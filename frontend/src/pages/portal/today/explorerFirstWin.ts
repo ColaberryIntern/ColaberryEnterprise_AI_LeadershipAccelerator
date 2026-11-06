@@ -16,6 +16,17 @@ export function needsFirstWin(s: Pick<OnboardingSchedule, 'is_explorer' | 'first
   return !!s?.is_explorer && s.first_win === false;
 }
 
+/**
+ * C115 (Ali, 2026-11-05: "anyone that logs in ... if they haven't completed one task yet"): should this learner's sign-in open the
+ * first lesson? An Explorer: exactly needsFirstWin, unchanged. Anyone else: only when the server says explicitly that they have no
+ * first win AND have never completed a card (older paid learners completed cards that banked no learning points). Staff never, so
+ * the team is not sent to the video in every new tab. Anything unknown: no.
+ */
+export function needsFirstLesson(s: Pick<OnboardingSchedule, 'is_explorer' | 'is_staff' | 'first_win' | 'any_card_completed'> | null | undefined): boolean {
+  if (needsFirstWin(s)) return true;
+  return !!s && !s.is_explorer && !s.is_staff && s.first_win === false && s.any_card_completed === false;
+}
+
 /** The query flag the campus gate's "Start your first lesson" sends to Today, which then opens that lesson. */
 export const FIRST_LESSON_PARAM = 'first';
 export const FIRST_LESSON_HREF = `/portal/today?stay=1&${FIRST_LESSON_PARAM}=1`;

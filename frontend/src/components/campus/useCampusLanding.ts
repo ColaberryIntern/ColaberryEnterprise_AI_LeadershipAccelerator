@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCampus } from './CampusContext';
 import type { OnboardingSchedule } from '../../services/onboardingApi';
 import { loadSchedule } from '../../pages/portal/scheduleCache';
-import { needsFirstWin, FIRST_LESSON_HREF } from '../../pages/portal/today/explorerFirstWin';
+import { needsFirstLesson, FIRST_LESSON_HREF } from '../../pages/portal/today/explorerFirstWin';
 
 /**
  * The landing rule (C11b, decision D1), run by PortalProtectedRoute on every signed-in page: the FIRST time a tab opens the portal on Today with the campus on for this learner, it
@@ -27,10 +27,10 @@ export function shouldLandOnCampus(s: { ready: boolean; active: boolean; pathnam
 /**
  * C114 (Ali, 2026-11-05: "When I login as a free account now it goes to the campus instead of the 1st assignment video"): where
  * that first landing goes. An Explorer who has not finished a first lesson opens it; everyone else, and an unknown schedule
- * (null: the read failed), gets the campus home as before.
+ * (null: the read failed), gets the campus home as before. C115: any learner with no lesson done, not only an Explorer (needsFirstLesson).
  */
-export function campusLandingTarget(schedule: Pick<OnboardingSchedule, 'is_explorer' | 'first_win'> | null): string {
-  return needsFirstWin(schedule) ? FIRST_LESSON_HREF : CAMPUS_HOME;
+export function campusLandingTarget(schedule: Pick<OnboardingSchedule, 'is_explorer' | 'is_staff' | 'first_win' | 'any_card_completed'> | null): string {
+  return needsFirstLesson(schedule) ? FIRST_LESSON_HREF : CAMPUS_HOME;
 }
 
 function readLanded(): boolean {

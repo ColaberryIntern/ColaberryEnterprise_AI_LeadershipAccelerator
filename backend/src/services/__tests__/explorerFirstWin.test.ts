@@ -1,10 +1,34 @@
 import { Op } from 'sequelize';
-import { hasFirstWin, FIRST_WIN_EVENT_TYPES } from '../explorerFirstWin';
-import { StudentPointsEvent } from '../../models';
+import { hasFirstWin, hasCompletedAnyCard, FIRST_WIN_EVENT_TYPES } from '../explorerFirstWin';
+import { StudentPointsEvent, TimelineCardProgress } from '../../models';
 
-jest.mock('../../models', () => ({ StudentPointsEvent: { findOne: jest.fn() } }));
+jest.mock('../../models', () => ({ StudentPointsEvent: { findOne: jest.fn() }, TimelineCardProgress: { findOne: jest.fn() } }));
 
 const findOne = StudentPointsEvent.findOne as unknown as jest.Mock;
+const findProgress = TimelineCardProgress.findOne as unknown as jest.Mock;
+
+describe('hasCompletedAnyCard (C115)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('is true once any card is completed, points or not, and asks only for completed rows', async () => {
+    findProgress.mockResolvedValue({ id: 'tcp-1' });
+    await expect(hasCompletedAnyCard('enr-1')).resolves.toBe(true);
+    expect(findProgress.mock.calls[0][0].where).toEqual({ enrollment_id: 'enr-1', status: 'completed' });
+  });
+
+  it('is false for a learner with no completed card', async () => {
+    findProgress.mockResolvedValue(null);
+    await expect(hasCompletedAnyCard('enr-2')).resolves.toBe(false);
+  });
+
+  it('returns null (unknown), never false, when the read fails, and logs it', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    findProgress.mockRejectedValue(Object.assign(new Error('timeout'), { name: 'SequelizeTimeoutError' }));
+    await expect(hasCompletedAnyCard('enr-3')).resolves.toBeNull();
+    expect(JSON.parse(warn.mock.calls[0][0])).toMatchObject({ event: 'completed_card_read_failed', error_class: 'SequelizeTimeoutError' });
+    warn.mockRestore();
+  });
+});
 
 describe('explorerFirstWin (C91)', () => {
   beforeEach(() => jest.clearAllMocks());

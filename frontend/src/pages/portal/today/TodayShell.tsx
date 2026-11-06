@@ -43,7 +43,7 @@ import { useTodayNextStep } from './useTodayNextStep';
 import TodayNextStepCondensed from './TodayNextStepCondensed';
 import ExplorerPreviewBanner from './ExplorerPreviewBanner';
 import { recordBannerOpen } from './todayFeedApi';
-import { needsFirstWin, findFirstLessonCard, FIRST_LESSON_PARAM } from './explorerFirstWin';
+import { needsFirstWin, needsFirstLesson, findFirstLessonCard, FIRST_LESSON_PARAM } from './explorerFirstWin';
 
 const TodayShell: React.FC = () => {
   // False until the first loadAll() settles. Gates every derived number in the
@@ -194,14 +194,17 @@ const TodayShell: React.FC = () => {
   const firstWinDone = !!schedule?.is_explorer && schedule.first_win === true;
   const nextLesson = useMemo(() => (firstWinDone ? findFirstLessonCard(curriculum, curriculumBuckets) : null), [firstWinDone, curriculum, curriculumBuckets]);
   const openFromBanner = useCallback((card: TimelineFeedCard) => { recordBannerOpen(card.id); openCard(card); }, [openCard]);
-  // The campus gate's "Start your first lesson" lands here with ?first=1: open that lesson once, as soon as it is known
+  // The campus gate's "Start your first lesson" and the sign-in landing land here with ?first=1: open that lesson once, as soon as it
+  // is known. C115: for any learner with no lesson done (needsFirstLesson), not only an Explorer; the banner above stays Explorer-only.
+  const firstLessonPending = needsFirstLesson(schedule);
+  const lessonToOpen = useMemo(() => (firstLessonPending ? findFirstLessonCard(curriculum, curriculumBuckets) : null), [firstLessonPending, curriculum, curriculumBuckets]);
   const firstOpened = React.useRef(false);
   useEffect(() => {
-    if (firstOpened.current || !hydrated || !firstLesson) return;
+    if (firstOpened.current || !hydrated || !lessonToOpen) return;
     if (new URLSearchParams(window.location.search).get(FIRST_LESSON_PARAM) !== '1') return;
     firstOpened.current = true;
-    openCard(firstLesson);
-  }, [hydrated, firstLesson, openCard]);
+    openCard(lessonToOpen);
+  }, [hydrated, lessonToOpen, openCard]);
   const firstName = profile?.profile?.full_name?.trim().split(/\s+/)[0] || '';
 
   // The real registration lives on Eventbrite; RSVP here records it + awards
