@@ -31,9 +31,18 @@ const dpmFindAll = jest.fn();
 jest.mock('../../models/DeliveryProjectMember', () => ({ __esModule: true, default: { findAll: (...a: any[]) => dpmFindAll(...a) } }));
 const dpFindAll = jest.fn();
 jest.mock('../../models/DeliveryProject', () => ({ __esModule: true, default: { findAll: (...a: any[]) => dpFindAll(...a) } }));
+// v4 portal artifact-image route: mock the artifact model + the upload dir (set to a real temp dir in beforeAll so a
+// member actually receives the bytes, while a wrong-project / missing id is 404).
+const gbaFindByPk = jest.fn();
+jest.mock('../../models/GovBuildArtifact', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => gbaFindByPk(...a) } }));
+const mockUpload: { GOV_BUILD_ARTIFACT_DIR: string } = { GOV_BUILD_ARTIFACT_DIR: '' };
+jest.mock('../../config/upload', () => mockUpload);
 
 import express from 'express';
 import request from 'supertest';
+import fs from 'fs';
+import os from 'os';
+import nodePath from 'path';
 import router from '../govProjectPortalRoutes';
 
 const app = express();
@@ -205,5 +214,42 @@ describe('POST /api/portal/gov-projects/:projectId/copilot (project copilot)', (
     getStudentGovProjectView.mockResolvedValue(null);
     const res = await request(app).post('/api/portal/gov-projects/dp-A/copilot').send({ question: 'next?' });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/portal/gov-projects/:projectId/artifacts/:artifactId/image (member thumbnail)', () => {
+  let tmpDir = '';
+  beforeAll(() => {
+    tmpDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'gps-art-'));
+    fs.writeFileSync(nodePath.join(tmpDir, 'cap.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]));
+    mockUpload.GOV_BUILD_ARTIFACT_DIR = tmpDir;
+  });
+  afterAll(() => { try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ } });
+
+  it('a MEMBER receives the captured PNG (the artifact belongs to THIS project) — bytes streamed from the upload dir', async () => {
+    gbaFindByPk.mockResolvedValue({ id: 'a1', delivery_project_id: 'dp-A', file_path: '/wherever/cap.png' });
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/artifacts/a1/image');
+    expect(res.status).toBe(200);
+    expect(String(res.headers['content-type'])).toMatch(/image\/png/);
+    expect(gbaFindByPk).toHaveBeenCalledWith('a1'); // only the basename of file_path is ever used (no path traversal)
+  });
+
+  it('a MEMBER requesting an artifact that belongs to ANOTHER project is 404 (project scope, not just membership)', async () => {
+    gbaFindByPk.mockResolvedValue({ id: 'a1', delivery_project_id: 'dp-OTHER', file_path: '/wherever/cap.png' });
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/artifacts/a1/image');
+    expect(res.status).toBe(404);
+  });
+
+  it('a MEMBER requesting a missing artifact id is 404', async () => {
+    gbaFindByPk.mockResolvedValue(null);
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/artifacts/nope/image');
+    expect(res.status).toBe(404);
+  });
+
+  it('a NON-MEMBER is 404 (the guard denies first) — the artifact is never looked up', async () => {
+    guardAllows = false;
+    const res = await request(app).get('/api/portal/gov-projects/dp-OTHER/artifacts/a1/image');
+    expect(res.status).toBe(404);
+    expect(gbaFindByPk).not.toHaveBeenCalled();
   });
 });

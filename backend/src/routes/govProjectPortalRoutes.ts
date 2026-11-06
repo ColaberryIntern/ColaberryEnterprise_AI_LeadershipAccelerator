@@ -81,6 +81,39 @@ router.get(
 );
 
 /**
+ * GET /api/portal/gov-projects/:projectId/artifacts/:artifactId/image — stream a captured build-evidence PNG to a
+ * MEMBER of this project, so an intern sees the real screenshot thumbnail (not a placeholder). Same bytes the admin
+ * route serves. Security is the guard chain PLUS the project-scope check: requireParticipant + project.read already
+ * 404 a non-member (they can't learn the project exists); then the artifact must belong to THIS project, so a member
+ * cannot read another project's artifact by id (404). A bare <img src> can't carry the bearer token, so the client
+ * fetches this as a blob.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/artifacts/:artifactId/image',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    const artifactId = req.params.artifactId;
+    if (typeof projectId !== 'string' || !projectId || typeof artifactId !== 'string' || !artifactId) {
+      res.status(400).json({ error: 'Project id and artifact id are required' });
+      return;
+    }
+    try {
+      const path = await import('path');
+      const { GOV_BUILD_ARTIFACT_DIR } = await import('../config/upload');
+      const { default: GovBuildArtifact } = await import('../models/GovBuildArtifact');
+      const row: any = await GovBuildArtifact.findByPk(artifactId);
+      // Project-scope: the artifact must belong to THIS project (a member of project A cannot read project B's bytes).
+      if (!row || row.delivery_project_id !== projectId || !row.file_path) { res.status(404).json({ error: 'Not found' }); return; }
+      res.sendFile(path.join(GOV_BUILD_ARTIFACT_DIR, path.basename(String(row.file_path))));
+    } catch {
+      res.status(500).json({ error: 'Could not load the image.' });
+    }
+  },
+);
+
+/**
  * POST /api/portal/gov-projects/:projectId/copilot — the Build Cockpit's project copilot. Guarded by project.read
  * (a member of THIS project), it loads the SAME student-safe projection the page renders and answers
  * DETERMINISTICALLY from it (govCopilot) — so the copilot can only ever repeat what the caller already sees; there

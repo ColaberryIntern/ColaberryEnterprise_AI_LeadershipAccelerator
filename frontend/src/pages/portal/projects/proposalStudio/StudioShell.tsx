@@ -93,7 +93,7 @@ export default function StudioShell(
       center = <DocumentSet view={view} projectId={projectId} docs={docs} studioApi={studioApi} onOpen={openDoc} onReload={onReload} onToast={toast} />;
       break;
     case 'evidence':
-      center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} onReload={onReload} onToast={toast} />;
+      center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} studioApi={studioApi} onReload={onReload} onToast={toast} />;
       break;
     case 'gates':
       center = <ReviewGatesView projectId={projectId} docs={docs} reviewApi={reviewApi} onOpenDoc={openDoc} onToast={toast} />;

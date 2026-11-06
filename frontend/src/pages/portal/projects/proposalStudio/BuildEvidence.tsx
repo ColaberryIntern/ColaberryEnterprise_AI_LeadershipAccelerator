@@ -1,17 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi, GovStudioApi } from '../../../../services/govProjectPortalApi';
 import { Bar } from './studioHelpers';
 
-/** A captured screenshot thumbnail — fetched as an object URL via the review API (admin); a hatched placeholder
- *  otherwise or while loading. */
-function Thumb({ projectId, artifactId, reviewApi, miss }: { projectId: string; artifactId: string; reviewApi?: GovReviewApi; miss: boolean }): React.ReactElement {
+/** A captured screenshot thumbnail — fetched as an object URL. The reviewer (admin) uses the review API; an intern
+ *  (no reviewApi) uses the member-level studio image route; a hatched placeholder otherwise or while loading. */
+function Thumb({ projectId, artifactId, reviewApi, studioApi, miss }: { projectId: string; artifactId: string; reviewApi?: GovReviewApi; studioApi?: GovStudioApi; miss: boolean }): React.ReactElement {
   const [url, setUrl] = useState<string | null>(null);
+  const fetchImage = reviewApi?.fetchArtifactImage ?? studioApi?.fetchArtifactImage;
   useEffect(() => {
-    if (miss || !reviewApi) return;
+    if (miss || !fetchImage) return;
     let live = true; let made: string | null = null;
-    reviewApi.fetchArtifactImage(projectId, artifactId).then((u) => { if (live) { made = u; setUrl(u); } }).catch(() => undefined);
+    fetchImage(projectId, artifactId).then((u) => { if (live) { made = u; setUrl(u); } }).catch(() => undefined);
     return () => { live = false; if (made) { try { URL.revokeObjectURL(made); } catch { /* noop */ } } };
-  }, [projectId, artifactId, reviewApi, miss]);
+  }, [projectId, artifactId, fetchImage, miss]);
   if (miss) return <div className="gps-img miss">Not verified yet. No capture.</div>;
   if (url) return <img className="gps-img" src={url} alt="" loading="lazy" />;
   return <div className="gps-img" aria-hidden="true" />;
@@ -24,8 +25,8 @@ function Thumb({ projectId, artifactId, reviewApi, miss }: { projectId: string; 
  * approved design.
  */
 export default function BuildEvidence(
-  { view, projectId, reviewApi, onReload, onToast }:
-  { view: StudentGovProjectView; projectId: string; reviewApi?: GovReviewApi; onReload: () => void; onToast?: (m: string) => void },
+  { view, projectId, reviewApi, studioApi, onReload, onToast }:
+  { view: StudentGovProjectView; projectId: string; reviewApi?: GovReviewApi; studioApi?: GovStudioApi; onReload: () => void; onToast?: (m: string) => void },
 ): React.ReactElement {
   const artifacts: GovBuildArtifactView[] = view.buildArtifacts ?? [];
   const rollup = view.buildSummary?.rollup;
@@ -78,7 +79,7 @@ export default function BuildEvidence(
           const miss = a.status !== 'captured' && a.status !== 'verified';
           return (
             <div className="gps-shot" key={a.id} data-testid="ev-capture" data-story={a.storyId} data-verified={!miss}>
-              <Thumb projectId={projectId} artifactId={a.id} reviewApi={reviewApi} miss={miss} />
+              <Thumb projectId={projectId} artifactId={a.id} reviewApi={reviewApi} studioApi={studioApi} miss={miss} />
               <div className="gps-cap">
                 <div className="gps-row"><span className="gps-mono" style={{ color: 'var(--gps-accent)' }}>{a.storyId}</span>{miss ? <span className="gps-tag warn">Story open</span> : <span className="gps-tag ok">Verified</span>}</div>
                 {a.caption && <b>{a.caption}</b>}

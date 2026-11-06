@@ -408,6 +408,13 @@ export async function buildAllGovDocuments(projectId: string): Promise<GovBuildA
   return { started: !!data?.started, enqueued: Array.isArray(data?.enqueued) ? data.enqueued : [], skipped: Array.isArray(data?.skipped) ? data.skipped : [] };
 }
 
+/** P4 (v4): fetch a build-evidence PNG through the participant-guarded portal route and return an object URL, so an
+ *  intern sees the real thumbnail (a bare <img src> can't carry the bearer token). The caller revokes the URL. */
+export async function fetchGovArtifactImage(projectId: string, artifactId: string): Promise<string> {
+  const { data } = await portalApi.get(`${portalBase(projectId)}/artifacts/${encodeURIComponent(artifactId)}/image`, { responseType: 'blob' });
+  return URL.createObjectURL(data as Blob);
+}
+
 /**
  * GovStudioApi — the Studio shell + agent panel's read-model adapter. The SAME Studio components drive either the
  * portal routes (the default below, participant token) or the admin routes (injected by the admin cockpit page).
@@ -423,6 +430,9 @@ export interface GovStudioApi {
   listNeeds(projectId: string): Promise<GovNeedsGrouped>;
   resolveNeed(projectId: string, key: string, submission: GovNeedSubmission): Promise<GovNeedResolveResult>;
   buildAll(projectId: string): Promise<GovBuildAllResult>;
+  /** P4 (v4): fetch a build-evidence PNG as an object URL. A member-level read (any project member), so it lives on
+   *  the studio API, not the reviewer-only review API — this is how an intern (no reviewApi) sees a real thumbnail. */
+  fetchArtifactImage?(projectId: string, artifactId: string): Promise<string>;
 }
 
 export const portalGovStudioApi: GovStudioApi = {
@@ -435,4 +445,5 @@ export const portalGovStudioApi: GovStudioApi = {
   listNeeds: listGovNeeds,
   resolveNeed: resolveGovNeed,
   buildAll: buildAllGovDocuments,
+  fetchArtifactImage: fetchGovArtifactImage,
 };
