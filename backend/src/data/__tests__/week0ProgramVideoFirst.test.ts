@@ -43,6 +43,18 @@ describe('planProgramVideoFirst', () => {
     expect(planProgramVideoFirst(after[0], after[1], after[2])).toEqual([]);
   });
 
+  it('is idempotent after a database round trip that reorders object keys (production, 5 Nov)', () => {
+    // Postgres jsonb returns keys sorted by length, then bytes ("options", "question", ...), not in the order written.
+    // Comparing as JSON text then never matched, so every re-run planned the Quick check again.
+    const jsonbOrder = (x: unknown): unknown => Array.isArray(x) ? x.map(jsonbOrder)
+      : x && typeof x === 'object' ? Object.fromEntries(Object.keys(x).sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)).map((k) => [k, jsonbOrder((x as Record<string, unknown>)[k])]))
+      : x;
+    const [v, q, s] = prodCards();
+    const stored = applyPlan([v, q, s], planProgramVideoFirst(v, q, s)).map((c) => ({ ...c, metadata: jsonbOrder(c.metadata) as Record<string, unknown> }));
+    expect(Object.keys(((stored[1].metadata.assessment as { questions: object[] }).questions[0]))[0]).toBe('options'); // the reorder is real
+    expect(planProgramVideoFirst(stored[0], stored[1], stored[2])).toEqual([]);
+  });
+
   it('refuses to touch the wrong cards', () => {
     const [v, q, s] = prodCards();
     expect(() => planProgramVideoFirst({ ...v, title: 'Some other video' }, q, s)).toThrow(/not the program video/);
