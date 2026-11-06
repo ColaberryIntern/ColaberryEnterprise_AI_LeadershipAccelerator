@@ -20,6 +20,7 @@ export default function StageRail(
   const docCount = (view.proposalDocuments ?? []).length;
   const artifactCount = (view.buildArtifacts ?? []).length;
   const readiness = view.proposalReadiness?.pct ?? 0;
+  const needCount = view.needsCount ?? 0;
 
   const steps: Array<{ v: StudioView; label: string; small?: string; ic: Icon }> = [
     { v: 'overview', label: 'Where we are', ic: { kind: 'now', label: '●' } },
@@ -50,7 +51,8 @@ export default function StageRail(
       <div className="gps-grp">For you</div>
       <button className="gps-step" data-v="openitems" aria-current={current === 'openitems' ? 'page' : undefined} onClick={() => onNavigate('openitems')}>
         <span className="gps-ic" aria-hidden="true">!</span>
-        Open items
+        Needs you
+        {needCount > 0 ? <small className={`gps-rail-badge ${(view.fatalNeedsCount ?? 0) > 0 ? 'bad' : 'warn'}`}>{needCount}</small> : null}
       </button>
     </nav>
   );

@@ -12,7 +12,7 @@ import BuildEvidence from './BuildEvidence';
 import DraftVersions from './DraftVersions';
 import ReviewGatesView from './ReviewGatesView';
 import PackageView from './PackageView';
-import OpenItems from './OpenItems';
+import NeedsInbox from './NeedsInbox';
 import StudioTour from './StudioTour';
 // The drafting drawer for a form/pricing row is the one shipped govCockpit piece still reused (wrapped in `.gck` to
 // carry its own tokens); every stage view is now a native `.gps` surface.
@@ -65,7 +65,6 @@ export default function StudioShell(
     window.setTimeout(() => setToastMsg((cur) => (cur === m ? null : cur)), 3400);
   }, []);
 
-  const openQuestionCount = 0; // the agent panel owns the live count; Where-we-are only needs a hint for next-moves
   const gck = (node: React.ReactNode) => <div className="gck">{node}</div>;
 
   // A scored document opens in the Draft & versions editor (deep-linked via ?doc=); a form/pricing row opens the
@@ -82,13 +81,13 @@ export default function StudioShell(
   let center: React.ReactNode;
   switch (current) {
     case 'overview':
-      center = <WhereWeAre view={view} questionCount={openQuestionCount} onNavigate={go} />;
+      center = <WhereWeAre view={view} onNavigate={go} studioApi={studioApi} onReload={onReload} onToast={toast} />;
       break;
     case 'blueprint':
       center = <Blueprint view={view} onReanalyze={onReanalyze} reanalyzing={reanalyzing} onToast={toast} />;
       break;
     case 'documents':
-      center = <DocumentSet docs={docs} onOpen={openDoc} onToast={toast} />;
+      center = <DocumentSet view={view} projectId={projectId} docs={docs} studioApi={studioApi} onOpen={openDoc} onReload={onReload} onToast={toast} />;
       break;
     case 'evidence':
       center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} onReload={onReload} onToast={toast} />;
@@ -104,17 +103,17 @@ export default function StudioShell(
       break;
     case 'openitems':
     default:
-      center = <OpenItems view={view} projectId={projectId} docs={docs} studioApi={studioApi} onNavigate={go} onOpenDoc={openDoc} />;
+      center = <NeedsInbox projectId={projectId} docs={docs} studioApi={studioApi} onReload={onReload} onNavigate={go} onToast={toast} />;
       break;
   }
 
   return (
     <div className="gps">
-      <ContractBar view={view} onStartTour={() => setTourStep(0)} />
+      <ContractBar view={view} onStartTour={() => setTourStep(0)} onNeeds={() => go('openitems')} />
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
         <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>
-        <AgentPanel projectId={projectId} studioApi={studioApi} onReload={onReload} onToast={toast} />
+        <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} />
       </div>
       {drawerDoc && (
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)

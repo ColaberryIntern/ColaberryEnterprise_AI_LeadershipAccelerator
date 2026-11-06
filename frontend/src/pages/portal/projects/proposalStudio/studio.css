@@ -255,3 +255,22 @@
 .gps-tour-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
 @keyframes gps-tour-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (prefers-reduced-motion:reduce){.gps *{animation:none!important;transition:none!important}}
+
+/* v3 (T15) Needs-you inbox + shared inline field */
+.gps-input{border:1px solid var(--gps-line);background:var(--gps-surface);color:var(--gps-fg);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;min-width:0;flex:1 1 auto}
+.gps-input:focus{outline:none;border-color:var(--gps-accent)}
+.gps-needs{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.gps-need-card{border:1px solid var(--gps-line);border-radius:8px;padding:12px 14px;background:var(--gps-surface)}
+.gps-need-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.gps-need-head b{font-size:14px}
+.gps-need-control{display:flex;flex-direction:column;gap:6px}
+.gps-inline-field{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gps-choice-row{display:flex;gap:6px;flex-wrap:wrap}
+
+/* v3 (T22) contract-bar Needs chip + rail badge */
+.gps-chip-btn{cursor:pointer}
+.gps-chip-btn.gps-chip-warn{border-color:var(--gps-warn);color:var(--gps-warn)}
+.gps-chip-btn.gps-chip-bad{border-color:var(--gps-bad);color:var(--gps-bad)}
+.gps-rail-badge{margin-left:auto;font-weight:700;border-radius:999px;padding:0 7px;font-size:11px;color:#fff}
+.gps-rail-badge.warn{background:var(--gps-warn)}
+.gps-rail-badge.bad{background:var(--gps-bad)}
