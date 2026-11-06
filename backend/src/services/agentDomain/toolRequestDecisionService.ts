@@ -23,6 +23,7 @@ import { Transaction, type Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import AgentDomainToolRequestDecision from '../../models/AgentDomainToolRequestDecision';
 import { resolveRecordedHumans } from './recordedHumans';
+import { configuredApprovers } from './approverConfiguration';
 import { loadToolCatalogForMatching } from './toolCatalogForMatching';
 import {
   acceptToolRequestDecision,
@@ -50,23 +51,16 @@ export class ToolRequestNotFoundError extends Error {
   }
 }
 
-/** The default approver, used when nothing is configured. Ali's ruling of 4 Nov 2026. */
-export const DEFAULT_TOOL_GRANT_APPROVERS = ['ali@colaberry.com'];
-
 /**
- * Who may settle a tool grant right now.
+ * The approver set MOVED to `approverConfiguration.ts` when AF3.5's grant service needed it.
  *
- * Read from `TOOL_GRANT_APPROVERS` (comma separated) so widening it is a deployment setting. An
- * EMPTY setting is deliberately NOT treated as "no restriction": a blank value falls back to the
- * documented default rather than opening the gate, because the fail-open reading of an empty
- * list is a mistake this subtree has made more than once.
+ * Re-exported here so every existing caller and test keeps importing the name it already
+ * imported, which is what makes the move provably not a behaviour change. It moved rather than
+ * being imported from here because a second importer of THIS file would weaken the pin in
+ * `toolRequestDecisionGrantsNothing.test.ts` — the same reason `resolveRecordedHumans` moved
+ * into `recordedHumans.ts` during AF11.0.
  */
-export function configuredApprovers(env: NodeJS.ProcessEnv = process.env): string[] {
-  const raw = String(env.TOOL_GRANT_APPROVERS ?? '').trim();
-  if (!raw) return [...DEFAULT_TOOL_GRANT_APPROVERS];
-  const parsed = raw.split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
-  return parsed.length > 0 ? parsed : [...DEFAULT_TOOL_GRANT_APPROVERS];
-}
+export { DEFAULT_TOOL_GRANT_APPROVERS, configuredApprovers } from './approverConfiguration';
 
 export interface DecideToolRequestArgs {
   readonly sequelize: Sequelize;

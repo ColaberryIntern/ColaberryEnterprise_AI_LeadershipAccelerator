@@ -143,6 +143,9 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // the decider to be a recorded human on the configured approver set: a section grant is what
   // lets the page's data load, never what decides whose tool grant may stand.
   ['/api/admin/agent-domain-tool-requests', 'program'],
+  // AF3.5. The grant itself. Classified alongside the review console it follows, so the
+  // whole ladder answers the same section rather than one rung 403ing unexplained.
+  ['/api/admin/agent-tool-grants', 'program'],
   // Agent Factory tab list (M2). Its OWN 'agents'-gated prefix so the Interns-hub Agents tab's data
   // agrees with its nav gate; reusing '-provisioned' ('program') would 403 a future 'agents'-only
   // builder who can see the tab. Distinct from the '-domains' prefixes (no '/'-boundary overlap), so

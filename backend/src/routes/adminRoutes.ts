@@ -65,6 +65,7 @@ import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
+import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -299,6 +300,7 @@ router.use(agentChangeRequestRoutes);
 // these two are `requireAdmin` on both -- settling a tool grant is not something the section
 // every mgmt role carries should reach.
 router.use(toolRequestDecisionRoutes);
+router.use(agentToolGrantRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);

@@ -186,11 +186,29 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     //
     // It is wrapped: `ensureToolRequestDecisionSchemaGuarded` cannot reject, and
     // `__tests__/ensureToolRequestDecisionSchema.test.ts` drives that failure path.
+    //
+    // AF3.5 added the eighth member, 2026-11-05. `ensureAgentToolGrantSchema.ts` is the ledger of
+    // which tool an agent was actually granted, and asserts the same way for the same reason as
+    // the seven above.
+    //
+    // Its post-condition carries one the others do not: `uq_adtg_agent_tool`, the UNIQUE index on
+    // `(agent_id, tool_name)`. That index IS the idempotency key -- it is what makes a retried
+    // grant one row instead of two -- and unlike a table or a column, a missing index is
+    // invisible to every query the application runs until the duplicate it was supposed to
+    // prevent already exists. So its absence is a named post-condition failure rather than a
+    // silent accept, which is exactly why the assert checks `pg_indexes` and not only
+    // `information_schema.tables`.
+    //
+    // It is wrapped: `ensureAgentToolGrantSchemaGuarded` cannot reject, and
+    // `__tests__/ensureAgentToolGrantSchema.test.ts` drives that failure path with a rejecting
+    // driver, asserting it RESOLVES `{ ok: false }` with the derived error_class rather than
+    // grepping server.ts for a try/catch.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
       'ensureAgentDomainToolDuplicateCheckSchema.ts',
       'ensureAgentDomainToolRequestSchema.ts',
+      'ensureAgentToolGrantSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
       'ensureToolRequestDecisionSchema.ts',
