@@ -81,17 +81,26 @@ const OFF_EXPLORER = /enrollment_type\s*:\s*'(standard|member)'|enrollment_type\
 const PAID_FILES: Record<string, string> = {
   // ---- WRITERS ----
   'services/subscriptionService.ts':
-    'WRITER, THE REFERENCE. grantMembership writes enrollment_type + tier + payment_status together.',
+    'WRITER, THE REFERENCE. grantMembership writes tier + payment_status together. As of C10.17 '
+    + 'Phase 2 it does NOT write enrollment_type: origin is not a payment outcome. tier is the '
+    + 'column isEnrolledMember, subjectResolver and reeseWelcomeService actually read.',
   'services/paymentReconciliationService.ts':
-    'WRITER (model update). Coherent as of T206: grants the pair with the paid flag.',
+    'WRITER (model update). Grants tier with the paid flag; no longer writes enrollment_type (C10.17 Phase 2).',
   'services/paymentSyncService.ts':
-    'WRITER (raw SQL update). Coherent as of T206, each column gated on :status = paid.',
+    'WRITER (raw SQL update). tier gated on :status = paid, so a failed payment grants nothing. '
+    + 'The enrollment_type CASE arm was deleted in C10.17 Phase 2.',
   'services/appPaymentReconcileService.ts':
-    'WRITER (raw SQL update). The FIFTH writer, found by deriving this set rather than from the plan, which named three. Coherent as of T206.',
+    'WRITER (raw SQL update). The FIFTH writer, found by deriving this set rather than from the '
+    + 'plan, which named three. Grants tier beside the paid flag; the enrollment_type assignment '
+    + 'was deleted in C10.17 Phase 2.',
   'controllers/sponsorController.ts':
-    'WRITER (create). Coherent only by COLUMN DEFAULT - tier defaults member, enrollment_type standard. Nothing at the call site states the pair.',
+    'WRITER (create). Coherent only by COLUMN DEFAULT - tier defaults member, enrollment_type standard. Nothing at the call site states either. A create, so it sets origin at birth, which is legitimate.',
   'services/enrollmentService.ts':
-    'TWO WRITERS. (a) markEnrollmentPaid - a LIVE UPDATE on the plan\'s "legacy webhook" path, called from webhookController; writes by PROPERTY ASSIGNMENT then .save(), which is why the first pass of T206 missed it. Coherent as of T206 attempt 2. (b) the legacy invoice CREATE, coherent by column default only.',
+    'TWO WRITERS. (a) markEnrollmentPaid - a LIVE UPDATE on the plan\'s "legacy webhook" path, '
+    + 'called from webhookController; writes by PROPERTY ASSIGNMENT then .save(), which is why the '
+    + 'first pass of T206 missed it and why these patterns cover three syntaxes. It grants tier and '
+    + 'the paid flag; its enrollment_type assignment was deleted in C10.17 Phase 2. (b) the legacy '
+    + 'invoice CREATE, coherent by column default only.',
 
   // ---- Added by T207/T210. These are the files this phase itself introduced;
   // the tripwire caught that I had not classified my own work. ----
@@ -99,6 +108,14 @@ const PAID_FILES: Record<string, string> = {
 
   'services/adminOs/conversionState.ts':
     'READ (T210). The one conversion definition: SQL aggregates plus a TS predicate over payment_status, amount_paid and subscription state. No write of any kind - it is a derivation consumed by the roster, the profile and subjectResolver.',
+
+  'scripts/backfillFreeAccountCoherence.ts':
+    'READ (C10.17 Phase 2), and A NEWCOMER THIS GUARD CAUGHT. It began matching when Phase 2 '
+    + 'split the Shape A witness on payment: SHAPE_COUNT_SQL now counts explorer+non-guest rows '
+    + 'that are UNPAID apart from the paying upgraders it must never write, because after Phase 2 '
+    + 'both populations share that shape and a single number would report payers as pending work. '
+    + 'The terms are inside count(*) FILTER clauses - a read. Every write this script performs is '
+    + 'planned by freeAccountCoherenceBackfill.decideRow and gated on --confirm-production.',
   // ---- READS: filters, counts and reports. No write. ----
   'services/cohortService.ts': 'READ. Dashboard filter on paid enrolments.',
   'services/marketing/payingMembersSql.ts':
@@ -139,32 +156,49 @@ const PAID_FILES: Record<string, string> = {
  * TRIPWIRE 2's population: files whose code moves `enrollment_type` to a non-explorer value,
  * or filters on one.
  *
- * ABOUT TRANSITIONS, NOT THE RESTING STATE — with one honest qualification about how far the
- * pattern itself can enforce that.
+ * THIS GUARD CHANGED JOBS IN C10.17 PHASE 2, and the change is worth stating because the
+ * tests below read almost the same while meaning something much stronger.
  *
- * `standard` + `guest` is a perfectly legitimate place to be: an org teammate invited by
- * their employer has a non-learner programme, free access, and has paid nothing. A guard
- * that condemned that state would fire on the population this phase exists to protect.
+ * Under T206 this was a COHERENCE guard. Five payment paths rewrote `enrollment_type` to
+ * 'standard' when somebody paid, that rewrite was legitimate, and the question the guard
+ * asked was "does each writer also grant `tier`, so no row ends up standard+guest?".
  *
- * **The regex cannot distinguish a transition off `'explorer'` from a create that simply
- * starts a row at `'standard'`.** A future org-teammate writer using the literal would match
- * and be pinned. What saves the protected population is not the pattern but the SHAPE of the
- * guard: matching only ever means "write a determination for this file", never "this is a
- * bug". Nothing here can condemn a legitimate resting state, because nothing here judges —
- * which is the difference between a population guard and the invariant guard T203 failed to
- * build. The legitimacy of that state is asserted as behaviour in `writerPairCoherence.test.ts`.
+ * Phase 2 deleted all five rewrites, because `enrollment_type` is ORIGIN - 'explorer' means
+ * the account arrived free - and a payment is not a change of origin. Rewriting it is what
+ * made free-to-paid conversion unmeasurable: the measured event mutated the field the
+ * population was defined by.
+ *
+ * So the question is now stronger: **does anything move a row off its origin at all?** The
+ * answer is meant to be no, and the pinned set below is what that looks like - reads,
+ * creates, seeds and declarations, with not one update among them.
+ *
+ * STILL A POPULATION GUARD, NOT AN INVARIANT ONE, and still for T203's reason. **The regex
+ * cannot distinguish a transition off `'explorer'` from a create that simply starts a row at
+ * `'standard'`.** Agent identity seeds do exactly that and are legitimate; so is an org
+ * teammate resting at `standard` + `guest`, which is a non-learner programme with free
+ * access and nothing paid. A guard that condemned the resting state would fire on the
+ * population this work exists to protect. What saves them is not the pattern but the SHAPE
+ * of the guard: matching only ever means "write a determination for this file", never "this
+ * is a bug". The legitimacy of that resting state is asserted as behaviour in
+ * `writerPairCoherence.test.ts`, and the departure of the five writers is asserted by name
+ * below rather than inferred from the count.
  */
 const OFF_EXPLORER_FILES: Record<string, string> = {
   // ---- WRITERS of the transition ----
-  'services/subscriptionService.ts':
-    'WRITER, THE REFERENCE. grantMembership moves off explorer AND grants member, in one place.',
-  'services/enrollmentService.ts':
-    'WRITER. convertExplorerToStandard - the latent standard+guest bug T206 fixes. Now writes both.',
-  'services/paymentReconciliationService.ts': 'WRITER (model update). Coherent as of T206.',
-  'services/paymentSyncService.ts': 'WRITER (raw SQL). Coherent as of T206.',
-  'services/appPaymentReconcileService.ts': 'WRITER (raw SQL). Coherent as of T206.',
+  //
+  // THERE ARE NONE, AND THAT IS NOW THE POINT OF THIS GUARD (C10.17 Phase 2).
+  //
+  // Five files stood here: subscriptionService (grantMembership, the reference),
+  // enrollmentService (markEnrollmentPaid and convertExplorerToStandard),
+  // paymentReconciliationService, paymentSyncService and appPaymentReconcileService. Every
+  // one has left the matched set, because every one has stopped assigning the column. That
+  // departure is asserted by name in its own test below, so the emptiness of this section is
+  // a derived fact rather than a gap somebody left.
+  //
+  // What remains below is reads, creates and declarations. A create sets origin at BIRTH,
+  // which is the only legitimate time to set it.
 
-  // ---- Added by T207/T209/T210, the files this phase introduced. ----
+  // ---- Added by T207/T209/T210, the files those phases introduced. ----
 
   'scripts/backfillFreeAccountCoherence.ts':
     'WRITER, OPT-IN ONLY (T207). Moves rows ONTO explorer (never off it) and only with --confirm-production; the inverse is ledger-driven so it cannot touch rows the sweep never wrote.',
@@ -283,8 +317,34 @@ describe('TRIPWIRE 2 — every file moving enrollment_type off explorer is accou
     expect(thin).toEqual([]);
   });
 
-  it('POSITIVE CONTROL: the reference and the previously-broken converter are in the matched set', () => {
-    expect(found).toContain('services/subscriptionService.ts');
-    expect(found).toContain('services/enrollmentService.ts');
+  /**
+   * THE ASSERTION C10.17 PHASE 2 EXISTS TO MAKE, and the one the old positive control has
+   * become. It used to assert that `subscriptionService` and `enrollmentService` WERE in the
+   * matched set, as proof the scan could see the writers. Both have now left it, so that
+   * control had to be replaced rather than deleted - deleting it would have left the shrunken
+   * population resting on a count, and a count cannot say WHICH file left.
+   *
+   * Named individually, because the five sites are the whole of Phase 2 and each is a
+   * separate way for the rewrite to come back: two object literals, two raw SQL statements,
+   * and one property assignment followed by `.save()`.
+   */
+  it('NO PAYMENT WRITER remains in the matched set - the five are named, not counted', () => {
+    const formerWriters = [
+      'services/subscriptionService.ts',
+      'services/enrollmentService.ts',
+      'services/paymentReconciliationService.ts',
+      'services/paymentSyncService.ts',
+      'services/appPaymentReconcileService.ts',
+    ];
+    for (const f of formerWriters) expect(found).not.toContain(f);
+  });
+
+  it('POSITIVE CONTROL: the scan still sees the files that legitimately set origin at birth', () => {
+    // Without this, the five assertions above would pass just as well over an empty match
+    // set, a broken path or a stripper that ate every file - which is how a guard reads green
+    // while checking nothing. These three WRITE `enrollment_type` and are supposed to.
+    expect(found).toContain('services/mayaIdentitySeed.ts');
+    expect(found).toContain('services/agentDomain/domainAgentIdentitySeed.ts');
+    expect(found).toContain('models/Enrollment.ts');
   });
 });

@@ -182,3 +182,28 @@ Still unproven on live traffic: the backfill actually firing. It fires only for 
 lacks a tag its session has, now the uncommon path. Between the deploy and this check no leads and
 no `/api/t/identify` traffic arrived at all, and the backend logs show zero `Backfilled UTM` lines
 and zero `utm_backfill_failed` lines.
+
+### Closed 2026-11-03
+
+Both artifacts built, looked at, attached and filed, then the ticket closed.
+
+- `ADS3_ATTRIBUTION_HANDOFF_1PAGE.pdf` (1 page, 58 KB) and
+  `ADS3_ATTRIBUTION_HANDOFF_VERIFICATION.pdf` (5 pages, 95 KB), both built from one data module
+  (`scripts/artifacts/tickets/ads3Data.js`) so a figure on the visual is the same figure in the
+  document by construction rather than by re-typing. Visual posted first. Both read back as real
+  previews rather than broken-attachment glyphs, and both are filed in the vault folder
+  "Marketing Ad Attribution - Artifacts" (`PARENT_VAULT=1041287220`, `LIST=10467338643` — neither
+  is the script's default, and it throws on a folder title it cannot resolve).
+- **The one-page limit caught a two-page first render.** Content was cut rather than the limit
+  raised: short forms of the four items and the two limits now live in the data module beside their
+  full versions, so the visual and the document still share one source.
+- Rendered to PNG and looked at, per the standing rule that passing the page check is not the same
+  as the page being right: body 556px against 688px of usable landscape height, nothing clipped,
+  and no element in the document exceeds the page width.
+- Closed by POSTing completion and re-reading `completed`. The POST threw `Unexpected end of JSON
+  input`, which is the 204 answering with no body, not a failure.
+
+**Left for someone to decide:** ADS-5's filed artifact states "0 of 450 leads carry utm_content"
+and "0 leads carry a piped shape". Both were true when measured and false hours later. The
+correction is recorded in ADS-3's document under what it supersedes, rather than rewriting the
+filed evidence of a closed ticket.

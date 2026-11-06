@@ -1,0 +1,80 @@
+{
+  "slug": "the-exemption-was-denied-someone-had-to-say-why",
+  "output": "sss-modernization-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 8,
+      "title": "The exemption was denied.",
+      "subtitle": "Someone had to be able to say why.",
+      "caption": "A Selective Service registration and case management system, built in ninety days as a rehearsal. Synthetic data throughout."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-register.png",
+      "caption": "Registering online, where the process used to be paper."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-registrant-dashboard.png",
+      "caption": "What a registrant sees about their own standing."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-compliance-check.png",
+      "caption": "The eligibility check runs, and it stops there. It scores the case; it does not close it."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 10,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-denied-with-reason.png",
+      "caption": "Eligible by the check, and denied anyway by a person, with the reason written on the record underneath."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-case-workflow.png",
+      "caption": "The queue the staff actually work."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-second-reviewer.png",
+      "caption": "An appeal goes to someone who has not already decided it."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-assistant-cited-answer.png",
+      "caption": "The assistant answers, and shows the passages it drew on. A statement it cannot cite is withheld rather than shown."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-assistant-review-queue.png",
+      "caption": "Every answer waits for a person, and you cannot review your own question."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-audit-log.png",
+      "caption": "The record nobody can quietly edit."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 8,
+      "path": "C:/Users/ali_m/Downloads/acc-obi-wt/frontend/public/site-v2/shot-sss-leadership-dashboard.png",
+      "caption": "The operational view the paper process never had."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Demonstrated on a synthetic demo deployment.",
+      "subtitle": "Not operating in production.",
+      "caption": "The builder put that sentence on every update of this project. It is the reason the rest of it can be shown."
+    }
+  ]
+}

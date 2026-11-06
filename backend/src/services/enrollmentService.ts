@@ -118,7 +118,7 @@ export async function markEnrollmentPaid(
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
-  // T206: THE PAIR, written with the paid flag. This is the plan's "legacy webhook" path -
+  // T206, NARROWED BY C10.17 PHASE 2 to `tier` alone. This is the plan's "legacy webhook" path -
   // `webhookController` calls it on a PaySimple payment_created - and it is the one writer
   // the first pass of T206 MISSED, because it writes by PROPERTY ASSIGNMENT followed by
   // `.save()` rather than through an object literal or raw SQL. Two syntaxes were considered
@@ -130,7 +130,13 @@ export async function markEnrollmentPaid(
   // for the same reason `convertExplorerToStandard` was - a latent trap is still a trap, and
   // the coherence must not depend on a column default nobody states at the call site.
   enrollment.tier = 'member';
-  enrollment.enrollment_type = 'standard';
+  // C10.17 PHASE 2: `enrollment.enrollment_type = 'standard'` STOOD HERE AND IS GONE.
+  // `enrollment_type` is origin, not current state, so a payment must not rewrite it; `tier`
+  // above is the access grant and is what `isEnrolledMember` and the other student predicates
+  // read. Note the write syntax, because it is why this site was missed once already: property
+  // assignment plus `.save()`, which a scanner looking for `.update({...})` or raw SQL cannot
+  // see. The origin-immutability guard in `writerPairTripwires.test.ts` is derived over all
+  // three syntaxes for exactly this reason.
   // Confirmed payment is the self-serve grant condition — without this, requestMagicLink
   // (participantService) keeps rejecting the paid student with "pending admin approval"
   // forever, since it gates strictly on portal_enabled, not payment_status.
@@ -169,8 +175,14 @@ export async function markEnrollmentPaid(
  * (free Open House) enrollment they hold, so the same person is not counted as
  * both a paid student and a free prospect. Idempotent: withdrawn rows are skipped
  * on re-run, and the paid enrollment itself is never touched. enrollment_type is
- * left as 'explorer' so dashboards keep excluding it; status='withdrawn' removes
- * it from the active free-prospect view.
+ * left as 'explorer' because that is the row's origin and always was; what removes
+ * it from the active free-prospect view is `status='withdrawn'`.
+ *
+ * The second clause used to read "so dashboards keep excluding it", which named the
+ * wrong mechanism. The dashboard counts no longer exclude on origin at all - C10.17
+ * Phase 1 changed them to ask about payment, because the origin term was dropping
+ * every paying ex-Explorer off the admin dashboard and out of MRR at the same time.
+ * `status` is what this function relies on, and it is what it has always written.
  */
 export async function retireRedundantExplorerAccounts(email: string, paidEnrollmentId: string): Promise<void> {
   const strays = await Enrollment.findAll({
@@ -188,7 +200,11 @@ export async function retireRedundantExplorerAccounts(email: string, paidEnrollm
     // `paidEnrollmentId` — and the query selects on `enrollment_type='explorer'`, which
     // after the origin change will match paying ex-Explorers too. Defense in depth: a
     // stale, null or sibling id from any future caller can no longer withdraw a paid seat.
-    // A no-op today, since no paid row carries 'explorer'.
+    //
+    // It WAS a no-op when written in Phase 1, because no paid row could carry 'explorer'.
+    // Phase 2 stops the payment writers, so from this commit it is live: every paying
+    // ex-Explorer now matches the query above, and this line is the thing that stops the
+    // sweep withdrawing the very row that holds their access.
     if (stray.payment_status === 'paid') continue;
     await stray.update({
       status: 'withdrawn',
@@ -452,36 +468,36 @@ export async function createExplorerEnrollment(input: {
   return { enrollment, created: true, cohort_id: cohort.id };
 }
 
-/**
- * Admin "Convert to enrolled": move an Explorer onto a standard enrollment. Seat
- * reservation and payment follow the normal enrollment path, not this flag flip.
+/*
+ * `convertExplorerToStandard` WAS HERE AND IS DELETED, C10.17 Phase 2.
  *
- * WRITES BOTH SEMANTIC COLUMNS, Phase 2 T206, and the reason is the whole task.
+ * It took an enrollment id and did one thing: `update({ enrollment_type: 'standard', tier:
+ * 'member' })`. Admin "Convert to enrolled", moving an Explorer onto a standard enrollment.
  *
- * This used to write `enrollment_type: 'standard'` alone. Once T202 gave `/enroll`
- * Explorers `tier: 'guest'`, that produced **`standard` + `guest`**: a non-learner
- * programme with free access. Invisible to Explorer Growth because the row is no longer
- * `'explorer'`, and gated out of nothing because the legacy entitlement branch only gates
- * explorers. Crucially the row is **never paid**, so a `payment_status: 'paid'` +
- * `tier: 'guest'` tripwire cannot see it either — which is exactly why T206 has two
- * tripwires rather than one.
+ * It is removed rather than narrowed because once `enrollment_type` is origin, every
+ * possible version of this function is wrong:
  *
- * It was latent rather than live: this function has no callers (`grep -rn
- * convertExplorerToStandard backend/src --include=*.ts` finds only its own definition).
- * Fixed here so it is not a trap for whoever wires the admin button.
+ *   - Keep writing `enrollment_type` and it reintroduces exactly the rewrite this phase
+ *     exists to delete, on the one path where no payment even justifies it.
+ *   - Write `tier: 'member'` alone and the row rests at explorer + member + UNPAID. The
+ *     Phase 1 paywall gates on `isExplorer && !paid`, so an admin would "convert" somebody
+ *     and leave them locked out of weeks 1-12 - a latent trap, which is what this function
+ *     already was once before.
+ *   - Teach the paywall to honour `tier === 'member'` as well, and the gate changes for
+ *     rows that exist in production TODAY (explorer + non-guest tier is `freeAccountCohe
+ *     renceBackfill`'s "Shape A"). That is a live, customer-visible access change and a
+ *     decision for Ali, not a side effect of a bookkeeping fix.
  *
- * `grantMembership` (`subscriptionService.ts:525`) is the reference implementation — its
- * own comment says it is "kept in one place so the two callers can never drift apart" —
- * and this function now agrees with it rather than offering a second opinion.
+ * Deleting is the only option that leaves no wrong answer in the tree, and it costs
+ * nothing: the function had NO callers. Verified across backend/src, frontend/src,
+ * /scripts and /tests - the only references were its own definition and its own tests.
+ * The live admin "Convert to enrolled" buttons (`routes/admin/acceleratorRoutes.ts:93`,
+ * `routes/admin/communityMemberRoutes.ts:65`) call `grantFreeAccess`, which grants
+ * `tier: 'member'` AND `payment_status: 'paid'` through `grantMembership` and records a
+ * comp subscription. That path was always the right one and is unaffected.
+ *
+ * Delegating to it instead of deleting was considered and rejected: enrollmentService
+ * cannot import subscriptionService, because `grantMembership` already calls
+ * `retireRedundantExplorerAccounts` from this file, and CLAUDE.md forbids the circular
+ * dependency that would create.
  */
-export async function convertExplorerToStandard(enrollmentId: string): Promise<Enrollment> {
-  const enrollment = await Enrollment.findByPk(enrollmentId);
-  if (!enrollment) throw new AppError('Enrollment not found', 404);
-  if (enrollment.enrollment_type === 'explorer') {
-    // The PAIR, written together. `tier` is the access level and `enrollment_type` the
-    // programme; converting the programme without granting the access leaves the row in a
-    // state no consumer reads correctly.
-    await enrollment.update({ enrollment_type: 'standard', tier: 'member' });
-  }
-  return enrollment;
-}

@@ -89,10 +89,41 @@ const CANDIDATE_SQL = `
   LEFT JOIN community_members cm ON cm.enrollment_id = e.id
 `;
 
-/** The two shapes, counted straight from the table — the before/after witness. */
+/**
+ * The two shapes, counted straight from the table — the before/after witness.
+ *
+ * SHAPE A IS SPLIT, C10.17 Phase 2, because otherwise this witness lies to the operator.
+ *
+ * Shape A is `explorer` + non-guest tier. Before Phase 2 that could only be an
+ * incoherence: a free programme holding the paid access level. After Phase 2 it is also
+ * the NORMAL resting shape of every learner who signed up free and then paid, because the
+ * payment paths no longer rewrite `enrollment_type` — origin stays 'explorer' and `tier`
+ * becomes 'member'.
+ *
+ * `decideRow` already refuses to touch those rows (the `paid_status` / `paid_amount` /
+ * `active_subscription` exclusions short-circuit ahead of the Shape A write), so the SWEEP
+ * is safe. The WITNESS was not: a single `shape_a` number would count payers as pending
+ * work, and would not fall after a run, which reads exactly like a sweep that failed. An
+ * operator's next move on that evidence is to re-run it or escalate.
+ *
+ * So the two populations are counted apart. `shape_a` is now only the rows this sweep can
+ * actually write, and `shape_a_paid` is the payers it must never write.
+ *
+ * APPROXIMATE, AND DELIBERATELY ON THE SAFE SIDE. This counts over `enrollments` alone,
+ * while `isPaid` also honours an active SUBSCRIPTION, which needs a join this witness does
+ * not do. So a payer whose only paid signal is a subscription still lands in `shape_a`
+ * here. The error direction is the right one: the witness can over-report work to be done
+ * and never under-reports a protected row, and `decideRow` remains the authority on what
+ * is written.
+ */
 const SHAPE_COUNT_SQL = `
   SELECT
-    count(*) FILTER (WHERE enrollment_type = 'explorer' AND tier <> 'guest') AS shape_a,
+    count(*) FILTER (WHERE enrollment_type = 'explorer' AND tier <> 'guest'
+                       AND payment_status IS DISTINCT FROM 'paid'
+                       AND COALESCE(amount_paid, 0) <= 0)                  AS shape_a,
+    count(*) FILTER (WHERE enrollment_type = 'explorer' AND tier <> 'guest'
+                       AND (payment_status = 'paid'
+                            OR COALESCE(amount_paid, 0) > 0))              AS shape_a_paid,
     count(*) FILTER (WHERE enrollment_type = 'standard' AND tier = 'guest')  AS shape_b,
     count(*) FILTER (WHERE enrollment_type = 'explorer' AND tier = 'guest')  AS coherent_free,
     count(*) AS total
@@ -101,6 +132,9 @@ const SHAPE_COUNT_SQL = `
 
 export interface ShapeCounts {
   shape_a: string;
+  /** Paying upgraders resting at explorer + member. Never written; reported so the
+   *  operator can tell them from real work. See SHAPE_COUNT_SQL. */
+  shape_a_paid: string;
   shape_b: string;
   coherent_free: string;
   total: string;
@@ -113,7 +147,9 @@ async function shapeCounts(): Promise<ShapeCounts> {
 
 function printCounts(label: string, c: ShapeCounts): void {
   console.log(
-    `${label}  shape_a(explorer+non-guest)=${c.shape_a}  shape_b(standard+guest)=${c.shape_b}`
+    `${label}  shape_a(explorer+non-guest,unpaid)=${c.shape_a}`
+    + `  shape_a_paid(paying upgraders, NOT written)=${c.shape_a_paid}`
+    + `  shape_b(standard+guest)=${c.shape_b}`
     + `  coherent(explorer+guest)=${c.coherent_free}  total=${c.total}`,
   );
 }

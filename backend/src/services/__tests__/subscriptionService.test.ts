@@ -79,8 +79,12 @@ describe('subscriptionService', () => {
       }));
       expect((Subscription.create as jest.Mock).mock.calls[0][0].payment_ref).toMatch(/^COMP-e1-/);
       expect(update).toHaveBeenCalledWith(expect.objectContaining({
-        enrollment_type: 'standard', tier: 'member', payment_status: 'paid', status: 'active', portal_enabled: true, amount_paid: 0,
+        tier: 'member', payment_status: 'paid', status: 'active', portal_enabled: true, amount_paid: 0,
       }));
+      // C10.17 Phase 2: `enrollment_type: 'standard'` was in that objectContaining and is
+      // gone. Asserted as an absence as well, because `objectContaining` ignores extra keys
+      // and would happily pass if the write came back.
+      expect(update.mock.calls[0][0]).not.toHaveProperty('enrollment_type');
       expect((sub as any).plan).toBe('comp');
       // grantFreeAccess shares grantMembership with activateByRef, so a comped
       // student's lingering Explorer duplicate gets retired the same way.
@@ -551,7 +555,7 @@ describe('subscriptionService', () => {
       expect(Enrollment.findByPk).not.toHaveBeenCalled();
     });
 
-    it('activates + converts the Explorer on first payment', async () => {
+    it('activates + grants the Explorer a paid seat on first payment, origin intact', async () => {
       const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
       const enrollment = { cohort_id: null, enrolled_at: null, update: jest.fn() };
       (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
@@ -565,10 +569,14 @@ describe('subscriptionService', () => {
       expect(subUpdate.started_at.getTime()).toBe(NOW);
       expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 15, 12));
       const enrUpdate = enrollment.update.mock.calls[0][0];
-      expect(enrUpdate.enrollment_type).toBe('standard'); // drops the Week-0 gate
       expect(enrUpdate.tier).toBe('member');
       expect(enrUpdate.payment_status).toBe('paid');
       expect(enrUpdate.cohort_id).toBe('c-july');
+      // C10.17 Phase 2: `enrollment_type: 'standard'` was asserted here, commented "drops
+      // the Week-0 gate". The gate now keys on payment, not origin, so this activation
+      // leaves the row's origin intact: the student still arrived as an Explorer, and now
+      // they have paid. Both facts survive, which is the entire change.
+      expect(enrUpdate).not.toHaveProperty('enrollment_type');
     });
 
     it('retires any lingering Explorer duplicate on activation (regression: this self-serve path never did before 2026-07-31)', async () => {

@@ -37,7 +37,8 @@ jest.mock('../../models', () => ({
 // opens no connection, so `query` is spied per-test instead.
 jest.mock('../../config/env', () => ({ env: { jwtSecret: 't', databaseUrl: 'postgres://u:p@localhost:5432/t' } }));
 
-import { convertExplorerToStandard, markEnrollmentPaid } from '../enrollmentService';
+import * as enrollmentService from '../enrollmentService';
+import { markEnrollmentPaid } from '../enrollmentService';
 import { reconcilePayment } from '../paymentReconciliationService';
 // THE REAL CONSUMER, imported rather than re-implemented. Re-declaring a predicate inside a
 // test is the tautology that cost T203 five of its tests: inverting the real function left
@@ -49,20 +50,39 @@ import { isEnrolledMember } from '../../controllers/v1EnrollmentLookupController
 import '../../config/database';
 
 /**
- * Phase 2 T206 — WRITER-PAIR COHERENCE.
+ * Phase 2 T206 — WRITER-PAIR COHERENCE, NARROWED TO `tier` BY C10.17 PHASE 2.
  *
- * `enrollment_type` is the PROGRAMME and `tier` is the ACCESS LEVEL. A writer that moves one
- * without the other leaves a row no consumer reads correctly, and there are two distinct
- * broken states, neither of which implies the other:
+ * WHAT CHANGED AND WHY THESE TESTS INVERTED. T206 established "the pair": every payment
+ * writer wrote `tier: 'member'` AND `enrollment_type: 'standard'` together with the paid
+ * flag. C10.17 Phase 2 deletes the `enrollment_type` half from all five writers, so the
+ * assertions below that demanded `'standard'` now demand its ABSENCE. That is not T206
+ * being undone - it is T206's protection being separated from a second thing that was
+ * riding along with it.
  *
- *   1. **paid-but-guest** — `payment_status: 'paid'` with `tier: 'guest'`.
- *   2. **standard + guest** — moved off `'explorer'` without being granted `'member'`.
- *      This row is **never paid**, so no paid-but-guest check can see it. That is why
- *      T206 has two tripwires rather than one.
+ * `enrollment_type` is ORIGIN: 'explorer' means the account arrived free. Rewriting it on
+ * payment destroyed the only record of that, which is why free-to-paid conversion measured
+ * zero - the measured event mutated the field the population was defined by. `tier` is the
+ * ACCESS LEVEL, and it is the one that was always doing the work.
  *
- * `grantMembership` (`subscriptionService.ts:525`) is the reference implementation and its own
- * comment says it is "kept in one place so the two callers can never drift apart". This task
- * makes the other writers agree with it rather than adding a second opinion.
+ * THE EVIDENCE THAT THIS IS SAFE, and it is the reason this file barely changes shape.
+ * T206 named three consumers that paid-but-guest breaks: `isEnrolledMember`
+ * (v1EnrollmentLookupController), `growthJourney/subjectResolver`, and
+ * `reeseWelcomeService`. Every one of them reads `tier` and/or `payment_status`.
+ * NOT ONE of them reads `enrollment_type`:
+ *
+ *   isEnrolledMember   -> `r.tier === 'member' && (status active|completed)`
+ *   subjectResolver    -> `tier !== 'guest' && payment_status === 'paid'`
+ *   reeseWelcomeService-> `tier === 'member' || inRealClass`
+ *
+ * So the composition tests below - real writer output fed to the real consumer - are
+ * UNCHANGED and still green. They are what proves Phase 2 does not cost a paying student
+ * their partner-app login, and they prove it by driving the real predicate rather than by
+ * anybody arguing about it.
+ *
+ * WHAT REMAINS GUARDED: **paid-but-guest** (`payment_status: 'paid'` with `tier: 'guest'`)
+ * is still unreachable through every writer here, which was always the harm worth
+ * preventing. The second broken state T206 listed, **standard + guest**, is now simply
+ * unreachable a different way: nothing moves a row to 'standard' at all.
  *
  * HOW THESE TESTS ARE BUILT. For each writer that goes through the model, the test captures
  * the patch the REAL function writes, applies it to a realistic starting row, and feeds the
@@ -126,40 +146,31 @@ const stripSource = (file: string): string => {
 /** Apply a captured patch to a row, the way a real Sequelize instance would. */
 const applied = (row: Record<string, unknown>, patch: Record<string, unknown>) => ({ ...row, ...patch });
 
-describe('T206 writer 1 — convertExplorerToStandard (the LATENT one)', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('writes BOTH columns, so the conversion cannot produce standard + guest', async () => {
-    const row = freeExplorer();
-    enrollmentFindByPk.mockResolvedValue(row);
-
-    await convertExplorerToStandard('enr-1');
-
-    expect(row.update).toHaveBeenCalledTimes(1);
-    const patch = row.update.mock.calls[0][0];
-    expect(patch).toEqual({ enrollment_type: 'standard', tier: 'member' });
-  });
-
-  it('and the converted row reads as ENROLLED to the real partner-app predicate', async () => {
-    // The composition that matters: writer output -> real consumer input. Before T206 this
-    // produced `standard` + `guest`, which `isEnrolledMember` reports as NOT enrolled - a
-    // converted student the partner app refuses to log in.
-    const row = freeExplorer();
-    enrollmentFindByPk.mockResolvedValue(row);
-
-    await convertExplorerToStandard('enr-1');
-    const after = applied(row, row.update.mock.calls[0][0]);
-
-    expect(isEnrolledMember([after as never])).toBe(true);
-  });
-
-  it('leaves a row that is already standard completely alone', async () => {
-    const row = freeExplorer({ enrollment_type: 'standard', tier: 'member' });
-    enrollmentFindByPk.mockResolvedValue(row);
-
-    await convertExplorerToStandard('enr-1');
-
-    expect(row.update).not.toHaveBeenCalled();
+describe('T206 writer 1 — convertExplorerToStandard is DELETED, C10.17 Phase 2', () => {
+  /**
+   * The three tests that stood here drove `convertExplorerToStandard` and asserted it wrote
+   * the pair. The function is gone, so they are gone with it rather than being weakened into
+   * something that still passes.
+   *
+   * It was removed instead of narrowed because once `enrollment_type` is origin, no version
+   * of it is right: keeping the origin write reintroduces what Phase 2 deletes, on the one
+   * path where no payment justifies it; writing `tier` alone leaves the row at explorer +
+   * member + UNPAID, which the Phase 1 paywall still gates, so an admin would "convert"
+   * somebody and leave them locked out; and teaching the paywall to honour `tier` instead
+   * would change access for rows that exist in production today. It had no callers anywhere
+   * in backend/src, frontend/src, /scripts or /tests - only its own definition and these
+   * tests - and the live admin "Convert to enrolled" buttons call `grantFreeAccess`, which
+   * is tested under AC3 below and was always the correct path.
+   *
+   * This assertion replaces them: the export is pinned ABSENT. A test that merely stopped
+   * mentioning the function would leave nothing to catch its reintroduction, and the thing
+   * worth catching is somebody re-adding a second, origin-rewriting conversion path.
+   */
+  it('is no longer exported, so no caller can be wired to it again by accident', () => {
+    expect(Object.keys(enrollmentService)).not.toContain('convertExplorerToStandard');
+    // POSITIVE CONTROL: the module really did load and really does export its other work,
+    // so the assertion above is about a missing symbol and not a missing import.
+    expect(Object.keys(enrollmentService)).toContain('markEnrollmentPaid');
   });
 });
 
@@ -196,7 +207,11 @@ describe('T206 writer 5 — markEnrollmentPaid (LIVE; the one attempt 1 MISSED)'
     expect(row.save).toHaveBeenCalledTimes(1);
     expect(row.payment_status).toBe('paid');
     expect(row.tier).toBe('member');
-    expect(row.enrollment_type).toBe('standard');
+    // C10.17 Phase 2: this read `toBe('standard')`. ORIGIN SURVIVES THE PAYMENT - and the
+    // assignment seam is the strongest place in the repo to assert that, because the row
+    // object IS the evidence. If anybody re-adds `enrollment.enrollment_type = 'standard'`,
+    // this fails on the real mutation rather than on a source string.
+    expect(row.enrollment_type).toBe('explorer');
   });
 
   it('and the saved row reads as ENROLLED to the real partner-app predicate', async () => {
@@ -227,7 +242,7 @@ describe('T206 writer 2 — reconcilePayment (LIVE)', () => {
     cohortIncrement.mockResolvedValue(undefined);
   });
 
-  it('marks paid AND grants the pair in the same write', async () => {
+  it('marks paid AND grants the access level in the same write, without touching origin', async () => {
     const row = freeExplorer();
     enrollmentFindByPk.mockResolvedValue(row);
 
@@ -237,7 +252,11 @@ describe('T206 writer 2 — reconcilePayment (LIVE)', () => {
     const patch = row.update.mock.calls[0][0];
     expect(patch.payment_status).toBe('paid');
     expect(patch.tier).toBe('member');
-    expect(patch.enrollment_type).toBe('standard');
+    // C10.17 Phase 2: this asserted `patch.enrollment_type === 'standard'`. The key is absent
+    // from the patch entirely, which is stronger than asserting a value: `not.toBe('standard')`
+    // would also pass if the writer started sending `enrollment_type: undefined`, and Sequelize
+    // treats a present-but-undefined key differently from an absent one.
+    expect(patch).not.toHaveProperty('enrollment_type');
   });
 
   it('and the paid row reads as ENROLLED to the real partner-app predicate', async () => {
@@ -251,6 +270,13 @@ describe('T206 writer 2 — reconcilePayment (LIVE)', () => {
     // the partner app, and read as not-a-customer by the Growth Journey.
     expect(isEnrolledMember([after as never])).toBe(true);
     expect(after.tier).not.toBe('guest');
+
+    // THE WHOLE POINT OF C10.17, in one row. This is the resting shape Phase 2 creates and
+    // that nothing could reach before it: origin still records that they arrived FREE, and
+    // the real partner-app predicate on the line above still says ENROLLED. Conversion
+    // becomes countable because the two facts no longer overwrite each other.
+    expect(after.enrollment_type).toBe('explorer');
+    expect(after.payment_status).toBe('paid');
   });
 
   it('is still idempotent: an already-paid row is a no-op and writes nothing', async () => {
@@ -296,7 +322,7 @@ describe('T206 writer 3 — paymentSyncService, RAW SQL (LIVE, and the weaker se
    * is new in T206 is the two column assignments, asserted below on the statement text.
    */
 
-  it('the UPDATE statement gates BOTH columns on :status = paid, never unconditionally', () => {
+  it('gates tier on :status = paid, and does not assign enrollment_type at all', () => {
     // Read from the module's own source: the statement is a template literal, so this is the
     // text that will be sent. Declared as a source assertion for exactly that reason.
     const src = require('fs').readFileSync(
@@ -305,13 +331,18 @@ describe('T206 writer 3 — paymentSyncService, RAW SQL (LIVE, and the weaker se
     const stripped = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\r\n]*/g, ' ');
 
     expect(stripped).toContain("tier = CASE WHEN :status = 'paid' THEN 'member' ELSE tier END");
-    expect(stripped).toContain(
-      "enrollment_type = CASE WHEN :status = 'paid' THEN 'standard' ELSE enrollment_type END",
-    );
-    // A FAILED payment must move neither column. The `ELSE tier END` / `ELSE enrollment_type
-    // END` arms are what guarantee that, so their absence is the thing to catch.
+    // A FAILED payment must not grant access. The `ELSE tier END` arm is what guarantees
+    // that, so an unconditional assignment is the thing to catch.
     expect(stripped).not.toContain("tier = 'member',");
-    // POSITIVE CONTROL: the read found the statement at all.
+
+    // C10.17 Phase 2: the `enrollment_type = CASE WHEN ... THEN 'standard' ELSE
+    // enrollment_type END` arm was asserted PRESENT here and is now asserted ABSENT. Any
+    // assignment to the column is caught, not just the exact CASE arm that was deleted -
+    // pinning the old string's absence alone would miss a plain `enrollment_type =
+    // 'standard'` written in its place, which is the likelier way it would come back.
+    expect(stripped).not.toMatch(/SET[\s\S]*?enrollment_type\s*=/);
+    // POSITIVE CONTROL: the read found the statement at all, and the regex above is scanning
+    // real SQL rather than returning a vacuous pass over a file it failed to read.
     expect(stripped).toContain('UPDATE enrollments SET');
   });
 });
@@ -332,30 +363,34 @@ describe('T206 writer 4 — appPaymentReconcileService, RAW SQL (LIVE; the FIFTH
    */
   const src = () => stripSource('appPaymentReconcileService.ts');
 
-  it('writes the pair alongside the paid flag', () => {
+  it('grants the access level alongside the paid flag, and never writes origin', () => {
     expect(src()).toContain("tier = 'member'");
-    expect(src()).toContain("enrollment_type = 'standard'");
+    // C10.17 Phase 2: asserted present, now asserted absent.
+    expect(src()).not.toContain("enrollment_type = 'standard'");
   });
 
-  it('and they sit in the SAME statement as payment_status, not a separate one', () => {
+  it('and tier sits in the SAME statement as payment_status, not a separate one', () => {
     // A separate UPDATE would reintroduce the gap this closes: two statements can be
     // interrupted between, leaving paid-but-guest for exactly as long as that takes.
     const stmt = src().match(/UPDATE enrollments[\s\S]*?WHERE id = :id/);
     expect(stmt).not.toBeNull();
     expect(stmt![0]).toContain("payment_status = 'paid'");
     expect(stmt![0]).toContain("tier = 'member'");
-    expect(stmt![0]).toContain("enrollment_type = 'standard'");
+    // The statement that marks somebody paid must not also restate their origin. Scoped to
+    // the matched statement rather than the file, so this cannot be satisfied or broken by
+    // an unrelated query elsewhere in the module.
+    expect(stmt![0]).not.toMatch(/enrollment_type\s*=/);
   });
 });
 
-describe('T206 AC3 — grantMembership remains the reference: both columns, one place', () => {
+describe('T206 AC3 — grantMembership remains the reference: access granted, origin untouched', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     subscriptionFindOne.mockResolvedValue(null);
     subscriptionCreate.mockImplementation(async (a: Record<string, unknown>) => ({ id: 'sub-1', ...a }));
   });
 
-  it('a comped member is granted the pair, through the reference path', async () => {
+  it('a comped member is granted member access and paid status, through the reference path', async () => {
     // Driven through `grantFreeAccess`, the exported entry point that reaches the private
     // `grantMembership`, rather than asserting on its source.
     const row = freeExplorer();
@@ -365,10 +400,36 @@ describe('T206 AC3 — grantMembership remains the reference: both columns, one 
     await grantFreeAccess('enr-1', Date.parse('2026-10-06T00:00:00Z'));
 
     const patches = row.update.mock.calls.map((c: unknown[]) => c[0] as Record<string, unknown>);
-    const paired = patches.find((p) => 'tier' in p && 'enrollment_type' in p);
-    expect(paired).toBeDefined();
-    expect(paired!.tier).toBe('member');
-    expect(paired!.enrollment_type).toBe('standard');
+    // C10.17 Phase 2: this used to FIND the patch by looking for one carrying both `tier`
+    // and `enrollment_type`, which is precisely the shape that no longer exists - so the
+    // selector itself had to change, not just the expectation. It now selects on the grant
+    // that matters and then asserts origin is absent from it.
+    const grant = patches.find((p) => 'tier' in p && 'payment_status' in p);
+    expect(grant).toBeDefined();
+    expect(grant!.tier).toBe('member');
+    expect(grant!.payment_status).toBe('paid');
+    expect(grant).not.toHaveProperty('enrollment_type');
+  });
+
+  /**
+   * THE COMP CASE IS WHY DELETING `convertExplorerToStandard` COSTS NOTHING, asserted here
+   * rather than argued in a comment. An admin comping a free learner reaches `grantMembership`
+   * through this path, and the row comes out `paid` - so every Phase 1 reader, including the
+   * paywall, treats them as a real student while their ORIGIN still records that they arrived
+   * free. That is the behaviour the deleted function was reaching for and getting wrong.
+   */
+  it('and no patch anywhere in the comp path rewrites origin', async () => {
+    const row = freeExplorer();
+    enrollmentFindByPk.mockResolvedValue(row);
+    const { grantFreeAccess } = await import('../subscriptionService');
+
+    await grantFreeAccess('enr-1', Date.parse('2026-10-06T00:00:00Z'));
+
+    const patches = row.update.mock.calls.map((c: unknown[]) => c[0] as Record<string, unknown>);
+    // POSITIVE CONTROL first: this path really did write something, so "none of them touch
+    // origin" is a finding about writes that happened and not about an empty list.
+    expect(patches.length).toBeGreaterThan(0);
+    expect(patches.filter((p) => 'enrollment_type' in p)).toEqual([]);
   });
 });
 

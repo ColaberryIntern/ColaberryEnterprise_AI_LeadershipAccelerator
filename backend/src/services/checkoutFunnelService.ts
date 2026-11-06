@@ -64,8 +64,20 @@ export interface CheckoutAttemptRow {
    * Durable origin marker: did this person ever enter as a free Explorer? Computed in SQL as
    * `explorer_entered_at IS NOT NULL OR cohorts.cohort_type = 'explorer'`.
    *
-   * NOT `enrollment_type`, which `markEnrollmentPaid` rewrites to 'standard' on payment. Using
-   * that field makes the Explorer conversion rate zero by definition.
+   * NOT `enrollment_type`, and the reason has changed shape as of C10.17 Phase 2 without
+   * changing the decision.
+   *
+   * It used to be that `markEnrollmentPaid` and four other writers rewrote that column to
+   * 'standard' on payment, so grouping on it made the Explorer conversion rate zero by
+   * definition. Phase 2 deleted those rewrites, so from now on `enrollment_type` does hold
+   * origin and would be usable here.
+   *
+   * These markers stay, because Phase 2 is NOT RETROACTIVE. Every row that paid before it
+   * shipped already had its origin overwritten, and nothing can recover it from that column.
+   * `explorer_entered_at` and `cohorts.cohort_type` were never touched by payment, so they
+   * are the only signals under which the historical conversion rate is computable at all -
+   * which is exactly why this module was built on them rather than waiting for the schema
+   * to be fixed.
    */
   explorer_origin: boolean | null;
   /** The two markers separately, so their disagreement can be counted rather than hidden. */
@@ -270,10 +282,12 @@ export function computeCheckoutFunnel(
 /**
  * The SQL behind it, kept next to the logic it feeds so the two cannot drift apart.
  *
- * `enrollment_type` is deliberately NOT selected. It is rewritten to 'standard' by
- * `markEnrollmentPaid`, so grouping on it makes the Explorer conversion rate zero by
- * definition. Origin is taken from the two markers payment does not touch, and both are
- * returned separately so the module can count how often they disagree.
+ * `enrollment_type` is deliberately NOT selected. Until C10.17 Phase 2 it was rewritten to
+ * 'standard' by `markEnrollmentPaid` and four other payment writers, so grouping on it made
+ * the Explorer conversion rate zero by definition. Those writers have stopped, but the rows
+ * that paid before they stopped cannot be recovered - Phase 2 preserves origin from here on,
+ * it does not restore it. Origin is therefore still taken from the two markers payment never
+ * touched, and both are returned separately so the module can count how often they disagree.
  *
  * IT DELIBERATELY HAS NO DATE FILTER, and that is load-bearing rather than lazy. A person's
  * FIRST attempt decides which period they are counted in, so filtering rows by date before the
