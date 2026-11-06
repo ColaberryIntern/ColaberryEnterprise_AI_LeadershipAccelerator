@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { CampusAudience } from '../campusMap';
 import type { CampusPerson } from '../campusApi';
 import { initialsOf } from '../WhoIsHere';
-import { placePeople, type HqPlaced } from './hqModel';
+import { floorAgents, placePeople, type HqPlaced } from './hqModel';
 import type { HqState } from './useHq';
 import { HqLobby, HqOutside } from './HqOutside';
 import { HqCab, HqFloorScene } from './HqInside';
@@ -24,17 +24,19 @@ export function toHqPeople(named: CampusPerson[]): HqPerson[] {
 }
 
 /**
- * C87: an AI agent whose place is a Staff Office floor stands at its office door (Dara at Curriculum on the Program floor).
- * The server lists such a desk only for a badge that opens that floor, so nothing here needs its own gate.
+ * C87 placed an AI agent on a Staff Office floor as a face on its office door (Dara at Curriculum on the Program floor), which
+ * nobody could press. C119 (Ali 2026-11-06): she stands at that floor's front desk in its lobby instead, and pressing her opens
+ * her staff card (FloorLobbyDesk). So the doors carry only the people really at them; the agents come from useFloorAgents.
  */
-export function deskPeople(desks: StaffDesk[] | null | undefined): HqPerson[] {
-  return (desks ?? []).filter((d) => d.on_duty && d.office)
-    .map((d) => ({ key: `desk-${d.id}`, name: `${d.name} (AI, ${d.title})`, initials: initialsOf(d.name), photo: null, hq_path: d.office ?? undefined }));
+export function useHqPlaced(s: HqState, named: CampusPerson[]): HqPlaced<HqPerson> {
+  return useMemo(() => placePeople(s.hq, toHqPeople(named)), [s.hq, named]);
 }
 
-export function useHqPlaced(s: HqState, named: CampusPerson[]): HqPlaced<HqPerson> {
+/** The AI agents at the front desk of the floor the viewer is standing on (none off a floor). Gated by floorAgents. */
+export function useFloorAgents(s: HqState): StaffDesk[] {
   const { staffDesks } = useCampus();
-  return useMemo(() => placePeople(s.hq, [...toHqPeople(named), ...deskPeople(staffDesks)]), [s.hq, named, staffDesks]);
+  const f = s.scene === 'floor' ? s.floorOf(s.floor) : null;
+  return useMemo(() => (f ? floorAgents(s.hq, f, staffDesks) : []), [s.hq, f, staffDesks]);
 }
 
 const AUDIENCE_TITLE: Record<CampusAudience, string> = { member: 'Member', explorer: 'Explorer', business: 'Partner', staff: 'Colaberry staff' };
@@ -46,7 +48,8 @@ export function HqArrivalSide({ s, audience, face, named }: { s: HqState; audien
   const placed = useHqPlaced(s, named);
   const name = facts.fullName || 'You';
   const who = { name, initials: facts.initials || initialsOf(name), title: (audience === 'staff' && mgmt.label) || AUDIENCE_TITLE[audience] };
-  return <HqPanel s={s} who={who} face={face} placed={placed} />;
+  const agents = useFloorAgents(s);
+  return <HqPanel s={s} who={who} face={face} placed={placed} agents={agents} />;
 }
 
 export interface HqBuildingProps {
@@ -63,6 +66,7 @@ export interface HqBuildingProps {
 export default function HqBuilding(p: HqBuildingProps): React.ReactElement {
   const { s } = p;
   const placed = useHqPlaced(s, p.named);
+  const agents = useFloorAgents(s);
   const hour = new Date().getHours();
   const floor = s.scene === 'floor' ? s.floorOf(s.floor) : null;
   return (
@@ -71,7 +75,7 @@ export default function HqBuilding(p: HqBuildingProps): React.ReactElement {
       {s.scene === 'lobby' && <HqLobby s={s} face={p.face} audience={p.audience} firstName={p.firstName} hour={hour} desk={p.desk}
         lobby={placed.lobby} people={placed.byFloor} onGround={p.onGround} />}
       {s.scene === 'cab' && <HqCab s={s} face={p.face} people={placed} />}
-      {s.scene === 'floor' && floor && <HqFloorScene s={s} f={floor} people={placed} />}
+      {s.scene === 'floor' && floor && <HqFloorScene s={s} f={floor} people={placed} agents={agents} />}
       <div className="cm-hq-toast" aria-live="polite" data-testid="cm-hq-toast">{s.toast && <div className="t">{s.toast}</div>}</div>
     </div>
   );

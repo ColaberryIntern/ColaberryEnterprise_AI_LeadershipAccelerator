@@ -2,6 +2,8 @@ import React from 'react';
 import { badgeLevel, floorStatus, openFloors, roomHref, roomName, roomsText, type HqFloor, type HqPlaced } from './hqModel';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
+import type { StaffDesk } from '../campusPeopleApi';
+import { FloorLobbyDesks } from './FloorLobbyDesk';
 
 /**
  * Campus HQ, the arrival panel's part (H5.1): your badge (what it opens, at a glance), the Floors list in sidebar order, and
@@ -36,7 +38,7 @@ function FloorRow({ s, f, here }: { s: HqState; f: HqFloor; here: HqPerson[] }):
   );
 }
 
-export function HqPanel({ s, who, face, placed }: { s: HqState; who: HqBadgeWho; face: string; placed: HqPlaced<HqPerson> }): React.ReactElement {
+export function HqPanel({ s, who, face, placed, agents = [] }: { s: HqState; who: HqBadgeWho; face: string; placed: HqPlaced<HqPerson>; agents?: StaffDesk[] }): React.ReactElement {
   const { hq } = s;
   const f = s.scene === 'floor' ? s.floorOf(s.floor) : null;
   if (f) {
@@ -45,6 +47,11 @@ export function HqPanel({ s, who, face, placed }: { s: HqState; who: HqBadgeWho;
         <div className="kick">FLOOR {f.num}</div>
         <h2>{f.label}</h2>
         <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>
+        {agents.length > 0 && <>
+          {/* C119: the AI agent at this floor's front desk, the same card the scene's desk opens */}
+          <div className="sec">At the front desk</div>
+          <FloorLobbyDesks desks={agents} variant="row" />
+        </>}
         <div className="sec">Rooms on this floor <small>{f.openCount} open</small></div>
         <div className="cm-hq-rlist">
           {f.rooms.map((r) => {

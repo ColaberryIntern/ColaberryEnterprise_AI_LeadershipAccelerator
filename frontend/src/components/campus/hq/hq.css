@@ -144,6 +144,26 @@
 .cm-hq-floor .office.lock .pl{background:var(--cm-art-hq-plaque-lock);color:var(--cm-art-hq-btn-lock-s)}
 .cm-hq-floor .office.lock:hover{transform:none}
 .cm-hq-floorbar{position:absolute;left:20px;bottom:20px;display:flex;gap:8px;z-index:3}
+/* C119: an AI agent at the floor's front desk, in the floor's lobby (bottom right; the elevator and Lobby buttons are bottom left) */
+.cm-hq-fdesks{position:absolute;right:20px;bottom:16px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 300px)}
+.cm-hq-fdesks .sign{font:800 10px 'DM Sans',system-ui,sans-serif;letter-spacing:.18em;color:var(--cm-art-hq-plate-ink);background:linear-gradient(180deg,var(--cm-art-hq-brass2),var(--cm-art-hq-brass3));border-radius:3px;padding:3px 8px}
+.cm-hq .cm-hq-fdesk,.cm-hq-fdesk-row{display:flex;align-items:center;gap:10px;min-height:44px;border:0;cursor:pointer;text-align:left;font-family:'DM Sans',system-ui,sans-serif;color:var(--cm-art-ink)}
+/* .cm-hq scoped: .cm-hq button (reset: no background, no border) would otherwise win */
+.cm-hq .cm-hq-fdesk{padding:8px 14px 8px 8px;border-radius:12px;background:var(--cm-art-paper);box-shadow:var(--cm-art-shadow);border-bottom:5px solid var(--cm-art-hq-brass3);max-width:100%}
+.cm-hq-fdesk:hover{transform:translateY(-2px);transition:transform .15s}
+.cm-hq-fdesk:focus-visible,.cm-hq-fdesk-row:focus-visible{outline:3px solid var(--cm-art-red);outline-offset:2px}
+.cm-hq-fdesk .av,.cm-hq-fdesk-row .av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px;color:var(--cm-art-white);background:var(--cm-art-staff-dara);border:2px solid var(--cm-art-white)}
+.cm-hq-fdesk .av.staff-reese,.cm-hq-fdesk-row .av.staff-reese{background:var(--cm-art-staff-reese)}
+.cm-hq-fdesk .av.staff-maya,.cm-hq-fdesk-row .av.staff-maya{background:var(--cm-art-staff-maya)}
+.cm-hq-fdesk .tx,.cm-hq-fdesk-row .tx{display:flex;flex-direction:column;min-width:0}
+.cm-hq-fdesk .tx b,.cm-hq-fdesk-row .tx b{font-size:14px;line-height:1.2}
+.cm-hq-fdesk .tx b small,.cm-hq-fdesk-row .tx b small{font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--cm-art-muted)}
+.cm-hq-fdesk .tx>small,.cm-hq-fdesk-row .tx>small{font-size:12px;color:var(--cm-art-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-hq-fdesk .go,.cm-hq-fdesk-row .go{flex:none;font-weight:800;font-size:12.5px;color:var(--cm-art-red);white-space:nowrap}
+.cm-hq-fdesks-rows{display:flex;flex-direction:column;gap:6px;margin:0 0 6px}
+.cm-hq-fdesk-row{width:100%;padding:8px 10px;border-radius:10px;background:var(--cm-art-card);border:1px solid var(--cm-art-line)}
+.cm-hq-fdesk-row .tx{flex:1}
+@media (max-width:820px){.cm-hq-fdesks{left:20px;right:20px;bottom:70px;max-width:none;align-items:stretch}.cm-hq-fdesks .sign{align-self:flex-start}}
 
 /* people (Campus HQ presence): faces, never invented */
 .cm-hq-people{display:inline-flex;align-items:center;flex:none}
