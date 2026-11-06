@@ -81,6 +81,7 @@ export interface OnboardingSchedule {
   is_staff?: boolean;         // community_members.role === 'staff' — never gated by <PageGate>
   has_full_access?: boolean;  // page-level paywall signal (separate flag from is_explorer) — see useEntitlement
   first_win?: boolean | null; // C91: has finished a first lesson; null/absent = unknown (keep the pre-C91 page) — see explorerFirstWin
+  any_card_completed?: boolean | null; // C115: has completed any card, points or not; null/absent = unknown — see needsFirstLesson
 }
 
 export interface ResumeProfileFields {

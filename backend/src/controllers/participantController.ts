@@ -22,7 +22,7 @@ import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 import { isFreePreviewTier, resolveContentPageAccess } from '../services/access/contentEntitlement';
-import { hasFirstWin } from '../services/explorerFirstWin';
+import { hasFirstWin, hasCompletedAnyCard } from '../services/explorerFirstWin';
 import { getUpcomingPublicEvents, annotateRegistration } from '../services/publicEventsService';
 import { Enrollment } from '../models';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
@@ -214,7 +214,7 @@ export async function handleClaimStreak(req: Request, res: Response, next: NextF
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
     const enrollmentId = req.participant!.sub;
-    const [schedule, isExplorer, pageAccess, firstWin] = await Promise.all([
+    const [schedule, isExplorer, pageAccess, firstWin, anyCardCompleted] = await Promise.all([
       getOnboardingSchedule(enrollmentId),
       // Free-preview status drives the enroll/pay conversion funnel on the portal
       // (Today). Single source of truth = contentEntitlement.isFreePreviewTier
@@ -226,8 +226,10 @@ export async function handleGetOnboardingSchedule(req: Request, res: Response, n
       resolveContentPageAccess(enrollmentId),
       // C91: has the learner finished a first lesson? Holds the enroll ask until they have. null = unknown (old behavior).
       hasFirstWin(enrollmentId),
+      // C115: any completed card, points or not; with first_win it decides whether a non-Explorer signs in to the first lesson.
+      hasCompletedAnyCard(enrollmentId),
     ]);
-    res.json({ ...schedule, is_explorer: isExplorer, is_staff: pageAccess.isStaff, has_full_access: pageAccess.hasFullAccess, first_win: firstWin });
+    res.json({ ...schedule, is_explorer: isExplorer, is_staff: pageAccess.isStaff, has_full_access: pageAccess.hasFullAccess, first_win: firstWin, any_card_completed: anyCardCompleted });
   } catch (err) { next(err); }
 }
 

@@ -173,6 +173,18 @@ describe('campusLandingTarget (C114)', () => {
     expect(campusLandingTarget({ is_explorer: false, first_win: false })).toBe('/portal/campus');
     expect(campusLandingTarget(null)).toBe('/portal/campus');
   });
+
+  it('C115: a paid learner who has done nothing goes to the first lesson; done anything, staff or unknown stays on Campus', () => {
+    const paid = { is_explorer: false, is_staff: false };
+    expect(campusLandingTarget({ ...paid, first_win: false, any_card_completed: false })).toBe(FIRST_LESSON_HREF);
+    expect(campusLandingTarget({ ...paid, first_win: false, any_card_completed: true })).toBe('/portal/campus'); // cards done without points
+    expect(campusLandingTarget({ ...paid, first_win: true, any_card_completed: false })).toBe('/portal/campus');
+    expect(campusLandingTarget({ ...paid, first_win: false, any_card_completed: null })).toBe('/portal/campus');
+    expect(campusLandingTarget({ ...paid, first_win: false })).toBe('/portal/campus'); // older server: no field
+    expect(campusLandingTarget({ is_explorer: false, is_staff: true, first_win: false, any_card_completed: false })).toBe('/portal/campus');
+    // An Explorer keeps the C114 rule: a completed 0-point card is not a first lesson
+    expect(campusLandingTarget({ is_explorer: true, first_win: false, any_card_completed: true })).toBe(FIRST_LESSON_HREF);
+  });
 });
 
 describe('the campus home', () => {
