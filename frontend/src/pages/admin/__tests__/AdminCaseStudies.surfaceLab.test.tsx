@@ -81,6 +81,31 @@ const WRITE_CALLS = [
   'createCaseStudyFromProject', 'createCaseStudyFromRepositories',
 ] as const;
 
+describe('the LIVE marker on the lens tabs follows the record', () => {
+  it('marks Hire LIVE once this record is published there', async () => {
+    api.getCaseStudy.mockResolvedValue(F.detailFixture({
+      publications: [
+        { id: 'pub-1', surfaceKey: 'enterprise', status: 'published', publishedSnapshotId: 's', publishedAt: '2026-11-01T00:00:00.000Z', unpublishedAt: null },
+        { id: 'pub-2', surfaceKey: 'hire', status: 'published', publishedSnapshotId: 's', publishedAt: '2026-11-06T00:00:00.000Z', unpublishedAt: null },
+      ],
+    }));
+    await mountDetail();
+    expect(H.query('cs-lens-live-marker-hire')).not.toBeNull();
+    expect(H.query('cs-lens-live-marker')).not.toBeNull(); // enterprise, unchanged
+  });
+
+  it('does not mark Hire when the record has no published Hire row, or only a withdrawn one', async () => {
+    await mountDetail(); // the default fixture is published on enterprise only
+    expect(H.query('cs-lens-live-marker-hire')).toBeNull();
+    H.unmount();
+    api.getCaseStudy.mockResolvedValue(F.detailFixture({
+      publications: [{ id: 'pub-2', surfaceKey: 'hire', status: 'unpublished', publishedSnapshotId: null, publishedAt: null, unpublishedAt: '2026-11-06T00:00:00.000Z' }],
+    }));
+    await mountDetail();
+    expect(H.query('cs-lens-live-marker-hire')).toBeNull();
+  });
+});
+
 describe('the segmented control is five discrete lenses', () => {
   it('renders one tab per surface inside a real tablist', async () => {
     await mountDetail();
