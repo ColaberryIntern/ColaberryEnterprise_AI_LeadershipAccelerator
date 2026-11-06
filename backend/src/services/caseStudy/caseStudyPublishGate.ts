@@ -122,6 +122,7 @@ import {
   ruleQuotes, ruleRepoIdentityInProse, ruleUnverifiedClaims,
 } from './caseStudyPublishClaimScan';
 import { ruleVisualStory } from './caseStudyVisualStoryValidate';
+import { ruleHireLinkedPerson } from './caseStudyPublishHireRule';
 import type {
   CaseStudyPublishBlocker,
   CaseStudyPublishBlockerCode,
@@ -167,6 +168,8 @@ export function evaluateCaseStudyPublishGate(
 ): CaseStudyPublishDecision {
   const b = new Blockers();
   ruleSurface(input, b);
+  // Hire lists people: a record that resolves to nobody is refused on `hire` only.
+  ruleHireLinkedPerson(input, b);
   ruleStatus(input.caseStudy, b);
   ruleSnapshot(input.snapshot, b);
 
