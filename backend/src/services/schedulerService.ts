@@ -105,10 +105,51 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** Get the next open cohort for dynamic context */
-async function getNextCohort(): Promise<{ name: string; start_date: string; seats_remaining: number } | null> {
+/**
+ * Get the current accelerator batch, for dynamic context in templates and AI generation.
+ *
+ * C10.15. This used to be `status: 'open'` ordered by `start_date ASC`, with no type filter and
+ * no date filter, and the two missing terms made it return the wrong thing in production.
+ *
+ * MEASURED 2026-11-06, against production: the open cohorts were `Explorer - Prospects`
+ * (12 July 2026, cohort_type 'explorer'), `AI Internship` (15 Sept, 'ai_internship') and
+ * `Cohort - November 2026` (7 Dec, 'accelerator'). Sorted ascending by start_date it returned
+ * **Explorer - Prospects, 12 July** - the prospect bucket, and a date nearly four months old.
+ * Every template rendering `{{cohort_name}}` or `{{cohort_start}}` named that, and the same
+ * value was stamped onto payment_readiness actions as `metadata.cohort_start_date`.
+ *
+ * WHY THAT WAS WORSE THAN A COSMETIC BUG. The guard above (`cohort already started`, line ~580)
+ * cancels a payment_readiness action when `now >= metadata.cohort_start_date`. Stamped with a
+ * date in the past, that test is true the moment the action is written, so **the readiness
+ * ladder cancelled itself**. 7 of the 10 actions that have ever carried a cohort_start_date are
+ * cancelled. The ladder is what the monthly batch model depends on to collect payment, so this
+ * had to be right before C10.13 wires placement to it.
+ *
+ * The two terms:
+ *
+ *   cohort_type: 'accelerator'  - 'explorer' is a prospect bucket and 'ai_internship' is a
+ *                                 different programme; neither is a batch anybody enrols into
+ *                                 here. (Those are the only three values in the table.)
+ *   start_date >= today         - a batch's `start_date` holds its ORIENTATION date, so a past
+ *                                 one is a finished event. Start-of-today rather than `now`, so
+ *                                 the cohort stays selectable on its own orientation day.
+ *
+ * RETURNING null IS A SAFE OUTCOME, and better than the old behaviour. If no accelerator batch
+ * has a future orientation, callers fall back to 'our next cohort' / 'soon', and no
+ * `cohort_start_date` is stamped at all - which means the cancel guard cannot fire, because it
+ * requires that field to be present. The old code could not return null while any cohort of any
+ * type was open, so it always had something wrong to say.
+ */
+export async function getNextCohort(): Promise<{ name: string; start_date: string; seats_remaining: number } | null> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   const cohort = await Cohort.findOne({
-    where: { status: 'open' },
+    where: {
+      status: 'open',
+      cohort_type: 'accelerator',
+      start_date: { [Op.gte]: startOfToday },
+    } as any,
     order: [['start_date', 'ASC']],
   });
   if (!cohort) return null;
