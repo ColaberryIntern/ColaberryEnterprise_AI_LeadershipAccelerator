@@ -7,6 +7,13 @@
  * `solution_build` draft document. A not-accepted result surfaces the gate issues and persists NOTHING
  * (never a fake pass); when the flag is off it reports `disabled` without a model call.
  *
+ * THE PERSISTED DOCUMENT IS THE WHOLE DECOMPOSITION, not the subset it used to be. Until 2026-11-06 this
+ * built `doc_json` member by member and `agent_teams` / `surfaces` were simply not among them, so the
+ * model could emit a perfect agent roster and one console and the column would come back without the
+ * keys. Nothing failed: the gate ran before the write, the write succeeded, and the two fields fell on
+ * the floor between them. Any member added to `FactoryProject` has to be added here too, or it is
+ * generated and then discarded.
+ *
  * Additive; overwrites the v1 draft `doc_json` in place (fork-on-edit is an approval-time behavior). The
  * row->typed mappers are inline (not imported from factoryRoutes) so this service does not create a circular
  * dependency with the routes module that imports it.
@@ -88,6 +95,13 @@ export async function generateDecomposition(deliveryProjectId: string): Promise<
   const docJson = {
     processes: p.processes, roles: p.roles, tasks: p.tasks, assignments: p.assignments,
     transitions: p.transitions, allocation: p.allocation, role_map: p.role_map, source_blocks: p.source_blocks,
+    // L10.2/L10.3. These two are PASSED THROUGH EXACTLY and never defaulted, because `undefined` and
+    // `[]` are different statements to the gate: `humanAiStructure` reads an absent key as "this
+    // decomposition declared no structure" (STRUCTURE_ABSENT) and an empty array as "it declared the
+    // structure and there is none" (AI_TASK_WITHOUT_TEAM / HUMAN_TASK_WITHOUT_SURFACE). A `?? []` here
+    // would turn every silent model response into a false claim that the model answered. `JSON.stringify`
+    // drops an undefined member, so an absent key stays absent in the JSONB column.
+    agent_teams: p.agent_teams, surfaces: p.surfaces,
   };
   const { default: ContractProcessDocument } = await import('../../models/ContractProcessDocument');
   await sequelize.transaction(async (transaction) => {

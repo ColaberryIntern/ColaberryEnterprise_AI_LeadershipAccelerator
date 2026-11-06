@@ -56,6 +56,37 @@ describe('generateDecomposition', () => {
     expect(docUpsert.mock.calls[0][1]).toEqual({ transaction: 'TX' });
   });
 
+  /**
+   * These three assert the SERIALIZED document, not the JS object handed to upsert. The column is
+   * JSONB, so what survives is whatever `JSON.stringify` keeps, and `{ agent_teams: undefined }`
+   * satisfies `toMatchObject` and `'agent_teams' in doc` while storing no key at all. Asserting the
+   * object would pass identically whether or not the field ever reached the database.
+   */
+  const stored = () => JSON.parse(JSON.stringify(docUpsert.mock.calls[0][0].doc_json));
+
+  it('persists agent_teams and surfaces, which the write dropped until 2026-11-06', async () => {
+    const agent_teams = [{ id: 'team-1', name: 'Compliance', subject: 'Compliance', task_ids: ['T1'], approver_role_id: 'role-lead', execution_policy: 'agent_with_review', approval_policy: 'internal_review', autonomy_stage: null, trust_dimensions: ['transparent'] }];
+    const surfaces = [{ id: 'surf-1', name: 'Bid console', kind: 'console', task_ids: ['T1'] }];
+    factoryGenerateIfEnabled.mockResolvedValue({ project: { ...project, agent_teams, surfaces }, issues: [], accepted: true });
+    await generateDecomposition('dp-1');
+    expect(stored().agent_teams).toEqual(agent_teams);
+    expect(stored().surfaces).toEqual(surfaces);
+  });
+
+  it('stores NO KEY when the model declared neither, so the gate still reads STRUCTURE_ABSENT', async () => {
+    factoryGenerateIfEnabled.mockResolvedValue({ project, issues: [], accepted: true });
+    await generateDecomposition('dp-1');
+    expect(stored()).not.toHaveProperty('agent_teams');
+    expect(stored()).not.toHaveProperty('surfaces');
+  });
+
+  it('stores an EMPTY declaration as empty, which is the opposite claim and a different finding', async () => {
+    factoryGenerateIfEnabled.mockResolvedValue({ project: { ...project, agent_teams: [], surfaces: [] }, issues: [], accepted: true });
+    await generateDecomposition('dp-1');
+    expect(stored().agent_teams).toEqual([]);
+    expect(stored().surfaces).toEqual([]);
+  });
+
   it('surfaces issues and persists NOTHING when the result is not accepted (no fake pass)', async () => {
     factoryGenerateIfEnabled.mockResolvedValue({ project, accepted: false, issues: [{ code: 'START', message: 'x', severity: 'error' }, { code: 'END', message: 'y', severity: 'error' }] });
     const out = await generateDecomposition('dp-1');
