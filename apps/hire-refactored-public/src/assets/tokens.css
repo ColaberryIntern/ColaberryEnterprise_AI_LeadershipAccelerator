@@ -16,6 +16,9 @@
   --star: #F2C14E;
   --star-soft: rgba(242, 193, 78, .14);
   --star-ink: #1d1503;
+  /* Gold TEXT. Equal to --star in dark; in light it is darker, because #B7860B reaches only
+     2.87:1 on --star-soft (MOTION §9 asks 4.5:1). Fills, rings and borders keep --star. */
+  --star-text: #F2C14E;
   --r: 14px;
   --shadow: 0 20px 50px -24px rgba(0, 0, 0, .7);
   --ease-launch: cubic-bezier(.2, .9, .3, 1);
@@ -29,6 +32,7 @@
   :root:not([data-theme="dark"]) {
     --star: #B7860B;
     --star-soft: rgba(183, 134, 11, .12);
+    --star-text: #856106;
     --shadow: 0 18px 40px -22px rgba(22, 34, 44, .35);
   }
 }
@@ -36,5 +40,6 @@
 :root[data-theme="light"] {
   --star: #B7860B;
   --star-soft: rgba(183, 134, 11, .12);
+  --star-text: #856106;
   --shadow: 0 18px 40px -22px rgba(22, 34, 44, .35);
 }

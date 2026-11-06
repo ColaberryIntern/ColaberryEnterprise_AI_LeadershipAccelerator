@@ -17,7 +17,8 @@ COPY apps/refactored-public/ ./apps/refactored-public/
 COPY apps/ai-flotation-public/ ./apps/ai-flotation-public/
 COPY apps/cpn-public/ ./apps/cpn-public/
 COPY apps/hire-refactored-public/ ./apps/hire-refactored-public/
-RUN node apps/refactored-public/build.js  && node apps/ai-flotation-public/build.js  && node apps/cpn-public/build.js \n && node apps/hire-refactored-public/build.js
+RUN node apps/refactored-public/build.js  && node apps/ai-flotation-public/build.js  && node apps/cpn-public/build.js \
+ && node apps/hire-refactored-public/build.js
 
 FROM nginx:alpine
 COPY --from=builder /app/frontend/build /usr/share/nginx/html

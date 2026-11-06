@@ -55,6 +55,10 @@ describe('wiring', () => {
     const df = fs.readFileSync(path.join(ROOT, 'nginx', 'Dockerfile'), 'utf8');
     assert.match(df, /COPY apps\/hire-refactored-public\/ \.\/apps\/hire-refactored-public\//);
     assert.match(df, /node apps\/hire-refactored-public\/build\.js/);
+    // A real line continuation, never a literal "\n" (which sh would pass to the previous
+    // app's build as a stray argument - shipped once, caught by the H7.1 verifier).
+    assert.doesNotMatch(df, /build\.js \\n /);
+    assert.match(df, /cpn-public\/build\.js \\\r?\n && node apps\/hire-refactored-public\/build\.js/);
     assert.match(df, /COPY --from=builder \/app\/apps\/hire-refactored-public\/dist \/usr\/share\/nginx\/hire-refactored/);
     assert.match(df, /COPY nginx\/hire-refactored\.conf\s+\/etc\/nginx\/conf\.d\/hire-refactored\.conf/);
   });

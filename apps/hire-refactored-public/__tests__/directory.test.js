@@ -120,4 +120,14 @@ describe('art', () => {
     assert.notEqual(strip(C.art('other-slug', { n: 7 })), strip(a));
     assert.match(a, /r="9" fill="#F2C14E"/, 'the terminal node is gold');
   });
+
+  test('never repeats a gradient or pattern id across a full 48-card page', () => {
+    // A full directory page holds 48 cards; some share a slug (the same case study drawn on a
+    // card and in the published strip), which is exactly when ids would collide.
+    const page = Array.from({ length: 48 }, (_, i) => C.art(i % 6 === 0 ? 'shared-slug' : `slug-${i}`, { n: 9 })).join('');
+    const ids = [...page.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(ids.length, 48 * 3, 'three defs per picture');
+    assert.equal(new Set(ids).size, ids.length, 'every id unique');
+    for (const ref of page.matchAll(/url\(#([^)]+)\)/g)) assert.ok(ids.includes(ref[1]), `dangling url(#${ref[1]})`);
+  });
 });

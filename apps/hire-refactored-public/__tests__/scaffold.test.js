@@ -77,6 +77,25 @@ describe('tokens', () => {
     assert.match(block(':root:not([data-theme="dark"])'), /--star:\s*#B7860B/);
   });
 
+  test('gold TEXT meets 4.5:1 on --star-soft in both themes (MOTION §9), computed from the tokens', () => {
+    const lum = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+      .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const mix = (fg, alpha, bg) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(fg.slice(i, i + 2), 16) * alpha
+      + parseInt(bg.slice(i, i + 2), 16) * (1 - alpha)).toString(16).padStart(2, '0')).join('');
+    const darkText = /--star-text:\s*(#[0-9A-Fa-f]{6})/.exec(block(':root {'))[1];
+    const lightText = /--star-text:\s*(#[0-9A-Fa-f]{6})/.exec(block(':root[data-theme="light"]'))[1];
+    assert.equal(/--star-text:\s*(#[0-9A-Fa-f]{6})/.exec(block(':root:not([data-theme="dark"])'))[1], lightText);
+    // --star-soft is the star at 12-14% over the page; the worst real background in each theme.
+    assert.ok(ratio(darkText, mix('#F2C14E', 0.14, '#0C141B')) >= 4.5, 'dark gold text on star-soft');
+    for (const bg of ['#FFFFFF', '#F7FAFC', '#EDF3F8']) {
+      assert.ok(ratio(lightText, mix('#B7860B', 0.12, bg)) >= 4.5, `light gold text on star-soft over ${bg}`);
+    }
+    // The spec's light fill gold would NOT pass as text - which is why text has its own token.
+    assert.ok(ratio('#B7860B', mix('#B7860B', 0.12, '#FFFFFF')) < 4.5);
+  });
+
   test('vendors the design system byte-for-byte from the Refactored app it mirrors', () => {
     const ours = read(APP, 'src', 'assets', 'design', 'tokens', 'colors.css');
     const theirs = read(APP, '..', 'refactored-public', 'src', 'assets', 'design', 'tokens', 'colors.css');

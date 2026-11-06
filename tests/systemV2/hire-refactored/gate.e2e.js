@@ -5,8 +5,10 @@
  *   - an EMPTY directory renders the honest "Nobody is listed yet";
  *   - the API DOWN renders that same honest state - no sample data, no spinner, no console spam loop.
  *
- * Self-test (`--self-test`): runs the "no sample data" checker against a page that DOES carry a
- * name and requires it to go red, proving the check can fail.
+ * Self-test (`--self-test`): the FIRST step is served a deliberately broken directory payload
+ * (no `ok: true`, so the shell must refuse it) while the checks still expect two listed
+ * people. The script MUST then exit 1. The quality gate runs it both ways: plain must exit
+ * 0, `--self-test` must exit 1 - a check that cannot go red proves nothing.
  */
 const L = require('./lib');
 
@@ -19,7 +21,9 @@ async function run() {
   try {
     // 1. Listed people render.
     let ctx = await browser.newContext();
-    await L.routeApi(ctx, { '/api/public/hire/talent': L.directory([L.person('ann-lee', 'Ann Lee'), L.person('bo-chen', 'Bo Chen')]) });
+    const good = L.directory([L.person('ann-lee', 'Ann Lee'), L.person('bo-chen', 'Bo Chen')]);
+    const broken = { ...good, ok: undefined }; // malformed: the shell must not render it
+    await L.routeApi(ctx, { '/api/public/hire/talent': selfTest ? broken : good });
     let page = await ctx.newPage();
     await page.goto(`${base}/`);
     await page.waitForSelector('.tcard', { timeout: 10000 }).catch(() => null);
@@ -51,7 +55,6 @@ async function run() {
     check('API down keeps the honest empty state', main.includes('Nobody is listed yet'));
     check('API down shows no sample data', noSample(main));
     check('API down does not loop errors into the console', errors.length <= 2, `${errors.length} console errors`);
-    if (selfTest) check('SELF-TEST: the no-sample checker goes red on a page with a name', noSample('Ann Lee is here') === false);
     await ctx.close();
   } catch (err) {
     check('run completed without an exception', false, err.message);
