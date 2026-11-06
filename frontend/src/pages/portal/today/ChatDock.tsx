@@ -4,6 +4,7 @@ import {
   useAgentAttachments, AttachButton, AttachmentTray, DropOverlay, SentAttachments,
   type SentAttachment,
 } from '../../../components/portal/AgentAttachments';
+import DmMessageText from './DmMessageText';
 
 /**
  * Placeholder key for previews belonging to a message that has been sent but
@@ -124,7 +125,7 @@ const ChatDock: React.FC<{ target: DmTarget; onClose: () => void }> = ({ target,
             {messages.length === 0 && <div className="te-dm-empty">Say hi 👋</div>}
             {messages.map((m) => (
               <div key={m.id} className={`te-dm-msg${m.enrollment_id === meRef.current ? ' mine' : ''}`}>
-                {m.content}
+                <DmMessageText content={m.content} />
                 {/* Server URLs win: they survive a reload and work for the
                     recipient too. The local previews are only the optimistic
                     bridge between hitting Send and the poll catching up. */}

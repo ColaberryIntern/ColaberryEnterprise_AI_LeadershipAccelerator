@@ -78,6 +78,22 @@ export function onBookCall(cb: (current: AdmissionsBooking | null) => void): () 
   window.addEventListener(BOOK_CALL_EVENT, h);
   return () => window.removeEventListener(BOOK_CALL_EVENT, h);
 }
+/**
+ * C122: Maya's "book a call" deep link. Her portal DM reply carries `[Book a call with admissions](BOOK_CALL_PATH)` (the
+ * backend's maya/mayaPortalTools.ts BOOK_CALL_PATH, pinned equal by a test). In the chat dock it opens this sheet in place
+ * when a sheet host is mounted, else it navigates to the campus, whose host opens the sheet from the URL.
+ */
+export const BOOK_CALL_PATH = '/portal/campus?book=call';
+export const BOOK_CALL_PARAM = 'book';
+let bookHosts = 0;
+/** A mounted BookCallHost registers here so the chat dock knows it can open the sheet in place. */
+export function registerBookCallHost(): () => void {
+  bookHosts += 1;
+  let done = false;
+  return () => { if (!done) { done = true; bookHosts -= 1; } };
+}
+export function hasBookCallHost(): boolean { return bookHosts > 0; }
+
 export function bookingChanged(): void {
   try { window.dispatchEvent(new CustomEvent(BOOKING_CHANGED_EVENT)); } catch { /* non-DOM environment */ }
 }

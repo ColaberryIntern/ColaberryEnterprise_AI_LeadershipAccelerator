@@ -3,6 +3,7 @@ import Enrollment from '../../models/Enrollment';
 import { isStaffOrMgmt } from '../access/staffAccess';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 import { getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
+import { getMayaEnrollmentId } from '../mayaIdentitySeed';
 import { canReachAgent, floorBlockedMessage } from '../campus/agentPlaces';
 
 /**
@@ -11,9 +12,11 @@ import { canReachAgent, floorBlockedMessage } from '../campus/agentPlaces';
  *   1. the other person is in my cohort;
  *   2. I am staff or management (the role-aware People panel shows staff everyone online, across cohorts);
  *   3. either side is Reese's enrollment (Reese has no cohort; students can always reach her);
- *   4. either side is Dara's enrollment (same reasoning).
- * Otherwise the exact DmError text the chat dock already shows. Reese/Dara are an explicit pair rather than a general
- * "any AI agent" mechanism: two real cases, below the three-case extraction threshold in CLAUDE.md.
+ *   4. either side is Dara's enrollment (same reasoning);
+ *   5. either side is Maya's enrollment (C121: admissions moved into the shared chat; she has no cohort, every audience can
+ *      reach her desk, and no floor: AGENT_PLACES.maya.floor is null).
+ * Otherwise the exact DmError text the chat dock already shows. The agents stay explicit ids rather than a general
+ * "any AI agent" mechanism, so a new agent is reachable only when someone adds it here on purpose.
  *
  * Failure posture (unchanged): an id lookup that fails or throws counts as "no bypass", so a broken lookup can only
  * ever deny a cross-cohort DM, never allow one.
@@ -22,7 +25,7 @@ import { canReachAgent, floorBlockedMessage } from '../campus/agentPlaces';
  * may not DM her, whatever their cohort or role: that check runs FIRST. Dara writing to someone is not limited here. The
  * floor lookup fails closed (canReachAgent), so a broken lookup can only ever deny.
  */
-export interface DmContext { meIsStaffOrMgmt: boolean; reeseId: string | null; daraId: string | null; daraFloorOpen: boolean }
+export interface DmContext { meIsStaffOrMgmt: boolean; reeseId: string | null; daraId: string | null; daraFloorOpen: boolean; mayaId: string | null }
 export interface DmTarget { id: string; cohort_id: string | null }
 
 export const DM_NOT_AVAILABLE = 'That person is no longer available';
@@ -48,7 +51,8 @@ export async function loadDmContext(meId: string): Promise<DmContext> {
   const reeseId = await lookupAgentId(getReeseEnrollmentId, 'reese_enrollment_lookup_failed');
   const daraId = await lookupAgentId(getDaraEnrollmentId, 'dara_enrollment_lookup_failed');
   const daraFloorOpen = await canReachAgent(meId, 'dara');
-  return { meIsStaffOrMgmt, reeseId, daraId, daraFloorOpen };
+  const mayaId = await lookupAgentId(getMayaEnrollmentId, 'maya_enrollment_lookup_failed');
+  return { meIsStaffOrMgmt, reeseId, daraId, daraFloorOpen, mayaId };
 }
 
 /** Pure: null when the DM is allowed, else the exact message the sender sees. */
@@ -59,6 +63,7 @@ export function dmBlockReason(meId: string, other: DmTarget | null, myCohortId: 
   if (ctx.meIsStaffOrMgmt) return null;
   if (ctx.reeseId && (meId === ctx.reeseId || other.id === ctx.reeseId)) return null;
   if (ctx.daraId && (meId === ctx.daraId || other.id === ctx.daraId)) return null;
+  if (ctx.mayaId && (meId === ctx.mayaId || other.id === ctx.mayaId)) return null;
   return myCohortId ? DM_COHORT_ONLY : DM_NO_COHORT;
 }
 

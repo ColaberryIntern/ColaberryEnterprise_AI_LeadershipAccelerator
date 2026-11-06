@@ -6,6 +6,7 @@ jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn(), findAll: jest
 jest.mock('../../services/access/staffAccess', () => ({ isStaffOrMgmt: jest.fn() }));
 jest.mock('../../services/reese/reeseIdentitySeed', () => ({ getReeseEnrollmentId: jest.fn() }));
 jest.mock('../../services/curriculum/daraIdentitySeed', () => ({ getDaraEnrollmentId: jest.fn() }));
+jest.mock('../../services/mayaIdentitySeed', () => ({ getMayaEnrollmentId: jest.fn() }));
 // C87: the badge sections that decide whether Dara's Program floor is open to the sender
 jest.mock('../../services/access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn() }));
 
@@ -14,19 +15,21 @@ import { isStaffOrMgmt } from '../../services/access/staffAccess';
 import { getReeseEnrollmentId } from '../../services/reese/reeseIdentitySeed';
 import { getDaraEnrollmentId } from '../../services/curriculum/daraIdentitySeed';
 import { getMgmtStatus } from '../../services/access/mgmtBridgeService';
+import { getMayaEnrollmentId } from '../../services/mayaIdentitySeed';
 import {
   dmBlockReason, dmBlockReasonFor, canDmMany, loadDmContext,
   DM_NOT_AVAILABLE, DM_COHORT_ONLY, DM_NO_COHORT, DM_DARA_FLOOR, DmContext, agentFloorBlockFor,
 } from '../../services/communityRooms/dmEligibility';
 
-const ME = 'me-1', REESE = 'reese-1', DARA = 'dara-1';
-const ctx = (over: Partial<DmContext> = {}): DmContext => ({ meIsStaffOrMgmt: false, reeseId: REESE, daraId: DARA, daraFloorOpen: true, ...over });
+const ME = 'me-1', REESE = 'reese-1', DARA = 'dara-1', MAYA = 'maya-1';
+const ctx = (over: Partial<DmContext> = {}): DmContext => ({ meIsStaffOrMgmt: false, reeseId: REESE, daraId: DARA, daraFloorOpen: true, mayaId: MAYA, ...over });
 
 beforeEach(() => {
   jest.clearAllMocks();
   (isStaffOrMgmt as jest.Mock).mockResolvedValue(false);
   (getReeseEnrollmentId as jest.Mock).mockResolvedValue(REESE);
   (getDaraEnrollmentId as jest.Mock).mockResolvedValue(DARA);
+  (getMayaEnrollmentId as jest.Mock).mockResolvedValue(MAYA);
   (getMgmtStatus as jest.Mock).mockResolvedValue({ is_mgmt: true, role: 'curriculum', label: 'Curriculum', sections: ['dashboard', 'program'] });
 });
 
@@ -52,12 +55,13 @@ describe('dmBlockReason (pure)', () => {
 });
 
 describe('loadDmContext fails closed', () => {
-  it('a throwing Reese or Dara lookup becomes "no bypass" and is logged, never thrown', async () => {
+  it('a throwing Reese, Dara or Maya lookup becomes "no bypass" and is logged, never thrown', async () => {
     (getReeseEnrollmentId as jest.Mock).mockRejectedValue(new TypeError('db down'));
     (getDaraEnrollmentId as jest.Mock).mockRejectedValue(new TypeError('db down'));
+    (getMayaEnrollmentId as jest.Mock).mockRejectedValue(new TypeError('db down'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    await expect(loadDmContext(ME)).resolves.toEqual({ meIsStaffOrMgmt: false, reeseId: null, daraId: null, daraFloorOpen: true });
-    expect(warn.mock.calls.map((c) => JSON.parse(String(c[0])).event)).toEqual(['reese_enrollment_lookup_failed', 'dara_enrollment_lookup_failed']);
+    await expect(loadDmContext(ME)).resolves.toEqual({ meIsStaffOrMgmt: false, reeseId: null, daraId: null, daraFloorOpen: true, mayaId: null });
+    expect(warn.mock.calls.map((c) => JSON.parse(String(c[0])).event)).toEqual(['reese_enrollment_lookup_failed', 'dara_enrollment_lookup_failed', 'maya_enrollment_lookup_failed']);
     warn.mockRestore();
   });
 });
@@ -90,6 +94,33 @@ describe('canDmMany (the campus presence list)', () => {
   it('an empty list makes no query', async () => {
     expect((await canDmMany(ME, 'c1', [])).size).toBe(0);
     expect(Enrollment.findAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('C121: Maya is reachable in the shared chat', () => {
+  it.each([
+    ['a learner in a cohort', { id: MAYA, cohort_id: null }, 'c1', ctx(), null],
+    ['a learner with no cohort (an Explorer)', { id: MAYA, cohort_id: null }, null, ctx(), null],
+    ['a badge without the Program floor (Maya has no floor)', { id: MAYA, cohort_id: null }, 'c1', ctx({ daraFloorOpen: false }), null],
+    ['her lookup failed (null): no bypass', { id: MAYA, cohort_id: null }, 'c1', ctx({ mayaId: null }), DM_COHORT_ONLY],
+  ])('%s', (_n, other, cohort, c, want) => {
+    expect(dmBlockReason(ME, other, cohort, c)).toBe(want);
+  });
+  it('Maya writing back to a learner in any cohort is allowed', () => {
+    expect(dmBlockReason(MAYA, { id: ME, cohort_id: 'c9' }, null, ctx())).toBeNull();
+  });
+  it('POST /dm/open: an Explorer with no cohort can open a conversation with Maya', async () => {
+    (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: MAYA, cohort_id: null });
+    (getMgmtStatus as jest.Mock).mockResolvedValue({ is_mgmt: false, role: null, label: null, sections: [] });
+    await expect(dmBlockReasonFor(ME, MAYA, null)).resolves.toBeNull();
+  });
+  it('the campus list marks Maya messageable', async () => {
+    (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: MAYA, cohort_id: null }]);
+    expect((await canDmMany(ME, null, [MAYA])).get(MAYA)).toBe(true);
+  });
+  it('sending in an existing Maya thread is never floor-blocked', async () => {
+    (getMgmtStatus as jest.Mock).mockResolvedValue({ is_mgmt: false, role: null, label: null, sections: [] });
+    await expect(agentFloorBlockFor(ME, MAYA)).resolves.toBeNull();
   });
 });
 

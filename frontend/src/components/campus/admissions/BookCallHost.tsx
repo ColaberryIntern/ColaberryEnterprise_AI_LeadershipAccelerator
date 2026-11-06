@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useHomeFacts } from '../home/useHomeFacts';
 import BookCallSheet from './BookCallSheet';
 import {
-  BOOKING_CHANGED_EVENT, centralParts, getUpcoming, onBookCall, onWindowEvent, openBookCall, type AdmissionsBooking,
+  BOOKING_CHANGED_EVENT, BOOK_CALL_PARAM, centralParts, getUpcoming, onBookCall, onWindowEvent, openBookCall, registerBookCallHost,
+  type AdmissionsBooking,
 } from './admissionsCallApi';
 
 /**
@@ -19,10 +20,27 @@ export function useAdmissionsCall(enabled: boolean): AdmissionsBooking | null {
   return booking;
 }
 
+/** C122: true (and the param removed from the address bar) when this page was opened from Maya's booking link. */
+export function takeBookCallParam(): boolean {
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(BOOK_CALL_PARAM) !== 'call') return false;
+    url.searchParams.delete(BOOK_CALL_PARAM);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    return true;
+  } catch { return false; }
+}
+
 export default function BookCallHost(): React.ReactElement | null {
   const [open, setOpen] = useState<{ current: AdmissionsBooking | null } | null>(null);
   const facts = useHomeFacts(false);
-  useEffect(() => onBookCall((current) => setOpen({ current })), []);
+  useEffect(() => {
+    const off = onBookCall((current) => setOpen({ current }));
+    const unregister = registerBookCallHost();
+    // C122: arrived from Maya's link (?book=call): open the sheet once
+    if (takeBookCallParam()) setOpen({ current: null });
+    return () => { off(); unregister(); };
+  }, []);
   const close = useCallback(() => setOpen(null), []);
   return open ? <BookCallSheet name={facts.fullName || facts.firstName} current={open.current} onClose={close} /> : null;
 }

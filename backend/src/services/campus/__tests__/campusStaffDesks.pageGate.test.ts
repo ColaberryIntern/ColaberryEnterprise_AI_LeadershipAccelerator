@@ -14,6 +14,7 @@ jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(asyn
 jest.mock('../../access/staffAccess', () => ({ isStaffOrMgmt: jest.fn(async () => true), isStaffEnrollment: jest.fn(async () => true) }));
 jest.mock('../../reese/reeseIdentitySeed', () => ({ isReeseEnabled: jest.fn(async () => true), getReeseEnrollmentId: jest.fn(async () => 'reese-1') }));
 jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(async () => true), getDaraEnrollmentId: jest.fn(async () => 'dara-1') }));
+jest.mock('../../mayaIdentitySeed', () => ({ getMayaEnrollmentId: jest.fn(async () => 'maya-1') }));
 
 import { campusAudienceFor, getStaffDesks } from '../campusStaffDesks';
 

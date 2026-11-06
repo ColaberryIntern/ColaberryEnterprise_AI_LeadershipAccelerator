@@ -4,15 +4,15 @@ import { useCampus } from '../../../components/campus/CampusContext';
 import { useCampusView } from '../../../components/campus/useCampusView';
 import { buildingName } from '../../../components/campus/campusMap';
 import type { CampusBuilding, ExplorerAccess } from '../../../components/campus/campusMap';
-import AskMaya from '../../../components/campus/AskMaya';
+import { hasDmHost, openDmThroughShell } from '../../../components/campus/dmHost';
 
 /**
  * Today as the Explorer's home base (C54, v13 T6): three small additions to the Today page, for an Explorer on the campus only
  * (members and the classic portal see Today unchanged).
  *  - the kicker above the greeting: EXPLORER - YOUR HOME BASE;
  *  - "Your explorer pass": what is open to them and what they can peek inside, from the same access table the campus draws its
- *    badges with (campusAccess via useCampusView, never a hard-coded list), and Ask Maya about enrolling (her chat, as at her desk,
- *    while her desk is on duty);
+ *    badges with (campusAccess via useCampusView, never a hard-coded list), and Message Maya (C121: the shared chat, as at her
+ *    desk, while her desk is on duty);
  *  - "Explore the campus": Take the tour opens the campus and starts the Explorer tour.
  */
 export function useExplorerHomeBase(): boolean {
@@ -39,7 +39,10 @@ export function ExplorerRailCards(): React.ReactElement {
   const { settings, staffDesks, startTour } = useCampus();
   const { buildings, accessOf } = useCampusView();
   const { open, peek } = passLists(buildings, accessOf, settings.workplaceNames);
-  const mayaOn = !!staffDesks?.some((d) => d.id === 'maya' && d.on_duty);
+  // C121: Maya answers in the shared chat, so the pass opens a conversation with her (her desk's enrollment id), not the
+  // website's widget. No id (off duty, not seeded) or no DM host on this page: no button rather than a dead one.
+  const maya = staffDesks?.find((d) => d.id === 'maya' && d.on_duty && !!d.enrollment_id);
+  const mayaOn = !!maya && hasDmHost();
   const tour = () => { navigate('/portal/campus'); startTour(); };
   return (
     <>
@@ -47,7 +50,10 @@ export function ExplorerRailCards(): React.ReactElement {
         <h3><span aria-hidden="true">🎟</span> Your explorer pass</h3>
         {open.length > 0 && <><div className="te-stat"><span className="lab">Open to you</span></div><p className="te-muted" data-testid="te-pass-open">{open.join(' · ')}</p></>}
         {peek.length > 0 && <><div className="te-stat"><span className="lab">Peek inside</span></div><p className="te-muted" data-testid="te-pass-peek">{peek.join(' · ')}</p></>}
-        {mayaOn && <AskMaya className="te-btn berry sm te-pass-maya" />}
+        {mayaOn && maya && (
+          <button type="button" className="te-btn berry sm te-pass-maya" data-testid="te-message-maya"
+            onClick={() => openDmThroughShell(maya.enrollment_id!, maya.name)}>Message Maya</button>
+        )}
       </div>
       <div className="te-card te-scard" data-testid="te-explore-campus">
         <h3><span aria-hidden="true">🧭</span> Explore the campus</h3>
