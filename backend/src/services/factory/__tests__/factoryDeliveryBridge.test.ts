@@ -475,3 +475,71 @@ describe('requirement traceability resolves without a caller-supplied map', () =
     expect(human?.fulfills).toEqual(['override']);
   });
 });
+
+/**
+ * A ROW THE PIPELINE DEMOTED IS NOT AN UNCOVERED OBLIGATION.
+ *
+ * Measured on Herriman after the map fix landed: 51 must_requirement gaps became 21, and 20 of
+ * those 21 were rows `buildFactoryDecomposeInput` had explicitly demoted - "All Proposals
+ * received will be reviewed by a Review Panel", "The average of all reviews will be taken as the
+ * final score", the City's own process, binding nobody. Exactly ONE was a real uncovered
+ * obligation. Demotion turns the source block into `context`, which is how the decomposer tells
+ * the model it need not cite the row; demanding a story for it anyway asks for what the pipeline
+ * forbade, and no decomposition could ever satisfy it.
+ *
+ * The controls matter more than the fix here. An exclusion is the one change that can make a
+ * traceability rule WORSE than absent - a gate that reports nothing because it asks nothing -
+ * so each test below pins something that must still be reported.
+ */
+describe('traceability ignores demoted rows but still asks for everything else', () => {
+  const req = (id: string, interpretation: string | null): ContractRequirement => ({
+    ...requirement(id, 'must'), interpretation,
+  } as ContractRequirement);
+
+  /** No story cites anything, so every included must-requirement should surface as a gap. */
+  function noCitations(requirements: ContractRequirement[]): BridgeInput {
+    const base = baseInput();
+    return {
+      ...base,
+      project: {
+        ...base.project,
+        requirements,
+        tasks: base.project.tasks.map((t) => ({ ...t, source_evidence: [] })),
+      },
+    };
+  }
+  const gapIds = (input: BridgeInput) => bridgeFactoryToDelivery(input)
+    .traceabilityGaps.filter((g) => g.kind === 'must_requirement').map((g) => g.id).sort();
+
+  it('a demoted (non-binding) must-requirement no story cites is NOT a gap', () => {
+    expect(gapIds(noCitations([req('r-city', 'TRIAGE: city_process')]))).toEqual([]);
+  });
+
+  /** THE CONTROL. An explicitly BINDING row is still demanded. */
+  it('STILL reports an obligation-triaged must-requirement no story cites', () => {
+    expect(gapIds(noCitations([req('r-oblig', 'TRIAGE: obligation')]))).toEqual(['r-oblig']);
+  });
+
+  /**
+   * THE CONTROL THAT MATTERS MOST. `isExplicitlyNonBinding` is false for a row with no verdict,
+   * so a project nobody has triaged keeps every obligation it had. If untriaged rows were
+   * excluded, this gate would pass on any un-triaged project by asking for nothing at all.
+   */
+  it('STILL reports an UNTRIAGED must-requirement no story cites', () => {
+    expect(gapIds(noCitations([req('r-untriaged', null)]))).toEqual(['r-untriaged']);
+  });
+
+  it('an unrecognized verdict is treated as binding, not as an excuse', () => {
+    expect(gapIds(noCitations([req('r-junk', 'TRIAGE: not_a_real_class')]))).toEqual(['r-junk']);
+    expect(gapIds(noCitations([req('r-nonprefix', 'city_process')]))).toEqual(['r-nonprefix']);
+  });
+
+  /** And the discrimination itself: same fixture, one field changed, different answer. */
+  it('separates the two within one requirement set', () => {
+    expect(gapIds(noCitations([
+      req('r-keep', 'TRIAGE: obligation'),
+      req('r-drop', 'TRIAGE: note'),
+      req('r-also-keep', null),
+    ]))).toEqual(['r-also-keep', 'r-keep']);
+  });
+});

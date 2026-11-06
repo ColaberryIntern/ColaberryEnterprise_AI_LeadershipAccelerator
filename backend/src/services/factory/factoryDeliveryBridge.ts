@@ -46,6 +46,10 @@ import {
   type ReleaseGateResult, type DeploymentAuthorizationRefusal,
 } from '../delivery/releaseGate';
 import { sourceBlockIdFor } from './factoryDecomposeInput';
+// The SAME predicate the decompose adapter uses to demote a non-binding row to a `context`
+// block. Read from the other end here: a row the decomposer told the model not to cite must not
+// then be demanded by traceability.
+import { isExplicitlyNonBinding } from './proposal/requirementTriage';
 // `riskLevelFor` lived here until 2026-11-06 and moved to `factoryTaskRisk` when the upstream
 // gate (`factoryValidate`) needed the same thresholds. See that module's header: the validator
 // cannot import this one, because this one depends on the delivery layer.
@@ -289,8 +293,36 @@ export function bridgeFactoryToDelivery(input: BridgeInput): BridgeResult {
 
   const storyIssues = stories.flatMap((s) => validateStoryContract(s));
 
+  /**
+   * MUST-REQUIREMENTS, EXCLUDING THE ONES THE PIPELINE ITSELF DEMOTED.
+   *
+   * `priority === 'must'` alone was wrong, and Herriman measured the cost. Of its 51 reported
+   * must_requirement gaps, 30 were unresolvable citations (fixed by deriving the block map) and
+   * **20 were rows `buildFactoryDecomposeInput` had explicitly DEMOTED** - leaving exactly ONE
+   * real uncovered obligation. The 20 are things like "All Proposals received will be reviewed by
+   * a Review Panel": the City's own process, binding nobody.
+   *
+   * A demoted row's source block becomes `context` instead of `requirement`, which is precisely
+   * how the decomposer lifts the citation obligation - the model is deliberately told it need not
+   * cite it. But the row keeps `priority: 'must'` in contract_requirements, so asking traceability
+   * for a story covering it demands exactly what the pipeline forbade. No decomposition could ever
+   * close those 20, which makes them a plumbing number wearing a coverage number's label.
+   *
+   * SOURCE_COVERAGE already gets this right by keying on block kind; this is the same exclusion
+   * read from the other end. The filter lives HERE, in the factory->delivery adapter, because
+   * `isExplicitlyNonBinding` is a factory/proposal concept and `findDeliveryTraceabilityGaps` is
+   * deliberately generic about where its id list came from.
+   *
+   * UNTRIAGED ROWS STAY IN. `isExplicitlyNonBinding` is false for a row with no verdict, so a
+   * project nobody has triaged keeps every obligation it had. Treating "no verdict" as "not
+   * binding" would make this gate pass by asking for nothing, which is the one way a traceability
+   * rule can be worse than absent.
+   */
   const mustRequirementIds = input.project.requirements
     .filter((r) => r.priority === 'must')
+    .filter((r) => !isExplicitlyNonBinding(
+      (r as { interpretation?: string | null }).interpretation,
+    ))
     .map((r) => r.id);
 
   // One trust requirement per (team, dimension). Carried into the traceability check so the
