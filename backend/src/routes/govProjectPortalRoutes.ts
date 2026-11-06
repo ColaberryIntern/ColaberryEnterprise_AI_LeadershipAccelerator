@@ -554,9 +554,33 @@ router.post(
         note: typeof b.note === 'string' ? b.note : undefined,
       };
       const result = await resolveProjectNeed(projectId, key, submission, { email: actor?.email, canApprove: false });
+      // v3 (T12) AUTO-RESUME: the intern's answer kicks a bounded review cycle for each unblocked document.
+      const unblocked = (result.body as { unblocked?: unknown }).unblocked;
+      if (result.status === 200 && Array.isArray(unblocked) && unblocked.length) {
+        const { resumeUnblocked } = await import('../services/factory/proposal/resumeCycles');
+        void resumeUnblocked(projectId, unblocked as string[], { identityId: null }).catch(() => undefined);
+      }
       return res.status(result.status).json(result.body);
     } catch {
       return res.status(500).json({ error: 'Could not resolve the need.', error_class: 'NeedResolveFailed' });
+    }
+  },
+);
+
+// v3 (T12): BUILD ALL DOCUMENTS from the portal — kick a bounded cycle for every not-passed document. Gated on
+// `story.execute` (edit-share), so a read-only viewer cannot trigger the build. Returns enqueued + skipped.
+router.post(
+  '/api/portal/gov-projects/:projectId/build-all',
+  requireParticipant,
+  requireGovProjectAccess('story.execute'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = String(req.params.projectId);
+    try {
+      const { buildAllDocuments } = await import('../services/factory/proposal/resumeCycles');
+      const result = await buildAllDocuments(projectId, { identityId: null });
+      return res.json({ started: true, ...result });
+    } catch {
+      return res.status(500).json({ error: 'Could not start Build all documents.', error_class: 'BuildAllFailed' });
     }
   },
 );

@@ -620,9 +620,31 @@ router.post('/api/admin/gov-contracts/:projectId/needs/:key/resolve', requireSec
       note: typeof b.note === 'string' ? b.note : undefined,
     };
     const result = await resolveProjectNeed(String(req.params.projectId), String(req.params.key), submission, { email: actor?.email, canApprove: true });
+    // v3 (T12) AUTO-RESUME: a just-answered need kicks a bounded review cycle for each document it unblocked, so the
+    // agent picks up where it was waiting. Fire-and-forget (never blocks the resolve response); bounded by RESUME_CAP.
+    const unblocked = (result.body as { unblocked?: unknown }).unblocked;
+    if (result.status === 200 && Array.isArray(unblocked) && unblocked.length) {
+      const { resumeUnblocked } = await import('../../services/factory/proposal/resumeCycles');
+      void resumeUnblocked(String(req.params.projectId), unblocked as string[], { identityId: null }).catch(() => undefined);
+    }
     res.status(result.status).json(result.body);
   } catch {
     res.status(500).json({ error: 'Could not resolve the need.', error_class: 'NeedResolveFailed' });
+  }
+});
+
+// v3 (T12): BUILD ALL DOCUMENTS — kick a bounded review cycle for every not-passed document in blueprint order.
+// Admin holds `gov_contracts`. Returns which documents were enqueued (with run ids) and which were skipped
+// (already running, or over the per-call cap). Fire-and-forget cycles; the client polls each run.
+router.post('/api/admin/gov-contracts/:projectId/build-all', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const { buildAllDocuments } = await import('../../services/factory/proposal/resumeCycles');
+    const result = await buildAllDocuments(String(req.params.projectId), { identityId: ctx.identityId });
+    res.json({ started: true, ...result });
+  } catch (err: unknown) {
+    logFail('gov_contract_build_all_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not start Build all documents.' });
   }
 });
 
