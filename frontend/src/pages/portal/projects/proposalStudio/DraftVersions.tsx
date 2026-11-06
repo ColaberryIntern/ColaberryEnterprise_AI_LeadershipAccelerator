@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StudentGovProjectView, GovProposalDocument, GovReviewApi, GovStudioApi, GovDocumentVersion, GovVersionContent, GovDiffSegment, GovSectionPlanFields } from '../../../../services/govProjectPortalApi';
 import { CHECKS, Bar, colr, weightedScore } from './studioHelpers';
+import { outlineRows } from './editorHelpers';
+
+type EditorMode = 'paper' | 'outline' | 'edit';
 
 const PLAN_FIELDS: Array<{ k: keyof GovSectionPlanFields; label: string }> = [
   { k: 'hotButton', label: 'Hot button' }, { k: 'feature', label: 'Feature' }, { k: 'benefit', label: 'Benefit' }, { k: 'proof', label: 'Proof' }, { k: 'discriminator', label: 'Discriminator' },
@@ -29,7 +32,11 @@ export default function DraftVersions(
   const [running, setRunning] = useState(false);
   const [planDraft, setPlanDraft] = useState<GovSectionPlanFields>(EMPTY_PLAN);
   const [selSection, setSelSection] = useState<string>('');
+  const [mode, setMode] = useState<EditorMode>('paper');
+  const [editText, setEditText] = useState('');
+  const [saving, setSaving] = useState(false);
   const poll = useRef<number | null>(null);
+  const canEdit = !!reviewApi?.editDocument;
 
   const loadVersions = useCallback(() => {
     if (!docKey) { setVersions([]); return; }
@@ -91,27 +98,80 @@ export default function DraftVersions(
 
   const canEditPlan = !!reviewApi?.saveSectionPlan;
 
+  // Seed the Edit textarea from the current version's content whenever Edit opens or the content changes.
+  useEffect(() => { if (mode === 'edit') setEditText(content?.contentHtml ?? ''); }, [mode, content]);
+
+  const saveEdit = useCallback(async () => {
+    if (!reviewApi?.editDocument || !docKey) return;
+    const html = editText.trim();
+    if (!html) { onToast?.('Edit content is required.'); return; }
+    setSaving(true);
+    try {
+      const r = await reviewApi.editDocument(projectId, docKey, html);
+      onToast?.(r.passes ? 'Saved — the edit passes the checks.' : r.resumed ? 'Saved — still below bar, the agent is revising.' : 'Saved as a new version.');
+      setMode('paper');
+      onReload(); loadVersions();
+    } catch { onToast?.('Could not save the edit.'); } finally { setSaving(false); }
+  }, [reviewApi, projectId, docKey, editText, onReload, loadVersions, onToast]);
+
+  const rows = outlineRows(content?.sections, doc?.pageLimit);
+
   return (
     <div className="gps-view">
       <div className="gps-vh"><div><h2>Draft &amp; versions</h2><p>One working copy per document. Each agent pass or human edit saves a new version with its check scores, so you can compare versions or roll back.</p></div>
-        <div className="gps-act"><button className="gps-btn agent" disabled={running} onClick={runCycle}>{running ? <><span className="gps-spin" /> Running</> : 'Run review cycle'}</button>{reviewApi ? <button className="gps-btn" onClick={toggleDiff}>{diff ? 'Hide diff' : 'Diff vs previous'}</button> : null}</div></div>
+        <div className="gps-act">
+          <div className="gps-tabs" role="tablist" aria-label="Editor view">
+            <button className={`gps-btn sm ${mode === 'paper' ? 'primary' : ''}`} role="tab" aria-selected={mode === 'paper'} onClick={() => setMode('paper')}>Paper</button>
+            <button className={`gps-btn sm ${mode === 'outline' ? 'primary' : ''}`} role="tab" aria-selected={mode === 'outline'} onClick={() => setMode('outline')}>Outline</button>
+            {canEdit && <button className={`gps-btn sm ${mode === 'edit' ? 'primary' : ''}`} role="tab" aria-selected={mode === 'edit'} onClick={() => setMode('edit')}>Edit</button>}
+          </div>
+          <button className="gps-btn agent" disabled={running} onClick={runCycle}>{running ? <><span className="gps-spin" /> Running</> : 'Run review cycle'}</button>
+          {reviewApi ? <button className="gps-btn" onClick={toggleDiff}>{diff ? 'Hide diff' : 'Diff vs previous'}</button> : null}
+        </div></div>
       <div className="gps-doc-pick">
         {scored.map((d) => (<button key={d.key} className="gps-btn sm" style={d.key === docKey ? { borderColor: 'var(--gps-accent)', color: 'var(--gps-accent)' } : undefined} onClick={() => { setDocKey(d.key); setSelVerId(null); }}>{d.title}</button>))}
       </div>
       {!doc ? <div className="gps-panel gps-muted">No drafted documents yet. Open a document from Document set to draft it.</div> : (
         <div className="gps-ed">
           <div className="gps-paper-wrap">
-            <div className="gps-paper">
-              <div className="gps-run"><span>Colaberry &middot; Response to {view.name}</span><span>{doc.title} &middot; v{selVer?.version ?? doc.version}</span><span>{selVer?.pageCount != null ? `${selVer.pageCount} page${selVer.pageCount === 1 ? '' : 's'}` : ''}</span></div>
-              {content?.contentHtml || diff ? (
-                diff ? (
-                  <p>{diff.map((seg, i) => (seg.type === 'add' ? <ins key={i}>{seg.text}</ins> : seg.type === 'del' ? <del key={i}>{seg.text}</del> : <span key={i}>{seg.text}</span>))}</p>
-                ) : (
-                  // eslint-disable-next-line react/no-danger
-                  <div dangerouslySetInnerHTML={{ __html: content?.contentHtml ?? '' }} />
-                )
-              ) : <p className="gps-muted" style={{ fontFamily: 'var(--gps-sans)', fontSize: 13 }}>This document has no draft yet. Run a review cycle, or open it from Document set to draft it.</p>}
-            </div>
+            {mode === 'outline' ? (
+              <div className="gps-panel">
+                <h3>Outline <span className="gps-muted gps-small" style={{ fontWeight: 400 }}>{doc.pageLimit ? `${doc.pageLimit}-page limit` : 'no page limit'}</span></h3>
+                {rows.length === 0 ? <p className="gps-muted gps-small">No sections yet. Run a review cycle to build the outline.</p> : (
+                  <div className="gps-outline">
+                    {rows.map((r) => (
+                      <div className="gps-outline-row" key={r.sectionKey}>
+                        <div style={{ minWidth: 0 }}>
+                          <b>{r.heading}</b>{r.suggested && <span className="gps-tag acc" style={{ marginLeft: 6 }}>Suggested</span>}
+                          <div className="gps-choice-row" style={{ marginTop: 4 }}>{r.requirementIds.map((id) => <span key={id} className="gps-tag">{id}</span>)}</div>
+                        </div>
+                        <div className="gps-num gps-small" title="page budget">{r.pageBudget != null ? `${r.pageBudget} pg` : '—'}</div>
+                        <span className={`gps-tag ${r.hasContent ? 'ok' : ''}`}>{r.hasContent ? 'Drafted' : 'Empty'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : mode === 'edit' ? (
+              <div className="gps-panel">
+                <h3>Edit {doc.title}</h3>
+                <p className="gps-small gps-muted">Saving writes a human version and re-runs the checks. If it is still below the bar, the agent keeps revising; if it passes, it stops.</p>
+                <textarea className="gps-input" style={{ width: '100%', minHeight: 320, fontFamily: 'var(--gps-sans)' }} aria-label="Edit document HTML" value={editText} onChange={(e) => setEditText(e.target.value)} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}><button className="gps-btn primary" disabled={saving} onClick={saveEdit}>{saving ? 'Saving…' : 'Save edit'}</button><button className="gps-btn" onClick={() => setMode('paper')}>Cancel</button></div>
+              </div>
+            ) : (
+              <div className="gps-paper">
+                <div className="gps-run"><span>Colaberry &middot; Response to {view.name}</span><span>{doc.title} &middot; v{selVer?.version ?? doc.version}</span><span>{selVer?.pageCount != null ? `${selVer.pageCount} page${selVer.pageCount === 1 ? '' : 's'}` : ''}</span></div>
+                {content?.contentHtml || diff ? (
+                  diff ? (
+                    <p>{diff.map((seg, i) => (seg.type === 'add' ? <ins key={i}>{seg.text}</ins> : seg.type === 'del' ? <del key={i}>{seg.text}</del> : <span key={i}>{seg.text}</span>))}</p>
+                  ) : (
+                    // eslint-disable-next-line react/no-danger
+                    <div dangerouslySetInnerHTML={{ __html: content?.contentHtml ?? '' }} />
+                  )
+                ) : <p className="gps-muted" style={{ fontFamily: 'var(--gps-sans)', fontSize: 13 }}>This document has no draft yet. Run a review cycle, or open it from Document set to draft it.</p>}
+              </div>
+            )}
           </div>
           <div className="gps-side">
             <div className="gps-panel"><h3>Section plan{content && content.sections.length > 1 ? <select value={selSection} onChange={(e) => setSelSection(e.target.value)} style={{ marginLeft: 'auto', maxWidth: 120 }} aria-label="Section">{content.sections.map((s) => <option key={s.sectionKey} value={s.sectionKey}>{s.heading.slice(0, 28)}</option>)}</select> : null}</h3>

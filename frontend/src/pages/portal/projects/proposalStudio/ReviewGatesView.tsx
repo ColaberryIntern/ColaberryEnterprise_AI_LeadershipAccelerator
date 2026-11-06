@@ -1,6 +1,34 @@
 import React, { useCallback, useState } from 'react';
 import type { GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovGateName } from '../../../../services/govProjectPortalApi';
 import { CHECKS, Bar, colr, weightedScore, teamTag } from './studioHelpers';
+import { goldEligibility } from './buildHelpers';
+
+/** The single PACKAGE Gold Go/No-go — the one human gate (T20). Go only when every document passes; No-go takes a note. */
+function GoldDecision({ projectId, docs, reviewApi, onToast }: { projectId: string; docs: GovProposalDocument[]; reviewApi: GovReviewApi; onToast?: (m: string) => void }): React.ReactElement | null {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  if (!reviewApi.decideGold) return null;
+  const { eligible, blockers } = goldEligibility(docs);
+  const decide = async (decision: 'go' | 'nogo') => {
+    if (decision === 'nogo' && !note.trim()) { onToast?.('Add a short No-go note first.'); return; }
+    setBusy(true);
+    try {
+      const r = await reviewApi.decideGold!(projectId, decision, note.trim() || undefined);
+      onToast?.(decision === 'go' ? `Gold recorded on ${(r.approved ?? []).length} document(s).` : `No-go recorded on ${(r.returned ?? []).length} document(s).`);
+    } catch { onToast?.('Could not record the Gold decision.'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="gps-panel"><h3>Gold gate · package Go / No-go</h3>
+      <p className="gps-small gps-muted" style={{ marginTop: 0 }}>The one human decision. Go records Gold on every passing document (you cannot approve a version you last authored — separation of duties). No-go sends the package back with a note.</p>
+      {!eligible && <p className="gps-small" style={{ color: 'var(--gps-warn)' }}>Not ready: {blockers.length ? `${blockers.join(', ')} ${blockers.length === 1 ? 'is' : 'are'} not passing yet.` : 'no scored documents yet.'}</p>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+        <button className="gps-btn primary" disabled={busy || !eligible} onClick={() => decide('go')}>Go — approve the package</button>
+        <input className="gps-input" style={{ maxWidth: 260 }} placeholder="No-go note (what to fix)" value={note} onChange={(e) => setNote(e.target.value)} />
+        <button className="gps-btn" disabled={busy} onClick={() => decide('nogo')}>No-go</button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * ReviewGatesView — the Shipley color-team process with the agent doing the reading. The four team cards describe
@@ -47,13 +75,11 @@ function DocGatePanel({ projectId, doc, reviewApi }: { projectId: string; doc: G
       </button>
       {open && (
         <div style={{ marginTop: 8 }}>
-          <div className="gps-tags">{GATES.map((g) => <span key={g} className={`gps-tag ${statusCls(byGate.get(g)?.status ?? 'pending')}`}>{GATE_LABEL[g]}: {byGate.get(g)?.status ?? 'pending'}</span>)}</div>
+          <div className="gps-tags">{GATES.map((g) => { const st = byGate.get(g)?.status ?? 'pending'; const ai = g !== 'gold'; return <span key={g} className={`gps-tag ${statusCls(st)}`}>{GATE_LABEL[g]}: {st}{ai ? ' · AI' : ''}</span>; })}</div>
           <div className="gps-tags" style={{ marginTop: 10 }}>
-            <button type="button" className="gps-btn sm" disabled={!!busy} onClick={() => run(() => reviewApi.runChecks(projectId, doc.key), 'checks')}>{busy === 'checks' ? 'Running…' : 'Run checks'}</button>
-            {GATES.map((g) => (
-              <button key={g} type="button" className="gps-btn sm" disabled={!!busy} onClick={() => run(() => reviewApi.decideGate(projectId, doc.key, g, 'approve'), `ap-${g}`)}>{busy === `ap-${g}` ? '…' : `Approve ${GATE_LABEL[g]}`}</button>
-            ))}
+            <button type="button" className="gps-btn sm" disabled={!!busy} onClick={() => run(() => reviewApi.runChecks(projectId, doc.key), 'checks')}>{busy === 'checks' ? 'Running…' : 'Re-run checks'}</button>
           </div>
+          <p className="gps-small gps-muted" style={{ marginTop: 8 }}>Pink, Red and White glove are recorded automatically by the AI judge when the version passes their checks. Gold is the one human decision — made for the whole package below.</p>
           {msg && <p className="gps-small" style={{ color: 'var(--gps-warn)', marginTop: 8 }}>{msg}</p>}
         </div>
       )}
@@ -62,8 +88,8 @@ function DocGatePanel({ projectId, doc, reviewApi }: { projectId: string; doc: G
 }
 
 export default function ReviewGatesView(
-  { projectId, docs, reviewApi, onOpenDoc }:
-  { projectId: string; docs: GovProposalDocument[]; reviewApi?: GovReviewApi; onOpenDoc: (d: GovProposalDocument) => void },
+  { projectId, docs, reviewApi, onOpenDoc, onToast }:
+  { projectId: string; docs: GovProposalDocument[]; reviewApi?: GovReviewApi; onOpenDoc: (d: GovProposalDocument) => void; onToast?: (m: string) => void },
 ): React.ReactElement {
   const scored = docs.filter((d) => d.key !== 'pricing' && !d.superseded);
 
@@ -95,8 +121,9 @@ export default function ReviewGatesView(
           </tbody>
         </table></div>
       )}
+      {reviewApi && scored.length > 0 && <GoldDecision projectId={projectId} docs={docs} reviewApi={reviewApi} onToast={onToast} />}
       {reviewApi && scored.length > 0 && (
-        <div className="gps-panel"><h3>Reviewer gate controls</h3><p className="gps-small gps-muted" style={{ marginTop: 0 }}>Run the checks and approve each color team in order: Pink → Red → Gold → White glove. Gold needs a reviewer who did not author the version — the server enforces it.</p>
+        <div className="gps-panel"><h3>Per-document gates</h3><p className="gps-small gps-muted" style={{ marginTop: 0 }}>Pink, Red and White glove are recorded by the AI judge when a version passes their checks. Re-run the checks on a document after an edit; the Gold decision for the whole package is above.</p>
           {scored.map((d) => <DocGatePanel key={d.key} projectId={projectId} doc={d} reviewApi={reviewApi} />)}
         </div>
       )}

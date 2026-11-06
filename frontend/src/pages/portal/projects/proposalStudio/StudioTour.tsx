@@ -9,34 +9,46 @@ import type { StudioView } from './StageRail';
  * person's first visit (remembered per browser). Keyboard: Esc skips, arrows move. No new dependency; styled in the
  * `.gps` system.
  */
-export interface TourStep { view: StudioView; title: string; body: string; youDo?: string; }
+export interface TourStep { view: StudioView; title: string; body: string; youDo?: string; adminOnly?: boolean; }
+export type TourVariant = 'admin' | 'intern';
 
-export const TOUR_STEPS: TourStep[] = [
-  { view: 'overview', title: 'Where we are', body: 'Your starting point. The pursuit stage, proposal readiness (every document against the 95 target), and the ranked next moves. Come back here to see what is left.', youDo: 'Read it. The numbers are the real projection, never guessed.' },
-  { view: 'blueprint', title: 'Blueprint', body: 'Re-analyze the solicitation ZIP into a cited rulebook: scoring factors, submission rules, required forms, page limits. Each rule carries the quote and the page it came from.', youDo: 'Confirm the blueprint. A rule with no real quote is dropped, never invented.' },
-  { view: 'documents', title: 'Document set', body: 'The deliverables this contract needs, each with a type (narrative, form, from the build, or generated), a page limit, the requirements it must cover, and a live score.', youDo: 'Open a document to draft or record it. Pricing stays admin-only end to end.' },
-  { view: 'evidence', title: 'Build evidence', body: 'Screenshots and artifacts captured from your verified build stories, each tagged with the requirements it proves.', youDo: 'Insert an artifact into a document as a figure, so a claim is backed by working software.' },
-  { view: 'editor', title: 'Draft & versions', body: 'The working copy of each document: the paper preview, the section plan, the six checks, and the full version history. The agent drafts, scores, and revises; people edit.', youDo: 'Pick a document, then Run review cycle. Every save is a new, scored version you can diff or roll back.' },
-  { view: 'gates', title: 'Review gates', body: 'The Shipley color teams — Pink, Red, Gold, White glove — with the agent doing the reading. The matrix shows every document across the six checks.', youDo: 'A document passes at a weighted 95 with no check under 85. A person signs off at Gold before anything is packaged.' },
+/** All steps, in order. Steps flagged adminOnly (the human Gold decision) are dropped for the intern variant. */
+const ALL_STEPS: TourStep[] = [
+  { view: 'overview', title: 'Where we are', body: 'Your starting point. The pursuit stage, proposal readiness (every document against the 95 target), and the ranked next moves — led by what needs you. "Build all documents" starts the agent on everything not yet begun.', youDo: 'Read it. The numbers are the real projection, never guessed.' },
+  { view: 'openitems', title: 'Needs you', body: 'The one list of exactly what a person must supply before this proposal can ship — each a typed need with its ask, why, and the documents it unblocks. Answer one and the agent picks that document back up automatically.', youDo: 'Answer a need inline. The agent resumes the documents it unblocked.' },
+  { view: 'blueprint', title: 'Blueprint', body: 'The solicitation ZIP as a cited rulebook: scoring factors, submission rules, required forms, page limits. Each rule carries the quote and the page it came from.', youDo: 'Confirm the blueprint. A rule with no real quote is dropped, never invented.' },
+  { view: 'documents', title: 'Document set', body: 'The deliverables this contract needs, each with a type, a stage, the needs holding it, a page limit, and a live score. A not-started row has a "Build it" button; "Add from library" offers only the forms for this bid’s jurisdiction.', youDo: 'Build a document, or open one to read it. Pricing stays admin-only end to end.' },
+  { view: 'evidence', title: 'Build evidence', body: 'Screenshots captured from your verified build stories, each tagged with the requirements it proves.', youDo: 'Insert an artifact into a document as a figure, so a claim is backed by working software.' },
+  { view: 'editor', title: 'Draft & versions', body: 'The working copy of each document: the Paper, an Outline tab (page budget + requirement coverage), the six checks, and the full version history. The agent drafts, judges and revises; a person can Edit, which re-judges and resumes only if still below bar.', youDo: 'Pick a document, then Run review cycle, or Edit it directly.' },
+  { view: 'gates', title: 'Review gates', body: 'The Shipley color teams with the agent doing the reading. Pink, Red and White glove are recorded automatically by the AI judge when a version passes their checks.', youDo: 'Watch the gates light up as documents pass. Nothing to approve here except Gold.', adminOnly: true },
+  { view: 'gates', title: 'The Gold decision', body: 'Gold is the one human gate: a single Go or No-go for the whole package, offered only once every document passes. You cannot approve a version you last authored — separation of duties is enforced.', youDo: 'Give the package a Go when it is ready, or a No-go with a note.', adminOnly: true },
   { view: 'package', title: 'Package & submit', body: 'Assemble the approved version of each document into PDFs with the right file names, the sealed price file, the redacted copy, and a manifest.', youDo: 'Export once every document passes. Exporting is not submitting — you upload to the agency and record the receipt.' },
-  { view: 'openitems', title: 'Open items', body: 'Everything that needs a person before this can ship: questions the agent is waiting on, items that would block export, and loose ends. Pulled live from the project.', youDo: 'Clear each one, then run a cycle.' },
-  { view: 'overview', title: 'The proposal agent', body: 'The panel on the right is always here: the activity log and the questions the agent needs answered. An answer is saved to your company library and re-scores the documents that cited it.', youDo: 'Answer a question once; the agent reuses it everywhere it applies.' },
-  { view: 'overview', title: 'You are set', body: 'Start at Blueprint to lock the rules, or jump into Draft & versions and run a cycle. You can reopen this walkthrough any time from "Take a tour".', youDo: 'Reopen it whenever you want a refresher.' },
+  { view: 'overview', title: 'The proposal agent', body: 'The panel on the right is always here: a live state (Building / Judging / Revising / Waiting on you), the activity log, the top needs, and an Ask box. An answer is saved to your company library and re-scores the documents that cited it.', youDo: 'Answer a need once; the agent reuses it everywhere it applies. Ask it anything about this proposal.' },
+  { view: 'overview', title: 'You are set', body: 'Start at Blueprint to lock the rules, or press "Build all documents" and let the agent draft. You can reopen this walkthrough any time from "Take a tour".', youDo: 'Reopen it whenever you want a refresher.' },
 ];
 
+/** PURE: the steps for a variant. The intern variant hides the admin-only Gold steps. */
+export function tourSteps(variant: TourVariant = 'admin'): TourStep[] {
+  return ALL_STEPS.filter((s) => variant === 'admin' || !s.adminOnly);
+}
+
+/** Back-compat: the full (admin) step list. */
+export const TOUR_STEPS: TourStep[] = tourSteps('admin');
+
 export default function StudioTour(
-  { step, onNavigate, onSetStep, onClose }:
-  { step: number; onNavigate: (v: StudioView) => void; onSetStep: (n: number) => void; onClose: () => void },
+  { step, onNavigate, onSetStep, onClose, variant = 'admin' }:
+  { step: number; onNavigate: (v: StudioView) => void; onSetStep: (n: number) => void; onClose: () => void; variant?: TourVariant },
 ): React.ReactElement | null {
-  const total = TOUR_STEPS.length;
-  const s = TOUR_STEPS[step];
+  const steps = tourSteps(variant);
+  const total = steps.length;
+  const s = steps[step];
 
   // Drive the real studio to the stage this step describes, so the person sees it live underneath the card. Keyed on
   // the step index ONLY (via a ref for the navigator), so it fires when the step changes — not every time the parent's
   // onNavigate identity changes on a URL update, which would otherwise snap the view back to the current step.
   const navRef = useRef(onNavigate);
   useEffect(() => { navRef.current = onNavigate; });
-  useEffect(() => { const cur = TOUR_STEPS[step]; if (cur) navRef.current(cur.view); }, [step]);
+  useEffect(() => { const cur = steps[step]; if (cur) navRef.current(cur.view); }, [step, steps]);
 
   const back = useCallback(() => onSetStep(Math.max(0, step - 1)), [step, onSetStep]);
   const next = useCallback(() => { if (step >= total - 1) onClose(); else onSetStep(step + 1); }, [step, total, onSetStep, onClose]);
@@ -65,7 +77,7 @@ export default function StudioTour(
         <p>{s.body}</p>
         {s.youDo && <p className="gps-tour-do"><b>You:</b> {s.youDo}</p>}
         <div className="gps-tour-dots" aria-hidden="true">
-          {TOUR_STEPS.map((_, i) => <span key={i} className={i === step ? 'on' : undefined} />)}
+          {steps.map((_, i) => <span key={i} className={i === step ? 'on' : undefined} />)}
         </div>
         <div className="gps-tour-foot">
           <button type="button" className="gps-btn sm" onClick={onClose}>Skip</button>

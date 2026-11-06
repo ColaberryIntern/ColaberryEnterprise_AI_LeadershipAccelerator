@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import StudioTour, { TOUR_STEPS } from './StudioTour';
+import StudioTour, { TOUR_STEPS, tourSteps } from './StudioTour';
 
 /**
  * StudioTour drives the real studio to each step's view and exposes Back / Next / Finish. These tests cover the
@@ -51,4 +51,14 @@ it('Skip closes the tour', () => {
   render(<StudioTour step={2} onNavigate={jest.fn()} onSetStep={jest.fn()} onClose={onClose} />);
   click(btn('Skip'));
   expect(onClose).toHaveBeenCalled();
+});
+
+it('the intern variant hides the admin-only Gold steps', () => {
+  const admin = tourSteps('admin');
+  const intern = tourSteps('intern');
+  expect(admin.some((s) => s.title === 'The Gold decision')).toBe(true);
+  expect(intern.some((s) => s.title === 'The Gold decision')).toBe(false);
+  expect(intern.length).toBeLessThan(admin.length);
+  // every intern step is a real admin step (intern is a strict filter)
+  expect(intern.every((s) => admin.includes(s))).toBe(true);
 });

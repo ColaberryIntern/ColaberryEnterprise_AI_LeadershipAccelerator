@@ -1,4 +1,4 @@
-import { isLiveDoc, anyNotStarted, docStageLabel, pursuitStageLabel, libraryPickerItems } from './buildHelpers';
+import { isLiveDoc, anyNotStarted, docStageLabel, pursuitStageLabel, libraryPickerItems, goldEligibility } from './buildHelpers';
 import type { GovProposalDocument, StudentGovProjectView } from '../../../../services/govProjectPortalApi';
 
 const doc = (over: Partial<GovProposalDocument>): GovProposalDocument => ({
@@ -63,5 +63,17 @@ describe('libraryPickerItems (D9: jurisdiction-only forms)', () => {
 
   it('is total with no blueprint (generic library only)', () => {
     expect(libraryPickerItems({} as StudentGovProjectView).map((i) => i.key)).toEqual(generic);
+  });
+});
+
+describe('goldEligibility', () => {
+  const pass = (key: string, passes: boolean): GovProposalDocument => doc({ key, title: key, latest: { versionId: 'v', version: 1, scores: {}, passes, pageCount: 1, createdAt: null } });
+  it('is eligible only when every scored doc passes', () => {
+    expect(goldEligibility([pass('a', true), pass('b', true)])).toEqual({ eligible: true, blockers: [] });
+    expect(goldEligibility([pass('a', true), pass('b', false)])).toEqual({ eligible: false, blockers: ['b'] });
+    expect(goldEligibility([])).toEqual({ eligible: false, blockers: [] });
+  });
+  it('ignores pricing + superseded', () => {
+    expect(goldEligibility([pass('a', true), doc({ key: 'pricing', latest: { versionId: 'v', version: 1, scores: {}, passes: false, pageCount: 1, createdAt: null } })]).eligible).toBe(true);
   });
 });

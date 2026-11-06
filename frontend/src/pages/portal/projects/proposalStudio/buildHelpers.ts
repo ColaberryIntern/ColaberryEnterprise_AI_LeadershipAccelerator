@@ -60,3 +60,13 @@ export function libraryPickerItems(view: Pick<StudentGovProjectView, 'blueprint'
   items.push({ key: 'reference:project', label: 'Reference project sheet', group: 'References' });
   return items;
 }
+
+/**
+ * Gold-gate eligibility (T20): the package Go is offered only when there is at least one scored (non-pricing,
+ * non-superseded) document and EVERY one passes; otherwise the not-yet-passing documents are the blockers.
+ */
+export function goldEligibility(docs: GovProposalDocument[] | null | undefined): { eligible: boolean; blockers: string[] } {
+  const scored = (Array.isArray(docs) ? docs : []).filter((d) => isLiveDoc(d));
+  const blockers = scored.filter((d) => !d.latest?.passes).map((d) => d.title);
+  return { eligible: scored.length > 0 && blockers.length === 0, blockers };
+}

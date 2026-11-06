@@ -274,3 +274,9 @@
 .gps-rail-badge{margin-left:auto;font-weight:700;border-radius:999px;padding:0 7px;font-size:11px;color:#fff}
 .gps-rail-badge.warn{background:var(--gps-warn)}
 .gps-rail-badge.bad{background:var(--gps-bad)}
+
+/* v3 (T19) editor tabs + outline tab */
+.gps-tabs{display:inline-flex;gap:4px;margin-right:8px}
+.gps-outline{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.gps-outline-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px dashed var(--gps-line)}
+.gps-outline-row > div:first-child{flex:1 1 auto;min-width:0}

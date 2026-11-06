@@ -93,7 +93,7 @@ export default function StudioShell(
       center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} onReload={onReload} onToast={toast} />;
       break;
     case 'gates':
-      center = <ReviewGatesView projectId={projectId} docs={docs} reviewApi={reviewApi} onOpenDoc={openDoc} />;
+      center = <ReviewGatesView projectId={projectId} docs={docs} reviewApi={reviewApi} onOpenDoc={openDoc} onToast={toast} />;
       break;
     case 'package':
       center = <PackageView view={view} projectId={projectId} docs={docs} reviewApi={reviewApi} onToast={toast} />;
@@ -119,7 +119,7 @@ export default function StudioShell(
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
-      {tourStep !== null && <StudioTour step={tourStep} onNavigate={go} onSetStep={setTourStep} onClose={() => setTourStep(null)} />}
+      {tourStep !== null && <StudioTour step={tourStep} onNavigate={go} onSetStep={setTourStep} onClose={() => setTourStep(null)} variant={view.viewerCanVerify ? 'admin' : 'intern'} />}
       {bugReportEndpoint && <ReportAProblem brandLabel={null} endpoint={bugReportEndpoint} extra={{ projectId, contractName: view.name }} />}
     </div>
   );
