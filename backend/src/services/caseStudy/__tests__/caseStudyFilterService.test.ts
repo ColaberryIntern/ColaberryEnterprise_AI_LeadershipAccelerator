@@ -105,7 +105,7 @@ describe('surface isolation (AC4)', () => {
     expect(paged.items).toEqual([]);
   });
 
-  it('the surface is a parameter, not a constant: all four keys have a profile', () => {
+  it('the surface is a parameter, not a constant: every key has a profile', () => {
     for (const key of CASE_STUDY_SURFACE_KEYS) {
       expect(getCaseStudySurfaceProfile(key).surfaceKey).toBe(key);
     }

@@ -17,15 +17,20 @@
  * row, not a schema change" a real property rather than an aspiration — but only
  * `enterprise` is publishable in Phase 1 and the publish gate rejects the rest.
  *
+ * `hire` is the fifth, and the first added AFTER day one. It still needed no
+ * schema change: `surface_key` is `VARCHAR(40)` with no CHECK constraint
+ * (ensureCaseStudySchema.ts), which was confirmed before the key was added.
+ *
  * `case_study_collections.surface_key`, `case_study_publications.surface_key`.
  */
-export type CaseStudySurfaceKey = 'enterprise' | 'training' | 'ai-flotation' | 'refactored';
+export type CaseStudySurfaceKey = 'enterprise' | 'training' | 'ai-flotation' | 'refactored' | 'hire';
 
 export const CASE_STUDY_SURFACE_KEYS = [
   'enterprise',
   'training',
   'ai-flotation',
   'refactored',
+  'hire',
 ] as const;
 
 /**
@@ -39,9 +44,19 @@ export const CASE_STUDY_SURFACE_KEYS = [
  * reads the surface off the request - which is exactly what the gate's own
  * refusal message had been promising since Phase 1.
  *
- * `training` and `refactored` stay out deliberately. Neither has a page to
+ * `training` JOINED later, when training.colaberry.com shipped its
+ * /student-projects page. `refactored` stays out deliberately: it has no page to
  * appear on yet, and a surface that is publishable but unreachable is a record
  * marked live that nobody can read.
+ *
+ * `hire` JOINED 2026-11-06, in the SAME change that ships the site it appears on
+ * (apps/hire-refactored-public, served at hire.refactored.ai). That pairing is the
+ * rule above applied, not a coincidence: the key and the page merge together or
+ * not at all. It answers a different reader question from `refactored` - "should
+ * I hire the person who built this?" - so it is a new surface rather than
+ * `refactored` made publishable. It is also the one surface with a second gate:
+ * a hire record must resolve to a PERSON (`hire_no_linked_person` in the publish
+ * rules), because a talent listing that names nobody lists nobody.
  *
  * ADDING ONE IS NOT A FREE ACTION. Each surface is a brand - AI Flotation runs
  * its own Cloudflare zone specifically to keep the entity boundary clean - so
@@ -49,4 +64,4 @@ export const CASE_STUDY_SURFACE_KEYS = [
  * per-surface publication row is the control for that judgement. It does not
  * make the judgement.
  */
-export const PUBLISHABLE_SURFACE_KEYS = ['enterprise', 'ai-flotation', 'training'] as const;
+export const PUBLISHABLE_SURFACE_KEYS = ['enterprise', 'ai-flotation', 'training', 'hire'] as const;

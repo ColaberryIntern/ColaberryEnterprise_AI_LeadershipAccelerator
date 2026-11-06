@@ -1,5 +1,5 @@
 /**
- * caseStudySurfaceProfiles - the four surface profiles, as DATA (spec §21).
+ * caseStudySurfaceProfiles - the five surface profiles, as DATA (spec §21).
  *
  * Split out of `caseStudyFilterService.ts` to keep both files inside CLAUDE.md's
  * size targets, on the same precedent as `caseStudySnapshotBuilder` + `…Sections`
@@ -12,7 +12,8 @@
  * aspiration - and it has now been collected on twice. AI Flotation went live in
  * September 2026 and Training followed it, each by adding a key to
  * `PUBLISHABLE_SURFACE_KEYS` and an address to its profile. No migration, no new
- * table, no change to a single stored snapshot.
+ * table, no change to a single stored snapshot. `hire` (2026-11-06) was the first
+ * key added after day one, and it took the same shape: a key, an order, an address.
  *
  * `publishable` on the returned profile is DERIVED from that list rather than
  * declared here, because a hand-written copy of it had already drifted.
@@ -29,20 +30,20 @@ import type {
 import type { CaseStudySurfaceProfile } from '../../types/caseStudyFilters';
 import type { PublicVerificationClass } from '../../types/caseStudyPublic';
 
-/* ────────────────────────────────────────────────────── the four lenses ──── */
+/* ────────────────────────────────────────────────────── the five lenses ──── */
 
 /**
  * A LENS REORDERS. IT DOES NOT DROP.
  *
- * Every one of the four orders below contains all ten section keys. That is the
- * rule the four differ under, and it is deliberate: `hiddenSections` stays `[]`
- * on all four surfaces because "this audience does not get to see the
+ * Every one of the five orders below contains all thirteen section keys. That is the
+ * rule the five differ under, and it is deliberate: `hiddenSections` stays `[]`
+ * on all five surfaces because "this audience does not get to see the
  * measurement" is an editorial decision nobody has made, while "this audience
  * meets the architecture first" is the decision the lens model exists to
  * express. A record's evidence is not audience-dependent
  * (SURFACE_LENS_MODEL §7.2); the sequence it is met in is.
  *
- * `hero` leads and `cta` closes on all four — the hero carries the `h1` and the
+ * `hero` leads and `cta` closes on all five — the hero carries the `h1` and the
  * CTA carries its own heading from `profile.cta`, so moving either is a page
  * structure change rather than a framing one.
  *
@@ -70,7 +71,7 @@ import type { PublicVerificationClass } from '../../types/caseStudyPublic';
  *    Resolving that duplication is a precondition of the change, and it is not
  *    resolved.
  *
- * It is also the control. Three lenses moving against a fixed fourth is how an
+ * It is also the control. Four lenses moving against a fixed fifth is how an
  * operator can see that the difference is the lens and not the record.
  */
 const ENTERPRISE_ORDER = [
@@ -148,12 +149,32 @@ const REFACTORED_ORDER = [
 ] as const;
 
 /**
- * The attribution floor, identical on all four surfaces (SURFACE_LENS_MODEL
+ * HIRE — "Should I hire the person who built this?"
+ *
+ * Person-first: the builder leads straight after the hero, then the evidence of
+ * what they personally did (build, measurement, artifacts, source), then the
+ * context. The reader is an employer, and the record is a reference for a
+ * person, so `situation` - the business problem - falls to tenth: it is why the
+ * work mattered, not whether this engineer can do it.
+ *
+ * A lens reorders; it never drops, so all thirteen keys stay present (pinned by
+ * caseStudySurfaceLens.test.ts). The person band itself is drawn by the hire
+ * site and the admin's person-first preview, around this order, from the linked
+ * portfolio - not by a section on the record, because the record is about a
+ * project and only the link says whose.
+ */
+const HIRE_ORDER = [
+  'hero', 'builder', 'contributors', 'build', 'measurement', 'artifacts',
+  'repositories', 'architecture', 'decisions', 'situation', 'roadmap', 'closing', 'cta',
+] as const;
+
+/**
+ * The attribution floor, identical on all five surfaces (SURFACE_LENS_MODEL
  * §5.4). Subtracted from `hiddenSections` before the section walk, so no
  * profile can hide who built the work, where the source is, or the offer being
  * made.
  *
- * It is the same on all four ON PURPOSE. A per-surface floor would be a floor
+ * It is the same on all five ON PURPOSE. A per-surface floor would be a floor
  * the surface sets for itself, which is not a floor.
  */
 const REQUIRED_SECTIONS = ['contributors', 'repositories', 'cta'] as const;
@@ -196,8 +217,8 @@ function profile(
     defaultFilters: { surface: surfaceKey, verificationClass: PROVEN_ONLY },
     defaultSort: 'featured',
     sectionOrder,
-    // Empty on all four, and that is the point: the lens model is proved by
-    // ORDER, not by suppression. See the block comment on the four orders.
+    // Empty on all five, and that is the point: the lens model is proved by
+    // ORDER, not by suppression. See the block comment on the five orders.
     hiddenSections: [],
     requiredSections: REQUIRED_SECTIONS,
     cta: { key: `${surfaceKey}-default`, ...cta },
@@ -297,6 +318,31 @@ export const CASE_STUDY_SURFACE_PROFILES: Readonly<
       href: '/refactored',
     },
     ['project facts', 'build timeline', 'architecture', 'ownership'],
+  ),
+  hire: profile(
+    'hire', 'Hire · Refactored', HIRE_ORDER,
+    {
+      eyebrow: 'Hire · proven talent',
+      title: 'Engineers who have already deployed AI into real work.',
+      description: 'Every person here is listed because a project they built was verified and '
+        + 'published as a case study.',
+    },
+    {
+      eyebrow: 'Built by someone you can hire',
+      heading: 'Talk to the engineer who shipped this.',
+      buttonLabel: 'Request an intro',
+      /* Resolved on hire.refactored.ai, where /intro/ is the no-JS intro form. Like the
+         training href above, nothing in this repository can follow it from here, so it is
+         pinned in caseStudySurfaceCtaHrefs.test.ts. */
+      href: '/intro',
+    },
+    ['who built it', 'what they personally shipped', 'capabilities proven', 'outcome', 'source',
+      'availability'],
+    /* Its own site on refactored.ai. A record published here is a page ON THE HIRE SITE,
+       so its canonical says so. */
+    { publicBaseUrl: 'https://hire.refactored.ai', detailPathPrefix: '/case-studies' },
+    /* No default builder. A hire record that names nobody is not listable, and the
+       publish gate refuses it outright (hire_no_linked_person). */
   ),
 });
 

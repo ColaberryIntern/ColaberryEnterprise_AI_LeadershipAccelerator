@@ -147,6 +147,7 @@ export function describeSurfaceKey(value: CaseStudySurfaceKey): string {
     case 'training': return 'Training';
     case 'ai-flotation': return 'AI Flotation';
     case 'refactored': return 'Refactored';
+    case 'hire': return 'Hire · Refactored';
     default: return assertNever(value, 'CaseStudySurfaceKey');
   }
 }

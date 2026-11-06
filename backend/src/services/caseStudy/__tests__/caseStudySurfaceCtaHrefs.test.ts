@@ -31,6 +31,9 @@ const EXPECTED_CTA: Record<string, { href: string; site: string; verified: boole
   enterprise: { href: '/lab', site: 'https://enterprise.colaberry.ai', verified: true },
   'ai-flotation': { href: '/contact', site: 'https://aiflotation.com', verified: false },
   refactored: { href: '/refactored', site: 'https://refactored.ai', verified: false },
+  // /intro/ is the no-JS intro form shipped in apps/hire-refactored-public. Not probed:
+  // the site goes live after this change merges.
+  hire: { href: '/intro', site: 'https://hire.refactored.ai', verified: false },
 };
 
 describe('surface CTA hrefs', () => {

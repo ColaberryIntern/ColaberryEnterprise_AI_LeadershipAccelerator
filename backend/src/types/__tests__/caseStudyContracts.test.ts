@@ -85,6 +85,7 @@ const CONTRACT_FILES = [
   'caseStudyPublic.ts',
   'caseStudyFilters.ts',
   'caseStudyGuards.ts',
+  'caseStudySurfaceKeys.ts',
 ];
 
 const readContract = (file: string): string =>
@@ -392,13 +393,15 @@ describe('provenance precedence', () => {
 });
 
 describe('surfaces and sorts', () => {
-  it('declares all four surfaces so a future surface is a row, not a migration', () => {
+  it('declares all five surfaces so a future surface is a row, not a migration', () => {
     expect([...CASE_STUDY_SURFACE_KEYS]).toEqual([
       'enterprise',
       'training',
       'ai-flotation',
       'refactored',
+      'hire',
     ]);
+    expect(isCaseStudySurfaceKey('hire')).toBe(true);
     expect(isCaseStudySurfaceKey('training')).toBe(true);
     expect(isCaseStudySurfaceKey('linkedin')).toBe(false);
   });
@@ -418,12 +421,13 @@ describe('surfaces and sorts', () => {
    */
   it('publishes only to surfaces that have a page to appear on', () => {
     // Enterprise, then AI Flotation (2026-09-05, aiflotation.com/results), then
-    // Training (2026-09-06, training.colaberry.com/student-projects). Each entry
-    // arrived WITH a page. This list is asserted literally on purpose: adding a
+    // Training (2026-09-06, training.colaberry.com/student-projects), then Hire
+    // (2026-11-06, hire.refactored.ai, shipped in the same change as
+    // apps/hire-refactored-public). Each entry arrived WITH a page. This list is asserted literally on purpose: adding a
     // key here is what makes a surface publishable, so it should never happen as
     // a side effect of some other edit, and this line is the stop-and-look.
-    expect([...PUBLISHABLE_SURFACE_KEYS]).toEqual(['enterprise', 'ai-flotation', 'training']);
-    for (const key of ['enterprise', 'ai-flotation', 'training']) {
+    expect([...PUBLISHABLE_SURFACE_KEYS]).toEqual(['enterprise', 'ai-flotation', 'training', 'hire']);
+    for (const key of ['enterprise', 'ai-flotation', 'training', 'hire']) {
       expect(isPublishableSurfaceKey(key)).toBe(true);
     }
     // `refactored` is the last surface with nowhere to appear. When it ships,
@@ -476,8 +480,19 @@ describe('CaseStudySnapshotContent', () => {
 /* ──────────────────────────── 7. the contract modules are leaves ───────────── */
 
 describe('the contract modules are leaf modules', () => {
-  it('caseStudy.ts imports nothing at all', () => {
-    expect(readContract('caseStudy.ts')).not.toMatch(/^\s*import\s/m);
+  /*
+   * caseStudy.ts may import exactly ONE module, the surface vocabulary split out of it
+   * on 2026-11-06 to keep it off the 500-line ceiling, and that module may import
+   * NOTHING. The property this protects is unchanged - nothing reachable from the
+   * contract can drag in I/O - it is stated as a closure now that it has two files.
+   */
+  it('caseStudy.ts imports only the surface-key leaf, which imports nothing at all', () => {
+    const specifiers = [...codeOnly(readContract('caseStudy.ts')).matchAll(/from\s+'([^']+)'/g)]
+      .map((m) => m[1]);
+    expect(new Set(specifiers)).toEqual(new Set(['./caseStudySurfaceKeys']));
+    const leaf = codeOnly(readContract('caseStudySurfaceKeys.ts'));
+    expect(leaf).not.toMatch(/^\s*import\s/m);
+    expect(leaf).not.toMatch(/from\s+'/);
   });
 
   it('no contract file imports a service, model, config, route, or Express', () => {

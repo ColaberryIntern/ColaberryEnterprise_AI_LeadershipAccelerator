@@ -4,6 +4,7 @@ import type {
   CaseStudyMetricPayload,
   CaseStudySnapshotContent,
 } from '../../types/caseStudy';
+import { CASE_STUDY_SURFACE_KEYS } from '../../types/caseStudy';
 import {
   CASE_STUDY_VISUAL_CHART_KINDS,
   CASE_STUDY_VISUAL_GENERATORS,
@@ -151,7 +152,9 @@ const sectionSchema = z.object({
   schemaVersion: z.literal(1),
   presentationVersion: z.literal('v2'),
   enabled: z.boolean(),
-  surfaces: z.array(z.enum(['enterprise', 'training', 'ai-flotation', 'refactored'])).max(4),
+  /* Read from the contract, not restated: a hand-written copy of this list would have
+     refused every visual story that targets a surface added later (it did for `hire`). */
+  surfaces: z.array(z.enum(CASE_STUDY_SURFACE_KEYS)).max(CASE_STUDY_SURFACE_KEYS.length),
   motion: z.enum(CASE_STUDY_VISUAL_MOTION),
   workflow: workflowSchema.optional(),
   outcomeCards: z.array(z.object({
