@@ -108,6 +108,17 @@ function withPrior(card: CardState, fields: Array<'title' | 'bucket' | 'order'>,
 }
 
 /**
+ * JSON text with object keys sorted, so equal values compare equal however they were stored. Postgres jsonb hands keys back
+ * in its own order (length, then bytes), and plain JSON.stringify made every re-run plan the Quick check again (5 Nov).
+ */
+function canonicalJson(x: unknown): string {
+  const sortKeys = (v: unknown): unknown => Array.isArray(v) ? v.map(sortKeys)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys((v as Record<string, unknown>)[k])]))
+    : v;
+  return JSON.stringify(sortKeys(x));
+}
+
+/**
  * Pure: the updates that put the program video first and the rewritten Quick check second. Empty when the cards are
  * already in that state, so a second run changes nothing. Throws if a card is missing or is not the card expected.
  */
@@ -122,7 +133,7 @@ export function planProgramVideoFirst(video: CardState | undefined, check: CardS
     updates.push({ id: video.id, set: { bucket: 'pre_class', order: 1, metadata: withPrior(video, ['bucket', 'order'], false) } });
   }
   const assessment = (check.metadata.assessment || {}) as Record<string, unknown>;
-  const rewritten = JSON.stringify(assessment.questions) === JSON.stringify(QUICK_CHECK_QUESTIONS);
+  const rewritten = canonicalJson(assessment.questions) === canonicalJson(QUICK_CHECK_QUESTIONS);
   if (check.order !== 2 || check.title !== QUICK_CHECK_TITLE || !rewritten || check.metadata.locked !== true) {
     const content = (check.metadata.content || {}) as Record<string, unknown>;
     updates.push({
