@@ -82,7 +82,8 @@ export function HallwayBoard({ hallway, onOpen }: { hallway: Hallway | null; onO
   return (
     <>
       <div className="k" data-testid="cm-board-title">Meeting rooms · {summary ? `${summary.count} ${summary.label}` : '…'}</div>
-      {hallway && !shown.length && <h3 className="plain">Nobody is in a room right now. Open one, or book one for later.</h3>}
+      {/* C117: a sentence, not a headline: at headline size it ran three lines and the screen clipped it mid-line */}
+      {hallway && !shown.length && <p className="cm-hall-empty" data-testid="cm-board-empty">Nobody is in a room right now. Open one, or book one for later.</p>}
       <ul className="cm-hall-board-rows" onClick={(e) => e.stopPropagation()}>
         {shown.slice(0, 4).map((d) => (
           <li key={d.key} data-testid={`cm-board-room-${d.roomId}`}>

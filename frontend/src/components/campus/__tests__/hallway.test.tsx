@@ -154,6 +154,16 @@ describe('the walls, the board and the card', () => {
     expect(q('[data-testid="cm-board-title"]')!.textContent).toBe('Meeting rooms · 1 room live now');
   });
 
+  it('C117: an empty hallway says so as a body line (not a headline the screen clipped), with + New room and Book a session', () => {
+    render(<HallwayBoard hallway={H([])} onOpen={() => undefined} />);
+    const empty = q('[data-testid="cm-board-empty"]')!;
+    expect(empty.tagName).toBe('P');
+    expect(empty.className).toBe('cm-hall-empty');
+    expect(empty.textContent).toBe('Nobody is in a room right now. Open one, or book one for later.');
+    expect(q('[data-testid="cm-board-new-room"]')).not.toBeNull();
+    expect(q('[data-testid="cm-board-book-room"]')).not.toBeNull();
+  });
+
   it('the card says so when the rooms cannot load or none are open, and still offers + New room and Book a session', () => {
     render(<HallwayRows hallway={null} error onOpen={() => undefined} />);
     expect(q('[data-testid="cm-hall-rows"]')!.textContent).toContain('can’t load the rooms');

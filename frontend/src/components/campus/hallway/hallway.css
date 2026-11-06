@@ -23,7 +23,9 @@
 .cm-mdoor .num{position:absolute;top:-30px;left:50%;transform:translateX(-50%);font:800 calc(var(--fw, 900px) * .017) ui-monospace,monospace;color:var(--cm-art-ink);
   background:var(--cm-art-door-plate);border-radius:6px;padding:0 10px}
 
-/* the back-wall board (inside .cm-r3-screen: scales with the room) */
+/* the back-wall board (inside .cm-r3-screen: scales with the room).
+   C117: the empty line is body copy at the shared screen scale (--fwg, the room's real width), never clamped mid-sentence */
+.cm-r3-screen .cm-hall-empty{display:block;-webkit-line-clamp:unset;font-size:calc(var(--fwg, var(--fw)) * .034 * var(--fit));line-height:1.3;color:var(--cm-art-sp-ink);margin:calc(var(--fwg, var(--fw)) * .012) 0 calc(var(--fwg, var(--fw)) * .02)}
 .cm-r3-screen .cm-hall-board-rows{list-style:none;margin:calc(var(--fw) * .006) 0;padding:0}
 .cm-hall-board-rows li{display:flex;align-items:center;gap:calc(var(--fw) * .01);padding:calc(var(--fw) * .005) 0;border-bottom:1px solid var(--cm-art-line);font-size:calc(var(--fw) * .014);color:var(--cm-art-sp-ink)}
 .cm-hall-board-rows .tx{flex:1;min-width:0}

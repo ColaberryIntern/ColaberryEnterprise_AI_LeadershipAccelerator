@@ -24,18 +24,30 @@
 /* Ali 2026-10-26 ("I can barely see the information on the screen"): a room's own screen (Chow Hall's cravings, the Schedule, the hallway,
    the plans, events, live, the arcade) sizes its type from --fw at 0.9-3%; inside the screen --fw is the room width x 1.7, so every custom
    screen reads about 1.7x larger at once, keeping its own proportions. --fwr is the room's real width (Room3D). */
-.cm-r3-screen .inner.is-custom{--fw:calc(var(--fwr) * 1.7)}
+/* C117 (Ali 2026-11-06, Meeting Rooms / Admissions: "everything fits and the words and icons aren't too big"): two fixes to that rule.
+   1. The SHARED pieces every screen uses (.k kicker, h3 title, p line, .b buttons, .pts) size from --fwg, the room's real width, in
+      custom screens too, so a custom screen's kicker and buttons are exactly the Classroom screen's size. Before, they took the 1.7x
+      and a 32-character kicker wrapped, the title clipped and the buttons were 0.12 x the room wide.
+   2. A custom screen's own pieces keep the 1.7x, and --fit is folded into --fw, so the fit pass (RoomScreen fitScreen) shrinks
+      everything on a custom screen, not only the shared pieces. */
+.cm-r3-screen .inner.is-custom{--fw:calc(var(--fwr) * 1.7 * var(--fit));--fwg:var(--fwr)}
 .cm-r3-screen:focus-visible{outline:4px solid var(--cm-art-red);outline-offset:4px}
-/* C80 (Ali 2026-10-27: "don't cut off the words at the top"): a board taller than its screen overflows at the bottom, never the top */
-.cm-r3-screen .inner{width:100%;height:100%;border-radius:10px;background:var(--cm-art-white);color:var(--cm-art-sp-ink);display:flex;flex-direction:column;justify-content:center;justify-content:safe center;padding:4% 5%;position:relative;overflow:hidden}
+/* C80 (Ali 2026-10-27: "don't cut off the words at the top"): a board taller than its screen overflows at the bottom, never the top.
+   C117: words never break mid-word on a screen ("No card neede/d", "$1,20/0"); a word too wide for its box is a horizontal
+   overflow the fit pass sees and shrinks for. */
+.cm-r3-screen .inner{width:100%;height:100%;border-radius:10px;background:var(--cm-art-white);color:var(--cm-art-sp-ink);display:flex;flex-direction:column;justify-content:center;justify-content:safe center;padding:4% 5%;position:relative;overflow:hidden;overflow-wrap:normal;word-break:normal;hyphens:manual}
+/* C117: the board's pieces never shrink to fit the column. They did: the title and line clamp with overflow:hidden, which makes a
+   flex item's minimum height 0, so a tall board squeezed them to a slice of their letters ("Nobody is in a..." cut through the
+   glyphs) and hid the overflow from the fit pass, which then saw nothing to fix. Now the overflow is real and --fit removes it. */
+.cm-r3-screen .inner>*{flex-shrink:0}
 .cm-r3-screen .inner::before{content:"";position:absolute;left:0;top:0;right:0;height:7px;background:var(--bc)}
-.cm-r3-screen .k{font-size:calc(var(--fw) * .026 * var(--fit));font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-red);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.cm-r3-screen .pts{font-size:calc(var(--fw) * .024 * var(--fit));font-weight:700;letter-spacing:0;color:var(--cm-art-live);background:var(--cm-art-live-tint);border-radius:8px;padding:3px 8px;font-family:ui-monospace,Menlo,monospace}
-.cm-r3-screen h3{font-size:calc(var(--fw) * .05 * var(--fit));line-height:1.12;margin:12px 0 10px;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.cm-r3-screen h3.plain{font-size:calc(var(--fw) * .06 * var(--fit));text-align:center}
-.cm-r3-screen p{font-size:calc(var(--fw) * .028 * var(--fit));color:var(--cm-art-muted);margin:0 0 16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cm-r3-screen .k{font-size:calc(var(--fwg, var(--fw)) * .026 * var(--fit));font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-red);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cm-r3-screen .pts{font-size:calc(var(--fwg, var(--fw)) * .024 * var(--fit));font-weight:700;letter-spacing:0;color:var(--cm-art-live);background:var(--cm-art-live-tint);border-radius:8px;padding:3px 8px;font-family:ui-monospace,Menlo,monospace}
+.cm-r3-screen h3{font-size:calc(var(--fwg, var(--fw)) * .05 * var(--fit));line-height:1.12;margin:12px 0 10px;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.cm-r3-screen h3.plain{font-size:calc(var(--fwg, var(--fw)) * .06 * var(--fit));text-align:center}
+.cm-r3-screen p{font-size:calc(var(--fwg, var(--fw)) * .028 * var(--fit));color:var(--cm-art-muted);margin:0 0 16px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .cm-r3-screen .row{display:flex;gap:10px;flex-wrap:wrap}
-.cm-r3-screen .b{height:calc(var(--fw) * .07 * var(--fit));font-size:calc(var(--fw) * .03 * var(--fit));padding:0 calc(var(--fw) * .03 * var(--fit));border-radius:999px;border:1px solid var(--cm-art-line);background:var(--cm-art-white);
+.cm-r3-screen .b{height:calc(var(--fwg, var(--fw)) * .07 * var(--fit));font-size:calc(var(--fwg, var(--fw)) * .03 * var(--fit));padding:0 calc(var(--fwg, var(--fw)) * .03 * var(--fit));border-radius:999px;border:1px solid var(--cm-art-line);background:var(--cm-art-white);
   font-weight:700;color:var(--cm-art-sp-ink);cursor:pointer;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .cm-r3-screen .b.red{background:var(--cm-art-red);border-color:var(--cm-art-red);color:var(--cm-art-white)}
 .cm-r3-screen .stand{display:none} /* C42: wall-mounted, no stand */
