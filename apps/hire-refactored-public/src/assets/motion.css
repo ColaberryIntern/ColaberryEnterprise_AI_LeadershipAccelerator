@@ -1,0 +1,68 @@
+/*
+ * hire.refactored.ai - the motion layer (MOTION.md).
+ *
+ * WHY THIS SURFACE MOVES WHEN THE REST OF REFACTORED DOES NOT. The vendored Refactored
+ * motion tokens say motion is "instrumental only". hire.refactored.ai departs from that BY
+ * ALI'S DIRECTION (2026-11-06): here motion tells the story of proof - the gate fills in,
+ * the evidence path flows to a gold node, a project flexes as it opens, the case study
+ * verifies itself before it reveals. The base tokens (--ease, --dur-fast, --dur) are kept;
+ * this file adds only the hire layer on top of them.
+ *
+ * RULES (MOTION.md §0): animate only transform, opacity, box-shadow, filter and SVG
+ * stroke-dashoffset - never a layout property. Hover and :focus-visible look identical.
+ * Under prefers-reduced-motion every item below is off and everything ends in its final
+ * state; the JS-driven motions (count-up, boot) check matchMedia themselves as well.
+ */
+
+/* 2.1 view fade-in */
+.fade{animation:fade var(--dur-fade) ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* 3.2 listing-gate steps: 500ms each, staggered by the inline animation-delay */
+.step.anim{opacity:0;transform:translateX(-8px);animation:gate-in .5s forwards}
+@keyframes gate-in{to{opacity:1;transform:none}}
+
+/* 4.x cards: lift, glow, cue. Hover and focus-visible are the same state. */
+.spot-card{transition:transform var(--dur-lift-lg),box-shadow var(--dur-lift-lg),border-color var(--dur-lift-lg)}
+.spot-card:hover,.spot-card:focus-visible{transform:translateY(-4px);border-color:color-mix(in srgb,var(--star) 55%,transparent);box-shadow:0 24px 60px -28px color-mix(in srgb,var(--star) 45%,transparent)}
+.tcard{transition:transform var(--dur-lift),box-shadow var(--dur-lift),border-color var(--dur-lift)}
+.tcard:hover,.tcard:focus-within{transform:translateY(-3px);border-color:var(--accent);box-shadow:var(--shadow)}
+.sig{transition:transform 300ms,box-shadow 300ms}
+.sig:hover,.sig:focus-visible{transform:translateY(-3px);box-shadow:0 30px 70px -30px color-mix(in srgb,var(--star) 50%,transparent)}
+a.proj{transition:transform var(--dur-lift-lg),box-shadow var(--dur-lift-lg),border-color var(--dur-lift-lg)}
+a.proj:hover,a.proj:focus-visible{border-color:var(--star);transform:translateY(-3px);box-shadow:0 20px 50px -25px color-mix(in srgb,var(--star) 50%,transparent)}
+.mini{transition:transform 200ms,border-color 200ms}
+.mini:hover,.mini:focus-visible{border-color:var(--star);transform:translateY(-2px)}
+.open-cue svg{transition:transform 200ms}
+.sig:hover .open-cue svg,.sig:focus-visible .open-cue svg,a.proj:hover .open-cue svg,a.proj:focus-visible .open-cue svg{transform:translate(3px,-3px)}
+/* 4.7 a pending project is inert: no transition, no lift */
+.proj.pending{transition:none}
+/* 4.8 buttons */
+.btn{transition:transform 180ms,filter 180ms,border-color 180ms,color 180ms}
+.btn-primary:hover,.btn-primary:focus-visible{filter:brightness(1.08);transform:translateY(-1px)}
+.btn-ghost:hover,.btn-ghost:focus-visible{border-color:var(--accent);color:var(--accent)}
+.chip{transition:border-color 150ms,color 150ms}
+.builder{transition:border-color 200ms}
+.builder:hover,.builder:focus-visible{border-color:var(--star)}
+
+/* 5 the launch: dip-and-spring + gold sweep, both 700ms, together */
+.sig,.proj,.mini{position:relative;overflow:hidden}
+.launch{animation:launch var(--dur-launch) var(--ease-launch)}
+.launch::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,color-mix(in srgb,var(--star) 55%,transparent) 50%,transparent 70%);transform:translateX(-100%);animation:sweep var(--dur-launch) forwards;pointer-events:none;z-index:5}
+@keyframes launch{0%{transform:scale(1)}35%{transform:scale(.97)}70%{transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes sweep{to{transform:translateX(100%)}}
+.toast{transition:opacity 300ms,transform 300ms}
+
+/* 6 the boot overlay fades 500ms; launch.js removes it at +520ms */
+.boot{transition:opacity 500ms}
+.boot .cursor{animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* Reduced motion is a first-class mode: nothing above animates, and every element that
+   starts hidden for an animation ends in its final, visible state. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .step.anim{opacity:1;transform:none}
+  .launch::after{display:none}
+  .boot{display:none}
+}
