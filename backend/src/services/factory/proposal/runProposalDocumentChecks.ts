@@ -14,7 +14,7 @@ import GovProposalBlueprint from '../../../models/GovProposalBlueprint';
 import { runDocumentChecks, type DocumentCheckInput } from './documentChecks';
 import { runAiChecks } from './documentChecksAI';
 import { renderProposalPdf } from './renderProposalPdf';
-import { recordVersionChecks } from './govProposalReviewStore';
+import { recordVersionChecks, recordAiGates } from './govProposalReviewStore';
 import { reconcilePlaceholderGaps } from './govProposalGaps';
 import { withClassification } from './classifyFinding';
 import { judgeRunIds } from './judgeRuns';
@@ -73,6 +73,10 @@ export async function runProposalDocumentChecks(deliveryProjectId: string, docKe
   result.findings = classified;
   result.fatal = classified.filter((f) => f.severity === 'fatal');
   // v3 (T11): record the independent judge run ids (evaluator/proof/clarity) on the scored version.
-  await recordVersionChecks(doc.current_version_id, result, judgeRunIds(ai?.judgeRuns as any));
+  const runIds = judgeRunIds(ai?.judgeRuns as any);
+  await recordVersionChecks(doc.current_version_id, result, runIds);
+  // v3 (T13): the AI judge auto-records the AI gates (pink/red/white_glove) this version now passes, with the scores
+  // + judge-run evidence. Gold stays human-only. Best-effort: a gate-write failure never fails the scoring.
+  try { await recordAiGates(doc.id, doc.current_version_id, result.scores, result.findings, runIds); } catch { /* best-effort */ }
   return result;
 }

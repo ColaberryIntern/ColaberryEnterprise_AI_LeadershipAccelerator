@@ -16,6 +16,12 @@ export interface GovProposalGateReviewAttributes {
   status: GateStatus;
   reviewer_identity_id: string | null;
   note: string | null;
+  /** v3 T13: 'ai_judge' when the AI recorded the gate on a passing version, 'human' for a Gold Go/No-go. */
+  decided_by?: string | null;
+  /** v3 T13: the check scores snapshot at the time the gate was decided (the gate's evidence). */
+  scores?: Partial<Record<string, number>> | null;
+  /** v3 T13: the independent judge run ids behind the gate decision. */
+  judge_run_ids?: string[] | null;
   decided_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
@@ -29,6 +35,9 @@ class GovProposalGateReview extends Model<GovProposalGateReviewAttributes> imple
   declare status: GateStatus;
   declare reviewer_identity_id: string | null;
   declare note: string | null;
+  declare decided_by: string | null;
+  declare scores: Partial<Record<string, number>> | null;
+  declare judge_run_ids: string[] | null;
   declare decided_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -43,6 +52,9 @@ GovProposalGateReview.init(
     status: { type: DataTypes.STRING(12), allowNull: false, defaultValue: 'pending' },
     reviewer_identity_id: { type: DataTypes.UUID, allowNull: true },
     note: { type: DataTypes.TEXT, allowNull: true },
+    decided_by: { type: DataTypes.STRING(12), allowNull: true },
+    scores: { type: DataTypes.JSONB, allowNull: true },
+    judge_run_ids: { type: DataTypes.JSONB, allowNull: true },
     decided_at: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

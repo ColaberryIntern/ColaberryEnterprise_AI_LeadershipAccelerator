@@ -592,6 +592,31 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/gates/:gate',
   }
 });
 
+// v3 (T13): the single PACKAGE Gold decision. Go records the Gold gate on every eligible document (separation of
+// duties enforced per document); No-go returns Gold on all of them with the reviewer's note, locking the package
+// until a new version reopens Gold. The human executive gate — admin-only; interns never approve Gold.
+router.post('/api/admin/gov-contracts/:projectId/gold', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const decision = String((req.body ?? {}).decision ?? '');
+  if (decision !== 'go' && decision !== 'nogo') { res.status(400).json({ error: 'decision must be "go" or "nogo".' }); return; }
+  try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    const isMasterAdmin = adminAllowedSections((req as any).admin ?? {}).includes('program');
+    if (decision === 'go') {
+      const result = await review.recordProjectGold(req.params.projectId as string, ctx.identityId, { isMasterAdmin });
+      res.json({ decision, ...result });
+    } else {
+      const note = String((req.body ?? {}).note ?? '').trim();
+      if (!note) { res.status(400).json({ error: 'A No-go note is required.' }); return; }
+      const result = await review.recordProjectNoGo(req.params.projectId as string, ctx.identityId, note);
+      res.json({ decision, ...result });
+    }
+  } catch (err: unknown) {
+    logFail('gov_contract_gold_decide_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not record the Gold decision.' });
+  }
+});
+
 // v3 (V1.4): the one open-needs list for the contract — what a human must supply before it can ship. Grouped
 // Blocking-export first, then Holding-score. Read-only; the resolve route lands with the resolution stores.
 router.get('/api/admin/gov-contracts/:projectId/needs', requireSection('gov_contracts'), async (req: Request, res: Response) => {

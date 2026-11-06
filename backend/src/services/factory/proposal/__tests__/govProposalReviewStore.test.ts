@@ -5,6 +5,7 @@
  */
 const docFindByPk = jest.fn();
 const docFindOne = jest.fn();
+const docFindAll = jest.fn();
 const docUpdate = jest.fn();
 const verFindOne = jest.fn();
 const verCreate = jest.fn();
@@ -15,11 +16,11 @@ const gateFindOrCreate = jest.fn();
 const gateFindAll = jest.fn();
 const gateUpdate = jest.fn();
 
-jest.mock('../../../../models/GovProposalDocument', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => docFindByPk(...a), findOne: (...a: any[]) => docFindOne(...a), update: (...a: any[]) => docUpdate(...a) } }));
+jest.mock('../../../../models/GovProposalDocument', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => docFindByPk(...a), findOne: (...a: any[]) => docFindOne(...a), findAll: (...a: any[]) => docFindAll(...a), update: (...a: any[]) => docUpdate(...a) } }));
 jest.mock('../../../../models/GovProposalDocumentVersion', () => ({ __esModule: true, default: { findOne: (...a: any[]) => verFindOne(...a), create: (...a: any[]) => verCreate(...a), findByPk: (...a: any[]) => verFindByPk(...a), findAll: (...a: any[]) => verFindAll(...a), update: (...a: any[]) => verUpdate(...a) } }));
 jest.mock('../../../../models/GovProposalGateReview', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => gateFindOrCreate(...a), findAll: (...a: any[]) => gateFindAll(...a), update: (...a: any[]) => gateUpdate(...a) } }));
 
-import { createDocumentVersion, versionPassesGate, decideGate, ProposalReviewError } from '../govProposalReviewStore';
+import { createDocumentVersion, versionPassesGate, decideGate, ProposalReviewError, gatesToAutoRecord, recordAiGates, recordProjectGold, recordProjectNoGo } from '../govProposalReviewStore';
 import type { CheckScores } from '../proposalReviewTypes';
 
 const plain = (v: any) => ({ get: () => ({ ...v }) });
@@ -108,5 +109,61 @@ describe('decideGate', () => {
 
   it('requires a reviewer identity', async () => {
     await expect(decideGate({ documentId: docId, gate: 'pink', reviewerIdentityId: null, decision: 'approve' })).rejects.toBeInstanceOf(ProposalReviewError);
+  });
+});
+
+describe('gatesToAutoRecord (pure, T13)', () => {
+  it('returns the AI gates the version passes, never Gold', () => {
+    expect(gatesToAutoRecord(scoreAll(100), [])).toEqual(['pink', 'red', 'white_glove']);
+    const g = gatesToAutoRecord({ ...scoreAll(100), evaluator: 10 }, []); // red needs the evaluator floor
+    expect(g).toContain('pink');
+    expect(g).not.toContain('red');
+    expect(gatesToAutoRecord(scoreAll(100), []).includes('gold' as any)).toBe(false);
+  });
+});
+
+describe('recordAiGates (T13)', () => {
+  it('approves each passing AI gate as the ai_judge with scores + judge run ids, and never Gold', async () => {
+    const updates: any[] = [];
+    gateFindOrCreate.mockImplementation(async () => [{ update: (f: any) => { updates.push(f); return Promise.resolve(); } }, false]);
+    const recorded = await recordAiGates('doc-1', 'v3', scoreAll(100), [], ['jr:evaluator:x']);
+    expect(recorded).toEqual(['pink', 'red', 'white_glove']);
+    expect(updates.every((u) => u.decided_by === 'ai_judge' && u.status === 'approved' && u.version_id === 'v3')).toBe(true);
+    expect(updates.every((u) => Array.isArray(u.judge_run_ids))).toBe(true);
+    const gatesWritten = gateFindOrCreate.mock.calls.map((c: any[]) => c[0].where.gate);
+    expect(gatesWritten).not.toContain('gold'); // Gold stays human-only
+  });
+});
+
+describe('recordProjectGold / recordProjectNoGo (Go / No-go, T13)', () => {
+  const arm = (authorId: string) => {
+    docFindAll.mockResolvedValue([
+      plain({ id: 'd1', doc_key: 'cover', superseded: false, order_index: 0 }),
+      plain({ id: 'd2', doc_key: 'tech', superseded: false, order_index: 1 }),
+    ]);
+    docFindByPk.mockResolvedValue({ id: 'd1', current_version_id: 'vX' });
+    gateFindAll.mockResolvedValue([plain({ gate: 'pink', status: 'approved' }), plain({ gate: 'red', status: 'approved' }), plain({ gate: 'gold', status: 'pending' })]);
+    verFindByPk.mockResolvedValue(plain({ id: 'vX', check_scores: scoreAll(95), findings: [], author_kind: 'human', author_identity_id: authorId }));
+    gateFindOrCreate.mockResolvedValue([{ update: jest.fn() }, false]);
+  };
+
+  it('Go approves Gold on every eligible document when a non-author reviewer signs off', async () => {
+    arm('author-1');
+    const r = await recordProjectGold('p', 'reviewer-2');
+    expect(r.approved).toEqual(['cover', 'tech']);
+    expect(r.skipped).toEqual([]);
+  });
+
+  it('Go skips a document on separation of duties (the author cannot approve their own Gold)', async () => {
+    arm('reviewer-2'); // the version author IS the reviewer
+    const r = await recordProjectGold('p', 'reviewer-2');
+    expect(r.approved).toEqual([]);
+    expect(r.skipped.map((s) => s.reason)).toEqual(['separation_of_duties', 'separation_of_duties']);
+  });
+
+  it('No-go returns Gold on every document', async () => {
+    arm('author-1');
+    const r = await recordProjectNoGo('p', 'reviewer-2', 'Pricing needs a human pass first');
+    expect(r.returned).toEqual(['cover', 'tech']);
   });
 });
