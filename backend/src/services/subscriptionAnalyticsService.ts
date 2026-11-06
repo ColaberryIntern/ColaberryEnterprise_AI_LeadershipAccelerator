@@ -357,7 +357,13 @@ async function classifyAllMembers(nowMs: number): Promise<ClassifiedMember[]> {
     email: m.payerEmail,
     hasActiveSubscription: m.best?.sub_status === 'active',
     paymentStatusPaid: true, // fetchPayingMembers already filters payment_status='paid'
-    isExplorer: false, // fetchPayingMembers already excludes enrollment_type='explorer'
+    // `false` because this list is already filtered to payers, so the origin term in the
+    // duplicate tie-break has nothing left to decide. The comment here used to say
+    // "fetchPayingMembers already excludes enrollment_type='explorer'", which stopped being
+    // true in C10.17 Phase 1 when that exclusion was removed - it was dropping every paying
+    // ex-Explorer out of MRR. The hardcoded value was right either way; only the reason was
+    // stale, and a wrong reason beside a right value is how the next change goes wrong.
+    isExplorer: false,
     createdAt: m.memberSince,
   }));
 }

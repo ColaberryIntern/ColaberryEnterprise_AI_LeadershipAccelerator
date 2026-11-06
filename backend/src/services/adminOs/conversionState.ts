@@ -102,6 +102,22 @@ export const HAS_PROGRAM_ACCESS_SQL = `(${IS_CONVERTED_SQL} OR e.has_comp_seat)`
  *     have a free account, not a programme: calling them an Explorer would
  *     undo exactly what T207 protected, and calling them a student is the bug
  *     being fixed.
+ *
+ *  5. THE BRANCH ORDER IS NOW LOAD-BEARING, C10.17 Phase 2. The payment paths no
+ *     longer rewrite `enrollment_type`, so a learner who signed up free and then
+ *     paid keeps `has_explorer = true` FOREVER. They are staged 'enrolled_student'
+ *     only because the `enrolled_student` branch is tested BEFORE the 'explorer'
+ *     branch, and because `has_paid_enrollment` is
+ *     `payment_status = 'paid' AND tier <> 'guest'` — which every payment writer
+ *     still satisfies, since Phase 2 removed only the origin write and left
+ *     `tier: 'member'` in place.
+ *
+ *     Swapping those two WHEN arms, or any future path that marks a row paid
+ *     without granting `tier`, now stages a PAYING CUSTOMER as 'explorer' on the
+ *     admin roster and the person profile. Before Phase 2 it could not: the origin
+ *     rewrite made `has_explorer` false for anybody who had paid. This is the one
+ *     place in the codebase where deleting that rewrite turns a tier bug into an
+ *     origin bug, so it is written down here rather than left to be rediscovered.
  */
 export const STAGE_CASE_SQL = `
   CASE

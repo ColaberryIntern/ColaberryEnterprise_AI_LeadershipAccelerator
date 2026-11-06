@@ -145,7 +145,19 @@ const PersonHistoryDrawer: React.FC<Props> = ({
             <button className="btn-close" aria-label="Close" onClick={onClose} />
           </div>
           <div className="d-flex flex-wrap gap-1 mt-2 align-items-center">
-            {p?.enrollment_type === 'explorer' && <span className="badge text-bg-secondary">Explorer</span>}
+            {/* C10.17 Phase 2: `enrollment_type` is ORIGIN now, not a lifecycle stage. The
+                payment paths no longer rewrite it, so a paying customer stays 'explorer'
+                here forever. Badging them "Explorer" would tell an admin deciding whether
+                to comp or chase this person that they are an unconverted free account -
+                `adminOs/lifecycle.ts` defines that stage as "a real relationship and a real
+                login, but not a student, and not a conversion". So the badge now says which
+                of the two it means, and the origin stays visible either way, because that is
+                the fact this whole change exists to preserve. */}
+            {p?.enrollment_type === 'explorer' && (
+              p?.payment_status === 'paid'
+                ? <span className="badge text-bg-light text-dark border" title="Signed up as a free Explorer, then converted to a paying member">From Explorer</span>
+                : <span className="badge text-bg-secondary">Explorer</span>
+            )}
             {p?.payment_status && <span className={`badge ${p.payment_status === 'paid' ? 'text-bg-success' : 'text-bg-warning'}`}>{p.payment_status}</span>}
             {p?.portal_enabled && <span className="badge text-bg-info">Portal</span>}
             {freeAccess && <span className="badge text-bg-success" title="Comped seat — full access at $0">Free Access</span>}

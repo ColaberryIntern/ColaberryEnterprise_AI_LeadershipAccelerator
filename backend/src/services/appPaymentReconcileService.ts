@@ -444,8 +444,11 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
       // this candidate out of the next run, so if anything above throws the whole
       // candidate is still picked up and retried rather than half-finished.
       await sequelize.query(
-        // T206: THE PAIR, written alongside the paid flag. A FIFTH paid-status writer, found
+        // T206, NARROWED BY C10.17 PHASE 2 to `tier` alone. A FIFTH paid-status writer, found
         // by deriving the writer set from source rather than from the plan, which named three.
+        // The `enrollment_type = 'standard'` assignment stood beside `tier` here and is gone:
+        // origin is not a payment outcome. What this statement still guarantees is the part
+        // that mattered - a row cannot come out of here paid-but-guest.
         // In the happy path `activateByRef` has already granted membership before this runs
         // (its own comment above says so), so this is usually a no-op re-assertion. It matters
         // on the ERROR path: if activation threw or was skipped, this statement would
@@ -461,8 +464,7 @@ export async function reconcileAppPayments(opts?: { dryRun?: boolean }): Promise
                 amount_paid = :amt,
                 paysimple_payment_id = COALESCE(paysimple_payment_id, :pid),
                 enrolled_at = COALESCE(enrolled_at, NOW()),
-                tier = 'member',
-                enrollment_type = 'standard'
+                tier = 'member'
           WHERE id = :id`,
         { replacements: { amt: membership.amountCents / 100, pid: membership.pid, id: c.id }, type: QueryTypes.UPDATE }
       );
