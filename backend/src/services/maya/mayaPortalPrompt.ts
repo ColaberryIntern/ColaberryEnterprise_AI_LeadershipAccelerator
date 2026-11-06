@@ -22,7 +22,7 @@ function warn(event: string, e: any): void {
 
 async function learnerBlock(enrollmentId: string): Promise<string> {
   try {
-    const e = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'full_name', 'email', 'phone', 'enrollment_type'] });
+    const e = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'full_name', 'email', 'phone'] });
     if (!e) return 'LEARNER: their account details could not be loaded. Do not ask for their name or email; it is their own account.';
     const digits = String(e.phone || '').replace(/\D/g, '');
     const phoneLine = digits.length >= 10 ? `a phone number ending in ${digits.slice(-4)} is on their account` : 'no phone number is on their account';
