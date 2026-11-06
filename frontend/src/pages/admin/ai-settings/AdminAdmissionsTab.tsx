@@ -46,6 +46,8 @@ interface CallbackEntry {
   request_timestamp: string;
   requested_time: string | null;
   scheduled_time: string | null;
+  /** C122: set when a signed-in learner asked Maya for a call in the portal chat. */
+  portal_learner?: { name: string | null; email: string | null; phone: string | null } | null;
 }
 
 interface CallLogEntry {
@@ -305,7 +307,14 @@ export default function AdminAdmissionsTab() {
                 <tbody>
                   {callbacks.map((cb) => (
                     <tr key={cb.id}>
-                      <td className="text-muted">{cb.visitor_id.substring(0, 12)}...</td>
+                      {cb.portal_learner ? (
+                        <td>
+                          {cb.portal_learner.name || cb.portal_learner.email || 'Portal learner'}
+                          <div className="text-muted">{[cb.portal_learner.phone, 'portal chat with Maya'].filter(Boolean).join(' · ')}</div>
+                        </td>
+                      ) : (
+                        <td className="text-muted">{cb.visitor_id.substring(0, 12)}...</td>
+                      )}
                       <td>
                         <span className={`badge bg-${cb.callback_status === 'completed' ? 'success' : cb.callback_status === 'scheduled' ? 'info' : 'warning'}`}>
                           {cb.callback_status}
