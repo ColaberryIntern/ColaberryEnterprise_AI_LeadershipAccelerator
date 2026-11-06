@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { LIVE_SURFACE_KEY, SURFACE_LENS_TABS } from './caseStudySurfaceLabModel';
+import { SURFACE_LENS_TABS, isLiveTab } from './caseStudySurfaceLabModel';
 import type { CaseStudySurfaceKey } from '../../services/caseStudyAdminTypes';
 
 /**
@@ -47,10 +47,13 @@ export interface CaseStudySurfaceTabsProps {
   /** The id of the tabpanel these tabs control. */
   panelId: string;
   ariaLabel: string;
+  /** Surfaces this record is published on (`liveSurfaceKeys`). Enterprise is always marked. */
+  liveSurfaces?: readonly CaseStudySurfaceKey[];
 }
 
 export function CaseStudySurfaceTabs({
   activeSurface, onSelectSurface, loading, idPrefix, tablistTestId, panelId, ariaLabel,
+  liveSurfaces = [],
 }: CaseStudySurfaceTabsProps): React.ReactElement {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -105,8 +108,11 @@ export function CaseStudySurfaceTabs({
             <span className="text-uppercase fw-semibold small">{tab.label}</span>
             {/* The live surface is marked in TEXT, not by colour alone — the
                 same rule the roadmap glyphs follow. */}
-            {tab.key === LIVE_SURFACE_KEY && (
-              <span className="d-block small fw-normal" data-testid={`${idPrefix}live-marker`}>
+            {isLiveTab(tab.key, liveSurfaces) && (
+              <span
+                className="d-block small fw-normal"
+                data-testid={tab.key === 'enterprise' ? `${idPrefix}live-marker` : `${idPrefix}live-marker-${tab.key}`}
+              >
                 ↑ LIVE
               </span>
             )}

@@ -81,11 +81,11 @@ const WRITE_CALLS = [
   'createCaseStudyFromProject', 'createCaseStudyFromRepositories',
 ] as const;
 
-describe('the segmented control is four discrete lenses', () => {
+describe('the segmented control is five discrete lenses', () => {
   it('renders one tab per surface inside a real tablist', async () => {
     await mountDetail();
     expect(H.query('cs-surface-lab-tablist')).not.toBeNull();
-    ['enterprise', 'training', 'ai-flotation', 'refactored'].forEach((key) => {
+    ['enterprise', 'training', 'ai-flotation', 'refactored', 'hire'].forEach((key) => {
       const tab = H.el(`cs-lens-tab-${key}`);
       expect(tab.getAttribute('role')).toBe('tab');
       expect(tab.getAttribute('aria-controls')).toBe('cs-lens-panel');

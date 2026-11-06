@@ -28,8 +28,10 @@ import {
  * the thing it guards.
  */
 
+/* The surface vocabulary moved out of caseStudy.ts into its own leaf file on 2026-11-06
+   (caseStudy.ts re-exports it). This reads the file that DECLARES the constant. */
 const BACKEND_TYPES = path.resolve(
-  __dirname, '..', '..', '..', '..', 'backend', 'src', 'types', 'caseStudy.ts',
+  __dirname, '..', '..', '..', '..', 'backend', 'src', 'types', 'caseStudySurfaceKeys.ts',
 );
 
 /** `export const PUBLISHABLE_SURFACE_KEYS = ['a', 'b'] as const;` → ['a','b'] */

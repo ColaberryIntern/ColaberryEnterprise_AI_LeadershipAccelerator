@@ -45,13 +45,14 @@ import type {
  * representable so that adding one is a routing change rather than a type
  * change.
  */
-export type CaseStudySurfaceKey = 'enterprise' | 'training' | 'ai-flotation' | 'refactored';
+export type CaseStudySurfaceKey = 'enterprise' | 'training' | 'ai-flotation' | 'refactored' | 'hire';
 
 export const CASE_STUDY_SURFACE_KEYS: readonly CaseStudySurfaceKey[] = Object.freeze([
   'enterprise',
   'training',
   'ai-flotation',
   'refactored',
+  'hire',
 ] as CaseStudySurfaceKey[]);
 
 /** The one surface with a public page in phase 1. */
@@ -159,6 +160,18 @@ export const CASE_STUDY_SURFACES: Readonly<Record<CaseStudySurfaceKey, CaseStudy
       liveUrl: 'https://aiflotation.com/results/',
     }),
     refactored: unrouted('refactored', 'Refactored'),
+    /*
+     * HIRE IS A SEPARATE SITE, like AI Flotation: static HTML from
+     * `apps/hire-refactored-public`, served at hire.refactored.ai, reading this
+     * platform's public API with `?surface=hire`. Unrouted here for the same
+     * reason; it needs an ADDRESS so the admin can send an operator to the
+     * person they just listed.
+     */
+    hire: Object.freeze({
+      ...unrouted('hire', 'Hire · Refactored'),
+      liveUrl: 'https://hire.refactored.ai',
+      detailPathPrefix: '/case-studies',
+    }),
   });
 
 /**
@@ -168,7 +181,7 @@ export const CASE_STUDY_SURFACES: Readonly<Record<CaseStudySurfaceKey, CaseStudy
  * here can do is offer a button the server then refuses by name.
  *
  * Only `refactored` is absent now, because it is the one surface with no page
- * to appear on. A surface that is publishable but unreachable is a record
+ * to appear on. `hire` joined 2026-11-06 in the same change that shipped its site. A surface that is publishable but unreachable is a record
  * marked live that nobody can read.
  *
  * THIS LIST HAS ALREADY DRIFTED ONCE, on 2026-09-07: the backend made
@@ -180,7 +193,7 @@ export const CASE_STUDY_SURFACES: Readonly<Record<CaseStudySurfaceKey, CaseStudy
  * directly and fails when the two disagree.
  */
 export const PUBLISHABLE_CASE_STUDY_SURFACES: readonly CaseStudySurfaceKey[] =
-  Object.freeze(['enterprise', 'ai-flotation', 'training']);
+  Object.freeze(['enterprise', 'ai-flotation', 'training', 'hire']);
 
 /** Unknown keys resolve to the default surface rather than crashing a render. */
 export function resolveCaseStudySurfaceProfile(

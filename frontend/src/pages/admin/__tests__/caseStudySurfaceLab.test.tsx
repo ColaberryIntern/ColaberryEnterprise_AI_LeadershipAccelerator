@@ -1,5 +1,6 @@
 import {
   LIVE_SURFACE_KEY, SURFACE_LENS_TABS, bandSummary, canonicalFacts, draftState,
+  isLiveTab, liveSurfaceKeys,
   lensComposition, publicationState,
 } from '../caseStudySurfaceLabModel';
 import {
@@ -27,9 +28,9 @@ import type { CaseStudySectionKey } from '../../../services/caseStudyPublicTypes
  * this system exists to prevent.
  */
 
-const KEYS: readonly CaseStudySurfaceKey[] = ['enterprise', 'training', 'ai-flotation', 'refactored'];
+const KEYS: readonly CaseStudySurfaceKey[] = ['enterprise', 'training', 'ai-flotation', 'refactored', 'hire'];
 
-describe('the four lenses produce genuinely different composition', () => {
+describe('the five lenses produce genuinely different composition', () => {
   it('gives no two lenses the same band order for the same record', () => {
     const projection = projectionFixture();
     const orders = KEYS.map(
@@ -43,7 +44,7 @@ describe('the four lenses produce genuinely different composition', () => {
     }
   });
 
-  it('renders the SAME SET of bands on all four — a lens reorders, it does not drop', () => {
+  it('renders the SAME SET of bands on all five — a lens reorders, it does not drop', () => {
     const projection = projectionFixture();
     const sets = KEYS.map(
       (key) => [...lensComposition(projection, surfaceViewFixture(key)).bands.map((b) => b.key)]
@@ -75,7 +76,7 @@ describe('the four lenses produce genuinely different composition', () => {
 });
 
 describe('the canonical facts do not move when the lens does', () => {
-  it('reports byte-identical canonical facts on all four lenses', () => {
+  it('reports byte-identical canonical facts on all five lenses', () => {
     // THE EXIT CRITERION. These five come from the snapshot, which does not know
     // which surface it is being read for. If a lens ever changes one of them, it
     // has reached past framing and into fact, and the lens model is void.
@@ -233,10 +234,43 @@ describe('band summaries state facts and characterise nothing', () => {
 });
 
 describe('the fixture orders are not accidentally identical', () => {
-  it('keeps the four mirrored orders distinct', () => {
+  it('keeps the five mirrored orders distinct', () => {
     // Guard on the fixture itself. Every assertion in this file about lenses
     // differing would pass vacuously if this table collapsed to one order.
     const joined = Object.values(SURFACE_ORDERS).map((o) => o.join('>'));
-    expect(new Set(joined).size).toBe(4);
+    expect(new Set(joined).size).toBe(5);
+  });
+});
+
+describe('the LIVE marker follows the record, not a constant', () => {
+  const row = (surfaceKey: string, status: string) => ({ surfaceKey, status });
+
+  it('marks a surface live only when this record has a PUBLISHED row there', () => {
+    expect(liveSurfaceKeys([row('hire', 'published'), row('training', 'draft')])).toEqual(['hire']);
+  });
+
+  it('drops a withdrawn row, so the marker never claims a page that is gone', () => {
+    expect(liveSurfaceKeys([row('hire', 'unpublished')])).toEqual([]);
+    expect(liveSurfaceKeys([row('hire', 'archived')])).toEqual([]);
+  });
+
+  it('ignores unknown surface keys and empty input rather than trusting them', () => {
+    expect(liveSurfaceKeys([row('linkedin', 'published')])).toEqual([]);
+    expect(liveSurfaceKeys(null)).toEqual([]);
+    expect(liveSurfaceKeys(undefined)).toEqual([]);
+    expect(liveSurfaceKeys([row('hire', 'published'), row('hire', 'published')])).toEqual(['hire']);
+  });
+
+  it('keeps Enterprise marked unconditionally and adds Hire once published', () => {
+    expect(isLiveTab('enterprise')).toBe(true);
+    expect(isLiveTab('hire')).toBe(false);
+    expect(isLiveTab('hire', ['hire'])).toBe(true);
+    expect(isLiveTab('training', ['hire'])).toBe(false);
+  });
+
+  it('asks the hire reader question on the Hire tab', () => {
+    const hire = SURFACE_LENS_TABS.find((t) => t.key === 'hire');
+    expect(hire?.label).toBe('Hire');
+    expect(hire?.readerQuestion).toBe('Should I hire the person who built this?');
   });
 });
