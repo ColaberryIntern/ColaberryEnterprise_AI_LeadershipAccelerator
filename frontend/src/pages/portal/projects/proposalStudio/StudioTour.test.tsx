@@ -19,7 +19,7 @@ it('navigates to the first step view on mount and shows its content + progress',
   render(<StudioTour step={0} onNavigate={onNavigate} onSetStep={jest.fn()} onClose={jest.fn()} />);
   expect(onNavigate).toHaveBeenCalledWith(TOUR_STEPS[0].view);
   expect(container.textContent).toContain(TOUR_STEPS[0].title);
-  expect(container.textContent).toContain(`Step 1 of ${TOUR_STEPS.length}`);
+  expect(container.textContent).toContain(`1 of ${TOUR_STEPS.length}`); // v4 eyebrow: "Tour · 1 of N"
   expect(btn('Back').disabled).toBe(true);
 });
 
