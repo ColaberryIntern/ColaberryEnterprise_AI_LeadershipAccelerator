@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import type { NextLesson } from '../../../components/timeline/VideoWinCelebration';
 import type { OnboardingSchedule } from '../../../services/onboardingApi';
 import { loadSchedule } from '../scheduleCache';
 import { bySectionOrder, sumCardPoints } from '../classroomNextStep';
@@ -48,6 +49,21 @@ export function findFirstLessonCard(cards: TimelineFeedCard[], buckets: string[]
   const week = (c: TimelineFeedCard) => (typeof c.week === 'number' ? c.week : Number.MAX_SAFE_INTEGER);
   const order = bySectionOrder(buckets);
   return [...open].sort((a, b) => week(a) - week(b) || order(a, b))[0];
+}
+
+/** C117: the lesson the drawer's celebration offers next, by the same rule, never the card the learner is on. */
+export function findNextLessonCard(cards: TimelineFeedCard[], buckets: string[], currentId: string): TimelineFeedCard | null {
+  return findFirstLessonCard(cards.filter((c) => c.id !== currentId), buckets);
+}
+
+/** C117: the drawer's Next offer for the open card (null when nothing is open or nothing is next). */
+export function useNextLessonOffer(
+  open: TimelineFeedCard | null, cards: TimelineFeedCard[], buckets: string[], openCard: (c: TimelineFeedCard) => void,
+): NextLesson | null {
+  return useMemo(() => {
+    const c = open ? findNextLessonCard(cards, buckets, open.id) : null;
+    return c ? { title: c.title, onOpen: () => openCard(c) } : null;
+  }, [open, cards, buckets, openCard]);
 }
 
 /** For surfaces that don't load the schedule themselves (the campus gate): true only once the server has said "no first win yet". */

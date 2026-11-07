@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TimelineFeedCard } from './TimelineCard';
 import CardDetailBody, { type CompleteOpts } from './CardDetailBody';
+import type { NextLesson } from './VideoWinCelebration';
 
 /**
  * CardDetailDrawer — the right-slide panel that opens when a student clicks a
@@ -18,9 +19,12 @@ interface Props {
   /** Admin contexts (Timeline editor / Studio): the SAME popup students get,
    *  with the live-only actions (complete, Enter-workspace nav) disabled. */
   preview?: boolean;
+  /** C117: passed to the watch-bar celebration (first-win wording, and the Next button). */
+  firstWinPending?: boolean;
+  next?: NextLesson | null;
 }
 
-const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview }) => {
+const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview, firstWinPending, next }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -55,6 +59,8 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview 
             preview={preview}
             autoplayVideo
             onClose={onClose}
+            firstWinPending={!preview && firstWinPending}
+            next={preview ? null : next}
             onComplete={preview || !onComplete ? undefined : (opts) => onComplete(card, opts)}
             onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`, { state: { from: location.pathname } })}
           />

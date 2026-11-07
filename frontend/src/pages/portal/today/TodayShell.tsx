@@ -43,7 +43,7 @@ import { useTodayNextStep } from './useTodayNextStep';
 import TodayNextStepCondensed from './TodayNextStepCondensed';
 import ExplorerPreviewBanner from './ExplorerPreviewBanner';
 import { recordBannerOpen } from './todayFeedApi';
-import { needsFirstWin, needsFirstLesson, findFirstLessonCard, FIRST_LESSON_PARAM } from './explorerFirstWin';
+import { needsFirstWin, needsFirstLesson, findFirstLessonCard, useNextLessonOffer, FIRST_LESSON_PARAM } from './explorerFirstWin';
 
 const TodayShell: React.FC = () => {
   // False until the first loadAll() settles. Gates every derived number in the
@@ -205,6 +205,7 @@ const TodayShell: React.FC = () => {
     firstOpened.current = true;
     openCard(lessonToOpen);
   }, [hydrated, lessonToOpen, openCard]);
+  const drawerNext = useNextLessonOffer(selectedCard, curriculum, curriculumBuckets, openCard);   // C117: the celebration's Next
   const firstName = profile?.profile?.full_name?.trim().split(/\s+/)[0] || '';
 
   // The real registration lives on Eventbrite; RSVP here records it + awards
@@ -467,6 +468,8 @@ const TodayShell: React.FC = () => {
       <CardDetailDrawer
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
+        firstWinPending={firstLessonPending}
+        next={drawerNext}
         onComplete={async (card, opts) => {
           // Same dispatch as the tile (collectCard); the drawer additionally closes, unless the video collected itself at the
           // watch bar (C116), where the learner is still watching.
