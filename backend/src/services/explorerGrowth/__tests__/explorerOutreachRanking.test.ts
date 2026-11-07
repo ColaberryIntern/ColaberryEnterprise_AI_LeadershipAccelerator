@@ -1,4 +1,4 @@
-import { engagementScore, rankOutreach, reachOutCandidate, reasonsFor, type OutreachSignals } from '../explorerOutreachRanking';
+import { engagementScore, rankOutreach, rankOutreachPool, reachOutCandidate, reasonsFor, type OutreachSignals } from '../explorerOutreachRanking';
 
 const NOW = Date.parse('2026-10-26T17:00:00Z');
 const day = (n: number): string => new Date(NOW - n * 24 * 60 * 60 * 1000).toISOString();
@@ -66,5 +66,66 @@ describe('reasons, in plain words and only from recorded facts', () => {
   it('never claims a tour or call that was not recorded', () => {
     const r = reasonsFor(base(), NOW).join(' ');
     expect(r).not.toMatch(/tour|call|RSVP|assignment/i);
+  });
+});
+
+describe('paging the ranked pool', () => {
+  /** Ten candidates, deliberately tied on score so only the email tiebreak orders them. */
+  const ten = () => Array.from({ length: 10 }, (_, i) =>
+    base({ enrollment_id: `e${i}`, email: `p${i}@example.com`, i_score: 10 }));
+
+  it('the pool is the whole ranked list, with no cut applied', () => {
+    expect(rankOutreachPool(ten(), 'reach_out', NOW)).toHaveLength(10);
+  });
+
+  it('CONTROL: the pool still excludes who it always excluded', () => {
+    // Without this, "the pool is everyone" could pass by having quietly stopped filtering.
+    const rows = [...ten(), base({ enrollment_id: 'gone', email: 'z@example.com', primary_state: 'CONVERTED' })];
+    expect(rankOutreachPool(rows, 'reach_out', NOW).map((r) => r.enrollment_id)).not.toContain('gone');
+  });
+
+  it('a page is a window on the pool: offset 3 limit 3 is pool[3..5]', () => {
+    const pool = rankOutreachPool(ten(), 'reach_out', NOW).map((r) => r.enrollment_id);
+    expect(rankOutreach(ten(), 'reach_out', 3, NOW, 3).map((r) => r.enrollment_id))
+      .toEqual(pool.slice(3, 6));
+  });
+
+  it('consecutive pages tile the pool exactly: no gap, no overlap', () => {
+    // The property that makes paging safe to walk. Three pages of four over ten rows.
+    const pool = rankOutreachPool(ten(), 'reach_out', NOW).map((r) => r.enrollment_id);
+    const walked = [0, 4, 8].flatMap((o) => rankOutreach(ten(), 'reach_out', 4, NOW, o).map((r) => r.enrollment_id));
+    expect(walked).toEqual(pool);
+    expect(new Set(walked).size).toBe(walked.length); // nobody appears twice
+  });
+
+  it('offset defaults to 0, so every existing 4-argument caller is unchanged', () => {
+    expect(rankOutreach(ten(), 'reach_out', 4, NOW).map((r) => r.enrollment_id))
+      .toEqual(rankOutreach(ten(), 'reach_out', 4, NOW, 0).map((r) => r.enrollment_id));
+  });
+
+  it('an offset past the end is an empty page, not a throw and not a wrap to the start', () => {
+    expect(rankOutreach(ten(), 'reach_out', 5, NOW, 999)).toEqual([]);
+  });
+
+  it('a partial last page returns only what is left', () => {
+    expect(rankOutreach(ten(), 'reach_out', 4, NOW, 8)).toHaveLength(2);
+  });
+
+  it('is idempotent: the same page asked for twice is the same page', () => {
+    const once = rankOutreach(ten(), 'reach_out', 4, NOW, 4).map((r) => r.enrollment_id);
+    const twice = rankOutreach(ten(), 'reach_out', 4, NOW, 4).map((r) => r.enrollment_id);
+    expect(once).toEqual(twice);
+  });
+
+  it('the order is total, so paging cannot drop or duplicate a tied row', () => {
+    // Every row here ties on score. If the sort were not total the slice boundaries would be
+    // free to move between calls, and a walk would miss people. The email tiebreak prevents it.
+    const ids = rankOutreachPool(ten(), 'reach_out', NOW).map((r) => r.email);
+    expect(ids).toEqual([...ids].sort());
+  });
+
+  it('the engaged view pages too, not just reach_out', () => {
+    const pool = rankOutreachPool(ten(), 'engaged', NOW).map((r) => r.enrollment_id);
+    expect(rankOutreach(ten(), 'engaged', 2, NOW, 2).map((r) => r.enrollment_id)).toEqual(pool.slice(2, 4));
   });
 });

@@ -370,7 +370,7 @@ export const getDistributionHandler = handler(null, distributionQuerySchema, (_p
 
 export const getCampusActivityHandler = handler(null, null, () => getCampusActivity());
 
-export const getOutreachHandler = handler(null, outreachQuerySchema, (_p, q) => getOutreach(q.view, q.limit));
+export const getOutreachHandler = handler(null, outreachQuerySchema, (_p, q) => getOutreach(q.view, q.limit, { offset: q.offset }));
 
 // ─── Journey ────────────────────────────────────────────────────────────────
 
