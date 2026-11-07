@@ -77,6 +77,27 @@ GET  /api/v1/knowledge/sales            (public - the frontend falls back to a b
 | `enterprise_crm` | `ENTERPRISE_CRM_TOKEN` | training.colaberry.com (Sai's Cloud Run), Repo2Reputation |
 | `cora` | `CORA_SERVICE_TOKEN` | the Cora recap engine, read-only |
 
+### `GET /api/v1/explorer-growth/outreach` — the paging contract
+
+Query: `view` (`reach_out` default, or `engaged`), `limit` (1 to 200, **default 25**),
+`offset` (default 0). The schema is `.strict()`, so any other parameter is a **400** rather
+than being ignored.
+
+```json
+{ "view": "reach_out", "tracked_since": "2026-10-26",
+  "count": 200, "total": 847, "offset": 0, "snapshot": "3f9a2c1d8e7b4056", "rows": [ ... ] }
+```
+
+`count` is this page, `total` is the whole ranked pool. **There is more to read while
+`offset + count < total`.** Before `total` existed a consumer holding a full page could not
+tell "that is everyone" from "that is the first 200 of more", so Cora read the capped page as
+the whole queue and could not safely tag anyone out of it.
+
+`snapshot` is a digest of the page's ordered enrollment ids. The pool is re-derived against the
+clock on every call, so two counts taken minutes apart legitimately disagree and comparing them
+proves nothing. Comparing snapshots is the check that works: equal means both sides hold the
+same rows in the same order.
+
 **Before 2026-11-05 there was one shared token and every guarded route took it.** That gave any
 holder the three writes, including `request-callback`, which asks Synthflow to dial a person. It
 also could not be rotated: three systems hold the same value, so rotating it means changing all

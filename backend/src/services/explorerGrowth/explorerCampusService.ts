@@ -1,7 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { ensureCampusActivitySchema } from '../../db/ensureCampusActivitySchema';
-import { rankOutreach, type OutreachRow, type OutreachSignals, type OutreachView } from './explorerOutreachRanking';
+import { rankOutreachPool, type OutreachRow, type OutreachSignals, type OutreachView } from './explorerOutreachRanking';
 import { withPersonLinks, type PersonLinks } from './explorerPersonLinks';
 
 /**
@@ -123,10 +123,23 @@ export function toSignals(r: RawSignals): OutreachSignals {
   };
 }
 
-export async function getOutreach(view: OutreachView, limit: number, now = Date.now()): Promise<{ view: OutreachView; rows: (OutreachRow & PersonLinks)[]; tracked_since: string }> {
+/**
+ * One page of the ranked outreach list, plus the size of the pool it was cut from.
+ *
+ * `offset` and `now` are an options object rather than positional parameters on purpose: both
+ * are numbers, so a positional pair invites a caller to pass a timestamp where an offset is
+ * expected and get a silently empty page instead of a type error.
+ */
+export async function getOutreach(
+  view: OutreachView,
+  limit: number,
+  { offset = 0, now = Date.now() }: { offset?: number; now?: number } = {},
+): Promise<{ view: OutreachView; rows: (OutreachRow & PersonLinks)[]; tracked_since: string; total: number; offset: number }> {
   await ensureCampusActivitySchema();
   const raw = await sequelize.query<RawSignals>(SIGNALS_SQL, { type: QueryTypes.SELECT });
-  // The 360 and GHL links for the ranked page only (the GHL lookup is per person)
-  const rows = await withPersonLinks(rankOutreach(raw.map(toSignals), view, limit, now));
-  return { view, rows, tracked_since: CAMPUS_TRACKED_SINCE };
+  const pool = rankOutreachPool(raw.map(toSignals), view, now);
+  // The 360 and GHL links for the ranked page only (the GHL lookup is per person), so paging
+  // deeper costs one lookup per row returned and never one per row in the pool.
+  const rows = await withPersonLinks(pool.slice(offset, offset + limit));
+  return { view, rows, tracked_since: CAMPUS_TRACKED_SINCE, total: pool.length, offset };
 }
