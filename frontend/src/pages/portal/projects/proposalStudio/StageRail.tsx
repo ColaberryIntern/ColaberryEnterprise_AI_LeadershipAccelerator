@@ -37,7 +37,7 @@ export default function StageRail(
   const needSeverity = needCount === 0 ? 'ok' : (view.fatalNeedsCount ?? 0) > 0 ? 'bad' : 'warn';
 
   return (
-    <nav className="gps-rail" aria-label="Proposal process" data-testid="rail">
+    <nav className="gps-rail" aria-label="Proposal process" data-tour="rail" data-testid="rail">
       <div className="gps-grp">Done</div>
       <div className="gps-past">
         <span>Snapshot</span><span>Solicitation intake</span><span>Fit</span><span>Bid decision</span><span>{buildLabel}</span>
@@ -51,7 +51,7 @@ export default function StageRail(
       </button>
       <div className="gps-grp">Proposal production</div>
       {steps.map((s) => (
-        <button key={s.v} className="gps-step" data-v={s.v} data-testid={`rail-step-${s.v}`} aria-current={current === s.v ? 'page' : undefined} onClick={() => onNavigate(s.v)}>
+        <button key={s.v} className="gps-step" data-v={s.v} data-tour={s.v} data-testid={`rail-step-${s.v}`} aria-current={current === s.v ? 'page' : undefined} onClick={() => onNavigate(s.v)}>
           <span className={icClass(s.ic)} aria-hidden="true">{s.ic.label}</span>
           {s.label}
           {s.small ? <small>{s.small}</small> : null}

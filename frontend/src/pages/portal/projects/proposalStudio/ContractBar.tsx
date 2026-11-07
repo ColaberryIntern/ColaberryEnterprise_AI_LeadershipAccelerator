@@ -30,8 +30,8 @@ export default function ContractBar({ view, onStartTour, onNeeds }: { view: Stud
           <span className="gps-chip">Stage <b>{pursuitStageLabel(view)}</b></span>
           {view.agency && <span className="gps-chip">Agency <b>{view.agency}</b></span>}
           <span className="gps-chip">Build <b className="gps-num">{buildPct}%</b> verified</span>
-          <span className="gps-chip gps-meter" data-testid="bar-ready">Proposal ready <span className="gps-m"><span style={{ width: `${readiness}%` }} /></span><b className="gps-num">{readiness}%</b> / 95%</span>
-          <button type="button" data-testid="bar-needs" data-count={needCount} data-severity={severity} className={`gps-chip gps-chip-btn gps-chip-${needClass}`} onClick={onNeeds}>Needs you <b className="gps-num">{needCount}</b></button>
+          <span className="gps-chip gps-meter" data-tour="ready" data-testid="bar-ready">Proposal ready <span className="gps-m"><span style={{ width: `${readiness}%` }} /></span><b className="gps-num">{readiness}%</b> / 95%</span>
+          <button type="button" data-tour="needs" data-testid="bar-needs" data-count={needCount} data-severity={severity} className={`gps-chip gps-chip-btn gps-chip-${needClass}`} onClick={onNeeds}>Needs you <b className="gps-num">{needCount}</b></button>
           {onStartTour && <button type="button" data-testid="bar-tour" className="gps-chip gps-chip-btn" onClick={onStartTour}>Take the tour</button>}
           {closeIso && <span className="gps-chip">Closes <b className="gps-num">{closeIso}</b>{countdown ? <> &middot; <b className="gps-num">{countdown}</b></> : null}</span>}
         </div>

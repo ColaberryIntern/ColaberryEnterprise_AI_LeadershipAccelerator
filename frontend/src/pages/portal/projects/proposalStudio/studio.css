@@ -292,6 +292,12 @@
 .gps-tour-prompt-go{font-weight:700;color:var(--gps-accent)}
 @media (max-width:760px){.gps-tour-ring{display:none!important}}
 
+/* The shared "Report a problem" widget renders inside `.gps` and uses Bootstrap `.btn-dark` for its floating pill and
+   its "Send report" button. The `.gps button{color:inherit}` reset (top of this file) outweighs Bootstrap's own
+   `.btn-dark` colour, which left dark text on the dark pill — invisible until the dialog opened over a white panel.
+   Restore the intended white (specificity 0,2,0 beats the 0,1,1 reset). */
+.gps .btn-dark{color:#fff}
+
 /* v4 (T3) needs: two-column card, file drop, per-view help button */
 .gps-need-2col{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start}
 .gps-need-left{min-width:0}
