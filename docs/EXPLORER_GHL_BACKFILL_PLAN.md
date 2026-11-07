@@ -291,10 +291,46 @@ So the 194 open-house contacts in the school account arrived by **some path outs
 codebase**. The unlinked open-house leads span 2026-07 through 2026-10 (67, 62, 41, 36), which is
 the window when our own sync was withheld for the missing key.
 
-**The mechanism is not yet confirmed** and is worth confirming before Phase 3: the likely
-candidates are an Eventbrite integration configured on the school sub-account itself, or a manual
-import of attendee lists. It matters because if another path is already creating open-house
-contacts, our sync is partly a reconciliation rather than the only source.
+**Confirmed, by asking GoHighLevel itself.** Reading `attributionSource` on a 24-contact
+sample from the school account, origin-fields only:
+
+| `sessionSource` / `medium` | contacts |
+|---|---|
+| `CRM UI` / `manual` | 17 |
+| `Other` / `other` | 4 |
+| `CRM UI` / `csv_import` | 2 |
+| `Third Party` | 1 |
+
+**19 of 24 were entered through the GoHighLevel UI**, by hand or by spreadsheet upload. Not one
+carries an API attribution. The contacts also carry tags like `ai explorer` and **`left
+voicemail`**, and were added 12 to 14 October.
+
+So nothing was integrating. **Somebody on the team, in practice Rose, typed these people into the
+CRM by hand and has been calling them**, for the three months our sync was withholding them. The
+`left voicemail` tag is the proof that the calling already happened.
+
+That reframes the value of this work a third time. It is not "make 195 people reachable", because
+they were made reachable by hand. It is:
+
+1. **Stop the double entry.** The forward path has been correct since 2026-10-23, so this is
+   already fixed; the backfill is the catch-up.
+2. **Reconcile the two systems**, so our admin surfaces show the contact Rose is already working
+   instead of showing nothing, and so Cora's nightly job can tag people out of her call list.
+3. **Rule out duplicates before creating anything**, which is exactly what Phase 1 just did: a
+   live run on the plan's original assumptions would have created up to 196 duplicates of
+   contacts she is actively calling.
+
+Ruled out as the creator: Cora. Its GHL adapter reads, searches and `PUT`s contact fields, and has
+no contact-create path. Ruled out: this codebase, whose 18 creation call sites all route through
+one service that either never ran or withheld for these people.
+
+### The school account's real location id, measured
+
+Those contacts report `locationId: ttBtJmxoLwjf18lIvvVD`. The six frontend files hardcode
+`JFWwp8q7l6T12NWTIOKG`, the Agent Cory account. That is no longer an inference about the
+wrong-sub-account reports: the two ids are different, measured from live data, so every GHL link
+built on those six admin surfaces does point at a location where these 195 contacts do not
+exist.
 
 ### The 7 matched by phone, not email
 

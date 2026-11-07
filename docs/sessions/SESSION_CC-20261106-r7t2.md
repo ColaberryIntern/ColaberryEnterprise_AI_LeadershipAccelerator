@@ -182,11 +182,25 @@ Plan PR #3745 merged at 20:02 UTC with all ten checks green, which was Ali's app
     the plan's figure it would have pushed 46 more test accounts into a customer-facing CRM,
     which is the exact failure of 2026-10-23.
 
-    **Those 194 open-house contacts were not created by this codebase.** All 18 GHL
-    contact-creation call sites route through one service, and for these people it either never
-    ran or withheld. Some path outside this repo is putting open-house registrants into the
-    school sub-account, most likely an Eventbrite integration on that account or a manual
-    import. Not yet confirmed, and worth confirming before Phase 3.
+    **Those 194 open-house contacts were typed in by hand, and Rose has been calling them.**
+    Asked GoHighLevel directly, reading `attributionSource` on a 24-contact sample and origin
+    fields only: 17 `CRM UI / manual`, 2 `CRM UI / csv_import`, 4 `Other`, 1 `Third Party`.
+    **19 of 24 arrived through the GHL UI and not one carries an API attribution.** They also
+    carry a **`left voicemail`** tag, which is proof the calling already happened. Cora is ruled
+    out as the creator (its adapter reads, searches and `PUT`s fields, with no create path), and
+    so is this codebase (18 creation call sites, one service, which either never ran or withheld
+    for these people). So nothing was integrating: somebody absorbed three months of our
+    withheld sync as manual double entry.
+
+    That reframes the value a third time. Not "make 195 people reachable", since they were made
+    reachable by hand, but: stop the double entry (already fixed forward on 2026-10-23),
+    reconcile the two systems so our surfaces show the contact she is working, and rule out
+    duplicates before creating anything. A live run on the plan's original assumptions would
+    have created up to 196 duplicates of contacts she is actively calling.
+
+    **The school location id, measured: `ttBtJmxoLwjf18lIvvVD`.** The six frontend files
+    hardcode `JFWwp8q7l6T12NWTIOKG`, the Agent Cory account. The wrong-sub-account reports are
+    no longer an inference: the ids differ, measured from live data.
 
     **A dead check caught by its own control.** My first verification of the compiled artifact
     grepped for `createContact(` and friends and found zero of each. That was meaningless:
