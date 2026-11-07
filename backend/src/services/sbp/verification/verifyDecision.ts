@@ -165,21 +165,133 @@ export interface BuildRollup {
  * Deliberately NOT matched anywhere else in the body: a commit that merely
  * mentions "this unblocks STORY-004" in a paragraph is not a commit for
  * STORY-004.
+ *
+ * ── WHY `planIds` EXISTS: `\b` IS NOT A STORY-ID BOUNDARY ───────────────────
+ *
+ * The subject fallback used to be `\b<id>\b` and nothing else, which silently
+ * credits a story whose id is a PREFIX of another story's id. `\b` only
+ * requires the next character to be a non-word character, and `.` and `:` are
+ * both non-word characters — so for
+ *
+ *   base id   admissions.CAP.admission_decision_recording
+ *   rung id   admissions.CAP.admission_decision_recording.autonomy:R0
+ *
+ * a subject naming the RUNG id satisfies `\b<base id>\b` as well, and one
+ * commit verifies two stories and is paid for both.
+ *
+ * MEASURED IN PRODUCTION 2026-11-07, not reasoned about: across the ten agent
+ * domains this is 964 colliding id pairs covering 443 distinct stories that
+ * could be credited by a commit that never named them. It is not reachable
+ * today only because the published plans contain 0 rung ids; the AF12.7
+ * republish puts them in, so this guard is a PREREQUISITE for that republish
+ * rather than a follow-up to it.
+ *
+ * The rule is longest-match, and it is deliberately SHAPE-FREE: strip every
+ * plan id that strictly extends this one from the subject, then re-test. It
+ * therefore needs no knowledge of the `.autonomy:Rn` convention and keeps
+ * working if the id format changes again. Stripping rather than simply
+ * rejecting is what keeps "STORY-1 and STORY-10: both" crediting STORY-1 —
+ * the id is still there once STORY-10 is removed, because it was named
+ * independently and not merely as a prefix.
+ *
+ * A measurement whose pattern encoded the `:Rn` guess reported this collision
+ * as UNREACHABLE (0 rows) while a shape-free one reported 964. The guess was
+ * wrong — the real suffix is `.autonomy:Rn`, not `:Rn` — which is precisely
+ * why the rule below asserts no shape either.
+ *
+ * The TRAILER is left authoritative on purpose. `Story: <base id>` is the
+ * student naming that story explicitly and exactly, `$`-anchored, so it cannot
+ * be a prefix of anything; if they wrote it, they meant it.
+ *
+ * `planIds` is optional so no existing caller breaks. Omitting it restores the
+ * old, permissive behaviour, which is why `decideBuild` always passes it.
  */
-export function commitNamesStory(message: string, storyId: string): boolean {
-  if (!message || !storyId) return false;
-  const id = escapeRegExp(storyId);
-  const lines = message.split(/\r?\n/);
-
-  // Trailer: a line of its own, `Story: STORY-001`.
-  const trailer = new RegExp(`^\\s*story\\s*:\\s*${id}\\s*$`, 'i');
-  if (lines.some((l) => trailer.test(l))) return true;
-
-  // Fallback: the id in the subject line (the first line).
-  const subject = lines[0] ?? '';
-  return new RegExp(`\\b${id}\\b`, 'i').test(subject);
+export function commitNamesStory(
+  message: string,
+  storyId: string,
+  planIds: readonly string[] = [],
+): boolean {
+  return storyCommitMatcher(storyId, planIds).names(message);
 }
 
+/** One story's compiled match rule, reusable across many commit messages. */
+export interface StoryCommitMatcher {
+  names(message: string): boolean;
+}
+
+/**
+ * Compile the match rule for ONE story once, then test many commits with it.
+ *
+ * ── WHY THIS IS NOT JUST `commitNamesStory` IN A LOOP ───────────────────────
+ *
+ * The rule depends only on (storyId, planIds), and both are fixed for the whole
+ * of one build's verification — but the matcher is applied once per commit per
+ * story. The first version of this change recomputed everything per call: an
+ * O(plan size) scan for extending ids plus a `new RegExp` for each one, inside
+ * a loop that runs roughly 2 x stories x commits times.
+ *
+ * On the plans AF12.7 is about that is not academic. admissions re-derives to
+ * 189 stories; against a 100-commit read window that is ~37,800 calls, each
+ * scanning 189 ids and compiling regexes — on the path a student hits when they
+ * press Sync. Compiling per story instead makes it one scan and a handful of
+ * regexes per story, and the regexes are then reused across every commit.
+ *
+ * `commitNamesStory` is kept as the single-shot form because it is the honest
+ * API for one question about one commit, and most callers and every test want
+ * exactly that.
+ */
+export function storyCommitMatcher(
+  storyId: string,
+  planIds: readonly string[] = [],
+): StoryCommitMatcher {
+  if (!storyId) return { names: () => false };
+
+  const id = escapeRegExp(storyId);
+  const trailer = new RegExp(`^\\s*story\\s*:\\s*${id}\\s*$`, 'i');
+  const inSubject = new RegExp(`\\b${id}\\b`, 'i');
+
+  // Ids that strictly extend this one, by the same non-word-character test `\b`
+  // itself applies — so exactly the ids whose presence could make `inSubject`
+  // match spuriously, and nothing else. `STORY-10` does not extend `STORY-1`
+  // (`0` is a word character), which is correct and already handled by `\b`.
+  //
+  // Longest first, so a chain (`X`, `X.a`, `X.a:R1`) collapses from the outside
+  // in and a shorter extension cannot leave a fragment of a longer one behind.
+  const lower = storyId.toLowerCase();
+  const extending = planIds
+    .filter((other) => {
+      const o = other.toLowerCase();
+      return o.length > lower.length
+        && o.startsWith(lower)
+        && /[^a-z0-9_]/.test(o.charAt(lower.length));
+    })
+    .sort((a, b) => b.length - a.length)
+    .map((other) => new RegExp(`\\b${escapeRegExp(other)}\\b`, 'gi'));
+
+  return {
+    names(message: string): boolean {
+      if (!message) return false;
+      const lines = message.split(/\r?\n/);
+
+      // Trailer: a line of its own, `Story: STORY-001`.
+      if (lines.some((l) => trailer.test(l))) return true;
+
+      // Fallback: the id in the subject line (the first line), with any longer
+      // plan id blanked out first. Replaced with a space rather than deleted so
+      // removal cannot join two neighbouring tokens into a third thing that
+      // matches. `String.replace` with a `g` regex always starts at 0 and
+      // resets `lastIndex`, so these compiled regexes are safe to reuse.
+      let subject = lines[0] ?? '';
+      for (const longer of extending) subject = subject.replace(longer, ' ');
+      return inSubject.test(subject);
+    },
+  };
+}
+
+/**
+ * Escape a story id for use inside a regex. Ids carry `.` and `:`, both of
+ * which are regex metacharacters or boundary-relevant, so this is not optional.
+ */
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -196,8 +308,14 @@ function escapeRegExp(s: string): string {
  * student keeps committing — a reference that moved on every push would look
  * like new evidence to anything downstream of it.
  */
-export function evidenceCommitFor(storyId: string, commits: CommitFact[]): CommitFact | null {
-  const qualifying = commits.filter((c) => c.changed_files > 0 && commitNamesStory(c.message, storyId));
+export function evidenceCommitFor(
+  storyId: string,
+  commits: CommitFact[],
+  planIds: readonly string[] = [],
+): CommitFact | null {
+  // One compiled matcher for this story, applied to every commit in the window.
+  const matcher = storyCommitMatcher(storyId, planIds);
+  const qualifying = commits.filter((c) => c.changed_files > 0 && matcher.names(c.message));
   if (qualifying.length === 0) return null;
   return [...qualifying].sort(compareByOldest)[0];
 }
@@ -277,6 +395,13 @@ export function decideStory(
   progress: ProgressFile | null,
   commits: CommitFact[],
   tree: RepoTreeContext | null = null,
+  /**
+   * Every story id in the published plan, so the commit matcher can tell a
+   * commit naming THIS story from one naming a story whose id merely starts
+   * with it. See `commitNamesStory`. Optional, and omitting it is the old
+   * permissive behaviour — `decideBuild` always supplies it.
+   */
+  planIds: readonly string[] = [],
 ): StoryVerdict {
   const entry = progress?.stories.find((s) => s.id === spec.id) ?? null;
 
@@ -344,7 +469,7 @@ export function decideStory(
   const passedCount = criteria.filter((c) => c.passed).length;
   const outstanding = criteria.filter((c) => !c.passed).map((c) => c.text);
 
-  const commit = evidenceCommitFor(spec.id, commits);
+  const commit = evidenceCommitFor(spec.id, commits, planIds);
   const reasons: string[] = [];
 
   // A story the plan gave no acceptance criteria can never be verified by this
@@ -444,12 +569,20 @@ export function decideBuild(
     .map((s) => s.id)
     .filter((id) => !planIds.has(id));
 
+  // Passed to every per-story decision below. Built ONCE here rather than per
+  // story: the matcher needs the whole plan's ids to resolve a prefix
+  // collision, and a story cannot see its own siblings from `spec` alone.
+  const planIdList = [...planIds];
+
   const verdicts = [...stories]
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((s) => decideStory(s, progress, commits, tree));
+    .map((s) => decideStory(s, progress, commits, tree, planIdList));
 
+  // Compiled once per story, then reused across every commit. See
+  // `storyCommitMatcher` for why this is not `commitNamesStory` in a loop.
+  const matchers = stories.map((s) => storyCommitMatcher(s.id, planIdList));
   const qualifying = commits.filter(
-    (c) => c.changed_files > 0 && stories.some((s) => commitNamesStory(c.message, s.id)),
+    (c) => c.changed_files > 0 && matchers.some((m) => m.names(c.message)),
   ).length;
 
   return {
