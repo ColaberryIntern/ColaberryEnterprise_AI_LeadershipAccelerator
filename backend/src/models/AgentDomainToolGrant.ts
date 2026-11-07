@@ -33,6 +33,21 @@ export interface AgentDomainToolGrantAttributes {
   tool_name: string;
   /** The capability this grant serves. Must be confirmed at the moment of granting. */
   capability_id: string;
+  /**
+   * The tool request this grant answers, when it answers one. AF11.4.
+   *
+   * NULLABLE, and not a foreign key. Null is the ordinary case for a grant made directly
+   * through the AF3.5 route — a capability promotion answers no request — so a `NOT NULL`
+   * column would have forced a fake id into those rows. Not a foreign key for the same reason
+   * `capability_id` is not one: the constraint would make deleting a request fail or cascade
+   * into a grant, and a grant outranks the paperwork that prompted it.
+   *
+   * A re-grant does not rewrite this. If a tool was granted earlier for a promotion and a
+   * request later asks for the same tool, the first row keeps the provenance it was written
+   * with and the second call reports `unchanged: true` — otherwise the record would depend on
+   * the order the two calls happened to arrive in.
+   */
+  change_request_id?: string | null;
   approved_by_identity: string;
   approved_at?: Date;
   created_at?: Date;
@@ -47,6 +62,7 @@ class AgentDomainToolGrant
   declare agent_name: string;
   declare tool_name: string;
   declare capability_id: string;
+  declare change_request_id: string | null;
   declare approved_by_identity: string;
   declare approved_at: Date;
   declare created_at: Date;
@@ -60,6 +76,7 @@ AgentDomainToolGrant.init(
     agent_name: { type: DataTypes.TEXT, allowNull: false },
     tool_name: { type: DataTypes.TEXT, allowNull: false },
     capability_id: { type: DataTypes.TEXT, allowNull: false },
+    change_request_id: { type: DataTypes.UUID, allowNull: true },
     approved_by_identity: { type: DataTypes.TEXT, allowNull: false },
     approved_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
@@ -72,6 +89,7 @@ AgentDomainToolGrant.init(
     indexes: [
       { fields: ['agent_id', 'tool_name'], unique: true },
       { fields: ['agent_name'] },
+      { fields: ['change_request_id'] },
     ],
   },
 );

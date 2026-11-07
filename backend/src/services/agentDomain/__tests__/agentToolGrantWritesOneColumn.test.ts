@@ -172,10 +172,19 @@ describe('AF3.5 — exactly one service writes tools_granted', () => {
     return out;
   }
 
-  it('only the controller imports the grant service', () => {
+  it('only the controller and AF11.4 import the grant service', () => {
     // Widening this list is a visible, reviewable line in a diff. That is the point: a second
     // writer of tools_granted cannot appear without somebody editing this array.
-    const ALLOWED = ['controllers/agentToolGrantController.ts'];
+    //
+    // AF11.4 took the second line, 6 Nov 2026. `assignExistingToolService.ts` carries out a
+    // recorded "assign an existing tool" decision by CALLING this service rather than writing
+    // the column itself, which is what the ticket asked for in those words: "Use AF3.5's grant
+    // path; if it does not exist yet, this ticket is blocked on it rather than a reason to write
+    // a second one." So the number of writers is still one, and the number of callers is two.
+    const ALLOWED = [
+      'controllers/agentToolGrantController.ts',
+      'services/agentDomain/assignExistingToolService.ts',
+    ];
     const importers = tsFilesUnder(BACKEND_SRC)
       .filter((f) => /from\s+'[^']*agentToolGrantService'/.test(fs.readFileSync(f, 'utf8')))
       .map((f) => path.relative(BACKEND_SRC, f).replace(/\\/g, '/'));

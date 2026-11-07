@@ -7,12 +7,19 @@ import api from '../utils/api';
  * target. The console reads the queue through that file (`fetchAllChangeRequests`, which already
  * carries `tool_request` and `duplicate_check`) and writes decisions through this one.
  *
- * ## What is deliberately not here
+ * ## What is deliberately not here, as of AF11.4
  *
- * No function that writes `tools_granted`, `autonomy_level`, `enabled` or `abac_mode_override`.
- * `assign_existing_tool` records an INTENT and AF11.4 performs the grant, because a console that
- * grants a tool and lifts an autonomy level in one action means nobody separately decided the
- * agent may act more freely. A client with no call for it cannot be wired to one by accident.
+ * There is now a call that asks for a grant — `assignExistingTool` — and the shape of it is the
+ * part worth reading. **It takes an id and nothing else.** It cannot name a tool, an agent, a
+ * capability or an approver, because every one of those is read on the server off records that
+ * already exist: the decision Ali made, the request the intern filed, and the verified token. The
+ * server's own body schema is a strict empty object, so a field added here would be refused by
+ * name rather than quietly dropped.
+ *
+ * Still absent, and absent on purpose: any way to express `autonomy_level`, `enabled` or
+ * `abac_mode_override`. A console that granted a tool and lifted an autonomy level in one action
+ * would mean nobody separately decided the agent may act more freely. The grant is one decision;
+ * what the agent is allowed to do with it is another, with another author.
  */
 
 /** The four verbs. Mirrors `TOOL_REQUEST_VERBS` in the backend contract. */
@@ -97,6 +104,68 @@ export async function decideToolRequest(
     proposed,
   );
   return data;
+}
+
+/**
+ * AF11.4 — what the grant did, and what the agent can actually do with it.
+ *
+ * `access` is `null` when the effective-access resolver could not be read. That is "not
+ * measured", which is a different fact from "measured, and not usable", and the console must not
+ * render the first as the second.
+ */
+export interface AssignedToolAccess {
+  toolName: string;
+  /** A real handler exists FOR THIS AGENT. Not the same question as "is it a registered tool". */
+  registered: boolean;
+  grantedVia: string[];
+  mismatches: string[];
+  usable: boolean;
+  agentEnabled: boolean;
+  autonomyLevel: string | null;
+  abacMode: string;
+}
+
+export interface AssignedToolGrant {
+  agentName: string;
+  toolName: string;
+  capabilityId: string;
+  approvedBy: string;
+  toolsGranted: string[];
+  changeRequestId: string | null;
+  /** True when the agent already held the tool, so nothing changed. Safe to click twice. */
+  unchanged: boolean;
+}
+
+export interface AssignExistingToolResult {
+  changeRequestId: string;
+  grant: AssignedToolGrant;
+  access: AssignedToolAccess | null;
+}
+
+/**
+ * Carry out a recorded `assign_existing_tool` decision.
+ *
+ * NO BODY. The tool comes from the decision, the agent and capability from the request, and the
+ * approver from the token — so this cannot grant a different tool from the one that was decided.
+ *
+ * Two different **409**s, told apart by `code` on the response, because they are fixed on
+ * different screens: `assignment_refused` means there is nothing to carry out — nobody decided,
+ * or you are not the person who did — while `grant_refused` means the decision stands and the
+ * grant it asks for does not, most often because the capability has not been confirmed. Use
+ * `decisionRefusals` on either; both answer with the same `issues` shape.
+ */
+export async function assignExistingTool(id: string): Promise<AssignExistingToolResult> {
+  const { data } = await api.post(
+    `/api/admin/agent-domain-tool-requests/${id}/assign-tool`,
+  );
+  return data;
+}
+
+/** Which of the two 409s came back, so the console can say the right sentence. */
+export function refusalCode(e: unknown): string {
+  const r = e as { response?: { data?: { code?: unknown } } };
+  const code = r?.response?.data?.code;
+  return typeof code === 'string' ? code : '';
 }
 
 /** Every decision on one request, oldest first. */

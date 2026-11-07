@@ -127,6 +127,8 @@ export async function handleListAgentGrants(req: Request, res: Response): Promis
         agent_name: r.agent_name,
         tool_name: r.tool_name,
         capability_id: r.capability_id,
+        // AF11.4. Null for a grant made for a capability promotion, which answers no request.
+        change_request_id: r.change_request_id ?? null,
         approved_by_identity: r.approved_by_identity,
         approved_at: r.approved_at,
       })),
