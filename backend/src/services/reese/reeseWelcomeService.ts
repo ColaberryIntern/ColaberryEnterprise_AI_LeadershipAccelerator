@@ -63,7 +63,15 @@ import { getReeseEnrollmentId, getReeseAdminUserId, isReeseEnabled } from './ree
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 import { authorizeTicketDispatch } from '../workLedger/agentActionAuthorizationBridge';
 import { recordHeldAction, recordSentAction } from './reeseGovernedActionLog';
-import { RISK_TIER } from './reeseAutonomousOutreachService';
+
+// C126 (Ali 2026-11-07, option "A"): welcomes borrowed outreach's R3, and R3
+// always requires approval (agentAutonomy.ts high_risk_tier). Production had
+// 608 welcome requests and not one was approved by a person; every decided one
+// timed out, and the replay service refuses timeout approvals by design, so none of
+// those welcomes was ever delivered. A welcome is now R2, like C116's replies: it
+// goes through authorizeTicketDispatch and every other approval rule, but the
+// tier alone no longer holds it. Unprompted outreach keeps its own R3.
+const WELCOME_RISK_TIER = 'R2';
 
 export type WelcomeOutcome =
   | 'sent'
@@ -249,7 +257,7 @@ async function sendOnce(
       resourceId: enrollmentId,
       agentName: 'Reese',
       action: welcomeAction,
-      riskTier: RISK_TIER,
+      riskTier: WELCOME_RISK_TIER,
       preparedAction: { studentEnrollmentId: enrollmentId, kind },
     });
 
@@ -270,7 +278,7 @@ async function sendOnce(
       // corresponding activity rows. Bookkeeping only — the hold is unchanged.
       await recordHeldAction({
         action: welcomeAction,
-        riskTier: RISK_TIER,
+        riskTier: WELCOME_RISK_TIER,
         verdict: authResult.verdict,
         reasonCode: authResult.reason,
         // One intro per person per kind, enforced by the ReeseWelcome claim
@@ -328,7 +336,7 @@ async function sendOnce(
     // own failures internally (see reeseGovernedActionLog.ts).
     recordSentAction({
       action: welcomeAction,
-      riskTier: RISK_TIER,
+      riskTier: WELCOME_RISK_TIER,
       reason: 'welcome_sent',
       eventId,
       details: { enrollment_id: enrollmentId, kind, room_id: roomId, message_id: messageId },

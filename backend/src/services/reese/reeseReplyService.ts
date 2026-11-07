@@ -32,7 +32,8 @@ import { createWorkUnit, updateWorkUnitStatus } from '../workGraph/workGraphServ
 // inside a conversation the learner started is now R2: it still goes through
 // authorizeTicketDispatch and every other approval rule, but the tier alone no
 // longer holds it. Outreach Reese starts unprompted (autonomous outreach,
-// follow-ups, welcome) keeps its own R3 constant and still needs approval.
+// follow-ups) keeps its own R3 constant and still needs approval; welcomes
+// moved to R2 under C126.
 const REPLY_RISK_TIER = 'R2';
 
 // Reese Phase 1 — the ONLY place Reese-authored DM content is ever produced.
