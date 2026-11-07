@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import portalApi from '../../../utils/portalApi';
 import { getCertDomains, getCertPrepSummary } from '../../../services/certPrepApi';
 import { useProjectsList } from '../../../pages/portal/projects/projectsStore';
+import { refreshProjectsFromBackend } from '../../../pages/portal/projects/projectSync';
 import type { BuildingId, CampusAudience } from '../campusMap';
 import { fetchLibrary } from '../../../services/roomsApi';
 import { eventsFor } from '../events/eventsModel';
@@ -41,6 +42,13 @@ export const clearSummaryCache = (): void => cache.clear();
 /** The classroom feed and the next 30 days of events, through the shared cache (the rooms and C78's path ahead read the same). */
 export const loadClassroom = (): Promise<ClassroomFeed> => cached('classroom', () => portalApi.get('/api/portal/classroom').then((r) => r.data as ClassroomFeed));
 export const loadEvents30 = (): ReturnType<typeof fetchPublicEvents> => cached('events-30', () => fetchPublicEvents(30));
+/**
+ * C124: the Project Studio room pulls the learner's builds from the server when it opens, through the shared cache. Before this
+ * the room read only this browser's saved copy, so a browser that had never opened /portal/projects showed just the training
+ * sample. Pull only: the push half of syncProjectsWithBackend would mirror this device's copy over the server's, which a room
+ * (and "viewing as", which is read-only) must never do. A failed pull leaves the saved copy as it was.
+ */
+export const refreshStudioProjects = (): Promise<void> => cached('studio-projects', refreshProjectsFromBackend);
 /** C78: the path ahead (pathAhead), loaded only while `enabled`; null while loading, off, or when both sources fail. */
 export function usePathAhead(enabled: boolean, audience?: CampusAudience): SideRow[] | null {
   const [rows, setRows] = useState<SideRow[] | null>(null);
@@ -91,6 +99,7 @@ export function usePageSummary(id: BuildingId, open: boolean, name: string, audi
     if (!open || id !== 'studio') return undefined;
     let alive = true;
     cached('studio-facts', fetchStudioFacts).then((f) => { if (alive) setStudioFacts(f); }, () => { if (alive) setStudioFacts(null); });
+    refreshStudioProjects().catch(() => { /* the saved copy stays; the Projects page reports its own sync errors */ });
     return () => { alive = false; };
   }, [id, open]);
   const account = useAccountFacts(open && id === 'admissions'); // C21: the Admissions room's "Your account" wall board
