@@ -140,3 +140,69 @@ the integration going live.
   `SMTP_PASSWORD`. Should be `0600`. His box, so his change to make.
 - `CORA_INBOUND_WEBHOOK_SECRET` is declared **three times** in that same `.env`. Last one wins
   silently, which is how a rotated secret gets shadowed by a stale copy.
+
+---
+
+## Phase 1 of the Explorer GHL backfill, 2026-11-07
+
+Plan PR #3745 merged at 20:02 UTC with all ten checks green, which was Ali's approval of
+`docs/EXPLORER_GHL_BACKFILL_PLAN.md`. Phase 1 is the dry run.
+
+- [x] Explorer GHL backfill, Phase 1: the read-only dry run
+  - Date: 2026-11-07
+  - Session: CC-20261106-r7t2
+  - What changed: `backend/src/scripts/explorerGhlBackfillDryRun.ts` (new, 420 lines) plus
+    `backend/src/scripts/__tests__/explorerGhlBackfillDryRun.test.ts` (new, 23 tests), and a
+    Phase 1 results section appended to `docs/EXPLORER_GHL_BACKFILL_PLAN.md` which supersedes
+    three of that document's own figures. The script resolves the candidate set, asks GHL about
+    each person through the existing `findContactByEmail` / `findContactByPhone` path, and
+    reports what a live run would do. **It has no write path**: the only two symbols it imports
+    from `ghlService` are those two lookups, which the suite asserts against the import
+    statement itself.
+  - Verification: **ran against production** from inside `accelerator-backend`, read-only,
+    correlation id `06a5dfcd-4f9c-44c6-82ff-adc88251c62b`. 261 candidates, 261 rows classified,
+    0 lookup errors, 0 withheld, dispositions summing exactly to 261. **Both credentials passed
+    a present/absent control pair** before any candidate was read: a lead already holding a
+    `ghl_contact_id` was found by email in each account with its stored id matching, and an
+    address under `.invalid` was correctly not found in either. Jest **23 passed**. **Mutation
+    testing 4 killed, 0 survived**, every restore byte identical. Single-file compile of the
+    script against its full import graph: **exit 0, zero errors**. Secret scan OK (8,123 tracked
+    files), admin route-auth lint OK (149 route files). The ledger carries no email, name or
+    phone: measured 0 occurrences of each, against a control of 261 for `enrollment_id`.
+  - Notes: **The dry run overturned the plan's central premise.** 196 of the 261 candidates are
+    **already in GoHighLevel** under contacts we never recorded, including 184 of the 195
+    callable people. Rose can already call them. What is missing is the `ghl_contact_id` link on
+    our side, not the contact in the CRM. Only 65 contacts would be newly created and only 11 of
+    those are callable.
+
+    **The plan's exclusion count was wrong by 46, and in the dangerous direction.** It derived
+    test fixtures from the sync audit's `reason`, which only knows about the fixtures the guard
+    actually refused; 46 more were never attempted, so no audit row names them. By email shape,
+    the rule the live sync itself applies, there are 56 fixtures, not 9. Had the live run used
+    the plan's figure it would have pushed 46 more test accounts into a customer-facing CRM,
+    which is the exact failure of 2026-10-23.
+
+    **Those 194 open-house contacts were not created by this codebase.** All 18 GHL
+    contact-creation call sites route through one service, and for these people it either never
+    ran or withheld. Some path outside this repo is putting open-house registrants into the
+    school sub-account, most likely an Eventbrite integration on that account or a manual
+    import. Not yet confirmed, and worth confirming before Phase 3.
+
+    **A dead check caught by its own control.** My first verification of the compiled artifact
+    grepped for `createContact(` and friends and found zero of each. That was meaningless:
+    `tsc` emits `ghlService_1.findContactByEmail(...)`, so the pattern matches nothing whether
+    the call is present or not, and the write names appear in the file's header comment anyway.
+    The present-control, which required the two read calls to be found, returned zero too and
+    exposed it. The check now ENUMERATES the member accesses on the service and requires the set
+    to be exactly the two reads, which cannot pass by accident.
+
+    **`nohup ... &` inside a tool call does not survive it.** A 14-minute typecheck launched that
+    way left a zero-byte output file for 25 minutes while appearing to run. Re-run under the
+    harness's own background mode it completed normally. Separately, `checkTestTypecheck.js
+    --print` prints per-file error COUNTS, not error text, so getting the text meant invoking
+    `tsc -p tsconfig.test.json` directly with the same 8GB heap.
+
+    **Pre-existing, not mine:** `src/scripts/lib/__tests__/agentRoster.test.ts` has been on
+    `main` since 2026-10-22 (commit `e6c966e8`) with 13 type errors and no baseline entry, so
+    the Test-file typecheck gate reports it as new debt on any branch cut from main. Flagged,
+    not touched.
