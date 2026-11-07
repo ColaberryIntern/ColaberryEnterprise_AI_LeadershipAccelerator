@@ -12,7 +12,15 @@ This document covers the gate that prevents that, and what to do when it fires.
 |---|---|---|---|
 | `.githooks/pre-commit` | On every `git commit` | Staged changes only | Yes (locally) |
 | `.github/workflows/secret-scan.yml` → `pull-request` | Every PR, every push to `main` | The commits the change adds | Yes |
-| `.github/workflows/secret-scan.yml` → `full-history` | Weekly (Mon 06:00 UTC), on push to `main`, on demand | All ~4,600 commits on all refs | Yes |
+| `.github/workflows/secret-scan.yml` → `full-history` | Weekly (Mon 06:00 UTC), on demand | All ~4,600 commits on all refs | Yes, for its own run |
+
+Both CI jobs begin by running `scripts/secret-scan-selftest.js`, which points the same binary and the same ruleset at deliberately planted secrets and fails the job if any of them goes unseen. This gate reports an **absence**, so a broken detector and a clean repository produce the identical green tick; the self-test is what tells those two apart.
+
+### Why `full-history` does not run on a push to `main`
+
+It used to, and that made main's required check permanently red. The sweep scans `--log-opts="--all"`, meaning every commit reachable from **every ref** rather than the ref that triggered it. So an unrelated, unmerged work-in-progress branch could fail main: in November 2026 main went red over seven findings that lived only on an open PR's branch and were all false positives, while scanning main's own commits returned zero. The PR that owned the finding was green; main, which did not contain the code at all, was red.
+
+**Coverage was not narrowed to fix it.** The sweep still walks every ref, so a secret committed to a branch and never merged is still found — it is now reported by the Monday run or an on-demand run instead of blocking an unrelated merge. Anything new reaching `main` is still blocked by the `pull-request` job, which runs on push to `main` and scans the pushed range.
 
 All three use the **same scanner at the same pinned version** ([gitleaks](https://github.com/gitleaks/gitleaks) `8.30.1`) against the **same ruleset** (`.gitleaks.toml`). That is deliberate: a finding can never pass locally but fail in CI, or the reverse.
 
@@ -47,7 +55,10 @@ npm run secrets:scan             # -> "no leaks found"
 npm run secrets:scan        # what is staged right now (identical to the hook)
 npm run secrets:scan:tree   # every tracked file in the working tree
 npm run secrets:history     # every commit on every ref — slow, several minutes
+npm run secrets:selftest    # prove the detector can still SEE a secret (what CI runs first)
 ```
+
+Run `secrets:selftest` whenever you change `.gitleaks.toml`. Broadening an allowlist is the one edit that cannot be reviewed by reading the diff: a regex that silences a false positive and a regex that silences a real credential look the same on the page, and only the planted fixtures tell you which one you wrote.
 
 ---
 
