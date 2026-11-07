@@ -6,7 +6,7 @@ import RoomMessage from '../../models/RoomMessage';
 import { getMayaEnrollmentId, getMayaAgentId } from '../mayaIdentitySeed';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
 import { buildMayaPortalSystemPrompt } from './mayaPortalPrompt';
-import { MAYA_PORTAL_TOOLS, executeMayaPortalTool, BOOK_CALL_LINK, BOOK_CALL_PATH } from './mayaPortalTools';
+import { MAYA_PORTAL_TOOLS, executeMayaPortalTool, BOOK_CALL_LINK, BOOK_CALL_PATH, TOUR_LINK, TOUR_PATH } from './mayaPortalTools';
 
 /**
  * C121 — the ONLY place a Maya-authored portal DM is produced. Ali, 2026-11-06: "I think we should probably put Maya in
@@ -74,6 +74,12 @@ export function withBookingLink(reply: string, offered: boolean): string {
   return `${reply}\n\n${BOOK_CALL_LINK}`;
 }
 
+/** C123: the same for the tour link, so "here is the tour" always carries the button that starts it. */
+export function withTourLink(reply: string, offered: boolean): string {
+  if (!offered || reply.includes(TOUR_PATH)) return reply;
+  return `${reply}\n\n${TOUR_LINK}`;
+}
+
 async function logActivity(result: 'success' | 'failed', reason: string, roomId: string): Promise<void> {
   const agentId = await getMayaAgentId().catch(() => null);
   if (agentId) await logAgentActivity({ agentId, action: 'maya_dm_reply', result, reason, details: { room_id: roomId } });
@@ -114,6 +120,7 @@ export async function maybeTriggerMayaReply(roomId: string, senderEnrollmentId: 
     });
 
     let bookingOffered = false;
+    let tourOffered = false;
     const calls = completion.choices[0]?.message?.tool_calls;
     if (calls && calls.length > 0) {
       messages.push(completion.choices[0].message as OpenAI.Chat.ChatCompletionMessageParam);
@@ -122,6 +129,7 @@ export async function maybeTriggerMayaReply(roomId: string, senderEnrollmentId: 
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* malformed args: the tool sees none and answers honestly */ }
         if (call.function.name === 'book_admissions_call') bookingOffered = true;
+        if (call.function.name === 'start_campus_tour') tourOffered = true;
         const result = await executeMayaPortalTool(call.function.name, args, { senderEnrollmentId });
         messages.push({ role: 'tool', tool_call_id: call.id, content: result });
       }
@@ -130,7 +138,7 @@ export async function maybeTriggerMayaReply(roomId: string, senderEnrollmentId: 
 
     const text = completion.choices[0]?.message?.content?.trim();
     if (!text) return;
-    const reply = withBookingLink(text, bookingOffered);
+    const reply = withTourLink(withBookingLink(text, bookingOffered), tourOffered);
 
     // Dynamic import breaks the dmService <-> mayaReplyService cycle (same convention as Reese and Dara).
     const { sendDmMessage } = await import('../communityRooms/dmService');

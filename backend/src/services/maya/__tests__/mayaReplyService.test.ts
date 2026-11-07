@@ -24,8 +24,8 @@ import { getMayaEnrollmentId, getMayaAgentId } from '../../mayaIdentitySeed';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { sendDmMessage } from '../../communityRooms/dmService';
 import { logAgentActivity } from '../../agentBlueprint/agentActivityLogService';
-import { executeMayaPortalTool, BOOK_CALL_LINK, BOOK_CALL_PATH } from '../mayaPortalTools';
-import { maybeTriggerMayaReply, MAYA_REPLY_FAILURE_MESSAGE, withBookingLink, __resetMayaReplyClientForTests } from '../mayaReplyService';
+import { executeMayaPortalTool, BOOK_CALL_LINK, BOOK_CALL_PATH, TOUR_LINK, TOUR_PATH } from '../mayaPortalTools';
+import { maybeTriggerMayaReply, MAYA_REPLY_FAILURE_MESSAGE, withBookingLink, withTourLink, __resetMayaReplyClientForTests } from '../mayaReplyService';
 
 const MAYA = 'maya-enr-1';
 const LEARNER = 'learner-enr-1';
@@ -81,11 +81,11 @@ describe('guards: no LLM call, no message', () => {
 });
 
 describe('a reply', () => {
-  it('answers through sendDmMessage as Maya, offering only the three portal tools', async () => {
+  it('answers through sendDmMessage as Maya, offering only the four portal tools', async () => {
     create.mockResolvedValue(answer('Membership is billed annually.'));
     await maybeTriggerMayaReply(ROOM, LEARNER);
     const names = create.mock.calls[0][0].tools.map((t: { function: { name: string } }) => t.function.name);
-    expect(names).toEqual(['retrieve_knowledge', 'book_admissions_call', 'request_callback']);
+    expect(names).toEqual(['retrieve_knowledge', 'book_admissions_call', 'request_callback', 'start_campus_tour']);
     expect(send).toHaveBeenCalledWith({ enrollmentId: MAYA, cohortId: null, isAdmin: false }, ROOM, 'Membership is billed annually.');
     expect(logAgentActivity).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'maya-agent-1', action: 'maya_dm_reply', result: 'success' }));
   });
@@ -115,6 +115,30 @@ describe('a reply', () => {
   it('withBookingLink does not add a second copy, and adds nothing when no booking was offered', () => {
     expect(withBookingLink(`See ${BOOK_CALL_LINK}`, true)).toBe(`See ${BOOK_CALL_LINK}`);
     expect(withBookingLink('Hi', false)).toBe('Hi');
+  });
+
+  it('C123 start_campus_tour: the reply always carries the real tour link, even when the model left it out', async () => {
+    create
+      .mockResolvedValueOnce(toolCall('start_campus_tour', {}))
+      .mockResolvedValueOnce(answer('Happy to show you around. The tour walks you through each place on campus.'));
+    tool.mockResolvedValue(JSON.stringify({ offered: true, link: TOUR_LINK }));
+    await maybeTriggerMayaReply(ROOM, LEARNER);
+    expect(send.mock.calls[0][2]).toContain(TOUR_PATH);
+    expect(send.mock.calls[0][2]).not.toContain(BOOK_CALL_PATH);
+  });
+
+  it('C123 withTourLink does not add a second copy, and adds nothing when no tour was offered', () => {
+    expect(withTourLink(`Here: ${TOUR_LINK}`, true)).toBe(`Here: ${TOUR_LINK}`);
+    expect(withTourLink('Hi', false)).toBe('Hi');
+  });
+
+  it('C123 the tour tool exists, takes nothing from the model, and returns the exact link', async () => {
+    const real = jest.requireActual('../mayaPortalTools') as typeof import('../mayaPortalTools');
+    const def = real.MAYA_PORTAL_TOOLS.find((t) => t.type === 'function' && t.function.name === 'start_campus_tour');
+    expect(def).toBeDefined();
+    expect(real.isMayaPortalTool('start_campus_tour')).toBe(true);
+    expect(JSON.parse(await real.executeMayaPortalTool('start_campus_tour', { anything: 'x' }, { senderEnrollmentId: LEARNER })).link).toBe(TOUR_LINK);
+    expect(TOUR_LINK).toBe(`[Take the campus tour](${TOUR_PATH})`);
   });
 
   it('an empty model answer sends nothing', async () => {

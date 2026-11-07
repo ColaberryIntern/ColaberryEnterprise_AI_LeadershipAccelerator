@@ -30,6 +30,7 @@ import { useCampusView } from '../../../components/campus/useCampusView';
 import { useCampusWorldProps } from '../../../components/campus/useCampusWorldProps';
 import { useLiveNow } from '../../../components/campus/campusOnAir';
 import { openWayfinder } from '../../../components/campus/wayfinderHost';
+import { useTourLinkHost } from '../../../components/campus/tourLink';
 import type { BuildingId } from '../../../components/campus/campusMap';
 import { buildingName } from '../../../components/campus/campusMap';
 import CampusListView from '../../../components/campus/CampusListView';
@@ -161,6 +162,8 @@ function CampusHome(): React.ReactElement {
   const todayCount = campus.planStops && campus.planStops.length ? { done: campus.planStops.filter((s) => s.done).length, total: campus.planStops.length } : null;
   const initials = facts.initials || readParticipant().initials;
   const enter = (t: boolean) => { setGateOpen(false); reveal.show(); if (reduce) map.camRef.current?.base(); if (t) campus.startTour(); void claimStreak(); };
+  // C123: Maya's "Take the campus tour" link (in place, or ?tour=start from another page) starts the tour once past the gate
+  useTourLinkHost(!gateOpen, audience !== 'staff', campus.startTour);
   // C91: an Explorer with no first lesson yet: the gate's main button opens that lesson on Today (ad audit: 170 of 193 stalled at the start)
   const firstWinPending = useFirstWinPending(audience === 'explorer');
   const startFirstLesson = () => { void claimStreak(); navigate(FIRST_LESSON_HREF); };

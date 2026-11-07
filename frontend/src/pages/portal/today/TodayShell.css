@@ -255,8 +255,9 @@
 .te-dm-empty{margin:auto;color:var(--muted);font-size:13px}
 .te-dm-msg{max-width:80%;padding:7px 11px;border-radius:var(--r-16);font-size:14px;line-height:1.4;background:var(--sunken);color:var(--body);align-self:flex-start;overflow-wrap:anywhere}
 .te-dm-msg.mine{align-self:flex-end;background:var(--berry);color:#fff}
-/* C122: Maya's booking link (DmMessageText), on its own line as a tappable action, 44px tall */
-.te-dm-action{display:flex;align-items:center;min-height:44px;margin-top:8px;padding:0 12px;border:1px solid var(--berry);border-radius:var(--r-pill);background:var(--surface);color:var(--berry);font-weight:600;text-decoration:none}
+/* C122/C123: Maya's booking and tour links (DmMessageText), a tappable action 44px tall, inline with the sentence around it
+   (block display used to push the words after it onto a new line) */
+.te-dm-action{display:inline-flex;align-items:center;vertical-align:middle;min-height:44px;margin:4px 0;padding:0 12px;border:1px solid var(--berry);border-radius:var(--r-pill);background:var(--surface);color:var(--berry);font-weight:600;text-decoration:none}
 .te-dm-action:hover{background:var(--sunken)}
 .te-dm-action:focus-visible{outline:2px solid var(--berry);outline-offset:2px}
 .te-dm-typing{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;font-style:italic;background:transparent;padding:2px 11px}
