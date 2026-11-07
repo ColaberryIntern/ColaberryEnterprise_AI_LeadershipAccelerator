@@ -69,11 +69,47 @@ The `never attempted` 233 are older still: the sync was not wired into the open-
 training-site paths at all before August 2026 (recorded in that module's own header, from Kes,
 2026-08-25).
 
-## 4. Who should NOT be in the backfill
+### A separate bug that probably explains the "wrong sub-account" reports
 
-- **The 9 `synthetic_email` rows are test accounts** (`@colaberry-test.local`) and are still being
-  generated today. They are withheld correctly. Excluding them is a filter on the real email
-  domain, not a hand-maintained id list.
+Six **frontend** files hardcode a single location id,
+`const GHL_LOCATION_ID = 'JFWwp8q7l6T12NWTIOKG'` — the Agent Cory account:
+`CRMTab.tsx:6`, `LeadsOutreachTab.tsx:6`, `OverviewTab.tsx:7`, `AdminLeadDetailPage.tsx:49`,
+`AdminLeadsPage.tsx:46`, `AdminPipelinePage.tsx:23`. Each builds its own GHL deep link from it.
+
+So **every GHL link clicked from those six admin surfaces points at the Agent Cory location**,
+regardless of which sub-account the lead actually lives in. For an `open_house` lead now correctly
+created in School of Data Analytics, that link opens a location where the contact does not exist,
+and GHL answers with an empty record rather than an error. `ghlContactLink.ts:6-11` describes this
+exact failure as the reason the routed builder exists — *"a dead end that looks like missing data
+rather than a wrong link."* Only the backend-rendered surfaces (Person 360, Explorer Growth) use
+the correct builder.
+
+This is a better explanation of "contacts in the wrong sub-account" than anything in the data, it
+will get worse as the backfill adds contacts to the school account, and it is a small fix. It is
+tracked separately from this plan but should land **before** Phase 3, or the backfill's own
+verification will be read through broken links.
+
+## 4. Who should NOT be in the backfill, and the incident that proves it
+
+**A backfill has been run before, and it went wrong.** From
+`backend/src/services/leads/syntheticContacts.ts:5-12`, verbatim:
+
+> On 2026-10-23 the GHL backfill pushed one of them into the live School of Data and AI account
+> before anybody noticed, and it had to be deleted from a customer-facing CRM by hand. It was
+> caught only because that run was deliberately batched five at a time; a single unbatched run
+> would have put three in.
+
+That is the precedent this plan is written against, and it is why batching below is a control
+rather than a courtesy. The end-to-end suite creates **real `free_signup` leads in production**
+with addresses like `e2e-points-…@colaberry-test.local`, so fixtures are a standing hazard on this
+path, not a one-off.
+
+- **The 9 `synthetic_email` rows are those test accounts**, and they are still being generated
+  today. **The exclusion is already enforced in code**, not something the backfill must remember:
+  `isSyntheticContactEmail` is checked at `ghlService.ts:289`, *before* routing, matching the
+  prefixes `e2e-`, `e2e_`, `test-fixture-` and the `CAMPAIGN_TEST_EMAIL_DOMAIN`
+  (`@colaberry-test.local`). The guard sits on the sync rather than in a script precisely because
+  a script-level filter is what failed in October.
 - **The 2 `success`-with-no-contact-id rows are a separate defect.** The sync reported success and
   the contact id was never persisted, so we do not know whether a duplicate contact already
   exists for them. They get investigated individually, not batch-written.
@@ -116,9 +152,11 @@ records, and Phase 1 is what checks it.
 **Phase 2 — the consent decision.** Ali's call, informed by Phase 1's real numbers. Options, in
 increasing scope: the 53 consent-true only; the 123 email-only (no dialer exposure); or all 307.
 
-**Phase 3 — live run, batched and resumable.** Explicit `--commit` flag, batches of 25, pausing
-between batches, writing an idempotency record per person so a re-run cannot double-create.
-Logs structured per CLAUDE.md's observability rules, one correlation id for the whole run.
+**Phase 3 — live run, batched and resumable.** Explicit `--commit` flag. **Batches of 5, not 25**,
+because five is the batch size that caught the October fixture leak at one contact instead of
+three, and this run has no reason to be braver than that one. Pause between batches, retry with
+capped backoff in the driver, and an idempotency record per person so a re-run cannot
+double-create. Structured logs per CLAUDE.md's observability rules, one correlation id for the run.
 
 **Phase 4 — verify, then close the two side issues.** Re-measure the 318; confirm the count fell
 by exactly the number of contacts created; confirm each created contact resolves through
@@ -135,9 +173,25 @@ by exactly the number of contacts created; confirm each created contact resolves
 4. only calls `createContact` when neither finds anything
 5. adds the note **only for newly created contacts**, so a re-run cannot pollute an existing one
 
-`bulkSyncCampaignLeads` (line 515) already exists as a bulk driver. **The backfill should drive
-these, not write new GHL-calling code.** That is the single most important implementation
-constraint in this plan: new code here would be a second, untested path to the same CRM.
+The dedup keys are **email first (exact match, with GHL v1's fuzzy search result rejected at
+`:129-135`), then phone (last 10 digits, `:158-164`)**. Both guards exist because v1 search is
+fuzzy and would otherwise return a false match.
+
+**A new driver script is needed, and that is not a contradiction.** `bulkSyncCampaignLeads`
+(line 515) cannot be reused as-is: it requires a `Campaign` with an `interest_group`, so it cannot
+target "every lead where `ghl_contact_id IS NULL`". What the driver must not do is call the GHL
+API itself — it selects candidates and calls `syncLeadToGhl`, because new GHL-calling code would
+be a second, untested path to the same CRM.
+
+**Retry and backoff belong in the driver, not in `ghlService`.**
+`docs/growth-os-reset/GHL_CALENDAR_BOUNDARY.md` records DECISION 1 and DECISION 2 that the v1
+contact sync is deliberately not to be touched, with "byte-identical to its state before Phase 4"
+as an explicit acceptance criterion. Adding resilience inside that service would cross a decision
+already taken. The driver wraps it instead.
+
+**`ghl_enabled` gates the whole path** (`syncLeadToGhl:271`). On production it is currently set,
+but the driver should assert it rather than assume it, because the code default is `false` and a
+disabled flag would make the run silently do nothing.
 
 ## 8. Failure modes and safety constraints
 
@@ -145,7 +199,8 @@ constraint in this plan: new code here would be a second, untested path to the s
 |---|---|
 | Wrong sub-account | Routing resolves per source and fails closed; Phase 4 verifies the resulting URL names `school_of_data_analytics`. |
 | Double-create on re-run | Email-then-phone lookup already in `syncLeadToGhl`, plus a per-person idempotency record. |
-| Rate limiting | **Gap: no 429 handling or retry/backoff was found in `ghlService.ts`** (timeout is 15s, `AbortSignal.timeout`). To confirm and add before Phase 3; batches of 25 with pauses are the interim control. |
+| Rate limiting | **Confirmed gap.** The only resilience primitive on this boundary is a 15s `AbortSignal.timeout`. There is **no retry, no backoff, and no status-code branching at all** — `ghlService.ts:87` is a flat `if (!response.ok)`, so a 429 is handled identically to a 400. No circuit breaker. The driver owns this (see §7). |
+| Request volume | **One lead costs up to ~6 sequential requests**: email search, phone search, create, one `POST /tags` per provenance tag (v1 has no bulk tag endpoint, `:378`), and one note. So 307 leads is on the order of **1,800 requests**. No documented GHL per-request or per-day contact limit exists anywhere in the code, `docs/` or `directives/` — the only rate limit implemented in this repo is for **SMS**, not contacts (`schedulerService.ts:761-790`), and it does not gate contact creation. Pacing is therefore a judgement call, not a documented bound, which is another reason to batch. |
 | Partial run | Resumable by design: the driver selects candidates fresh each batch, so a killed run resumes by re-running. |
 | Test rows | Excluded by email domain, not by a hand-kept id list. |
 | Secrets | Keys stay in `system_settings` and are read by the service. Never logged, never printed, never in a PR or an email. |
@@ -167,8 +222,10 @@ Not "looks right":
 - **The wider lead-level gap.** 318 is the *explorer-profile* subset. At lead level the gap is far
   larger (for example ~16,000 `ccpp_winback` leads from a single July import are not in GHL). That
   is a separate scoping decision and is not assumed here.
-- **The 19 November `free_signup` leads** not in GHL that have no explorer profile — outside this
-  population, possibly a live leak, flagged for its own look.
+- **The 19 November `free_signup` leads** not in GHL that have no explorer profile. I first read
+  these as a possible live leak; they are most likely the synthetic-email guard working correctly,
+  since the 28 `withheld / synthetic_email` audit rows are all `free_signup` at
+  `@colaberry-test.local` and the most recent is from today. Worth confirming, not worth alarm.
 - **Kes's 7 "wrong sub-account" ids.** Only **1** explorer-linked `open_house` contact predates the
   school key (enrollment `7b8e43c9-4683-4523-9614-98f1db712287`, lead 25070, created 2026-10-21),
   and that used lead-creation time as a proxy for sync time. The other 6 are unexplained and need
