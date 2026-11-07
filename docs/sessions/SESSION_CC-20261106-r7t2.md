@@ -216,7 +216,21 @@ Plan PR #3745 merged at 20:02 UTC with all ten checks green, which was Ali's app
     --print` prints per-file error COUNTS, not error text, so getting the text meant invoking
     `tsc -p tsconfig.test.json` directly with the same 8GB heap.
 
-    **Pre-existing, not mine:** `src/scripts/lib/__tests__/agentRoster.test.ts` has been on
-    `main` since 2026-10-22 (commit `e6c966e8`) with 13 type errors and no baseline entry, so
-    the Test-file typecheck gate reports it as new debt on any branch cut from main. Flagged,
-    not touched.
+    **I misdiagnosed a break as pre-existing, and it was mine.** The Test-file typecheck gate
+    reported 413 errors across 142 files: 1 in my new suite and **13 in
+    `src/scripts/lib/__tests__/agentRoster.test.ts`**, a file I had not touched and which has
+    been on `main` since 2026-10-22. I recorded it as pre-existing debt on main. It was not.
+    Because my suite used only `require` and `jest.mock` it had no import or export, so
+    TypeScript treated it as a SCRIPT and put `fs`, `path`, `row` and the rest into the GLOBAL
+    scope, where they collided with that file's own globals. A redeclaration is reported against
+    **both** files, so 13 of the errors landed on a file whose only fault was declaring `fs`
+    first.
+
+    Adding `export {}` to my suite returned the whole-program measurement to the frozen baseline
+    **exactly, 399 errors across 140 files, matching in both directions**. Both my 1 and its 13
+    disappeared together, which is the proof of cause.
+
+    The lesson is the diagnosis, not the fix: a single script-mode test file can make a
+    completely unrelated file fail this gate, so "that file is already broken on main" is a
+    conclusion that needs testing before it is written down. Checking the file in isolation
+    would never have shown it, because in isolation there is nothing to collide with.
