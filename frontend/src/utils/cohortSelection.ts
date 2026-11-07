@@ -48,3 +48,33 @@ export function selectEnrollableCohorts(cohorts: Cohort[] | null | undefined): C
 export function selectNextCohort(cohorts: Cohort[] | null | undefined): Cohort | null {
   return selectEnrollableCohorts(cohorts)[0] || null;
 }
+
+/**
+ * A batch month as a reader sees it: "2026-12" becomes "December 2026".
+ *
+ * WHY THIS EXISTS AT ALL. Since 2026-11-05 enrollment runs in monthly batches: you
+ * join the batch for the month you pay in, and that batch's ORIENTATION is the first
+ * Monday of the FOLLOWING month. `cohorts.start_date` holds the orientation, so a
+ * marketing surface that prints it is naming a month the visitor has not missed and
+ * cannot join yet. On 2026-11-06 the open November batch advertised "December 7, 2026"
+ * and leads asked whether they could still start this month. Taiwo reported it.
+ *
+ * Parsed from `batch_month` rather than from the row's name, because the name is a
+ * human label that has already drifted on production (both a hyphen and an em dash
+ * appear in live rows) while `batch_month` is written by the batch tooling.
+ *
+ * Returns null for anything that is not a `YYYY-MM`, so a caller falls back to the
+ * legacy rendering instead of printing a guess.
+ */
+export function formatBatchMonth(batchMonth: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(batchMonth || '').trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  // Day 1 at midday, so no timezone can roll it into the previous month.
+  return new Date(year, month - 1, 1, 12).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
