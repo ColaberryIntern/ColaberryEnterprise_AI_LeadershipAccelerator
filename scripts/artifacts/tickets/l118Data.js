@@ -305,8 +305,11 @@ const LEDGER = [
       + 'untested prose. Owner is Piyush, not Claude Code.',
   },
   {
-    id: 14, title: 'Developer & AI Maintenance Runbook', ticket: 'L11.4', file: null,
-    state: 'NOT_WRITTEN', note: 'Needs DOC 11.',
+    id: 14, title: 'Developer & AI Maintenance Runbook', ticket: 'L11.4',
+    file: 'docs/colaberry-live/DOC_14_DEVELOPER_MAINTENANCE_RUNBOOK.md', state: 'WRITTEN',
+    note: 'Written 2026-11-07. Generated from l114Data.js + l114Sections.js. Every path it tells '
+      + 'a reader to open — 35 reference paths and 18 procedure file references — is stat\'ed on '
+      + 'every build, and every documented env var must be referenced in backend/src.',
   },
   {
     id: 15, title: 'Testing Strategy & Evidence Matrix', ticket: 'L11.5',

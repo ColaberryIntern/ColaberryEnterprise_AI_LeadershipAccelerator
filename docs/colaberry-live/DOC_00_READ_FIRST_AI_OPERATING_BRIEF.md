@@ -320,12 +320,12 @@ Eighteen documents are required by bootstrap §3.1 and §17. Status as of 2026-1
 | **11** | System Architecture Handbook | L11.1 | `docs/colaberry-live/DOC_11_SYSTEM_ARCHITECTURE_HANDBOOK.md` — **read this second**, after DOC 00 |
 | **12** | Architecture Diagrams | L11.2 | `docs/colaberry-live/DOC_12_ARCHITECTURE_DIAGRAMS.md` — **generated**, ten diagrams |
 | **13** | Ali + Piyush Studio Operator Manual | L11.3 | Not written — needs the studio installed (L6.3) |
-| **14** | Developer & AI Maintenance Runbook | L11.4 | Not written — needs DOC 11 |
+| **14** | Developer & AI Maintenance Runbook | L11.4 | `docs/colaberry-live/DOC_14_DEVELOPER_MAINTENANCE_RUNBOOK.md` — **generated**; read its *False leads* first |
 | **15** | Testing Strategy & Evidence Matrix | L11.5 | `docs/COLABERRY_LIVE_TESTING_STRATEGY.md` — **generated** |
 | **16** | Ram Executive Brief | L11.6 | Not written — needs DOC 12's diagrams |
 | **17** | Case Study Source Pack | L11.7 | Not written |
 
-**Thirteen of eighteen written.** Rebuild the index with
+**Fourteen of eighteen written.** Rebuild the index with
 `node scripts/artifacts/buildL118Artifacts.js`, which checks every row above against the disk in
 both directions — a document that lands here without a ledger row fails the build.
 

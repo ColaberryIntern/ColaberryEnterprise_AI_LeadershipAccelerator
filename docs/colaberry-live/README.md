@@ -5,7 +5,7 @@ Generated from `scripts/artifacts/tickets/l118Data.js`. **Do not hand-edit** —
 before it writes anything.
 
 Bootstrap §3.1 and §17 require **18 documents**, DOC 00 through DOC 17.
-**13 are written**, 9 of them under L11.8 on 2026-11-03.
+**14 are written**, 9 of them under L11.8 on 2026-11-03.
 
 **Start at [DOC 00](DOC_00_READ_FIRST_AI_OPERATING_BRIEF.md).** Every AI-executable todo links to it, and it carries
 the source-of-truth hierarchy, the ticket-selection rule and the current blockers.
@@ -28,7 +28,7 @@ the source-of-truth hierarchy, the ticket-selection rule and the current blocker
 | 11 | System Architecture Handbook | L11.1 | In the repo | `docs/colaberry-live/DOC_11_SYSTEM_ARCHITECTURE_HANDBOOK.md` | Written 2026-11-03. Its capability proof register is generated from l111Data.js and spliced into the document, so the handbook cannot claim a capability is proven when the data says otherwise: 4 of 28 claims have run in a real airing, 10 have never run. |
 | 12 | Architecture Diagrams | L11.2 | In the repo | `docs/colaberry-live/DOC_12_ARCHITECTURE_DIAGRAMS.md` | Written 2026-11-03. Ten diagrams, Mermaid source generated from l112Data.js, 76 required elements checked against the source. 14 nodes across 7 diagrams are drawn dashed and red because they are not built, and the build fails if an unbuilt path is drawn like a working one. |
 | 13 | Ali + Piyush Studio Operator Manual | L11.3 | Blocked | — | Needs the studio installed (L6.2, L6.3). A manual for equipment nobody has yet is untested prose. Owner is Piyush, not Claude Code. |
-| 14 | Developer & AI Maintenance Runbook | L11.4 | Not written | — | Needs DOC 11. |
+| 14 | Developer & AI Maintenance Runbook | L11.4 | In the repo | `docs/colaberry-live/DOC_14_DEVELOPER_MAINTENANCE_RUNBOOK.md` | Written 2026-11-07. Generated from l114Data.js + l114Sections.js. Every path it tells a reader to open — 35 reference paths and 18 procedure file references — is stat'ed on every build, and every documented env var must be referenced in backend/src. |
 | 15 | Testing Strategy & Evidence Matrix | L11.5 | In the repo | `docs/COLABERRY_LIVE_TESTING_STRATEGY.md` | Generated with a self-check. |
 | 16 | Ram Executive Brief | L11.6 | Not written | — | Needs DOC 12 for its diagrams. Definition-of-done item 44. Not launch-blocking. |
 | 17 | Case Study Source Pack | L11.7 | Not written | — | Was meant to be maintained DURING the build rather than written after it, so every week it stays open it gets harder rather than easier. |
