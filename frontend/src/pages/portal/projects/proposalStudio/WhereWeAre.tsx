@@ -1,36 +1,54 @@
-import React from 'react';
-import type { StudentGovProjectView } from '../../../../services/govProjectPortalApi';
+import React, { useCallback, useState } from 'react';
+import type { StudentGovProjectView, GovStudioApi } from '../../../../services/govProjectPortalApi';
 import type { StudioView } from './StageRail';
 import { docScore, colr, Bar } from './studioHelpers';
+import { anyNotStarted, docStageLabel } from './buildHelpers';
 
 /**
- * WhereWeAre — the Studio's overview. The pursuit stage strip, the proposal-readiness ring + a score bar per scored
- * document, a data-driven "Next moves" list, and the "how a document gets to 95%" card. Ported from the approved
- * design; every number is the real projection's.
+ * WhereWeAre — the Studio's overview (v3, T17). The pursuit stage strip, the proposal-readiness ring + a score bar
+ * and stage pill per scored document, a data-driven "Next moves" list led by what needs you, and a "Build all
+ * documents" primary action when any document is not started. Every number is the real projection's.
  */
 export default function WhereWeAre(
-  { view, questionCount, onNavigate }:
-  { view: StudentGovProjectView; questionCount: number; onNavigate: (v: StudioView) => void },
+  { view, onNavigate, studioApi, onReload, onToast }:
+  { view: StudentGovProjectView; onNavigate: (v: StudioView) => void; studioApi: GovStudioApi; onReload: () => void; onToast: (m: string) => void },
 ): React.ReactElement {
   const readiness = view.proposalReadiness ?? { pct: 0, passing: 0, total: 0 };
   const docs = (view.proposalDocuments ?? []);
   const scored = docs.filter((d) => d.docType !== 'form' && !d.superseded);
   const r = 34, c = 2 * Math.PI * r;
   const p = readiness.pct;
+  const needCount = view.needsCount ?? 0;
+  const [building, setBuilding] = useState(false);
+
+  const buildAll = useCallback(async () => {
+    setBuilding(true);
+    try { const res = await studioApi.buildAll(view.projectId); onToast(res.enqueued.length ? `Building ${res.enqueued.length} document${res.enqueued.length === 1 ? '' : 's'}…` : 'Nothing to build right now.'); onReload(); }
+    catch { onToast('Could not start Build all. Please try again.'); } finally { setBuilding(false); }
+  }, [studioApi, view.projectId, onReload, onToast]);
 
   const lowest = scored.filter((d) => docScore(d) < 95).sort((a, b) => docScore(a) - docScore(b))[0];
   const formsPending = docs.filter((d) => d.docType === 'form' && !(d.latest?.passes)).length;
+  const canBuildAll = anyNotStarted(docs);
 
   type Move = { who: string; cls: string; text: string };
   const moves: Move[] = [];
-  if (questionCount > 0) moves.push({ who: 'You', cls: 'warn', text: `Answer ${questionCount} question${questionCount === 1 ? '' : 's'} in the agent panel. They unblock the documents that cite them.` });
-  if (lowest) moves.push({ who: 'Agent', cls: 'agent', text: `Run a review cycle on ${lowest.title}. It scores ${docScore(lowest)}; the target is 95.` });
+  if (needCount > 0) moves.push({ who: 'You', cls: 'warn', text: `Answer ${needCount} need${needCount === 1 ? '' : 's'} in Needs you. Each one unblocks the documents that cite it.` });
+  if (canBuildAll) moves.push({ who: 'Agent', cls: 'agent', text: 'Build all documents that have not been started — the agent drafts, checks and revises each one.' });
+  else if (lowest) moves.push({ who: 'Agent', cls: 'agent', text: `Run a review cycle on ${lowest.title}. It scores ${docScore(lowest)}; the target is 95.` });
   if (formsPending > 0) moves.push({ who: 'Signer', cls: 'acc', text: `Record the signed copy for ${formsPending} required form${formsPending === 1 ? '' : 's'}.` });
-  if (moves.length === 0) moves.push({ who: 'Agent', cls: 'ok', text: 'Every scored document is passing. Send them to Gold team for approval, then package.' });
+  if (moves.length === 0) moves.push({ who: 'Agent', cls: 'ok', text: 'Every scored document is passing. Give the package a final Go at the Gold gate, then submit.' });
 
+  const notStarted = docs.filter((d) => d.key !== 'pricing' && !d.superseded && d.status === 'not_started').length;
   return (
     <div className="gps-view">
-      <div className="gps-vh"><div><h2>Where we are</h2><p>Planning and the pilot build are done. The work now is turning the solicitation, the build and the company record into a submittable proposal, with every document checked against the requirements until it scores 95 or better.</p></div></div>
+      <div className="gps-vh"><div><h2>Where we are <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast('Where we are: readiness, the next moves led by what needs you, and Build all documents to start the agent on everything not yet begun.')}>i</button></h2><p>Planning and the pilot build are done. The work now is turning the solicitation, the build and the company record into a submittable proposal, with every document checked against the requirements until it scores 95 or better.</p></div></div>
+      {canBuildAll && (
+        <div className="gps-build-hero" data-testid="overview-build-hero">
+          <div style={{ minWidth: 0 }}><b>{notStarted} document{notStarted === 1 ? '' : 's'} not started.</b><div className="gps-small gps-muted">The agent builds, checks and revises each one; you answer only what it can&rsquo;t find.</div></div>
+          <button className="gps-btn primary" data-testid="btn-build-all" disabled={building} onClick={buildAll}>Build all documents</button>
+        </div>
+      )}
       <div className="gps-pipe" aria-label="Pursuit stages">
         <div className="d"><b>Snapshot</b>advisory read</div>
         <div className="d"><b>Solicitation</b>{view.requirementCounts.total} requirements</div>
@@ -42,7 +60,7 @@ export default function WhereWeAre(
         <div><b>Outcome</b>win / loss</div>
       </div>
       <div className="gps-grid2">
-        <div className="gps-panel">
+        <div className="gps-panel" data-testid="overview-readiness">
           <h3>Proposal readiness</h3>
           <div className="gps-ring">
             <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true">
@@ -52,17 +70,18 @@ export default function WhereWeAre(
             <div><div className="gps-big gps-num">{p}%</div><div className="gps-muted gps-small">target 95% on every document &middot; {readiness.passing} of {readiness.total} documents pass</div></div>
           </div>
           <div className="gps-mini-docs" style={{ marginTop: 14 }}>
-            {scored.map((d) => { const sc = docScore(d); return (<div className="gps-r" key={d.key}><span>{d.title}</span><Bar v={sc} /><b className="gps-num" style={{ textAlign: 'right' }}>{sc}</b></div>); })}
+            {scored.map((d) => { const sc = docScore(d); const scored0 = !!d.latest; return (<div className="gps-r" key={d.key} data-testid={`overview-doc-${d.key}`} data-stage={docStageLabel(d)}><span>{d.title} <span className="gps-tag gps-small" style={{ marginLeft: 4 }}>{docStageLabel(d)}</span></span><Bar v={sc} /><b className="gps-num" style={{ textAlign: 'right' }}>{scored0 ? sc : '—'}</b></div>); })}
           </div>
         </div>
-        <div className="gps-panel">
-          <h3>Next moves</h3>
+        <div className="gps-panel" data-testid="overview-needs">
+          <h3>What you need to do <span className="gps-muted gps-small">{needCount}</span></h3>
           <ul className="gps-next">
             {moves.map((m, i) => (<li key={i}><span className={`gps-who gps-tag ${m.cls}`}>{m.who}</span><span>{m.text}</span></li>))}
           </ul>
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            {canBuildAll && <button className="gps-btn primary" disabled={building} onClick={buildAll}>Build all documents</button>}
             <button className="gps-btn agent" onClick={() => onNavigate('editor')}>Open Draft &amp; versions</button>
-            <button className="gps-btn" onClick={() => onNavigate('openitems')}>See open items</button>
+            <button className="gps-btn" onClick={() => onNavigate('openitems')}>Needs you{needCount ? ` (${needCount})` : ''}</button>
           </div>
         </div>
       </div>

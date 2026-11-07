@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style></head><body>
+<title>Proposal Studio v4</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: proposal desk v3. Sticky contract bar with a Needs-you chip; left stage rail with a Needs-you badge; center workspace; right agent panel. The AI builds and judges; amber = something only a person can supply. */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --sunk:#e5e9ef; --line:#d3d9e2; --fg:#172133; --muted:#5d6a7e;
+  --accent:#23408e; --accent-soft:#e2e8f6; --paper:#fdfdfb; --paper-ink:#1d2430;
+  --ok:#1d7a4c; --ok-soft:#dff2e7; --warn:#a35b00; --warn-soft:#fbeed6; --bad:#b4302a; --bad-soft:#f9e1df;
+  --pink:#c43f7c; --pink-soft:#f8e3ed; --red:#b4302a; --red-soft:#f9e1df; --gold:#9a6f00; --gold-soft:#f6ecd0; --glove:#4b5568; --glove-soft:#e8ebf0;
+  --agent:#5a3fb0; --agent-soft:#ece7fa; --scrim:rgba(12,18,30,.58);
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1520; --surface:#161e2c; --sunk:#1d2738; --line:#2b3850; --fg:#e3e9f3; --muted:#94a2b8;
+  --accent:#9db6f2; --accent-soft:#1f2d4d; --paper:#1b2230; --paper-ink:#e6e9ef;
+  --ok:#5ccf98; --ok-soft:#163626; --warn:#f0b25a; --warn-soft:#3a2b13; --bad:#ff8f86; --bad-soft:#3d1c1a;
+  --pink:#f08bb9; --pink-soft:#3b1d2c; --red:#ff8f86; --red-soft:#3d1c1a; --gold:#e8c35c; --gold-soft:#372d12; --glove:#b7c0d0; --glove-soft:#252f40;
+  --agent:#bba8f5; --agent-soft:#2a2448; --scrim:rgba(0,0,0,.66); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1520; --surface:#161e2c; --sunk:#1d2738; --line:#2b3850; --fg:#e3e9f3; --muted:#94a2b8;
+  --accent:#9db6f2; --accent-soft:#1f2d4d; --paper:#1b2230; --paper-ink:#e6e9ef;
+  --ok:#5ccf98; --ok-soft:#163626; --warn:#f0b25a; --warn-soft:#3a2b13; --bad:#ff8f86; --bad-soft:#3d1c1a;
+  --pink:#f08bb9; --pink-soft:#3b1d2c; --red:#ff8f86; --red-soft:#3d1c1a; --gold:#e8c35c; --gold-soft:#372d12; --glove:#b7c0d0; --glove-soft:#252f40;
+  --agent:#bba8f5; --agent-soft:#2a2448; --scrim:rgba(0,0,0,.66); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+.gut{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,h4{text-wrap:balance;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sample{background:var(--warn-soft);color:var(--warn);font-size:12px;padding-block:6px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+.sample button{border:1px solid var(--warn);background:none;color:var(--warn);border-radius:4px;font-size:11px;padding:1px 8px;font-weight:600}
+
+/* bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar-in{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;padding-block:10px;max-width:1480px;margin:0 auto}
+.bar h1{font-size:17px;font-weight:700;letter-spacing:-.01em;max-width:62ch}
+.bar .meta{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--muted);white-space:nowrap;background:var(--surface)}
+.chip b{color:var(--fg);font-weight:600}
+button.chip:hover{border-color:var(--accent)}
+.chip.needs{border-color:var(--warn);background:var(--warn-soft);color:var(--warn);font-weight:600}
+.chip.needs b{color:var(--warn)}
+.chip.needs.fatal{border-color:var(--bad);background:var(--bad-soft);color:var(--bad)}
+.chip.needs.fatal b{color:var(--bad)}
+.chip.needs.clear{border-color:var(--ok);background:var(--ok-soft);color:var(--ok)}
+.chip.needs.clear b{color:var(--ok)}
+.meter{display:flex;align-items:center;gap:8px}
+.meter .m{width:110px;height:8px;border-radius:4px;background:var(--sunk);overflow:hidden}
+.meter .m span{display:block;height:100%;background:var(--accent);transition:width .5s}
+
+/* shell */
+.shell{display:grid;grid-template-columns:220px minmax(0,1fr) 340px;gap:16px;max-width:1480px;margin:0 auto;padding-block:16px 48px;align-items:start}
+@media (max-width:1180px){.shell{grid-template-columns:200px minmax(0,1fr)}.agent{grid-column:1/-1}}
+@media (max-width:760px){.shell{grid-template-columns:minmax(0,1fr)}}
+.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);display:flex;flex-direction:column;gap:2px}
+@media (max-width:760px){.rail{position:static;flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:4px}}
+.rail .grp{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 10px 4px}
+
+.step{display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:6px;padding:7px 10px;text-align:left;color:var(--muted);white-space:nowrap;width:100%}
+@media (max-width:760px){.step{width:auto;border:1px solid var(--line);background:var(--surface)}}
+.step:hover{background:var(--sunk);color:var(--fg)}
+.step[aria-current="page"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:inset 3px 0 0 var(--accent)}
+.step .ic{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;border:1.5px solid var(--line);color:var(--muted);background:var(--surface)}
+.step .ic.done{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.step .ic.now{border-color:var(--accent);color:var(--accent)}
+.step small{margin-left:auto;font-size:11px;color:var(--muted);font-weight:500}
+.step .badge{margin-left:auto;min-width:22px;height:20px;border-radius:10px;display:grid;place-items:center;font-size:11px;font-weight:700;padding:0 6px;background:var(--warn);color:var(--surface)}
+.step .badge.fatal{background:var(--bad)}
+.step .badge.clear{background:var(--ok)}
+.step.needsme{color:var(--fg);font-weight:600}
+.past{font-size:12px;color:var(--muted);padding:2px 10px 8px;display:flex;flex-direction:column;gap:2px}
+.past span::before{content:"✓ ";color:var(--ok);font-weight:700}
+@media (max-width:760px){.rail .grp,.rail .past{display:none}.rail{align-items:center}}
+
+/* generic */
+.view{display:flex;flex-direction:column;gap:16px;min-width:0}
+.vh{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-end}
+.vh h2{font-size:22px;font-weight:700;letter-spacing:-.015em;display:flex;align-items:center;gap:8px}
+.vh p{margin:4px 0 0;color:var(--muted);max-width:68ch}
+.vh .act{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.info{width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:11px;font-weight:700;color:var(--muted);display:inline-grid;place-items:center;padding:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;min-width:0}
+.panel h3{font-size:14px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 12px;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.agent{background:var(--agent);border-color:var(--agent);color:var(--surface)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.btn.warn{background:var(--warn);border-color:var(--warn);color:var(--surface)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.sm{padding:3px 9px;font-size:12px}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:4px;padding:1px 7px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.warn{background:var(--warn-soft);color:var(--warn)}.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.agent{background:var(--agent-soft);color:var(--agent)}.tag.acc{background:var(--accent-soft);color:var(--accent)}
+.tag.pink{background:var(--pink-soft);color:var(--pink)}.tag.red{background:var(--red-soft);color:var(--red)}.tag.gold{background:var(--gold-soft);color:var(--gold)}.tag.glove{background:var(--glove-soft);color:var(--glove)}
+.muted{color:var(--muted)}.small{font-size:12px}
+.bar-s{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;min-width:50px}
+.bar-s span{display:block;height:100%;transition:width .5s}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:760px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;background:var(--surface)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover td{background:var(--accent-soft)}
+.sticky1 th:first-child,.sticky1 td:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)}
+.quote{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--fg);border-left:2px solid var(--line);padding-left:10px;margin:4px 0}
+.src{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.stage{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.stage.building,.stage.judging,.stage.revising{background:var(--agent-soft);color:var(--agent)}
+.stage.needs{background:var(--warn-soft);color:var(--warn)}
+.stage.passed{background:var(--ok-soft);color:var(--ok)}
+.stage.go{background:var(--ok);color:var(--surface)}
+.spin{display:inline-block;width:9px;height:9px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* overview */
+.pipe{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.pipe div{flex:1;min-width:96px;padding:8px 10px;border-radius:6px;background:var(--sunk);font-size:12px;color:var(--muted)}
+.pipe div b{display:block;color:var(--fg);font-size:13px}
+.pipe .d{background:var(--ok-soft)}.pipe .d b::before{content:"✓ ";color:var(--ok)}
+.pipe .h{background:var(--accent);color:var(--surface)}.pipe .h b{color:var(--surface)}
+.ring{display:flex;gap:16px;align-items:center}
+.big{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.mini-docs{display:flex;flex-direction:column;gap:7px}
+.mini-docs .r{display:grid;grid-template-columns:minmax(0,1fr) 92px 70px 30px;gap:10px;align-items:center;font-size:13px}
+@media (max-width:520px){.mini-docs .r{grid-template-columns:minmax(0,1fr) 70px 30px}.mini-docs .r .bar-s{display:none}}
+.hero{display:flex;gap:16px;align-items:center;flex-wrap:wrap;background:var(--agent-soft);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.hero p{margin:0;max-width:62ch}
+.hero .btn{margin-left:auto}
+.now-line{display:flex;gap:10px;align-items:center;font-size:13px;padding:8px 10px;border-radius:6px;background:var(--agent-soft);color:var(--agent)}
+
+/* needs cards */
+.needs-list{display:flex;flex-direction:column;gap:10px}
+.need{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:8px;padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:10px 18px}
+.need.fatal{border-left-color:var(--bad)}
+.need.done{border-left-color:var(--ok);opacity:.85}
+@media (max-width:900px){.need{grid-template-columns:minmax(0,1fr)}}
+.need .hd{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.need .ask{font-weight:600;font-size:14px}
+.need .why{color:var(--muted);font-size:12.5px;margin-top:2px}
+.need .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+.used{border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:11.5px;background:var(--surface);color:var(--accent)}
+.used:hover{border-color:var(--accent)}
+.ctl{display:flex;flex-direction:column;gap:6px;justify-content:center}
+.ctl input,.ctl textarea{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 9px;width:100%;min-width:0}
+.ctl textarea{min-height:64px;resize:vertical}
+.ctl .opts{display:flex;flex-wrap:wrap;gap:6px}
+.fmt{font-size:11.5px;color:var(--muted)}
+.drop{border:1.5px dashed var(--line);border-radius:6px;padding:10px;text-align:center;font-size:12px;color:var(--muted);background:var(--bg)}
+.grp-h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+/* blueprint */
+.bp-list{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.bp-list li{display:flex;flex-direction:column;gap:2px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.bp-list li:last-child{border:0;padding:0}
+.bp-k{display:flex;justify-content:space-between;gap:8px;font-weight:600;flex-wrap:wrap}
+.weights{display:flex;height:28px;border-radius:6px;overflow:hidden;margin:6px 0 10px}
+.weights div{display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--surface);min-width:0;overflow:hidden;white-space:nowrap}
+.log{font-family:var(--mono);font-size:12px;background:var(--sunk);border-radius:6px;padding:10px 12px;max-height:170px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.log .ok{color:var(--ok)}
+
+/* evidence */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.shot{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.shot .img{aspect-ratio:16/10;max-width:100%;background:var(--sunk);padding:8px;display:flex;flex-direction:column;gap:4px}
+.shot .img .tb{height:8px;border-radius:2px;background:var(--line);width:40%}
+.shot .img .ln{height:6px;border-radius:2px;background:var(--line)}
+.shot .img .tiles{display:flex;gap:4px}.shot .img .tiles i{flex:1;height:22px;border-radius:3px;background:var(--surface);border:1px solid var(--line)}
+.shot .img .blk{flex:1;border-radius:3px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;color:var(--muted)}
+.shot .img.miss{display:grid;place-items:center;color:var(--muted);font-size:12px;background:repeating-linear-gradient(45deg,var(--sunk),var(--sunk) 8px,var(--surface) 8px,var(--surface) 16px)}
+.shot .cap{padding:10px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.shot .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.shot .foot{margin-top:auto;display:flex;gap:6px;align-items:center;justify-content:space-between}
+.urlbox{display:flex;gap:6px;margin-top:6px}
+.urlbox input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:12px}
+
+/* editor */
+.ed{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start}
+@media (max-width:1320px){.ed{grid-template-columns:minmax(0,1fr)}}
+.doc-pick{display:flex;gap:6px;flex-wrap:wrap}
+.doc-pick .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.etabs{display:flex;gap:2px;border-bottom:1px solid var(--line)}
+.etabs button{background:none;border:0;border-bottom:2px solid transparent;padding:7px 12px;font-weight:600;color:var(--muted);font-size:13px}
+.etabs button[aria-selected="true"]{color:var(--fg);border-color:var(--accent)}
+.paper-wrap{background:var(--sunk);border-radius:0 0 8px 8px;padding:20px;overflow-x:auto}
+.paper{background:var(--paper);color:var(--paper-ink);max-width:720px;margin:0 auto;padding:40px 52px 48px;box-shadow:0 1px 3px rgba(0,0,0,.12),0 8px 24px rgba(20,30,50,.08);font-family:var(--serif);font-size:14.5px;line-height:1.65;min-width:0}
+@media (max-width:600px){.paper{padding:22px 18px}.paper-wrap{padding:10px}}
+.paper .run{display:flex;justify-content:space-between;gap:10px;font-family:var(--sans);font-size:10.5px;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:22px;white-space:nowrap;overflow:hidden}
+.paper .run span:first-child{overflow:hidden;text-overflow:ellipsis}
+.sec{position:relative;border-radius:4px;margin:0 -10px 10px;padding:4px 10px}
+.sec:hover{background:var(--accent-soft)}
+.sec .tools{position:absolute;top:4px;right:6px;display:none;gap:4px}
+.sec:hover .tools,.sec:focus-within .tools{display:flex}
+.sec .tools button{font-family:var(--sans);font-size:11px;border:1px solid var(--line);background:var(--surface);border-radius:4px;padding:1px 7px;color:var(--fg)}
+.paper h3{font-family:var(--serif);font-size:18px;font-weight:600;margin:0 0 2px}
+.sec .tools{top:-14px}
+.paper h4{font-family:var(--sans);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px;font-weight:600}
+.paper p{margin:0 0 10px;max-width:66ch}
+.paper .theme{font-weight:600;margin-top:10px}
+.paper .reqref{font-family:var(--sans);font-size:11px;color:var(--accent);font-weight:600}
+.needchip{display:inline;background:var(--warn-soft);color:var(--warn);font-family:var(--sans);font-size:12.5px;padding:1px 6px;border-radius:3px;font-weight:600;border:0;cursor:pointer;line-height:1.7}
+.needchip.done{background:var(--ok-soft);color:var(--ok);cursor:default}
+.margin{font-family:var(--sans);font-size:11.5px;border-radius:4px;padding:6px 8px;margin:0 0 10px;display:flex;gap:6px;align-items:flex-start}
+.margin.agentfix{background:var(--sunk);color:var(--muted)}
+.margin.human{background:var(--warn-soft);color:var(--warn)}
+.paper ins{background:var(--ok-soft);text-decoration:none;border-bottom:1px solid var(--ok)}
+.paper del{background:var(--bad-soft);color:var(--bad)}
+.paper figure{margin:12px 0}
+.paper figcaption{font-family:var(--sans);font-size:11.5px;color:var(--muted);margin-top:6px}
+.fig{border:1px solid var(--line);border-radius:4px;padding:10px;background:var(--surface);font-family:var(--sans);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.fig i{display:block;height:34px;border-radius:3px;background:var(--sunk)}
+.fig i.w{grid-column:span 4;height:70px}
+.empty-paper{font-family:var(--sans);text-align:center;padding:40px 10px;color:var(--muted)}
+.outline{display:flex;flex-direction:column;gap:8px;padding:16px;background:var(--sunk);border-radius:0 0 8px 8px}
+.ol{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;grid-template-columns:22px minmax(0,1fr) 120px;gap:10px;align-items:center}
+@media (max-width:600px){.ol{grid-template-columns:22px minmax(0,1fr)}.ol .bud{grid-column:2}}
+.ol .grip{color:var(--muted);cursor:grab;text-align:center}
+.ol b{font-size:13px}
+.ol .reqs{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.bud{font-size:12px}
+.pdfprev{display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px;background:var(--sunk);border-radius:0 0 8px 8px}
+.pdfpage{width:min(100%,340px);aspect-ratio:8.5/11;background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.15);padding:22px 24px;display:flex;flex-direction:column;gap:6px;position:relative}
+.pdfpage i{display:block;height:5px;border-radius:2px;background:var(--line)}
+.pdfpage i.h{height:9px;width:55%;background:var(--muted)}
+.pdfpage .pn{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:9px;color:var(--muted);font-family:var(--sans)}
+.side{display:flex;flex-direction:column;gap:12px}
+.checks{display:flex;flex-direction:column;gap:8px}
+.ck{display:grid;grid-template-columns:minmax(0,1fr) 36px;gap:4px 8px;align-items:center;font-size:12.5px}
+.ck .bar-s{grid-column:1/-1}
+.ck .sc{text-align:right;font-weight:700}
+.pass-line{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:8px;margin-top:4px;gap:8px}
+.ver{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;max-height:300px;overflow-y:auto}
+.ver li button{width:100%;text-align:left;background:none;border:0;border-left:2px solid var(--line);padding:6px 0 8px 12px;position:relative;display:flex;flex-direction:column;gap:1px}
+.ver li button::before{content:"";position:absolute;left:-6px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--line)}
+.ver li button[aria-pressed="true"]::before{background:var(--accent);border-color:var(--accent)}
+.ver .vt{font-weight:600;font-size:13px;display:flex;gap:6px;align-items:center}
+.ver .vd{font-size:12px;color:var(--muted)}
+.plan{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 10px;margin:0;font-size:12px}
+.plan dt{color:var(--muted)}.plan dd{margin:0}
+
+/* gates */
+.gchips{display:flex;gap:4px;flex-wrap:wrap}
+.gchip{font-size:10.5px;font-weight:600;border-radius:4px;padding:1px 5px;white-space:nowrap}
+.gchips{flex-wrap:nowrap}
+.sc-chip{display:inline-block;min-width:34px;text-align:center;font-weight:700;font-size:12px;border-radius:4px;padding:2px 6px;font-variant-numeric:tabular-nums}
+.gchip.done{background:var(--ok-soft);color:var(--ok)}
+.gchip.wait{background:var(--sunk);color:var(--muted)}
+.gchip.go{background:var(--gold-soft);color:var(--gold)}
+.gcell{display:flex;align-items:center;gap:6px;min-width:70px}
+.gcell .bar-s{flex:1;min-width:30px}
+.teams{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:1000px){.teams{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.teams{grid-template-columns:minmax(0,1fr)}}
+.team{border-radius:8px;padding:12px 14px;border:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.team h3{font-size:14px;margin:0;display:flex;gap:6px;align-items:center}
+.team ul{margin:0;padding-left:16px;font-size:12.5px;color:var(--muted)}
+.gopanel{border:2px solid var(--gold);background:var(--gold-soft);border-radius:8px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.gopanel p{margin:0;max-width:64ch}
+.gopanel .btns{margin-left:auto;display:flex;gap:8px}
+.fsplit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.fsplit{grid-template-columns:minmax(0,1fr)}}
+.fsplit ul{margin:0;padding-left:16px;font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+
+/* package */
+.tree{font-family:var(--mono);font-size:12.5px;display:flex;flex-direction:column;gap:2px}
+.tree .f{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:5px 8px;border-radius:4px}
+.tree .f:nth-child(odd){background:var(--sunk)}
+.tree .f span:first-child{overflow-wrap:anywhere}
+.tree .env{margin-top:10px;border:1.5px dashed var(--gold);border-radius:6px;padding:8px}
+
+/* agent */
+.agent{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);display:flex;flex-direction:column;gap:12px}
+@media (max-width:1180px){.agent{position:static}}
+.ag{background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;max-height:calc(100vh - 100px);min-height:400px}
+@media (max-width:1180px){.ag{max-height:none}}
+.ag header{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.ag .av{width:30px;height:30px;border-radius:7px;background:var(--agent-soft);color:var(--agent);display:grid;place-items:center;font-weight:700;font-size:12px;flex:none}
+.ag header h2{font-size:14px}
+.ag header p{margin:0;font-size:12px;color:var(--muted)}
+.ag .state{margin-left:auto}
+.ag-log{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:150px}
+.ev{font-size:12.5px;display:grid;grid-template-columns:14px minmax(0,1fr);gap:8px}
+.ev::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--agent);margin-top:6px}
+.ev.h::before{background:var(--warn)}
+.ev.ok::before{background:var(--ok)}
+.ev .t{color:var(--muted);font-size:11px}
+.ag-needs{border-top:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.ag-needs h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.mneed{background:var(--warn-soft);border-radius:6px;padding:8px 10px;font-size:12.5px;display:flex;flex-direction:column;gap:3px;border:0;text-align:left;color:var(--fg)}
+.mneed.fatal{background:var(--bad-soft)}
+.mneed .k{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--warn)}
+.mneed.fatal .k{color:var(--bad)}
+.askbox{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--line)}
+.askbox input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 9px}
+
+/* tour */
+.tour-ring{position:fixed;z-index:40;border-radius:8px;box-shadow:0 0 0 9999px var(--scrim);transition:all .25s;pointer-events:none;outline:2px solid var(--agent)}
+.tour-card{position:fixed;z-index:41;width:min(340px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:8px}
+.tour-card h3{font-size:15px}
+.tour-card p{margin:0;font-size:13px;color:var(--muted)}
+.tour-card .ft{display:flex;align-items:center;gap:6px;margin-top:4px}
+.dots{display:flex;gap:4px;margin-right:auto}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--agent)}
+.tour-scrim{position:fixed;inset:0;z-index:39;background:transparent}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:45;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="sample gut"><span>Sample data on your Saratoga Springs contract. Every button works so you can walk the process.</span><button id="resetDemo">Reset</button><button id="skipDemo">Skip to answers needed</button></div>
+<header class="bar" data-testid="studio-bar">
+  <div class="bar-in gut">
+    <div style="min-width:0">
+      <div class="eyebrow">Proposal Studio · Gov contract</div>
+      <h1>2026 Saratoga Springs Municipal Asset Management and Permitting Software Solution RFP</h1>
+    </div>
+    <div class="meta">
+      <span class="chip">Agency <b>U3P (Utah)</b></span>
+      <span class="chip">Build <b class="num">64%</b> verified</span>
+      <span class="chip meter" data-tour="ready" data-testid="bar-ready">Proposal ready <span class="m"><span id="topBar"></span></span><b class="num" id="topPct">0%</b> / 95%</span>
+      <button class="chip needs" id="needsChip" data-tour="needs" data-testid="bar-needs"><span id="needsChipTxt">Needs you</span></button>
+      <button class="chip" id="tourBtn" data-testid="bar-tour">Take the tour</button>
+    </div>
+  </div>
+</header>
+
+<div class="shell gut">
+  <nav class="rail" aria-label="Proposal process" data-tour="rail" data-testid="rail">
+    <div class="grp">Done</div>
+    <div class="past"><span>Snapshot</span><span>Solicitation intake</span><span>Fit</span><span>Bid decision</span><span>Build (7 of 11 stories)</span></div>
+    <div class="grp">For you</div>
+    <button class="step" data-v="needs" id="nav-needs" data-testid="rail-step-needs"><span class="ic" style="border-color:var(--warn);color:var(--warn)">!</span>Needs you<span class="badge" id="railBadge" data-testid="rail-needs-badge">0</span></button>
+    <div class="grp">Proposal production</div>
+    <button class="step" data-v="overview" id="nav-overview" data-testid="rail-step-overview"><span class="ic now">●</span>Where we are</button>
+    <button class="step" data-v="blueprint" id="nav-blueprint" data-testid="rail-step-blueprint" data-tour="blueprint"><span class="ic done">1</span>Blueprint<small>from ZIP</small></button>
+    <button class="step" data-v="documents" id="nav-documents" data-testid="rail-step-documents" data-tour="documents"><span class="ic" id="ic-docs">2</span>Document set<small id="nDocs">9</small></button>
+    <button class="step" data-v="evidence" id="nav-evidence" data-testid="rail-step-evidence" data-tour="evidence"><span class="ic done">3</span>Build evidence<small>7</small></button>
+    <button class="step" data-v="editor" id="nav-editor" data-testid="rail-step-editor" data-tour="editor"><span class="ic" id="ic-ed">4</span>Draft &amp; versions</button>
+    <button class="step" data-v="gates" id="nav-gates" data-testid="rail-step-gates" data-tour="gates"><span class="ic" id="ic-gates">5</span>Review gates</button>
+    <button class="step" data-v="package" id="nav-package" data-testid="rail-step-package" data-tour="package"><span class="ic" id="ic-pkg">6</span>Package &amp; submit</button>
+  </nav>
+
+  <main id="main" style="min-width:0"></main>
+
+  <aside class="agent" data-tour="agent" data-testid="agent-panel">
+    <div class="ag">
+      <header>
+        <div class="av">AI</div>
+        <div><h2>Proposal agent</h2><p>Builds and judges. You supply what's missing.</p></div>
+        <span class="state tag agent" id="agState" data-testid="agent-state">Idle</span>
+      </header>
+      <div class="ag-log" id="agLog" aria-live="polite" data-testid="agent-log"></div>
+      <div class="ag-needs">
+        <h3><span>Needs you</span><span class="num" id="agCount">0</span></h3>
+        <div id="agNeeds" data-testid="agent-needs" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+      <form class="askbox" id="askForm" data-testid="agent-ask"><input id="askIn" placeholder="Ask about this proposal…" aria-label="Ask the agent"><button class="btn sm" type="submit">Ask</button></form>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast" hidden></div>
+<div id="tourLayer"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------- model ---------- */
+const CHECKS=[
+ {k:'cov',n:'Requirement coverage',w:25,team:'pink'},
+ {k:'eval',n:'Evaluator score',w:25,team:'red'},
+ {k:'proof',n:'Proof & evidence',w:15,team:'red'},
+ {k:'clar',n:'Clarity & win themes',w:15,team:'red'},
+ {k:'fmt',n:'Format & instructions',w:10,team:'glove'},
+ {k:'fact',n:'Fact integrity',w:10,team:'red'},
+];
+const TYPES={narrative:['Narrative','acc'],form:['Form','glove'],build:['From build','agent'],generated:['Generated','ok'],pricing:['Pricing','gold']};
+const STAGE_LBL={not_started:'Not started',building:'Building',judging:'Judging',revising:'Revising',needs:'Needs you',passed:'Passed',go:'Go'};
+
+const freshDocs=()=>[
+ {k:'cover',t:'Cover Letter / Transmittal',type:'narrative',file:'01_Cover_Letter.pdf',limit:2,pages:0,reqs:3,secs:2},
+ {k:'tech',t:'Technical Proposal',type:'narrative',file:'02_Technical_Proposal.pdf',limit:25,pages:0,reqs:34,secs:9},
+ {k:'impl',t:'Implementation Plan & Schedule',type:'narrative',file:'03_Implementation_Plan.pdf',limit:10,pages:0,reqs:8,secs:5},
+ {k:'past',t:'Past Performance & References',type:'narrative',file:'04_Past_Performance.pdf',limit:8,pages:0,reqs:4,secs:3},
+ {k:'staff',t:'Key Personnel & Resumes',type:'narrative',file:'05_Key_Personnel.pdf',limit:null,pages:0,reqs:5,secs:4},
+ {k:'demo',t:'Pilot Demonstration Exhibit',type:'build',file:'06_Pilot_Exhibit.pdf',limit:8,pages:0,reqs:12,secs:6},
+ {k:'matrix',t:'Compliance Matrix',type:'generated',file:'07_Compliance_Matrix.xlsx',limit:null,pages:0,reqs:58,secs:1},
+ {k:'form',t:'Signed Proposal Form & Addenda',type:'form',file:'08_Proposal_Form_SIGNED.pdf',limit:null,pages:0,reqs:3,secs:1},
+ {k:'price',t:'Price / Cost Proposal',type:'pricing',file:'09_Cost_Proposal.xlsx',limit:null,pages:0,reqs:4,secs:1,admin:true},
+].map(d=>({...d,stage:'not_started',s:null,ver:0,progress:'',gates:{pink:0,red:0,glove:0,gold:0}}));
+
+/* what the first judge pass finds, per document */
+const FIRST={
+ cover:{s:{cov:100,eval:92,proof:90,clar:94,fmt:100,fact:60},pages:1,needs:['years']},
+ tech:{s:{cov:96,eval:86,proof:84,clar:90,fmt:80,fact:62},pages:27,needs:['years','inspect','resumes']},
+ impl:{s:{cov:100,eval:96,proof:95,clar:96,fmt:100,fact:100},pages:8,needs:[]},
+ past:{s:{cov:70,eval:60,proof:45,clar:88,fmt:100,fact:40},pages:3,needs:['refs']},
+ staff:{s:{cov:78,eval:72,proof:70,clar:90,fmt:96,fact:50},pages:6,needs:['pm','resumes']},
+ demo:{s:{cov:94,eval:96,proof:98,clar:95,fmt:98,fact:100},pages:6,needs:[]},
+ matrix:{s:{cov:100,eval:100,proof:100,clar:100,fmt:100,fact:100},pages:0,needs:[]},
+ form:{s:{cov:100,eval:100,proof:100,clar:100,fmt:60,fact:100},pages:2,needs:['sign']},
+ price:{s:{cov:100,eval:100,proof:100,clar:100,fmt:60,fact:100},pages:0,needs:['pricefile']},
+};
+const NEEDS_DEF={
+ years:{kind:'Fact',ask:'How many years has Colaberry delivered data and AI software projects?',why:'The cover letter and Technical §1 state experience. The agent will not guess a number. Unresolved, it blocks export.',format:'A whole number',ctl:'text',ph:'e.g. 12',blocking:'fatal',used:[['cover','Letter ¶2'],['tech','§1.1']],fill:'12'},
+ refs:{kind:'Fact',ask:'Three references for similar municipal or permitting work: client, contact name, phone, email, contract value, and dates.',why:'RFP §4.3 requires three. None are in the company library yet.',quote:'"Provide a minimum of three (3) references for projects of similar scope completed within the last five (5) years."',src:'RFP.pdf p.14 §4.3',format:'One reference per line',ctl:'area',blocking:'fatal',used:[['past','§1–3']]},
+ inspect:{kind:'Decision',ask:'Inspection scheduling (REQ-021) isn\'t verified in the build. Finish it before submission, or describe it without a screenshot?',why:'Evaluators weight working proof. Describing it is allowed but scores lower on Proof for Technical §3.4.',format:'Pick one',ctl:'opts',opts:['Finish the build','Describe only'],blocking:'score',used:[['tech','§3.4'],['demo','p.5']]},
+ resumes:{kind:'Decision',ask:'Do resumes count toward the 25-page Technical limit?',why:'The page-limit sentence is ambiguous. If they count, Technical is over the limit and the agent moves resumes into Key Personnel.',quote:'"Technical proposals shall not exceed twenty-five (25) pages, excluding required forms and attachments."',src:'RFP.pdf p.12 §4.1',format:'Pick one',ctl:'opts',opts:['Resumes are attachments','They count toward 25'],blocking:'fatal',used:[['tech','page limit'],['staff','all']]},
+ pm:{kind:'Fact',ask:'Who is the proposed project manager?',why:'RFP §4.4 names Project Manager as key personnel. The agent pulls the resume from the staff library once you confirm the person.',format:'Name from the staff library',ctl:'text',ph:'Name',blocking:'fatal',used:[['staff','§1'],['tech','§5.2']]},
+ sign:{kind:'Signature',ask:'Upload the signed Proposal Form (Attachment B) with Addenda 1 and 2 acknowledged.',why:'An unsigned proposal form makes the response nonresponsive. The agent prefilled every field except the signature.',quote:'"The Proposal Form must be signed by an individual authorized to bind the Offeror."',src:'Attachment B p.1',format:'PDF of the signed form',ctl:'file',blocking:'fatal',used:[['form','signature block']]},
+ pricefile:{kind:'File',ask:'Upload the completed cost proposal (Attachment C pricing sheet).',why:'Admin only. It ships as its own sealed file, and the agent checks that no price appears anywhere else.',format:'Excel, formulas intact',ctl:'file',blocking:'fatal',used:[['price','sheet']],admin:true},
+ go:{kind:'Approval',ask:'Go / No-go: submit these 9 documents?',why:'Every document passed its AI gates (Pink, Red, White glove) with no fatal findings. Gold is the one human sign-off. It must come from a program admin who did not author the last version.',format:'Go or No-go, with a note',ctl:'go',blocking:'fatal',used:[]},
+};
+let DOCS=freshDocs(), NEEDS={}, VERS={}, LOG=[], running=0, agState='Idle', currentWork='', goGiven=false;
+const docBy=k=>DOCS.find(d=>d.k===k);
+const score=d=>d.s?Math.round(CHECKS.reduce((a,c)=>a+d.s[c.k]*c.w,0)/100):0;
+const passes=d=>d.s&&score(d)>=95&&CHECKS.every(c=>d.s[c.k]>=85);
+const colr=v=>v>=95?'var(--ok)':v>=85?'var(--accent)':v>=70?'var(--warn)':'var(--bad)';
+const bar=v=>`<div class="bar-s"><span style="width:${v}%;background:${colr(v)}"></span></div>`;
+const openNeeds=()=>Object.values(NEEDS).filter(n=>!n.done);
+const fatalOpen=()=>openNeeds().some(n=>n.blocking==='fatal');
+const stagePill=d=>`<span class="stage ${d.stage==='needs'?'needs':d.stage}">${['building','judging','revising'].includes(d.stage)?'<span class="spin"></span>':''}${STAGE_LBL[d.stage]}</span>`;
+function pct(){const ds=DOCS.filter(d=>!d.admin);return Math.round(ds.reduce((a,d)=>a+score(d),0)/ds.length)}
+
+/* ---------- log ---------- */
+function stamp(){const d=new Date();return d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}
+function log(m,c=''){LOG.push({c,t:stamp(),m});renderAgent()}
+function setState(s){agState=s;renderAgent()}
+
+/* ---------- needs ---------- */
+function raiseNeed(key,docKey){
+  if(!NEEDS[key]) NEEDS[key]={key,...NEEDS_DEF[key],done:false,docs:new Set()};
+  if(docKey) NEEDS[key].docs.add(docKey);
+}
+async function resolveNeed(key,answer){
+  const n=NEEDS[key]; if(!n||n.done) return;
+  n.done=true; n.answer=answer;
+  if(key==='go'){goGiven=true;agState='Idle';DOCS.forEach(d=>{d.stage='go';d.gates.gold=1});log('Go given for submission. The package is ready to export.','ok');render();toast('Go recorded. Package & submit is unlocked.');return}
+  const affected=[...n.docs];
+  log(`${n.kind} supplied: ${esc(n.ask.length>70?n.ask.slice(0,68)+'…':n.ask)} Updating ${affected.length} document${affected.length===1?'':'s'}.`,'h');
+  toast(`Saved. The agent is updating ${affected.length} document${affected.length===1?'':'s'}.`);
+  render();
+  for(const k of affected){const d=docBy(k); if(openNeeds().some(x=>x.docs.has(k))) continue; resume(d);}
+}
+async function resume(d){
+  d.stage='revising'; running++; setState('Revising'); render();
+  await sleep(900);
+  if(d.type==='form'||d.type==='pricing'){d.s.fmt=100;}
+  else{for(const c of CHECKS) d.s[c.k]=Math.max(d.s[c.k],c.k==='eval'?96:c.k==='fmt'&&d.k==='tech'?100:97);}
+  if(d.k==='tech'){d.pages=24;addVer('tech','Agent','Wrote in the answers; moved resumes to Key Personnel; tightened §2 to fit 25 pages');}
+  else if(d.type==='narrative') addVer(d.k,'Agent','Wrote in the supplied facts and re-judged');
+  d.stage='judging'; render(); await sleep(700);
+  passGates(d); running--; if(!running) setState(openNeeds().length?'Waiting on you':'Idle');
+  log(`${d.t} scored ${score(d)}. Pink, Red and White glove passed by the AI judges.`,'ok');
+  maybeGo(); render();
+}
+function passGates(d){d.stage='passed';d.gates.pink=1;d.gates.red=1;d.gates.glove=1}
+function maybeGo(){
+  if(goGiven) return;
+  const all=DOCS.every(d=>d.stage==='passed');
+  if(all&&!NEEDS.go){raiseNeed('go');log('Every document passed its AI gates. Waiting on your Go at Gold.','h');setState('Waiting on you')}
+}
+function addVer(k,by,what){VERS[k]=VERS[k]||[];const d=docBy(k);d.ver++;VERS[k].push({v:d.ver,by,what,sc:score(d),when:stamp()});}
+
+/* ---------- build all ---------- */
+async function buildAll(only){
+  if(running){toast('The agent is already building.');return}
+  const todo=DOCS.filter(d=>d.stage==='not_started'&&(!only||d.k===only));
+  if(!todo.length){toast('Every document is already built.');return}
+  log(only?`Building ${todo[0].t}.`:`Build all: ${todo.length} documents queued in blueprint order.`);
+  running++; setState('Building');
+  for(const d of todo){
+    d.stage='building';
+    for(let i=1;i<=Math.min(d.secs,3);i++){d.progress=i===1?'outlining':`drafting section ${Math.ceil(d.secs*i/3)} of ${d.secs}`;currentWork=`${d.t}: ${d.progress}`;render();await sleep(320);}
+    d.stage='judging'; currentWork=`${d.t}: judging`; setState('Judging'); render(); await sleep(380);
+    const f=FIRST[d.k]; d.s={...f.s}; d.pages=f.pages;
+    if(d.type==='narrative'||d.type==='build') addVer(d.k,'Agent',d.k==='tech'?'First draft from outline, 9 sections, 4 figures':'First draft from outline');
+    if(d.k==='tech'){d.s={cov:96,eval:88,proof:86,clar:92,fmt:80,fact:62};addVer('tech','Agent','Revision: added proof to §3.1–3.3, clarity pass');}
+    if(f.needs.length){f.needs.forEach(n=>raiseNeed(n,d.k));d.stage='needs';log(`${d.t} scored ${score(d)}. It needs ${f.needs.length} thing${f.needs.length>1?'s':''} from you.`,'h');}
+    else{passGates(d);log(`${d.t} scored ${score(d)}. Passed by the AI judges.`,'ok');}
+    setState('Building');
+  }
+  running--; currentWork=''; setState(openNeeds().length?'Waiting on you':'Idle');
+  if(!only) log(`Build all finished. ${DOCS.filter(d=>d.stage==='passed').length} passed, ${DOCS.filter(d=>d.stage==='needs').length} waiting on ${openNeeds().length} answers from you.`,'h');
+  maybeGo(); render();
+}
+function buildOne(k){buildAll(k)}
+
+/* ---------- views ---------- */
+const V={};
+let view='overview', selDoc='tech', etab='paper', selVer=null, gateDoc=null;
+
+function needCard(n,full=true){
+  const docsList=[...n.docs].map(k=>docBy(k)).filter(Boolean);
+  const used=(n.used||[]).filter(u=>!docsList.length||n.docs.has(u[0])||n.key==='resumes').map(u=>`<button class="used" data-testid="need-used" data-jump="${u[0]}">${esc(docBy(u[0])?.t||u[0])} · ${esc(u[1])}</button>`).join('');
+  let ctl='';
+  if(n.done) ctl=`<div class="tag ok" style="align-self:flex-start">✓ ${esc(n.answer)}</div>`;
+  else if(n.ctl==='text') ctl=`<input id="in-${n.key}" placeholder="${esc(n.ph||'')}" aria-label="Answer"><button class="btn sm primary" data-res="${n.key}">Save</button>`;
+  else if(n.ctl==='area') ctl=`<textarea id="in-${n.key}" aria-label="Answer" placeholder="Client · contact · phone · email · value · dates"></textarea><div class="opts"><button class="btn sm primary" data-res="${n.key}">Save</button><button class="btn sm" data-fill="${n.key}">Use sample</button></div>`;
+  else if(n.ctl==='opts') ctl=`<div class="opts">${n.opts.map(o=>`<button class="btn sm" data-opt="${n.key}" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+  else if(n.ctl==='file') ctl=`<div class="drop">Drop the file here, or <button class="btn sm" data-file="${n.key}">Choose file</button></div>`;
+  else if(n.ctl==='go') ctl=`<input id="in-go" placeholder="Note (optional)" aria-label="Note"><div class="opts"><button class="btn sm ok" data-go="1">Go</button><button class="btn sm" data-nogo="1">No-go</button></div>`;
+  return `<div class="need ${n.done?'done':n.blocking==='fatal'?'fatal':''}" id="need-${n.key}" data-testid="need-card" data-key="${n.key}" data-kind="${n.kind.toLowerCase()}" data-blocking="${n.blocking}" data-done="${n.done}">
+    <div style="min-width:0">
+      <div class="hd"><span class="tag ${n.done?'ok':n.blocking==='fatal'?'bad':'warn'}">${n.kind}</span>${n.blocking==='fatal'?'<span class="tag bad">blocks export</span>':'<span class="tag warn">holds a score under 95</span>'}${n.admin?'<span class="tag gold">admin only</span>':''}</div>
+      <div class="ask">${esc(n.ask)}</div>
+      <div class="why">${esc(n.why)}</div>
+      ${full&&n.quote?`<div class="quote" data-testid="need-quote">${esc(n.quote)}</div><div class="src">${esc(n.src)}</div>`:''}
+      <div class="meta">${used}<span class="fmt" data-testid="need-format">Format: ${esc(n.format)}</span></div>
+    </div>
+    <div class="ctl" data-testid="need-control" data-control="${n.done?'done':n.ctl}">${ctl}</div>
+  </div>`;
+}
+
+V.overview=()=>{
+  const p=pct(), ds=DOCS.filter(d=>!d.admin), pass=ds.filter(passes).length, notStarted=DOCS.filter(d=>d.stage==='not_started').length;
+  const r=34,c=2*Math.PI*r, open=openNeeds().sort((a,b)=>(a.blocking==='fatal'?0:1)-(b.blocking==='fatal'?0:1));
+  return `<div class="view">
+  <div class="vh"><div><h2>Where we are <button class="info" data-testid="help" data-help="overview" aria-label="Help">i</button></h2><p>The build is mostly verified. The AI now builds every proposal document, judges it against the solicitation, and asks you only for what it can't know.</p></div></div>
+  ${notStarted?`<div class="hero" data-tour="buildall" data-testid="overview-build-hero"><div><b>${notStarted} document${notStarted>1?'s':''} not started.</b><p class="muted small">The agent outlines each one in the RFP's section order, drafts it section by section from the blueprint, the build evidence and the company library, then judges it. Anything it can't know comes to you as a specific request.</p></div><button class="btn agent" id="buildAll" data-testid="btn-build-all" ${running?'disabled':''}>${running?'<span class="spin"></span> Building':'Build all documents'}</button></div>`:''}
+  ${currentWork?`<div class="now-line" data-testid="overview-now"><span class="spin"></span>Agent now: ${esc(currentWork)}</div>`:''}
+  <div class="pipe" aria-label="Pursuit stages"><div class="d"><b>Snapshot</b>advisory read</div><div class="d"><b>Solicitation</b>58 requirements</div><div class="d"><b>Fit</b>approved</div><div class="d"><b>Decide</b>bid approved</div><div class="d"><b>Build</b>7 / 11 verified</div><div class="h"><b>Proposal</b>you are here</div><div><b>Submit</b>export + record</div><div><b>Outcome</b>win / loss</div></div>
+  <div class="grid2">
+    <div class="panel" data-testid="overview-readiness"><h3>Proposal readiness</h3>
+      <div class="ring"><svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" fill="none" stroke="var(--sunk)" stroke-width="9"/><circle cx="42" cy="42" r="${r}" fill="none" stroke="${colr(p)}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c*p/100} ${c}" transform="rotate(-90 42 42)"/></svg>
+      <div><div class="big num">${p}%</div><div class="muted small">target 95% on every document · ${pass} of ${ds.length} pass</div></div></div>
+      <div class="mini-docs" style="margin-top:14px">${ds.map(d=>`<div class="r" data-testid="overview-doc-${d.k}" data-stage="${d.stage}"><span>${d.t}</span>${bar(score(d))}${stagePill(d)}<b class="num" style="text-align:right">${d.s?score(d):'—'}</b></div>`).join('')}</div>
+    </div>
+    <div class="panel" data-testid="overview-needs"><h3>What you need to do <span class="tag ${open.length?(fatalOpen()?'bad':'warn'):'ok'}">${open.length||'nothing'}</span></h3>
+      ${open.length?`<div class="needs-list">${open.slice(0,3).map(n=>`<div class="mneed ${n.blocking==='fatal'?'fatal':''}" style="padding:10px"><span class="k">${n.kind}${n.blocking==='fatal'?' · blocks export':''}</span><b>${esc(n.ask)}</b><span class="muted small">${esc(n.why)}</span><div style="margin-top:4px"><button class="btn sm primary" data-gonav="needs" data-focus="${n.key}">Answer</button></div></div>`).join('')}</div>${open.length>3?`<button class="btn sm" style="margin-top:10px" data-gonav="needs">See all ${open.length}</button>`:''}`
+      :`<p class="muted" style="margin:0">${notStarted?'Nothing yet. Start the build and the agent will tell you exactly what it needs.':running?'Nothing right now. The agent is working.':'Nothing. Every document has what it needs.'}</p>`}
+    </div>
+  </div>
+  <div class="panel"><h3>How it works</h3><div class="grid3 small">
+    <div><span class="tag agent">AI builds</span><p style="margin:6px 0 0">Outline in the solicitation's order, page budget per section, then a grounded draft per section with figures from the build.</p></div>
+    <div><span class="tag red">AI judges</span><p style="margin:6px 0 0">Independent evaluators score six checks against Section M. Every finding is either fixed by the agent or turned into one exact request for you.</p></div>
+    <div><span class="tag warn">You supply</span><p style="margin:6px 0 0">Facts, decisions, files and signatures, then one Go at Gold. Answer once and every document that needed it updates on its own.</p></div>
+  </div></div>
+  </div>`;
+};
+
+V.needs=()=>{
+  const all=Object.values(NEEDS), open=all.filter(n=>!n.done), fat=open.filter(n=>n.blocking==='fatal'), sc=open.filter(n=>n.blocking!=='fatal'), done=all.filter(n=>n.done);
+  return `<div class="view">
+  <div class="vh"><div><h2>Needs you <button class="info" data-testid="help" data-help="needs" aria-label="Help">i</button></h2><p>Every item here came out of a scan: the blueprint, a judge pass, or the package check. Each one says exactly what's needed, why, where it's used and in what format. Answer it here and the agent continues on its own.</p></div></div>
+  ${!all.length?`<div class="panel"><p class="muted" style="margin:0">${DOCS.some(d=>d.stage==='not_started')?'Nothing yet. Run <b>Build all documents</b> and the scans will list exactly what they need from you.':'Nothing needed.'}</p>${DOCS.some(d=>d.stage==='not_started')?'<button class="btn agent" style="margin-top:10px" id="buildAll2" data-testid="btn-build-all">Build all documents</button>':''}</div>`:''}
+  ${fat.length?`<div class="grp-h"><span class="tag bad">${fat.length}</span>Blocking export</div><div class="needs-list" data-testid="needs-group-fatal">${fat.map(n=>needCard(n)).join('')}</div>`:''}
+  ${sc.length?`<div class="grp-h"><span class="tag warn">${sc.length}</span>Holding a score under 95</div><div class="needs-list" data-testid="needs-group-score">${sc.map(n=>needCard(n)).join('')}</div>`:''}
+  ${all.length&&!open.length?`<div class="panel"><p style="margin:0" class="muted">Nothing open. ${goGiven?'You gave the Go. Export the package from Package & submit.':'The agent has everything it needs.'}</p></div>`:''}
+  ${done.length?`<div class="grp-h"><span class="tag ok">${done.length}</span>Answered</div><div class="needs-list" data-testid="needs-group-answered">${done.map(n=>needCard(n,false)).join('')}</div>`:''}
+  </div>`;
+};
+
+V.blueprint=()=>`<div class="view">
+  <div class="vh"><div><h2>Blueprint <button class="info" data-testid="help" data-help="blueprint" aria-label="Help">i</button></h2><p>Built from the stored solicitation ZIP. Every rule quotes its source, and anything the scan can't settle becomes a request in Needs you.</p></div><div class="act"><button class="btn agent" id="reanalyze" data-testid="bp-reanalyze">Re-analyze ZIP</button></div></div>
+  <div class="panel"><h3>Solicitation package <span class="tag ok">stored</span><span class="tag">Jurisdiction: Utah</span></h3>
+    <div class="log" id="zipLog" data-testid="bp-log"><div><span class="ok">✓</span> RFP_Saratoga_Springs_Asset_Permitting.pdf · 38 pages</div><div><span class="ok">✓</span> Attachment A — Functional Requirements.xlsx</div><div><span class="ok">✓</span> Attachment B — Proposal Form.pdf</div><div><span class="ok">✓</span> Attachment C — Cost Proposal.xlsx</div><div><span class="ok">✓</span> Addendum 1.pdf · Addendum 2 — Q&amp;A.pdf</div><div class="ok">58 requirements · 4 scoring factors · 6 submission rules · 9 documents · 1 rule needs a decision</div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><h3>How it's scored <span class="tag">Section M</span></h3>
+      <div class="weights" data-testid="bp-weights"><div style="flex:40;background:var(--accent)">Technical 40</div><div style="flex:20;background:var(--agent)">Qualifications 20</div><div style="flex:15;background:var(--pink)">Plan 15</div><div style="flex:25;background:var(--gold)">Cost 25</div></div>
+      <div class="quote">"Proposals will be evaluated as follows: Technical Approach (40), Qualifications and References (20), Implementation Plan (15), Cost (25)."</div><div class="src">RFP.pdf p.17 §6</div>
+    </div>
+    <div class="panel" data-testid="bp-rules"><h3>Submission rules <span class="tag">Section L</span></h3><ul class="bp-list">
+      <li><div class="bp-k">Technical: 25 pages <span><span class="tag bad">fatal</span> <span class="tag warn">needs a decision</span></span></div><div class="quote">"…shall not exceed twenty-five (25) pages, excluding required forms and attachments."</div><div class="src">RFP.pdf p.12 §4.1</div></li>
+      <li><div class="bp-k">Single PDF per section, via the city's bid portal</div><div class="src">RFP.pdf p.11 §3.2</div></li>
+      <li><div class="bp-k">Cost proposal in a separate file <span class="tag gold">admin only</span></div><div class="quote">"Cost proposals shall be submitted separately from the technical response."</div><div class="src">RFP.pdf p.13 §4.6</div></li>
+      <li><div class="bp-k">Signed Proposal Form + addenda acknowledged <span class="tag bad">fatal</span></div><div class="src">Attachment B p.1</div></li>
+    </ul></div>
+  </div>
+  <div class="panel" data-testid="bp-state-forms"><h3>State forms rules</h3><p class="muted small" style="margin:0 0 8px">No state forms rules are loaded for Utah. Only the forms the solicitation names are listed. (Texas rules apply to Texas buyers only.)</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag glove">Attachment B — Proposal Form</span><span class="tag gold">Attachment C — Cost Proposal</span><span class="tag">Certificate of insurance — at award</span></div></div>
+</div>`;
+
+V.documents=()=>`<div class="view">
+  <div class="vh"><div><h2>Document set <button class="info" data-testid="help" data-help="documents" aria-label="Help">i</button></h2><p>Everything this contract must submit. The agent builds each one; the Needs column shows what it's waiting on from you.</p></div><div class="act"><button class="btn" id="lib" data-testid="docs-library">Add from library</button>${DOCS.some(d=>d.stage==='not_started')?`<button class="btn agent" id="buildAll3" data-testid="btn-build-all" ${running?'disabled':''}>Build all documents</button>`:''}</div></div>
+  <div class="tbl-wrap"><table class="sticky1" data-testid="docs-table">
+    <thead><tr><th>Document</th><th>Type</th><th>Stage</th><th>Needs</th><th class="num">Pages</th><th class="num">Reqs</th><th>Ver</th><th style="width:140px">Score</th></tr></thead>
+    <tbody>${DOCS.map(d=>{const nn=openNeeds().filter(n=>n.docs.has(d.k));return `<tr class="click" data-doc="${d.k}" data-testid="docs-row" data-key="${d.k}" data-stage="${d.stage}"><td><b>${d.t}</b><div class="small muted mono">${d.file}</div>${d.admin?'<div class="small muted">Hidden from interns</div>':''}</td><td><span class="tag ${TYPES[d.type][1]}">${TYPES[d.type][0]}</span></td><td>${d.stage==='not_started'?`<button class="btn sm agent" data-testid="docs-build-it" data-build="${d.k}" ${running?'disabled':''}>Build it</button>`:stagePill(d)}</td><td>${nn.length?`<button class="tag ${nn.some(n=>n.blocking==='fatal')?'bad':'warn'}" style="border:0" data-testid="docs-needs" data-gonav="needs">${nn.length} from you</button>`:'<span class="muted small">—</span>'}</td><td class="num">${d.limit?`<span style="color:${d.pages>d.limit?'var(--bad)':'inherit'}">${d.pages||0}/${d.limit}</span>`:(d.pages||'—')}</td><td class="num">${d.reqs}</td><td class="mono">v${d.ver}</td><td><div class="gcell">${bar(score(d))}<b class="num">${d.s?score(d):'—'}</b></div></td></tr>`}).join('')}</tbody>
+  </table></div>
+</div>`;
+
+const SHOTS=[['STORY-REQ-012','Asset register dashboard','REQ-012','tiles','Technical §3.1'],['STORY-REQ-014','Condition scoring & work orders','REQ-014, REQ-015','table','Technical §3.2'],['STORY-REQ-018','Online permit intake','REQ-018, REQ-019','form','Technical §3.3'],['STORY-REQ-020','Plan review routing','REQ-020','table','Exhibit p.4'],['STORY-REQ-025','GIS map of assets and permits','REQ-025','tiles','Technical §3.5'],['STORY-REQ-030','Public permit status lookup','REQ-030','form','Exhibit p.3'],['STORY-REQ-033','Audit trail','REQ-033','table','Not used yet'],['STORY-REQ-021','Inspection scheduling','REQ-021',null,'—']];
+function shotImg(kind){if(!kind)return '<div class="img miss">Not verified yet. No capture.</div>';if(kind==='tiles')return '<div class="img"><div class="tb"></div><div class="tiles"><i></i><i></i><i></i></div><div class="blk">chart</div></div>';if(kind==='form')return '<div class="img" style="align-items:center;justify-content:center"><div class="blk" style="flex:none;width:60%;height:70%">form</div></div>';return '<div class="img"><div class="tb"></div>'+'<div class="ln"></div>'.repeat(6)+'</div>'}
+V.evidence=()=>`<div class="view">
+  <div class="vh"><div><h2>Build evidence <button class="info" data-testid="help" data-help="evidence" aria-label="Help">i</button></h2><p>Each verified story is captured from the demo and filed against its requirements. The agent places captures as numbered figures. An unverified story becomes a decision for you.</p></div><div class="act"><button class="btn" id="recap" data-testid="ev-recapture">Re-capture all</button></div></div>
+  <div class="grid3">
+    <div class="panel"><div class="eyebrow">Build completion</div><div class="big num">7 / 11</div><div class="small muted">stories verified from commits</div>${bar(64)}</div>
+    <div class="panel"><div class="eyebrow">Demo URL</div><div class="urlbox"><input id="demoUrl" data-testid="ev-demo-url" value="saratoga-pilot.demo.colaberry.ai" aria-label="Demo URL"><button class="btn sm" id="saveUrl">Save</button></div><div class="small muted" style="margin-top:4px">Sample data only, no real PII</div></div>
+    <div class="panel"><div class="eyebrow">Captures in documents</div><div class="big num">6 of 7</div><div class="small muted">counted from real figure references</div></div>
+  </div>
+  <div class="gallery">${SHOTS.map(s=>`<div class="shot" data-testid="ev-capture" data-story="${s[0]}" data-verified="${!!s[3]}">${shotImg(s[3])}<div class="cap"><div class="row"><span class="mono" style="color:var(--accent)">${s[0]}</span>${s[3]?'<span class="tag ok">Verified</span>':'<span class="tag warn">Story open</span>'}</div><b>${s[1]}</b><span class="small muted">Proves ${s[2]}</span><div class="foot"><span class="small">${s[4]}</span>${s[3]?`<select class="btn sm" aria-label="Insert into" data-testid="ev-insert" data-ins="${s[0]}"><option value="">Insert into…</option><option>Technical Proposal §3</option><option>Pilot Exhibit</option></select>`:`<button class="btn sm warn" data-testid="ev-decide" data-gonav="needs" data-focus="inspect">Decide</button>`}</div></div></div>`).join('')}</div>
+</div>`;
+
+const TECH_SECS0=[
+ {k:'3.1',h:'3.1 Asset Inventory and Condition Tracking',reqs:'REQ-010 · REQ-011 · REQ-012',factor:'Technical Approach (40)',theme:'Saratoga Springs gets one register for every pipe, road segment, park and facility, with condition scores that drive the work plan instead of a spreadsheet.',body:'Every asset carries its location, install date, condition score and maintenance history. Crews update condition from the field, and the register recalculates priorities nightly.',fig:true,cap:'Figure 2. Asset register dashboard in the Colaberry pilot, captured from the verified build (STORY-REQ-012, commit 7c0e5d1). Sample data.'},
+ {k:'3.3',h:'3.3 Online Permit Intake and Review',reqs:'REQ-018 · REQ-019 · REQ-020',factor:'Technical Approach (40)',theme:'Applicants file, pay and track permits online, and staff review them in one queue, so nothing waits in an inbox.',body:'Applications are validated at intake, routed to the right reviewers, and every comment and decision is time-stamped for the record.',note:{c:'agentfix',t:'Agent will fix: add the review-routing figure (STORY-REQ-020) to back this claim.'}},
+ {k:'3.4',h:'3.4 Field Inspections',reqs:'REQ-021 · REQ-022',factor:'Technical Approach (40)',theme:'Inspectors schedule, perform and close inspections from a tablet, and results post to the permit automatically.',body:'Inspection requests are created from approved permits and assigned by area and workload.',need:'inspect'},
+ {k:'1.1',h:'1.1 About Colaberry',reqs:'REQ-002',factor:'Qualifications (20)',theme:'',body:'Colaberry has delivered data and AI software for',need:'years',after:' years, including the asset and permitting work described in Section 4.'},
+];
+const TECH_SECS=[TECH_SECS0[3],...TECH_SECS0.slice(0,3)];
+function paper(){
+  const d=docBy(selDoc);
+  if(!d.ver) return `<div class="paper"><div class="empty-paper"><b>${d.t}</b> hasn't been built yet.<p>The agent outlines it in the RFP's order, drafts each section, and judges it. You'll only be asked for what it can't know.</p><button class="btn agent" data-build="${d.k}" ${running?'disabled':''}>Build it</button></div></div>`;
+  if(selDoc!=='tech') return `<div class="paper"><div class="run"><span>Colaberry · Response to Saratoga Springs RFP</span><span>${d.t} · v${d.ver}</span></div><h3>${d.t}</h3><p class="muted" style="font-family:var(--sans);font-size:13px">The sample is set up on the Technical Proposal. Other documents open the same way in the full build.</p><button class="btn sm" data-pick="tech">Open Technical Proposal</button></div>`;
+  const yrs=NEEDS.years?.done?NEEDS.years.answer:null, insp=NEEDS.inspect?.done?NEEDS.inspect.answer:null;
+  return `<div class="paper" data-testid="ed-paper">
+    <div class="run" data-testid="ed-running-header"><span>Colaberry · Response to Saratoga Springs Asset Management &amp; Permitting RFP</span><span>Technical Proposal · v${d.ver} · ${d.pages}/${d.limit} p</span></div>
+    ${TECH_SECS.map(s=>`<div class="sec" tabindex="0" data-testid="ed-section" data-section="${s.k}"><div class="tools"><button data-testid="ed-sec-edit" data-secedit="${s.k}">Edit section</button><button data-testid="ed-sec-regen" data-regen="${s.k}">Regenerate</button><button data-testid="ed-sec-figure" data-figin="${s.k}">Insert figure</button></div>
+      <h3>${s.h}</h3><div class="reqref" data-testid="ed-reqref">Responds to RFP §4.2 · ${s.reqs} · Evaluation factor: ${s.factor}</div>
+      ${s.theme?`<p class="theme">${s.theme}</p>`:''}
+      ${s.need==='years'?`<p>${s.body} ${yrs?`<span class="needchip done" data-testid="ed-needchip" data-done="true">${esc(yrs)}</span>`:`<button class="needchip" data-testid="ed-needchip" data-done="false" data-gonav="needs" data-focus="years">Needs: years delivering data/AI projects</button>`}${s.after}</p>`:`<h4>How our solution does it</h4><p>${s.body}</p>`}
+      ${s.need==='inspect'?(insp?`<p>${insp==='Describe only'?'Our pilot does not yet include inspection scheduling; it is delivered in Release 2 and shown in the Implementation Plan.':'<ins>The pilot now schedules and closes inspections; see Figure 5.</ins>'}</p>`:`<div class="margin human" data-testid="ed-margin-human">Needs you: inspection scheduling isn't verified in the build. <button class="needchip" data-gonav="needs" data-focus="inspect">Decide</button></div>`):''}
+      ${s.fig?`<figure data-testid="ed-figure"><div class="fig"><i class="w"></i><i></i><i></i><i></i><i></i></div><figcaption>${s.cap}</figcaption></figure>`:''}
+      ${s.note&&!passes(d)?`<div class="margin ${s.note.c}" data-testid="ed-margin-agent">${s.note.t}</div>`:''}
+    </div>`).join('')}
+  </div>`;
+}
+function outline(){
+  const d=docBy(selDoc);
+  if(!d.ver) return `<div class="outline"><p class="muted" style="margin:0">The outline appears when the agent starts building this document.</p></div>`;
+  const rows=selDoc==='tech'?[['1','Company overview','REQ-001 · REQ-002',1.5,1.5],['2','Understanding of the City’s needs','REQ-003 · REQ-004',2,2],['3.1','Asset inventory & condition','REQ-010–012',3,3],['3.2','Work orders & maintenance','REQ-013–016',3,3],['3.3','Permit intake & review','REQ-018–020',3.5,3.5],['3.4','Field inspections','REQ-021–022',2,2],['3.5','GIS & public portal','REQ-025–030',3,3],['4','Security, hosting & integrations','REQ-031–040',4,3.5],['5','Support & training','REQ-041–044',2.5,2.5]]:[['1','Overview','',1,1]];
+  return `<div class="outline"><div class="small muted">Built by the agent in the solicitation's section order. Page budget = page limit × Section M weight. Drag to reorder; a change saves as a new version.</div>${rows.map(r=>`<div class="ol" data-testid="ed-outline-row"><span class="grip" aria-hidden="true">⋮⋮</span><div><b>${r[0]} ${r[1]}</b><div class="reqs">${r[2]?`<span class="tag acc">${r[2]}</span>`:''}<span class="tag agent">plan suggested</span></div></div><div class="bud">${bar(Math.min(100,r[4]/r[3]*100))}<span class="muted">${r[4]} of ${r[3]} p</span></div></div>`).join('')}</div>`;
+}
+function pdfPrev(){const d=docBy(selDoc);if(!d.ver)return '<div class="pdfprev"><p class="muted">No version to render yet.</p></div>';return `<div class="pdfprev"><div class="small muted">Rendered with the agency rules: Letter size, 11 pt minimum, page numbers. ${d.pages} pages${d.limit?` of ${d.limit}`:''}.</div>${[14,15].map(n=>`<div class="pdfpage" data-testid="ed-pdf-page"><i class="h"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i><div style="flex:1;border:1px solid var(--line);border-radius:3px;margin:6px 0"></div><i></i><i style="width:70%"></i><div class="pn">Colaberry · Technical Proposal · Page ${n} of ${d.pages}</div></div>`).join('')}</div>`}
+V.editor=()=>{
+  const d=docBy(selDoc), vers=(VERS[selDoc]||[]).slice().reverse();
+  return `<div class="view">
+  <div class="vh"><div><h2>Draft &amp; versions <button class="info" data-testid="help" data-help="editor" aria-label="Help">i</button></h2><p>Watch the agent build each document section by section. Hover a section to edit it, regenerate it, or insert a figure. Every change is a new version and is re-judged.</p></div><div class="act">${d.ver&&!['building','judging','revising'].includes(d.stage)&&!passes(d)?`<button class="btn agent" data-testid="ed-run" data-runone="${d.k}">Re-judge &amp; revise</button>`:''}</div></div>
+  <div class="doc-pick" data-testid="ed-doc-pick">${DOCS.filter(x=>['narrative','build'].includes(x.type)).map(x=>`<button class="btn sm" aria-pressed="${x.k===selDoc}" data-pick="${x.k}">${x.t} ${x.stage!=='not_started'?stagePill(x):''}</button>`).join('')}</div>
+  <div class="ed">
+    <div><div class="etabs" role="tablist"><button role="tab" aria-selected="${etab==='paper'}" data-etab="paper" data-testid="ed-tab-paper">Paper</button><button role="tab" aria-selected="${etab==='outline'}" data-etab="outline" data-testid="ed-tab-outline">Outline</button><button role="tab" aria-selected="${etab==='pdf'}" data-etab="pdf" data-testid="ed-tab-pdf">Preview PDF</button></div>
+      ${etab==='outline'?outline():etab==='pdf'?pdfPrev():`<div class="paper-wrap">${paper()}</div>`}</div>
+    <div class="side">
+      <div class="panel" data-testid="ed-checks"><h3>Checks${d.ver?` · v${d.ver}`:''} ${d.stage!=='not_started'?stagePill(d):''}</h3>${d.s?`<div class="checks">${CHECKS.map(c=>`<div class="ck"><span>${c.n}</span><b class="sc num" style="color:${colr(d.s[c.k])}">${d.s[c.k]}</b>${bar(d.s[c.k])}</div>`).join('')}<div class="pass-line"><span class="small muted">Pass at 95, no check under 85</span><b class="num big" style="font-size:22px;color:${colr(score(d))}">${score(d)}</b></div></div>`:'<p class="muted small" style="margin:0">Scores appear after the first judge pass.</p>'}</div>
+      ${selDoc==='tech'&&d.ver?`<div class="panel" data-testid="ed-plan" data-suggested="true"><h3>Section plan · §3.3 <span class="tag agent">suggested</span></h3><dl class="plan"><dt>Hot button</dt><dd>Permits stuck in email</dd><dt>Feature</dt><dd>One review queue</dd><dt>Benefit</dt><dd>Faster, traceable decisions</dd><dt>Proof</dt><dd>Figure 3, STORY-REQ-018</dd><dt>Discriminator</dt><dd>Working pilot today</dd></dl></div>`:''}
+      <div class="panel" data-testid="ed-versions"><h3>Version history</h3><ul class="ver">${vers.length?vers.map(x=>`<li><button aria-pressed="${x.v===d.ver}"><span class="vt">v${x.v} <span class="tag ${x.by==='Agent'?'agent':'acc'}">${x.by}</span><span class="num" style="margin-left:auto;color:${colr(x.sc)}">${x.sc}</span></span><span class="vd">${x.when} · ${esc(x.what)}</span></button></li>`).join(''):'<li class="muted small">No versions yet.</li>'}</ul></div>
+    </div>
+  </div></div>`;
+};
+
+V.gates=()=>{
+  const ds=DOCS.filter(d=>!d.admin);
+  const sel=gateDoc?docBy(gateDoc):null;
+  const gc=(d,g,label)=>`<span class="gchip ${d.gates[g]?'done':'wait'}">${label}${d.gates[g]?' ✓':''}</span>`;
+  return `<div class="view">
+  <div class="vh"><div><h2>Review gates <button class="info" data-testid="help" data-help="gates" aria-label="Help">i</button></h2><p>AI judges, separate from the writer, run Pink, Red and White glove and record their evidence. You give the one human decision: the Go at Gold.</p></div></div>
+  ${NEEDS.go&&!NEEDS.go.done?`<div class="gopanel" data-testid="gates-gold-panel"><div><b>Gold: ready for your Go</b><p class="small">All ${DOCS.length} documents passed their AI gates with no fatal findings.</p></div><div class="btns"><button class="btn ok" data-testid="gates-go" data-go="1">Go</button><button class="btn" data-testid="gates-nogo" data-nogo="1">No-go</button></div></div>`:''}
+  ${goGiven?`<div class="gopanel" style="border-color:var(--ok);background:var(--ok-soft)"><b>Go given.</b><span class="small">Package &amp; submit is unlocked.</span></div>`:''}
+  <div class="teams">
+    <div class="team" data-testid="gates-team-pink" style="border-top:3px solid var(--pink)"><h3>Pink <span class="tag agent">AI</span></h3><ul><li>Outline follows the RFP order</li><li>Every requirement answered</li></ul></div>
+    <div class="team" data-testid="gates-team-red" style="border-top:3px solid var(--red)"><h3>Red <span class="tag agent">AI ×3</span></h3><ul><li>Scored against Section M</li><li>Proof, facts, clarity</li><li>2-level disagreement → 4th judge</li></ul></div>
+    <div class="team" data-testid="gates-team-glove" style="border-top:3px solid var(--glove)"><h3>White glove <span class="tag agent">AI</span></h3><ul><li>Pages, fonts, file names</li><li>Signatures, addenda, sealed price</li></ul></div>
+    <div class="team" data-testid="gates-team-gold" style="border-top:3px solid var(--gold)"><h3>Gold <span class="tag gold">You</span></h3><ul><li>One Go / No-go for the package</li><li>Not the last editor</li></ul></div>
+  </div>
+  <div class="tbl-wrap"><table class="sticky1" data-testid="gates-matrix">
+    <thead><tr><th style="min-width:170px">Document</th>${CHECKS.map(c=>`<th>${c.n.split(' ')[0].replace('Requirement','Coverage')}<div style="font-weight:500;text-transform:none;letter-spacing:0">${c.w}%</div></th>`).join('')}<th>Score</th><th>Gates</th></tr></thead>
+    <tbody>${ds.map(d=>`<tr class="click" data-gdoc="${d.k}" data-testid="gates-row" data-key="${d.k}"><td><b>${d.t}</b></td>${CHECKS.map(c=>`<td>${d.s?`<span class="sc-chip" style="color:${colr(d.s[c.k])};background:color-mix(in srgb, ${colr(d.s[c.k])} 14%, transparent)">${d.s[c.k]}</span>`:'<span class="muted">—</span>'}</td>`).join('')}<td><b class="num" style="color:${colr(score(d))};font-size:15px">${d.s?score(d):'—'}</b></td><td><div class="gchips" data-testid="gates-row-chips">${gc(d,'pink','P')}${gc(d,'red','R')}${gc(d,'glove','WG')}<span class="gchip ${d.gates.gold?'done':'go'}">Gold${d.gates.gold?' ✓':''}</span></div></td></tr>`).join('')}</tbody>
+  </table></div>
+  ${sel?`<div class="panel" data-testid="gates-detail"><h3>${sel.t} <span class="small muted" style="font-weight:400">latest judge pass</span><button class="btn sm ghost" style="margin-left:auto" id="closeG">Close</button></h3><div class="fsplit">
+    <div><span class="tag">Agent will fix</span><ul>${sel.stage==='passed'||sel.stage==='go'?'<li class="muted">Nothing. Passed.</li>':'<li>Add the routing figure to §3.3</li><li>Tighten §2 by 1 page</li><li>Theme statement missing in §5</li>'}</ul></div>
+    <div><span class="tag warn">Needs you</span><ul>${openNeeds().filter(n=>n.docs.has(sel.k)).map(n=>`<li><button class="needchip" data-gonav="needs" data-focus="${n.key}">${esc(n.ask)}</button></li>`).join('')||'<li class="muted">Nothing.</li>'}</ul></div>
+  </div><p class="small muted" style="margin:10px 0 0">Judge evidence: 3 evaluator runs (median used), version v${sel.ver}, scores stored with the version.</p></div>`:''}
+  </div>`;
+};
+
+V.package=()=>{
+  const ready=goGiven;
+  return `<div class="view">
+  <div class="vh"><div><h2>Package &amp; submit <button class="info" data-testid="help" data-help="package" aria-label="Help">i</button></h2><p>Assembled from the approved version of each document, named and ordered by the blueprint. Exporting is not submitting: you upload to the city's portal and record the receipt.</p></div><div class="act"><button class="btn primary" id="exportBtn" data-testid="pkg-export" ${ready?'':'disabled'}>Export package</button></div></div>
+  <div class="grid2">
+    <div class="panel" data-testid="pkg-files"><h3>Response files</h3><div class="tree">${DOCS.filter(d=>!d.admin).map(d=>`<div class="f"><span>${d.file}</span><span class="muted">${d.limit?`${d.pages||0}/${d.limit} p`:d.type}</span>${passes(d)?'<span class="tag ok">ready</span>':`<span class="tag ${d.stage==='not_started'?'':'warn'}">${STAGE_LBL[d.stage].toLowerCase()}</span>`}</div>`).join('')}
+      <div class="env" data-testid="pkg-sealed"><div class="eyebrow" style="color:var(--gold)">Sealed · separate upload · admin only</div><div class="f"><span>${docBy('price').file}</span><span class="muted">Attachment C</span>${NEEDS.pricefile?.done?'<span class="tag ok">uploaded</span>':'<span class="tag warn">needs file</span>'}</div></div></div></div>
+    <div class="panel" data-testid="pkg-checklist"><h3>Before export</h3><ul class="bp-list">
+      <li><div class="bp-k">Every document passed its AI gates <span class="tag ${DOCS.every(d=>['passed','go'].includes(d.stage))?'ok':'warn'}">${DOCS.filter(d=>['passed','go'].includes(d.stage)).length} / ${DOCS.length}</span></div></li>
+      <li><div class="bp-k">Nothing open in Needs you <span class="tag ${openNeeds().length?'bad':'ok'}">${openNeeds().length?openNeeds().length+' open':'clear'}</span></div></li>
+      <li><div class="bp-k">Page limits met <span class="tag ${docBy('tech').pages>25?'bad':'ok'}">${docBy('tech').pages>25?'Technical over':'yes'}</span></div></li>
+      <li><div class="bp-k">Price only in the sealed file <span class="tag ok">scan clean</span></div></li>
+      <li><div class="bp-k">Gold Go <span class="tag ${goGiven?'ok':'warn'}">${goGiven?'given':'waiting'}</span></div></li>
+    </ul></div>
+  </div></div>`;
+};
+
+/* ---------- render ---------- */
+function renderAgent(){
+  $('#agState').textContent=agState; $('#agState').dataset.state=agState;
+  $('#agState').className='state tag '+(agState==='Waiting on you'?'warn':agState==='Idle'?'':'agent');
+  const L=LOG.length?LOG:[{c:'',t:'',m:'Ready. Run Build all documents and I will outline, draft and judge every document, then tell you exactly what I need.'}];
+  $('#agLog').innerHTML=L.slice(-14).map(l=>`<div class="ev ${l.c}"><div>${l.t?`<div class="t">${l.t}</div>`:''}${l.m}</div></div>`).join('')+(currentWork?`<div class="ev"><div><div class="t">now</div><span class="spin" style="margin-right:6px"></span>${esc(currentWork)}</div></div>`:'');
+  $('#agLog').scrollTop=1e6;
+  const o=openNeeds().sort((a,b)=>(a.blocking==='fatal'?0:1)-(b.blocking==='fatal'?0:1));
+  $('#agCount').textContent=o.length;
+  $('#agNeeds').innerHTML=o.length?o.slice(0,4).map(n=>`<button class="mneed ${n.blocking==='fatal'?'fatal':''}" data-gonav="needs" data-focus="${n.key}"><span class="k">${n.kind}</span>${esc(n.ask)}</button>`).join('')+(o.length>4?`<button class="btn sm" data-gonav="needs">See all ${o.length}</button>`:''):'<div class="muted small">Nothing needed right now.</div>';
+  wireNav($('#agNeeds'));
+}
+function render(){
+  $('#main').innerHTML=V[view]();
+  document.querySelectorAll('.step').forEach(b=>b.setAttribute('aria-current',b.dataset.v===view?'page':'false'));
+  const p=pct(); $('#topPct').textContent=p+'%'; $('#topBar').style.width=p+'%';
+  const o=openNeeds().length, fat=fatalOpen();
+  const chip=$('#needsChip'); chip.className='chip needs'+(o?(fat?' fatal':''):' clear'); chip.dataset.count=o; chip.dataset.severity=o?(fat?'fatal':'score'):'clear'; $('#agState').dataset.state=agState;
+  $('#needsChipTxt').innerHTML=o?`Needs you <b>${o}</b>`:'Needs you <b>0</b>';
+  const rb=$('#railBadge'); rb.textContent=o; rb.dataset.severity=o?(fat?'fatal':'score'):'clear'; rb.className='badge'+(o?(fat?' fatal':''):' clear');
+  $('#nav-needs').classList.toggle('needsme',o>0);
+  $('#ic-docs').className='ic'+(DOCS.every(d=>d.stage!=='not_started')?' done':'');
+  $('#ic-gates').className='ic'+(goGiven?' done':'');
+  renderAgent(); wire();
+}
+function go(v,focus){view=v;try{history.replaceState(null,'','#'+v)}catch(e){}render();window.scrollTo({top:0});if(focus){const el=document.getElementById('need-'+focus);if(el){el.scrollIntoView({block:'center'});el.style.outline='2px solid var(--accent)';const i=el.querySelector('input,textarea');if(i)i.focus();setTimeout(()=>el.style.outline='',1600)}}}
+document.querySelectorAll('.step').forEach(b=>b.onclick=()=>go(b.dataset.v));
+$('#needsChip').onclick=()=>go('needs');
+function wireNav(root){root.querySelectorAll('[data-gonav]').forEach(b=>b.onclick=e=>{e.stopPropagation();go(b.dataset.gonav,b.dataset.focus)})}
+function wire(){
+  const m=$('#main');
+  wireNav(m);
+  ['#buildAll','#buildAll2','#buildAll3'].forEach(s=>{const b=$(s);if(b)b.onclick=()=>buildAll()});
+  m.querySelectorAll('[data-build]').forEach(b=>b.onclick=e=>{e.stopPropagation();buildOne(b.dataset.build)});
+  m.querySelectorAll('[data-res]').forEach(b=>b.onclick=()=>{const k=b.dataset.res,i=$('#in-'+k);const v=(i&&i.value.trim())||'';if(!v){toast('Type an answer first.');return}resolveNeed(k,NEEDS[k].ctl==='area'?'3 references saved to the library':v)});
+  m.querySelectorAll('[data-fill]').forEach(b=>b.onclick=()=>{$('#in-'+b.dataset.fill).value='City of Lehi — Public Works · J. Doe · (555) 010-0101 · $310k · 2024–25\nTown of Example — Permits · A. Roe · (555) 010-0102 · $180k · 2023\nExample County GIS · K. Poe · (555) 010-0103 · $240k · 2022–23'});
+  m.querySelectorAll('[data-opt]').forEach(b=>b.onclick=()=>resolveNeed(b.dataset.opt,b.dataset.o));
+  m.querySelectorAll('[data-file]').forEach(b=>b.onclick=()=>resolveNeed(b.dataset.file,b.dataset.file==='sign'?'Signed form uploaded':'Pricing file uploaded'));
+  m.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{if(!NEEDS.go){toast('Gold opens when every document passes its AI gates.');return}resolveNeed('go','Go')});
+  m.querySelectorAll('[data-nogo]').forEach(b=>b.onclick=()=>toast('No-go recorded with your note. The agent stops and the package stays locked.'));
+  m.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{const k=b.dataset.jump,d=docBy(k);if(['narrative','build'].includes(d.type)){selDoc=k;etab='paper';go('editor')}else go('documents')});
+  m.querySelectorAll('[data-doc]').forEach(r=>r.onclick=()=>{const d=docBy(r.dataset.doc);if(['narrative','build'].includes(d.type)){selDoc=d.k;etab='paper';go('editor')}else toast(d.t+(d.type==='generated'?': generated from the blueprint, no writing needed.':d.admin?': admin only, sealed file.':': prefilled by the agent; your part is the signature (see Needs you).'))});
+  m.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{selDoc=b.dataset.pick;render()});
+  m.querySelectorAll('[data-etab]').forEach(b=>b.onclick=()=>{etab=b.dataset.etab;render()});
+  m.querySelectorAll('[data-runone]').forEach(b=>b.onclick=()=>resume(docBy(b.dataset.runone)));
+  m.querySelectorAll('[data-secedit]').forEach(b=>b.onclick=()=>toast('Edit section opens inline. Saving makes a new version by you, then the judges re-score it.'));
+  m.querySelectorAll('[data-regen]').forEach(b=>b.onclick=()=>{log(`Regenerating Technical §${b.dataset.regen} from the blueprint and evidence.`);toast('Regenerating this section only.')});
+  m.querySelectorAll('[data-figin]').forEach(b=>b.onclick=()=>toast('Pick a capture from Build evidence to place here as a numbered figure.'));
+  m.querySelectorAll('[data-gdoc]').forEach(r=>r.onclick=()=>{gateDoc=r.dataset.gdoc;render()});
+  const cg=$('#closeG'); if(cg) cg.onclick=()=>{gateDoc=null;render()};
+  m.querySelectorAll('[data-ins]').forEach(s=>s.onchange=()=>{if(s.value){log(`Inserted ${s.dataset.ins} into ${s.value} as a numbered figure.`);toast('Inserted. It is saved with the next version.')}});
+  m.querySelectorAll('[data-help]').forEach(b=>b.onclick=()=>startTour(TOUR.findIndex(t=>t.help===b.dataset.help),true));
+  const ra=$('#reanalyze'); if(ra) ra.onclick=()=>{const box=$('#zipLog');box.innerHTML='';const L=['Opening stored ZIP (6 files)…','Jurisdiction: Utah (quote: "City of Saratoga Springs, Utah"). Texas rules skipped.','Section M: 4 factors, 100 points','Section L: page limit, single PDF per section, separate cost file','1 rule is ambiguous → added to Needs you','Blueprint v3 written. No changes to documents.'];let i=0;setState('Reading ZIP');const t=setInterval(()=>{box.insertAdjacentHTML('beforeend',`<div>${i===L.length-1?'<span class="ok">✓</span> ':'› '}${L[i]}</div>`);i++;if(i>=L.length){clearInterval(t);setState(running?'Building':openNeeds().length?'Waiting on you':'Idle')}},380)};
+  const su=$('#saveUrl'); if(su) su.onclick=()=>toast('Demo URL saved. New captures use it.');
+  const rc=$('#recap'); if(rc) rc.onclick=()=>{log('Re-captured 7 screens from the demo URL.','ok');toast('Re-captured 7 screens.')};
+  const lb=$('#lib'); if(lb) lb.onclick=()=>toast('Library: standard sections, resumes, references, and forms for Utah buyers (none loaded yet).');
+  const ex=$('#exportBtn'); if(ex) ex.onclick=()=>toast('Package exported with manifest. Next: upload to the city portal and record the receipt.');
+}
+$('#askForm').addEventListener('submit',e=>{e.preventDefault();const v=$('#askIn').value.trim();if(!v)return;$('#askIn').value='';log(`You asked: ${esc(v)}`,'h');const o=openNeeds();setTimeout(()=>log(o.length?`${o.length} thing${o.length>1?'s':''} still need you. The first is: ${esc(o[0].ask)}`:DOCS.some(d=>d.stage==='not_started')?'Run Build all documents to start. I will tell you what I need as I go.':'Nothing is waiting on you right now.'),400)});
+
+/* ---------- tour ---------- */
+const TOUR=[
+ {sel:'[data-tour="ready"]',t:'Proposal ready',b:'How close every document is to the 95% bar. It moves as the agent builds and as you answer.',help:'overview',view:'overview'},
+ {sel:'#needsChip',t:'Needs you',b:'The AI writes and judges every document. When it needs a fact, a decision, a file or a signature, it asks here, exactly what and why. Red means it blocks export.',help:'needs',view:'needs'},
+ {sel:'[data-tour="buildall"]',t:'Build all documents',b:'One click. The agent outlines, drafts and judges every document in the blueprint, then lists what it needs from you.',view:'overview'},
+ {sel:'[data-tour="blueprint"]',t:'Blueprint',b:'Built from the solicitation ZIP. Every rule quotes its source. Rules the scan can\'t settle become requests for you.',help:'blueprint',view:'blueprint'},
+ {sel:'[data-tour="documents"]',t:'Document set',b:'Everything this contract must submit, with each document\'s stage and what it is waiting on.',help:'documents',view:'documents'},
+ {sel:'[data-tour="evidence"]',t:'Build evidence',b:'Screens captured from the verified build. They become figures that prove requirements.',help:'evidence',view:'evidence'},
+ {sel:'[data-tour="editor"]',t:'Draft & versions',b:'Watch each document take shape section by section. Amber marks are things only you can supply; click one to answer it.',help:'editor',view:'editor'},
+ {sel:'[data-tour="gates"]',t:'Review gates',b:'AI judges pass Pink, Red and White glove. You give the one Go at Gold.',help:'gates',view:'gates'},
+ {sel:'[data-tour="package"]',t:'Package & submit',b:'After your Go, export the package and upload it to the city\'s portal.',help:'package',view:'package'},
+ {sel:'[data-tour="agent"]',t:'Proposal agent',b:'What the agent is doing right now, and the top things it needs from you.',view:null},
+];
+let tIdx=-1, tSingle=false;
+function startTour(i=0,single=false){tIdx=Math.max(0,i);tSingle=single;showStep()}
+function endTour(){tIdx=-1;$('#tourLayer').innerHTML='';try{localStorage.setItem('gps-tour-v3','done')}catch(e){}}
+function showStep(){
+  const s=TOUR[tIdx]; if(!s){endTour();return}
+  if(s.view&&view!==s.view&&!tSingle){view=s.view;render()}
+  let el=document.querySelector(s.sel); if(el&&s.sel==='[data-tour="buildall"]'&&!el.offsetParent) el=null;
+  if(!el&&s.sel==='[data-tour="buildall"]'){tIdx++;showStep();return}
+  const narrow=innerWidth<760;
+  if(el&&!narrow) el.scrollIntoView({block:'nearest'});
+  const r=el&&!narrow?el.getBoundingClientRect():null;
+  const ring=r?`<div class="tour-ring" data-testid="tour-ring" style="left:${r.left-6}px;top:${r.top-6}px;width:${r.width+12}px;height:${r.height+12}px"></div>`:`<div class="tour-ring" style="left:50%;top:50%;width:0;height:0"></div>`;
+  let cx=16,cy=80;
+  if(r){cx=Math.min(Math.max(16,r.left),innerWidth-356);cy=r.bottom+14;if(cy+200>innerHeight)cy=Math.max(16,r.top-214);if(r.width<260&&r.left<300){cx=r.right+16;cy=Math.max(16,Math.min(r.top,innerHeight-220))}}
+  else{cx=Math.max(16,(innerWidth-340)/2);cy=Math.max(16,innerHeight/2-110)}
+  const n=TOUR.length;
+  $('#tourLayer').innerHTML=`<div class="tour-scrim"></div>${ring}<div class="tour-card" data-testid="tour-card" data-step="${tIdx}" role="dialog" aria-label="Tour" style="left:${cx}px;top:${cy}px"><span class="eyebrow">${tSingle?'Help':`Tour · ${tIdx+1} of ${n}`}</span><h3>${s.t}</h3><p>${s.b}</p><div class="ft">${tSingle?'':`<div class="dots">${TOUR.map((_,i)=>`<i class="${i===tIdx?'on':''}"></i>`).join('')}</div>`}${tSingle?'<span style="margin-right:auto"></span>':`<button class="btn sm ghost" id="tSkip" data-testid="tour-skip">Skip</button>`}${!tSingle&&tIdx>0?'<button class="btn sm" id="tBack">Back</button>':''}<button class="btn sm agent" id="tNext" data-testid="tour-next">${tSingle?'Got it':tIdx===n-1?'Finish':'Next'}</button></div></div>`;
+  $('#tNext').focus();
+  $('#tNext').onclick=()=>{if(tSingle){endTour();return}tIdx++;tIdx>=n?endTour():showStep()};
+  const bk=$('#tBack'); if(bk) bk.onclick=()=>{tIdx--;showStep()};
+  const sk=$('#tSkip'); if(sk) sk.onclick=endTour;
+  $('.tour-scrim').onclick=endTour;
+}
+document.addEventListener('keydown',e=>{if(tIdx<0)return;if(e.key==='Escape')endTour();if(e.key==='ArrowRight'&&!tSingle){tIdx++;tIdx>=TOUR.length?endTour():showStep()}if(e.key==='ArrowLeft'&&tIdx>0&&!tSingle){tIdx--;showStep()}});
+addEventListener('resize',()=>{if(tIdx>=0)showStep()});
+$('#tourBtn').onclick=()=>startTour(0);
+
+/* ---------- demo controls ---------- */
+function reset(){DOCS=freshDocs();NEEDS={};VERS={};LOG=[];running=0;agState='Idle';currentWork='';goGiven=false;gateDoc=null;selDoc='tech';etab='paper';go('overview')}
+$('#resetDemo').onclick=reset;
+$('#skipDemo').onclick=()=>{if(running)return;reset();DOCS.forEach(d=>{const f=FIRST[d.k];d.s={...f.s};d.pages=f.pages;if(['narrative','build'].includes(d.type))addVer(d.k,'Agent','First draft from outline');if(d.k==='tech'){d.s={cov:96,eval:88,proof:86,clar:92,fmt:80,fact:62};addVer('tech','Agent','Revision: added proof to §3.1–3.3, clarity pass')}if(f.needs.length){f.needs.forEach(n=>raiseNeed(n,d.k));d.stage='needs'}else passGates(d)});LOG=[{c:'h',t:stamp(),m:`Build all finished. 3 passed, 6 waiting on ${openNeeds().length} answers from you.`}];agState='Waiting on you';go('needs')};
+
+const h=(location.hash||'').slice(1); if(V[h]) view=h;
+render();
+let seen=null; try{seen=localStorage.getItem('gps-tour-v3')}catch(e){}
+if(!seen){const t=document.createElement('div');t.className='toast';t.setAttribute('data-testid','tour-prompt');t.innerHTML='New here? <button class="btn sm agent" id="tStart" style="margin-left:8px">Take the 2-minute tour</button> <button class="btn sm ghost" id="tNo" style="color:inherit">Not now</button>';document.body.appendChild(t);t.querySelector('#tStart').onclick=()=>{t.remove();startTour(0)};t.querySelector('#tNo').onclick=()=>{t.remove();try{localStorage.setItem('gps-tour-v3','later')}catch(e){}}}
+let tt; function toast(m){const el=$('#toast');el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,3600)}
+</script>
+
+</body></html>

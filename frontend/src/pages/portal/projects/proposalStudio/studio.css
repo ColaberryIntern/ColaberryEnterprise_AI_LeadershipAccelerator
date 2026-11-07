@@ -238,4 +238,86 @@
 .gps-spin{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:gps-sp .7s linear infinite}
 @keyframes gps-sp{to{transform:rotate(360deg)}}
 .gps-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--gps-fg);color:var(--gps-bg);padding:10px 16px;border-radius:8px;font-size:13px;z-index:1200;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+/* guided tour */
+.gps-tour-start{margin-top:8px;border-color:var(--gps-accent);color:var(--gps-accent)}
+.gps-tour{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:1150;width:min(560px,calc(100vw - 32px))}
+.gps-tour-card{background:var(--gps-surface);border:1px solid var(--gps-line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.28);padding:16px 18px;animation:gps-tour-in .18s ease-out}
+.gps-tour-card h3{margin:6px 0 4px;font-size:17px}
+.gps-tour-card>p{margin:0 0 6px;font-size:13.5px;line-height:1.5;color:var(--gps-fg)}
+.gps-tour-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.gps-tour-x{background:none;border:0;color:var(--gps-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 2px}
+.gps-tour-x:hover{color:var(--gps-fg)}
+.gps-tour-do{font-size:12.5px!important;color:var(--gps-muted)!important}
+.gps-tour-do b{color:var(--gps-accent)}
+.gps-tour-dots{display:flex;gap:5px;margin:10px 0}
+.gps-tour-dots span{width:6px;height:6px;border-radius:50%;background:var(--gps-line)}
+.gps-tour-dots span.on{background:var(--gps-accent)}
+.gps-tour-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+@keyframes gps-tour-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (prefers-reduced-motion:reduce){.gps *{animation:none!important;transition:none!important}}
+
+/* v3 (T15) Needs-you inbox + shared inline field */
+.gps-input{border:1px solid var(--gps-line);background:var(--gps-surface);color:var(--gps-fg);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;min-width:0;flex:1 1 auto}
+.gps-input:focus{outline:none;border-color:var(--gps-accent)}
+.gps-needs{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.gps-need-card{border:1px solid var(--gps-line);border-radius:8px;padding:12px 14px;background:var(--gps-surface)}
+.gps-need-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.gps-need-head b{font-size:14px}
+.gps-need-control{display:flex;flex-direction:column;gap:6px}
+.gps-inline-field{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gps-choice-row{display:flex;gap:6px;flex-wrap:wrap}
+
+/* v3 (T22) contract-bar Needs chip + rail badge */
+.gps-chip-btn{cursor:pointer}
+.gps-chip-btn.gps-chip-warn{border-color:var(--gps-warn);color:var(--gps-warn)}
+.gps-chip-btn.gps-chip-bad{border-color:var(--gps-bad);color:var(--gps-bad)}
+.gps-rail-badge{margin-left:auto;font-weight:700;border-radius:999px;padding:0 7px;font-size:11px;color:#fff}
+.gps-rail-badge.warn{background:var(--gps-warn)}
+.gps-rail-badge.bad{background:var(--gps-bad)}
+
+/* v3 (T19) editor tabs + outline tab */
+.gps-tabs{display:inline-flex;gap:4px;margin-right:8px}
+.gps-outline{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.gps-outline-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px dashed var(--gps-line)}
+.gps-outline-row > div:first-child{flex:1 1 auto;min-width:0}
+
+/* v4 (T2) global shell: clear/green chip + badge, strong rail label */
+.gps-chip-btn.gps-chip-ok{border-color:var(--gps-ok);color:var(--gps-ok)}
+.gps-rail-badge.ok{background:var(--gps-ok)}
+.gps-step.gps-step-strong{font-weight:700}
+
+/* v4 (T2) tour: spotlight ring + non-blocking first-visit prompt */
+.gps-tour-ring{position:fixed;border:2px solid var(--gps-accent);border-radius:10px;box-shadow:0 0 0 9999px rgba(10,16,26,.45);pointer-events:none;z-index:40;transition:all .2s ease;display:none}
+.gps-tour-prompt{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:30;background:var(--gps-surface);border:1px solid var(--gps-line);border-radius:999px;padding:8px 16px;display:flex;gap:10px;align-items:center;box-shadow:0 6px 24px rgba(10,16,26,.18);font-size:13px}
+.gps-tour-prompt-go{font-weight:700;color:var(--gps-accent)}
+@media (max-width:760px){.gps-tour-ring{display:none!important}}
+
+/* v4 (T3) needs: two-column card, file drop, per-view help button */
+.gps-need-2col{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start}
+.gps-need-left{min-width:0}
+.gps-file-drop{display:inline-block;cursor:pointer}
+.gps-help{margin-left:8px;width:18px;height:18px;border-radius:50%;border:1px solid var(--gps-line);background:var(--gps-surface);color:var(--gps-muted);font-size:11px;font-weight:700;font-style:italic;cursor:pointer;vertical-align:middle;line-height:1}
+.gps-help:hover{border-color:var(--gps-accent);color:var(--gps-accent)}
+@media (max-width:640px){.gps-need-2col{grid-template-columns:minmax(0,1fr)}}
+
+/* v4 (T4) overview build hero */
+.gps-build-hero{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:linear-gradient(90deg,var(--gps-agent-soft),transparent);border:1px solid var(--gps-agent-soft);border-left:3px solid var(--gps-agent);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+
+/* v4 (T6) gates: score chip */
+.gps-score-chip{display:inline-block;min-width:30px;text-align:center;padding:2px 8px;border-radius:6px;font-weight:600}
+
+/* v4 (T10) editor: section blocks, requirement reference line, need-chips, PDF preview */
+.gps-ed-section{padding:10px 0 4px;border-top:1px solid var(--gps-line)}
+.gps-ed-section:first-of-type{border-top:0}
+.gps-reqref{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--gps-muted);margin-bottom:6px}
+.gps-needchip{display:inline-block;background:var(--gps-warn-soft,rgba(214,158,46,.16));color:var(--gps-warn);border:1px dashed var(--gps-warn);border-radius:5px;padding:0 6px;font-size:12px;font-weight:600;white-space:nowrap}
+.gps-pdf{display:flex;flex-direction:column;gap:12px;align-items:center}
+.gps-pdf-page{width:100%;max-width:640px;background:#fff;color:#111;border:1px solid var(--gps-line);border-radius:4px;box-shadow:0 2px 12px rgba(10,16,26,.12);padding:40px 46px;aspect-ratio:8.5/11;overflow:auto}
+.gps-pdf-page .gps-run{color:#555}
+
+/* v4 (T11) phone 400px: long unbroken strings in a draft/quote/tree wrap instead of forcing page-level scroll */
+@media (max-width:760px){
+  .gps-paper,.gps-pdf-page,.gps-quote,.gps-tree,.gps-need-quote,.gps-reqref{overflow-wrap:anywhere;word-break:break-word}
+  .gps-pdf-page{padding:22px 18px}
+  .gps-vh .gps-act{margin-left:0}
+}

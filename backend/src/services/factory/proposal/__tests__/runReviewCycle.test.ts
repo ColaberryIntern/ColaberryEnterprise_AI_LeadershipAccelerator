@@ -54,8 +54,23 @@ describe('reviewCycleCore', () => {
     expect(saveVersion).toHaveBeenCalledTimes(3);
   });
 
-  it('stops at no_document when there is no draft to work on', async () => {
+  it('stops at no_document when there is no draft and no create-path is injected', async () => {
     const r = await reviewCycleCore(deps({ loadContent: async () => null }));
     expect(r.stoppedBecause).toBe('no_document');
+  });
+
+  it('T06: with no draft, BUILDS one via createDraft, then reaches judging — passes on the built draft', async () => {
+    const createDraft = jest.fn(async () => '<h3>Built section</h3>');
+    const runChecks = jest.fn(async () => checks({ passes: true }));
+    const r = await reviewCycleCore(deps({ loadContent: async () => null, createDraft, runChecks }));
+    expect(createDraft).toHaveBeenCalledTimes(1);
+    expect(runChecks).toHaveBeenCalled(); // it reached the judging loop rather than dead-ending at no_document
+    expect(r).toMatchObject({ stoppedBecause: 'passed', finalPasses: true, iterations: 1 });
+  });
+
+  it('T06: stops at build_failed when the create-path cannot draft anything', async () => {
+    const r = await reviewCycleCore(deps({ loadContent: async () => null, createDraft: async () => null }));
+    expect(r.stoppedBecause).toBe('build_failed');
+    expect(r.finalPasses).toBe(false);
   });
 });

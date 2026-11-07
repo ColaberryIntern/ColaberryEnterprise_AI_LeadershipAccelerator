@@ -30,11 +30,17 @@ const MAX_BYTES = 6 * 1024 * 1024;
 interface Props {
   /** The brand the Marketing section is scoped to, which changes how these pages behave. */
   brandLabel: string | null;
+  /** Where the report posts. Defaults to the Marketing endpoint; the Studio passes its own. */
+  endpoint?: string;
+  /** Extra fields merged into the payload (e.g. the Studio's projectId + contractName). */
+  extra?: Record<string, unknown>;
 }
+
+const DEFAULT_ENDPOINT = '/api/admin/marketing/bug-report';
 
 type Status = { kind: 'idle' | 'sending' | 'sent' } | { kind: 'error'; message: string };
 
-export default function ReportAProblem({ brandLabel }: Props) {
+export default function ReportAProblem({ brandLabel, endpoint, extra }: Props) {
   const [open, setOpen] = useState(false);
   const [summary, setSummary] = useState('');
   const [whatHappened, setWhatHappened] = useState('');
@@ -85,13 +91,14 @@ export default function ReportAProblem({ brandLabel }: Props) {
     setStatus({ kind: 'sending' });
     try {
       const ctx = collectContext(brandLabel);
-      await api.post('/api/admin/marketing/bug-report', {
+      await api.post(endpoint ?? DEFAULT_ENDPOINT, {
         summary: summary.trim(),
         whatHappened: whatHappened.trim(),
         whatExpected: whatExpected.trim() || undefined,
         stepsToReproduce: steps.trim() || undefined,
         screenshot: shot || undefined,
         ...ctx,
+        ...(extra ?? {}),
       });
       setStatus({ kind: 'sent' });
       setSummary(''); setWhatHappened(''); setWhatExpected(''); setSteps(''); setShot(null); setShotName('');

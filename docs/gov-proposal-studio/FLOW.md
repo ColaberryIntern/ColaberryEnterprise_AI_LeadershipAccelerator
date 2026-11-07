@@ -1,47 +1,68 @@
-# Proposal Studio: target flow
+# Gov Proposal Studio — Flow (v3)
 
-Runs after **Decide** (bid approved) and alongside **Build the bid** in the existing pursuit flow. It replaces the cockpit's Proposal tab and feeds the existing **Submit** step. The clickable shape is in `designs/proposal-studio.html`. This file states what each step must do.
+The v3 operating model in one page. The AI **builds and judges** every document; a person
+**supplies what only a person can** and gives **one Go** at the end. This replaces the v1
+"narrative drawer + question list" model.
 
-Two entry points onto the same delivery project, as today:
-- **Admin**: `/admin/internship/gov-contract/:projectId` (requires `gov_contracts` section). Full view, including pricing.
-- **Intern**: `/portal/gov-projects/:projectId` (participant + membership). Student-safe projection: never pricing, never identities.
+## The loop
 
-## Stages (left rail)
+```
+   Blueprint ──▶ Build ──▶ Judge ──▶ Revise ──┐
+   (cited        (outline   (6 checks,         │ below bar
+    rulebook)     → section  independent       │
+                  drafts)    evaluator/        ▼
+                             proof/clarity)   a fact is missing?
+                                              │
+                        ┌─────────────────────┘
+                        ▼
+                   Needs you  ──(answer)──▶ auto-resume the unblocked docs
+                        │
+                        ▼
+                 All docs pass ──▶ Gold Go / No-go (one human decision) ──▶ Package
+```
 
-| # | Stage | What happens | Who acts | Gate / rail |
-|---|---|---|---|---|
-| 0 | **Where we are** | Pursuit stage strip, proposal readiness (avg doc score vs 95), per-document bars, ranked next moves (questions, cycles to run, signatures, admin pricing) | Everyone | Read-only summary. Numbers come from stored scores, never recomputed by the client |
-| 1 | **Blueprint** | Re-analyze the stored ZIP into a versioned blueprint: scoring (Section M), submission rules (Section L), Texas forms rules, required documents, addenda. Each rule carries a quote + file + page and is flagged fatal/curable. A new blueprint shows what changed from the last | Agent builds; admin confirms | A rule with no literal quote is dropped (verifyQuotes rail). Missing bytes means "re-upload", never a guessed blueprint |
-| 2 | **Document set** | The contract's deliverables, derived from blueprint + requirements + forms rules + our additions (Compliance Matrix, Pilot Demonstration Exhibit). Each document has a type: `narrative`, `form`, `build`, `generated`, `pricing` | Admin can add from the library or remove (with reason) | `pricing` is admin-only end to end |
-| 3 | **Build evidence** | Build completion, demo URL, gallery of screenshots captured from verified stories, each tagged with requirement IDs and where it's used. An unverified story has no capture, plus a decision card (finish it or describe it) | System captures; people insert | Capture only from the contract's allowlisted demo host; sample data only |
-| 4 | **Draft & versions** | Working copy per document: section plan, live checks for the selected version, immutable version history (agent or human), diff, **Run review cycle** | Agent drafts and revises; people edit | Each save = new version + re-score. AI never sets `accepted` |
-| 5 | **Review gates** | Pink → Red → Gold → White glove per document; matrix of documents × six checks | Agent scores; a **person** approves each gate; **Gold** needs a program-capable admin | Pass = weighted ≥ 95 **and** no check < 85 **and** no open question **and** no fatal item |
-| 6 | **Package & submit** | Assemble approved versions into PDFs with blueprint file names, the sealed pricing file, the redacted copy, and a manifest. Export, upload externally, record the receipt | Admin exports and records | Fatal items block export. Exported ≠ submitted (unchanged) |
-| — | **Agent panel** (right) | Activity log, and **Needs your answer** questions. An answer is saved to the company library and re-scores the affected documents | Agent asks; people answer | Agent never answers for the firm |
+## Who does what
+
+| Step | Owner | What happens |
+|---|---|---|
+| Blueprint | Agent + human confirm | The solicitation ZIP becomes a cited rulebook (scoring, rules, forms, page limits). |
+| Build | Agent | For a document with no draft, the create-path builds it: `buildOutline` → grounded `draftProposalSection` per section → assemble → save v1. No fact is invented; a missing one becomes a `[PLACEHOLDER]` **and** a need. |
+| Judge | Agent | Six checks. Evaluator / proof / clarity run as **independent judge calls**; their run ids are recorded on the version. The AI gates (Pink / Red / White glove) are recorded automatically when their checks pass (`decided_by: 'ai_judge'`). |
+| Revise | Agent | Below the bar (weighted < 95 or any check < 85), the agent rewrites only the failing sections, up to the iteration cap. |
+| Needs you | Human | The one list of typed needs — fact, decision, file, signature, approval, confirm_rule, setting. Answering a need records it and **auto-resumes** every document it unblocked (bounded). |
+| Gold | Human (admin) | One **Go / No-go** for the whole package, offered only when every document passes. Separation of duties: the approver cannot be the version's last author. No-go returns Gold with a note. |
+| Package | Agent + human | Assemble the approved versions into PDFs + the sealed price file + the compliance matrix + a manifest. Exporting is not submitting. |
 
 ## The six checks
 
-| Check | Weight | Team | Method |
-|---|---|---|---|
-| Requirement coverage | 25 | Pink | **Deterministic.** Every requirement mapped to the document is cited by a section (`data-req` anchors); missing = finding |
-| Evaluator score | 25 | Red | **AI ×3** independent evaluators with a scoresheet built from the blueprint's Section M factors. Median score; 2+ adjectival-level disagreement → human flag |
-| Proof & evidence | 15 | Red | AI finds claims; deterministic join to evidence (artifact, library fact, reference). Unbacked claim = finding |
-| Fact integrity | 15 | Red | **Deterministic.** Open questions / placeholders count; facts must come from the library or the blueprint |
-| Format & instructions | 10 | White glove | **Deterministic.** Real rendered page count vs limit, font, page size, required headings, section order, file name |
-| Clarity & win themes | 10 | Red | AI: theme statement present per section, customer-focused, readability band |
+`coverage` (25) · `evaluator` (25) · `proof` (15) · `clarity` (15) · `format` (10) · `fact` (10).
+Pass = weighted ≥ **95** and no check < **85**, no fatal finding, no open gap.
 
-Fatal items outside the score (fail the document outright): over page limit; missing required signature; price text outside the pricing file; missing required form.
+## Needs — the contract
 
-## Review cycle (agent loop)
+Every finding carries a **resolver**: `agent` (fixed on the next pass, with a `fixHint`) or
+`human` (carries a typed `need`). A `[PLACEHOLDER]` is always a need. The needs list is the
+single source of "what a person must do"; the old question-only list is gone.
 
-```
-for i in 1..maxIterations (default 3):
-  scores = runChecks(currentVersion)            # stored on the version
-  if passes(scores): log "ready for <next gate>"; stop
-  if openQuestions(): log "blocked on N answers"; stop
-  findings = failing checks' findings, ranked by weight × gap
-  next = reviseDocument(currentVersion, findings, grounding)   # AI, fail-soft
-  save as new version (author: agent, change summary from findings)
-```
+- **Intern projection drops pricing and ungivable approvals** — an intern never sees a price
+  value or the Gold approval need.
+- Resolving a need routes by kind (fact → library, decision → log, file/signature → upload,
+  setting → setting store, approval → the Gold gate) and then drops it from the list.
 
-Grounding for every draft and revision: blueprint (weights, rules, order), the document's requirements, section plans, inserted artifacts, approved library facts. Nothing else.
+## Build-all and auto-resume
+
+- **Build all documents** (overview / document set) kicks a bounded cycle for every not-passed
+  document in blueprint order.
+- Answering a need auto-resumes the documents it unblocked. Both are bounded (one active run
+  per document, a per-call cap) so nothing fans out without limit.
+
+## Code map
+
+- Create-path: `createProposalDraft.ts`, `buildOutline.ts`, `sectionDrafting.ts`, `runReviewCycle.ts`
+- Judge: `documentChecks.ts`, `documentChecksAI.ts`, `judgeRuns.ts`, `runProposalDocumentChecks.ts`
+- Needs: `proposalReviewTypes.ts`, `classifyFinding.ts`, `placeholderNeeds.ts`, `aggregateNeeds.ts`,
+  `collectProjectNeeds.ts`, `resolveNeed.ts`, `resolveProjectNeed.ts`, `formsPrefill.ts`
+- Gates: `proposalReviewConfig.ts`, `goldGate.ts`, `govProposalReviewStore.ts`
+- Resume: `resumeCycles.ts`; human edit: `humanEdit.ts`; audit: `scripts/auditProposalNeeds.js`
+- UI: `frontend/src/pages/portal/projects/proposalStudio/*` (shell, NeedsInbox, AgentPanel,
+  WhereWeAre, DocumentSet, DraftVersions, ReviewGatesView, BuildEvidence, ContractBar, StageRail)

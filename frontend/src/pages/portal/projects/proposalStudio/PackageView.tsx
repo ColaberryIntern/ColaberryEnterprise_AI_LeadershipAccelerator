@@ -54,39 +54,37 @@ export default function PackageView(
 
   return (
     <div className="gps-view">
-      <div className="gps-vh"><div><h2>Package &amp; submit</h2><p>Assembled from the approved version of each document, in the order and with the file names the blueprint requires. Exporting is not submitting. You upload to the agency&rsquo;s portal and record the receipt here.</p></div>
+      <div className="gps-vh"><div><h2>Package &amp; submit <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast?.('Package & submit: the approved documents assembled into PDFs with the blueprint file names, the sealed price file, and a manifest. Exporting is not submitting.')}>i</button></h2><p>Assembled from the approved version of each document, in the order and with the file names the blueprint requires. Exporting is not submitting. You upload to the agency&rsquo;s portal and record the receipt here.</p></div>
         <div className="gps-act">{reviewApi
-          ? <button className="gps-btn primary" disabled={busy || !allPass} onClick={assemble}>{busy ? 'Assembling…' : 'Export package'}</button>
-          : <button className="gps-btn" disabled onClick={() => onToast?.('A reviewer assembles the package once every document passes.')}>Reviewer assembles</button>}</div>
+          ? <button className="gps-btn primary" data-testid="pkg-export" disabled={busy || !allPass} onClick={assemble}>{busy ? 'Assembling…' : 'Export package'}</button>
+          : <button className="gps-btn" data-testid="pkg-export" disabled onClick={() => onToast?.('A reviewer assembles the package once every document passes.')}>Reviewer assembles</button>}</div>
       </div>
       <div className="gps-grid2">
         <div className="gps-panel"><h3>Response files</h3>
-          <div className="gps-tree">
+          <div className="gps-tree" data-testid="pkg-files">
             {response.map((d, i) => (
               <div className="gps-f" key={d.key}><span>{fileLabel(d, i)}</span><span className="gps-muted">{pageText(d)}</span>{d.latest?.passes ? <span className="gps-tag ok">ready</span> : <span className="gps-tag warn">{weightedScore(d.latest?.scores)}</span>}</div>
             ))}
             {response.length === 0 && <div className="gps-muted gps-small">No documents yet.</div>}
             {pricing && (
-              <div className="gps-env"><div className="gps-eyebrow" style={{ color: 'var(--gps-gold)' }}>Sealed &middot; separate upload &middot; admin only</div><div className="gps-f"><span>{fileLabel(pricing, response.length)}</span><span className="gps-muted">sealed</span><span className="gps-tag gold">admin</span></div></div>
+              <div className="gps-env" data-testid="pkg-sealed"><div className="gps-eyebrow" style={{ color: 'var(--gps-gold)' }}>Sealed &middot; separate upload &middot; admin only</div><div className="gps-f"><span>{fileLabel(pricing, response.length)}</span><span className="gps-muted">sealed</span><span className="gps-tag gold">admin</span></div></div>
             )}
             <div className="gps-f" style={{ marginTop: 8 }}><span>Redacted_Public_Copy.pdf</span><span className="gps-muted">auto-built</span><span className="gps-tag">after export</span></div>
           </div>
         </div>
         <div className="gps-panel"><h3>Before export</h3>
-          <ul className="gps-bp-list">
+          <ul className="gps-bp-list" data-testid="pkg-checklist">
             <li><div className="gps-bp-k">Every document passes its gate <span className={`gps-tag ${allPass ? 'ok' : 'warn'}`}>{readiness.passing} / {readiness.total}</span></div></li>
+            <li><div className="gps-bp-k">Nothing open in Needs you <span className={`gps-tag ${(view.needsCount ?? 0) === 0 ? 'ok' : 'warn'}`}>{(view.needsCount ?? 0) === 0 ? 'clear' : `${view.needsCount} open`}</span></div></li>
+            <li><div className="gps-bp-k">Gold Go given <span className={`gps-tag ${allPass ? 'warn' : ''}`}>{allPass ? 'waiting' : 'not ready'}</span></div></li>
             <li><div className="gps-bp-k">No fatal findings <span className="gps-tag bad">fatal</span> <span className={`gps-tag ${fatalCount === 0 ? 'ok' : 'bad'}`}>{fatalCount === 0 ? 'none' : `${fatalCount} to resolve`}</span></div></li>
             <li><div className="gps-bp-k">Signatures collected <span className="gps-tag bad">fatal</span> {reviewApi ? <span className={`gps-tag ${pendingSigs === 0 ? 'ok' : 'warn'}`}>{pendingSigs === 0 ? 'all signed' : `${pendingSigs} pending`}</span> : <span className="gps-tag">checked at package</span>}</div></li>
             <li><div className="gps-bp-k">Price appears only in the sealed file <span className="gps-tag bad">fatal</span> <span className="gps-tag ok">scan at export</span></div></li>
             <li><div className="gps-bp-k">Formats: searchable PDF, 11 pt minimum <span className="gps-tag ok">checked</span></div></li>
           </ul>
           <p className="gps-small gps-muted" style={{ margin: '10px 0 0' }}>Fatal items can&rsquo;t be fixed after the deadline, so they block export whatever the score. Export writes a manifest with each file&rsquo;s version number and hash, so you can always tell exactly what was sent.</p>
-          {reviewApi && (
-            <div className="gps-small" style={{ marginTop: 10 }}>
-              {sigs.filter((s) => s.status !== 'signed').map((s) => (
-                <div className="gps-f" key={`${s.formKey}:${s.signerRole}`}><span>{s.formKey} <span className="gps-muted">({s.signerRole})</span></span><input type="file" aria-label={`Upload signed ${s.formKey}`} accept=".pdf,.png,.jpg,.jpeg,.webp" onChange={async (e) => { const f = e.target.files?.[0]; if (f && reviewApi) { try { await reviewApi.uploadSignedForm(projectId, s.formKey, f); await loadSigs(); onToast?.('Signed copy uploaded.'); } catch { onToast?.('Upload failed.'); } } }} /></div>
-              ))}
-            </div>
+          {reviewApi && pendingSigs > 0 && (
+            <p className="gps-small gps-muted" style={{ marginTop: 10 }}>{pendingSigs} signature{pendingSigs === 1 ? '' : 's'} still needed — upload the signed copies from the matching cards in <b>Needs you</b>.</p>
           )}
           {msg && <p className="gps-small" style={{ color: 'var(--gps-warn)', marginTop: 8 }}>{msg}</p>}
           {result && !result.ok && (

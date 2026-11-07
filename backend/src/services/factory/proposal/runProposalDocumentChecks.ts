@@ -14,7 +14,10 @@ import GovProposalBlueprint from '../../../models/GovProposalBlueprint';
 import { runDocumentChecks, type DocumentCheckInput } from './documentChecks';
 import { runAiChecks } from './documentChecksAI';
 import { renderProposalPdf } from './renderProposalPdf';
-import { recordVersionChecks } from './govProposalReviewStore';
+import { recordVersionChecks, recordAiGates } from './govProposalReviewStore';
+import { reconcilePlaceholderGaps } from './govProposalGaps';
+import { withClassification } from './classifyFinding';
+import { judgeRunIds } from './judgeRuns';
 import type { CheckRunResult } from './proposalReviewTypes';
 import type { ProposalBlueprint } from './proposalBlueprintTypes';
 
@@ -38,6 +41,9 @@ export async function runProposalDocumentChecks(deliveryProjectId: string, docKe
   const contentHtml: string | null = doc.content_html ?? null;
   const sections = Array.isArray(doc.sections_json) ? doc.sections_json : [];
   const requirementIds: string[] = Array.isArray(doc.requirement_ids) ? doc.requirement_ids : [];
+  // v3 (T03): every [PLACEHOLDER] in the current content gets one open gap carrying its typed need; an answered one
+  // closes. Runs BEFORE loadGaps so the fact check scores against the reconciled markers.
+  await reconcilePlaceholderGaps(deliveryProjectId, docKey, contentHtml);
   const gaps = await loadGaps(deliveryProjectId, docKey);
 
   // Render for the REAL page count (fail-soft: a render failure leaves pageCount null, so format can't assert over-limit).
@@ -61,6 +67,16 @@ export async function runProposalDocumentChecks(deliveryProjectId: string, docKe
     gaps, isPricingDoc: !!doc.admin_only,
   };
   const result = runDocumentChecks(input, ai);
-  await recordVersionChecks(doc.current_version_id, result);
+  // v3 (T01/T02): stamp every finding with WHO resolves it and the typed need, so the needs inbox and the audit
+  // ("every finding has a resolver") have what they require. Pure; re-derive the fatal subset from the enriched list.
+  const classified = result.findings.map((f) => withClassification(f, { docKey }));
+  result.findings = classified;
+  result.fatal = classified.filter((f) => f.severity === 'fatal');
+  // v3 (T11): record the independent judge run ids (evaluator/proof/clarity) on the scored version.
+  const runIds = judgeRunIds(ai?.judgeRuns as any);
+  await recordVersionChecks(doc.current_version_id, result, runIds);
+  // v3 (T13): the AI judge auto-records the AI gates (pink/red/white_glove) this version now passes, with the scores
+  // + judge-run evidence. Gold stays human-only. Best-effort: a gate-write failure never fails the scoring.
+  try { await recordAiGates(doc.id, doc.current_version_id, result.scores, result.findings, runIds); } catch { /* best-effort */ }
   return result;
 }

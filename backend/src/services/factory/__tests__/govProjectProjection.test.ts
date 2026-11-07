@@ -284,7 +284,7 @@ describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness',
     superseded: false, comments: [], draftedAt: null, acceptedAt: null, ...over,
   });
   const mkVersion = (over: Partial<VersionView> & { id: string }): VersionView => ({
-    version: 1, authorKind: 'agent', changeSummary: null, scores: {}, findings: [], passes: false, pageCount: null, createdAt: null, ...over,
+    version: 1, authorKind: 'agent', changeSummary: null, scores: {}, findings: [], passes: false, pageCount: null, createdAt: null, judgeRunIds: [], ...over,
   });
   const gatesAll = (status: string): GateView[] => (['pink', 'red', 'gold', 'white_glove'] as const).map((gate) => ({ gate, status, versionId: null, note: null, decidedAt: null }));
 

@@ -74,7 +74,7 @@ const AdminGovContractCockpitPage: React.FC = () => {
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Try again</button>
         </div>
       )}
-      {state.k === 'ready' && <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} />}
+      {state.k === 'ready' && <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} />}
     </div>
   );
 };

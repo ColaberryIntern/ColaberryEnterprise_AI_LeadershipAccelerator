@@ -113,6 +113,9 @@ export interface StudentGovProjectView {
   overallProgress?: GovOverallProgress;
   /** U1 (B.1/C.2): the proposal readiness meter — pct of scored (non-pricing/superseded/form) documents that pass. */
   proposalReadiness?: GovProposalReadiness;
+  /** v3 (T05): open-need counts for this viewer (pricing/ungivable approvals already dropped). Optional (older backends). */
+  needsCount?: number;
+  fatalNeedsCount?: number;
 }
 
 /** U1: the readiness meter the Studio header + Where-we-are read ("Proposal ready x% / 95%"). */
@@ -148,11 +151,31 @@ export interface GovProposalDocument {
   openGapCount?: number;
   fatalCount?: number;
   cycle?: { status: string; runId: string } | null;
+  /** v3 (T05): typed-need counts for this document (viewer-filtered). Optional (older backends). */
+  needsCount?: number;
+  fatalNeedsCount?: number;
 }
 
 // ── U1 read-model surfaces the Studio UI consumes (questions, activity, review runs, version content) ──────────────
 /** B.3: one open question for the agent panel's "Needs your answer" list. `key` round-trips to the answer route. */
 export interface GovOpenQuestion { key: string; question: string; why: string | null; documentKeys: string[]; suggestions: string[]; }
+
+// ── v3 (V1): the typed HumanNeed model (the one "Needs you" list) ──────────────────────────────────────────────
+export type GovNeedKind = 'fact' | 'decision' | 'file' | 'signature' | 'approval' | 'confirm_rule' | 'setting';
+/** Exactly what a human must supply, why, and what it unblocks (mirrors backend HumanNeed). */
+export interface GovProjectNeed {
+  kind: GovNeedKind; key: string; ask: string; why: string;
+  usedIn: Array<{ docKey: string; sectionKey?: string }>;
+  format: string; options?: string[]; blocking: 'fatal' | 'score';
+  source?: { quote: string; file: string; page?: number };
+}
+/** The one needs list, grouped Blocking-export (fatal) then Holding-score. */
+export interface GovNeedsGrouped { needs: GovProjectNeed[]; blockingExport: GovProjectNeed[]; holdingScore: GovProjectNeed[]; }
+/** What a human submits to resolve one need (shape by kind; the server validates). */
+export interface GovNeedSubmission { value?: string; fileRef?: string; approve?: boolean; note?: string; }
+export interface GovNeedResolveResult { resolved: string; store: string; status: string; unblocked: string[]; }
+/** The result of a bounded Build-all / auto-resume enqueue. */
+export interface GovBuildAllResult { started: boolean; enqueued: Array<{ docKey: string; runId: string }>; skipped: string[]; }
 /** B.4: one derived activity event for the agent-panel feed. */
 export type GovActivityKind = 'version' | 'gate' | 'artifact' | 'blueprint' | 'library_answer' | 'signature';
 export interface GovActivityEvent { kind: GovActivityKind; at: string; summary: string; docKey?: string | null; }
@@ -221,6 +244,10 @@ export interface GovReviewApi {
   assemblePackage(projectId: string): Promise<GovPackageResult>;
   /** U1 (B.7): save a reviewer's structured section plan; saving writes a new human version. Admin only (optional). */
   saveSectionPlan?(projectId: string, docKey: string, sectionKey: string, plan: GovSectionPlanFields): Promise<{ document: GovProposalDocument }>;
+  /** v3 (T14): save a sanitized HUMAN edit, re-judge it, and resume the agent only if still below bar. Admin only. */
+  editDocument?(projectId: string, docKey: string, contentHtml: string): Promise<{ saved: boolean; passes: boolean; resumed: boolean }>;
+  /** v3 (T13): the single PACKAGE Gold decision — Go records Gold on every eligible doc; No-go returns + notes. Admin only. */
+  decideGold?(projectId: string, decision: 'go' | 'nogo', note?: string): Promise<{ decision: string; approved?: string[]; skipped?: Array<{ docKey: string; reason: string }>; returned?: string[] }>;
 }
 
 /** P6: a card for a gov project the intern is assigned to — minimal fields for the "on your profile" surface. */
@@ -367,6 +394,27 @@ export async function getGovVersionContent(projectId: string, docKey: string, ve
   return data;
 }
 
+// ── v3 (V1): the typed needs list, resolve, and Build-all (portal/participant token) ───────────────────────────
+export async function listGovNeeds(projectId: string): Promise<GovNeedsGrouped> {
+  const { data } = await portalApi.get<Partial<GovNeedsGrouped>>(`${portalBase(projectId)}/needs`);
+  return { needs: data?.needs ?? [], blockingExport: data?.blockingExport ?? [], holdingScore: data?.holdingScore ?? [] };
+}
+export async function resolveGovNeed(projectId: string, key: string, submission: GovNeedSubmission): Promise<GovNeedResolveResult> {
+  const { data } = await portalApi.post<GovNeedResolveResult>(`${portalBase(projectId)}/needs/${encodeURIComponent(key)}/resolve`, submission);
+  return { resolved: data?.resolved ?? key, store: data?.store ?? '', status: data?.status ?? '', unblocked: Array.isArray(data?.unblocked) ? data.unblocked : [] };
+}
+export async function buildAllGovDocuments(projectId: string): Promise<GovBuildAllResult> {
+  const { data } = await portalApi.post<Partial<GovBuildAllResult>>(`${portalBase(projectId)}/build-all`, {});
+  return { started: !!data?.started, enqueued: Array.isArray(data?.enqueued) ? data.enqueued : [], skipped: Array.isArray(data?.skipped) ? data.skipped : [] };
+}
+
+/** P4 (v4): fetch a build-evidence PNG through the participant-guarded portal route and return an object URL, so an
+ *  intern sees the real thumbnail (a bare <img src> can't carry the bearer token). The caller revokes the URL. */
+export async function fetchGovArtifactImage(projectId: string, artifactId: string): Promise<string> {
+  const { data } = await portalApi.get(`${portalBase(projectId)}/artifacts/${encodeURIComponent(artifactId)}/image`, { responseType: 'blob' });
+  return URL.createObjectURL(data as Blob);
+}
+
 /**
  * GovStudioApi — the Studio shell + agent panel's read-model adapter. The SAME Studio components drive either the
  * portal routes (the default below, participant token) or the admin routes (injected by the admin cockpit page).
@@ -378,6 +426,13 @@ export interface GovStudioApi {
   startReviewCycle(projectId: string, docKey: string, maxIterations?: number): Promise<{ runId: string }>;
   getReviewRun(projectId: string, runId: string): Promise<GovReviewRun>;
   getVersionContent(projectId: string, docKey: string, versionId: string): Promise<GovVersionContent>;
+  /** v3 (V1): the one typed-needs list, resolve, and Build-all (both tokens carry these routes). */
+  listNeeds(projectId: string): Promise<GovNeedsGrouped>;
+  resolveNeed(projectId: string, key: string, submission: GovNeedSubmission): Promise<GovNeedResolveResult>;
+  buildAll(projectId: string): Promise<GovBuildAllResult>;
+  /** P4 (v4): fetch a build-evidence PNG as an object URL. A member-level read (any project member), so it lives on
+   *  the studio API, not the reviewer-only review API — this is how an intern (no reviewApi) sees a real thumbnail. */
+  fetchArtifactImage?(projectId: string, artifactId: string): Promise<string>;
 }
 
 export const portalGovStudioApi: GovStudioApi = {
@@ -387,4 +442,8 @@ export const portalGovStudioApi: GovStudioApi = {
   startReviewCycle: startGovReviewCycle,
   getReviewRun: getGovReviewRun,
   getVersionContent: getGovVersionContent,
+  listNeeds: listGovNeeds,
+  resolveNeed: resolveGovNeed,
+  buildAll: buildAllGovDocuments,
+  fetchArtifactImage: fetchGovArtifactImage,
 };

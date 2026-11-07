@@ -26,7 +26,7 @@ export default function Blueprint(
   if (!bp) {
     return (
       <div className="gps-view"><div className="gps-vh"><div><h2>Proposal blueprint</h2><p>Re-analyze the stored solicitation package to build the rulebook this proposal must follow.</p></div>
-        <div className="gps-act"><button className="gps-btn agent" disabled={reanalyzing} onClick={onReanalyze}>{reanalyzing ? <><span className="gps-spin" /> Analyzing</> : 'Re-analyze ZIP'}</button></div></div>
+        <div className="gps-act"><button className="gps-btn agent" data-testid="bp-reanalyze" disabled={reanalyzing} onClick={onReanalyze}>{reanalyzing ? <><span className="gps-spin" /> Analyzing</> : 'Re-analyze ZIP'}</button></div></div>
         <div className="gps-panel gps-muted">No blueprint yet. Re-analyze the stored solicitation package to build it.</div></div>
     );
   }
@@ -38,11 +38,11 @@ export default function Blueprint(
 
   return (
     <div className="gps-view">
-      <div className="gps-vh"><div><h2>Proposal blueprint</h2><p>The agent re-reads the stored solicitation ZIP and writes the rules this proposal has to follow. Each rule quotes the source text and cites its file and page, so you can check it.</p></div>
-        <div className="gps-act"><button className="gps-btn agent" disabled={reanalyzing} onClick={onReanalyze}>{reanalyzing ? <><span className="gps-spin" /> Analyzing</> : 'Re-analyze ZIP'}</button></div></div>
+      <div className="gps-vh"><div><h2>Proposal blueprint <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast?.('Blueprint: the cited rulebook the agent derives from the solicitation ZIP — scoring, submission rules, forms.')}>i</button></h2><p>The agent re-reads the stored solicitation ZIP and writes the rules this proposal has to follow. Each rule quotes the source text and cites its file and page, so you can check it.</p></div>
+        <div className="gps-act"><button className="gps-btn agent" data-testid="bp-reanalyze" disabled={reanalyzing} onClick={onReanalyze}>{reanalyzing ? <><span className="gps-spin" /> Analyzing</> : 'Re-analyze ZIP'}</button></div></div>
 
       <div className="gps-panel"><h3>Solicitation package <span className="gps-tag ok">stored</span></h3>
-        <div className="gps-log">
+        <div className="gps-log" data-testid="bp-log">
           {bp.sourceFiles.map((f) => (<div key={f}><span className="ok">✓</span> {f}</div>))}
           <div className="ok">{view.requirementCounts.total} requirements · {bp.scoring.factors.length} evaluation factors · {bp.rules.length} submission rules · {(view.proposalDocuments ?? []).length} documents</div>
         </div>
@@ -51,7 +51,7 @@ export default function Blueprint(
       <div className="gps-grid2">
         <div className="gps-panel"><h3>How it is scored <span className="gps-tag">Section M</span></h3>
           {bp.scoring.factors.length > 0 ? (
-            <div className="gps-weights">
+            <div className="gps-weights" data-testid="bp-weights">
               {bp.scoring.factors.map((f, i) => { const w = f.points ?? f.percent ?? 0; return (<div key={i} style={{ flex: w || 1, background: FACTOR_COLORS[i % FACTOR_COLORS.length] }} title={`${f.label} ${w}`}>{f.label} {w}</div>); })}
             </div>
           ) : <p className="gps-muted gps-small">No weighted scoring factors were detected in this solicitation.</p>}
@@ -59,7 +59,7 @@ export default function Blueprint(
           <p className="gps-small gps-muted" style={{ margin: '10px 0 0' }}>The agent spends drafting effort by weight; the Red-team evaluators score against these factors. Pass/fail items such as the HUB plan earn no points.</p>
         </div>
         <div className="gps-panel"><h3>Submission rules <span className="gps-tag">Section L</span></h3>
-          <ul className="gps-bp-list">
+          <ul className="gps-bp-list" data-testid="bp-rules">
             {bp.rules.map((r, i) => (
               <li key={i}><div className="gps-bp-k">{titleCase(r.key)}{r.value && r.value !== 'required' ? `: ${r.value}` : ''} {r.severity === 'fatal' ? <span className="gps-tag bad">elimination risk</span> : null}</div>
                 {r.quote && <div className="gps-quote">{r.quote}</div>}<div className="gps-src">{r.sourceFile}{r.page ? ` p.${r.page}` : ''}</div></li>
@@ -69,7 +69,7 @@ export default function Blueprint(
         </div>
       </div>
 
-      <div className="gps-panel"><h3>State forms rules <span className="gps-tag">{texasLoaded ? 'applied to this contract' : (bp.stateFormsStatus?.state ?? 'jurisdiction')}</span></h3>
+      <div className="gps-panel" data-testid="bp-state-forms"><h3>State forms rules <span className="gps-tag">{texasLoaded ? 'applied to this contract' : (bp.stateFormsStatus?.state ?? 'jurisdiction')}</span></h3>
         {!texasLoaded && <p className="gps-small gps-muted" style={{ margin: '0 0 8px' }}>{bp.stateFormsStatus?.note ?? 'No state forms rulebook loaded for this jurisdiction. Forms named in the solicitation are listed below.'}</p>}
         {formsToShow.length > 0 ? (
           <div className="gps-tbl-wrap" style={{ border: 0 }}><table style={{ minWidth: 560 }}>

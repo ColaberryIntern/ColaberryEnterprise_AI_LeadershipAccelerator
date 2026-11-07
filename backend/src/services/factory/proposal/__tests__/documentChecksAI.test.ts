@@ -46,6 +46,14 @@ describe('runAiChecks', () => {
     expect(r!.scores.clarity).toBe(88);
   });
 
+  it('T11: runs the three judges independently and returns one distinct judge run per judge', async () => {
+    createMock.mockImplementation(routeByPrompt([90, 90, 90]));
+    const r = await runAiChecks({ docKey: 'technical', title: 'Technical', contentHtml: '<p>approach</p>' });
+    expect(r!.judgeRuns).toHaveLength(3);
+    expect(r!.judgeRuns!.map((j) => j.judge).sort()).toEqual(['clarity', 'evaluator', 'proof']);
+    expect(new Set(r!.judgeRuns!.map((j) => j.runId)).size).toBe(3); // distinct ids per judge
+  });
+
   it('fails soft per-check: an evaluator upstream error scores it 0 without throwing, clarity still scores', async () => {
     createMock.mockImplementation(async ({ messages }: any) => {
       const sys = String(messages[0].content);
