@@ -33,7 +33,7 @@ describe('renderComplianceMatrixXlsx', () => {
     expect(Buffer.isBuffer(buf)).toBe(true);
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf);
+    await wb.xlsx.load(buf as any); // exceljs bundles its own `Buffer` type; cross the boundary like pricingWorkbook does
     const ws = wb.getWorksheet('Compliance Matrix')!;
     expect(ws).toBeTruthy();
     const header = ws.getRow(1).values as any[];
