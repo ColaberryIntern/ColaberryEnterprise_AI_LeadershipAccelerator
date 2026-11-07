@@ -467,11 +467,12 @@ const TodayShell: React.FC = () => {
       <CardDetailDrawer
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
-        onComplete={async (card) => {
-          // Same dispatch as the tile (collectCard); the drawer additionally closes.
+        onComplete={async (card, opts) => {
+          // Same dispatch as the tile (collectCard); the drawer additionally closes, unless the video collected itself at the
+          // watch bar (C116), where the learner is still watching.
           // A server rejection propagates so the drawer surfaces the reason.
           const res = await collectCard(card);
-          setSelectedCard(null);
+          if (!opts?.keepOpen) setSelectedCard(null);
           resetScheduleCache(); // C91: the first lesson finishes here; re-read first_win
           await loadAll();
           emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime
