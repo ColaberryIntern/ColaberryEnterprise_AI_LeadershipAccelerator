@@ -62,3 +62,21 @@ it('the intern variant hides the admin-only Gold steps', () => {
   // every intern step is a real admin step (intern is a strict filter)
   expect(intern.every((s) => admin.includes(s))).toBe(true);
 });
+
+it('every step spotlights a real chrome anchor — no step is left un-highlighted (the v4 bug)', () => {
+  // The bug Ali reported: the tour narrated but never highlighted. The fix is that every step carries a `target`
+  // selector pointing at a `[data-tour="…"]` anchor in the always-mounted shell (bar chip / rail step / agent panel).
+  for (const s of tourSteps('admin')) {
+    expect(typeof s.target).toBe('string');
+    expect(s.target).toMatch(/^\[data-tour="[a-z]+"\]$/);
+  }
+  expect(tourSteps('intern').every((s) => !!s.target)).toBe(true);
+});
+
+it('hides the ring (no crash) when the step target is not in the DOM', () => {
+  // No anchors are mounted in this unit test, so positioning must resolve to display:none rather than throwing.
+  render(<StudioTour step={0} onNavigate={jest.fn()} onSetStep={jest.fn()} onClose={jest.fn()} />);
+  const ring = container.querySelector('[data-testid="tour-ring"]') as HTMLElement;
+  expect(ring).toBeTruthy();
+  expect(ring.style.display).toBe('none');
+});
