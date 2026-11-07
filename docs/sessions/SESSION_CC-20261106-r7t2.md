@@ -81,3 +81,62 @@ Syncing was broken from roughly July through September and has been correct sinc
 breakdowns reconcile independently to 875 and 318, which is why they are trustworthy. The
 backfill is a separate piece of work: it writes contacts into the live CRM and needs its own
 approval.
+
+---
+
+## Production verification, 2026-11-07
+
+PR #3738 merged as `29d1b38d`. Production was **already carrying it** before any deploy of
+mine: another session deployed main's tip `8831278d` (which has `29d1b38d` as an ancestor) at
+12:49 UTC from an image CI built at 12:14 UTC, after the merge. `snapshotOf` and
+`rankOutreachPool` are both present in the running container's `dist/`, with a control string
+confirmed absent so the check could report absence. No deploy was needed, and none was run.
+
+**Verified from Cora's own server** (`204.168.245.238`), over the public internet, with Cora's
+own stored `CORA_SERVICE_TOKEN` — the exact path Kes's nightly job takes. The token was read
+into a variable and never printed.
+
+| check | result |
+|---|---|
+| `offset=0`, `offset=50`, `offset=99999` | HTTP 200 |
+| unknown parameter `cursor` | HTTP 400, `Unrecognized key: "cursor"` |
+| envelope keys | exactly `view, tracked_since, count, total, offset, snapshot, rows`, no extras |
+| pages tile | 50 + 50 ids, overlap **0**, 100 distinct |
+| `total` agrees across pages | 432 and 432 |
+| snapshot back to back | `8d2f180886a5b425` both times, reproducible |
+| snapshot across pages | differs, as it must |
+| offset past the end | `count=0`, empty page, `total` still 432, not an error |
+| PII | `email` and `name` absent from rows; 18 keys, matching the allowlist |
+
+### The number that matters: the pool is 432, not 200
+
+`total=432` on a 200-row cap means **Kes's full page was 46% of the queue**, and 232 people
+were invisible to it. This is no longer an inference from `count === limit`; it is the measured
+size of the thing he could not see.
+
+## Two things on Cora's side before tagging can switch on
+
+Found by reading Kes's deployment, not by asking. Neither is a defect in this PR; both block
+the integration going live.
+
+1. **His scheduled job reads a test fixture, not the live feed.**
+   `EXPLORER_QUEUE_FEED_PATH=/app/execution/fixtures/explorer_queue_test_feed.json` is set, and
+   `EXPLORER_QUEUE_FEED_URL` is set nowhere in his `.env` or compose. His own
+   `settings.py` records the precedence: *"While explorer_queue_feed_path is set it takes
+   precedence."* So setting the live URL alone would change nothing — **the fixture path has to
+   be cleared in the same edit.** That precedence is the trap worth naming explicitly.
+
+2. **His client cannot consume paging yet, by design.** `explorer_queue_feed.py` carries
+   `MAX_LIMIT = 200  # accelerator caps at 200 (default 25), no offset` and documents the old
+   contract: *"send ONLY `view` and `limit` (any other parameter is a 400) ... a full page at
+   the limit means more rows exist (no paging yet)."* It has 0 references to `total`,
+   `snapshot` or `has_more`. He wrote to the contract I gave him on 6 November; that contract
+   changed today. Paging on this side is necessary but not sufficient.
+
+## Flagged on Kes's host, not acted on
+
+- `/opt/cora-recap-engine/.env` is mode `0644`, world readable, and holds `CORA_SERVICE_TOKEN`,
+  `GHL_API_KEY`, `OPENAI_API_KEY`, `SYNTHFLOW_API_KEY`, `POSTGRES_PASSWORD` and
+  `SMTP_PASSWORD`. Should be `0600`. His box, so his change to make.
+- `CORA_INBOUND_WEBHOOK_SECRET` is declared **three times** in that same `.env`. Last one wins
+  silently, which is how a rotated secret gets shadowed by a stale copy.
