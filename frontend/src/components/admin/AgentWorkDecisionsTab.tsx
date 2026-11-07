@@ -210,7 +210,7 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
                         </div>
                         <div className="adv2-card">
                           <div className="adv2-body">
-                            <h3><span className="adv2-number">2</span>What does Reese know?</h3>
+                            <h3><span className="adv2-number">2</span>What does this agent know?</h3>
                             <p className="adv2-muted">Not tracked as a facts list — the real structured signals behind this proposal:</p>
                             <p className="adv2-muted">Confidence {item.confidence} · Risk {item.riskScore ?? '—'} · Impact {item.impactScore ?? '—'} · Priority {item.priorityScore ?? '—'}</p>
                           </div>
@@ -259,7 +259,7 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
       <div className="adv2-card">
         <h2>
           Decision Journal
-          <span className="adv2-hint">A chronological log of Reese's own automated checks and proposals across all of her work — not specific to any one ticket. Every line is a real recorded fact, never a generated narrative or hidden reasoning trace.</span>
+          <span className="adv2-hint">A chronological log of this agent's own automated checks and proposals across all of its work — not specific to any one ticket. Every line is a real recorded fact, never a generated narrative or hidden reasoning trace.</span>
         </h2>
         {journalLoading && <p className="adv2-body adv2-muted">Loading the decision journal…</p>}
         {journalError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>Could not load the decision journal: {journalError}</p>}
@@ -305,7 +305,7 @@ export default function AgentWorkDecisionsTab({ agentId, inboxItems, inboxLoadin
       <div className="adv2-card">
         <h2>
           Approval Requests
-          <span className="adv2-hint">Reese's own ticket-dispatch authorization history — what happened when one of her sends was held for human review. Separate from "Pending Approvals" above (that's the general proposal inbox).</span>
+          <span className="adv2-hint">This agent's own ticket-dispatch authorization history — what happened when one of its sends was held for human review. Separate from "Pending Approvals" above (that's the general proposal inbox).</span>
         </h2>
         {journalLoading && <p className="adv2-body adv2-muted">Loading approval requests…</p>}
         {journalError && <p className="adv2-body" style={{ color: 'var(--adv2-warn)' }}>Could not load approval requests: {journalError}</p>}

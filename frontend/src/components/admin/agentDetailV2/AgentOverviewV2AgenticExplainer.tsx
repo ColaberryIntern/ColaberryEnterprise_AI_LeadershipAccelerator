@@ -20,7 +20,7 @@ export default function AgentOverviewV2AgenticExplainer({ onNavigate }: Props) {
         <div className="adv2-eyebrow" style={{ color: 'var(--adv2-trust)' }}>What makes this agentic?</div>
         <h3 style={{ marginTop: 8, marginBottom: 6, fontSize: 15, fontWeight: 600 }}>The next step depends on the result.</h3>
         <p className="adv2-muted" style={{ fontSize: 13.5, margin: '0 0 12px' }}>
-          Reese investigates, chooses an authorized action, checks what happened, and adjusts her plan.
+          The agent investigates, chooses an authorized action, checks what happened, and adjusts its plan.
         </p>
         <button className="adv2-link" style={{ background: 'none', border: 0, padding: 0 }} onClick={() => onNavigate('decisions')}>
           Explore one complete decision →
