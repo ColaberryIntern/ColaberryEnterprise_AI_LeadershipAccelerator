@@ -16,6 +16,7 @@ import { useDeepDiveHost } from './useDeepDiveHost';
 import { useBlogReadGate } from './useBlogReadGate';
 import { useDwellGate, isDwellGatedCard } from './useDwellGate';
 import { useWatchVerdict, isWatchBlocked, watchGateLabel } from './useWatchVerdict';
+import { useAutoCollectOnWatchMet } from './useAutoCollectOnWatchMet';
 
 /** Tiny stable string hash — varies the dwell Collect button placement per card. */
 function hashStr(s: string): number {
@@ -201,10 +202,13 @@ export function readerDoc(bodyHtml: string, title?: string, opts?: ReaderOpts): 
   <script>${js}</script>`;
 }
 
+/** C116: `keepOpen` asks the host not to close the drawer, because the learner is still watching (auto-collect at the watch bar). */
+export interface CompleteOpts { keepOpen?: boolean }
+
 interface Props {
   card: TimelineFeedCard;
   preview?: boolean;                       // admin: disable live calls + nav
-  onComplete?: () => Promise<void> | void; // real drawer: mark complete (also on video end)
+  onComplete?: (opts?: CompleteOpts) => Promise<void> | void; // real drawer: mark complete (also on video end)
   onEnterWorkspace?: () => void;           // real drawer: navigate to the runtime
   onClose?: () => void;                    // real drawer: the header × button
   autoplayVideo?: boolean;                 // drawer contexts: the open click was the play intent — start the video immediately
@@ -281,7 +285,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
   const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
-  const done = card.status === 'completed';
+  const [autoCollected, setAutoCollected] = useState(false);   // C116: collected at the watch bar while the drawer stays open
+  useEffect(() => { setAutoCollected(false); }, [card.id]);
+  const done = card.status === 'completed' || autoCollected;
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
   const duration = card.estimated_time ? `${card.estimated_time} min` : null;
@@ -330,6 +336,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
     : undefined;
   const gateActive = watch?.required_pct != null;
   const watchLabel = watchGateLabel(watch, 'Collect points');   // null = met → open to click
+  // C116: crossing the watch bar while playing collects the points itself (same call as the button below), without closing the
+  // drawer, so the learner keeps watching. Same conditions as the button; on failure the button and the message remain.
+  useAutoCollectOnWatchMet(watch, live && isVideo && !!source && pts > 0 && !!onComplete, async () => {
+    setGateMsg(null);
+    try { await onComplete?.({ keepOpen: true }); setAutoCollected(true); }
+    catch (err: any) { setGateMsg(err?.response?.data?.error || 'Not quite yet — keep watching to unlock your points.'); }
+  });
 
   // Self Study gating: the reader iframe reports per-section read-progress (>=5s dwell
   // each); the Mark Complete button appears only once every section is read. Enforced

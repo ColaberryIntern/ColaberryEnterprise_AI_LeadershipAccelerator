@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { TimelineFeedCard } from './TimelineCard';
-import CardDetailBody from './CardDetailBody';
+import CardDetailBody, { type CompleteOpts } from './CardDetailBody';
 
 /**
  * CardDetailDrawer — the right-slide panel that opens when a student clicks a
@@ -14,7 +14,7 @@ import CardDetailBody from './CardDetailBody';
 interface Props {
   card: TimelineFeedCard | null;
   onClose: () => void;
-  onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
+  onComplete?: (card: TimelineFeedCard, opts?: CompleteOpts) => Promise<void> | void;
   /** Admin contexts (Timeline editor / Studio): the SAME popup students get,
    *  with the live-only actions (complete, Enter-workspace nav) disabled. */
   preview?: boolean;
@@ -55,7 +55,7 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview 
             preview={preview}
             autoplayVideo
             onClose={onClose}
-            onComplete={preview || !onComplete ? undefined : () => onComplete(card)}
+            onComplete={preview || !onComplete ? undefined : (opts) => onComplete(card, opts)}
             onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`, { state: { from: location.pathname } })}
           />
         </aside>
