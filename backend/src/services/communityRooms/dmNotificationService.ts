@@ -29,6 +29,14 @@
  * (`email/idempotencyKey.ts:23`), so a subject carrying a preview would mint a fresh key for every
  * message and the quiet period below would never suppress anything.
  *
+ * C125 (Ali 2026-11-07, option C): ONE exception. When the sender is one of our AI staff (Reese,
+ * Maya, Dara), the email body carries a short preview of that message, because it is text we wrote
+ * and the preview is what brings a learner back. Person-to-person messages stay content-free. The
+ * sender is matched by ENROLLMENT ID against the three identity seeds, never by display name (a
+ * person can rename themselves "Reese"); a failed lookup means no preview. The subject is unchanged,
+ * so the dedup above still holds. Within a window only the first message emails, so the preview is
+ * that message, not a summary of the thread.
+ *
  * ## Difference 2: the quiet period is carried by the idempotency key
  *
  * The ticket is explicit that this "must not become a second firehose: consider one email per
@@ -50,7 +58,7 @@
  *
  * - Never throws. A mail outage must never cost somebody their message; the caller treats this as
  *   fire-and-forget, the same posture as `communityService.ts:729`.
- * - Never mails an AI agent. It is called at the END of `notifyDmRecipient`, which has already
+ * - Never mails an AI agent (it may quote one, C125). It is called at the END of `notifyDmRecipient`, which has already
  *   returned early for Reese and Dara, so those skips are reused rather than reimplemented.
  * - Never mails somebody who paused notifications or opted out.
  * - Never takes a recipient from a caller. The recipient is derived from the room's own
@@ -139,13 +147,51 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/** Deliberately content-free. See "Difference 1" in the header. */
+export const DM_PREVIEW_MAX = 280;
+
+/**
+ * C125: the preview text of an AI staff message. Plain text only: a chat link `[label](path)` becomes its label, whitespace
+ * collapses, and it is cut at a word boundary to DM_PREVIEW_MAX with an ellipsis. Escaped by the HTML builder, never here.
+ */
+export function dmPreviewOf(content: string | null | undefined): string {
+  const flat = String(content || '').replace(/\[([^\]\n]{1,80})\]\([^)\s]+\)/g, '$1').replace(/\s+/g, ' ').trim();
+  if (flat.length <= DM_PREVIEW_MAX) return flat;
+  const cut = flat.slice(0, DM_PREVIEW_MAX);
+  const atWord = cut.lastIndexOf(' ');
+  return `${(atWord > DM_PREVIEW_MAX * 0.6 ? cut.slice(0, atWord) : cut).trimEnd()}...`;
+}
+
+/** C125: true only when the sender's enrollment is Reese's, Maya's or Dara's. Any lookup failure: false (no preview). */
+export async function isAiStaffSender(senderEnrollmentId: string | null | undefined): Promise<boolean> {
+  if (!senderEnrollmentId) return false;
+  try {
+    const [{ getReeseEnrollmentId }, { getMayaEnrollmentId }, { getDaraEnrollmentId }] = await Promise.all([
+      import('../reese/reeseIdentitySeed'), import('../mayaIdentitySeed'), import('../curriculum/daraIdentitySeed'),
+    ]);
+    const ids = await Promise.all([getReeseEnrollmentId(), getMayaEnrollmentId(), getDaraEnrollmentId()]);
+    return ids.includes(senderEnrollmentId);
+  } catch (err: unknown) {
+    const e = err as Error;
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'dm', event: 'dm_preview_sender_lookup_failed',
+      outcome: 'failure', error_class: e?.name || 'Error', context: { message: String(e?.message || '').slice(0, 200) },
+    }));
+    return false;
+  }
+}
+
+/** Content-free unless `preview` is given (C125: AI staff senders only). See "Difference 1" in the header. */
 export function buildDmNotificationHtml(data: {
   recipientName: string;
   senderName: string;
+  preview?: string | null;
 }): string {
   const who = escapeHtml((data.senderName || '').trim() || 'Someone');
   const first = escapeHtml((data.recipientName || '').trim().split(/\s+/)[0] || 'there');
+  const preview = (data.preview || '').trim();
+  const body = preview
+    ? `<p style="margin:0 0 22px;padding:12px 16px;border-left:3px solid #C20E1E;background:#f7fafc;color:#2d3748;font-size:15px;">${escapeHtml(preview)}</p>`
+    : '<p style="margin:0 0 22px;color:#6b7280;font-size:14px;">The message itself is only on the platform, not in this email.</p>';
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f7fafc;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc;padding:24px 0;">
@@ -154,7 +200,7 @@ export function buildDmNotificationHtml(data: {
         <tr><td style="padding:28px 32px 8px;color:#2d3748;font-size:16px;line-height:1.6;">
           <p style="margin:0 0 14px;">Hi ${first},</p>
           <p style="margin:0 0 14px;"><strong>${who}</strong> sent you a message on the Colaberry platform.</p>
-          <p style="margin:0 0 22px;color:#6b7280;font-size:14px;">The message itself is only on the platform, not in this email.</p>
+          ${body}
           <p style="margin:0 0 26px;">
             <a href="${PORTAL_COMMUNITY_URL}" style="display:inline-block;background:#C20E1E;color:#ffffff;padding:11px 22px;border-radius:22px;text-decoration:none;font-weight:700;">Read and reply</a>
           </p>
@@ -208,9 +254,11 @@ export async function notifyDmByEmail(input: DmNotifyInput): Promise<DmNotifyRes
     const at = input.at ?? new Date();
     const subject = dmNotificationSubject(senderName);
     const businessEventId = dmBusinessEventId(input.roomId, input.recipientEnrollmentId, at);
+    const preview = (await isAiStaffSender(message?.enrollment_id)) ? dmPreviewOf(message?.content) : null;
     const html = buildDmNotificationHtml({
       recipientName: recipient.full_name || '',
       senderName,
+      preview,
     });
 
     const result = await sendOnce(
