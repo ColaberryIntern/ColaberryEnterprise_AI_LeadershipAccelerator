@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { requestPortalCallback, type CallbackOutcome } from './mayaCallbackService';
 
 /**
- * C121/C122 — the ONLY tools Maya has in the portal's shared chat. Three, on purpose:
+ * C121/C122/C123 — the ONLY tools Maya has in the portal's shared chat. Four, on purpose:
  *
  *   retrieve_knowledge   plans, pricing and program facts, through the same gated knowledge search her site chat uses
  *                        (mayaToolsService.retrieveKnowledgeContent, which withholds retired facts).
@@ -10,6 +10,8 @@ import { requestPortalCallback, type CallbackOutcome } from './mayaCallbackServi
  *                        which writes through /api/portal/campus/admissions-call onto the admissions calendar, so the call
  *                        shows in "Coming up". Maya's old schedule_strategy_call wrote different records and never showed.
  *   request_callback     writes a callback_requests row for the admissions team (mayaCallbackService.ts).
+ *   start_campus_tour    offers the campus's existing guided tour (C123, Ali 2026-11-07 "she should be able to give tours").
+ *                        Like the booking link it changes nothing itself: the learner's tap starts the tour on the map.
  *
  * NOT HERE, deliberately: Synthflow voice calls, SMS, document email, campaign enrollment, lead capture and the marketing
  * tools. Those are her public-site tools and reach a stranger; a signed-in learner already has an account, and Ali asked
@@ -22,6 +24,9 @@ import { requestPortalCallback, type CallbackOutcome } from './mayaCallbackServi
 /** The deep link the chat dock turns into the booking sheet (frontend ChatDock + BookCallHost read the same string). */
 export const BOOK_CALL_PATH = '/portal/campus?book=call';
 export const BOOK_CALL_LINK = `[Book a call with admissions](${BOOK_CALL_PATH})`;
+/** C123: the deep link the chat dock turns into the campus's own guided tour (frontend campus/tourLink.ts reads the same string). */
+export const TOUR_PATH = '/portal/campus?tour=start';
+export const TOUR_LINK = `[Take the campus tour](${TOUR_PATH})`;
 
 export const MAYA_PORTAL_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -71,6 +76,16 @@ export const MAYA_PORTAL_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'start_campus_tour',
+      description:
+        'The learner asks for a tour, a walkthrough, or what is on campus and where things are. This gives them a link that ' +
+        'starts the campus guided tour, which walks them stop by stop through the places their enrollment opens.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
 ];
 
 const NAMES = new Set(MAYA_PORTAL_TOOLS.map((t) => (t.type === 'function' ? t.function.name : '')).filter(Boolean));
@@ -112,6 +127,9 @@ export async function executeMayaPortalTool(name: string, args: Record<string, u
     }
     if (name === 'book_admissions_call') {
       return JSON.stringify({ offered: true, link: BOOK_CALL_LINK, note: 'The link opens the booking calendar. Nothing is booked until they pick a time.' });
+    }
+    if (name === 'start_campus_tour') {
+      return JSON.stringify({ offered: true, link: TOUR_LINK, note: 'The link starts the guided tour on the campus map. Include it exactly. Staff accounts have no tour.' });
     }
     if (name === 'request_callback') {
       const r = await requestPortalCallback({

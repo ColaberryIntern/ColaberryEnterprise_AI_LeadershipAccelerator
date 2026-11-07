@@ -48,6 +48,11 @@ jest.mock('../../email/idempotentSend', () => ({
 jest.mock('../../../config/env', () => ({
   env: { trainingWelcomeFromEmail: 'noreply@colaberry.com' },
 }));
+// C125: the three AI staff identities, matched by enrollment id (never by display name).
+const mockReeseId = jest.fn(async () => 'enr-reese' as string | null);
+jest.mock('../../reese/reeseIdentitySeed', () => ({ getReeseEnrollmentId: () => mockReeseId() }));
+jest.mock('../../mayaIdentitySeed', () => ({ getMayaEnrollmentId: async () => 'enr-maya' }));
+jest.mock('../../curriculum/daraIdentitySeed', () => ({ getDaraEnrollmentId: async () => 'enr-dara' }));
 
 import {
   notifyDmByEmail,
@@ -57,6 +62,9 @@ import {
   dmNotificationSubject,
   buildDmNotificationHtml,
   DM_NOTIFY_WINDOW_MINUTES,
+  dmPreviewOf,
+  isAiStaffSender,
+  DM_PREVIEW_MAX,
 } from '../dmNotificationService';
 
 const ROOM = 'room-abc';
@@ -309,5 +317,65 @@ describe('boundaries - every reason it declines', () => {
     mockEnrollmentFindByPk.mockResolvedValue(activeRecipient({ intake_data_json: 'not-an-object' }));
     const r = await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
     expect(r.sent).toBe(true);
+  });
+});
+
+// ───────────────────────────────────────────────────────────── C125: AI staff previews
+describe('C125: a message from Reese, Maya or Dara carries a preview; a person-to-person one never does', () => {
+  const sentMail = () => mockGuardedSendMail.mock.calls[0][0];
+
+  it("Reese's message shows its text in the email body, with the subject unchanged", async () => {
+    mockMessageFindByPk.mockResolvedValue({ id: MESSAGE, sender_name: 'Reese', enrollment_id: 'enr-reese', content: 'This week covers prompt chaining. Start with the lab.' });
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+    expect(sentMail().html).toContain('This week covers prompt chaining. Start with the lab.');
+    expect(sentMail().html).not.toContain('only on the platform');
+    expect(sentMail().subject).toBe('Reese sent you a message');
+  });
+
+  it('Maya and Dara count as AI staff too', async () => {
+    expect(await isAiStaffSender('enr-maya')).toBe(true);
+    expect(await isAiStaffSender('enr-dara')).toBe(true);
+  });
+
+  it('a PERSON named "Reese" gets no preview: the match is by enrollment, not by name', async () => {
+    mockMessageFindByPk.mockResolvedValue({ id: MESSAGE, sender_name: 'Reese', enrollment_id: 'enr-a-person', content: 'SENSITIVE-BODY-SENTINEL' });
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+    expect(sentMail().html).not.toContain('SENSITIVE-BODY-SENTINEL');
+    expect(sentMail().html).toContain('only on the platform');
+  });
+
+  it('a failed identity lookup means no preview, and the email still goes', async () => {
+    mockReeseId.mockRejectedValueOnce(new Error('db down'));
+    mockMessageFindByPk.mockResolvedValue({ id: MESSAGE, sender_name: 'Reese', enrollment_id: 'enr-reese', content: 'SENSITIVE-BODY-SENTINEL' });
+    const r = await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+    expect(r.sent).toBe(true);
+    expect(sentMail().html).not.toContain('SENSITIVE-BODY-SENTINEL');
+  });
+
+  it('the preview is escaped, never injected', async () => {
+    mockMessageFindByPk.mockResolvedValue({ id: MESSAGE, sender_name: 'Maya', enrollment_id: 'enr-maya', content: '<img src=x onerror=alert(1)> hi' });
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE });
+    expect(sentMail().html).not.toContain('<img');
+    expect(sentMail().html).toContain('&lt;img');
+  });
+
+  it('dmPreviewOf: chat links become their label, whitespace collapses, long text is cut at a word with an ellipsis', () => {
+    expect(dmPreviewOf('Here:\n\n[Take the campus tour](/portal/campus?tour=start)')).toBe('Here: Take the campus tour');
+    const long = 'word '.repeat(100);
+    const p = dmPreviewOf(long);
+    expect(p.length).toBeLessThanOrEqual(DM_PREVIEW_MAX + 3);
+    expect(p.endsWith('...')).toBe(true);
+    expect(p).not.toMatch(/wor\.\.\.$/);
+    expect(dmPreviewOf(null)).toBe('');
+    expect(dmPreviewOf('short')).toBe('short');
+  });
+
+  it('a second AI message in the same window asks the ledger the same question (the preview does not touch the dedup)', async () => {
+    const at = new Date('2026-11-07T16:20:00Z');
+    mockMessageFindByPk.mockResolvedValue({ id: MESSAGE, sender_name: 'Reese', enrollment_id: 'enr-reese', content: 'first' });
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: MESSAGE, at });
+    mockMessageFindByPk.mockResolvedValue({ id: 'msg-2', sender_name: 'Reese', enrollment_id: 'enr-reese', content: 'second, different' });
+    await notifyDmByEmail({ roomId: ROOM, recipientEnrollmentId: RECIPIENT, messageId: 'msg-2', at: new Date(at.getTime() + 60000) });
+    expect(mockSendOnce.mock.calls[0][0]).toEqual(mockSendOnce.mock.calls[1][0]);
   });
 });

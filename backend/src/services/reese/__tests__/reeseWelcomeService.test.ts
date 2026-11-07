@@ -26,11 +26,9 @@ jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }
 // Real-enforcement scoping, Phase 3 (R211) — the new gate on sendOnce()'s
 // real send. Defaults to allow in every existing test below (regression:
 // identical behavior to before this gate existed); denial gets its own
-// dedicated describe block. reeseAutonomousOutreachService.ts is mocked
-// wholesale too, purely for its RISK_TIER re-export — its own real
-// behavior is untouched and already covered by its own test file.
+// dedicated describe block. Welcomes carry their own R2 tier (C126), so
+// reeseAutonomousOutreachService.ts is no longer imported or mocked here.
 jest.mock('../../workLedger/agentActionAuthorizationBridge', () => ({ authorizeTicketDispatch: jest.fn() }));
-jest.mock('../reeseAutonomousOutreachService', () => ({ RISK_TIER: 'R3' }));
 jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn(), recordSentAction: jest.fn() }));
 
 import ReeseWelcome from '../../../models/ReeseWelcome';
@@ -359,7 +357,7 @@ describe('each intro exactly once, ever', () => {
     expect(mockRecordHeldAction).toHaveBeenCalledTimes(1);
     expect(mockRecordHeldAction).toHaveBeenCalledWith(expect.objectContaining({
       action: 'reese_welcome_account',
-      riskTier: 'R3',
+      riskTier: 'R2',
       verdict: 'would_block',
       reasonCode: 'level_forbids:write',
       decisionId: 'ar-1',
@@ -398,7 +396,7 @@ describe('each intro exactly once, ever', () => {
     expect(mockRecordHeldAction).not.toHaveBeenCalled();
     expect(mockRecordSentAction).toHaveBeenCalledWith(expect.objectContaining({
       action: 'reese_welcome_account',
-      riskTier: 'R3',
+      riskTier: 'R2',
       reason: 'welcome_sent',
     }));
   });
@@ -413,7 +411,7 @@ describe('each intro exactly once, ever', () => {
         resourceId: PERSON,
         agentName: 'Reese',
         action: 'reese_welcome_account',
-        riskTier: 'R3',
+        riskTier: 'R2',
       }),
     );
     expect(mockCreate.mock.invocationCallOrder[0]).toBeLessThan(mockAuthorizeTicketDispatch.mock.invocationCallOrder[0]);

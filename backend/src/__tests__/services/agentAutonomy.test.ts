@@ -91,6 +91,14 @@ describe('agentAutonomy — HITL always-approval rules (§5 Q2)', () => {
     expect(outreach.required).toBe(true);
     expect(outreach.rule).toBe('high_risk_tier');
   });
+  it('C126: a Reese welcome at R2 is not held by the tier alone; at R3 it was', () => {
+    for (const action of ['reese_welcome_student', 'reese_welcome_account']) {
+      expect(actionRequiresApproval(action, { riskTier: 'R2' }).required).toBe(false);
+      const old = actionRequiresApproval(action, { riskTier: 'R3' });
+      expect(old.required).toBe(true);
+      expect(old.rule).toBe('high_risk_tier');
+    }
+  });
 });
 
 describe('agentAutonomy — ProofDesk R0-R4 risk-tier reconciliation (Milestone 4, shadow mode)', () => {
