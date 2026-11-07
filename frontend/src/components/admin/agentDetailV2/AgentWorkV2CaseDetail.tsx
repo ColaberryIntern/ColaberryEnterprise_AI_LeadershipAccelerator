@@ -116,7 +116,7 @@ export default function AgentWorkV2CaseDetail({ ticket, onNavigate, onDraftTalk 
 
       <div className="adv2-actions" style={{ marginTop: 18 }}>
         <button className="adv2-btn" onClick={handleToggleExplain}>{explainOpen ? 'Hide explanation' : 'Explain this decision'}</button>
-        <button className="adv2-btn" onClick={() => { onDraftTalk(ticket); onNavigate('talk'); }}>Discuss with Reese</button>
+        <button className="adv2-btn" onClick={() => { onDraftTalk(ticket); onNavigate('talk'); }}>Discuss with this agent</button>
         <a className="adv2-btn" style={{ textDecoration: 'none' }} href={`/admin/tickets?open=${ticket.id}`} target="_blank" rel="noopener noreferrer">Open ticket ↗</a>
       </div>
 
