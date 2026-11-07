@@ -35,6 +35,10 @@ export interface GovPipelineBuildProgress {
   pct: number;
   verified: number;
   total: number;
+  /** The monitored project's name — the solicitation title the operator named it with at materialize time.
+   *  Carried here as the LAST-RESORT display title for a pursuit whose own record never captured one; see the
+   *  title fallback in projectGovPipelineCard. Null when the project row is unreadable. */
+  studentProjectName: string | null;
 }
 
 /** An ACTIVE intern assigned to build this pursuit's delivery project (membership ∩ live intern roster). */
@@ -196,8 +200,15 @@ export function projectGovPipelineCard(
   const evaluation = evaluateRequirements(established);
   const establishedCount = established.length;
 
+  // A pursuit uploaded as a solicitation ZIP can reach approval with NO title anywhere on its record: the
+  // decoupled provenance holds only the workspace uuid and there is no OP snapshot to fall back to. The Crash
+  // Records pursuit (gws:2ac2fdbc) is exactly that, and the result was a funnel card with a blank title and a
+  // left-nav label of `gws:2ac2fdbc-9675-4f61-9baa-1020493600e8` — unrecognisable to the person who filed it.
+  // So the materialized project's own name is the last fallback: it is the title the operator typed when they
+  // created the build, which is the most human name the system holds for that pursuit.
   const title = (provenance && provenance.title)
     || (snapshot && (snapshot.title || (snapshot.opportunity && snapshot.opportunity.title)))
+    || (build && build.studentProjectName)
     || null;
   const agency = (provenance && provenance.agency)
     || (snapshot && (snapshot.agency || snapshot.buyer || (snapshot.opportunity && snapshot.opportunity.agency)))
@@ -242,7 +253,16 @@ export async function getGovBuildProgressLite(deliveryProjectId: string | null):
   const total = storyTasks.length;
   const verified = storyTasks.filter((t) => !!t.verified_at).length;
   const pct = total ? Math.round((verified / total) * 100) : 0;
-  return { studentProjectId, pct, verified, total };
+  // Display-only, and best-effort for exactly that reason: an unreadable project row must degrade the TITLE,
+  // never the progress rollup the board is actually for.
+  let studentProjectName: string | null = null;
+  try {
+    const { default: Project } = await import('../../models/Project');
+    const project: any = await Project.findByPk(studentProjectId);
+    const name = project && project.name ? String(project.name).trim() : '';
+    studentProjectName = name || null;
+  } catch { studentProjectName = null; }
+  return { studentProjectId, pct, verified, total, studentProjectName };
 }
 
 /** List every in-flight pursuit (thread head) for a tenant, projected into funnel cards, newest-updated first.

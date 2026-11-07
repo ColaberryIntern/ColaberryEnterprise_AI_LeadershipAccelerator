@@ -39,7 +39,7 @@ jest.mock('../../../modules/delivery/deliveryAuthorization', () => {
   return { __esModule: true, ...actual, buildDeliveryContext: (...a: any[]) => buildCtx(...a) };
 });
 
-import { assignBuildStory, unassignBuildStory, listBuildStoryAssignments, listAssignableBuilders, listActiveInternsForAssignment, AssignmentError } from '../govBuildAssignment';
+import { assignBuildStory, unassignBuildStory, listBuildStoryAssignments, listAssignableBuilders, listActiveInternsForAssignment, ensureAssigneeCanBuild, AssignmentError } from '../govBuildAssignment';
 
 const ctxWithRoles = (roles: string[]) => ({ platformIdentityId: 'who', deliveryProjectId: 'dp-1', projectTenantId: 't-1', roles, isClientOnly: false });
 const rowFrom = (v: any) => ({ get: () => ({ id: 'as-1', assigned_at: new Date('2026-10-08T00:00:00Z'), ...v }) });
@@ -140,13 +140,63 @@ describe('provision-on-assign — keeps the gate and preserves separation of dut
   });
 
   it('swallows a provisioning race (unique-constraint create failure) and still assigns', async () => {
-    memFindOne.mockResolvedValue(null);
+    // A REAL race: our findOne saw nothing, the create lost to a concurrent insert, and the re-read now finds the
+    // row the racer wrote. The grant is satisfied by somebody else's row, so assignment proceeds.
+    memFindOne.mockResolvedValueOnce(null).mockResolvedValue({ id: 'm-racer', delivery_role: 'associate_builder' });
     memCreate.mockRejectedValue(new Error('duplicate key value violates unique constraint'));
     buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder'])); // the racer's row is now visible to the gate
     asFindOne.mockResolvedValue(null);
     asCreate.mockImplementation(async (v: any) => rowFrom(v));
     const r = await assignBuildStory(input());
     expect(r.assigneeIdentityId).toBe('builder-7'); // did not throw; assignment proceeded
+  });
+
+  // THE REGRESSION THIS PAIR EXISTS FOR. The catch above used to be unconditional, so a create that failed for
+  // any reason OTHER than a race was indistinguishable from one that succeeded, and the caller carried on with an
+  // unauthorized builder. That is how a materialized gov build ended up with zero membership rows: its intern
+  // could not open their own cockpit and the contract vanished from the admin nav, silently.
+  it('does NOT swallow a create failure when the membership is still absent — throws grant_failed, assigns nothing', async () => {
+    memFindOne.mockResolvedValue(null); // before AND after the failed create: the row genuinely is not there
+    memCreate.mockRejectedValue(new Error('null value in column "delivery_role" violates not-null constraint'));
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder']));
+    asFindOne.mockResolvedValue(null);
+    asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    await expect(assignBuildStory(input())).rejects.toMatchObject({ reason: 'grant_failed' });
+    expect(asCreate).not.toHaveBeenCalled(); // nothing assigned on a failed grant
+  });
+
+  it('logs the failed grant with an error_class so it is traceable instead of silent', async () => {
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      memFindOne.mockResolvedValue(null);
+      const boom: any = new Error('connection terminated unexpectedly');
+      boom.name = 'SequelizeConnectionError';
+      memCreate.mockRejectedValue(boom);
+      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', 'op-1')).rejects.toMatchObject({ reason: 'grant_failed' });
+      expect(err).toHaveBeenCalledTimes(1);
+      const logged = JSON.parse(err.mock.calls[0][0] as string);
+      expect(logged).toMatchObject({
+        level: 'error',
+        event: 'gov_build_membership_grant_failed',
+        outcome: 'failure',
+        error_class: 'SequelizeConnectionError',
+      });
+      expect(logged.context).toMatchObject({ deliveryProjectId: 'dp-1', assigneeIdentityId: 'builder-7' });
+    } finally {
+      err.mockRestore();
+    }
+  });
+
+  it('is a silent no-op when the membership already exists (nothing created, nothing logged)', async () => {
+    const err = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      memFindOne.mockResolvedValue({ id: 'm-1', delivery_role: 'associate_builder' });
+      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', 'op-1')).resolves.toBeUndefined();
+      expect(memCreate).not.toHaveBeenCalled();
+      expect(err).not.toHaveBeenCalled();
+    } finally {
+      err.mockRestore();
+    }
   });
 });
 

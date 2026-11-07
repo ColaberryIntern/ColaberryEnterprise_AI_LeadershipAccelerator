@@ -69,26 +69,51 @@ function toView(row: GovBuildStoryAssignmentAttributes): AssignmentView {
  * silently promoted to builder, and a deliberately revoked builder is never silently reinstated by assigning them
  * a story. In those cases the engine gate below still decides and still fails closed. Idempotent: if the member
  * already exists it is a no-op, and a concurrent-create race is swallowed (the gate reads whichever row won).
+ *
+ * THE GRANT IS VERIFIED, NOT ASSUMED. This used to `catch {}` the create unconditionally, on the stated
+ * assumption that the only way it could fail was a concurrent-insert race. Any other failure — a constraint, a
+ * column the schema had not grown yet, a dropped connection — was therefore indistinguishable from success, and
+ * the caller carried on. That is how the Crash Records build (delivery project 7a818ed2, materialized
+ * 2026-11-05) ended up with ZERO membership rows: the intern could not open the cockpit for their own project
+ * (`requireGovProjectAccess('project.read')`), could not hand in story evidence (`story.execute`), and the
+ * contract was dropped from the admin left nav by `adminGovContractNavEntries`, whose `hasActiveIntern` test
+ * reads exactly these rows. Nothing anywhere said so.
+ *
+ * So the catch now does what the story-assignment create 40 lines below has always done: re-read, and only treat
+ * the failure as benign when the row it was trying to write is actually there. A genuine failure is logged with
+ * an `error_class` and thrown, because a materialized project its own builder cannot open is worse than a loud
+ * failure the operator can retry — and materialize IS retryable (it reuses the project on the solution_build
+ * track rather than creating a second one).
  */
 export async function ensureAssigneeCanBuild(
   deliveryProjectId: string,
   assigneeIdentityId: string,
   grantedByIdentityId: string | null,
 ): Promise<void> {
-  const existing = await DeliveryProjectMember.findOne({
-    where: { delivery_project_id: deliveryProjectId, platform_identity_id: assigneeIdentityId },
-  });
+  const where = { delivery_project_id: deliveryProjectId, platform_identity_id: assigneeIdentityId };
+  const existing = await DeliveryProjectMember.findOne({ where });
   if (existing) return; // never alter an existing membership — the engine gate decides
   try {
     await DeliveryProjectMember.create({
-      delivery_project_id: deliveryProjectId,
-      platform_identity_id: assigneeIdentityId,
+      ...where,
       delivery_role: DELIVERY_ROLES.ASSOCIATE_BUILDER,
       granted_by_identity_id: grantedByIdentityId,
     });
-  } catch {
+  } catch (err: any) {
     // Race: a concurrent assign inserted the membership between our findOne and create (the unique index
-    // rejected ours). Idempotent — the engine gate below reads whichever row won; never fail the assign on this.
+    // rejected ours). Benign ONLY if the row is now there — the gate reads whichever row won.
+    const raced = await DeliveryProjectMember.findOne({ where });
+    if (raced) return;
+    const errorClass = err?.name ?? err?.constructor?.name ?? 'Error';
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'gov_build_membership_grant_failed', outcome: 'failure', error_class: errorClass,
+      context: { deliveryProjectId, assigneeIdentityId, message: err?.message ?? null },
+    }));
+    throw new AssignmentError(
+      'The builder role could not be granted on this project, so the assignee would not be able to open it. Nothing was assigned; retry.',
+      'grant_failed',
+    );
   }
 }
 
