@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * govPursuitDuplicates — which gov pursuits are the same solicitation entered more than once.
  *
@@ -5,10 +6,13 @@
  * interesting cases are not hypothetical: the Crash Records pair is two downloads of ONE posting whose bytes
  * differ, so a checksum-only rule misses it, and the Snow College trio is one posting that reached TWO separate
  * builds. A rule that only grouped by sha256 would pass a naive test and still have left Crash unfound.
+ *
+ * A .js test for a .js lib, like every other JS module in this folder: `tsconfig.test.json` includes
+ * `src/**` + '/*' + `.ts` only, and a .ts test importing an untyped .js module is a TS7016 implicit-any error.
  */
-import {
+const {
   groupDuplicatePursuits, duplicateSignals, solicitationNumberFrom, normalizeBundleFilename,
-} from '../govPursuitDuplicates';
+} = require('../govPursuitDuplicates');
 
 const CRASH_A = {
   qualificationKey: 'gws:546cbf25-13a5-45fa-ae5e-10313a513502',
@@ -36,7 +40,7 @@ const UNRELATED = {
   title: 'AASHTOWARE Project Service Units',
 };
 
-const snow = (key: string, built: boolean, decision: string, uploadedAt: string) => ({
+const snow = (key, built, decision, uploadedAt) => ({
   qualificationKey: key,
   sha256: '518bfb513585590a310ff713d0b334664b05373b499333e85961933d1d0cb66a',
   filename: 'SNOC26271024 - pub - SNOC26271024 - RFP - Adult Learner Stra.zip',
@@ -87,7 +91,7 @@ describe('groupDuplicatePursuits', () => {
   it('groups the Crash pair on the solicitation number even though the bytes differ', () => {
     const groups = groupDuplicatePursuits([CRASH_A, CRASH_B, UNRELATED]);
     expect(groups).toHaveLength(1);
-    expect(groups[0].members.map((m: any) => m.qualificationKey).sort())
+    expect(groups[0].members.map((m) => m.qualificationKey).sort())
       .toEqual([CRASH_B.qualificationKey, CRASH_A.qualificationKey].sort());
     expect(groups[0].verdict).toBe('duplicate_one_built');
   });
@@ -139,7 +143,7 @@ describe('groupDuplicatePursuits', () => {
 
   it('survives junk input', () => {
     expect(groupDuplicatePursuits([])).toEqual([]);
-    expect(groupDuplicatePursuits(null as any)).toEqual([]);
-    expect(groupDuplicatePursuits([null, undefined, { sha256: 'x' }] as any)).toEqual([]);
+    expect(groupDuplicatePursuits(null)).toEqual([]);
+    expect(groupDuplicatePursuits([null, undefined, { sha256: 'x' }])).toEqual([]);
   });
 });

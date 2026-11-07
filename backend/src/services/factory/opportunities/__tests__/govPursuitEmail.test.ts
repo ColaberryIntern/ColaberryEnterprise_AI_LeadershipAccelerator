@@ -13,7 +13,7 @@ const board = (rows: BoardRow[], counts: any = {}): DiscoveryBoard => ({
 const html = (b: DiscoveryBoard, hidden: any[] = []) => renderGovPursuitEmail(b, hidden, TODAY);
 
 describe('the note at the top', () => {
-  const project = { deliveryProjectId: 'dp1', title: 'Saratoga Springs Portal', agency: 'City', closeDate: '2026-11-12', interns: ['Sam Lee'], build: { studentProjectId: 's', pct: 20, verified: 2, total: 10 }, establishedCount: 7 };
+  const project = { deliveryProjectId: 'dp1', title: 'Saratoga Springs Portal', agency: 'City', closeDate: '2026-11-12', interns: ['Sam Lee'], build: { studentProjectId: 's', pct: 20, verified: 2, total: 10, studentProjectName: null }, establishedCount: 7 };
   it('is addressed to Ali and summarizes the report in counts', () => {
     const b = { ...board([row('vetted', { closeDate: '2026-11-25' }), row('needs_zip', { uuid: 'u2', title: 'Other' })], { vetted: 1, needs_zip: 1, analyzing: 2 }), currentProjects: [project] };
     const note = summaryNote(b, [{ opportunity: row('needs_zip', { uuid: 'h', title: 'Gone' }).opportunity, reason: 'ai_not_a_fit' }], TODAY);
