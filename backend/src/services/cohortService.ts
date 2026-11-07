@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError';
 import { Op, fn, col, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { env } from '../config/env';
+import { readBatchMonth } from './cohortBatchMonth';
 
 const SESSION_DEFAULT_DURATION_MIN = 90; // matches the existing "Add Session" form's own 10:00->11:30 default
 const DEFAULT_PROGRAM_WEEKS = 12; // matches sessionGenerationService.ts's own constant of the same name
@@ -165,13 +166,9 @@ export async function listOpenCohorts() {
  * Exported so it can be tested without a database.
  */
 export function toPublicCohort(plain: Record<string, unknown>): Record<string, unknown> {
-  const settings = plain.settings_json as { batch_month?: unknown } | null | undefined;
-  const batchMonth = settings && typeof settings.batch_month === 'string' && settings.batch_month.trim()
-    ? settings.batch_month.trim()
-    : null;
   const rest = { ...plain };
   delete rest.settings_json;
-  return { ...rest, batch_month: batchMonth };
+  return { ...rest, batch_month: readBatchMonth(plain.settings_json) };
 }
 
 /**
