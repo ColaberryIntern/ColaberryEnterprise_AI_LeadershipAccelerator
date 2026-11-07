@@ -83,6 +83,28 @@ export interface V1OutreachResponse {
   tracked_since: string;
   /** How many rows the ranking returned, so a caller can tell "none today" from "page empty". */
   count: number;
+  /**
+   * How many rows are in the whole ranked pool, not just this page.
+   *
+   * `count` alone could never answer the question that matters to a consumer holding a full
+   * page: is this everyone, or the first slice of more? Cora read a full page as the whole
+   * queue, and so could not tell a lead that had LEFT the queue from one that had merely
+   * ranked below the cut. `total` with `offset` makes that answerable: there is more to read
+   * while `offset + count < total`.
+   */
+  total: number;
+  /** Where this page started in the pool. Echoed back so a reply is self describing. */
+  offset: number;
+  /**
+   * A digest of this page's ordered enrollment ids.
+   *
+   * Two systems comparing counts taken minutes apart will disagree, because the pool is
+   * re-derived against the clock on every call and there is no snapshot behind it. That is
+   * correct behavior and it made "do our numbers match?" an unanswerable question. Comparing
+   * this value answers it exactly: equal snapshots mean both sides hold the same rows in the
+   * same order, and anything else is a different read of a moving list.
+   */
+  snapshot: string;
   rows: V1OutreachRow[];
 }
 
@@ -91,6 +113,21 @@ export function toPublicRow(row: Record<string, unknown>): V1OutreachRow {
   const out = {} as V1OutreachRow;
   for (const key of V1_OUTREACH_FIELDS) out[key] = row[key] ?? null;
   return out;
+}
+
+/**
+ * A short, order sensitive digest of a page's enrollment ids.
+ *
+ * Order sensitive because two pages holding the same people in a different order are NOT the
+ * same page to a consumer that works them top down. Truncated to 16 hex characters: this is a
+ * comparison aid between two trusted systems, not a security boundary, and a value short
+ * enough to quote in an email is the point. Ids are newline delimited so that concatenation
+ * cannot make two different id lists hash alike.
+ */
+export function snapshotOf(rows: V1OutreachRow[]): string {
+  const h = crypto.createHash('sha256');
+  for (const r of rows) h.update(`${String(r.enrollment_id)}\n`);
+  return h.digest('hex').slice(0, 16);
 }
 
 function log(
@@ -111,19 +148,24 @@ export async function getOutreachFeed(req: Request, res: Response, next: NextFun
   try {
     // The SAME schema the admin route uses, imported rather than restated, so the two surfaces
     // cannot drift on the 200-row cap or on rejecting an unknown parameter.
-    const { view, limit } = outreachQuerySchema.parse(req.query);
-    const result = await getOutreach(view, limit);
+    const { view, limit, offset } = outreachQuerySchema.parse(req.query);
+    const result = await getOutreach(view, limit, { offset });
     const rows = result.rows.map((r) => toPublicRow(r as unknown as Record<string, unknown>));
+    const snapshot = snapshotOf(rows);
 
     // `joinable` is logged because a row with no ghl_url is one the consumer must skip, and a
     // sudden drop in that ratio is the signal that lead linkage has broken upstream.
-    const joinable = rows.filter((r) => r.ghl_url !== null).length;
+    // Truthiness, not `!== null`: an empty string is just as unjoinable as a null, and counting
+    // it as a link would over-report the health of the very thing this number exists to watch.
+    const joinable = rows.filter((r) => Boolean(r.ghl_url)).length;
     log('info', 'outreach_feed', 'success', {
-      correlation_id, view, limit, rows: rows.length, joinable, duration_ms: Date.now() - start,
+      correlation_id, view, limit, offset, rows: rows.length, total: result.total, joinable, snapshot,
+      duration_ms: Date.now() - start,
     });
 
     res.status(200).json({
-      view: result.view, tracked_since: result.tracked_since, count: rows.length, rows,
+      view: result.view, tracked_since: result.tracked_since,
+      count: rows.length, total: result.total, offset: result.offset, snapshot, rows,
     } satisfies V1OutreachResponse);
   } catch (err) {
     if (err instanceof ZodError) {

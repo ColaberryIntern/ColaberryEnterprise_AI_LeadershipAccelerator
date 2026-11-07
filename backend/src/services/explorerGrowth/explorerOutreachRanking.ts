@@ -86,11 +86,29 @@ export function reasonsFor(s: OutreachSignals, now: number): string[] {
   return out;
 }
 
-export function rankOutreach(rows: OutreachSignals[], view: OutreachView, limit: number, now: number): OutreachRow[] {
+/**
+ * The WHOLE ranked pool, in order, before any page is cut from it.
+ *
+ * Split out from `rankOutreach` so a caller can learn the size of the real pool without
+ * paying for it twice. Before this existed the only thing a consumer could see was the page,
+ * so `count === limit` meant either "that is everyone" or "that is the first page of more",
+ * with no way to tell them apart. Cora read the capped page as the whole queue and therefore
+ * could not tell a lead that had LEFT the queue from one that had merely ranked below the cut,
+ * which is why it could not safely tag anyone out.
+ *
+ * The sort is total: score descending, ties broken by email, so the order is stable for a
+ * given input and a given `now`. It is NOT stable ACROSS time, and is not meant to be. People
+ * get contacted, windows move, and the pool is re-derived on every call.
+ */
+export function rankOutreachPool(rows: OutreachSignals[], view: OutreachView, now: number): OutreachRow[] {
   const pool = view === 'reach_out' ? rows.filter((r) => reachOutCandidate(r, now)) : rows.filter((r) => r.primary_state !== 'CONVERTED');
   const score = view === 'reach_out' ? intentScore : engagementScore;
   return pool
     .map((r) => ({ ...r, score: score(r, now), reasons: reasonsFor(r, now) }))
-    .sort((a, b) => b.score - a.score || a.email.localeCompare(b.email))
-    .slice(0, limit);
+    .sort((a, b) => b.score - a.score || a.email.localeCompare(b.email));
+}
+
+/** One page of the ranked pool. An `offset` past the end is an empty page, never an error. */
+export function rankOutreach(rows: OutreachSignals[], view: OutreachView, limit: number, now: number, offset = 0): OutreachRow[] {
+  return rankOutreachPool(rows, view, now).slice(offset, offset + limit);
 }
