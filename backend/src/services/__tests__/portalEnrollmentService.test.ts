@@ -155,3 +155,53 @@ describe('portalEnrollmentService', () => {
     });
   });
 });
+
+/**
+ * The class-date dropdown under the monthly batch model.
+ *
+ * A batch row's `start_date` is its ORIENTATION, in the month AFTER the batch, so
+ * the dropdown cannot label it a start date. `batch_month` is the only field that
+ * says which kind of row it is, and the view has to carry it or the frontend has
+ * nothing to branch on — which is exactly how the public cohort card came to
+ * advertise "December 7, 2026" for the open November cohort on 2026-11-06.
+ */
+describe('getEnrollmentView carries batch_month', () => {
+  const DEC_BATCH = {
+    id: 'c-dec', name: 'Cohort - December 2026', start_date: '2027-01-04',
+    core_day: 'Monday', core_time: '6:30 PM - 8:00 PM', max_seats: 500, seats_taken: 0,
+    status: 'open', settings_json: { batch_month: '2026-12', schedule: { core_days: ['Monday'] } },
+  };
+
+  beforeEach(() => {
+    (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: null, payment_status: 'pending' });
+  });
+
+  it('lifts batch_month onto a batch option', async () => {
+    (Cohort.findAll as jest.Mock).mockResolvedValue([DEC_BATCH]);
+    const v = await getEnrollmentView('e1', NOW);
+    expect(v!.cohorts[0].batch_month).toBe('2026-12');
+    // The orientation still travels, because the UI names it separately.
+    expect(v!.cohorts[0].start_date).toBe('2027-01-04');
+  });
+
+  it('is null for a legacy cohort, which is what keeps July and November reading as start dates', async () => {
+    (Cohort.findAll as jest.Mock).mockResolvedValue([JULY, NOV]);
+    const v = await getEnrollmentView('e1', NOW);
+    expect(v!.cohorts.map((c) => c.batch_month)).toEqual([null, null]);
+  });
+
+  it('never leaks settings_json into the option', async () => {
+    (Cohort.findAll as jest.Mock).mockResolvedValue([DEC_BATCH]);
+    const v = await getEnrollmentView('e1', NOW);
+    expect(v!.cohorts[0]).not.toHaveProperty('settings_json');
+  });
+
+  it('carries batch_month on the enrolled cohort too, not only the list', async () => {
+    // The enrolled row renders its own facts panel, which has the same problem.
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(DEC_BATCH);
+    (Cohort.findAll as jest.Mock).mockResolvedValue([DEC_BATCH]);
+    (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-dec', payment_status: 'pending' });
+    const v = await getEnrollmentView('e1', NOW);
+    expect(v!.enrolled_cohort!.batch_month).toBe('2026-12');
+  });
+});

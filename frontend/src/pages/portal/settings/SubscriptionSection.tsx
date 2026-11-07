@@ -4,7 +4,6 @@ import {
   fetchSubscription, startSubscriptionCheckout, cancelSubscription, confirmSubscriptionCheckout,
   SubscriptionView, PlanId,
 } from '../../../services/subscriptionApi';
-import { formatClassDate } from '../../../services/portalEnrollmentApi';
 import { trackEvent } from '../../../utils/tracker';
 import { markOncePerSession } from '../../../utils/oncePerSession';
 
@@ -191,16 +190,29 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       <p className="set-sub" style={{ gridColumn: '1 / -1', margin: '6px 0 0' }}>
         Secure checkout by PaySimple — pay by card or bank. You’ll be enrolled and everything unlocks the moment your payment clears.
       </p>
-      {view.class_start?.is_future && (
-        <div className="set-enroll-callout" style={{ gridColumn: '1 / -1' }}>
-          <div className="ttl">Pay early, lose nothing</div>
-          <p>
-            Your subscription month starts on your <b>class start date ({formatClassDate(view.class_start.start_date)})</b>,
-            not the day you pay. Paying now locks your seat — your first month still runs
-            from {formatClassDate(view.class_start.start_date)}.
-          </p>
-        </div>
-      )}
+      {/*
+        THIS CALLOUT WAS TITLED "Pay early, lose nothing" AND IT WAS NO LONGER TRUE.
+
+        It promised the first month ran from the class start date rather than the
+        payment date, which is what `billingAnchorMs` did until 2026-10-30. That
+        function now returns the payment date and ignores the cohort start
+        entirely — deliberately, so a rolling intake gives everyone a predictable
+        anniversary — and its own comment records the cost: "a member who signs up
+        before a class begins now spends part of their first month waiting for it."
+
+        The copy was not changed with the code, so the plan picker was making a
+        promise the billing engine does not keep, at the exact moment the student
+        is being asked to pay. The sibling Enrollment tab carried the same claim
+        and is corrected in the same change. Said plainly, this is now simply what
+        `billing/billingPeriod` does.
+      */}
+      <div className="set-enroll-callout" style={{ gridColumn: '1 / -1' }}>
+        <div className="ttl">When your membership starts</div>
+        <p>
+          Your membership runs from <b>the day you pay</b> and renews on that date each
+          month, whichever class date you picked.
+        </p>
+      </div>
     </div>
   );
 

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  fetchEnrollment, selectEnrollmentCohort, formatClassDate,
+  fetchEnrollment, selectEnrollmentCohort,
+  cohortHeadline, cohortOrientation, isBatchCohort,
   PortalEnrollmentView, EnrollmentCohortOption,
 } from '../../../services/portalEnrollmentApi';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
@@ -34,8 +35,17 @@ const INTERNSHIP_CHOICE = '__ai_internship__';
  *  - paid: seat locked; date changes go through the program team.
  */
 
+/**
+ * One row in the class-date dropdown.
+ *
+ * `cohortHeadline` is what keeps a BATCH from advertising its orientation as a
+ * start date: a batch's `start_date` falls in the month after the batch, so the
+ * month is the honest headline and the orientation goes in the note below the
+ * select rather than into the option text. A legacy fixed-start cohort reads
+ * exactly as it always has.
+ */
 const optionLabel = (c: EnrollmentCohortOption): string => {
-  let label = formatClassDate(c.start_date);
+  let label = cohortHeadline(c);
   if (c.core_day && c.core_time) label += ` · ${c.core_day} ${c.core_time}`;
   if (c.seats_left != null && c.seats_left <= 10) label += ` · ${c.seats_left} seats left`;
   return label;
@@ -69,7 +79,12 @@ const EnrollmentSection: React.FC<{
 
   const enrolled = view.enrolled_cohort;
   const selected = view.cohorts.find((c) => c.id === choice) || null;
-  const selectedDate = selected ? formatClassDate(selected.start_date) : null;
+  const selectedDate = selected ? cohortHeadline(selected) : null;
+  const selectedOrientation = selected ? cohortOrientation(selected) : null;
+  // The field is only a "start date" while every option in it IS one. Once a
+  // batch is open the student is choosing a month, not a day, and calling that
+  // field a start date is the same error as printing the orientation in it.
+  const dateFieldLabel = view.cohorts.some(isBatchCohort) ? 'Your batch' : 'Class start date';
 
   /**
    * Start an internship application and go to it.
@@ -110,28 +125,67 @@ const EnrollmentSection: React.FC<{
     } finally { setBusy(false); }
   };
 
-  // The "pay early without penalty" promise, anchored to the chosen date.
-  const payEarlyNote = (dateLabel: string | null) => (
+  /**
+   * Enrolling versus paying.
+   *
+   * THIS BLOCK USED TO PROMISE THAT PAYING EARLY COST NOTHING, and it was true
+   * when it was written: billing anchored on the class start date, so paying 7/20
+   * for a class starting 7/23 still ran the first month 7/23 to 8/23. It stopped
+   * being true on 2026-10-30. `billingAnchorMs` now returns the payment date and
+   * ignores the cohort start entirely — a deliberate change, made so a rolling
+   * intake gives everyone a predictable anniversary, and its own comment records
+   * the cost: "a member who signs up before a class begins now spends part of
+   * their first month waiting for it."
+   *
+   * The copy was not changed with the code, so this screen has been making a
+   * money promise the billing engine does not keep, to exactly the students being
+   * asked to pay. What it says now is what `billingPeriod` actually does.
+   */
+  const payEarlyNote = () => (
     <div className="set-enroll-callout">
       <div className="ttl">Enroll now — pay when you’re ready</div>
       <p>
-        Enrolling needs no card and reserves your spot. Paying locks your seat — and your
-        subscription month starts on your <b>class start date{dateLabel ? ` (${dateLabel})` : ''}</b>,
-        not the day you pay. Pay before class starts and your first month still runs
-        from {dateLabel || 'class day'} — paying early never costs you time.
+        Enrolling needs no card and reserves your spot. Paying locks your seat in, and your
+        membership runs from <b>the day you pay</b>, renewing on that date each month.
       </p>
     </div>
   );
 
+  /**
+   * The facts panel, shared by the unpaid and the paid states.
+   *
+   * Which facts there ARE depends on the kind of row. A legacy cohort has a class
+   * start date and a cohort name. A batch has a month and an orientation, and its
+   * name ("Cohort - December 2026") only repeats the month, so printing both reads
+   * as two different things that happen to agree.
+   */
+  const enrollmentFacts = (c: EnrollmentCohortOption) => {
+    const orientation = cohortOrientation(c);
+    return (
+      <div className="set-enroll-facts">
+        <div className="fact">
+          <span className="k">{orientation ? 'Your batch' : 'Class starts'}</span>
+          <span className="v">{cohortHeadline(c)}</span>
+        </div>
+        {orientation
+          ? <div className="fact"><span className="k">Orientation</span><span className="v">{orientation}</span></div>
+          : <div className="fact"><span className="k">Cohort</span><span className="v">{c.name}</span></div>}
+        {c.core_day && (
+          <div className="fact"><span className="k">Live classes</span><span className="v">{c.core_day}s{c.core_time ? ` · ${c.core_time}` : ''}</span></div>
+        )}
+      </div>
+    );
+  };
+
   const datePicker = (
     <div className="set-field" style={{ maxWidth: 420 }}>
-      <label className="set-label" htmlFor="enroll-date">Class start date</label>
+      <label className="set-label" htmlFor="enroll-date">{dateFieldLabel}</label>
       <select id="enroll-date" className="set-input" value={choice} onChange={(e) => setChoice(e.target.value)}>
         {/* Grouped so the internship never reads as a class DATE. Every other
             option in this list is a day in the calendar; an ungrouped
             "AI Internship" sitting among them is a category error a student has
             to squint at. */}
-        <optgroup label="Class start date">
+        <optgroup label={dateFieldLabel}>
           {view.cohorts.map((c) => (
             <option key={c.id} value={c.id}>{optionLabel(c)}</option>
           ))}
@@ -146,14 +200,23 @@ const EnrollmentSection: React.FC<{
       </select>
       {choice === INTERNSHIP_CHOICE ? (
         <span className="set-sub" style={{ margin: '2px 0 0' }}>
-          Rolling weekly starts, no fixed end date. You keep your class enrolment —
+          Rolling weekly starts, no fixed end date. You keep your class enrollment —
           the internship is added on top, not instead.
         </span>
-      ) : selected?.core_day && (
+      ) : (selectedOrientation || selected?.core_day) ? (
         <span className="set-sub" style={{ margin: '2px 0 0' }}>
-          Live classes meet {selected.core_day}s, {selected.core_time || ''}.
+          {/* For a batch the orientation has to be said out loud HERE, because it
+              is deliberately not in the option text. Leaving it out entirely
+              would be the opposite error: a student who sees only "December 2026"
+              has no idea when the group meets for the first time. */}
+          {selectedOrientation && (
+            <>You start as soon as you enroll and the work is self-paced. Orientation is {selectedOrientation}. </>
+          )}
+          {selected?.core_day && (
+            <>Live classes meet {selected.core_day}s{selected.core_time ? `, ${selected.core_time}` : ''}.</>
+          )}
         </span>
-      )}
+      ) : null}
     </div>
   );
 
@@ -181,7 +244,7 @@ const EnrollmentSection: React.FC<{
                       : `Enroll — reserve my spot${selectedDate ? ` for ${selectedDate}` : ''}`}
                 </button>
               </div>
-              {choice !== INTERNSHIP_CHOICE && payEarlyNote(selectedDate)}
+              {choice !== INTERNSHIP_CHOICE && payEarlyNote()}
             </>
           )}
         </>
@@ -191,13 +254,7 @@ const EnrollmentSection: React.FC<{
       {enrolled && !view.paid && (
         <>
           <span className="set-sub-badge active">● Enrolled</span>
-          <div className="set-enroll-facts">
-            <div className="fact"><span className="k">Class starts</span><span className="v">{formatClassDate(enrolled.start_date)}</span></div>
-            <div className="fact"><span className="k">Cohort</span><span className="v">{enrolled.name}</span></div>
-            {enrolled.core_day && (
-              <div className="fact"><span className="k">Live classes</span><span className="v">{enrolled.core_day}s{enrolled.core_time ? ` · ${enrolled.core_time}` : ''}</span></div>
-            )}
-          </div>
+          {enrollmentFacts(enrolled)}
           <p className="set-sub">
             Your spot is reserved. To <b>lock in your seat</b>, choose a plan on the Subscription tab.
           </p>
@@ -223,7 +280,7 @@ const EnrollmentSection: React.FC<{
               </div>
             </>
           )}
-          {payEarlyNote(formatClassDate(enrolled.start_date))}
+          {payEarlyNote()}
         </>
       )}
 
@@ -231,13 +288,7 @@ const EnrollmentSection: React.FC<{
       {enrolled && view.paid && (
         <>
           <span className="set-sub-badge active">● Seat locked</span>
-          <div className="set-enroll-facts">
-            <div className="fact"><span className="k">Class starts</span><span className="v">{formatClassDate(enrolled.start_date)}</span></div>
-            <div className="fact"><span className="k">Cohort</span><span className="v">{enrolled.name}</span></div>
-            {enrolled.core_day && (
-              <div className="fact"><span className="k">Live classes</span><span className="v">{enrolled.core_day}s{enrolled.core_time ? ` · ${enrolled.core_time}` : ''}</span></div>
-            )}
-          </div>
+          {enrollmentFacts(enrolled)}
           <p className="set-sub">
             You’re enrolled and your seat is locked in — see you in class. Need a different
             start date? Contact the program team and we’ll move you, no penalty.

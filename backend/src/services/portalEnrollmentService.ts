@@ -1,5 +1,6 @@
 import { Enrollment, Cohort } from '../models';
 import { isNonPayingCohortName } from './subscriptionService';
+import { readBatchMonth } from './cohortBatchMonth';
 
 /**
  * portalEnrollmentService — the student-facing "pick your class date" flow
@@ -21,7 +22,18 @@ import { isNonPayingCohortName } from './subscriptionService';
 export interface EnrollmentCohortOption {
   id: string;
   name: string;
-  start_date: string;          // DATEONLY 'YYYY-MM-DD'
+  /**
+   * DATEONLY 'YYYY-MM-DD'. READ `batch_month` BEFORE SHOWING THIS TO A STUDENT:
+   * for a batch row this is the ORIENTATION, not the day class starts.
+   */
+  start_date: string;
+  /**
+   * 'YYYY-MM' when this row is a monthly batch, null for a legacy fixed-start
+   * cohort. See cohortBatchMonth for what the distinction means; the short
+   * version is that it decides whether `start_date` may be labelled as a start
+   * date at all.
+   */
+  batch_month: string | null;
   core_day: string | null;
   core_time: string | null;
   seats_left: number | null;
@@ -46,10 +58,18 @@ export type SelectCohortResult =
   | { ok: true; changed: boolean; view: PortalEnrollmentView }
   | { ok: false; reason: SelectCohortReason };
 
-const toOption = (c: any): EnrollmentCohortOption => ({
+/**
+ * One cohort as the dropdown sees it.
+ *
+ * Exported so the mapping can be tested without a database — the `batch_month`
+ * lift is the part that stops this dropdown advertising an orientation as a
+ * class start date, and it is worth a test that does not need Postgres running.
+ */
+export const toOption = (c: any): EnrollmentCohortOption => ({
   id: c.id,
   name: c.name,
   start_date: String(c.start_date).slice(0, 10),
+  batch_month: readBatchMonth(c?.settings_json),
   core_day: c.core_day ?? null,
   core_time: c.core_time ?? null,
   seats_left: typeof c.max_seats === 'number' && typeof c.seats_taken === 'number'
