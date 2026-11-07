@@ -262,13 +262,15 @@ describe('AgentWorkV2', () => {
   // Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
   // Reese... should send a message about that case." Confirmed via
   // AskUserQuestion: pre-fill the draft, never auto-send.
-  it('"Discuss with Reese" drafts a real, ticket-specific message, then navigates to the Talk tab', async () => {
+  // Relabelled 2026-11-06: this page renders for every agent, so the button no longer names
+  // Reese. The behaviour it asserts is unchanged.
+  it('"Discuss with this agent" drafts a real, ticket-specific message, then navigates to the Talk tab', async () => {
     const onNavigate = jest.fn();
     const onDraftTalk = jest.fn();
     const t = ticket({ id: 't-1', ticket_number: 7, title: 'Student support case', status: 'in_progress', status_bucket: 'overdue' });
     await renderTab([t], onNavigate, onDraftTalk);
 
-    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Discuss with Reese');
+    const btn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Discuss with this agent');
     await act(async () => { btn!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     expect(onDraftTalk).toHaveBeenCalledWith(t);

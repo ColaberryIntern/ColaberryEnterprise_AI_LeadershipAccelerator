@@ -194,14 +194,14 @@ describe('AgentWorkDecisionsTab — 4-quadrant inspector honesty (Track E)', () 
     expect(container.textContent).toContain('scheduled_emails (email-1)');
   });
 
-  it('quadrant 2 ("What does Reese know?") shows the real confidence/risk/impact/priority scores, honestly labeled as scores not facts', async () => {
+  it('quadrant 2 ("What does this agent know?") shows the real confidence/risk/impact/priority scores, honestly labeled as scores not facts', async () => {
     getInboxItemInspector.mockResolvedValue({ blastRadius: 'x', reversibility: 'y', expectedResult: 'z' });
     await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
 
     const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
     await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
 
-    expect(container.textContent).toContain('What does Reese know?');
+    expect(container.textContent).toContain('What does this agent know?');
     expect(container.textContent).toContain('Not tracked as a facts list');
     expect(container.textContent).toContain('Confidence 0.88 · Risk 0.2 · Impact 0.5 · Priority 0.7');
   });
@@ -370,5 +370,57 @@ describe('AgentWorkDecisionsTab — Approval Requests (Decision Journal enrichme
     getAgentExplainability.mockRejectedValue({ response: { data: { error: 'Explainability service unavailable' } } });
     await renderTab();
     expect(container.textContent).toContain('Could not load approval requests: Explainability service unavailable');
+  });
+});
+
+/**
+ * The page's own copy must not name a particular agent.
+ *
+ * Reported by Mihret Netsereab, the product experience builder, on 6 Nov 2026, with a screenshot
+ * of HER agent's page describing Reese by name and in the feminine. The copy was written when
+ * Reese was the only agent with this page; it now renders for every agent, so every builder reads
+ * a description of somebody else's.
+ *
+ * ## The positive control is the point of this block
+ *
+ * "the word Reese does not appear" would be the wrong assertion and would make this test a
+ * liability: `reese_autonomous_outreach` is a REAL action name that this card renders from data,
+ * and it must keep rendering. So the first case proves the data still names Reese, and only then
+ * do the remaining cases pin that the STATIC copy around it does not. Without the control, this
+ * block would pass just as happily against a card that rendered nothing at all.
+ */
+describe('AgentWorkDecisionsTab — the copy describes "this agent", not a named one', () => {
+  it('POSITIVE CONTROL: an action named after Reese in the DATA still renders, untouched', async () => {
+    getAgentExplainability.mockResolvedValue(EXPLAINABILITY);
+    await renderTab();
+    expect(container.textContent).toContain('reese_autonomous_outreach');
+  });
+
+  it('the Decision Journal hint says "this agent", in the neuter', async () => {
+    getAgentExplainability.mockResolvedValue(EXPLAINABILITY);
+    await renderTab();
+    expect(container.textContent).toContain("A chronological log of this agent's own automated checks");
+    expect(container.textContent).toContain('across all of its work');
+    expect(container.textContent).not.toContain("Reese's own automated checks");
+  });
+
+  it('the Approval Requests hint says "This agent", in the neuter', async () => {
+    getAgentExplainability.mockResolvedValue(EXPLAINABILITY);
+    await renderTab();
+    expect(container.textContent).toContain("This agent's own ticket-dispatch authorization history");
+    expect(container.textContent).toContain('one of its sends was held for human review');
+    expect(container.textContent).not.toContain("Reese's own ticket-dispatch");
+  });
+
+  it('the inspector quadrant heading asks about "this agent"', async () => {
+    getAgentExplainability.mockResolvedValue(EXPLAINABILITY);
+    getInboxItemInspector.mockResolvedValue({ blastRadius: 'x', reversibility: 'y', expectedResult: 'z' });
+    await renderTab({ inboxItems: [REAL_EXECUTOR_ITEM] });
+
+    const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'View details')!;
+    await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
+
+    expect(container.textContent).toContain('What does this agent know?');
+    expect(container.textContent).not.toContain('What does Reese know?');
   });
 });
