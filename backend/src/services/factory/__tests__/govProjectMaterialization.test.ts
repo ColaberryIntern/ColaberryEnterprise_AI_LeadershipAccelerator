@@ -104,6 +104,24 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     expect(mock(ensureAssigneeCanBuild)).toHaveBeenCalledWith('dp-1', 'id-1', null);
   });
 
+  // The grant is not best-effort: a project whose own builder cannot open it is not a successful materialize. The
+  // reason is translated into this module's own error so the route answers 503 (retryable) rather than a bare 500,
+  // and the project is kept — step 3 reuses the one on the solution_build track, so a retry cannot duplicate it.
+  it('a FAILED grant fails the materialize as grant_failed, rather than returning a project the intern cannot open', async () => {
+    const project: any = { id: 'proj-1', project_variables: {}, save: jest.fn().mockResolvedValue(undefined) };
+    mock(createNewProjectForEnrollment).mockResolvedValue(project);
+    const grantErr: any = new Error('The builder role could not be granted on this project.');
+    grantErr.name = 'AssignmentError';
+    grantErr.reason = 'grant_failed';
+    // Once, not for the suite: jest.clearAllMocks() clears calls but keeps implementations, so a persistent
+    // rejection here would leak into every test that follows.
+    mock(ensureAssigneeCanBuild).mockRejectedValueOnce(grantErr);
+    await expect(materializeGovBuildProject(baseInput)).rejects.toMatchObject({
+      name: 'GovMaterializeError', reason: 'grant_failed',
+    });
+    expect(mock(materializePlanAsTasks)).not.toHaveBeenCalled(); // stops before writing the task rows
+  });
+
   it('does NOT grant membership when materialize fails before the project is ensured', async () => {
     mock(blockingViolations).mockReturnValue([{ rule: 'release_unbalanced', message: 'too much in r0' }]);
     await expect(materializeGovBuildProject(baseInput)).rejects.toMatchObject({ reason: 'plan_blocked' });

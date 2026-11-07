@@ -255,7 +255,10 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/build-stor
     res.json(view);
   } catch (err: any) {
     if (err instanceof AssignmentError) {
-      res.status(err.reason === 'assignee_not_builder' ? 422 : 400).json({ error: err.message, reason: err.reason });
+      // grant_failed is ours, not the caller's: the membership write failed, so nothing was assigned. 503 so the
+      // operator reads it as "retry", not "your request was wrong".
+      const status = err.reason === 'assignee_not_builder' ? 422 : err.reason === 'grant_failed' ? 503 : 400;
+      res.status(status).json({ error: err.message, reason: err.reason });
       return;
     }
     logFail('gov_build_assign_failed', err, { canonicalOpportunityId, storyId });
@@ -863,6 +866,9 @@ const materializeBuildBody = z.object({
 });
 const GOV_MATERIALIZE_STATUS: Record<GovMaterializeReason, number> = {
   bad_input: 400, no_enrollment: 422, no_program: 422, plan_blocked: 409, decompose_error: 503,
+  // Not the operator's input: the grant itself failed, so the project exists but its builder could not be
+  // authorized on it. Retryable — materialize reuses the project on the solution_build track.
+  grant_failed: 503,
 };
 
 /** POST …/materialize-build-project — turn the authorized build into a REAL monitored student project owned by

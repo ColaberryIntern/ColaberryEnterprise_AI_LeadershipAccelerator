@@ -89,7 +89,7 @@ describe('projectGovPipelineCard', () => {
       requirements_json: { established: [establishedReq] },
       updated_at: '2026-10-27T12:00:00.000Z',
     };
-    const build = { studentProjectId: 'sp-1', pct: 40, verified: 2, total: 5 };
+    const build = { studentProjectId: 'sp-1', pct: 40, verified: 2, total: 5, studentProjectName: 'ERP build' };
     const card = projectGovPipelineCard(rec, build);
     expect(card.stage).toBe('in_build');
     expect(card.isDecoupled).toBe(false);
@@ -124,7 +124,7 @@ describe('projectGovPipelineCard', () => {
       delivery_project_id: 'dp-9', source_snapshot: { closeDate: '2026-12-01' },
       requirements_json: { established: [] },
     };
-    const card = projectGovPipelineCard(rec, { studentProjectId: 'sp', pct: 0, verified: 0, total: 3 },
+    const card = projectGovPipelineCard(rec, { studentProjectId: 'sp', pct: 0, verified: 0, total: 3, studentProjectName: null },
       [{ identityId: 'id-1', name: 'Omolola', email: 'om@x.com' }]);
     expect(card.closeDate).toBe('2026-12-01');
     expect(card.assignedInterns).toEqual([{ identityId: 'id-1', name: 'Omolola', email: 'om@x.com' }]);
@@ -135,6 +135,43 @@ describe('projectGovPipelineCard', () => {
     const card = projectGovPipelineCard({ canonical_opportunity_id: 'gws:x', requirements_json: {} }, null);
     expect(card.assignedInterns).toEqual([]);
     expect(card.hasActiveIntern).toBe(false);
+  });
+
+  // A ZIP-uploaded pursuit can reach approval carrying only its workspace uuid: no provenance title, no OP
+  // snapshot. Before the fallback below, the funnel card title was null and the left-nav label degraded to the
+  // raw `gws:<uuid>` key, which is what made the Crash Records build unfindable on the admin page.
+  const untitled = (deliveryProjectId: string | null = 'dp-crash') => ({
+    canonical_opportunity_id: 'gws:2ac2fdbc-9675-4f61-9baa-1020493600e8',
+    bidding_entity: 'colaberry', decision: 'approved_bid_pursuit', version: 1,
+    delivery_project_id: deliveryProjectId,
+    requirements_json: { provenance: { uuid: '2ac2fdbc-9675-4f61-9baa-1020493600e8' } },
+  });
+
+  it('falls back to the materialized project name when the pursuit itself never captured a title', () => {
+    const card = projectGovPipelineCard(untitled(), {
+      studentProjectId: 'sp-crash', pct: 0, verified: 0, total: 16,
+      studentProjectName: 'Crash Records Information System Service Agreement',
+    });
+    expect(card.title).toBe('Crash Records Information System Service Agreement');
+  });
+
+  it('prefers the pursuit\'s own title over the project name when it has one', () => {
+    const rec = { ...untitled(), requirements_json: { provenance: { title: 'The real solicitation title' } } };
+    const card = projectGovPipelineCard(rec, {
+      studentProjectId: 'sp', pct: 0, verified: 0, total: 1, studentProjectName: 'Whatever the operator typed',
+    });
+    expect(card.title).toBe('The real solicitation title');
+  });
+
+  it('stays null for an untitled pursuit with no build to borrow a name from', () => {
+    expect(projectGovPipelineCard(untitled(null), null).title).toBeNull();
+  });
+
+  it('treats an empty project name as no name rather than an empty title', () => {
+    const card = projectGovPipelineCard(untitled(), {
+      studentProjectId: 'sp', pct: 0, verified: 0, total: 1, studentProjectName: null,
+    });
+    expect(card.title).toBeNull();
   });
 });
 

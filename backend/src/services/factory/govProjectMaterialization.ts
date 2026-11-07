@@ -33,7 +33,10 @@ import { factoryId } from './factoryIds';
 import { decomposeGovBuildPlanRaw } from './govBuildPlanAI';
 import { rescaleScheduleToDeadline } from './govScheduleWindow';
 
-export type GovMaterializeReason = 'no_enrollment' | 'no_program' | 'decompose_error' | 'plan_blocked' | 'bad_input';
+export type GovMaterializeReason =
+  | 'no_enrollment' | 'no_program' | 'decompose_error' | 'plan_blocked' | 'bad_input'
+  /** The intern's builder role could not be granted on the delivery project — see the grant step below. */
+  | 'grant_failed';
 export class GovMaterializeError extends Error {
   constructor(public readonly reason: GovMaterializeReason, message: string) {
     super(message);
@@ -155,7 +158,16 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
   // monitored project but never a delivery membership. Idempotent and non-destructive, mirroring the per-story
   // ensureAssigneeCanBuild, so re-running materialize backfills an already-assigned intern, and an existing
   // membership of any role is left untouched.
-  await ensureAssigneeCanBuild(input.deliveryProjectId, input.assigneeIdentityId, input.actorIdentityId ?? null);
+  // Translated into this module's own error so the route maps it (503, retryable) instead of falling through to a
+  // bare 500. A failed grant is NOT survivable here: the project would exist and its own builder could not open it.
+  try {
+    await ensureAssigneeCanBuild(input.deliveryProjectId, input.assigneeIdentityId, input.actorIdentityId ?? null);
+  } catch (err: any) {
+    if (err?.name === 'AssignmentError' && err.reason === 'grant_failed') {
+      throw new GovMaterializeError('grant_failed', `${err.message} The project is kept and reused on retry.`);
+    }
+    throw err;
+  }
 
   // 4. Schedule + materialize (idempotent on (project_id, story_id); injects the STORY-000 Command Center).
   //    Back-scheduled to finish the day before the deadline when one is known (owner's "day before" rule).
