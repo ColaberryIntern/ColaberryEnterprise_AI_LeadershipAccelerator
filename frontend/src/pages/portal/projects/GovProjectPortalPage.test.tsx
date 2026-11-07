@@ -42,8 +42,12 @@ async function render(projectId = 'dp-A') {
 }
 beforeEach(() => {
   // The persistent agent panel (and Open items) read these on mount; without a promise they throw.
+  // v4: the panel's top-needs cards read listNeeds (grouped), replacing the old listQuestions read.
+  (api.portalGovStudioApi.listNeeds as jest.Mock).mockResolvedValue({ needs: [] });
   (api.portalGovStudioApi.listQuestions as jest.Mock).mockResolvedValue([]);
   (api.portalGovStudioApi.listActivity as jest.Mock).mockResolvedValue([]);
+  // The studio offers its guided tour once per browser; pre-seed "seen" so it doesn't auto-open during these tests.
+  try { window.localStorage.setItem('gps-tour-seen', '1'); } catch { /* jsdom always has storage */ }
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.clearAllMocks(); });
 

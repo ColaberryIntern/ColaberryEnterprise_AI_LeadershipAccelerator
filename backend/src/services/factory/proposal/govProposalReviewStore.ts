@@ -15,7 +15,7 @@ import GovProposalDocument from '../../../models/GovProposalDocument';
 import GovProposalDocumentVersion from '../../../models/GovProposalDocumentVersion';
 import GovProposalGateReview from '../../../models/GovProposalGateReview';
 import { GATE_ORDER, type GovProposalGate, type CheckScores, type CheckFinding, type VersionAuthorKind } from './proposalReviewTypes';
-import { GATE_CHECKS, CHECK_FLOOR, weightedTotal, PASS_THRESHOLD } from './proposalReviewConfig';
+import { GATE_CHECKS, CHECK_FLOOR, weightedTotal, PASS_THRESHOLD, AI_GATES } from './proposalReviewConfig';
 import type { ProposalDocumentSection } from './govProposalDocuments';
 import { diffVersionsHtml, type DiffSegment } from './htmlTextDiff';
 
@@ -64,21 +64,27 @@ export async function docIdFor(deliveryProjectId: string, docKey: string): Promi
   return doc ? doc.id : null;
 }
 
-/** Write a version's evaluation ONCE (content stays immutable; this fills scores/findings/passes/page_count). */
-export async function recordVersionChecks(versionId: string, result: { scores: CheckScores; findings: CheckFinding[]; passes: boolean; pageCount: number | null }): Promise<void> {
-  await GovProposalDocumentVersion.update(
-    { check_scores: result.scores, findings: result.findings, passes: result.passes, page_count: result.pageCount } as any,
-    { where: { id: versionId } },
-  );
+/** Write a version's evaluation ONCE (content stays immutable; this fills scores/findings/passes/page_count, and the
+ *  independent judge run ids when supplied — T11). */
+export async function recordVersionChecks(
+  versionId: string,
+  result: { scores: CheckScores; findings: CheckFinding[]; passes: boolean; pageCount: number | null },
+  judgeRunIds?: string[] | null,
+): Promise<void> {
+  const fields: Record<string, unknown> = { check_scores: result.scores, findings: result.findings, passes: result.passes, page_count: result.pageCount };
+  if (Array.isArray(judgeRunIds)) fields.judge_run_ids = judgeRunIds;
+  await GovProposalDocumentVersion.update(fields as any, { where: { id: versionId } });
 }
 
 export interface VersionView {
   id: string; version: number; authorKind: VersionAuthorKind; changeSummary: string | null;
   scores: Partial<CheckScores>; findings: CheckFinding[]; passes: boolean; pageCount: number | null; createdAt: string | null;
+  /** v3 T11: the independent judge run ids recorded for this version (evaluator/proof/clarity), when scored. */
+  judgeRunIds: string[];
 }
 function toVersionView(row: any): VersionView {
   const p = typeof row?.get === 'function' ? row.get({ plain: true }) : row;
-  return { id: p.id, version: p.version, authorKind: p.author_kind, changeSummary: p.change_summary ?? null, scores: p.check_scores ?? {}, findings: Array.isArray(p.findings) ? p.findings : [], passes: !!p.passes, pageCount: p.page_count ?? null, createdAt: p.created_at ? new Date(p.created_at).toISOString() : null };
+  return { id: p.id, version: p.version, authorKind: p.author_kind, changeSummary: p.change_summary ?? null, scores: p.check_scores ?? {}, findings: Array.isArray(p.findings) ? p.findings : [], passes: !!p.passes, pageCount: p.page_count ?? null, createdAt: p.created_at ? new Date(p.created_at).toISOString() : null, judgeRunIds: Array.isArray(p.judge_run_ids) ? p.judge_run_ids : [] };
 }
 
 export async function listDocumentVersions(documentId: string): Promise<VersionView[]> {
@@ -166,6 +172,30 @@ export function versionPassesGate(scores: Partial<CheckScores>, findings: CheckF
   return floorsMet;
 }
 
+/** PURE (T13): of the AI gates (pink/red/white_glove), the ones this version now passes — the judge auto-records these. */
+export function gatesToAutoRecord(scores: Partial<CheckScores>, findings: CheckFinding[]): GovProposalGate[] {
+  return AI_GATES.filter((g) => versionPassesGate(scores, findings, g));
+}
+
+/**
+ * v3 (T13): the AI judge records the AI gates it now passes on the scored version — `decided_by:'ai_judge'`, carrying
+ * the scores snapshot and the judge run ids (the gate's evidence). Never touches the human Gold gate, so separation of
+ * duties is preserved. A new version resets every gate to pending (createDocumentVersion), so this re-records only the
+ * gates the new content passes. Best-effort; never throws past the caller.
+ */
+export async function recordAiGates(documentId: string, versionId: string, scores: Partial<CheckScores>, findings: CheckFinding[], judgeRunIds?: string[] | null): Promise<GovProposalGate[]> {
+  if (!documentId || !versionId) return [];
+  const recorded: GovProposalGate[] = [];
+  for (const gate of gatesToAutoRecord(scores, findings)) {
+    try {
+      const [row]: any = await GovProposalGateReview.findOrCreate({ where: { document_id: documentId, gate }, defaults: { document_id: documentId, gate, status: 'pending' } as any });
+      await row.update({ status: 'approved', version_id: versionId, decided_by: 'ai_judge', reviewer_identity_id: null, scores, judge_run_ids: judgeRunIds ?? null, decided_at: new Date(), updated_at: new Date() } as any);
+      recorded.push(gate);
+    } catch { /* best-effort per gate; a write error on one gate never sinks the rest */ }
+  }
+  return recorded;
+}
+
 export interface GateView { gate: GovProposalGate; status: string; versionId: string | null; note: string | null; decidedAt: string | null; }
 export async function listGateReviews(documentId: string): Promise<GateView[]> {
   const rows = await GovProposalGateReview.findAll({ where: { document_id: documentId } });
@@ -215,4 +245,46 @@ export async function decideGate(input: DecideGateInput): Promise<GateView[]> {
   }
   await upsertGate('approved', currentVersionId);
   return listGateReviews(documentId);
+}
+
+export interface ProjectGoldResult { approved: string[]; skipped: Array<{ docKey: string; reason: string }> }
+
+/**
+ * Go (T13): record the Gold gate on EVERY eligible (non-superseded) document at its current version, enforcing
+ * separation of duties per document (via decideGate). Returns which documents were approved and which were skipped
+ * (with the reason — e.g. SoD, earlier gate not approved, checks not met). A per-document failure never sinks the rest.
+ */
+export async function recordProjectGold(deliveryProjectId: string, reviewerIdentityId: string | null, opts?: { isMasterAdmin?: boolean }): Promise<ProjectGoldResult> {
+  const approved: string[] = [];
+  const skipped: Array<{ docKey: string; reason: string }> = [];
+  const docs: any[] = await GovProposalDocument.findAll({ where: { delivery_project_id: deliveryProjectId }, order: [['order_index', 'ASC']] });
+  for (const d of docs) {
+    const p = d.get({ plain: true });
+    if (p.superseded) continue;
+    try {
+      await decideGate({ documentId: p.id, gate: 'gold', reviewerIdentityId, decision: 'approve', isMasterAdmin: opts?.isMasterAdmin });
+      approved.push(p.doc_key);
+    } catch (err) {
+      skipped.push({ docKey: p.doc_key, reason: err instanceof ProposalReviewError ? err.reason : 'error' });
+    }
+  }
+  return { approved, skipped };
+}
+
+/**
+ * No-go (T13): return the Gold gate on every document with the reviewer's note. The package is locked until a new
+ * version reopens Gold (createDocumentVersion resets the gates). Returns the documents whose Gold gate was returned.
+ */
+export async function recordProjectNoGo(deliveryProjectId: string, reviewerIdentityId: string | null, note: string): Promise<{ returned: string[] }> {
+  const returned: string[] = [];
+  const docs: any[] = await GovProposalDocument.findAll({ where: { delivery_project_id: deliveryProjectId }, order: [['order_index', 'ASC']] });
+  for (const d of docs) {
+    const p = d.get({ plain: true });
+    if (p.superseded) continue;
+    try {
+      await decideGate({ documentId: p.id, gate: 'gold', reviewerIdentityId, decision: 'return', note });
+      returned.push(p.doc_key);
+    } catch { /* best-effort; a return never enforces checks, so this rarely throws */ }
+  }
+  return { returned };
 }

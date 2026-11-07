@@ -1,5 +1,5 @@
 import api from '../utils/api';
-import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult, GovStudioApi, GovOpenQuestion, GovActivityEvent, GovReviewRun, GovVersionContent, GovSectionPlanFields } from './govProjectPortalApi';
+import type { StudentGovProjectView, GovCockpitApi, GovCopilotAnswer, GovProposalDocument, GovReviewApi, GovDocumentVersion, GovGateReview, GovCheckRunResult, GovGateName, GovDiffSegment, GovSignatureView, GovPackageResult, GovStudioApi, GovOpenQuestion, GovActivityEvent, GovReviewRun, GovVersionContent, GovSectionPlanFields, GovNeedsGrouped, GovNeedSubmission, GovNeedResolveResult, GovBuildAllResult } from './govProjectPortalApi';
 
 /**
  * adminGovContractsApi — the admin Interns-hub "Gov Contracts" tab's one data call.
@@ -191,6 +191,8 @@ export const adminGovReviewApi: GovReviewApi = {
   uploadSignedForm: adminUploadGovSignedForm,
   assemblePackage: adminAssembleGovPackage,
   saveSectionPlan: adminSaveGovSectionPlan,
+  editDocument: adminEditGovDocument,
+  decideGold: adminDecideGovGold,
 };
 
 /** U1 (B.7): save a reviewer's section plan for one section; the backend writes a new human version. */
@@ -234,6 +236,28 @@ export async function adminGetGovVersionContent(projectId: string, docKey: strin
   return data as GovVersionContent;
 }
 
+// ── v3 (V1): typed needs list, resolve, Build-all, human edit, Gold Go/No-go (admin token) ─────────────────────
+export async function adminListGovNeeds(projectId: string): Promise<GovNeedsGrouped> {
+  const { data } = await api.get<Partial<GovNeedsGrouped>>(`${adminBase(projectId)}/needs`);
+  return { needs: data?.needs ?? [], blockingExport: data?.blockingExport ?? [], holdingScore: data?.holdingScore ?? [] };
+}
+export async function adminResolveGovNeed(projectId: string, key: string, submission: GovNeedSubmission): Promise<GovNeedResolveResult> {
+  const { data } = await api.post<GovNeedResolveResult>(`${adminBase(projectId)}/needs/${encodeURIComponent(key)}/resolve`, submission);
+  return { resolved: data?.resolved ?? key, store: data?.store ?? '', status: data?.status ?? '', unblocked: Array.isArray(data?.unblocked) ? data.unblocked : [] };
+}
+export async function adminBuildAllGovDocuments(projectId: string): Promise<GovBuildAllResult> {
+  const { data } = await api.post<Partial<GovBuildAllResult>>(`${adminBase(projectId)}/build-all`, {});
+  return { started: !!data?.started, enqueued: Array.isArray(data?.enqueued) ? data.enqueued : [], skipped: Array.isArray(data?.skipped) ? data.skipped : [] };
+}
+export async function adminEditGovDocument(projectId: string, docKey: string, contentHtml: string): Promise<{ saved: boolean; passes: boolean; resumed: boolean }> {
+  const { data } = await api.post<{ saved: boolean; passes: boolean; resumed: boolean }>(adminDocUrl(projectId, docKey, 'edit'), { contentHtml });
+  return { saved: !!data?.saved, passes: !!data?.passes, resumed: !!data?.resumed };
+}
+export async function adminDecideGovGold(projectId: string, decision: 'go' | 'nogo', note?: string): Promise<{ decision: string; approved?: string[]; skipped?: Array<{ docKey: string; reason: string }>; returned?: string[] }> {
+  const { data } = await api.post<{ decision: string; approved?: string[]; skipped?: Array<{ docKey: string; reason: string }>; returned?: string[] }>(`${adminBase(projectId)}/gold`, { decision, note });
+  return data;
+}
+
 /** The admin Studio read-model adapter (gates/pricing routes stay on adminGovReviewApi). */
 export const adminGovStudioApi: GovStudioApi = {
   listQuestions: adminListGovQuestions,
@@ -242,4 +266,7 @@ export const adminGovStudioApi: GovStudioApi = {
   startReviewCycle: adminStartGovReviewCycle,
   getReviewRun: adminGetGovReviewRun,
   getVersionContent: adminGetGovVersionContent,
+  listNeeds: adminListGovNeeds,
+  resolveNeed: adminResolveGovNeed,
+  buildAll: adminBuildAllGovDocuments,
 };

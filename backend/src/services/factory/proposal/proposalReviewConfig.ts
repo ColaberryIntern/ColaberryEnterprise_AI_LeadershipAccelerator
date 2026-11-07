@@ -31,6 +31,19 @@ export const GATE_CHECKS: Record<GovProposalGate, CheckKey[]> = {
   white_glove: ['format'],
 };
 
+/**
+ * v3 (T13) GATE AUTOMATION CONFIG. The AI judge records the AI gates automatically when the version passes their
+ * checks (`decided_by:'ai_judge'`); the human gate (Gold) is the single package Go/No-go a person gives, never the
+ * AI. This split is the operating model's spine: AI builds + judges, a human gives one Go at Gold.
+ */
+export const AI_GATES: GovProposalGate[] = ['pink', 'red', 'white_glove'];
+export const HUMAN_GATES: GovProposalGate[] = ['gold'];
+/** The PROMPT names for the same split (config surface D13). */
+export const aiGates = AI_GATES;
+export const humanGates = HUMAN_GATES;
+export const isAiGate = (gate: GovProposalGate): boolean => AI_GATES.includes(gate);
+export const isHumanGate = (gate: GovProposalGate): boolean => HUMAN_GATES.includes(gate);
+
 /** The weighted total of a score set (0–100). Pure. */
 export function weightedTotal(scores: CheckScores): number {
   let total = 0;

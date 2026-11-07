@@ -158,6 +158,25 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/draft', requi
   }
 });
 
+// v3 (T14): the editor's Edit — save a sanitized HUMAN version, re-judge it, and resume the agent ONLY if the new
+// version is still below bar. Distinct from /draft (which saves without re-judging): Edit closes the loop so a human
+// edit is scored immediately and handed back to the agent when it still falls short.
+router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/edit', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const docKey = docKeyOf(req, res); if (!docKey) return;
+  const html = typeof (req.body ?? {}).contentHtml === 'string' ? (req.body as any).contentHtml : '';
+  if (!html.trim()) { res.status(422).json({ error: 'Edit content is required.' }); return; }
+  try {
+    const { applyHumanEdit } = await import('../../services/factory/proposal/humanEdit');
+    const result = await applyHumanEdit(req.params.projectId as string, docKey, html, { identityId: ctx.identityId, canVerify: true });
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+    logFail('gov_contract_doc_edit_failed', err, { projectId: req.params.projectId, docKey });
+    res.status(500).json({ error: 'Could not save the edit.' });
+  }
+});
+
 /** POST .../:projectId/documents/:docKey/accept — management accepts a drafted document. */
 router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/accept', requireSection('gov_contracts'), async (req: Request, res: Response) => {
   const ctx = await adminGovContext(req, res);
@@ -589,6 +608,107 @@ router.post('/api/admin/gov-contracts/:projectId/documents/:docKey/gates/:gate',
     if (err?.name === 'ProposalReviewError') { res.status(REVIEW_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
     logFail('gov_contract_gate_decide_failed', err, { projectId: req.params.projectId, docKey, gate });
     res.status(500).json({ error: 'Could not record the gate decision.' });
+  }
+});
+
+// v3 (T13): the single PACKAGE Gold decision. Go records the Gold gate on every eligible document (separation of
+// duties enforced per document); No-go returns Gold on all of them with the reviewer's note, locking the package
+// until a new version reopens Gold. The human executive gate — admin-only; interns never approve Gold.
+router.post('/api/admin/gov-contracts/:projectId/gold', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const decision = String((req.body ?? {}).decision ?? '');
+  if (decision !== 'go' && decision !== 'nogo') { res.status(400).json({ error: 'decision must be "go" or "nogo".' }); return; }
+  try {
+    const review = await import('../../services/factory/proposal/govProposalReviewStore');
+    const isMasterAdmin = adminAllowedSections((req as any).admin ?? {}).includes('program');
+    if (decision === 'go') {
+      const result = await review.recordProjectGold(req.params.projectId as string, ctx.identityId, { isMasterAdmin });
+      res.json({ decision, ...result });
+    } else {
+      const note = String((req.body ?? {}).note ?? '').trim();
+      if (!note) { res.status(400).json({ error: 'A No-go note is required.' }); return; }
+      const result = await review.recordProjectNoGo(req.params.projectId as string, ctx.identityId, note);
+      res.json({ decision, ...result });
+    }
+  } catch (err: unknown) {
+    logFail('gov_contract_gold_decide_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not record the Gold decision.' });
+  }
+});
+
+// v3 (V1.4): the one open-needs list for the contract — what a human must supply before it can ship. Grouped
+// Blocking-export first, then Holding-score. Read-only; the resolve route lands with the resolution stores.
+router.get('/api/admin/gov-contracts/:projectId/needs', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  try {
+    const { collectProjectNeeds } = await import('../../services/factory/proposal/collectProjectNeeds');
+    const { groupNeeds } = await import('../../services/factory/proposal/aggregateNeeds');
+    const needs = await collectProjectNeeds(String(req.params.projectId));
+    res.json({ needs, ...groupNeeds(needs) });
+  } catch {
+    res.status(500).json({ error: 'Could not load the needs list.', error_class: 'NeedsLoadFailed' });
+  }
+});
+
+// v3 (V1.4): resolve one open need. Admin holds `gov_contracts`, so this actor CAN approve (fact -> library
+// approved, Gold Go/No-go allowed). Validation + routing by kind is the pure resolveNeed core; the answer is
+// recorded on the gaps table and the need drops off the list. Idempotent: resolving an already-closed key is a 404.
+router.post('/api/admin/gov-contracts/:projectId/needs/:key/resolve', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  try {
+    const { resolveProjectNeed } = await import('../../services/factory/proposal/resolveProjectNeed');
+    const actor = await resolveGovProjectActor(req);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const submission = {
+      value: typeof b.value === 'string' ? b.value : undefined,
+      fileRef: typeof b.fileRef === 'string' ? b.fileRef : undefined,
+      approve: typeof b.approve === 'boolean' ? b.approve : undefined,
+      note: typeof b.note === 'string' ? b.note : undefined,
+    };
+    const result = await resolveProjectNeed(String(req.params.projectId), String(req.params.key), submission, { email: actor?.email, canApprove: true });
+    // v3 (T12) AUTO-RESUME: a just-answered need kicks a bounded review cycle for each document it unblocked, so the
+    // agent picks up where it was waiting. Fire-and-forget (never blocks the resolve response); bounded by RESUME_CAP.
+    const unblocked = (result.body as { unblocked?: unknown }).unblocked;
+    if (result.status === 200 && Array.isArray(unblocked) && unblocked.length) {
+      const { resumeUnblocked } = await import('../../services/factory/proposal/resumeCycles');
+      void resumeUnblocked(String(req.params.projectId), unblocked as string[], { identityId: null }).catch(() => undefined);
+    }
+    res.status(result.status).json(result.body);
+  } catch {
+    res.status(500).json({ error: 'Could not resolve the need.', error_class: 'NeedResolveFailed' });
+  }
+});
+
+// v3 (T12): BUILD ALL DOCUMENTS — kick a bounded review cycle for every not-passed document in blueprint order.
+// Admin holds `gov_contracts`. Returns which documents were enqueued (with run ids) and which were skipped
+// (already running, or over the per-call cap). Fire-and-forget cycles; the client polls each run.
+router.post('/api/admin/gov-contracts/:projectId/build-all', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  try {
+    const { buildAllDocuments } = await import('../../services/factory/proposal/resumeCycles');
+    const result = await buildAllDocuments(String(req.params.projectId), { identityId: ctx.identityId });
+    res.json({ started: true, ...result });
+  } catch (err: unknown) {
+    logFail('gov_contract_build_all_failed', err, { projectId: req.params.projectId });
+    res.status(500).json({ error: 'Could not start Build all documents.' });
+  }
+});
+
+// "Report a problem" — the Studio's bug reporter (admin). Emails the Gov Studio recipients so the
+// Gov-contract Claude tab, which checks email, picks it up and starts on the fix, with the route, the
+// captured console errors / failed requests, and the screenshot. Shared core with the portal mirror.
+router.post('/api/admin/gov-contracts/:projectId/bug-report', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const projectId = String(req.params.projectId);
+  try {
+    const actor = await resolveGovProjectActor(req);
+    const { handleGovStudioBugReport } = await import('../../services/govStudio/studioBugReport');
+    const result = await handleGovStudioBugReport(projectId, actor?.email, req.body);
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'gov-studio-bug-report',
+      event: 'bug_report_failed', outcome: 'failure', error_class: 'BugReportSendFailed',
+      context: { projectId, message: String((err as Error)?.message ?? err).slice(0, 300) },
+    }));
+    res.status(500).json({ error: 'The report could not be sent.', error_class: 'BugReportSendFailed' });
   }
 });
 

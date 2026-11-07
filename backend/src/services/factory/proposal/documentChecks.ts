@@ -111,6 +111,8 @@ export function passes(scores: CheckScores, fatal: CheckFinding[], openGaps: num
 export interface AiCheckResults {
   scores: Pick<CheckScores, 'evaluator' | 'proof' | 'clarity'>;
   findings: CheckFinding[];
+  /** v3 T11: the per-judge run records (evaluator/proof/clarity), recorded on the scored version's judge_run_ids. */
+  judgeRuns?: Array<{ judge: string; runId: string; model: string; at: string }>;
 }
 
 /**

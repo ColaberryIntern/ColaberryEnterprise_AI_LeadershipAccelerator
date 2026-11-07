@@ -49,6 +49,13 @@ export async function ensureGovProposalReviewSchema(): Promise<void> {
      )`,
     // One live review row per (document, gate): decisions update in place; a reopened gate flips back to pending.
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_gov_proposal_gate_reviews_doc_gate ON gov_proposal_gate_reviews (document_id, gate)`,
+    // v3 (T-SCHEMA): the independent-judge evidence. On the version, the judge run ids that scored it; on the gate
+    // review, WHO decided ('ai_judge' for an automatic AI gate vs 'human' for Gold), the scores at decision time, and
+    // the judge run ids behind it. Additive + IF NOT EXISTS — rollback-safe (old code ignores these columns).
+    `ALTER TABLE gov_proposal_document_versions ADD COLUMN IF NOT EXISTS judge_run_ids JSONB`,
+    `ALTER TABLE gov_proposal_gate_reviews ADD COLUMN IF NOT EXISTS decided_by VARCHAR(16)`,
+    `ALTER TABLE gov_proposal_gate_reviews ADD COLUMN IF NOT EXISTS scores JSONB`,
+    `ALTER TABLE gov_proposal_gate_reviews ADD COLUMN IF NOT EXISTS judge_run_ids JSONB`,
   ];
 
   for (const sql of statements) {

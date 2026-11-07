@@ -81,6 +81,39 @@ router.get(
 );
 
 /**
+ * GET /api/portal/gov-projects/:projectId/artifacts/:artifactId/image — stream a captured build-evidence PNG to a
+ * MEMBER of this project, so an intern sees the real screenshot thumbnail (not a placeholder). Same bytes the admin
+ * route serves. Security is the guard chain PLUS the project-scope check: requireParticipant + project.read already
+ * 404 a non-member (they can't learn the project exists); then the artifact must belong to THIS project, so a member
+ * cannot read another project's artifact by id (404). A bare <img src> can't carry the bearer token, so the client
+ * fetches this as a blob.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/artifacts/:artifactId/image',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    const artifactId = req.params.artifactId;
+    if (typeof projectId !== 'string' || !projectId || typeof artifactId !== 'string' || !artifactId) {
+      res.status(400).json({ error: 'Project id and artifact id are required' });
+      return;
+    }
+    try {
+      const path = await import('path');
+      const { GOV_BUILD_ARTIFACT_DIR } = await import('../config/upload');
+      const { default: GovBuildArtifact } = await import('../models/GovBuildArtifact');
+      const row: any = await GovBuildArtifact.findByPk(artifactId);
+      // Project-scope: the artifact must belong to THIS project (a member of project A cannot read project B's bytes).
+      if (!row || row.delivery_project_id !== projectId || !row.file_path) { res.status(404).json({ error: 'Not found' }); return; }
+      res.sendFile(path.join(GOV_BUILD_ARTIFACT_DIR, path.basename(String(row.file_path))));
+    } catch {
+      res.status(500).json({ error: 'Could not load the image.' });
+    }
+  },
+);
+
+/**
  * POST /api/portal/gov-projects/:projectId/copilot — the Build Cockpit's project copilot. Guarded by project.read
  * (a member of THIS project), it loads the SAME student-safe projection the page renders and answers
  * DETERMINISTICALLY from it (govCopilot) — so the copilot can only ever repeat what the caller already sees; there
@@ -506,6 +539,101 @@ router.get(
       if (!run) { res.status(404).json({ error: 'Not found' }); return; }
       res.json({ run });
     } catch { res.status(500).json({ error: 'Could not load the review run.' }); }
+  },
+);
+
+// v3 (V1.4): the intern's open-needs list — same list, but never pricing and no approvals they can't give.
+router.get(
+  '/api/portal/gov-projects/:projectId/needs',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    try {
+      const { collectProjectNeeds } = await import('../services/factory/proposal/collectProjectNeeds');
+      const { groupNeeds, needsForViewer } = await import('../services/factory/proposal/aggregateNeeds');
+      const all = await collectProjectNeeds(String(req.params.projectId));
+      const needs = needsForViewer(all, { includePricing: false, canApprove: false });
+      res.json({ needs, ...groupNeeds(needs) });
+    } catch {
+      res.status(500).json({ error: 'Could not load the needs list.', error_class: 'NeedsLoadFailed' });
+    }
+  },
+);
+
+// v3 (V1.4): the portal mirror of resolve. The intern CANNOT approve (fact -> library pending; Gold refused by
+// the core), and may only resolve a need their own viewer projection exposes — the rail check below rejects a
+// direct POST at a pricing or ungivable-approval key the list never showed them.
+router.post(
+  '/api/portal/gov-projects/:projectId/needs/:key/resolve',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    try {
+      const { collectProjectNeeds } = await import('../services/factory/proposal/collectProjectNeeds');
+      const { needsForViewer } = await import('../services/factory/proposal/aggregateNeeds');
+      const { resolveProjectNeed } = await import('../services/factory/proposal/resolveProjectNeed');
+      const projectId = String(req.params.projectId);
+      const key = String(req.params.key);
+      const actor = await resolveGovProjectActor(req);
+      const visible = needsForViewer(await collectProjectNeeds(projectId), { includePricing: false, canApprove: false });
+      if (!visible.some((n) => n.key === key)) {
+        return res.status(403).json({ error: 'That need is not yours to resolve.', error_class: 'NeedNotVisible' });
+      }
+      const b = (req.body ?? {}) as Record<string, unknown>;
+      const submission = {
+        value: typeof b.value === 'string' ? b.value : undefined,
+        fileRef: typeof b.fileRef === 'string' ? b.fileRef : undefined,
+        approve: typeof b.approve === 'boolean' ? b.approve : undefined,
+        note: typeof b.note === 'string' ? b.note : undefined,
+      };
+      const result = await resolveProjectNeed(projectId, key, submission, { email: actor?.email, canApprove: false });
+      // v3 (T12) AUTO-RESUME: the intern's answer kicks a bounded review cycle for each unblocked document.
+      const unblocked = (result.body as { unblocked?: unknown }).unblocked;
+      if (result.status === 200 && Array.isArray(unblocked) && unblocked.length) {
+        const { resumeUnblocked } = await import('../services/factory/proposal/resumeCycles');
+        void resumeUnblocked(projectId, unblocked as string[], { identityId: null }).catch(() => undefined);
+      }
+      return res.status(result.status).json(result.body);
+    } catch {
+      return res.status(500).json({ error: 'Could not resolve the need.', error_class: 'NeedResolveFailed' });
+    }
+  },
+);
+
+// v3 (T12): BUILD ALL DOCUMENTS from the portal — kick a bounded cycle for every not-passed document. Gated on
+// `story.execute` (edit-share), so a read-only viewer cannot trigger the build. Returns enqueued + skipped.
+router.post(
+  '/api/portal/gov-projects/:projectId/build-all',
+  requireParticipant,
+  requireGovProjectAccess('story.execute'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = String(req.params.projectId);
+    try {
+      const { buildAllDocuments } = await import('../services/factory/proposal/resumeCycles');
+      const result = await buildAllDocuments(projectId, { identityId: null });
+      return res.json({ started: true, ...result });
+    } catch {
+      return res.status(500).json({ error: 'Could not start Build all documents.', error_class: 'BuildAllFailed' });
+    }
+  },
+);
+
+// "Report a problem" from the intern's Studio — the portal mirror of the admin bug reporter, scoped to
+// a project the intern can read. Same email to the Gov Studio recipients so the Gov tab picks it up.
+router.post(
+  '/api/portal/gov-projects/:projectId/bug-report',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = String(req.params.projectId);
+    try {
+      const actor = await resolveGovProjectActor(req);
+      const { handleGovStudioBugReport } = await import('../services/govStudio/studioBugReport');
+      const result = await handleGovStudioBugReport(projectId, actor?.email, req.body);
+      res.status(result.status).json(result.body);
+    } catch {
+      res.status(500).json({ error: 'The report could not be sent.', error_class: 'BugReportSendFailed' });
+    }
   },
 );
 

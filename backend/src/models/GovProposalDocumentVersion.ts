@@ -22,6 +22,8 @@ export interface GovProposalDocumentVersionAttributes {
   findings: CheckFinding[];
   passes: boolean;
   page_count: number | null;
+  /** v3 T11: the independent judge run ids recorded for this version's scoring (evaluator/proof/clarity). */
+  judge_run_ids?: string[] | null;
   created_at?: Date;
 }
 
@@ -38,6 +40,7 @@ class GovProposalDocumentVersion extends Model<GovProposalDocumentVersionAttribu
   declare findings: CheckFinding[];
   declare passes: boolean;
   declare page_count: number | null;
+  declare judge_run_ids: string[] | null;
   declare created_at: Date;
 }
 
@@ -55,6 +58,7 @@ GovProposalDocumentVersion.init(
     findings: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     passes: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     page_count: { type: DataTypes.INTEGER, allowNull: true },
+    judge_run_ids: { type: DataTypes.JSONB, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },
   {
