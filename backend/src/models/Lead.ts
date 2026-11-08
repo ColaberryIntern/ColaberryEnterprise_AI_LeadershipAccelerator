@@ -24,6 +24,7 @@ interface LeadAttributes {
   utm_campaign?: string;
   utm_content?: string | null;
   utm_term?: string | null;
+  utm_medium?: string | null;
   page_url?: string;
   interest_area?: string;
   message?: string;
@@ -93,6 +94,7 @@ class Lead extends Model<LeadAttributes> implements LeadAttributes {
   declare utm_campaign: string;
   declare utm_content: string | null;
   declare utm_term: string | null;
+  declare utm_medium: string | null;
   declare page_url: string;
   declare interest_area: string;
   declare message: string;
@@ -213,6 +215,12 @@ Lead.init(
       allowNull: true,
     },
     utm_term: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    // C10.4: paid / organic / email. Added in prod by ensureLeadAttributionColumns, which
+    // explains why it arrived three columns later than the other three.
+    utm_medium: {
       type: DataTypes.STRING(255),
       allowNull: true,
     },
