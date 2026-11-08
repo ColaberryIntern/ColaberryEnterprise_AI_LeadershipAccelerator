@@ -92,7 +92,15 @@ const { resetAgents, reactivateAgent } = require('../../../services/workforceOrg
 // block below, not once at module scope.
 jest.mock('../../../services/managerInboxApi', () => ({ getManagerInboxItems: jest.fn(), approveInboxItem: jest.fn(), getInboxItemInspector: jest.fn() }));
 jest.mock('../../../services/ticketSummaryApi', () => ({ getTicketSummary: jest.fn() }));
-jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn(), revokeDirective: jest.fn() }));
+// AF12.8 — `listDirectivesWithPosture` is stubbed even though nothing here asserts on it,
+// because the Authority & controls sub-tab mounts the Directives card and an un-stubbed
+// function makes that card throw inside an otherwise-passing test. A component erroring
+// silently under a green suite is how a vacuous pass happens.
+jest.mock('../../../services/managerDirectiveApi', () => ({
+  listDirectives: jest.fn(),
+  listDirectivesWithPosture: jest.fn().mockResolvedValue({ directives: [], posture: null }),
+  revokeDirective: jest.fn(),
+}));
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));

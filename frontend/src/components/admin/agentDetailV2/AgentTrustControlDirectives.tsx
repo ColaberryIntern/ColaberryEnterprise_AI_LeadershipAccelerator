@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { timeAgo } from '../shell/trust';
 import { adv2PillClass } from './adv2PillTone';
-import { ManagerDirective, listDirectives, revokeDirective } from '../../../services/managerDirectiveApi';
+import {
+  ManagerDirective, DirectivePosture, listDirectivesWithPosture, revokeDirective,
+} from '../../../services/managerDirectiveApi';
 
 // Track A2 (2026-09-22) — extracted out of AgentTrustControlTab.tsx (which
 // hit this repo's 500-line ceiling once the 2 new Authority & controls cards
@@ -14,8 +16,16 @@ interface Props {
   agentId: string;
 }
 
+/** Surface keys come from the backend; a manager should not have to read snake_case. */
+function surfaceLabel(surface: string): string {
+  if (surface === 'manager_conversation') return 'manager conversations';
+  if (surface === 'own_reply_runtime') return "this agent's own replies";
+  return surface;
+}
+
 export default function AgentTrustControlDirectives({ agentId }: Props) {
   const [directives, setDirectives] = useState<ManagerDirective[]>([]);
+  const [posture, setPosture] = useState<DirectivePosture | null>(null);
   const [directivesLoading, setDirectivesLoading] = useState(true);
   const [directivesError, setDirectivesError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -24,7 +34,9 @@ export default function AgentTrustControlDirectives({ agentId }: Props) {
     setDirectivesLoading(true);
     setDirectivesError(null);
     try {
-      setDirectives(await listDirectives(agentId));
+      const { directives: rows, posture: p } = await listDirectivesWithPosture(agentId);
+      setDirectives(rows);
+      setPosture(p);
     } catch (err: any) {
       setDirectivesError(err?.response?.data?.error || 'Failed to load directives');
     } finally {
@@ -52,6 +64,28 @@ export default function AgentTrustControlDirectives({ agentId }: Props) {
   return (
     <div className="adv2-card" style={{ marginTop: 22 }}>
       <h2>Standing Directives<span className="adv2-hint">Review and revoke this agent's active directives here. To create a new one, use Ask/Direct on the Talk tab.</span></h2>
+      {/*
+        AF12.8 — a list of "Active" directives reads as a list of rules in force, and it is not
+        one. This says so before the list rather than after it, and it names any live surface
+        the directives do not reach, because that is the part a manager cannot otherwise find
+        out. Derived server-side from the prompt wiring; see services/agentBlueprint/directivePosture.ts.
+      */}
+      {posture && (
+        <div style={{ marginBottom: 16 }}>
+          <span className={adv2PillClass(posture.notInjectedBy.length > 0 ? 'warning' : 'info')}>
+            {posture.mechanism === 'advisory' ? 'Advisory' : 'Enforced'}
+          </span>
+          <p className="adv2-body adv2-muted" style={{ margin: '8px 0 0', fontSize: 13.5 }}>
+            {posture.mechanismReason}
+          </p>
+          <p className="adv2-body adv2-muted" style={{ margin: '6px 0 0', fontSize: 13.5 }}>
+            Reaches {posture.injectedBy.map(surfaceLabel).join(' and ') || 'no surface'}.
+            {posture.notInjectedBy.length > 0 && (
+              <> Does <strong>not</strong> reach {posture.notInjectedBy.map(surfaceLabel).join(' or ')}, so a directive here will not change what this agent says there.</>
+            )}
+          </p>
+        </div>
+      )}
       <div>
         {directivesError && <p className="adv2-body" style={{ color: 'var(--adv2-bad)' }}>{directivesError}</p>}
         {directivesLoading && <p className="adv2-body adv2-muted">Loading…</p>}
