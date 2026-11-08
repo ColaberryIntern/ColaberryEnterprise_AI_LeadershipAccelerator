@@ -2081,6 +2081,31 @@ export function startScheduler(): void {
     );
   }
 
+  // C10.18, the paid-member welcome. Every 15 minutes rather than daily: this is somebody's
+  // first message after paying, and "within a quarter of an hour" is the difference between a
+  // welcome and an afterthought. It is a sweep rather than a call in the payment path so that
+  // all four paid-status writers are covered without any of them knowing it exists, and so a
+  // mail outage can never affect a payment. Idempotent - the communication_logs row IS the
+  // dedup - so a missed tick costs nothing and a double tick sends nothing twice.
+  //
+  // The flag defaults to FALSE, unlike the rollover above, and the asymmetry is the point: the
+  // worst the rollover does is move a cohort row's status, which an admin can put back, while
+  // an email cannot be put back. See config/env.ts.
+  if (env.paidMemberWelcomeEnabled) {
+    cron.schedule(
+      '*/15 * * * *',
+      () => {
+        instrumentCronJob('PaidMemberWelcome', async () => {
+          const { runPaidMemberWelcomeSweep } = await import('./welcome/paidMemberWelcomeService');
+          await runPaidMemberWelcomeSweep({ execute: true });
+        }).catch((err) => {
+          console.error('[Scheduler] Paid member welcome error:', err);
+        });
+      },
+      { timezone: 'America/Chicago' }
+    );
+  }
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(

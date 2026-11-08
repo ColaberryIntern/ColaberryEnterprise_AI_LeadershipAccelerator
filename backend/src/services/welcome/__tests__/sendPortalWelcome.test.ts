@@ -20,6 +20,7 @@ jest.mock('../../communicationLogService', () => ({
   logCommunication: (...a: unknown[]) => logCommunication(...a),
 }));
 
+import { Op } from 'sequelize';
 import { sendPortalWelcome, alreadyWelcomed, WELCOME_EVENTS } from '../sendPortalWelcome';
 
 /**
@@ -171,13 +172,65 @@ describe('sendPortalWelcome - idempotency, which the recovery run depends on', (
     expect((await sendPortalWelcome({ enrollment })).sent).toBe(true);
   });
 
-  it('only counts SENT rows: the query itself is scoped to them', async () => {
+  it('only counts SENT rows, and matches the address case-insensitively, in SQL', async () => {
     const { enrollment } = enrollmentFake();
     await sendPortalWelcome({ enrollment });
 
-    expect(findAll.mock.calls[0][0]).toMatchObject({
-      where: { to_address: 'dana@example.com', status: 'sent' },
-    });
+    // Read through the real `Op.and` symbol. This assertion used to be
+    // `toMatchObject({ where: { to_address, status } })`; C10.18 made the address match
+    // case-insensitive via lower() on both sides, so the clause is now an AND of a
+    // sequelize `where(fn('lower', col))` and the status. What the test is for has not
+    // changed: the SENT-scoping is in the query, not applied in JS afterwards.
+    const where: any = findAll.mock.calls[0][0].where;
+    const and: any[] = where[Op.and];
+    expect(and).toHaveLength(2);
+    expect(and).toContainEqual({ status: 'sent' });
+
+    // The lower() comparison carries the lowercased address as its value. Checked through
+    // JSON rather than by shape, because the internals of a sequelize Where object are
+    // not a contract and asserting on them would break on an upgrade.
+    expect(JSON.stringify(and)).toContain('dana@example.com');
+  });
+
+  it('a capital letter cannot bypass the guard', async () => {
+    // Two doors storing the same person under different casing was the one way this guard
+    // could be walked past, and it is the reason for the lower() match.
+    findAll.mockResolvedValue([{ id: 12, metadata: { event: 'portal_welcome' } }]);
+    expect(await alreadyWelcomed('Dana@Example.COM')).toBe(true);
+    expect(await alreadyWelcomed('  dana@example.com  ')).toBe(true);
+    const where: any = findAll.mock.calls[findAll.mock.calls.length - 1][0].where;
+    expect(JSON.stringify(where[Op.and])).toContain('dana@example.com');
+  });
+
+  it('an empty address is not treated as a match for everything', async () => {
+    // Without the guard, lower('') would match any row whose to_address is blank, and the
+    // caller would be told the person had already been welcomed.
+    findAll.mockClear();
+    for (const blank of ['', '   ', null, undefined]) {
+      expect(await alreadyWelcomed(blank as any)).toBe(false);
+    }
+    expect(findAll).not.toHaveBeenCalled();
+  });
+
+  it('blockingEvents narrows the question, and defaults to the sign-in-link set', async () => {
+    // The C10.18 change. A person who has had `open_house_welcome` must still be eligible
+    // for a paid-member welcome, because that is a different thing being said, not a second
+    // copy of the same greeting.
+    findAll.mockResolvedValue([{ id: 12, metadata: { event: 'open_house_welcome' } }]);
+    expect(await alreadyWelcomed('dana@example.com')).toBe(true);
+    expect(await alreadyWelcomed('dana@example.com', ['paid_member_welcome'])).toBe(false);
+
+    findAll.mockResolvedValue([{ id: 13, metadata: { event: 'paid_member_welcome' } }]);
+    expect(await alreadyWelcomed('dana@example.com', ['paid_member_welcome'])).toBe(true);
+    // And the sign-in-link doors are blind to it, so a paid welcome never suppresses one.
+    expect(await alreadyWelcomed('dana@example.com')).toBe(false);
+  });
+
+  it('the paid event is deliberately NOT in WELCOME_EVENTS', async () => {
+    // If someone "tidies" it in, every paying ex-Explorer stops getting their welcome and
+    // nothing fails loudly. This is the assertion that catches that edit.
+    expect([...WELCOME_EVENTS]).toEqual(['portal_welcome', 'open_house_welcome']);
+    expect([...WELCOME_EVENTS]).not.toContain('paid_member_welcome');
   });
 
   it('alreadyWelcomed is exported and answers the same question directly', async () => {
