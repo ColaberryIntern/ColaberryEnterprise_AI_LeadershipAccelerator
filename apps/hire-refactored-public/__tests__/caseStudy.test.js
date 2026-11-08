@@ -43,6 +43,42 @@ describe('the hire hero', () => {
   });
 });
 
+describe('a role-only record linked to a listed person (audit 2026-11-08)', () => {
+  const roleOnly = (over) => { const b = body(over); b.caseStudy.builder = { name: null, roleTitle: 'AI Systems Architect', photoUrl: null }; return b; };
+  const portfolioRes = { ok: true, status: 200, body: { ok: true, portfolio: { identity: { full_name: 'Kes D', headline: 'QA', avatar_data_url: null } } } };
+
+  test('names the builder from their public portfolio, keeping the record\'s role title', () => {
+    const person = S.personFromPortfolio(portfolioRes);
+    assert.deepEqual(person, { name: 'Kes D', role: 'QA', avatarUrl: null });
+    const html = S.hero(roleOnly(), person);
+    assert.match(html, /Built by Kes D/);
+    assert.match(html, /AI Systems Architect/, 'the record\'s role beats the portfolio headline');
+    assert.match(S.hireCard(roleOnly(), person), /Request intro/);
+  });
+
+  test('never borrows a portfolio name when the server linked no reachable person', () => {
+    const person = S.personFromPortfolio(portfolioRes);
+    assert.doesNotMatch(S.hero(roleOnly({ builderPortfolioSlug: null }), person), /class="builder"/);
+    assert.equal(S.builderOf(roleOnly()), null, 'before the portfolio answers there is no name to show');
+  });
+
+  test('reads nothing from a failed or malformed portfolio response', () => {
+    assert.equal(S.personFromPortfolio({ ok: false, status: 404, body: null }), null);
+    assert.equal(S.personFromPortfolio({ ok: true, body: { identity: { full_name: 'top-level is not the shape' } } }), null);
+    assert.equal(S.personFromPortfolio({ ok: true, body: { portfolio: { identity: { full_name: '' } } } }), null);
+  });
+
+  test('badges a verified record only, and counts private repositories without naming them', () => {
+    assert.doesNotMatch(S.hero(body()), /✓ Verified/, 'no class, no badge');
+    const v = body(); v.caseStudy.verificationClass = 'verified';
+    assert.match(S.hero(v), /✓ Verified/);
+    const a = body(); a.caseStudy.verificationClass = 'anonymized';
+    assert.doesNotMatch(S.hero(a), /✓ Verified/);
+    const p = body(); p.caseStudy.repositories = []; p.caseStudy.privateRepositoryCount = 1;
+    assert.match(S.hireCard(p), /1 private repository/);
+  });
+});
+
 describe('outcomes and the hire card', () => {
   test('shows only the record\'s own hero metrics, at most four', () => {
     const b = body(); b.caseStudy.heroMetrics = Array.from({ length: 6 }, (_, i) => ({ label: 'm' + i, valueDisplay: String(i), unit: null }));
@@ -80,6 +116,12 @@ describe('the shell wiring', () => {
     assert.match(html, /case-study-record\.js" data-api="\{\{brand\.platformApiBase\}\}"\s+data-surface="hire"/);
     assert.match(html, /<div class="wrap" id="case-frame" hidden>/);
     assert.match(html, /id="cs-record"/);
+  });
+
+  test('hides the shell hero\'s COPY only, never its picture slot (the walkthrough lives there)', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'assets', 'case-study.css'), 'utf8');
+    assert.doesNotMatch(css, /#cs-record\s*>\s*\.cs-hero\s*\{\s*display:\s*none/, 'hiding the whole hero hid every video on Hire');
+    assert.match(css, /#cs-record\s*>\s*\.cs-hero\s*>\s*\.cs-hero-copy\s*\{\s*display:\s*none/);
   });
 });
 

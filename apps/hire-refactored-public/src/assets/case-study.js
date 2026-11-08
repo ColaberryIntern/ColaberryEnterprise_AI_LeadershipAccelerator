@@ -29,19 +29,42 @@
   function talentHref(slug) { return '/talent/' + encodeURIComponent(slug) + '/'; }
 
   /* The builder as the page shows them. `builderPortfolioSlug` is set only when the person
-     is reachable on Hire; without it the chip renders, unlinked. */
-  function builderOf(body) {
-    var b = body.caseStudy.builder;
-    if (!b || !b.name) return null;
+     is reachable on Hire; without it the chip renders, unlinked.
+
+     A RECORD THAT NAMES A ROLE, NOT A PERSON, STILL HAS A PERSON ON HIRE. Records written
+     role-only ("AI Systems Architect") cross with `builder.name` null, so the Cora records
+     drew no "Built by" chip and no Request intro, on a site whose whole point is the
+     person (audit, 2026-11-08). When the server says the record links to a listed
+     portfolio, `person` is that portfolio's own public identity, which its owner already
+     chose to publish; the record's role title still wins over the portfolio headline. */
+  function builderOf(body, person) {
+    var b = body.caseStudy.builder || {};
+    var slug = typeof body.builderPortfolioSlug === 'string' ? body.builderPortfolioSlug : null;
+    var p = slug && person && person.name ? person : null;
+    var name = b.name || (p && p.name);
+    if (!name) return null;
     return {
-      name: b.name, role: b.roleTitle || null, avatarUrl: b.photoUrl || null,
-      slug: typeof body.builderPortfolioSlug === 'string' ? body.builderPortfolioSlug : null,
+      name: name, role: b.roleTitle || (p && p.role) || null,
+      avatarUrl: b.photoUrl || (p && p.avatarUrl) || null, slug: slug,
     };
   }
 
-  function hero(body) {
+  /* The public portfolio's identity, reduced to what the chip needs. Null on anything else. */
+  function personFromPortfolio(res) {
+    var id = res && res.ok && res.body && res.body.portfolio && res.body.portfolio.identity;
+    if (!id || typeof id.full_name !== 'string' || !id.full_name) return null;
+    return { name: id.full_name, role: id.headline || null, avatarUrl: id.avatar_data_url || null };
+  }
+
+  /* `verified` is the only class worth a badge here; anything else prints nothing rather
+     than a weaker-sounding label an employer would read as a warning. */
+  function verifyBadge(c) {
+    return c.verificationClass === 'verified' ? '<span class="verify">✓ Verified</span>' : '';
+  }
+
+  function hero(body, person) {
     var c = body.caseStudy;
-    var who = builderOf(body);
+    var who = builderOf(body, person);
     var chip = '';
     if (who) {
       var inner = C.avatar({ slug: who.slug || who.name, name: who.name, avatarUrl: who.avatarUrl }, 46, false)
@@ -49,7 +72,7 @@
       chip = who.slug ? '<a class="builder" href="' + talentHref(who.slug) + '">' + inner + '</a>' : '<span class="builder">' + inner + '</span>';
     }
     return '<section class="hire-hero"><div class="art">' + C.art(c.slug, { n: 12 }) + '</div><div class="wrap">'
-      + '<span class="eyebrow">★ Published case study' + (c.industry ? ' · ' + esc(c.industry) : '') + '</span>'
+      + '<span class="eyebrow">★ Published case study' + (c.industry ? ' · ' + esc(c.industry) : '') + '</span>' + verifyBadge(c)
       + '<h1 id="cs-title" tabindex="-1">' + esc(c.title) + '</h1>'
       + (c.standfirst ? '<p class="dek">' + esc(c.standfirst) + '</p>' : '')
       + chip + '</div></section>';
@@ -64,16 +87,19 @@
     }).join('') + '</div>';
   }
 
-  function hireCard(body) {
-    var who = builderOf(body);
+  function hireCard(body, person) {
+    var who = builderOf(body, person);
     var c = body.caseStudy;
     var repos = arr(c.repositories);
+    var priv = Number(c.privateRepositoryCount) || 0;
     var project = '<div class="side-card"><div class="label">Project</div>'
       + (c.organizationLabel ? '<p style="font-weight:600">' + esc(c.organizationLabel) + '</p>' : '')
       + (arr(c.stack).length ? '<div class="label" style="margin-top:16px">Stack</div><div class="tags">' + arr(c.stack).map(function (s) { return '<span class="tag">' + esc(s) + '</span>'; }).join('') + '</div>' : '')
       + (repos.length ? '<div class="label" style="margin-top:16px">Repository</div>' + repos.map(function (r) {
         return /^https:\/\//.test(String(r.url || '')) ? '<p><a class="mono" style="font-size:.82rem;color:var(--accent)" href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.label) + '</a></p>' : '';
       }).join('') : '')
+      + (priv > 0 ? (repos.length ? '' : '<div class="label" style="margin-top:16px">Repository</div>')
+        + '<p style="font-size:.82rem;color:var(--fg-muted)">' + priv + ' private ' + (priv === 1 ? 'repository' : 'repositories') + '</p>' : '')
       + '</div>';
     if (!who) return '<aside><div class="sticky">' + project + '</div></aside>';
     var introHref = '/intro/' + (who.slug ? '?talent=' + encodeURIComponent(who.slug) : '');
@@ -87,6 +113,6 @@
 
   return {
     isPayload: isPayload, slugFromPath: slugFromPath, builderOf: builderOf,
-    hero: hero, outcomes: outcomes, hireCard: hireCard,
+    personFromPortfolio: personFromPortfolio, hero: hero, outcomes: outcomes, hireCard: hireCard,
   };
 }));

@@ -92,6 +92,16 @@ describe('projectVisualStory through projectPublicDetail', () => {
     expect(projectPublicDetail(input(internalSnapshotContent())).visualStory).toBeNull();
   });
 
+  it('hire shows a story approved for enterprise, and nothing else widens (Ali, 2026-11-08: "no chart")', () => {
+    expect(projectPublicDetail(input(withStory(), 'hire')).visualStory?.workflow?.title).toBe('Same order, a different path');
+    expect(projectPublicDetail(input(withStory({ surfaces: ['hire'] }), 'hire')).visualStory).not.toBeNull();
+    // A story kept OFF enterprise stays off hire: hire inherits enterprise's permission, not any surface's.
+    expect(projectPublicDetail(input(withStory({ surfaces: ['training', 'ai-flotation'] }), 'hire')).visualStory).toBeNull();
+    expect(projectPublicDetail(input(withStory({ enabled: false }), 'hire')).visualStory).toBeNull();
+    // The inheritance is one-way: a hire-only story does not appear on enterprise.
+    expect(projectPublicDetail(input(withStory({ surfaces: ['hire'] }), 'enterprise')).visualStory).toBeNull();
+  });
+
   it('is null, not partial, when the story no longer validates against the record', () => {
     const broken = withStory();
     ((broken as unknown as { visualStory: { workflow: { panels: { edges: { from: string; to: string }[] }[] } } }).visualStory.workflow.panels[0].edges).push({ from: 'order', to: 'ghost' });
