@@ -140,3 +140,97 @@ the integration going live.
   `SMTP_PASSWORD`. Should be `0600`. His box, so his change to make.
 - `CORA_INBOUND_WEBHOOK_SECRET` is declared **three times** in that same `.env`. Last one wins
   silently, which is how a rotated secret gets shadowed by a stale copy.
+
+---
+
+## Phase 1 of the Explorer GHL backfill, 2026-11-07
+
+Plan PR #3745 merged at 20:02 UTC with all ten checks green, which was Ali's approval of
+`docs/EXPLORER_GHL_BACKFILL_PLAN.md`. Phase 1 is the dry run.
+
+- [x] Explorer GHL backfill, Phase 1: the read-only dry run
+  - Date: 2026-11-07
+  - Session: CC-20261106-r7t2
+  - What changed: `backend/src/scripts/explorerGhlBackfillDryRun.ts` (new, 420 lines) plus
+    `backend/src/scripts/__tests__/explorerGhlBackfillDryRun.test.ts` (new, 23 tests), and a
+    Phase 1 results section appended to `docs/EXPLORER_GHL_BACKFILL_PLAN.md` which supersedes
+    three of that document's own figures. The script resolves the candidate set, asks GHL about
+    each person through the existing `findContactByEmail` / `findContactByPhone` path, and
+    reports what a live run would do. **It has no write path**: the only two symbols it imports
+    from `ghlService` are those two lookups, which the suite asserts against the import
+    statement itself.
+  - Verification: **ran against production** from inside `accelerator-backend`, read-only,
+    correlation id `06a5dfcd-4f9c-44c6-82ff-adc88251c62b`. 261 candidates, 261 rows classified,
+    0 lookup errors, 0 withheld, dispositions summing exactly to 261. **Both credentials passed
+    a present/absent control pair** before any candidate was read: a lead already holding a
+    `ghl_contact_id` was found by email in each account with its stored id matching, and an
+    address under `.invalid` was correctly not found in either. Jest **23 passed**. **Mutation
+    testing 4 killed, 0 survived**, every restore byte identical. Single-file compile of the
+    script against its full import graph: **exit 0, zero errors**. Secret scan OK (8,123 tracked
+    files), admin route-auth lint OK (149 route files). The ledger carries no email, name or
+    phone: measured 0 occurrences of each, against a control of 261 for `enrollment_id`.
+  - Notes: **The dry run overturned the plan's central premise.** 196 of the 261 candidates are
+    **already in GoHighLevel** under contacts we never recorded, including 184 of the 195
+    callable people. Rose can already call them. What is missing is the `ghl_contact_id` link on
+    our side, not the contact in the CRM. Only 65 contacts would be newly created and only 11 of
+    those are callable.
+
+    **The plan's exclusion count was wrong by 46, and in the dangerous direction.** It derived
+    test fixtures from the sync audit's `reason`, which only knows about the fixtures the guard
+    actually refused; 46 more were never attempted, so no audit row names them. By email shape,
+    the rule the live sync itself applies, there are 56 fixtures, not 9. Had the live run used
+    the plan's figure it would have pushed 46 more test accounts into a customer-facing CRM,
+    which is the exact failure of 2026-10-23.
+
+    **Those 194 open-house contacts were typed in by hand, and Rose has been calling them.**
+    Asked GoHighLevel directly, reading `attributionSource` on a 24-contact sample and origin
+    fields only: 17 `CRM UI / manual`, 2 `CRM UI / csv_import`, 4 `Other`, 1 `Third Party`.
+    **19 of 24 arrived through the GHL UI and not one carries an API attribution.** They also
+    carry a **`left voicemail`** tag, which is proof the calling already happened. Cora is ruled
+    out as the creator (its adapter reads, searches and `PUT`s fields, with no create path), and
+    so is this codebase (18 creation call sites, one service, which either never ran or withheld
+    for these people). So nothing was integrating: somebody absorbed three months of our
+    withheld sync as manual double entry.
+
+    That reframes the value a third time. Not "make 195 people reachable", since they were made
+    reachable by hand, but: stop the double entry (already fixed forward on 2026-10-23),
+    reconcile the two systems so our surfaces show the contact she is working, and rule out
+    duplicates before creating anything. A live run on the plan's original assumptions would
+    have created up to 196 duplicates of contacts she is actively calling.
+
+    **The school location id, measured: `ttBtJmxoLwjf18lIvvVD`.** The six frontend files
+    hardcode `JFWwp8q7l6T12NWTIOKG`, the Agent Cory account. The wrong-sub-account reports are
+    no longer an inference: the ids differ, measured from live data.
+
+    **A dead check caught by its own control.** My first verification of the compiled artifact
+    grepped for `createContact(` and friends and found zero of each. That was meaningless:
+    `tsc` emits `ghlService_1.findContactByEmail(...)`, so the pattern matches nothing whether
+    the call is present or not, and the write names appear in the file's header comment anyway.
+    The present-control, which required the two read calls to be found, returned zero too and
+    exposed it. The check now ENUMERATES the member accesses on the service and requires the set
+    to be exactly the two reads, which cannot pass by accident.
+
+    **`nohup ... &` inside a tool call does not survive it.** A 14-minute typecheck launched that
+    way left a zero-byte output file for 25 minutes while appearing to run. Re-run under the
+    harness's own background mode it completed normally. Separately, `checkTestTypecheck.js
+    --print` prints per-file error COUNTS, not error text, so getting the text meant invoking
+    `tsc -p tsconfig.test.json` directly with the same 8GB heap.
+
+    **I misdiagnosed a break as pre-existing, and it was mine.** The Test-file typecheck gate
+    reported 413 errors across 142 files: 1 in my new suite and **13 in
+    `src/scripts/lib/__tests__/agentRoster.test.ts`**, a file I had not touched and which has
+    been on `main` since 2026-10-22. I recorded it as pre-existing debt on main. It was not.
+    Because my suite used only `require` and `jest.mock` it had no import or export, so
+    TypeScript treated it as a SCRIPT and put `fs`, `path`, `row` and the rest into the GLOBAL
+    scope, where they collided with that file's own globals. A redeclaration is reported against
+    **both** files, so 13 of the errors landed on a file whose only fault was declaring `fs`
+    first.
+
+    Adding `export {}` to my suite returned the whole-program measurement to the frozen baseline
+    **exactly, 399 errors across 140 files, matching in both directions**. Both my 1 and its 13
+    disappeared together, which is the proof of cause.
+
+    The lesson is the diagnosis, not the fix: a single script-mode test file can make a
+    completely unrelated file fail this gate, so "that file is already broken on main" is a
+    conclusion that needs testing before it is written down. Checking the file in isolation
+    would never have shown it, because in isolation there is nothing to collide with.

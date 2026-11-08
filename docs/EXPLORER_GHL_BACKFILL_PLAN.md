@@ -1,6 +1,8 @@
 # Explorer leads missing from GoHighLevel: the backfill plan
 
-**Status:** awaiting Ali's approval. **No write to the live CRM happens until that approval lands.**
+**Status:** plan approved 2026-11-07 (PR #3745). Phase 1 ran the same day and corrected three
+of this document's own figures, including its central premise. **See Phase 1 results at the end;
+sections 2, 4 and 5 above are superseded by it.** No write to the live CRM has happened.
 **Measured:** 2026-11-07, against production, read-only.
 **Session:** CC-20261106-r7t2
 
@@ -230,3 +232,152 @@ Not "looks right":
   school key (enrollment `7b8e43c9-4683-4523-9614-98f1db712287`, lead 25070, created 2026-10-21),
   and that used lead-creation time as a proxy for sync time. The other 6 are unexplained and need
   his actual ids, which have been requested twice.
+
+---
+
+# Phase 1 results, 2026-11-07
+
+Ran against production, read-only, from inside `accelerator-backend`. Script:
+`backend/src/scripts/explorerGhlBackfillDryRun.ts`. Correlation id
+`06a5dfcd-4f9c-44c6-82ff-adc88251c62b`. 261 candidates classified, 261 rows, no lookup errors
+and nothing withheld.
+
+**Both credentials passed their controls before any candidate was looked up**: a lead already
+carrying a `ghl_contact_id` was found by email in each account with its stored id matching, and
+an address under `.invalid` was correctly not found in either. Without that pair, a
+misconfigured key would have reported "would create" for all 261 people and read as a clean run.
+
+## Correction 1: the candidate set is 261, not 307
+
+The plan derived the exclusions from the sync audit's `reason`, which only knows about the test
+fixtures the guard actually refused. **46 more fixtures were never attempted at all**, so no row
+says `synthetic_email` for them. Tested by email shape, which is the rule the live sync itself
+applies at `ghlService.ts:289`, the real figure is 56.
+
+| | people |
+|---|---|
+| explorer profiles with no GHL contact | 318 |
+| test fixtures, excluded | **56** (plan said 9) |
+| `success` with no contact id stored | 1 (plan said 2; the other is a fixture) |
+| **candidates** | **261** (plan said 307) |
+
+No callable person is removed by the correction: all 195 callable people are candidates.
+
+## Correction 2: 196 of the 261 are already in GoHighLevel
+
+This is the finding that changes the work. The dry run asked GHL about each candidate, and
+three quarters of them are **already there** under a contact we never recorded.
+
+| what a live run would do | people | callable |
+|---|---|---|
+| **already in GHL, found by exact email** | 189 | |
+| **already in GHL, found by phone** | 7 | |
+| **already in GHL, total** | **196** | **184** |
+| would create a new contact | **65** | **11** |
+| | **261** | **195** |
+
+**184 of the 195 callable people are already in Rose's CRM and callable today.** The premise
+this plan was written on, that 195 people are unreachable, was wrong. What is missing is the
+`ghl_contact_id` link on our side, not the contact in theirs.
+
+By source: 194 of the already-present are `open_house` in `school_of_data_analytics`, 1 is
+`popup` there, and 1 is `ccpp_winback` in the default account.
+
+### This codebase did not create those contacts
+
+Every GHL contact-creation path in the repo routes through `syncLeadToGhl` / `syncNewLeadToGhl`
+(18 call sites, one service), and for these 261 people that service either never ran or withheld.
+So the 194 open-house contacts in the school account arrived by **some path outside this
+codebase**. The unlinked open-house leads span 2026-07 through 2026-10 (67, 62, 41, 36), which is
+the window when our own sync was withheld for the missing key.
+
+**Confirmed, by asking GoHighLevel itself.** Reading `attributionSource` on a 24-contact
+sample from the school account, origin-fields only:
+
+| `sessionSource` / `medium` | contacts |
+|---|---|
+| `CRM UI` / `manual` | 17 |
+| `Other` / `other` | 4 |
+| `CRM UI` / `csv_import` | 2 |
+| `Third Party` | 1 |
+
+**19 of 24 were entered through the GoHighLevel UI**, by hand or by spreadsheet upload. Not one
+carries an API attribution. The contacts also carry tags like `ai explorer` and **`left
+voicemail`**, and were added 12 to 14 October.
+
+So nothing was integrating. **Somebody on the team, in practice Rose, typed these people into the
+CRM by hand and has been calling them**, for the three months our sync was withholding them. The
+`left voicemail` tag is the proof that the calling already happened.
+
+That reframes the value of this work a third time. It is not "make 195 people reachable", because
+they were made reachable by hand. It is:
+
+1. **Stop the double entry.** The forward path has been correct since 2026-10-23, so this is
+   already fixed; the backfill is the catch-up.
+2. **Reconcile the two systems**, so our admin surfaces show the contact Rose is already working
+   instead of showing nothing, and so Cora's nightly job can tag people out of her call list.
+3. **Rule out duplicates before creating anything**, which is exactly what Phase 1 just did: a
+   live run on the plan's original assumptions would have created up to 196 duplicates of
+   contacts she is actively calling.
+
+Ruled out as the creator: Cora. Its GHL adapter reads, searches and `PUT`s contact fields, and has
+no contact-create path. Ruled out: this codebase, whose 18 creation call sites all route through
+one service that either never ran or withheld for these people.
+
+### The school account's real location id, measured
+
+Those contacts report `locationId: ttBtJmxoLwjf18lIvvVD`. The six frontend files hardcode
+`JFWwp8q7l6T12NWTIOKG`, the Agent Cory account. That is no longer an inference about the
+wrong-sub-account reports: the two ids are different, measured from live data, so every GHL link
+built on those six admin surfaces does point at a location where these 195 contacts do not
+exist.
+
+### The 7 matched by phone, not email
+
+Their email in our `leads` row differs from the one on the GHL contact. The phone match is
+verified on the last 10 digits, so it is a real match, but it is weaker evidence than the 189
+exact-email matches and those 7 should be eyeballed before their link is written.
+
+## Correction 3: the consent question is now about 11 people, not 195
+
+Of the 65 that would be newly created, **11 are callable**, all `open_house`, and **none has
+`consent_contact = true`**. The other 54 have no usable phone, so no dialer exposure exists for
+them whatever is decided.
+
+| would create | people | destination | callable |
+|---|---|---|---|
+| `ccpp_winback` | 50 | default (Agent Cory, the dialer) | 0 |
+| `open_house` | 12 | school_of_data_analytics | 11 |
+| `contact` | 2 | default | 0 |
+| `trustbeforeintelligence` | 1 | default | 0 |
+
+The 53 going to the default account land in Agent Cory AI, which feeds an outbound dialer. That
+is the correct routing per Ali's instruction of 2026-10-23, recorded at
+`leadSourceGroups.ts:94` ("use the School account for Colaberry training and Agent Cory for
+everything else"), and none of them is callable. Whether 50 alumni-winback contacts belong in the
+dialer CRM at all is a scope decision, not a defect.
+
+## What this does to Phase 3
+
+Phase 3 splits, because the two halves now have completely different risk:
+
+**Phase 3A, the link repair: 196 rows, our Postgres only.** Write the discovered
+`ghl_contact_id` onto those 196 leads. **No write to the customer-facing CRM at all.** It records
+a fact that already exists, it is reversible from the ledger, and it is what makes those people
+visible as linked on our admin surfaces. This is the high-value, low-risk half, and it is most of
+the benefit.
+
+**Phase 3B, the creates: 65 contacts in the live CRM.** This is the half that carries the October
+incident's risk, and it now needs a scope decision rather than a consent decision, because the
+consent population is 11 people with no recorded consent. Batches of 5 still apply.
+
+The hardcoded frontend `GHL_LOCATION_ID` fix (section 3) matters more after 3A, not less: 195 of
+the 196 repaired links point into `school_of_data_analytics`, and the six admin surfaces that
+build their own deep links would send every one of them to the Agent Cory location and show an
+empty record.
+
+## Still open from the plan
+
+- The 1 remaining `success`-with-no-contact-id lead.
+- The consent-capture regression at intake, 61% in July to 6% in November. Unchanged by this.
+- Kes's 7 "wrong sub-account" enrollment ids, still not supplied.
