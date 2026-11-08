@@ -92,16 +92,39 @@ not part of this log.
     helper that JSON-parses the body throws on a write that actually succeeded. The close was
     confirmed by re-reading the ticket, not by the helper's exit.
 
-- [x] Corrected the Basecamp account id printed on the ADS-2 artifacts
+- [x] Corrected the Basecamp account id printed on the ADS-2 verification document, and re-filed it
   - Date: 2026-11-08
   - Session: CC-20261102-k9r4
   - What changed: `scripts/artifacts/tickets/ads2Data.js` — `TICKET_URL` account id `4322705` to
-    `3945211`. The value is printed in the document PDF's footer and was therefore a dead link on
-    filed evidence.
-  - Verification: `4322705` occurred exactly once in the whole repository, in that line;
-    every other Basecamp link in tracked code uses `3945211`, which is also the account the API base
-    `https://3.basecampapi.com/3945211` reads and writes against — the same base that read ADS-2 and
-    completed it. Bucket `7463955` and todo `10467338730` were already right.
-  - Notes: Found while writing this log, by checking the URL I had handed over rather than trusting
-    it. The lesson is narrow and worth keeping: an id pasted into a data module is printed onto a PDF
-    that outlives the session, and nothing in the artifact toolchain validates a URL it renders.
+    `3945211`. That value is printed in the document PDF's footer, so the artifact filed in the vault
+    carried a dead link back to its own ticket. The document was rebuilt, the superseded copies were
+    retired, and the corrected build was re-filed on ADS-2 under its stable name. The one-page visual
+    does not print the URL and was not touched.
+  - Verification: `4322705` occurred **exactly once in the whole repository**, in that line; every
+    other Basecamp link in tracked code uses `3945211`, and the attach tool's own output prints
+    `https://app.basecamp.com/3945211/...` for this todo, which settles it from the API side rather
+    than from the repo alone. Bucket `7463955` and todo `10467338730` were already right. Rebuild
+    unchanged: `visual 1 page(s) (limit 1) 73 KB`, `document 5 page(s) 83 KB`;
+    `checkAmericanSpelling.js` 345 files, 0 British spellings. Retired with
+    `PUT /buckets/7463955/recordings/<id>/status/trashed.json` — comment 10487546986 and vault upload
+    10487546981 (the mis-named interim copy), comment 10485840814 and vault upload 10485840781 (the
+    stale document), **all four 204**, and all four confirmed gone from a re-read of the vault folder
+    and the comment list. Re-filed as vault upload 10487550636 and comment 10487550642, **preview OK**
+    on read-back. The ticket re-read after the trashes: `completed=true`, 5 comments. End state in the
+    folder: one `ADS2_LANDING_CTA_VERIFICATION.pdf` and one `ADS2_LANDING_CTA_1PAGE.pdf`, with no
+    interim name anywhere.
+  - Notes: **I got the replacement wrong first, and the repo already had the rule.** I uploaded the
+    corrected document as `ADS2_LANDING_CTA_VERIFICATION_R2.pdf`, because
+    `attachArtifactToTicket.js` dedupes by filename and silently skips a re-upload under a name it
+    has already seen. C0.3 forbids exactly that workaround: artifact names carry no dates, version
+    numbers or status words, and where a superseded copy must coexist it is the **superseded** one
+    that takes the suffix while the current one keeps the stable name. The documented procedure is to
+    trash the stale uploads and re-upload under the stable name, which is what the end state above
+    reflects. One detail worth having in writing: the dedupe scans existing **comments** for the
+    filename as well as the vault, so the stale comment has to be retired too or the corrected upload
+    is skipped with a cheerful "already on the ticket". Trashed recordings are recoverable, and the
+    vault copy and the comment attachment are separate uploads with separate sgids, so retiring one
+    does not break the other.
+    Found at all only by checking a URL I had already handed over instead of trusting it. Nothing in
+    the artifact toolchain validates a URL it renders, and an id pasted into a data module outlives
+    the session on a PDF.
