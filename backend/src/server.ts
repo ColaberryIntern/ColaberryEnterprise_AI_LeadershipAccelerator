@@ -43,6 +43,7 @@ import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
+import publicRoomJoinRoutes from './routes/publicRoomJoinRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { startRepoTreeRefresh } from './services/repoTree/repoTreeRefreshService';
@@ -329,6 +330,12 @@ app.use(trackingRoutes);
 app.use(publicCareerPortfolioRoutes);
 app.use(publicHireTalentRoutes); // hire.refactored.ai directory + intro (public, unauthenticated)
 app.use(publicCaseStudyRoutes);
+// A room's stable join address (/api/public/rooms/join/:token). Same rule, and it
+// matters more here than almost anywhere: this URL is pasted into recurring
+// calendar invites, so mounting it below adminRoutes would 401 every attendee
+// opening the invite — and it would fail that way weeks after the deploy that
+// broke it, at the start of a session, for people who cannot debug it.
+app.use(publicRoomJoinRoutes);
 
 app.use(adminRoutes);
 
