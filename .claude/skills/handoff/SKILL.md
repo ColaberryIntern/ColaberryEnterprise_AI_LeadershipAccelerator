@@ -30,6 +30,22 @@ same time, without clobbering each other. `manifest.json` is derived from the
 directory listing at finalize time for exactly this reason - the lesson
 `PROGRESS.md` already taught this repo.
 
+**One tab can capture all of them.** `captureTab.js` takes the session id as an
+argument, so it does not have to run inside the tab it is describing:
+
+```bash
+node scripts/handoff/captureTab.js --session <other tab's uuid> \
+  --cwd "<the directory that tab STARTED in>" --worktree <where it works now>
+```
+
+This is not an edge case, it is the normal path the first time: `/handoff` only
+exists in a worktree that has this skill, so on a machine where the branch is
+unmerged the other tabs have no such command to run. Each tab's session id is
+the filename of its transcript under `~/.claude/projects/<slug>/`, and every
+transcript entry carries the `cwd` to pass. **Tabs are frequently reassigned to a
+different directory mid-session**, which is why `--cwd` (what names the
+transcript folder) and `--worktree` (where the git state lives) are separate.
+
 Append `--with-transcripts` to `finalize` only if the literal conversation
 history is wanted. It turns a few-MB bundle into a multi-GB one.
 
@@ -68,6 +84,19 @@ original, and the script refuses to guess rather than capturing an empty tab.
 
 - Every reporting tab: branch, HEAD, upstream, unpushed commits, the tracked
   diff as an appliable patch, open PR URLs, and the session log.
+- **One patch per worktree, not per tab.** Measured on the first multi-tab run:
+  18 tabs, and 15 of them were sitting in the same checkout. Keyed on the session
+  id, that checkout's 74-file diff and its 873 untracked files were written once
+  per tab; keyed on the worktree, the first tab stores them and the rest point at
+  the same files. Tabs still never contend, because no tab rewrites a file
+  another tab owns.
+- `RESUME_PROMPT.md`, generated from what actually shipped: the real worktrees,
+  tab count and `origin/main` sha. Paste it into a fresh Claude Code tab on the
+  new machine and it drives the restore. It is generated rather than written by
+  hand so it cannot promise something the bundle does not contain.
+- **This tooling itself**, under `scripts/handoff/`, so the bundle restores
+  itself. Telling the operator to run `bootstrapMachine.ps1` from the repo is
+  circular - cloning the repo is what bootstrap does.
 - **New files that were never committed.** `git diff HEAD` cannot see an
   untracked file, and a workstream whose value is six new files would otherwise
   hand over a patch of nothing. Small text files are copied into `extras/`;
@@ -88,6 +117,27 @@ and where to fetch each one.
 
 **MCP server names only**, not their configs, which can hold OAuth tokens.
 
+**Not `tmp/`, ever.** The first multi-tab run copied a checkout's 873 untracked
+files and the gate refused the bundle naming real material: JWT session cookies,
+a GitHub PAT, a Slack webhook URL, a GCP key. All of it came out of `tmp/`, which
+this repo's `CLAUDE.md` defines as scratch that is "always safe to delete, never
+committed" - probe output and saved responses pile up there precisely because
+nothing is meant to keep them. Scratch is reproducible by definition, so it has
+no handoff value and carrying it into a folder built to be emailed is a leak with
+a delivery mechanism attached. `tmp`, `.cache`, `.next`, `.venv`, `__pycache__`
+and files whose names announce credentials are refused entry.
+
+**Anything else the scanner flags inside `extras/` is withheld, not refused.**
+`extras/` is a copy of untracked files nobody curates, so refusing the whole
+bundle over one stray probe script means the tool never runs. The file is left
+behind instead, the original untouched on the old machine, and it is named on
+stdout, written to `WITHHELD.md` and recorded in `manifest.json`. **A hit there is
+usually a real credential sitting in a working tree, so the list is worth
+reading** - the first run surfaced a teammate's portal password hardcoded in an
+untracked Playwright script. A finding in `tabs/`, `memory/` or `machine/` still
+refuses the bundle: those are files this tool assembled, so a credential in one
+is a defect in the capture, not stray material.
+
 **Not the scratchpad, unless asked.** Pass `--with-scratchpad` to carry a
 session's ad-hoc probe scripts. They are off by default because the first real
 bundle built here tripped the secret gate four times and three were scratchpad
@@ -95,7 +145,7 @@ files holding service URLs and account identifiers. They are the highest-risk
 and lowest-value thing in a bundle, and they can be reconstructed from the
 transcript.
 
-**Not all 416 worktrees.** Only the ones a reporting tab is actually working in
+**Not all 418 worktrees.** Only the ones a reporting tab is actually working in
 are recreated. The rest are recorded as a path and branch list, recreatable on
 demand. Rebuilding all of them would take hours and produce a machine nobody
 wants.
@@ -134,9 +184,14 @@ drops a real credential into it.
 
 ## On the new machine
 
+Unzip the bundle, then run this **from inside the unzipped folder**. The bundle
+carries the script, so nothing needs cloning first:
+
 ```
-powershell -ExecutionPolicy Bypass -File scripts\handoff\bootstrapMachine.ps1 -Bundle <unzipped folder>
+powershell -ExecutionPolicy Bypass -File scripts\handoff\bootstrapMachine.ps1 -Bundle .
 ```
+
+Or paste `RESUME_PROMPT.md` into a fresh Claude Code tab and let it drive.
 
 Useful switches: `-RepoRoot` to clone somewhere other than the old path,
 `-Verify` to prove the checkout works, `-SkipPatches` to leave uncommitted work
@@ -157,8 +212,16 @@ everything except literal `--resume` still works.
 node scripts/handoff/handoffSelfTest.js
 ```
 
-Eleven checks, including a planted credential the gate must refuse. CI runs it.
+Fifteen checks, including a planted credential the gate must refuse. CI runs it.
 If it fails, do not send a bundle built by that code.
+
+Three of those checks exist because a real run broke: the worktree key must not
+fork on a separator or case difference (or the shared patch duplicates again),
+`tmp/` and credential-shaped names must be refused entry to `extras/` while real
+work still travels, and a legitimate bundle carrying a real worktree id must pass
+the gate - that field, when it was called `worktreeKey`, tripped the
+`generic-api-key` rule in all 18 tab files at once and refused the bundle over 62
+findings of its own making.
 
 ## Scope note
 
