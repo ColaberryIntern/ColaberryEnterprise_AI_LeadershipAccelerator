@@ -39,7 +39,12 @@ jest.mock('../../../services/workforceOrgChartApi', () => ({
     observe: 'Read only.', suggest: 'May propose actions.', act_audited: 'May write, audited.', communicate: 'May send outbound comms.',
   },
 }));
-jest.mock('../../../services/managerDirectiveApi', () => ({ listDirectives: jest.fn() }));
+// AF12.8 — stubbed so the Directives card does not throw if this page mounts it; see the
+// matching note in AgentDetailPage.smoke.test.tsx.
+jest.mock('../../../services/managerDirectiveApi', () => ({
+  listDirectives: jest.fn(),
+  listDirectivesWithPosture: jest.fn().mockResolvedValue({ directives: [], posture: null }),
+}));
 jest.mock('../../../services/agentReportSubscriptionApi', () => ({ listReportSubscriptions: jest.fn() }));
 jest.mock('../../../services/agentGoalApi', () => ({ listGoals: jest.fn() }));
 jest.mock('../../../services/agentOneOnOneApi', () => ({ listOneOnOnes: jest.fn() }));

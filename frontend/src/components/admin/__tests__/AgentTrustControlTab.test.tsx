@@ -25,6 +25,10 @@ jest.mock('../../../services/agentMemoryProposalApi', () => ({
 }));
 jest.mock('../../../services/managerDirectiveApi', () => ({
   listDirectives: jest.fn(),
+  // AF12.8 — the Directives card reads through this one now, because it needs the posture
+  // alongside the rows. `listDirectives` stays mocked: AgentTalkTab and AgentAtAGlanceTab
+  // still call it, and this suite would hide a regression in them if it stopped existing.
+  listDirectivesWithPosture: jest.fn(),
   createDirective: jest.fn(),
   revokeDirective: jest.fn(),
 }));
@@ -44,8 +48,8 @@ const { listMemoryProposals, proposeMemory, approveMemoryProposal, rejectMemoryP
     listMemoryProposals: jest.Mock; proposeMemory: jest.Mock; approveMemoryProposal: jest.Mock; rejectMemoryProposal: jest.Mock;
   };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { listDirectives, revokeDirective } = require('../../../services/managerDirectiveApi') as {
-  listDirectives: jest.Mock; revokeDirective: jest.Mock;
+const { listDirectivesWithPosture, revokeDirective } = require('../../../services/managerDirectiveApi') as {
+  listDirectivesWithPosture: jest.Mock; revokeDirective: jest.Mock;
 };
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getAgentRoleCharter } = require('../../../services/agentRoleCharterApi') as { getAgentRoleCharter: jest.Mock };
@@ -127,7 +131,7 @@ const mockSetAgentAbacOverride = setAgentAbacOverride as unknown as jest.Mock;
 beforeEach(() => {
   jest.clearAllMocks();
   listMemoryProposals.mockResolvedValue([]);
-  listDirectives.mockResolvedValue([]);
+  listDirectivesWithPosture.mockResolvedValue({ directives: [], posture: null });
   getAgentRoleCharter.mockResolvedValue({ agentId: 'agent-1', charter: null });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -221,10 +225,15 @@ describe('AgentTrustControlTab — Directives', () => {
   it('shows the honest empty state when none exist', async () => {
     await renderTab();
     expect(container.textContent).toContain('No directives have been given to this agent yet.');
+    // This assertion is here because the test PASSED VACUOUSLY once: when the component was
+    // switched to a function this suite had not mocked, the fetch threw, the list stayed empty,
+    // and the empty state rendered for entirely the wrong reason. An empty list and a failed
+    // load look identical unless the error is ruled out.
+    expect(container.textContent).not.toContain('Failed to load directives');
   });
 
   it('renders an active directive with a Revoke control and no create control', async () => {
-    listDirectives.mockResolvedValue([ACTIVE_DIRECTIVE]);
+    listDirectivesWithPosture.mockResolvedValue({ directives: [ACTIVE_DIRECTIVE], posture: null });
     await renderTab();
     expect(container.textContent).toContain('Always cc Kes on escalations.');
     const buttons = Array.from(container.querySelectorAll('button')).map((b) => b.textContent);
@@ -233,13 +242,64 @@ describe('AgentTrustControlTab — Directives', () => {
   });
 
   it('revoke calls the real API and refreshes the list', async () => {
-    listDirectives.mockResolvedValue([ACTIVE_DIRECTIVE]);
+    listDirectivesWithPosture.mockResolvedValue({ directives: [ACTIVE_DIRECTIVE], posture: null });
     revokeDirective.mockResolvedValue({ ...ACTIVE_DIRECTIVE, status: 'revoked' });
     await renderTab();
     const revokeButton = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Revoke')!;
     await act(async () => { revokeButton.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise((r) => setTimeout(r, 0)); });
     expect(revokeDirective).toHaveBeenCalledWith('agent-1', 'd1');
-    expect(listDirectives).toHaveBeenCalledTimes(2);
+    expect(listDirectivesWithPosture).toHaveBeenCalledTimes(2);
+  });
+
+  // ── AF12.8: the posture, which is the whole point of the card now ──────────
+  //
+  // A list of rows labelled "Active" reads as a list of rules in force. These assert that the
+  // card says otherwise, and that it says so about the one thing a manager cannot find out for
+  // themselves: a live surface the directives do not reach.
+
+  it('says directives are ADVISORY, with the reason, not just a label', async () => {
+    listDirectivesWithPosture.mockResolvedValue({
+      directives: [ACTIVE_DIRECTIVE],
+      posture: {
+        mechanism: 'advisory',
+        mechanismReason: 'Directives are injected as prompt text, never checked as a gate.',
+        injectedBy: ['manager_conversation', 'own_reply_runtime'],
+        notInjectedBy: [],
+        hasOwnReplyRuntime: true,
+      },
+    });
+    await renderTab();
+    expect(container.textContent).toContain('Advisory');
+    expect(container.textContent).toContain('never checked as a gate');
+    expect(container.textContent).toContain("this agent's own replies");
+    // Nothing to warn about when every live surface is covered.
+    expect(container.textContent).not.toContain('will not change what this agent says there');
+  });
+
+  it('names a live surface the directives do NOT reach, which is the Maya case', async () => {
+    listDirectivesWithPosture.mockResolvedValue({
+      directives: [ACTIVE_DIRECTIVE],
+      posture: {
+        mechanism: 'advisory',
+        mechanismReason: 'Directives are injected as prompt text, never checked as a gate.',
+        injectedBy: ['manager_conversation'],
+        notInjectedBy: ['own_reply_runtime'],
+        hasOwnReplyRuntime: true,
+      },
+    });
+    await renderTab();
+    expect(container.textContent).toContain('Does');
+    expect(container.textContent).toContain("this agent's own replies");
+    expect(container.textContent).toContain('will not change what this agent says there');
+  });
+
+  it('renders the list unchanged when the server sends no posture at all', async () => {
+    // Forward compatibility in the honest direction: an older backend simply omits the field,
+    // and the card must degrade to what it always showed rather than claiming anything.
+    listDirectivesWithPosture.mockResolvedValue({ directives: [ACTIVE_DIRECTIVE], posture: null });
+    await renderTab();
+    expect(container.textContent).toContain('Always cc Kes on escalations.');
+    expect(container.textContent).not.toContain('Advisory');
   });
 });
 
