@@ -4,6 +4,7 @@ import {
   listRecentPayments, getCustomerById,
   PaySimplePayment, PaySimpleCustomer,
 } from './paysimpleService';
+import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 
 /**
  * Cross-references PaySimple payments against Accelerator enrollment records.
@@ -208,11 +209,30 @@ export async function reconcilePayment(
   const fresh = await Enrollment.findByPk(enrollmentId);
   if (!fresh || fresh.payment_status === 'paid') return false;
 
+  // C10.13 — place them in the batch of the month they paid in.
+  //
+  // `PaymentDate` and not `Date.now()`: this is a SWEEP, so it routinely applies payments
+  // that cleared days or weeks ago, and a payment made on 29 November and reconciled on
+  // 2 December belongs to the November batch. That is the one path where the distinction
+  // is the normal case rather than an edge case.
+  //
+  // `alreadyPaid: false` is sound here for the same reason as in `markEnrollmentPaid`:
+  // the guard one line above returned for every already-paid row.
+  //
+  // The `Cohort.increment` below reads `fresh.cohort_id`, which `update()` refreshes on
+  // the instance, so writing the batch in this same object makes the seat land on it.
+  const placedCohortId = await resolvePaidBatchPlacement({
+    currentCohortId: fresh.cohort_id,
+    alreadyPaid: false,
+    paidAt: new Date(payment.PaymentDate || Date.now()),
+  });
+
   await fresh.update({
     payment_status: 'paid',
     portal_enabled: true,
     amount_paid: payment.Amount,
     enrolled_at: fresh.enrolled_at || new Date(payment.PaymentDate || Date.now()),
+    cohort_id: placedCohortId ?? fresh.cohort_id,
     paysimple_payment_id: String(payment.Id),
     paysimple_customer_id: String(customerId),
     // T206, NARROWED BY C10.17 PHASE 2 to `tier` alone. Marking a row paid while leaving

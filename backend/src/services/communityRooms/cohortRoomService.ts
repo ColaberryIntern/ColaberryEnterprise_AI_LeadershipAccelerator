@@ -53,9 +53,25 @@ import { detectDayKind } from '../classKit/kitSpec';
 import { emitRoomEvent } from './roomOutboxService';
 import { ROOM_EVENTS } from './roomEvents';
 import { log, truncated } from './roomShared';
+import { BATCH_COHORT_TYPE, isBatchCohort } from '../batch/batchCohort';
 
-/** The cohort_type that means "a monthly batch". */
-export const BATCH_COHORT_TYPE = 'accelerator';
+/**
+ * The batch definition is re-exported, not re-declared.
+ *
+ * C10.14 wrote `BATCH_COHORT_TYPE` and `isBatchCohort` here, because rooms was the only
+ * thing that needed them. C10.13 added two more readers — placement and rollover — and
+ * three copies of "what counts as a batch" is the drift this ladder keeps being bitten
+ * by, so the definition moved to `services/batch/batchCohort.ts` (pure, no imports) and
+ * this module imports it. The names and behaviour are unchanged, including the reason the
+ * predicate reads a NULL `cohort_type` as a batch; the rationale travelled with it.
+ *
+ * Scoped to `accelerator` because the other two cohort types are not batches and a room
+ * for either would be wrong rather than merely unused: `explorer` is the prospect bucket
+ * (473 enrollments, 433 of them active), so a room there is a room for every lead the
+ * platform has ever captured, and `ai_internship` already has its own hand-made
+ * persistent cohort room (`ai-internship-standup`).
+ */
+export { BATCH_COHORT_TYPE, isBatchCohort };
 
 /**
  * The batch room's slug: deterministic, so {@link ensureRoomForCohort} is
@@ -74,19 +90,6 @@ export interface BatchRoomCohort {
   id: string;
   name: string;
   cohort_type?: string | null;
-}
-
-/**
- * Is this cohort a monthly batch, i.e. does it get its own room?
- *
- * Scoped to `accelerator` because the other two cohort types are not batches and
- * a room for either would be wrong rather than merely unused: `explorer` is the
- * prospect bucket (473 enrollments, 433 of them active), so a room there is a
- * room for every lead the platform has ever captured, and `ai_internship`
- * already has its own hand-made persistent cohort room (`ai-internship-standup`).
- */
-export function isBatchCohort(cohort: BatchRoomCohort): boolean {
-  return (cohort.cohort_type ?? BATCH_COHORT_TYPE) === BATCH_COHORT_TYPE;
 }
 
 /**

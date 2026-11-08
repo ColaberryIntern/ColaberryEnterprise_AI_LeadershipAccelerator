@@ -37,6 +37,31 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute, so also before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
   },
   {
+    // Monthly batch rollover (2026-11-08, C10.13). Seeded rather than baselined: an
+    // instrumentCronJob() name with no ai_agents row tracks its run_count and error_count
+    // against nothing, so it is invisible to every health and staleness surface — and
+    // adding it to cronRegistryBaseline.ts instead would be growing a ratchet that is only
+    // allowed to shrink. The schedule here must stay equal to the cron expression in
+    // schedulerService.ts, or the reconciliation guard reports the disagreement.
+    agent_name: 'BatchRollover',
+    agent_type: 'scheduled_processor',
+    module: 'batchRolloverService',
+    source_file: 'backend/src/services/batch/batchRolloverService.ts',
+    trigger_type: 'cron',
+    schedule: '10 0 * * *',
+    category: 'operations',
+    description:
+      'Keeps exactly one monthly enrollment batch open: closes any accelerator batch whose ' +
+      'month has passed and opens the current month\'s, per directives/run-monthly-enrollment-' +
+      'batches.md. Runs daily at 00:10 Central rather than on the 1st because it is idempotent ' +
+      'and a daily tick self-heals a rollover missed to a restart or a deploy. Changes one row ' +
+      'at a time, by id, recording the previous status. REFUSES to close anything when the ' +
+      'current month has no batch row, because zero open batches blocks enrollment outright ' +
+      'while one stale batch still admits members. Closing never removes access: portal and ' +
+      'curriculum gating read Enrollment.status and portal_enabled, never Cohort.status. ' +
+      'Set BATCH_ROLLOVER_ENABLED=false to stop it without a deploy.',
+  },
+  {
     // Gov AI vetting catch-up (2026-11-04). Advisory: it writes only to gov_ai_vettings.
     agent_name: 'GovAiVettingCatchup',
     agent_type: 'scheduled_processor',

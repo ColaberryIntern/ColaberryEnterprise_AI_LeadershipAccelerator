@@ -90,7 +90,39 @@ date filter, so it would start advertising the oldest batch in briefing and camp
 
 ## Steps
 
-### A. Monthly rollover - run in the first week of each month
+### A. Monthly rollover - AUTOMATED since 2026-11-08 (C10.13)
+
+**Steps A1 to A3 and A6 now run by themselves.** The `BatchRollover` job (daily 00:10
+America/Chicago, `backend/src/services/batch/batchRolloverService.ts`) closes any batch
+whose month has passed, opens the current month's, and confirms the batch room. It runs
+**daily rather than on the 1st** because it is idempotent and a daily tick self-heals a
+rollover missed to a deploy or a restart - a once-a-month timer gets one chance a month to
+be up. It changes one row at a time, by id, recording the previous status in its log.
+
+**It refuses to close anything when the current month has no batch row**, because zero
+open batches blocks enrollment outright while one stale open batch still admits members.
+That refusal is logged at `warn` with event `no_batch_row_for_current_month`, and it is
+the signal that step D (creating rows ahead) has been missed.
+
+To run it by hand - to see what it would do, or immediately after a deploy rather than
+waiting for the next tick:
+
+```bash
+docker exec accelerator-backend node dist/scripts/rollBatchMonth.js              # dry run
+docker exec accelerator-backend node dist/scripts/rollBatchMonth.js --execute
+docker exec accelerator-backend node dist/scripts/rollBatchMonth.js --at 2026-12-01
+```
+
+The script calls the same function the cron calls, so a dry run is evidence about the
+scheduled job rather than about a second implementation of it. `BATCH_ROLLOVER_ENABLED=false`
+stops the timer without a code change; the script still works.
+
+**What is still a human's job each month: steps A4 and A5** - handing the closed batch to
+Jackie for its orientation, and asking her to open the new batch's WhatsApp group. Neither
+is in this repo.
+
+The steps below are the procedure the job performs, kept because they are also what an
+operator does when the job is off or has refused.
 
 1. **Confirm the incoming month's batch row exists.**
    `SELECT id, name, start_date, status FROM cohorts WHERE name = 'Cohort - <Month> <Year>';`
@@ -119,11 +151,45 @@ batch (C10.14, 2026-11-06: "everyone can use the same curriculum until future no
 step used to read "materialize curriculum for the newly opened batch", which at twelve batches
 a year is twelve copies a year. Nothing to do now: see Edge cases.
 
-### B. When a member pays
+### B. When a member pays - AUTOMATED since 2026-11-08 (C10.13)
 
-Placement is "the batch whose month contains the payment date". **This is not yet automated** -
-see Edge cases. Until it is, an admin assigns the member to the open batch, which is the
-current month's batch, so the manual action and the rule agree as long as step A ran on time.
+**There is no admin step.** Placement is "the batch whose month contains the payment date",
+and `backend/src/services/batch/batchPlacementService.ts` is the only place that decides
+it. Ali, 6 November 2026: "when a user signs up and pays for a membership, they should
+automatically be moved into the cohort for that month."
+
+Four writers mark an enrollment paid, in three different syntaxes, and all four ask that
+one resolver: `grantMembership` (self-serve activation and comped grants),
+`markEnrollmentPaid` (the legacy PaySimple webhook), `reconcilePayment` (the PaySimple
+sweep) and `paymentSyncService` (raw SQL). `appPaymentReconcileService` needs no wiring
+because it activates through `activateByRef`, which reaches `grantMembership`, and its own
+fallback UPDATE does not write `cohort_id` - asserted by a tripwire rather than assumed
+(`__tests__/services/batchPlacementWiring.test.ts`).
+
+**The rules it applies, each of which exists for a case that would otherwise be wrong:**
+
+| Rule | Why |
+|---|---|
+| Fires on the **unpaid → paid transition only** | `activateByRef` runs on every renewal. The batch is "when you joined", not "when you last paid", so a renewal must never move anybody. |
+| Resolves the month in **Central time** | A payment at 23:30 on 30 November Central is 05:30 on 1 December UTC. A UTC month puts that member in the wrong batch, silently, once a month, only at night. |
+| Uses the **payment date**, not the clock | A webhook repaired weeks later must place the member in the month they paid. Same distinction as the billing anchor, and the same 2026-08-12 incident. |
+| Reads `settings_json.batch_month`, falling back to the **name** | The batch open right now (November 2026) carries no `settings_json` block, while December 2026 onward do. A resolver keyed only on the explicit field would find nothing for the live month. `start_date` is never consulted - it holds the orientation date, which is in the following month. |
+| Matches a **closed** batch too | A future batch is `closed` until its month arrives, so a payment early in a month whose rollover has not run yet must still find its batch. |
+| Leaves **corporate, sponsor, internship and business** lanes alone | Those are placed by their own `cohort_type` lookups (see Edge cases). |
+| **Never throws** | A payment that cleared must land. The member in the wrong batch is an admin correction; an exception here would leave a paying member unpaid. |
+
+No seat arithmetic was added, and none is needed: `seats_taken` is a paid-capacity counter
+that the Explorer path never increments, so a free Explorer who pays has nothing to
+decrement. The three writers that do increment read the enrollment's own `cohort_id` after
+their write, so placing the member first makes their existing increment land on the right
+batch.
+
+`settings_json.batch_month` can be filled in for any row that only has its month in its
+name (idempotent, dry run by default, refuses to overwrite a conflicting value):
+
+```bash
+docker exec accelerator-backend node dist/scripts/backfillBatchMonths.js --execute
+```
 
 ### C. Orientation cadence
 
@@ -167,6 +233,22 @@ Not "looks right". Each of these is a query or a request with one correct answer
 5. **Members of a closed batch still have access.** Pick an enrollment in last month's batch
    and confirm the participant endpoints still return its curriculum. If they do not, the
    close in step A2 was not safe and must be reverted.
+6. **No paid member is sitting outside a batch.** This is the check that would have caught
+   the state C10.13 was written for: on 2026-11-08 it returned 8.
+   ```sql
+   SELECT c.name, c.cohort_type, count(*)
+   FROM enrollments e JOIN cohorts c ON c.id = e.cohort_id
+   WHERE e.payment_status = 'paid' AND e.status = 'active'
+     AND c.cohort_type <> 'accelerator'
+   GROUP BY 1, 2 ORDER BY 3 DESC;
+   ```
+   Pass: no rows, apart from the corporate, sponsor and internship lanes, which are placed
+   by their own rules. Rows in `explorer` mean placement did not fire - read the
+   `batch-placement` log lines for that payment.
+7. **The rollover is actually scheduled.** `docker exec accelerator-backend node
+   dist/scripts/rollBatchMonth.js` prints `[no change] the <current month> batch was
+   already open`. Any other output on a day that is not the 1st means the timer is not
+   running (check `BATCH_ROLLOVER_ENABLED`).
 
 ## Edge cases and failure modes
 
@@ -174,10 +256,13 @@ Not "looks right". Each of these is a query or a request with one correct answer
 |---|---|
 | **~~A new batch has no curriculum.~~ FIXED 2026-11-06 (C10.14).** Curriculum is shared: no reader scopes `curriculum_modules` by cohort any more (`backend/src/services/curriculumModuleScope.ts`), so a batch with no rows of its own is served the one shared set instead of throwing. The student-facing curriculum was never per-cohort to begin with - `timeline_cards` are course-scoped with `cohort_id NULL`. | Nothing to do per batch. Do **not** re-introduce a per-batch materialize step; a source ratchet in `__tests__/services/curriculumModuleScope.test.ts` fails the build if a cohort-scoped reader comes back. |
 | **`live_sessions` are still per-cohort, and that is correct.** A batch genuinely has its own meetings. Session rooms follow the batch model: the orientation's room is private to the batch, every later session's room is public, because after the first meeting all batches attend the combined monthly class. | Generate sessions per batch as before. The privacy is automatic (`cohortRoomService.sessionRoomPrivacy`). |
-| **Placement is not automated.** Every paid write path takes `cohort_id` from its caller (`backend/src/services/enrollmentService.ts`); the payment webhook only flips `payment_status` and never re-places anyone. Nothing computes "the batch for this month". | Until the resolver ships, step A must run on time, because the open batch is the only thing an admin add can land in correctly. |
-| **`selectNextOpenCohort()` is the wrong rule for this model.** It picks the soonest open cohort whose `start_date` is in the future. It has no callers today. If it is ever wired into placement, a mid-month signup lands in **next** month's batch. | Do not wire it in. Placement is a lookup on the batch month, not a sort on `start_date`. |
-| **Two batches open at once.** Public surfaces and `getNextCohort()` start disagreeing about which batch is current, and campaign copy advertises the older one. | Close the older one immediately, then verify check 2. |
-| **A missed rollover.** The previous month stays open and takes this month's signups. | Close it, open the correct month, and move any enrollment created after the 1st into the right batch. This is why three months of rows are kept ahead. |
+| **~~Placement is not automated.~~ FIXED 2026-11-08 (C10.13).** All four paid-status writers resolve the batch from the payment month (`backend/src/services/batch/batchPlacementService.ts`); see step B. | Nothing per payment. If a member still lands wrong, read the `batch-placement` log lines - `no_batch_for_payment_month` means the month has no row, `left_in_other_lane` means they were corporate/sponsor/internship. |
+| **A payment arriving in a month with no batch row leaves the member where they were.** The resolver will not invent a batch, and placement is never retried - it fires on the unpaid→paid transition, which happens once. | Keep three months of rows ahead (step D), which is what makes this unreachable. If it happens, move the member by hand: there is no re-placement sweep, by design, because a sweep that re-places by month would move renewing members out of the batch they joined. |
+| **Members who paid BEFORE the resolver shipped are not moved by it.** Their unpaid→paid transition already happened, so the fix is forward-only. Measured 2026-11-08: **22 paid, active members sit in the Explorer pool**, having paid in 2026-07 (8), 2026-08 (6) and 2026-09 (8) - all before this model was decided on 2026-11-05. **There is no placeable batch for any of those months** (July 2026 is `completed`; August and September have no row), so they are not a placement failure under this rule, they predate it. | `node dist/scripts/placeHistoricalPaidMembers.js` (dry run by default) reports them and moves **zero**, which is correct: filing them into the November batch would state they joined in November. Giving them a batch at all - retroactive rows for those months, or a deliberate move into the current one - is a product decision for Ali, not an implementation detail. The script stays as the recovery path for the row above. **Not scheduled, on purpose**: a recurring version would move renewing members out of their own batch every month. |
+| **`selectNextOpenCohort()` is the wrong rule for this model.** It picks the soonest open cohort whose `start_date` is in the future, so from the 13th onward it files that month's signup into **next** month's batch. **Corrected 2026-11-06: it does have a caller** - `getLatestOpenCohort()` (`cohortService.ts:391`), which is itself dead and marked DEPRECATED in its own docblock. State it the loose way and the next person greps, finds the caller, and concludes the warning is stale. | Do not wire it into placement. Placement is a lookup on the batch month, not a sort on `start_date`. |
+| **`resolvePaidCohortFor()` is a SECOND placement rule, and it is the start_date one.** `subscriptionService.ts` reroutes a paying Explorer to "the soonest open cohort that is a real paid cohort", ordered `start_date ASC`. It agrees with the batch month only while exactly one batch is open; it disagrees whenever a rollover is missed (picks the older) or runs early in a month (the right batch is still `closed`). | Already handled: `grantMembership` resolves batch placement first and that result wins. The function is left in place for the `class_start` display it also feeds. Do not add a third rule. |
+| **Two batches open at once.** Public surfaces and `getNextCohort()` start disagreeing about which batch is current, and campaign copy advertises the older one. | The daily `BatchRollover` job closes every batch whose month is not the current one, so this self-corrects within 24 hours. To fix it now, run `rollBatchMonth.js --execute`, then verify check 2. |
+| **A missed rollover.** The previous month stays open and takes this month's signups. | Self-healing since C10.13 on two fronts: the daily job closes it on the next tick, and placement puts anyone who PAYS in the right batch regardless of which one is open, because it resolves on the month and not on status. An enrollment created but not yet paid still sits in the stale batch until payment moves it. |
 | **Explorer signups are not batch members.** Free Open House / training.colaberry.com signups are placed deterministically in the standing `cohort_type='explorer'` cohort (`getOrCreateExplorerCohort`). They join a monthly batch only when they pay. | Never move an Explorer into a batch to make a number look better; they do not consume a paid seat and are excluded from paid metrics by design. |
 | **Sponsored and corporate members** are placed by `cohort_type='corporate'` / `'sponsor'` lookups, not by month. | Out of scope for this directive. Leave those lanes alone. |
 | **`max_seats` blocks a signup.** `validateCohortAvailability` rejects when `seats_taken >= max_seats`, and `seats_taken` is incremented on payment. A self-paced batch has no room. | Keep `max_seats` generously above any plausible month. The July 2026 cohort already sits at 58 taken against 50 seats, so this check has drawn blood before. |
@@ -193,5 +278,15 @@ Not "looks right". Each of these is a query or a request with one correct answer
   the welcome call script (`backend/src/services/automationService.ts`), the calendar invite
   on `EnrollSuccessPage`, and the readiness campaign. It is not a cosmetic edit, and it is
   Ali's call, not an implementation detail.
+
+  **OPEN, awaiting Ali as of 2026-11-08: the November 2026 row still reads
+  `start_date = 2026-11-12`.** The convention above says it should hold that batch's
+  orientation date, 7 December 2026. Left as it is, two things happen after the 12th: the
+  public countdown renders a negative "Starts in -N days", and `schedulerService` begins
+  cancelling payment reminders for the batch as "cohort already started" - on the batch
+  where most members have not paid, which is the most expensive line in that file. Changed,
+  50-odd members who were told the 12th see a new date. **Nothing in C10.13 depends on this**:
+  placement and rollover never read `start_date`, deliberately. It is a separate decision
+  with a deadline of 12 November 2026.
 - **Closing a batch must never remove access.** Verified by check 5 above. If it ever does,
   something has started reading `Cohort.status` as an access gate and that is the bug.

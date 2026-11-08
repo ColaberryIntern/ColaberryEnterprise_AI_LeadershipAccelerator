@@ -128,6 +128,13 @@ const PAID_FILES: Record<string, string> = {
 
   // ---- NEITHER: a declaration, seeds, and agent identities that are not people. ----
   'models/Enrollment.ts': 'DECLARATION. The payment_status union and the column defaults.',
+  'scripts/placeHistoricalPaidMembers.ts':
+    'READ of the paid literal, and A NEWCOMER THIS GUARD CAUGHT (C10.13). It selects on '
+    + "`payment_status: 'paid'` AND `status: 'active'` to find members who paid before batch "
+    + 'placement existed, and the only column it ever writes is `cohort_id` - never tier, '
+    + 'payment_status or enrollment_type, so it cannot make a row incoherent in the sense this '
+    + 'tripwire guards. Dry-run by default, --execute to write, and deliberately not scheduled: '
+    + 'a recurring version would move renewing members out of their own batch every month.',
   'scripts/createTestUsers.ts': 'SEED/DEV script. Creates test people; never runs in production.',
   'scripts/internshipJourneyE2E.ts': 'E2E script. Creates a fixture journey.',
   'scripts/seedTimelineDemo.ts':

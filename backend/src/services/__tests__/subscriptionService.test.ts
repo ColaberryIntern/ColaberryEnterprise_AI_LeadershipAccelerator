@@ -677,14 +677,36 @@ describe('subscriptionService', () => {
       expect(opts.where).toEqual({ id: ['cr1'] });
     });
 
-    it('keeps an existing cohort assignment on activation', async () => {
+    it('keeps an existing cohort assignment when no batch matches the payment month', async () => {
       const sub = { status: 'pending', plan: 'annual', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
       const enrollment = { cohort_id: 'existing', enrolled_at: null, update: jest.fn() };
       (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
       (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
       await activateByRef('SUB-e1-1', {}, NOW);
       expect(enrollment.update.mock.calls[0][0].cohort_id).toBe('existing');
-      expect(Cohort.findAll).not.toHaveBeenCalled();
+      // C10.13 replaced "activation never looks for a cohort" with "it looks, and changes
+      // nothing unless the payment month has a batch". So the lookup is now expected, and
+      // the `Cohort.findAll -> []` default of this suite IS the no-batch-for-this-month
+      // case: the assignment has to survive it. This assertion used to read
+      // `.not.toHaveBeenCalled()`, which pinned the old rule.
+      expect(Cohort.findAll).toHaveBeenCalledTimes(1);
+    });
+
+    it('moves the payer into the batch for the month the money arrived (C10.13)', async () => {
+      // Ali, 6 Nov 2026: "when a user signs up and pays for a membership, they should
+      // automatically be moved into the cohort for that month." NOW is 15 July 2026, so
+      // the July batch is the answer and the June one they were sitting in is not.
+      const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-june', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findAll as jest.Mock).mockResolvedValue([
+        { id: 'c-june', name: 'Cohort - June 2026', cohort_type: 'accelerator', status: 'closed' },
+        { id: 'c-july', name: 'Cohort - July 2026', cohort_type: 'accelerator', status: 'open' },
+      ]);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-june', name: 'Cohort - June 2026', cohort_type: 'accelerator' });
+      await activateByRef('SUB-e1-1', {}, NOW);
+      expect(enrollment.update.mock.calls[0][0].cohort_id).toBe('c-july');
     });
 
     it('anchors the period on the SIGNUP date even when the class starts later (pay 7/20 → 8/20)', async () => {
