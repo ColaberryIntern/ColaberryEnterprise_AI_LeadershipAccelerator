@@ -82,4 +82,58 @@ function perStoryXp(budget, storyCount) {
   return Math.round(budget / storyCount);
 }
 
-module.exports = { diffPlanStories, perStoryXp, sameAcceptance };
+/**
+ * Which of `candidateIds` any evidence row is about, with how much was paid for each.
+ *
+ * This is the fail-closed gate's EYES, so it lives here, pure and tested, rather than as a SQL
+ * prefix predicate. A gate whose detector is silently wrong does not fail closed, it passes
+ * vacuously - which is precisely how a previous measurement of this subsystem reported 0 rows
+ * for a condition that was in fact true 964 times.
+ *
+ * ## Attribution is LONGEST MATCH, not a character class
+ *
+ * `evidence_records.source_ref` is `<storyId>@<sha>` today, and the first draft of this function
+ * asserted no shape by requiring the character after the id to be a non-word one. That is the
+ * SAME BUG the shipped matcher guard was written to fix: `.` and `:` are non-word characters and
+ * they are both ordinary story-id characters here, so `...recording` happily claimed
+ * `...recording.autonomy:R0`'s evidence. The negative-control test caught it.
+ *
+ * So the rule is the guard's rule (`storyCommitMatcher` in
+ * `services/sbp/verification/verifyDecision.ts`): a ref belongs to the LONGEST known story id
+ * that prefixes it, and it counts for a candidate only when that longest id IS the candidate.
+ * That needs no opinion about which characters a story id or a separator may contain - the ids
+ * themselves settle it.
+ *
+ * `knownIds` must therefore be the full id universe (the published plan's stories AND the
+ * re-derived ones), not just the candidates. Pass a partial universe and attribution falls back
+ * toward the shorter id, which over-reports earnings, which refuses more removals - the safe
+ * direction, but report it rather than relying on it.
+ *
+ * @param {Array<{source_ref: string, builder_xp?: number}>} evidence
+ * @param {Array<string>} candidateIds  the ids being asked about (the proposed removals)
+ * @param {Array<string>} [knownIds]    every story id that exists, for disambiguation
+ * @returns {Array<{story_id: string, evidence_rows: number, xp: number}>} only ids with a hit
+ */
+function creditedStories(evidence, candidateIds, knownIds) {
+  const candidates = (candidateIds || []).filter(Boolean).map(String);
+  if (!candidates.length) return [];
+  // Longest first, so the first prefix hit is the longest one.
+  const universe = [...new Set([...(knownIds || []).filter(Boolean).map(String), ...candidates])]
+    .sort((a, b) => b.length - a.length);
+  const wanted = new Set(candidates);
+
+  const tally = new Map();
+  for (const e of evidence || []) {
+    const ref = e && e.source_ref ? String(e.source_ref) : '';
+    if (!ref) continue;
+    const owner = universe.find((id) => ref.startsWith(id));
+    if (!owner || !wanted.has(owner)) continue;
+    const t = tally.get(owner) || { story_id: owner, evidence_rows: 0, xp: 0 };
+    t.evidence_rows += 1;
+    t.xp += Number(e.builder_xp) || 0;
+    tally.set(owner, t);
+  }
+  return candidates.filter((c) => tally.has(c)).map((c) => tally.get(c));
+}
+
+module.exports = { diffPlanStories, perStoryXp, sameAcceptance, creditedStories };

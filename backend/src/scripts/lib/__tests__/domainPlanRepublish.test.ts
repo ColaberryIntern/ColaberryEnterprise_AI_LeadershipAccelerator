@@ -6,7 +6,9 @@
 // under a story that stays, and must REFUSE a removal of anything already earned rather than
 // deciding on a student's behalf. Pure functions, no database.
 
-const { diffPlanStories, perStoryXp, sameAcceptance } = require('../domainPlanRepublish');
+const {
+  diffPlanStories, perStoryXp, sameAcceptance, creditedStories,
+} = require('../domainPlanRepublish');
 
 const s = (id: string, acceptance: string[] = ['does the thing']) => ({ id, acceptance });
 
@@ -113,6 +115,83 @@ describe('perStoryXp — mirrors pointsConfigService, and is pinned to its docum
     expect(perStoryXp(800, null)).toBe(0);
     expect(perStoryXp(NaN, 20)).toBe(0);
     expect(perStoryXp(800, -5)).toBe(0);
+  });
+});
+
+describe('creditedStories — the fail-closed gate\'s detector', () => {
+  // A gate whose detector never fires does not fail closed, it passes vacuously. These are the
+  // positive control: they prove the function can see evidence AT ALL before any test is allowed
+  // to read an empty result as "nothing was earned".
+  it('finds the evidence written for a story, in the real source_ref format', () => {
+    const ev = [{ source_ref: `${BASE}@abc1234`, builder_xp: 15 }];
+    expect(creditedStories(ev, [BASE])).toEqual([{ story_id: BASE, evidence_rows: 1, xp: 15 }]);
+  });
+
+  it('finds a bare source_ref equal to the id, with no suffix at all', () => {
+    expect(creditedStories([{ source_ref: BASE, builder_xp: 40 }], [BASE]))
+      .toEqual([{ story_id: BASE, evidence_rows: 1, xp: 40 }]);
+  });
+
+  it('sums every row for a story, because XP accrues across commits', () => {
+    const ev = [
+      { source_ref: `${BASE}@aaa`, builder_xp: 15 },
+      { source_ref: `${BASE}@bbb`, builder_xp: 15 },
+    ];
+    expect(creditedStories(ev, [BASE])).toEqual([{ story_id: BASE, evidence_rows: 2, xp: 30 }]);
+  });
+
+  it('NEGATIVE CONTROL: the base story does not claim the rung story\'s evidence', () => {
+    // This caught the first draft, which required a non-word character after the id — the exact
+    // mistake the matcher guard exists to fix, since "." is non-word AND an ordinary id
+    // character. Longest match replaced it. If this ever fails again, the gate refuses
+    // republishes over work the base story was never paid for.
+    const ev = [{ source_ref: `${RUNG0}@abc1234`, builder_xp: 4 }];
+    expect(creditedStories(ev, [BASE], [BASE, RUNG0])).toEqual([]);
+    expect(creditedStories(ev, [RUNG0], [BASE, RUNG0]))
+      .toEqual([{ story_id: RUNG0, evidence_rows: 1, xp: 4 }]);
+  });
+
+  it('does not let STORY-1 claim STORY-10 when both ids are known', () => {
+    const ev = [{ source_ref: 'STORY-10@sha', builder_xp: 9 }];
+    const known = ['STORY-1', 'STORY-10'];
+    expect(creditedStories(ev, ['STORY-1'], known)).toEqual([]);
+    expect(creditedStories(ev, ['STORY-10'], known))
+      .toEqual([{ story_id: 'STORY-10', evidence_rows: 1, xp: 9 }]);
+  });
+
+  it('over-attributes rather than under-attributes when the universe is incomplete', () => {
+    // Pinning the documented fallback. With STORY-10 unknown, its evidence lands on STORY-1 —
+    // wrong, but wrong in the direction that REFUSES a removal. A test records which way it
+    // leans so nobody later "fixes" it into silently dropping earned work.
+    const ev = [{ source_ref: 'STORY-10@sha', builder_xp: 9 }];
+    expect(creditedStories(ev, ['STORY-1'], ['STORY-1']))
+      .toEqual([{ story_id: 'STORY-1', evidence_rows: 1, xp: 9 }]);
+  });
+
+  it('omits a story with no evidence rather than reporting it as zero', () => {
+    // The caller treats presence in this list as "earned", so a zero-row entry would refuse
+    // every removal.
+    expect(creditedStories([{ source_ref: 'something.else@sha' }], [BASE])).toEqual([]);
+  });
+
+  it('survives missing xp, null refs, and empty inputs', () => {
+    expect(creditedStories([{ source_ref: `${BASE}@x` }], [BASE]))
+      .toEqual([{ story_id: BASE, evidence_rows: 1, xp: 0 }]);
+    expect(creditedStories([{ source_ref: null }, {}], [BASE])).toEqual([]);
+    expect(creditedStories([], [BASE])).toEqual([]);
+    expect(creditedStories(null, null)).toEqual([]);
+    expect(creditedStories([{ source_ref: `${BASE}@x` }], ['', null])).toEqual([]);
+  });
+
+  it('feeds diffPlanStories, so an earned removal becomes an unsafe one end to end', () => {
+    // The two halves of the gate, wired the way the script wires them.
+    const ev = [{ source_ref: `${RUNG0}@abc`, builder_xp: 4 }];
+    const current = [s(BASE), s(RUNG0)];
+    const next = [s(BASE)];
+    const first = diffPlanStories(current, next);
+    const known = [...current, ...next].map((x) => x.id);
+    const earnedIds = creditedStories(ev, first.removed, known).map((e: any) => e.story_id);
+    expect(diffPlanStories(current, next, earnedIds).unsafeRemovals).toEqual([RUNG0]);
   });
 });
 
