@@ -9,7 +9,7 @@
  */
 
 const TICKET = 'ADS-2';
-const TICKET_URL = 'https://3.basecamp.com/4322705/buckets/7463955/todos/10467338730';
+const TICKET_URL = 'https://3.basecamp.com/3945211/buckets/7463955/todos/10467338730';
 const MEASURED_ON = '2026-11-06';
 const DB = 'accelerator_prod';
 const SESSION = 'CC-20261102-k9r4';
