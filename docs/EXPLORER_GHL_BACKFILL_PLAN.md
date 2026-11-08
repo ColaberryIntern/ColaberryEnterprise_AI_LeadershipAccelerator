@@ -1,9 +1,11 @@
 # Explorer leads missing from GoHighLevel: the backfill plan
 
-**Status:** plan approved 2026-11-07 (PR #3745). Phase 1 ran the same day and corrected three
-of this document's own figures, including its central premise. **See Phase 1 results at the end;
-sections 2, 4 and 5 above are superseded by it.** No write to the live CRM has happened.
-**Measured:** 2026-11-07, against production, read-only.
+**Status:** plan approved 2026-11-07 (PR #3745). Phase 1 ran the same day and corrected three of
+this document's own figures, including its central premise; Phase 3A was built on 2026-11-08 and
+corrected a fourth. **Read the two appendices at the end first: sections 2, 4 and 5 above are
+superseded, and the "196 links" figure in the Phase 1 appendix is 192.** No write to the live CRM
+has happened, and no write of any kind to production has happened.
+**Measured:** 2026-11-07 and 2026-11-08, against production, read-only.
 **Session:** CC-20261106-r7t2
 
 ---
@@ -381,3 +383,118 @@ empty record.
 - The 1 remaining `success`-with-no-contact-id lead.
 - The consent-capture regression at intake, 61% in July to 6% in November. Unchanged by this.
 - Kes's 7 "wrong sub-account" enrollment ids, still not supplied.
+
+---
+
+# Phase 3A built, 2026-11-08
+
+Approved by merging PR #3752. `backend/src/scripts/explorerGhlLinkRepair.ts` plus
+`backend/src/scripts/lib/explorerGhlLinkPlan.ts`. **Nothing has been written to production yet:**
+the script's default mode is a plan that writes nothing, and `--apply` refuses to run without
+being told the row count up front.
+
+## It is 192 links, not the 196 this document says
+
+The 196 matches Phase 1 found resolve to only **192 distinct GoHighLevel contact ids**. Four
+contacts are each matched by **two different lead rows**, and the pattern is identical in all
+four: one row matched by phone, the other by email, adjacent lead ids, same source
+(`open_house`), same account, and all eight rows callable with 11 phone digits.
+
+| contact | lead matched by phone | lead matched by email |
+|---|---|---|
+| `bJF9fVVMiFv1WqwTPp5O` | 24128 | 24132 |
+| `HQ9P7mlmFpcyQ4qCbQdI` | 24403 | 25044 |
+| `xt2SjoRLDdbCcCzrkYEa` | 24993 | 24995 |
+| `Nv3xGMbeLS4QYsJY7WMA` | 24997 | 24998 |
+
+That is one person who registered twice under two email addresses with one phone number. Our
+`leads` table carries a unique index on `LOWER(email)`, so two registrations become two rows,
+while GoHighLevel holds them as one contact. Each of the four also has two
+`explorer_journey_profiles` rows, so the Explorer cohort counts them twice as well.
+
+**Why it matters rather than being a rounding difference.** Writing one `ghl_contact_id` onto two
+lead rows fans a customer-facing record across two of ours, and the next campaign sync then
+updates that single contact from two sources.
+
+Measured on production the same day: **8,071 linked lead rows hold 8,071 distinct contact ids**.
+One contact per lead row has held across every link in the system's history. It is enforced by
+nothing - `leads` carries 11 indexes, 3 of them unique, and **not one mentions
+`ghl_contact_id`** - so Postgres would have accepted the fan-out silently and Phase 3A would have
+been the first thing ever to break the property.
+
+That argues for a unique partial index on `ghl_contact_id WHERE ghl_contact_id IS NOT NULL`, and
+the data says it would apply cleanly today. It is not in this change: a constraint that can start
+rejecting writes from the live sync is a schema decision, so it is raised rather than taken.
+
+**The rule, in `lib/explorerGhlLinkPlan.ts`:** one lead matched it, link it; several and exactly
+one of them by email, the email match wins and the rest are withheld for a human merge; several
+and the tie does not break that way, withhold the whole group; another lead row already carries
+the id, withhold. Preferring the email match is not convenience, it is the address GoHighLevel
+itself holds for that contact, which beats a phone number two people can share, and it is the
+order Phase 1 searched in.
+
+Applying that rule to the Phase 1 ledger, which is how these figures were checked:
+
+| | |
+|---|---|
+| matched in GoHighLevel | 196 |
+| **links written** | **192** |
+| distinct contacts among them | 192 (equal to the links, so no fan-out) |
+| into `school_of_data_analytics` | 191 |
+| into `default` (Agent Cory) | 1 |
+| callable among the links | 180 |
+| **withheld** | **4** - lead ids 24128, 24403, 24993, 24997 |
+
+**No person is left unlinked.** Each withheld row is the duplicate side of a pair whose other row
+IS linked, so all four of those people end up reachable through the lead row that holds the link.
+What is deferred is a decision about four duplicate lead rows, not about four learners.
+
+## The one behavioral consequence, stated plainly
+
+Setting `ghl_contact_id` changes which branch `syncLeadToGhl` takes for these leads
+(`services/ghlService.ts:348`). Before the repair, a campaign send against one of them tries to
+**create** a contact, duplicating the one Rose is working. After the repair it takes the
+already-linked branch, which applies provenance tags and, when a campaign supplies an interest
+group, one `updateContact` on a custom field.
+
+Both are additive. So the repair **removes a duplicate-creation path** and **adds a labeling
+path**. That is a net reduction in CRM risk, but it is a change in live behavior and it should
+not be discovered later.
+
+## How it is run, and how it is undone
+
+```
+# plan only, writes nothing, prints the withheld collisions by lead id
+docker exec accelerator-backend node dist/scripts/explorerGhlLinkRepair.js \
+  --json /tmp/phase3a-plan.json
+
+# the write: refuses outright if the plan has moved off the number given
+docker exec accelerator-backend node dist/scripts/explorerGhlLinkRepair.js \
+  --apply --expect 192 --json /tmp/phase3a-applied.json
+
+# full reversal from the ledger, only where the value is still the one we wrote
+docker exec accelerator-backend node dist/scripts/explorerGhlLinkRepair.js \
+  --reverse /tmp/phase3a-applied.json
+```
+
+Idempotent by construction: every forward `UPDATE` carries `AND ghl_contact_id IS NULL`, so a
+second run writes nothing and reports the rows as already linked instead of failing. A concurrent
+writer therefore wins rather than being overwritten, which is correct, because the live sync
+holds evidence this script does not. Each batch of 5 is one transaction and the ledger is
+flushed to disk after it, so a crash names every row written before it.
+
+Every repaired lead also gets an `activities` row with
+`metadata->>'action' = 'ghl_link_repair'`, in the same transaction as the link, so Phase 4 can
+verify from inside the product rather than from this document.
+
+## Phase 3B and the frontend link bug are unchanged
+
+3B (the 65 creates) still needs a scope decision. The six frontend files hardcoding
+`GHL_LOCATION_ID` still point at the Agent Cory location, and after 3A that is 191 of the 192
+repaired leads whose admin deep links would open an empty record in the wrong sub-account.
+
+That fix is **not** a find-and-replace of one literal for another: the right location depends on
+which account the contact lives in, which depends on the lead's source, so a single hardcoded id
+is wrong for a mixed list whichever id is chosen. It needs the location to come from the backend
+on the lead payload. That is a contract change across the lead API and six components, so it is
+its own phase rather than a rider on this one.

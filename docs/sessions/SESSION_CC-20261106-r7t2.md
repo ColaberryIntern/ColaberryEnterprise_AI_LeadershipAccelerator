@@ -234,3 +234,47 @@ Plan PR #3745 merged at 20:02 UTC with all ten checks green, which was Ali's app
     completely unrelated file fail this gate, so "that file is already broken on main" is a
     conclusion that needs testing before it is written down. Checking the file in isolation
     would never have shown it, because in isolation there is nothing to collide with.
+
+- [x] Explorer GHL backfill Phase 3A: build the link repair, with the fan-out guard production forced on it
+  - Date: 2026-11-08
+  - Session: CC-20261106-r7t2
+  - What changed: `backend/src/scripts/explorerGhlLinkRepair.ts` (the driver) and
+    `backend/src/scripts/lib/explorerGhlLinkPlan.ts` (the pure rule), plus two suites and the
+    plan's Phase 3A appendix. `resolveAccounts` exported from the Phase 1 module so the repair
+    routes exactly as the dry run did.
+  - Verification: jest 52 passed across 3 suites (29 new); mutation testing 7 killed, 0 survived,
+    both files restored byte-identical; backend `tsc --noEmit` clean after a planted control
+    error proved the check live; test-file typecheck matched the frozen baseline in both
+    directions; secret scan and route-auth lint OK. **Nothing written to production.**
+  - Notes: **The count in the merged plan was wrong, and the data said so.** The 196 matches
+    resolve to only **192 distinct contact ids**: four contacts are each matched by two lead
+    rows, one by phone and one by email, adjacent ids, same source. One person registering twice
+    under two email addresses with one phone number, which our `LOWER(email)` unique index turns
+    into two rows while GoHighLevel keeps one contact. So 192 links (191 into
+    `school_of_data_analytics`, 1 into default, 180 callable) and 4 withheld: lead ids 24128,
+    24403, 24993, 24997. **No person is left unlinked** - each withheld row is the duplicate side
+    of a pair whose other row is linked, so what is deferred is a decision about four duplicate
+    lead rows, not about four learners.
+
+    What makes it worth recording is what the probe found next. Production holds **8,071 linked
+    lead rows with 8,071 distinct contact ids** - one contact per lead has been true of every
+    link ever written - and **no index on `leads.ghl_contact_id` at all** (11 indexes on the
+    table, 3 unique, none of them this column). So the fan-out would have been accepted
+    silently, and this backfill would have been the first thing in the system's history to break
+    a property nothing enforces. A one-line `UPDATE ... FROM` over the Phase 1 ledger, which is
+    what "write the 196 ids" sounds like, does exactly that.
+
+    The lesson is about where the rule lives rather than what it is: the decision logic went into
+    a pure module with no imports, so the thing that chooses what gets written to production is
+    tested with no mocks, no database and no credential. The driver's job is then only I/O, and
+    its tests assert the two properties I/O can break - that the forward `UPDATE` carries
+    `AND ghl_contact_id IS NULL` in the statement rather than in a TypeScript condition that a
+    refactor can lift, and that the audit row follows the transition rather than the attempt.
+
+    Second thing worth keeping: **setting `ghl_contact_id` changes what the live sync does.**
+    `ghlService.ts:348` branches on it, so before the repair a campaign send against one of these
+    leads would CREATE a contact and duplicate the one Rose is working; after it, the send tags
+    and updates the existing contact. Both additive, and the repair therefore removes a
+    duplicate-creation path. But it is a change in live behavior from a change that looks local,
+    and it is exactly the kind of thing that reads as a surprise later if it is not written down
+    now.
