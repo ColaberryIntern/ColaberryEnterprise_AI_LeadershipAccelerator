@@ -205,3 +205,13 @@ describe('sameAcceptance', () => {
     expect(sameAcceptance(['a'], ['a', 'b'])).toBe(false);
   });
 });
+
+// MAKES THIS FILE A MODULE, and it is not optional.
+//
+// A `.ts` file with no `import` or `export` is a global SCRIPT, so every top-level `const` here
+// would join the global scope. Without this line, this file's `const BASE` collided with the
+// `const BASE` in `services/email/__tests__/sendReplyAsAli.test.ts` — another require-style
+// test file, also a script — and the test-file typecheck reported 1 error here and 13 THERE,
+// in a file this change never touched. The sibling `interviewPrepData.test.ts` ends the same
+// way for the same reason.
+export {};
