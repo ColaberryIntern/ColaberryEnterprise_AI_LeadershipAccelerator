@@ -13,13 +13,17 @@
  * window assertions pass today and start failing a month from now, which is the kind of test that
  * teaches people to ignore CI.
  */
+import fs from 'fs';
+import path from 'path';
 import {
+  historicalBackfillUpdates,
   pickAttributionSession,
   utmBackfillUpdates,
   UTM_ATTRIBUTION_WINDOW_DAYS,
   UTM_FIELDS,
   UTM_SESSION_LOOKBACK,
   UtmFields,
+  UtmLead,
   UtmSession,
 } from '../utmBackfill';
 
@@ -28,8 +32,9 @@ const DAY_MS = 86_400_000;
 const daysAgo = (days: number) => new Date(NOW - days * DAY_MS);
 
 /**
- * A real `visitor_sessions` row, which carries a `utm_medium` that `leads` has no column for. The
- * fixtures keep it so the tests exercise the shape production actually hands the backfill.
+ * A real `visitor_sessions` row. It carries a `utm_medium`, which `leads` gained a column for in
+ * C10.4 — before that the fixture kept the field precisely to prove it was NOT copied. The
+ * fixtures exercise the shape production actually hands the backfill.
  */
 type SessionRow = UtmSession & { utm_medium?: string | null };
 
@@ -134,15 +139,26 @@ describe('utmBackfillUpdates', () => {
     expect(updates.utm_term).toBe('52708443249434');
   });
 
-  it('never tries to write utm_medium, because leads has no such column', () => {
-    // The session carries a medium and the lead has nowhere to put it: the column lives on
-    // visitor_sessions only. Sequelize drops a key that is not a model attribute, so including it
-    // would not break the write — it would make the caller's success log name a field it had not
-    // written. Verified against production on 2026-11-03, where `leads` carries exactly
-    // utm_source, utm_campaign, utm_content and utm_term.
-    expect([...UTM_FIELDS] as string[]).not.toContain('utm_medium');
-    const updates = utmBackfillUpdates(session({ utm_medium: 'paid' }), emptyLead());
-    expect(updates).not.toHaveProperty('utm_medium');
+  it('carries utm_medium now that leads has the column (C10.4)', () => {
+    // This test used to assert the OPPOSITE, and the assertion was the old rule written down:
+    // medium was excluded because `leads` had no such column, and Sequelize drops a key that is
+    // not a model attribute, so the write would have succeeded while the caller's log named a
+    // field it had not written. `ensureLeadAttributionColumns` now adds the column — the same file
+    // the old comment here pointed at — so the exclusion is gone rather than merely unenforced.
+    // Measured against production on 2026-11-08: 447 leads whose own visitor has a session
+    // carrying a medium had nowhere for it to land.
+    expect([...UTM_FIELDS] as string[]).toContain('utm_medium');
+    expect(utmBackfillUpdates(session({ utm_medium: 'paid' }), emptyLead()).utm_medium).toBe('paid');
+  });
+
+  it('the column and the field list agree, which is what stops a silently dropped write', () => {
+    // The pair that has to stay in step: a field in UTM_FIELDS with no model attribute is
+    // dropped without error. Read from the model SOURCE because importing it needs a real
+    // sequelize; the DDL half is pinned in db/__tests__/ensureLeadAttributionColumns.test.ts.
+    const model = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'models', 'Lead.ts'), 'utf8');
+    for (const field of UTM_FIELDS) {
+      expect(model).toMatch(new RegExp(`\\n    ${field}: \\{\\s*type: DataTypes\\.STRING\\(255\\),`));
+    }
   });
 
   it('never overwrites a tag the lead already has', () => {
@@ -183,5 +199,92 @@ describe('utmBackfillUpdates', () => {
       emptyLead(),
     );
     expect(Object.keys(updates).sort()).toEqual([...UTM_FIELDS].sort());
+  });
+});
+
+/**
+ * historicalBackfillUpdates — the same rule, anchored on the SIGNUP instead of the clock.
+ *
+ * These are the tests that matter most in this file, because the failure they describe is silent:
+ * run against `Date.now()`, a repair over historical rows rejects every session as stale, falls
+ * through to "newest session", and writes an attribution that looks plausible and is not bounded
+ * by anything. It would not throw, and the rows it wrote would be indistinguishable from correct
+ * ones. So the window is anchored on the lead's own created_at, and that is asserted here rather
+ * than trusted to the docblock.
+ */
+describe('historicalBackfillUpdates — the window is measured from the signup, not from today', () => {
+  const JULY = Date.parse('2026-07-15T12:00:00.000Z');
+  const leadAt = (at: number | Date | string | null): UtmLead => ({ created_at: at as any });
+  /** A session N days before the JULY signup, carrying a campaign. */
+  const julySession = (daysBeforeSignup: number, over: SessionRow = {}): SessionRow =>
+    ({ ...session(), created_at: new Date(JULY - daysBeforeSignup * DAY_MS), ...over });
+
+  it('attributes a July signup to its own July click, which "now" would call stale', () => {
+    // The click is 2 days before the signup — plainly attributable — but about four months before
+    // NOW. This is the whole case: the lead is historical, the click is not.
+    const updates = historicalBackfillUpdates([julySession(2)], leadAt(new Date(JULY)), NOW);
+    expect(updates.utm_campaign).toBe('52708443249234');
+    expect(updates.utm_content).toBe('52708445138434');
+    expect(updates.utm_medium).toBe('paid');
+  });
+
+  it('still refuses a click that was already stale AT THE TIME OF THE SIGNUP', () => {
+    // Bounded, not merely shifted: a click 31 days before a 30-day window is out of it whichever
+    // instant the window is anchored on. The newest session is untagged, so there is nothing to
+    // fall back to and the correct answer is to write nothing.
+    const stale = julySession(UTM_ATTRIBUTION_WINDOW_DAYS + 1);
+    const newest = untagged({ created_at: new Date(JULY - DAY_MS) });
+    expect(historicalBackfillUpdates([newest, stale], leadAt(new Date(JULY)), NOW)).toEqual({});
+  });
+
+  it('a click exactly on the window boundary is still attributable', () => {
+    const edge = julySession(UTM_ATTRIBUTION_WINDOW_DAYS, { utm_campaign: 'edge' });
+    expect(historicalBackfillUpdates([edge], leadAt(new Date(JULY)), NOW).utm_campaign).toBe('edge');
+  });
+
+  it('PROOF THE ANCHOR IS THE SIGNUP: the clock-anchored call rejects what this one accepts', () => {
+    // The control. If this assertion ever fails, the anchor has silently moved back to the clock
+    // and every historical repair is unbounded again.
+    const sessions = [julySession(2)];
+    const lead = leadAt(new Date(JULY));
+    expect(historicalBackfillUpdates(sessions, lead, NOW).utm_campaign).toBe('52708443249234');
+    // Anchored on NOW instead, the July click is four months stale, so the bounded pick finds
+    // nothing attributable and falls through to newestFirst[0] — which here is that same session,
+    // so the danger is not a wrong value, it is that NOTHING was bounded. Shown with a second,
+    // untagged, newer session: the clock-anchored read now takes the untagged one and writes
+    // nothing at all.
+    const withNewerUntagged = [untagged({ created_at: new Date(NOW - DAY_MS) }), ...sessions];
+    expect(utmBackfillUpdates(pickAttributionSession(withNewerUntagged, NOW), lead)).toEqual({});
+    expect(historicalBackfillUpdates(withNewerUntagged, lead, NOW).utm_campaign).toBe('52708443249234');
+  });
+
+  it('falls back to the clock when the lead has no readable created_at', () => {
+    // A missing stamp must not drop an attribution — that is the failure this module exists to
+    // stop — so it degrades to the identify-time behaviour rather than to "write nothing".
+    const recent = session({ created_at: daysAgo(1) });
+    for (const bad of [null, undefined, '', 'not-a-date']) {
+      expect(historicalBackfillUpdates([recent], leadAt(bad as any), NOW).utm_campaign)
+        .toBe('52708443249234');
+    }
+  });
+
+  it('is idempotent: a second pass over a lead it already filled writes nothing', () => {
+    const lead: UtmLead = { created_at: new Date(JULY) };
+    const first = historicalBackfillUpdates([julySession(2)], lead, NOW);
+    expect(Object.keys(first)).toHaveLength(UTM_FIELDS.length);
+    Object.assign(lead, first);
+    expect(historicalBackfillUpdates([julySession(2)], lead, NOW)).toEqual({});
+  });
+
+  it('never overwrites a tag the signup itself supplied', () => {
+    const lead: UtmLead = { created_at: new Date(JULY), utm_campaign: 'from_the_form' };
+    const updates = historicalBackfillUpdates([julySession(2)], lead, NOW);
+    expect(updates).not.toHaveProperty('utm_campaign');
+    expect(updates.utm_content).toBe('52708445138434');
+  });
+
+  it('an empty or absent session list writes nothing rather than throwing', () => {
+    expect(historicalBackfillUpdates([], leadAt(new Date(JULY)), NOW)).toEqual({});
+    expect(historicalBackfillUpdates(null as unknown as SessionRow[], leadAt(new Date(JULY)), NOW)).toEqual({});
   });
 });

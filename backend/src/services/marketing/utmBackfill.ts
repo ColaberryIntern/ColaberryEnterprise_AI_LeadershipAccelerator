@@ -25,13 +25,17 @@
  *    nothing was writing to them. Measured in production on 2026-11-03: 388 leads created in the
  *    previous 30 days carry no `utm_content` while a session of the same visitor does.
  *
- *    `utm_medium` is deliberately NOT in the list: `leads` has no such column. It belongs to
- *    `visitor_sessions` only, so the old copy's third field was already landing nowhere — Sequelize
- *    drops a key that is not a model attribute, so that write was silently discarded. Carrying it
- *    here would cost nothing at the database but would make the caller's success log name a field
- *    it had not written. Verified against production on 2026-11-03: `leads` carries exactly
- *    `utm_source`, `utm_campaign`, `utm_content`, `utm_term`. A medium on a lead needs the column
- *    added first — see `ensureLeadAttributionColumns`.
+ * 3. IT NOW CARRIES `utm_medium` TOO (C10.4). The paragraph that used to sit here said medium was
+ *    deliberately excluded because `leads` had no such column, and ended "a medium on a lead needs
+ *    the column added first — see ensureLeadAttributionColumns". That column now exists, added by
+ *    that same file, so the exclusion is gone rather than merely unenforced. Measured against
+ *    production on 2026-11-08: 447 leads whose own visitor has a session carrying a medium had
+ *    nowhere for it to land.
+ *
+ *    This does NOT undo the `source|medium` convention that the signup form writes into
+ *    `utm_source` (`fb|paid`), which `adSpend/utmSource.ts` settles on read for the rows already
+ *    stored. Both can be true at once: the medium copied here is the session's own `utm_medium`
+ *    value, and a lead that gets one is not stopped from also carrying a piped source.
  *
  * ── WHAT THIS DOES NOT FIX ──
  *
@@ -51,10 +55,14 @@
  */
 
 /**
- * The four UTM columns a `leads` row can hold, and therefore the only ones worth copying.
- * `visitor_sessions` carries a fifth, `utm_medium`; `leads` does not — see the note above.
+ * The UTM columns a `leads` row can hold, and therefore the only ones worth copying.
+ *
+ * All five that `visitor_sessions` carries, since C10.4 added `utm_medium` to `leads`. The list is
+ * the contract: a field added here that the model does not declare is dropped by Sequelize without
+ * error, so the write would succeed while the log named a column it had not written. That is why
+ * `ensureLeadAttributionColumns.test.ts` pins the DDL against the model declaration.
  */
-export const UTM_FIELDS = ['utm_source', 'utm_campaign', 'utm_content', 'utm_term'] as const;
+export const UTM_FIELDS = ['utm_source', 'utm_campaign', 'utm_content', 'utm_term', 'utm_medium'] as const;
 
 export type UtmField = typeof UTM_FIELDS[number];
 
@@ -63,6 +71,9 @@ export type UtmFields = { [K in UtmField]?: string | null };
 
 /** A session: those columns plus when it started. */
 export type UtmSession = UtmFields & { created_at?: Date | string | null };
+
+/** A lead: those columns plus when the person signed up. */
+export type UtmLead = UtmFields & { created_at?: Date | string | null };
 
 /**
  * How many of a visitor's recent sessions to look back through for a campaign.
@@ -95,8 +106,8 @@ const DAY_MS = 86_400_000;
 /** A usable tag: a non-blank string. NULL, undefined and whitespace all count as absent. */
 const present = (value: unknown): value is string => typeof value === 'string' && value.trim() !== '';
 
-/** When the session started, or null when it cannot be read. */
-function startedAt(session: UtmSession | undefined): number | null {
+/** When a session started, or a lead signed up — or null when the stamp cannot be read. */
+function startedAt(session: UtmSession | UtmLead | undefined | null): number | null {
   const raw = session?.created_at;
   if (!raw) return null;
   const ms = raw instanceof Date ? raw.getTime() : Date.parse(String(raw));
@@ -148,4 +159,32 @@ export function utmBackfillUpdates(session: UtmFields | undefined | null, lead: 
     if (present(incoming) && !present(lead?.[field])) updates[field] = incoming;
   }
   return updates;
+}
+
+/**
+ * The same decision, for a lead that signed up in the PAST (C10.4).
+ *
+ * At identify time the two rules above are evaluated against the clock, because the signup is
+ * happening now. A one-time repair over historical rows cannot do that, and the reason is the whole
+ * point of this function: {@link UTM_ATTRIBUTION_WINDOW_DAYS} asks "was the click recent enough to
+ * be what this signup came from", which is a question about the gap between the CLICK and the
+ * SIGNUP, not between the click and today. Passing `Date.now()` for a lead created in July would
+ * reject every session that lead ever had as stale, fall through to `newestFirst[0]`, and quietly
+ * turn a bounded last-touch rule into "whatever session happens to be newest" — the exact failure
+ * ADS-3 removed. So the window is anchored on the lead's own `created_at`.
+ *
+ * A lead whose `created_at` cannot be read falls back to the clock, matching how a session with an
+ * unreadable stamp is treated as inside the window: a missing field must not silently drop an
+ * attribution, which is what this module exists to stop.
+ *
+ * Idempotent for the same reason `utmBackfillUpdates` is: a field already present on the lead is
+ * never overwritten, so a second pass over the same rows returns {} for every one of them.
+ */
+export function historicalBackfillUpdates(
+  newestFirst: readonly UtmSession[],
+  lead: UtmLead,
+  nowMs: number = Date.now(),
+): Partial<Record<UtmField, string>> {
+  const signedUpAt = startedAt(lead) ?? nowMs;
+  return utmBackfillUpdates(pickAttributionSession(newestFirst, signedUpAt), lead);
 }
