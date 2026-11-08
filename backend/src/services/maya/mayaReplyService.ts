@@ -7,6 +7,7 @@ import { getMayaEnrollmentId, getMayaAgentId } from '../mayaIdentitySeed';
 import { logAgentActivity } from '../agentBlueprint/agentActivityLogService';
 import { buildMayaPortalSystemPrompt } from './mayaPortalPrompt';
 import { MAYA_PORTAL_TOOLS, executeMayaPortalTool, BOOK_CALL_LINK, BOOK_CALL_PATH, TOUR_LINK, TOUR_PATH } from './mayaPortalTools';
+import { guardLinks } from './mayaLinkGuard';
 
 /**
  * C121 — the ONLY place a Maya-authored portal DM is produced. Ali, 2026-11-06: "I think we should probably put Maya in
@@ -138,7 +139,25 @@ export async function maybeTriggerMayaReply(roomId: string, senderEnrollmentId: 
 
     const text = completion.choices[0]?.message?.content?.trim();
     if (!text) return;
-    const reply = withTourLink(withBookingLink(text, bookingOffered), tourOffered);
+
+    /**
+     * A link the renderer will not render reaches the learner as raw markdown, so the guard runs
+     * BEFORE the two appenders: anything it repaired is already the real path, which the
+     * appenders then see and correctly leave alone rather than adding a second copy.
+     *
+     * This is the backstop for the 2026-11-08 failure, where she answered with an invented tour
+     * link without calling the tool, so `tourOffered` was false and `withTourLink` never fired.
+     */
+    const guarded = guardLinks(text);
+    if (guarded.removed.length > 0) {
+      console.warn(JSON.stringify({
+        level: 'warn', service: 'maya', event: 'fabricated_link_guarded', outcome: 'partial',
+        room_id: roomId, removed: guarded.removed,
+        repaired_tour: guarded.repairedTour, repaired_booking: guarded.repairedBooking,
+        tool_called: { book: bookingOffered, tour: tourOffered },
+      }));
+    }
+    const reply = withTourLink(withBookingLink(guarded.reply, bookingOffered), tourOffered);
 
     // Dynamic import breaks the dmService <-> mayaReplyService cycle (same convention as Reese and Dara).
     const { sendDmMessage } = await import('../communityRooms/dmService');
