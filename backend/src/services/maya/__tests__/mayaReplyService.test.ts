@@ -132,6 +132,30 @@ describe('a reply', () => {
     expect(withTourLink('Hi', false)).toBe('Hi');
   });
 
+  it('a tour answer that never called the tool: her invented link is replaced by the real one', async () => {
+    /**
+     * 2026-11-08, observed in production. She answered "Let me get that started for you. Here's
+     * the link to begin the tour: [Start Campus Tour](/portal/campus/map)" WITHOUT calling
+     * start_campus_tour, so `tourOffered` was false and `withTourLink` never fired. The path she
+     * invented does not exist, the renderer's allowlist refused it, and the learner was shown
+     * raw markdown for a dead link.
+     */
+    create.mockResolvedValueOnce(answer(
+      "Yes, I can help you start a guided tour of our campus! Here's the link to begin the tour: " +
+      '[Start Campus Tour](/portal/campus/map). Enjoy exploring!',
+    ));
+    await maybeTriggerMayaReply(ROOM, LEARNER);
+
+    const sent = send.mock.calls[0][2];
+    expect(sent).toContain(TOUR_PATH);
+    expect(sent).not.toContain('/portal/campus/map');
+    // The control: the tool really was not called, so this is the ungated path and not just
+    // withTourLink doing its existing job.
+    expect(tool).not.toHaveBeenCalled();
+    // And only one tour link, not the real one appended beside a repaired one.
+    expect(sent.split(TOUR_PATH).length - 1).toBe(1);
+  });
+
   it('C123 the tour tool exists, takes nothing from the model, and returns the exact link', async () => {
     const real = jest.requireActual('../mayaPortalTools') as typeof import('../mayaPortalTools');
     const def = real.MAYA_PORTAL_TOOLS.find((t) => t.type === 'function' && t.function.name === 'start_campus_tour');

@@ -278,3 +278,39 @@ Plan PR #3745 merged at 20:02 UTC with all ten checks green, which was Ali's app
     duplicate-creation path. But it is a change in live behavior from a change that looks local,
     and it is exactly the kind of thing that reads as a surprise later if it is not written down
     now.
+
+- [x] Maya: stop her sending links the portal cannot render
+  - Date: 2026-11-08
+  - Session: CC-20261106-r7t2
+  - What changed: new `backend/src/services/maya/mayaLinkGuard.ts` (pure, no I/O) and its suite,
+    wired into `mayaReplyService` before the two existing link appenders, plus a regression test
+    in the existing Maya harness that replays the exact production reply.
+  - Verification: jest 36 passed across both suites; mutation testing 6 killed, 0 survived, both
+    files restored byte-identical; backend `tsc --noEmit` clean. Reported by Ali from a live
+    screenshot, reproduced as a test before the fix.
+  - Notes: **The bug was not in the UI, and the first instinct would have made it worse.** Ali
+    saw `[Start Campus Tour](/portal/campus/map)` rendered as literal text in a learner's DM. The
+    obvious reading is "the chat does not render markdown", and the obvious fix is to make it
+    render markdown. That would have been wrong twice over: `DmMessageText` renders only two
+    allowlisted paths ON PURPOSE, so that no DM can render an arbitrary URL, script or markup,
+    and the path she sent does not exist anyway, so rendering it would only have produced a
+    prettier 404.
+
+    What actually happened is that she never called `start_campus_tour`. She wrote a reply
+    imitating what the tool returns and invented both the label and the path. The real one,
+    `/portal/campus?tour=start`, is already exported as a constant she was supposed to emit
+    verbatim.
+
+    The part worth keeping is the third link in the chain. `withTourLink` exists precisely to
+    repair this, by appending the real link when she paraphrases it away - but it is gated on
+    `offered`, which is only true WHEN THE TOOL WAS CALLED. So the one failure mode it was built
+    for is the one that switches it off. A safety net conditioned on the thing it is protecting
+    against is not a safety net, and that shape is worth looking for elsewhere: the guard now
+    runs unconditionally on every reply, and the gated appenders sit behind it.
+
+    Deliberately not done: making her call the tool. She will still sometimes answer from her
+    own words and the guard will quietly repair the link. That is a backstop, not a cure, and
+    saying so matters more than the fix, because a silent repair makes the underlying
+    non-compliance invisible. Hence the structured log line on every repair, naming the
+    fabricated target and whether the tool had been called, so the rate is measurable rather
+    than assumed to be rare.
