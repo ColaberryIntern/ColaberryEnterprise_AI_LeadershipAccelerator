@@ -303,8 +303,13 @@ export async function runControls(
   return results;
 }
 
-/** Resolve every distinct candidate source once, so routing is read N times not 261. */
-async function resolveAccounts(
+/**
+ * Resolve every distinct candidate source once, so routing is read N times not 261.
+ *
+ * Exported for `explorerGhlLinkRepair.ts` (Phase 3A), which must route exactly as this run did
+ * or its links could land in the wrong account.
+ */
+export async function resolveAccounts(
   candidates: CandidateRow[]
 ): Promise<{ ready: Map<string, { accountKey: string; apiKey: string }>; withheld: Map<string, Disposition> }> {
   const ready = new Map<string, { accountKey: string; apiKey: string }>();
