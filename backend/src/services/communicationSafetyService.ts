@@ -16,6 +16,9 @@ import { isSuppressedForChannel, type SuppressibleChannel } from './channelSuppr
 import { isKillSwitchActive } from './launchSafety';
 // Phase 5 T511: the journey's campaign registry - a module with no imports, an in-memory lookup.
 import { isRegisteredJourneyCampaignKey } from './growthJourney/execution/campaignKeys';
+// AF12.5: the repo's canonical error classifier, so the refusal below carries a stable
+// error_class rather than the bare 'Error' that CLAUDE.md names as unacceptable.
+import { classifyError } from '../utils/errorClassifier';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -295,7 +298,27 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
     return { allowed: false, redirect: null, testMode: false, blockedReason: 'kill_switch', deliveryMode: 'blocked' };
   }
 
-  // 0.5. Global scheduler pause check
+  // 0.5. Global scheduler pause check. FAILS CLOSED (AF12.5).
+  //
+  // This read used to be wrapped in a bare `catch {}` whose comment read "fail open for pause
+  // check — if DB is down, other checks will catch it". Neither half held. The other checks do
+  // NOT catch it: `checkLeadSendable` and `checkCampaignSendable` fail closed on their own
+  // errors, but they are different reads and a pause is not a lead or a campaign fact, so a
+  // readable lead and a readable campaign sent the mail with the pause unexamined. And a safety
+  // flag that fails open stops working exactly when the system is already in trouble, which is
+  // the moment it exists for. Found by Quincy Ninying on 4 Nov 2026 while building the
+  // emergency stop, not while looking for it.
+  //
+  // FAILING CLOSED IS SAFE HERE, AND THAT IS A MEASURED CLAIM RATHER THAN A HOPE. `getSetting`
+  // returns `DEFAULTS[key] ?? null` for a key with no row, and `scheduler_paused` is not in
+  // DEFAULTS — so "never paused" is a SUCCESSFUL read returning null, and only a genuine
+  // database failure throws. Refusing on `catch` therefore cannot block mail merely because
+  // nobody has ever touched the flag; it blocks only when the answer is genuinely unknown.
+  //
+  // Deliberately a DIFFERENT reason from `scheduler_paused`: "we are paused" and "we cannot
+  // tell whether we are paused" are different operational facts and the second one needs
+  // someone to look at the database. The rate limit immediately below still fails open, which
+  // is the right asymmetry — a throttle is not a stop.
   try {
     const paused = await getSetting('scheduler_paused');
     if (paused === true || paused === 'true') {
@@ -307,8 +330,27 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
         deliveryMode: 'blocked',
       };
     }
-  } catch {
-    // Fail open for pause check — if DB is down, other checks will catch it
+  } catch (err: unknown) {
+    const error_class = classifyError(err);
+    console.error(
+      '[CommunicationSafety] Scheduler pause check failed, refusing the send:',
+      JSON.stringify({
+        event: 'scheduler_pause_unreadable',
+        outcome: 'failure',
+        error_class,
+        message: (err as { message?: string })?.message,
+        channel: req.channel,
+        source: req.source ?? null,
+        campaign_id: req.campaignId ?? null,
+      }),
+    );
+    return {
+      allowed: false,
+      redirect: null,
+      testMode: false,
+      blockedReason: 'scheduler_pause_unreadable',
+      deliveryMode: 'blocked',
+    };
   }
 
   // 1. Global rate limit
