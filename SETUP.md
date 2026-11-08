@@ -105,6 +105,44 @@ Backend takes 60–90 seconds to bind port 3001 after a deploy. `/api` returning
 
 ---
 
+## 9. Moving your Claude Code setup to another computer
+
+Sections 1 to 8 set up a machine from scratch. This section is for carrying an
+existing machine's *working state* across: the worktrees your live tabs are in,
+their branches and uncommitted diffs, open PRs, session logs and Claude's memory.
+
+On the old machine, in each tab you care about:
+
+```bash
+/handoff                # adds this tab to a shared bundle
+```
+
+Then, in the last one:
+
+```bash
+/handoff finalize       # machine tier, manifest, secret scan, zip
+```
+
+A single tab can do both at once with `/handoff finalize` on its own. The result
+is a zip in `~/Downloads`, a few MB, which you move however you like.
+
+On the new machine, install git and the Claude Code extension, then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\handoff\bootstrapMachine.ps1 -Bundle <unzipped folder>
+```
+
+It is idempotent, so running it twice is safe. **No credentials are in the
+bundle** by design; it writes `ENV_CHECKLIST.md` naming every variable and where
+to fetch it, and nothing that talks to Mandrill, Basecamp, OpenAI or the database
+works until you fill those in.
+
+Full detail, including what is deliberately left behind, is in
+[.claude/skills/handoff/SKILL.md](.claude/skills/handoff/SKILL.md). Verify the
+tooling itself with `node scripts/handoff/handoffSelfTest.js`.
+
+---
+
 ## Need help
 
 - Stack-specific questions → see [docs/DEV_GUIDE.md](docs/DEV_GUIDE.md) and [CLAUDE.md](CLAUDE.md)

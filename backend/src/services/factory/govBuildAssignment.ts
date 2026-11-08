@@ -102,9 +102,13 @@ export async function ensureAssigneeCanBuild(
 ): Promise<void> {
   const where = { delivery_project_id: deliveryProjectId, platform_identity_id: assigneeIdentityId };
   // ATTRIBUTION MUST NEVER BLOCK AUTHORIZATION. The materialize route passed the admin's email here, so every
-  // "Create the monitored project" since the grant was added rejected on the uuid column and granted nothing —
-  // 8 delivery projects carry a materialized build and zero members. Who granted the role is metadata; the role
-  // itself is the point. A non-uuid actor is therefore recorded as null and logged, not thrown on.
+  // "Create the monitored project" since the grant was added rejected on the uuid column and granted nothing.
+  // Who granted the role is metadata; the role itself is the point. A non-uuid actor is therefore recorded as
+  // null and logged, not thrown on.
+  // An earlier version of this comment claimed 8 projects were left with a build and no members. Measured
+  // afterwards, that was wrong in both directions: the bug had exactly ONE victim, and the other projects in
+  // that query carry no build at all. The real blocker elsewhere is revoked membership, which the early return
+  // below deliberately does not reinstate.
   const grantedBy = asIdentityId(grantedByIdentityId);
   if (grantedByIdentityId && !grantedBy) {
     console.warn(JSON.stringify({

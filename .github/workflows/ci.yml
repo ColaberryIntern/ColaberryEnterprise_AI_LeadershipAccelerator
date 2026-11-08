@@ -226,6 +226,17 @@ jobs:
         run: node scripts/checkPriceAgreement.js --self-test
       - name: Membership price agreement
         run: node scripts/checkPriceAgreement.js
+      # Session handoff tooling. It builds a bundle meant to be emailed or carried on a
+      # USB stick, so its secret gate is the only thing standing between a credential and
+      # an uncontrolled copy of it. That gate's output is an absence, exactly like the
+      # lints above, so the self-test plants known credentials in a DIRECTORY scan - a
+      # different gitleaks code path from the repo scan the secret-scan workflow proves -
+      # and fails if they are not found. It also pins the behaviours that make twenty
+      # concurrent tabs safe: first-writer-wins on the bundle pointer, and a manifest
+      # derived from the directory rather than appended to. One step, because the control
+      # is inside the suite.
+      - name: Session handoff self-test
+        run: node scripts/handoff/handoffSelfTest.js
 
   security-scan:
     name: Static security scan
