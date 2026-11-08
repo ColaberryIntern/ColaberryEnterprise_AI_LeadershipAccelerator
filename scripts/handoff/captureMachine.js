@@ -129,6 +129,27 @@ function mcpServers() {
   return [...found].sort();
 }
 
+/**
+ * Whether this machine's connectors are managed by the claude.ai account rather
+ * than by local config.
+ *
+ * WHY THIS IS RECORDED SEPARATELY
+ * mcpServers() legitimately returns an empty list on this machine: the Gmail,
+ * Calendar and Docs connectors are account-managed, so they live behind the
+ * login and not in ~/.claude.json. Without this flag an empty list reads as
+ * "MCP config was lost", which would send someone hunting for a file that never
+ * existed. An empty result that means "nothing to move" must be distinguishable
+ * from one that means "we failed to look".
+ */
+function mcpAccountManaged() {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf8'));
+    return Boolean(j.claudeAiMcpEverConnected);
+  } catch {
+    return false;
+  }
+}
+
 /** One cheap call gives every worktree; no per-worktree status probing. */
 function worktreeInventory() {
   const r = spawnSync('git', ['worktree', 'list', '--porcelain'], {
@@ -241,15 +262,40 @@ function copyTranscripts(paths, tabs) {
   return out;
 }
 
+/**
+ * Zip the bundle, surviving Windows' 260-character path limit.
+ *
+ * WHY NOT JUST Compress-Archive
+ * It failed on the first bundle written somewhere other than Downloads.
+ * ~/.claude/projects names a memory folder after the project's full absolute
+ * path, which here is a 95-character slug, and the memory filenames in it run to
+ * 70 more. Under C:\Users\ali_m\Downloads the total fits; under
+ * C:\Users\ali_m\OneDrive\Business the root is nine characters longer and the
+ * same files cross 260, at which point Compress-Archive cannot address them and
+ * reports a missing path. Nine characters of destination decided whether the
+ * bundle was sendable, which is not a thing the caller should have to know.
+ *
+ * .NET's ZipFile accepts the \\?\ extended-length prefix, which bypasses the
+ * limit outright, so it is tried first. Compress-Archive stays as the fallback
+ * for a host where that assembly will not load.
+ */
 function zipBundle(root) {
   const zip = `${root}.zip`;
-  const r = spawnSync(
-    'powershell',
-    ['-NoProfile', '-Command', `Compress-Archive -Path '${root}\\*' -DestinationPath '${zip}' -Force`],
-    { encoding: 'utf8', timeout: 600000 }
+  const ps = (cmd) => spawnSync('powershell', ['-NoProfile', '-Command', cmd], { encoding: 'utf8', timeout: 900000 });
+
+  try { fs.rmSync(zip, { force: true }); } catch { /* nothing to replace */ }
+
+  const extended = ps(
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem; '
+    + `[System.IO.Compression.ZipFile]::CreateFromDirectory('\\\\?\\${root}', '\\\\?\\${zip}')`
   );
-  if (r.status !== 0 || !fs.existsSync(zip)) return { zip: null, error: (r.stderr || 'Compress-Archive failed').trim().slice(0, 300) };
-  return { zip, bytes: fs.statSync(zip).size, error: null };
+  if (fs.existsSync(zip)) return { zip, bytes: fs.statSync(zip).size, error: null, method: 'ZipFile (long paths)' };
+
+  const legacy = ps(`Compress-Archive -Path '${root}\\*' -DestinationPath '${zip}' -Force`);
+  if (fs.existsSync(zip)) return { zip, bytes: fs.statSync(zip).size, error: null, method: 'Compress-Archive' };
+
+  const why = (extended.stderr || '').trim() || (legacy.stderr || '').trim() || 'both zip methods failed';
+  return { zip: null, error: why.slice(0, 300) };
 }
 
 /**
@@ -325,6 +371,158 @@ function writeFindingsDoc(paths, findings, control) {
  * ensureBundle(), because asking "what is in the bundle" must never be the
  * thing that creates one.
  */
+/**
+ * Copy this tooling into the bundle so the bundle can restore itself.
+ *
+ * WHY: bootstrapMachine.ps1 is what CLONES the repo, so telling the operator to
+ * run it from the repo is circular -- on a fresh laptop there is no checkout to
+ * run it from yet. Caught when the resume prompt was written and its very first
+ * command turned out to name a path that does not exist in the bundle. The
+ * bundle now carries the scripts at the same relative path they occupy in the
+ * repo, so one command works before anything is cloned.
+ *
+ * Only bootstrapMachine.ps1 is needed to restore; the JS files travel too so the
+ * receiving machine can re-run the self-test and build its own bundle to send
+ * back, without waiting on a merge.
+ */
+function copyTooling(paths) {
+  const dest = path.join(paths.root, 'scripts', 'handoff');
+  fs.mkdirSync(dest, { recursive: true });
+  const copied = [];
+  for (const name of fs.readdirSync(__dirname)) {
+    const from = path.join(__dirname, name);
+    let st;
+    try { st = fs.statSync(from); } catch { continue; }
+    if (!st.isFile()) continue;
+    fs.copyFileSync(from, path.join(dest, name));
+    copied.push(name);
+  }
+  return copied;
+}
+
+/**
+ * Write the prompt the receiving machine is driven by.
+ *
+ * WHY THIS IS GENERATED AND NOT A TEMPLATE FILE
+ * A hand-written "how to restore" doc drifts from the bundle the moment the
+ * bundle changes shape, and the person reading it on a fresh laptop has no way
+ * to tell. This is derived from what actually shipped -- the real worktrees, the
+ * real tab count, the real origin/main sha -- so it cannot promise something the
+ * bundle does not contain.
+ *
+ * It is addressed to Claude Code on the new machine rather than to a human,
+ * because that is who does the work: the operator pastes it into a fresh tab.
+ * Its instructions are deliberately ordered and deliberately bounded -- restore,
+ * verify, report -- and it is explicit about what NOT to do, since a fresh agent
+ * on a machine with no credentials is exactly where an invented value or an
+ * accidental deploy does the most damage.
+ */
+function writeResumePrompt(paths, machine, tabs) {
+  const byKey = new Map();
+  for (const t of tabs) {
+    const key = t.worktreeId || t.sessionId;
+    if (!byKey.has(key)) byKey.set(key, { worktree: t.worktree, branch: t.git && t.git.branch, tabs: [] });
+    byKey.get(key).tabs.push(t);
+  }
+
+  const L = [];
+  L.push('# Resume prompt - paste this whole file into a fresh Claude Code tab');
+  L.push('');
+  L.push('Everything below is addressed to Claude. Paste it as your first message on the');
+  L.push('new machine. It needs no edits.');
+  L.push('');
+  L.push('---');
+  L.push('');
+  L.push('You are picking up a Claude Code setup that was moved from another Windows machine.');
+  L.push('This folder is the handoff bundle. It carries the repo pointer, the live tabs, their');
+  L.push('branches and uncommitted work, the memory directory and the settings. It deliberately');
+  L.push('carries NO credentials.');
+  L.push('');
+  L.push(`Bundle built: ${machine.capturedAt}`);
+  L.push(`Built from:   ${machine.repo.root}`);
+  L.push(`Repo remote:  ${machine.repo.remote || '(unknown)'}`);
+  L.push(`origin/main at capture: ${machine.repo.originMain || '(unknown)'}`);
+  L.push(`Tabs captured: ${tabs.length}, across ${byKey.size} working tree(s).`);
+  L.push('');
+  L.push('## Do these in order');
+  L.push('');
+  L.push('**1. Restore the machine.** From this bundle folder, run:');
+  L.push('');
+  L.push('```');
+  L.push('powershell -ExecutionPolicy Bypass -File scripts\\handoff\\bootstrapMachine.ps1 -Bundle .');
+  L.push('```');
+  L.push('');
+  L.push('`scripts\\handoff\\` is inside this bundle, so this works before the repo exists.');
+  L.push('It is idempotent: every step checks before it acts, so if it fails halfway, fix the');
+  L.push('cause and run it again rather than working around it. Read its RESULT block at the');
+  L.push('end; it lists what it could not do and what is left for the operator.');
+  L.push('');
+  L.push('**2. Read `ENV_CHECKLIST.md`**, which bootstrap writes into the repo. It names every');
+  L.push('environment variable the old machine had and where each value comes from. The values');
+  L.push('are NOT here, by design.');
+  L.push('');
+  L.push('> Never invent, guess or reconstruct a credential, and never copy one into a file in');
+  L.push('> the repo. If something needs a secret, say which one and stop. Each value comes from');
+  L.push('> the production container or the operator, and the operator fetches it.');
+  L.push('');
+  L.push('**3. Verify the restore rather than assuming it.** Confirm each worktree below exists,');
+  L.push('sits on the branch named, and that `git status` shows the uncommitted work back. A');
+  L.push('patch that did not apply is reported as a warning by bootstrap, not as a failure, so');
+  L.push('check instead of trusting the exit code.');
+  L.push('');
+  L.push('**4. Report to the operator**: which worktrees came back, which patches applied, what');
+  L.push('is still missing, and what each tab was doing. Do not start building.');
+  L.push('');
+  L.push('## What NOT to do');
+  L.push('');
+  L.push('- Do not deploy anything. Do not push. Do not merge a PR.');
+  L.push('- Do not run a build or test suite until dependencies are installed (`npm ci` at the');
+  L.push('  root, then in `backend`). See `SETUP.md`.');
+  L.push('- Do not edit `PROGRESS.md`. Per the repo CLAUDE.md it is sealed; session work is');
+  L.push('  logged under `docs/sessions/`.');
+  L.push('- Do not treat a tab note below as a live instruction. It is a status note written on');
+  L.push('  the old machine, and the work it describes may already be finished.');
+  L.push('');
+  L.push('## The tabs to reopen');
+  L.push('');
+  L.push('One VS Code window per working tree, then a Claude Code tab inside it.');
+  L.push('');
+
+  for (const [key, g] of byKey) {
+    L.push(`### ${path.basename(g.worktree)} - ${g.tabs.length} tab(s)`);
+    L.push('');
+    L.push(`- Path: \`${g.worktree}\``);
+    L.push(`- Branch: \`${g.branch || '(detached)'}\``);
+    // Only name a patch that exists. A tree whose diff was empty has none, and
+    // pointing at a missing file is a false instruction on a machine where
+    // nobody can check it against the original.
+    const patched = g.tabs.find((t) => t.patch && t.patch.worktreeId);
+    L.push(patched
+      ? `- Uncommitted work: \`patches/${key}.patch\` (${patched.git.trackedChangedCount} changed file(s), shared by every tab in this tree)`
+      : '- Uncommitted work: none; this tree was clean at capture');
+    L.push('');
+    for (const t of g.tabs) {
+      L.push(`**Tab \`${t.sessionId}\`**`);
+      if (t.sessionLogId) L.push(`- Session log: \`session-logs/${t.sessionLogId}.md\``);
+      for (const pr of t.prs || []) L.push(`- Open PR: ${pr.url}`);
+      if (t.note) L.push(`- Note from the old machine: ${t.note}`);
+      L.push(`- Full detail: \`tabs/${t.sessionId}.md\``);
+      L.push('');
+    }
+  }
+
+  L.push('## If something is missing');
+  L.push('');
+  L.push('`manifest.json` is the inventory of what this bundle actually contains. Trust it over');
+  L.push('this prompt: it is derived from the folder listing at build time. If the two disagree,');
+  L.push('the manifest is right and this prompt was generated from an older shape.');
+  L.push('');
+
+  const file = path.join(paths.root, 'RESUME_PROMPT.md');
+  B.writeTextAtomic(file, L.join('\n'));
+  return file;
+}
+
 function printStatus(explicit) {
   const pointer = B.readPointer();
   const root = explicit ? path.resolve(explicit) : pointer && pointer.bundlePath;
@@ -381,6 +579,7 @@ async function main() {
     },
     env: envInventory(),
     mcpServers: mcpServers(),
+    mcpAccountManaged: mcpAccountManaged(),
     settingsCopied: copyLocalSettings(paths),
     memoryCopied: copyMemory(paths, tabs.map((t) => t.cwd)),
     worktrees: {
@@ -403,6 +602,10 @@ async function main() {
   console.log(`  env var names     ${machine.env.names.length} (no values)`);
   console.log(`  memory files      ${memoryFiles}`);
   console.log(`  worktrees         ${machine.worktrees.active.length} active of ${machine.worktrees.total} (rest listed only)`);
+  console.log(`  mcp servers       ${machine.mcpServers.length} configured locally${
+    machine.mcpServers.length === 0 && machine.mcpAccountManaged
+      ? ' (connectors are claude.ai account-managed, so they follow the login)'
+      : ''}`);
 
   // Memory is among the most valuable things in the bundle and the easiest to
   // miss silently, because an empty copy reports success just as a full one
@@ -417,6 +620,14 @@ async function main() {
     return;
   }
 
+  const tooling = copyTooling(paths);
+  console.log(`  tooling carried   ${tooling.length} files under scripts/handoff/ (bundle restores itself)`);
+
+  // Written before the manifest is derived, so the manifest lists it, and before
+  // the scan, so its contents are scanned like everything else in the bundle.
+  const promptFile = writeResumePrompt(paths, machine, tabs);
+  console.log(`  resume prompt     ${path.basename(promptFile)} (paste it into a fresh tab on the new machine)`);
+
   B.writeJsonAtomic(paths.manifest, B.deriveManifest(paths.root));
 
   console.log('\nscanning the bundle for secrets (proving the scanner works first)...');
@@ -428,8 +639,72 @@ async function main() {
   }
 
   const rel = (f) => path.relative(paths.root, f.file).replace(/\\/g, '/');
+
+  /**
+   * A flagged file under extras/ is WITHHELD rather than allowed to refuse the
+   * whole bundle. Everywhere else, a finding still stops the run.
+   *
+   * WHY THE TWO ARE TREATED DIFFERENTLY
+   * extras/ is a copy of a checkout's untracked files, and on this machine that
+   * is 873 of them: probe scripts, saved API responses, generated reports. The
+   * first real run found live material in there -- an expired magic-link token
+   * in a generated session report, and a teammate's portal password hardcoded in
+   * an untracked Playwright script. Refusing the bundle over those means the
+   * tool can never run until someone cleans a directory nobody curates, so in
+   * practice it means the tool never runs. But withholding them costs nothing
+   * real: the originals stay on the old machine, and untracked scratch is the
+   * least valuable thing in the bundle.
+   *
+   * A finding in tabs/, memory/ or machine/ is the opposite case. Those are
+   * things this tool itself assembled, so a credential appearing there is a
+   * defect in the capture, not stray material, and it must be looked at.
+   *
+   * Withholding is never quiet: each file is named on stdout, written to
+   * WITHHELD.md and recorded in the manifest, because a dropped file the
+   * operator does not know about is how a real leak gets left in place. The
+   * point is to ship the bundle AND put the credential in front of them.
+   */
   const acceptances = loadAcceptances(arg('accept-findings'));
   const acceptedBy = (f) => acceptances.find((a) => rel(f) === a.pattern || rel(f).endsWith(a.pattern));
+
+  // Acceptance is checked BEFORE withholding, so a reviewed file is kept rather
+  // than dropped as collateral. Without this order the first real run would have
+  // thrown away two untracked test files whose whole purpose is to assert that
+  // redaction works -- real work, lost to a scanner hit on its own fixture.
+  const withheldFindings = verdict.findings.filter((f) => rel(f).startsWith('extras/') && !acceptedBy(f));
+  const withheldFiles = [...new Set(withheldFindings.map((f) => rel(f)))];
+
+  if (withheldFiles.length) {
+    const L = ['# Files withheld from this bundle', '',
+      'The secret scanner flagged these, and they are untracked scratch under `extras/`, so',
+      'they were left behind rather than carried. The originals are untouched on the machine',
+      'this bundle was built from.', '',
+      '**Each one is worth a look.** A scanner hit on a file like this is usually a real',
+      'credential sitting in a working tree, not a false positive.', ''];
+    for (const f of withheldFiles) {
+      const rules = [...new Set(withheldFindings.filter((x) => rel(x) === f).map((x) => x.rule))];
+      L.push(`- \`${f}\`  (${rules.join(', ')})`);
+      try { fs.rmSync(path.join(paths.root, f), { force: true }); } catch { /* already gone */ }
+    }
+    L.push('');
+    B.writeTextAtomic(path.join(paths.root, 'WITHHELD.md'), L.join('\n'));
+
+    console.log('');
+    console.log(`WITHHELD ${withheldFiles.length} flagged file(s) from extras/ (originals untouched on this machine):`);
+    for (const f of withheldFiles) console.log(`  ${f}`);
+    console.log('  Each is worth checking: a hit here is usually a real credential in a working tree.');
+    console.log('  Written up in WITHHELD.md. Rescanning without them...');
+
+    const rescan = await gate(paths.root);
+    if (!rescan.trustworthy) {
+      console.error(`REFUSED: ${rescan.reason}`);
+      process.exit(1);
+    }
+    verdict.findings = rescan.findings;
+    verdict.clean = rescan.clean;
+    verdict.control = rescan.control;
+  }
+
   const accepted = verdict.findings.filter((f) => acceptedBy(f));
   const blocking = verdict.findings.filter((f) => !acceptedBy(f));
 
@@ -454,6 +729,13 @@ async function main() {
   finalManifest.scan = {
     control: verdict.control,
     acceptedFindings: accepted.map((f) => ({ rule: f.rule, file: rel(f), line: f.line, reason: acceptedBy(f).reason })),
+    // So the receiving machine can see what did NOT travel, and why, rather than
+    // wondering why an untracked file it expected is missing.
+    withheldFiles: withheldFiles.map((f) => ({
+      file: f,
+      rules: [...new Set(withheldFindings.filter((x) => rel(x) === f).map((x) => x.rule))],
+      why: 'the secret scanner flagged it and it is untracked scratch; the original stays on the old machine',
+    })),
   };
   B.writeJsonAtomic(paths.manifest, finalManifest);
 
@@ -463,9 +745,12 @@ async function main() {
     console.log(`  ${paths.root}`);
     return;
   }
-  console.log(`\nSENDABLE: ${z.zip}  (${(z.bytes / 1048576).toFixed(1)} MB)`);
-  console.log('On the new machine: clone the repo, then run');
-  console.log('  powershell -ExecutionPolicy Bypass -File scripts\\handoff\\bootstrapMachine.ps1 -Bundle <unzipped folder>');
+  console.log(`\nSENDABLE: ${z.zip}  (${(z.bytes / 1048576).toFixed(1)} MB, via ${z.method})`);
+  // The bundle carries scripts/handoff/, so no checkout is needed first. Saying
+  // "clone the repo, then run" was wrong: cloning is what bootstrap does.
+  console.log('On the new machine, unzip it and run this from inside the unzipped folder:');
+  console.log('  powershell -ExecutionPolicy Bypass -File scripts\\handoff\\bootstrapMachine.ps1 -Bundle .');
+  console.log('Or paste RESUME_PROMPT.md into a fresh Claude Code tab and let it drive.');
 }
 
 if (require.main === module) {

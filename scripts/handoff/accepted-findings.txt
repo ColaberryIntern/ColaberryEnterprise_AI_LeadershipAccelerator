@@ -1,0 +1,24 @@
+# Findings reviewed and judged not to be secrets.
+#
+# Passed explicitly with --accept-findings; nothing here is applied unless you
+# name this file on the command line. That is deliberate. A list baked into the
+# scanner rots, and would go on suppressing a path after someone drops a real
+# credential into it. Reviewing again is the cost of carrying the exception.
+#
+# Format: <path suffix>  # why it is not a secret
+#
+# Each line below was read, with long tokens masked, before being added. If you
+# are adding a line, read the actual file first. A reason you cannot write is a
+# finding you have not reviewed.
+
+# A literal named `secret` that exists so the test can assert the failure path
+# does NOT leak it back to the caller. The string is invented by the test.
+backend/src/routes/__tests__/healthRoutes.test.ts  # test fixture proving an error message is not leaked
+
+# Asserts redactText() detects a private-key header and a connection URI. The
+# fixtures have to look like credentials or the test proves nothing.
+frontend/src/features/claudeGuide/__tests__/parser.test.ts  # redaction test fixtures, invented strings
+
+# A public OAuth client id. The memory file's own text states the client_secret
+# lives in the advisor container env and is not recorded here.
+reference_advisor_can_mint_bc_token_during_outage.md  # public OAuth client id, secret stays in container env

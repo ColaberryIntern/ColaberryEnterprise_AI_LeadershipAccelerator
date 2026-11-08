@@ -228,6 +228,9 @@ function deriveManifest(root) {
       sessionLogId: t.sessionLogId || null,
       branch: t.git ? t.git.branch : null,
       worktree: t.worktree || null,
+      // Several tabs share one worktree, so this is what tells the manifest's
+      // reader which tabs restore together.
+      worktreeId: t.worktreeId || null,
       patch: t.patch ? path.basename(t.patch.file) : null,
       prs: t.prs || [],
     })),
