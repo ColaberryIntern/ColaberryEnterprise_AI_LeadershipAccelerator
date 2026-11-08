@@ -15,7 +15,7 @@ const OTHER = 'b'.repeat(32);
 function room(over: Partial<JoinableRoom> = {}): JoinableRoom {
   return {
     status: 'active',
-    meeting_link: 'https://example.zoom.us/j/85910290895',
+    meeting_link: 'https://example.zoom.us/j/01234567890',
     metadata: { [ROOM_JOIN_TOKEN_KEY]: TOKEN },
     ...over,
   };
@@ -106,7 +106,7 @@ describe('resolveRoomJoin', () => {
   it('resolves to the room current link', () => {
     expect(resolveRoomJoin(room(), TOKEN)).toEqual({
       ok: true,
-      joinUrl: 'https://example.zoom.us/j/85910290895',
+      joinUrl: 'https://example.zoom.us/j/01234567890',
     });
   });
 
