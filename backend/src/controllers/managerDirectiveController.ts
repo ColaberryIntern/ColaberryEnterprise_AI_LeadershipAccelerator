@@ -8,6 +8,7 @@ import {
   AgentNotFoundError,
   DirectiveNotFoundError,
 } from '../services/managerDirectiveService';
+import { describeDirectivePosture } from '../services/agentBlueprint/directivePosture';
 
 // AI Workforce Management, Checkpoint C — requireAgentManagerOrAdmin-gated
 // (route layer), same 500-on-unexpected-failure / never-a-raw-stack-trace
@@ -31,7 +32,11 @@ export async function handleListDirectives(req: Request, res: Response) {
       res.status(404).json({ error: 'Agent not found' });
       return;
     }
-    res.json({ agentId: id, directives });
+    // AF12.8 - the list alone cannot answer "is this actually in force", and a manager reading
+    // a list of active directives will assume it is. The posture says plainly that directives
+    // are advisory prompt text and names the surfaces that do and do not inject this agent's.
+    const posture = await describeDirectivePosture(id);
+    res.json({ agentId: id, directives, posture });
   } catch (err: any) {
     console.error('[ManagerDirective] Error:', err.message);
     res.status(500).json({ error: 'Failed to load directives' });
