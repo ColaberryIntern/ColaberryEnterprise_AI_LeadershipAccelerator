@@ -33,6 +33,7 @@
  */
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -49,7 +50,34 @@ const MAX_SCRATCHPAD_TOTAL_BYTES = 10 * 1024 * 1024;
 // only when they look like work: small, textual, not build output.
 const MAX_EXTRA_FILE_BYTES = 256 * 1024;
 const MAX_EXTRA_TOTAL_BYTES = 20 * 1024 * 1024;
-const EXTRA_SKIP = /(^|\/)(node_modules|dist|build|coverage|\.git)\/|\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|tgz|exe|dll|node|mp4|mov|woff2?|ttf|eot|jsonl)$/i;
+
+/**
+ * Directories whose untracked contents never travel.
+ *
+ * WHY `tmp` IS ON THIS LIST, AND IT IS NOT ABOUT SIZE
+ * The first multi-tab run copied the main checkout's untracked files, 873 of
+ * them, and the secret gate then refused the bundle naming real material: JWT
+ * session cookies, a GitHub PAT, a Slack webhook URL, a GCP key. Every one came
+ * out of `tmp/`, which this repo's CLAUDE.md defines as scratch space that is
+ * "always safe to delete, never committed" -- probe output, saved cookies and
+ * API responses accumulate there precisely because nothing is meant to keep
+ * them. Carrying that into a folder built to be emailed is a leak with a
+ * delivery mechanism attached, and it has no handoff value: scratch is
+ * reproducible by definition. The gate caught it, and the gate is the backstop,
+ * not the design -- a bundle should not be assembled out of material the
+ * scanner then has to save us from.
+ */
+const EXTRA_SKIP_DIRS = ['node_modules', 'dist', 'build', 'coverage', '.git', 'tmp', '.cache', '.next', '.venv', '__pycache__'];
+
+// Names that announce they hold credentials, wherever they sit in the tree.
+// A weak guard on its own, which is why the gate still runs over the result.
+const EXTRA_SKIP_NAMES = /(^|\/)(\.env($|\.)|.*(cookie|cookies|secret|secrets|token|tokens|credential|credentials)[^/]*\.(txt|json|js|ts|md|html)$)/i;
+
+const EXTRA_SKIP = new RegExp(
+  `(^|/)(${EXTRA_SKIP_DIRS.map((d) => d.replace(/\./g, '\\.')).join('|')})/`
+    + '|\\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|tgz|exe|dll|node|mp4|mov|woff2?|ttf|eot|jsonl)$',
+  'i',
+);
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`);
@@ -105,13 +133,48 @@ function gitState(cwd) {
 }
 
 /** The tracked diff, written as a patch bootstrap can `git apply --3way`. */
-function writePatch(cwd, paths, sessionId) {
-  const diff = git(cwd, ['diff', 'HEAD'], { timeoutMs: 120000 });
+/**
+ * A stable name for a worktree, used to key the things that belong to the
+ * worktree rather than to the tab.
+ *
+ * WHY THE DIFF IS NOT KEYED ON THE SESSION
+ * Measured on the first real multi-tab run: 18 tabs, and 14 of them were sitting
+ * in the SAME checkout. Keyed on the session id, that checkout's diff and its
+ * untracked files were about to be written 14 times over -- and that checkout
+ * carries 947 changed and 873 untracked files, so the duplication was the
+ * difference between a few MB and a few hundred. Uncommitted work is a property
+ * of a working tree, not of the tab looking at it, so it is stored once under
+ * the tree's own name and the tab files point at it. Tabs still never contend:
+ * the first tab in a worktree writes the patch and the rest reuse it, and no tab
+ * ever reads-modifies-writes a file another tab owns.
+ */
+function worktreeId(worktree) {
+  // Normalized before anything is derived from it, because the same directory
+  // arrives spelled three ways: `git worktree list` emits forward slashes,
+  // path.resolve() on Windows emits backslashes, and Windows paths are
+  // case-insensitive. Any of those differences forking the key would hand back
+  // the duplicate patch this function exists to prevent.
+  const abs = path.resolve(worktree).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const leaf = (abs.split('/').pop() || 'worktree').replace(/[^a-z0-9._-]/g, '-');
+  const hash = crypto.createHash('sha1').update(abs).digest('hex').slice(0, 8);
+  return `${leaf}-${hash}`;
+}
+
+function writePatch(cwd, paths, key) {
+  const file = path.join(paths.patches, `${key}.patch`);
+
+  // Another tab in this same worktree already serialized it during this run.
+  // Re-running `git diff HEAD` over a 947-file checkout per tab would cost
+  // minutes and produce the identical bytes.
+  if (fs.existsSync(file)) {
+    return { file, bytes: fs.statSync(file).size, worktreeId: key, worktree: path.resolve(cwd), reused: true };
+  }
+
+  const diff = git(cwd, ['diff', 'HEAD'], { timeoutMs: 180000 });
   if (!diff) return null;
-  const file = path.join(paths.patches, `${sessionId}.patch`);
   fs.mkdirSync(paths.patches, { recursive: true });
   B.writeTextAtomic(file, `${diff}\n`);
-  return { file, bytes: Buffer.byteLength(diff, 'utf8') };
+  return { file, bytes: Buffer.byteLength(diff, 'utf8'), worktreeId: key, worktree: path.resolve(cwd), reused: false };
 }
 
 /**
@@ -128,8 +191,15 @@ function writePatch(cwd, paths, sessionId) {
  * skipped by name so the bundle stays emailable. Skips are reported, never
  * silent: a file that did not travel must be visible as a decision.
  */
-function copyUntracked(cwd, untracked, sessionId, paths) {
-  const destRoot = path.join(paths.root, 'extras', sessionId);
+function copyUntracked(cwd, untracked, key, paths) {
+  const destRoot = path.join(paths.root, 'extras', key);
+
+  // Keyed on the worktree for the same reason as the patch: 14 tabs in one
+  // checkout must not each copy that checkout's 873 untracked files.
+  if (fs.existsSync(destRoot)) {
+    return { copied: [], skipped: [], bytes: 0, worktreeId: key, reused: true };
+  }
+
   let total = 0;
   const copied = [];
   const skipped = [];
@@ -137,7 +207,11 @@ function copyUntracked(cwd, untracked, sessionId, paths) {
   for (const rel of untracked) {
     const norm = rel.replace(/\\/g, '/');
     if (EXTRA_SKIP.test(norm)) {
-      skipped.push({ path: norm, why: 'generated or binary' });
+      skipped.push({ path: norm, why: 'scratch, generated or binary' });
+      continue;
+    }
+    if (EXTRA_SKIP_NAMES.test(norm)) {
+      skipped.push({ path: norm, why: 'the name indicates credential material' });
       continue;
     }
     const from = path.join(cwd, rel);
@@ -165,9 +239,9 @@ function copyUntracked(cwd, untracked, sessionId, paths) {
 
   if (!copied.length) {
     try { fs.rmdirSync(destRoot); } catch { /* may not exist */ }
-    return { copied: [], skipped, bytes: 0 };
+    return { copied: [], skipped, bytes: 0, worktreeId: key, reused: false };
   }
-  return { copied, skipped, bytes: total };
+  return { copied, skipped, bytes: total, worktreeId: key, reused: false };
 }
 
 /** Open PRs for this branch. Best effort: gh may be absent or unauthenticated. */
@@ -296,12 +370,15 @@ function main() {
     note: arg('note'),
     cwd,
     worktree,
+    // Several tabs legitimately share one worktree, so this is what groups them
+    // for the receiving machine: one patch, one extras folder, one restore.
+    worktreeId: worktreeId(worktree),
     transcriptSlug: slug,
     transcript: transcript && { file: transcript.file, bytes: transcript.bytes, modified: transcript.modified },
     git: g,
     prs: openPrs(worktree, g.branch),
-    patch: flag('no-patch') ? null : writePatch(worktree, paths, sessionId),
-    extras: flag('no-extras') ? null : copyUntracked(worktree, untrackedAll, sessionId, paths),
+    patch: flag('no-patch') ? null : writePatch(worktree, paths, worktreeId(worktree)),
+    extras: flag('no-extras') ? null : copyUntracked(worktree, untrackedAll, worktreeId(worktree), paths),
     // OPT-IN, not opt-out. The first real bundle built here tripped the secret
     // gate four times and three were scratchpad files: ad-hoc probe scripts
     // holding service URLs and account identifiers. They are the highest-risk
@@ -319,8 +396,11 @@ function main() {
   console.log(`captured tab ${sessionId}`);
   console.log(`  bundle   ${paths.root}`);
   console.log(`  branch   ${g.branch || '(detached)'} @ ${g.headShort}  unpushed=${g.unpushedCount}`);
-  console.log(`  changes  tracked=${g.trackedChangedCount} untracked=${g.untrackedCount}  patch=${tab.patch ? `${tab.patch.bytes}B` : 'none'}`);
-  if (tab.extras) {
+  const patchNote = tab.patch ? `${tab.patch.bytes}B${tab.patch.reused ? ' (shared with this worktree\'s other tabs)' : ''}` : 'none';
+  console.log(`  changes  tracked=${g.trackedChangedCount} untracked=${g.untrackedCount}  patch=${patchNote}`);
+  if (tab.extras && tab.extras.reused) {
+    console.log(`  extras   already carried by another tab in ${path.basename(worktree)} (shared)`);
+  } else if (tab.extras) {
     console.log(`  extras   ${tab.extras.copied.length} new files carried (${Math.round(tab.extras.bytes / 1024)}KB), ${tab.extras.skipped.length} skipped`);
   }
   console.log(`  prs      ${tab.prs.length ? tab.prs.map((p) => `#${p.number}`).join(' ') : 'none'}`);
@@ -330,4 +410,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { gitState, renderMarkdown };
+module.exports = { gitState, renderMarkdown, worktreeId, EXTRA_SKIP, EXTRA_SKIP_NAMES };

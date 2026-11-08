@@ -172,6 +172,66 @@ async function main() {
     return `${inv.names.length} names, fields: ${[...keys].join('/')}`;
   });
 
+  // ---- 9. One worktree, many tabs: stored once ---------------------------
+  // The break this pins: 18 tabs were captured on the machine this was built
+  // from and 14 shared ONE checkout, so a session-keyed patch meant serializing
+  // a 947-file diff fourteen times. Keyed on the worktree, the first tab writes
+  // it and the rest point at the same file.
+  check('worktree key: same path same key, different path different key', () => {
+    const { worktreeId } = require('./captureTab');
+    const a = worktreeId(path.resolve('/repo/acc-handoff-wt'));
+    const b = worktreeId(path.resolve('/repo/acc-handoff-wt'));
+    const c = worktreeId(path.resolve('/repo/acc-internship-wt'));
+    assert(a === b, `the same worktree produced two keys: ${a} vs ${b}`);
+    assert(a !== c, `two different worktrees collided on ${a}`);
+    assert(!/[^a-zA-Z0-9._-]/.test(a), `key is not filename-safe: ${a}`);
+    return `${a} != ${c}`;
+  });
+
+  check('worktree key: case and separator differences do not fork the key', () => {
+    const { worktreeId } = require('./captureTab');
+    // Windows paths are case-insensitive, and git reports forward slashes while
+    // path.resolve emits backslashes. Either difference forking the key would
+    // reintroduce the duplicate patch this is here to prevent.
+    const a = worktreeId('C:\\Users\\x\\Downloads\\acc-handoff-wt');
+    const b = worktreeId('c:/users/x/downloads/acc-handoff-wt');
+    assert(a === b, `separator or case forked the key: ${a} vs ${b}`);
+    return a;
+  });
+
+  // ---- 10. Scratch and credential-shaped files never enter extras --------
+  // The break this pins: the first multi-tab run copied a checkout's 873
+  // untracked files, and the gate then refused the bundle over real JWT session
+  // cookies, a GitHub PAT, a Slack webhook and a GCP key -- all of it out of
+  // `tmp/`, which this repo defines as disposable scratch. The gate catching it
+  // is the backstop; not assembling the bundle out of it is the fix.
+  check('extras: scratch and credential-shaped paths are refused entry', () => {
+    const { EXTRA_SKIP, EXTRA_SKIP_NAMES } = require('./captureTab');
+    const mustSkip = [
+      'tmp/suralink-cookie.txt',
+      'tmp/ma-opps/ma.json',
+      'tmp/manifest-secret-probe.json',
+      'backend/tmp/probe.json',
+      'node_modules/x/index.js',
+      '.venv/lib/thing.py',
+    ];
+    for (const p of mustSkip) {
+      assert(EXTRA_SKIP.test(p) || EXTRA_SKIP_NAMES.test(p), `would have carried ${p}`);
+    }
+
+    const mustSkipByName = ['backend/src/authCookie.json', 'scripts/getToken.js', '.env.local'];
+    for (const p of mustSkipByName) {
+      assert(EXTRA_SKIP.test(p) || EXTRA_SKIP_NAMES.test(p), `would have carried ${p}`);
+    }
+
+    // Real work must still travel, or the fix has quietly emptied the bundle.
+    const mustCarry = ['scripts/handoff/captureTab.js', 'backend/src/services/newThing.ts', 'docs/sessions/CC-1.md'];
+    for (const p of mustCarry) {
+      assert(!EXTRA_SKIP.test(p) && !EXTRA_SKIP_NAMES.test(p), `refused real work: ${p}`);
+    }
+    return `${mustSkip.length + mustSkipByName.length} refused, ${mustCarry.length} carried`;
+  });
+
   // ---- 8. Accepting a finding is explicit and carries a reason -----------
   check('acceptances: parsed with reasons, comments ignored', () => {
     const { dir } = sandbox();
@@ -206,12 +266,27 @@ async function main() {
 
   await checkAsync('GATE: a bundle with nothing planted passes', async () => {
     const { B } = sandbox();
+    const { worktreeId } = require('./captureTab');
     const p = B.ensureBundle({ sessionId: 'tab-one' });
-    B.writeJsonAtomic(path.join(p.tabs, 'aaa.json'), { sessionId: 'aaa', git: { branch: 'workstream/x' }, prs: [] });
+
+    // The tab record carries its REAL shape here, worktree id included, because
+    // that field once refused a whole bundle. Named `worktreeKey` and holding a
+    // long slug plus a hex hash, it tripped gitleaks' generic-api-key rule in
+    // every tab file at once: 62 false findings and no zip. Renaming it so it no
+    // longer reads as a credential is the fix, and this is what pins it -- a
+    // rename back to anything key-shaped fails here rather than at finalize.
+    B.writeJsonAtomic(path.join(p.tabs, 'aaa.json'), {
+      sessionId: 'aaa',
+      worktreeId: worktreeId(path.resolve('/repo/colaberry-enterprise-ai-leadership-accelerator')),
+      git: { branch: 'workstream/x' },
+      patch: { worktreeId: worktreeId(path.resolve('/repo/colaberry-enterprise-ai-leadership-accelerator')), bytes: 474418 },
+      prs: [],
+    });
+
     const { gate } = require('./handoffScan');
     const verdict = await gate(p.root);
     assert(verdict.trustworthy, `the scanner could not prove itself: ${verdict.reason}`);
-    assert(verdict.clean === true, `a clean bundle was refused: ${JSON.stringify(verdict.findings)}`);
+    assert(verdict.clean === true, `a legitimate bundle was refused: ${JSON.stringify(verdict.findings)}`);
     return 'clean, and the control still detected the planted set';
   });
 

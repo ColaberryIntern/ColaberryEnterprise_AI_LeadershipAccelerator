@@ -119,6 +119,22 @@ if (-not $manifest.machineCaptured) {
 }
 Ok "$($manifest.tabCount) tabs, machine tier present, generated $($manifest.generatedAt)"
 
+# Several tabs legitimately share one worktree -- on the machine this was built
+# from, 14 of 18 tabs sat in the same checkout -- so uncommitted work is stored
+# once per WORKTREE and the tab files point at it by key. Group them here, once,
+# and both the restore steps and the tab listing read this map rather than
+# assuming one patch per tab.
+$tabsByWorktreeId = @{}
+foreach ($t in $tabFiles) {
+    $tab = Get-Content $t.FullName -Raw | ConvertFrom-Json
+    $key = $tab.worktreeId
+    if (-not $key) { $key = $tab.sessionId }   # bundles built before the key existed
+    if (-not $tabsByWorktreeId.ContainsKey($key)) {
+        $tabsByWorktreeId[$key] = [pscustomobject]@{ Tab = $tab; Sessions = @() }
+    }
+    $tabsByWorktreeId[$key].Sessions += $tab.sessionId
+}
+
 $machine = $manifest.machine
 if ($RepoRoot -eq '') {
     if ($machine -and $machine.repo -and $machine.repo.root) { $RepoRoot = $machine.repo.root }
@@ -338,6 +354,12 @@ if ($machine -and $machine.mcpServers -and @($machine.mcpServers).Count -gt 0) {
     Say ("     " + ($machine.mcpServers -join ', '))
     Todo 'Re-add and re-authorize the MCP servers listed above. Their configs can hold OAuth tokens, so the bundle carries only their names.'
 }
+elseif ($machine -and $machine.mcpAccountManaged) {
+    # An empty list here means "nothing to move", not "we failed to look". The
+    # old machine had no local MCP config at all: its Gmail, Calendar and Docs
+    # connectors are claude.ai account-managed, so signing in brings them along.
+    Ok 'no local MCP config to move: the connectors are claude.ai account-managed and follow your login'
+}
 
 # ----------------------------------------------------------------- 7. patches
 Step '7. Uncommitted work'
@@ -348,10 +370,11 @@ else {
     $patches = @(Get-ChildItem $patchDir -Filter '*.patch' -ErrorAction SilentlyContinue)
     if ($patches.Count -eq 0) { Skip 'no patches in the bundle' }
     foreach ($p in $patches) {
-        $sessionId = [System.IO.Path]::GetFileNameWithoutExtension($p.Name)
-        $tabFile = Join-Path $Bundle "tabs\$sessionId.json"
-        if (-not (Test-Path $tabFile)) { Warn "patch $($p.Name) has no matching tab file; skipped"; continue }
-        $tab = Get-Content $tabFile -Raw | ConvertFrom-Json
+        $key = [System.IO.Path]::GetFileNameWithoutExtension($p.Name)
+        if (-not $tabsByWorktreeId.ContainsKey($key)) { Warn "patch $($p.Name) matches no captured tab; skipped"; continue }
+        $group = $tabsByWorktreeId[$key]
+        $tab = $group.Tab
+        $sessionId = $group.Sessions -join ', '
 
         $leaf = Split-Path $tab.worktree -Leaf
         $target = $tab.worktree
@@ -364,10 +387,10 @@ else {
             # context, which matters because origin/main has moved since capture.
             git apply --3way --whitespace=nowarn $p.FullName
             if ($LASTEXITCODE -ne 0) {
-                Warn "patch for $sessionId did not apply cleanly in $leaf. It is kept at $($p.FullName); apply it by hand."
-                Todo "Resolve the patch conflict for session $sessionId in $leaf."
+                Warn "the patch for $leaf did not apply cleanly. It is kept at $($p.FullName); apply it by hand. Tabs affected: $sessionId"
+                Todo "Resolve the patch conflict in $leaf (tabs: $sessionId)."
             }
-            else { Ok "applied $($tab.git.trackedChangedCount) changed files into $leaf" }
+            else { Ok "applied $($tab.git.trackedChangedCount) changed files into $leaf (shared by $(@($group.Sessions).Count) tab(s))" }
         }
         finally { Pop-Location }
     }
@@ -384,9 +407,8 @@ $extrasRoot = Join-Path $Bundle 'extras'
 if (-not (Test-Path $extrasRoot)) { Skip 'no untracked files were carried' }
 else {
     foreach ($dir in Get-ChildItem $extrasRoot -Directory) {
-        $tabFile = Join-Path $Bundle "tabs\$($dir.Name).json"
-        if (-not (Test-Path $tabFile)) { Warn "extras for $($dir.Name) have no tab file; skipped"; continue }
-        $tab = Get-Content $tabFile -Raw | ConvertFrom-Json
+        if (-not $tabsByWorktreeId.ContainsKey($dir.Name)) { Warn "extras folder $($dir.Name) matches no captured tab; skipped"; continue }
+        $tab = $tabsByWorktreeId[$dir.Name].Tab
 
         $leaf = Split-Path $tab.worktree -Leaf
         $target = $tab.worktree
@@ -442,21 +464,28 @@ else {
 # ---------------------------------------------------------------- 9. the tabs
 Step '9. Reopen these tabs'
 
-foreach ($t in $tabFiles) {
-    $tab = Get-Content $t.FullName -Raw | ConvertFrom-Json
+# Grouped by worktree, because that is how the windows get opened: one VS Code
+# window per checkout, however many tabs were living in it.
+foreach ($key in $tabsByWorktreeId.Keys) {
+    $group = $tabsByWorktreeId[$key]
+    $tab = $group.Tab
     Say ''
-    Say "   --- $($tab.sessionId)"
-    Say "       branch   $($tab.git.branch)"
-    Say "       worktree $(Split-Path $tab.worktree -Leaf)"
-    if ($tab.sessionLogId) { Say "       log      session-logs\$($tab.sessionLogId).md" }
-    if (@($tab.prs).Count -gt 0) {
-        foreach ($pr in $tab.prs) { Say "       PR       $($pr.url)" }
+    Say "   --- $(Split-Path $tab.worktree -Leaf)   [$($tab.git.branch)]   $(@($group.Sessions).Count) tab(s)"
+    Say "       path     $($tab.worktree)"
+    foreach ($s in $group.Sessions) {
+        $file = Join-Path $Bundle "tabs\$s.json"
+        if (-not (Test-Path $file)) { continue }
+        $one = Get-Content $file -Raw | ConvertFrom-Json
+        Say "       tab      $s"
+        if ($one.sessionLogId) { Say "                log  session-logs\$($one.sessionLogId).md" }
+        foreach ($pr in @($one.prs)) { Say "                PR   $($pr.url)" }
+        if ($one.note) { Say "                note $($one.note)" }
     }
-    if ($tab.note) { Say "       note     $($tab.note)" }
 }
 Say ''
-Say '   Open one VS Code window per worktree and start a Claude Code tab in it.'
+Say '   Open one VS Code window per worktree above and start a Claude Code tab in it.'
 Say "   Each tab's tabs\<session>.md says where that work stood."
+Say '   Or paste RESUME_PROMPT.md into a fresh Claude Code tab and let it drive.'
 
 # ----------------------------------------------------------------- 10. verify
 if ($Verify) {
