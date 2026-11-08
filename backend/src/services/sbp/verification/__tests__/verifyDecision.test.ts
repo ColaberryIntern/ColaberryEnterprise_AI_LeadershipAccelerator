@@ -14,6 +14,7 @@ import {
   decideBuild,
   decideStory,
   commitNamesStory,
+  storyCommitMatcher,
   evidenceCommitFor,
   CommitFact,
   PlanStorySpec,
@@ -74,6 +75,108 @@ describe('commitNamesStory', () => {
 
   it('does not let STORY-1 match STORY-10', () => {
     expect(commitNamesStory('STORY-10: something', 'STORY-1')).toBe(false);
+  });
+});
+
+/**
+ * The prefix collision, pinned with the ids that actually exist in production.
+ *
+ * These are real `student_tasks.story_id` values from the admissions domain, not
+ * invented shapes — the bug was originally measured as UNREACHABLE by a query
+ * whose pattern guessed the suffix was `:Rn` when it is really `.autonomy:Rn`,
+ * so a test written from a guessed shape would pass while the defect shipped.
+ *
+ * The first test here FAILS without the `planIds` argument threaded through
+ * `decideBuild`, and that is the point of it: a guard nobody has watched fail is
+ * not yet a guard.
+ */
+describe('commitNamesStory — a rung commit must not also credit its base story', () => {
+  const BASE = 'admissions.CAP.admission_decision_recording';
+  const RUNG = 'admissions.CAP.admission_decision_recording.autonomy:R0';
+  const IDS = [BASE, RUNG];
+  const subject = `${RUNG}: record the decision and emit the audit row`;
+
+  it('NEGATIVE CONTROL: does not credit the base story for a commit naming the rung', () => {
+    // `\b` is satisfied by the `.` that starts `.autonomy`, so the un-guarded
+    // matcher returns true here and the student is paid twice for one commit.
+    expect(commitNamesStory(subject, BASE, IDS)).toBe(false);
+  });
+
+  it('still credits the story the commit actually named', () => {
+    expect(commitNamesStory(subject, RUNG, IDS)).toBe(true);
+  });
+
+  it('proves the un-guarded call is what was broken, so the fix is load-bearing', () => {
+    // Same subject, same base id, no plan ids supplied: the old permissive
+    // answer. Pinning it keeps the two paths honestly distinguishable rather
+    // than letting a future "simplification" quietly drop the argument.
+    expect(commitNamesStory(subject, BASE)).toBe(true);
+  });
+
+  it('leaves the explicit trailer authoritative even when the subject names the rung', () => {
+    // `Story: <base>` is $-anchored and cannot be a prefix of anything. If the
+    // student wrote it, they meant that story.
+    expect(commitNamesStory(`${subject}\n\nStory: ${BASE}`, BASE, IDS)).toBe(true);
+  });
+
+  it('still credits a story named independently alongside a longer one', () => {
+    // Stripping rather than rejecting is what makes this work: remove STORY-10
+    // and STORY-1 is still there, because it was named on its own.
+    expect(commitNamesStory('STORY-1 and STORY-10: both', 'STORY-1', ['STORY-1', 'STORY-10'])).toBe(true);
+  });
+
+  it('collapses a whole chain from the outside in', () => {
+    const chain = ['a.b', 'a.b.autonomy', 'a.b.autonomy:R1'];
+    expect(commitNamesStory('a.b.autonomy:R1: done', 'a.b.autonomy:R1', chain)).toBe(true);
+    expect(commitNamesStory('a.b.autonomy:R1: done', 'a.b.autonomy', chain)).toBe(false);
+    expect(commitNamesStory('a.b.autonomy:R1: done', 'a.b', chain)).toBe(false);
+  });
+
+  it('gives the same answer compiled once as called one-shot, over many messages', () => {
+    // The compiled form exists for speed on 189-story plans, and a fast matcher
+    // that disagrees with the documented one would be the worst of both. Reused
+    // across messages on purpose: the compiled regexes carry `g`, and a stale
+    // `lastIndex` between calls is exactly how this kind of cache goes wrong.
+    const matcher = storyCommitMatcher(BASE, IDS);
+    const messages = [
+      subject,
+      `${RUNG}: again`,
+      `${BASE}: the base story on its own`,
+      `${subject}\n\nStory: ${BASE}`,
+      'unrelated work',
+      `${BASE}.`,
+    ];
+    for (const m of messages) {
+      expect(matcher.names(m)).toBe(commitNamesStory(m, BASE, IDS));
+    }
+    // And spot-check two of those answers directly, so a bug common to both
+    // paths cannot pass by agreeing with itself.
+    expect(matcher.names(`${BASE}: the base story on its own`)).toBe(true);
+    expect(matcher.names(subject)).toBe(false);
+  });
+});
+
+describe('decideBuild — one commit cannot verify a story it did not name', () => {
+  const BASE = 'admissions.CAP.admission_decision_recording';
+  const RUNG = 'admissions.CAP.admission_decision_recording.autonomy:R0';
+
+  it('verifies only the rung story when the commit names only the rung', () => {
+    const stories: PlanStorySpec[] = [
+      { id: BASE, acceptance: [CRIT_A] },
+      { id: RUNG, acceptance: [CRIT_A] },
+    ];
+    const verdict = decideBuild(
+      stories,
+      progress([story(BASE, [[CRIT_A, true]]), story(RUNG, [[CRIT_A, true]])]),
+      [commit({ message: `${RUNG}: record the decision`, changed_files: 2 })],
+    );
+
+    const byId = new Map(verdict.verdicts.map((v) => [v.story_id, v]));
+    expect(byId.get(RUNG)?.state).toBe('verified');
+    // Criteria are ticked, so this is NOT "not_started" — it is a story waiting
+    // for a commit of its own, which is exactly the honest answer.
+    expect(byId.get(BASE)?.state).not.toBe('verified');
+    expect(verdict.rollup.stories_verified).toBe(1);
   });
 });
 
