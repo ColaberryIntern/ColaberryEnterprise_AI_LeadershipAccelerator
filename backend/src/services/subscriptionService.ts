@@ -9,6 +9,7 @@ import {
 } from './accountCreditService';
 import { retireRedundantExplorerAccounts } from './enrollmentService';
 import { MEMBERSHIP_PRICE, ANNUAL_TERM_MONTHS } from './membershipPrice';
+import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 import type { SubscriptionPlan } from '../models/Subscription';
 
 /**
@@ -506,6 +507,11 @@ export async function activateByRef(
       cohortId: cohort ? cohort.id : enrollment.cohort_id,
       amountPaid: typeof opts.amount === 'number' && opts.amount > 0 ? opts.amount : cfg.price,
       now, // enrolled_at falls back to this only if the enrollment has none yet
+      // The batch is the month the MONEY arrived in, which is what anchorBasisMs already
+      // resolved (opts.paidAt when the caller knows it, else now). A webhook repaired
+      // weeks later must place the member in the month they paid, not the month of the
+      // repair — the same distinction, and the same incident, as the billing anchor above.
+      paidAt: new Date(anchorBasisMs),
     });
   }
 
@@ -561,14 +567,38 @@ export async function activateByRef(
  */
 async function grantMembership(
   enrollment: Enrollment,
-  opts: { cohortId: string | null; amountPaid: number; now: Date },
+  opts: { cohortId: string | null; amountPaid: number; now: Date; paidAt?: Date },
 ): Promise<void> {
+  // C10.13 — place them in the batch of the month they paid in.
+  //
+  // Read `payment_status` BEFORE the update below, because that is what distinguishes a
+  // first payment from a renewal and this function is where both arrive. The batch is
+  // "when you joined", so a renewal must never move anybody; `resolvePaidBatchPlacement`
+  // returns null for an already-paid row and nothing changes.
+  //
+  // This takes precedence over `opts.cohortId`, which on the self-serve path is
+  // `resolvePaidCohortFor()` — a `start_date ASC` pick over open cohorts. That agrees
+  // with the batch month only while exactly one batch is open; it disagrees whenever a
+  // rollover is missed or has not run yet this month. The month lookup is the rule the
+  // directive states, so it wins. `opts.cohortId` still decides the lane: it is passed in
+  // as the destination, so a member already routed to a corporate or sponsor cohort is
+  // left there.
+  //
+  // Nothing here touches the billing anchor: `billingAnchorMs` has ignored the cohort's
+  // start date since 2026-10-30 (a membership renews on the day it was bought), so
+  // changing which batch they land in cannot move their money.
+  const placedCohortId = await resolvePaidBatchPlacement({
+    currentCohortId: opts.cohortId ?? enrollment.cohort_id,
+    alreadyPaid: enrollment.payment_status === 'paid',
+    paidAt: opts.paidAt ?? opts.now,
+  });
+
   await enrollment.update({
     tier: 'member',
     payment_status: 'paid',
     status: 'active',
     portal_enabled: true,
-    cohort_id: opts.cohortId ?? enrollment.cohort_id,
+    cohort_id: placedCohortId ?? opts.cohortId ?? enrollment.cohort_id,
     amount_paid: opts.amountPaid,
     payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
     enrolled_at: enrollment.enrolled_at || opts.now,

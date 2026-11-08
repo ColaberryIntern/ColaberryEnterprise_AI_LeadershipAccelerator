@@ -8,6 +8,7 @@ import {
   exitPaymentCampaign,
 } from './readinessCampaignService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 
 // Lazy import (the convention ghlService itself uses for aiEventService): a
 // top-level import pulls settingsService -> SystemSetting -> config/database and
@@ -146,6 +147,27 @@ export async function markEnrollmentPaid(
     enrollment.amount_paid = paymentDetails.amount;
     enrollment.enrolled_at = new Date();
   }
+
+  // C10.13 — place them in the batch of the month they paid in, BEFORE the save and
+  // before the seat increment below.
+  //
+  // The ordering is the whole trick, and it is why this needs no seat arithmetic of its
+  // own: the increment that follows reads `enrollment.cohort_id`, so assigning the batch
+  // first makes that existing increment land on the correct batch. Reversed, the seat
+  // would be spent on whatever cohort they arrived in - which for a paying ex-Explorer is
+  // the Explorer bucket, a cohort that is not supposed to hold paid seats at all.
+  //
+  // `alreadyPaid` is hardcoded false rather than read from the row: the idempotency guard
+  // forty lines above already returned for any row that was paid, so reaching here IS the
+  // unpaid -> paid transition. Passing the field would read it after the assignment above
+  // set it to 'paid' and so would disable placement entirely.
+  const placedCohortId = await resolvePaidBatchPlacement({
+    currentCohortId: enrollment.cohort_id,
+    alreadyPaid: false,
+    paidAt: new Date(),
+  });
+  if (placedCohortId) enrollment.cohort_id = placedCohortId;
+
   await enrollment.save();
 
   // Increment seats on confirmed payment

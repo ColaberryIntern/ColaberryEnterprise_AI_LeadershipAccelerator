@@ -358,6 +358,16 @@ export const env = {
   // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
   // to dark-disable coursework awards (streak + RSVP awards are unaffected).
   portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
+  // Monthly batch rollover: close the month that ended and open the incoming one, so
+  // exactly one accelerator batch is ever `open` (directives/run-monthly-enrollment-
+  // batches.md). ON by default, because the thing being automated is a step a human was
+  // meant to remember on the 1st of every month and the failure mode of NOT running it is
+  // that last month's batch quietly takes this month's signups. The kill switch exists
+  // because this is the one scheduled job in the batch model that mutates a `cohorts` row
+  // unattended: set BATCH_ROLLOVER_ENABLED=false to stop it without a code change. The
+  // placement resolver is NOT gated - it only ever decides a column a payment writer was
+  // already writing.
+  batchRolloverEnabled: process.env.BATCH_ROLLOVER_ENABLED !== 'false',
   // Paid/entitlement gate on the build + evidence subsystem (/api/portal/project*).
   // Free "Explorer" accounts get HTTP 402 with an upgrade payload; paid / comped /
   // staff / sponsor-seat enrollments pass. Default OFF (inverted vs the points flag

@@ -3,6 +3,7 @@ import { sequelize } from '../config/database';
 import { getPayment } from './paysimpleService';
 import type { PaySimplePayment } from './paysimpleService';
 import { env } from '../config/env';
+import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 
 /* ------------------------------------------------------------------ */
 /*  PaySimple payment reconciliation (precise — our payments only)     */
@@ -100,7 +101,10 @@ export function decideTargetState(
 /* ------------------------ data gathering -------------------------- */
 
 interface KnownPayment { enrollmentId: string; paymentId: string; }
-interface EnrollmentState { payment_status: string; amount_paid: number | null; }
+/** `cohort_id` is read for C10.13 batch placement: it is what tells the placement rule
+ *  which lane the member is in, so a corporate or sponsor row is not swept into a
+ *  monthly batch. Without it the sweep would have to place blind. */
+interface EnrollmentState { payment_status: string; amount_paid: number | null; cohort_id: string | null; }
 
 // Every (enrollment, PaySimple payment id) we recorded from our own checkout.
 async function gatherKnownPayments(): Promise<KnownPayment[]> {
@@ -121,10 +125,12 @@ async function getEnrollmentStates(ids: string[]): Promise<Map<string, Enrollmen
   const out = new Map<string, EnrollmentState>();
   if (ids.length === 0) return out;
   const rows = (await sequelize.query(
-    `SELECT id, payment_status, amount_paid FROM enrollments WHERE id IN (:ids)`,
+    `SELECT id, payment_status, amount_paid, cohort_id FROM enrollments WHERE id IN (:ids)`,
     { replacements: { ids }, type: QueryTypes.SELECT }
-  )) as Array<{ id: string; payment_status: string; amount_paid: number | null }>;
-  for (const r of rows) out.set(r.id, { payment_status: r.payment_status, amount_paid: r.amount_paid });
+  )) as Array<{ id: string; payment_status: string; amount_paid: number | null; cohort_id: string | null }>;
+  for (const r of rows) {
+    out.set(r.id, { payment_status: r.payment_status, amount_paid: r.amount_paid, cohort_id: r.cohort_id });
+  }
   return out;
 }
 
@@ -187,6 +193,31 @@ export async function syncPaySimplePayments(opts?: { dryRun?: boolean }): Promis
 
     if (!dryRun) {
       try {
+        // C10.13 — place them in the batch of the month they paid in.
+        //
+        // This writer is the one that CANNOT be covered by wiring `grantMembership`: it
+        // marks a row paid with its own SQL and never calls an activation path, so before
+        // this a member first marked paid by this sweep stayed in whichever cohort they
+        // arrived in. (`appPaymentReconcileService` needs no change for the opposite
+        // reason - it activates through `activateByRef`, and its own fallback UPDATE does
+        // not write `cohort_id`, so it cannot undo a placement. A tripwire test asserts
+        // that rather than trusting it.)
+        //
+        // `alreadyPaid` comes from the row's CURRENT state, not from `target`: this sweep
+        // also re-runs for an amount change on a row that was already paid, and that is a
+        // renewal or a correction, not a join.
+        //
+        // Resolved INSIDE the `!dryRun` branch on purpose. A dry run reports nothing about
+        // placement, so computing it there would only spend two queries per row and emit
+        // `placed` log lines for placements that are not going to happen.
+        const placedCohortId = target.payment_status === 'paid'
+          ? await resolvePaidBatchPlacement({
+            currentCohortId: cur?.cohort_id ?? null,
+            alreadyPaid: cur?.payment_status === 'paid',
+            paidAt: latest.paymentDate ?? new Date(),
+          })
+          : null;
+
         // T206, NARROWED BY C10.17 PHASE 2 to `tier` alone, WRITTEN IN SQL because this
         // writer does not go through the model. That is the point worth noting: a tripwire
         // that scans for `.create`/`.update` calls cannot see this site at all, which is
@@ -209,7 +240,8 @@ export async function syncPaySimplePayments(opts?: { dryRun?: boolean }): Promis
              amount_paid = COALESCE(:amount, amount_paid),
              paysimple_payment_id = COALESCE(:pid, paysimple_payment_id),
              enrolled_at = CASE WHEN :status = 'paid' AND enrolled_at IS NULL THEN NOW() ELSE enrolled_at END,
-             tier = CASE WHEN :status = 'paid' THEN 'member' ELSE tier END
+             tier = CASE WHEN :status = 'paid' THEN 'member' ELSE tier END,
+             cohort_id = COALESCE(:cohort, cohort_id)
            WHERE id = :id`,
           {
             replacements: {
@@ -217,6 +249,11 @@ export async function syncPaySimplePayments(opts?: { dryRun?: boolean }): Promis
               status: target.payment_status,
               amount: target.payment_status === 'paid' ? (target.amount_paid ?? 0) : null,
               pid: target.paysimple_payment_id ?? null,
+              // COALESCE and not a CASE: `placedCohortId` is already null for every case
+              // that must not move - a failed payment, a renewal, a lane this rule does
+              // not govern, a month with no batch row - so null here means "leave it", in
+              // one place, rather than re-deriving the conditions in SQL.
+              cohort: placedCohortId,
             },
             type: QueryTypes.UPDATE,
           }

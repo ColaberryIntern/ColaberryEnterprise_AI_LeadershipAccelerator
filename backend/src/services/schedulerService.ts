@@ -2056,6 +2056,31 @@ export function startScheduler(): void {
     });
   });
 
+  // Monthly batch rollover (00:10 America/Chicago, EVERY day). Closes any accelerator
+  // batch whose month has passed and opens the current month's, so exactly one batch is
+  // open — the invariant the whole monthly batch model rests on, because `open` is the
+  // only status the public cohort list returns and `getNextCohort()` below would otherwise
+  // start advertising the oldest open batch. Idempotent: on any day where the right batch
+  // is already the only open one it writes nothing, which is why it runs daily rather than
+  // on the 1st — a deploy or a restart over a month boundary cannot leave the rollover
+  // missed. Refuses to close anything when the current month has no batch row at all
+  // (zero open batches would block enrollment outright). ON unless
+  // BATCH_ROLLOVER_ENABLED=false.
+  if (env.batchRolloverEnabled) {
+    cron.schedule(
+      '10 0 * * *',
+      () => {
+        instrumentCronJob('BatchRollover', async () => {
+          const { rollBatches } = await import('./batch/batchRolloverService');
+          await rollBatches({ execute: true });
+        }).catch((err) => {
+          console.error('[Scheduler] Batch rollover error:', err);
+        });
+      },
+      { timezone: 'America/Chicago' }
+    );
+  }
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(
