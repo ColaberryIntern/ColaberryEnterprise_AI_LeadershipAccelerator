@@ -110,6 +110,9 @@ export function getThrottleMetrics(): {
 // ─── 2. Global Kill Switch ──────────────────────────────────────────────────
 
 const KILL_SWITCH_KEY = 'system_kill_switch';
+// Written by `adminSchedulerController`. Deliberately absent from settingsService DEFAULTS,
+// which is what lets `readSchedulerPause` tell "never set" apart from "cannot be read".
+const SCHEDULER_PAUSED_KEY = 'scheduler_paused';
 
 // Outbound messaging agent categories that should be disabled on kill switch
 // (exported for the registry's own pin: an agent that may contact people must sit in one of these)
@@ -144,6 +147,66 @@ export async function isKillSwitchActive(): Promise<boolean> {
 export async function isKillSwitchActiveStrict(): Promise<boolean> {
   const val = await getSetting(KILL_SWITCH_KEY);
   return val === true || val === 'true';
+}
+
+/** Why a send may not proceed, or that the pause does not block it. */
+export type SchedulerPauseVerdict =
+  | { blocked: false }
+  | { blocked: true; reason: 'scheduler_paused' | 'scheduler_pause_unreadable' };
+
+/**
+ * The global scheduler pause, read so that an UNREADABLE flag refuses the send (AF12.5).
+ *
+ * It lives here beside the kill-switch readers because it is the same kind of thing - a global
+ * safety flag in `system_settings` - and because the interesting part of both is the failure
+ * mode rather than the happy path.
+ *
+ * THE BUG THIS REPLACES. `evaluateSend` read this key inside a bare `catch {}` commented "fail
+ * open for pause check - if DB is down, other checks will catch it". Neither half held. The
+ * other checks do NOT catch it: `checkLeadSendable` and `checkCampaignSendable` fail closed on
+ * THEIR OWN errors, but a pause is not a lead fact or a campaign fact, so a readable lead plus
+ * a readable campaign sent the mail with the pause never examined. And a safety flag that fails
+ * open stops working exactly when the system is already in trouble, which is the moment it
+ * exists for. Found by Quincy Ninying on 4 Nov 2026 while building the emergency stop.
+ *
+ * FAILING CLOSED IS SAFE HERE, AND THAT IS MEASURED RATHER THAN HOPED. `getSetting` returns
+ * `DEFAULTS[key] ?? null` for a key with no row, and `scheduler_paused` is absent from DEFAULTS
+ * - so "never paused" is a SUCCESSFUL read returning null, and only a genuine database failure
+ * throws. Refusing on `catch` therefore cannot block mail merely because nobody has ever
+ * touched the flag; it blocks only when the answer is genuinely unknown.
+ *
+ * The two reasons are deliberately DIFFERENT strings: "we are paused" and "we cannot tell
+ * whether we are paused" are different operational facts, and only the second one needs
+ * somebody to go and look at the database.
+ *
+ * NOT the same bias as `isKillSwitchActive` directly above, and that asymmetry is the point.
+ * That reader answers "off" on a read error because it also gates ordinary background work
+ * where a blip must not stop everything. This one is consulted at the send chokepoint only,
+ * where the cost of guessing wrong is an outbound message that someone had asked to stop.
+ */
+export async function readSchedulerPause(
+  context: Record<string, unknown> = {},
+): Promise<SchedulerPauseVerdict> {
+  try {
+    const paused = await getSetting(SCHEDULER_PAUSED_KEY);
+    return paused === true || paused === 'true'
+      ? { blocked: true, reason: 'scheduler_paused' }
+      : { blocked: false };
+  } catch (err: unknown) {
+    console.error(
+      '[LaunchSafety] Scheduler pause unreadable, refusing the send:',
+      JSON.stringify({
+        event: 'scheduler_pause_unreadable',
+        outcome: 'failure',
+        // The repo's canonical classifier, because CLAUDE.md names a bare 'Error' as an
+        // unacceptable classification and this refusal is the only trace an operator gets.
+        error_class: classifyError(err),
+        message: (err as { message?: string })?.message,
+        ...context,
+      }),
+    );
+    return { blocked: true, reason: 'scheduler_pause_unreadable' };
+  }
 }
 
 /**
