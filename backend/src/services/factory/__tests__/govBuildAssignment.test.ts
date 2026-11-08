@@ -43,7 +43,10 @@ import { assignBuildStory, unassignBuildStory, listBuildStoryAssignments, listAs
 
 const ctxWithRoles = (roles: string[]) => ({ platformIdentityId: 'who', deliveryProjectId: 'dp-1', projectTenantId: 't-1', roles, isClientOnly: false });
 const rowFrom = (v: any) => ({ get: () => ({ id: 'as-1', assigned_at: new Date('2026-10-08T00:00:00Z'), ...v }) });
-const input = (over: any = {}) => ({ deliveryProjectId: 'dp-1', storyId: 'STORY-R1', canonicalReqId: 'R1', assigneeIdentityId: 'builder-7', assignedByIdentityId: 'op-1', ...over });
+// A REAL uuid, because `granted_by_identity_id` is a uuid column and the fixture has to be able to tell the
+// difference between "attribution recorded" and "attribution dropped" (see the actor-is-not-a-uuid tests below).
+const OPERATOR_ID = '22222222-2222-4222-8222-222222222222';
+const input = (over: any = {}) => ({ deliveryProjectId: 'dp-1', storyId: 'STORY-R1', canonicalReqId: 'R1', assigneeIdentityId: 'builder-7', assignedByIdentityId: OPERATOR_ID, ...over });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -62,7 +65,7 @@ describe('assignBuildStory — the assignee MUST be a builder (story.execute)', 
     expect(asCreate).toHaveBeenCalledTimes(1);
     const created = asCreate.mock.calls[0][0];
     expect(created.assignee_identity_id).toBe('builder-7');
-    expect(created.assigned_by_identity_id).toBe('op-1');
+    expect(created.assigned_by_identity_id).toBe(OPERATOR_ID);
     expect(created.story_id).toBe('STORY-R1');
     expect(r.assigneeIdentityId).toBe('builder-7');
   });
@@ -82,7 +85,7 @@ describe('assignBuildStory — the assignee MUST be a builder (story.execute)', 
     const r = await assignBuildStory(input());
     expect(memCreate).toHaveBeenCalledTimes(1);
     expect(memCreate.mock.calls[0][0]).toMatchObject({
-      delivery_project_id: 'dp-1', platform_identity_id: 'builder-7', delivery_role: 'associate_builder', granted_by_identity_id: 'op-1',
+      delivery_project_id: 'dp-1', platform_identity_id: 'builder-7', delivery_role: 'associate_builder', granted_by_identity_id: OPERATOR_ID,
     });
     expect(r.assigneeIdentityId).toBe('builder-7');
   });
@@ -172,7 +175,7 @@ describe('provision-on-assign — keeps the gate and preserves separation of dut
       const boom: any = new Error('connection terminated unexpectedly');
       boom.name = 'SequelizeConnectionError';
       memCreate.mockRejectedValue(boom);
-      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', 'op-1')).rejects.toMatchObject({ reason: 'grant_failed' });
+      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', OPERATOR_ID)).rejects.toMatchObject({ reason: 'grant_failed' });
       expect(err).toHaveBeenCalledTimes(1);
       const logged = JSON.parse(err.mock.calls[0][0] as string);
       expect(logged).toMatchObject({
@@ -191,11 +194,69 @@ describe('provision-on-assign — keeps the gate and preserves separation of dut
     const err = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
       memFindOne.mockResolvedValue({ id: 'm-1', delivery_role: 'associate_builder' });
-      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', 'op-1')).resolves.toBeUndefined();
+      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', OPERATOR_ID)).resolves.toBeUndefined();
       expect(memCreate).not.toHaveBeenCalled();
       expect(err).not.toHaveBeenCalled();
     } finally {
       err.mockRestore();
+    }
+  });
+});
+
+// THE BUG THE LOUD GRANT EXPOSED. Making the failure visible (above) turned a silent miss into one production
+// log line, and the line named the cause outright: `invalid input syntax for type uuid: "admin@colaberry.com"`.
+// The materialize route handed the admin's EMAIL to a uuid column, so the INSERT that grants the builder role was
+// rejected every time. The route now resolves a real identity; this guard is the second half, so that no caller
+// can ever again lose an authorization grant over a field that only records who performed it.
+describe('ensureAssigneeCanBuild — attribution never blocks the grant', () => {
+  beforeEach(() => { memFindOne.mockResolvedValue(null); }); // no membership yet: exercise the create
+
+  it('records a non-uuid actor (an admin email) as null and still grants the role', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await expect(ensureAssigneeCanBuild('dp-1', 'builder-7', 'admin@colaberry.com')).resolves.toBeUndefined();
+      expect(memCreate).toHaveBeenCalledTimes(1);
+      expect(memCreate.mock.calls[0][0]).toMatchObject({
+        delivery_project_id: 'dp-1', platform_identity_id: 'builder-7', delivery_role: 'associate_builder',
+        granted_by_identity_id: null,
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('logs the dropped attribution so it is visible rather than silent', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await ensureAssigneeCanBuild('dp-1', 'builder-7', 'admin@colaberry.com');
+      expect(warn).toHaveBeenCalledTimes(1);
+      const logged = JSON.parse(warn.mock.calls[0][0] as string);
+      expect(logged).toMatchObject({ level: 'warn', event: 'gov_build_grant_by_not_an_identity', outcome: 'partial' });
+      expect(logged.context).toMatchObject({ deliveryProjectId: 'dp-1', grantedByIdentityId: 'admin@colaberry.com' });
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('KEEPS a real uuid actor as the granter — the guard narrows nothing it should not', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await ensureAssigneeCanBuild('dp-1', 'builder-7', OPERATOR_ID);
+      expect(memCreate.mock.calls[0][0].granted_by_identity_id).toBe(OPERATOR_ID);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('treats a null actor as the ordinary unattributed case — no warning', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await ensureAssigneeCanBuild('dp-1', 'builder-7', null);
+      expect(memCreate.mock.calls[0][0].granted_by_identity_id).toBeNull();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
     }
   });
 });

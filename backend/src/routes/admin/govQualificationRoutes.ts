@@ -896,6 +896,11 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/materializ
     } catch { friendlyTitle = null; }
   }
   try {
+    // `actorIdentity(req)` is the admin's EMAIL — correct for the text audit fields it feeds elsewhere, wrong
+    // here. This value reaches `ensureAssigneeCanBuild`, which writes it to the uuid column
+    // `granted_by_identity_id`, so an email made the grant fail and the intern got no cockpit access. Resolve
+    // the real platform identity, exactly as the per-story assign route above does, and keep the attribution.
+    const actor = await resolveGovProjectActor(req).catch(() => null);
     const result = await materializeGovBuildProject({
       deliveryProjectId: body.data.deliveryProjectId,
       canonicalOpportunityId,
@@ -906,7 +911,7 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/materializ
       buildSpec: body.data.buildSpec ?? null,
       deadline: body.data.deadline ?? null,
       projectName: body.data.projectName ?? null,
-      actorIdentityId: actorIdentity(req),
+      actorIdentityId: actor ? actor.platformIdentityId : null,
     });
     res.status(201).json(result);
   } catch (err: any) {

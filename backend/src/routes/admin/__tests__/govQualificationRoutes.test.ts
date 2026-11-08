@@ -881,8 +881,50 @@ describe('P5 submission + outcome routes', () => {
 
 describe('materialize-build-project route (P2.3)', () => {
   const U = '11111111-1111-4111-8111-111111111111';
+  const OP = '22222222-2222-4222-8222-222222222222';
   const mUrl = `/api/admin/factory/qualification/${CLEAN_CANONICAL}/materialize-build-project`;
   const mBody = { deliveryProjectId: U, assigneeIdentityId: U, requirements: [{ id: 'REQ-001', text: 'x' }] };
+  // The admin stub authenticates as an EMAIL (`req.admin = { email: 'reviewer@test' }`), which is the whole point
+  // of the two actor tests below: the email is what used to reach a uuid column.
+  beforeEach(() => { resolveGovProjectActor.mockResolvedValue({ platformIdentityId: OP, email: 'reviewer@test' }); });
+
+  // REGRESSION, production incident 2026-11-05/08. This route passed `actorIdentity(req)` — the admin's EMAIL —
+  // straight through to `ensureAssigneeCanBuild`, which writes it to `delivery_project_members.granted_by_identity_id`,
+  // a uuid column. Postgres answered `invalid input syntax for type uuid: "admin@colaberry.com"`, the grant failed,
+  // and (before the grant was made loud) the materialize reported success with no membership written. Eight gov
+  // delivery projects carried a materialized build and zero members as a result.
+  it('passes the actor as a platform identity UUID, never the admin email (uuid column)', async () => {
+    (materializeGovBuildProject as jest.Mock).mockResolvedValue({ projectId: 'p1', created: true, enrollmentId: 'e1', lists: 2, tasks: 3, releaseCount: 2, storyCount: 3 });
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(201);
+    const passed = (materializeGovBuildProject as jest.Mock).mock.calls[0][0];
+    expect(passed.actorIdentityId).toBe(OP);
+    expect(passed.actorIdentityId).not.toBe('reviewer@test');
+  });
+
+  it('passes null rather than an email when the operator has no resolvable platform identity', async () => {
+    resolveGovProjectActor.mockResolvedValue(null);
+    (materializeGovBuildProject as jest.Mock).mockResolvedValue({ projectId: 'p1', created: true, enrollmentId: 'e1', lists: 2, tasks: 3, releaseCount: 2, storyCount: 3 });
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(201);
+    expect((materializeGovBuildProject as jest.Mock).mock.calls[0][0].actorIdentityId).toBeNull();
+  });
+
+  it('still materializes when the actor lookup itself throws — attribution never blocks the build', async () => {
+    resolveGovProjectActor.mockRejectedValue(new Error('identity store unavailable'));
+    (materializeGovBuildProject as jest.Mock).mockResolvedValue({ projectId: 'p1', created: true, enrollmentId: 'e1', lists: 2, tasks: 3, releaseCount: 2, storyCount: 3 });
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(201);
+    expect((materializeGovBuildProject as jest.Mock).mock.calls[0][0].actorIdentityId).toBeNull();
+  });
+
+  it('503 (reason grant_failed) when the builder role could not be granted', async () => {
+    (materializeGovBuildProject as jest.Mock).mockRejectedValue(new GovMaterializeError('grant_failed', 'grant failed'));
+    const res = await request(app).post(mUrl).send(mBody);
+    expect(res.status).toBe(503);
+    expect(res.body.reason).toBe('grant_failed');
+  });
+
   it('201 with the result on success', async () => {
     (materializeGovBuildProject as jest.Mock).mockResolvedValue({ projectId: 'p1', created: true, enrollmentId: 'e1', lists: 2, tasks: 3, releaseCount: 2, storyCount: 3 });
     const res = await request(app).post(mUrl).send(mBody);
