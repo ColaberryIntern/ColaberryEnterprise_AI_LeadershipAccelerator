@@ -17,6 +17,16 @@ import PlatformIdentity from '../../models/PlatformIdentity';
 import { buildDeliveryContext, hasDeliveryPermission } from '../../modules/delivery/deliveryAuthorization';
 import { rolesHaveDeliveryPermission, isKnownDeliveryRole, DELIVERY_ROLES } from '../../modules/delivery/deliveryRoles';
 
+/**
+ * `granted_by_identity_id` is a uuid column, but an admin actor reaches the service layer as their EMAIL on
+ * several admin routes (`actorIdentity(req)` is documented "email preferred, sub fallback"). Postgres rejects the
+ * string outright — `invalid input syntax for type uuid: "admin@colaberry.com"` — so an unguarded value fails the
+ * INSERT that grants the role, over a field that is only attribution. `govDeliveryProject` already guards its two
+ * uuid audit columns exactly this way; this is the same guard for the third.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asIdentityId = (v: unknown): string | null => (typeof v === 'string' && UUID_RE.test(v) ? v : null);
+
 export interface AssignmentView {
   id: string;
   storyId: string;
@@ -91,13 +101,25 @@ export async function ensureAssigneeCanBuild(
   grantedByIdentityId: string | null,
 ): Promise<void> {
   const where = { delivery_project_id: deliveryProjectId, platform_identity_id: assigneeIdentityId };
+  // ATTRIBUTION MUST NEVER BLOCK AUTHORIZATION. The materialize route passed the admin's email here, so every
+  // "Create the monitored project" since the grant was added rejected on the uuid column and granted nothing —
+  // 8 delivery projects carry a materialized build and zero members. Who granted the role is metadata; the role
+  // itself is the point. A non-uuid actor is therefore recorded as null and logged, not thrown on.
+  const grantedBy = asIdentityId(grantedByIdentityId);
+  if (grantedByIdentityId && !grantedBy) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'gov_build_grant_by_not_an_identity', outcome: 'partial',
+      context: { deliveryProjectId, assigneeIdentityId, grantedByIdentityId },
+    }));
+  }
   const existing = await DeliveryProjectMember.findOne({ where });
   if (existing) return; // never alter an existing membership — the engine gate decides
   try {
     await DeliveryProjectMember.create({
       ...where,
       delivery_role: DELIVERY_ROLES.ASSOCIATE_BUILDER,
-      granted_by_identity_id: grantedByIdentityId,
+      granted_by_identity_id: grantedBy,
     });
   } catch (err: any) {
     // Race: a concurrent assign inserted the membership between our findOne and create (the unique index
