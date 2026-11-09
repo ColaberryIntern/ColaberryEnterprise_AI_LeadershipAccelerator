@@ -4,9 +4,50 @@ import { ChatConversation, ChatMessage, Visitor, Lead, IntentScore, BehavioralSi
 import { Op } from 'sequelize';
 
 /**
- * Load or create AdmissionsMemory for a visitor.
+ * The memory row that belongs to a PERSON, or null when the person is unknown.
+ *
+ * ORDER IS LOAD-BEARING, not tidiness. 49 of 455 leads already carry two or more visitor
+ * identities (43 with two, 5 with three, 1 with four), so `findOne({ where: { lead_id } })`
+ * without an order returns whichever row Postgres hands back first — which can differ between
+ * two calls for the same person. The OLDEST row is chosen as canonical because it holds the
+ * earliest history, and because "oldest" is a property of the data rather than of the query
+ * plan. callTranscriptProcessor.ts:87 has this exact unordered bug today.
  */
-export async function loadMemory(visitorId: string): Promise<AdmissionsMemory> {
+async function findMemoryByPerson(leadId: number | null | undefined): Promise<AdmissionsMemory | null> {
+  if (!leadId) return null;
+  return AdmissionsMemory.findOne({
+    where: { lead_id: leadId },
+    order: [['created_at', 'ASC']],
+  });
+}
+
+/**
+ * Load or create the AdmissionsMemory for whoever is at the door.
+ *
+ * RESOLVES BY PERSON WHERE A PERSON IS KNOWN, and falls back to the browser only for an
+ * anonymous first touch. That ordering is the whole ticket.
+ *
+ * The previous signature took a visitor id alone and did `findOrCreate({ where: { visitor_id } })`,
+ * where `visitor_id` traces back to a fingerprint in the browser's localStorage
+ * (frontend/src/utils/tracker.ts:21-27, derived from user agent, screen size, timezone and
+ * language). A new browser, a new device or cleared storage therefore produced a new identity
+ * and a blank memory, so Maya greeted a returning person as a stranger. In production that is
+ * 111 memory rows of which 1 carries a lead_id.
+ *
+ * `leadId` is OPTIONAL so every existing caller keeps compiling and keeps its old behaviour;
+ * the callers that already hold a person identity now pass it. Where one is passed and the
+ * visitor-scoped row is not yet linked, the link is written here — which is what lets the
+ * SECOND device find the SAME memory by person rather than minting another one.
+ *
+ * NOT a third identity, per the ticket: the lead is the identity that already exists.
+ */
+export async function loadMemory(
+  visitorId: string,
+  leadId?: number | null,
+): Promise<AdmissionsMemory> {
+  const byPerson = await findMemoryByPerson(leadId);
+  if (byPerson) return byPerson;
+
   const [memory] = await AdmissionsMemory.findOrCreate({
     where: { visitor_id: visitorId },
     defaults: {
@@ -18,6 +59,16 @@ export async function loadMemory(visitorId: string): Promise<AdmissionsMemory> {
       visitor_type: 'new',
     },
   });
+
+  // Attach the person to the row the moment one is known. Without this the link is only ever
+  // written by mayaToolsService.captureLeadDetails (behind a bare `.catch(() => {})`, so its
+  // failures are invisible) and by a conversation that already knew the lead before it began.
+  // Nothing wrote it from /api/t/identify, which is where a visitor actually becomes a person,
+  // and that asymmetry is the mechanism behind 1 linked row out of 111.
+  if (leadId && !memory.lead_id) {
+    await memory.update({ lead_id: leadId });
+  }
+
   return memory;
 }
 
@@ -28,7 +79,9 @@ export async function saveConversationToMemory(conversationId: string): Promise<
   const conversation = await ChatConversation.findByPk(conversationId);
   if (!conversation) return;
 
-  const memory = await loadMemory(conversation.visitor_id);
+  // The conversation row carries the person. Passing it means a conversation closed on a
+  // second device folds into the SAME memory instead of starting a parallel history.
+  const memory = await loadMemory(conversation.visitor_id, conversation.lead_id);
 
   const messages = await ChatMessage.findAll({
     where: { conversation_id: conversationId },
@@ -94,8 +147,15 @@ export async function saveConversationToMemory(conversationId: string): Promise<
 /**
  * Build a memory context string for injection into the system prompt.
  */
-export async function buildMemoryContext(visitorId: string): Promise<string> {
-  const memory = await AdmissionsMemory.findOne({ where: { visitor_id: visitorId } });
+export async function buildMemoryContext(
+  visitorId: string,
+  leadId?: number | null,
+): Promise<string> {
+  // Person first, browser second. This is the function whose empty return IS the bug the
+  // ticket describes: it bails out at conversation_count === 0, so a returning person on a
+  // second device produced no memory block at all and Maya opened as though they were new.
+  const memory = (await findMemoryByPerson(leadId))
+    ?? (await AdmissionsMemory.findOne({ where: { visitor_id: visitorId } }));
   if (!memory || memory.conversation_count === 0) return '';
 
   const parts: string[] = ['VISITOR MEMORY (cross-session):'];
@@ -135,13 +195,24 @@ export async function buildMemoryContext(visitorId: string): Promise<string> {
 /**
  * Classify the visitor type based on behavior, lead data, and identity.
  */
-export async function classifyVisitorType(visitorId: string): Promise<AdmissionsVisitorType> {
-  const memory = await AdmissionsMemory.findOne({ where: { visitor_id: visitorId } });
+export async function classifyVisitorType(
+  visitorId: string,
+  leadId?: number | null,
+): Promise<AdmissionsVisitorType> {
+  // Person first, so conversation_count is the PERSON's count. This is criterion (4): with
+  // the browser-scoped row, someone on their second device had a count of 0 and fell through
+  // every branch below to 'new', which is precisely "reporting a returning person as new".
+  const memory = (await findMemoryByPerson(leadId))
+    ?? (await AdmissionsMemory.findOne({ where: { visitor_id: visitorId } }));
   const visitor = await Visitor.findByPk(visitorId);
 
+  // An explicitly supplied person wins over the one hanging off this browser's visitor row,
+  // which may be null on a device the person has not been identified on yet.
+  const personId = leadId ?? visitor?.lead_id ?? null;
+
   // Check if CEO
-  if (visitor?.lead_id) {
-    const lead = await Lead.findByPk(visitor.lead_id);
+  if (personId) {
+    const lead = await Lead.findByPk(personId);
     if (lead && isCEO(lead)) return 'ceo';
   }
 
@@ -149,8 +220,8 @@ export async function classifyVisitorType(visitorId: string): Promise<Admissions
   const intentScore = await IntentScore.findOne({ where: { visitor_id: visitorId } });
 
   // Enterprise detection: corporate email domain + multiple visits
-  if (visitor?.lead_id) {
-    const lead = await Lead.findByPk(visitor.lead_id);
+  if (personId) {
+    const lead = await Lead.findByPk(personId);
     if (lead?.email) {
       const domain = lead.email.split('@')[1]?.toLowerCase() || '';
       const freeProviders = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'];
