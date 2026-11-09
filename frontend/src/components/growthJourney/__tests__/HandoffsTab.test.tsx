@@ -303,3 +303,37 @@ describe('the mechanical accessibility rules', () => {
     expectNoA11yViolations(container);
   });
 });
+
+describe('M35: the admissions queue ordered by readiness', () => {
+  // KILLS: a toggle that never reaches the API, a readiness column shown for the queue order, or a missing score that
+  // renders as 0 instead of "not scored".
+  it('asks for the queue order by default', async () => {
+    await render();
+    expect(api.listHandoffQueue).toHaveBeenCalledWith(expect.objectContaining({ order: 'queue' }));
+    expect(text()).not.toContain('Readiness');
+  });
+
+  it('choosing "readiness" sends order=readiness and starts again at the first page', async () => {
+    await render();
+    api.listHandoffQueue.mockClear();
+    const select = container.querySelector('#gj-order') as HTMLSelectElement;
+    await act(async () => {
+      select.value = 'readiness';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(api.listHandoffQueue).toHaveBeenCalledWith(expect.objectContaining({ order: 'readiness', offset: 0 }));
+  });
+
+  it('shows the score and coverage, says how it is ordered, and says "not scored" rather than 0 for a null', async () => {
+    api.listHandoffQueue.mockResolvedValue(page({
+      order: 'readiness',
+      rows: [row({ id: 'h-1', readiness: { total: 42, scoreableMax: 60, coverage: 0.75 } }), row({ id: 'h-2', readiness: null })],
+    }));
+    await render();
+    expect(container.querySelector('[data-testid="handoff-readiness-h-1"]')?.textContent).toContain('42 of 60');
+    expect(bodyText()).toContain('75% of factors scored');
+    expect(bodyText()).toContain('not scored');
+    expect(text()).toContain('Ordered by the Sales Readiness Score, highest first');
+    expect(text()).toContain('listed last, never hidden');
+  });
+});

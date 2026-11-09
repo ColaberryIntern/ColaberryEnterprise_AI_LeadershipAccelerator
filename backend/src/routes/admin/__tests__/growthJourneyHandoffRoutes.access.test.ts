@@ -19,6 +19,15 @@ import jwt from 'jsonwebtoken';
 const growthJourney = { growthJourneyEnabled: true, journeySignalIngest: false, journeyClassification: false, journeyDecisions: false, journeyHandoffs: true, journeyExecution: false };
 jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret', nodeEnv: 'test', growthJourney } }));
 jest.mock('../../../services/aiEventService', () => ({ emitAiEvent: jest.fn().mockResolvedValue(undefined) }));
+// M35: the readiness order scores with the profile composition; here a fixed table, so the route test is about the route.
+const mockReadiness: Record<string, number | null> = {};
+const mockScopeSeen: unknown[] = [];
+jest.mock('../../../services/career/careerMentorScopeService', () => ({ visibleEnrollmentIds: jest.fn(async () => null) }));
+jest.mock('../../../services/growthJourney/handoffs/handoffReadiness', () => {
+  const actual = jest.requireActual('../../../services/growthJourney/handoffs/handoffReadiness');
+  return { ...actual, profileScorer: (scope: unknown) => { mockScopeSeen.push(scope); return { scoreFor: async (ref: string) => {
+    const v = mockReadiness[ref]; return v === null || v === undefined ? null : { total: v, scoreableMax: 60, coverage: 1 }; } }; } };
+});
 
 /* ── the in-memory world ────────────────────────────────────────────────────── */
 
@@ -364,6 +373,31 @@ describe('the list: scope, projection, filters, order', () => {
     expect(all.offset).toBe(10);
     await auth(request(app()).get(`${LIST}?status=returned_to_ai&owner_queue=admissions`));
     expect(findAndCountAll.mock.calls[1][0]).toMatchObject({ where: { status: 'returned_to_ai', owner_queue: 'admissions', brand_id: BRAND.enterprise } });
+  });
+
+  it('M35 order=readiness: ranked by the readiness score, every handoff exactly once, unscorable last, scored in the caller\'s scope', async () => {
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, BRAND.training, [BRAND.training]));
+    const mk = (id: string, enr: string | null, created: string) => ({ id, enrollment_id: enr, lead_id: null, created_at: created, status: 'queued' });
+    findAndCountAll.mockResolvedValueOnce({ rows: [mk('h1', 'e1', '2026-11-01'), mk('h2', 'e2', '2026-11-02'), mk('h3', null, '2026-10-30'), mk('h4', 'e4', '2026-11-03')], count: 4 });
+    Object.assign(mockReadiness, { 'enrollment:e1': 12, 'enrollment:e2': 40, 'enrollment:e4': 40 });
+    const res = await auth(request(app()).get(`${LIST}?order=readiness&limit=10`));
+    expect(res.status).toBe(200);
+    expect(res.body.order).toBe('readiness');
+    expect(res.body.rows.map((r: { id: string }) => r.id)).toEqual(['h2', 'h4', 'h1', 'h3']);
+    expect(res.body.rows[0].readiness).toEqual({ total: 40, scoreableMax: 60, coverage: 1 });
+    expect(res.body.rows[3].readiness).toBeNull();
+    expect(new Set(res.body.rows.map((r: { id: string }) => r.id)).size).toBe(4);
+    // Read in queue order with the same scope, bounded by the readiness window rather than the page.
+    expect(findAndCountAll.mock.calls[0][0]).toMatchObject({ where: { brand_id: BRAND.training }, limit: 100, order: [['urgent', 'DESC'], ['expected_value', 'DESC'], ['created_at', 'ASC']] });
+    expect(mockScopeSeen.at(-1)).toMatchObject({ visibleEnrollmentIds: null });
+  });
+
+  it('M35: order defaults to the queue order, and an unknown order is a 400 before any read', async () => {
+    contextFromAdminRequest.mockResolvedValue(memberOf(TENANT.colaberry, BRAND.training, [BRAND.training]));
+    expect((await auth(request(app()).get(LIST))).body.order).toBe('queue');
+    findAndCountAll.mockClear();
+    expect((await auth(request(app()).get(`${LIST}?order=score`))).status).toBe(400);
+    expect(findAndCountAll).not.toHaveBeenCalled();
   });
 
   it('the projection excludes the packet and the two arrays: the queue is for finding a row, the detail is for reading one', async () => {

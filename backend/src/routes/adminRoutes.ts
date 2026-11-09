@@ -60,6 +60,8 @@ import coryRoutes from './admin/coryRoutes';
 import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
 import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
+import mayaCapabilityRoutes from './admin/mayaCapabilityRoutes';
+import growthJourneyContentApprovalRoutes from './admin/growthJourneyContentApprovalRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
@@ -287,6 +289,8 @@ router.use(coryRoutes);
 router.use(departmentIntelligenceRoutes);
 router.use(websiteIntelligenceRoutes);
 router.use(admissionsRoutes);
+router.use(mayaCapabilityRoutes); // M37: Maya shadow-to-live switch
+router.use(growthJourneyContentApprovalRoutes); // R2: content approval from the admin Content tab
 // The ten AI employee domain projects. Read-only; every route carries its own
 // requireSection guard, because the repo's route-auth lint is per FILE not per route.
 router.use(agentDomainRoutes);

@@ -2,16 +2,21 @@
  * C112: the Week 0 program video goes first and the Quick check is rewritten from it. The plan is pure, so the
  * production cards (as read on 2026-11-05) are the fixtures.
  */
+import fs from 'fs';
+import path from 'path';
 import {
   PROGRAM_VIDEO_ID, QUICK_CHECK_ID, SELF_STUDY_ID, QUICK_CHECK_QUESTIONS, QUICK_CHECK_TITLE, PRIOR_KEY,
+  PROGRAM_VIDEO_TITLE, WELCOME_VIDEO, WELCOME_MINUTES, VIDEO_PRIOR_KEY,
   planProgramVideoFirst, planRollback, type CardState, type CardUpdate,
 } from '../week0ProgramVideoFirst';
 
 const OLD_QUESTIONS = [{ question: 'What is generative AI primarily used for?', options: ['a', 'b', 'c', 'd'], correct_index: 0 }];
+const YOUTUBE_VIDEO = { url: 'https://www.youtube.com/watch?v=cCFr2qc5ME8', poster: 'https://i.ytimg.com/vi/cCFr2qc5ME8/hqdefault.jpg', presenter: 'Colaberry School Of Data & AI', duration_seconds: 213 };
+const OLD_TITLE = 'Video: AI Systems Architect Accelerator | Start Your Learning Journey';
 
 function prodCards(): [CardState, CardState, CardState] {
   return [
-    { id: PROGRAM_VIDEO_ID, title: 'Video: AI Systems Architect Accelerator | Start Your Learning Journey', bucket: 'learn', order: 0, metadata: { video: { url: 'https://www.youtube.com/watch?v=cCFr2qc5ME8' } } },
+    { id: PROGRAM_VIDEO_ID, title: OLD_TITLE, bucket: 'learn', order: 0, estimated_time: 4, metadata: { video: YOUTUBE_VIDEO } },
     { id: QUICK_CHECK_ID, title: 'Quick check: AI foundations', bucket: 'pre_class', order: 1, metadata: { assessment: { questions: OLD_QUESTIONS, generated_at: '2026-07-18' }, content: { title: 'Knowledge Check' } } },
     { id: SELF_STUDY_ID, title: 'Self Study', bucket: 'pre_class', order: 2, metadata: { locked: true } },
   ];
@@ -76,6 +81,62 @@ describe('planProgramVideoFirst', () => {
     const drifted = { ...after[1], order: 9 };
     const again = planProgramVideoFirst(after[0], drifted, after[2]);
     expect((again[0].set.metadata as Record<string, Record<string, unknown>>)[PRIOR_KEY].order).toBe(1);
+  });
+});
+
+describe('C118: the avatar welcome video', () => {
+  /** Production as read on 2026-11-09: C112 applied, so the video is already first and the check holds the C112 questions. */
+  function afterC112(): [CardState, CardState, CardState] {
+    const [v, q, s] = prodCards();
+    const c112Questions = [{ question: 'How long is the program?', options: ['6 weeks', '12 weeks', '6 months', '2 years'], correct_index: 1, explanation: 'x', competency: 'program_orientation' }];
+    return [
+      { ...v, bucket: 'pre_class', order: 1, metadata: { video: YOUTUBE_VIDEO, [PRIOR_KEY]: { bucket: 'learn', order: 0 } } },
+      { ...q, order: 2, title: QUICK_CHECK_TITLE, metadata: { assessment: { questions: c112Questions, rewritten_for: 'C112' }, content: { title: QUICK_CHECK_TITLE }, locked: true, [PRIOR_KEY]: { title: 'Quick check: AI foundations', order: 1, assessment: q.metadata.assessment, content: q.metadata.content, locked: null } } },
+      { ...s, order: 3, metadata: { locked: true, [PRIOR_KEY]: { order: 2 } } },
+    ];
+  }
+
+  it('plays the self-hosted video with its title and minutes, and saves the YouTube video it replaces', () => {
+    const cards = afterC112();
+    const after = applyPlan(cards, planProgramVideoFirst(...cards));
+    expect(after[0]).toMatchObject({ title: PROGRAM_VIDEO_TITLE, estimated_time: WELCOME_MINUTES, bucket: 'pre_class', order: 1 });
+    expect(after[0].metadata.video).toEqual(WELCOME_VIDEO);
+    expect(after[0].metadata[VIDEO_PRIOR_KEY]).toEqual({ video: YOUTUBE_VIDEO, title: OLD_TITLE, estimated_time: 4 });
+    expect(after[0].metadata[PRIOR_KEY]).toEqual({ bucket: 'learn', order: 0 }); // the C112 save is untouched
+  });
+
+  it('from production, changes only the video card and the Quick check, then nothing on a re-run', () => {
+    const cards = afterC112();
+    const plan = planProgramVideoFirst(...cards);
+    expect(plan.map((u) => u.id)).toEqual([PROGRAM_VIDEO_ID, QUICK_CHECK_ID]);
+    expect(plan[0].set).not.toHaveProperty('bucket');
+    const after = applyPlan(cards, plan);
+    expect((after[1].metadata.assessment as { questions: unknown }).questions).toEqual(QUICK_CHECK_QUESTIONS);
+    expect(planProgramVideoFirst(after[0], after[1], after[2])).toEqual([]);
+  });
+
+  it('keeps the first saved video when a re-run meets a drifted card', () => {
+    const cards = afterC112();
+    const after = applyPlan(cards, planProgramVideoFirst(...cards));
+    const again = planProgramVideoFirst({ ...after[0], estimated_time: 7 }, after[1], after[2]);
+    expect((again[0].set.metadata as Record<string, unknown>)[VIDEO_PRIOR_KEY]).toEqual({ video: YOUTUBE_VIDEO, title: OLD_TITLE, estimated_time: 4 });
+  });
+
+  it('rolls back through both changes to the original cards', () => {
+    const before = prodCards();
+    const after = applyPlan(before, planProgramVideoFirst(...before));
+    expect(applyPlan(after, planRollback(after))).toEqual(before);
+  });
+
+  it('serves the video and poster from the site, not a third party', () => {
+    expect(WELCOME_VIDEO.url).toMatch(/^\/media\/welcome\/[a-z0-9-]+\.mp4$/);
+    expect(WELCOME_VIDEO.poster).toMatch(/^\/media\/welcome\/[a-z0-9-]+\.jpg$/);
+    expect(PROGRAM_VIDEO_TITLE).toMatch(/Start Your Learning Journey/); // the card guard still recognizes it
+  });
+
+  it('points at files that ship in the frontend build', () => {
+    const publicDir = path.resolve(__dirname, '../../../../frontend/public');
+    for (const p of [WELCOME_VIDEO.url, WELCOME_VIDEO.poster]) expect(fs.existsSync(path.join(publicDir, p))).toBe(true);
   });
 });
 

@@ -10,7 +10,6 @@
  */
 
 import Lead from '../models/Lead';
-import ScheduledEmail from '../models/ScheduledEmail';
 import UnsubscribeEvent from '../models/UnsubscribeEvent';
 import { logAiEvent } from './aiEventService';
 import { cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';

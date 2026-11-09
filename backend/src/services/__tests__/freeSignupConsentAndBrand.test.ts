@@ -41,6 +41,7 @@ jest.mock('../welcome/sendPortalWelcome', () => ({
   sendPortalWelcome: (...a: unknown[]) => sendPortalWelcome(...a),
 }));
 jest.mock('../reese/reeseWelcomeService', () => ({ maybeSendWelcomes: jest.fn() }), { virtual: true });
+jest.mock('../maya/mayaWelcomeService', () => ({ maybeSendMayaWelcome: jest.fn() })); // M32: signup also runs Maya's (shadow) welcome
 jest.mock('../explorerGrowth/explorerProfileAtRegistration', () => ({
   bridgeExplorerProfileAtRegistration: jest.fn(),
 }));

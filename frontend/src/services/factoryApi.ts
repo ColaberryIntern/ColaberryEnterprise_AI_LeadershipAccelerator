@@ -703,6 +703,9 @@ export interface GovBuildPlan {
   deliveryProjectId?: string | null;
   /** The builders a story can be assigned to (admin workspace only; empty before approval). */
   assignableBuilders?: GovAssignableBuilder[];
+  /** True once an intern is assigned and the build is materialized into a student project (ready_to_assign →
+   *  in_build). The Qualification stepper hands step 6 to the Proposal Studio when this is true. Optional (older backends). */
+  materialized?: boolean;
 }
 
 /** A procurement code detected in the ZIP, tagged with its code SYSTEM (never assume NAICS). */

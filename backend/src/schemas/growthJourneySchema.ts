@@ -115,6 +115,8 @@ export const handoffsQuerySchema = z.object({
   owner_queue: z.enum(HANDOFF_OWNER_QUEUES).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   offset: z.coerce.number().int().min(0).default(0),
+  /** M35: `queue` (urgent, expected value, oldest) or `readiness` (the Sales Readiness Score, highest first). */
+  order: z.enum(['queue', 'readiness']).default('queue'),
 });
 
 export const handoffAcceptBodySchema = z.object({}).strict();

@@ -13,6 +13,10 @@ import {
 } from '../schemas/growthJourneySchema';
 import { acceptHandoff, dispositionHandoff, HandoffTransitionError, releaseHandoff, type HumanActor } from '../services/growthJourney/handoffs/dispositionService';
 import { accessDenied, badRequest, logReadFailure, scopedContext } from './growthJourneyController';
+import { adminAllowedSections } from '../middlewares/authMiddleware';
+import {
+  profileScorer, READINESS_WINDOW, scoreRows, sortByReadiness, type ReadinessRow,
+} from '../services/growthJourney/handoffs/handoffReadiness';
 
 /**
  * The human's handoff queue and their three moves (Phase 4, T405).
@@ -71,6 +75,31 @@ function detail(row: GrowthJourneyHandoff): { handoff: HandoffView; packet: Reco
   return { handoff: handoffView(row), packet: row.evidence };
 }
 
+/**
+ * M35: the same queue, ordered by the Sales Readiness Score (services/growthJourney/handoffs/handoffReadiness.ts), scored
+ * with the CALLER's sections and visibility so it shows nothing their person profile would not. Reads at most
+ * READINESS_WINDOW rows in queue order, scores them, sorts, then pages. Each row appears once, with `readiness` beside it.
+ */
+async function listByReadiness(req: Request, where: Record<string, unknown>, limit: number, offset: number) {
+  const { rows, count } = await GrowthJourneyHandoff.findAndCountAll({
+    where, attributes: [...HANDOFF_LIST_ATTRIBUTES], order: [...HANDOFF_QUEUE_ORDER], limit: READINESS_WINDOW,
+  });
+  const admin = req.admin!;
+  // Lazy: the mentor-scope service loads the model graph, which the queue's default order never needs.
+  const { visibleEnrollmentIds } = await import('../services/career/careerMentorScopeService');
+  const scorer = profileScorer({
+    sections: adminAllowedSections(admin),
+    visibleEnrollmentIds: await visibleEnrollmentIds({
+      sub: admin.sub, email: admin.email, role: admin.role, mgmt_role: admin.mgmt_role ?? null,
+      enrollmentId: (admin as unknown as { enrollment_id?: string }).enrollment_id ?? null,
+    }),
+  });
+  const plain = rows.map((r) => (typeof r.get === 'function' ? r.get({ plain: true }) : r) as unknown as ReadinessRow & Record<string, unknown>);
+  const scores = await scoreRows(plain, scorer);
+  const ranked = sortByReadiness(plain, scores).slice(offset, offset + limit).map((r) => ({ ...r, readiness: scores.get(r.id) ?? null }));
+  return { rows: ranked, total: count, limit, offset, order: 'readiness' as const, readiness_window: READINESS_WINDOW };
+}
+
 /** GET /handoffs - the open queue by default, brand-scoped, ranked. */
 export async function listHandoffsHandler(req: Request, res: Response): Promise<void> {
   const query = handoffsQuerySchema.safeParse(req.query);
@@ -87,6 +116,10 @@ export async function listHandoffsHandler(req: Request, res: Response): Promise<
       ...(status === 'all' ? {} : status === 'open' ? { status: [...HANDOFF_OPEN_STATUSES] } : { status }),
       ...(query.data.owner_queue ? { owner_queue: query.data.owner_queue } : {}),
     };
+    if (query.data.order === 'readiness') {
+      res.json({ ...(await listByReadiness(req, where, query.data.limit, query.data.offset)), status, owner_queue: query.data.owner_queue ?? null });
+      return;
+    }
     const { rows, count } = await GrowthJourneyHandoff.findAndCountAll({
       where,
       attributes: [...HANDOFF_LIST_ATTRIBUTES],
@@ -94,7 +127,7 @@ export async function listHandoffsHandler(req: Request, res: Response): Promise<
       limit: query.data.limit,
       offset: query.data.offset,
     });
-    res.json({ rows, total: count, limit: query.data.limit, offset: query.data.offset, status, owner_queue: query.data.owner_queue ?? null });
+    res.json({ rows, total: count, limit: query.data.limit, offset: query.data.offset, status, owner_queue: query.data.owner_queue ?? null, order: 'queue' });
   } catch (err) {
     if (err instanceof TenantAccessError) return accessDenied(req, res, err, 'handoff_read_refused');
     const errorClass = logReadFailure(req, err, 'handoff_read_failed');

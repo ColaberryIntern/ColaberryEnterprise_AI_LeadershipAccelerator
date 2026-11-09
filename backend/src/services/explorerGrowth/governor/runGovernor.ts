@@ -12,6 +12,7 @@ import { redactForLogs } from '../../../utils/piiRedaction';
 import { resolveAllForCandidate } from '../content/resolveContentAssets';
 import { isFreePreviewTier } from '../../access/contentEntitlement';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
+import { isHumanOwned } from './humanOwnership';
 
 /**
  * Explorer Growth OS — Governor batch runner. Plan §9; EPIC 4 T005.
@@ -120,7 +121,7 @@ async function runOne(
     email: profile.email_normalized ?? null,
   });
 
-  const history = await contactHistory(enrollmentId, asOf);
+  const [history, humanOwned] = await Promise.all([contactHistory(enrollmentId, asOf), isHumanOwned(enrollmentId)]);
 
   const ctx: GovernorContext = {
     enrollment_id: enrollmentId,
@@ -154,6 +155,7 @@ async function runOne(
       consentRevoked: false,
       killSwitch: false,
       campaignInactive: false,
+      humanOwned, // M35 / M5: an accepted admissions handoff pauses the AI for this learner
     },
     asOf,
   };

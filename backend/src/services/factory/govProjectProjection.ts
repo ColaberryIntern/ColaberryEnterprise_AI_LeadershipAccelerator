@@ -123,6 +123,14 @@ export interface StudentGovProjectView {
   agency: string | null;
   /** Detected key-date lines (public) — the frontend's govDeadline helper turns these into the close countdown. */
   keyDates: Array<{ date: string | null; text: string | null }>;
+  /** Cockpit: the AUTHORITATIVE submission close date for the Studio bar's countdown — the qualification's
+   *  source-snapshot closeAt/closeDate, falling back to the dossier key dates (resolveGovCloseDate). Null when none
+   *  resolves. Carries no identity. Optional so pre-existing view literals still compile. */
+  closeDate?: string | null;
+  /** Cockpit: the opportunity's 0-100 priority score (urgency), from the qualification's source snapshot. The Studio
+   *  bar shows it next to the countdown so the deadline + urgency survive the move into the Studio. Null when not
+   *  captured. Optional so pre-existing view literals still compile. */
+  priorityScore?: number | null;
   /** The build-repo commit feed: every matched push for this project, newest first (public commit facts, no identity). */
   commitFeed: CommitFeedItem[];
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
@@ -236,6 +244,8 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     // commit feed (from the project's github_push evidence).
     agency: null,
     keyDates: [],
+    closeDate: null, // filled by the async loader from the qualification's authoritative close date
+    priorityScore: null, // filled by the async loader from the qualification's source snapshot
     commitFeed: [],
     buildSummary: null, // filled by the async loader from the materialized SBP build
     proposalDocuments: [], // filled by the async loader from the derived + synced documents
@@ -394,8 +404,19 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       const facts = readGovProvenanceFacts(qual.requirements_json);
       view.agency = facts.agency;
       view.keyDates = facts.keyDates;
+      // The AUTHORITATIVE deadline + urgency the pursuit carried, so they survive the move into the Studio (the
+      // discovery feed's "Closes … · N days left" + Priority). Read the source snapshot's closeAt/closeDate (what the
+      // feed uses) — the SAME authoritative branch as govPipeline.resolveGovCloseDate; the ZIP-only dossier fallback is
+      // left to the frontend (ContractBar already falls back to dossierDeadlineIso(view.keyDates)), so the student
+      // projection stays decoupled from the pipeline module. priorityScore is the 0-100 urgency; null when uncaptured.
+      const snap: any = (qual as { source_snapshot?: any }).source_snapshot || null;
+      const op: any = snap && snap.opportunity ? snap.opportunity : null;
+      const closeAt = (snap && snap.closeAt) || (op && op.closeAt);
+      const closeDate = (snap && snap.closeDate) || (op && op.closeDate);
+      view.closeDate = closeAt ? String(closeAt) : (closeDate ? String(closeDate) : null);
+      view.priorityScore = (snap && (snap.priorityScore ?? (op && op.priorityScore))) ?? null;
     }
-  } catch { /* additive; agency/keyDates stay at their safe defaults */ }
+  } catch { /* additive; agency/keyDates/closeDate/priorityScore stay at their safe defaults */ }
 
   // v2 Build view: the SBP build summary (releases -> stories + progress) for the linked build project. Best-effort;
   // it also lazily publishes the plan so the commit->story loop runs. Null when no build is linked yet.
