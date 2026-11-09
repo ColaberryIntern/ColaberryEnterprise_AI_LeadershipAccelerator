@@ -161,6 +161,22 @@ function projectWorkflow(content: CaseStudySnapshotContent, section: CaseStudyVi
   };
 }
 
+/**
+ * Whether the story's own surface list admits this page.
+ *
+ * HIRE READS ENTERPRISE'S PERMISSION. Hire shipped (2026-11-06) after every visual story
+ * on file had been authored with an explicit list, so no stored story names `hire`, and
+ * every hire case study rendered with no workflow drawing and no charts (Ali, 2026-11-08:
+ * "no video no chart"). A hire page is the same record re-framed around the person who
+ * built it, so a story its author approved for the general Enterprise reader is approved
+ * for it; one authored for hire directly still works. Every other surface keeps its own
+ * list, so this widens nothing for them.
+ */
+export function storyAllowedOn(surfaces: readonly string[], surfaceKey: CaseStudySurfaceKey): boolean {
+  if (surfaces.includes(surfaceKey)) return true;
+  return surfaceKey === 'hire' && surfaces.includes('enterprise');
+}
+
 export function projectVisualStory(
   content: CaseStudySnapshotContent,
   surfaceKey: CaseStudySurfaceKey,
@@ -170,7 +186,7 @@ export function projectVisualStory(
   const result = validateVisualStory(raw, visualStoryContextFromContent(content, evidenceIdsCitedByContent(content)));
   if (!result.ok) return null;
   const section = result.section;
-  if (!section.enabled || !section.surfaces.includes(surfaceKey)) return null;
+  if (!section.enabled || !storyAllowedOn(section.surfaces, surfaceKey)) return null;
 
   const outcomeCards: PublicCaseStudyMetric[] = [];
   const ordered = [...section.outcomeCards].sort((a, b) => Number(b.emphasis === true) - Number(a.emphasis === true));

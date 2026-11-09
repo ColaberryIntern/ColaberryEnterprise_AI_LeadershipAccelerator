@@ -19,12 +19,27 @@
     : Promise.resolve({ ok: false, status: 404, body: null });
   window.HireCaseStudyRequest = request;
 
+  /* A role-only record linked to a listed person: draw at once, then name the builder from
+     their public portfolio when it answers. A slow or failed portfolio leaves the page as
+     drawn - the record is never held for it. */
+  function upgradeBuilder(body) {
+    if (S.builderOf(body) || typeof body.builderPortfolioSlug !== 'string') return;
+    C.fetchJson(api + '/api/public/portfolios/' + encodeURIComponent(body.builderPortfolioSlug) + '?surface=hire', 10000)
+      .then(function (res) {
+        var person = S.personFromPortfolio(res);
+        if (!person) return;
+        doc.getElementById('hire-hero-host').innerHTML = S.hero(body, person);
+        doc.getElementById('hire-card-host').innerHTML = S.hireCard(body, person);
+      });
+  }
+
   function render(res) {
     if (!res.ok || !S.isPayload(res.body)) return false;
     var body = res.body;
     doc.getElementById('hire-hero-host').innerHTML = S.hero(body);
     doc.getElementById('outcomes-host').innerHTML = S.outcomes(body);
     doc.getElementById('hire-card-host').innerHTML = S.hireCard(body);
+    upgradeBuilder(body);
     doc.getElementById('case-missing').hidden = true;
     doc.getElementById('case-frame').hidden = false;
     var robots = doc.getElementById('robots');

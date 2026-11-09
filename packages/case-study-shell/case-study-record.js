@@ -625,7 +625,16 @@
     },
 
     repositories: function (c) {
-      return section('repositories', 'Repositories', [
+      /* A PRIVATE SOURCE IS STILL A SOURCE. Every Cora record is built from one private
+         repository, so `repositories` crossed empty and this band vanished, leaving a
+         reader no way to tell "no source" from "source not public" (hire audit,
+         2026-11-08). The count is the projection's; no name or URL is ever printed. */
+      var priv = Number(c.privateRepositoryCount) || 0;
+      var privNote = priv > 0
+        ? el('p', 'cs-prose cs-repo-private', (priv === 1 ? '1 private repository' : priv + ' private repositories')
+          + '. The source is not public; this record was assembled from it.')
+        : null;
+      return section('repositories', 'Repositories and provenance', [
         list(c.repositories, function (r) {
           var li = el('li', 'cs-repo');
           var a = document.createElement('a');
@@ -637,6 +646,7 @@
           if (r.lastCommitDate) li.appendChild(el('span', 'cs-repo-date', r.lastCommitDate.slice(0, 10)));
           return li;
         }, 'cs-repos'),
+        privNote,
       ]);
     },
   };
