@@ -224,11 +224,34 @@ if [ "$DEPLOY_MODE" = "registry" ]; then
   log "registry mode: verifying published images match $HEAD_SHA"
   for svc in "${SERVICES[@]}"; do
     IMAGE="${REGISTRY_PREFIX}${svc}"
-    D_MOVING="$(docker manifest inspect "${IMAGE}:main" 2>/dev/null | sha256sum | awk '{print $1}')"
-    D_PINNED="$(docker manifest inspect "${IMAGE}:sha-${HEAD_SHA}" 2>/dev/null | sha256sum | awk '{print $1}')"
-    if [ -z "$D_PINNED" ]; then
-      fail "no image ${IMAGE}:sha-${HEAD_SHA}. CI has not published this commit yet — wait for the Build images workflow, or use the default build mode."
+
+    # -----------------------------------------------------------------------
+    # Hash the manifest only AFTER proving there is one.
+    #
+    # This used to pipe `docker manifest inspect` straight into sha256sum and
+    # test the result with `-z`. sha256sum always emits a hash, so an absent
+    # image did not produce an empty string, it produced
+    # e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 — the
+    # sha256 of empty input. The `-z` guard therefore could never fire, and
+    # when BOTH tags were missing the two empty-input hashes compared EQUAL,
+    # so the equality check passed too and the script reported
+    # "  <svc>: :main matches sha-<sha>" for an image that does not exist.
+    # Observed 9 Nov 2026 on accelerator-frontend: both reads returned
+    # e3b0c442... and the verification announced a match. The guard graded its
+    # own instrument instead of the registry.
+    # -----------------------------------------------------------------------
+    M_MOVING="$(docker manifest inspect "${IMAGE}:main" 2>/dev/null)"
+    M_PINNED="$(docker manifest inspect "${IMAGE}:sha-${HEAD_SHA}" 2>/dev/null)"
+
+    if [ -z "$M_PINNED" ]; then
+      fail "no image ${IMAGE}:sha-${HEAD_SHA}. CI has not published this commit yet — wait for the Build images workflow, or use DEPLOY_MODE=build."
     fi
+    if [ -z "$M_MOVING" ]; then
+      fail "no image ${IMAGE}:main. The moving tag is missing, so it cannot be compared against sha-${HEAD_SHA}."
+    fi
+
+    D_MOVING="$(printf '%s' "$M_MOVING" | sha256sum | awk '{print $1}')"
+    D_PINNED="$(printf '%s' "$M_PINNED" | sha256sum | awk '{print $1}')"
     if [ "$D_MOVING" != "$D_PINNED" ]; then
       fail "${IMAGE}:main does not match sha-${HEAD_SHA}. Pulling :main would deploy a different commit."
     fi
