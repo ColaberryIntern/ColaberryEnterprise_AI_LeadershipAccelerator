@@ -1895,14 +1895,25 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* Proposal — its OWN step/page (step 6): Build above is the software product we would deliver; this is the
               bid RESPONSE we submit. Unlocked after approval, same as Build. */}
           <GovTabPanel active={activeStep === 'proposal'}>
-          {materialized && (
-            <div className="alert alert-success d-flex flex-wrap align-items-center gap-2 py-2 px-3 small" role="status">
-              <i className="ri-check-double-line" aria-hidden="true" />
-              <span>Monitored project created under the intern and the build is authorized. This page is the bid RESPONSE to write and submit, separate from the software build.</span>
-              <a className="ms-auto fw-semibold text-decoration-none" href={`/admin/projects?interns=1&project=${materialized.projectId}`}>Open the intern's project board &rarr;</a>
-            </div>
-          )}
-          {(
+          {ws.build?.deliveryProjectId ? (
+            /* Takeover: once the pursuit is approved into a delivery project (intern assigned / build materialized),
+               the mature Proposal Studio OWNS the proposal — it supersedes the legacy response checklist for this
+               step. The other qualification steps stay visible in the rail above. Interns land in the Studio from
+               their portal; management opens it from here. The two were redundant; the Studio is the single home. */
+            <SectionCard title="Proposal Studio" icon="draft-line"
+              subtitle="This bid's proposal is written, checked, gated, and packaged in the Proposal Studio — the mature process that supersedes the old response checklist. The deadline, urgency, documents, review gates, and submission package all live there.">
+              {materialized && (
+                <div className="alert alert-success d-flex flex-wrap align-items-center gap-2 py-2 px-3 small mb-3" role="status">
+                  <i className="ri-check-double-line" aria-hidden="true" />
+                  <span>Monitored project created under the intern and the build is authorized.</span>
+                </div>
+              )}
+              <p className="small text-secondary mb-3">Interns and management work the proposal in the Studio from here on — this step is now a doorway into it, not a second place to write the bid response.</p>
+              <a className="btn btn-primary" href={`/admin/internship/gov-contract/${ws.build!.deliveryProjectId}`}>
+                <i className="ri-artboard-2-line me-1" aria-hidden="true" />Open the Proposal Studio &rarr;
+              </a>
+            </SectionCard>
+          ) : (
             <SectionCard title="What we submit" icon="draft-line"
               subtitle="The bid response, grouped into the submittal categories a government proposal is organized into (what you actually hand in) instead of one flat list. Draft each response, then take it through review → approval; a material amendment reopens an affected answer.">
               {(ws.responseSlots ?? []).length === 0 ? (

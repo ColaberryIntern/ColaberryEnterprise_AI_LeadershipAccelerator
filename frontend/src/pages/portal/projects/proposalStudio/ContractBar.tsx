@@ -1,6 +1,6 @@
 import React from 'react';
 import type { StudentGovProjectView } from '../../../../services/govProjectPortalApi';
-import { parseDeadline, countdownTo, formatCountdown, dossierDeadlineIso } from '../../../admin/govDeadline';
+import { parseDeadline, countdownTo, formatCountdown, dossierDeadlineIso, deadlineTone } from '../../../admin/govDeadline';
 import { pursuitStageLabel } from './buildHelpers';
 
 /**
@@ -11,9 +11,14 @@ import { pursuitStageLabel } from './buildHelpers';
 export default function ContractBar({ view, onStartTour, onNeeds }: { view: StudentGovProjectView; onStartTour?: () => void; onNeeds?: () => void }): React.ReactElement {
   const readiness = view.proposalReadiness?.pct ?? 0;
   const buildPct = view.buildSummary?.rollup.pct ?? view.overallProgress?.pct ?? 0;
-  const closeIso = dossierDeadlineIso(view.keyDates ?? []);
+  // Prefer the AUTHORITATIVE close date carried from the opportunity (so the deadline survives the move into the
+  // Studio); fall back to the AI-extracted dossier key dates for a ZIP-only pursuit with no OP close.
+  const closeIso = view.closeDate ?? dossierDeadlineIso(view.keyDates ?? []);
   const parsed = parseDeadline(closeIso);
-  const countdown = parsed ? formatCountdown(countdownTo(parsed.ms, Date.now()), parsed.hasTime) : null;
+  const cd = parsed ? countdownTo(parsed.ms, Date.now()) : null;
+  const countdown = parsed && cd ? formatCountdown(cd, parsed.hasTime) : null;
+  // Urgency colour for the countdown (past/≤3d → bad, ≤7d → warn, else ok), reusing the shared tag tones.
+  const toneClass = cd ? ({ danger: 'bad', warning: 'warn', success: 'ok', secondary: '' } as const)[deadlineTone(cd)] : '';
   const needCount = view.needsCount ?? 0;
   // v4: the Needs chip is ALWAYS shown. Severity drives the fill colour.
   const severity = (view.fatalNeedsCount ?? 0) > 0 ? 'fatal' : needCount > 0 ? 'score' : 'clear';
@@ -33,7 +38,9 @@ export default function ContractBar({ view, onStartTour, onNeeds }: { view: Stud
           <span className="gps-chip gps-meter" data-tour="ready" data-testid="bar-ready">Proposal ready <span className="gps-m"><span style={{ width: `${readiness}%` }} /></span><b className="gps-num">{readiness}%</b> / 95%</span>
           <button type="button" data-tour="needs" data-testid="bar-needs" data-count={needCount} data-severity={severity} className={`gps-chip gps-chip-btn gps-chip-${needClass}`} onClick={onNeeds}>Needs you <b className="gps-num">{needCount}</b></button>
           {onStartTour && <button type="button" data-testid="bar-tour" className="gps-chip gps-chip-btn" onClick={onStartTour}>Take the tour</button>}
-          {closeIso && <span className="gps-chip">Closes <b className="gps-num">{closeIso}</b>{countdown ? <> &middot; <b className="gps-num">{countdown}</b></> : null}</span>}
+          {view.priorityScore != null && <span className="gps-chip" data-testid="bar-priority">Priority <b className="gps-num">{view.priorityScore}</b></span>}
+          {closeIso && <span className="gps-chip" data-testid="bar-closes">Closes <b className="gps-num">{closeIso}</b></span>}
+          {countdown && <span className={`gps-tag ${toneClass}`.trim()} data-testid="bar-countdown">{countdown}</span>}
         </div>
       </div>
     </header>

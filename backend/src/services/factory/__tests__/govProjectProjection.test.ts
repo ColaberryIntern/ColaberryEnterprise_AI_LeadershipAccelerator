@@ -217,6 +217,25 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(JSON.stringify(v)).not.toContain('phishing@irs.gov'); // dossier contacts are NOT carried to the student
   });
 
+  it('COCKPIT: carries the AUTHORITATIVE close date + priority (urgency) from the qualification source snapshot', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gqFindOne.mockResolvedValue({
+      requirements_json: { provenance: { agency: 'City of Plano' }, dossier: { keyDates: [{ date: '2027-01-01', text: 'Questions due' }] } },
+      source_snapshot: { closeAt: '2026-11-30T17:00:00Z', priorityScore: 70 },
+    });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.closeDate).toBe('2026-11-30T17:00:00Z'); // the OP close wins over the dossier "questions" line
+    expect(v!.priorityScore).toBe(70);                 // the urgency survives the move into the Studio
+  });
+
+  it('COCKPIT: closeDate/priorityScore default to null when the qualification carries no snapshot', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gqFindOne.mockResolvedValue({ requirements_json: { provenance: { agency: 'X' }, dossier: {} } });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.closeDate).toBeNull();
+    expect(v!.priorityScore).toBeNull();
+  });
+
   it('P2: surfaces the blueprint + blueprint-derived doc fields, and still drops the pricing document for a non-verifier', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
     gpbFindOne.mockResolvedValue({ version: 1, blueprint_json: {
