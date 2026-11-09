@@ -11,6 +11,18 @@ jest.mock('../hypothesisHealthService', () => ({
   getHypothesisHealth: (...a: unknown[]) => hyp.getHypothesisHealth(...a),
 }));
 
+/**
+ * The checkout section reads the database. Only its reader is mocked, so the real section
+ * builder still runs here and the report is assembled from the shape production produces.
+ * Mocked at all because an unclosed Sequelize instance in a suite leaks handles and
+ * force-exits a jest worker.
+ */
+const checkout = { getCheckoutConversionSnapshot: jest.fn() };
+jest.mock('../checkoutConversionSection', () => ({
+  ...jest.requireActual('../checkoutConversionSection'),
+  getCheckoutConversionSnapshot: (...a: unknown[]) => checkout.getCheckoutConversionSnapshot(...a),
+}));
+
 import {
   buildWeeklyReport,
   assertActivityNeverLeads,
@@ -65,6 +77,10 @@ function mock(counts: Record<string, number | null>, dying = 5, caveats: string[
 beforeEach(() => {
   funnel.getFunnelSnapshot.mockReset();
   hyp.getHypothesisHealth.mockReset();
+  // Default: nothing to report from checkout, so these cases keep testing what they tested
+  // before the section existed. Cases that care set their own.
+  checkout.getCheckoutConversionSnapshot.mockReset();
+  checkout.getCheckoutConversionSnapshot.mockResolvedValue({ funnel: null, attempts: 0, error: null });
 });
 
 describe('an empty week says it was empty', () => {

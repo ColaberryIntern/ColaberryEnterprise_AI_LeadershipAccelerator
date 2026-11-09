@@ -21,6 +21,9 @@
  */
 import { getFunnelSnapshot } from './funnelStageService';
 import { getHypothesisHealth } from './hypothesisHealthService';
+import {
+  buildCheckoutSection, getCheckoutConversionSnapshot, CheckoutConversionSnapshot,
+} from './checkoutConversionSection';
 
 export interface ReportSection {
   key: string;
@@ -43,8 +46,16 @@ export interface WeeklyReport {
 
 const n = (v: number | null): string => (v === null ? 'not measurable' : String(v));
 
-/** The outcome sections, in the order the ticket lists them. */
-async function outcomeSections(): Promise<{ sections: ReportSection[]; moved: number }> {
+/**
+ * The outcome sections, in the order the ticket lists them.
+ *
+ * `checkout` is passed in rather than fetched here so that `buildWeeklyReport` can also carry
+ * its caveats onto the report. A caveat computed in one place and dropped in another is how a
+ * rate ends up quoted as settled when it is not.
+ */
+async function outcomeSections(
+  checkout: CheckoutConversionSnapshot,
+): Promise<{ sections: ReportSection[]; moved: number }> {
   const funnel = await getFunnelSnapshot();
   const health = await getHypothesisHealth();
 
@@ -113,7 +124,16 @@ async function outcomeSections(): Promise<{ sections: ReportSection[]; moved: nu
     empty: dying.length === 0,
   };
 
-  return { sections: [pipeline, meetings, revenue, pilots, hypotheses], moved };
+  // Self-paced checkout sits beside contracts because it is the same question asked of the
+  // other product: did anybody actually buy. It counts as movement on exactly the condition
+  // its own section calls non-empty, so the headline and the section can never disagree.
+  const { section: checkoutSection } = buildCheckoutSection(checkout);
+  if (!checkoutSection.empty) moved += 1;
+
+  return {
+    sections: [pipeline, meetings, revenue, checkoutSection, pilots, hypotheses],
+    moved,
+  };
 }
 
 /** Decisions waiting on a person. A report nobody must act on is a newsletter. */
@@ -157,7 +177,8 @@ function activitySection(sends: number | null, engaged: number | null): ReportSe
 /** Build the week's report. Reads the funnel; takes no hand-entered figure. */
 export async function buildWeeklyReport(now: Date = new Date()): Promise<WeeklyReport> {
   const funnel = await getFunnelSnapshot();
-  const { sections: outcomes, moved } = await outcomeSections();
+  const checkout = await getCheckoutConversionSnapshot(now);
+  const { sections: outcomes, moved } = await outcomeSections(checkout);
   const health = await getHypothesisHealth(now);
 
   const dying = health.hypotheses.filter(
@@ -176,7 +197,7 @@ export async function buildWeeklyReport(now: Date = new Date()): Promise<WeeklyR
     asOf: now.toISOString(),
     headline,
     sections: [...outcomes, decisionSection(dying), activitySection(contacted, engaged)],
-    caveats: funnel.caveats,
+    caveats: [...funnel.caveats, ...buildCheckoutSection(checkout).caveats],
   };
 }
 
