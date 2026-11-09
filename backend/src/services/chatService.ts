@@ -178,8 +178,11 @@ export async function startConversation(params: {
   let visitorType = 'new';
   let isReturning = false;
   try {
-    memory = await loadMemory(visitorUUID);
-    visitorType = await classifyVisitorType(visitorUUID);
+    // `leadId` is computed two lines above from the visitor row and was already being passed
+    // to buildMayaSystemPrompt; it simply was not passed here, so the memory this chat used
+    // was keyed on the browser while the prompt around it knew the person.
+    memory = await loadMemory(visitorUUID, leadId);
+    visitorType = await classifyVisitorType(visitorUUID, leadId);
     isReturning = memory.conversation_count > 0;
 
     if (memory.visitor_type !== visitorType) {
