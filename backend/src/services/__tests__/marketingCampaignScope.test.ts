@@ -19,6 +19,7 @@ jest.mock('../governanceService', () => ({ logAgentExecution: jest.fn().mockReso
 import { ACTIVITY_DATE_COLUMNS, buildDateFilter, getCampaignMetrics, totalCampaignMetrics } from '../marketingAnalyticsService';
 import Visitor from '../../models/Visitor';
 import InteractionOutcome from '../../models/InteractionOutcome';
+import ScheduledEmail from '../../models/ScheduledEmail';
 
 function lastSql(): { sql: string; replacements: Record<string, unknown> } {
   const [sql, opts] = mockQuery.mock.calls.at(-1) as [string, { replacements: Record<string, unknown> }];
@@ -51,6 +52,10 @@ describe('the date range reaches BOTH activity sources', () => {
     // pinned the same wrong string. This assertion goes to the model definition instead.
     expect(Object.keys(Visitor.getAttributes())).toContain(ACTIVITY_DATE_COLUMNS.visitors);
     expect(Object.keys(InteractionOutcome.getAttributes())).toContain(ACTIVITY_DATE_COLUMNS.interaction_outcomes);
+    // scheduled_emails joined this map with the send-and-blocked counters, and it goes to the
+    // model for the same reason the other two do.
+    expect(Object.keys(ScheduledEmail.getAttributes())).toContain(ACTIVITY_DATE_COLUMNS.scheduled_emails);
+    expect(Object.keys(ScheduledEmail.getAttributes())).not.toContain('createdAt');
     // And neither model is a Sequelize-timestamped one, so there is no camelCase alias to fall back on.
     expect(Object.keys(Visitor.getAttributes())).not.toContain('createdAt');
     expect(Object.keys(InteractionOutcome.getAttributes())).not.toContain('createdAt');

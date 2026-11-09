@@ -1,6 +1,7 @@
 import { StrategyPrepInput } from '../schemas/strategyPrepSchema';
 import { FollowUpSequence, Campaign, ScheduledEmail, CampaignLead } from '../models';
 import { enrollLeadInSequence } from './sequenceService';
+import { cancelScheduledMessage, cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';
 import { env } from '../config/env';
 
 const PREP_NUDGE_SEQUENCE_NAME = 'Strategy Call Readiness';
@@ -69,9 +70,12 @@ async function cancelCampaignActionsForLead(leadId: number, sequenceName: string
   const sequence = await FollowUpSequence.findOne({ where: { name: sequenceName } });
   if (!sequence) return 0;
 
-  const [count] = await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, sequence_id: sequence.id, status: 'pending' } }
+  // The reason was previously recorded only on campaign_leads.outcome a few lines below, so
+  // the message row itself said nothing about why it stopped. Both are written now.
+  const count = await cancelScheduledMessagesWhere(
+    { lead_id: leadId, sequence_id: sequence.id },
+    'superseded_by_strategy_prep',
+    { statuses: ['pending'] },
   );
 
   if (count > 0) {
@@ -152,9 +156,12 @@ export async function enrollInPrepNudge(
       if (minutesBefore !== undefined && scheduledAt) {
         const countdownTime = new Date(scheduledAt.getTime() - minutesBefore * 60 * 1000);
         if (countdownTime <= now) {
-          // This action's window has already passed — cancel it
-          updates.status = 'cancelled';
+          // This action's window has already passed — cancel it. The cancel is deferred to
+          // the reason-carrying helper below rather than set here, so the row cannot reach
+          // 'cancelled' without a reason. `scheduled_for` is still written by this update;
+          // the helper then moves the status, leaving the same end state as before.
           updates.scheduled_for = countdownTime;
+          updates.__cancelWindowPassed = true;
           cancelled++;
         } else {
           updates.scheduled_for = countdownTime;
@@ -164,7 +171,12 @@ export async function enrollInPrepNudge(
         scheduled++;
       }
 
+      const cancelWindowPassed = Boolean((updates as any).__cancelWindowPassed);
+      delete (updates as any).__cancelWindowPassed;
       await action.update(updates as any);
+      if (cancelWindowPassed) {
+        await cancelScheduledMessage(action, 'prep_window_passed');
+      }
     }
 
     // Mark step 0 (confirmation email) as sent — the actual email is sent by calendarController
@@ -229,15 +241,10 @@ export async function cancelPrepNudge(leadId: number): Promise<number> {
   const result = await findSequenceAndCampaign(PREP_NUDGE_SEQUENCE_NAME);
   if (!result) return 0;
 
-  const [count] = await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    {
-      where: {
-        lead_id: leadId,
-        sequence_id: result.sequence.id,
-        status: 'pending',
-      },
-    }
+  const count = await cancelScheduledMessagesWhere(
+    { lead_id: leadId, sequence_id: result.sequence.id },
+    'prep_nudge_cancelled',
+    { statuses: ['pending'] },
   );
 
   if (count > 0) {

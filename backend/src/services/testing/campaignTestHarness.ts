@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { Campaign, CampaignLead, ScheduledEmail, CampaignTestRun, CampaignTestStep } from '../../models';
 import { createTestLead } from './testLeadGenerator';
+import { cancelScheduledMessagesWhere } from '../scheduling/cancelScheduledMessage';
 import { getTestOverrides } from '../settingsService';
 import { generateMessage } from '../aiMessageService';
 import { sendSmsViaGhl } from '../ghlService';
@@ -272,14 +273,10 @@ export async function runCampaignTest(
   // Scoped to this campaign AND any orphaned actions (campaign_id IS NULL).
   if (testLead) {
     try {
-      const [cancelledCount] = await ScheduledEmail.update(
-        { status: 'cancelled' } as any,
-        {
-          where: {
-            lead_id: testLead.id,
-            status: { [Op.in]: ['pending', 'processing', 'paused'] },
-          },
-        },
+      const cancelledCount = await cancelScheduledMessagesWhere(
+        { lead_id: testLead.id },
+        'test_harness_cleanup',
+        { statuses: ['pending', 'processing', 'paused'] },
       );
       if (cancelledCount > 0) {
         console.log(`[TestHarness] Cancelled ${cancelledCount} pending test action(s) for test lead ${testLead.id}`);

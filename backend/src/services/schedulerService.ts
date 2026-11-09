@@ -14,6 +14,7 @@ import { generateMessage, buildConversationHistory } from './aiMessageService';
 import { recordActionOutcome } from './interactionService';
 import { computeInsights } from './icpInsightService';
 import { cancelPrepNudge, enrollInNoShowRecovery } from './strategyPrepService';
+import { cancelScheduledMessage } from './scheduling/cancelScheduledMessage';
 import { advancePipelineStage } from './pipelineService';
 import { detectSignalsForRecentSessions } from './behavioralSignalService';
 import { recomputeRecentIntentScores } from './intentScoringService';
@@ -448,10 +449,18 @@ async function processScheduledActions(): Promise<void> {
     if (maxAgeDays > 0) {
       const cutoff = staleCutoff(new Date(), maxAgeDays);
       const [, expiredMeta] = await sequelize.query(
+        // `blocked_reason` is written ALONGSIDE `expired_reason`, and that is the fix rather
+        // than a tidy-up. `expired_reason` is read by nothing: reconcileExecutions.ts:70 and
+        // journeyHealth.ts:163 both key on `blocked_reason`, so every row auto-expired here
+        // recorded a reason and still reported downstream as 'unknown'. These rows were part
+        // of the unexplained population this ticket is about, not an exception to it.
+        // `expired_reason` is kept so anything already reading it keeps working.
         `UPDATE scheduled_emails
             SET status = 'cancelled',
                 metadata = COALESCE(metadata, '{}'::jsonb)
-                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+                  || jsonb_build_object('expired_stale_at', NOW(),
+                                        'expired_reason', :reason,
+                                        'blocked_reason', 'auto_expired_stale')
           WHERE status = 'pending' AND scheduled_for < :cutoff`,
         { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
       );
@@ -597,10 +606,7 @@ async function processScheduledActions(): Promise<void> {
     // Guard: skip actions for non-active campaigns (archived, paused, completed, draft)
     const cachedCampaign = campaignCache[campaignId];
     if (cachedCampaign && cachedCampaign.status !== 'active') {
-      await action.update({
-        status: 'cancelled',
-        metadata: { ...(action.metadata || {}), blocked_reason: `campaign_${cachedCampaign.status}` },
-      } as any);
+      await cancelScheduledMessage(action, `campaign_${cachedCampaign.status}`);
       console.log(`[Scheduler] Cancelled action ${action.id} — campaign ${campaignId} is ${cachedCampaign.status}`);
       continue;
     }
@@ -611,7 +617,7 @@ async function processScheduledActions(): Promise<void> {
         where: { email: action.to_email, payment_status: 'paid' },
       });
       if (paidEnrollment) {
-        await action.update({ status: 'cancelled' } as any);
+        await cancelScheduledMessage(action, 'enrollment_already_paid');
         console.log(`[Scheduler] Cancelled payment reminder ${action.id} — enrollment already paid (${action.to_email})`);
         continue;
       }
@@ -621,7 +627,7 @@ async function processScheduledActions(): Promise<void> {
     if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.metadata?.cohort_start_date) {
       const cohortStart = new Date(action.metadata.cohort_start_date);
       if (new Date() >= cohortStart) {
-        await action.update({ status: 'cancelled' } as any);
+        await cancelScheduledMessage(action, 'cohort_already_started');
         console.log(`[Scheduler] Cancelled payment reminder ${action.id} — cohort already started (${action.metadata.cohort_start_date})`);
         continue;
       }
@@ -673,14 +679,7 @@ async function processScheduledActions(): Promise<void> {
         const isTestDomain = email.endsWith(testDomain);
 
         if (!isTestDomain) {
-          await action.update({
-            status: 'cancelled',
-            metadata: {
-              ...(action.metadata || {}),
-              blocked_reason: 'test_action_non_test_domain',
-              blocked_email: email,
-            },
-          } as any);
+          await cancelScheduledMessage(action, 'test_action_non_test_domain', { blocked_email: email });
           console.error(`[Scheduler] TEST EMAIL BLOCKED — action ${action.id} targeted non-test domain: ${email}`);
           continue;
         }
@@ -703,10 +702,14 @@ async function processScheduledActions(): Promise<void> {
       });
 
       if (!safetyDecision.allowed) {
-        await action.update({
-          status: 'cancelled',
-          metadata: { ...(action.metadata || {}), blocked_reason: safetyDecision.blockedReason },
-        } as any);
+        // The gate composes its own token family (brand_*, lead_*, consent_*, journey_hold:*),
+        // so it is passed through rather than re-derived. A decision that somehow arrives
+        // without a reason is recorded as such explicitly, because an empty string here would
+        // read downstream as 'unknown' and be indistinguishable from the gap this ticket closes.
+        await cancelScheduledMessage(
+          action,
+          (safetyDecision.blockedReason || 'safety_gate_reason_absent') as any
+        );
         console.log(`[Scheduler] BLOCKED action ${action.id}: ${safetyDecision.blockedReason}`);
         continue;
       }

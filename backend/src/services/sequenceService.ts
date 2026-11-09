@@ -3,6 +3,7 @@ import { FollowUpSequence, ScheduledEmail, Lead, Campaign, CampaignLead, Strateg
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import { redactForLogs } from '../utils/piiRedaction';
+import { cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';
 
 /* ------------------------------------------------------------------ */
 /*  Sequence Step Timing Validation                                    */
@@ -270,10 +271,7 @@ export async function deleteSequence(id: string) {
   const seq = await FollowUpSequence.findByPk(id);
   if (!seq) return false;
 
-  await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { sequence_id: id, status: 'pending' } }
-  );
+  await cancelScheduledMessagesWhere({ sequence_id: id }, 'sequence_deleted', { statuses: ['pending'] });
 
   await seq.destroy();
   return true;
@@ -373,9 +371,10 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
 
   // Cancel any existing pending actions for this lead from THIS sequence only
   // (preserves actions from other campaigns the lead may be enrolled in)
-  await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, sequence_id: sequenceId, status: 'pending' } }
+  await cancelScheduledMessagesWhere(
+    { lead_id: leadId, sequence_id: sequenceId },
+    'sequence_reenrolled',
+    { statuses: ['pending'] },
   );
 
   const now = new Date();
@@ -608,11 +607,11 @@ export async function scheduleNextStep(completedAction: any): Promise<any | null
 }
 
 export async function cancelSequenceForLead(leadId: number) {
-  const [count] = await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, status: 'pending' } }
+  return cancelScheduledMessagesWhere(
+    { lead_id: leadId },
+    'sequence_cancelled_for_lead',
+    { statuses: ['pending'] },
   );
-  return count;
 }
 
 export async function getLeadSequenceStatus(leadId: number) {

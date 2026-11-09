@@ -349,8 +349,16 @@ export async function recommitDraft(
 
   return sequelize.transaction(async (t) => {
     const superseded = await sequelize.query<{ id: string }>(
+      // The reason is written here rather than by routing this through
+      // services/scheduling/cancelScheduledMessage, deliberately: that helper is a Sequelize
+      // update and this statement's RETURNING clause inside the transaction is what tells the
+      // caller whether the supersession actually took. Swapping it for the helper would trade
+      // a concurrency guard for consistency of style.
       `UPDATE scheduled_emails
-          SET status = :supersededStatus
+          SET status = :supersededStatus,
+              metadata = COALESCE(metadata, '{}'::jsonb)
+                         || jsonb_build_object('blocked_reason', 'draft_superseded',
+                                               'cancelled_at', NOW())
         WHERE id = CAST(:previousId AS uuid)
           AND status IN (:draftStatus, :rejectedStatus)
         RETURNING id::text AS id`,
