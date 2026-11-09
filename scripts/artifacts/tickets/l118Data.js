@@ -317,13 +317,25 @@ const LEDGER = [
     note: 'Generated with a self-check.',
   },
   {
-    id: 16, title: 'Ram Executive Brief', ticket: 'L11.6', file: null, state: 'NOT_WRITTEN',
-    note: 'Needs DOC 12 for its diagrams. Definition-of-done item 44. Not launch-blocking.',
+    id: 16, title: 'Ram Executive Brief', ticket: 'L11.6',
+    file: 'docs/colaberry-live/DOC_16_RAM_EXECUTIVE_BRIEF.md', state: 'WRITTEN',
+    note: 'Written 2026-11-08. Generated from l116Data.js. Fifteen required explanations '
+      + 'transcribed from the bootstrap and pinned by count. Two of them, costs/vendors and the '
+      + '10,000 Architect goal, are not defined anywhere in this repository: they carry an '
+      + 'explicit gap marker, name who can settle them, and the build refuses any currency '
+      + 'figure inside them. The brief also states that the briefing session the ticket asks '
+      + 'for is an event rather than a document, and stays with Ali.',
   },
   {
-    id: 17, title: 'Case Study Source Pack', ticket: 'L11.7', file: null, state: 'NOT_WRITTEN',
-    note: 'Was meant to be maintained DURING the build rather than written after it, so every '
-      + 'week it stays open it gets harder rather than easier.',
+    id: 17, title: 'Case Study Source Pack', ticket: 'L11.7',
+    file: 'docs/colaberry-live/DOC_17_CASE_STUDY_SOURCE_PACK.md', state: 'WRITTEN',
+    note: 'Written 2026-11-08. Generated from l117Data.js. It was meant to be maintained DURING '
+      + 'the build rather than written after it, and the cost of that shows: of the sixteen '
+      + 'captures the bootstrap asks for, 10 are captured, 5 need an event that has not happened '
+      + 'and 1 is blocked on the studio. A captured item must name its evidence and an '
+      + 'uncaptured one must NOT name a file, asserted in both directions, and an attributed '
+      + 'quotation anywhere in the document fails the build because the bootstrap permits quotes '
+      + 'only when real.',
   },
 ];
 
