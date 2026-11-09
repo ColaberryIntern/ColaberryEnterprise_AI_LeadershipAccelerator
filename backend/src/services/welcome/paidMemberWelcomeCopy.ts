@@ -33,7 +33,7 @@ export interface PaidMemberWelcomeContext {
   fullName?: string | null;
   /** "November 2026" - the batch they were placed in, from the month they paid in. */
   batchLabel: string;
-  /** "Monday 7 December 2026 at 6:30 PM CT", or null when it cannot be resolved. */
+  /** "Monday, December 7, 2026 at 6:30 PM CT", or null when it cannot be resolved. */
   orientationLabel?: string | null;
   /** Absolute URL of the batch's own room, or null when there is not one yet. */
   roomUrl?: string | null;
@@ -84,14 +84,9 @@ export function paidMemberWelcomeLines(ctx: PaidMemberWelcomeContext): string[] 
     );
   }
   if (ctx.orientationLabel) {
-    lines.push(
-      `Orientation is ${ctx.orientationLabel}. That is your batch's first live session, and it is `
-      + 'the one session held just for your batch.',
-    );
-    lines.push(
-      'After orientation, your batch joins the combined monthly class, where every batch learns '
-      + 'together in the shared rooms.',
-    );
+    // Ali, 2026-11-09: name the date and stop. What the sessions after it look like is not this
+    // email's job.
+    lines.push(`Your first live session is ${ctx.orientationLabel}.`);
   }
   return lines;
 }

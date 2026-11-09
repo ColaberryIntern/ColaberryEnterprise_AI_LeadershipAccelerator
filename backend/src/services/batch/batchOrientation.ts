@@ -53,13 +53,13 @@ const MONTH_NAMES = [
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
 export interface BatchOrientation {
-  /** 'YYYY-MM-DD', the first Monday of the month after the batch month. */
+  /** 'YYYY-MM-DD': the first Monday of the month after the batch month, or a first-session exception. */
   date: string;
   /** 'HH:MM' in 24-hour Central, from the row's own schedule where it has one. */
   time: string;
   /** The batch month this orientation belongs to, 'YYYY-MM'. */
   batchMonth: string;
-  /** "Monday 7 December 2026 at 6:30 PM CT" — the form an email should print. */
+  /** "Monday, December 7, 2026 at 6:30 PM CT" — the form an email should print. */
   label: string;
 }
 
@@ -113,13 +113,42 @@ export function formatBatchMonth(monthKey: string): string | null {
   return `${MONTH_NAMES[month - 1]} ${year}`;
 }
 
-/** "2026-12-07" becomes "Monday 7 December 2026". */
+/** "2026-12-07" becomes "Monday, December 7, 2026" (American order, per the house style). */
 export function formatOrientationDate(date: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date ?? '').trim())) return null;
   const [year, month, day] = date.split('-').map(Number);
   const at = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(at.getTime())) return null;
-  return `${DAY_NAMES[at.getUTCDay()]} ${at.getUTCDate()} ${MONTH_NAMES[at.getUTCMonth()]} ${at.getUTCFullYear()}`;
+  return `${DAY_NAMES[at.getUTCDay()]}, ${MONTH_NAMES[at.getUTCMonth()]} ${at.getUTCDate()}, ${at.getUTCFullYear()}`;
+}
+
+/**
+ * One-off first sessions that come BEFORE the convention's orientation, keyed by batch month.
+ *
+ * Ali, 2026-11-09: the November 2026 batch holds a live session on 12 November as well as its
+ * 7 December orientation. A member who joins on or before 12 November is told 12 November; from the
+ * 13th on, the November batch is told 7 December like every other batch is told its own first
+ * Monday. December onward has no entry and follows the convention.
+ *
+ * `through` is inclusive: on the 12th itself the 6:30 PM session is still ahead of a member who
+ * pays that day, so it is still the right date to give them.
+ */
+export const FIRST_SESSION_EXCEPTIONS: Readonly<Record<string, { date: string; through: string }>> = {
+  '2026-11': { date: '2026-11-12', through: '2026-11-12' },
+};
+
+/**
+ * The date a member should be given as their batch's first live session, as 'YYYY-MM-DD'.
+ *
+ * `todayCentral` is the Central calendar date the member is being told on. Without it the answer is
+ * the convention's orientation, so a caller that has no clock can never pick up an exception that
+ * may already have passed.
+ */
+export function firstSessionDateFor(monthKey: string, todayCentral?: string | null): string | null {
+  const exception = FIRST_SESSION_EXCEPTIONS[String(monthKey ?? '').trim()];
+  const today = String(todayCentral ?? '').trim();
+  if (exception && /^\d{4}-\d{2}-\d{2}$/.test(today) && today <= exception.through) return exception.date;
+  return orientationDateFor(monthKey);
 }
 
 /**
@@ -129,10 +158,13 @@ export function formatOrientationDate(date: string): string | null {
  * and there is no monthly orientation to compute. Calling such a date an orientation would be the
  * same mislabelling this module exists to avoid, pointing the other way.
  */
-export function orientationOf(cohort: BatchCohortRow | null | undefined): BatchOrientation | null {
+export function orientationOf(
+  cohort: BatchCohortRow | null | undefined,
+  todayCentral?: string | null,
+): BatchOrientation | null {
   const batchMonth = batchMonthOf(cohort);
   if (!batchMonth) return null;
-  const date = orientationDateFor(batchMonth);
+  const date = firstSessionDateFor(batchMonth, todayCentral);
   if (!date) return null;
   const time = orientationTimeOf(cohort);
   const pretty = formatOrientationDate(date);

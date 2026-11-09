@@ -17,7 +17,7 @@ import {
 const ctx = (over: Partial<PaidMemberWelcomeContext> = {}): PaidMemberWelcomeContext => ({
   fullName: 'Dana Okonkwo',
   batchLabel: 'November 2026',
-  orientationLabel: 'Monday 7 December 2026 at 6:30 PM CT',
+  orientationLabel: 'Monday, December 7, 2026 at 6:30 PM CT',
   roomUrl: 'https://enterprise.colaberry.ai/portal/rooms/room-1',
   portalUrl: 'https://enterprise.colaberry.ai/portal',
   ...over,
@@ -36,7 +36,7 @@ describe('it says the things the ticket requires, in the order it requires', () 
     // exact misreading it exists to prevent, so position is part of the requirement.
     const lines = paidMemberWelcomeLines(ctx());
     const selfPaced = lines.findIndex((l) => /self-paced/i.test(l));
-    const orientation = lines.findIndex((l) => /Orientation is/i.test(l));
+    const orientation = lines.findIndex((l) => /first live session is/i.test(l));
     expect(selfPaced).toBeGreaterThanOrEqual(0);
     expect(orientation).toBeGreaterThan(selfPaced);
     expect(lines[selfPaced]).toMatch(/begin your first module today/i);
@@ -49,11 +49,11 @@ describe('it says the things the ticket requires, in the order it requires', () 
     expect(copy.text).toContain('Open your batch room');
   });
 
-  it('gives the orientation date and says what happens after it', () => {
+  it('gives the first live session date and nothing about the sessions after it', () => {
+    // Ali, 2026-11-09: no explanation of a second session or of group sessions afterwards.
     const copy = buildPaidMemberWelcomeCopy(ctx());
-    expect(copy.text).toContain('Monday 7 December 2026 at 6:30 PM CT');
-    expect(copy.text).toMatch(/joins the combined monthly class/i);
-    expect(copy.text).toMatch(/shared rooms/i);
+    expect(copy.text).toContain('Your first live session is Monday, December 7, 2026 at 6:30 PM CT.');
+    expect(copy.text).not.toMatch(/combined|shared rooms|after orientation|two sessions|group session/i);
   });
 });
 

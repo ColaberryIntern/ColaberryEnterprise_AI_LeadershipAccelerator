@@ -56,6 +56,7 @@ import { Cohort, Enrollment } from '../../models';
 import { env } from '../../config/env';
 import { batchMonthOf } from '../batch/batchCohort';
 import { formatBatchMonth, orientationOf } from '../batch/batchOrientation';
+import { centralDateKey } from '../centralDate';
 import { buildPaidMemberWelcomeCopy } from './paidMemberWelcomeCopy';
 import { alreadyWelcomed } from './sendPortalWelcome';
 
@@ -182,7 +183,8 @@ export async function welcomeOnePaidMember(enrollment: any, execute: boolean): P
   const batchLabel = monthKey ? formatBatchMonth(monthKey) : null;
   if (!cohort || !batchLabel) return { ...base, outcome: 'not-in-a-batch' };
 
-  const orientation = orientationOf(cohort as any);
+  // Today in Central decides whether the November batch's 12 November exception still applies.
+  const orientation = orientationOf(cohort as any, centralDateKey(Date.now()));
   const roomUrl = await batchRoomUrl(cohort);
   const copy = buildPaidMemberWelcomeCopy({
     fullName: enrollment.full_name,
