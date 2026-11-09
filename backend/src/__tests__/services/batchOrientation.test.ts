@@ -10,6 +10,8 @@
  */
 import {
   DEFAULT_ORIENTATION_TIME,
+  FIRST_SESSION_EXCEPTIONS,
+  firstSessionDateFor,
   formatClockTime,
   formatOrientationDate,
   orientationDateFor,
@@ -100,8 +102,8 @@ describe('orientationTimeOf — the row owns its evening slot', () => {
 
 describe('formatting, because this text goes in front of a paying member', () => {
   it('prints the date the way a person reads it', () => {
-    expect(formatOrientationDate('2026-12-07')).toBe('Monday 7 December 2026');
-    expect(formatOrientationDate('2027-01-04')).toBe('Monday 4 January 2027');
+    expect(formatOrientationDate('2026-12-07')).toBe('Monday, December 7, 2026');
+    expect(formatOrientationDate('2027-01-04')).toBe('Monday, January 4, 2027');
   });
 
   it('converts a 24-hour time, including the two cases a naive modulo gets wrong', () => {
@@ -123,12 +125,50 @@ describe('formatting, because this text goes in front of a paying member', () =>
   });
 });
 
+describe('the November 2026 first-session exception (Ali, 2026-11-09)', () => {
+  it('November members told on or before 12 November get 12 November', () => {
+    for (const today of ['2026-11-01', '2026-11-09', '2026-11-12']) {
+      expect(firstSessionDateFor('2026-11', today)).toBe('2026-11-12');
+    }
+  });
+
+  it('from 13 November the November batch is told 7 December, for good', () => {
+    for (const today of ['2026-11-13', '2026-11-30', '2027-06-01']) {
+      expect(firstSessionDateFor('2026-11', today)).toBe('2026-12-07');
+    }
+  });
+
+  it('no other batch is touched, whatever the date', () => {
+    for (const today of ['2026-11-09', '2026-11-12', '2026-12-15']) {
+      expect(firstSessionDateFor('2026-12', today)).toBe('2027-01-04');
+      expect(firstSessionDateFor('2027-01', today)).toBe('2027-02-01');
+    }
+  });
+
+  it('with no usable date the convention answers, so a caller with no clock never uses a stale exception', () => {
+    for (const today of [undefined, null, '', 'today', '2026/11/09']) {
+      expect(firstSessionDateFor('2026-11', today as any)).toBe('2026-12-07');
+    }
+  });
+
+  it('orientationOf passes the date through and labels the exception like any other date', () => {
+    const nov = { id: 'c', name: 'Cohort - November 2026', cohort_type: 'accelerator' } as any;
+    expect(orientationOf(nov, '2026-11-09')!.label).toBe('Thursday, November 12, 2026 at 6:30 PM CT');
+    expect(orientationOf(nov, '2026-11-13')!.label).toBe('Monday, December 7, 2026 at 6:30 PM CT');
+    expect(orientationOf(nov)!.date).toBe('2026-12-07');
+  });
+
+  it('the exception table holds only November 2026', () => {
+    expect(Object.keys(FIRST_SESSION_EXCEPTIONS)).toEqual(['2026-11']);
+  });
+});
+
 describe('orientationOf — the whole answer for a row', () => {
   it('gives the live November batch its real orientation, not its start_date', () => {
     const o = orientationOf(row())!;
     expect(o.batchMonth).toBe('2026-11');
     expect(o.date).toBe('2026-12-07');
-    expect(o.label).toBe('Monday 7 December 2026 at 6:30 PM CT');
+    expect(o.label).toBe('Monday, December 7, 2026 at 6:30 PM CT');
   });
 
   it('IGNORES start_date entirely, even when the row carries a contradicting one', () => {

@@ -16,11 +16,13 @@
  *   node dist/scripts/previewPaidMemberWelcome.js --month 2026-11
  *   node dist/scripts/previewPaidMemberWelcome.js --no-room              (a batch with no room yet)
  *   node dist/scripts/previewPaidMemberWelcome.js --out /path/to/file.html
+ *   node dist/scripts/previewPaidMemberWelcome.js --today 2026-11-13   (as sent on that Central date)
  */
 
 import fs from 'fs';
 import path from 'path';
-import { formatBatchMonth, orientationDateFor, formatOrientationDate, formatClockTime, DEFAULT_ORIENTATION_TIME } from '../services/batch/batchOrientation';
+import { formatBatchMonth, firstSessionDateFor, formatOrientationDate, formatClockTime, DEFAULT_ORIENTATION_TIME } from '../services/batch/batchOrientation';
+import { centralDateKey } from '../services/centralDate';
 import { buildPaidMemberWelcomeCopy } from '../services/welcome/paidMemberWelcomeCopy';
 
 function arg(name: string): string | undefined {
@@ -43,7 +45,10 @@ function main(): void {
     process.exit(1);
   }
 
-  const date = orientationDateFor(month);
+  // The same date the live sweep would give on that Central day (the November batch's 12 November
+  // exception depends on it).
+  const today = (arg('today') || centralDateKey(Date.now())).trim();
+  const date = firstSessionDateFor(month, today);
   const orientationLabel = date
     ? `${formatOrientationDate(date)} at ${formatClockTime(DEFAULT_ORIENTATION_TIME)} CT`
     : null;
@@ -93,7 +98,7 @@ function main(): void {
 
   console.log(`=== Paid member welcome preview (${batchLabel}) ===`);
   console.log(`subject: ${copy.subject}`);
-  console.log(`orientation: ${orientationLabel ?? '(none resolved)'}`);
+  console.log(`first live session (as sent on ${today}): ${orientationLabel ?? '(none resolved)'}`);
   console.log(`room paragraph: ${withRoom ? 'included' : 'omitted (--no-room)'}`);
   console.log(`\n--- plain text ---\n${copy.text}`);
   console.log(`\nHTML written to: ${out}`);

@@ -152,16 +152,29 @@ describe('who it refuses to mail', () => {
 });
 
 describe('what the email is actually given', () => {
-  it('the real batch, the orientation from the convention, and the room URL', async () => {
+  // The November batch's first session depends on the Central date it is sent on, so every test
+  // here pins the clock. Unpinned, these would change answer on 13 November 2026.
+  const at = (iso: string) => jest.spyOn(Date, 'now').mockReturnValue(new Date(iso).getTime());
+  afterEach(() => jest.restoreAllMocks());
+
+  it('after 12 November: the real batch, the orientation from the convention, and the room URL', async () => {
+    at('2026-11-13T18:00:00Z');
     const row = await welcomeOnePaidMember(member(), true);
     expect(row.outcome).toBe('sent');
     expect(row.batchLabel).toBe('November 2026');
-    // NOT 2026-11-12, which is what the row's own start_date says.
-    expect(row.orientation).toBe('Monday 7 December 2026 at 6:30 PM CT');
+    expect(row.orientation).toBe('Monday, December 7, 2026 at 6:30 PM CT');
     const sent = send.mock.calls[0][0];
     expect(sent.subject).toContain('November 2026');
     expect(sent.html).toContain('/portal/rooms/room-1');
-    expect(sent.text).toContain('Monday 7 December 2026 at 6:30 PM CT');
+    expect(sent.text).toContain('Monday, December 7, 2026 at 6:30 PM CT');
+  });
+
+  it('on or before 12 November (Central): the November batch is told 12 November', async () => {
+    // 05:00 UTC on the 13th is still the evening of the 12th in Central: the boundary is Central.
+    at('2026-11-13T05:00:00Z');
+    const row = await welcomeOnePaidMember(member(), true);
+    expect(row.orientation).toBe('Thursday, November 12, 2026 at 6:30 PM CT');
+    expect(send.mock.calls[0][0].text).toContain('Your first live session is Thursday, November 12, 2026 at 6:30 PM CT.');
   });
 
   it('still sends when the batch has no room, dropping the room paragraph', async () => {
