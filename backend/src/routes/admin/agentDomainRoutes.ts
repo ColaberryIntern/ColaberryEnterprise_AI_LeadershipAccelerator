@@ -39,6 +39,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
+import { readAdmissionsSignals } from '../../services/agentDomain/admissionsSignalsReader';
 import {
   AGENT_DOMAINS,
   AGENT_DOMAIN_KEYS,
@@ -530,6 +531,72 @@ router.get(
         'Resolved through assertBuildAuthorized, the same gate the delivery path uses. Expected to '
         + 'report not authorized with reason no_authorization: the table is empty because no human '
         + 'has approved a build.',
+    });
+  }),
+);
+
+/**
+ * The admissions domain's visitor signals, anonymised, for its own builder.
+ *
+ * Requested by Kalkidan Bezabeh on 9 Nov 2026 while starting
+ * `admissions.CAP.page_event_admissions_enrichment`, whose criterion is "20
+ * sampled visitor summaries match the underlying page events with zero
+ * fabricated page titles". She asked for the narrow route rather than the wide
+ * grant, and was right to: the existing visitor routes are `requireAdmin`, map
+ * to the `campaigns` section, and return whole model rows including IP address,
+ * user agent and a `lead` include carrying a real name — and still would not
+ * have returned the interest tags, which no route exposed for any role.
+ *
+ * Path sits under `/api/admin/agent-domains-mine/`, so `pathToSection` already
+ * resolves it to `dashboard` by prefix and no new PATH_SECTION row is needed.
+ *
+ * `domainKey` is a literal rather than the shared DomainParam: this is an
+ * admissions-shaped payload (admissions_memory.interests), so asking for it
+ * under another domain key is a malformed request, not a permission problem.
+ * Ownership is still checked, so holding `dashboard` is not enough — the caller
+ * must own admissions.
+ */
+const AdmissionsSignalsParam = z.object({ domainKey: z.literal('admissions') });
+
+const AdmissionsSignalsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  events_per_visitor: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+router.get(
+  '/api/admin/agent-domains-mine/:domainKey/admissions-signals',
+  requireSection('dashboard'),
+  guarded(async (req: Request, res: Response) => {
+    const p = AdmissionsSignalsParam.safeParse(req.params);
+    if (!p.success) return badRequest(res, p.error);
+    const q = AdmissionsSignalsQuery.safeParse(req.query);
+    if (!q.success) return badRequest(res, q.error);
+
+    const key = p.data.domainKey;
+    const mine = await myDomainKeys(req.admin?.email ?? '');
+    if (!mine.includes(key)) return refuseNotYours(res, key, mine);
+
+    const page = await readAdmissionsSignals({
+      limit: q.data.limit ?? 20,
+      eventsPerVisitor: q.data.events_per_visitor ?? 50,
+    });
+
+    res.json({
+      domain_key: key,
+      visitors: page.visitors,
+      returned: page.returned,
+      matching: page.matching,
+      not_recorded: [
+        'ip_address', 'user_agent', 'fingerprint', 'lead_id', 'page_url',
+        'event_data', 'questions_asked', 'conversation_summaries', 'personality_notes',
+      ],
+      disclosure:
+        'Anonymised by design. anon_id is a keyed HMAC of the visitor id, stable within this '
+        + 'surface and not reversible to a visitor; it rotates if the signing secret rotates, so '
+        + 'nothing should be joined on it across a rotation. page_path and page_title are returned '
+        + 'in place of page_url, which carries the query string the tracker writes an email into. '
+        + 'page_title is null when the event recorded none, never an empty string, because the '
+        + 'capability this serves is measured on fabricating no titles.',
     });
   }),
 );

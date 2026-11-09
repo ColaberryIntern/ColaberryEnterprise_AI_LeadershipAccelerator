@@ -31,3 +31,31 @@ export function verifyHmacSignature(
 export function sha256Hex(input: string): string {
   return crypto.createHash('sha256').update(input).digest('hex');
 }
+
+/**
+ * A stable, non-reversible stand-in for an identifier, for surfaces that must
+ * group a person's rows together without learning who the person is.
+ *
+ * Keyed on purpose. `sha256Hex` is unkeyed, so hashing a visitor UUID with it
+ * is reversible by anyone who can enumerate UUIDs — the hash is then a
+ * pseudonym in name only. This takes the same shape the rest of the repo
+ * already uses for signed values (`unsubscribeTokenService`,
+ * `journeyLinkService`, `recordingTicket`): a secret from env, plus a literal
+ * `context` prefix so an id minted for one surface can never collide with, or
+ * be cross-used as, an id minted for another.
+ *
+ * The output is truncated to 16 hex characters (64 bits). That is far beyond
+ * collision range for the row counts these surfaces return, and short enough
+ * to read in a response.
+ *
+ * Stable for a given (context, value, secret). Rotating the secret rotates
+ * every id, which is the intended behaviour: these are not durable keys and
+ * nothing should join on them across a rotation.
+ */
+export function pseudonymousId(context: string, value: string, secret: string): string {
+  return crypto
+    .createHmac('sha256', secret)
+    .update(`${context}:${value}`)
+    .digest('hex')
+    .slice(0, 16);
+}
