@@ -1895,11 +1895,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {/* Proposal — its OWN step/page (step 6): Build above is the software product we would deliver; this is the
               bid RESPONSE we submit. Unlocked after approval, same as Build. */}
           <GovTabPanel active={activeStep === 'proposal'}>
-          {ws.build?.deliveryProjectId ? (
-            /* Takeover: once the pursuit is approved into a delivery project (intern assigned / build materialized),
-               the mature Proposal Studio OWNS the proposal — it supersedes the legacy response checklist for this
-               step. The other qualification steps stay visible in the rail above. Interns land in the Studio from
-               their portal; management opens it from here. The two were redundant; the Studio is the single home. */
+          {(ws.build?.materialized || materialized) ? (
+            /* Takeover: once an intern is assigned and the build is materialized (ws.build.materialized, or just
+               materialized in this session), the mature Proposal Studio OWNS the proposal — it supersedes the legacy
+               response checklist for this step. The other qualification steps stay visible in the rail above. Interns
+               land in the Studio from their portal; management opens it from here. The two were redundant; the Studio
+               is the single home. Before assignment (approved, not yet materialized) the legacy checklist still shows. */
             <SectionCard title="Proposal Studio" icon="draft-line"
               subtitle="This bid's proposal is written, checked, gated, and packaged in the Proposal Studio — the mature process that supersedes the old response checklist. The deadline, urgency, documents, review gates, and submission package all live there.">
               {materialized && (
