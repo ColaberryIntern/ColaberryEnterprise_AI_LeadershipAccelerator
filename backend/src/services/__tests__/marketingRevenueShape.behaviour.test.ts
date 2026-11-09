@@ -65,6 +65,13 @@ const ALLOWED_KEYS = [
   // counts already on the row. This list is exact ON PURPOSE - adding a key here is a
   // conscious act, which is what keeps a renamed fabricated field from sneaking back in.
   'funnel_stage', 'engagement_count',
+  // Added by R3 for observability, and deliberate in the way this list demands. These three
+  // are COUNTS OF MESSAGES read from scheduled_emails, not money and not derived from any
+  // price: messages_sent and messages_blocked are row counts, and
+  // messages_blocked_unexplained is a row count with a null-reason predicate. They exist
+  // because every other key here is derived from an event, so none of them could express
+  // "nothing was sent" — the state the re-engagement channel sat in for 80 days unnoticed.
+  'messages_sent', 'messages_blocked', 'messages_blocked_unexplained',
 ].sort();
 
 describe('getCampaignMetrics returns no invented money', () => {

@@ -49,6 +49,15 @@ interface CampaignMetric {
   clicks_count: number;
   replies_count: number;
   /**
+   * Read from the message queue rather than from interactions, so that "nothing was sent" is
+   * reportable. Every other count on this interface comes from an event, and an event that
+   * never happened leaves no row, which is why a dead channel was invisible here.
+   */
+  messages_sent: number;
+  messages_blocked: number;
+  /** Blocked messages with no machine-readable reason. Should read 0 for any recent window. */
+  messages_blocked_unexplained: number;
+  /**
    * Metrics the server says it cannot compute, with reasons. Revenue used to live on this
    * interface as a plain number; the server derived it from a hardcoded $4,500 price times an
    * enrollment count, so a campaign that had collected nothing still reported revenue.
@@ -181,6 +190,24 @@ function renderCampaignCell(c: CampaignMetric, key: string): React.ReactNode {
     case 'visitors_count': return c.visitors_count.toLocaleString();
     case 'high_intent_pct': return <StatusBadge label={`${c.high_intent_pct}%`} tone={intentTone(c.high_intent_pct)} />;
     case 'leads_count': return c.leads_count;
+    // A zero here is a measured zero and is styled to say so, because the whole failure this
+    // column exists to catch looked exactly like an empty cell. Blocked is only alarming when
+    // nothing is getting out alongside it, so the tone depends on both numbers.
+    case 'messages_sent': return (
+      <span className={c.messages_sent === 0 && c.messages_blocked > 0 ? 'fw-bold text-danger' : ''}>
+        {c.messages_sent.toLocaleString()}
+      </span>
+    );
+    case 'messages_blocked': return (
+      <span className={c.messages_blocked > 0 && c.messages_sent === 0 ? 'fw-bold text-danger' : 'text-muted'}>
+        {c.messages_blocked.toLocaleString()}
+      </span>
+    );
+    case 'messages_blocked_unexplained': return (
+      <span className={c.messages_blocked_unexplained > 0 ? 'fw-bold text-warning' : 'text-muted'}>
+        {c.messages_blocked_unexplained.toLocaleString()}
+      </span>
+    );
     case 'engagement_count': return c.engagement_count;
     case 'opens_count': return c.opens_count;
     case 'clicks_count': return c.clicks_count;
@@ -1136,10 +1163,26 @@ function RevenueIntelligenceTab(
         highIntent: acc.highIntent + c.high_intent_count,
         strategyCalls: acc.strategyCalls + c.strategy_calls,
         enrollments: acc.enrollments + c.enrollments_count,
+        messagesSent: acc.messagesSent + c.messages_sent,
+        messagesBlocked: acc.messagesBlocked + c.messages_blocked,
       }),
-      { visitors: 0, leads: 0, highIntent: 0, strategyCalls: 0, enrollments: 0 }
+      {
+        visitors: 0, leads: 0, highIntent: 0, strategyCalls: 0, enrollments: 0,
+        messagesSent: 0, messagesBlocked: 0,
+      }
     );
   }, [campaigns]);
+
+  /**
+   * The channel is queueing messages and sending none of them.
+   *
+   * This is the single condition the page could not previously express, and it is the one
+   * that went unnoticed for 80 days: messages were being generated at roughly a thousand a
+   * day and every one was refused at the safety gate, while the page showed an empty funnel
+   * that looked like an idle channel rather than a blocked one. Both halves are required —
+   * blocked-with-no-sends is a stoppage, blocked-alongside-sends is just normal suppression.
+   */
+  const channelStopped = totals.messagesBlocked > 0 && totals.messagesSent === 0;
 
   const avgIntentPct = totals.visitors > 0 ? Math.round((totals.highIntent / totals.visitors) * 100) : 0;
   const overallConversion = totals.visitors > 0 ? Math.round((totals.enrollments / totals.visitors) * 10000) / 100 : 0;
@@ -1181,6 +1224,19 @@ function RevenueIntelligenceTab(
   }, [totals]);
 
   const kpiCards: { label: string; value: string; icon: string; tone: BadgeTone }[] = [
+    // FIRST CARD, DELIBERATELY. The question this page failed to answer for 80 days was not
+    // "how well is the funnel converting" but "is anything going out at all", and a counter
+    // placed sixth would have been scrolled past. The tone is driven by the stoppage
+    // condition rather than by the number, so a red card means messages are queueing and
+    // none are leaving — not merely that the figure is small.
+    {
+      label: 'Messages Sent',
+      value: channelStopped
+        ? `0 — ${totals.messagesBlocked.toLocaleString()} blocked`
+        : totals.messagesSent.toLocaleString(),
+      icon: 'send-plane-line',
+      tone: channelStopped ? 'danger' : totals.messagesSent > 0 ? 'success' : 'neutral',
+    },
     { label: 'Total Visitors', value: totals.visitors.toLocaleString(), icon: 'group-line', tone: 'info' },
     { label: 'Total Leads', value: totals.leads.toLocaleString(), icon: 'user-add-line', tone: 'success' },
     { label: 'High Intent %', value: `${avgIntentPct}%`, icon: 'fire-line', tone: 'primary' },

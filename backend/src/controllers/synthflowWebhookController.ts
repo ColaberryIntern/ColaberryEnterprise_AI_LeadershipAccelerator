@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Op } from 'sequelize';
 import { CommunicationLog, CampaignSimulationStep, Lead } from '../models';
 import { InteractionOutcome } from '../models';
+import { cancelScheduledMessagesWhere } from '../services/scheduling/cancelScheduledMessage';
 import { CallContactLog } from '../models';
 import { processCallTranscript } from '../services/callTranscriptProcessor';
 import { sendSmsViaGhl, syncLeadToGhl, findContactByEmail } from '../services/ghlService';
@@ -303,7 +304,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
             const interestArea = (lead as any)?.interest_area;
             // Check if lead expressed interest (transcript processor sets interest_area)
             if (interestArea === 'strategy_call' || interestArea === 'enrollment' || interestArea === 'executive_briefing') {
-              const { CampaignLead, ScheduledEmail, Campaign: CampaignModel } = require('../models');
+              const { CampaignLead, Campaign: CampaignModel } = require('../models');
               const strategyCampaignId = '673d0ddf-78fc-44ab-b25e-858ef322d335';
               const prevCampaignId = commMeta.previous_campaign_id;
 
@@ -314,9 +315,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
                   { where: { lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'active' } },
                 );
                 // Cancel pending actions in old campaign
-                await ScheduledEmail.update(
-                  { status: 'cancelled' },
-                  { where: { lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'pending' } },
+                await cancelScheduledMessagesWhere(
+                  { lead_id: commLog.lead_id, campaign_id: prevCampaignId },
+                  'hot_lead_escalation',
+                  { statuses: ['pending'] },
                 );
                 console.log(`[Synthflow Webhook] Unenrolled lead ${commLog.lead_id} from ${prevCampaignId}`);
               }

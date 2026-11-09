@@ -60,6 +60,22 @@ export interface CampaignMetric {
    * campaign ranks on. A plain sum of three trusted counts, so trusted itself. */
   engagement_count: number;
   /**
+   * Queue truth, read from scheduled_emails rather than from interactions.
+   *
+   * These three exist so that "nothing was sent" is reportable. Every other field on this
+   * interface is derived from an event, and an event that never happened leaves no row, so a
+   * dead channel and an absent campaign were indistinguishable on the page. A zero here is a
+   * measured zero.
+   */
+  messages_sent: number;
+  messages_blocked: number;
+  /**
+   * Blocked messages carrying no machine-readable reason. Non-zero means those cancellations
+   * cannot be attributed to any decision; new writes cannot reach this state, so a non-zero
+   * value in a fresh window is a defect rather than history.
+   */
+  messages_blocked_unexplained: number;
+  /**
    * Metrics that CANNOT be computed, with the reason - never a zero standing in for one.
    * Callers must render these as an explicit unavailable state and must not feed them to a
    * health score, an average, or an AI narrative.
@@ -107,6 +123,7 @@ function buildUnavailable(): UnavailableMetric[] {
 export const ACTIVITY_DATE_COLUMNS = {
   interaction_outcomes: 'created_at',
   visitors: 'created_at',
+  scheduled_emails: 'created_at',
 } as const;
 
 export interface CampaignMetricFilters {
@@ -142,6 +159,32 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
         ${dateFilter.clauseFor(`io.${ACTIVITY_DATE_COLUMNS.interaction_outcomes}`)}
       GROUP BY io.campaign_id
     ),
+    -- WHY THIS CTE EXISTS. Every other source in this query describes what HAPPENED. None of
+    -- them can describe nothing happening, because a message that was never sent leaves no
+    -- interaction_outcomes row. The re-engagement channel sent nothing between 2026-08-19 and
+    -- 2026-10-29 and no one noticed, because this page had no send counter: zero sends and no
+    -- campaign looked identical. These three counts are read from the queue itself, so a zero
+    -- is a measured zero.
+    --
+    -- messages_blocked_unexplained is the ticket's own acceptance query promoted onto the
+    -- page. It counts cancelled rows carrying no machine-readable reason, which is the state
+    -- services/scheduling/cancelScheduledMessage.ts now makes unreachable for new writes. It
+    -- is expected to fall to zero for fresh windows and to stay non-zero for historical ones;
+    -- that difference is the point, so it is shown rather than smoothed away.
+    message_delivery AS (
+      SELECT
+        se.campaign_id,
+        COUNT(*) FILTER (WHERE se.status = 'sent')::int AS messages_sent,
+        COUNT(*) FILTER (WHERE se.status IN ('cancelled', 'paused'))::int AS messages_blocked,
+        COUNT(*) FILTER (
+          WHERE se.status IN ('cancelled', 'paused')
+            AND COALESCE(NULLIF(se.metadata->>'blocked_reason', ''), NULL) IS NULL
+        )::int AS messages_blocked_unexplained
+      FROM scheduled_emails se
+      WHERE se.campaign_id IS NOT NULL
+        ${dateFilter.clauseFor(`se.${ACTIVITY_DATE_COLUMNS.scheduled_emails}`)}
+      GROUP BY se.campaign_id
+    ),
     visitor_data AS (
       SELECT
         v.campaign_id,
@@ -167,19 +210,29 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
       COALESCE(ce.meetings, 0)::int AS strategy_calls,
       COALESCE(ce.total_opens, 0)::int AS total_opens,
       COALESCE(ce.total_clicks, 0)::int AS total_clicks,
+      COALESCE(md.messages_sent, 0)::int AS messages_sent,
+      COALESCE(md.messages_blocked, 0)::int AS messages_blocked,
+      COALESCE(md.messages_blocked_unexplained, 0)::int AS messages_blocked_unexplained,
       COUNT(DISTINCT e.id)::int AS enrollments_count
     FROM campaigns c
     LEFT JOIN campaign_engagement ce ON ce.campaign_id = c.id
+    LEFT JOIN message_delivery md ON md.campaign_id = c.id
     LEFT JOIN visitor_data vd ON vd.campaign_id = c.id::text
     LEFT JOIN campaign_leads cl ON cl.campaign_id = c.id AND cl.status = 'active'
     LEFT JOIN leads l ON l.id = cl.lead_id
     LEFT JOIN enrollments e ON LOWER(e.email) = LOWER(l.email) AND e.status = 'active'
     WHERE c.status = 'active'
       ${brandClause}
-      AND (ce.emails_sent > 0 OR vd.visitors_count > 0)
+      -- A campaign whose every message was blocked used to drop out of this list entirely,
+      -- because it has no interaction_outcomes and no visitors. That is the absence the
+      -- ticket is about: the one campaign most worth looking at was the one guaranteed to be
+      -- invisible. Queue activity now qualifies a campaign for a row of its own.
+      AND (ce.emails_sent > 0 OR vd.visitors_count > 0
+           OR COALESCE(md.messages_sent, 0) > 0 OR COALESCE(md.messages_blocked, 0) > 0)
     GROUP BY c.id, c.name, c.type, c.funnel_stage, vd.visitors_count, vd.high_intent_count,
       ce.emails_sent, ce.unique_opens, ce.unique_clicks, ce.replies, ce.meetings,
-      ce.total_opens, ce.total_clicks
+      ce.total_opens, ce.total_clicks,
+      md.messages_sent, md.messages_blocked, md.messages_blocked_unexplained
     ORDER BY COALESCE(ce.emails_sent, 0) DESC
   `;
 
@@ -215,6 +268,9 @@ export async function getCampaignMetrics(filters?: CampaignMetricFilters): Promi
       replies_count: Number(row.replies_count) || 0,
       total_opens: Number(row.total_opens) || 0,
       total_clicks: Number(row.total_clicks) || 0,
+      messages_sent: Number(row.messages_sent) || 0,
+      messages_blocked: Number(row.messages_blocked) || 0,
+      messages_blocked_unexplained: Number(row.messages_blocked_unexplained) || 0,
       strategy_calls: strategyCalls,
       enrollments_count: enrollments,
       open_rate: leads > 0 ? Math.round((opens / leads) * 10000) / 100 : 0,

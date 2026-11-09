@@ -13,6 +13,7 @@ import Lead from '../models/Lead';
 import ScheduledEmail from '../models/ScheduledEmail';
 import UnsubscribeEvent from '../models/UnsubscribeEvent';
 import { logAiEvent } from './aiEventService';
+import { cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';
 import { revokeConsent } from './consentService';
 
 const STOP_KEYWORDS = ['STOP', 'UNSUBSCRIBE', 'QUIT', 'CANCEL', 'OPT OUT', 'OPTOUT', 'END', 'REMOVE'];
@@ -41,10 +42,13 @@ export async function processInboundSms(leadId: number, messageBody: string): Pr
       return false;
     }
 
-    // 2. Cancel all pending scheduled actions for this lead
-    const [cancelledCount] = await ScheduledEmail.update(
-      { status: 'cancelled' },
-      { where: { lead_id: leadId, status: 'pending' } },
+    // 2. Cancel all pending scheduled actions for this lead. The reason previously lived only
+    // on the UnsubscribeEvent row created below, so the cancelled messages themselves could
+    // not be attributed to a STOP keyword without a join.
+    const cancelledCount = await cancelScheduledMessagesWhere(
+      { lead_id: leadId },
+      'sms_stop_keyword',
+      { statuses: ['pending'] },
     );
 
     // 3. Create unsubscribe event
