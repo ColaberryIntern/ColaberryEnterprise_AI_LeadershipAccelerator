@@ -63,7 +63,10 @@ Your goals:
   parts.push(`\nCURRENT CONTEXT: The visitor is on ${pageDesc}.`);
 
   // Memory context (cross-session)
-  const memoryContext = await buildMemoryContext(params.visitorId);
+  // `params.leadId` is already declared on this function's own signature and used below for
+  // the CEO overlay and the campaign context. Passing it here costs nothing upstream and is
+  // what lets the memory block survive a change of device.
+  const memoryContext = await buildMemoryContext(params.visitorId, params.leadId);
   if (memoryContext) {
     parts.push(`\n${memoryContext}`);
   }

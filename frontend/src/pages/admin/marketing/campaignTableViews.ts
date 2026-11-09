@@ -134,6 +134,17 @@ export const ALL_COLUMNS: readonly ColumnDef[] = [
   { key: 'visitors_count', label: 'Visitors', defaultOn: true },
   { key: 'high_intent_pct', label: 'Intent %', defaultOn: true },
   { key: 'leads_count', label: 'Leads', defaultOn: true },
+  // QUEUE TRUTH, ON BY DEFAULT ON PURPOSE. Every other column here is derived from something
+  // that happened, so none of them can show nothing happening. The re-engagement channel sent
+  // nothing from 2026-08-19 onward and no one saw it, because zero sends and no campaign
+  // looked the same on this page. 'Sent' and 'Blocked' are read from the message queue
+  // itself, so a zero in them is a measured zero. They are not opt-in columns: a counter
+  // nobody switches on would not have caught the outage either.
+  { key: 'messages_sent', label: 'Sent', defaultOn: true },
+  { key: 'messages_blocked', label: 'Blocked', defaultOn: true },
+  // Off by default: it should read zero for any recent window, and it is the diagnostic for
+  // when it does not.
+  { key: 'messages_blocked_unexplained', label: 'Blocked (no reason)', defaultOn: false },
   { key: 'engagement_count', label: 'Engagement', defaultOn: true },
   { key: 'opens_count', label: 'Opens', defaultOn: false },
   { key: 'clicks_count', label: 'Clicks', defaultOn: false },

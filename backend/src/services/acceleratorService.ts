@@ -5,8 +5,8 @@ import {
   ProgramBlueprint,
 } from '../models';
 import { env } from '../config/env';
+import { cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';
 import { convertTo24h, classInstant } from './centralDate';
-import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 
 // PaySimple dashboard base for the admin "open this payer in PaySimple" deep link.
 // Override with PAYSIMPLE_DASHBOARD_BASE if the account uses a different host.
@@ -874,8 +874,13 @@ async function removeLeadFromAllCampaigns(email: string) {
   });
 
   for (const cl of activeCampaignLeads) {
-    // Cancel pending scheduled emails for this lead in this campaign
-    await cancelScheduledEmails({ campaign_id: cl.campaign_id, lead_id: lead.id, status: 'pending' }, 'converted_to_student');
+    // Cancel pending scheduled emails for this lead in this campaign. The reason matches the
+    // outcome written to campaign_leads on the next line, so the two agree.
+    await cancelScheduledMessagesWhere(
+      { campaign_id: cl.campaign_id, lead_id: lead.id },
+      'converted_to_student',
+      { statuses: ['pending'] },
+    );
     await cl.update({ status: 'removed', outcome: 'converted_to_student' } as any);
   }
 }

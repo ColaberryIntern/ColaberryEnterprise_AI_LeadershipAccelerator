@@ -203,14 +203,23 @@ export async function discardAgentDraft(
   draftId: string,
   discardedBy: string,
 ): Promise<DraftActionResult> {
-  return transition(draftId, AGENT_DRAFT_STATUS, 'cancelled', discardedBy);
+  return transition(draftId, AGENT_DRAFT_STATUS, 'cancelled', discardedBy, 'agent_draft_discarded');
 }
 
+/**
+ * @param reason Recorded as `metadata.blocked_reason` when this transition is a cancellation.
+ *   It is a parameter rather than a constant because this one function serves BOTH approve
+ *   and discard, and an approval must not be stamped with a cancellation reason. The reason
+ *   is written here instead of through services/scheduling/cancelScheduledMessage because the
+ *   guarded single UPDATE below is what resolves two reviewers clicking at once — the
+ *   affected-row count is the answer, and the helper cannot express that.
+ */
 async function transition(
   draftId: string,
   from: string,
   to: string,
   actor: string,
+  reason?: string,
 ): Promise<DraftActionResult> {
   try {
     // Guarded on the CURRENT status inside the UPDATE, not read-then-write: two reviewers
@@ -221,13 +230,14 @@ async function transition(
               metadata = COALESCE(metadata, '{}'::jsonb)
                          || jsonb_build_object('approved_by', $actor::text,
                                                'decided_at', now()::text)
-                         -- R3: a discard is a cancellation, and every cancellation states its reason.
-                         || CASE WHEN $to::text = 'cancelled' THEN jsonb_build_object('cancel_reason', 'agent_draft_discarded')
-                                 ELSE '{}'::jsonb END
+                         || CASE WHEN $reason::text IS NULL THEN '{}'::jsonb
+                                 ELSE jsonb_build_object('blocked_reason', $reason::text,
+                                                         'cancelled_at', now()::text)
+                            END
         WHERE id = $draftId
           AND status = $from
           AND metadata->>'tool' = $tool`,
-      { bind: { to, from, draftId, actor, tool: AGENT_EMAIL_TOOL } },
+      { bind: { to, from, draftId, actor, tool: AGENT_EMAIL_TOOL, reason: reason ?? null } },
     );
     const changed = typeof meta === 'number' ? meta : (meta as { rowCount?: number })?.rowCount ?? 0;
     if (!changed) return { ok: false, reason: 'not_in_expected_state' };

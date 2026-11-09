@@ -11,8 +11,8 @@
  */
 import { Op } from 'sequelize';
 import { Lead, CampaignLead, ScheduledEmail, UnsubscribeEvent } from '../models';
-import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import { logActivity } from './activityService';
+import { cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';
 import { revokeConsent } from './consentService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { optOutSuppressesGlobally } from './channelSuppression';
@@ -229,11 +229,17 @@ export async function processOptOut(
  * Returns the count of cancelled actions.
  */
 export async function cancelPendingActions(leadId: number): Promise<number> {
-  // R3: the reason is MERGED into each row's metadata (this used to overwrite it); the legacy keys are kept for readers.
-  return cancelScheduledEmails(
-    { lead_id: leadId, status: { [Op.in]: ['pending', 'processing'] } },
+  // TWO BUGS WERE FIXED HERE, both invisible from the call site.
+  //
+  // 1. The reason was written to `metadata.cancelled_reason`, a key NOTHING in the codebase
+  //    reads. `reconcileExecutions` and `journeyHealth` both read `blocked_reason`, so these
+  //    rows recorded a reason and still reported as 'unknown' downstream.
+  // 2. Passing a plain object to `update` REPLACES the whole JSONB column, so every other key
+  //    on every row this touched was destroyed. The helper merges instead.
+  return cancelScheduledMessagesWhere(
+    { lead_id: leadId },
     'lead_opted_out',
-    { extra: { cancelled_reason: 'lead_opted_out', cancelled_at: new Date().toISOString() } },
+    { statuses: ['pending', 'processing'] },
   );
 }
 

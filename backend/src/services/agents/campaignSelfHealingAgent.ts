@@ -1,8 +1,8 @@
 import { Op } from 'sequelize';
 import { Campaign, CampaignTestRun, CampaignTestStep, ScheduledEmail } from '../../models';
-import { cancelScheduledEmail } from '../scheduledEmailCancellation'; // R3: every cancellation states its reason
 import { runCampaignTest } from '../testing/campaignTestHarness';
 import { checkLeadSendable } from '../communicationSafetyService';
+import { cancelScheduledMessage } from '../scheduling/cancelScheduledMessage';
 import type { AgentExecutionResult, AgentAction } from './types';
 
 /**
@@ -68,7 +68,11 @@ export async function runCampaignSelfHealingAgent(
         for (const email of failedEmails) {
           // Skip test actions — never retry test harness emails
           if (email.is_test_action) {
-            await cancelScheduledEmail(email, 'test_action_not_retried');
+            // 'failed' is outside the helper's default cancellable set; see the note on
+            // cancelScheduledMessage. Passing it keeps this site's behaviour identical.
+            await cancelScheduledMessage(email, 'test_action_not_retried', undefined, {
+              statuses: ['failed'],
+            });
             actions.push({
               campaign_id: campaignId,
               action: 'retry_skipped_test_action',
@@ -85,7 +89,12 @@ export async function runCampaignSelfHealingAgent(
           if (email.lead_id) {
             const leadCheck = await checkLeadSendable(email.lead_id);
             if (!leadCheck.sendable) {
-              await cancelScheduledEmail(email, 'lead_not_sendable', { not_sendable_reason: leadCheck.reason });
+              await cancelScheduledMessage(
+                email,
+                `lead_not_sendable:${leadCheck.reason}`,
+                undefined,
+                { statuses: ['failed'] },
+              );
               actions.push({
                 campaign_id: campaignId,
                 action: 'retry_skipped_unsendable_lead',

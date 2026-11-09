@@ -1,9 +1,13 @@
 import { Op } from 'sequelize';
 import { sequelize } from '../config/database';
 import { Campaign, CampaignLead, Lead, FollowUpSequence, ScheduledEmail, AdminUser, InteractionOutcome, Activity, CampaignDeployment } from '../models';
-import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import StrategyCall from '../models/StrategyCall';
 import { enrollLeadInSequence } from './sequenceService';
+import {
+  cancelScheduledMessagesWhere,
+  pauseScheduledMessagesWhere,
+  NOT_SENT_OR_CANCELLED_STATUSES,
+} from './scheduling/cancelScheduledMessage';
 import { getSetting } from './settingsService';
 import { syncLeadToGhl, bulkSyncCampaignLeads } from './ghlService';
 
@@ -314,8 +318,14 @@ export async function deleteCampaign(id: string): Promise<{ success: boolean; er
 
   // Atomic: cancel emails + archive campaign in a single transaction
   await sequelize.transaction(async (t: any) => {
-    // Cancel any remaining scheduled items
-    await cancelScheduledEmails({ campaign_id: id, status: { [Op.notIn]: ['sent', 'cancelled'] } }, 'campaign_deleted', { transaction: t });
+    // Cancel any remaining scheduled items. The status set is passed explicitly to preserve
+    // this site's original population: it cancels anything not already sent or cancelled,
+    // which is wider than the helper's default non-terminal set.
+    await cancelScheduledMessagesWhere(
+      { campaign_id: id },
+      'campaign_archived',
+      { statuses: NOT_SENT_OR_CANCELLED_STATUSES, transaction: t },
+    );
 
     // Soft-delete: archive instead of destroying — preserves all dependent data
     await campaign.update({ status: 'archived' } as any, { transaction: t });
@@ -394,10 +404,7 @@ export async function pauseCampaign(id: string) {
   if (campaign.status !== 'active') throw new Error('Campaign is not active');
 
   // Pause pending actions
-  await ScheduledEmail.update(
-    { status: 'paused' } as any,
-    { where: { campaign_id: id, status: 'pending' } }
-  );
+  await pauseScheduledMessagesWhere({ campaign_id: id }, 'campaign_paused');
 
   await campaign.update({ status: 'paused', updated_at: new Date() } as any);
   return campaign;
@@ -408,7 +415,7 @@ export async function completeCampaign(id: string) {
   if (!campaign) throw new Error('Campaign not found');
 
   // Cancel remaining pending actions
-  await cancelScheduledEmails({ campaign_id: id, status: 'pending' }, 'campaign_completed');
+  await cancelScheduledMessagesWhere({ campaign_id: id }, 'campaign_completed', { statuses: ['pending'] });
 
   // Mark all active campaign leads as completed
   await CampaignLead.update(
@@ -504,7 +511,11 @@ export async function removeLeadFromCampaign(campaignId: string, leadId: number)
   if (!cl) throw new Error('Lead not enrolled in this campaign');
 
   // Cancel pending actions for this lead in this campaign
-  await cancelScheduledEmails({ campaign_id: campaignId, lead_id: leadId, status: 'pending' }, 'lead_removed_from_campaign');
+  await cancelScheduledMessagesWhere(
+    { campaign_id: campaignId, lead_id: leadId },
+    'lead_removed_from_campaign',
+    { statuses: ['pending'] },
+  );
 
   await cl.update({ status: 'removed' } as any);
   return cl;

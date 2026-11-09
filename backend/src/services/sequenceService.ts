@@ -1,9 +1,9 @@
 import { Op } from 'sequelize';
 import { FollowUpSequence, ScheduledEmail, Lead, Campaign, CampaignLead, StrategyCall, Enrollment, Cohort } from '../models';
-import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import { redactForLogs } from '../utils/piiRedaction';
+import { cancelScheduledMessagesWhere } from './scheduling/cancelScheduledMessage';
 
 /* ------------------------------------------------------------------ */
 /*  Sequence Step Timing Validation                                    */
@@ -271,7 +271,7 @@ export async function deleteSequence(id: string) {
   const seq = await FollowUpSequence.findByPk(id);
   if (!seq) return false;
 
-  await cancelScheduledEmails({ sequence_id: id, status: 'pending' }, 'sequence_deleted');
+  await cancelScheduledMessagesWhere({ sequence_id: id }, 'sequence_deleted', { statuses: ['pending'] });
 
   await seq.destroy();
   return true;
@@ -371,7 +371,11 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
 
   // Cancel any existing pending actions for this lead from THIS sequence only
   // (preserves actions from other campaigns the lead may be enrolled in)
-  await cancelScheduledEmails({ lead_id: leadId, sequence_id: sequenceId, status: 'pending' }, 'sequence_reenrolled');
+  await cancelScheduledMessagesWhere(
+    { lead_id: leadId, sequence_id: sequenceId },
+    'sequence_reenrolled',
+    { statuses: ['pending'] },
+  );
 
   const now = new Date();
   const scheduledActions = [];
@@ -603,7 +607,11 @@ export async function scheduleNextStep(completedAction: any): Promise<any | null
 }
 
 export async function cancelSequenceForLead(leadId: number) {
-  return cancelScheduledEmails({ lead_id: leadId, status: 'pending' }, 'sequence_cancelled_for_lead');
+  return cancelScheduledMessagesWhere(
+    { lead_id: leadId },
+    'sequence_cancelled_for_lead',
+    { statuses: ['pending'] },
+  );
 }
 
 export async function getLeadSequenceStatus(leadId: number) {

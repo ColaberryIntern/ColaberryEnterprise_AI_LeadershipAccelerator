@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { ScheduledEmail, Campaign, CampaignLead } from '../../models';
-import { cancelScheduledEmail } from '../scheduledEmailCancellation'; // R3: every cancellation states its reason
 import CampaignError from '../../models/CampaignError';
+import { cancelScheduledMessage } from '../scheduling/cancelScheduledMessage';
 import { logAgentActivity, logAiEvent } from '../aiEventService';
 import { checkLeadSendable } from '../communicationSafetyService';
 import type { AgentExecutionResult, AgentAction } from './types';
@@ -46,7 +46,15 @@ export async function runCampaignRepairAgent(agentId: string): Promise<AgentExec
         if (action.lead_id) {
           const leadCheck = await checkLeadSendable(action.lead_id);
           if (!leadCheck.sendable) {
-            await cancelScheduledEmail(action, 'lead_not_sendable', { not_sendable_reason: leadCheck.reason });
+            // These rows are in 'failed', which is NOT in the helper's default cancellable
+            // set, so the status is passed explicitly. Without it the cancel would no-op
+            // silently and the retry loop would keep picking the row up.
+            await cancelScheduledMessage(
+              action,
+              `lead_not_sendable:${leadCheck.reason}`,
+              undefined,
+              { statuses: ['failed'] },
+            );
             actions.push({
               campaign_id: action.campaign_id || '',
               action: 'retry_skipped_unsendable_lead',
