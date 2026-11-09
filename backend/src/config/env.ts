@@ -69,6 +69,14 @@ export const env = {
   // tracker's `?email=` parameter does today.
   journeyLinkSecret: process.env.JOURNEY_LINK_SECRET || resolveJwtSecret(),
 
+  // Pseudonymous-id signing — HMAC secret for the anonymous ids on domain-scoped
+  // read surfaces, where a builder needs to group a visitor's rows together
+  // without being told who the visitor is. Same fallback and same
+  // domain-separation reasoning as the two above (see utils/hmac pseudonymousId).
+  // It must be a SECRET and not a salt: an unkeyed hash of a visitor UUID is
+  // reversible by anyone who can enumerate UUIDs.
+  pseudonymSecret: process.env.PSEUDONYM_SECRET || resolveJwtSecret(),
+
   // Email (SMTP)
   smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
