@@ -324,7 +324,14 @@ const LEDGER = [
       + '10,000 Architect goal, are not defined anywhere in this repository: they carry an '
       + 'explicit gap marker, name who can settle them, and the build refuses any currency '
       + 'figure inside them. The brief also states that the briefing session the ticket asks '
-      + 'for is an event rather than a document, and stays with Ali.',
+      + 'for is an event rather than a document, and stays with Ali.\n\n'
+      + 'CORRECTED 2026-11-09. The first version asserted the system had never aired, in its '
+      + 'lead and in its risk section. Production holds two broadcast_occurrences rows (15 and '
+      + '20 October) and Basecamp ticket L11.7 names a third recording from 13 October, so the '
+      + 'claim was false - it came from reading the repository and then speaking about the '
+      + 'world. The true claim is narrower and more useful: it has aired three times and no '
+      + 'airing has ever been measured. Both unqualified phrasings are now banned by the '
+      + 'self-check so the shorter, false sentence cannot come back.',
   },
   {
     id: 17, title: 'Case Study Source Pack', ticket: 'L11.7',
@@ -335,7 +342,16 @@ const LEDGER = [
       + 'and 1 is blocked on the studio. A captured item must name its evidence and an '
       + 'uncaptured one must NOT name a file, asserted in both directions, and an attributed '
       + 'quotation anywhere in the document fails the build because the bootstrap permits quotes '
-      + 'only when real.',
+      + 'only when real.\n\n'
+      + 'CORRECTED 2026-11-09 after reading ticket L11.7 and production. Three airings have '
+      + 'happened (13, 15 and 20 October); none recorded a single viewer, so the counts above '
+      + 'are unchanged but the reason is now sourced rather than assumed. A new `airedRecord` '
+      + 'field carries external references - Cloudflare video ids, occurrence rows, the viewer '
+      + 'census - for uncaptured items, and the check refuses a file path inside it so the '
+      + 'asymmetry rule is not quietly relaxed by the field sitting next to it. The pack also '
+      + 'now carries the one destructive risk on this ticket: the 13 October recording is the '
+      + 'only copy of the first airing, it has no occurrence row, and its live input is marked '
+      + 'for deletion when the ticket closes.',
   },
 ];
 

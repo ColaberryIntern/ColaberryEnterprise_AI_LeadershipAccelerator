@@ -142,9 +142,16 @@ Blocked rather than merely pending: there is no studio to photograph. This also 
 
 **Not captured yet** — Needs an event that has not happened
 
-The single highest-value event outstanding on the whole project. It is the gate that most of the launch work sits behind, and it is cheap compared to what it unblocks.
+Restated on 2026-11-09 after reading production and ticket L11.7. The earlier version of this entry said no live test had happened, which was wrong: three airings have. What has never happened is a MEASURED one, and that distinction is the whole value of this entry - a reader who believes nothing aired will plan a first airing, when what is actually needed is instrumentation on an airing the team already knows how to run.
 
-**What would settle it:** An internal airing with three viewers on separate networks, with the real bitrate and latency recorded and the preview flag returned to false afterwards.
+URGENT, and the reason this capture should be worked before the ticket closes: the 13 October recording is the only copy of the first airing, it has no occurrence row, and ticket L11.7 records a decision to delete its live input once this ticket is done. Deleting a live input takes its recordings with it. Pull that footage into the pack first; the deletion is the last step, not an early tidy-up.
+
+**What would settle it:** Not the airing - that has happened three times. What is missing is the measurement: three viewers on separate networks, with the real bitrate and latency recorded and the preview flag returned to false afterwards. None of the three airings recorded a single viewer, so none of them meets this bar.
+
+**What is on record, outside this repository:**
+- 13 Oct 2026, 18 min, Cloudflare video b4c0c11c60952605105180b02c0d3db4 on live input 08def3066403e44d507fc16709cc9a4e. Named on ticket L11.7 by Ali on 23 Oct. NO occurrence row exists for it in the production database.
+- 15 Oct 2026, occurrence e5c4a59f-48de-4dba-815e-f14e165e0eef, titled "First Private Technical Airing", access_mode free, editorial_state ended with a NULL ended_at.
+- 20 Oct 2026, occurrence 21d0ce4f-cb55-4a7b-b9b6-0b42280fa5a8, titled "Test 2", access_mode private, ran 13:49 to 14:09 UTC.
 
 ## First public live
 
@@ -152,21 +159,30 @@ The single highest-value event outstanding on the whole project. It is the gate 
 
 This is the event the case study is ultimately about, and the one that converts most of this pack from a description of a system into a record of a system that ran. It depends on the first live test and on the studio, so it is third in a chain of three. The acceptance bar is deliberately higher than "it worked": a non-staff cohort member watches successfully, someone in the wrong cohort is refused and cannot even see that the class exists, and the replay and the audience numbers are checked afterwards rather than assumed. Capture it while it happens — this is the one item in the pack that cannot be reconstructed later from the repository.
 
-**What would settle it:** A recorded go/no-go decision, a real public class aired, and the replay and analytics verified afterwards rather than assumed.
+**What would settle it:** A recorded go/no-go decision, a real public class aired, and the replay and analytics verified afterwards rather than assumed. Checked against production on 2026-11-09: neither existing occurrence qualifies. One ran access_mode private and the other access_mode free, and both recorded zero viewers, so neither can be read as a public class. An access mode is a setting, not an audience.
+
+**What is on record, outside this repository:**
+- The 15 Oct occurrence is titled "First Private Technical Airing" in the database, while ticket L11.7 calls the 13 Oct recording the first private technical airing and the 15 Oct one "the first production airing". The two records disagree about which event was which, and that should be settled before either is cited in a case study.
 
 ## Metrics
 
 **Not captured yet** — Needs an event that has not happened
 
-Deliberately empty. Every counter the system exposes currently has nothing in it, and a zero printed from an unaired system is the exact mistake the telemetry work was built to avoid - the audience endpoint returns no number at all when collection fails, rather than a confident zero.
+Deliberately empty, and now empty for a sourced reason rather than an assumed one. Every counter the system exposes has nothing in it, and a zero printed from an unmeasured airing is the exact mistake the telemetry work was built to avoid - the audience endpoint returns no number at all when collection fails, rather than a confident zero.
 
-**What would settle it:** A class airing, plus one production query to establish whether viewer telemetry has collected a single row since the player was wired to report on 2026-10-20. Until that query runs, the measurement path is unproven in production as well as unexercised.
+One caveat that matters more than the zero does. The viewer was only wired to report on 2026-10-20, so empty tables are not evidence that the 13 and 15 October airings had no viewers. They are evidence that nothing has been measured since instrumentation existed. Those two airings are unmeasurable after the fact, which is a cost already incurred rather than a task outstanding.
+
+**What would settle it:** A class aired to an audience. The production query this entry used to ask for was run on 2026-11-09 and is no longer outstanding.
+
+**What is on record, outside this repository:**
+- Census of 2026-11-09, read-only: broadcast_viewer_sessions 0 rows, broadcast_viewer_people 0 rows, broadcast_occurrence_metrics 0 rows. Distinct non-staff, non-test viewers ever recorded: 0.
+- The instrument itself is sound: index idx_bvs_active exists and the planner chooses it over a sequential scan. What is missing is an audience, not a measurement path.
 
 ## Quotes and feedback
 
 **Not captured yet** — Needs an event that has not happened
 
-Empty by instruction. The bootstrap says "only when real", and nobody has watched a Colaberry Live class, so there is nothing to quote. The build refuses if an attributed quotation appears anywhere in this document.
+Empty by instruction. The bootstrap says "only when real", and no viewer has ever been recorded watching a Colaberry Live airing, so there is nobody to quote. The build refuses if an attributed quotation appears anywhere in this document.
 
 **What would settle it:** A real viewer, instructor or stakeholder saying something after a real class, recorded verbatim with attribution and permission.
 
@@ -191,5 +207,5 @@ Four, each paid for. **A green suite is not a working system** - grade a capabil
 
 ---
 
-*State claims checked on 2026-11-08. An airing is an event version control cannot show, so the absence of a record is reported as what was checked rather than as proof that nothing aired.*
+*State claims checked on 2026-11-09. An airing is an event version control cannot show, so the absence of a record is reported as what was checked rather than as proof that nothing aired.*
 

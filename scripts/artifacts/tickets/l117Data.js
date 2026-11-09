@@ -6,10 +6,16 @@
  * maintained DURING the build rather than written after it - so every week it stays open it gets
  * harder, not easier."
  *
- * WHAT THIS DOCUMENT HONESTLY IS. Of the sixteen things the bootstrap says to capture, six need
- * an event that has not happened: screenshots of a running show, the studio before and after,
- * the first live test, the first public airing, metrics, and quotes. The studio is not installed
- * and no class has aired. So this is not a case study and does not pretend to be one - it is the
+ * WHAT THIS DOCUMENT HONESTLY IS. Of the sixteen things the bootstrap says to capture, six are
+ * not capturable yet: screenshots of a running show, the studio before and after, the first live
+ * test, the first public airing, metrics, and quotes. The studio is not installed, and although
+ * the system HAS aired three times - 13, 15 and 20 October 2026 - not one of those airings
+ * recorded a single viewer, so none satisfies a capture that asks for a measured event.
+ *
+ * Corrected 2026-11-09. The first version of this file said no class had aired, which confused
+ * "absent from this repository" with "absent from the world": the airings were recorded on
+ * Basecamp ticket L11.7 and in the production database, and a repository build can read neither.
+ * So this is not a case study and does not pretend to be one - it is the
  * source pack, and a source pack whose gaps are visible is worth more than one that reads as
  * complete, because the gaps are the shooting list for the day the class finally airs.
  *
@@ -44,7 +50,7 @@ const META = {
   bootstrap: 'docs/requirements/COLABERRY_LIVE_BASECAMP_BOOTSTRAP_v2.md',
   feeds: 'The final Case Study OS publication task after launch (bootstrap R10).',
   /** An airing is an event git cannot show. See l116Data's note on this field. */
-  stateCheckedOn: '2026-11-08',
+  stateCheckedOn: '2026-11-09',
 };
 
 const STATES = {
@@ -62,6 +68,19 @@ const TEST_COUNT_TOKEN = '{{BROADCAST_TEST_SUITES}}';
  * `bullet` is the source text kept verbatim. `state` is one of STATES. `evidence` is a list of
  * repo-relative paths, present ONLY for CAPTURED items and stat'ed by the check. `settledBy` is
  * present ONLY for the others. `note` is the prose that goes under the heading.
+ *
+ * `airedRecord` is a fourth field, added 2026-11-09, permitted ONLY on uncaptured items. It
+ * holds EXTERNAL references - a Cloudflare video id, a database row, a census result - that say
+ * what is known about an event without claiming the capture is satisfied. It exists because the
+ * first version of this pack said no live test had happened when three airings had: the record
+ * lived on the Basecamp ticket and in the production database, and a repository build cannot
+ * read either.
+ *
+ * The check REFUSES a file path inside `airedRecord`. That is the whole point of keeping it
+ * separate from `evidence`: the asymmetry rule above exists so a reader can never mistake a
+ * path for proof, and a field that relaxed it would quietly undo the rule it sits beside. An
+ * external identifier a reader must go and look up is honest context; a repo path beside an
+ * unproven claim is not.
  */
 const CAPTURES = [
   {
@@ -196,16 +215,44 @@ const CAPTURES = [
   },
   {
     key: 'firstTest', bullet: 'first live test', match: 'First live test', state: 'NOT_YET',
-    settledBy: 'An internal airing with three viewers on separate networks, with the real '
-      + 'bitrate and latency recorded and the preview flag returned to false afterwards.',
-    note: 'The single highest-value event outstanding on the whole project. It is the gate that '
-      + 'most of the launch work sits behind, and it is cheap compared to what it unblocks.',
+    settledBy: 'Not the airing - that has happened three times. What is missing is the '
+      + 'measurement: three viewers on separate networks, with the real bitrate and latency '
+      + 'recorded and the preview flag returned to false afterwards. None of the three airings '
+      + 'recorded a single viewer, so none of them meets this bar.',
+    airedRecord: [
+      '13 Oct 2026, 18 min, Cloudflare video b4c0c11c60952605105180b02c0d3db4 on live input '
+        + '08def3066403e44d507fc16709cc9a4e. Named on ticket L11.7 by Ali on 23 Oct. NO '
+        + 'occurrence row exists for it in the production database.',
+      '15 Oct 2026, occurrence e5c4a59f-48de-4dba-815e-f14e165e0eef, titled "First Private '
+        + 'Technical Airing", access_mode free, editorial_state ended with a NULL ended_at.',
+      '20 Oct 2026, occurrence 21d0ce4f-cb55-4a7b-b9b6-0b42280fa5a8, titled "Test 2", '
+        + 'access_mode private, ran 13:49 to 14:09 UTC.',
+    ],
+    note: 'Restated on 2026-11-09 after reading production and ticket L11.7. The earlier version '
+      + 'of this entry said no live test had happened, which was wrong: three airings have. What '
+      + 'has never happened is a MEASURED one, and that distinction is the whole value of this '
+      + 'entry - a reader who believes nothing aired will plan a first airing, when what is '
+      + 'actually needed is instrumentation on an airing the team already knows how to run.\n\n'
+      + 'URGENT, and the reason this capture should be worked before the ticket closes: the 13 '
+      + 'October recording is the only copy of the first airing, it has no occurrence row, and '
+      + 'ticket L11.7 records a decision to delete its live input once this ticket is done. '
+      + 'Deleting a live input takes its recordings with it. Pull that footage into the pack '
+      + 'first; the deletion is the last step, not an early tidy-up.',
   },
   {
     key: 'firstPublic', bullet: 'first public live', match: 'First public live',
     state: 'NOT_YET',
     settledBy: 'A recorded go/no-go decision, a real public class aired, and the replay and '
-      + 'analytics verified afterwards rather than assumed.',
+      + 'analytics verified afterwards rather than assumed. Checked against production on '
+      + '2026-11-09: neither existing occurrence qualifies. One ran access_mode private and the '
+      + 'other access_mode free, and both recorded zero viewers, so neither can be read as a '
+      + 'public class. An access mode is a setting, not an audience.',
+    airedRecord: [
+      'The 15 Oct occurrence is titled "First Private Technical Airing" in the database, while '
+        + 'ticket L11.7 calls the 13 Oct recording the first private technical airing and the '
+        + '15 Oct one "the first production airing". The two records disagree about which event '
+        + 'was which, and that should be settled before either is cited in a case study.',
+    ],
     note: 'This is the event the case study is ultimately about, and the one that converts most '
       + 'of this pack from a description of a system into a record of a system that ran. It '
       + 'depends on the first live test and on the studio, so it is third in a chain of three. '
@@ -217,22 +264,34 @@ const CAPTURES = [
   },
   {
     key: 'metrics', bullet: 'metrics', match: 'Metrics', state: 'NOT_YET',
-    settledBy: 'A class airing, plus one production query to establish whether viewer telemetry '
-      + 'has collected a single row since the player was wired to report on 2026-10-20. Until '
-      + 'that query runs, the measurement path is unproven in production as well as unexercised.',
-    note: 'Deliberately empty. Every counter the system exposes currently has nothing in it, and '
-      + 'a zero printed from an unaired system is the exact mistake the telemetry work was built '
-      + 'to avoid - the audience endpoint returns no number at all when collection fails, rather '
-      + 'than a confident zero.',
+    settledBy: 'A class aired to an audience. The production query this entry used to ask for '
+      + 'was run on 2026-11-09 and is no longer outstanding.',
+    airedRecord: [
+      'Census of 2026-11-09, read-only: broadcast_viewer_sessions 0 rows, '
+        + 'broadcast_viewer_people 0 rows, broadcast_occurrence_metrics 0 rows. Distinct '
+        + 'non-staff, non-test viewers ever recorded: 0.',
+      'The instrument itself is sound: index idx_bvs_active exists and the planner chooses it '
+        + 'over a sequential scan. What is missing is an audience, not a measurement path.',
+    ],
+    note: 'Deliberately empty, and now empty for a sourced reason rather than an assumed one. '
+      + 'Every counter the system exposes has nothing in it, and a zero printed from an '
+      + 'unmeasured airing is the exact mistake the telemetry work was built to avoid - the '
+      + 'audience endpoint returns no number at all when collection fails, rather than a '
+      + 'confident zero.\n\n'
+      + 'One caveat that matters more than the zero does. The viewer was only wired to report '
+      + 'on 2026-10-20, so empty tables are not evidence that the 13 and 15 October airings had '
+      + 'no viewers. They are evidence that nothing has been measured since instrumentation '
+      + 'existed. Those two airings are unmeasurable after the fact, which is a cost already '
+      + 'incurred rather than a task outstanding.',
   },
   {
     key: 'quotes', bullet: 'quotes/feedback only when real', match: 'Quotes and feedback',
     state: 'NOT_YET',
     settledBy: 'A real viewer, instructor or stakeholder saying something after a real class, '
       + 'recorded verbatim with attribution and permission.',
-    note: 'Empty by instruction. The bootstrap says "only when real", and nobody has watched a '
-      + 'Colaberry Live class, so there is nothing to quote. The build refuses if an attributed '
-      + 'quotation appears anywhere in this document.',
+    note: 'Empty by instruction. The bootstrap says "only when real", and no viewer has ever '
+      + 'been recorded watching a Colaberry Live airing, so there is nobody to quote. The build '
+      + 'refuses if an attributed quotation appears anywhere in this document.',
   },
   {
     key: 'diagrams', bullet: 'final system diagrams', match: 'Final system diagrams',

@@ -130,6 +130,11 @@ function markdown() {
       c.evidence.forEach((e) => L.push(`- \`${e}\``));
     } else {
       L.push(`**What would settle it:** ${c.settledBy}`);
+      if (Array.isArray(c.airedRecord) && c.airedRecord.length) {
+        L.push('');
+        L.push('**What is on record, outside this repository:**');
+        c.airedRecord.forEach((r) => L.push(`- ${r}`));
+      }
     }
     L.push('');
   });
@@ -200,6 +205,34 @@ function selfCheck() {
           + 'unproven claim gets read as a proven one.');
       }
     }
+
+    // 2b. airedRecord: EXTERNAL references only, and only on an uncaptured item.
+    //
+    // This field says what is known about an event without claiming the capture is met. If it
+    // were allowed to hold a repo path it would reintroduce exactly the confusion the asymmetry
+    // above exists to prevent, so a path-shaped string is refused here rather than reviewed.
+    if (c.airedRecord !== undefined) {
+      if (!Array.isArray(c.airedRecord) || c.airedRecord.length === 0) {
+        throw new Error(`capture "${c.key}" has an airedRecord that is not a non-empty array`);
+      }
+      if (c.state === 'CAPTURED') {
+        throw new Error(`capture "${c.key}" is CAPTURED and also carries an airedRecord. `
+          + 'Captured evidence belongs in `evidence`, where it is stat\'ed; airedRecord is for '
+          + 'what is known about an event that has NOT been captured.');
+      }
+      c.airedRecord.forEach((r) => {
+        if (typeof r !== 'string' || r.trim().length < 40) {
+          throw new Error(`capture "${c.key}" has an airedRecord entry too thin to be useful`);
+        }
+        const pathish = /(^|\s)[\w.-]*(?:\/[\w.-]+)+/.test(r)
+          || /\.(?:md|js|ts|tsx|json|pdf|html|sql|ya?ml)\b/i.test(r);
+        if (pathish) {
+          throw new Error(`capture "${c.key}" puts what looks like a file path in airedRecord: `
+            + `"${r.slice(0, 60)}". An uncaptured item must not name a file, and airedRecord is `
+            + 'not a loophole in that rule — use an external identifier a reader must look up.');
+        }
+      });
+    }
   });
 
   // 3. EVERY EVIDENCE PATH EXISTS.
@@ -245,6 +278,49 @@ function selfCheck() {
     throw new Error(`the document contains an attributed quotation (${q[0].slice(0, 60)}...). `
       + 'Quotes are permitted only when real, and nobody has watched a class yet.');
   }
+
+  // 5b. THE AIRING RECORD, AND THE FOOTAGE THAT CAN STILL BE LOST.
+  //
+  // The first version of this pack said no live test had happened. Three airings had. The
+  // correction is pinned here so it cannot be quietly reverted to the simpler, false sentence,
+  // and so the one genuinely destructive risk on this ticket keeps its place in the document.
+  const firstTest = D.CAPTURES.find((c) => c.key === 'firstTest');
+  if (!firstTest) throw new Error('the firstTest capture is missing');
+  if (!Array.isArray(firstTest.airedRecord) || firstTest.airedRecord.length < 3) {
+    throw new Error('the firstTest capture does not record all three airings (13, 15 and 20 '
+      + 'October 2026). Without them the pack reads as though nothing has ever aired, which is '
+      + 'the error this entry was corrected to fix.');
+  }
+  ['b4c0c11c60952605105180b02c0d3db4', '08def3066403e44d507fc16709cc9a4e'].forEach((id) => {
+    if (!md.includes(id)) {
+      throw new Error(`the document no longer names ${id}. That recording is the only copy of `
+        + 'the first airing and its live input is scheduled for deletion when this ticket '
+        + 'closes; dropping the identifier is how the footage gets lost.');
+    }
+  });
+  // Both halves are required, and deliberately not an either/or. An earlier version of this
+  // guard accepted any one of three phrasings, and a mutation that deleted the instruction
+  // still matched on a passing mention of the live input elsewhere in the same entry. Naming
+  // the risk is not the same as saying what to do about it, so the check demands the
+  // instruction ("pull the footage first") AND the ordering ("the deletion is last").
+  const WARN_HALVES = [
+    /Pull that footage into the pack\s+first/i,
+    /the deletion is the last step/i,
+  ];
+  WARN_HALVES.forEach((re) => {
+    if (!re.test(md)) {
+      throw new Error('the pack no longer tells the reader what to do about the 13 October '
+        + `footage (missing: ${re.source}). Deleting that live input destroys the only copy of `
+        + 'the first airing, so naming the risk without the instruction is not enough.');
+    }
+  });
+  ['no class has aired', 'nothing has ever aired', 'has never aired'].forEach((phrase) => {
+    if (md.toLowerCase().includes(phrase)) {
+      throw new Error(`the pack claims "${phrase}", which production contradicts: two `
+        + 'occurrence rows exist and ticket L11.7 names a third recording. What is true is that '
+        + 'no airing has ever been MEASURED.');
+    }
+  });
 
   // 6. THE COUNTED FIGURE IS SUBSTITUTED AND PRESENT.
   if (md.includes(D.TEST_COUNT_TOKEN)) {
@@ -302,7 +378,11 @@ function html() {
       .replace(/\n\n/g, '</p><p>');
     const tail = c.state === 'CAPTURED'
       ? `<p class="ev"><strong>Evidence:</strong> ${c.evidence.map((e) => `<code>${esc(e)}</code>`).join(' · ')}</p>`
-      : `<p class="ev"><strong>What would settle it:</strong> ${esc(c.settledBy)}</p>`;
+      : `<p class="ev"><strong>What would settle it:</strong> ${esc(c.settledBy)}</p>`
+        + ((c.airedRecord || []).length
+          ? `<p class="ev"><strong>On record, outside this repository:</strong> ${
+            c.airedRecord.map((r) => esc(r)).join(' · ')}</p>`
+          : '');
     const cls = c.state === 'CAPTURED' ? 'ok' : (c.state === 'BLOCKED' ? 'bad' : 'warn');
     return `<h2>${esc(c.match)} <span class="tag ${cls}">${esc(c.state)}</span></h2>`
       + `<p>${body}</p>${tail}`;

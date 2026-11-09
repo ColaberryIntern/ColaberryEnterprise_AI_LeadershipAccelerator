@@ -58,8 +58,16 @@ const META = {
    * documents in the tree: no Colaberry Live airing is recorded in the repository. Absence of a
    * record is not proof no airing happened, so this is stated as what was checked and when,
    * never as what is true. Same discipline as l114Data's stateCheckedOn.
+   *
+   * THAT RULE WAS WRITTEN HERE AND THEN BROKEN TWO SECTIONS LOWER. The first version of this
+   * brief turned "not recorded in the repository" into "it has never aired" in its lead and in
+   * its risk section. Three airings had in fact happened; their record was on Basecamp ticket
+   * L11.7 and in the production database, neither of which a repository build can read. Checked
+   * again on 2026-11-09 against production, read-only - see AIRINGS below. The lesson is not
+   * that the check was too weak; it is that a document must not promote the scope of its own
+   * evidence, and the scope here was always "this repository".
    */
-  stateCheckedOn: '2026-11-08',
+  stateCheckedOn: '2026-11-09',
 };
 
 /** The question this brief exists to answer, quoted from the bootstrap's own audience table. */
@@ -186,6 +194,52 @@ const DERIVED = (() => {
 })();
 
 /** The brief's prose. One entry per REQUIRES key; the check refuses any mismatch either way. */
+/**
+ * THE AIRING RECORD, read from production on 2026-11-09, read-only.
+ *
+ *   - broadcast_occurrences holds 2 rows. "Colaberry Live - First Private Technical Airing"
+ *     started 15 Oct 15:13 UTC with access_mode `free` and has editorial_state `ended` but a
+ *     NULL ended_at. "Colaberry Live - Test 2" ran 20 Oct 13:49-14:09 UTC, access_mode
+ *     `private`.
+ *   - broadcast_occurrence_metrics, broadcast_viewer_sessions and broadcast_viewer_people are
+ *     all EMPTY. Distinct non-staff, non-test viewers ever recorded: zero.
+ *   - A third airing on 13 Oct exists only as a Cloudflare recording named on ticket L11.7,
+ *     with no occurrence row at all.
+ *
+ * So the accurate claim is narrower, and more useful, than either "it has aired" or "it has
+ * never aired": it has aired, and no airing has ever been measured. The empty tables do not
+ * prove nobody watched on 13 or 15 October - the viewer was only wired to report on 20 October
+ * - they prove nothing has been measured since.
+ */
+const AIRINGS = {
+  count: 3,
+  occurrenceRows: 2,
+  measuredViewers: 0,
+  telemetryWiredOn: '2026-10-20',
+  checkedOn: '2026-11-09',
+};
+
+const AIRING_NOTE = 'What has happened is narrower than it sounds. Checked against production '
+  + `on ${AIRINGS.checkedOn}, the database holds ${AIRINGS.occurrenceRows} occurrence rows - a `
+  + 'technical airing on 15 October and a test on 20 October - while a third airing on 13 '
+  + 'October survives only as a recording outside the platform, with no occurrence row at all. '
+  + `The viewer telemetry tables are empty: ${AIRINGS.measuredViewers} non-staff viewers have `
+  + 'ever been recorded watching any of them. Because the viewer was only wired to report on '
+  + `${AIRINGS.telemetryWiredOn}, that emptiness is not proof the earlier two had no audience; `
+  + 'it proves nothing has been measured since. No Colaberry Live class has been aired to an '
+  + 'audience anyone can count.';
+
+/**
+ * The framing sentence, defined once because it previously existed as two separate literals -
+ * one in the Markdown renderer and one in the HTML callout. Correcting a claim in one copy and
+ * not the other is the predictable failure of that arrangement, so there is now one copy.
+ */
+const LEAD = 'Colaberry Live is **built, and has aired three times without once being '
+  + 'measured.** Everything below that describes the system working describes it working under '
+  + 'test. That is not a hedge - it is the single most useful fact in this document, and the '
+  + 'section on risk explains what it has already cost. Where this brief cannot source '
+  + 'something, it says so instead of estimating.';
+
 const SECTIONS = {
   why: 'Today a live class is an event. It happens, it ends, and what it leaves behind is a '
     + 'recording nobody uses and a memory of who attended. Colaberry Live exists to change what '
@@ -280,12 +334,13 @@ const SECTIONS = {
     + 'unwatched live class. And the studio is a one-off capital cost sitting with Piyush, not '
     + 'a recurring line.',
 
-  risks: `The largest risk is the simplest: **it has never aired.** As of the L0.3 review on `
+  risks: `The largest risk is the simplest: **no airing has ever been measured.** As of the L0.3 review on `
     + `${DERIVED.reviewDate}, ${DERIVED.airingBlocked} of the ${DERIVED.openTickets} open `
     + 'tickets cannot be finished by writing code, because their acceptance criteria require a '
     + 'real class to have happened — three viewers on separate networks, a recorded latency, a '
     + 'replay verified after the fact. Everything in this brief that describes the system '
     + 'working describes it working in tests.\n\n'
+    + `${AIRING_NOTE}\n\n`
     + 'That distinction has already cost something real, which is the honest reason to take it '
     + 'seriously: four complete, well-tested units shipped that nothing called, and one of them '
     + 'meant a live class recorded zero viewers for five days while the server logs showed '
@@ -319,11 +374,15 @@ const SECTIONS = {
     + 'indistinguishable from an empty room and is the more expensive mistake.\n\n'
     + 'Beyond the live count: replay views, clip performance on YouTube, and $0 account '
     + 'creations attributed to a class — the funnel\'s own steps.\n\n'
-    + `**What no metric shows yet.** As checked on ${META.stateCheckedOn}, there is no record in `
-    + 'this repository of a Colaberry Live class having aired, so every number above currently '
-    + 'has nothing in it. Whether telemetry has collected a single row since the viewer was '
-    + 'wired to report on 2026-10-20 is still unverified; it takes one command '
-    + '(`scripts/explainBroadcastTelemetry.js`) against production to answer, and that is owed.',
+    + `**What no metric shows yet.** That question was open until ${META.stateCheckedOn}, when `
+    + 'the owed command (`scripts/explainBroadcastTelemetry.js`) was finally run against '
+    + 'production alongside a read-only census. The answer is that every number above has '
+    + 'nothing in it, and now for a sourced reason rather than an assumed one: '
+    + '`broadcast_viewer_sessions`, `broadcast_viewer_people` and '
+    + `\`broadcast_occurrence_metrics\` are all empty, so ${AIRINGS.measuredViewers} viewers `
+    + 'have ever been recorded. The measurement path itself is sound - the expected index '
+    + '`idx_bvs_active` exists and the planner chooses it - so what is missing is an audience, '
+    + 'not an instrument.',
 };
 
 const TOTALS = (() => ({
@@ -336,5 +395,5 @@ const TOTALS = (() => ({
 
 module.exports = {
   META, AUDIENCE_QUESTION, BRIEFING, REQUIRES, requiredCount, GAP_MARKER, GAPS,
-  FUNNEL, VENDORS, CITED, DERIVED, SECTIONS, TOTALS,
+  FUNNEL, VENDORS, CITED, DERIVED, SECTIONS, TOTALS, AIRINGS, AIRING_NOTE, LEAD,
 };
