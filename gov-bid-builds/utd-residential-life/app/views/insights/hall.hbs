@@ -1,0 +1,198 @@
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-4">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/insights">Insights</a></li>
+    <li class="breadcrumb-item active">{{building}}</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">{{building}}</h2>
+    <p class="text-muted mb-0 small">Hall-level view — drill down to a floor to see individual students</p>
+  </div>
+  <span class="badge bg-info text-dark px-3 py-2">
+    <i class="bi bi-building me-1"></i>Hall View
+  </span>
+</div>
+
+<!-- Hall KPI cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-primary">{{hallStats.residents}}</div>
+        <div class="small text-muted">Residents</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-secondary">{{hallStats.incidents}}</div>
+        <div class="small text-muted">Total Incidents</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-danger">{{hallStats.open}}</div>
+        <div class="small text-muted">Open / Escalated</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-info">{{hallStats.notes}}</div>
+        <div class="small text-muted">Staff Notes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Floor incident chart + floor grid -->
+<div class="row g-4 mb-4">
+  {{#if floors.length}}
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-light fw-semibold small py-2">
+        <i class="bi bi-bar-chart me-2 text-warning"></i>Incidents by Floor
+      </div>
+      <div class="card-body">
+        <canvas id="floorChart" style="max-height:240px"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+  {{else}}
+  <div class="col-12">
+  {{/if}}
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-layers me-2 text-primary"></i>Floors
+    </h5>
+    {{#if floors.length}}
+    <div class="row g-3">
+      {{#each floors}}
+      <div class="col-sm-6 col-md-4">
+        <a href="/insights/hall/{{urlencode ../building}}/floor/{{floor}}" class="text-decoration-none">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="fw-semibold text-dark fs-5">Floor {{floor}}</div>
+                <span class="badge bg-light text-dark border">{{residentCount}} residents</span>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                {{#if total}}
+                <span class="badge bg-secondary small">{{total}} incidents</span>
+                {{/if}}
+                {{#if noise}}
+                <span class="badge bg-warning text-dark small">{{noise}} noise</span>
+                {{/if}}
+                {{#if lockout}}
+                <span class="badge bg-primary small">{{lockout}} lockouts</span>
+                {{/if}}
+                {{#if escalated}}
+                <span class="badge bg-danger small">{{escalated}} escalated</span>
+                {{/if}}
+              </div>
+              <div class="text-primary small mt-2">
+                View students <i class="bi bi-arrow-right ms-1"></i>
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {{/each}}
+    </div>
+    {{else}}
+    <div class="alert alert-light border">
+      <i class="bi bi-info-circle me-2 text-muted"></i>No floor data yet — incidents and residents will appear here once recorded.
+    </div>
+    {{/if}}
+  </div>
+</div>
+
+<!-- Programs + Staff row -->
+<div class="row g-4">
+  <div class="col-lg-7">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-calendar-event me-2 text-success"></i>Approved Programs
+    </h5>
+    {{#if programs.length}}
+    <div class="card border-0 shadow-sm">
+      <div class="list-group list-group-flush">
+        {{#each programs}}
+        <div class="list-group-item py-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold small">{{title}}</div>
+              <div class="text-muted" style="font-size:.78rem">
+                {{categoryTitle}} · {{submitter_name}}
+              </div>
+            </div>
+            <span class="badge bg-success flex-shrink-0">Approved</span>
+          </div>
+          {{#if description}}
+          <div class="text-muted small mt-1" style="font-size:.78rem">{{description}}</div>
+          {{/if}}
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{else}}
+    <div class="text-muted small">No approved programs for this hall yet.</div>
+    {{/if}}
+  </div>
+
+  <div class="col-lg-5">
+    <h5 class="fw-semibold mb-3">
+      <i class="bi bi-people me-2 text-info"></i>Hall Staff
+    </h5>
+    {{#if staff.length}}
+    <div class="card border-0 shadow-sm">
+      <div class="list-group list-group-flush">
+        {{#each staff}}
+        <div class="list-group-item py-3">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="small fw-semibold">{{name}}</div>
+              <div class="text-muted" style="font-size:.78rem">{{email}}</div>
+            </div>
+            <span class="badge bg-light text-dark border small text-capitalize">
+              {{role}}
+            </span>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+    {{else}}
+    <div class="text-muted small">No staff assigned to this hall.</div>
+    {{/if}}
+  </div>
+</div>
+
+{{#if floors.length}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 12;
+new Chart(document.getElementById('floorChart'), {
+  type: 'bar',
+  data: {
+    labels: {{{chartFloorLabels}}},
+    datasets: [
+      { label: 'Noise',    data: {{{chartFloorNoise}}},   backgroundColor: '#ffc107' },
+      { label: 'Lockout',  data: {{{chartFloorLockout}}}, backgroundColor: '#0d6efd' },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+    scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true } }
+  }
+});
+</script>
+{{/if}}
