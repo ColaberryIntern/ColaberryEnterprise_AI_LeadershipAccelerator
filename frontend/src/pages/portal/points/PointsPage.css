@@ -178,13 +178,31 @@
 .points-root .pts-journey-h { display: flex; flex-direction: column; gap: 3px; margin-bottom: 18px; }
 .points-root .pts-journey-h h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--pr-ink); }
 
+/* The journey WRAPS. It used to be a single nowrap flex row inside an
+   overflow-x:auto box, which looked fine at the width the design was drawn at
+   and was unusable at the width the page actually gets.
+   Measured in production, 9 Nov 2026: the shell is 248px / 1fr / 300px, the
+   points page then splits its middle column into 462px + 340px, so the track
+   got a 420px window holding 1022px of rungs - about three of nine visible.
+   Horizontal scroll inside a nested 420px strip has no affordance: a mouse
+   wheel does not scroll it and no scrollbar is drawn, which is exactly what
+   Ruth Kumera reported on 27 Oct ("it doesn't let you scroll to the right to
+   reveal the content, rather it seems stuck on the cut off").
+   Three fixed columns rather than auto-fit, because the connector below has to
+   know where a row begins; and 3 divides the 9-rung ladder exactly. At the
+   narrowest width this page is built for the journey is 362px, giving 118px a
+   node - wider than the 110px the nowrap row was already using. */
 .points-root .pts-jtrack {
   list-style: none; margin: 0; padding: 2px 0 4px;
-  display: flex; gap: 4px;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 4px;
 }
 .points-root .pts-jnode {
-  position: relative; flex: 1 0 110px; min-width: 110px;
+  position: relative;
+  /* min-width:0 is load-bearing: a grid item defaults to min-content width and
+     would push the track wider than its column, reintroducing the clipping. */
+  min-width: 0;
   display: flex; flex-direction: column; align-items: center; text-align: center;
 }
 /* connector line coming in from the previous node (filled up to the current rung) */
@@ -192,6 +210,9 @@
   content: ''; position: absolute; top: 18px; left: -52%; width: 100%; height: 3px;
   background: var(--pr-line); z-index: 0; border-radius: 3px;
 }
+/* ...but never into the first node of a row, where it would reach back across
+   the grid gap to the node above-right and read as a line to nowhere. */
+.points-root .pts-jnode:nth-child(3n + 1)::before { content: none; }
 /* The connector into a reached rung wears that rung's own colour, so the track
    reads as the ladder's palette left to right (rungTones.css). */
 .points-root .pts-jnode.done::before,

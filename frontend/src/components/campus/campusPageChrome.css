@@ -121,6 +121,24 @@
 @media (min-width:1201px){
   .te-shell.contacts-collapsed:has(.te-contacts .cm-rail){grid-template-columns:248px 1fr 300px}
   .te-shell.collapsed.contacts-collapsed:has(.te-contacts .cm-rail){grid-template-columns:66px 1fr 300px}
+
+  /* ...and because the column stays 300px, collapsing has to actually close the
+     PEOPLE list, not just hide each name.
+     Everywhere else `contacts-collapsed` narrows the column to a 66px avatar
+     rail, and the avatar-only rules in TodayShell.css are what make that read as
+     closed. Here the two rules above deliberately hold the column at 300px for
+     the rail, so those same avatar-only rows stayed 300px wide and the panel
+     looked half-shut. Ruth Kumera, 27 Oct: "The people tab also is not closing
+     completely when clicking on the closing arrow on the top left." Verified in
+     production 9 Nov: clicking the toggle set `contacts-collapsed` and hid the
+     names (so the click and the state were never the problem), while
+     grid-template-columns stayed `248px 892px 300px` and .te-contacts stayed
+     300px wide.
+     .te-ct-head is kept deliberately - it holds .te-ct-toggle, which is the only
+     way back. Hiding it would close the panel permanently. */
+  .te-shell.contacts-collapsed:has(.te-contacts .cm-rail) .te-ct-find,
+  .te-shell.contacts-collapsed:has(.te-contacts .cm-rail) .te-ct-grp,
+  .te-shell.contacts-collapsed:has(.te-contacts .cm-rail) .te-ctrow{display:none}
 }
 /* too narrow for the column (it shrinks to avatars at 1200 px and goes at 820 px): the drawer instead */
 @media (max-width:1200px){ .cm-pagebits .cm-steps-btn{display:inline-flex;align-items:center} .te-contacts .cm-rail{display:none} }
