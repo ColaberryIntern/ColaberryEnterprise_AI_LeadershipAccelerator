@@ -252,6 +252,65 @@ describe('communicationSafetyService', () => {
       expect(decision.blockedReason).toBe('scheduler_paused');
     });
 
+    // ── AF12.5: the UNREADABLE pause flag ────────────────────────────────
+    //
+    // The test above drives the readable path, and it passed before this fix as well as after,
+    // so it proves nothing about what happens when the flag cannot be read. These two do, and
+    // they are a pair on purpose: one asserts the refusal, the other asserts that the refusal
+    // did not become "block everything". A fail-closed change is only safe if BOTH hold.
+
+    test('REFUSES the send when the pause flag cannot be read', async () => {
+      const dbDown = Object.assign(new Error('connection terminated unexpectedly'), { code: 'ECONNRESET' });
+      mockGetSetting.mockImplementation(async (key: string) => {
+        if (key === 'scheduler_paused') throw dbDown;
+        return null;
+      });
+      const req: SendRequest = { leadId: 1, channel: 'email', campaignId: 'c1' };
+      const decision = await evaluateSend(req);
+      expect(decision.allowed).toBe(false);
+      expect(decision.deliveryMode).toBe('blocked');
+      // A DISTINCT reason from 'scheduler_paused': "we are paused" and "we cannot tell whether
+      // we are paused" are different operational facts, and only the second one means somebody
+      // has to go and look at the database.
+      expect(decision.blockedReason).toBe('scheduler_pause_unreadable');
+    });
+
+    test('names a stable error_class in the log when the flag cannot be read', async () => {
+      // The ticket's acceptance asks for a NAMED error class, not just a refusal — an
+      // unexplained block at the send chokepoint is its own outage to debug.
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        mockGetSetting.mockImplementation(async (key: string) => {
+          if (key === 'scheduler_paused') {
+            throw Object.assign(new Error('no route to host'), { code: 'ECONNREFUSED' });
+          }
+          return null;
+        });
+        const req: SendRequest = { leadId: 1, channel: 'email', campaignId: 'c1' };
+        await evaluateSend(req);
+        const logged = spy.mock.calls.map((c) => c.join(' ')).join('\n');
+        expect(logged).toContain('scheduler_pause_unreadable');
+        // ECONNREFUSED classifies as UpstreamUnavailable, which is one of CLAUDE.md's canonical
+        // buckets. Asserting the bucket rather than merely "some class" is what stops this
+        // regressing to the bare string 'Error' the classifier exists to prevent.
+        expect(logged).toContain('UpstreamUnavailable');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('still SENDS when the pause flag has simply never been set', async () => {
+      // The outage guard. `scheduler_paused` is absent from settingsService DEFAULTS, so an
+      // untouched flag is a SUCCESSFUL read returning null. If failing closed ever starts
+      // treating that as unknown, every outbound send in the system stops, and this is the
+      // test that says so instead of production saying it.
+      mockGetSetting.mockImplementation(async () => null);
+      const req: SendRequest = { leadId: 1, channel: 'email', campaignId: 'c1' };
+      const decision = await evaluateSend(req);
+      expect(decision.allowed).toBe(true);
+      expect(decision.deliveryMode).toBe('live');
+    });
+
     test('should allow full pipeline when everything is good', async () => {
       const req: SendRequest = { leadId: 1, channel: 'email', campaignId: 'c1' };
       const decision = await evaluateSend(req);

@@ -13,7 +13,8 @@ import { assertConsentForSend } from './consentService';
 import { checkBrandPreference } from '../modules/communications/brandPreferenceGate';
 import { isSuppressedForChannel, type SuppressibleChannel } from './channelSuppression';
 // Phase 6 T602: the one global kill switch, its lenient reader (a read error is "off": the decision is unchanged).
-import { isKillSwitchActive } from './launchSafety';
+// AF12.5: and the scheduler pause, read the opposite way - an unreadable flag blocks the send.
+import { isKillSwitchActive, readSchedulerPause } from './launchSafety';
 // Phase 5 T511: the journey's campaign registry - a module with no imports, an in-memory lookup.
 import { isRegisteredJourneyCampaignKey } from './growthJourney/execution/campaignKeys';
 
@@ -295,20 +296,14 @@ export async function evaluateSend(req: SendRequest): Promise<SendDecision> {
     return { allowed: false, redirect: null, testMode: false, blockedReason: 'kill_switch', deliveryMode: 'blocked' };
   }
 
-  // 0.5. Global scheduler pause check
-  try {
-    const paused = await getSetting('scheduler_paused');
-    if (paused === true || paused === 'true') {
-      return {
-        allowed: false,
-        redirect: null,
-        testMode: false,
-        blockedReason: 'scheduler_paused',
-        deliveryMode: 'blocked',
-      };
-    }
-  } catch {
-    // Fail open for pause check — if DB is down, other checks will catch it
+  // 0.5. The scheduler pause, which FAILS CLOSED (AF12.5): an unreadable flag blocks rather than
+  // being swallowed as "not paused". Reader and reasoning live in `launchSafety` beside the kill
+  // switch. The rate limit below still fails open, deliberately - a throttle is not a stop.
+  const pause = await readSchedulerPause({
+    channel: req.channel, source: req.source ?? null, campaign_id: req.campaignId ?? null,
+  });
+  if (pause.blocked) {
+    return { allowed: false, redirect: null, testMode: false, blockedReason: pause.reason, deliveryMode: 'blocked' };
   }
 
   // 1. Global rate limit
