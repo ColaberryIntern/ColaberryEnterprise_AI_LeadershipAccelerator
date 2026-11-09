@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { ScheduledEmail, Campaign, CampaignLead } from '../../models';
+import { cancelScheduledEmail } from '../scheduledEmailCancellation'; // R3: every cancellation states its reason
 import CampaignError from '../../models/CampaignError';
 import { logAgentActivity, logAiEvent } from '../aiEventService';
 import { checkLeadSendable } from '../communicationSafetyService';
@@ -45,7 +46,7 @@ export async function runCampaignRepairAgent(agentId: string): Promise<AgentExec
         if (action.lead_id) {
           const leadCheck = await checkLeadSendable(action.lead_id);
           if (!leadCheck.sendable) {
-            await action.update({ status: 'cancelled' });
+            await cancelScheduledEmail(action, 'lead_not_sendable', { not_sendable_reason: leadCheck.reason });
             actions.push({
               campaign_id: action.campaign_id || '',
               action: 'retry_skipped_unsendable_lead',

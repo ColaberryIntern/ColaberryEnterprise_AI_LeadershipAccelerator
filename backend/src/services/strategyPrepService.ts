@@ -1,5 +1,6 @@
 import { StrategyPrepInput } from '../schemas/strategyPrepSchema';
 import { FollowUpSequence, Campaign, ScheduledEmail, CampaignLead } from '../models';
+import { cancelScheduledEmails, type CancelReason } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import { enrollLeadInSequence } from './sequenceService';
 import { env } from '../config/env';
 
@@ -69,10 +70,7 @@ async function cancelCampaignActionsForLead(leadId: number, sequenceName: string
   const sequence = await FollowUpSequence.findOne({ where: { name: sequenceName } });
   if (!sequence) return 0;
 
-  const [count] = await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, sequence_id: sequence.id, status: 'pending' } }
-  );
+  const count = await cancelScheduledEmails({ lead_id: leadId, sequence_id: sequence.id, status: 'pending' }, 'superseded_by_strategy_prep');
 
   if (count > 0) {
     const campaign = await Campaign.findOne({ where: { sequence_id: sequence.id } });
@@ -152,8 +150,9 @@ export async function enrollInPrepNudge(
       if (minutesBefore !== undefined && scheduledAt) {
         const countdownTime = new Date(scheduledAt.getTime() - minutesBefore * 60 * 1000);
         if (countdownTime <= now) {
-          // This action's window has already passed — cancel it
+          // This action's window has already passed, so cancel it (R3: with its reason)
           updates.status = 'cancelled';
+          updates.metadata.cancel_reason = 'prep_window_passed' satisfies CancelReason;
           updates.scheduled_for = countdownTime;
           cancelled++;
         } else {
@@ -229,16 +228,7 @@ export async function cancelPrepNudge(leadId: number): Promise<number> {
   const result = await findSequenceAndCampaign(PREP_NUDGE_SEQUENCE_NAME);
   if (!result) return 0;
 
-  const [count] = await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    {
-      where: {
-        lead_id: leadId,
-        sequence_id: result.sequence.id,
-        status: 'pending',
-      },
-    }
-  );
+  const count = await cancelScheduledEmails({ lead_id: leadId, sequence_id: result.sequence.id, status: 'pending' }, 'prep_nudge_cancelled');
 
   if (count > 0) {
     console.log(`[PrepService] Cancelled ${count} pending nudge actions for lead ${leadId}`);

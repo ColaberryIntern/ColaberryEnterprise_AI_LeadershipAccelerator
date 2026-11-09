@@ -10,7 +10,7 @@
  */
 
 import Lead from '../models/Lead';
-import ScheduledEmail from '../models/ScheduledEmail';
+import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import UnsubscribeEvent from '../models/UnsubscribeEvent';
 import { logAiEvent } from './aiEventService';
 import { revokeConsent } from './consentService';
@@ -42,10 +42,7 @@ export async function processInboundSms(leadId: number, messageBody: string): Pr
     }
 
     // 2. Cancel all pending scheduled actions for this lead
-    const [cancelledCount] = await ScheduledEmail.update(
-      { status: 'cancelled' },
-      { where: { lead_id: leadId, status: 'pending' } },
-    );
+    const cancelledCount = await cancelScheduledEmails({ lead_id: leadId, status: 'pending' }, 'sms_opt_out');
 
     // 3. Create unsubscribe event
     await UnsubscribeEvent.create({

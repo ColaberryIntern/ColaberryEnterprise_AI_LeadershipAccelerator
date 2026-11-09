@@ -5,7 +5,7 @@
  *  - C121 (Ali, 2026-11-06: "put Maya in the same IM system as everyone else"): her desk is the same card as Reese's and Dara's.
  *    On duty with a DM host: "Message Maya" and her three questions, which open the shared chat dock; no embedded website chat,
  *    no visitor-id check, no request to the public /api/chat endpoints, and no "Executive briefing" anywhere.
- *  - Site chat off: "opens soon", no button and no link.
+ *  - Off duty (site chat off, or M36: paused on the M37 switch): "Back soon" like every desk, no button and no link.
  */
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -135,9 +135,9 @@ describe('the Maya desk (C121: the shared chat)', () => {
     expect(container.querySelector('[data-testid="cm-desk-message-maya"]')).toBeNull();
   });
 
-  it('site chat off: "opens soon", no button and no link', async () => {
-    await render(<StaffDesk desk={{ ...maya, on_duty: false, enrollment_id: null, prompts: [], opens: 'site_chat_off' }} />);
-    expect(container.querySelector('[data-testid="cm-desk-status-maya"]')?.textContent).toBe("Maya's desk opens soon");
+  it.each([['site_chat_off'], ['maya_paused']])('off duty (%s): "Back soon", no button and no link (M36)', async (opens) => {
+    await render(<StaffDesk desk={{ ...maya, on_duty: false, enrollment_id: null, prompts: [], opens }} />);
+    expect(container.querySelector('[data-testid="cm-desk-status-maya"]')?.textContent).toBe('Back soon');
     expect(container.querySelectorAll('button, a')).toHaveLength(0);
   });
 });

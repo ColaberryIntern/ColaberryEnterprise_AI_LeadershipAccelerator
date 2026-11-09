@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   buildMarketingFunnelGraph,
@@ -53,6 +54,26 @@ router.get('/api/admin/marketing/funnel/acquisition', requireAdmin, async (req: 
   } catch (err: any) {
     console.error('[marketing] acquisition funnel error:', err?.message);
     res.status(500).json({ error: 'Failed to load the acquisition funnel', error_class: 'InternalError' });
+  }
+});
+
+// R3: sent, failed and cancelled-by-reason for the same window, so "nothing is being sent" reads as zero on this page.
+const SendOutcomesQuery = z.object({ days: z.coerce.number().int().default(30) });
+router.get('/api/admin/marketing/funnel/send-outcomes', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    // Zod-validated, then clamped exactly like the acquisition window above, so the two always describe the same days.
+    const parsed = SendOutcomesQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request', error_class: 'ValidationError' });
+      return;
+    }
+    const days = Math.min(365, Math.max(1, parsed.data.days));
+    const { sendOutcomes } = await import('../../services/marketing/sendOutcomes');
+    res.json(await sendOutcomes(days));
+  } catch (err: unknown) {
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'send_outcomes_failed', outcome: 'failure',
+      error_class: err instanceof Error ? err.name : 'UnknownError', context: { message: err instanceof Error ? err.message : String(err) } }));
+    res.status(500).json({ error: 'Failed to load send outcomes', error_class: 'InternalError' });
   }
 });
 

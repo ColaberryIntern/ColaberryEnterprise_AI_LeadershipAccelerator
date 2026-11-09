@@ -3,7 +3,7 @@ import { isReeseEnabled, getReeseEnrollmentId } from '../reese/reeseIdentitySeed
 import { isDaraEnabled, getDaraEnrollmentId } from '../curriculum/daraIdentitySeed';
 import { getMayaEnrollmentId } from '../mayaIdentitySeed';
 import type { CampusArea } from './campusAreas';
-import { env } from '../../config/env';
+import { resolveMayaMode } from '../maya/mayaPromotion';
 import { AGENT_PLACES, canReachAgent } from './agentPlaces';
 import type { SectionKey } from '../access/mgmtRoles';
 
@@ -17,12 +17,13 @@ import type { SectionKey } from '../access/mgmtRoles';
  * disagree if one of those shared functions changes for both. A test pins the frontend precedence line.
  *
  * MAYA (C121, Ali 2026-11-06: "put Maya in the same IM system as everyone else"): she answers in the shared portal chat like
- * Reese and Dara, so her desk carries her enrollment id and her suggested questions. Her desk is still on duty exactly when
- * the site chat is switched on (ENABLE_CHAT, the C6 rule), which is also what gates her DM replies (maya/mayaReplyService.ts);
- * with it off it reads "opens soon". Her AiAgent row is NOT what gates her (see mayaIdentitySeed.ts).
+ * Reese and Dara, so her desk carries her enrollment id and her suggested questions. M36 (2026-11-09): her desk is on duty
+ * exactly when her DM reply is LIVE on the M37 switch (maya/mayaPromotion.resolveMayaMode: kill switch, ENABLE_CHAT,
+ * promotion), the same answer that gates her replies (maya/mayaReplyService.ts); off, it reads "Back soon" like every desk.
+ * Her AiAgent row is NOT what gates her (see mayaIdentitySeed.ts).
  *
  * ON DUTY. Reese and Dara answer DMs whenever their AiAgent row is enabled and their identity is seeded (their reply
- * paths check nothing else); Maya when ENABLE_CHAT is on and her identity is seeded. Off duty, the desk reads "Back soon"
+ * paths check nothing else); Maya when her DM reply is live and her identity is seeded. Off duty, the desk reads "Back soon"
  * and carries no enrollment id, so nothing can open a conversation that would get no answer.
  *
  * PLACES (C87). Each desk's building, and for the Staff Office its floor and office door, come from agentPlaces.ts: Reese
@@ -82,12 +83,15 @@ async function mayaEnrollmentOrNull(): Promise<string | null> {
   }
 }
 
-/** Maya's desk (C121): the agentDesk pattern, on duty iff the site chat flag is on and her identity is seeded. With the flag
- *  off it says "opens soon" (opens: 'site_chat_off'). C21 (v6 D3): her desk is in the Admissions building beside the gate. */
+/** Maya's desk (C121; M36, 2026-11-09): the agentDesk pattern, on duty iff her DM reply is LIVE on the M37 switch
+ *  (resolveMayaMode: kill switch, ENABLE_CHAT, promotion) and her identity is seeded, so the desk never offers a
+ *  conversation she would not answer. Off duty she is "back soon", never an error: opens is 'site_chat_off' when chat is
+ *  off and 'maya_paused' when an admin reverted her or the kill switch is on. C21 (v6 D3): Admissions, beside the gate. */
 async function mayaDesk(): Promise<StaffDesk> {
-  const on = env.enableChat === true;
+  const mode = await resolveMayaMode('respondToExplorerDm');
+  const on = mode.mode === 'live';
   const desk = await agentDesk('maya', 'Maya', 'Welcome desk', MAYA_PROMPTS, async () => on, mayaEnrollmentOrNull);
-  return on ? desk : { ...desk, opens: 'site_chat_off' };
+  return on ? desk : { ...desk, opens: mode.reason === 'chat_off' ? 'site_chat_off' : 'maya_paused' };
 }
 
 /** C21 (v6 D3): Maya is always in her Admissions building and on every help desk, for every audience (it replaces C6's

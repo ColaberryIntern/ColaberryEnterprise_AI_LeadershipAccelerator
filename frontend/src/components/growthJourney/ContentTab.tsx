@@ -2,6 +2,7 @@ import React from 'react';
 import AsyncPanel from '../explorerGrowth/AsyncPanel';
 import { useGrowthJourneyData } from './useGrowthJourneyData';
 import { listOfferPolicies } from '../../services/growthJourneyInspectApi';
+import ContentApprovalForm from './ContentApprovalForm';
 import type { OfferPolicyRow } from '../../services/growthJourneyInspectApi';
 import { safeText } from './journeyText';
 import {
@@ -100,6 +101,7 @@ export default function ContentTab({ brandName, unseeded }: Props) {
   return (
     <section>
       <h2 className="h5 mb-3">What may be said, and which assets are approved</h2>
+      <ContentApprovalForm onChanged={policies.reload} />
       <JourneyFilterBar
         right={(
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={policies.reload}>

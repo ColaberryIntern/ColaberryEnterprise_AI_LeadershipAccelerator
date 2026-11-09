@@ -11,6 +11,7 @@
  */
 import { Op } from 'sequelize';
 import { Lead, CampaignLead, ScheduledEmail, UnsubscribeEvent } from '../models';
+import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import { logActivity } from './activityService';
 import { revokeConsent } from './consentService';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -228,19 +229,12 @@ export async function processOptOut(
  * Returns the count of cancelled actions.
  */
 export async function cancelPendingActions(leadId: number): Promise<number> {
-  const [count] = await ScheduledEmail.update(
-    {
-      status: 'cancelled',
-      metadata: { cancelled_reason: 'lead_opted_out', cancelled_at: new Date().toISOString() },
-    } as any,
-    {
-      where: {
-        lead_id: leadId,
-        status: { [Op.in]: ['pending', 'processing'] },
-      },
-    },
+  // R3: the reason is MERGED into each row's metadata (this used to overwrite it); the legacy keys are kept for readers.
+  return cancelScheduledEmails(
+    { lead_id: leadId, status: { [Op.in]: ['pending', 'processing'] } },
+    'lead_opted_out',
+    { extra: { cancelled_reason: 'lead_opted_out', cancelled_at: new Date().toISOString() } },
   );
-  return count;
 }
 
 // ---------------------------------------------------------------------------

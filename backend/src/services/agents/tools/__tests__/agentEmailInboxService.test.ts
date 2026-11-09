@@ -155,6 +155,16 @@ describe('approval, which never sends', () => {
     }
   });
 
+  it('R3: a discard cancels WITH a reason (cancel_reason agent_draft_discarded); an approval writes no cancel_reason', async () => {
+    query.mockResolvedValue([[], 1]);
+    await discardAgentDraft('draft-2', 'ali@colaberry.com');
+    expect(bindOf(0)).toMatchObject({ to: 'cancelled' });
+    expect(sqlOf(0)).toMatch(/CASE WHEN \$to::text = 'cancelled' THEN jsonb_build_object\('cancel_reason', 'agent_draft_discarded'\)/);
+    // The reason is a member of the closed vocabulary the marketing page reads.
+    const { CANCEL_REASONS } = jest.requireActual('../../../scheduledEmailCancellation');
+    expect(CANCEL_REASONS).toContain('agent_draft_discarded');
+  });
+
   it('is guarded on the current status inside the UPDATE, not read-then-write', async () => {
     query.mockResolvedValue([[], 1]);
     await approveAgentDraft('draft-1', 'ali@colaberry.com');

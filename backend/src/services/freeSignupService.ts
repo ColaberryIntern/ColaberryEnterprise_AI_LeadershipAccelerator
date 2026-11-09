@@ -302,16 +302,15 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     programme: input.programme,
   });
 
-  // Reese's intros. Self-serve signup is the other way a student reaches the
-  // portal for the first time, so it gets the same greeting as the magic-link
-  // path. Fire-and-forget: signup must not wait on a DM, and maybeSendWelcomes
-  // is idempotent, so a returning guest whose account is merely being reused is
-  // short-circuited rather than greeted twice.
+  // Reese's intros, then Maya's welcome (M32, shadow by default). Self-serve signup is
+  // the other way a student reaches the portal for the first time, so it gets the same
+  // greeting as the magic-link path. Fire-and-forget: signup must not wait on a DM. Both
+  // are idempotent, so a returning guest whose account is reused is not greeted twice.
   void (async () => {
     try {
-      const { maybeSendWelcomes } = await import('./reese/reeseWelcomeService');
-      await maybeSendWelcomes(enrollment.id);
-    } catch { /* never allowed to affect signup */ }
+      const { runSignupWelcomes } = await import('./signupWelcomes');
+      await runSignupWelcomes(enrollment.id);
+    } catch { /* never allowed to affect signup; runSignupWelcomes logs its own failures */ }
   })();
 
   // Resolve the door's slug to a tenant and brand through the one resolver that

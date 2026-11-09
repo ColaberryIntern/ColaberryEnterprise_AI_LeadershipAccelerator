@@ -272,15 +272,8 @@ export async function runCampaignTest(
   // Scoped to this campaign AND any orphaned actions (campaign_id IS NULL).
   if (testLead) {
     try {
-      const [cancelledCount] = await ScheduledEmail.update(
-        { status: 'cancelled' } as any,
-        {
-          where: {
-            lead_id: testLead.id,
-            status: { [Op.in]: ['pending', 'processing', 'paused'] },
-          },
-        },
-      );
+      const { cancelScheduledEmails } = await import('../scheduledEmailCancellation'); // R3: with its reason
+      const cancelledCount = await cancelScheduledEmails({ lead_id: testLead.id, status: { [Op.in]: ['pending', 'processing', 'paused'] } }, 'test_harness_cleanup');
       if (cancelledCount > 0) {
         console.log(`[TestHarness] Cancelled ${cancelledCount} pending test action(s) for test lead ${testLead.id}`);
       }

@@ -84,16 +84,20 @@ export interface HandoffQueueRow {
   source: 'decision_deferral' | 'human_review' | 'reply_route' | 'manual';
   created_at: string;
   updated_at: string;
+  /** M35: present only when listed with order=readiness. The Sales Readiness Score, or null when it could not be computed. */
+  readiness?: { total: number; scoreableMax: number; coverage: number } | null;
 }
 
 export interface HandoffQueueResponse extends JourneyPage {
   rows: HandoffQueueRow[];
   status: string;
   owner_queue: string | null;
+  /** M35: which order the server used. */
+  order?: 'queue' | 'readiness';
 }
 
 export const listHandoffQueue = (
-  q: { brand_id?: string; status?: string; owner_queue?: string; limit?: number; offset?: number } = {},
+  q: { brand_id?: string; status?: string; owner_queue?: string; limit?: number; offset?: number; order?: 'queue' | 'readiness' } = {},
 ): Promise<HandoffQueueResponse> =>
   api.get<HandoffQueueResponse>(`${BASE}/handoffs${params(q)}`).then((r) => r.data);
 

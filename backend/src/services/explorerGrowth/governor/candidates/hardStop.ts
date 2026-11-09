@@ -23,7 +23,8 @@ export type HardStopReason =
   | 'dnc'
   | 'consent_revoked'
   | 'kill_switch'
-  | 'campaign_inactive';
+  | 'campaign_inactive'
+  | 'human_owned';
 
 /**
  * Returns the reason to stop, or null to continue.
@@ -45,6 +46,9 @@ export function hardStopReason(ctx: HardStopBearer): HardStopReason | null {
   if (h.consentRevoked) return 'consent_revoked';
   if (h.killSwitch) return 'kill_switch';
   if (h.campaignInactive) return 'campaign_inactive';
+  // M35 / M5: a person has taken this learner (an accepted admissions handoff). Last, because the reasons above are
+  // permanent and more informative; this one lifts when the handoff closes.
+  if (h.humanOwned) return 'human_owned';
   return null;
 }
 

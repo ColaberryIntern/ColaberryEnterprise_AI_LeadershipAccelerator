@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
 import { FollowUpSequence, ScheduledEmail, Lead, Campaign, CampaignLead, StrategyCall, Enrollment, Cohort } from '../models';
+import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import type { SequenceStep } from '../models/FollowUpSequence';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import { redactForLogs } from '../utils/piiRedaction';
@@ -270,10 +271,7 @@ export async function deleteSequence(id: string) {
   const seq = await FollowUpSequence.findByPk(id);
   if (!seq) return false;
 
-  await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { sequence_id: id, status: 'pending' } }
-  );
+  await cancelScheduledEmails({ sequence_id: id, status: 'pending' }, 'sequence_deleted');
 
   await seq.destroy();
   return true;
@@ -373,10 +371,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
 
   // Cancel any existing pending actions for this lead from THIS sequence only
   // (preserves actions from other campaigns the lead may be enrolled in)
-  await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, sequence_id: sequenceId, status: 'pending' } }
-  );
+  await cancelScheduledEmails({ lead_id: leadId, sequence_id: sequenceId, status: 'pending' }, 'sequence_reenrolled');
 
   const now = new Date();
   const scheduledActions = [];
@@ -608,11 +603,7 @@ export async function scheduleNextStep(completedAction: any): Promise<any | null
 }
 
 export async function cancelSequenceForLead(leadId: number) {
-  const [count] = await ScheduledEmail.update(
-    { status: 'cancelled' } as any,
-    { where: { lead_id: leadId, status: 'pending' } }
-  );
-  return count;
+  return cancelScheduledEmails({ lead_id: leadId, status: 'pending' }, 'sequence_cancelled_for_lead');
 }
 
 export async function getLeadSequenceStatus(leadId: number) {

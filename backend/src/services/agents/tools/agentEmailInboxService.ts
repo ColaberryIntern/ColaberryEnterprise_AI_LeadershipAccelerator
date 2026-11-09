@@ -221,6 +221,9 @@ async function transition(
               metadata = COALESCE(metadata, '{}'::jsonb)
                          || jsonb_build_object('approved_by', $actor::text,
                                                'decided_at', now()::text)
+                         -- R3: a discard is a cancellation, and every cancellation states its reason.
+                         || CASE WHEN $to::text = 'cancelled' THEN jsonb_build_object('cancel_reason', 'agent_draft_discarded')
+                                 ELSE '{}'::jsonb END
         WHERE id = $draftId
           AND status = $from
           AND metadata->>'tool' = $tool`,

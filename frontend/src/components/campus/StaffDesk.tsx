@@ -45,7 +45,8 @@ export default function StaffDesk({ desk: d, onMessaged, place, here = false, wo
       .finally(() => { busy.current = false; });
   };
 
-  const status = isMaya && !d.on_duty ? `${d.name}'s desk opens soon` : d.on_duty ? 'On duty 24/7 · replies in seconds' : 'Back soon';
+  // M36 (2026-11-09): an off-duty Maya reads "Back soon" like every other desk, never an error (site chat off or paused).
+  const status = d.on_duty ? 'On duty 24/7 · replies in seconds' : 'Back soon';
 
   return (
     <div className={`cm-desk cm-desk-${d.id}${d.on_duty ? '' : ' is-off'}`} data-testid={`cm-desk-${d.id}`}>

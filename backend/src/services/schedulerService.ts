@@ -5,6 +5,7 @@ import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
 import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment } from '../models';
+import { cancelScheduledEmail } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 import { buildSearchRequest, recordMandrillEngagement, searchSaturated, searchWindowStart } from './mandrillEngagementPoll';
 import type { MandrillSearchMessage } from './mandrillEngagementPoll';
 import { env } from '../config/env';
@@ -451,7 +452,7 @@ async function processScheduledActions(): Promise<void> {
         `UPDATE scheduled_emails
             SET status = 'cancelled',
                 metadata = COALESCE(metadata, '{}'::jsonb)
-                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason)
+                  || jsonb_build_object('expired_stale_at', NOW(), 'expired_reason', :reason, 'cancel_reason', 'expired_stale')
           WHERE status = 'pending' AND scheduled_for < :cutoff`,
         { replacements: { cutoff, reason: `auto-expired: >${maxAgeDays}d past scheduled_for` } }
       );
@@ -597,10 +598,7 @@ async function processScheduledActions(): Promise<void> {
     // Guard: skip actions for non-active campaigns (archived, paused, completed, draft)
     const cachedCampaign = campaignCache[campaignId];
     if (cachedCampaign && cachedCampaign.status !== 'active') {
-      await action.update({
-        status: 'cancelled',
-        metadata: { ...(action.metadata || {}), blocked_reason: `campaign_${cachedCampaign.status}` },
-      } as any);
+      await cancelScheduledEmail(action, 'campaign_inactive', { blocked_reason: `campaign_${cachedCampaign.status}` });
       console.log(`[Scheduler] Cancelled action ${action.id} — campaign ${campaignId} is ${cachedCampaign.status}`);
       continue;
     }
@@ -611,7 +609,7 @@ async function processScheduledActions(): Promise<void> {
         where: { email: action.to_email, payment_status: 'paid' },
       });
       if (paidEnrollment) {
-        await action.update({ status: 'cancelled' } as any);
+        await cancelScheduledEmail(action, 'lead_paid');
         console.log(`[Scheduler] Cancelled payment reminder ${action.id} — enrollment already paid (${action.to_email})`);
         continue;
       }
@@ -621,7 +619,7 @@ async function processScheduledActions(): Promise<void> {
     if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.metadata?.cohort_start_date) {
       const cohortStart = new Date(action.metadata.cohort_start_date);
       if (new Date() >= cohortStart) {
-        await action.update({ status: 'cancelled' } as any);
+        await cancelScheduledEmail(action, 'cohort_started');
         console.log(`[Scheduler] Cancelled payment reminder ${action.id} — cohort already started (${action.metadata.cohort_start_date})`);
         continue;
       }
@@ -673,14 +671,7 @@ async function processScheduledActions(): Promise<void> {
         const isTestDomain = email.endsWith(testDomain);
 
         if (!isTestDomain) {
-          await action.update({
-            status: 'cancelled',
-            metadata: {
-              ...(action.metadata || {}),
-              blocked_reason: 'test_action_non_test_domain',
-              blocked_email: email,
-            },
-          } as any);
+          await cancelScheduledEmail(action, 'test_action_non_test_domain', { blocked_reason: 'test_action_non_test_domain', blocked_email: email });
           console.error(`[Scheduler] TEST EMAIL BLOCKED — action ${action.id} targeted non-test domain: ${email}`);
           continue;
         }
@@ -703,10 +694,7 @@ async function processScheduledActions(): Promise<void> {
       });
 
       if (!safetyDecision.allowed) {
-        await action.update({
-          status: 'cancelled',
-          metadata: { ...(action.metadata || {}), blocked_reason: safetyDecision.blockedReason },
-        } as any);
+        await cancelScheduledEmail(action, 'safety_blocked', { blocked_reason: safetyDecision.blockedReason });
         console.log(`[Scheduler] BLOCKED action ${action.id}: ${safetyDecision.blockedReason}`);
         continue;
       }

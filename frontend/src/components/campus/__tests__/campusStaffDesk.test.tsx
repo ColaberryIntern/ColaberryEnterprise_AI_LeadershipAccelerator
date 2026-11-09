@@ -1,5 +1,5 @@
 /**
- * C5 AI staff desks: labelled as AI, initials in an AI ring (never a face), on duty vs "Back soon", Maya "opens soon",
+ * C5 AI staff desks: labelled as AI, initials in an AI ring (never a face), on duty vs "Back soon", Maya "Back soon" too (M36),
  * a suggested question sent once. C21 (v6 D3): Maya sits in Admissions and is seen by every audience.
  */
 import React from 'react';
@@ -86,10 +86,10 @@ describe('a desk', () => {
     expect(q('.cm-desk-prompts')).toBeNull();
   });
 
-  it('Maya: "opens soon", no actions', async () => {
+  it('Maya off duty: "Back soon" (M36), no actions', async () => {
     unhost = registerDmHost();
     await render(<StaffDesk desk={maya} />);
-    expect(q('[data-testid="cm-desk-status-maya"]')?.textContent).toBe("Maya's desk opens soon");
+    expect(q('[data-testid="cm-desk-status-maya"]')?.textContent).toBe('Back soon');
     expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 

@@ -2,11 +2,28 @@ import AdmissionsMemory from '../models/AdmissionsMemory';
 import type { AdmissionsVisitorType } from '../models/AdmissionsMemory';
 import { ChatConversation, ChatMessage, Visitor, Lead, IntentScore, BehavioralSignal } from '../models';
 import { Op } from 'sequelize';
+import {
+  defaultMemoryIdentityDeps, findPersonMemory, leadFor, unlinkedRowsOf, type MemoryIdentityDeps,
+} from './admissionsMemoryIdentity';
 
 /**
- * Load or create AdmissionsMemory for a visitor.
+ * Load or create the memory for the PERSON behind this visitor (R4, admissionsMemoryIdentity.ts): when the visitor (or the
+ * conversation, via leadHint) is a known lead, the person's canonical row is returned and this browser's own row, if any,
+ * is stamped with the lead. An anonymous first touch gets its own row, exactly as before.
  */
-export async function loadMemory(visitorId: string): Promise<AdmissionsMemory> {
+export async function loadMemory(
+  visitorId: string, leadHint?: number | null, deps: MemoryIdentityDeps = defaultMemoryIdentityDeps(),
+): Promise<AdmissionsMemory> {
+  const leadId = await leadFor(visitorId, leadHint, deps);
+  if (leadId !== null) {
+    const canonical = await deps.canonicalForLead(leadId);
+    if (canonical) {
+      if (canonical.visitor_id !== visitorId) {
+        await AdmissionsMemory.update({ lead_id: leadId }, { where: unlinkedRowsOf(visitorId) });
+      }
+      return canonical;
+    }
+  }
   const [memory] = await AdmissionsMemory.findOrCreate({
     where: { visitor_id: visitorId },
     defaults: {
@@ -16,8 +33,10 @@ export async function loadMemory(visitorId: string): Promise<AdmissionsMemory> {
       interests: [],
       questions_asked: [],
       visitor_type: 'new',
+      ...(leadId !== null ? { lead_id: leadId } : {}),
     },
   });
+  if (leadId !== null && memory.lead_id == null) await memory.update({ lead_id: leadId });
   return memory;
 }
 
@@ -28,7 +47,7 @@ export async function saveConversationToMemory(conversationId: string): Promise<
   const conversation = await ChatConversation.findByPk(conversationId);
   if (!conversation) return;
 
-  const memory = await loadMemory(conversation.visitor_id);
+  const memory = await loadMemory(conversation.visitor_id, conversation.lead_id ?? null);
 
   const messages = await ChatMessage.findAll({
     where: { conversation_id: conversationId },
@@ -94,8 +113,8 @@ export async function saveConversationToMemory(conversationId: string): Promise<
 /**
  * Build a memory context string for injection into the system prompt.
  */
-export async function buildMemoryContext(visitorId: string): Promise<string> {
-  const memory = await AdmissionsMemory.findOne({ where: { visitor_id: visitorId } });
+export async function buildMemoryContext(visitorId: string, deps: MemoryIdentityDeps = defaultMemoryIdentityDeps()): Promise<string> {
+  const memory = await findPersonMemory(visitorId, null, deps);
   if (!memory || memory.conversation_count === 0) return '';
 
   const parts: string[] = ['VISITOR MEMORY (cross-session):'];
@@ -135,8 +154,9 @@ export async function buildMemoryContext(visitorId: string): Promise<string> {
 /**
  * Classify the visitor type based on behavior, lead data, and identity.
  */
-export async function classifyVisitorType(visitorId: string): Promise<AdmissionsVisitorType> {
-  const memory = await AdmissionsMemory.findOne({ where: { visitor_id: visitorId } });
+export async function classifyVisitorType(visitorId: string, deps: MemoryIdentityDeps = defaultMemoryIdentityDeps()): Promise<AdmissionsVisitorType> {
+  // R4: the PERSON's memory, so a returning person on a new browser is not classified as new.
+  const memory = await findPersonMemory(visitorId, null, deps);
   const visitor = await Visitor.findByPk(visitorId);
 
   // Check if CEO

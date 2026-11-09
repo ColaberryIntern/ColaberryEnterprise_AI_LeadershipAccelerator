@@ -2,7 +2,10 @@ import OpenAI from 'openai';
 import { requestPortalCallback, type CallbackOutcome } from './mayaCallbackService';
 
 /**
- * C121/C122/C123 — the ONLY tools Maya has in the portal's shared chat. Four, on purpose:
+ * C121/C122/C123/M33 - the ONLY tools Maya has in the portal's shared chat. Five, on purpose:
+ *
+ *   create_journey_handoff  M33: a real admissions handoff (maya/mayaJourneyHandoff.ts), bound to the sender. She may say
+ *                        someone will follow up ONLY when it returns handed_off true.
  *
  *   retrieve_knowledge   plans, pricing and program facts, through the same gated knowledge search her site chat uses
  *                        (mayaToolsService.retrieveKnowledgeContent, which withholds retired facts).
@@ -79,6 +82,20 @@ export const MAYA_PORTAL_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: 'function',
     function: {
+      name: 'create_journey_handoff',
+      description:
+        'M33: hand this learner to a person on the admissions team. Use it when they ask for a human, or ask something only a ' +
+        'person can answer. It returns handed_off true only when a handoff really exists; only then may you say someone will ' +
+        'follow up. Otherwise offer the booking calendar.',
+      parameters: {
+        type: 'object',
+        properties: { why: { type: 'string', description: 'In a few words, what they need a person for. No contact details.' } },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'start_campus_tour',
       description:
         'The learner asks for a tour, a walkthrough, or what is on campus and where things are. This gives them a link that ' +
@@ -138,6 +155,15 @@ export async function executeMayaPortalTool(name: string, args: Record<string, u
         preferredTime: typeof args.preferred_time === 'string' ? args.preferred_time : null,
       });
       return callbackResultText(r);
+    }
+    if (name === 'create_journey_handoff') {
+      // Bound to the SENDER; any id the model puts in args is ignored. The model's "why" is not stored: the row carries a
+      // fixed reason code, so no free text (and no address) from the conversation reaches the handoff packet.
+      const { createJourneyHandoff } = await import('./mayaJourneyHandoff');
+      const r = await createJourneyHandoff(ctx.senderEnrollmentId, 'maya_dm_request');
+      return JSON.stringify(r.handoff
+        ? { handed_off: true, note: 'A person from admissions will follow up with them here. You may say so. Do not promise a time.' }
+        : { handed_off: false, note: 'No handoff was created. Do not say anyone will reach out. Offer the booking calendar link instead.', link: BOOK_CALL_LINK });
     }
     return JSON.stringify({ error: `Unknown tool: ${name}` });
   } catch (e: any) {

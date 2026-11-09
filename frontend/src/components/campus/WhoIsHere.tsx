@@ -66,7 +66,7 @@ export interface WhoIsHereProps {
 }
 
 export default function WhoIsHere({ presence, error, loading = false, onPick, desks = [], onStaff = openStaffCard, onMore, peopleHidden = false }: WhoIsHereProps): React.ReactElement {
-  // every desk the server listed here (its card says whether it is open: "Back soon", "opens soon"), on-duty desks first
+  // every desk the server listed here (its card says whether it is open: "Back soon"), on-duty desks first
   const staff = [...desks].sort((x, y) => Number(y.on_duty) - Number(x.on_duty));
   const count = presence && !error ? presence.count : 0;
   let people: React.ReactNode = null;

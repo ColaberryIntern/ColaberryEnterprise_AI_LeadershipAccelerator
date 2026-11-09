@@ -303,7 +303,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
             const interestArea = (lead as any)?.interest_area;
             // Check if lead expressed interest (transcript processor sets interest_area)
             if (interestArea === 'strategy_call' || interestArea === 'enrollment' || interestArea === 'executive_briefing') {
-              const { CampaignLead, ScheduledEmail, Campaign: CampaignModel } = require('../models');
+              const { CampaignLead } = require('../models');
               const strategyCampaignId = '673d0ddf-78fc-44ab-b25e-858ef322d335';
               const prevCampaignId = commMeta.previous_campaign_id;
 
@@ -314,10 +314,8 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
                   { where: { lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'active' } },
                 );
                 // Cancel pending actions in old campaign
-                await ScheduledEmail.update(
-                  { status: 'cancelled' },
-                  { where: { lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'pending' } },
-                );
+                const { cancelScheduledEmails } = require('../services/scheduledEmailCancellation');
+                await cancelScheduledEmails({ lead_id: commLog.lead_id, campaign_id: prevCampaignId, status: 'pending' }, 'moved_to_strategy_call');
                 console.log(`[Synthflow Webhook] Unenrolled lead ${commLog.lead_id} from ${prevCampaignId}`);
               }
 
@@ -326,34 +324,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
               await enrollLeadInSequence(commLog.lead_id, strategyCampaignId);
               console.log(`[Synthflow Webhook] Hot lead ${redactForLogs((lead as any)?.name)} moved to Strategy Call Readiness (interest: ${interestArea})`);
 
-              // ── Maya→Ali Handoff: auto-enroll interested leads in Ali Personal Outreach ──
-              try {
-                const aliCampaign = await CampaignModel.findOne({ where: { type: 'executive_outreach' } });
-                if (aliCampaign) {
-                  // Check if lead is NOT already in Ali Personal Outreach
-                  const existingAli = await CampaignLead.findOne({
-                    where: { lead_id: commLog.lead_id, campaign_id: aliCampaign.id, status: 'active' },
-                  });
-                  if (!existingAli) {
-                    const callSummary = (lead as any)?.interest_area || '';
-                    await enrollLeadInSequence(commLog.lead_id, aliCampaign.sequence_id, aliCampaign.id);
-                    // Stamp metadata on the campaign_lead for Ali's context
-                    await CampaignLead.update(
-                      {
-                        metadata: {
-                          trigger_source: 'maya_conversation',
-                          maya_notes: transcript ? transcript.substring(0, 2000) : 'Maya call — lead expressed interest',
-                          interest_area: interestArea,
-                        },
-                      },
-                      { where: { lead_id: commLog.lead_id, campaign_id: aliCampaign.id } },
-                    );
-                    console.log(`[Synthflow Webhook] Maya->Ali handoff: enrolled lead ${commLog.lead_id} in Ali Personal Outreach (interest: ${interestArea})`);
-                  }
-                }
-              } catch (aliErr: any) {
-                console.warn(`[Synthflow Webhook] Maya->Ali handoff failed: ${aliErr.message}`);
-              }
+              // M30 / M33 (Ali, 2026-11-09, "Q1: A"): the Maya->Ali voice handoff that stood here (auto-enrolling the lead
+              // in an executive_outreach campaign picked by findOne on type) was retired. It never fired in production (0 of
+              // 21,111 campaign_leads carried trigger_source maya_conversation) and the type lookup chose an arbitrary campaign.
+              // Maya hands a person to a human through services/maya/mayaJourneyHandoff.ts only. See docs/maya/MAYA_UNIFICATION_DECISION.md.
             }
           } catch (moveErr: any) {
             console.warn(`[Synthflow Webhook] Campaign transition failed: ${moveErr.message}`);

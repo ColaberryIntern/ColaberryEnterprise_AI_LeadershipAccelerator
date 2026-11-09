@@ -1,11 +1,12 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import {
-  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail, Subscription,
+  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, Subscription,
   ProgramBlueprint,
 } from '../models';
 import { env } from '../config/env';
 import { convertTo24h, classInstant } from './centralDate';
+import { cancelScheduledEmails } from './scheduledEmailCancellation'; // R3: every cancellation states its reason
 
 // PaySimple dashboard base for the admin "open this payer in PaySimple" deep link.
 // Override with PAYSIMPLE_DASHBOARD_BASE if the account uses a different host.
@@ -874,10 +875,7 @@ async function removeLeadFromAllCampaigns(email: string) {
 
   for (const cl of activeCampaignLeads) {
     // Cancel pending scheduled emails for this lead in this campaign
-    await ScheduledEmail.update(
-      { status: 'cancelled' } as any,
-      { where: { campaign_id: cl.campaign_id, lead_id: lead.id, status: 'pending' } }
-    );
+    await cancelScheduledEmails({ campaign_id: cl.campaign_id, lead_id: lead.id, status: 'pending' }, 'converted_to_student');
     await cl.update({ status: 'removed', outcome: 'converted_to_student' } as any);
   }
 }

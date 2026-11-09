@@ -28,6 +28,14 @@ jest.mock('../../models', () => ({
   },
 }));
 
+// R3: cancellations go through services/scheduledEmailCancellation (its own SQL is tested in
+// services/__tests__/scheduledEmailCancellation.test.ts). Routed onto the same update spy so the counts below still hold.
+jest.mock('../../services/scheduledEmailCancellation', () => ({
+  cancelScheduledEmails: async (where: unknown, reason: string, opts: { extra?: Record<string, unknown> } = {}) => {
+    const [count] = await mockScheduledEmailUpdate({ status: 'cancelled', cancel_reason: reason, extra: opts.extra }, { where });
+    return count;
+  },
+}));
 jest.mock('../../services/activityService', () => ({
   logActivity: (...args: any[]) => mockLogActivity(...args),
 }));
@@ -202,6 +210,14 @@ describe('unsubscribeEnforcementService', () => {
       mockScheduledEmailUpdate.mockResolvedValueOnce([7]);
       const count = await cancelPendingActions(42);
       expect(count).toBe(7);
+    });
+
+    test('R3: cancels with cancel_reason lead_opted_out and keeps the legacy cancelled_reason key', async () => {
+      mockScheduledEmailUpdate.mockResolvedValueOnce([1]);
+      await cancelPendingActions(42);
+      const [values, opts] = mockScheduledEmailUpdate.mock.calls.at(-1);
+      expect(values).toMatchObject({ status: 'cancelled', cancel_reason: 'lead_opted_out', extra: { cancelled_reason: 'lead_opted_out' } });
+      expect(opts.where.lead_id).toBe(42);
     });
 
     test('should return 0 when no actions to cancel', async () => {
