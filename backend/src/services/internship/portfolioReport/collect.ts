@@ -25,9 +25,10 @@ import { internshipProjectReadiness } from '../internshipProjectReadiness';
 import { loadAgentNudgeStates } from '../agentNudgeState';
 import { listGovContractsFor } from '../../factory/govContractsList';
 import type { GovPipelineCard } from '../../factory/govPipeline';
-import type { AgentTab, CollectedPortfolio, FeedItem, InternEmail, ProjectFacts, WeWrote } from './types';
+import type { AgentTab, CollectedPortfolio, FeedItem, InternEmail, OurReply, ProjectFacts, WeWrote } from './types';
 
-export const LOOKBACK_DAYS = 14;
+// One window for the whole story: commits, verified stories, emails and replies all cover 21 days.
+export const LOOKBACK_DAYS = 21;
 export const EMAIL_LOOKBACK_DAYS = 21;
 /** Ali's own test enrollment is on the roster; "what he emailed Ali" would be his whole outbox. */
 export const OPERATOR_EMAILS = ['ali@colaberry.com'];
@@ -38,14 +39,19 @@ const PROJECT_SQL = `
          (SELECT json_agg(x ORDER BY x.verified_at DESC) FROM (
             SELECT t.story_id, t.title, t.verified_at FROM student_tasks t
              WHERE t.project_id = p.id AND t.verified_at > now() - interval '${LOOKBACK_DAYS} days'
-             ORDER BY t.verified_at DESC LIMIT 8) x) AS recently_verified,
+             ORDER BY t.verified_at DESC LIMIT 15) x) AS recently_verified,
          (SELECT json_agg(x ORDER BY x.due_on NULLS LAST) FROM (
             SELECT t.story_id, t.title, t.due_on::text AS due_on, t.status FROM student_tasks t
              WHERE t.project_id = p.id AND t.verified_at IS NULL AND COALESCE(t.status,'') <> 'complete'
              ORDER BY t.due_on NULLS LAST, t.story_id LIMIT 3) x) AS next_tasks,
          (SELECT count(*)::int FROM student_tasks t
            WHERE t.project_id = p.id AND t.verified_at IS NULL AND COALESCE(t.status,'') <> 'complete'
-             AND t.due_on < current_date) AS overdue
+             AND t.due_on < current_date) AS overdue,
+         (SELECT json_agg(x ORDER BY x.due_on) FROM (
+            SELECT t.story_id, t.title, t.due_on::text AS due_on FROM student_tasks t
+             WHERE t.project_id = p.id AND t.verified_at IS NULL AND COALESCE(t.status,'') <> 'complete'
+               AND t.due_on < current_date
+             ORDER BY t.due_on LIMIT 6) x) AS overdue_tasks
     FROM projects p
     LEFT JOIN LATERAL (SELECT * FROM github_connections gc WHERE gc.project_id = p.id
                         ORDER BY gc.last_sync_at DESC NULLS LAST LIMIT 1) g ON TRUE
@@ -61,6 +67,15 @@ const EMAIL_SQL = `
    ORDER BY received_at DESC`;
 
 // Our side of the conversation: every outbound BCCs Ali and that copy is ingested (see agentNudgeState).
+// Each message colaberry.com sent an intern in the window (the BCC copy), for the reply chips.
+const REPLIES_SQL = `
+  SELECT e AS email, x.subject, x.received_at
+    FROM unnest(ARRAY[:emails]::text[]) AS e
+    JOIN inbox_emails x ON lower(x.from_address) LIKE '%@colaberry.com'
+                       AND x.to_addresses::text ILIKE '%' || e || '%'
+                       AND x.received_at > now() - interval '${EMAIL_LOOKBACK_DAYS} days'
+   ORDER BY x.received_at`;
+
 const WE_WROTE_SQL = `
   SELECT e AS email, (SELECT max(x.received_at) FROM inbox_emails x
                        WHERE lower(x.from_address) LIKE '%@colaberry.com'
@@ -110,12 +125,13 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     ...agentTabs.map((a) => a.student_project_id),
   ].filter((x): x is string => !!x))];
 
-  const [readiness, agentStates, projects, emailRows, weWrote] = await Promise.all([
+  const [readiness, agentStates, projects, emailRows, weWrote, replies] = await Promise.all([
     soft('project readiness', () => internshipProjectReadiness(), []),
     soft('agent nudge state', () => loadAgentNudgeStates({ query: (s) => select(s), now: now.toISOString() }), []),
     soft('project detail', () => (projectIds.length ? select<ProjectFacts>(PROJECT_SQL, { ids: projectIds }) : Promise.resolve([])), []),
     soft('intern emails', () => (emails.length ? select<InternEmail>(EMAIL_SQL, { emails }) : Promise.resolve([])), []),
-    soft('our replies', () => (emails.length ? select<WeWrote>(WE_WROTE_SQL, { emails }) : Promise.resolve([])), []),
+    soft('our last reply', () => (emails.length ? select<WeWrote>(WE_WROTE_SQL, { emails }) : Promise.resolve([])), []),
+    soft('our replies', () => (emails.length ? select<OurReply>(REPLIES_SQL, { emails }) : Promise.resolve([])), []),
   ]);
 
   // Sequential on purpose: ~14 interns, each detail is a handful of queries.
@@ -140,5 +156,6 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     projects,
     emails: emailRows,
     weWrote,
+    replies,
   };
 }

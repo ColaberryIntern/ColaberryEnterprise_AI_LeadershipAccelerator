@@ -11,6 +11,7 @@
 import type { ConsoleRosterRow } from '../internConsoleRoster';
 import type { AgentNudgeState } from '../agentNudgeComposer';
 import type { GovPipelineCard } from '../../factory/govPipeline';
+import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
   InternEmail, PortfolioReport, ProjectFacts, ProjectView, StatusKey, Track, TrainingView, WeWrote,
@@ -20,7 +21,8 @@ const DAY = 86400000;
 export const OWED_WINDOW_DAYS = 7;          // matches agentNudgeState.OWED_WINDOW_DAYS
 export const TRAINING_GATE_DAY = 21;        // weeks 1-3 are three weeks of training
 export const COMMIT_QUIET_DAYS = 3;         // the nudge asks for a commit after this many quiet days
-export const BUILD_QUIET_REASON_DAYS = 5;   // ...and the status flags it after this many
+/** The status calls it stuck at the same point the timeline does (timeline.STUCK_GAP_DAYS). */
+export const BUILD_QUIET_REASON_DAYS = STUCK_GAP_DAYS;
 
 const PLATFORM_AUTHOR = /build bot|colaberry|github-actions|\[bot\]/i;
 const PLATFORM_MESSAGE = /^chore\(colaberry\)|^Merge (pull request|branch)/i;
@@ -42,6 +44,7 @@ const ms = (v: unknown): number | null => {
   const t = Date.parse(String(v));
   return Number.isNaN(t) ? null : t;
 };
+const calendarDaysAgo = (iso: string, nowMs: number): number => daysBetween(dayKey(iso), dayKey(nowMs));
 const daysAgo = (v: unknown, nowMs: number): number | null => {
   const t = ms(v);
   return t === null ? null : Math.floor((nowMs - t) / DAY);
@@ -151,7 +154,7 @@ export function buildQuietDays(p: Pick<ProjectView, 'lastCommitDays' | 'lastVeri
   return Math.min(a, b);
 }
 
-type CardCore = Omit<InternCard, 'status' | 'lately' | 'nextSteps' | 'nudge' | 'aliMoves' | 'asks' | 'asksFromModel'>;
+type CardCore = Omit<InternCard, 'timeline' | 'status' | 'lately' | 'nextSteps' | 'nudge' | 'aliMoves' | 'asks' | 'asksFromModel'>;
 
 function latelyFacts(c: CardCore, lookbackDays: number): string[] {
   const out: string[] = [];
@@ -182,9 +185,9 @@ export function statusFor(c: CardCore): InternCard['status'] {
   if (lvl === 'red' || lvl === 'black') reasons.push(`${c.activity.daysSince} days with no platform activity`);
   else if (lvl === 'orange') reasons.push(`quiet ${c.activity.daysSince} days`);
   if (!p) reasons.push('no project');
-  if (projectQuiet) reasons.push('no commits or verified stories in 14 days');
+  if (projectQuiet) reasons.push('no commits or verified stories in 3 weeks');
   const quiet = p ? buildQuietDays(p) : null;
-  if (p && !projectQuiet && quiet !== null && quiet >= BUILD_QUIET_REASON_DAYS) reasons.push(`no commit or verified story in ${quiet} days`);
+  if (p && !projectQuiet && quiet !== null && quiet >= BUILD_QUIET_REASON_DAYS) reasons.push(`stuck ${quiet}d (no commit or verified story)`);
   if (p && p.overdue > 0) reasons.push(plural(p.overdue, 'overdue task'));
   if (!c.training.gateClear && (c.day ?? 0) > TRAINING_GATE_DAY + 7) reasons.push(`training behind (weeks 1-3 gate ${c.training.gateDone}/3)`);
   if (c.emails.awaitingReply) reasons.push('waiting on a reply from Ali');
@@ -260,9 +263,12 @@ function projectFor(r: ConsoleRosterRow, agent: AgentNudgeState | null, tab: Age
     repoUrl: pr.repo_url ?? null,
     overdue: pr.overdue ?? 0,
     commitsRecent: ownCommits(pr.commits, nowMs, lookback).map((c) => ({ sha: c.sha, date: String(c.date), message: String(c.message ?? '').split('\n')[0].slice(0, 120) })),
-    lastCommitDays: own.length ? daysAgo(own[0].date, nowMs) : null,
-    lastVerifiedDays: verified.length ? daysAgo(verified[0].verified_at, nowMs) : null,
+    // Central calendar days, the same measure the timeline uses, so the status chip, the nudge and
+    // the timeline's "Stuck Nd" can never disagree by one.
+    lastCommitDays: own.length ? calendarDaysAgo(String(own[0].date), nowMs) : null,
+    lastVerifiedDays: verified.length ? calendarDaysAgo(verified[0].verified_at, nowMs) : null,
     verifiedRecent: verified.map((v) => ({ storyId: v.story_id, title: v.title, at: v.verified_at })),
+    overdueTasks: (pr.overdue_tasks ?? []).map((t) => ({ title: t.title, due_on: t.due_on })),
     next: agent?.nextStory ? { title: agent.nextStory.title, dueOn: agent.nextStory.dueOn ?? null } : nextTask ? { title: nextTask.title, dueOn: nextTask.due_on } : null,
   };
 }
@@ -306,8 +312,14 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     subscriptions: tab?.subscriptions ?? [],
   };
   const status = statusFor(core);
+  const timeline = buildTimeline({
+    nowMs, firstName: core.firstName, project, training: core.training, awaitingReply: core.emails.awaitingReply, activityDays: days,
+    emails: data.emails.filter((e) => lc(e.email) === email),
+    replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
+  });
   return {
     ...core,
+    timeline,
     status,
     lately: latelyFacts(core, lookback),
     nextSteps: nextStepsFor(core),

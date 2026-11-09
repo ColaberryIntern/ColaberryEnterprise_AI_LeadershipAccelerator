@@ -30,10 +30,12 @@ export interface ProjectFacts {
   recently_verified: Array<{ story_id: string | null; title: string; verified_at: string }> | null;
   next_tasks: Array<{ story_id: string | null; title: string; due_on: string | null; status: string | null }> | null;
   overdue: number;
+  overdue_tasks?: Array<{ story_id: string | null; title: string; due_on: string }> | null;
 }
 
 export interface InternEmail { email: string; subject: string | null; snippet: string | null; received_at: string }
 export interface WeWrote { email: string; last_we_wrote: string | null }
+export interface OurReply { email: string; subject: string | null; received_at: string }
 
 export interface ReportSubscription { cadence: string; scope: string[] | null; hour: number; enabled: boolean; by: string | null }
 
@@ -62,6 +64,8 @@ export interface CollectedPortfolio {
   projects: ProjectFacts[];
   emails: InternEmail[];
   weWrote: WeWrote[];
+  /** Optional so older saved collections still render. */
+  replies?: OurReply[];
 }
 
 export type Track = 'agent' | 'gov' | 'other' | 'none';
@@ -103,6 +107,7 @@ export interface ProjectView {
   lastVerifiedDays: number | null;
   verifiedRecent: Array<{ storyId: string | null; title: string; at: string }>;
   next: { title: string; dueOn: string | null } | null;
+  overdueTasks: Array<{ title: string; due_on: string }>;
 }
 
 export interface InternCard {
@@ -136,6 +141,7 @@ export interface InternCard {
   nextSteps: string[];
   nudge: string;
   aliMoves: string[];
+  timeline: Timeline;
   /** Filled by narrate.ts; empty when the model is unavailable. */
   asks: string[];
   asksFromModel: boolean;
@@ -150,4 +156,25 @@ export interface PortfolioReport {
   aliMoves: string[];
   groups: Array<{ key: Track; title: string; interns: InternCard[] }>;
   operatorsExcluded: string[];
+}
+
+export type EventKind = 'commit' | 'verified' | 'question' | 'stuck' | 'update' | 'reply' | 'unstuck' | 'late' | 'training';
+export interface TimelineEvent { kind: EventKind; day: string; at: string; label: string; detail?: string; meta?: string; slow?: boolean }
+/** One row: a single day, or (when `routine`) a span of routine days from `day` to `dayEnd`. */
+export interface TimelineRow { day: string; dayEnd: string; routine: boolean; mode: 'build' | 'talk' | 'story'; gapBefore: number; gapStuck: boolean; onlyTraining: boolean; events: TimelineEvent[] }
+export interface TimelineNext { kind: 'owed' | 'late' | 'stuck' | 'next' | 'training' | 'noproject'; label: string; detail: string }
+export interface Timeline {
+  windowDays: number;
+  start: string;
+  today: string;
+  rows: TimelineRow[];
+  /** Days from the last row to today. */
+  sinceLastRow: number;
+  next: TimelineNext[];
+  story: string;
+  strip: Array<{ day: string; kinds: EventKind[] }>;
+  stuckSpells: number;
+  lateBeforeWindow: Array<{ title: string; due: string }>;
+  /** Days since the last build work; null = none in the window (or no project). */
+  quietNow: number | null;
 }

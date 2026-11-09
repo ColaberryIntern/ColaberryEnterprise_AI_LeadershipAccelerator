@@ -101,6 +101,10 @@ async function main(): Promise<number> {
   let outcome: string = 'dry';
   if (!has('--dry') && !fromJson) outcome = await send(subject, html, text, now);
   log('done', { duration_ms: Date.now() - started, outcome, totals: report.totals });
+  // The instrumented OpenAI client records each call with a fire-and-forget emitAiEvent (no flush
+  // to await). Closing the pool immediately lost the last write on the 9 Nov dry run, so give the
+  // in-flight inserts a moment before main() returns and the pool closes.
+  if (client) await new Promise((r) => setTimeout(r, 2000));
   return 0;
 }
 
