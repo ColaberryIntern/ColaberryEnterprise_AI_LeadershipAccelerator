@@ -6,6 +6,9 @@
  * have learned anything. This moves the program video into pre_class right after the welcome, rewrites the Quick
  * check from that video (see data/week0ProgramVideoFirst.ts), and locks it so generation cannot overwrite it.
  *
+ * C118 (2026-11-09): the same run swaps the program video to Ali's self-hosted avatar welcome video and rewrites the
+ * Quick check from its transcript. The replaced video, title and minutes are saved under metadata.c118_prior.
+ *
  * Dry run by default: prints the plan and writes nothing. One transaction; a re-run with nothing to do changes nothing.
  * The values it replaces are saved on each card (metadata.c112_prior), so --rollback restores them exactly.
  * Sends no communications.
@@ -23,7 +26,7 @@ import {
 } from '../data/week0ProgramVideoFirst';
 
 const toState = (c: TimelineCard): CardState => ({
-  id: c.id, title: c.title, bucket: c.bucket, order: c.order,
+  id: c.id, title: c.title, bucket: c.bucket, order: c.order, estimated_time: c.estimated_time ?? null,
   metadata: c.metadata && typeof c.metadata === 'object' ? { ...(c.metadata as Record<string, unknown>) } : {},
 });
 
@@ -43,7 +46,10 @@ async function main(): Promise<void> {
 
     console.log(JSON.stringify({
       event: 'c112_week0_plan', mode: rollback ? 'rollback' : 'forward', apply,
-      changes: plan.map((u) => ({ id: u.id, title: u.set.title, bucket: u.set.bucket, order: u.set.order })),
+      changes: plan.map((u) => ({
+        id: u.id, title: u.set.title, bucket: u.set.bucket, order: u.set.order, estimated_time: u.set.estimated_time,
+        video_url: (u.set.metadata?.video as { url?: string } | undefined)?.url,
+      })),
     }));
     if (!plan.length) { console.log('Nothing to change.'); return; }
     if (!apply) { console.log('DRY RUN: nothing written. Re-run with --apply to write.'); return; }
