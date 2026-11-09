@@ -32,6 +32,7 @@ import { ensureAssigneeCanBuild } from './govBuildAssignment';
 import { factoryId } from './factoryIds';
 import { decomposeGovBuildPlanRaw } from './govBuildPlanAI';
 import { rescaleScheduleToDeadline } from './govScheduleWindow';
+import { reanalyzeProposalBlueprint } from './proposal/reanalyzeProposalBlueprint';
 
 export type GovMaterializeReason =
   | 'no_enrollment' | 'no_program' | 'decompose_error' | 'plan_blocked' | 'bad_input'
@@ -191,6 +192,28 @@ export async function materializeGovBuildProject(input: MaterializeGovProjectInp
       await publishPlan(projectId, draft.version, draft.plan_sha256);
     }
   } catch { /* materialize still succeeds; the sync path falls back to the reconstruction as before */ }
+
+  // 6. ENTER-BUILD blueprint: this is the ready_to_assign -> in_build transition (deriveGovPipelineStage reads
+  //    `in_build` from the solution_build track's student-project link that step 3 just created). On that first
+  //    materialize only, analyze the already-stored solicitation ZIP ONCE so the proposal blueprint + document set
+  //    exist from the real solicitation BEFORE the intern can build — the intern never runs the ZIP step, and
+  //    "Build all documents" never fires against a missing/stale structure. Gated on `created`, so a re-materialize
+  //    or retry (which reuses the project, created=false) never re-bumps the blueprint version.
+  //    FAIL-SOFT: a not-yet-uploaded ZIP (bundle_missing), an extraction failure, or any persistence error inside
+  //    reanalyze must NEVER roll back the build-entry transition — swallow everything and log one structured line.
+  if (created) {
+    try {
+      await reanalyzeProposalBlueprint(input.deliveryProjectId, input.actorIdentityId ?? null);
+    } catch (err) {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'warn', service: 'gov-project-materialization',
+        event: 'blueprint_reanalyze_on_build_entry_skipped', outcome: 'partial',
+        deliveryProjectId: input.deliveryProjectId,
+        error_class: (err as { name?: string } | null)?.name ?? 'Error',
+        message: (err as { message?: string } | null)?.message ?? String(err),
+      }));
+    }
+  }
 
   return {
     projectId, created, enrollmentId,
