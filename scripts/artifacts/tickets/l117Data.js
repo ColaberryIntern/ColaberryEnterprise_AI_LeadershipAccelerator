@@ -82,6 +82,28 @@ const TEST_COUNT_TOKEN = '{{BROADCAST_TEST_SUITES}}';
  * external identifier a reader must go and look up is honest context; a repo path beside an
  * unproven claim is not.
  */
+/**
+ * The 13 October footage, after it was recovered on 2026-11-09.
+ *
+ * These values live in data, not in prose, so the document and the self-check cannot drift
+ * apart: the document renders them and check 5b asserts them from this same object. A hash
+ * typed out twice is a hash that will eventually disagree with itself.
+ *
+ * `measuredSeconds` was read from the file's own `mvhd` (movie header) box, which is the
+ * field ffprobe reports. It is NOT size divided by bitrate. A duration computed from a
+ * file's size is a guess wearing a number's clothes, and the measured value is the only one
+ * that can show a copy was truncated.
+ */
+const FOOTAGE = {
+  recoveredOn: '2026-11-09',
+  filename: 'colaberry-live-2026-10-13-first-airing.mp4',
+  sha256: '9f9df276403a98aa02e2243fa1be296d4a5b5150ee8708cc6da2051412052ed1',
+  sizeBytes: 23417432,
+  measuredSeconds: 1080.005,
+  measuredHms: '18m 00s',
+  heldAt: ['the Basecamp vault on ticket L11.7', 'OneDrive, outside this repository'],
+};
+
 const CAPTURES = [
   {
     key: 'problem', bullet: 'original problem', match: 'Original problem', state: 'CAPTURED',
@@ -222,7 +244,8 @@ const CAPTURES = [
     airedRecord: [
       '13 Oct 2026, 18 min, Cloudflare video b4c0c11c60952605105180b02c0d3db4 on live input '
         + '08def3066403e44d507fc16709cc9a4e. Named on ticket L11.7 by Ali on 23 Oct. NO '
-        + 'occurrence row exists for it in the production database.',
+        + 'occurrence row exists for it in the production database. The recording itself has '
+        + 'since been copied off Cloudflare and preserved; the note below says where.',
       '15 Oct 2026, occurrence e5c4a59f-48de-4dba-815e-f14e165e0eef, titled "First Private '
         + 'Technical Airing", access_mode free, editorial_state ended with a NULL ended_at.',
       '20 Oct 2026, occurrence 21d0ce4f-cb55-4a7b-b9b6-0b42280fa5a8, titled "Test 2", '
@@ -233,11 +256,19 @@ const CAPTURES = [
       + 'has never happened is a MEASURED one, and that distinction is the whole value of this '
       + 'entry - a reader who believes nothing aired will plan a first airing, when what is '
       + 'actually needed is instrumentation on an airing the team already knows how to run.\n\n'
-      + 'URGENT, and the reason this capture should be worked before the ticket closes: the 13 '
-      + 'October recording is the only copy of the first airing, it has no occurrence row, and '
-      + 'ticket L11.7 records a decision to delete its live input once this ticket is done. '
-      + 'Deleting a live input takes its recordings with it. Pull that footage into the pack '
-      + 'first; the deletion is the last step, not an early tidy-up.',
+      + `RESOLVED on ${FOOTAGE.recoveredOn}, and written down here because the risk it closed `
+      + 'was real: the 13 October recording was the only copy of the first airing, it has no '
+      + 'occurrence row, and ticket L11.7 records a decision to delete its live input once this '
+      + 'ticket is done. Deleting a live input takes its recordings with it, and that input '
+      + 'holds exactly one recording. It could not have been retrieved afterwards either - the '
+      + 'video required signed URLs and no downloadable MP4 had ever been generated, so there '
+      + `was no link anyone could have clicked. The footage was pulled to ${FOOTAGE.filename}, `
+      + `measured at ${FOOTAGE.measuredHms} from the file's own movie header rather than `
+      + `computed, and verified by SHA256 ${FOOTAGE.sha256}, identical at every hop from `
+      + `Cloudflare to the final copy. It is held in two places independent of Cloudflare: `
+      + `${FOOTAGE.heldAt.join(' and ')}. Deleting the live input is now safe.\n\n`
+      + 'This capture stays NOT YET regardless, and that is the point worth keeping: preserving '
+      + 'footage is not measuring an airing. The bar above is the measurement.',
   },
   {
     key: 'firstPublic', bullet: 'first public live', match: 'First public live',
@@ -339,5 +370,5 @@ const TOTALS = (() => {
 })();
 
 module.exports = {
-  META, STATES, CAPTURES, requiredCount, TOTALS, TEST_COUNT_TOKEN,
+  META, STATES, CAPTURES, requiredCount, TOTALS, TEST_COUNT_TOKEN, FOOTAGE,
 };

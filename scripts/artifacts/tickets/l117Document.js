@@ -298,22 +298,54 @@ function selfCheck() {
         + 'closes; dropping the identifier is how the footage gets lost.');
     }
   });
-  // Both halves are required, and deliberately not an either/or. An earlier version of this
-  // guard accepted any one of three phrasings, and a mutation that deleted the instruction
-  // still matched on a passing mention of the live input elsewhere in the same entry. Naming
-  // the risk is not the same as saying what to do about it, so the check demands the
-  // instruction ("pull the footage first") AND the ordering ("the deletion is last").
-  const WARN_HALVES = [
-    /Pull that footage into the pack\s+first/i,
-    /the deletion is the last step/i,
-  ];
-  WARN_HALVES.forEach((re) => {
-    if (!re.test(md)) {
-      throw new Error('the pack no longer tells the reader what to do about the 13 October '
-        + `footage (missing: ${re.source}). Deleting that live input destroys the only copy of `
-        + 'the first airing, so naming the risk without the instruction is not enough.');
-    }
-  });
+  // The footage was recovered on 2026-11-09, so this guard changed shape. Its earlier form
+  // demanded the instruction "pull that footage first" AND the ordering "the deletion is the
+  // last step" - and keeping that would now demand a stale instruction. What replaces it is
+  // stricter rather than looser, in four parts: the recovery must carry the evidence that
+  // makes it checkable, it must say what it unblocks, the superseded instruction is BANNED so
+  // nobody reinstates a warning to rescue footage that is already rescued, and the capture
+  // itself must not be promoted on the strength of the rescue.
+  if (!md.includes(D.FOOTAGE.sha256)) {
+    throw new Error('the pack no longer carries the SHA256 of the recovered 13 October '
+      + 'footage. The hash is what makes "we saved it" checkable instead of merely asserted; '
+      + 'without it a reader holding a file has no way to tell whether it is the right one.');
+  }
+  if (!md.includes(D.FOOTAGE.measuredHms)) {
+    throw new Error(`the pack no longer states the measured duration (${D.FOOTAGE.measuredHms}) `
+      + 'of the recovered footage. That figure is what distinguishes a complete copy from a '
+      + 'truncated one, and it was measured from the file rather than computed.');
+  }
+  // Two guards that compare the data against ITSELF, because the checks above compare the
+  // document against the data and therefore cannot catch a wrong value - change the number
+  // and the rendered document changes with it, so they agree and the check still passes.
+  if (!Array.isArray(D.FOOTAGE.heldAt) || D.FOOTAGE.heldAt.length < 2) {
+    throw new Error('the recovered footage is recorded as held in fewer than two places. One '
+      + 'copy is not a rescue: the defect being fixed here WAS a single copy, sitting in a '
+      + 'location scheduled for deletion.');
+  }
+  const fMin = Math.floor(D.FOOTAGE.measuredSeconds / 60);
+  const fSec = Math.round(D.FOOTAGE.measuredSeconds % 60);
+  const expectedHms = `${fMin}m ${String(fSec).padStart(2, '0')}s`;
+  if (D.FOOTAGE.measuredHms !== expectedHms) {
+    throw new Error(`the footage duration reads ${D.FOOTAGE.measuredHms} but its measured `
+      + `${D.FOOTAGE.measuredSeconds} seconds work out to ${expectedHms}. The sentence a reader `
+      + 'sees must not drift from the number that was actually measured.');
+  }
+  if (!/Deleting the live input is now safe/i.test(md)) {
+    throw new Error('the pack records the recovery but no longer says what it unblocks. The '
+      + 'reason to pull the footage was to make the deletion safe; a reader who cannot see '
+      + 'that is told a thing happened without being told what it permits.');
+  }
+  if (/Pull that footage into the pack\s+first/i.test(md)) {
+    throw new Error('the pack still instructs the reader to pull the 13 October footage, which '
+      + `was recovered on ${D.FOOTAGE.recoveredOn}. A stale instruction is worse than no `
+      + 'instruction: it sends someone to redo finished work and implies a closed risk is open.');
+  }
+  if (firstTest.state !== 'NOT_YET') {
+    throw new Error('the firstTest capture has been promoted out of NOT_YET. Recovering the '
+      + 'footage did not measure the airing, and the bar for this capture is the measurement. '
+      + 'Rescuing evidence must never be mistaken for satisfying the capture it belongs to.');
+  }
   ['no class has aired', 'nothing has ever aired', 'has never aired'].forEach((phrase) => {
     if (md.toLowerCase().includes(phrase)) {
       throw new Error(`the pack claims "${phrase}", which production contradicts: two `
