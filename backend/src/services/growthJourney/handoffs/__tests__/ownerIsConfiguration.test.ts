@@ -216,8 +216,11 @@ describe('T214 — zero new GHL code paths', () => {
         '--', 'backend/src',
         ':!backend/src/services/growthJourney/handoffs/__tests__/ownerIsConfiguration.test.ts',
       ], { cwd: repo, encoding: 'utf8' }) as string;
-    } catch {
-      out = '';   // git grep exits 1 on no matches, which is the pass
+    } catch (e: unknown) {
+      // git grep exits 1 on no matches, which is the pass, and ONLY that (M20, 2026-11-09): any other failure (spawn,
+      // timeout, kill under load) used to read as a pass too. It is now a failed test.
+      if ((e as { status?: number }).status !== 1) throw e;
+      out = '';
     }
     expect(out.trim()).toBe('');
   });

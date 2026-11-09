@@ -6,13 +6,18 @@
 const mockEnv = { enableChat: true };
 jest.mock('../../../config/env', () => ({ env: mockEnv }));
 jest.mock('../../../models/RoomMembership', () => ({ findOne: jest.fn() }));
-jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn() }));
+jest.mock('../../../models/RoomMessage', () => ({ findAll: jest.fn(), count: jest.fn(async () => 1) }));
+// M31: the reply's mode comes from the M37 switch. Off when chat is off, as before; live otherwise (Q2: A).
+jest.mock('../mayaPromotion', () => ({
+  resolveMayaMode: jest.fn(async (cap: string) => ({ capability: cap, mode: cap === 'respondToExplorerDm' && mockEnv.enableChat ? 'live' : (cap === 'respondToExplorerDm' ? 'off' : 'shadow'), reason: 'test' })),
+}));
 jest.mock('../../mayaIdentitySeed', () => ({ getMayaEnrollmentId: jest.fn(), getMayaAgentId: jest.fn() }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
 jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
 jest.mock('../mayaPortalPrompt', () => ({ buildMayaPortalSystemPrompt: jest.fn(async () => 'SYSTEM') }));
 jest.mock('../mayaCallbackService', () => ({ requestPortalCallback: jest.fn() }));
+jest.mock('../mayaJourneyHandoff', () => ({ createJourneyHandoff: jest.fn(async () => ({ handoff: false, reason: 'disabled' })) }));
 jest.mock('../mayaPortalTools', () => {
   const actual = jest.requireActual('../mayaPortalTools');
   return { ...actual, executeMayaPortalTool: jest.fn() };
@@ -81,11 +86,11 @@ describe('guards: no LLM call, no message', () => {
 });
 
 describe('a reply', () => {
-  it('answers through sendDmMessage as Maya, offering only the four portal tools', async () => {
+  it('answers through sendDmMessage as Maya, offering only the five portal tools', async () => {
     create.mockResolvedValue(answer('Membership is billed annually.'));
     await maybeTriggerMayaReply(ROOM, LEARNER);
     const names = create.mock.calls[0][0].tools.map((t: { function: { name: string } }) => t.function.name);
-    expect(names).toEqual(['retrieve_knowledge', 'book_admissions_call', 'request_callback', 'start_campus_tour']);
+    expect(names).toEqual(['retrieve_knowledge', 'book_admissions_call', 'request_callback', 'create_journey_handoff', 'start_campus_tour']);
     expect(send).toHaveBeenCalledWith({ enrollmentId: MAYA, cohortId: null, isAdmin: false }, ROOM, 'Membership is billed annually.');
     expect(logAgentActivity).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'maya-agent-1', action: 'maya_dm_reply', result: 'success' }));
   });

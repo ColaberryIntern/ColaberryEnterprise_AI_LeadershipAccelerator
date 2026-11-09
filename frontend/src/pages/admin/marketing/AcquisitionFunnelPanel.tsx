@@ -9,6 +9,7 @@ import LandingPagesTable from './performance/LandingPagesTable';
 import { takeawaySentence } from './performance/performanceMetrics';
 import type { MarketingDataState } from './marketingTrust';
 import AdProfitabilityCard from './performance/AdProfitabilityCard';
+import SendOutcomesCard from './performance/SendOutcomesCard';
 import './performance/marketingPerformance.css';
 
 /**
@@ -167,6 +168,9 @@ export default function AcquisitionFunnelPanel({
               missing from every number above.
             </div>
           )}
+
+          {/* R3: what the outbound channel did in the SAME window, so "nothing is being sent" reads as 0. */}
+          <SendOutcomesCard days={data?.windowDays ?? days} />
 
           {/* Spend against return. Its own request and its own window (90 days by default), so a
               slow or failing spend query never holds up the funnel above it. */}

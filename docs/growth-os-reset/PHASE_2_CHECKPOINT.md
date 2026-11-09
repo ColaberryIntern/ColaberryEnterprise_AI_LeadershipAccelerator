@@ -470,7 +470,7 @@ directions.
 ## G · Behaviour changes a person could notice — derived, not remembered
 
 Taken from T202's committed enumeration by command
-(`grep -cE '\*\*CHANGES\*\*' docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md` → **16**), not from
+(`grep -cE '\*\*CHANGES\*\*' docs/growth-os-reset/FREE_ACCOUNT_CONSUMERS.md` → **17**), not from
 memory, because a remembered list is always short:
 
 1. `controllers/v1EnrollmentLookupController.ts` — the partner-app lookup reports free Explorers
@@ -495,6 +495,8 @@ memory, because a remembered list is always short:
 16. `services/adminOs/conversionState.ts` — the conversion definition.
 17. `services/portalSettingsService.ts` — **an Explorer's Settings page will read `explorer` /
     `guest`** where it used to read `standard` / `member`.
+18. `services/maya/mayaWelcomeService.ts` - **portal free accounts become eligible for Maya's in-app welcome** (it considers
+    Explorer enrollments only). Shadow by default: one ledger row, no message, until Ali promotes it (M32, 2026-11-09).
 
 **Item 17 is here by judgement, not by the scan**, and that is worth saying plainly. The
 enumeration classifies `portalSettingsService` as REPORTING, but lines 253–254 return `tier` and

@@ -73,6 +73,22 @@ const QUEUES: readonly { value: string; label: string }[] = [
   { value: 'human_review', label: 'human_review' },
 ];
 
+/** M35: the admissions team calls the readiest person first. `readiness` asks the server to order by the score. */
+const ORDERS: readonly { value: string; label: string }[] = [
+  { value: 'queue', label: 'urgent, then value, then oldest' },
+  { value: 'readiness', label: 'readiness, highest first' },
+];
+
+function ReadinessCell({ row }: { row: HandoffQueueRow }) {
+  if (!row.readiness) return <span className="text-muted">not scored</span>;
+  return (
+    <span data-testid={`handoff-readiness-${row.id}`}>
+      {row.readiness.total} of {row.readiness.scoreableMax}
+      <span className="small text-muted d-block">{Math.round(row.readiness.coverage * 100)}% of factors scored</span>
+    </span>
+  );
+}
+
 function PriorityBadge({ row }: { row: HandoffQueueRow }) {
   const tone = row.priority === 'critical' ? 'bg-danger'
     : row.priority === 'high' ? 'bg-warning text-dark'
@@ -95,12 +111,13 @@ export default function HandoffsTab({ words, brandName, unseeded }: Props) {
   const [status, setStatus] = React.useState('open');
   const [queue, setQueue] = React.useState('');
   const [offset, setOffset] = React.useState(0);
+  const [order, setOrder] = React.useState<'queue' | 'readiness'>('queue');
 
   const state = useGrowthJourneyData(
     () => listHandoffQueue({
-      status, owner_queue: queue || undefined, limit: PAGE_LIMIT, offset,
+      status, owner_queue: queue || undefined, limit: PAGE_LIMIT, offset, order,
     }),
-    `handoffs:${status}:${queue}:${offset}`,
+    `handoffs:${status}:${queue}:${offset}:${order}`,
   );
 
   return (
@@ -130,6 +147,12 @@ export default function HandoffsTab({ words, brandName, unseeded }: Props) {
           options={QUEUES}
           onChange={(v) => { setQueue(v); setOffset(0); }}
         />
+        <JourneySelect
+          label="Order"
+          value={order}
+          options={ORDERS}
+          onChange={(v) => { setOrder(v === 'readiness' ? 'readiness' : 'queue'); setOffset(0); }}
+        />
       </JourneyFilterBar>
 
       <AsyncPanel state={state} onRetry={state.reload}>
@@ -156,19 +179,27 @@ export default function HandoffsTab({ words, brandName, unseeded }: Props) {
                 <div className="card-body">
                   <div className="table-responsive">
                     <table className="table table-hover mb-0 align-middle">
-                      <caption className="small text-muted">
-                        Ordered urgent first, then by expected value, then oldest first.
-                        Two caveats worth knowing: a handoff with NO expected value sorts
-                        above valued ones in its urgency bucket, and rows identical on all
-                        three keys have no stable order across pages.{' '}
-                        <code>priority</code> is shown but does not affect the ranking.
-                      </caption>
+                      {data.order === 'readiness' ? (
+                        <caption className="small text-muted">
+                          Ordered by the Sales Readiness Score, highest first, scored with what your role may see on each
+                          person&rsquo;s profile. A handoff that could not be scored is listed last, never hidden.
+                        </caption>
+                      ) : (
+                        <caption className="small text-muted">
+                          Ordered urgent first, then by expected value, then oldest first.
+                          Two caveats worth knowing: a handoff with NO expected value sorts
+                          above valued ones in its urgency bucket, and rows identical on all
+                          three keys have no stable order across pages.{' '}
+                          <code>priority</code> is shown but does not affect the ranking.
+                        </caption>
+                      )}
                       <thead className="table-light">
                         <tr>
                           <th scope="col">{words.subject}</th>
                           <th scope="col">Queue</th>
                           <th scope="col">Priority</th>
                           <th scope="col">Expected value</th>
+                          {data.order === 'readiness' && <th scope="col">Readiness</th>}
                           <th scope="col">Status</th>
                           <th scope="col">Waiting since</th>
                           <th scope="col">Ticket</th>
@@ -189,6 +220,7 @@ export default function HandoffsTab({ words, brandName, unseeded }: Props) {
                                 ? <span className="text-muted">none recorded</span>
                                 : decimalText(row.expected_value)}
                             </td>
+                            {data.order === 'readiness' && <td><ReadinessCell row={row} /></td>}
                             <td>
                               <span className="badge bg-light text-dark border">{safeText(row.status)}</span>
                               {row.assignment_blocked_reason && (

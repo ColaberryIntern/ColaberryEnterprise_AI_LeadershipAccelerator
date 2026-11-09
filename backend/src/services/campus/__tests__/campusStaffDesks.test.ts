@@ -17,6 +17,13 @@ jest.mock('../../access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn(asyn
 jest.mock('../../reese/reeseIdentitySeed', () => ({ isReeseEnabled: jest.fn(), getReeseEnrollmentId: jest.fn() }));
 jest.mock('../../curriculum/daraIdentitySeed', () => ({ isDaraEnabled: jest.fn(), getDaraEnrollmentId: jest.fn() }));
 jest.mock('../../mayaIdentitySeed', () => ({ getMayaEnrollmentId: jest.fn() }));
+// M36: her desk follows the M37 switch. Off when chat is off (reason chat_off), as before; mockMayaMode overrides it.
+const mockMayaMode: { value: null | 'shadow' | 'off' } = { value: null };
+jest.mock('../../maya/mayaPromotion', () => ({
+  resolveMayaMode: jest.fn(async () => (mockMayaMode.value === 'shadow' ? { mode: 'shadow', reason: 'not_promoted' }
+    : mockMayaMode.value === 'off' ? { mode: 'off', reason: 'kill_switch' }
+    : mockEnv.enableChat ? { mode: 'live', reason: 'default_live' } : { mode: 'off', reason: 'chat_off' })),
+}));
 // The thing NOT to use: a broader staff test (staff role OR mgmt_role). Mocked to say "yes" so a regression to it shows.
 jest.mock('../../access/staffAccess', () => ({ isStaffOrMgmt: jest.fn(async () => true), isStaffEnrollment: jest.fn(async () => true) }));
 
@@ -132,6 +139,16 @@ describe('Maya: every audience (C21, v6 D3; it replaced the C6 rule of staff and
     warn.mockRestore();
     mockEnv.enableChat = false;
   });
+
+  it.each([['shadow' as const], ['off' as const]])(
+    'M36: chat on but her DM reply %s on the M37 switch: desk off duty, "back soon" (maya_paused), not an error',
+    async (mode) => {
+      set({ explorer: true }); mockEnv.enableChat = true; mockMayaMode.value = mode;
+      const maya = (await getStaffDesks('enr-1')).desks.find((d) => d.id === 'maya')!;
+      expect(maya).toMatchObject({ on_duty: false, opens: 'maya_paused', enrollment_id: null, prompts: [] });
+      mockMayaMode.value = null; mockEnv.enableChat = false;
+    },
+  );
 });
 
 describe('on duty', () => {

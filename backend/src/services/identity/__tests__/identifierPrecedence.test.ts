@@ -188,8 +188,12 @@ describe('T208 — the tripwire: every file that builds a subject key is account
   const gitGrep = (args: string[]): string => {
     try {
       return execFileSync('git', args, { cwd: REPO, encoding: 'utf8' });
-    } catch {
-      return '';   // git grep exits 1 on no matches
+    } catch (e: unknown) {
+      // git grep exits 1 on no matches, and ONLY that means "nothing found". M20 (2026-11-09): this used to swallow every
+      // error, so a git that failed to spawn, timed out or was killed under load read as "no violations" and the
+      // tripwire passed while checking nothing. Any other failure is now a failed test, never a silent pass.
+      if ((e as { status?: number }).status === 1) return '';
+      throw e;
     }
   };
 

@@ -143,6 +143,12 @@ export interface HardStopFlags {
   consentRevoked: boolean;
   killSwitch: boolean;
   campaignInactive: boolean;
+  /**
+   * M35 / M5: a person on the admissions team has ACCEPTED a handoff for this learner, so they are human-owned and
+   * the AI proposes no contact until the handoff closes or is released. Optional so the Growth Journey strategies that
+   * build these flags are unchanged; only the Explorer governor sets it (governor/humanOwnership.ts).
+   */
+  humanOwned?: boolean;
 }
 
 /** Anything carrying the six stops. `hardStopReason` needs no more than this. */

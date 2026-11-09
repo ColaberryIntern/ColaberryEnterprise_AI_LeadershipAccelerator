@@ -21,6 +21,7 @@ jest.mock('../../services/participantService', () => ({
   signParticipantJwt: () => 'test.jwt.token',
 }));
 
+jest.mock('../../services/maya/mayaWelcomeService', () => ({ maybeSendMayaWelcome: jest.fn() })); // M32: signup also runs Maya's (shadow) welcome
 jest.mock('../../services/reese/reeseWelcomeService', () => ({
   maybeSendWelcomes: jest.fn().mockResolvedValue(undefined),
 }), { virtual: true });

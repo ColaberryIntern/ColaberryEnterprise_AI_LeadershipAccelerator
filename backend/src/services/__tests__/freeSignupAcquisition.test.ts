@@ -19,6 +19,7 @@ jest.mock('../../config/env', () => ({
 }));
 jest.mock('../participantService', () => ({ signParticipantJwt: () => 'jwt' }));
 jest.mock('../reese/reeseWelcomeService', () => ({ maybeSendWelcomes: jest.fn() }), { virtual: true });
+jest.mock('../maya/mayaWelcomeService', () => ({ maybeSendMayaWelcome: jest.fn() })); // M32: signup also runs Maya's (shadow) welcome
 
 // The CRM push this path was missing. Mocked because the real module reaches
 // settingsService and then Sequelize; asserted below because the absence of this

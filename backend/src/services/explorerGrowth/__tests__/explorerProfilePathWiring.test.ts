@@ -69,6 +69,7 @@ jest.mock('../../participantService', () => ({
   pickBestEnrollment: (rows: unknown[]) => rows[0] ?? null,
 }));
 jest.mock('../../reese/reeseWelcomeService', () => ({ maybeSendWelcomes: jest.fn() }), { virtual: true });
+jest.mock('../../maya/mayaWelcomeService', () => ({ maybeSendMayaWelcome: jest.fn() })); // M32: signup also runs Maya's (shadow) welcome
 
 import { createFreeAccount } from '../../freeSignupService';
 import { createExplorerEnrollment } from '../../enrollmentService';
