@@ -1,17 +1,42 @@
 # Handoff — the ADS ladder: ad attribution and ad spend
 
-Six tickets in Ali Personal, bucket `7463955`. Four are closed, two are blocked on a permission
-that is not ours to grant. This page is the forward-looking state; the evidence for everything
-closed is in the four session logs listed at the bottom.
+Six tickets in Ali Personal, bucket `7463955`. Three are closed, one is one step from closing, and
+two are blocked on a permission that is not ours to grant. This page is the forward-looking state;
+the evidence for everything closed is in the four session logs listed at the bottom.
 
 | Ticket | Subject | State |
 |---|---|---|
 | [ADS-1](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338755) | Ad spend ledger + profitability report | **Closed.** Code on `main`. **Deploy not verified — see below.** |
 | [ADS-2](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338730) | Landing-page signup CTAs same-origin | **Closed.** Live, verified in production. |
-| [ADS-3](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338843) | UTM-to-lead attribution hardening | **Closed.** |
+| [ADS-3](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338843) | UTM-to-lead attribution hardening | **Open**, not closed — code merged and deployed, one production query left. See below. |
 | ADS-4 (`10467338894`) | Meta token / ad-account read access | **Blocked on Sohail.** |
 | [ADS-5](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338811) | Are the live ads tagged? | **Closed.** Answer: yes, since 2026-10-21. |
 | ADS-6 (`10467338921`) | Daily spend sync | **Blocked — depends on ADS-4.** |
+
+## ADS-3 is the one with a step left, and the first version of this page got it wrong
+
+**This page originally called ADS-3 closed. It is not** — corrected 2026-11-09, and worth saying
+plainly because the wrong version is what the next reader would have acted on.
+
+The code is done and shipped: the UTM backfill no longer reads only the newest session, and
+`utm_source` is canonicalized on read (`adSpend/utmSource.ts`) so `fb|paid` and `fb` stop splitting
+one campaign into two rows. PR #3622, deployed in main's tip `e8756aa8`. Campaign
+`52708443249234` went from four groups to two on live rows.
+
+What is left is the ticket's own "done when": **one production query against a real tagged click**,
+confirming a lead row carries the campaign. That query has not been run, so the ticket cannot close
+on the code alone.
+
+Two warnings before anyone runs it:
+
+- **ADS-3's stated acceptance test does not prove ADS-3.** "Query one real tagged click's lead row"
+  now passes whether or not the backfill ever runs, because the signup payload itself carries the
+  tags and `utmBackfillUpdates` correctly returns `{}`. What the backfill is actually worth, if you
+  need to show it: **388 leads** in 30 days carry no `utm_content` while a session of the same
+  visitor does, and **17 visitors** had a tagged click sitting behind an untagged newest session.
+- **Confirm the status in Basecamp before acting either way.** Basecamp is the authority, and the
+  status above rests on measurement notes from 2026-11-06, not on a ticket read — the attempt to
+  re-read it on 2026-11-09 failed because the machine in use had no production access.
 
 ## Check this before you trust the profitability report
 
