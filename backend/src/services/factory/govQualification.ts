@@ -281,6 +281,10 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
     buildStoryCount: buildPlanBase.buildStoryCount,
     deliveryProjectId,
     assignableBuilders: [],
+    // True once an intern is assigned and the build is materialized into a student project (the ready_to_assign →
+    // in_build transition the Proposal Studio reads). The Qualification stepper uses it to hand step 6 to the Studio.
+    // Filled by the overlay below when a delivery project exists; false before approval/assignment.
+    materialized: false,
   };
   // P4: the dates/messages/amendment inbox (empty before a project exists).
   let amendments: any[] = [];
@@ -316,6 +320,14 @@ export async function getDecoupledWorkspace(tenantId: string, gwsKey: string, bi
       submission = submissionView;
       submissionReadiness = evaluateSubmissionReadiness(responseSlots, coverage.sufficient, !!(evaluation && evaluation.canApproveBid));
     } catch { /* leave the pure projections as-is — they are still correct without the overlay */ }
+    // Has an intern been assigned (the build materialized into a student project)? Read the solution_build track's
+    // student-project link — the same anchor materializeGovBuildProject writes and deriveGovPipelineStage reads for
+    // in_build. Isolated so a failure here never disturbs the overlays above (materialized stays false).
+    try {
+      const { default: ContractTrack } = await import('../../models/ContractTrack');
+      const solTrack: any = await ContractTrack.findOne({ where: { delivery_project_id: deliveryProjectId, track_type: 'solution_build' } });
+      build.materialized = !!(solTrack && solTrack.solution_student_project_id);
+    } catch { /* leave build.materialized = false */ }
   }
   // Daily-tracking: surface the last sync + any flagged change (never throws / blocks the workspace).
   let sync: any = null;
