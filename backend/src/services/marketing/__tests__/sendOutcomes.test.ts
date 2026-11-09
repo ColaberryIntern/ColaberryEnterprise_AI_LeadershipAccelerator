@@ -6,7 +6,7 @@ jest.mock('../../reporting/marketingFunnelGraphService', () => ({ buildMarketing
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { sendOutcomes, shapeSendOutcomes } from '../sendOutcomes';
+import { CANCEL_REASON_SQL, sendOutcomes, shapeSendOutcomes } from '../sendOutcomes';
 
 /** R3 acceptance 2: the page carries a sent-and-blocked count for the same window, and zero reads as zero. */
 
@@ -28,6 +28,26 @@ describe('shapeSendOutcomes', () => {
     expect(out.cancelledByReason.map((r) => r.reason)).toEqual([
       'legacy:brand_no_relationship', 'legacy:kill_switch', 'legacy:global_rate_limit_exceeded', 'no_reason_recorded',
     ]);
+  });
+});
+
+describe('CANCEL_REASON_SQL (the key the shared cancel helper writes is current, not legacy)', () => {
+  const keys = (s: string): string[] => Array.from(s.matchAll(/metadata->>'(\w+)'/g), (m) => m[1]);
+  it('reads cancel_reason, then blocked_reason, unprefixed, before any legacy key', () => {
+    const [current, legacy] = CANCEL_REASON_SQL.split("'legacy:'");
+    expect(keys(current)).toEqual(['cancel_reason', 'blocked_reason']);
+    expect(keys(legacy)).toEqual(['cancelled_reason', 'expired_reason']);
+  });
+  it('blocked_reason is the key services/scheduling/cancelScheduledMessage.ts writes', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const src: string = require('fs').readFileSync(require('path').join(__dirname, '../../scheduling/cancelScheduledMessage.ts'), 'utf8');
+    expect(src).toMatch(/'blocked_reason', \$\{sequelize\.escape\(reason\)\}/);
+  });
+  it('the query uses that expression', async () => {
+    query.mockResolvedValue([]);
+    await sendOutcomes(7);
+    expect(query.mock.calls[query.mock.calls.length - 1][0]).toContain(CANCEL_REASON_SQL);
+    query.mockClear();
   });
 });
 

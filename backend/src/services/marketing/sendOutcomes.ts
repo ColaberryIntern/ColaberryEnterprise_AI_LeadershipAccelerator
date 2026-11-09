@@ -10,9 +10,12 @@ import { QueryTypes } from 'sequelize';
  *   cancelled  cancelled (status 'cancelled', scheduled_for in the window), grouped by WHY
  * Zero is returned as 0, never as an absent field, so an empty channel reads as zero rather than as missing data.
  *
- * THE REASON for a cancelled row is metadata.cancel_reason (R3, every new cancellation writes it). Rows cancelled before
- * R3 shipped fall back to the older keys a few sites wrote (blocked_reason, cancelled_reason, expired_reason), shown as
- * `legacy:<value>`, and a row with none of them is `no_reason_recorded`, so the unexplained count is visible, not hidden.
+ * THE REASON for a cancelled row is metadata.blocked_reason: the shared cancel helper
+ * (services/scheduling/cancelScheduledMessage.ts) writes that key on every path, so it is CURRENT, not legacy, and is
+ * shown unprefixed. metadata.cancel_reason is also read first in case any writer sets it. Only the keys no current
+ * writer uses (cancelled_reason from the old unsubscribe path, expired_reason) are shown as `legacy:<value>`, and a row
+ * with none of them is `no_reason_recorded`, so the unexplained count is visible, not hidden.
+ * (Fixed 2026-11-09: the first version treated blocked_reason as legacy, so every live reason read as legacy.)
  *
  * Read-only. One parameterized query; `days` is clamped by the caller (1..365) and passed as a bound integer.
  */
@@ -27,6 +30,12 @@ export interface SendOutcomes {
 
 type Row = { bucket: string; reason: string | null; n: number };
 
+/** The reason expression for one cancelled row. Exported so the key order is pinned by a test. */
+export const CANCEL_REASON_SQL = `COALESCE(metadata->>'cancel_reason', metadata->>'blocked_reason',
+                  'legacy:' || COALESCE(metadata->>'cancelled_reason',
+                                        CASE WHEN metadata->>'expired_reason' IS NOT NULL THEN 'expired_stale' END),
+                  'no_reason_recorded')`;
+
 const SQL = `
   SELECT 'sent' AS bucket, NULL AS reason, COUNT(*)::int AS n
     FROM scheduled_emails WHERE status = 'sent' AND sent_at >= NOW() - make_interval(days => :days)
@@ -34,12 +43,7 @@ const SQL = `
   SELECT 'failed', NULL, COUNT(*)::int
     FROM scheduled_emails WHERE status = 'failed' AND scheduled_for >= NOW() - make_interval(days => :days)
   UNION ALL
-  SELECT 'cancelled',
-         COALESCE(metadata->>'cancel_reason',
-                  'legacy:' || COALESCE(metadata->>'blocked_reason', metadata->>'cancelled_reason',
-                                        CASE WHEN metadata->>'expired_reason' IS NOT NULL THEN 'expired_stale' END),
-                  'no_reason_recorded'),
-         COUNT(*)::int
+  SELECT 'cancelled', ${CANCEL_REASON_SQL}, COUNT(*)::int
     FROM scheduled_emails WHERE status = 'cancelled' AND scheduled_for >= NOW() - make_interval(days => :days)
    GROUP BY 2`;
 
