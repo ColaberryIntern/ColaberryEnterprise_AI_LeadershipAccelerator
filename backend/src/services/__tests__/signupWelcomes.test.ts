@@ -1,25 +1,32 @@
-const reese = jest.fn();
-const maya = jest.fn();
-jest.mock('../reese/reeseWelcomeService', () => ({ maybeSendWelcomes: (...a: unknown[]) => reese(...a) }));
-jest.mock('../maya/mayaWelcomeService', () => ({ maybeSendMayaWelcome: (...a: unknown[]) => maya(...a) }));
-
 import * as fs from 'fs';
 import * as path from 'path';
+import * as reeseSvc from '../reese/reeseWelcomeService';
+import * as mayaSvc from '../maya/mayaWelcomeService';
 import { runSignupWelcomes } from '../signupWelcomes';
 
-/** M32 hook: signup greets with Reese, then Maya; one failing never stops the other or the signup. */
+/**
+ * M32 hook: signup greets with Reese, then Maya; one failing never stops the other or the signup.
+ *
+ * runSignupWelcomes reaches the two services via dynamic `await import()`. Under the CI suite's worker sharding a
+ * prior file in the same worker loads the REAL reeseWelcomeService into Node's module cache BELOW jest's registry,
+ * so `jest.mock` + the dynamic import stop intercepting (the real service runs, logs its own `welcome_failed`, and
+ * the order/warning assertions miss — the test passed alone but failed in the suite). Resetting the registry does
+ * not clear that cache. So instead of mocking the module, spy on the real module OBJECTS: whatever instance the
+ * dynamic import resolves to is the same one spied here, so the stubs always apply, hermetic regardless of sharding.
+ */
+let reese: jest.SpyInstance;
+let maya: jest.SpyInstance;
 let warnSpy: jest.SpyInstance;
-// runSignupWelcomes reaches its two services via dynamic `await import()`. Under the CI suite's worker sharding a
-// prior file can leave the REAL reese/maya module cached in this worker's registry, and the dynamic import then
-// resolves to it instead of the mock above — the test passes alone but fails in the suite (the real reese service
-// runs, logs its own `welcome_failed`, and the ordering/warning assertions miss). Resetting the module registry
-// before each test forces the dynamic import back through the hoisted jest.mock, making the test hermetic.
-beforeEach(() => { jest.resetModules(); reese.mockReset(); maya.mockReset(); warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined); });
-afterEach(() => warnSpy.mockRestore());
+beforeEach(() => {
+  reese = jest.spyOn(reeseSvc, 'maybeSendWelcomes').mockResolvedValue([]);
+  maya = jest.spyOn(mayaSvc, 'maybeSendMayaWelcome').mockResolvedValue(undefined as never);
+  warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+afterEach(() => { jest.restoreAllMocks(); });
 
 it('calls Reese first, then Maya, for the same enrollment', async () => {
   const order: string[] = [];
-  reese.mockImplementation(async () => { order.push('reese'); });
+  reese.mockImplementation(async () => { order.push('reese'); return []; });
   maya.mockImplementation(async () => { order.push('maya'); });
   await runSignupWelcomes('enr-1');
   expect(order).toEqual(['reese', 'maya']);
