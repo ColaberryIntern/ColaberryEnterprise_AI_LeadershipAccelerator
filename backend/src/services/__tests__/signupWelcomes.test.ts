@@ -26,7 +26,8 @@ it('Reese throwing does not stop Maya, and is logged with its class', async () =
   reese.mockRejectedValue(new Error('reese down'));
   await expect(runSignupWelcomes('enr-1')).resolves.toBeUndefined();
   expect(maya).toHaveBeenCalled();
-  expect(JSON.parse(String(warnSpy.mock.calls[0][0])).event).toBe('signup_reese_welcome_failed');
+  // Among the warnings, not necessarily first: other welcome code may also warn in the same run.
+  expect(warnSpy.mock.calls.map((c) => { try { return JSON.parse(String(c[0])).event; } catch { return null; } })).toContain('signup_reese_welcome_failed');
 });
 
 it('Maya throwing never rejects', async () => {
