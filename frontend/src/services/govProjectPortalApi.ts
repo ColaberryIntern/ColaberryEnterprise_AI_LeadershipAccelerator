@@ -98,6 +98,11 @@ export interface StudentGovProjectView {
   agency?: string | null;
   /** Cockpit: detected key-date lines (public) — fed to the govDeadline countdown helper. Optional (older backends). */
   keyDates?: Array<{ date: string | null; text: string | null }>;
+  /** Cockpit: the AUTHORITATIVE submission close date (source-snapshot closeAt/closeDate, else dossier) — the Studio
+   *  bar's countdown prefers this over the AI-extracted key dates. Optional (older backends). */
+  closeDate?: string | null;
+  /** Cockpit: the opportunity's 0-100 priority score (urgency), shown next to the countdown. Optional (older backends). */
+  priorityScore?: number | null;
   /** Cockpit: the build-repo commit feed (matched pushes, newest first). Optional (older backends). */
   commitFeed?: GovCommitFeedItem[];
   /** v2 Build view: releases → stories + progress + the linked project id for the deep-link. Optional (older backends). */

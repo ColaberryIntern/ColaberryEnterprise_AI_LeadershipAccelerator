@@ -962,6 +962,31 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(factoryApi.reviewGovProposalResponse).toHaveBeenCalledWith(CANON, 'R1', 'approved');
   });
 
+  it('Proposal tab: once the build is MATERIALIZED (intern assigned), the Studio takes over step 6 — a deep-link, no legacy editor', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      build: { buildStoryCount: 0, releases: [], stories: [], deliveryProjectId: 'dp-1', assignableBuilders: [], materialized: true },
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'draft', content: 'c' }],
+    }));
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    // The legacy authoring editor is GONE — the Studio supersedes it.
+    expect(container.querySelector('textarea[aria-label="Response to R1"]')).toBeNull();
+    // A deep-link into the Proposal Studio for THIS delivery project is offered instead.
+    const link = Array.from(container.querySelectorAll('a')).find((a) => (a.textContent || '').includes('Open the Proposal Studio')) as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe('/admin/internship/gov-contract/dp-1');
+  });
+
+  it('Proposal tab: before materialization (approved, not yet assigned), the legacy response editor still shows', async () => {
+    (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
+      responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'draft', content: 'We are SAM-registered.' }],
+    })); // withProject sets deliveryProjectId but NOT materialized
+    await renderAt(`?canonical=${CANON}&tab=proposal`);
+    await flush();
+    expect(container.querySelector('textarea[aria-label="Response to R1"]')).toBeTruthy();
+    expect(Array.from(container.querySelectorAll('a')).some((a) => (a.textContent || '').includes('Open the Proposal Studio'))).toBe(false);
+  });
+
   it('Dates tab inbox: lists a recorded amendment with its reopened-count + provenance, and records a new entry', async () => {
     (factoryApi.getGovQualificationWorkspace as jest.Mock).mockResolvedValue(withProject({
       responseSlots: [{ requirementId: 'R1', statement: 'x', sourceRef: null, status: 'approved', content: 'done' }],

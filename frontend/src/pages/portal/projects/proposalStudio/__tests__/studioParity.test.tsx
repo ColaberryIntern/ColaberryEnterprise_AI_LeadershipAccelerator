@@ -149,3 +149,33 @@ describe('Proposal Studio v4 parity', () => {
     }
   });
 });
+
+describe('ContractBar — deadline + urgency survive the move into the Studio', () => {
+  const withDates = (over: Partial<StudentGovProjectView>) => ({ ...VIEW, ...over } as StudentGovProjectView);
+  const text = (id: string) => container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+
+  it('shows the authoritative close date, a countdown, and the priority chip', async () => {
+    await render(<ContractBar view={withDates({ closeDate: '2030-01-15', priorityScore: 70, keyDates: [] })} onNeeds={noop} />);
+    expect(present('bar-closes')).toBe(true);
+    expect(present('bar-countdown')).toBe(true);
+    expect(present('bar-priority')).toBe(true);
+    expect(text('bar-closes')).toContain('2030-01-15');
+    expect(text('bar-priority')).toContain('70');
+  });
+
+  it('PREFERS the authoritative closeDate over the AI-extracted dossier key dates', async () => {
+    await render(<ContractBar view={withDates({ closeDate: '2030-01-15', keyDates: [{ date: '2027-02-02', text: 'Proposals due' }] })} onNeeds={noop} />);
+    expect(text('bar-closes')).toContain('2030-01-15');
+    expect(text('bar-closes')).not.toContain('2027-02-02');
+  });
+
+  it('falls back to the dossier key date when the payload carries no authoritative closeDate (older backend)', async () => {
+    await render(<ContractBar view={withDates({ closeDate: null, keyDates: [{ date: '2030-03-03', text: 'Proposals due' }] })} onNeeds={noop} />);
+    expect(present('bar-closes')).toBe(true); // the countdown still shows from the dossier fallback
+  });
+
+  it('hides the priority chip when no priority score is carried (older backend)', async () => {
+    await render(<ContractBar view={withDates({ priorityScore: null, closeDate: '2030-01-15', keyDates: [] })} onNeeds={noop} />);
+    expect(present('bar-priority')).toBe(false);
+  });
+});
