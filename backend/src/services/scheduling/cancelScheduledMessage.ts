@@ -46,8 +46,14 @@
  * pending rows on its next tick, so an UPDATE that failed is simply attempted again.
  */
 import { Op, WhereOptions } from 'sequelize';
-import { sequelize } from '../../config/database';
-import ScheduledEmail from '../../models/ScheduledEmail';
+// FROM THE MODELS INDEX, NOT models/ScheduledEmail DIRECTLY, and this is load-bearing. Every
+// service that calls this helper imports its models from '../models', and their suites mock
+// that module. A direct import of the model file is a DIFFERENT module to jest, so those mocks
+// would not cover this helper and the real model would try to open a socket — which is exactly
+// what happened: unsubscribeEnforcement.test.ts failed with SequelizeConnectionRefusedError on
+// the first run after the refactor. Matching the call sites' import path keeps every existing
+// mock working, and the index is the right layer for a service-tier helper anyway.
+import { ScheduledEmail } from '../../models';
 
 /**
  * The machine-readable reason vocabulary.
@@ -127,6 +133,27 @@ export const NOT_SENT_OR_CANCELLED_STATUSES = [
 ];
 
 /**
+ * `config/database` is required LAZILY, not imported at the top, and this is not a style
+ * choice.
+ *
+ * That module does `new Sequelize(env.databaseUrl)` at module scope. Any suite that mocks
+ * `config/env` with only the fields it cares about leaves `databaseUrl` undefined, and the
+ * constructor then throws `The "url" argument must be of type string` AT IMPORT TIME — before
+ * a single test runs, reported as "Test suite failed to run" with no test names. Two suites
+ * died exactly that way on the first run after this refactor (portalLoginUrl,
+ * acceleratorService.liveOccurrence), because a top-level import here propagates to every
+ * service that calls this helper and to every suite that imports one of them.
+ *
+ * Deferring it means module load touches nothing, and the instance is built only when a
+ * cancellation is actually performed. It is the same eager-construction-at-import mechanism
+ * documented in src/__tests__/testSupport/configMocks.ts, met from the other side.
+ */
+function getSequelize() {
+  // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+  return require('../../config/database').sequelize;
+}
+
+/**
  * The JSONB merge expression. Built as a literal because the whole point is to preserve the
  * other keys on the column, which a plain object cannot do.
  *
@@ -136,6 +163,7 @@ export const NOT_SENT_OR_CANCELLED_STATUSES = [
  * refactor away from not being. Escaping costs nothing.
  */
 function metadataMerge(reason: string, extraKeys?: Record<string, unknown>) {
+  const sequelize = getSequelize();
   const pairs: string[] = [
     `'blocked_reason', ${sequelize.escape(reason)}`,
     `'cancelled_at', NOW()`,
