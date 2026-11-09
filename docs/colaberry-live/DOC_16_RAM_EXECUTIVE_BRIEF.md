@@ -8,7 +8,7 @@
 
 ## Read this first
 
-Colaberry Live is **built and has not yet aired.** Everything below that describes the system working describes it working under test. That is not a hedge — it is the single most useful fact in this document, and the section on risk explains what it has already cost. Where this brief cannot source something, it says so instead of estimating.
+Colaberry Live is **built, and has aired three times without once being measured.** Everything below that describes the system working describes it working under test. That is not a hedge - it is the single most useful fact in this document, and the section on risk explains what it has already cost. Where this brief cannot source something, it says so instead of estimating.
 
 ## Still owed: the briefing session
 
@@ -74,7 +74,9 @@ Two cost notes that are structural rather than numeric. The delivery cost scales
 
 ## What risks exist
 
-The largest risk is the simplest: **it has never aired.** As of the L0.3 review on 2026-11-02, 12 of the 39 open tickets cannot be finished by writing code, because their acceptance criteria require a real class to have happened — three viewers on separate networks, a recorded latency, a replay verified after the fact. Everything in this brief that describes the system working describes it working in tests.
+The largest risk is the simplest: **no airing has ever been measured.** As of the L0.3 review on 2026-11-02, 12 of the 39 open tickets cannot be finished by writing code, because their acceptance criteria require a real class to have happened — three viewers on separate networks, a recorded latency, a replay verified after the fact. Everything in this brief that describes the system working describes it working in tests.
+
+What has happened is narrower than it sounds. Checked against production on 2026-11-09, the database holds 2 occurrence rows - a technical airing on 15 October and a test on 20 October - while a third airing on 13 October survives only as a recording outside the platform, with no occurrence row at all. The viewer telemetry tables are empty: 0 non-staff viewers have ever been recorded watching any of them. Because the viewer was only wired to report on 2026-10-20, that emptiness is not proof the earlier two had no audience; it proves nothing has been measured since. No Colaberry Live class has been aired to an audience anyone can count.
 
 That distinction has already cost something real, which is the honest reason to take it seriously: four complete, well-tested units shipped that nothing called, and one of them meant a live class recorded zero viewers for five days while the server logs showed people watching. The register in `docs/colaberry-live/DOC_11_SYSTEM_ARCHITECTURE_HANDBOOK.md` now grades every capability by whether it has run in production, in a test, or never.
 
@@ -94,7 +96,7 @@ What is instrumented, and what each number means, matters more here than a targe
 
 Beyond the live count: replay views, clip performance on YouTube, and $0 account creations attributed to a class — the funnel's own steps.
 
-**What no metric shows yet.** As checked on 2026-11-08, there is no record in this repository of a Colaberry Live class having aired, so every number above currently has nothing in it. Whether telemetry has collected a single row since the viewer was wired to report on 2026-10-20 is still unverified; it takes one command (`scripts/explainBroadcastTelemetry.js`) against production to answer, and that is owed.
+**What no metric shows yet.** That question was open until 2026-11-09, when the owed command (`scripts/explainBroadcastTelemetry.js`) was finally run against production alongside a read-only census. The answer is that every number above has nothing in it, and now for a sourced reason rather than an assumed one: `broadcast_viewer_sessions`, `broadcast_viewer_people` and `broadcast_occurrence_metrics` are all empty, so 0 viewers have ever been recorded. The measurement path itself is sound - the expected index `idx_bvs_active` exists and the planner chooses it - so what is missing is an audience, not an instrument.
 
 ---
 
@@ -103,5 +105,5 @@ Beyond the live count: replay views, clip performance on YouTube, and $0 account
 - **What costs and vendors are involved** — Not defined in this repository. Settled by: Ram or Ali reading the current vendor invoices. The bootstrap defers this twice in its own text — "use current vendor/product pages at execution time" and "confirm billing/cost visibility" — so the amounts were never meant to live in the repository.
 - **How the system supports the 10,000 Architect goal** — Not defined in this repository. Settled by: Ram defining the number, the horizon and what counts as one Architect. The phrase appears exactly once in the bootstrap, inside this document's own requirement list, and nowhere else in the repository.
 
-*State claims checked on 2026-11-08. An airing is an event version control cannot show, so the absence of a record is reported as what was checked rather than as proof that nothing aired.*
+*State claims checked on 2026-11-09. An airing is an event version control cannot show, so the absence of a record is reported as what was checked rather than as proof that nothing aired.*
 

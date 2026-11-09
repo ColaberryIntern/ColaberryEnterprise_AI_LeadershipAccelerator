@@ -76,11 +76,7 @@ function markdown() {
   L.push('');
   L.push('## Read this first');
   L.push('');
-  L.push('Colaberry Live is **built and has not yet aired.** Everything below that describes '
-    + 'the system working describes it working under test. That is not a hedge — it is the '
-    + 'single most useful fact in this document, and the section on risk explains what it has '
-    + 'already cost. Where this brief cannot source something, it says so instead of '
-    + 'estimating.');
+  L.push(D.LEAD);
   L.push('');
   L.push(`## Still owed: the briefing session`);
   L.push('');
@@ -193,6 +189,36 @@ function selfCheck() {
       + 'central claim is no longer tied to the board');
   }
 
+  // 5b. THE CLAIM THIS BRIEF GOT WRONG ONCE CANNOT COME BACK.
+  //
+  // The first version asserted the system had never aired. Production holds two occurrence rows
+  // and ticket L11.7 names a third recording, so the unqualified claim is false. It is banned by
+  // its exact wording rather than by review, because it is a phrase a later edit would reach for
+  // naturally: "never aired" is shorter and more dramatic than what is true.
+  const FALSE_AIRING_CLAIMS = [
+    'has never aired',
+    'has not yet aired',
+    'never been aired',
+    'it has never aired',
+  ];
+  FALSE_AIRING_CLAIMS.forEach((phrase) => {
+    if (md.toLowerCase().includes(phrase)) {
+      throw new Error(`the brief claims the system "${phrase}". Production holds `
+        + `${D.AIRINGS.occurrenceRows} occurrence rows and ticket L11.7 names a third recording. `
+        + 'The true and more useful claim is that no airing has ever been MEASURED - say that '
+        + 'instead of reaching for the shorter sentence.');
+    }
+  });
+  if (!md.includes(D.AIRING_NOTE)) {
+    throw new Error('the risk section does not carry the airing record, so a reader cannot tell '
+      + 'an unaired system from an unmeasured one');
+  }
+  if (D.AIRINGS.measuredViewers !== 0) {
+    throw new Error(`AIRINGS.measuredViewers is ${D.AIRINGS.measuredViewers}, not 0. If a `
+      + 'viewer has now been recorded, the brief\'s central risk has changed and the wording '
+      + 'above must change with it rather than the number being edited alone.');
+  }
+
   // 6. THE HALF OF THE CRITERION NO DOCUMENT CAN DISCHARGE.
   if (!md.includes('Still owed: the briefing session')) {
     throw new Error('the brief does not say the briefing session is still owed. A complete-'
@@ -260,8 +286,7 @@ function html() {
     <p class="meta">Written for ${esc(D.META.audience)} · ${esc(D.META.doc)} · ticket
       ${esc(D.META.ticket)} · ${esc(D.META.built)}</p>
     <blockquote>${esc(D.AUDIENCE_QUESTION)}</blockquote>
-    <div class="callout"><strong>Colaberry Live is built and has not yet aired.</strong>
-      Everything below that describes the system working describes it working under test.
+    <div class="callout">${esc(D.LEAD).replace(/\*\*(.+?)\*\*/s, '<strong>$1</strong>')}
       ${D.DERIVED.airingBlocked} of the ${D.DERIVED.openTickets} open tickets cannot finish
       until a real class airs.</div>
     <div class="callout"><strong>Still owed:</strong> ${esc(D.BRIEFING.owed)}
