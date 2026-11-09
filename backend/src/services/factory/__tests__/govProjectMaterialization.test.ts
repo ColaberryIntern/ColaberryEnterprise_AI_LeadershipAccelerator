@@ -12,8 +12,10 @@ jest.mock('../govBuildPlanAI', () => ({ decomposeGovBuildPlanRaw: jest.fn() }));
 jest.mock('../../sbp/planGate', () => ({ gatePlan: jest.fn(() => ({ ok: true, violations: [] })), blockingViolations: jest.fn(() => []) }));
 jest.mock('../govBuildAssignment', () => ({ ensureAssigneeCanBuild: jest.fn() }));
 jest.mock('../../sbp/planStore', () => ({ getPublishedPlan: jest.fn(), savePlanDraft: jest.fn(), publishPlan: jest.fn() }));
+jest.mock('../proposal/reanalyzeProposalBlueprint', () => ({ reanalyzeProposalBlueprint: jest.fn() }));
 
 import { getIdentityLinks } from '../../../modules/identity/platformIdentityService';
+import { reanalyzeProposalBlueprint } from '../proposal/reanalyzeProposalBlueprint';
 import { getPublishedPlan, savePlanDraft, publishPlan } from '../../sbp/planStore';
 import ContractTrack from '../../../models/ContractTrack';
 import { createNewProjectForEnrollment } from '../../projectService';
@@ -57,6 +59,7 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     mock(getPublishedPlan).mockResolvedValue(null);
     mock(savePlanDraft).mockResolvedValue({ version: 1, plan_sha256: 'sha' });
     mock(publishPlan).mockResolvedValue(undefined);
+    mock(reanalyzeProposalBlueprint).mockResolvedValue({ version: 1, blueprint: {}, diff: {}, documentCount: 13 });
   });
 
   it('happy path: creates a named project, marks its gov origin, links it, and materializes the plan', async () => {
@@ -190,6 +193,36 @@ describe('govProjectMaterialization (core-table write — idempotent, typed erro
     mock(getPublishedPlan).mockRejectedValue(new Error('db down'));
     const r = await materializeGovBuildProject(baseInput);
     expect(r.projectId).toBe('proj-x');
+    expect(r.tasks).toBe(3);
+  });
+
+  // ENTER-BUILD: analyze the stored solicitation ZIP once at the ready_to_assign -> in_build transition, so the
+  // proposal blueprint + document set exist before the intern can build. The intern never runs the ZIP step.
+  it('on first materialize (created), analyzes the ZIP once so the blueprint exists before the intern builds', async () => {
+    const project: any = { id: 'proj-1', project_variables: {}, save: jest.fn().mockResolvedValue(undefined) };
+    mock(createNewProjectForEnrollment).mockResolvedValue(project);
+    const r = await materializeGovBuildProject({ ...baseInput, actorIdentityId: 'actor-9' });
+    expect(r.created).toBe(true);
+    expect(mock(reanalyzeProposalBlueprint)).toHaveBeenCalledTimes(1);
+    expect(mock(reanalyzeProposalBlueprint)).toHaveBeenCalledWith('dp-1', 'actor-9');
+  });
+
+  it('does NOT re-analyze when the project is REUSED (created=false) — no repeated version bump on retry', async () => {
+    mock(ContractTrack.findByPk).mockResolvedValue({ solution_student_project_id: 'proj-existing' });
+    const r = await materializeGovBuildProject(baseInput);
+    expect(r.created).toBe(false);
+    expect(mock(reanalyzeProposalBlueprint)).not.toHaveBeenCalled();
+  });
+
+  it('a ZIP-not-yet-uploaded (bundle_missing) or any reanalyze failure is swallowed — build entry still succeeds', async () => {
+    const project: any = { id: 'proj-1', project_variables: {}, save: jest.fn().mockResolvedValue(undefined) };
+    mock(createNewProjectForEnrollment).mockResolvedValue(project);
+    const bundleMissing: any = new Error('Solicitation package missing. Re-upload it on the Solicitation step.');
+    bundleMissing.name = 'BlueprintReanalysisError';
+    mock(reanalyzeProposalBlueprint).mockRejectedValueOnce(bundleMissing);
+    const r = await materializeGovBuildProject(baseInput);
+    expect(r.created).toBe(true);           // the build-entry transition is NOT rolled back
+    expect(r.projectId).toBe('proj-1');
     expect(r.tasks).toBe(3);
   });
 });
