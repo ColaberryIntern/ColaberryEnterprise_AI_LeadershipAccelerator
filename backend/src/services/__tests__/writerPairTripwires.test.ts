@@ -135,6 +135,13 @@ const PAID_FILES: Record<string, string> = {
     + 'payment_status or enrollment_type, so it cannot make a row incoherent in the sense this '
     + 'tripwire guards. Dry-run by default, --execute to write, and deliberately not scheduled: '
     + 'a recurring version would move renewing members out of their own batch every month.',
+  'services/welcome/paidMemberWelcomeService.ts':
+    'READ of the paid literal, and A NEWCOMER THIS GUARD CAUGHT (C10.18). The welcome sweep '
+    + "selects on `payment_status: 'paid'` AND `status: 'active'` AND a non-null cohort_id, to "
+    + 'find members who have been placed in a batch but not yet welcomed. It writes NO enrollment '
+    + 'column at all: its only write anywhere is a communication_logs row recording that the mail '
+    + 'went out, which is the same row that makes it idempotent. So it is a read rather than a '
+    + 'fifth writer, and it cannot make an enrollment incoherent in the sense this tripwire guards.',
   'scripts/createTestUsers.ts': 'SEED/DEV script. Creates test people; never runs in production.',
   'scripts/internshipJourneyE2E.ts': 'E2E script. Creates a fixture journey.',
   'scripts/seedTimelineDemo.ts':

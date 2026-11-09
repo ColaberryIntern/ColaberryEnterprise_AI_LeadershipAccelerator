@@ -427,6 +427,14 @@ export const env = {
   // the outbox drain cron no-ops, and createSession skips linked-room creation
   // until COMMUNITY_ROOMS_ENABLED=true is set explicitly in an environment.
   communityRoomsEnabled: process.env.COMMUNITY_ROOMS_ENABLED === 'true',
+  // C10.18, the paid-member welcome sweep. OFF by default, and this one is not symmetry with the
+  // flags around it: it is the only scheduled job in this subtree that sends unrecallable mail to
+  // paying customers with no human in the loop. `BATCH_ROLLOVER_ENABLED` defaults ON because the
+  // worst it does is move a cohort row's status, which an admin can put back. An email cannot be
+  // put back. It stays off until somebody has read the rendered copy -
+  // `scripts/previewPaidMemberWelcome.ts` renders it for exactly that, and the sweep's dry run
+  // names every member it would mail without sending anything.
+  paidMemberWelcomeEnabled: process.env.PAID_MEMBER_WELCOME_ENABLED === 'true',
   // Colaberry Live — the broadcast surface. OFF by default so the routes 404 and the
   // feature ships dark, exactly as the community rooms above do. Deliberately its OWN flag
   // rather than riding COMMUNITY_ROOMS_ENABLED: the blast radii differ (this one gates a

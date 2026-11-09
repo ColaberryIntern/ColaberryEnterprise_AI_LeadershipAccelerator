@@ -62,6 +62,32 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Set BATCH_ROLLOVER_ENABLED=false to stop it without a deploy.',
   },
   {
+    // C10.18 (2026-11-08). Seeded rather than added to cronRegistryBaseline.ts, because that
+    // baseline is a ratchet allowed only to shrink and an instrumentCronJob name with no
+    // ai_agents row tracks its run_count and error_count against nothing.
+    agent_name: 'PaidMemberWelcome',
+    agent_type: 'scheduled_processor',
+    module: 'paidMemberWelcomeService',
+    source_file: 'backend/src/services/welcome/paidMemberWelcomeService.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'operations',
+    description:
+      'Welcomes a new paying member into the batch C10.13 placed them in: names the batch, ' +
+      'says the curriculum is self-paced so they can start the same day, links the batch\'s own ' +
+      'private room (C10.14) and gives the orientation date. A SWEEP rather than a call in the ' +
+      'payment path, so all four paid-status writers are covered without any of them importing a ' +
+      'mail sender, and so a mail outage cannot affect a payment. Idempotent: a ' +
+      'communication_logs row with metadata.event = paid_member_welcome IS the dedup, checked ' +
+      'per member before each send, so re-running this or any reconciliation sweep sends ' +
+      'nothing further. Deduped on that event ALONE and never on the sign-in-link welcome set, ' +
+      'because a paying ex-Explorer already has open_house_welcome and would otherwise be ' +
+      'silently skipped. Mails nobody whose placement has not landed. OFF unless ' +
+      'PAID_MEMBER_WELCOME_ENABLED=true, because this is the one job here that sends ' +
+      'unrecallable mail to paying customers with no human in the loop; ' +
+      'scripts/previewPaidMemberWelcome.ts renders the copy for review first.',
+  },
+  {
     // Gov AI vetting catch-up (2026-11-04). Advisory: it writes only to gov_ai_vettings.
     agent_name: 'GovAiVettingCatchup',
     agent_type: 'scheduled_processor',

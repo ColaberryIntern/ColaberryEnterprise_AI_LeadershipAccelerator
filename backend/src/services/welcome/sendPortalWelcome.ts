@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { col, fn, Op, where as sequelizeWhere } from 'sequelize';
 import { CommunicationLog } from '../../models';
 import { env } from '../../config/env';
 
@@ -106,17 +107,53 @@ export interface SendPortalWelcomeResult {
 }
 
 /**
- * Has this address already been welcomed?
+ * Has this address already been sent one of `blockingEvents`?
  *
  * Reads `status: 'sent'` rows for the address and checks the event in JS rather
  * than in SQL. The per-address row count here is single digits, and a jsonb
  * predicate in a Sequelize `where` is the kind of thing that silently matches
  * nothing when the operator is wrong - which would turn this guard into a
  * rubber stamp and double-mail everybody.
+ *
+ * ── WHY `blockingEvents` IS A PARAMETER (C10.18) ──
+ *
+ * It defaults to {@link WELCOME_EVENTS}, so both free doors behave exactly as
+ * before. The default is what makes the asymmetry noted above still hold: what a
+ * caller WRITES is per-caller, and what the sign-in-link doors READ is the whole
+ * set, so two doors cannot hand the same person a sign-in link twice.
+ *
+ * A caller passes its own set when it is sending something that is NOT a sign-in
+ * link. The paid-member welcome (C10.18) is the first: it names the batch the
+ * payment bought, the batch's own room and the orientation date. Someone who
+ * joined as a free Explorer and later paid has, by definition, already received
+ * `open_house_welcome` - so deduping a paid welcome against the sign-in-link set
+ * would silently skip the paying customer, which is the opposite of the bug the
+ * shared set prevents. Those two mails are not two copies of one greeting; they
+ * are two different things said at two different times.
+ *
+ * So: do not add a paid event to `WELCOME_EVENTS`. Pass it here instead.
+ *
+ * The address is matched case-insensitively, through `lower()` on both sides
+ * rather than `iLike`, because an address containing `_` or `%` is a perfectly
+ * ordinary address and a LIKE wildcard. Two doors storing the same person under
+ * different casing is the one way this guard could be bypassed, and a guard that
+ * can be bypassed by a capital letter is not one.
  */
-export async function alreadyWelcomed(email: string): Promise<boolean> {
+export async function alreadyWelcomed(
+  email: string,
+  blockingEvents: ReadonlyArray<string> = WELCOME_EVENTS,
+): Promise<boolean> {
+  const address = String(email ?? '').trim().toLowerCase();
+  // An empty address cannot have been mailed, and must not match every row with a
+  // NULL to_address either.
+  if (!address) return false;
   const rows = await CommunicationLog.findAll({
-    where: { to_address: email, status: 'sent' },
+    where: {
+      [Op.and]: [
+        sequelizeWhere(fn('lower', col('to_address')), address),
+        { status: 'sent' },
+      ],
+    } as any,
     attributes: ['id', 'metadata'],
   });
   return rows.some((r) => {
@@ -124,7 +161,7 @@ export async function alreadyWelcomed(email: string): Promise<boolean> {
     const event = meta && typeof meta === 'object'
       ? (meta as Record<string, unknown>).event
       : null;
-    return typeof event === 'string' && WELCOME_EVENTS.includes(event);
+    return typeof event === 'string' && blockingEvents.includes(event);
   });
 }
 
