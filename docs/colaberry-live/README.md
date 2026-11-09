@@ -5,7 +5,7 @@ Generated from `scripts/artifacts/tickets/l118Data.js`. **Do not hand-edit** —
 before it writes anything.
 
 Bootstrap §3.1 and §17 require **18 documents**, DOC 00 through DOC 17.
-**14 are written**, 9 of them under L11.8 on 2026-11-03.
+**16 are written**, 9 of them under L11.8 on 2026-11-03.
 
 **Start at [DOC 00](DOC_00_READ_FIRST_AI_OPERATING_BRIEF.md).** Every AI-executable todo links to it, and it carries
 the source-of-truth hierarchy, the ticket-selection rule and the current blockers.
@@ -30,8 +30,8 @@ the source-of-truth hierarchy, the ticket-selection rule and the current blocker
 | 13 | Ali + Piyush Studio Operator Manual | L11.3 | Blocked | — | Needs the studio installed (L6.2, L6.3). A manual for equipment nobody has yet is untested prose. Owner is Piyush, not Claude Code. |
 | 14 | Developer & AI Maintenance Runbook | L11.4 | In the repo | `docs/colaberry-live/DOC_14_DEVELOPER_MAINTENANCE_RUNBOOK.md` | Written 2026-11-07. Generated from l114Data.js + l114Sections.js. Every path it tells a reader to open — 35 reference paths and 18 procedure file references — is stat'ed on every build, and every documented env var must be referenced in backend/src. |
 | 15 | Testing Strategy & Evidence Matrix | L11.5 | In the repo | `docs/COLABERRY_LIVE_TESTING_STRATEGY.md` | Generated with a self-check. |
-| 16 | Ram Executive Brief | L11.6 | Not written | — | Needs DOC 12 for its diagrams. Definition-of-done item 44. Not launch-blocking. |
-| 17 | Case Study Source Pack | L11.7 | Not written | — | Was meant to be maintained DURING the build rather than written after it, so every week it stays open it gets harder rather than easier. |
+| 16 | Ram Executive Brief | L11.6 | In the repo | `docs/colaberry-live/DOC_16_RAM_EXECUTIVE_BRIEF.md` | Written 2026-11-08. Generated from l116Data.js. Fifteen required explanations transcribed from the bootstrap and pinned by count. Two of them, costs/vendors and the 10,000 Architect goal, are not defined anywhere in this repository: they carry an explicit gap marker, name who can settle them, and the build refuses any currency figure inside them. The brief also states that the briefing session the ticket asks for is an event rather than a document, and stays with Ali. |
+| 17 | Case Study Source Pack | L11.7 | In the repo | `docs/colaberry-live/DOC_17_CASE_STUDY_SOURCE_PACK.md` | Written 2026-11-08. Generated from l117Data.js. It was meant to be maintained DURING the build rather than written after it, and the cost of that shows: of the sixteen captures the bootstrap asks for, 10 are captured, 5 need an event that has not happened and 1 is blocked on the studio. A captured item must name its evidence and an uncaptured one must NOT name a file, asserted in both directions, and an attributed quotation anywhere in the document fails the build because the bootstrap permits quotes only when real. |
 
 ## The coverage contract
 
