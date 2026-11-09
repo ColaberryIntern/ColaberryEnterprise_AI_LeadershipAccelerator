@@ -1,4 +1,5 @@
 import { classifyError } from '../../../utils/errorClassifier';
+import { subjectRefFrom } from '../../identity/identifierPrecedence';
 
 /**
  * M35 - the admissions queue ordered by the Sales Readiness Score (M25/M26), so the human team calls the readiest
@@ -31,9 +32,8 @@ export interface ReadinessDeps {
 
 /** The person reference for a handoff: the enrollment outranks the lead (the identity T208 precedence). */
 export function personRefFor(row: Pick<ReadinessRow, 'enrollment_id' | 'lead_id'>): string | null {
-  if (row.enrollment_id) return `enrollment:${row.enrollment_id}`;
-  if (row.lead_id !== null && row.lead_id !== undefined) return `lead:${row.lead_id}`;
-  return null;
+  // The shared builder (identity T208 tripwire): one place constructs subject keys, so precedence cannot drift.
+  return subjectRefFrom({ enrollmentId: row.enrollment_id, leadId: row.lead_id });
 }
 
 export async function scoreRows<R extends ReadinessRow>(rows: R[], deps: ReadinessDeps): Promise<Map<string, Readiness | null>> {

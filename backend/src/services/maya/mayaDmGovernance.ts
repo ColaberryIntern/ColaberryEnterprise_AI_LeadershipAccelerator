@@ -1,6 +1,7 @@
 import { env } from '../../config/env';
 import type { GrowthJourneyFlags } from '../../config/growthJourneyFlags';
 import { classifyError } from '../../utils/errorClassifier';
+import { subjectRefFrom } from '../identity/identifierPrecedence';
 import { BOOK_CALL_LINK } from './mayaPortalTools';
 import { createJourneyHandoff, type HandoffReasonCode, type JourneyHandoffResult } from './mayaJourneyHandoff';
 import { resolveMayaMode, type MayaModeAnswer } from './mayaPromotion';
@@ -129,7 +130,7 @@ function defaultPersonDeps(): Person360Deps {
 export async function person360Block(enrollmentId: string, deps: Person360Deps = defaultPersonDeps()): Promise<string> {
   try {
     if ((await deps.mode()).mode !== 'live') return '';
-    const ref = `enrollment:${enrollmentId}`;
+    const ref = subjectRefFrom({ enrollmentId }) as string; // the shared builder (identity T208 tripwire)
     const [who, ready] = await Promise.all([deps.who(ref), deps.ready(ref)]);
     const parts: string[] = [];
     if (who.status === 'present' && who.data) parts.push(`lifecycle stage: ${who.data.stage}`);
