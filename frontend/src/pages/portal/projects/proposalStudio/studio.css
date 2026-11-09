@@ -271,7 +271,11 @@
 .gps-chip-btn{cursor:pointer}
 .gps-chip-btn.gps-chip-warn{border-color:var(--gps-warn);color:var(--gps-warn)}
 .gps-chip-btn.gps-chip-bad{border-color:var(--gps-bad);color:var(--gps-bad)}
-.gps-rail-badge{margin-left:auto;font-weight:700;border-radius:999px;padding:0 7px;font-size:11px;color:#fff}
+/* Scope to `.gps-step .gps-rail-badge` so the count colour beats `.gps-step small` (same 1-class
+   specificity, but that rule's element selector was winning and painting the number `--gps-muted`:
+   dark-grey digits on the dark warn/bad fill). `--gps-surface` reads on the saturated fill in BOTH
+   themes (white on dark fill in light, dark on light fill in dark), matching `.gps-ic.done`. */
+.gps-step .gps-rail-badge{margin-left:auto;font-weight:700;border-radius:999px;padding:0 7px;font-size:11px;color:var(--gps-surface)}
 .gps-rail-badge.warn{background:var(--gps-warn)}
 .gps-rail-badge.bad{background:var(--gps-bad)}
 
