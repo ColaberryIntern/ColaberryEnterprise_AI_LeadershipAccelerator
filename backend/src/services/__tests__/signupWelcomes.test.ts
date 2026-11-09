@@ -9,7 +9,12 @@ import { runSignupWelcomes } from '../signupWelcomes';
 
 /** M32 hook: signup greets with Reese, then Maya; one failing never stops the other or the signup. */
 let warnSpy: jest.SpyInstance;
-beforeEach(() => { reese.mockReset(); maya.mockReset(); warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined); });
+// runSignupWelcomes reaches its two services via dynamic `await import()`. Under the CI suite's worker sharding a
+// prior file can leave the REAL reese/maya module cached in this worker's registry, and the dynamic import then
+// resolves to it instead of the mock above — the test passes alone but fails in the suite (the real reese service
+// runs, logs its own `welcome_failed`, and the ordering/warning assertions miss). Resetting the module registry
+// before each test forces the dynamic import back through the hoisted jest.mock, making the test hermetic.
+beforeEach(() => { jest.resetModules(); reese.mockReset(); maya.mockReset(); warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined); });
 afterEach(() => warnSpy.mockRestore());
 
 it('calls Reese first, then Maya, for the same enrollment', async () => {
