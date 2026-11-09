@@ -114,3 +114,33 @@ while it emitted an IP address beside them.
    a missing `page_title`, malformed `limit`. Not handled — `admissions_memory`
    growing large enough that `count()` becomes slow; it is a single unfiltered
    count and would want an estimate at a scale this table is nowhere near.
+
+---
+
+## Addendum: the gate I did not run
+
+- Date: 2026-11-09
+- Session: CC-20261109-h4m8
+- What changed: typed the `PageEvent.findAll` mock's parameter; added one test
+  asserting the event query is scoped in SQL.
+- Verification: `node scripts/checkTestTypecheck.js` - "matched exactly, in both
+  directions", 399 errors across 140 files (was 400/141, my file dropped out).
+  Jest 14/14. The new assertion was mutation-tested: with the reader's `where`
+  removed, it failed and the other 13 passed.
+
+**Test-file typecheck failed on the first push and I had reported the PR green.**
+I had verified with `tsc --noEmit` over `src/`, which does not compile test files
+at all - the test suite is typechecked by a separate CI job against
+`tsconfig.test.json`, under a per-file baseline ratchet that refuses a NEW file
+with any errors rather than letting it be baselined. One real error:
+`findAllEvents` was declared `jest.fn(async () => ...)` with no parameter while
+the mock passed it the query options, so `Expected 0 arguments, but got 1`.
+
+Reproduced locally by running the gate's own command rather than a proxy, and
+confirmed the local run was the same instrument before trusting it: it reported
+**400 errors across 141 files, the exact numbers CI reported.**
+
+The fix also exposed a gap. Typing the parameter meant the options object was
+captured, and nothing asserted on it - so a reader that forgot its `where` would
+have read every row of `page_events` and still passed all 13 tests, because the
+per-visitor grouping happens in Node afterwards. That mutant is now caught.

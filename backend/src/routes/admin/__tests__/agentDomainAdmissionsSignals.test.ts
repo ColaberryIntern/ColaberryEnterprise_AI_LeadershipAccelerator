@@ -75,7 +75,7 @@ const findAllMemory = jest.fn(async (opts: Record<string, unknown>) => {
   const limit = typeof opts?.limit === 'number' ? opts.limit : memoryRows.length;
   return memoryRows.slice(0, limit);
 });
-const findAllEvents = jest.fn(async () => pageEventRows);
+const findAllEvents = jest.fn(async (_opts: Record<string, unknown>) => pageEventRows);
 
 jest.mock('../../../models', () => ({
   AdmissionsMemory: {
@@ -183,6 +183,16 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
       timestamp: '2026-11-08T10:00:00.000Z',
     });
     expect(b.page_events).toHaveLength(0);
+  });
+
+  it('scopes the event query in SQL, rather than reading the table and filtering', async () => {
+    // Every assertion above passes just as well with an unscoped query, because
+    // the grouping happens in Node afterwards. What it would not survive is
+    // production: page_events is the largest table in this schema.
+    await request(app()).get(URL).set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
+    const opts = findAllEvents.mock.calls[0][0] as Record<string, unknown>;
+    const where = opts.where as Record<string, unknown>;
+    expect(Object.keys(where)).toEqual(['visitor_id']);
   });
 
   it('reports a missing page title as null, never as an empty string', async () => {
