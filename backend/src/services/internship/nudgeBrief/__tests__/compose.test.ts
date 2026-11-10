@@ -198,3 +198,49 @@ describe('daysUntil', () => {
     expect(daysUntil('2026-11-24', NOW)).toBeLessThanOrEqual(DEADLINE_LEADS_WITHIN_DAYS);
   });
 });
+
+/**
+ * Nothing in a message to an intern may be written ABOUT them.
+ *
+ * On 10 Nov 2026 ten of thirteen live briefs opened with the dashboard narrative, in the third
+ * person: "Quincy, Quincy is well underway on Platform Automation and Reliability ... Their last
+ * build work was 3 days ago." Same root cause as the dashboard lines removed alongside it.
+ */
+describe('the message is written TO the intern, never about them', () => {
+  const tiers: TriageTier[] = ['no_project_at_day_N', 'never_started_building', 'overdue_backlog', 'quiet', 'on_track', 'blocked_waiting_on_ali'];
+
+  it('never refers to the intern in the third person', () => {
+    for (const tier of tiers) {
+      const b = composeBrief({
+        intern: intern({
+          first_name: 'Quincy', name: 'Quincy Nkwain Ninying',
+          narrative: 'Quincy is well underway on Platform Automation. Their last build work was 3 days ago.',
+          triage: { tier, reason: 'because' },
+        }),
+        deadline: null,
+        now: NOW,
+      });
+      const afterGreeting = b.body.slice(b.body.indexOf('\n'));
+      expect(afterGreeting).not.toContain('Quincy is');
+      expect(afterGreeting).not.toMatch(/\bTheir\b/);
+      expect(b.body).not.toContain('well underway');
+    }
+  });
+
+  /** The facts the narrative carried are already said in the second person, so nothing is lost. */
+  it('still says where they are, addressed to them', () => {
+    const b = composeBrief({ intern: intern({ triage: { tier: 'on_track', reason: 'fine' } }), deadline: null, now: NOW });
+    expect(b.body).toContain('Where you are:');
+  });
+});
+
+/** An attachment nobody mentions reads as a mistake, because it is one. */
+it('carries no attachment when the body does not mention one', () => {
+  const b = composeBrief({
+    intern: intern({ triage: { tier: 'blocked_waiting_on_ali', reason: 'waiting' } }),
+    deadline: null,
+    now: NOW,
+  });
+  expect(b.attachment).toBeNull();
+  expect(b.body).not.toContain('The prompt is attached');
+});
