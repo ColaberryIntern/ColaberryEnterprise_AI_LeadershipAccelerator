@@ -182,6 +182,7 @@ import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributio
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
 import { ensureChannelAccountSchema } from './db/ensureChannelAccountSchema';
 import { ensureLandingPageSchema } from './db/ensureLandingPageSchema';
+import { ensureOpenHouseRegistrationSchema } from './db/ensureOpenHouseRegistrationSchema';
 import { ensureBrandPixelSchema } from './db/ensureBrandPixelSchema';
 import { ensureLandingPageSnackbarSchema } from './db/ensureLandingPageSnackbarSchema';
 import { ensureMarketingSpendSchema } from './db/ensureMarketingSpendSchema';
@@ -2805,6 +2806,8 @@ async function start(): Promise<void> {
   await ensureRefundSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
+  // OH-2: our own Open House attendee list (idempotent, additive).
+  await ensureOpenHouseRegistrationSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
   await ensureOnboardingProfileSchema();
   // Student Settings: avatar photo + uploaded resume file columns (idempotent).
