@@ -129,7 +129,7 @@ async function main(): Promise<number> {
   if (sidecarOut) { fs.writeFileSync(sidecarOut, sidecarText); log('sidecar_written', { file: sidecarOut, previous: previous?.report_date ?? null }); }
   // The interactive page (filter by person or tier, top communications, every prompt in full),
   // rendered ONLY from the sidecar, so it cannot disagree with the JSON beside it.
-  const dashboard = renderDashboard(sidecar);
+  const dashboard = renderDashboard(report, sidecar);
   const dashboardOut = opt('--dashboard-out');
   if (dashboardOut) { fs.writeFileSync(dashboardOut, dashboard); log('dashboard_written', { file: dashboardOut }); }
   const attachments: Attachment[] = [

@@ -14,7 +14,8 @@ import type { Conversation, InternCard, LastOutbound, PortfolioReport, TimelineN
 import { classifyArtifact } from './classify';
 import { delta } from './delta';
 import { pacing } from './pacing';
-import { TOP_N, rankCommunications, topCommunications, type Communication } from './communications';
+import { TOP_N, rankCommunications, type Communication } from './communications';
+import { highlights } from './highlights';
 import { triage } from './triage';
 import { REQUIRED_INTERN_KEYS, SIDECAR_VERSION, type PreviousSnapshot, type Sidecar, type SidecarIntern, type SidecarTimelineRow, type SnapshotIntern } from './types';
 
@@ -143,6 +144,7 @@ export function buildSidecar(report: PortfolioReport, inp: SidecarInputs): Sidec
   const k = (report.counts || {}) as Record<string, number | undefined>;
   const cards = report.groups.flatMap((g) => g.interns);
   const ranked = rankCommunications(inp.conversations ?? [], cards.map((c) => ({ enrollmentId: c.enrollmentId, name: c.name, email: lc(c.email) })), nowMs);
+  const interns = cards.map((c) => internJson(c, report, inp, nowMs, ranked.get(c.enrollmentId) ?? []));
   return {
     sidecar_version: SIDECAR_VERSION,
     generated_at: report.generatedAt,
@@ -158,8 +160,8 @@ export function buildSidecar(report: PortfolioReport, inp: SidecarInputs): Sidec
     },
     your_move: [...report.aliMoves],
     operators_excluded: [...report.operatorsExcluded],
-    top_communications: topCommunications(ranked),
-    interns: cards.map((c) => internJson(c, report, inp, nowMs, ranked.get(c.enrollmentId) ?? [])),
+    highlights: highlights(cards, interns),
+    interns,
   };
 }
 

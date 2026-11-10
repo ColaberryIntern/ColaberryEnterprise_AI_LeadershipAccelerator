@@ -13,7 +13,8 @@
 export const SIDECAR_VERSION = 1;
 
 import type { Communication } from './communications';
-export type { Communication };
+import type { Highlight } from './highlights';
+export type { Communication, Highlight };
 
 export type TriageTier =
   | 'no_project_at_day_N'
@@ -133,8 +134,8 @@ export interface Sidecar {
   counts: SidecarCounts;
   your_move: string[];
   operators_excluded: string[];
-  /** The 10 most insightful communications in the report window, at most 3 per intern. */
-  top_communications: Communication[];
+  /** The 10 most impactful things in this report, in tour order (highlights.ts), at most 2 per intern. */
+  highlights: Highlight[];
   interns: SidecarIntern[];
 }
 

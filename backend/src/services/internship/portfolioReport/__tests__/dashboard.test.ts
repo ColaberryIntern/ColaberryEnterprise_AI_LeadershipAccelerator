@@ -1,5 +1,6 @@
 /**
- * The interactive page, exercised in a real DOM: click a person, click a tier, try to inject.
+ * The interactive page, exercised in a real DOM: click a person, run the tour, copy a prompt, try
+ * to inject.
  *
  * jsdom is NOT a declared backend dependency: it is present because CI (and local dev) run the
  * workspace-root `npm install`, which hoists the frontend's test tooling. It is required with a
@@ -8,7 +9,9 @@
  */
 import { composeInternshipPortfolio } from '../compose';
 import { renderDashboard, safeJson } from '../dashboard/renderDashboard';
+import { internCard } from '../render';
 import { buildSidecar } from '../sidecar/build';
+import type { PortfolioReport } from '../types';
 import type { Sidecar } from '../sidecar/types';
 import { NOW, collected, daysAgo, rosterRow } from './fixtures';
 
@@ -17,77 +20,99 @@ interface JSDOM { window: Window & typeof globalThis }
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { JSDOM: Dom } = require('jsdom') as { JSDOM: new (html: string, opts: { runScripts: 'dangerously'; url: string }) => JSDOM };
 
-function sidecar(): Sidecar {
+function build(): { report: PortfolioReport; s: Sidecar; html: string } {
   const d = collected({
     roster: [rosterRow(), rosterRow({ enrollment_id: 'e2', name: 'Megan Doe', email: 'megan@example.com', project: null, day: 50 })],
-    conversations: [
-      { from_address: 'kal@example.com', to_text: 'ali@colaberry.com', subject: 'Unable to push: access denied on STORY-1', body: `Found the root cause in .github/workflows/ci.yml. ${'detail '.repeat(90)}`, received_at: daysAgo(1) },
-      { from_address: 'megan@example.com', to_text: 'ali@colaberry.com', subject: 'Which project should I pick?', body: `Should I build the scheduler or the intake bot? ${'context '.repeat(90)}`, received_at: daysAgo(2) },
-    ],
+    emails: [{ email: 'kal@example.com', subject: 'Unable to push, access denied', snippet: 'blocked', received_at: daysAgo(2) }],
   });
+  d.projects[0].commits = [{ sha: 'a', date: daysAgo(6), author: 'kal', message: 'feature' }];
   const report = composeInternshipPortfolio(d, { now: NOW });
-  return buildSidecar(report, { reportDate: '2026-11-09', previous: null, lastOutbound: [], conversations: d.conversations });
+  const s = buildSidecar(report, { reportDate: '2026-11-09', previous: null, lastOutbound: [] });
+  return { report, s, html: renderDashboard(report, s) };
 }
 const load = (html: string, hash = ''): JSDOM => new Dom(html, { runScripts: 'dangerously', url: `https://report.local/${hash}` });
-const text = (dom: JSDOM, sel: string): string[] => Array.from(dom.window.document.querySelectorAll(sel)).map((e) => (e.textContent || '').trim());
+const visible = (dom: JSDOM, sel: string): Element[] => Array.from(dom.window.document.querySelectorAll(sel)).filter((e) => !(e as HTMLElement).hidden && !(e as HTMLElement).closest('[hidden]'));
 
-describe('dashboard: click a person to filter', () => {
-  it('lists every intern in the sidebar and shows everyone by default', () => {
-    const dom = load(renderDashboard(sidecar()));
-    expect(text(dom, '.side .pname')).toEqual(['All interns (2)', 'Kalkidan Bezabeh', 'Megan Doe']);
-    expect(dom.window.document.querySelectorAll('article.card')).toHaveLength(2);
-  });
-
-  it('clicking a person shows only them: their card, their communications, their JSON', () => {
-    const dom = load(renderDashboard(sidecar()));
-    const btn = dom.window.document.querySelector('.side button[data-id="e2"]') as HTMLButtonElement;
-    btn.click();
-    const doc = dom.window.document;
-    expect(doc.querySelectorAll('article.card')).toHaveLength(1);
-    expect(doc.querySelector('.cname')!.textContent).toBe('Megan Doe');
-    expect(doc.querySelector('#comms h2')!.textContent).toBe("Megan's most insightful communications");
-    expect(text(dom, '.comm .subj')).toEqual(['Which project should I pick?']);
-    expect(JSON.parse(doc.querySelector('pre.json')!.textContent!).enrollment_id).toBe('e2');
-    expect(dom.window.location.hash).toBe('#p=e2');
-    (doc.querySelector('.filter button') as HTMLButtonElement).click();
-    expect(doc.querySelectorAll('article.card')).toHaveLength(2);
-  });
-
-  it('a bookmarked #p= link opens filtered, and clicking a tier filters by tier', () => {
-    const s = sidecar();
-    const dom = load(renderDashboard(s), '#p=e1');
-    expect(dom.window.document.querySelectorAll('article.card')).toHaveLength(1);
-    const all = load(renderDashboard(s));
-    const tierBtn = Array.from(all.window.document.querySelectorAll('.bar-row')).find((b) => /No project/.test(b.textContent || '')) as HTMLButtonElement;
-    tierBtn.click();
-    expect(text(all, '.cname')).toEqual(['Megan Doe']);
+describe('dashboard: the report, with the report\'s own formatting', () => {
+  it('each intern card is the email card, plus only anchors', () => {
+    const { report, html } = build();
+    const c = report.groups.flatMap((g) => g.interns)[0];
+    const stripAnchors = (s: string): string => s.replace(/<div id="(facts|artifacts|timeline|asks)-[^"]+">/g, '').replace(/<\/div>/g, '');
+    expect(stripAnchors(internCard(c, { anchors: true }))).toBe(stripAnchors(internCard(c)));
+    expect(html).toContain(internCard(c, { anchors: true }));
+    expect(html).toContain('How to read the timelines');
+    expect(html).toContain('Everyone on one timeline');
   });
 });
 
-describe('dashboard: the suggested prompts, in full', () => {
-  it('every ask shows its full prompt and nudge with copy buttons', () => {
-    const s = sidecar();
-    const dom = load(renderDashboard(s));
-    const prompts = text(dom, 'pre.prompt');
-    const expected = s.interns.flatMap((i) => i.asks.map((a) => a.prompt.trim()));
-    expect(expected.length).toBeGreaterThan(0);
-    expect(prompts).toEqual(expected);
-    expect(text(dom, '.copy').filter((t) => t === 'Copy prompt')).toHaveLength(expected.length);
-    expect(text(dom, '.copy').filter((t) => t === 'Copy nudge')).toHaveLength(expected.length);
+describe('dashboard: click a person to filter everything', () => {
+  it('filters the combined timeline, the glance table, the notes and the cards together', () => {
+    const { html } = build();
+    const dom = load(html);
+    const doc = dom.window.document;
+    expect(visible(dom, '.intern')).toHaveLength(2);
+    (doc.querySelector('#side .person[data-person="e2"]') as HTMLButtonElement).click();
+    expect(visible(dom, '.intern').map((e) => e.getAttribute('data-e'))).toEqual(['e2']);
+    expect(visible(dom, '#combined .ct-line').every((e) => e.getAttribute('data-e') === 'e2')).toBe(true);
+    expect(visible(dom, '.glance tr[data-e]').map((e) => e.getAttribute('data-e'))).toEqual(['e2']);
+    expect(doc.getElementById('filter-name')!.textContent).toBe('Megan Doe');
+    expect(dom.window.location.hash).toBe('#p=e2');
+    (doc.getElementById('filter-clear') as HTMLButtonElement).click();
+    expect(visible(dom, '.intern')).toHaveLength(2);
+  });
+
+  it('a name pill on the combined timeline filters too, and #p= opens filtered', () => {
+    const { html } = build();
+    const dom = load(html);
+    (dom.window.document.querySelector('#combined .who[data-person="e1"]') as HTMLButtonElement).click();
+    expect(visible(dom, '.intern').map((e) => e.getAttribute('data-e'))).toEqual(['e1']);
+    expect(visible(load(html, '#p=e2'), '.intern').map((e) => e.getAttribute('data-e'))).toEqual(['e2']);
+  });
+});
+
+describe('dashboard: the guided tour', () => {
+  it('walks the highlights in order, outlining each target, and ends cleanly', () => {
+    const { s, html } = build();
+    expect(s.highlights.length).toBeGreaterThan(0);
+    const dom = load(html);
+    const doc = dom.window.document;
+    (doc.getElementById('tour-start') as HTMLButtonElement).click();
+    expect(doc.getElementById('tour')!.classList.contains('on')).toBe(true);
+    expect(doc.getElementById('tour-title')!.textContent).toBe(s.highlights[0].title);
+    expect(doc.querySelectorAll('.tour-hl')).toHaveLength(1);
+    for (let i = 1; i < s.highlights.length; i += 1) {
+      (doc.getElementById('tour-next') as HTMLButtonElement).click();
+      expect(doc.getElementById('tour-title')!.textContent).toBe(s.highlights[i].title);
+      expect(doc.querySelectorAll('.tour-hl')).toHaveLength(1);
+    }
+    (doc.getElementById('tour-end') as HTMLButtonElement).click();
+    expect(doc.getElementById('tour')!.classList.contains('on')).toBe(false);
+    expect(doc.querySelectorAll('.tour-hl')).toHaveLength(0);
+  });
+});
+
+describe('dashboard: prompts are compact and copyable', () => {
+  it('every prompt scrolls inside a short box and has a Copy button', () => {
+    const { s, html } = build();
+    expect(html).toContain('[id^="asks-"] pre{max-height:8.2em;overflow:auto}');
+    const dom = load(html);
+    const prompts = dom.window.document.querySelectorAll('[id^="asks-"] pre');
+    const asks = s.interns.reduce((n, i) => n + i.asks.length, 0);
+    expect(prompts.length).toBe(asks);
+    expect(dom.window.document.querySelectorAll('[id^="asks-"] .cp').length).toBe(asks * 2);
   });
 });
 
 describe('dashboard: safety', () => {
-  it('a subject line cannot close the data script or inject markup', () => {
-    const s = sidecar();
-    s.top_communications[0].subject = '</script><script>window.pwned=1</script><img src=x onerror="window.pwned=2">';
-    s.interns[0].communications[0] = s.top_communications[0];
-    const html = renderDashboard(s);
+  it('a highlight title cannot close the data script or inject markup', () => {
+    const { report, s } = build();
+    s.highlights[0].title = '</script><script>window.pwned=1</script><img src=x onerror="window.pwned=2">';
+    const html = renderDashboard(report, s);
     expect(html).not.toContain('</script><script>window.pwned');
     const dom = load(html);
+    (dom.window.document.getElementById('tour-start') as HTMLButtonElement).click();
     expect((dom.window as unknown as { pwned?: number }).pwned).toBeUndefined();
-    expect(dom.window.document.querySelector('.comm .subj')!.textContent).toBe(s.top_communications[0].subject);
-    expect(dom.window.document.querySelector('.comm img')).toBeNull();
+    expect(dom.window.document.getElementById('tour-title')!.textContent).toBe(s.highlights[0].title);
   });
 
   it('safeJson round-trips and never contains a raw "<"', () => {
@@ -95,13 +120,5 @@ describe('dashboard: safety', () => {
     const out = safeJson(v);
     expect(out).not.toContain('<');
     expect(JSON.parse(out)).toEqual(v);
-  });
-
-  it('only https links become hrefs', () => {
-    const s = sidecar();
-    s.interns[0].artifacts = [{ ...s.interns[0].artifacts[0] ?? {}, id: 'x', kind: 'build_artifact', kind_label: 'Build Artifact', title: 'evil', published_at: daysAgo(1), url: 'javascript:alert(1)', source: 'repo', provenance: '', file_type: 'pdf', wrong_format: false, classification: 'training_upload' }];
-    const dom = load(renderDashboard(s));
-    const a = Array.from(dom.window.document.querySelectorAll('a.art')).find((x) => x.textContent?.includes('evil'))!;
-    expect(a.getAttribute('href')).toBeNull();
   });
 });
