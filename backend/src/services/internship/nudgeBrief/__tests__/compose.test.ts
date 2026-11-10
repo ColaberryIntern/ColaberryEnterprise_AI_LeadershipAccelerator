@@ -233,3 +233,14 @@ describe('the message is written TO the intern, never about them', () => {
     expect(b.body).toContain('Where you are:');
   });
 });
+
+/** An attachment nobody mentions reads as a mistake, because it is one. */
+it('carries no attachment when the body does not mention one', () => {
+  const b = composeBrief({
+    intern: intern({ triage: { tier: 'blocked_waiting_on_ali', reason: 'waiting' } }),
+    deadline: null,
+    now: NOW,
+  });
+  expect(b.attachment).toBeNull();
+  expect(b.body).not.toContain('The prompt is attached');
+});

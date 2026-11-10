@@ -298,7 +298,10 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
     promises: findPromises(intern),
     subject,
     body,
-    attachment: ask.attachment,
+    // Gated on the SAME condition as the ask lines. Dropping only the lines left Sarbjit's message
+    // carrying `format-correction.md` with nothing in the body mentioning it: an unexplained
+    // attachment on a four-line note, which reads as a mistake because it is one.
+    attachment: awaitingAli ? null : ask.attachment,
     warnings,
     generatedAt: now.toISOString(),
   };
