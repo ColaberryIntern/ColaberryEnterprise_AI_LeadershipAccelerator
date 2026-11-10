@@ -413,8 +413,15 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       const op: any = snap && snap.opportunity ? snap.opportunity : null;
       const closeAt = (snap && snap.closeAt) || (op && op.closeAt);
       const closeDate = (snap && snap.closeDate) || (op && op.closeDate);
-      view.closeDate = closeAt ? String(closeAt) : (closeDate ? String(closeDate) : null);
-      view.priorityScore = (snap && (snap.priorityScore ?? (op && op.priorityScore))) ?? null;
+      // A management-entered override (POST .../due-date -> requirements_json.manualDeadline) WINS over the snapshot.
+      // It is how a pursuit that carried NO close date into the Studio (empty source_snapshot, as Crash Records had)
+      // still shows a deadline + urgency once someone sets it by hand on the bar.
+      const manual: any = (qual.requirements_json && (qual.requirements_json as any).manualDeadline) || null;
+      const manualClose = manual && manual.closeDate ? String(manual.closeDate) : null;
+      view.closeDate = manualClose ?? (closeAt ? String(closeAt) : (closeDate ? String(closeDate) : null));
+      view.priorityScore = (manual && manual.priorityScore != null)
+        ? manual.priorityScore
+        : ((snap && (snap.priorityScore ?? (op && op.priorityScore))) ?? null);
     }
   } catch { /* additive; agency/keyDates/closeDate/priorityScore stay at their safe defaults */ }
 

@@ -236,6 +236,20 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.priorityScore).toBeNull();
   });
 
+  it('COCKPIT: a management-set due date (requirements_json.manualDeadline) surfaces when the snapshot carried none, and WINS over a snapshot date', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    // (a) empty snapshot + manual override -> the manual deadline + urgency show
+    gqFindOne.mockResolvedValueOnce({ requirements_json: { provenance: { agency: 'X' }, dossier: {}, manualDeadline: { closeDate: '2026-12-15', priorityScore: 55 } }, source_snapshot: null });
+    let v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.closeDate).toBe('2026-12-15');
+    expect(v!.priorityScore).toBe(55);
+    // (b) a manual override BEATS a source-snapshot close date (management corrected it)
+    gqFindOne.mockResolvedValueOnce({ requirements_json: { manualDeadline: { closeDate: '2026-12-15', priorityScore: 55 } }, source_snapshot: { closeAt: '2026-11-30T17:00:00Z', priorityScore: 70 } });
+    v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.closeDate).toBe('2026-12-15');
+    expect(v!.priorityScore).toBe(55);
+  });
+
   it('P2: surfaces the blueprint + blueprint-derived doc fields, and still drops the pricing document for a non-verifier', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
     gpbFindOne.mockResolvedValue({ version: 1, blueprint_json: {

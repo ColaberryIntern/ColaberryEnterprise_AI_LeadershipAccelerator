@@ -359,6 +359,35 @@ router.post('/api/admin/gov-contracts/:projectId/answer-question', requireSectio
   } catch (err: unknown) { logFail('gov_contract_answer_question_failed', err, { projectId: req.params.projectId }); res.status(500).json({ error: 'Could not record the answer.' }); }
 });
 
+/** POST .../:projectId/due-date — management sets the proposal's solicitation close date (+ optional 0-100 urgency)
+ *  when the pursuit carried none into the Studio (empty source_snapshot). Stored as a manual override on the latest
+ *  qualification's requirements_json.manualDeadline; the projection prefers it, so the ContractBar deadline + countdown
+ *  light up. Idempotent: the same input re-writes the same override, no new row. */
+router.post('/api/admin/gov-contracts/:projectId/due-date', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const ctx = await adminGovContext(req, res); if (!ctx) return;
+  const b = (req.body ?? {}) as { closeDate?: unknown; priorityScore?: unknown };
+  const closeDate = String(b.closeDate ?? '').trim();
+  if (!closeDate || Number.isNaN(Date.parse(closeDate))) { res.status(400).json({ error: 'A valid closeDate (YYYY-MM-DD) is required.' }); return; }
+  let priorityScore: number | null = null;
+  if (b.priorityScore != null && b.priorityScore !== '') {
+    const p = Number(b.priorityScore);
+    if (!Number.isFinite(p) || p < 0 || p > 100) { res.status(400).json({ error: 'priorityScore must be a number from 0 to 100.' }); return; }
+    priorityScore = Math.round(p);
+  }
+  const projectId = req.params.projectId as string;
+  try {
+    const { default: GovQualification } = await import('../../models/GovQualification');
+    const q: any = await GovQualification.findOne({ where: { delivery_project_id: projectId }, order: [['version', 'DESC']] });
+    if (!q) { res.status(409).json({ error: 'This pursuit has no qualification yet — run qualification before setting a due date.' }); return; }
+    const rj = (q.requirements_json && typeof q.requirements_json === 'object') ? { ...(q.requirements_json as Record<string, unknown>) } : {};
+    (rj as Record<string, unknown>).manualDeadline = { closeDate, priorityScore, setBy: ctx.identityId, setAt: new Date().toISOString() };
+    q.requirements_json = rj;
+    q.changed('requirements_json', true);
+    await q.save();
+    res.json({ ok: true, closeDate, priorityScore });
+  } catch (err: unknown) { logFail('gov_contract_due_date_failed', err, { projectId }); res.status(500).json({ error: 'Could not save the due date.' }); }
+});
+
 /** GET .../:projectId/questions?status=open — the agent panel's "Needs your answer" list (B.3): open gaps grouped
  *  by question, each with a why line, the documents it blocks, and suggested options. Only `open` is served today. */
 router.get('/api/admin/gov-contracts/:projectId/questions', requireSection('gov_contracts'), async (req: Request, res: Response) => {
