@@ -4,6 +4,9 @@ import { CommunicationLog } from '../../models';
 import { env } from '../../config/env';
 import { safeNextPath } from '../../utils/safeNextPath';
 import { PROGRAM_VIDEO_ID } from '../../data/week0ProgramVideoFirst';
+// A constant, not the builder: this module needs the subject for the
+// CommunicationLog row and must not pull an email template into its graph.
+import { EXPLORER_WELCOME_SUBJECT } from './explorerWelcomeEmail';
 
 /**
  * Where the sign-in link in this email lands (OH-4).
@@ -115,6 +118,16 @@ export interface SendPortalWelcomeInput {
   /** An extra paragraph after the sign-in link. */
   closing?: string;
   /**
+   * Which welcome to render. Defaults to `standard`, so every caller that does not
+   * ask is unchanged.
+   *
+   * `explorer` is for the landing-page / Open House door, whose reader never
+   * enrolled in anything and needs a different message rather than a restyled one.
+   * The template owns its own subject, so a caller passing this usually passes no
+   * subjectOverride.
+   */
+  template?: 'standard' | 'explorer';
+  /**
    * Which event name to WRITE. Defaults to `portal_welcome`.
    *
    * It exists so the open-house door can adopt this module without renaming the
@@ -225,7 +238,7 @@ export async function sendPortalWelcome(
   input: SendPortalWelcomeInput,
 ): Promise<SendPortalWelcomeResult> {
   const {
-    enrollment, leadId = null, subjectOverride, intro, hideHighlights, closing,
+    enrollment, leadId = null, subjectOverride, intro, hideHighlights, closing, template,
     event = PORTAL_WELCOME_EVENT,
     // `undefined` means "use the default"; an explicit `null` means "the
     // dashboard, on purpose". `?? FIRST_ASSIGNMENT_PATH` would conflate them.
@@ -252,7 +265,12 @@ export async function sendPortalWelcome(
     return { sent: false, skipped: true, reason: 'idempotency_check_failed', messageId: null };
   }
 
-  const subject = subjectOverride || 'Welcome to Colaberry: your AI journey starts now';
+  // Mirrors emailService: an override wins, else the template brings its own. This
+  // value is what lands on the CommunicationLog row, so it has to match what was
+  // actually sent - a log saying one subject while the inbox shows another is worse
+  // than no log.
+  const subject = subjectOverride
+    || (template === 'explorer' ? EXPLORER_WELCOME_SUBJECT : 'Welcome to Colaberry: your AI journey starts now');
   let sent = false;
   let messageId: string | null = null;
   let errorMessage: string | null = null;
@@ -279,6 +297,7 @@ export async function sendPortalWelcome(
       intro,
       hideHighlights,
       closing,
+      template,
     });
     sent = result.sent;
     messageId = result.messageId || null;
