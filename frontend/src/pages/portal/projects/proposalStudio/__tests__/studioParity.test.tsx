@@ -179,3 +179,37 @@ describe('ContractBar — deadline + urgency survive the move into the Studio', 
     expect(present('bar-priority')).toBe(false);
   });
 });
+
+describe('ContractBar — management can set a due date when the pursuit carried none', () => {
+  const withDates = (over: Partial<StudentGovProjectView>) => ({ ...VIEW, ...over } as StudentGovProjectView);
+  const q = (id: string) => container.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+  const setValue = (el: HTMLInputElement, v: string) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  it('offers "Set due date" ONLY to a manager with no close date — hidden for an intern, and once a date exists', async () => {
+    await render(<ContractBar view={withDates({ closeDate: null, keyDates: [] })} onNeeds={noop} canManage={false} onSetDueDate={noop} />);
+    expect(present('bar-set-due')).toBe(false); // an intern never sets the deadline
+    act(() => root.unmount()); container.remove();
+    await render(<ContractBar view={withDates({ closeDate: null, keyDates: [] })} onNeeds={noop} canManage onSetDueDate={noop} />);
+    expect(present('bar-set-due')).toBe(true);
+    act(() => root.unmount()); container.remove();
+    await render(<ContractBar view={withDates({ closeDate: '2030-01-15', keyDates: [] })} onNeeds={noop} canManage onSetDueDate={noop} />);
+    expect(present('bar-set-due')).toBe(false); // a date is set -> the Closes chip replaces the setter
+    expect(present('bar-closes')).toBe(true);
+  });
+
+  it('expands, takes a date + urgency, and calls onSetDueDate with them', async () => {
+    const calls: Array<[string, number | null]> = [];
+    const onSet = (closeDate: string, priorityScore: number | null): void => { calls.push([closeDate, priorityScore]); };
+    await render(<ContractBar view={withDates({ closeDate: null, keyDates: [] })} onNeeds={noop} canManage onSetDueDate={onSet} />);
+    await act(async () => { (q('bar-set-due') as HTMLButtonElement).click(); });
+    setValue(q('bar-due-date') as HTMLInputElement, '2026-12-15');
+    setValue(q('bar-due-prio') as HTMLInputElement, '55');
+    await act(async () => { (q('bar-due-save') as HTMLButtonElement).click(); });
+    await flush();
+    expect(calls).toEqual([['2026-12-15', 55]]);
+  });
+});

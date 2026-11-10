@@ -438,6 +438,10 @@ export interface GovStudioApi {
   /** P4 (v4): fetch a build-evidence PNG as an object URL. A member-level read (any project member), so it lives on
    *  the studio API, not the reviewer-only review API — this is how an intern (no reviewApi) sees a real thumbnail. */
   fetchArtifactImage?(projectId: string, artifactId: string): Promise<string>;
+  /** Management-only: set the solicitation close date (+ optional 0-100 urgency) when the pursuit carried none into the
+   *  Studio. Admin route only — the portal (intern) client omits it, and the bar offers it only to a viewer who can
+   *  verify. Writes requirements_json.manualDeadline; the projection then surfaces closeDate/priorityScore. */
+  setProposalDueDate?(projectId: string, input: { closeDate: string; priorityScore?: number | null }): Promise<{ ok: boolean; closeDate: string; priorityScore: number | null }>;
 }
 
 export const portalGovStudioApi: GovStudioApi = {

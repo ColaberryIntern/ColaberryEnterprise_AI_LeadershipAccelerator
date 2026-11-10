@@ -113,7 +113,15 @@ export default function StudioShell(
 
   return (
     <div className="gps">
-      <ContractBar view={view} onStartTour={() => setTourStep(0)} onNeeds={() => go('openitems')} />
+      <ContractBar
+        view={view}
+        onStartTour={() => setTourStep(0)}
+        onNeeds={() => go('openitems')}
+        canManage={view.viewerCanVerify}
+        onSetDueDate={studioApi.setProposalDueDate
+          ? async (closeDate, priorityScore) => { await studioApi.setProposalDueDate!(projectId, { closeDate, priorityScore }); toast('Proposal due date saved'); onReload(); }
+          : undefined}
+      />
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
         <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>

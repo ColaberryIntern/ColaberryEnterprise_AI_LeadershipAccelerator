@@ -258,6 +258,12 @@ export async function adminDecideGovGold(projectId: string, decision: 'go' | 'no
   return data;
 }
 
+/** Management-only: set the solicitation close date + urgency for a pursuit that carried none into the Studio. */
+export async function adminSetGovDueDate(projectId: string, input: { closeDate: string; priorityScore?: number | null }): Promise<{ ok: boolean; closeDate: string; priorityScore: number | null }> {
+  const { data } = await api.post<{ ok: boolean; closeDate: string; priorityScore: number | null }>(`${adminBase(projectId)}/due-date`, input);
+  return data;
+}
+
 /** The admin Studio read-model adapter (gates/pricing routes stay on adminGovReviewApi). */
 export const adminGovStudioApi: GovStudioApi = {
   listQuestions: adminListGovQuestions,
@@ -269,4 +275,5 @@ export const adminGovStudioApi: GovStudioApi = {
   listNeeds: adminListGovNeeds,
   resolveNeed: adminResolveGovNeed,
   buildAll: adminBuildAllGovDocuments,
+  setProposalDueDate: adminSetGovDueDate,
 };
