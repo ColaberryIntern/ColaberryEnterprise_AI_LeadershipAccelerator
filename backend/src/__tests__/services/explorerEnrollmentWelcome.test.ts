@@ -56,6 +56,10 @@ jest.mock('../../services/communicationLogService', () => ({ logCommunication: (
 
 import { Enrollment, Lead } from '../../models';
 import { createExplorerEnrollment } from '../../services/enrollmentService';
+// OH-4's destination, imported rather than restated so this suite follows the
+// link instead of pinning a copy of it. `enrollmentService` already pulls this
+// module in, so nothing new enters the graph.
+import { FIRST_ASSIGNMENT_PATH } from '../../services/welcome/sendPortalWelcome';
 
 const findOne = Enrollment.findOne as jest.Mock;
 const findAll = Enrollment.findAll as jest.Mock;
@@ -123,11 +127,20 @@ describe('createExplorerEnrollment — new signup', () => {
     expect(upd.portal_token).toMatch(/^[0-9a-f-]{36}$/);
     expect(upd.portal_token_expires_at instanceof Date).toBe(true);
 
-    // welcome sent with the matching /portal/verify link
+    // welcome sent with the matching /portal/verify link, now carrying the
+    // destination OH-4 added: a new Explorer's first assignment (the Week 0
+    // program video) rather than the dashboard. The token half is unchanged and
+    // is still what makes this a login that can actually log someone in.
+    //
+    // Asserted against FIRST_ASSIGNMENT_PATH rather than a written-out uuid, so
+    // replacing that video does not turn this into a test of a stale id.
     const arg = mockSendTrainingWelcome.mock.calls[0][0];
     expect(arg.to).toBe('jane@acme.com');
     expect(arg.fullName).toBe('Jane Doe');
-    expect(arg.portalLink).toBe(`https://enterprise.colaberry.ai/portal/verify?token=${upd.portal_token}`);
+    expect(arg.portalLink).toBe(
+      `https://enterprise.colaberry.ai/portal/verify?token=${upd.portal_token}`
+      + `&next=${encodeURIComponent(FIRST_ASSIGNMENT_PATH)}`,
+    );
 
     // outcome recorded
     const logged = mockLogCommunication.mock.calls[0][0];
