@@ -45,7 +45,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/growthJourney/ClassificationTab.tsx': 1,
   'frontend/src/components/growthJourney/ContentRulesTable.tsx': 1,
   'frontend/src/components/membership/MembershipLanding.tsx': 3,
-  'frontend/src/components/membership/OpenHouseModal.tsx': 2,
   'frontend/src/components/membership/personaContent.ts': 13,
   'frontend/src/components/portal/lesson/ImplementationTask.tsx': 1,
   'frontend/src/components/publicV2/HeroPlatformV8.tsx': 1,
@@ -152,8 +151,15 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * number better than the truth. Whenever `BASELINE_SCOPE.roots` changes, this total is re-based
  * and the entry says so. Within a scope it still only shrinks, and every per-file number is still
  * exact in both directions.
+ *
+ * **273 since 2026-11-10 (OH-3), when OpenHouseModal.tsx went to zero** and its entry was
+ * deleted. It said it twice in its own defaults - the heading "Reserve Your Free Open House
+ * Seat" and the subtitle "The Open House is free." - which is the modal the membership pages
+ * open to take an Open House RSVP, so it was two of the most-read instances left. Now "Reserve
+ * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
+ * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 275;
+export const FRONTEND_COPY_BASELINE_TOTAL = 273;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

@@ -139,6 +139,29 @@ function firstCta(content: LandingPageContentShape): Cta | null {
   return null;
 }
 
+/**
+ * Remove the `{{open_house_*}}` placeholders that `/v1/next-open-house.js` fills in the browser.
+ *
+ * Used ONLY on head metadata. The token mechanism exists because this renderer is pure and
+ * synchronous on purpose - it reaches no database, which is what lets a hosted page be cached
+ * (max-age 60, s-maxage 300) and still show a live date. The cost of that choice is that the
+ * fill happens where scripts run, and a <title>, a meta description and an OG card are read by
+ * crawlers and link previews, where none do. So those get the token removed rather than filled:
+ * an honest sentence without a date beats a search result reading "{{open_house_when}}".
+ *
+ * Kept in step with the `TOKEN` pattern in `frontend/public/v1/next-open-house.js`. The two
+ * cannot share a module - one is served to a browser as a plain file, the other runs here - so
+ * the pattern is restated, narrowly, and the renderer test pins the body-side behaviour.
+ */
+function stripFillTokens(value: string): string {
+  return value
+    .replace(/\{\{\s*open_house_[a-z_]{1,32}\s*\}\}/g, '')
+    // A removed token usually leaves "Next one:  " or a doubled space mid-sentence.
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([.,;:!?])/g, '$1')
+    .trim();
+}
+
 
 export interface RenderedLandingPage {
   html: string;
@@ -158,9 +181,15 @@ export function renderLandingPage(input: RenderLandingPageInput): RenderedLandin
   const darkLogo = logoOnDarkForLandingPage(brand.default_theme_key);
 
   const hero = content.sections.find((s) => s.type === 'hero');
-  const title = content.title ?? (hero && hero.type === 'hero' ? hero.headline : brand.name);
-  const description = content.description
+  const rawTitle = content.title ?? (hero && hero.type === 'hero' ? hero.headline : brand.name);
+  // An `{{open_house_*}}` token is filled by a script, and no script runs on a <title>, a meta
+  // description or an OG card. Stripped here so a crawler, a search result or a pasted link
+  // preview is never served `{{open_house_when}}` as this page's name. The BODY keeps its
+  // tokens untouched, which is where the fill happens.
+  const title = stripFillTokens(rawTitle) || brand.name;
+  const rawDescription = content.description
     ?? (hero && hero.type === 'hero' ? hero.subhead : undefined);
+  const description = rawDescription ? stripFillTokens(rawDescription) || undefined : undefined;
   const canonical = safeHttpUrl(pageUrl);
   const ogImage = content.socialImage ? safeHttpUrl(content.socialImage.src) : null;
   const headCta = firstCta(content);
@@ -175,6 +204,16 @@ export function renderLandingPage(input: RenderLandingPageInput): RenderedLandin
   // the script itself shows nothing without a live session, so for everyone else the page is unchanged. Client-side
   // only, which is also why the page's shared cache (max-age 60, s-maxage 300) is unaffected.
   const welcomeBack = '<script src="/v1/welcome-back.js" defer></script>';
+
+  // OH-3: the real next Open House, filled client-side into any `{{open_house_*}}` token the
+  // page's copy carries. Unconditional for the same reasons as welcome-back.js above — it needs
+  // no site_slug, and a page whose copy holds no token returns before it issues a request, so
+  // every other page is unchanged and there is no switch for an operator to forget to flip.
+  //
+  // Client-side is also what keeps this compatible with the page's shared cache (max-age 60,
+  // s-maxage 300). That is the point rather than a concession: a cached page can still carry a
+  // live date, which a server-rendered one at this cache policy could not.
+  const nextOpenHouse = '<script src="/v1/next-open-house.js" defer></script>';
 
   // The brand lockup. An agreed logo renders as the image; a brand without one renders its name,
   // which is the same refusal-to-guess the palette registry makes.
@@ -246,6 +285,7 @@ ${darkLogo
 </footer>
 ${tracker}
 ${welcomeBack}
+${nextOpenHouse}
 ${snackbar ? snackbarScriptTag(snackbar) : ''}
 </body>
 </html>`;

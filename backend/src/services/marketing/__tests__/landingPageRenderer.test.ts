@@ -209,6 +209,55 @@ describe('tracking', () => {
     expect(render(MINIMAL).html.split(tag)).toHaveLength(2); // exactly once
   });
 
+  it('OH-3: every hosted page loads the Open House filler, with or without a site_slug', () => {
+    // Unconditional for the same reason as welcome-back above: the script returns before
+    // issuing a request on a page whose copy carries no {{open_house_*}} token, so there is
+    // nothing for an operator to switch on and nothing for a page without the token to pay.
+    const tag = '<script src="/v1/next-open-house.js" defer></script>';
+    expect(render(MINIMAL).html).toContain(tag);
+    expect(render(MINIMAL, { siteSlug: null }).html).toContain(tag);
+    expect(render(MINIMAL).html.split(tag)).toHaveLength(2); // exactly once
+  });
+
+  it('OH-3: a fill token reaches the BODY intact and the HEAD not at all', () => {
+    // Two halves of one contract, asserted together because each is useless alone.
+    //
+    // BODY: the filler finds its tokens in the served html, so `esc()` must leave braces
+    // alone - it touches & < > " ' and nothing else. If that ever changed, the script would
+    // match nothing and every Open House page would show `{{open_house_when}}` to visitors.
+    //
+    // HEAD: no script runs on a <title>, a meta description or an OG card, so a token there
+    // is served to crawlers and link previews for ever. Those are stripped.
+    const { html } = render(content({
+      sections: [{
+        type: 'hero',
+        headline: 'Open House {{open_house_date}}',
+        subhead: 'Join us {{open_house_when}} - seats are limited',
+      }],
+    }));
+    const headEnd = html.indexOf('</head>');
+    expect(headEnd).toBeGreaterThan(0);
+    expect(html.slice(0, headEnd)).not.toContain('{{');
+    expect(html.slice(headEnd)).toContain('{{open_house_when}}');
+    expect(html.slice(headEnd)).toContain('{{open_house_date}}');
+  });
+
+  it('OH-3: stripping a token leaves a sentence, not a gap', () => {
+    // The head copy has to read as English after the removal, otherwise the strip trades a
+    // visible token for a visibly broken description. Checked on the og:description, which is
+    // the attribute a link preview actually shows.
+    //
+    // Set as `description` rather than relying on the hero-subhead fallback on purpose:
+    // `subhead` is a heading key, so `normalizeHeadingCase` rewrites its case on the way
+    // through, and an exact-string assertion on a value another service is entitled to rewrite
+    // would be testing that service instead of this strip. `description` is not a heading key.
+    const { html } = render(content({
+      description: 'Join us {{open_house_when}} - no card needed',
+      sections: [{ type: 'hero', headline: 'Open House' }],
+    }));
+    expect(html).toContain('<meta property="og:description" content="Join us - no card needed">');
+  });
+
   it('carries no inline script, so the CSP never needs unsafe-inline for scripts', () => {
     const { html } = render(MINIMAL);
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)/);

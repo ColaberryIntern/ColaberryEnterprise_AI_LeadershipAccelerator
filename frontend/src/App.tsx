@@ -38,6 +38,7 @@ import AIPilotLandingPage from './pages/AIPilotLandingPage';
 import AIPilotVerticalPage from './pages/AIPilotVerticalPage';
 import PublicPortfolioPage from './pages/PublicPortfolioPage';
 import ManagementPreviewPage from './pages/ManagementPreviewPage';
+import OpenHouseSignupPage from './pages/OpenHouseSignupPage';
 
 function App() {
   return (
@@ -58,6 +59,17 @@ function App() {
           <Route path="/ai-pilot/care" element={<AIPilotVerticalPage variantKey="care" />} />
           <Route path="/portfolio/share/:token" element={<PublicPortfolioPage />} />
           <Route path="/try" element={<ManagementPreviewPage />} />
+          {/*
+              OH-3: where the Open House ads land. Standalone, like the landing pages above
+              it and for the same reason - a funnel destination carrying the full site nav
+              offers a dozen ways to leave before the form is filled.
+
+              NOT a collision with nginx's `location ^~ /openhouse/`, which proxies the
+              host-run live poll app on :8090. That prefix has no hyphen, so it does not
+              match this path; the two were checked against each other rather than assumed
+              apart.
+          */}
+          <Route path="/open-house" element={<OpenHouseSignupPage />} />
           {adminRoutes}
           {portalRoutes}
           {referralRoutes}
