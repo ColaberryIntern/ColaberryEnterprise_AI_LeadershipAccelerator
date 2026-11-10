@@ -116,10 +116,27 @@ async function downstream(days: number): Promise<DownstreamRow> {
   return rows[0] ?? { signups: '0', accounts: '0', in_crm: '0', opted_in: '0', returned: '0' };
 }
 
-/** Signups, accounts and CRM coverage per campaign, so spend can be compared to outcome. */
+/**
+ * Signups, accounts and CRM coverage per campaign, so spend can be compared to outcome.
+ *
+ * THE SOURCE IS CANONICALIZED IN THE GROUP BY, AND IT HAS TO BE HERE. `leads.utm_source` holds
+ * two shapes for one traffic source - measured in production over 30 days: `fb` 308, `ig` 123,
+ * `fb|paid` 29, `ig|paid` 27 - because the writers still emit both and PR #3622 only canonicalized
+ * on read, inside `adSpend/utmSource.ts`. Grouped raw, one Facebook campaign comes back as two
+ * rows, and because this is the ONLY query behind /api/admin/marketing/funnel/acquisition the
+ * split then propagates into the source donut, the campaign table and every per-campaign rate on
+ * /admin/marketing/performance. The totals stay right while the parts are wrong, which is what
+ * makes it read as data rather than as a bug.
+ *
+ * `split_part(.., '|', 1)` plus `lower(btrim(..))` is the SQL twin of `canonicalUtmSource`. NULL
+ * survives as NULL, so an untagged lead is still untagged rather than becoming an empty string.
+ *
+ * It matters for `LIMIT 20` too: duplicate halves consume slots, so grouping raw can push a
+ * genuinely distinct campaign off the bottom of a top-20 list.
+ */
 async function byCampaign(days: number): Promise<FunnelCampaignRow[]> {
   return sequelize.query<FunnelCampaignRow>(
-    `SELECT l.utm_source, l.utm_campaign,
+    `SELECT lower(btrim(split_part(l.utm_source, '|', 1))) AS utm_source, l.utm_campaign,
             count(*)::int AS signups,
             count(DISTINCT e.email)::int AS accounts,
             count(*) FILTER (WHERE l.ghl_contact_id IS NOT NULL)::int AS in_crm,
@@ -133,7 +150,7 @@ async function byCampaign(days: number): Promise<FunnelCampaignRow[]> {
        AND l.created_at >= now() - (:days || ' days')::interval
        AND lower(l.email) NOT LIKE 'e2e-%'
        AND lower(l.email) NOT LIKE '%@colaberry-test.local'
-     GROUP BY l.utm_source, l.utm_campaign
+     GROUP BY lower(btrim(split_part(l.utm_source, '|', 1))), l.utm_campaign
      ORDER BY signups DESC
      LIMIT 20`,
     { type: QueryTypes.SELECT, replacements: { days: String(days), sources: LANDING_SOURCES } },

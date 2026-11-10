@@ -240,6 +240,28 @@ describe('signupsBySource', () => {
   it('returns an empty list for no campaigns', () => {
     expect(signupsBySource([])).toEqual([]);
   });
+
+  /**
+   * `leads.utm_source` holds two spellings of one source - production over 30 days: `fb` 308,
+   * `ig` 123, `fb|paid` 29, `ig|paid` 27. The backend query now folds them, so these cases guard
+   * the rolling-deploy window where this bundle is served against an older backend.
+   */
+  it('folds the piped source shape into the bare one rather than drawing Facebook twice', () => {
+    const slices = signupsBySource([
+      campaign('fb', 'spring', 308, 300, 300),
+      campaign('fb|paid', 'spring', 29, 28, 28),
+      campaign('ig|paid', 'summer', 27, 27, 27),
+    ]);
+    expect(slices).toHaveLength(2);
+    expect(slices[0]).toMatchObject({ source: 'fb', label: 'Facebook', signups: 337 });
+    expect(slices[1]).toMatchObject({ source: 'ig', label: 'Instagram', signups: 27 });
+  });
+
+  it('gives the folded slice the canonical code, so the link it addresses matches the group', () => {
+    // A slice carrying `fb|paid` would filter to 29 of the 337 people it claims to represent.
+    const [slice] = signupsBySource([campaign('fb|paid', 'spring', 29, 28, 28)]);
+    expect(slice.source).toBe('fb');
+  });
 });
 
 describe('sourceLabel', () => {
@@ -249,6 +271,21 @@ describe('sourceLabel', () => {
     expect(sourceLabel('linkedin')).toBe('linkedin');
     expect(sourceLabel(null)).toBe('Untagged');
     expect(sourceLabel('')).toBe('Untagged');
+  });
+
+  it('names the piped shape instead of printing it as a raw code', () => {
+    // `fb|paid` missed SOURCE_LABELS and rendered as the code itself, which reads as missing
+    // data rather than as a bug - so nobody reported it.
+    expect(sourceLabel('fb|paid')).toBe('Facebook');
+    expect(sourceLabel('IG|paid')).toBe('Instagram');
+  });
+
+  it('canonicalizes an unknown piped source rather than echoing the pipe', () => {
+    expect(sourceLabel('linkedin|paid')).toBe('linkedin');
+  });
+
+  it('treats a source that is nothing but a pipe as untagged', () => {
+    expect(sourceLabel('|paid')).toBe('Untagged');
   });
 });
 

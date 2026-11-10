@@ -33,6 +33,27 @@ describe('a real lead from the October ads', () => {
     expect(tags).toContain('src-ai-flotation');
     expect(tags).not.toContain('brand-training_colaberry');
   });
+
+  /**
+   * The stored column holds two spellings of one source - production over 30 days: `fb` 308,
+   * `ig` 123, `fb|paid` 29, `ig|paid` 27 - because the writers emit both. Tagged raw, GHL ends up
+   * with `utm-fb` AND `utm-fb-paid`, and an audience built on the first silently loses the 29
+   * people behind the second. The undercount lands outside the app, so nothing here would catch
+   * it; these two cases are the catch.
+   */
+  it('folds the piped source shape into one tag, so an audience cannot lose half its people', () => {
+    const piped = provenanceTagsFor({ ...AD_LEAD, utm_source: 'fb|paid' });
+    expect(piped).toContain('utm-fb');
+    expect(piped).not.toContain('utm-fb-paid');
+    // Identical to the bare shape, which is the whole point: one source, one tag.
+    expect(piped).toEqual(provenanceTagsFor(AD_LEAD));
+  });
+
+  it('folds the Instagram shape too, without merging it into Facebook', () => {
+    const piped = provenanceTagsFor({ ...AD_LEAD, utm_source: 'IG|paid' });
+    expect(piped).toContain('utm-ig');
+    expect(piped).not.toContain('utm-fb');
+  });
 });
 
 describe('it never invents provenance', () => {
