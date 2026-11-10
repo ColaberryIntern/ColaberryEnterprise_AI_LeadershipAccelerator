@@ -80,6 +80,12 @@ export interface StudentSubmissionChecklist {
   counts: { total: number; approved: number; remaining: number };
   ready: boolean;
 }
+/** A public meeting line from the qualification dossier (e.g. the pre-proposal conference) — student-safe. */
+export interface StudentGovMeeting { date: string | null; text: string | null; }
+/** Advisory AI vetting of the pursuit (student-safe subset): verdict + capability coverage + a one-line reason. */
+export interface StudentGovVetting { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; coveragePct: number | null; reason: string | null; }
+/** Advisory "what they want / what we'd build" read, saved by the automatic AI checks on the ZIP. */
+export interface StudentGovOpportunitySummary { whatTheyWant: string | null; whatWedBuild: string | null; }
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -103,6 +109,13 @@ export interface StudentGovProjectView {
   closeDate?: string | null;
   /** Cockpit: the opportunity's 0-100 priority score (urgency), shown next to the countdown. Optional (older backends). */
   priorityScore?: number | null;
+  /** The qualification dossier's public meeting lines (e.g. the pre-proposal conference), surfaced on the Solicitation
+   *  stage. Student-safe (no contacts). Optional (older backends). */
+  meetings?: StudentGovMeeting[];
+  /** Advisory AI vetting verdict + coverage, for the Snapshot / Fit / Decide stages. Null when none ran. Optional. */
+  vetting?: StudentGovVetting | null;
+  /** Advisory "what they want / what we'd build" summary for the Snapshot stage. Null when none saved. Optional. */
+  opportunitySummary?: StudentGovOpportunitySummary | null;
   /** Cockpit: the build-repo commit feed (matched pushes, newest first). Optional (older backends). */
   commitFeed?: GovCommitFeedItem[];
   /** v2 Build view: releases → stories + progress + the linked project id for the deep-link. Optional (older backends). */

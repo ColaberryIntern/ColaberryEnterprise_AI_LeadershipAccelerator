@@ -102,6 +102,14 @@ export interface StudentSubmissionChecklist {
   /** True only when every non-pricing response is approved with no open/filler gap. */
   ready: boolean;
 }
+/** A public meeting line from the qualification dossier (e.g. the pre-proposal conference) — student-safe: the
+ *  detected date + the solicitation's own sentence. Contacts never ride on a meeting line. */
+export interface StudentGovMeeting { date: string | null; text: string | null; }
+/** Advisory AI vetting of the pursuit — the student-safe subset of the saved gov_ai_vettings view: the verdict, how
+ *  well the bid's needs matched Our Services, and a one-line reason. No capability internals, questions, or contacts. */
+export interface StudentGovVetting { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; coveragePct: number | null; reason: string | null; }
+/** Advisory "what they want / what we'd build" read, saved by the automatic AI checks on the ZIP. */
+export interface StudentGovOpportunitySummary { whatTheyWant: string | null; whatWedBuild: string | null; }
 export interface StudentGovProjectView {
   projectId: string;
   name: string;
@@ -131,6 +139,15 @@ export interface StudentGovProjectView {
    *  bar shows it next to the countdown so the deadline + urgency survive the move into the Studio. Null when not
    *  captured. Optional so pre-existing view literals still compile. */
   priorityScore?: number | null;
+  /** The qualification dossier's public meeting lines (e.g. the pre-proposal conference) — surfaced on the
+   *  Solicitation stage so the conference date/details that lived only in the legacy Qualification Workspace are
+   *  reachable from the assigned contract. Student-safe (no contacts). Optional (loader-filled). */
+  meetings?: StudentGovMeeting[];
+  /** Advisory AI vetting verdict + capability coverage, so the Snapshot / Fit / Decide stages carry the opportunity
+   *  read the legacy workspace showed. Null when no vetting ran. Optional (loader-filled). */
+  vetting?: StudentGovVetting | null;
+  /** Advisory "what they want / what we'd build" summary for the Snapshot stage. Null when none saved. Optional. */
+  opportunitySummary?: StudentGovOpportunitySummary | null;
   /** The build-repo commit feed: every matched push for this project, newest first (public commit facts, no identity). */
   commitFeed: CommitFeedItem[];
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
@@ -191,6 +208,46 @@ export function toStudentSubmissionChecklist(slots: any[], established: any[], c
 }
 
 /**
+ * PURE: project the qualification dossier's public meeting lines to the student-safe shape — the detected date + the
+ * solicitation's own sentence. A dossier contact never rides on a meeting line, so this carries no contact. A line
+ * with neither a date nor text is dropped. Total: garbage in ⇒ [].
+ */
+export function toStudentMeetings(dossier: any): StudentGovMeeting[] {
+  const rows: any[] = dossier && Array.isArray(dossier.meetings) ? dossier.meetings : [];
+  return rows
+    .map((m) => ({ date: m && m.date != null ? String(m.date) : null, text: m && m.text != null ? String(m.text) : null }))
+    .filter((m) => m.date || m.text);
+}
+
+/**
+ * PURE: the student-safe subset of a saved AI vetting view (verdict + capability coverage + one-line reason). The
+ * verdict is narrowed to the known literals (anything else ⇒ null). Null/absent in ⇒ null. Carries no capability
+ * internals, clarification questions, raw extraction, or contacts.
+ */
+export function toStudentVetting(vv: any): StudentGovVetting | null {
+  if (!vv) return null;
+  const verdict = (vv.verdict === 'pursue' || vv.verdict === 'pass' || vv.verdict === 'inconclusive') ? vv.verdict : null;
+  return {
+    status: String(vv.status ?? ''),
+    verdict,
+    coveragePct: typeof vv.coveragePct === 'number' ? vv.coveragePct : null,
+    reason: vv.reason != null ? String(vv.reason) : null,
+  };
+}
+
+/**
+ * PURE: the "what they want / what we'd build" read from a saved AI vetting view, or null when neither side is set.
+ */
+export function toStudentOpportunitySummary(vv: any): StudentGovOpportunitySummary | null {
+  const sum: any = vv && vv.summary ? vv.summary : null;
+  if (!sum || (!sum.whatTheyWant && !sum.whatWedBuild)) return null;
+  return {
+    whatTheyWant: sum.whatTheyWant != null ? String(sum.whatTheyWant) : null,
+    whatWedBuild: sum.whatWedBuild != null ? String(sum.whatWedBuild) : null,
+  };
+}
+
+/**
  * PURE: project a gov delivery project + its tracks + requirements into the student-safe view. Deliberately
  * omits every admin/internal field — the track OWNER identity and the raw `solution_student_project_id` (exposed
  * only as a boolean `hasBuild`), tenant/org/brand ids, `created_by_identity_id`, content hashes. Total.
@@ -246,6 +303,9 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     keyDates: [],
     closeDate: null, // filled by the async loader from the qualification's authoritative close date
     priorityScore: null, // filled by the async loader from the qualification's source snapshot
+    meetings: [], // filled by the async loader from the qualification dossier's public meeting lines
+    vetting: null, // filled by the async loader from the saved AI vetting (advisory)
+    opportunitySummary: null, // filled by the async loader from the saved AI "what they want / what we'd build"
     commitFeed: [],
     buildSummary: null, // filled by the async loader from the materialized SBP build
     proposalDocuments: [], // filled by the async loader from the derived + synced documents
@@ -397,10 +457,12 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
   // Cockpit project bar: the soliciting agency + detected key dates, from THIS project's qualification
   // (requirements_json.provenance + .dossier). Best-effort + student-safe (readGovProvenanceFacts carries only the
   // public agency + key-date lines, never the dossier's contacts or any evaluation/compliance internals).
+  let govQual: any = null; // reused by the AI-vetting block below so it does not re-query the qualification
   try {
     const { default: GovQualification } = await import('../../models/GovQualification');
     const qual: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
     if (qual) {
+      govQual = qual;
       const facts = readGovProvenanceFacts(qual.requirements_json);
       view.agency = facts.agency;
       view.keyDates = facts.keyDates;
@@ -422,8 +484,25 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       view.priorityScore = (manual && manual.priorityScore != null)
         ? manual.priorityScore
         : ((snap && (snap.priorityScore ?? (op && op.priorityScore))) ?? null);
+      // The dossier's public MEETING lines (e.g. the pre-proposal conference) — student-safe (date + the solicitation's
+      // own sentence, never contacts). The Solicitation stage surfaces these; they lived only in the legacy workspace.
+      view.meetings = toStudentMeetings((qual.requirements_json && (qual.requirements_json as any).dossier) || null);
     }
-  } catch { /* additive; agency/keyDates/closeDate/priorityScore stay at their safe defaults */ }
+  } catch { /* additive; agency/keyDates/closeDate/priorityScore/meetings stay at their safe defaults */ }
+
+  // Advisory AI vetting (verdict + capability coverage + the "what they want / what we'd build" summary), saved by the
+  // automatic ZIP checks (gov_ai_vettings). Surfaced on the Snapshot / Fit / Decide stages so the opportunity read that
+  // lived only in the legacy Qualification Workspace is reachable from the assigned contract. STUDENT-SAFE subset only
+  // (verdict + coverage + one-line reason + the summary — never capability internals, questions, extraction, or
+  // contacts). Keyed on the qualification's canonical id; null for a pursuit with no saved vetting. Best-effort + additive.
+  try {
+    if (govQual && govQual.canonical_opportunity_id && govQual.tenant_id) {
+      const { loadAiVettingView } = await import('./govAiVetting');
+      const vv: any = await loadAiVettingView(String(govQual.tenant_id), String(govQual.canonical_opportunity_id));
+      view.vetting = toStudentVetting(vv);
+      view.opportunitySummary = toStudentOpportunitySummary(vv);
+    }
+  } catch { /* additive; vetting/opportunitySummary stay null */ }
 
   // v2 Build view: the SBP build summary (releases -> stories + progress) for the linked build project. Best-effort;
   // it also lazily publishes the plan so the commit->story loop runs. Null when no build is linked yet.

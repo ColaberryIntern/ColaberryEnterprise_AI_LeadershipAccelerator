@@ -32,7 +32,7 @@ jest.mock('../proposal/govProposalReviewStore', () => ({ listVersionsByIds: jest
 jest.mock('../proposal/govProposalReviewRunStore', () => ({ latestRunsForDocs: jest.fn().mockResolvedValue(new Map()) }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
-import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist, assembleProposalDocuments, type ProposalDocSummarySource } from '../govProjectProjection';
+import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist, assembleProposalDocuments, toStudentMeetings, toStudentVetting, toStudentOpportunitySummary, type ProposalDocSummarySource } from '../govProjectProjection';
 import type { ProposalDocumentView } from '../proposal/govProposalDocumentStore';
 import type { VersionView, GateView } from '../proposal/govProposalReviewStore';
 
@@ -387,5 +387,57 @@ describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness',
 
   it('is total on garbage', () => {
     expect(assembleProposalDocuments(undefined as unknown as ProposalDocSummarySource[], true)).toEqual({ documents: [], readiness: { pct: 0, passing: 0, total: 0 } });
+  });
+});
+
+// The legacy Qualification Workspace read (dossier meetings + AI vetting + the "what they want / what we'd build"
+// summary) now rides on the student projection so it is reachable from the assigned contract's stage panels. These
+// pure helpers do the student-safe projection; the async loader just calls them.
+describe('toStudentMeetings — the dossier meeting lines, student-safe', () => {
+  it('keeps the detected date + the solicitation sentence and drops empty lines', () => {
+    const dossier = { meetings: [
+      { date: 'November 10, 2026', text: 'A pre-proposal conference will be held Tuesday, November 10, 2026 at 10:00 am.' },
+      { date: null, text: 'PRE-PROPOSAL CONFERENCE' },
+      { date: null, text: null },
+    ] };
+    expect(toStudentMeetings(dossier)).toEqual([
+      { date: 'November 10, 2026', text: 'A pre-proposal conference will be held Tuesday, November 10, 2026 at 10:00 am.' },
+      { date: null, text: 'PRE-PROPOSAL CONFERENCE' },
+    ]);
+  });
+
+  it('never carries a dossier contact field onto a meeting line', () => {
+    const out = toStudentMeetings({ meetings: [{ date: '2026-11-10', text: 'Conference', contact: 'buyer@agency.gov', phone: '555-1212' } as any] });
+    expect(JSON.stringify(out)).not.toMatch(/buyer@agency\.gov|555-1212|contact|phone/);
+  });
+
+  it('is total on garbage', () => {
+    expect(toStudentMeetings(null)).toEqual([]);
+    expect(toStudentMeetings({})).toEqual([]);
+    expect(toStudentMeetings({ meetings: 'nope' })).toEqual([]);
+  });
+});
+
+describe('toStudentVetting / toStudentOpportunitySummary — the student-safe AI read', () => {
+  const vv = {
+    status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'Core work matches Our Services.',
+    fit: { capabilities: [{ secret: 'internal' }] }, questions: { items: ['q'] }, extraction: { candidates: [] },
+    summary: { whatTheyWant: 'An integrated data platform.', whatWedBuild: 'A cloud-native platform.' },
+  };
+
+  it('projects only the verdict + coverage + reason (no capability internals, questions or extraction)', () => {
+    expect(toStudentVetting(vv)).toEqual({ status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'Core work matches Our Services.' });
+    expect(JSON.stringify(toStudentVetting(vv))).not.toMatch(/capabilit|questions|extraction|internal/i);
+  });
+
+  it('narrows an unknown verdict to null and is null on null input', () => {
+    expect(toStudentVetting({ verdict: 'maybe' })?.verdict).toBeNull();
+    expect(toStudentVetting(null)).toBeNull();
+  });
+
+  it('reads the what-they-want / what-we-d-build summary, null when neither side is set', () => {
+    expect(toStudentOpportunitySummary(vv)).toEqual({ whatTheyWant: 'An integrated data platform.', whatWedBuild: 'A cloud-native platform.' });
+    expect(toStudentOpportunitySummary({ summary: { whatTheyWant: '', whatWedBuild: '' } })).toBeNull();
+    expect(toStudentOpportunitySummary(null)).toBeNull();
   });
 });

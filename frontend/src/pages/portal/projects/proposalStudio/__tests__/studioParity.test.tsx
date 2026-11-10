@@ -247,6 +247,41 @@ describe('StageDetail — read-only vetting-stage panels (Snapshot/Solicitation/
   });
 });
 
+describe('StageDetail — the legacy workspace read (meetings, AI vetting, what-they-want) now rides on the stage panels', () => {
+  const text = (id: string) => container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+  const VIEW_VETTED = {
+    ...VIEW,
+    requirements: [{ canonicalReqId: 'R-1', statement: 'Data platform', priority: 'must', tracks: ['proposal'], evidenceState: 'open' }],
+    meetings: [{ date: 'November 10, 2026', text: 'A pre-proposal conference will be held Tuesday, November 10, 2026 at 10:00 am local time.' }],
+    vetting: { status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'The core work matches Our Services.' },
+    opportunitySummary: { whatTheyWant: 'An integrated data platform.', whatWedBuild: 'A cloud-native platform.' },
+  } as unknown as StudentGovProjectView;
+
+  it('Solicitation surfaces the pre-proposal meeting from the dossier', async () => {
+    await render(<StageDetail stage="solicitation" view={VIEW_VETTED} />);
+    expect(present('stage-meetings')).toBe(true);
+    expect(text('stage-meetings')).toContain('pre-proposal conference');
+  });
+
+  it('Snapshot shows the AI verdict, coverage and the what-they-want summary, and drops the placeholder', async () => {
+    await render(<StageDetail stage="snapshot" view={VIEW_VETTED} />);
+    expect(text('stage-vetting')).toContain('pursuing');
+    expect(text('stage-coverage')).toContain('75%');
+    expect(text('stage-summary')).toContain('integrated data platform');
+    expect(present('stage-coming')).toBe(false);
+  });
+
+  it('Fit and Decide carry the vetting read instead of the placeholder', async () => {
+    await render(<StageDetail stage="fit" view={VIEW_VETTED} />);
+    expect(text('stage-coverage')).toContain('75%');
+    expect(present('stage-coming')).toBe(false);
+    act(() => root.unmount()); container.remove();
+    await render(<StageDetail stage="decide" view={VIEW_VETTED} />);
+    expect(text('stage-vetting')).toContain('pursuing');
+    expect(present('stage-coming')).toBe(false);
+  });
+});
+
 describe('WhereWeAre pursuit-stage chips are now clickable and route to the stage panels', () => {
   it('each chip navigates to its stage view (Build→evidence, Proposal→overview, Submit→package)', async () => {
     const calls: string[] = [];
