@@ -1,8 +1,9 @@
 # Handoff — the ADS ladder: ad attribution and ad spend
 
-Six tickets in Ali Personal, bucket `7463955`. Four are closed. ADS-4 is one production credential
-write from done, and ADS-6 is one toggle behind it. This page is the forward-looking state; the
-evidence for everything closed is in the four session logs listed at the bottom.
+Seven tickets in Ali Personal, bucket `7463955`. Four are closed. ADS-4 is one production
+credential write from done, ADS-6 is one toggle behind it, and ADS-7 is merged but not yet
+deployed. This page is the forward-looking state; the evidence for everything closed is in the
+session logs listed at the bottom.
 
 | Ticket | Subject | State |
 |---|---|---|
@@ -12,6 +13,7 @@ evidence for everything closed is in the four session logs listed at the bottom.
 | ADS-4 (`10467338894`) | Meta token / ad-account read access | **Grant landed 2026-11-10.** Now waits on a production credential write. See below. |
 | [ADS-5](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338811) | Are the live ads tagged? | **Closed.** Answer: yes, since 2026-10-21. |
 | ADS-6 (`10467338921`) | Daily spend sync | **Waits on ADS-4.** One toggle once the credentials prove out. |
+| [ADS-7](https://app.basecamp.com/3945211/buckets/7463955/todos/10493942196) | `utm_source` split: one campaign read as two | **Merged 2026-11-10, not deployed.** See below. |
 
 ## ADS-3 is closed, and its closing condition holds — plus how this page got it wrong twice
 
@@ -118,8 +120,40 @@ cannot see this ticket and it stays assigned to Ali. The remaining work is a pro
 and an agent toggle, neither of which he could do anyway.
 
 **There is a Meta access token in this workstream's history.** It arrived by email and screenshot,
-was never written to production, and every script redacts it in log output. **Rotate it once the
-sync is proven.** Until then treat it as live.
+was never written to production, and every script redacts it in log output. It is a System User
+token, so `expires_at: never` — that was the point of insisting on a System User, and it also
+means nothing retires it on its own.
+
+**Decided 2026-11-10: it will not be rotated.** Earlier versions of this page said to rotate it
+once the sync was proven; that is no longer a pending action and should not be re-raised. Treat
+the token as live indefinitely, keep redacting it in any log output, and do not paste it into a
+ticket, a channel or a commit.
+
+## ADS-7: the readers are fixed, the column is not
+
+PR #3812 merged 2026-11-10 (`3ea69dad`), all seven CI gates green. **Merged, not deployed** — the
+source donut on `/admin/marketing/performance` keeps drawing Facebook twice until the backend and
+frontend images are rebuilt. Do not report that page as fixed on the strength of the merge.
+
+What it changed, and why only these three places: `leads.utm_source` holds two spellings of one
+source (`fb` 308, `ig` 123, `fb|paid` 29, `ig|paid` 27 over 30 days), and PR #3622 had
+canonicalized only on read inside `adSpend/utmSource.ts`.
+
+- `acquisitionFunnel.ts` now groups on `lower(btrim(split_part(utm_source, '|', 1)))`. That query
+  is the only thing behind `/api/admin/marketing/funnel/acquisition`, so it fixes the donut, the
+  campaign table and every per-campaign rate at once. It also matters for the query's `LIMIT 20`:
+  duplicate halves consumed slots, so a genuinely distinct campaign could fall off a top-20 list.
+- `ghlProvenanceTags.ts` canonicalizes before tagging. This was the worst shape of the bug and the
+  only one that did not ride along with the funnel fix — GoHighLevel carried both `utm-fb` and
+  `utm-fb-paid`, so any smart list or ad audience built on the first silently dropped 29 people,
+  outside the app where nothing surfaces it.
+- `performanceMetrics.ts` got the frontend twin as a second line of defense, because during a
+  rolling deploy this bundle can be served against an older backend.
+
+**Six further sites read `leads.utm_source` for one-person display only** — the person Acquisition
+tab, the person-history drawer, the lead detail page, the accelerator roster tooltip, Maya's
+pre-registration payload, and a substring test in `calculateLeadScore`. They were checked and are
+genuinely unaffected; do not "fix" them.
 
 ## Traps that will bite the next person
 
@@ -163,6 +197,8 @@ copy a sibling rather than ADS-2.
 - `docs/sessions/SESSION_CC-20261102-k9r4-ads3.md` — ADS-3
 - `docs/sessions/SESSION_CC-20261102-k9r4-ads5.md` — ADS-5, including why it was measurable without
   Ads Manager access
+- `docs/sessions/SESSION_CC-20261102-k9r4-ads7.md` — ADS-7, including the full consumer audit and
+  the six sites deliberately left alone
 
 Artifacts: vault folder "Marketing Ad Attribution - Artifacts" (`10469067334`). Pass `PARENT_VAULT`
 and `LIST` explicitly to the attach script or it defaults to the Agent Factory vault and throws.
@@ -173,8 +209,13 @@ Merged PRs for ADS-2: #3731 (`18d7f531`), #3754 (`91832aac`), #3756 (`2a8824fc`)
 
 - A follow-up ticket for **ad-level spend**. The sync pulls `level=campaign`, which makes
   cost-per-creative impossible to compute. Not filed.
-- **An audit of everything that reads `leads.utm_source` directly.** The piped `fb|paid` form is
-  still written (56 of ~490 tagged leads in the last 30 days) and is only canonicalized on read
-  inside `adSpend/utmSource.ts`. Every other consumer — report, export, segment, dashboard — splits
-  one campaign in two. Either route them through the same helper or canonicalize at the writers.
-  Not filed, and the only item here with a measured blast radius.
+- **Canonicalizing `utm_source` at the writers, plus a backfill of the stored column.** ADS-7 fixed
+  the readers; the column still holds both shapes and the writers still produce them, so every new
+  reader starts with the same trap. This is the permanent answer and it changes write paths, so it
+  is its own decision rather than a follow-up. Not filed.
+- **GHL contacts already mis-tagged** with `utm-fb-paid` from before ADS-7. The code emits one tag
+  per source now, but nothing went back and merged the contacts already carrying the old one. That
+  cleanup happens in GoHighLevel, not in this codebase. Not filed.
+- **The admin lead CSV export** (`leadService.ts:603`) still writes the raw column, so pivoting the
+  export in Excel still shows two Facebook rows. Left deliberately: it is a raw dump, and the
+  honest fix is an added canonical column rather than overwriting what it dumps. Not filed.

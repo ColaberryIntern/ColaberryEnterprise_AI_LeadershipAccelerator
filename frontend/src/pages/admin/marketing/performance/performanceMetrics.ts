@@ -104,7 +104,7 @@ export function funnelSteps(stages: FunnelStage[]): FunnelStep[] {
  * The key of the stage with the largest absolute fall, which the chart paints red.
  *
  * Largest ABSOLUTE fall, not the worst ratio: a 40% fall from 10,000 loses more people than a 90%
- * fall from 50, and the point of the colour is to say where the people went. Returns null when
+ * fall from 50, and the point of the color is to say where the people went. Returns null when
  * nothing fell, so a healthy funnel gets no red bar rather than an arbitrary one.
  */
 export function worstDropKey(steps: FunnelStep[]): string | null {
@@ -143,7 +143,7 @@ const SOURCE_LABELS: Record<string, string> = {
  *
  * WHY IT IS NEEDED AT ALL. `leads.utm_source` holds two shapes for one source - `fb` and
  * `fb|paid` - because the writers emit both. The backend funnel query now folds them, so this is
- * the second line of defence rather than the first: during a rolling deploy this bundle can be
+ * the second line of defense rather than the first: during a rolling deploy this bundle can be
  * served alongside an older backend that has not been updated yet, and a piped value arriving
  * here would miss SOURCE_LABELS and render as a raw code. A label that reads like missing data is
  * worse than one that reads like a bug, because nobody reports it.
@@ -171,14 +171,14 @@ export interface SourceSlice {
  *
  * AGGREGATION IS REQUIRED HERE and the reference design did not need it: the endpoint returns one
  * row per (source, campaign) pair, so a source running four campaigns appears four times. Feeding
- * those rows straight to a pie would draw four slices of one colour for one source and a centre
+ * those rows straight to a pie would draw four slices of one color for one source and a center
  * total that happens to be right for the wrong reason.
  *
  * Zero-signup sources are dropped rather than drawn as a slice of nothing.
  *
  * IT BUCKETS ON THE CANONICAL SOURCE, not the raw one. `fb` and `fb|paid` are one source wearing
  * two spellings, and bucketing raw drew Facebook as two slices - one at 308 and one at 29 - with
- * both percentages wrong while the centre total stayed right. The slice carries the canonical
+ * both percentages wrong while the center total stayed right. The slice carries the canonical
  * code as its `source`, so the link or filter it addresses matches the folded group rather than
  * one half of it.
  */
