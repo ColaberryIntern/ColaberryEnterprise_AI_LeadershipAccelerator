@@ -10,7 +10,7 @@ const registry = require('../lib/reportingRegistry') as {
   ctSlotDue: (sendCT: unknown, nowCTMin: number) => boolean;
   shouldFireToday: (r: unknown, now?: Date) => boolean;
 };
-import { sendPlanFor, testSubject } from '../../services/internship/portfolioReport/sendPlan';
+import { meetingSubject, parseEdition, sendPlanFor, testSubject } from '../../services/internship/portfolioReport/sendPlan';
 
 const at = (h: number, m: number): number => h * 60 + m;
 const entry = registry.REPORTS.find((r) => r.name === 'Internship Portfolio Report')!;
@@ -40,6 +40,34 @@ describe('internship report: every morning at 8:00 Central, retry at 9:00', () =
     expect(registry.ctSlotDue('05:30', at(5, 40))).toBe(false);
     expect(registry.ctSlotDue(undefined, at(8, 0))).toBe(false);
     expect(registry.ctSlotDue(['nonsense'], at(8, 0))).toBe(false);
+  });
+});
+
+describe('internship report: the Tuesday 10:00 intern-meeting copy', () => {
+  const meeting = registry.REPORTS.find((r) => r.name === 'Internship Portfolio Report (Tuesday intern meeting)') as typeof entry & { args: string[] };
+
+  it('runs the same script as the meeting edition, Tuesdays at 10:00 Central with an 11:00 retry', () => {
+    expect(meeting.scriptPath).toBe(entry.scriptPath);
+    expect(meeting.args).toEqual(['--edition', 'meeting']);
+    expect(meeting.sendCT).toEqual(['10:00', '11:00']);
+    expect(registry.ctSlotDue(meeting.sendCT, at(10, 0))).toBe(true);
+    expect(registry.ctSlotDue(meeting.sendCT, at(11, 4))).toBe(true);
+    expect(registry.ctSlotDue(meeting.sendCT, at(8, 0))).toBe(false);
+  });
+
+  it('fires on Tuesday only, at the UTC hours 10:00 Central falls on in CST and CDT', () => {
+    expect(registry.shouldFireToday(meeting, new Date('2026-11-10T16:00:00Z'))).toBe(true);  // Tue 10:00 CST
+    expect(registry.shouldFireToday(meeting, new Date('2026-06-09T15:00:00Z'))).toBe(true);  // Tue 10:00 CDT
+    expect(registry.shouldFireToday(meeting, new Date('2026-11-11T16:00:00Z'))).toBe(false); // Wed
+  });
+
+  it('has its own ledger key, so Tuesday gets the 8:00 report AND the 10:00 meeting copy', () => {
+    const now = new Date('2026-11-10T16:00:00Z');
+    expect(sendPlanFor(now, null, 'meeting').businessEventId).toBe('internship-report-2026-11-10-meeting');
+    expect(sendPlanFor(now, null, 'daily').businessEventId).toBe('internship-report-2026-11-10');
+    expect(meetingSubject("Ali, here's your Internship Report for Tue, Nov 10, 2026")).toBe("Ali, here's your Internship Report for your intern meeting, Tue, Nov 10, 2026");
+    expect(() => parseEdition('weekly')).toThrow(/unknown --edition/);
+    expect(parseEdition(null)).toBe('daily');
   });
 });
 

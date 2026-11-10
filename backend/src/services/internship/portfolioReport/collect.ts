@@ -25,7 +25,7 @@ import { internshipProjectReadiness } from '../internshipProjectReadiness';
 import { loadAgentNudgeStates } from '../agentNudgeState';
 import { listGovContractsFor } from '../../factory/govContractsList';
 import type { GovPipelineCard } from '../../factory/govPipeline';
-import type { AgentTab, CollectedPortfolio, Conversation, FeedItem, InternEmail, LastOutbound, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
+import type { AgentTab, CollectedPortfolio, Conversation, FeedItem, InternEmail, LastOutbound, PrepTask, RecordedVideo, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
 import { repairMojibake } from '../../../utils/textEncoding';
 
 // One window for the whole story: commits, verified stories, emails and replies all cover 21 days.
@@ -144,6 +144,26 @@ const COMMS_SQL = `
    ORDER BY received_at DESC
    LIMIT 2000`;
 
+// Every demo video an intern recorded in the Presentation Studio (Zoom practice-room takes ingested
+// to disk). Measured 10 Nov 2026: 4 intern recordings exist and NONE wrote a portfolio artifact
+// (that only happens on a task hand-in), so the report reads the recordings themselves.
+const VIDEOS_SQL = `
+  SELECT r.id AS recording_id, asg.enrollment_id, asg.story_id, r.presentation_type, asg.template_slug,
+         r.duration_seconds, r.created_at, a.attempt_no, a.mode, a.is_final_take, r.has_audio, r.has_shared_screen
+    FROM presentation_recordings r
+    JOIN presentation_attempts a ON a.id = r.attempt_id
+    JOIN presentation_assignments asg ON asg.id = a.assignment_id
+   WHERE r.ingest_status = 'ingested' AND asg.enrollment_id IN (:enrollmentIds)
+   ORDER BY r.created_at DESC`;
+
+// The presentation tasks on each intern's projects (PREP-1..5 = the five recorded presentation
+// types, PREP-6 = Demo Day), with the due dates the build schedule gave them.
+const PREP_SQL = `
+  SELECT p.enrollment_id, t.story_id, t.title, t.status, t.due_on, t.verified_at
+    FROM student_tasks t JOIN projects p ON p.id = t.project_id
+   WHERE p.enrollment_id IN (:enrollmentIds) AND t.story_id LIKE 'PREP-%'
+   ORDER BY t.story_id`;
+
 // The most recent message sent TO each intern from a colaberry.com address (Ali's own sends are
 // BCC'd into his inbox mirror, so they are here). Feeds the sidecar's `last_ask`; the HTML does
 // not use it. Body capped so one long thread cannot bloat the report.
@@ -191,7 +211,8 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     ...agentTabs.map((a) => a.student_project_id),
   ].filter((x): x is string => !!x))];
 
-  const [readiness, agentStates, projects, emailRows, weWrote, replies, lastOutbound, artifacts, conversations] = await Promise.all([
+  const enrollmentIds = roster.map((r) => r.enrollment_id);
+  const [readiness, agentStates, projects, emailRows, weWrote, replies, lastOutbound, artifacts, conversations, videos, prepTasks] = await Promise.all([
     soft('project readiness', () => internshipProjectReadiness(), []),
     soft('agent nudge state', () => loadAgentNudgeStates({ query: (s) => select(s), now: now.toISOString() }), []),
     soft('project detail', () => (projectIds.length ? select<ProjectFacts>(PROJECT_SQL, { ids: projectIds }) : Promise.resolve([])), []),
@@ -201,6 +222,8 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     soft('last outbound', () => (emails.length ? select<LastOutbound>(LAST_ASK_SQL, { emails }) : Promise.resolve([])), []),
     soft('published artifacts', () => (roster.length ? select<PublishedArtifact>(ARTIFACTS_SQL, { enrollmentIds: roster.map((r) => r.enrollment_id) }).then((rows) => rows.map(repairArtifactText)) : Promise.resolve([])), []),
     soft('conversations', () => (emails.length ? select<Conversation>(COMMS_SQL, { emails, likes: emails.map((e) => `%${e}%`) }) : Promise.resolve([])), []),
+    soft('demo videos', () => (enrollmentIds.length ? select<RecordedVideo>(VIDEOS_SQL, { enrollmentIds }) : Promise.resolve([])), []),
+    soft('presentation tasks', () => (enrollmentIds.length ? select<PrepTask>(PREP_SQL, { enrollmentIds }) : Promise.resolve([])), []),
   ]);
 
   // Sequential on purpose: ~14 interns, each detail is a handful of queries.
@@ -229,5 +252,7 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     artifacts,
     lastOutbound,
     conversations,
+    videos,
+    prepTasks,
   };
 }

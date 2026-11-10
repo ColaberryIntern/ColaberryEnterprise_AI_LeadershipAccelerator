@@ -16,6 +16,8 @@
  *   gov build 75%+ verified          32                         -> their facts line
  *   overdue backlog (3+)             25 + overdue (max 60)      -> their TODAY block
  *   strong build streak (5+ verified) 20 + verified (max 45)    -> latest verified day on the timeline
+ *   recorded a demo video (window)   26  (good news)            -> their artifacts
+ *   presentation overdue (PREP plan) 22 + days late (max 42)    -> their artifacts
  *   still submitting Markdown        16                         -> their artifacts
  *   training 4+ weeks behind         14 + 2 per week            -> their facts line
  * At most MAX_PER_INTERN stops per intern, so the tour covers the cohort, not one person, and up to
@@ -91,6 +93,12 @@ function candidatesFor(c: InternCard, j: SidecarIntern): Candidate[] {
   } else if ((c.day ?? 0) >= 14) {
     add('no_project', 40 + Math.floor((c.day ?? 0) / 10), `${who} has no project on day ${c.day}`, `${c.day} days in with nothing to build: one decision from you (a project) unblocks everything else.`, 'card');
   }
+  // Demo videos: an overdue presentation from their own plan, and a newly recorded take (good news).
+  const pres = c.presentation;
+  if (pres && pres.daysLate > 0) add('presentation', 22 + Math.min(pres.daysLate, 20), `${who}'s ${pres.label} is ${pres.daysLate} days overdue`, `${pres.storyId} was due ${pres.dueOn} and has not been recorded yet; the prompt and nudge to get it done are ready.`, 'artifacts');
+  const windowStart = Date.parse(c.timeline.start);
+  const newVideo = c.artifacts.published.filter((a) => a.fileType === 'video' && Date.parse(a.at) >= windowStart).sort((a, b) => b.at.localeCompare(a.at))[0];
+  if (newVideo) add('new_video', 26, `${who} recorded a ${newVideo.title.replace(/ \(\d+:\d{2}\)$/, '')}`, `A demo video you can watch now (${newVideo.title.match(/\((\d+:\d{2})\)/)?.[1] ?? 'recorded'}), from the Presentation Studio.`, 'artifacts');
   if (c.artifacts.asks.some((a) => a.key === 'format_correction')) add('format', 16, `${who} is still submitting Markdown artifacts`, 'Their artifacts should be visual PDFs; the course-correction prompt is ready to send.', 'artifacts');
   const wb = j.pacing.weeks_behind;
   if (wb !== null && wb >= 4) add('training', 14 + 2 * wb, `${who} is ${wb} weeks behind in training`, `Week ${j.pacing.actual_training_week} completed where ${j.pacing.expected_training_week} were expected (${String(j.pacing.expected_basis).replace('_', ' ')}).`, 'facts');
@@ -123,6 +131,6 @@ export function highlights(cards: InternCard[], interns: SidecarIntern[]): Highl
 }
 
 /** Highlights that are good news. */
-export const POSITIVE: ReadonlySet<string> = new Set(['streak', 'near_done', 'unstuck', 'recovering']);
+export const POSITIVE: ReadonlySet<string> = new Set(['streak', 'near_done', 'unstuck', 'recovering', 'new_video']);
 /** Up to this many stops are kept for good news when there is any. */
 export const POSITIVE_SLOTS = 2;
