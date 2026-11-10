@@ -14,9 +14,11 @@ const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 /** A nested nav sub-item (gov contract / agent): the title on one line, the OWNER on a muted second line,
  *  so both nested nodes make clear who owns the tasks. */
 function NavSubLink(
-  { to, label, owner, icon, active, onNavigate }:
-  { to: string; label: string; owner?: string; icon: string; active: boolean; onNavigate: () => void },
+  { to, label, owner, icon, active, onNavigate, daysLeft }:
+  { to: string; label: string; owner?: string; icon: string; active: boolean; onNavigate: () => void; daysLeft?: number | null },
 ) {
+  // Urgency colour for the always-visible "days left" KPI: <=3 danger, <=7 warning, else calm. Mirrors deadlineTone.
+  const dueColor = daysLeft == null ? undefined : daysLeft <= 3 ? '#ff6b6b' : daysLeft <= 7 ? '#ffc23d' : 'rgba(255,255,255,0.72)';
   return (
     <Link
       to={to}
@@ -25,7 +27,7 @@ function NavSubLink(
       aria-current={active ? 'page' : undefined}
     >
       <i className={`${icon} admin-nav-ricon`} aria-hidden="true" />
-      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.2 }}>
+      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.2, flex: 1 }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
         {owner && (
           <span style={{ fontSize: '0.75em', opacity: 0.65, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -33,6 +35,15 @@ function NavSubLink(
           </span>
         )}
       </span>
+      {daysLeft != null && (
+        <span
+          data-testid="gov-nav-daysleft"
+          title={`${daysLeft} day${daysLeft === 1 ? '' : 's'} until the proposal is due`}
+          style={{ marginLeft: 'auto', alignSelf: 'flex-end', fontSize: '0.72em', fontWeight: 700, color: dueColor, whiteSpace: 'nowrap' }}
+        >
+          {daysLeft}d
+        </span>
+      )}
     </Link>
   );
 }
@@ -247,7 +258,7 @@ function AdminLayout() {
                               <i className={`ri-arrow-${subOpen ? 'down' : 'right'}-s-line`} aria-hidden="true" />
                             </button>
                             {subOpen && entries.map((e) => (
-                              <NavSubLink key={e.key} to={e.to} label={e.label} owner={e.owner}
+                              <NavSubLink key={e.key} to={e.to} label={e.label} owner={e.owner} daysLeft={e.daysLeft}
                                 icon={`ri-${sl.icon}`} active={isActive(e.to)} onNavigate={closeMobile} />
                             ))}
                           </div>
