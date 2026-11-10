@@ -103,7 +103,11 @@ async function main(): Promise<void> {
     // Keyset pagination on id, not OFFSET: the rows being updated are the rows
     // being paged over, so an OFFSET walk would skip rows as the result set
     // shifts underneath it.
-    const rows = await sequelize.query<VisitorRow>(
+    // ANNOTATED, not inferred. Without this `tsc` reports TS7022: the query's SQL
+    // mentions `lastId`, `lastId` is assigned from `rows` at the bottom of the
+    // loop, and inference walks that circle back into its own initializer. The
+    // annotation cuts the cycle and says the same thing the generic does.
+    const rows: VisitorRow[] = await sequelize.query<VisitorRow>(
       `SELECT id, ip_address
          FROM visitors
         WHERE city IS NULL

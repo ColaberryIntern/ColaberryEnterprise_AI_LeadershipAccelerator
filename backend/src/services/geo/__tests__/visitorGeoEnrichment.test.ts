@@ -182,8 +182,21 @@ describe('the sanitiser copy is pinned to the one on the public page', () => {
       path.resolve(__dirname, '..', '..', 'marketing', 'snackbarFeedService.ts'),
       'utf8',
     );
-    const match = source.match(/\/\^\[\\p\{L\}[^/]*\/u/);
+
+    // SCOPED TO `cleanCity`, and this is the whole lesson of the first version.
+    // That one searched the WHOLE FILE for the first `/^[\p{L}...` literal and got
+    // `splitName`'s `/^[\p{L}'-]{1,40}$/u`, which sits a few lines higher and
+    // allows no space - so the test compared this module against the wrong
+    // sanitiser and failed on "São Paulo". A pin that is not aimed at a specific
+    // function is not a pin.
+    const start = source.indexOf('function cleanCity');
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, source.indexOf('\n}', start));
+    const match = body.match(/\/\^\[\\p\{L\}[^/]*\/u/);
     expect(match).not.toBeNull();
+    // The quantifier is what tells the two apart, so assert we took the right one
+    // rather than trusting that the slice was aimed correctly.
+    expect(match![0]).toContain('{2,60}');
 
     const theirs = new RegExp(match![0].slice(1, -2), 'u');
     for (const sample of ['Plano', 'Plano, TX', 'St. Louis', '12th District', 'A', 'São Paulo']) {
