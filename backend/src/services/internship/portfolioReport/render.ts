@@ -163,8 +163,9 @@ ${report.groups.map((g) => `<tr><td style="padding:18px 0 6px"><div style="font-
       '',
       `${c.name} - ${c.trackLabel} - ${c.status.label}${c.status.reasons.length ? ` (${c.status.reasons.join('; ')})` : ''}`,
       `  ${c.timeline.story}`,
-      ...c.timeline.rows.map((r) => `  ${r.day.slice(5)}${r.gapBefore >= 2 ? ` (+${r.gapBefore}d)` : ''}: ${r.events.map((e) => `${e.label}${e.detail ? ` ${e.detail}` : ''}${e.meta ? ` (${e.meta})` : ''}`).join(' | ')}`),
+      // Same order as the HTML: what needs attention now, then newest to oldest.
       ...c.timeline.next.map((n) => `  NEXT ${n.label}: ${n.detail}`),
+      ...[...c.timeline.rows].reverse().map((r) => `  ${r.day.slice(5)}: ${r.events.map((e) => `${e.label}${e.detail ? ` ${e.detail}` : ''}${e.meta ? ` (${e.meta})` : ''}`).join(' | ')}${r.gapBefore >= 2 ? `  [${r.gapBefore}d before this]` : ''}`),
       c.asks.length ? `  Asks: ${c.asks.join('; ')}` : null,
       `  Nudge: ${c.nudge}`,
     ].filter((x): x is string => x !== null))]),

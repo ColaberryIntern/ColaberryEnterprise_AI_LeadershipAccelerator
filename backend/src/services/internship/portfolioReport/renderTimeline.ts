@@ -52,9 +52,12 @@ export function legendHtml(): string {
     + ` <span style="font-size:12px;color:#b45309;border:2px solid #f59e0b;border-radius:12px;padding:1px 6px;margin-left:6px">amber ring = reply took 2+ days</span>`;
 }
 
-/** 21 columns; each column stacks a small bar per kind of thing that happened that day. */
+/**
+ * 21 columns; each column stacks a small bar per kind of thing that happened that day. Today is the
+ * LEFT column, matching the timeline below it, which also reads from today backwards.
+ */
 export function stripHtml(t: Timeline, cell = 14): string {
-  const cols = t.strip.map((s) => {
+  const cols = [...t.strip].reverse().map((s) => {
     const isToday = s.day === t.today;
     const bars = s.kinds.length
       ? s.kinds.slice(0, 4).map((k) => `<div style="height:${Math.max(4, Math.floor(20 / Math.min(4, s.kinds.length)))}px;background:${STRIP_COLOR[k]};margin-bottom:1px;border-radius:1px"></div>`).join('')
@@ -62,7 +65,7 @@ export function stripHtml(t: Timeline, cell = 14): string {
     return `<td title="${esc(fmtDay(s.day))}: ${esc(s.kinds.join(', ') || 'nothing')}" style="width:${cell}px;padding:0 1px;vertical-align:bottom;${isToday ? 'outline:2px solid #1a365d;' : ''}">${bars}</td>`;
   }).join('');
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:separate"><tr>${cols}</tr>
-<tr><td colspan="${t.strip.length}" style="font-size:10px;color:#94a3b8;padding-top:2px"><span>${esc(fmtDay(t.start))}</span><span style="float:right">today</span></td></tr></table>`;
+<tr><td colspan="${t.strip.length}" style="font-size:10px;color:#94a3b8;padding-top:2px"><span style="font-weight:700;color:#1a365d">today</span><span style="float:right">${esc(fmtDay(t.start))}</span></td></tr></table>`;
 }
 
 function gapRow(days: number, stuck: boolean): string {
@@ -86,25 +89,31 @@ function rowLabel(r: TimelineRow): { label: string; sub: string } {
   return { label: `${fmtDay(r.day)}-${end}`, sub: r.onlyTraining ? 'training only' : r.mode === 'talk' ? 'conversation' : 'building' };
 }
 
+/**
+ * Newest first (Ali, 9 Nov: "work from today down... I will keep going down the more I need
+ * history"). TODAY and what needs attention sit at the top, then the most recent row, and each gap
+ * line sits between a row and the OLDER row beneath it.
+ */
 export function timelineHtml(t: Timeline): string {
   const parts: string[] = [];
-  for (const r of t.rows) {
-    parts.push(gapRow(r.gapBefore, r.gapStuck));
-    const top = r.events[0]?.kind ?? 'update';
-    const chips = r.events.map((e) => chip(e.kind, e.label, e.detail, e.meta, e.slow)).join('');
-    const { label, sub } = rowLabel(r);
-    // Routine spans get a quiet rail; story moments get the strong color of what happened.
-    const accent = r.onlyTraining ? '#fde68a' : r.mode === 'build' ? '#93c5fd' : r.mode === 'talk' ? '#a5f3fc' : STRIP_COLOR[top];
-    parts.push(dayRow(label, sub, chips, accent));
-  }
-  parts.push(gapRow(t.sinceLastRow, t.quietNow !== null && t.quietNow >= 4 && t.sinceLastRow >= 4));
   const nowChips = t.next.length
     ? t.next.map((n) => { const s = NEXT_STYLE[n.kind]; return `<div style="margin:3px 0;padding:5px 9px;border-radius:6px;font-size:12px;background:${s.bg};color:${s.fg};border:1px solid ${s.border}"><strong>${esc(n.label)}</strong>: ${esc(clip(n.detail, 110))}</div>`; }).join('')
     : '<div style="font-size:12px;color:#15803d;font-weight:700">Nothing late, nothing waiting.</div>';
   parts.push(`<tr>
 <td style="width:70px;vertical-align:top;padding:6px 8px 4px 0;text-align:right"><div style="display:inline-block;background:#1a365d;color:#fff;font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px">TODAY</div></td>
 <td style="vertical-align:top;padding:4px 0 4px 10px;border-left:3px solid #1a365d"><div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#64748b;font-weight:700">Up next / needs attention</div>${nowChips}</td></tr>`);
-  if (!t.rows.length) parts.unshift(`<tr><td></td><td style="padding:4px 0 4px 10px;font-size:12px;color:#94a3b8">Nothing recorded in the last ${t.windowDays} days.</td></tr>`);
+  // Between TODAY and the newest row: how long since anything happened.
+  parts.push(gapRow(t.sinceLastRow, t.quietNow !== null && t.quietNow >= 4 && t.sinceLastRow >= 4));
+  for (const r of [...t.rows].reverse()) {
+    const top = r.events[0]?.kind ?? 'update';
+    const chips = r.events.map((e) => chip(e.kind, e.label, e.detail, e.meta, e.slow)).join('');
+    const { label, sub } = rowLabel(r);
+    // Routine spans get a quiet rail; story moments get the strong color of what happened.
+    const accent = r.onlyTraining ? '#fde68a' : r.mode === 'build' ? '#93c5fd' : r.mode === 'talk' ? '#a5f3fc' : STRIP_COLOR[top];
+    parts.push(dayRow(label, sub, chips, accent));
+    parts.push(gapRow(r.gapBefore, r.gapStuck));
+  }
+  if (!t.rows.length) parts.push(`<tr><td></td><td style="padding:4px 0 4px 10px;font-size:12px;color:#94a3b8">Nothing recorded in the last ${t.windowDays} days.</td></tr>`);
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${parts.join('')}</table>`;
 }
 

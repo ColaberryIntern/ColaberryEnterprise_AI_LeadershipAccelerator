@@ -73,3 +73,21 @@ describe('render', () => {
     expect(text).toContain('INTERNSHIP REPORT');
   });
 });
+
+describe('render: timeline order', () => {
+  it('reads from today down: TODAY first, then the newest row, then older rows', () => {
+    const data = collected();
+    data.projects[0].commits = [
+      { date: daysAgo(10), author: 'kal', message: 'OLDEST work' },
+      { date: daysAgo(1), author: 'kal', message: 'NEWEST work' },
+    ];
+    const { html } = renderInternshipPortfolio(composeInternshipPortfolio(data, { now: NOW }));
+    const card = html.slice(html.indexOf('Kalkidan Bezabeh</div>'));
+    const today = card.indexOf('TODAY');
+    const newest = card.indexOf('NEWEST work');
+    const oldest = card.indexOf('OLDEST work');
+    expect(today).toBeGreaterThan(-1);
+    expect(today).toBeLessThan(newest);
+    expect(newest).toBeLessThan(oldest);
+  });
+});
