@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
-import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
+import VideoEmbed, { WatchBeatPayload, type WatchBeatMeta } from './VideoEmbed';
 import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
@@ -171,10 +171,11 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // previews must never write progress.
   const reportBeats = !preview;
   const handleWatchBeat = reportBeats
-    ? (beat: WatchBeatPayload) => {
+    ? (beat: WatchBeatPayload, meta?: WatchBeatMeta) => {
+        const exiting = !!meta?.exiting;   // C119: leaving the page, so the beat goes out as keepalive
         const req = ambientMedia
-          ? runtimeApi.mediaWatch(ambientMedia.kind, ambientMedia.id, beat)
-          : runtimeApi.watch(card.id, beat);
+          ? runtimeApi.mediaWatch(ambientMedia.kind, ambientMedia.id, beat, exiting)
+          : runtimeApi.watch(card.id, beat, exiting);
         req.then(setWatch).catch(() => { /* best-effort heartbeat */ });
       }
     : undefined;

@@ -17,6 +17,14 @@ import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePrefere
  * and Vimeo (`timeupdate` postMessage) player channels for iframes; a
  * visibility-gated dwell timer for providers with no signal (Loom/Wistia).
  * When `onWatchBeat` is absent (admin previews) nothing is tracked.
+ *
+ * Exits (C119, 2026-11-10): closing the tab or app, switching away, or locking
+ * the phone sends what is buffered right away, with `{ exiting: true }`, so
+ * callers can send it as a keepalive request that survives the page going away.
+ * React cleanup never runs on unload, so before this, a learner who left
+ * without pausing lost up to 15 seconds of watch time, and one who left in the
+ * first 15 seconds was not recorded at all. A pause that arrives after the page
+ * is already hidden is an exit too.
  */
 
 export interface WatchBeatPayload {
@@ -25,6 +33,14 @@ export interface WatchBeatPayload {
   duration_s?: number | null;
   provider?: string | null;
 }
+
+/** Passed as onWatchBeat's second argument only on an exit beat. */
+export interface WatchBeatMeta {
+  exiting: true;
+}
+
+/** True when the page is hidden (tab closed or switched, app backgrounded, phone locked). */
+const pageHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 interface Props {
   source: VideoSource | null;
@@ -38,7 +54,7 @@ interface Props {
    *  already expressed play intent (opening a video card's drawer). */
   autoplay?: boolean;
   /** Live watch-progress reporter — see the header comment. */
-  onWatchBeat?: (beat: WatchBeatPayload) => void;
+  onWatchBeat?: (beat: WatchBeatPayload, meta?: WatchBeatMeta) => void;
   /** Duration fallback in seconds (e.g. card.estimated_time * 60) for providers
    *  that never report one — powers the dwell fallback's percentage. */
   fallbackDurationS?: number | null;
@@ -64,21 +80,28 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   const fallbackRef = useRef<number>(0);
   fallbackRef.current = Math.max(0, Number(fallbackDurationS) || 0);
 
-  const flushRef = useRef<(provider: string) => void>(() => {});
-  flushRef.current = (provider: string) => {
+  // The provider label of the last tick, so an exit beat is labeled like the beats before it.
+  const lastProviderRef = useRef<string>('file');
+
+  const flushRef = useRef<(provider: string, exiting?: boolean) => void>(() => {});
+  flushRef.current = (provider: string, exiting = false) => {
     const b = bufRef.current;
     if (!beatRef.current || b.delta <= 0) return;
     bufRef.current = { delta: 0, position: b.position, duration: b.duration };
-    beatRef.current({
+    const beat: WatchBeatPayload = {
       delta_s: Math.round(b.delta * 10) / 10,
       position_s: Math.round(b.position),
       duration_s: Math.round(b.duration || fallbackRef.current || 0),
       provider,
-    });
+    };
+    // One argument on an ordinary beat, so existing callers and tests see exactly what they always did.
+    if (exiting || pageHidden()) beatRef.current(beat, { exiting: true });
+    else beatRef.current(beat);
   };
 
   /** Fold one playhead tick into the buffer (media elements + iframe messages). */
   const tick = (pos: number, dur: number | null, provider: string, isPlaying = true) => {
+    lastProviderRef.current = provider;
     const last = lastPosRef.current;
     lastPosRef.current = pos;
     if (last != null && isPlaying) {
@@ -153,6 +176,7 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
     // the fallback duration so these players still gate fairly (never harder).
     const dwell = window.setInterval(() => {
       if (document.hidden) return;
+      lastProviderRef.current = 'dwell';
       bufRef.current.delta += 5;
       bufRef.current.position += 5;
       if (!bufRef.current.duration && fallbackRef.current) bufRef.current.duration = fallbackRef.current;
@@ -160,6 +184,22 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
     }, 5000);
     return () => { window.clearInterval(dwell); flushRef.current('dwell'); };
   }, [playing, kind, provider, onWatchBeat]);
+
+  // C119: leaving the page sends the buffered watch time now, as an exit beat. `pagehide` covers a closed tab,
+  // `visibilitychange` to hidden covers a backgrounded app or locked phone (where pagehide may never fire). When both
+  // fire, the second finds an empty buffer and sends nothing.
+  const tracking = playing && !!onWatchBeat;
+  useEffect(() => {
+    if (!tracking) return undefined;
+    const exit = () => flushRef.current(lastProviderRef.current, true);
+    const onVisibility = () => { if (pageHidden()) exit(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', exit);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', exit);
+    };
+  }, [tracking]);
 
   const ribbon = badge ? <span className="tlv-ribbon">{badge}</span> : null;
 
