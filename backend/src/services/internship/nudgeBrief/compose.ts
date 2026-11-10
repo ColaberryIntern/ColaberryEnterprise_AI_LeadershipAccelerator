@@ -175,8 +175,23 @@ function opening(i: SidecarIntern): string[] {
       return [`${n},`, '', `${i.triage.reason} Those come first, before anything new.`];
     case 'quiet':
       return [`${n},`, '', i.triage.reason + (i.most_urgent ? ` Next up is "${i.most_urgent.detail}".` : '')];
-    default:
-      return [`${n},`, '', i.narrative];
+    /**
+     * NOT `i.narrative`, which is what this used to be.
+     *
+     * The narrative is the dashboard's one-line summary, written in the THIRD PERSON for Ali,
+     * about the intern. Used as the opening of a message addressed to the intern it produced, on
+     * 10 Nov 2026 and to ten people: "Quincy, Quincy is well underway on Platform Automation and
+     * Reliability ... Their last build work was 3 days ago." Nobody who read that could think it
+     * had been written to them.
+     *
+     * Same root cause as the removed `outstandingLines()`: a field composed for one audience
+     * cannot be pasted into a message for another. The facts the narrative carried are already in
+     * `stateParagraph()`, in the second person, so nothing is lost by dropping it.
+     */
+    default: {
+      const where = i.project?.name ?? i.track_label;
+      return [`${n},`, '', `Nothing is wrong on ${where}. This is the next thing I want from it.`];
+    }
   }
 }
 
