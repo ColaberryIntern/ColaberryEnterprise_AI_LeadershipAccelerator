@@ -27,7 +27,7 @@ import DraftVersions from '../DraftVersions';
 import Blueprint from '../Blueprint';
 import PackageView from '../PackageView';
 import StudioShell from '../StudioShell';
-import { viewOpensQualification } from '../buildHelpers';
+import { viewOpensQualification, deriveContractStepState } from '../buildHelpers';
 
 // ── fixtures ───────────────────────────────────────────────────────────────────────────────────────────────────
 const doc = (over: Partial<GovProposalDocument>): GovProposalDocument => ({
@@ -286,19 +286,25 @@ describe('StageDetail — the legacy workspace read (meetings, AI vetting, what-
   });
 });
 
-describe('WhereWeAre pursuit-stage chips are now clickable and route to the stage panels', () => {
-  it('each chip navigates to its stage view (Build→evidence, Proposal→overview, Submit→package)', async () => {
-    const calls: string[] = [];
-    const onNav = (v: string) => { calls.push(v); };
-    await render(<WhereWeAre view={VIEW} onNavigate={onNav as any} studioApi={studioApi} onReload={noop} onToast={noop} />);
-    const click = async (id: string) => { await act(async () => { (container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click(); }); };
-    await click('pipe-snapshot'); await click('pipe-solicitation'); await click('pipe-fit'); await click('pipe-decide');
-    await click('pipe-build'); await click('pipe-proposal'); await click('pipe-submit'); await click('pipe-outcome');
-    expect(calls).toEqual(['snapshot', 'solicitation', 'fit', 'decide', 'evidence', 'overview', 'package', 'outcome']);
+describe('deriveContractStepState — unified stepper statuses for an assigned contract', () => {
+  it('marks the qualification steps done and the viewed step current', () => {
+    const v = { proposalReadiness: { pct: 64, passing: 1, total: 3 }, submissionChecklist: { ready: false } } as any;
+    const s = deriveContractStepState(v, 'overview'); // viewing the proposal overview
+    expect(s.statuses.snapshot).toBe('done');
+    expect(s.statuses.build).toBe('done');          // an assigned contract is post-approval, so 1-5 are settled
+    expect(s.statuses.proposal).toBe('current');    // 'overview' maps to the Proposal step, and it is the viewed step
+    expect(s.statuses.submit).toBe('todo');
+    expect(s.frontier).toBe('submit');              // Proposal is current, Submit is the first still-todo step
+  });
+  it('marks Proposal done at the 95 bar and reflects the viewed Submit step', () => {
+    const v = { proposalReadiness: { pct: 96, passing: 3, total: 3 }, submissionChecklist: { ready: false } } as any;
+    const s = deriveContractStepState(v, 'package'); // viewing Submit (package)
+    expect(s.statuses.proposal).toBe('done');
+    expect(s.statuses.submit).toBe('current');       // 'package' maps to the Submit step
   });
 });
 
-describe('StudioShell — the admin contract view opens the REAL Qualification Workspace for steps 1-4 (open-on-click)', () => {
+describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualification Workspace, 6-8 in the Studio', () => {
   const cockpitApi = { askCopilot: async () => ({ intent: 'other', answer: 'ok' }) } as any;
 
   it('viewOpensQualification selects only the pre-award assessment stages', () => {
@@ -306,19 +312,19 @@ describe('StudioShell — the admin contract view opens the REAL Qualification W
     expect(['evidence', 'overview', 'package', 'outcome', 'editor', 'needs'].some(viewOpensQualification)).toBe(false);
   });
 
-  it('ADMIN mount: Snapshot/Fit/Decide call onOpenQualification; Build stays in the contract', async () => {
+  it('ADMIN mount: stepper Snapshot..Build open the Qualification Workspace; Proposal stays in the Studio', async () => {
     const opened: string[] = [];
     await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} onOpenQualification={(s) => opened.push(s)} />);
     const click = async (id: string) => { await act(async () => { (container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click(); }); };
-    await click('pipe-snapshot'); await click('pipe-fit'); await click('pipe-decide');
-    expect(opened).toEqual(['snapshot', 'fit', 'decide']); // workspace opens for each; the contract view does not change
-    await click('pipe-build'); // Build → the contract's own build evidence, never the workspace
-    expect(opened).toEqual(['snapshot', 'fit', 'decide']);
+    await click('step-snapshot'); await click('step-fit'); await click('step-decide'); await click('step-build');
+    expect(opened).toEqual(['snapshot', 'fit', 'decide', 'build']); // all five qualification steps hand off to the workspace
+    await click('step-proposal'); // Proposal (step 6) stays in the Proposal Studio
+    expect(opened).toEqual(['snapshot', 'fit', 'decide', 'build']);
   });
 
-  it('INTERN mount (no onOpenQualification): the chips keep the student-safe StageDetail', async () => {
+  it('INTERN mount (no onOpenQualification): the stepper keeps the student-safe in-studio views', async () => {
     await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
-    await act(async () => { (container.querySelector('[data-testid="pipe-fit"]') as HTMLButtonElement).click(); });
-    expect(present('stage-fit')).toBe(true); // StageDetail rendered in-shell — the intern never leaves for the admin workspace
+    await act(async () => { (container.querySelector('[data-testid="step-fit"]') as HTMLButtonElement).click(); });
+    expect(present('stage-fit')).toBe(true); // in-studio StageDetail — the intern never reaches the admin workspace
   });
 });

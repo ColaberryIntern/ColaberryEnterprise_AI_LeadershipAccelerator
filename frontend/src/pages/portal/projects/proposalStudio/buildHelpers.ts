@@ -1,4 +1,5 @@
 import type { GovProposalDocument, StudentGovProjectView } from '../../../../services/govProjectPortalApi';
+import { WORKSPACE_STEPS, type WorkspaceStep, type StepStatus } from '../../../admin/govWorkspace/workspaceSteps';
 
 /**
  * buildHelpers — PURE logic for the Build-all button (T17), per-document stage pills + Build-it (T17/T18), the
@@ -49,6 +50,46 @@ export const QUALIFICATION_STAGE_VIEWS: readonly string[] = ['snapshot', 'solici
 export function viewOpensQualification(v: string): boolean {
   return QUALIFICATION_STAGE_VIEWS.includes(v);
 }
+
+/** Which pursuit STEP (1-8) the currently-shown Studio view belongs to — so the unified stepper can mark it current. */
+const STEP_FOR_STUDIO_VIEW: Record<string, WorkspaceStep> = {
+  snapshot: 'snapshot', solicitation: 'solicitation', fit: 'fit', decide: 'decide',
+  evidence: 'build',
+  overview: 'proposal', blueprint: 'proposal', documents: 'proposal', editor: 'proposal', gates: 'proposal', needs: 'proposal', openitems: 'proposal',
+  package: 'submit',
+  outcome: 'outcome',
+};
+
+/**
+ * PURE: the 8 pursuit-step statuses for the UNIFIED stepper on the assigned CONTRACT view. An assigned contract is
+ * post-approval, so the qualification steps (Snapshot..Build, 1-5) are settled (`done`). Proposal (6) is `done` only
+ * when readiness has hit the 95 bar, Submit (7) `done` once the price-free checklist is ready, Outcome (8) stays `todo`
+ * (the projection carries no outcome yet). The step matching the view the user is on is marked `current`; the frontier
+ * is the first still-`todo` step. Total: a missing field reads as not-done, never a crash.
+ */
+export function deriveContractStepState(
+  view: Pick<StudentGovProjectView, 'proposalReadiness' | 'submissionChecklist'>,
+  currentView: string,
+): { statuses: Record<WorkspaceStep, StepStatus>; frontier: WorkspaceStep } {
+  const ready = (view?.proposalReadiness?.pct ?? 0) >= 95;
+  const submitted = !!view?.submissionChecklist?.ready;
+  const statuses: Record<WorkspaceStep, StepStatus> = {
+    snapshot: 'done', solicitation: 'done', fit: 'done', decide: 'done', build: 'done',
+    proposal: ready ? 'done' : 'todo',
+    submit: submitted ? 'done' : 'todo',
+    outcome: 'todo',
+  };
+  const cur = STEP_FOR_STUDIO_VIEW[currentView] ?? 'proposal';
+  statuses[cur] = 'current';
+  const frontier = WORKSPACE_STEPS.find((s) => statuses[s.key] === 'todo')?.key ?? cur;
+  return { statuses, frontier };
+}
+
+/** The Studio view a unified-stepper step routes to when it is NOT handed off to the Qualification Workspace. */
+export const STEP_TO_STUDIO_VIEW: Record<WorkspaceStep, string> = {
+  snapshot: 'snapshot', solicitation: 'solicitation', fit: 'fit', decide: 'decide', build: 'evidence',
+  proposal: 'overview', submit: 'package', outcome: 'outcome',
+};
 
 export interface LibraryItem { key: string; label: string; group: 'State forms' | 'Sections' | 'Resumes' | 'References'; }
 

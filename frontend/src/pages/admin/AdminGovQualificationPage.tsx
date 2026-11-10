@@ -1031,6 +1031,18 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   // "Open, decide & approve" drawer that held the field was replaced by <DecidePanel/> (P4).
   const [biddingEntity] = useState(params.get('biddingEntity') ?? 'colaberry');
   const [ws, setWs] = useState<GovQualificationWorkspace | null>(null);
+  const navigate = useNavigate();
+  // Unified stepper: once this pursuit is an assigned contract (it has a delivery project), steps 6-8 (Proposal /
+  // Submit / Outcome) live in the Proposal Studio, so the stepper routes THERE instead of the workspace's own locked
+  // previews, blending the two views into one flow. Steps 1-5 stay in the workspace. Pre-approval (no delivery
+  // project) the proposal steps fall back to the in-workspace preview, exactly as before.
+  const goStep = useCallback((key: WorkspaceStep) => {
+    const toStudio: Partial<Record<WorkspaceStep, string>> = { proposal: 'overview', submit: 'package', outcome: 'outcome' };
+    const studioView = toStudio[key];
+    const dpid = ws?.build?.deliveryProjectId;
+    if (studioView && dpid) { navigate(`/admin/internship/gov-contract/${encodeURIComponent(dpid)}?view=${studioView}`); return; }
+    setStep(key);
+  }, [ws, navigate, setStep]);
   // The just-created monitored project, surfaced as a persistent success strip on the Proposal step (where
   // create now navigates) so the "open the intern's project" link is not lost when we leave the Build tab.
   const [materialized, setMaterialized] = useState<{ projectId: string } | null>(null);
@@ -1300,7 +1312,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {stepModel && (
             <StepBar
               steps={WORKSPACE_STEPS}
-              onStep={setStep}
+              onStep={goStep}
               statuses={stepModel.statuses}
               frontier={stepModel.frontier}
             />
