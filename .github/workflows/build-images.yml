@@ -82,6 +82,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The GeoLite2 City database, fetched here and baked into the backend image
+      # for scripts/enrichVisitorGeo.ts.
+      #
+      # WHY AT BUILD TIME RATHER THAN ON THE HOST. MaxMind's EULA requires GeoLite
+      # users to keep the data current and to delete a database within 30 days of a
+      # new release. Fetching it per build means every deploy ships a current copy
+      # with no cron to forget and, more importantly, NO LICENSE KEY ON THE
+      # PRODUCTION HOST - the key lives only in Actions, and the database it fetches
+      # is public data.
+      #
+      # The layer is content-addressed, so an unchanged database is not re-pulled on
+      # deploy; MaxMind publishes about twice a week.
+      #
+      # NEVER FAILS THE BUILD. Without a key (a fork's PR) or if MaxMind is
+      # unreachable, this logs and moves on: `backend/geoip/` is committed with a
+      # .gitkeep so the Dockerfile's COPY still succeeds, and the enrichment script
+      # refuses loudly at run time on a missing file. An image that cannot enrich is
+      # a worse outcome than a broken deploy only if it goes unnoticed, and it
+      # cannot - the script exits non-zero and says exactly which path was empty.
+      - name: Fetch GeoLite2 City database
+        if: matrix.service == 'backend'
+        env:
+          MM_ACCOUNT: ${{ vars.MAXMIND_ACCOUNT_ID }}
+          MM_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
+        run: |
+          set -uo pipefail
+          mkdir -p backend/geoip
+          if [ -z "${MM_KEY:-}" ] || [ -z "${MM_ACCOUNT:-}" ]; then
+            echo "::warning::No MaxMind credentials available; building without a GeoIP database."
+            exit 0
+          fi
+          # Credentials go in a config file, never on the command line, so they
+          # cannot surface in a process list or a trace.
+          cfg="$(mktemp)"
+          printf 'user = "%s:%s"\n' "$MM_ACCOUNT" "$MM_KEY" > "$cfg"
+          url='https://download.maxmind.com/geoip/databases/GeoLite2-City/download?suffix=tar.gz'
+          if ! curl -sS -f -L -K "$cfg" -o /tmp/geolite2-city.tar.gz "$url"; then
+            rm -f "$cfg"
+            echo "::warning::GeoLite2 download failed; building without a GeoIP database."
+            exit 0
+          fi
+          rm -f "$cfg"
+          tar -xzf /tmp/geolite2-city.tar.gz -C backend/geoip --strip-components=1 --wildcards '*/GeoLite2-City.mmdb'
+          rm -f /tmp/geolite2-city.tar.gz
+          ls -l backend/geoip/
+          # A truncated or HTML error body would otherwise be copied in as if it
+          # were a database and fail much later, at a prompt nobody is watching.
+          bytes=$(stat -c%s backend/geoip/GeoLite2-City.mmdb)
+          if [ "$bytes" -lt 10000000 ]; then
+            echo "::error::GeoLite2-City.mmdb is only ${bytes} bytes - that is not a city database."
+            exit 1
+          fi
+          echo "GeoLite2-City.mmdb: ${bytes} bytes"
+
       - name: Build image
         uses: docker/build-push-action@v6
         with:

@@ -67,6 +67,20 @@ COPY docs/ai-governance/ai-systems-registry.csv ./docs/ai-governance/ai-systems-
 # Copied --from=builder rather than from the build context, because the loader resolves them
 # relative to its own __dirname inside dist.
 COPY --from=builder /app/backend/src/services/agentDomain/capabilities ./dist/services/agentDomain/capabilities
+# The GeoLite2 City database, read off disk by scripts/enrichVisitorGeo.ts to fill
+# `visitors.city` - the column the landing-page snack bar needs and that nothing
+# has ever written (0 of 6,408 rows on 2026-11-10).
+#
+# A DIRECTORY COPY, and the directory is committed with a .gitkeep, so this layer
+# builds whether or not a database is present. `.github/workflows/build-images.yml`
+# downloads it into `backend/geoip/` just before the build; a local `docker build`
+# or a fork's PR build simply has an empty directory, and the script then fails
+# loudly on a missing file rather than quietly enriching nothing.
+#
+# NOT A SECRET, so the "none of the three Dockerfiles bakes a secret" invariant in
+# that workflow still holds: GeoLite2 is public data and the license key is needed
+# only to DOWNLOAD it. The key never leaves GitHub Actions.
+COPY backend/geoip/ ./geoip/
 RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
 
 ENV NODE_ENV=production

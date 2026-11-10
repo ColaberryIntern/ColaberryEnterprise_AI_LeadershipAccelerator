@@ -1,0 +1,10 @@
+This directory exists so `backend/Dockerfile` can `COPY backend/geoip/ ./geoip/`
+on any checkout, including one that has no GeoLite2 database.
+
+The database itself is NEVER committed. `.github/workflows/build-images.yml`
+downloads `GeoLite2-City.mmdb` into here immediately before the backend image is
+built, and `.gitignore` excludes `backend/geoip/*.mmdb` so it cannot be added by
+accident. MaxMind's EULA requires a GeoLite database to be deleted within 30 days
+of a new release, which is impossible once a copy is in git history.
+
+Reader: backend/src/scripts/enrichVisitorGeo.ts
