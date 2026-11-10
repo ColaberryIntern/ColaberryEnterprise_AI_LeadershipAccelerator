@@ -73,6 +73,40 @@ export function centralWallClockToInstant(naive: Date): Date {
 }
 
 /**
+ * The SQL twin of `centralWallClockToInstant`: "now", expressed in the same frame
+ * CCPP's `EventBrite_Events.StartDate` is stored in, for use in a WHERE clause.
+ *
+ * CCPP stores StartDate as CENTRAL wall-clock (10:00 for a 10:00 AM Central
+ * event) — the very thing the function above corrects when a row is read. An
+ * upcoming-window filter that compares that Central value against `GETUTCDATE()`
+ * mixes two frames, and the event drops out of the feed as soon as UTC-now passes
+ * its Central start: FIVE HOURS early in summer, SIX in winter.
+ *
+ * Observed twice, from the same root cause in two different services:
+ *   - 2026-09-02, `publicEventsService`: the 10:00 AM CDT AI Strategy session
+ *     vanished from the Events page, the calendar and the "Next event" chip at
+ *     05:00 AM CDT, while registration was still open.
+ *   - 2026-11-10, `openHouseEventService`: `GET /api/v1/open-house/event` labeled
+ *     the Nov 19 Open House "12:30 PM CT" for a 6:30 PM CT event, and would have
+ *     dropped it from the endpoint at 12:30 PM on the day.
+ *
+ * It lives HERE, next to the JS half, for exactly that reason. The first fix left
+ * the SQL fragment private to one service, so the second service kept its own
+ * broken comparison and nothing pointed the two at one implementation. Anything
+ * comparing a CCPP datetime column against "now" must use this.
+ *
+ * `AT TIME ZONE` rather than `GETDATE()`: the CCPP host happens to run Central
+ * today, so GETDATE() would also work, but it would break silently if that host
+ * were ever moved. This states the intent, and the Windows zone id handles
+ * CST/CDT automatically. Verified available on CCPP's SQL Server 2017 (the
+ * feature needs 2016+).
+ *
+ * Static SQL, no user input — safe to interpolate.
+ */
+export const CCPP_NOW_CENTRAL =
+  "CAST(GETUTCDATE() AT TIME ZONE 'UTC' AT TIME ZONE 'Central Standard Time' AS datetime)";
+
+/**
  * The INVERSE of `centralWallClockToInstant`, for an arbitrary zone: given a real
  * instant, what does the wall clock read in `timeZone`?
  *
