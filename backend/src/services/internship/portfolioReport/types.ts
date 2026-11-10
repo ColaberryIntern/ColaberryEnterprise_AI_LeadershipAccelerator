@@ -69,8 +69,6 @@ export interface CollectedPortfolio {
   replies?: OurReply[];
   /** Optional so older saved collections still render. */
   artifacts?: PublishedArtifact[];
-  artifactCards?: ArtifactCard[];
-  completedCards?: Array<{ enrollment_id: string; card_id: string }>;
 }
 
 export type Track = 'agent' | 'gov' | 'other' | 'none';
@@ -152,7 +150,7 @@ export interface InternCard {
   /** 2-3 sentences: where they are and what part they are building (summary.ts). */
   summary: string;
   summaryFromModel: boolean;
-  /** Published artifacts (with links), overdue/due artifact cards, and what to ask them to produce. */
+  /** Artifacts they actually published (each with a working link), and what to ask them to produce. */
   artifacts: ArtifactsView;
   /** Filled by narrate.ts; empty when the model is unavailable. */
   asks: string[];
@@ -194,8 +192,6 @@ export interface Timeline {
 
 /** One row of ARTIFACTS_SQL: an artifact the intern published (content stays in the DB). */
 export interface PublishedArtifact { id: string; enrollment_id: string; card_id: string | null; kind: string; title: string; created_at: string; external_url: string | null }
-/** One row of ARTIFACT_CARDS_SQL: a curriculum card that produces an artifact. */
-export interface ArtifactCard { card_id: string; week: number; type: string; title: string; kind: string }
 
 /** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
 export interface ArtifactAsk {
@@ -210,12 +206,11 @@ export interface ArtifactAsk {
 }
 
 export interface ArtifactsView {
-  /** Newest first, each with the link that opens it. */
+  /**
+   * Newest first, each with the link that opens it. ONLY artifacts that exist and have content:
+   * no curriculum placeholders (Ali, 9 Nov: "only artifacts that have actually been produced and
+   * are able to be connected to").
+   */
   published: Array<{ id: string; kind: string; title: string; at: string; url: string }>;
-  /** Artifact cards from weeks before their current training week with nothing published. */
-  overdue: Array<{ week: number; kind: string; title: string }>;
-  /** Artifact cards in their current training week, not yet published. */
-  dueNow: Array<{ week: number; kind: string; title: string }>;
-  currentWeek: number | null;
   asks: ArtifactAsk[];
 }

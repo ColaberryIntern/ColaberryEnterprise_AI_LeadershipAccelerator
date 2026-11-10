@@ -12,7 +12,7 @@ import type { ConsoleRosterRow } from '../internConsoleRoster';
 import type { AgentNudgeState } from '../agentNudgeComposer';
 import type { GovPipelineCard } from '../../factory/govPipeline';
 import { fallbackSummary } from './summary';
-import { artifactProgress, chooseAsks } from './artifacts';
+import { chooseAsks, publishedArtifacts } from './artifacts';
 import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
@@ -316,20 +316,14 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     subscriptions: tab?.subscriptions ?? [],
   };
   const status = statusFor(core);
-  const progress = artifactProgress(core.training, r.enrollment_id, data.artifacts ?? [], data.artifactCards ?? [], data.completedCards ?? []);
-  // Training artifacts missing from weeks already behind them are a reason, like overdue tasks.
-  if (progress.overdue.length) {
-    status.reasons.push(`${progress.overdue.length} training ${progress.overdue.length === 1 ? 'artifact' : 'artifacts'} overdue`);
-    if (status.key === 'on_track') { status.key = 'attention'; status.label = 'Needs attention'; }
-  }
+  const published = publishedArtifacts(r.enrollment_id, data.artifacts ?? []);
   const timeline = buildTimeline({
     nowMs, firstName: core.firstName, project, training: core.training, awaitingReply: core.emails.awaitingReply, activityDays: days,
     emails: data.emails.filter((e) => lc(e.email) === email),
     replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
-    artifacts: progress.published,
-    overdueArtifacts: progress.overdue.length,
+    artifacts: published,
   });
-  const artifacts = { ...progress, asks: chooseAsks({ ...core, timeline }, progress.overdue) };
+  const artifacts = { published, asks: chooseAsks({ ...core, timeline }) };
   const card: InternCard = {
     ...core,
     timeline,

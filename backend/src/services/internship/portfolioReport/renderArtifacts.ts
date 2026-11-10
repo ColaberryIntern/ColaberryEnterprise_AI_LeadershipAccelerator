@@ -1,6 +1,6 @@
 /**
- * renderArtifacts - PURE. The Command Center button, the artifacts block (published, each one
- * opening in a new tab; overdue; due this week) and the "Ask them for" cards (why, the Claude Code
+ * renderArtifacts - PURE. The Command Center button, the artifacts block (only what they published,
+ * each one opening in a new tab) and the "Ask them for" cards (why, the Claude Code
  * prompt to paste, and the matching nudge). Email-safe: tables, inline styles, every value escaped.
  */
 import { kindLabel } from './artifacts';
@@ -8,7 +8,6 @@ import type { InternCard } from './types';
 
 const NAVY = '#1a365d';
 const MUTED = '#64748b';
-const MAX_PUBLISHED = 10;
 
 const esc = (s: unknown): string => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const safeHref = (u: string): string | null => (/^https:\/\//.test(u) ? esc(u) : null);
@@ -25,25 +24,21 @@ export function commandCenterHtml(c: InternCard): string {
   return c.project ? `<div style="margin-top:6px;font-size:11px;color:#9a3412;font-weight:700">No Command Center published</div>` : '';
 }
 
+/**
+ * Every artifact they actually published, each a link that opens it. No placeholders, no
+ * "+N more": only things that exist, and all of them (Ali, 9 Nov).
+ */
 export function artifactsHtml(c: InternCard): string {
   const a = c.artifacts;
-  const pub = a.published.slice(0, MAX_PUBLISHED).map((p) => {
+  const pub = a.published.map((p) => {
     const href = safeHref(p.url);
     const text = `<strong>${esc(kindLabel(p.kind))}</strong>: ${esc(p.title.length > 60 ? `${p.title.slice(0, 59)}...` : p.title)}`;
     return href
       ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;background:#4338ca;color:#ffffff;text-decoration:none">${text} &#8599;</a>`
       : pill(text, '#ffffff', '#4338ca');
   }).join('');
-  const more = a.published.length > MAX_PUBLISHED ? ` <span style="font-size:11px;color:${MUTED}">+${a.published.length - MAX_PUBLISHED} more in their portfolio</span>` : '';
-  const overdue = a.overdue.map((o) => pill(`<strong>Overdue, week ${o.week}</strong>: ${esc(kindLabel(o.kind))}, ${esc(o.title)}`, '#ffffff', '#9f1239')).join('');
-  // One line, not one chip per card: in week 1 there are seven, and they are not late yet.
-  const due = a.dueNow.length
-    ? pill(`<strong>Due this week (week ${a.dueNow[0].week})</strong>: ${esc([...new Set(a.dueNow.map((o) => kindLabel(o.kind)))].join(', '))}`, '#b45309', '#fef3c7', '#f59e0b')
-    : '';
-  return `${label(`Artifacts (${a.published.length} published${a.overdue.length ? `, ${a.overdue.length} overdue` : ''})`)}
-<div>${pub || `<span style="font-size:12px;color:${MUTED}">Nothing published yet.</span>`}${more}</div>
-${overdue ? `<div style="margin-top:4px">${overdue}</div>` : ''}
-${due ? `<div style="margin-top:4px">${due}</div>` : ''}`;
+  return `${label(`Artifacts they published (${a.published.length})`)}
+<div>${pub || `<span style="font-size:12px;color:${MUTED}">Nothing published yet.</span>`}</div>`;
 }
 
 /** One card per ask: what it is and why, the prompt to paste, and the nudge that asks for it. */
@@ -65,9 +60,8 @@ export function asksHtml(c: InternCard): string {
 /** Plain-text version, for the text part of the email. */
 export function artifactsText(c: InternCard): string[] {
   const a = c.artifacts;
-  const out = [`  Artifacts: ${a.published.length} published${a.overdue.length ? `, ${a.overdue.length} overdue` : ''}${c.project?.commandCenterUrl ? `. Command Center: ${c.project.commandCenterUrl}` : ''}`];
-  for (const p of a.published.slice(0, 5)) out.push(`    ${kindLabel(p.kind)}: ${p.title} ${p.url}`);
-  for (const o of a.overdue.slice(0, 5)) out.push(`    OVERDUE week ${o.week} ${kindLabel(o.kind)}: ${o.title}`);
+  const out = [`  Artifacts published: ${a.published.length}${c.project?.commandCenterUrl ? `. Command Center: ${c.project.commandCenterUrl}` : ''}`];
+  for (const p of a.published) out.push(`    ${kindLabel(p.kind)}: ${p.title} ${p.url}`);
   for (const k of a.asks) out.push(`  ASK: ${k.name}. ${k.why}`, `    Nudge: ${k.nudge}`, ...k.prompt.split('\n').map((l) => `    > ${l}`));
   return out;
 }
