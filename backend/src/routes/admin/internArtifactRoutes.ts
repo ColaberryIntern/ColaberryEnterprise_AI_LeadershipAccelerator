@@ -1,7 +1,9 @@
+import fs from 'fs';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
-import { getInternArtifact } from '../../services/internship/internArtifactViewer';
+import { getInternArtifact, getInternArtifactFile } from '../../services/internship/internArtifactViewer';
+import { csvRowsToXlsx } from '../../services/internship/internArtifactXlsx';
 
 /**
  * Read one published intern artifact, for /admin/internship/artifact/:id, which the Internship
@@ -26,12 +28,70 @@ router.get('/api/admin/internship/artifacts/:id', requireSection('internship'), 
     if (!artifact) { res.status(404).json({ error: 'No published artifact with that id for an active intern.' }); return; }
     res.json(artifact);
   } catch (err) {
-    const e = err as Error;
-    console.error(JSON.stringify({
-      timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'intern_artifact_read_failed',
-      outcome: 'failure', error_class: e?.constructor?.name ?? 'UnknownError', context: { message: e?.message },
-    }));
+    logFailure('intern_artifact_read_failed', err);
     res.status(500).json({ error: 'Could not load this artifact.' });
+  }
+});
+
+function logFailure(event: string, err: unknown, context: Record<string, unknown> = {}): void {
+  const e = err as Error;
+  console.error(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'error', service: 'backend', event,
+    outcome: 'failure', error_class: e?.constructor?.name ?? 'UnknownError', context: { ...context, message: e?.message },
+  }));
+}
+
+/** A filename safe for a Content-Disposition header: ASCII fallback plus the RFC 5987 UTF-8 form. */
+export function disposition(type: 'inline' | 'attachment', name: string): string {
+  const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `${type}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
+
+/**
+ * The uploaded file itself, for the PDF viewer and the download buttons (Ali, 10 Nov 2026: "I also
+ * need to have a pdf viewer in the platform"). PDFs are served inline so the browser's own viewer
+ * shows them; every other kind is an attachment, so an intern's upload never renders as a page on
+ * our origin. `?download=1` forces an attachment for PDFs too.
+ */
+router.get('/api/admin/internship/artifacts/:id/file', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = Params.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Artifact id must be a UUID.' }); return; }
+  try {
+    const file = await getInternArtifactFile(parsed.data.id);
+    if (!file) { res.status(404).json({ error: 'No uploaded file for that artifact.' }); return; }
+    const inline = file.kind === 'pdf' && req.query.download !== '1';
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', disposition(inline ? 'inline' : 'attachment', file.name));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    const stream = fs.createReadStream(file.absPath);
+    stream.on('error', (err) => {
+      logFailure('intern_artifact_file_stream_failed', err, { id: parsed.data.id });
+      if (!res.headersSent) res.status(500).json({ error: 'Could not read this file.' }); else res.destroy();
+    });
+    stream.pipe(res);
+  } catch (err) {
+    logFailure('intern_artifact_file_failed', err, { id: parsed.data.id });
+    res.status(500).json({ error: 'Could not load this file.' });
+  }
+});
+
+/** A CSV artifact as a formatted Excel workbook ("a csv viewer where I can view in excel"). */
+router.get('/api/admin/internship/artifacts/:id/xlsx', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = Params.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Artifact id must be a UUID.' }); return; }
+  try {
+    const artifact = await getInternArtifact(parsed.data.id);
+    if (!artifact?.file) { res.status(404).json({ error: 'No uploaded file for that artifact.' }); return; }
+    if (artifact.file.kind !== 'csv' || !artifact.file.table) { res.status(400).json({ error: 'Only CSV artifacts can be opened in Excel.' }); return; }
+    const buf = await csvRowsToXlsx(artifact.file.table, artifact.file.name);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', disposition('attachment', artifact.file.name.replace(/\.[^.]+$/, '') + '.xlsx'));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(buf);
+  } catch (err) {
+    logFailure('intern_artifact_xlsx_failed', err, { id: parsed.data.id });
+    res.status(500).json({ error: 'Could not build the Excel file.' });
   }
 });
 

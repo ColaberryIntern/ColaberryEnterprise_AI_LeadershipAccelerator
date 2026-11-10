@@ -1,4 +1,4 @@
-import { artifactProvenance, artifactSource, artifactUrl, chooseAsks, publishedArtifacts } from '../artifacts';
+import { FINISH, artifactFileType, artifactProvenance, artifactSource, artifactUrl, chooseAsks, publishedArtifacts } from '../artifacts';
 import { composeInternshipPortfolio } from '../compose';
 import { renderInternshipPortfolio } from '../render';
 import type { PublishedArtifact } from '../types';
@@ -7,8 +7,8 @@ import { NOW, collected, daysAgo, rosterRow } from './fixtures';
 /** The default is a file in their repo: the one kind of artifact Ali asked for by name. */
 const pub = (over: Partial<PublishedArtifact> = {}): PublishedArtifact => ({
   id: '11111111-2222-4333-8444-555555555555', enrollment_id: 'e1', card_id: 'c1', kind: 'build_artifact',
-  title: 'project-standards.md', created_at: daysAgo(3), external_url: null,
-  repo_path: 'artifacts/week-01/project-standards.md', commit_sha: '988eac32a1b2c3d4', upload_name: null, ...over,
+  title: 'project-standards.pdf', created_at: daysAgo(3), external_url: null,
+  repo_path: 'artifacts/week-01/project-standards.pdf', commit_sha: '988eac32a1b2c3d4', upload_name: null, ...over,
 });
 /** A file they uploaded themselves. */
 const upload = (over: Partial<PublishedArtifact> = {}): PublishedArtifact =>
@@ -97,13 +97,13 @@ describe('artifacts: provenance - the intern made it, or it is not shown', () =>
   });
 
   it('each one names where it came from, so the claim is checkable without opening it', () => {
-    expect(artifactProvenance(pub())).toBe('artifacts/week-01/project-standards.md @ 988eac3');
+    expect(artifactProvenance(pub())).toBe('artifacts/week-01/project-standards.pdf @ 988eac3');
     expect(artifactProvenance(upload())).toBe('diagram.docx, uploaded');
     expect(artifactProvenance(link())).toBe('claude.ai');
 
     const { html, text } = renderInternshipPortfolio(report());
-    expect(html).toContain('project-standards.md @ 988eac3');
-    expect(text).toContain('[artifacts/week-01/project-standards.md @ 988eac3]');
+    expect(html).toContain('project-standards.pdf @ 988eac3');
+    expect(text).toContain('[artifacts/week-01/project-standards.pdf @ 988eac3]');
   });
 
   it('a provenance value is escaped like everything else', () => {
@@ -209,5 +209,60 @@ describe('artifacts: what to ask for, with prompt and nudge', () => {
     expect(html).toContain('Matching nudge');
     expect(html).not.toContain('<b>bold</b>');
     expect(text).toContain('ASK: ');
+  });
+});
+
+describe('artifacts: visual PDFs, not Markdown (Ali, 10 Nov 2026)', () => {
+  it('knows each file type from the repo path, the upload name or the link', () => {
+    expect(artifactFileType(pub())).toBe('pdf');
+    expect(artifactFileType(pub({ repo_path: 'a/b/coreops-program-inventory.csv' }))).toBe('spreadsheet');
+    expect(artifactFileType(upload())).toBe('word');
+    expect(artifactFileType(upload({ upload_name: 'deck.PPTX' }))).toBe('slides');
+    expect(artifactFileType(link())).toBe('claude');
+    expect(artifactFileType(link({ external_url: 'https://example.github.io/x' }))).toBe('link');
+    expect(artifactFileType(pub({ repo_path: 'a/notes.md' }))).toBe('markdown');
+    expect(artifactFileType(upload({ upload_name: 'log.txt' }))).toBe('text');
+  });
+
+  it('Markdown and plain-text files are not listed as artifacts', () => {
+    const p = publishedArtifacts('e1', [
+      pub({ id: 'md', repo_path: 'artifacts/week-02/skill-sharing-guide.md' }),
+      upload({ id: 'txt', upload_name: 'notes.txt' }),
+      pub({ id: 'pdf' }),
+      pub({ id: 'csv', repo_path: 'artifacts/week-08/custom-commands.csv' }),
+    ]);
+    expect(p.map((x) => x.id).sort()).toEqual(['csv', 'pdf']);
+  });
+
+  it('groups the chips by type, PDFs first, each group labeled and colored', () => {
+    const { html } = renderInternshipPortfolio(report({ artifacts: [link({ id: 'l' }), pub({ id: 'c', repo_path: 'x/a.csv' }), pub({ id: 'p' })] }));
+    const at = (s: string): number => html.indexOf(s);
+    expect(at('PDF 1')).toBeGreaterThan(-1);
+    expect(at('Spreadsheet 1')).toBeGreaterThan(at('PDF 1'));
+    expect(at('claude.ai 1')).toBeGreaterThan(at('Spreadsheet 1'));
+    expect(html).toContain('#b91c1c'); // PDF red
+    expect(html).toContain('#15803d'); // spreadsheet green
+  });
+
+  it('every prompt asks for a visual HTML page exported to PDF, never Markdown', () => {
+    expect(FINISH).toMatch(/self-contained HTML/);
+    expect(FINISH).toMatch(/chart or diagram/);
+    expect(FINISH).toMatch(/Save as PDF/);
+    expect(FINISH).toMatch(/Do not submit a Markdown/);
+    const data = collected();
+    data.projects[0].commits = [{ date: daysAgo(9), author: 'kal', message: 'old work' }];
+    const c = composeInternshipPortfolio(data, { now: NOW }).groups[0].interns[0];
+    const asks = c.artifacts.asks;
+    expect(asks.length).toBeGreaterThan(0);
+    for (const a of asks) {
+      // Nothing they are told to CREATE is Markdown (the warning "Do not submit a Markdown (.md) file" is fine).
+      expect(a.prompt).not.toMatch(/Create [^\n]*\.md\b/);
+      if (a.key !== 'command_center') {
+        expect(a.prompt).toContain('Save as PDF');
+        expect(a.nudge).toContain('upload the PDF');
+      }
+    }
+    const none = composeInternshipPortfolio(collected({ roster: [rosterRow({ project: null })], projects: [] }), { now: NOW }).groups[0].interns[0];
+    expect(none.artifacts.asks[0].prompt).toContain('PROJECT_PROPOSAL.html');
   });
 });

@@ -213,6 +213,8 @@ export interface PublishedArtifact {
 
 /** Where an artifact came from. There is no fourth value: anything else is not the intern's work. */
 export type ArtifactSource = 'repo' | 'upload' | 'link';
+/** What the artifact IS, so Ali can tell a PDF from a spreadsheet from a claude.ai page at a glance. */
+export type ArtifactFileType = 'pdf' | 'spreadsheet' | 'word' | 'slides' | 'html' | 'image' | 'claude' | 'link' | 'markdown' | 'text' | 'file';
 
 /** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
 export interface ArtifactAsk {
@@ -236,6 +238,6 @@ export interface ArtifactsView {
    * `provenance` is the short phrase naming the file, commit or site it came from, so the claim
    * can be checked from the email without opening anything.
    */
-  published: Array<{ id: string; kind: string; title: string; at: string; url: string; source: ArtifactSource; provenance: string }>;
+  published: Array<{ id: string; kind: string; title: string; at: string; url: string; source: ArtifactSource; provenance: string; fileType: ArtifactFileType }>;
   asks: ArtifactAsk[];
 }

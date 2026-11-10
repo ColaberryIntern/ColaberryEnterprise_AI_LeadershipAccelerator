@@ -14,7 +14,7 @@
  * build nearly done, an agent with many verified stories, no project), so the same facts always
  * produce the same asks, and each prompt is filled with their project, repo and stories.
  */
-import type { ArtifactAsk, ArtifactSource, ArtifactsView, InternCard, PublishedArtifact } from './types';
+import type { ArtifactAsk, ArtifactFileType, ArtifactSource, ArtifactsView, InternCard, PublishedArtifact } from './types';
 
 export const ADMIN_BASE = 'https://enterprise.colaberry.ai';
 const MAX_ASKS = 3;
@@ -58,6 +58,30 @@ export function artifactSource(a: Provenanced): ArtifactSource | null {
   return null;
 }
 
+const EXT_TYPE: Record<string, ArtifactFileType> = {
+  pdf: 'pdf', csv: 'spreadsheet', xlsx: 'spreadsheet', xls: 'spreadsheet', tsv: 'spreadsheet',
+  docx: 'word', doc: 'word', pptx: 'slides', ppt: 'slides', html: 'html', htm: 'html',
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', svg: 'image', webp: 'image',
+  md: 'markdown', markdown: 'markdown', txt: 'text',
+};
+
+/** What the artifact is, from its file name (a repo file or an upload) or its link. */
+export function artifactFileType(a: Provenanced): ArtifactFileType {
+  const name = a.upload_name && a.upload_name !== 'uploaded file' ? a.upload_name : (a.repo_path ?? '');
+  const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase();
+  if (ext && EXT_TYPE[ext]) return EXT_TYPE[ext];
+  if (!name && a.external_url) return /^https:\/\/claude\.ai\//.test(a.external_url) ? 'claude' : 'link';
+  return 'file';
+}
+
+/**
+ * Ali, 10 Nov 2026: "Artifacts should not be .md files. They should be pdfs ... that use
+ * conditional formatting, charts, graphs, icons, pictures ... to help communicate the story".
+ * Markdown and plain text are notes, not artifacts, so the report does not list them (measured on
+ * prod: 87 of 137 uploaded files were .md and 8 were .txt).
+ */
+export const NOT_AN_ARTIFACT: ReadonlySet<ArtifactFileType> = new Set<ArtifactFileType>(['markdown', 'text']);
+
 /** One short phrase naming where it came from, so the claim is checkable at a glance. */
 export function artifactProvenance(a: Provenanced): string {
   switch (artifactSource(a)) {
@@ -91,14 +115,29 @@ function projectContext(c: Ctx): string {
   ].filter(Boolean).join('\n');
 }
 
-const FINISH = 'Write it for Ali, the program lead: plain English, no filler, under one page. Commit it to the repo and push, then reply to Ali with the GitHub link.';
+/**
+ * Every artifact we ask for is a VISUAL PDF made from HTML (Ali, 10 Nov 2026: "Artifacts should
+ * not be .md files. They should be pdfs and specifically those that use conditional formatting,
+ * charts, graphs, icons, pictures etc... They should be created in html and exported to pdf's.").
+ */
+export const FINISH = [
+  'Build it as ONE self-contained HTML page (inline CSS, no external files) written for Ali, the program lead. Tell the story in visuals, not paragraphs:',
+  '- Lead with the takeaway in one sentence at the top.',
+  '- Conditional formatting: green = done, amber = in progress, red = blocked or missing, on every status.',
+  '- At least one chart or diagram (inline SVG or a simple HTML/CSS bar chart), plus icons and real screenshots where they help.',
+  '- Plain English, no filler, fits on one or two printed pages.',
+  'Then export it to PDF: open the HTML in Chrome, Print > Save as PDF, with "Background graphics" turned on. Commit both the .html and the .pdf, push, and upload the PDF as your artifact in the portal. Do not submit a Markdown (.md) file; it is not an artifact.',
+].join('\n');
 
-function ask(c: Ctx, key: string, name: string, why: string, forThem: string, body: string): ArtifactAsk {
-  const prompt = `${projectContext(c)}\n\n${body}\n\n${FINISH}`.trim();
+const LIVE_PAGE = 'Write it for Ali, the program lead: plain English, status colors (green done, amber in progress, red blocked), at least one chart. Commit and push, then reply to Ali with the live URL.';
+
+function ask(c: Ctx, key: string, name: string, why: string, forThem: string, body: string, finish = FINISH): ArtifactAsk {
+  const prompt = `${projectContext(c)}\n\n${body}\n\n${finish}`.trim();
   const project = c.project ? ` for ${c.project.name}` : '';
+  const deliver = finish === FINISH ? 'and upload the PDF in the portal when it is done' : 'and send me the link when it is live';
   return {
     key, name, why, prompt,
-    nudge: `Hi ${c.firstName}, could you put together a ${name}${project} in the next two days? ${forThem} Open Claude Code in your repo, paste the prompt below, and send me the link when it is pushed.`,
+    nudge: `Hi ${c.firstName}, could you put together a ${name}${project} in the next two days? ${forThem} Open Claude Code in your repo, paste the prompt below, ${deliver}.`,
   };
 }
 
@@ -129,37 +168,37 @@ export function chooseAsks(c: Ctx): ArtifactAsk[] {
     out.push(ask(c, 'blocker_brief', 'Blocker Brief',
       'Shows exactly what is blocking the build, what they already tried, and the one thing they need from you, so one reply can unblock them.',
       'It lets me unblock you in one reply instead of a back-and-forth.',
-      `Create docs/BLOCKER_BRIEF.md. Use git log, the open stories in the build plan, and any error you can reproduce now. Sections:\n1. What I am trying to finish${p.next ? ` (the story "${p.next.title}")` : ''}.\n2. Exactly where it fails: the command, file and error text.\n3. What I already tried and what happened.\n4. The one decision, access or answer I need from Ali.\n5. What I will do the moment it is unblocked.`));
+      `Create docs/BLOCKER_BRIEF.html (and its PDF). Use git log, the open stories in the build plan, and any error you can reproduce now. Sections:\n1. What I am trying to finish${p.next ? ` (the story "${p.next.title}")` : ''}.\n2. Exactly where it fails: the command, file and error text.\n3. What I already tried and what happened.\n4. The one decision, access or answer I need from Ali.\n5. What I will do the moment it is unblocked.`));
   }
   if (p && !p.commandCenterUrl) {
     const started = p.verifiedRecent.some((v) => /command center|story-000/i.test(v.title)) || p.commitsRecent.some((x) => /command center|story-000/i.test(x.message));
     out.push(ask(c, 'command_center', started ? 'published Command Center' : 'Command Center',
       'Gives you a live page for this project you can open any time, instead of reading the repo.',
       started ? 'You have built it; publishing it means I can open it from my report any time.' : 'It is the page I open first to see where your build is.',
-      `${started ? 'My Command Center (STORY-000) is built in this repo.' : 'Build my Command Center (STORY-000): one static page showing the project, the stories verified so far, what is in progress, and what is next.'}\nPublish it on GitHub Pages: put the static files under docs/command-center/, enable Pages from the /docs folder on the main branch, and confirm the URL loads in a private browser window. Add that URL to the README under "Command Center".`));
+      `${started ? 'My Command Center (STORY-000) is built in this repo.' : 'Build my Command Center (STORY-000): one static page showing the project, the stories verified so far, what is in progress, and what is next.'}\nPublish it on GitHub Pages: put the static files under docs/command-center/, enable Pages from the /docs folder on the main branch, and confirm the URL loads in a private browser window. Add that URL to the README under "Command Center".`, LIVE_PAGE));
   }
   if (c.gov && c.gov.total > 0 && c.gov.pct >= 75) {
     out.push(ask(c, 'demo_walkthrough', 'Demo Walkthrough',
       'Shows the working system story by story against the RFP, which is what the proposal and the demo call will need.',
       'We are close enough that the proposal needs to show what works.',
-      `Create docs/DEMO_WALKTHROUGH.html for the pursuit "${c.gov.title}". For each verified story: one screenshot or short code excerpt, what an evaluator would see, and which RFP requirement it satisfies. End with an honest list of what is not built yet.`));
+      `Create docs/DEMO_WALKTHROUGH.html (and its PDF) for the pursuit "${c.gov.title}". For each verified story: one screenshot or short code excerpt, what an evaluator would see, and which RFP requirement it satisfies. End with an honest list of what is not built yet.`));
   } else if (c.track === 'agent' && p && (p.tasksDone ?? 0) >= 10) {
     out.push(ask(c, 'capability_map', 'Capability Map',
       'Turns the verified stories into a list of what the agent can actually do today, with evidence, so you can judge it without reading code.',
       'You have verified enough stories that I want to see what the agent can do today.',
-      'Create docs/CAPABILITY_MAP.html. For every verified story: the capability it gives the agent in one sentence, the evidence (file, commit or screenshot), and whether it runs autonomously or needs a human. Group by capability area and finish with the three capabilities that are next.'));
+      'Create docs/CAPABILITY_MAP.html (and its PDF). For every verified story: the capability it gives the agent in one sentence, the evidence (file, commit or screenshot), and whether it runs autonomously or needs a human. Group by capability area and finish with the three capabilities that are next.'));
   }
   if (p && (p.verifiedRecent.length || p.commitsRecent.length)) {
     out.push(ask(c, 'project_one_pager', 'Project One-Pager',
       'One page in their own words: the problem, what is built, how it fits together, and what is next, which is the fastest way to understand the project.',
       'It is the fastest way for me to understand where the whole project stands.',
-      'Create docs/PROJECT_ONE_PAGER.html from what is actually in this repo:\n1. The problem and who it is for.\n2. What is built: link each verified story to the file or commit that proves it.\n3. How it fits together: components, data and outside services, as a simple diagram.\n4. What is next and the biggest open question.'));
+      'Create docs/PROJECT_ONE_PAGER.html (and its PDF) from what is actually in this repo:\n1. The problem and who it is for.\n2. What is built: link each verified story to the file or commit that proves it.\n3. How it fits together: components, data and outside services, as a simple diagram.\n4. What is next and the biggest open question.'));
   }
   if (!p) {
     out.push(ask(c, 'project_proposal', 'Project Proposal',
       'Three concrete project ideas from them, so you can pick one and start their build this week.',
       'It lets us pick your project this week.',
-      `Create PROJECT_PROPOSAL.md in your training repo with three project ideas you could build in the internship. For each: the problem, who has it, what you would build in four weeks, and what it would prove about you. Mark the one you want most and why. You are ${c.training.weeksCompleted} weeks into training; pick ideas that use what you have learned so far.`));
+      `Create PROJECT_PROPOSAL.html (and its PDF) in your training repo with three project ideas you could build in the internship. For each: the problem, who has it, what you would build in four weeks, and what it would prove about you. Mark the one you want most and why. You are ${c.training.weeksCompleted} weeks into training; pick ideas that use what you have learned so far.`));
   }
   return out.slice(0, MAX_ASKS);
 }
@@ -176,10 +215,10 @@ const SOURCE_ORDER: Record<ArtifactSource, number> = { repo: 0, upload: 1, link:
  */
 export function publishedArtifacts(enrollmentId: string, published: PublishedArtifact[]): ArtifactsView['published'] {
   return published
-    .filter((a) => a.enrollment_id === enrollmentId && artifactSource(a) !== null)
+    .filter((a) => a.enrollment_id === enrollmentId && artifactSource(a) !== null && !NOT_AN_ARTIFACT.has(artifactFileType(a)))
     .map((a) => ({
       id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a),
-      source: artifactSource(a) as ArtifactSource, provenance: artifactProvenance(a),
+      source: artifactSource(a) as ArtifactSource, provenance: artifactProvenance(a), fileType: artifactFileType(a),
     }))
     .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] || new Date(b.at).getTime() - new Date(a.at).getTime());
 }
