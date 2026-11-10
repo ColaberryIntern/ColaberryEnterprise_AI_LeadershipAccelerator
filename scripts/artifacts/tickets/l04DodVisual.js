@@ -52,6 +52,30 @@ function build() {
     return `<li><strong>${n.id}.</strong> ${esc(it.req)}</li>`;
   }).join('');
 
+  /**
+   * The tile says "N with no ticket" and counts every item whose `todo` is empty, which
+   * includes the ones deliberately left unticketed. The list beneath it shows only the gaps.
+   * Printed without this line the page says five and shows four, and a reader who counts is
+   * right to stop trusting the rest of it. The reason is carried from the data, not retyped.
+   */
+  const MARK = 'Not counted as a coverage gap: ';
+  const sequenced = D.SEQUENCED.length ? `<p class="lede">${
+    D.SEQUENCED.map((id) => {
+      const it = D.ITEMS.find((i) => i.id === id);
+      if (!it) throw new Error(`l04DodVisual: SEQUENCED names item ${id}, which is not in ITEMS`);
+      // The reason is READ from the row rather than written here. If the data stops carrying
+      // one, the page must not quietly supply a plausible sentence in its place.
+      const i = String(it.notes || '').indexOf(MARK);
+      if (i < 0) {
+        throw new Error(`l04DodVisual: item ${id} is SEQUENCED but its notes do not say why `
+          + `(no "${MARK}" in them). An item excluded from the gap count without a stated `
+          + 'reason is the thing this line exists to prevent.');
+      }
+      return `<strong>${id}</strong> also has no ticket and is not counted a gap: `
+        + `${esc(it.notes.slice(i + MARK.length))}`;
+    }).join(' ')
+  }</p>` : '';
+
   const blockers = D.ITEMS.filter((i) => i.blocker).map((i) => `
     <li><strong>${i.id}.</strong> ${esc(i.req)}
       <span class="who">${esc(i.owner)}${
@@ -103,6 +127,7 @@ function build() {
         <p class="lede">Searched all 61 todos, done and open. The board cannot show this about
           itself.</p>
         <ul>${gaps}</ul>
+        ${sequenced}
 
         <h2>Launch blockers</h2>
         <ul>${blockers}</ul>
@@ -113,4 +138,49 @@ function build() {
   return htmlDoc({ title: 'L0.4 — Definition of done, counted', css, body });
 }
 
-module.exports = { build };
+/**
+ * The page had no check of its own until 2026-11-10, and it shipped a tile reading "5 with no
+ * ticket" above a list of four. Nothing was watching the one relationship that makes the tile
+ * readable, so these guards are about arithmetic the reader can do by eye, not about the data
+ * being internally consistent - the data was already right.
+ */
+function selfCheck() {
+  const html = build();
+  const fail = (msg) => { throw new Error(`l04DodVisual: ${msg}`); };
+
+  // 1. The tile against the two lists beneath it. A reader counts the bullets; so does this.
+  if (D.NO_TICKET.length + D.SEQUENCED.length !== D.TOTALS.noTicket) {
+    fail(`the tile says ${D.TOTALS.noTicket} with no ticket, while the page shows `
+      + `${D.NO_TICKET.length} gaps and ${D.SEQUENCED.length} sequenced. A tile that does not `
+      + 'equal what is listed under it is how the first version of this page shipped.');
+  }
+
+  // 2. Every deliberately-excluded item must be NAMED on the page, not merely counted into it.
+  for (const id of D.SEQUENCED) {
+    if (!new RegExp(`<strong>${id}</strong> also has no ticket`).test(html)) {
+      fail(`item ${id} is excluded from the gap list but never appears on the page, so the tile `
+        + 'counts something the reader cannot find.');
+    }
+  }
+
+  // 3. Every gap must be named too, for the same reason in the other direction.
+  for (const n of D.NO_TICKET) {
+    if (!new RegExp(`<strong>${n.id}\\.</strong>`).test(html)) {
+      fail(`condition ${n.id} has no ticket but is not listed on the page.`);
+    }
+  }
+
+  // 4. The headline count must be the one the data derives, never a figure typed into the page.
+  if (!new RegExp(`<b>${D.TOTALS.satisfied}</b><span>of 48 satisfied`).test(html)) {
+    fail(`the satisfied tile does not carry the derived total ${D.TOTALS.satisfied}.`);
+  }
+
+  return {
+    noTicket: D.TOTALS.noTicket,
+    gaps: D.NO_TICKET.length,
+    sequenced: D.SEQUENCED.length,
+    blockers: D.TOTALS.blockers,
+  };
+}
+
+module.exports = { build, selfCheck };
