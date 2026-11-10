@@ -2,6 +2,38 @@ import crypto from 'crypto';
 import { col, fn, Op, where as sequelizeWhere } from 'sequelize';
 import { CommunicationLog } from '../../models';
 import { env } from '../../config/env';
+import { safeNextPath } from '../../utils/safeNextPath';
+import { PROGRAM_VIDEO_ID } from '../../data/week0ProgramVideoFirst';
+
+/**
+ * Where the sign-in link in this email lands (OH-4).
+ *
+ * Ali, 2026-11-10: "a link to login which would take them to their 1st
+ * assignment which is my AI video." Until now this email dropped people on
+ * `/portal/today` and left them to find it.
+ *
+ * WHY THE CARD ROUTE AND NOT `/portal/today?stay=1&first=1`, which is the link
+ * the portal itself uses to auto-open the first lesson. Two reasons, and the
+ * first is the deciding one:
+ *
+ *  1. `safeNextPath` REJECTS query strings, by design and on both sides of the
+ *     round trip - its own comment says rejecting them "removes a whole class of
+ *     parameter-smuggling bugs". Using that link would mean widening a sanitizer
+ *     that guards an emailed, attacker-reachable redirect, to deliver a
+ *     convenience. The card route is path-only and passes unchanged.
+ *  2. `?first=1` is only ever attached by `useCampusLanding`, and only when the
+ *     campus flags are ready AND active. A direct card link does not depend on
+ *     a feature flag being in the right state to reach the video.
+ *
+ * The id is imported rather than written out, so the video has one definition
+ * (`week0ProgramVideoFirst.ts`, C118: Ali's AI-avatar welcome, 1 min 49 s). If
+ * that card is ever replaced, this follows it.
+ *
+ * It is passed through `safeNextPath` like any other destination rather than
+ * trusted for being ours, which also makes the failure safe: a malformed value
+ * is dropped and the recipient lands on `/portal/today`, exactly as before.
+ */
+export const FIRST_ASSIGNMENT_PATH = `/portal/runtime/${PROGRAM_VIDEO_ID}`;
 
 /**
  * Send a portal welcome carrying a one-click sign-in link, idempotently.
@@ -87,7 +119,7 @@ export interface SendPortalWelcomeInput {
    *
    * It exists so the open-house door can adopt this module without renaming the
    * event it has been writing since it was built. Anything downstream reading
-   * `open_house_welcome` keeps working, and the migration changes behaviour in
+   * `open_house_welcome` keeps working, and the migration changes behavior in
    * exactly one way: that door gains the idempotency guard it never had.
    *
    * Note the asymmetry, which is deliberate. What this writes is per-caller; what
@@ -96,6 +128,18 @@ export interface SendPortalWelcomeInput {
    * which is the bug being fixed rather than a feature.
    */
   event?: string;
+  /**
+   * Where the sign-in link lands, as a `/portal/...` path.
+   *
+   * Defaults to `FIRST_ASSIGNMENT_PATH` (see above): a new account's first
+   * assignment, not the dashboard. Pass `null` to send them to `/portal/today`
+   * deliberately - a recovery mail to someone who has been using the product for
+   * weeks should not reopen the welcome video.
+   *
+   * Sanitized through `safeNextPath`, so an unsafe or malformed value is ignored
+   * rather than rejected: the link still works and lands on the default page.
+   */
+  next?: string | null;
 }
 
 export interface SendPortalWelcomeResult {
@@ -183,6 +227,9 @@ export async function sendPortalWelcome(
   const {
     enrollment, leadId = null, subjectOverride, intro, hideHighlights, closing,
     event = PORTAL_WELCOME_EVENT,
+    // `undefined` means "use the default"; an explicit `null` means "the
+    // dashboard, on purpose". `?? FIRST_ASSIGNMENT_PATH` would conflate them.
+    next = FIRST_ASSIGNMENT_PATH,
   } = input;
   const email = enrollment.email;
 
@@ -219,10 +266,15 @@ export async function sendPortalWelcome(
       portal_token_expires_at: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
     });
     const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+    // Sanitized, then encoded. `safeNextPath` returning null is the normal answer
+    // for "no destination requested" and leaves the link exactly as it was before
+    // OH-4, so the recipient lands on /portal/today.
+    const safeNext = safeNextPath(next);
+    const nextParam = safeNext ? `&next=${encodeURIComponent(safeNext)}` : '';
     const result = await sendTrainingWelcome({
       to: email,
       fullName: enrollment.full_name,
-      portalLink: `${base}/portal/verify?token=${token}`,
+      portalLink: `${base}/portal/verify?token=${token}${nextParam}`,
       subjectOverride,
       intro,
       hideHighlights,
