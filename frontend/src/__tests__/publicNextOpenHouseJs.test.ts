@@ -16,6 +16,23 @@ const SOURCE = fs.readFileSync(
   'utf8',
 );
 
+/**
+ * The source with its comments removed.
+ *
+ * The "it never does X" assertions below are claims about the CODE, and scanning the whole file
+ * for a word does not make that claim - it makes a weaker one about the prose as well. This file
+ * says "Nothing is written with innerHTML" in its header, so the first version of the markup
+ * assertion failed on the very sentence that explains why it passes.
+ *
+ * Crude on purpose: no `//` or block-comment sequence appears inside a string or regex literal
+ * in that file. That is checked, not assumed - the positive control below fails if this strips
+ * too much or too little, so a stripper that quietly returned '' could not make every
+ * `not.toMatch` vacuously true.
+ */
+const CODE = SOURCE
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+
 /** The real shape of GET /api/v1/open-house/event, measured against production on 2026-11-10. */
 const EVENT = {
   announced: true,
@@ -86,7 +103,7 @@ describe('next-open-house.js: when the event is known', () => {
     expect(document.getElementById('s')!.textContent).toBe('394 seats left');
     // The ISO instant never reaches the page: the backend owns Central, not this script.
     expect(document.body.textContent).not.toContain('2026-11-20');
-    expect(SOURCE).not.toMatch(/toLocaleString|getTimezoneOffset|America\/Chicago/);
+    expect(CODE).not.toMatch(/toLocaleString|getTimezoneOffset|America\/Chicago/);
   });
 
   it('fills tokens mid-sentence and several in one line', async () => {
@@ -112,7 +129,11 @@ describe('next-open-house.js: when the event is known', () => {
     await run('<main><p id="s">Only {{open_house_seats}}</p><p id="keep">k</p></main>');
     // "Only 0 seats left" invites a signup for a seat that does not exist, and "Only null"
     // is worse. The phrase goes, the page stays.
-    expect(document.getElementById('s')!.textContent).toBe('Only');
+    // The trailing space is deliberate and is the same decision as the double space left by a
+    // removed token below: HTML collapses runs of whitespace when it renders, so the visitor
+    // reads "Only", and a script that rewrote spacing inside operator copy would be doing more
+    // to the page than it was asked to.
+    expect(document.getElementById('s')!.textContent).toBe('Only ');
     expect(document.getElementById('keep')).not.toBeNull();
   });
 
@@ -122,7 +143,7 @@ describe('next-open-house.js: when the event is known', () => {
     expect(document.querySelector('img')).toBeNull();
     expect(document.getElementById('when')!.textContent).toContain('<img src=x onerror="alert(1)">');
     // The argument in one line: this script has no way to write markup.
-    expect(SOURCE).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
+    expect(CODE).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
   });
 
   it('ignores an absurdly long label rather than pasting it onto the page', async () => {
@@ -223,11 +244,26 @@ describe('next-open-house.js: what it does not do', () => {
     expect(calls[0][1].credentials).toBe('omit');
   });
 
+  it('POSITIVE CONTROL: the comment stripper removes the prose and keeps the code', () => {
+    // Without this, a stripper that returned '' would make every `not.toMatch` above pass by
+    // having nothing to match against - a clean result reported over code nobody read, which
+    // is the failure mode `frontendCopyLint.test.ts` guards itself against by asserting a file
+    // count floor before believing anything else.
+    expect(CODE.length).toBeLessThan(SOURCE.length);
+    expect(CODE.length).toBeGreaterThan(1000);
+    // The code survived...
+    expect(CODE).toContain('node.nodeValue = after');
+    expect(CODE).toContain("fetch(ENDPOINT, options)");
+    // ...and the prose that was tripping the scans did not.
+    expect(SOURCE).toContain('Nothing\n * is written with innerHTML');
+    expect(CODE).not.toContain('WHY A FILE AND NOT INLINE');
+  });
+
   it('is a read: it never writes anything anywhere', async () => {
     stubFetch(EVENT);
     await run(WHEN);
-    expect(SOURCE).not.toMatch(/localStorage|sessionStorage|document\.cookie|sendBeacon/);
-    expect(SOURCE).not.toMatch(/method:\s*['"]POST/);
+    expect(CODE).not.toMatch(/localStorage|sessionStorage|document\.cookie|sendBeacon/);
+    expect(CODE).not.toMatch(/method:\s*['"]POST/);
   });
 
   it('is idempotent: running it twice changes nothing the second time', async () => {
