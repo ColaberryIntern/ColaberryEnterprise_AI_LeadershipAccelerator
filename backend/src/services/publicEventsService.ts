@@ -2,7 +2,7 @@ import * as sql from 'mssql';
 import { env } from '../config/env';
 import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
-import { centralWallClockToInstant } from './centralDate';
+import { centralWallClockToInstant, CCPP_NOW_CENTRAL } from './centralDate';
 
 export { centralWallClockToInstant };
 
@@ -95,30 +95,11 @@ async function connectCcpp(): Promise<sql.ConnectionPool> {
 
 const EVENT_TZ = 'America/Chicago';
 
-/**
- * "Now", expressed in the SAME frame `EventBrite_Events.StartDate` is stored in.
- *
- * CCPP stores StartDate as CENTRAL wall-clock (10:00 for a 10:00 AM Central
- * event) — the very thing `ccppRowToView` corrects with centralWallClockToInstant
- * when it reads a row. The upcoming-window filter, however, compared that
- * Central value against `GETUTCDATE()`, mixing two frames: an event dropped out
- * of the feed as soon as UTC-now passed its Central start, i.e. FIVE HOURS (six
- * in winter) before it actually began.
- *
- * Observed on production 2026-09-02: the 10:00 AM CDT AI Strategy session
- * vanished from the Events page, the calendar and the "Next event" chip at
- * 05:00 AM CDT, while registration was still open.
- *
- * `AT TIME ZONE` rather than `GETDATE()`: the CCPP host happens to run Central
- * today, so GETDATE() would also work, but it would break silently if that host
- * were ever moved. This states the intent, and the Windows zone id handles
- * CST/CDT automatically. Verified available on CCPP's SQL Server 2017 (the
- * feature needs 2016+).
- *
- * Static SQL, no user input — safe to interpolate.
- */
-const CCPP_NOW_CENTRAL =
-  "CAST(GETUTCDATE() AT TIME ZONE 'UTC' AT TIME ZONE 'Central Standard Time' AS datetime)";
+// "Now" in the frame CCPP stores StartDate in. Moved to centralDate.ts on
+// 2026-11-10 and imported above, so the JS correction and its SQL twin sit
+// together: keeping this fragment private here is why openHouseEventService
+// still carried the same six-hour defect two months after this service was
+// fixed. The full explanation traveled with it.
 
 // CCPP stores `EventBrite_Events` datetimes as CENTRAL wall-clock, but the mssql
 // driver reads them as UTC (so 6:30 PM Central arrives as 18:30Z). Re-interpreting
@@ -138,7 +119,7 @@ export function ccppRowToView(r: CcppEventRow): OpenHouseView {
     timezone: EVENT_TZ,
     registration_url: r.URL ?? null,
     meeting_link: null,
-    // Blank strings exist in CCPP alongside NULLs; normalise both to null so the
+    // Blank strings exist in CCPP alongside NULLs; normalize both to null so the
     // UI's "has an image" check is a single truthiness test.
     image_url: r.Logo_url ? String(r.Logo_url).trim() || null : null,
     // A real count or null — never a fabricated zero. `null` means "not known"
@@ -288,7 +269,7 @@ export async function isKnownPublicEvent(id: string): Promise<boolean> {
 /**
  * Which of `eventIds` this email has registered for, from the CCPP
  * `EventBrite_EventAttendees` mirror (the same source
- * `openHouseOnboardingService.isEmailRegisteredForOpenHouse` reads, generalised
+ * `openHouseOnboardingService.isEmailRegisteredForOpenHouse` reads, generalized
  * to many events in one round trip).
  *
  * Deliberately NOT cached: `cache` is shared across every viewer, and folding a
