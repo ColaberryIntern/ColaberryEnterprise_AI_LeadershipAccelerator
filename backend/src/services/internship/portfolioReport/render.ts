@@ -18,7 +18,7 @@ const NAVY = '#1a365d';
 const RED = '#C20E1E';
 const MUTED = '#64748b';
 const LINE = '#e2e8f0';
-const STATUS: Record<StatusKey, { fg: string; bg: string }> = {
+export const STATUS: Record<StatusKey, { fg: string; bg: string }> = {
   on_track: { fg: '#166534', bg: '#dcfce7' },
   attention: { fg: '#9a3412', bg: '#ffedd5' },
   stalled: { fg: '#991b1b', bg: '#fee2e2' },
@@ -41,7 +41,7 @@ function pill(text: string, { fg, bg }: { fg: string; bg: string }): string {
   return `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;color:${fg};background:${bg}">${esc(text)}</span>`;
 }
 
-function kpi(label: string, value: unknown, accent: string): string {
+export function kpi(label: string, value: unknown, accent: string): string {
   return `<td style="padding:10px 12px;border:1px solid ${LINE};border-top:3px solid ${accent};background:#fff;width:14%"><div style="font-size:22px;font-weight:700;color:${NAVY}">${esc(value)}</div><div style="font-size:11px;color:${MUTED}">${esc(label)}</div></td>`;
 }
 
@@ -66,8 +66,17 @@ function factsLine(c: InternCard): string {
   return `<div style="font-size:12px;color:#334155;margin-top:8px">${build} &middot; training ${esc(t.weeksCompleted)}/${esc(t.weeksTotal)} weeks &middot; <span style="color:${gateColor};font-weight:700">weeks 1-3 gate ${esc(t.gateDone)}/3</span>${cert}</div>`;
 }
 
-function internCard(c: InternCard): string {
+/**
+ * `anchors` (interactive page only): wraps the timeline, facts, artifacts and asks in elements with
+ * ids the guided tour can scroll to. Off by default, so the email markup is byte-for-byte unchanged.
+ */
+export interface CardOptions { anchors?: boolean }
+const anchor = (on: boolean | undefined, id: string, inner: string): string => (on ? `<div id="${esc(id)}">${inner}</div>` : inner);
+
+export function internCard(c: InternCard, opts: CardOptions = {}): string {
   const st = STATUS[c.status.key];
+  const a = opts.anchors;
+  const e = c.enrollmentId;
   const link = c.agentTabUrl || c.govUrl;
   const track = link ? `<a href="${esc(link)}" style="color:${NAVY}">${esc(c.trackLabel)}</a>` : esc(c.trackLabel);
   const asks = c.asks.length
@@ -84,21 +93,22 @@ function internCard(c: InternCard): string {
   ${c.status.reasons.length ? `<div style="margin-top:6px">${c.status.reasons.map((r) => pill(r, reasonStyle(r))).join('')}</div>` : ''}
   <div style="font-size:14px;line-height:1.55;color:#0f172a;margin-top:10px;padding:10px 14px;background:#f8fafc;border-left:4px solid ${NAVY};border-radius:4px">${esc(c.summary)}</div>
   <div style="font-size:12px;color:${MUTED};margin-top:6px">${esc(c.timeline.story)}</div>
-  ${factsLine(c)}
-  ${artifactsHtml(c)}
+  ${anchor(a, `facts-${e}`, factsLine(c))}
+  ${anchor(a, `artifacts-${e}`, artifactsHtml(c))}
   <div style="margin-top:10px">${stripHtml(c.timeline, 22)}</div>
-  <div style="margin-top:10px">${timelineHtml(c.timeline)}</div>
+  ${anchor(a, `timeline-${e}`, `<div style="margin-top:10px">${timelineHtml(c.timeline)}</div>`)}
   ${asks}
-  ${asksHtml(c)}
+  ${anchor(a, `asks-${e}`, asksHtml(c))}
   ${subs}
   <div style="margin-top:10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${MUTED};font-weight:700">Your nudge</div>
   <div style="font-size:13px;line-height:1.55;background:#f8fafc;border-left:3px solid ${RED};padding:8px 12px;margin-top:4px">${esc(c.nudge)}</div>
 </td></tr></table>`;
 }
 
-function glanceRow(c: InternCard): string {
+/** `dataE` (interactive page only) tags the row with the intern, so the person filter can hide it. */
+export function glanceRow(c: InternCard, dataE = false): string {
   const st = STATUS[c.status.key];
-  return `<tr style="border-top:1px solid ${LINE}">
+  return `<tr${dataE ? ` data-e="${esc(c.enrollmentId)}"` : ''} style="border-top:1px solid ${LINE}">
 <td style="padding:6px 8px;vertical-align:middle"><div style="font-weight:700;color:${NAVY}">${esc(c.name)}</div><div style="font-size:10px;color:${MUTED}">${esc(c.trackLabel.replace(/^(Agent|Gov contract): /, ''))}</div></td>
 <td style="padding:6px 8px;vertical-align:middle">${pill(c.status.label, st)}</td>
 <td style="padding:6px 8px;vertical-align:middle">${stripHtml(c.timeline, 9)}</td>
@@ -148,12 +158,12 @@ export function renderInternshipPortfolio(report: PortfolioReport): { subject: s
     <div style="font-size:14px;font-weight:700;color:${NAVY};margin-bottom:6px">Everyone, last 21 days</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:12px;border-collapse:collapse">
       <tr style="color:${MUTED};text-transform:uppercase;font-size:10px;letter-spacing:1px"><td style="padding:4px 8px">Intern</td><td style="padding:4px 8px">Status</td><td style="padding:4px 8px">Timeline</td><td style="padding:4px 8px">Most urgent</td></tr>
-      ${all.map(glanceRow).join('')}
+      ${all.map((c) => glanceRow(c)).join('')}
     </table>
   </div>
 </td></tr>
 ${report.groups.map((g) => `<tr><td style="padding:18px 0 6px"><div style="font-size:17px;font-weight:700;color:${NAVY};border-bottom:2px solid ${RED};padding-bottom:4px">${esc(g.title)} (${g.interns.length})</div></td></tr>
-<tr><td>${g.interns.map(internCard).join('')}</td></tr>`).join('')}
+<tr><td>${g.interns.map((c) => internCard(c)).join('')}</td></tr>`).join('')}
 <tr><td style="padding:10px 4px 24px;font-size:11px;color:${MUTED};line-height:1.6">
   Stuck = an email that reports a blocker, or 4+ days with no commit or verified story. Unstuck = the first build work after either. Late = an unverified task past its due date.
   Your replies are messages from colaberry.com to them; the time shown is how long after their question it came. "You owe a reply" = their latest email is newer than anything sent to them and under 7 days old.
