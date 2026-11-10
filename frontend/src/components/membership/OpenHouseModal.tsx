@@ -43,8 +43,16 @@ function OpenHouseModal({
   onClose,
   personaSlug,
   submitLabel,
-  title = 'Reserve Your Free Open House Seat',
-  subtitle = 'Membership starts at $149/month. The Open House is free.',
+  // COPY RULE: the word barred by 40 TAC 807.172(d) must not appear on a page a
+  // licensed career school advertises with. The approved wording in this repo is
+  // "$0 to start" / "No card needed" - see PortalFreeSignupPage,
+  // which was corrected on 2026-10-05. These two defaults were missed then and
+  // said it twice, in the heading and again in the subtitle, on the membership
+  // pages. Corrected here rather than noted for later: it is two strings, and a
+  // known advertising-rule breach does not get to stay live while the funnel work
+  // around it ships.
+  title = 'Reserve Your Open House Seat',
+  subtitle = 'Membership starts at $149/month. The Open House costs nothing to attend.',
   successMessage = 'You’re registered. We’ll email you the Open House details shortly.',
 }: OpenHouseModalProps) {
   useEffect(() => {
