@@ -190,8 +190,29 @@ export interface Timeline {
   quietNow: number | null;
 }
 
-/** One row of ARTIFACTS_SQL: an artifact the intern published (content stays in the DB). */
-export interface PublishedArtifact { id: string; enrollment_id: string; card_id: string | null; kind: string; title: string; created_at: string; external_url: string | null }
+/**
+ * One row of ARTIFACTS_SQL: an artifact the intern themselves made (content stays in the DB).
+ * The three provenance fields are what prove it is theirs - see `artifactSource` in artifacts.ts.
+ */
+export interface PublishedArtifact {
+  id: string;
+  enrollment_id: string;
+  card_id: string | null;
+  kind: string;
+  title: string;
+  created_at: string;
+  /** A page the artifact already lives at, which the intern submitted (claude.ai). */
+  external_url: string | null;
+  /** Path of the file inside their repository, when it came from the repo. */
+  repo_path: string | null;
+  /** The commit that put that file there. Repo provenance needs BOTH this and `repo_path`. */
+  commit_sha: string | null;
+  /** The file's name, set only when the intern uploaded a file themselves. */
+  upload_name: string | null;
+}
+
+/** Where an artifact came from. There is no fourth value: anything else is not the intern's work. */
+export type ArtifactSource = 'repo' | 'upload' | 'link';
 
 /** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
 export interface ArtifactAsk {
@@ -207,10 +228,14 @@ export interface ArtifactAsk {
 
 export interface ArtifactsView {
   /**
-   * Newest first, each with the link that opens it. ONLY artifacts that exist and have content:
-   * no curriculum placeholders (Ali, 9 Nov: "only artifacts that have actually been produced and
-   * are able to be connected to").
+   * Repo files first, then uploads, then submitted links; newest first within each. ONLY artifacts
+   * the intern themselves made: no curriculum placeholders and nothing the platform generated
+   * about them (Ali, 9 Nov: "only artifacts that have actually been produced and are able to be
+   * connected to", then "The data should come from the user ONLY").
+   *
+   * `provenance` is the short phrase naming the file, commit or site it came from, so the claim
+   * can be checked from the email without opening anything.
    */
-  published: Array<{ id: string; kind: string; title: string; at: string; url: string }>;
+  published: Array<{ id: string; kind: string; title: string; at: string; url: string; source: ArtifactSource; provenance: string }>;
   asks: ArtifactAsk[];
 }

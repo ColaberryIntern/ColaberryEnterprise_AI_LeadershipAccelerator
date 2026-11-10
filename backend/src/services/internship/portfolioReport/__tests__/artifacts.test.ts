@@ -1,12 +1,28 @@
-import { artifactUrl, chooseAsks, publishedArtifacts } from '../artifacts';
+import { artifactProvenance, artifactSource, artifactUrl, chooseAsks, publishedArtifacts } from '../artifacts';
 import { composeInternshipPortfolio } from '../compose';
 import { renderInternshipPortfolio } from '../render';
 import type { PublishedArtifact } from '../types';
 import { NOW, collected, daysAgo, rosterRow } from './fixtures';
 
+/** The default is a file in their repo: the one kind of artifact Ali asked for by name. */
 const pub = (over: Partial<PublishedArtifact> = {}): PublishedArtifact => ({
-  id: '11111111-2222-4333-8444-555555555555', enrollment_id: 'e1', card_id: 'c1', kind: 'field_guide', title: 'Field Guide', created_at: daysAgo(3), external_url: null, ...over,
+  id: '11111111-2222-4333-8444-555555555555', enrollment_id: 'e1', card_id: 'c1', kind: 'build_artifact',
+  title: 'project-standards.md', created_at: daysAgo(3), external_url: null,
+  repo_path: 'artifacts/week-01/project-standards.md', commit_sha: '988eac32a1b2c3d4', upload_name: null, ...over,
 });
+/** A file they uploaded themselves. */
+const upload = (over: Partial<PublishedArtifact> = {}): PublishedArtifact =>
+  pub({ repo_path: null, commit_sha: null, upload_name: 'diagram.docx', title: 'diagram.docx', ...over });
+/** Something they built elsewhere and submitted. */
+const link = (over: Partial<PublishedArtifact> = {}): PublishedArtifact =>
+  pub({ repo_path: null, commit_sha: null, upload_name: null, kind: 'claude_studio', external_url: 'https://claude.ai/artifact/abc', ...over });
+/**
+ * What `runtime/portfolioService.generateArtifact` writes: LLM prose ABOUT the student, with no
+ * file, no commit, no upload and no link. This is the row Ali opened on 9 Nov.
+ */
+const generated = (over: Partial<PublishedArtifact> = {}): PublishedArtifact =>
+  pub({ kind: 'case_study', title: 'Week 2 Evaluation Case Study', repo_path: null, commit_sha: null, upload_name: null, external_url: null, ...over });
+
 const report = (over = {}) => composeInternshipPortfolio(collected({ artifacts: [pub()], ...over }), { now: NOW });
 const card = (over = {}) => report(over).groups[0].interns[0];
 
@@ -38,8 +54,61 @@ describe('artifacts: only what they actually produced (Ali, 9 Nov: "not placehol
   it('every published artifact is a link, with no "+N more" cut-off', () => {
     const many = Array.from({ length: 14 }, (_, i) => pub({ id: `00000000-0000-4000-8000-0000000000${String(i).padStart(2, '0')}`, title: `A${i}` }));
     const { html } = renderInternshipPortfolio(report({ artifacts: many }));
-    expect(html).toContain('Artifacts they published (14)');
+    expect(html).toContain('Artifacts they made (14)');
     for (const a of many) expect(html).toContain(`/admin/internship/artifact/${a.id}" target="_blank"`);
+  });
+});
+
+/**
+ * Ali, 9 Nov 2026, on a generated "Week 2 Evaluation Case Study": "I want things that come
+ * directly from the repo. Not things that have been created or made up by this process. The data
+ * should come from the user ONLY."
+ */
+describe('artifacts: provenance - the intern made it, or it is not shown', () => {
+  it('an artifact the platform generated about the student is not shown anywhere', () => {
+    expect(artifactSource(generated())).toBeNull();
+    expect(publishedArtifacts('e1', [generated()])).toEqual([]);
+
+    const { html, text } = renderInternshipPortfolio(report({ artifacts: [generated(), pub()] }));
+    expect(html).not.toContain('Week 2 Evaluation Case Study');
+    expect(text).not.toContain('Week 2 Evaluation Case Study');
+    expect(html).toContain('Artifacts they made (1)');
+  });
+
+  it('a repo path alone is not provenance: the commit that put the file there is required', () => {
+    expect(artifactSource(pub({ commit_sha: null }))).toBeNull();
+    expect(artifactSource(pub({ repo_path: null }))).toBeNull();
+    expect(artifactSource(pub())).toBe('repo');
+  });
+
+  it('uploads and submitted links are the intern\'s work too', () => {
+    expect(artifactSource(upload())).toBe('upload');
+    expect(artifactSource(link())).toBe('link');
+    expect(artifactSource(link({ external_url: 'javascript:alert(1)' }))).toBeNull();
+  });
+
+  it('repo files come first, then uploads, then links, whatever the dates say', () => {
+    const p = publishedArtifacts('e1', [
+      link({ id: 'l', title: 'Link', created_at: daysAgo(0) }),
+      upload({ id: 'u', title: 'Upload', created_at: daysAgo(1) }),
+      pub({ id: 'r', title: 'Repo', created_at: daysAgo(9) }),
+    ]);
+    expect(p.map((x) => x.source)).toEqual(['repo', 'upload', 'link']);
+  });
+
+  it('each one names where it came from, so the claim is checkable without opening it', () => {
+    expect(artifactProvenance(pub())).toBe('artifacts/week-01/project-standards.md @ 988eac3');
+    expect(artifactProvenance(upload())).toBe('diagram.docx, uploaded');
+    expect(artifactProvenance(link())).toBe('claude.ai');
+
+    const { html, text } = renderInternshipPortfolio(report());
+    expect(html).toContain('project-standards.md @ 988eac3');
+    expect(text).toContain('[artifacts/week-01/project-standards.md @ 988eac3]');
+  });
+
+  it('a provenance value is escaped like everything else', () => {
+    const { html } = renderInternshipPortfolio(report({ artifacts: [upload({ upload_name: '<script>x</script>' })] }));
+    expect(html).not.toContain('<script>x</script>');
   });
 });
 

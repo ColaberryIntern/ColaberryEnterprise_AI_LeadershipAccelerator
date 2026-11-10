@@ -83,19 +83,32 @@ const WE_WROTE_SQL = `
                          AND x.to_addresses::text ILIKE '%' || e || '%') AS last_we_wrote
     FROM unnest(ARRAY[:emails]::text[]) AS e`;
 
-// Every artifact an intern has published that has something to OPEN (content is fetched only by the
-// viewer page, never here): an HTML page, a claude.ai link, an uploaded file, or written content.
-// A row with none of those is a shell and is not shown (measured 9 Nov: 1 of 750, a practice
-// presentation with only metadata; all 137 uploaded files exist on disk).
+// Only artifacts the intern THEMSELVES made. `runtime_portfolio_artifacts` is an auto-generation
+// store (runtime/portfolioService.generateArtifact writes LLM prose about the student and throws
+// the student's own text away), so "has something to open" is not the same question as "is theirs".
+// The three clauses below are the only evidence of authorship the table carries:
+//   repo    repo_path + commit_sha   a file in their repository, and the commit that put it there
+//   upload  stored_path              a file they uploaded themselves
+//   link    artifact_url             something they built elsewhere and submitted
+// Measured on prod 9 Nov 2026: this admits 199 of 809 rows. The 610 it drops are 294 rows of LLM
+// prose, 151 of our own Colaberry curriculum field guides, 164 scenario-engine ADRs and 1 shell.
+// The previous version admitted any row with body_html or 200+ letters of JSON, which is exactly
+// how the field guides and the generated case studies reached Ali's report.
+// Content itself is fetched only by the viewer page, never here.
 const ARTIFACTS_SQL = `
   SELECT r.id, r.enrollment_id, r.card_id, r.kind, r.title, r.created_at,
-         NULLIF(r.content->>'artifact_url', '') AS external_url
+         NULLIF(r.content->>'artifact_url', '') AS external_url,
+         NULLIF(r.content->>'repo_path', '')    AS repo_path,
+         NULLIF(r.content->>'commit_sha', '')   AS commit_sha,
+         CASE WHEN coalesce(r.content->>'stored_path', '') <> ''
+              THEN coalesce(NULLIF(r.content->>'filename', ''), 'uploaded file') END AS upload_name
     FROM runtime_portfolio_artifacts r
    WHERE r.enrollment_id IN (:enrollmentIds)
-     AND (coalesce(r.content->>'body_html', '') <> ''
-          OR r.content->>'artifact_url' LIKE 'https://%'
+     AND (
+          (coalesce(r.content->>'repo_path', '') <> '' AND coalesce(r.content->>'commit_sha', '') <> '')
           OR coalesce(r.content->>'stored_path', '') <> ''
-          OR length(regexp_replace((r.content - 'mimetype' - 'filename' - 'size' - 'commit_sha' - 'repo_path')::text, '[^A-Za-z]', '', 'g')) >= 200)
+          OR r.content->>'artifact_url' LIKE 'https://%'
+         )
    ORDER BY r.created_at DESC`;
 
 const AGENT_SQL = `
