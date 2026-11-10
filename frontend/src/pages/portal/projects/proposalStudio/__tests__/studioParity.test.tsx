@@ -26,6 +26,8 @@ import BuildEvidence from '../BuildEvidence';
 import DraftVersions from '../DraftVersions';
 import Blueprint from '../Blueprint';
 import PackageView from '../PackageView';
+import StudioShell from '../StudioShell';
+import { viewOpensQualification } from '../buildHelpers';
 
 // ── fixtures ───────────────────────────────────────────────────────────────────────────────────────────────────
 const doc = (over: Partial<GovProposalDocument>): GovProposalDocument => ({
@@ -293,5 +295,30 @@ describe('WhereWeAre pursuit-stage chips are now clickable and route to the stag
     await click('pipe-snapshot'); await click('pipe-solicitation'); await click('pipe-fit'); await click('pipe-decide');
     await click('pipe-build'); await click('pipe-proposal'); await click('pipe-submit'); await click('pipe-outcome');
     expect(calls).toEqual(['snapshot', 'solicitation', 'fit', 'decide', 'evidence', 'overview', 'package', 'outcome']);
+  });
+});
+
+describe('StudioShell — the admin contract view opens the REAL Qualification Workspace for steps 1-4 (open-on-click)', () => {
+  const cockpitApi = { askCopilot: async () => ({ intent: 'other', answer: 'ok' }) } as any;
+
+  it('viewOpensQualification selects only the pre-award assessment stages', () => {
+    expect(['snapshot', 'solicitation', 'fit', 'decide'].every(viewOpensQualification)).toBe(true);
+    expect(['evidence', 'overview', 'package', 'outcome', 'editor', 'needs'].some(viewOpensQualification)).toBe(false);
+  });
+
+  it('ADMIN mount: Snapshot/Fit/Decide call onOpenQualification; Build stays in the contract', async () => {
+    const opened: string[] = [];
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} onOpenQualification={(s) => opened.push(s)} />);
+    const click = async (id: string) => { await act(async () => { (container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click(); }); };
+    await click('pipe-snapshot'); await click('pipe-fit'); await click('pipe-decide');
+    expect(opened).toEqual(['snapshot', 'fit', 'decide']); // workspace opens for each; the contract view does not change
+    await click('pipe-build'); // Build → the contract's own build evidence, never the workspace
+    expect(opened).toEqual(['snapshot', 'fit', 'decide']);
+  });
+
+  it('INTERN mount (no onOpenQualification): the chips keep the student-safe StageDetail', async () => {
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    await act(async () => { (container.querySelector('[data-testid="pipe-fit"]') as HTMLButtonElement).click(); });
+    expect(present('stage-fit')).toBe(true); // StageDetail rendered in-shell — the intern never leaves for the admin workspace
   });
 });

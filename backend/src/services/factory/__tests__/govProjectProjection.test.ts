@@ -236,6 +236,15 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.priorityScore).toBeNull();
   });
 
+  it('COCKPIT: exposes the qualification canonical id to an ADMIN viewer only (for the real-workspace deep-link)', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gqFindOne.mockResolvedValue({ canonical_opportunity_id: 'gws:abc-123', requirements_json: { provenance: { agency: 'X' }, dossier: {} } });
+    const asAdmin = await getStudentGovProjectView('dp-1', true, 'id-1');   // viewerCanVerify=true -> admin contract view
+    expect(asAdmin!.canonicalOpportunityId).toBe('gws:abc-123');
+    const asIntern = await getStudentGovProjectView('dp-1', false, 'id-1'); // intern: the key is withheld
+    expect(asIntern!.canonicalOpportunityId).toBeNull();
+  });
+
   it('COCKPIT: a management-set due date (requirements_json.manualDeadline) surfaces when the snapshot carried none, and WINS over a snapshot date', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
     // (a) empty snapshot + manual override -> the manual deadline + urgency show

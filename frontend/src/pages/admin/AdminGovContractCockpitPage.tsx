@@ -74,7 +74,15 @@ const AdminGovContractCockpitPage: React.FC = () => {
           <button type="button" className="btn btn-outline-secondary btn-sm" onClick={load}>Try again</button>
         </div>
       )}
-      {state.k === 'ready' && <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} />}
+      {state.k === 'ready' && (() => {
+        // Admin-only: the pre-award assessment chips (Snapshot/Solicitation/Fit/Decide) open the REAL Gov
+        // Qualification Workspace for this contract's pursuit (its canonical opportunity id), at the matching step.
+        const qualKey = state.view.canonicalOpportunityId ?? null;
+        const onOpenQualification = qualKey
+          ? (step: string) => navigate(`/admin/gov-qualification?gws=${encodeURIComponent(qualKey)}&tab=${encodeURIComponent(step)}`)
+          : undefined;
+        return <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} onOpenQualification={onOpenQualification} />;
+      })()}
     </div>
   );
 };

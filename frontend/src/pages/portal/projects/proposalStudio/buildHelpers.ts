@@ -38,6 +38,18 @@ export function pursuitStageLabel(view: Pick<StudentGovProjectView, 'buildSummar
   return 'Proposal production';
 }
 
+/**
+ * The pre-award ASSESSMENT stage views whose pipe chips, in the ADMIN contract view, open the real Gov Qualification
+ * Workspace (steps 1-4: Snapshot / Solicitation / Fit / Decide — they map 1:1 to the workspace's `?tab=` keys). Build
+ * and later stay on the contract's own views: once assigned, "Build" is the actual build work, not the pre-award plan.
+ */
+export const QUALIFICATION_STAGE_VIEWS: readonly string[] = ['snapshot', 'solicitation', 'fit', 'decide'];
+
+/** True when a Studio view is an assessment stage that the admin contract view routes to the Qualification Workspace. */
+export function viewOpensQualification(v: string): boolean {
+  return QUALIFICATION_STAGE_VIEWS.includes(v);
+}
+
 export interface LibraryItem { key: string; label: string; group: 'State forms' | 'Sections' | 'Resumes' | 'References'; }
 
 /**

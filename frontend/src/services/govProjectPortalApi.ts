@@ -116,6 +116,9 @@ export interface StudentGovProjectView {
   vetting?: StudentGovVetting | null;
   /** Advisory "what they want / what we'd build" summary for the Snapshot stage. Null when none saved. Optional. */
   opportunitySummary?: StudentGovOpportunitySummary | null;
+  /** The pursuit's canonical opportunity id (`gws:<uuid>`), set only for an admin viewer — lets the admin contract
+   *  view open the real Gov Qualification Workspace for steps 1-4. Absent for an intern. Optional. */
+  canonicalOpportunityId?: string | null;
   /** Cockpit: the build-repo commit feed (matched pushes, newest first). Optional (older backends). */
   commitFeed?: GovCommitFeedItem[];
   /** v2 Build view: releases → stories + progress + the linked project id for the deep-link. Optional (older backends). */
