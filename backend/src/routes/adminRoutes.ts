@@ -64,6 +64,7 @@ import mayaCapabilityRoutes from './admin/mayaCapabilityRoutes';
 import growthJourneyContentApprovalRoutes from './admin/growthJourneyContentApprovalRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
+import internNudgeRoutes from './admin/internNudgeRoutes';
 import internArtifactRoutes from './admin/internArtifactRoutes';
 import internVideoRoutes from './admin/internVideoRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
@@ -300,6 +301,7 @@ router.use(agentDomainRoutes);
 // agentDomainRoutes is read-only by charter, and because the recipient's name and address make
 // this an `internship` grant rather than a `program` one.
 router.use(agentNudgeRoutes);
+router.use(internNudgeRoutes);
 // One published intern artifact, for the viewer the Internship Report links to (section internship).
 router.use(internArtifactRoutes);
 router.use(internVideoRoutes);

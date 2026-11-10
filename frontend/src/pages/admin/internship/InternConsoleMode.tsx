@@ -35,7 +35,7 @@ const VIEWS: ReadonlyArray<{ key: ConsoleView; label: string; built: boolean }> 
   { key: 'C', label: 'Activity Timeline', built: true },
   // Scoped to the agent-domain builders rather than the whole roster, so it loads its own data and
   // takes no `rows`. See ConsoleViewD's header for why it is not a button on the Triage Board.
-  { key: 'D', label: 'Agent nudges', built: true },
+  { key: 'D', label: 'Nudges', built: true },
 ];
 
 /**
@@ -171,7 +171,7 @@ export const InternConsoleMode: React.FC<{
         <ConsoleViewB rows={rows} stages={data.stages ?? []} onOpen={(id) => onOpenApplicant?.(id)} />
       )}
       {view === 'C' && <ConsoleViewC rows={rows} onOpen={(id) => onOpenApplicant?.(id)} onChanged={load} />}
-      {view === 'D' && <ConsoleViewD />}
+      {view === 'D' && <ConsoleViewD rows={rows} />}
     </div>
   );
 };

@@ -177,6 +177,10 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   //       as the '-mine' note above says, the 'program' row for '/api/admin/agent-domains'
   //       cannot cover it. Declaration order is free for the same reason.
   //   /api/admin/agent-nudges  'internship' — matches the nudge routes' own `requireSection`.
+  //   /api/admin/intern-nudges  'internship' — the per-intern briefs. A separate prefix from
+  //       '-nudges' above and not a subtree of it, so it needs its own row for the same reason
+  //       the hyphen siblings do. It carries strictly more than the agent nudges: the intern's
+  //       name, their address, their project, and the verbatim text of their own emails to us.
   //   /api/admin/agent-domains-builders  'internship' — it serves intern NAMES, which are
   //       applicant data, and `agentDomainRoutes.ts` says so where it sets that guard.
   //   /api/admin/agent-domains-authorization  'program' — the ten-domain read, like '-domains'.
@@ -188,6 +192,7 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/agents', 'dashboard'],
   ['/api/admin/agent-domains-summary', 'program'],
   ['/api/admin/agent-nudges', 'internship'],
+  ['/api/admin/intern-nudges', 'internship'],
   ['/api/admin/agent-domains-builders', 'internship'],
   ['/api/admin/agent-domains-authorization', 'program'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
