@@ -142,9 +142,14 @@ const REPORTS = [
     recipients: STANDARD_RECIPIENTS,
     cbRunnerState: null,
     skipFlag: '--skip-internship-report',
-    cadence: 'daily', // Mon-Fri
-    sendHourUTC: 14,  // 8 AM CST / 9 AM CDT
-    description: 'Per intern: training/triage, 28-day activity, what they built lately (commits + verified stories), what they emailed Ali for, next steps and a suggested nudge. Grouped agent / gov / other. Idempotent per day via email_send_ledger.',
+    // EVERY morning, weekends included (Ali, 10 Nov 2026: "Setup the process to be on auto pilot
+    // running every morning"). 8:00 AM Central, DST-correct, with a 9:00 retry; fired by the daily
+    // `--ct-now` cron at 13,14,15 UTC (which covers 8 and 9 AM Central in both CST and CDT). The
+    // report's send ledger (internship-report-<CT date>) makes the 9:00 slot a no-op once 8:00 sent,
+    // and a failed 8:00 send retries at 9:00.
+    cadence: 'daily',
+    sendCT: ['08:00', '09:00'],
+    description: 'The 10 most impactful things in the internship today, your moves and everyone at a glance; attached: the full interactive report (guided tour, one timeline for everyone, filter by person, every intern card with prompts) and the JSON sidecar for agents. Idempotent per day via email_send_ledger.',
   },
   // ---- IPBC interview preparation ----
   {
@@ -196,8 +201,25 @@ function shouldFireToday(report, now = new Date()) {
   return false;
 }
 
+/**
+ * Whether a report's `sendCT` slot is due at `nowCTMin` (minutes since Central midnight). `sendCT`
+ * is "HH:MM" or a list of them (a list is a primary slot plus retries; the report's own send
+ * ledger makes a retry a no-op once the first slot sent). A slot is due for 10 minutes after its
+ * time, so cron jitter (a run at :01 instead of :00) still fires it exactly once.
+ */
+function ctSlotDue(sendCT, nowCTMin) {
+  if (!sendCT) return false;
+  const slots = Array.isArray(sendCT) ? sendCT : [sendCT];
+  return slots.some((s) => {
+    const [h, m] = String(s).split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return false;
+    const delta = nowCTMin - (h * 60 + m);
+    return delta >= 0 && delta <= 9;
+  });
+}
+
 function recipientsSummary() {
   return STANDARD_RECIPIENTS;
 }
 
-module.exports = { REPORTS, shouldFireToday, STANDARD_RECIPIENTS, recipientsSummary };
+module.exports = { REPORTS, shouldFireToday, ctSlotDue, STANDARD_RECIPIENTS, recipientsSummary };

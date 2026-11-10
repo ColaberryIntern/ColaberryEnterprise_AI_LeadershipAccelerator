@@ -30,7 +30,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
 const { auditAll } = require('./lib/reportingPreflight');
-const { REPORTS: REGISTRY, shouldFireToday } = require('./lib/reportingRegistry');
+const { REPORTS: REGISTRY, shouldFireToday, ctSlotDue } = require('./lib/reportingRegistry');
 const { getBasecampToken } = require('./lib/basecampToken');
 const nodemailer = require(path.resolve(__dirname, '../../../node_modules/nodemailer'));
 const { validateBeforeSend } = require(path.resolve(__dirname, './lib/mandrillPreflight'));
@@ -269,12 +269,8 @@ ${AUDIT_ONLY ? '<br><br><em>Audit-only run. Actual report sends were skipped.</e
   const nowCTMin = ctH * 60 + ctM;
   // Match a report's sendCT within a 10-minute window AFTER its slot, so cron
   // jitter (a run that lands at :31 instead of :30) still fires it exactly once.
-  const ctMatch = (sendCT) => {
-    if (!sendCT) return false;
-    const [h, m] = String(sendCT).split(':').map(Number);
-    const delta = nowCTMin - (h * 60 + m);
-    return delta >= 0 && delta <= 9;
-  };
+  // `sendCT` may be "HH:MM" or a list (primary slot + retries): see reportingRegistry.ctSlotDue.
+  const ctMatch = (sendCT) => ctSlotDue(sendCT, nowCTMin);
   if (CT_NOW) console.log(`[audit] --ct-now: current Central time ${nowCTHHMM}; firing reports whose sendCT is within the last 10 min`);
   // Warn loudly on any report missing BOTH sendHourUTC and sendCT (we treat that
   // as "do not fire" — fail-safe against the original 8-reports-at-8-AM bug).
