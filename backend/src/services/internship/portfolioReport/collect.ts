@@ -60,9 +60,22 @@ const PROJECT_SQL = `
    WHERE p.id IN (:ids)`;
 
 // Sequelize expands an array replacement into a comma list, hence IN (:x) and ARRAY[:x], never ANY(:x).
+// 8000, not 400.
+//
+// 400 characters is roughly the first paragraph. Victoria's message of 2026-11-10 asked FOUR
+// numbered questions about a scheduled agent, a colleague's access, a term we had used, and who
+// owns a model; at 400 characters the composer could see the first one and no more. A message
+// whose whole job is to answer somebody cannot be written from the opening paragraph of what they
+// asked, and every "you aren't talking about the correct things" complaint traces back here.
+//
+// 8000 matches the cap already used on our own outbound in LAST_ASK_SQL, and `snippet_truncated`
+// is carried so a reader is told when even that was not the whole message rather than guessing.
+// The dashboard still slices this down for display; nothing downstream assumed a short string.
 const EMAIL_SQL = `
   SELECT lower(from_address) AS email, subject,
-         left(regexp_replace(COALESCE(body_text,''), '\\s+', ' ', 'g'), 400) AS snippet, received_at
+         left(regexp_replace(COALESCE(body_text,''), '\\s+', ' ', 'g'), 8000) AS snippet,
+         length(COALESCE(body_text,'')) > 8000 AS snippet_truncated,
+         received_at
     FROM inbox_emails
    WHERE lower(from_address) IN (:emails)
      AND received_at > now() - interval '${EMAIL_LOOKBACK_DAYS} days'
