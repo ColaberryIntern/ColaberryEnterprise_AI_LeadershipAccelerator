@@ -25,6 +25,7 @@ import { buildSidecar } from '../portfolioReport/sidecar/build';
 import { getConsoleRoster } from '../internConsoleRoster';
 import { composeBrief } from './compose';
 import { caseStudyDeadline } from './deadline';
+import { holdFor, type HoldDecision } from './hold';
 import type { NudgeBrief } from './types';
 
 function centralDate(d: Date): string {
@@ -70,6 +71,82 @@ export async function buildBriefFor(enrollmentId: string, { now = new Date() }: 
   // The roster is the only place the address lives; the sidecar deliberately carries no email.
   const email = data.roster.find((r) => r.enrollment_id === enrollmentId)?.email ?? null;
   return { ...brief, email: email ? String(email) : null };
+}
+
+/** One intern's outcome in a batch: either their brief and its hold decision, or why they have none. */
+export type BriefAttempt =
+  | { readonly ok: true; readonly brief: NudgeBrief; readonly hold: HoldDecision | null }
+  | { readonly ok: false; readonly enrollmentId: string; readonly name: string; readonly errorClass: string; readonly error: string };
+
+export interface BriefBatch {
+  readonly generatedAt: string;
+  readonly attempts: readonly BriefAttempt[];
+}
+
+/**
+ * Every intern's brief, from ONE run of the pipeline.
+ *
+ * ## Why this is not `buildBriefFor` in a loop
+ *
+ * `collectInternshipPortfolio` is a few hundred queries whether it is asked for one intern or all
+ * fourteen, because the expensive parts are the cohort-wide joins. Narrowing it per intern and
+ * calling it fourteen times pays that cost fourteen times over, for a screen the manager asked for
+ * once. Collected once and composed per intern it is a single pass, which is what makes a "prepare
+ * them all" button answerable in seconds rather than a minute.
+ *
+ * ## One intern failing must not cost the other twelve
+ *
+ * `composeInternshipPortfolio` deliberately drops operators from the intern list, so an operator
+ * sitting on the roster has a roster row and no sidecar entry, and composing their brief throws.
+ * That is correct behaviour, and it is also the reason this returns a per-intern result rather than
+ * a single array: a batch that threw on the first unknown enrollment would hand back nothing at all
+ * because one row was never an intern.
+ *
+ * The deadline lookup is cached per project, because interns on the same gov project share one
+ * baseline date and the query is the only per-intern I/O left in the loop.
+ */
+export async function buildAllBriefs({ now = new Date() }: { now?: Date } = {}): Promise<BriefBatch> {
+  const data = await collectInternshipPortfolio({ now });
+  const report = composeInternshipPortfolio(data, { now });
+  const sidecar = buildSidecar(report, {
+    reportDate: centralDate(now),
+    previous: null,
+    lastOutbound: data.lastOutbound ?? [],
+  });
+
+  const emailOf = new Map(data.roster.map((r) => [r.enrollment_id, r.email ? String(r.email) : null]));
+  const deadlines = new Map<string, Awaited<ReturnType<typeof caseStudyDeadline>>>();
+
+  const attempts: BriefAttempt[] = [];
+  for (const r of data.roster) {
+    const id = r.enrollment_id;
+    const name = String(r.name ?? id);
+    try {
+      const intern = sidecar.interns.find((i) => i.enrollment_id === id);
+      if (!intern) throw new UnknownInternError(id);
+
+      const key = intern.project?.id ?? '';
+      if (!deadlines.has(key)) deadlines.set(key, await caseStudyDeadline(intern.project?.id ?? null, now));
+
+      const composed = composeBrief({ intern, deadline: deadlines.get(key) ?? null, now });
+      const brief = { ...composed, email: emailOf.get(id) ?? null };
+      attempts.push({
+        ok: true,
+        brief,
+        hold: holdFor({ brief, applicationState: r.application_state ?? null, now }),
+      });
+    } catch (err: any) {
+      attempts.push({
+        ok: false,
+        enrollmentId: id,
+        name,
+        errorClass: err?.name ?? 'Error',
+        error: String(err?.message ?? err).slice(0, 300),
+      });
+    }
+  }
+
+  return { generatedAt: now.toISOString(), attempts };
 }
 
 /** Every active intern, with no brief generated. This is what the tab lists. */

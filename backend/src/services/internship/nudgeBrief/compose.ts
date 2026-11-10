@@ -154,6 +154,48 @@ function opening(i: SidecarIntern): string[] {
   }
 }
 
+/**
+ * The numbers the body already used, lifted onto the brief so the screen can show its working.
+ *
+ * Read straight off the sidecar with no arithmetic of its own. The moment this starts deriving a
+ * figure the paragraph does not use, the card and the message can disagree about the same intern.
+ */
+function signalsOf(i: SidecarIntern): NudgeBrief['signals'] {
+  return {
+    day: i.day ?? null,
+    percentBuilt: i.percent_built ?? null,
+    storiesVerified: i.stories_verified ?? null,
+    storiesTotal: i.stories_total ?? null,
+    overdueTasks: i.overdue_tasks ?? null,
+    daysSinceBuildWork: i.days_since_build_work ?? null,
+    artifacts: i.artifacts_real_count,
+    trainingWeeksCompleted: i.training.weeks_completed,
+    trainingWeeksTotal: i.training.weeks_total,
+    gateCleared: i.training.gate_cleared,
+    openQuestions: i.open_questions.length,
+    hasRepo: Boolean(i.project?.repo_url),
+  };
+}
+
+/**
+ * The newest message FROM them that landed after our last message TO them, or null.
+ *
+ * Compared in milliseconds rather than on the date string, because the two timestamps routinely
+ * fall on the same day and a date comparison would call a reply that arrived ninety minutes later
+ * "not since".
+ */
+function inboundSince(i: SidecarIntern): string | null {
+  const ours = i.last_ask ? Date.parse(i.last_ask.sent_at) : null;
+  let newest: string | null = null;
+  for (const q of i.open_questions) {
+    const at = Date.parse(q.received_at);
+    if (Number.isNaN(at)) continue;
+    if (ours !== null && !Number.isNaN(ours) && at <= ours) continue;
+    if (newest === null || at > Date.parse(newest)) newest = q.received_at;
+  }
+  return newest;
+}
+
 export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief {
   const warnings: string[] = [];
   // Destructured, not dotted. See the note on opening() for why that matters here.
@@ -195,6 +237,11 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
     tierReason: intern.triage.reason,
     trackLabel: intern.track_label,
     projectName: intern.project?.name ?? null,
+    signals: signalsOf(intern),
+    lastOutbound: intern.last_ask
+      ? { sentAt: intern.last_ask.sent_at, subject: intern.last_ask.subject ?? null }
+      : null,
+    inboundSince: inboundSince(intern),
     deadline,
     promises: findPromises(intern),
     subject,

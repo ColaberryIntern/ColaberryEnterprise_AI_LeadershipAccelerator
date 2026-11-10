@@ -254,10 +254,10 @@ export function buildTimeline(i: TimelineInput): Timeline {
   for (const t of p?.overdueTasks ?? []) next.push({ kind: 'late', label: `Late ${daysBetween(t.due_on, today)}d`, detail: t.title });
   // The collector lists the 6 oldest; say how many more there are rather than letting the list undercount.
   const moreLate = (p?.overdue ?? 0) - (p?.overdueTasks ?? []).length;
-  if (moreLate > 0) next.push({ kind: 'late', label: `+${moreLate} more late`, detail: 'see the project in Admin > Interns > Projects' });
+  if (moreLate > 0) next.push({ kind: 'late', label: `+${moreLate} more late`, detail: 'see the project on the Projects tab in Interns' });
   if (p && quietNow === null) next.push({ kind: 'stuck', label: 'No build work in 21 days', detail: 'no commit or verified story in the window' });
   else if (p && quietNow !== null && quietNow >= STUCK_GAP_DAYS) next.push({ kind: 'stuck', label: `Stuck ${quietNow}d`, detail: `no commit or verified story since ${lastBuild?.slice(5)}` });
-  if (!p) next.push({ kind: 'noproject', label: 'No project', detail: 'start one from Internship > Projects' });
+  if (!p) next.push({ kind: 'noproject', label: 'No project', detail: 'start one from the Projects tab in Internship' });
   if (p?.next && !(p.overdueTasks ?? []).some((t) => t.title === p.next?.title)) {
     next.push({ kind: 'next', label: 'Up next', detail: `${p.next.title}${p.next.dueOn ? ` (due ${p.next.dueOn.slice(5)})` : ''}` });
   }

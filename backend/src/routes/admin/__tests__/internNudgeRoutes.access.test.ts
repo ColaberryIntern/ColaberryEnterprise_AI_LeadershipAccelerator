@@ -24,10 +24,12 @@ import * as path from 'path';
  * make an auth test pass or fail for the wrong reason.
  */
 const mockBuild = jest.fn();
+const mockBuildAll = jest.fn();
 const mockSend = jest.fn();
 class FakeUnknownIntern extends Error {}
 jest.mock('../../../services/internship/nudgeBrief/build', () => ({
   buildBriefFor: (...a: unknown[]) => mockBuild(...a),
+  buildAllBriefs: (...a: unknown[]) => mockBuildAll(...a),
   UnknownInternError: FakeUnknownIntern,
 }));
 jest.mock('../../../services/internship/nudgeBrief/send', () => ({
@@ -73,15 +75,33 @@ function registeredRoutes(): Array<{ path: string; methods: string[]; handlerCou
 beforeEach(() => {
   jest.clearAllMocks();
   mockBuild.mockResolvedValue(BRIEF);
+  mockBuildAll.mockResolvedValue({
+    generatedAt: new Date().toISOString(),
+    attempts: [
+      { ok: true, brief: BRIEF, hold: null },
+      { ok: true, brief: { ...BRIEF, enrollmentId: 'e2', name: 'Quincy Nkwain Ninying' }, hold: { reason: 'messaged_today', detail: 'We already wrote to them today.' } },
+      { ok: false, enrollmentId: 'e3', name: 'Ali Muwwakkil', errorClass: 'UnknownInternError', error: 'not an intern' },
+    ],
+  });
   mockSend.mockResolvedValue({ enrollmentId: ID, email: 'o@example.test', outcome: 'dry_run', subject: 'Two days', businessEventId: 'x' });
 });
 
 describe('every route carries its own guard', () => {
-  it('POSITIVE CONTROL: the router registers both routes, so the enumeration is not empty', () => {
+  it('POSITIVE CONTROL: the router registers all three routes, so the enumeration is not empty', () => {
     const routes = registeredRoutes();
-    expect(routes).toHaveLength(2);
-    expect(routes.filter((r) => r.methods.includes('get'))).toHaveLength(1);
+    expect(routes).toHaveLength(3);
+    expect(routes.filter((r) => r.methods.includes('get'))).toHaveLength(2);
     expect(routes.filter((r) => r.methods.includes('post'))).toHaveLength(1);
+  });
+
+  /**
+   * Express matches in registration order. The collection path must come first or it is reachable
+   * only by whatever the sibling param pattern happens not to swallow.
+   */
+  it('registers the collection route BEFORE the per-intern one', () => {
+    const paths = registeredRoutes().map((r) => r.path);
+    expect(paths.indexOf('/api/admin/intern-nudges'))
+      .toBeLessThan(paths.indexOf('/api/admin/intern-nudges/:enrollmentId'));
   });
 
   it('every route has at least one middleware BEFORE its handler', () => {
@@ -92,7 +112,49 @@ describe('every route carries its own guard', () => {
     const src = fs.readFileSync(ROUTER_SRC, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const sections = [...src.matchAll(/requireSection\(\s*'([a-z_]+)'\s*\)/g)].map((m) => m[1]);
     expect(sections).toHaveLength(registeredRoutes().length);
-    expect(sections).toEqual(['internship', 'internship']);
+    expect(sections).toEqual(['internship', 'internship', 'internship']);
+  });
+});
+
+/**
+ * Preparing the day is a READ. It must be as guarded as the single brief, and it must never be a
+ * way to send anything: the two-click send on each row is the only delivery path.
+ */
+describe('preparing every message at once', () => {
+  const auth = () => `Bearer ${tokenFor('internship_review')}`;
+
+  it('refuses an unauthenticated caller', async () => {
+    const res = await request(app()).get('/api/admin/intern-nudges');
+    expect([401, 403]).toContain(res.status);
+    expect(mockBuildAll).not.toHaveBeenCalled();
+  });
+
+  it('refuses `curriculum`, which holds `program` but not `internship`', async () => {
+    const res = await request(app()).get('/api/admin/intern-nudges').set('Authorization', `Bearer ${tokenFor('curriculum')}`);
+    expect(res.status).toBe(403);
+    expect(mockBuildAll).not.toHaveBeenCalled();
+  });
+
+  it('returns every attempt, including the held and the failed', async () => {
+    const res = await request(app()).get('/api/admin/intern-nudges').set('Authorization', auth());
+    expect(res.status).toBe(200);
+    expect(res.body.attempts).toHaveLength(3);
+    expect(res.body.attempts.filter((a: any) => a.ok && !a.hold)).toHaveLength(1);
+    expect(res.body.attempts.find((a: any) => a.hold)?.hold.reason).toBe('messaged_today');
+    expect(res.body.attempts.find((a: any) => !a.ok)?.name).toBe('Ali Muwwakkil');
+  });
+
+  /** Preparing must never deliver. This is the assertion that keeps it a preview button. */
+  it('sends nothing', async () => {
+    await request(app()).get('/api/admin/intern-nudges').set('Authorization', auth());
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('a fault is a 500 that does not leak the message', async () => {
+    mockBuildAll.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432'));
+    const res = await request(app()).get('/api/admin/intern-nudges').set('Authorization', auth());
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
   });
 });
 

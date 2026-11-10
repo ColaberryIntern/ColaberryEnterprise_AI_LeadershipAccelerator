@@ -52,6 +52,27 @@ export interface BriefPromise {
   quote: string;
 }
 
+/** The numbers the message was written from, so the card can show its working next to the words. */
+export interface BriefSignals {
+  day: number | null;
+  percentBuilt: number | null;
+  storiesVerified: number | null;
+  storiesTotal: number | null;
+  overdueTasks: number | null;
+  daysSinceBuildWork: number | null;
+  artifacts: number;
+  trainingWeeksCompleted: number;
+  trainingWeeksTotal: number;
+  gateCleared: boolean;
+  openQuestions: number;
+  hasRepo: boolean;
+}
+
+export interface BriefLastOutbound {
+  sentAt: string;
+  subject: string | null;
+}
+
 export interface NudgeBrief {
   enrollmentId: string;
   name: string;
@@ -61,6 +82,10 @@ export interface NudgeBrief {
   tierReason: string;
   trackLabel: string;
   projectName: string | null;
+  signals: BriefSignals;
+  lastOutbound: BriefLastOutbound | null;
+  /** When they wrote back after our last message. The difference between "leave them" and "owe them". */
+  inboundSince: string | null;
   deadline: BriefDeadline | null;
   promises: BriefPromise[];
   subject: string;
@@ -75,6 +100,47 @@ export type BriefSendOutcome =
   | { enrollmentId: string; email: string; outcome: 'skipped'; reason: string }
   | { enrollmentId: string; email: string; outcome: 'sent'; subject: string; messageId?: string }
   | { enrollmentId: string; email: string; outcome: 'failed'; errorClass: string; error: string };
+
+/**
+ * Why an intern is NOT being written to today.
+ *
+ * A hold is a default and never a lock: the message is still there and still sendable in one more
+ * click. The screen's job is to make the quiet choice the easy one.
+ */
+export type HoldReason = 'no_email' | 'unsendable_text' | 'paused' | 'messaged_today';
+
+export interface HoldDecision {
+  reason: HoldReason;
+  detail: string;
+}
+
+export const HOLD_LABEL: Record<HoldReason, string> = {
+  no_email: 'No address',
+  unsendable_text: 'Would be refused',
+  paused: 'Paused',
+  messaged_today: 'Written to today',
+};
+
+export type BriefAttempt =
+  | { ok: true; brief: NudgeBrief; hold: HoldDecision | null }
+  | { ok: false; enrollmentId: string; name: string; errorClass: string; error: string };
+
+export interface BriefBatch {
+  generatedAt: string;
+  attempts: BriefAttempt[];
+}
+
+/**
+ * Prepare every intern's message in one pass, with the hold decisions already made.
+ *
+ * One run of the report pipeline for the whole roster rather than one per intern, which is what
+ * makes this answerable in seconds. It prepares and never sends: delivery is still two clicks on
+ * the individual row.
+ */
+export async function fetchAllBriefs(): Promise<BriefBatch> {
+  const { data } = await api.get('/api/admin/intern-nudges');
+  return data as BriefBatch;
+}
 
 /** Generated at call time, never cached: that is the point of opening the row. */
 export async function fetchBrief(enrollmentId: string): Promise<NudgeBrief> {

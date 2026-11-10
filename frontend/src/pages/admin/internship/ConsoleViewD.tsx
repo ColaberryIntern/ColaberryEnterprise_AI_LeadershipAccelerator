@@ -1,152 +1,153 @@
 import React, { useCallback, useState } from 'react';
 import type { InternRow } from '../../../services/adminInternConsoleApi';
 import {
-  fetchBrief, sendBriefMessage, TIER_LABEL, TIER_RANK, TIER_TONE,
-  type BriefSendOutcome, type NudgeBrief,
+  fetchAllBriefs, fetchBrief, sendBriefMessage, HOLD_LABEL, TIER_LABEL, TIER_RANK, TIER_TONE,
+  type BriefAttempt, type BriefSendOutcome, type HoldDecision, type NudgeBrief,
 } from '../../../services/internNudgeApi';
+import NudgeCard, { BriefPanel, OutcomeLine } from './nudgeCard';
+import {
+  HOLD_ICON, TIER_ICON, headline, holdCounts, initials, tierSlices,
+} from './nudgeFormat';
 
 /**
- * View D - Nudges.
+ * View D - Nudges. The day's messages, prepared.
  *
  *     "I would like to create a nudge system, but one that is actually looking at what they are
  *      doing and helping them with the next step to move forward."  (Ali, 23 Oct 2026)
- *     "Make sure there is a nudge for all interns and not just those building agents."
- *      (Ali, 10 Nov 2026)
+ *     "we need a button that can prepare the messages that need to be sent out and also show of
+ *      the interns that shouldn't get messages. I should have the same functionality as I do
+ *      running this skill here which produces all the proposed messages."  (Ali, 10 Nov 2026)
  *
- * ## Every intern, because the roster is the roster
+ * ## Two states, because there are two jobs
  *
- * This view used to load its own list from `agent_domain_projects`, which is why it showed seven
- * people out of fourteen: a gov-contract intern and an intern with no project own no agent domain
- * and so did not exist to it. It now takes `rows` from the console shell, the same already-filtered
- * array that Views A, B and C take. Two things follow for free: everybody appears, and the
- * All / Needs attention / No project / Paused chips work here exactly as they do everywhere else,
- * because the filtering happened before the rows arrived.
+ * **Before Prepare** this is a roster: every intern, cheapest possible, one message generated when
+ * you ask for that one person. That is the "I need to write to Omolola" job.
  *
- * ## The message is generated when you open it, not when the page loads
+ * **After Prepare** it is a report: a headline count, the spread of the roster across the six
+ * tiers, then the people who need a message as cards with their evidence on the face, and under
+ * them the people who should be left alone with the reason stated. That is the "work my day" job,
+ * and it is the one the `/intern-nudges` skill used to do by hand in a chat window.
  *
- * Generating thirteen full briefs on load would cost a run of the report pipeline per intern for
- * messages a manager will mostly not read. So the row list is cheap and the message is fetched on
- * expand, which also makes the freshness claim true rather than approximate: the text describes the
- * intern at the moment you asked, not at whatever time the tab happened to load. Collapsing and
- * reopening re-fetches, so there is no stale copy to send by accident.
+ * ## Preparing is not sending, and there is still no bulk send
  *
- * ## The words are on screen before the send, and are editable
+ * Prepare runs ONE pass of the report pipeline for the whole roster and composes every message. It
+ * delivers nothing. Each send is still two deliberate clicks on that person's own card, against
+ * the text on screen, with Ali bcc'd. Thirteen long messages a manager has not read must never
+ * leave on one button, and nothing here changes that.
  *
- * Sending takes two deliberate clicks: the first arms the row and says so, the second sends. The
- * body is a textarea, so a manager can correct a sentence before it goes, and what is posted is
- * what is on screen. The server re-checks the sender's guards on the edited text, because an edit
- * can introduce a dash or a bracket the generated text did not have.
+ * ## Held is a default, not a lock
+ *
+ * The hold decision is made on the server next to the data that proves it - chiefly "we already
+ * wrote to them today and they have not answered", which on 10 Nov 2026 was true of all thirteen
+ * interns at once. Every held card still opens and still sends. The screen makes the quiet choice
+ * the easy one; it does not take the choice away.
  */
 
-const fmtDays = (n: number) => `${Math.abs(n)} ${Math.abs(n) === 1 ? 'day' : 'days'}`;
+const EXPLAINER = 'Nothing is sent until you send it. Preparing reads the database once and writes '
+  + "every intern's message from what it finds, so the text always describes where they are now. "
+  + "Each message is still sent from its own card, in two clicks, with Ali bcc'd.";
 
-/** What this row is waiting on, in a few words, before the brief has been fetched. */
+/** The spread of the roster across the six tiers: one bar, a full legend, counts in ink not colour. */
+const TierBar: React.FC<{ briefs: NudgeBrief[] }> = ({ briefs }) => {
+  const slices = tierSlices(briefs);
+  return (
+    <div className="aint-tierbar">
+      {/* The bar restates the legend underneath it, so it is hidden from assistive tech rather
+          than read out twice. Same decision, same reason, as View B's band bar. */}
+      <div className="aint-seg" aria-hidden="true">
+        {slices.filter((s) => s.n > 0).map((s) => (
+          <span
+            key={s.tier}
+            className={`tone-${TIER_TONE[s.tier]}`}
+            style={{ width: `${s.pct}%` }}
+            title={`${TIER_LABEL[s.tier]}: ${s.n}`}
+          />
+        ))}
+      </div>
+      <div className="aint-legend">
+        {slices.map((s) => (
+          <span key={s.tier} className={s.n === 0 ? 'aint-muted' : undefined}>
+            <i className={`aint-swatch tone-${TIER_TONE[s.tier]}`} aria-hidden="true" />
+            <i className={TIER_ICON[s.tier]} aria-hidden="true" />
+            {TIER_LABEL[s.tier]} <b>{s.n}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** What this row is waiting on, in a few words, before any brief has been generated. */
 function restingHint(r: InternRow): string {
   if (!r.project) return 'No project yet';
   if (r.activity.level === 'unknown') return 'No commit has ever been seen';
   if (r.activity.level === 'green') return 'Committed today';
-  return `Quiet ${r.activity.level === 'black' ? '10+' : r.activity.level === 'red' ? '7-9' : r.activity.level === 'orange' ? '4-6' : '1-3'} days`;
+  const band = r.activity.level === 'black' ? '10+' : r.activity.level === 'red' ? '7-9' : r.activity.level === 'orange' ? '4-6' : '1-3';
+  return `Quiet ${band} days`;
 }
-
-const OutcomeLine: React.FC<{ r: BriefSendOutcome }> = ({ r }) => {
-  if (r.outcome === 'sent') return <span className="aint-ok">Sent to {r.email}</span>;
-  if (r.outcome === 'dry_run') return <span className="aint-muted">Preview only, nothing sent</span>;
-  if (r.outcome === 'skipped') return <span className="aint-warn">Held: {r.reason}</span>;
-  return <span className="aint-alert">Failed: {r.errorClass}</span>;
-};
-
-const BriefPanel: React.FC<{
-  brief: NudgeBrief;
-  body: string;
-  subject: string;
-  armed: boolean;
-  busy: boolean;
-  onBody: (v: string) => void;
-  onArm: () => void;
-  onSend: () => void;
-}> = ({ brief, body, subject, armed, busy, onBody, onArm, onSend }) => (
-  <div className="aint-brief">
-    {brief.deadline && (
-      <p className={brief.deadline.daysLeft <= 3 ? 'aint-alert' : 'aint-warn'}>
-        <strong>
-          {brief.deadline.daysLeft < 0
-            ? `${fmtDays(brief.deadline.daysLeft)} past due`
-            : `${fmtDays(brief.deadline.daysLeft)} left`}
-        </strong>
-        {' '}to the {brief.deadline.what}, due {brief.deadline.dueOn}.
-        {' '}{brief.deadline.outstanding.length} outstanding.
-      </p>
-    )}
-
-    {brief.promises.length > 0 && (
-      <div className="aint-promises">
-        <strong>You promised, and it has a date in it:</strong>
-        <ul>
-          {brief.promises.map((p, i) => (
-            <li key={i}>&ldquo;{p.quote}&rdquo; <span className="aint-muted">({p.sentAt.slice(0, 10)})</span></li>
-          ))}
-        </ul>
-      </div>
-    )}
-
-    {brief.warnings.length > 0 && (
-      <ul className="aint-warnings">
-        {brief.warnings.map((w, i) => <li key={i} className="aint-warn">{w}</li>)}
-      </ul>
-    )}
-
-    <label className="aint-field">
-      <span>Subject</span>
-      <input type="text" value={subject} readOnly />
-    </label>
-
-    <label className="aint-field">
-      <span>Message, editable before you send it</span>
-      <textarea value={body} rows={18} onChange={(e) => onBody(e.target.value)} />
-    </label>
-
-    {brief.attachment && (
-      <p className="aint-muted">Carries an attachment: {brief.attachment.filename}</p>
-    )}
-
-    <p className="aint-muted">
-      Generated {new Date(brief.generatedAt).toLocaleTimeString()} from live data.
-      {brief.email ? ` Goes to ${brief.email}, with Ali bcc'd.` : ' No email address on file, so this cannot be sent.'}
-    </p>
-
-    {!armed ? (
-      <button type="button" className="aint-btn" disabled={busy || !brief.email} onClick={onArm}>
-        Send this message
-      </button>
-    ) : (
-      <span className="aint-arm">
-        <strong>Send to {brief.email}?</strong>
-        <button type="button" className="aint-btn danger" disabled={busy} onClick={onSend}>
-          {busy ? 'Sending…' : 'Yes, send it'}
-        </button>
-      </span>
-    )}
-  </div>
-);
 
 export const ConsoleViewD: React.FC<{ rows: InternRow[] }> = ({ rows }) => {
   const [open, setOpen] = useState<string | null>(null);
   const [briefs, setBriefs] = useState<Record<string, NudgeBrief>>({});
-  const [bodies, setBodies] = useState<Record<string, string>>({});
+  const [holds, setHolds] = useState<Record<string, HoldDecision | null>>({});
+  const [failed, setFailed] = useState<Array<{ enrollmentId: string; name: string; error: string }>>([]);
+  const [prepared, setPrepared] = useState<string[] | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [bodies, setBodies] = useState<Record<string, string>>({});
   const [armed, setArmed] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, BriefSendOutcome>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const rowOf = useCallback((id: string) => rows.find((r) => r.enrollment_id === id), [rows]);
+
+  /** Prepare every message in one pass. Reads only. */
+  const prepareAll = useCallback(async () => {
+    setPreparing(true);
+    setPrepareError(null);
+    setArmed(null);
+    setOpen(null);
+    try {
+      const batch = await fetchAllBriefs();
+      const nextBriefs: Record<string, NudgeBrief> = {};
+      const nextHolds: Record<string, HoldDecision | null> = {};
+      const nextBodies: Record<string, string> = {};
+      const order: string[] = [];
+      const bad: Array<{ enrollmentId: string; name: string; error: string }> = [];
+
+      for (const a of batch.attempts as BriefAttempt[]) {
+        if (a.ok) {
+          nextBriefs[a.brief.enrollmentId] = a.brief;
+          nextHolds[a.brief.enrollmentId] = a.hold;
+          nextBodies[a.brief.enrollmentId] = a.brief.body;
+          order.push(a.brief.enrollmentId);
+        } else {
+          bad.push({ enrollmentId: a.enrollmentId, name: a.name, error: a.error });
+        }
+      }
+
+      setBriefs(nextBriefs);
+      setHolds(nextHolds);
+      setBodies(nextBodies);
+      setFailed(bad);
+      setPrepared(order);
+    } catch (err: any) {
+      setPrepareError(err?.response?.data?.error ?? 'Could not prepare the messages.');
+    } finally {
+      setPreparing(false);
+    }
+  }, []);
+
+  /** One intern, generated now. Always re-fetches: a cached brief is a stale brief. */
   const openRow = useCallback(async (id: string) => {
     if (open === id) { setOpen(null); return; }
     setOpen(id);
     setArmed(null);
-    setLoadingId(id);
     setErrors((e) => ({ ...e, [id]: '' }));
+    setLoadingId(id);
     try {
-      // Always re-fetch. A cached brief is a stale brief, and this screen sends what it shows.
       const brief = await fetchBrief(id);
       setBriefs((b) => ({ ...b, [id]: brief }));
       setBodies((b) => ({ ...b, [id]: brief.body }));
@@ -156,6 +157,12 @@ export const ConsoleViewD: React.FC<{ rows: InternRow[] }> = ({ rows }) => {
       setLoadingId(null);
     }
   }, [open]);
+
+  /** In the prepared report the text already exists, so opening a card never re-fetches. */
+  const toggleCard = useCallback((id: string) => {
+    setArmed(null);
+    setOpen((cur) => (cur === id ? null : id));
+  }, []);
 
   const send = async (id: string) => {
     const brief = briefs[id];
@@ -177,72 +184,141 @@ export const ConsoleViewD: React.FC<{ rows: InternRow[] }> = ({ rows }) => {
     }
   };
 
+  const cardProps = (id: string) => ({
+    brief: briefs[id],
+    row: rowOf(id),
+    hold: holds[id] ?? null,
+    open: open === id,
+    body: bodies[id] ?? briefs[id].body,
+    armed: armed === id,
+    busy: busy === id,
+    error: errors[id] || undefined,
+    outcome: results[id],
+    onToggle: () => toggleCard(id),
+    onBody: (v: string) => setBodies((b) => ({ ...b, [id]: v })),
+    onArm: () => setArmed(id),
+    onSend: () => send(id),
+  });
+
   if (!rows.length) {
     return <div className="aint-state">No interns match this filter. Try All.</div>;
   }
 
-  // Sort by how urgent the row looks before its brief exists, so the list is useful on arrival.
-  const ordered = [...rows].sort((a, b) => {
-    const rank = (r: InternRow) => (briefs[r.enrollment_id] ? TIER_RANK[briefs[r.enrollment_id].tier] : r.project ? 4 : 1);
-    return rank(a) - rank(b) || a.name.localeCompare(b.name);
-  });
+  // Everything below respects the console's filter chips, including the failures. A section that
+  // ignored them would report people the chip has excluded, and the headline count would then
+  // describe a different roster from the one on screen.
+  const visible = prepared ? prepared.filter((id) => rowOf(id)) : [];
+  const toSend = visible.filter((id) => !holds[id]).sort((a, b) => TIER_RANK[briefs[a].tier] - TIER_RANK[briefs[b].tier]);
+  const toHold = visible.filter((id) => holds[id]);
+  const toFix = failed.filter((f) => rowOf(f.enrollmentId));
 
   return (
     <div className="aint-nudges">
-      <p className="aint-note">
-        Nothing is sent until you send it. Opening a row generates that intern&rsquo;s message from the
-        database at that moment, so it always describes where they are now. The text is editable, and
-        what you see is what goes out, with Ali bcc&rsquo;d.
-      </p>
+      <div className="aint-card aint-nhead">
+        <div className="aint-nhead-t">
+          <h2><i className="ri-mail-send-line" aria-hidden="true" /> Today&rsquo;s messages</h2>
+          <button type="button" className="aint-btn primary lg" disabled={preparing} onClick={prepareAll}>
+            <i className={preparing ? 'ri-loader-4-line' : 'ri-magic-line'} aria-hidden="true" />
+            {preparing ? ' Reading every intern…' : prepared ? ' Prepare again' : ' Prepare the messages'}
+          </button>
+        </div>
+        <p className="aint-note">{EXPLAINER}</p>
+        {prepareError && <p className="aint-alert">{prepareError}</p>}
+        {preparing && (
+          <p className="aint-muted">
+            Reading repositories, tasks, training and mail for {rows.length} interns. This takes a few seconds.
+          </p>
+        )}
+        {prepared && !preparing && (
+          <>
+            <p className="aint-headline">{headline(toSend.length, toHold.length, toFix.length)}</p>
+            <TierBar briefs={visible.map((id) => briefs[id])} />
+          </>
+        )}
+      </div>
 
-      <table className="aint-table">
-        <thead>
-          <tr>
-            <th>Intern</th>
-            <th>Project</th>
-            <th>Day</th>
-            <th>State</th>
-            <th>Message</th>
-            <th>Last send</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ordered.map((r) => {
-            const id = r.enrollment_id;
-            const brief = briefs[id];
-            const isOpen = open === id;
-            return (
-              <React.Fragment key={id}>
-                <tr>
-                  <td>
-                    <div className="aint-name">{r.name}</div>
-                    <div className="aint-muted">{r.email ?? 'No email on file'}</div>
-                  </td>
-                  <td>{r.project?.name ?? <span className="aint-warn">No project</span>}</td>
-                  <td>{r.day ?? '-'}</td>
-                  <td>
-                    {brief
-                      ? <span className={`aint-pill ${TIER_TONE[brief.tier]}`}>{TIER_LABEL[brief.tier]}</span>
-                      : <span className="aint-muted">{restingHint(r)}</span>}
-                    {brief && <div className="aint-muted">{brief.tierReason}</div>}
-                  </td>
-                  <td>
-                    <button type="button" className="aint-btn" onClick={() => openRow(id)}>
+      {prepared && !preparing ? (
+        <>
+          <section className="aint-nsec">
+            <h3><i className="ri-send-plane-line" aria-hidden="true" /> Send these <span className="aint-count">{toSend.length}</span></h3>
+            {toSend.length === 0
+              ? <p className="aint-state">Nobody is waiting on a message right now.</p>
+              : toSend.map((id) => <NudgeCard key={id} {...cardProps(id)} />)}
+          </section>
+
+          <section className="aint-nsec held">
+            <h3>
+              <i className="ri-pause-circle-line" aria-hidden="true" /> Not sending <span className="aint-count">{toHold.length}</span>
+            </h3>
+            <p className="aint-note">
+              Each of these has a message ready. They are held for the reason on the card, and any of
+              them can still be opened and sent.
+            </p>
+            <div className="aint-holdchips">
+              {holdCounts(toHold.map((id) => holds[id]!.reason)).map((h) => (
+                <span key={h.reason} className="aint-pill hold">
+                  <i className={HOLD_ICON[h.reason]} aria-hidden="true" /> {HOLD_LABEL[h.reason]} <b>{h.n}</b>
+                </span>
+              ))}
+            </div>
+            {toHold.map((id) => <NudgeCard key={id} {...cardProps(id)} />)}
+          </section>
+
+          {toFix.length > 0 && (
+            <section className="aint-nsec">
+              <h3><i className="ri-error-warning-line" aria-hidden="true" /> No message could be generated <span className="aint-count">{toFix.length}</span></h3>
+              <p className="aint-note">
+                These rows are on the roster but have no brief. An operator account on the roster is
+                the usual cause, and is not a fault.
+              </p>
+              <ul className="aint-warnings">
+                {toFix.map((f) => <li key={f.enrollmentId}><b>{f.name}</b>: {f.error}</li>)}
+              </ul>
+            </section>
+          )}
+        </>
+      ) : (
+        <section className="aint-nsec">
+          <h3><i className="ri-team-line" aria-hidden="true" /> Everyone on the roster <span className="aint-count">{rows.length}</span></h3>
+          <p className="aint-note">
+            Write to one person now, or prepare them all above. Opening a row generates that
+            intern&rsquo;s message from the database at that moment.
+          </p>
+          <ul className="aint-nlist">
+            {rows.map((r) => {
+              const id = r.enrollment_id;
+              const brief = briefs[id];
+              const isOpen = open === id;
+              return (
+                <li key={id} className={`aint-nrow ${isOpen ? 'on' : ''}`}>
+                  <div className="aint-nrow-t">
+                    <span className="aint-avatar" aria-hidden="true">{initials(r.name)}</span>
+                    <span className="aint-ncard-id">
+                      <span className="aint-name">{r.name}</span>
+                      <span className="aint-sub">
+                        {r.email ?? 'No email on file'}
+                        {r.project?.name ? ` · ${r.project.name}` : ' · No project'}
+                        {r.day !== null && ` · day ${r.day}`}
+                      </span>
+                    </span>
+                    <span className={`aint-pill ${brief ? `tier tone-${TIER_TONE[brief.tier]}` : 'resting'}`}>
+                      {brief
+                        ? <><i className={TIER_ICON[brief.tier]} aria-hidden="true" /> {TIER_LABEL[brief.tier]}</>
+                        : restingHint(r)}
+                    </span>
+                    <button type="button" className="aint-btn" onClick={() => openRow(id)} aria-expanded={isOpen}>
                       {isOpen ? 'Close' : loadingId === id ? 'Generating…' : 'Write the message'}
                     </button>
-                  </td>
-                  <td>{results[id] ? <OutcomeLine r={results[id]} /> : <span className="aint-muted">-</span>}</td>
-                </tr>
-                {isOpen && (
-                  <tr className="aint-expand">
-                    <td colSpan={6}>
+                    {results[id] && <span className="aint-ncard-out"><OutcomeLine r={results[id]} /></span>}
+                  </div>
+                  {isOpen && (
+                    <div className="aint-nexpand">
                       {errors[id] && <p className="aint-alert">{errors[id]}</p>}
                       {loadingId === id && <p className="aint-muted">Reading their repository, tasks, training and mail…</p>}
                       {brief && (
                         <BriefPanel
                           brief={brief}
                           body={bodies[id] ?? brief.body}
-                          subject={brief.subject}
                           armed={armed === id}
                           busy={busy === id}
                           onBody={(v) => setBodies((b) => ({ ...b, [id]: v }))}
@@ -250,14 +326,14 @@ export const ConsoleViewD: React.FC<{ rows: InternRow[] }> = ({ rows }) => {
                           onSend={() => send(id)}
                         />
                       )}
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 };

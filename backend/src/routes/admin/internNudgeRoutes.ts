@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
-import { buildBriefFor, UnknownInternError } from '../../services/internship/nudgeBrief/build';
+import { buildAllBriefs, buildBriefFor, UnknownInternError } from '../../services/internship/nudgeBrief/build';
 import { sendBrief } from '../../services/internship/nudgeBrief/send';
 import { briefProblems } from '../../services/internship/nudgeBrief/types';
 
@@ -54,6 +54,54 @@ function fail(res: Response, event: string, err: unknown, message: string): void
   }));
   res.status(500).json({ error: message });
 }
+
+/**
+ * GET /api/admin/intern-nudges
+ *
+ * Prepare the whole day in one pass: every intern's message, plus the decision about which of them
+ * should not receive one and why.
+ *
+ *     "we need a button that can prepare the messages that need to be sent out and also show of
+ *      the interns that shouldn't get messages."  (Ali, 10 Nov 2026)
+ *
+ * Registered BEFORE the `:enrollmentId` route. Express matches in order, and a collection path
+ * declared after a sibling param path is reachable only by accident of how the param pattern
+ * happens to be written.
+ *
+ * ## This is still not a bulk send
+ *
+ * It prepares; it does not deliver. Each message is sent from its own row with its own two clicks,
+ * exactly as before, because the objection in this file's header stands: thirteen long messages a
+ * manager has not read should never leave on one button. What this removes is the thirteen separate
+ * waits to find out which three were worth reading, which was never the safety mechanism.
+ *
+ * It costs one full run of the report pipeline, roughly the length of the daily report minus its
+ * model calls. That is why it is a button a person presses rather than something the tab does on
+ * load.
+ */
+router.get(
+  '/api/admin/intern-nudges',
+  requireSection('internship'),
+  async (_req: Request, res: Response) => {
+    const startedAt = Date.now();
+    try {
+      const batch = await buildAllBriefs();
+      const prepared = batch.attempts.filter((a) => a.ok).length;
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'intern-nudge-brief',
+        event: 'intern_briefs_prepared', outcome: 'success', duration_ms: Date.now() - startedAt,
+        context: {
+          prepared,
+          held: batch.attempts.filter((a) => a.ok && a.hold).length,
+          failed: batch.attempts.length - prepared,
+        },
+      }));
+      res.json(batch);
+    } catch (err: any) {
+      fail(res, 'intern_briefs_prepare_failed', err, 'Could not prepare today\'s messages.');
+    }
+  },
+);
 
 /**
  * GET /api/admin/intern-nudges/:enrollmentId
