@@ -1,7 +1,8 @@
 /**
- * renderArtifacts - PURE. The Command Center button, the artifacts block (only what they published,
- * each one opening in a new tab) and the "Ask them for" cards (why, the Claude Code
- * prompt to paste, and the matching nudge). Email-safe: tables, inline styles, every value escaped.
+ * renderArtifacts - PURE. The Command Center button, the artifacts block (only what the intern
+ * themselves made, each one opening in a new tab and naming where it came from) and the
+ * "Ask them for" cards (why, the Claude Code prompt to paste, and the matching nudge).
+ * Email-safe: tables, inline styles, every value escaped.
  */
 import { kindLabel } from './artifacts';
 import type { InternCard } from './types';
@@ -15,6 +16,9 @@ const label = (t: string, color = MUTED): string => `<div style="font-size:10px;
 const pill = (text: string, fg: string, bg: string, border = bg): string =>
   `<span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;background:${bg};color:${fg};border:1px solid ${border}">${text}</span>`;
 
+/** Keep the tail: the filename at the end of a repo path is the part worth reading. */
+const shorten = (s: string, max = 44): string => (s.length <= max ? s : `...${s.slice(-(max - 3))}`);
+
 /** The button in the card header: their published Command Center, or a clear "not published". */
 export function commandCenterHtml(c: InternCard): string {
   const url = c.project?.commandCenterUrl ? safeHref(c.project.commandCenterUrl) : null;
@@ -25,19 +29,23 @@ export function commandCenterHtml(c: InternCard): string {
 }
 
 /**
- * Every artifact they actually published, each a link that opens it. No placeholders, no
- * "+N more": only things that exist, and all of them (Ali, 9 Nov).
+ * Every artifact the intern actually made, each a link that opens it and each carrying the file,
+ * commit or site it came from. No placeholders, no "+N more", and nothing the platform wrote about
+ * them (Ali, 9 Nov: "The data should come from the user ONLY").
  */
 export function artifactsHtml(c: InternCard): string {
   const a = c.artifacts;
   const pub = a.published.map((p) => {
     const href = safeHref(p.url);
-    const text = `<strong>${esc(kindLabel(p.kind))}</strong>: ${esc(p.title.length > 60 ? `${p.title.slice(0, 59)}...` : p.title)}`;
+    const name = esc(p.title.length > 60 ? `${p.title.slice(0, 59)}...` : p.title);
+    const from = p.provenance ? ` <span style="opacity:0.75">${esc(shorten(p.provenance))}</span>` : '';
+    const text = `<strong>${esc(kindLabel(p.kind))}</strong>: ${name}${from}`;
     return href
       ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;background:#4338ca;color:#ffffff;text-decoration:none">${text} &#8599;</a>`
       : pill(text, '#ffffff', '#4338ca');
   }).join('');
-  return `${label(`Artifacts they published (${a.published.length})`)}
+  const caption = `<div style="font-size:11px;color:${MUTED};margin:0 0 4px">Their own work only: files in their repo, files they uploaded, artifacts they built elsewhere.</div>`;
+  return `${label(`Artifacts they made (${a.published.length})`)}${caption}
 <div>${pub || `<span style="font-size:12px;color:${MUTED}">Nothing published yet.</span>`}</div>`;
 }
 
@@ -60,8 +68,8 @@ export function asksHtml(c: InternCard): string {
 /** Plain-text version, for the text part of the email. */
 export function artifactsText(c: InternCard): string[] {
   const a = c.artifacts;
-  const out = [`  Artifacts published: ${a.published.length}${c.project?.commandCenterUrl ? `. Command Center: ${c.project.commandCenterUrl}` : ''}`];
-  for (const p of a.published) out.push(`    ${kindLabel(p.kind)}: ${p.title} ${p.url}`);
+  const out = [`  Artifacts they made: ${a.published.length}${c.project?.commandCenterUrl ? `. Command Center: ${c.project.commandCenterUrl}` : ''}`];
+  for (const p of a.published) out.push(`    ${kindLabel(p.kind)}: ${p.title}${p.provenance ? ` [${p.provenance}]` : ''} ${p.url}`);
   for (const k of a.asks) out.push(`  ASK: ${k.name}. ${k.why}`, `    Nudge: ${k.nudge}`, ...k.prompt.split('\n').map((l) => `    > ${l}`));
   return out;
 }

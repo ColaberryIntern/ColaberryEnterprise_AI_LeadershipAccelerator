@@ -6,13 +6,15 @@
  * Ali, 9 Nov 2026: "suggest the prompt that would help them build an artifact you know they could
  * produce easily based on where they are that would help me understand the project better... and
  * matching nudges." Then: "only artifacts that have actually been produced", so nothing in the
- * Artifacts list is a curriculum placeholder.
+ * Artifacts list is a curriculum placeholder. Then, reading a generated case study: "I want things
+ * that come directly from the repo... The data should come from the user ONLY" - see
+ * `artifactSource` for what that rules out and why.
  *
  * The asks are chosen by rules from where the intern is (stuck, no published Command Center, a gov
  * build nearly done, an agent with many verified stories, no project), so the same facts always
  * produce the same asks, and each prompt is filled with their project, repo and stories.
  */
-import type { ArtifactAsk, ArtifactsView, InternCard, PublishedArtifact } from './types';
+import type { ArtifactAsk, ArtifactSource, ArtifactsView, InternCard, PublishedArtifact } from './types';
 
 export const ADMIN_BASE = 'https://enterprise.colaberry.ai';
 const MAX_ASKS = 3;
@@ -20,6 +22,50 @@ const MAX_ASKS = 3;
 /** Where a published artifact opens: its own claude.ai page when it has one, else the admin viewer. */
 export function artifactUrl(a: Pick<PublishedArtifact, 'id' | 'external_url'>): string {
   return a.external_url && /^https:\/\//.test(a.external_url) ? a.external_url : `${ADMIN_BASE}/admin/internship/artifact/${a.id}`;
+}
+
+type Provenanced = Pick<PublishedArtifact, 'external_url' | 'repo_path' | 'commit_sha' | 'upload_name'>;
+
+/**
+ * Where this artifact came from, or null when it is not the intern's own work.
+ *
+ * Ali, 9 Nov 2026, opening a "Week 2 Evaluation Case Study" that read "The student successfully
+ * completed the Week 2 evaluation with a score of 100%, indicating a comprehensive grasp of the
+ * material": "This looks too structured to be an artifact. I want things that come directly from
+ * the repo. Not things that have been created or made up by this process. The data should come
+ * from the user ONLY."
+ *
+ * That is a property of the table, not of that one row. `runtime_portfolio_artifacts` is an
+ * AUTO-GENERATION store by design: `runtime/portfolioService.generateArtifact` sends the student's
+ * work to an LLM and keeps the model's prose, discarding the student's own text whenever the model
+ * answers (`content = { sections, skills_demonstrated, kind }`; their words survive only in the
+ * deterministic fallback, under `content.work`). Measured on production, 9 Nov 2026, 809 rows:
+ *
+ *   294  LLM prose about the student    (`sections` + `skills_demonstrated`)
+ *   151  our own curriculum field guides, Colaberry-branded, week 1 deep dives
+ *   164  scenario-engine ADRs           (`adr` + `receipt` + `scenario_version`)
+ *    74  a file in their repository     (`repo_path` + `commit_sha`)
+ *    63  a file they uploaded           (`stored_path`)
+ *    62  an artifact they built elsewhere and submitted, with their own reflection
+ *
+ * Only the last three are theirs. The first 609 are things we wrote about them, and a report that
+ * shows those is telling Ali about his own platform's output, not about the intern.
+ */
+export function artifactSource(a: Provenanced): ArtifactSource | null {
+  if (a.repo_path && a.commit_sha) return 'repo';
+  if (a.upload_name) return 'upload';
+  if (a.external_url && /^https:\/\//.test(a.external_url)) return 'link';
+  return null;
+}
+
+/** One short phrase naming where it came from, so the claim is checkable at a glance. */
+export function artifactProvenance(a: Provenanced): string {
+  switch (artifactSource(a)) {
+    case 'repo': return `${a.repo_path} @ ${String(a.commit_sha).slice(0, 7)}`;
+    case 'upload': return `${a.upload_name}, uploaded`;
+    case 'link': return (/^https:\/\/([^/]+)/.exec(String(a.external_url))?.[1]) ?? 'external link';
+    default: return '';
+  }
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -118,15 +164,22 @@ export function chooseAsks(c: Ctx): ArtifactAsk[] {
   return out.slice(0, MAX_ASKS);
 }
 
+/** Repo first, because that is the evidence Ali asked for; newest first inside each class. */
+const SOURCE_ORDER: Record<ArtifactSource, number> = { repo: 0, upload: 1, link: 2 };
+
 /**
- * What this intern actually published, newest first, each with the link that opens it. Nothing
- * here is inferred from the curriculum: Ali, 9 Nov, "artifacts should not be placeholders...
- * only artifacts that have actually been produced and are able to be connected to". (A first
- * version also listed curriculum cards as "overdue" and "due this week"; those were the same
- * template on every card, so they were removed.) Rows with nothing to open are filtered in SQL.
+ * What this intern actually MADE, newest first within each provenance class. Nothing here is
+ * inferred from the curriculum and nothing here was written by the platform: a row the intern did
+ * not produce has no source (see `artifactSource`) and is dropped, here as well as in SQL. The
+ * filter lives in both places on purpose - the SQL keeps the rows out of the report, and this keeps
+ * the rule testable without a database, which is how the generated rows got in the first time.
  */
 export function publishedArtifacts(enrollmentId: string, published: PublishedArtifact[]): ArtifactsView['published'] {
-  return published.filter((a) => a.enrollment_id === enrollmentId)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .map((a) => ({ id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a) }));
+  return published
+    .filter((a) => a.enrollment_id === enrollmentId && artifactSource(a) !== null)
+    .map((a) => ({
+      id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a),
+      source: artifactSource(a) as ArtifactSource, provenance: artifactProvenance(a),
+    }))
+    .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] || new Date(b.at).getTime() - new Date(a.at).getTime());
 }
