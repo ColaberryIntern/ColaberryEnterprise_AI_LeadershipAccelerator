@@ -33,12 +33,20 @@ async function main() {
 
   doc.selfCheck();
   console.log('self-check passed: 48 covered once, every column filled, every status evidenced, '
-    + `${D.TOTALS.noTicket} uncovered rows all declared`);
+    + `${D.NO_TICKET.length} uncovered rows declared as gaps and ${D.SEQUENCED.length} `
+    + 'declared as sequenced');
+
+  // The one-pager carries its own check. It is a different question from the document's:
+  // whether the page's tiles agree with the lists printed under them.
+  const vis = require('./tickets/l04DodVisual');
+  const v = vis.selfCheck();
+  console.log(`one-pager self-check passed: ${v.noTicket} with no ticket = ${v.gaps} gaps + `
+    + `${v.sequenced} sequenced, each named on the page; ${v.blockers} launch blockers`);
 
   const jobs = [
     {
       name: 'L04_DEFINITION_OF_DONE_1PAGE.pdf',
-      html: require('./tickets/l04DodVisual').build(),
+      html: vis.build(),
       landscape: true,
       maxPages: 1,
       margin: '10mm',
