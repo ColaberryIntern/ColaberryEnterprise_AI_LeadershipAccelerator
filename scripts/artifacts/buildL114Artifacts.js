@@ -42,7 +42,25 @@ async function main() {
     + `${D.TOTALS.procedures} procedures with ${D.TOTALS.procedureSteps} actionable steps, `
     + `${D.TOTALS.traps} false leads recorded`);
 
+  // The one-pager carries its own check. The document's check is about paths existing on disk;
+  // this one is about whether the cover page can be read without the mechanism behind it.
+  const vis = require('./tickets/l114Visual');
+  const v = vis.selfCheck();
+  console.log(`one-pager self-check passed: ${v.refs} file references, ${v.envs} env vars, `
+    + `${v.failures} failure symptoms each with its cause on the page, ${v.traps} traps each `
+    + 'named, and the dated state claim intact');
+
   fs.mkdirSync(OUT, { recursive: true });
+
+  // THE ONE-PAGER IS RENDERED FIRST because that is the order it is read in. `maxPages: 1` is
+  // the claim being made - the renderer throws rather than spilling onto a second page.
+  const visPath = path.join(OUT, 'L114_RUNBOOK_GUARANTEES_1PAGE.pdf');
+  const vres = await renderPdf({
+    html: vis.build(), outPath: visPath, landscape: true, maxPages: 1, margin: '10mm',
+  });
+  console.log(`L114_RUNBOOK_GUARANTEES_1PAGE.pdf: ${vres.pages} page(s) — what the runbook `
+    + 'guarantees, and the five things that are not what they look like');
+
   const outPath = path.join(OUT, 'L114_MAINTENANCE_RUNBOOK.pdf');
   const res = await renderPdf({
     html: doc.build(), outPath, landscape: false, maxPages: 0, margin: '12mm',

@@ -27,6 +27,12 @@
  * fifteen outputs are a table, not fifteen headings) — those only have to be present and named.
  */
 
+/**
+ * DOC 12's own data, read so the ledger's description of it cannot drift. Safe in this
+ * direction only: l112Data knows nothing about this file, so there is no cycle.
+ */
+const L112 = require('./l112Data');
+
 const META = {
   ticket: 'L11.8',
   title: 'Colaberry Live project documents DOC 00-08',
@@ -293,10 +299,18 @@ const LEDGER = [
   {
     id: 12, title: 'Architecture Diagrams', ticket: 'L11.2',
     file: 'docs/colaberry-live/DOC_12_ARCHITECTURE_DIAGRAMS.md', state: 'WRITTEN',
-    note: 'Written 2026-11-03. Ten diagrams, Mermaid source generated from l112Data.js, 76 '
-      + 'required elements checked against the source. 14 nodes across 7 diagrams are drawn '
-      + 'dashed and red because they are not built, and the build fails if an unbuilt path is '
-      + 'drawn like a working one.',
+    /**
+     * DERIVED FROM l112Data, NOT TYPED. This note said "76 required elements" while that module
+     * held 78, and "14 nodes across 7 diagrams" which happened to still be right. A figure
+     * copied into prose in one file and maintained in another drifts the moment the second one
+     * changes, and nothing in either file notices. Reading them makes the ledger wrong only if
+     * the diagrams are wrong.
+     */
+    note: `Written 2026-11-03. ${L112.TOTALS.diagrams} diagrams, Mermaid source generated from `
+      + `l112Data.js, ${L112.TOTALS.required} required elements checked against the source. `
+      + `${L112.TOTALS.notBuiltNodes} nodes across ${L112.TOTALS.withNotBuilt} diagrams are `
+      + 'drawn dashed and red because they are not built, and the build fails if an unbuilt '
+      + 'path is drawn like a working one.',
   },
   {
     id: 13, title: 'Ali + Piyush Studio Operator Manual', ticket: 'L11.3', file: null,
