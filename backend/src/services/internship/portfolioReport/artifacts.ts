@@ -15,6 +15,7 @@
  * produce the same asks, and each prompt is filled with their project, repo and stories.
  */
 import type { ArtifactAsk, ArtifactFileType, ArtifactSource, ArtifactsView, InternCard, PublishedArtifact } from './types';
+import { presentationAsk, type PresentationDue } from './presentations';
 
 export const ADMIN_BASE = 'https://enterprise.colaberry.ai';
 const MAX_ASKS = 3;
@@ -205,7 +206,7 @@ export function formatCorrection(c: Ctx, published: Published, nowMs: number): A
 }
 
 /** The project artifacts worth asking for right now, most useful first. */
-export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()): ArtifactAsk[] {
+export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now(), presentation: PresentationDue | null = null): ArtifactAsk[] {
   const p = c.project;
   const out: ArtifactAsk[] = [];
   // Second only to a Blocker Brief: an intern who is blocked needs unblocking before reformatting.
@@ -216,6 +217,8 @@ export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()
       'It lets me unblock you in one reply instead of a back-and-forth.',
       `Create docs/BLOCKER_BRIEF.html (and its PDF). Use git log, the open stories in the build plan, and any error you can reproduce now. Sections:\n1. What I am trying to finish${p.next ? ` (the story "${p.next.title}")` : ''}.\n2. Exactly where it fails: the command, file and error text.\n3. What I already tried and what happened.\n4. The one decision, access or answer I need from Ali.\n5. What I will do the moment it is unblocked.`));
   }
+  // The next presentation, once their own plan says it is due (presentations.presentationDue).
+  if (presentation) out.push(presentationAsk(c.firstName, p?.name ?? null, presentation));
   if (correction) out.push(correction);
   if (p && !p.commandCenterUrl) {
     const started = p.verifiedRecent.some((v) => /command center|story-000/i.test(v.title)) || p.commitsRecent.some((x) => /command center|story-000/i.test(x.message));
@@ -251,7 +254,7 @@ export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()
 }
 
 /** Repo first, because that is the evidence Ali asked for; newest first inside each class. */
-const SOURCE_ORDER: Record<ArtifactSource, number> = { repo: 0, upload: 1, link: 2 };
+const SOURCE_ORDER: Record<ArtifactSource, number> = { recording: 0, repo: 1, upload: 2, link: 3 };
 
 /**
  * What this intern actually MADE, newest first within each provenance class. Nothing here is
@@ -260,13 +263,15 @@ const SOURCE_ORDER: Record<ArtifactSource, number> = { repo: 0, upload: 1, link:
  * filter lives in both places on purpose - the SQL keeps the rows out of the report, and this keeps
  * the rule testable without a database, which is how the generated rows got in the first time.
  */
-export function publishedArtifacts(enrollmentId: string, published: PublishedArtifact[]): ArtifactsView['published'] {
+export function publishedArtifacts(enrollmentId: string, published: PublishedArtifact[], videos: ArtifactsView['published'] = []): ArtifactsView['published'] {
   return published
     .filter((a) => a.enrollment_id === enrollmentId && artifactSource(a) !== null)
-    .map((a) => ({
+    .map((a): ArtifactsView['published'][number] => ({
       id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a),
       source: artifactSource(a) as ArtifactSource, provenance: artifactProvenance(a), fileType: artifactFileType(a),
       repoPath: a.repo_path ?? null, uploadName: a.upload_name ?? null,
     }))
+    // Their demo videos (presentations.videoArtifacts) are artifacts too, listed first.
+    .concat(videos)
     .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] || new Date(b.at).getTime() - new Date(a.at).getTime());
 }

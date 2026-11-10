@@ -43,7 +43,7 @@ export interface SidecarArtifact {
   title: string;
   published_at: string;
   url: string;
-  source: 'repo' | 'upload' | 'link';
+  source: 'repo' | 'upload' | 'link' | 'recording';
   provenance: string;
   file_type: string;
   wrong_format: boolean;

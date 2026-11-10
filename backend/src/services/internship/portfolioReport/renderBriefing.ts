@@ -44,8 +44,9 @@ function highlightRows(report: PortfolioReport, s: Sidecar): string {
   }).join('');
 }
 
-export function renderBriefing(report: PortfolioReport, s: Sidecar): { subject: string; html: string; text: string } {
+export function renderBriefing(report: PortfolioReport, s: Sidecar, opts: { edition?: 'daily' | 'meeting' } = {}): { subject: string; html: string; text: string } {
   const date = fmtDate(report.generatedAt);
+  const meeting = opts.edition === 'meeting';
   const t = report.totals;
   const k = report.counts || {};
   const all = report.groups.flatMap((g) => g.interns);
@@ -60,7 +61,7 @@ export function renderBriefing(report: PortfolioReport, s: Sidecar): { subject: 
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Roboto,Segoe UI,Arial,sans-serif;color:#1e293b">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:20px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:760px">
-<tr><td>${brandHeader('Your Internship Report', `${date} · ${t.interns} interns · last 21 days`)}</td></tr>
+<tr><td>${brandHeader(meeting ? 'Your Internship Report for today\'s intern meeting' : 'Your Internship Report', `${date} · ${t.interns} interns · last 21 days${meeting ? ' · fresh as of 10:00 AM' : ''}`)}</td></tr>
 <tr><td style="padding:12px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="6"><tr>
   ${kpi('Interns', t.interns, BRAND.navy)}${kpi('On track', t.onTrack, '#16a34a')}${kpi('Need attention', t.attention, '#ea580c')}${kpi('Stalled', t.stalled, BRAND.red)}${kpi('Weeks 1-3 cleared', k.weeks_1_3_clear ?? '-', '#16a34a')}${kpi('No project', k.no_project ?? '-', '#ea580c')}${kpi('Replies you owe', t.repliesOwed, '#0e7490')}
 </tr></table></td></tr>

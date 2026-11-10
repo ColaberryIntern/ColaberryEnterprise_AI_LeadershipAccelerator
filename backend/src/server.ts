@@ -42,6 +42,7 @@ import buildArtifactRoutes from './routes/buildArtifactRoutes';
 import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
+import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
 import publicRoomJoinRoutes from './routes/publicRoomJoinRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
@@ -328,6 +329,9 @@ app.use(trackingRoutes);
 // MUST stay above adminRoutes: a public route mounted after it inherits the admin
 // auth guard and 401s for the strangers it exists to serve.
 app.use(publicCareerPortfolioRoutes);
+// Intern demo-video BYTES for the admin video viewer: authorized by a signed staff ticket in the URL
+// (a <video src> sends no Authorization header), so it MUST stay above adminRoutes or it 401s.
+app.use(internVideoStreamRoutes);
 app.use(publicHireTalentRoutes); // hire.refactored.ai directory + intro (public, unauthenticated)
 app.use(publicCaseStudyRoutes);
 // A room's stable join address (/api/public/rooms/join/:token). Same rule, and it

@@ -17,7 +17,13 @@
 const { spawnSync } = require('child_process');
 
 const CONTAINER = process.env.INTERN_REPORT_CONTAINER || 'accelerator-backend';
-const passthrough = process.argv.slice(2).filter((a) => ['--dry', '--no-llm'].includes(a));
+// Allowlisted passthrough: --dry, --no-llm, and --edition <daily|meeting> (the Tuesday 10:00 AM
+// intern-meeting copy). Anything else is dropped, so the registry cannot smuggle a flag such as
+// --test-to into the container.
+const argv = process.argv.slice(2);
+const passthrough = argv.filter((a) => ['--dry', '--no-llm'].includes(a));
+const ed = argv.indexOf('--edition');
+if (ed >= 0 && ['daily', 'meeting'].includes(argv[ed + 1])) passthrough.push('--edition', argv[ed + 1]);
 
 const r = spawnSync('docker', ['exec', CONTAINER, 'node', 'dist/scripts/internshipPortfolioReport.js', ...passthrough], {
   stdio: 'inherit',

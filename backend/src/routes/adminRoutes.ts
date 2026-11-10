@@ -65,6 +65,7 @@ import growthJourneyContentApprovalRoutes from './admin/growthJourneyContentAppr
 import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
 import internArtifactRoutes from './admin/internArtifactRoutes';
+import internVideoRoutes from './admin/internVideoRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
@@ -301,6 +302,7 @@ router.use(agentDomainRoutes);
 router.use(agentNudgeRoutes);
 // One published intern artifact, for the viewer the Internship Report links to (section internship).
 router.use(internArtifactRoutes);
+router.use(internVideoRoutes);
 // AF10.6: an intern naming their own agent. Separate from agentDomainRoutes for the same reason
 // as the line above -- that router is read-only by charter and this one writes -- but on the
 // narrower `dashboard` grant, because it carries no builder name or address.

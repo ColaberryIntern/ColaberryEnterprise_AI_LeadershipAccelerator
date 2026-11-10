@@ -16,6 +16,7 @@ const label = (t: string, color = MUTED): string => `<div style="font-size:10px;
 
 /** How each file type looks: a solid badge color, a light chip tint, an email-safe icon (HTML entity). */
 const FILE_TYPE: Record<ArtifactFileType, { label: string; color: string; tint: string; icon: string }> = {
+  video: { label: 'Video', color: '#be185d', tint: '#fdf2f8', icon: '&#127909;' },
   pdf: { label: 'PDF', color: '#b91c1c', tint: '#fef2f2', icon: '&#128196;' },
   spreadsheet: { label: 'Spreadsheet', color: '#15803d', tint: '#f0fdf4', icon: '&#128202;' },
   word: { label: 'Word', color: '#1d4ed8', tint: '#eff6ff', icon: '&#128221;' },
@@ -30,7 +31,7 @@ const FILE_TYPE: Record<ArtifactFileType, { label: string; color: string; tint: 
   text: { label: 'Text: convert to PDF', color: '#b45309', tint: '#fffbeb', icon: '&#9888;' },
 };
 /** PDFs first: they are the artifacts Ali asked for. */
-const TYPE_ORDER: ArtifactFileType[] = ['pdf', 'spreadsheet', 'word', 'slides', 'html', 'image', 'claude', 'link', 'file', 'markdown', 'text'];
+const TYPE_ORDER: ArtifactFileType[] = ['video', 'pdf', 'spreadsheet', 'word', 'slides', 'html', 'image', 'claude', 'link', 'file', 'markdown', 'text'];
 
 /** Keep the tail: the filename at the end of a repo path is the part worth reading. */
 const shorten = (s: string, max = 44): string => (s.length <= max ? s : `...${s.slice(-(max - 3))}`);

@@ -14,10 +14,14 @@
  *   attached     internship-report-<date>.json: the same data for an agent (sidecar/)
  *
  * Autopilot: reportingRegistry.js "Internship Portfolio Report", sendCT 08:00 with a 09:00 retry,
- * every day, fired by the --ct-now runner cron. The ledger below makes the retry a no-op once sent.
+ * every day, plus "Internship Portfolio Report (Tuesday intern meeting)", Tuesdays 10:00 with an
+ * 11:00 retry (--edition meeting), both fired by the --ct-now runner cron. The ledger makes each
+ * retry a no-op once its edition has sent.
  *
  * Run inside the backend container (cron):  node dist/scripts/internshipPortfolioReport.js
  *   --dry               build only, never send
+ *   --edition meeting   the Tuesday 10:00 AM intern-meeting copy: its own subject and ledger key,
+ *                       so it sends in addition to the 8:00 AM report (default: daily)
  *   --test-to <email>   send ONE test copy to <email> only (subject marked TEST, own idempotency
  *                       key, no snapshot): never consumes or changes the real daily send
  *   --out <file>        also write the email HTML to <file>
@@ -48,7 +52,7 @@ import { composeInternshipPortfolio } from '../services/internship/portfolioRepo
 import { narrateAsks, type ChatClient } from '../services/internship/portfolioReport/narrate';
 import { summarizeInterns } from '../services/internship/portfolioReport/summary';
 import { jsonFileName, pageFileName, renderBriefing } from '../services/internship/portfolioReport/renderBriefing';
-import { centralDate, sendPlanFor, testSubject, type SendPlan } from '../services/internship/portfolioReport/sendPlan';
+import { centralDate, meetingSubject, parseEdition, sendPlanFor, testSubject, type SendPlan } from '../services/internship/portfolioReport/sendPlan';
 import type { CollectedPortfolio } from '../services/internship/portfolioReport/types';
 import { claimSend, recordSendFailure, recordSendSuccess } from '../services/email/idempotentSend';
 import { lintAliEmail } from '../services/email/aliEmailStyle';
@@ -137,8 +141,10 @@ async function main(): Promise<number> {
 
   // The email: the 10 most impactful things, Ali's moves and everyone at a glance; the page is attached.
   const testTo = opt('--test-to');
-  const briefing = renderBriefing(report, sidecar);
-  const subject = testTo ? testSubject(briefing.subject) : briefing.subject;
+  const edition = parseEdition(opt('--edition'));
+  const briefing = renderBriefing(report, sidecar, { edition });
+  const editioned = edition === 'meeting' ? meetingSubject(briefing.subject) : briefing.subject;
+  const subject = testTo ? testSubject(editioned) : editioned;
   const { html, text } = briefing;
   const out = opt('--out');
   if (out) { fs.writeFileSync(out, html); log('written', { file: out }); }
@@ -150,7 +156,7 @@ async function main(): Promise<number> {
 
   let outcome: string = 'dry';
   if (!has('--dry') && !fromJson) {
-    outcome = await send(subject, html, text, sendPlanFor(now, testTo), attachments);
+    outcome = await send(subject, html, text, sendPlanFor(now, testTo, edition), attachments);
     // Only the real daily send moves the delta baseline; a dry run or a test copy never changes
     // tomorrow's comparison.
     if (outcome === 'sent' && !testTo && useStore) log('snapshot', { saved: await saveSnapshot(snapshotOf(sidecar), sidecarText), report_date: reportDate });

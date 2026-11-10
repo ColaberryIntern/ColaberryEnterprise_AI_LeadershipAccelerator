@@ -117,19 +117,13 @@ const REPORTS = [
     description: 'Daily decisions-owed report for Ali Personal. Gov Contracts format: per-topic-group cards with NEXT HUMAN STEP, full task sequence, tier pills, recently-completed. Replaces the Mon/Wed/Fri sendAliDecisionsOwedDigest.js cadence.',
   },
   // ---- Intern reports ----
-  {
-    name: 'Intern Daily Nudges (BLACK/RED/ORANGE)',
-    scriptPath: 'backend/src/scripts/dailyInternNudges.js',
-    args: [],
-    projectId: 24865175,
-    needsOpenai: true,
-    recipients: STANDARD_RECIPIENTS,
-    cbRunnerState: null,
-    skipFlag: '--skip-intern-nudges',
-    cadence: 'daily',
-    sendHourUTC: 17,  // 12 PM CT (lunch-break friendly)
-    description: 'Daily intern nudge digest. BLACK = day 10+ exit cliff, RED 7-9d, ORANGE 4-6d, YELLOW 1-3d, GREEN today.',
-  },
+  // ---- Intern Daily Nudges (BLACK/RED/ORANGE): RETIRED 2026-11-10 ----
+  // Ali, choosing to retire the Basecamp-based daily intern nudges ("2. A"). dailyInternNudges.js
+  // read Basecamp project 24865175, which the internship no longer uses; the nudges now come from
+  // the Internship Portfolio Report below (each intern's suggested nudge and asks). The standalone
+  // crontab line was commented out the same day, and the runner's hourly line carries
+  // --skip-intern-nudges until this removal deploys. The script stays runnable by hand. Do not
+  // re-add without asking.
   {
     // Replaced the Basecamp-based "Intern Weekly Report" (weeklyInternReport.js, project 24865175)
     // on 2026-11-09 per Ali: interns now build in repos on platform projects (7 agent + 3 gov), and
@@ -144,12 +138,30 @@ const REPORTS = [
     skipFlag: '--skip-internship-report',
     // EVERY morning, weekends included (Ali, 10 Nov 2026: "Setup the process to be on auto pilot
     // running every morning"). 8:00 AM Central, DST-correct, with a 9:00 retry; fired by the daily
-    // `--ct-now` cron at 13,14,15 UTC (which covers 8 and 9 AM Central in both CST and CDT). The
+    // `--ct-now` cron at 13-17 UTC (which covers 8 and 9 AM Central in both CST and CDT). The
     // report's send ledger (internship-report-<CT date>) makes the 9:00 slot a no-op once 8:00 sent,
     // and a failed 8:00 send retries at 9:00.
     cadence: 'daily',
     sendCT: ['08:00', '09:00'],
     description: 'The 10 most impactful things in the internship today, your moves and everyone at a glance; attached: the full interactive report (guided tour, one timeline for everyone, filter by person, every intern card with prompts) and the JSON sidecar for agents. Idempotent per day via email_send_ledger.',
+  },
+  {
+    // The same report, fresh for Ali's Tuesday intern meeting (Ali, 10 Nov 2026: "This report
+    // should also hit my inbox at 10am on Tuesdays and the same times you already have. That is
+    // when I meet with the interns"). In ADDITION to the 8:00 daily: `--edition meeting` gives it
+    // its own subject and ledger key (internship-report-<date>-meeting), so both send, each once.
+    // 10:00 AM Central with an 11:00 retry, fired by the same daily --ct-now cron (13-17 UTC).
+    name: 'Internship Portfolio Report (Tuesday intern meeting)',
+    scriptPath: 'backend/src/scripts/runInternshipPortfolioReport.js',
+    args: ['--edition', 'meeting'],
+    projectId: null,
+    needsOpenai: false,
+    recipients: STANDARD_RECIPIENTS,
+    cbRunnerState: null,
+    skipFlag: '--skip-internship-meeting-report',
+    cadence: { dayOfWeek: 2 }, // Tuesday
+    sendCT: ['10:00', '11:00'],
+    description: 'Tuesday 10:00 AM copy of the Internship Report, fresh for the weekly intern meeting.',
   },
   // ---- IPBC interview preparation ----
   {
