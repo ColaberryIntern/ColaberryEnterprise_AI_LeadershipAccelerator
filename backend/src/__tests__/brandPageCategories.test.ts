@@ -31,6 +31,9 @@ const APPS_DIR = path.join(REPO_ROOT, 'apps');
  */
 const ALLOWED_UNCATEGORISED: Record<string, string> = {
   // (brand:path) -> why
+  'refactored:/404':
+    'hire.refactored.ai not-found page. nginx serves it internally (error_page 404) at whatever ' +
+    'wrong address was typed, so "/404" is never a visited URL, and a miss carries no intent.',
 };
 
 interface AppPages {

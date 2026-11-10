@@ -40,6 +40,22 @@ async function run() {
     check('an unknown case study and one published only elsewhere render the same page',
       csUnknown.html === csOther.html && csUnknown.html.includes("isn't published here"));
 
+    // nginx's own pages leaked through in production (2026-11-09): a plain 404 for an
+    // unknown path and a plain 403 for the bare collections.
+    const stray = L.resolveFile('/no-such-page/');
+    check('an unknown path gets the site\'s branded 404, with a 404 status',
+      stray.status === 404 && /404\.html$/.test(stray.file || ''));
+    const ctx404 = await browser.newContext();
+    const p404 = await ctx404.newPage();
+    const r404 = await p404.goto(`${base}/no-such-page/`);
+    check('the branded 404 renders and points home',
+      r404.status() === 404 && (await p404.textContent('h1')).includes('There is no page here') && (await p404.getAttribute('main a', 'href')) === '/');
+    await ctx404.close();
+    for (const [p, to] of [['/talent/', '/#talent'], ['/case-studies/', '/#published']]) {
+      const r = L.resolveFile(p);
+      check(`${p} redirects to ${to}, never a 403`, r.status === 302 && r.location === to);
+    }
+
     for (const p of ['/ws-post-job', '/api/anything']) {
       const r = L.resolveFile(p);
       check(`${p} answers 410 retired JSON, never the HTML shell`, r.status === 410 && r.json === '{"error":"retired"}');

@@ -28,6 +28,13 @@ journey, not just "the homepage loads." Remember the backend's normal ~60-90s bo
 window after a rebuild - a slow first response in that window is timing, not failure;
 retry once before failing check 1 or 5.
 
+Two rules learned the hard way:
+- **Prove the release with git, not labels.** Image revision labels are empty here. The
+  merge is live when `git merge-base --is-ancestor <merge-sha> HEAD` holds on the box
+  and the changed behaviour shows on the live site.
+- **Visible, not present.** A UI element passes only with a non-zero rendered size after
+  hydration. Element-exists checks passed a page whose every video was 0x0.
+
 ## What you must never do
 
 - Never pass based on a local build succeeding, `tsc` being clean, or the deploy

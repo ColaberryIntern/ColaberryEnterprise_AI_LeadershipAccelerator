@@ -541,6 +541,8 @@
         var link = el('a', 'cs-back', 'Approved profile');
         link.href = b.profileUrl;
         link.rel = 'noopener';
+        // A profile on another site opens beside the case study, never in its place.
+        if (link.host && link.host !== window.location.host) link.target = '_blank';
         who.appendChild(link);
       }
       card.appendChild(who);

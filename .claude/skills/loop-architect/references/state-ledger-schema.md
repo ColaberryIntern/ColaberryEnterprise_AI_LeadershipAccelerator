@@ -27,7 +27,8 @@ handoff.md                # Phase J output
   "tasks": [
     {
       "id": "T001",
-      "status": "pending|in_progress|passed|failed|blocked|skipped",
+      "status": "pending|in_progress|passed|failed|blocked|skipped|superseded",
+      "superseded_by": "",
       "attempts": 0,
       "verifier_score": 0,
       "evidence": [],
@@ -50,9 +51,20 @@ Update this file atomically (write to a temp file in the same directory, then re
 after every status change - a run that crashes mid-write must never leave a
 half-written ledger the resume logic can't parse.
 
+`superseded` means an owner decision made the task moot; `superseded_by` names that
+decision (e.g. "H1.5: Ali cut hire.refactored.ai over directly, no preview host"). It
+counts as closed for dependency purposes, and its ticket gets the same reason as a
+comment.
+
 ## Resume behavior
 
-On invocation, before creating a new run:
+On invocation, before creating a new run (and before anything else, re-run the access
+preflight in SKILL.md - the resumed session may be on a different machine):
+
+0. If `.loop-architect/runs/` has no matching run but `docs/sessions/CC-<id>.md` carries
+   a resume pointer for this request, the run directory is on another machine. Rebuild
+   the ledger from that pointer and the tracker (ticked = passed) rather than starting
+   a fresh plan.
 
 1. List `.loop-architect/runs/*/state-ledger.json` where `status` is not `complete`.
 2. For each candidate, compare its `request_hash` (or a human-obvious match on

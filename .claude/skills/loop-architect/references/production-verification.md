@@ -14,24 +14,32 @@
 5. Rollback path is concrete: the last-known-good commit SHA is recorded before
    deploying the new one.
 6. `git diff` against `main`'s previous tip contains only in-scope changes.
-7. No concurrent deploy is in flight (check for a running `compose ... up` build on the
-   box - the repo has a documented race condition here; never overlap two deploys).
+7. No concurrent deploy is in flight. `scripts/deploy-prod.sh` enforces this with a
+   flock; never bypass it with a bare `compose up`.
+8. **The merge is not already live.** Other sessions deploy main several times a day.
+   If the box's `HEAD` already contains the merge commit and the containers were
+   created after it, do not redeploy: record who/when in `deployment-log.md` and go to
+   Phase I.
+9. **CI has published the image for main's tip** (registry mode). Deploying before it
+   exists pulls the previous image and reports success.
 
 ## Deploy execution
 
 ```bash
 ssh root@95.216.199.47
 cd /opt/colaberry-accelerator
-git status                      # confirm clean; do not deploy over uncommitted changes
-git rev-parse HEAD               # record as "previous SHA" for rollback before pulling
-git pull origin main
-git rev-parse HEAD               # record as "deployed SHA"
-docker compose -f docker-compose.production.yml up -d --build <service>
+git rev-parse HEAD                                   # "previous SHA", for rollback
+git merge-base --is-ancestor <merge-sha> HEAD && echo ALREADY-LIVE   # precondition 8
+./scripts/deploy-prod.sh backend nginx               # pulls, locks, deploys, proves running
+git rev-parse HEAD                                   # "deployed SHA"
 ```
 
-Wait for the backend's normal ~60-90s boot window before treating a 502 as a failure.
-Capture in `deployment-log.md`: command run, previous SHA, deployed SHA, timestamp,
-target environment, resulting URL(s), and which service(s) were rebuilt.
+Run multi-line remote work from a script file (`scp` + `bash`), never inline through
+PowerShell. Capture in `deployment-log.md`: command run, previous SHA, deployed SHA,
+timestamp, target environment, resulting URL(s), which service(s) were rebuilt, and -
+when precondition 8 held - which deploy actually shipped it. Container image revision
+labels are empty in this repo, so "deployed SHA" is the box's `HEAD`, proven against
+behaviour in Phase I, never against a label.
 
 Never invent a "deployed successfully" result. If SSH access, a passing quality gate,
 or a required migration step is missing, stop Phase H and report exactly what's
@@ -50,7 +58,13 @@ runs fresh, from the live system, using whichever of these it has tools for:
 3. **Primary user journey works** - the main flow the request was about, exercised
    live (HTTP calls, or browser automation if Playwright/browser tools are available).
 4. **Changed behavior specifically works** - not just "site is up," but the actual
-   thing this run built.
+   thing this run built. For UI, **measure what a reader sees, not what the DOM
+   holds**: a video, chart or panel passes only with a non-zero rendered size
+   (`getBoundingClientRect()`), after the page has hydrated. The hire case-study page
+   shipped with every walkthrough video in the DOM at 0x0, hidden by one CSS rule,
+   because checks asked "is the element there?" Where the run reproduces a reference
+   surface, screenshot both side by side and list what the reference shows that the
+   build does not.
 5. **API/health checks pass** - any existing health endpoints return healthy.
 6. **Auth/authorization correct** - if the change touches a protected route, confirm
    both the authorized and unauthorized paths behave as expected.
@@ -62,6 +76,13 @@ runs fresh, from the live system, using whichever of these it has tools for:
    and correct in `deployment-log.md`.
 10. **No secrets leaked** - none of the verifier's own output (or anything it observed)
     contains an env var value, token, or credential.
+
+**Criteria that need a production write** ("a newly published person appears within
+120s", "a withdrawn person disappears within the TTL") cannot be proven by a read-only
+verifier. Decide at PLAN time how each will be proven - a named, reversible fixture the
+owner has approved, or an explicit carve-out in the execution contract. A criterion
+nobody planned for comes back NOT VERIFIABLE, and the verdict must list it rather than
+pass over it.
 
 **PASS requires all applicable critical checks (1-6) to pass.** Checks 7-10 are
 recorded as pass/not-applicable/fail but a "not applicable" on 7-10 does not block PASS

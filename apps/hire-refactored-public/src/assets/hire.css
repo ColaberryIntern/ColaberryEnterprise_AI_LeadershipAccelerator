@@ -32,6 +32,15 @@ main:focus{outline:none}
 .nav a,.nav button.link{font-size:.92rem;color:var(--fg-muted);padding:8px 12px;border-radius:8px;background:none;border:0}
 .nav a:hover,.nav button.link:hover{color:var(--fg);background:var(--bg-elevated)}
 @media(max-width:760px){.nav .hide-sm{display:none}}
+/* A 390px phone could not fit logo + theme + "★ Shortlist 0": the bar ran 63px past the
+   screen and the page scrolled sideways (production verification, 2026-11-09). The word
+   stays for screen readers; the star and count carry it on sight. */
+@media(max-width:520px){
+  .wrap{padding:0 16px}
+  .bar{gap:10px}
+  .nav .btn-star{padding:8px 12px}
+  .nav .btn-star .lbl{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+}
 
 /* buttons */
 .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:.92rem;padding:10px 16px;border-radius:10px;border:1px solid transparent}

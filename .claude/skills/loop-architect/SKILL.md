@@ -55,13 +55,20 @@ the Blocked dashboard instead of chat prose.
 
 ## Repository facts this skill assumes (verify at DISCOVER time - these drift)
 
-- **Deploy mechanism:** `ssh root@95.216.199.47`, then `git pull origin main && docker
-  compose -f docker-compose.production.yml up -d --build [service]` from
-  `/opt/colaberry-accelerator`. Backend takes ~60-90s to bind port 3001 after a
-  build - a 502 in that window is timing, not failure. Verify `HEAD` on the box equals
-  `origin/main` before trusting a deploy (a dirty prod tree rebuilds stale). Never run
-  two `compose ... up` invocations concurrently (race -> Cloudflare 521 / shared
-  Postgres OOM cascade).
+- **Deploy mechanism:** `ssh root@95.216.199.47`, then `./scripts/deploy-prod.sh
+  backend nginx` from `/opt/colaberry-accelerator`. Never a bare `docker compose up`:
+  the script holds a flock (concurrent deploys race -> Cloudflare 521 / shared Postgres
+  OOM cascade) and proves the containers are running afterwards. Prod is in **registry
+  mode**: it pulls the image CI published for main's tip, so a deploy before that image
+  exists is a silent no-op, and rolling back by SHA needs `DEPLOY_MODE=build`. Backend
+  takes ~60-90s to bind port 3001 - a 502 in that window is timing, not failure.
+  Several sessions deploy main: **before deploying, check whether the merge is already
+  live** (`git merge-base --is-ancestor <merge-sha> HEAD` on the box, and container
+  `Created` later than the merge). If it is, record that in `deployment-log.md` and go
+  straight to Phase I - redeploying the same code only adds race risk.
+- **Remote commands from Windows:** PowerShell rewrites quotes and runs `$(...)` locally
+  before `ssh` sends it. Anything beyond a one-word command goes in a script file:
+  `scp` it to `/root`, run it with `bash`, delete it. Do not debug quoting.
 - **Protected path:** work happens on a `workstream/*` branch, merges to `main` via PR
   (1 review + 4 required checks; frontend typecheck is the authoritative frontend gate).
   Only `main` deploys to production.
@@ -73,14 +80,42 @@ the Blocked dashboard instead of chat prose.
   `passed` needs an entry in `docs/sessions/CC-<id>.md` with verification evidence
   before the run's Phase G is considered satisfied. This loop does not substitute for
   that gate - it feeds it.
-- **Escalation boundary (CLAUDE.md Autonomy Model):** routine app deploys (`docker
-  compose up -d --build <service>` on an already-approved plan) are PROCEED-tier.
+- **Escalation boundary (CLAUDE.md Autonomy Model):** routine app deploys
+  (`scripts/deploy-prod.sh` on an already-approved plan) are PROCEED-tier.
   Changes to `docker-compose*.yml`, `nginx/`, DB engine/schema redesign, new paid
   external dependencies, or anything in CLAUDE.md's Strategic Decisions list are
   ESCALATE-tier and become a hard-stop for this loop, not a task it executes silently.
 - **Runtime state:** lives in `.loop-architect/runs/<timestamp>-<task-slug>/`, gitignored.
   Never put secrets in it; deploy/prod checks read credentials from the environment
-  (VPS env vars), never from files this loop writes.
+  (VPS env vars), never from files this loop writes. **Gitignored means one machine.**
+  The operator switches computers mid-run; when that happened (hire.refactored.ai,
+  2026-11-09) the ledger, deploy log and handoff were stranded on the old one. So at
+  every milestone, mirror the ledger summary and a resume pointer into the committed
+  session log `docs/sessions/CC-<id>.md`, and commit `handoff.md` to `docs/` with the
+  run's last PR - never let the only copy of run state be a gitignored folder.
+
+## Access preflight (DISCOVER, not DEPLOY)
+
+Check at Phase A, on the machine the run is on, that every tool Phases H-I need works:
+`ssh -o BatchMode=yes root@95.216.199.47 true`, `gh auth status`, the tracker token, and
+a browser for Playwright. Claude cannot grant itself any of these (the safety
+classifier blocks minting keys or adding access, correctly), so a gap found at deploy
+time stalls the run on the operator. Found at DISCOVER, it goes in the single
+preflight question set with copy-paste steps, and the build proceeds while the
+operator fixes it. Re-run the check on resume: a resumed session may be on a
+different machine.
+
+## Keep the plan and the tracker honest
+
+- **Superseded, not stale.** When an owner decision makes a planned task moot (Ali cut
+  the real domain over directly, so the preview-host tasks never ran), mark the task
+  `superseded` in the ledger with the decision that replaced it, comment that on its
+  ticket, and re-point any "done when" check at what actually exists. A task left open
+  because the world moved past it reads as unfinished work.
+- **Reconcile ledger and tracker at every milestone.** Before firing a dashboard,
+  every `passed` task's ticket must be ticked with its evidence comment, and every
+  ticked ticket must be `passed` in the ledger. The hire run shipped M1 with 25 passed
+  tasks and their tickets still open; the tracker is what the owner reads.
 
 ## Assumption defaults when the repo is silent
 
@@ -109,7 +144,7 @@ On invocation:
 
 ## Final report (every run, pass or blocked)
 
-Plan audit score + cycles used; tasks passed/failed/blocked/skipped + retries; quality
-gate result; deploy environment + commit SHA + URL; production-verification result;
+Plan audit score + cycles used; tasks passed/failed/blocked/skipped/superseded + retries;
+ledger-vs-tracker reconcile result; quality gate result; deploy environment + commit SHA + URL; production-verification result;
 path to `handoff.md`; which milestone dashboards fired and where they live; why the
 loop stopped; the exact next action, if any.
