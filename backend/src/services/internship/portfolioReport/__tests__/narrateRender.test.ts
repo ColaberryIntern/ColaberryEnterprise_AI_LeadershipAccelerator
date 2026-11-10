@@ -62,7 +62,7 @@ describe('render', () => {
     const data = collected();
     data.projects[0].commits = [{ date: daysAgo(1), author: 'kal', message: 'fix — dash' }];
     const { subject, html, text } = renderInternshipPortfolio(composeInternshipPortfolio(data, { now: NOW }));
-    expect(subject).toBe('[Internship Report] Mon, Nov 9, 2026');
+    expect(subject).toBe("Ali, here's your Internship Report for Mon, Nov 9, 2026");
     expect(/[—–]/.test(html + text + subject)).toBe(false);
   });
 

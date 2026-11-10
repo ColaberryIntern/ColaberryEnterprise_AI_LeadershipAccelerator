@@ -747,3 +747,24 @@ describe('isVendorOperationalAlert (rule 00b)', () => {
     expect(isVendorOperationalAlert(undefined)).toBe(false);
   });
 });
+
+describe('the self-sent Internship Report stays in the INBOX (10 Nov 2026)', () => {
+  // The report is sent from and to ali@colaberry.com. Its first subject, "[Internship Report] <date>",
+  // matched no keep rule, fell to the LLM classifier as AUTOMATION, and the first test send was
+  // archived before Ali saw it. This pins the subject the renderer ACTUALLY produces to rule 0a.
+  const selfSent = (subject: string) => baseCoraEmail({ from_address: 'ali@colaberry.com', from_name: 'Ali Muwwakkil', to_addresses: ['ali@colaberry.com'], subject, body_text: 'Internship report' });
+
+  it('the subject the renderer produces is kept in the INBOX by a hard rule', async () => {
+    const { renderInternshipPortfolio } = await import('../../internship/portfolioReport/render');
+    const { composeInternshipPortfolio } = await import('../../internship/portfolioReport/compose');
+    const { NOW, collected } = await import('../../internship/portfolioReport/__tests__/fixtures');
+    const { subject } = renderInternshipPortfolio(composeInternshipPortfolio(collected(), { now: NOW }));
+    const r = await evaluateHardRules(selfSent(subject) as any);
+    expect(r).toEqual(expect.objectContaining({ matched: true, state: 'INBOX' }));
+  });
+
+  it('control: the old subject matched no keep rule', async () => {
+    const r = await evaluateHardRules(selfSent('[Internship Report] Mon, Nov 9, 2026') as any);
+    expect(r.state === 'INBOX' && r.matched).toBe(false);
+  });
+});
