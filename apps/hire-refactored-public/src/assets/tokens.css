@@ -1,8 +1,24 @@
 /*
  * hire.refactored.ai tokens.
  *
- * The Refactored.ai "Terminal" system is VENDORED under ./design (kept current by the
- * design-system-sync workflow) and imported here; no hex value from it is copied by hand.
+ * The Refactored.ai "Terminal" token files sit under ./design and are imported here; no hex
+ * value from them is copied by hand into this file.
+ *
+ * THEY ARE NOT SYNCED, despite what this comment claimed until 2026-11-10. There is no
+ * `hire-refactored` entry in the design-system registry
+ * (backend/src/scripts/lib/designSystemSync.js lists five brands: ai-flotation, cpn,
+ * refactored, colaberry-enterprise, colaberry-training), this directory has no
+ * `.design-sync-manifest.json`, and ./design is byte-identical to
+ * apps/refactored-public/src/assets/design - itself a hand-authored replacement made after
+ * the real vendored copy and its manifest were deleted. So these files are unmanaged
+ * first-party code that LOOKS vendored, which is worse than either being honestly: review
+ * and audit passes that skip vendored paths skip these too, and nothing upstream will ever
+ * correct them.
+ *
+ * Design ownership across all Colaberry brands sits with Aleem; see
+ * frontend/src/colaberry/PROVENANCE.md. Bringing this brand under the sync needs a registry
+ * entry and a target, which is a decision rather than a drive-by edit.
+ *
  * This file adds the ONE token hire.refactored.ai owns - `--star`, gold, reserved for
  * proof and stardom (MOTION.md §1) - plus the hire motion durations. Both theme blocks and
  * the light-preference block are set, mirroring the token file's three-state model.
