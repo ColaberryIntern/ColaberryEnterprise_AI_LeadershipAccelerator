@@ -11,6 +11,7 @@
  */
 import type { InternCard, PortfolioReport, StatusKey } from './types';
 import { legendHtml, stripHtml, timelineHtml, topNextHtml } from './renderTimeline';
+import { artifactsHtml, artifactsText, asksHtml, commandCenterHtml } from './renderArtifacts';
 
 const NAVY = '#1a365d';
 const RED = '#C20E1E';
@@ -77,15 +78,17 @@ function internCard(c: InternCard): string {
 <tr><td style="padding:14px 16px">
   <table role="presentation" width="100%"><tr>
     <td style="vertical-align:top"><div style="font-size:16px;font-weight:700;color:${NAVY}">${esc(c.name)}</div><div style="font-size:12px;color:${MUTED}">${track} &middot; day ${esc(c.day ?? '?')}</div></td>
-    <td style="vertical-align:top;text-align:right;white-space:nowrap">${pill(c.status.label, st)}</td>
+    <td style="vertical-align:top;text-align:right;white-space:nowrap">${pill(c.status.label, st)}<br>${commandCenterHtml(c)}</td>
   </tr></table>
   ${c.status.reasons.length ? `<div style="margin-top:6px">${c.status.reasons.map((r) => pill(r, reasonStyle(r))).join('')}</div>` : ''}
   <div style="font-size:14px;line-height:1.55;color:#0f172a;margin-top:10px;padding:10px 14px;background:#f8fafc;border-left:4px solid ${NAVY};border-radius:4px">${esc(c.summary)}</div>
   <div style="font-size:12px;color:${MUTED};margin-top:6px">${esc(c.timeline.story)}</div>
   ${factsLine(c)}
+  ${artifactsHtml(c)}
   <div style="margin-top:10px">${stripHtml(c.timeline, 22)}</div>
   <div style="margin-top:10px">${timelineHtml(c.timeline)}</div>
   ${asks}
+  ${asksHtml(c)}
   ${subs}
   <div style="margin-top:10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:${MUTED};font-weight:700">Your nudge</div>
   <div style="font-size:13px;line-height:1.55;background:#f8fafc;border-left:3px solid ${RED};padding:8px 12px;margin-top:4px">${esc(c.nudge)}</div>
@@ -170,6 +173,7 @@ ${report.groups.map((g) => `<tr><td style="padding:18px 0 6px"><div style="font-
       ...[...c.timeline.rows].reverse().map((r) => `  ${r.day.slice(5)}: ${r.events.map((e) => `${e.label}${e.detail ? ` ${e.detail}` : ''}${e.meta ? ` (${e.meta})` : ''}`).join(' | ')}${r.gapBefore >= 2 ? `  [${r.gapBefore}d before this]` : ''}`),
       c.asks.length ? `  Asks: ${c.asks.join('; ')}` : null,
       `  Nudge: ${c.nudge}`,
+      ...artifactsText(c),
     ].filter((x): x is string => x !== null))]),
   ].join('\n'));
 

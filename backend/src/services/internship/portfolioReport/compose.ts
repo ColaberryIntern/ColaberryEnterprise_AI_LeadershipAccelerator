@@ -12,6 +12,7 @@ import type { ConsoleRosterRow } from '../internConsoleRoster';
 import type { AgentNudgeState } from '../agentNudgeComposer';
 import type { GovPipelineCard } from '../../factory/govPipeline';
 import { fallbackSummary } from './summary';
+import { artifactProgress, chooseAsks } from './artifacts';
 import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
@@ -155,7 +156,7 @@ export function buildQuietDays(p: Pick<ProjectView, 'lastCommitDays' | 'lastVeri
   return Math.min(a, b);
 }
 
-type CardCore = Omit<InternCard, 'summary' | 'summaryFromModel' | 'timeline' | 'status' | 'lately' | 'nextSteps' | 'nudge' | 'aliMoves' | 'asks' | 'asksFromModel'>;
+type CardCore = Omit<InternCard, 'artifacts' | 'summary' | 'summaryFromModel' | 'timeline' | 'status' | 'lately' | 'nextSteps' | 'nudge' | 'aliMoves' | 'asks' | 'asksFromModel'>;
 
 function latelyFacts(c: CardCore, lookbackDays: number): string[] {
   const out: string[] = [];
@@ -270,6 +271,8 @@ function projectFor(r: ConsoleRosterRow, agent: AgentNudgeState | null, tab: Age
     lastVerifiedDays: verified.length ? calendarDaysAgo(verified[0].verified_at, nowMs) : null,
     verifiedRecent: verified.map((v) => ({ storyId: v.story_id, title: v.title, at: v.verified_at })),
     overdueTasks: (pr.overdue_tasks ?? []).map((t) => ({ title: t.title, due_on: t.due_on })),
+    // Only an https link is offered as a button; anything else in that free-form variable is ignored.
+    commandCenterUrl: pr.command_center_url && /^https:\/\//.test(pr.command_center_url) ? pr.command_center_url : null,
     next: agent?.nextStory ? { title: agent.nextStory.title, dueOn: agent.nextStory.dueOn ?? null } : nextTask ? { title: nextTask.title, dueOn: nextTask.due_on } : null,
   };
 }
@@ -313,16 +316,26 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     subscriptions: tab?.subscriptions ?? [],
   };
   const status = statusFor(core);
+  const progress = artifactProgress(core.training, r.enrollment_id, data.artifacts ?? [], data.artifactCards ?? [], data.completedCards ?? []);
+  // Training artifacts missing from weeks already behind them are a reason, like overdue tasks.
+  if (progress.overdue.length) {
+    status.reasons.push(`${progress.overdue.length} training ${progress.overdue.length === 1 ? 'artifact' : 'artifacts'} overdue`);
+    if (status.key === 'on_track') { status.key = 'attention'; status.label = 'Needs attention'; }
+  }
   const timeline = buildTimeline({
     nowMs, firstName: core.firstName, project, training: core.training, awaitingReply: core.emails.awaitingReply, activityDays: days,
     emails: data.emails.filter((e) => lc(e.email) === email),
     replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
+    artifacts: progress.published,
+    overdueArtifacts: progress.overdue.length,
   });
+  const artifacts = { ...progress, asks: chooseAsks({ ...core, timeline }, progress.overdue) };
   const card: InternCard = {
     ...core,
     timeline,
     summary: '',
     summaryFromModel: false,
+    artifacts,
     status,
     lately: latelyFacts(core, lookback),
     nextSteps: nextStepsFor(core),

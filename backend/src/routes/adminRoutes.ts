@@ -64,6 +64,7 @@ import mayaCapabilityRoutes from './admin/mayaCapabilityRoutes';
 import growthJourneyContentApprovalRoutes from './admin/growthJourneyContentApprovalRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
+import internArtifactRoutes from './admin/internArtifactRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
@@ -298,6 +299,8 @@ router.use(agentDomainRoutes);
 // agentDomainRoutes is read-only by charter, and because the recipient's name and address make
 // this an `internship` grant rather than a `program` one.
 router.use(agentNudgeRoutes);
+// One published intern artifact, for the viewer the Internship Report links to (section internship).
+router.use(internArtifactRoutes);
 // AF10.6: an intern naming their own agent. Separate from agentDomainRoutes for the same reason
 // as the line above -- that router is read-only by charter and this one writes -- but on the
 // narrower `dashboard` grant, because it carries no builder name or address.
