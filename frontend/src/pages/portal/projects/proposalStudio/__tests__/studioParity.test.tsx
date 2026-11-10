@@ -253,7 +253,7 @@ describe('StageDetail — the legacy workspace read (meetings, AI vetting, what-
     ...VIEW,
     requirements: [{ canonicalReqId: 'R-1', statement: 'Data platform', priority: 'must', tracks: ['proposal'], evidenceState: 'open' }],
     meetings: [{ date: 'November 10, 2026', text: 'A pre-proposal conference will be held Tuesday, November 10, 2026 at 10:00 am local time.' }],
-    vetting: { status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'The core work matches Our Services.' },
+    vetting: { status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'The core work matches Our Services.', quote: 'The vendor shall provide an integrated data platform.' },
     opportunitySummary: { whatTheyWant: 'An integrated data platform.', whatWedBuild: 'A cloud-native platform.' },
   } as unknown as StudentGovProjectView;
 
@@ -267,7 +267,9 @@ describe('StageDetail — the legacy workspace read (meetings, AI vetting, what-
     await render(<StageDetail stage="snapshot" view={VIEW_VETTED} />);
     expect(text('stage-vetting')).toContain('pursuing');
     expect(text('stage-coverage')).toContain('75%');
+    expect(text('stage-summary')).toContain('What they want');      // the two-column card renders
     expect(text('stage-summary')).toContain('integrated data platform');
+    expect(text('ai-vetting-card')).toContain('vendor shall provide'); // the source quote renders in the full card
     expect(present('stage-coming')).toBe(false);
   });
 

@@ -107,7 +107,7 @@ export interface StudentSubmissionChecklist {
 export interface StudentGovMeeting { date: string | null; text: string | null; }
 /** Advisory AI vetting of the pursuit — the student-safe subset of the saved gov_ai_vettings view: the verdict, how
  *  well the bid's needs matched Our Services, and a one-line reason. No capability internals, questions, or contacts. */
-export interface StudentGovVetting { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; coveragePct: number | null; reason: string | null; }
+export interface StudentGovVetting { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; coveragePct: number | null; reason: string | null; quote: string | null; }
 /** Advisory "what they want / what we'd build" read, saved by the automatic AI checks on the ZIP. */
 export interface StudentGovOpportunitySummary { whatTheyWant: string | null; whatWedBuild: string | null; }
 export interface StudentGovProjectView {
@@ -232,6 +232,7 @@ export function toStudentVetting(vv: any): StudentGovVetting | null {
     verdict,
     coveragePct: typeof vv.coveragePct === 'number' ? vv.coveragePct : null,
     reason: vv.reason != null ? String(vv.reason) : null,
+    quote: vv.quote != null ? String(vv.quote) : null,
   };
 }
 
