@@ -25,11 +25,13 @@ import * as path from 'path';
  */
 const mockBuild = jest.fn();
 const mockBuildAll = jest.fn();
+const mockArtifacts = jest.fn();
 const mockSend = jest.fn();
 class FakeUnknownIntern extends Error {}
 jest.mock('../../../services/internship/nudgeBrief/build', () => ({
   buildBriefFor: (...a: unknown[]) => mockBuild(...a),
   buildAllBriefs: (...a: unknown[]) => mockBuildAll(...a),
+  buildReportArtifacts: (...a: unknown[]) => mockArtifacts(...a),
   UnknownInternError: FakeUnknownIntern,
 }));
 jest.mock('../../../services/internship/nudgeBrief/send', () => ({
@@ -87,10 +89,10 @@ beforeEach(() => {
 });
 
 describe('every route carries its own guard', () => {
-  it('POSITIVE CONTROL: the router registers all three routes, so the enumeration is not empty', () => {
+  it('POSITIVE CONTROL: the router registers all four routes, so the enumeration is not empty', () => {
     const routes = registeredRoutes();
-    expect(routes).toHaveLength(3);
-    expect(routes.filter((r) => r.methods.includes('get'))).toHaveLength(2);
+    expect(routes).toHaveLength(4);
+    expect(routes.filter((r) => r.methods.includes('get'))).toHaveLength(3);
     expect(routes.filter((r) => r.methods.includes('post'))).toHaveLength(1);
   });
 
@@ -112,7 +114,7 @@ describe('every route carries its own guard', () => {
     const src = fs.readFileSync(ROUTER_SRC, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const sections = [...src.matchAll(/requireSection\(\s*'([a-z_]+)'\s*\)/g)].map((m) => m[1]);
     expect(sections).toHaveLength(registeredRoutes().length);
-    expect(sections).toEqual(['internship', 'internship', 'internship']);
+    expect(sections).toEqual(['internship', 'internship', 'internship', 'internship']);
   });
 });
 
@@ -142,6 +144,29 @@ describe('preparing every message at once', () => {
     expect(res.body.attempts.filter((a: any) => a.ok && !a.hold)).toHaveLength(1);
     expect(res.body.attempts.find((a: any) => a.hold)?.hold.reason).toBe('messaged_today');
     expect(res.body.attempts.find((a: any) => !a.ok)?.name).toBe('Ali Muwwakkil');
+  });
+
+  /**
+   * The two artifacts the nightly email attaches, served from the same pipeline the messages were
+   * written from. "report" must be matched by its own route and never swallowed by `:enrollmentId`.
+   */
+  it('serves the report page, and as JSON on request', async () => {
+    mockArtifacts.mockResolvedValue({ reportDate: '2026-11-10', html: '<!doctype html><title>r</title>', json: '{"ok":true}' });
+
+    const page = await request(app()).get('/api/admin/intern-nudges/report').set('Authorization', auth());
+    expect(page.status).toBe(200);
+    expect(page.headers['content-type']).toContain('text/html');
+    expect(mockBuild).not.toHaveBeenCalled(); // not treated as an enrollment id
+
+    const json = await request(app()).get('/api/admin/intern-nudges/report?format=json').set('Authorization', auth());
+    expect(json.status).toBe(200);
+    expect(json.headers['content-type']).toContain('application/json');
+  });
+
+  it('refuses the report to a `program` caller', async () => {
+    const res = await request(app()).get('/api/admin/intern-nudges/report').set('Authorization', `Bearer ${tokenFor('curriculum')}`);
+    expect(res.status).toBe(403);
+    expect(mockArtifacts).not.toHaveBeenCalled();
   });
 
   /** Preparing must never deliver. This is the assertion that keeps it a preview button. */
