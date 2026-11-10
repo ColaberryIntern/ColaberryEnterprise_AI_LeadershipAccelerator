@@ -21,8 +21,10 @@ const CURRICULUM = /^artifacts\/week-\d+\//i;
 
 const basename = (p: string): string => p.split(/[\\/]/).pop() ?? p;
 
-export function classifyArtifact(a: { kind: string; source: 'repo' | 'upload' | 'link'; repoPath: string | null; uploadName: string | null; title: string }): ArtifactClassification {
+export function classifyArtifact(a: { kind: string; source: 'repo' | 'upload' | 'link' | 'recording'; repoPath: string | null; uploadName: string | null; title: string }): ArtifactClassification {
   if (a.source === 'link' || a.kind === 'claude_studio') return 'studio_artifact';
+  // A recorded demo of their own project is project evidence, never a test file.
+  if (a.source === 'recording') return 'project_artifact';
   const name = basename(a.repoPath || a.uploadName || a.title || '');
   if (SCRATCH.some((re) => re.test(name))) return 'test_or_scratch';
   if (a.repoPath && !CURRICULUM.test(a.repoPath)) return 'project_artifact';

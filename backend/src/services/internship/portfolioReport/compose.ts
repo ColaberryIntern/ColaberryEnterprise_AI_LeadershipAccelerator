@@ -13,6 +13,7 @@ import type { AgentNudgeState } from '../agentNudgeComposer';
 import type { GovPipelineCard } from '../../factory/govPipeline';
 import { fallbackSummary } from './summary';
 import { chooseAsks, publishedArtifacts } from './artifacts';
+import { presentationDue, videoArtifacts } from './presentations';
 import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
@@ -320,17 +321,20 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     subscriptions: tab?.subscriptions ?? [],
   };
   const status = statusFor(core);
-  const published = publishedArtifacts(r.enrollment_id, data.artifacts ?? []);
+  const published = publishedArtifacts(r.enrollment_id, data.artifacts ?? [], videoArtifacts(r.enrollment_id, data.videos ?? []));
+  // Their next presentation, only once their own PREP due date makes it due (presentations.ts).
+  const presentation = project ? presentationDue(r.enrollment_id, data.prepTasks ?? [], data.videos ?? [], nowMs) : null;
   const timeline = buildTimeline({
     nowMs, firstName: core.firstName, project, training: core.training, awaitingReply: core.emails.awaitingReply, activityDays: days,
     emails: data.emails.filter((e) => lc(e.email) === email),
     replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
     artifacts: published,
   });
-  const artifacts = { published, asks: chooseAsks({ ...core, timeline }, published, nowMs) };
+  const artifacts = { published, asks: chooseAsks({ ...core, timeline }, published, nowMs, presentation) };
   const card: InternCard = {
     ...core,
     timeline,
+    presentation,
     summary: '',
     summaryFromModel: false,
     artifacts,

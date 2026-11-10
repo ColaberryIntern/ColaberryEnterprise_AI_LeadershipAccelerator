@@ -10,10 +10,12 @@
  */
 import { WRONG_FORMAT, kindLabel } from '../artifacts';
 import { classifyEmail, eventText } from '../timeline';
-import type { InternCard, LastOutbound, PortfolioReport, TimelineNext } from '../types';
+import type { Conversation, InternCard, LastOutbound, PortfolioReport, TimelineNext } from '../types';
 import { classifyArtifact } from './classify';
 import { delta } from './delta';
 import { pacing } from './pacing';
+import { TOP_N, rankCommunications, type Communication } from './communications';
+import { highlights } from './highlights';
 import { triage } from './triage';
 import { REQUIRED_INTERN_KEYS, SIDECAR_VERSION, type PreviousSnapshot, type Sidecar, type SidecarIntern, type SidecarTimelineRow, type SnapshotIntern } from './types';
 
@@ -22,6 +24,8 @@ export interface SidecarInputs {
   reportDate: string;
   previous: PreviousSnapshot | null;
   lastOutbound: LastOutbound[];
+  /** Both sides of the email window (collect COMMS_SQL); optional so older saved collections still build. */
+  conversations?: Conversation[];
 }
 
 const lc = (s: unknown): string => String(s ?? '').trim().toLowerCase();
@@ -80,7 +84,7 @@ function lastAsk(c: InternCard, rows: LastOutbound[], nowMs: number, windowDays:
   };
 }
 
-function internJson(c: InternCard, report: PortfolioReport, inp: SidecarInputs, nowMs: number): SidecarIntern {
+function internJson(c: InternCard, report: PortfolioReport, inp: SidecarInputs, nowMs: number, comms: Communication[]): SidecarIntern {
   const p = c.project;
   const artifacts = c.artifacts.published.map((a) => ({
     id: a.id, kind: a.kind, kind_label: kindLabel(a.kind), title: a.title, published_at: a.at, url: a.url,
@@ -129,6 +133,7 @@ function internJson(c: InternCard, report: PortfolioReport, inp: SidecarInputs, 
     triage: tr,
     pacing: pacing(c),
     last_ask: lastAsk(c, inp.lastOutbound, nowMs, report.lookbackDays),
+    communications: comms.slice(0, TOP_N),
   };
   return { ...base, delta: delta(c, { stories_verified: storiesVerified, days_since_build_work: quiet, triage: tr }, inp.previous, nowMs, report.lookbackDays) };
 }
@@ -137,6 +142,9 @@ export function buildSidecar(report: PortfolioReport, inp: SidecarInputs): Sidec
   const nowMs = Date.parse(report.generatedAt);
   const t = report.totals;
   const k = (report.counts || {}) as Record<string, number | undefined>;
+  const cards = report.groups.flatMap((g) => g.interns);
+  const ranked = rankCommunications(inp.conversations ?? [], cards.map((c) => ({ enrollmentId: c.enrollmentId, name: c.name, email: lc(c.email) })), nowMs);
+  const interns = cards.map((c) => internJson(c, report, inp, nowMs, ranked.get(c.enrollmentId) ?? []));
   return {
     sidecar_version: SIDECAR_VERSION,
     generated_at: report.generatedAt,
@@ -152,7 +160,8 @@ export function buildSidecar(report: PortfolioReport, inp: SidecarInputs): Sidec
     },
     your_move: [...report.aliMoves],
     operators_excluded: [...report.operatorsExcluded],
-    interns: report.groups.flatMap((g) => g.interns).map((c) => internJson(c, report, inp, nowMs)),
+    highlights: highlights(cards, interns),
+    interns,
   };
 }
 

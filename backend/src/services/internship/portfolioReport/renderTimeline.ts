@@ -19,7 +19,7 @@ export const KIND: Record<EventKind, { fg: string; bg: string; solid?: boolean; 
   training: { fg: '#b45309', bg: '#fef3c7', name: 'Training' },
 };
 /** Strip and rail colors: strong for story moments, pale for routine training so it never dominates. */
-const STRIP_COLOR: Record<EventKind, string> = {
+export const STRIP_COLOR: Record<EventKind, string> = {
   late: '#9f1239', stuck: '#dc2626', unstuck: '#84cc16', verified: '#15803d', artifact: '#4338ca', commit: '#3b82f6',
   question: '#7c3aed', update: '#cbd5e1', reply: '#06b6d4', training: '#fde68a',
 };
@@ -40,7 +40,7 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const fmtDay = (d: string): string => `${MONTHS[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8, 10))}`;
 const dow = (d: string): string => DOW[new Date(`${d}T12:00:00Z`).getUTCDay()];
 
-function chip(kind: EventKind, label: string, detail?: string, meta?: string, slow?: boolean, href?: string): string {
+export function chip(kind: EventKind, label: string, detail?: string, meta?: string, slow?: boolean, href?: string): string {
   const k = KIND[kind];
   const metaHtml = meta ? ` <span style="font-weight:700;color:${slow ? '#b45309' : k.fg}">(${esc(meta)})</span>` : '';
   const border = slow ? 'border:2px solid #f59e0b;' : `border:1px solid ${k.solid ? k.bg : k.fg}33;`;

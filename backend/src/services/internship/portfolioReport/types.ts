@@ -9,6 +9,7 @@ import type { ConsoleRosterRow, ConsoleCounts } from '../internConsoleRoster';
 import type { AgentNudgeState } from '../agentNudgeComposer';
 import type { ProjectReadinessRow } from '../internshipProjectReadiness';
 import type { GovPipelineCard } from '../../factory/govPipeline';
+import type { PresentationDue } from './presentations';
 
 export interface FeedItem {
   occurredAt: string;
@@ -71,7 +72,25 @@ export interface CollectedPortfolio {
   artifacts?: PublishedArtifact[];
   /** The latest message sent TO each intern (sidecar `last_ask` only). Optional for older saved collections. */
   lastOutbound?: LastOutbound[];
+  /** Both sides of every conversation in the email window (sidecar `communications` only). */
+  conversations?: Conversation[];
+  /** Demo videos recorded in the Presentation Studio. Optional for older saved collections. */
+  videos?: RecordedVideo[];
+  /** PREP-1..6 presentation tasks with their due dates. Optional for older saved collections. */
+  prepTasks?: PrepTask[];
 }
+
+/** One row of VIDEOS_SQL: an ingested Presentation Studio recording. */
+export interface RecordedVideo {
+  recording_id: string; enrollment_id: string; story_id: string | null; presentation_type: string | null; template_slug: string | null;
+  duration_seconds: number | null; created_at: string; attempt_no: number | null; mode: string | null; is_final_take: boolean | null;
+  has_audio: boolean | null; has_shared_screen: boolean | null;
+}
+/** One row of PREP_SQL. */
+export interface PrepTask { enrollment_id: string; story_id: string; title: string; status: string; due_on: string | null; verified_at: string | null }
+
+/** One row of COMMS_SQL. */
+export interface Conversation { from_address: string; to_text: string | null; subject: string | null; body: string | null; received_at: string }
 
 /** One row of LAST_ASK_SQL. */
 export interface LastOutbound { email: string; sent_at: string; subject: string | null; body_text: string | null; body_truncated: boolean | null; from_address: string }
@@ -162,6 +181,8 @@ export interface InternCard {
   summaryFromModel: boolean;
   /** Artifacts they actually published (each with a working link), and what to ask them to produce. */
   artifacts: ArtifactsView;
+  /** The presentation (demo video) they should be recording now, or null when none is due yet. */
+  presentation?: PresentationDue | null;
   /** Filled by narrate.ts; empty when the model is unavailable. */
   asks: string[];
   asksFromModel: boolean;
@@ -235,9 +256,9 @@ export interface PublishedArtifact {
 }
 
 /** Where an artifact came from. There is no fourth value: anything else is not the intern's work. */
-export type ArtifactSource = 'repo' | 'upload' | 'link';
+export type ArtifactSource = 'repo' | 'upload' | 'link' | 'recording';
 /** What the artifact IS, so Ali can tell a PDF from a spreadsheet from a claude.ai page at a glance. */
-export type ArtifactFileType = 'pdf' | 'spreadsheet' | 'word' | 'slides' | 'html' | 'image' | 'claude' | 'link' | 'markdown' | 'text' | 'file';
+export type ArtifactFileType = 'video' | 'pdf' | 'spreadsheet' | 'word' | 'slides' | 'html' | 'image' | 'claude' | 'link' | 'markdown' | 'text' | 'file';
 
 /** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
 export interface ArtifactAsk {
