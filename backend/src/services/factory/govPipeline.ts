@@ -179,9 +179,16 @@ export function resolveGovCloseDate(rec: any): string | null {
   const rows = keyDates.filter((k) => k && k.date);
   if (rows.length === 0) return null;
   const isQ = (t: string) => /\b(?:question|inquir|clarif)/i.test(t);
+  // Boilerplate policy lines ("effective for all bids/proposals due on or after November 1, 2009", "valid as of …")
+  // name a policy's effective date, NOT this solicitation's due date. They satisfy isSubmit (they contain "proposal"
+  // and "due"), so without this guard the resolver read a 2009 effective-date as the close date and the nav then hid
+  // the pursuit as expired — the actively-assigned Harris County Constable Precinct 4 build (gws:5e87b15a) vanished
+  // from the left-nav exactly this way. When no usable line remains the date is unknown (null), which the nav keeps
+  // visible rather than hiding as closed — right for an assigned, in-build pursuit with no real close date captured.
+  const isBoilerplate = (t: string) => /\b(?:effective|on\s+or\s+after|as\s+of|prior\s+to|valid\s+(?:from|through|until))\b/i.test(t);
   const isSubmit = (t: string) => /\b(?:received|due|submit|proposal|closing|closes?|no\s+later|must\s+be)\b/i.test(t);
-  const nonQ = rows.filter((k) => !isQ(String(k.text ?? '')));
-  const chosen = nonQ.find((k) => isSubmit(String(k.text ?? ''))) ?? nonQ[0] ?? rows[0];
+  const usable = rows.filter((k) => { const t = String(k.text ?? ''); return !isQ(t) && !isBoilerplate(t); });
+  const chosen = usable.find((k) => isSubmit(String(k.text ?? ''))) ?? usable[0] ?? null;
   return chosen ? toIsoDate(chosen.date) : null;
 }
 
