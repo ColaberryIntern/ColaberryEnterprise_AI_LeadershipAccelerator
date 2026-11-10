@@ -1,315 +1,263 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import type { InternRow } from '../../../services/adminInternConsoleApi';
 import {
-  fetchAgentNudges, nudgeAllBuilders, nudgeOneBuilder, DECISION_LABEL,
-  type AgentNudgeBulkResult, type AgentNudgeOutcome, type AgentNudgePreview,
-} from '../../../services/agentNudgeApi';
+  fetchBrief, sendBriefMessage, TIER_LABEL, TIER_RANK, TIER_TONE,
+  type BriefSendOutcome, type NudgeBrief,
+} from '../../../services/internNudgeApi';
 
 /**
- * View D - Agent nudges.
+ * View D - Nudges.
  *
  *     "I would like to create a nudge system, but one that is actually looking at what they are
- *      doing and helping them with the next step to move forward... I want to send out a message
- *      M-F but they need to be different each time."  (Ali, 23 Oct 2026)
+ *      doing and helping them with the next step to move forward."  (Ali, 23 Oct 2026)
+ *     "Make sure there is a nudge for all interns and not just those building agents."
+ *      (Ali, 10 Nov 2026)
  *
- * ## Why this is its own view and not a button on the Triage Board
+ * ## Every intern, because the roster is the roster
  *
- * The Triage Board's cards are the whole intern cohort; these nudges reach the seven people
- * building agent domains and nobody else. A per-card button there would be enabled for one intern
- * in five and refuse the rest, which reads as broken rather than as scoped. The lanes are also
- * keyed on an enrollment while a nudge is keyed on a domain, so the two do not line up row for row.
+ * This view used to load its own list from `agent_domain_projects`, which is why it showed seven
+ * people out of fourteen: a gov-contract intern and an intern with no project own no agent domain
+ * and so did not exist to it. It now takes `rows` from the console shell, the same already-filtered
+ * array that Views A, B and C take. Two things follow for free: everybody appears, and the
+ * All / Needs attention / No project / Paused chips work here exactly as they do everywhere else,
+ * because the filtering happened before the rows arrived.
  *
- * The Triage Board's own disabled Nudge button is a DIFFERENT feature - the fixed-template
- * check-in in `internshipNudge.ts` - and is left alone here.
+ * ## The message is generated when you open it, not when the page loads
  *
- * ## The words are on screen before the send, not after
+ * Generating thirteen full briefs on load would cost a run of the report pipeline per intern for
+ * messages a manager will mostly not read. So the row list is cheap and the message is fetched on
+ * expand, which also makes the freshness claim true rather than approximate: the text describes the
+ * intern at the moment you asked, not at whatever time the tab happened to load. Collapsing and
+ * reopening re-fetches, so there is no stale copy to send by accident.
  *
- * The composed body is fetched with the roster and rendered in full on expand. Sending takes two
- * deliberate clicks: the first arms the row and says so, the second sends. A manager can therefore
- * only approve text they have been shown, and a mis-click costs nothing.
+ * ## The words are on screen before the send, and are editable
  *
- * ## It shows what the weekday run would NOT do, and lets a human overrule it
- *
- * Every row carries the automatic verdict. A row the run would skip still gets a working Send
- * button, because a manager looking at the state has information the rule does not - and the
- * response says which verdict was overridden, so the row cannot silently contradict itself.
+ * Sending takes two deliberate clicks: the first arms the row and says so, the second sends. The
+ * body is a textarea, so a manager can correct a sentence before it goes, and what is posted is
+ * what is on screen. The server re-checks the sender's guards on the edited text, because an edit
+ * can introduce a dash or a bracket the generated text did not have.
  */
 
-const BAND_HINT: Record<string, string> = {
-  green: 'Committed today',
-  yellow: 'Quiet 1-3 days',
-  orange: 'Quiet 4-6 days',
-  red: 'Quiet 7-9 days',
-  black: 'Quiet 10+ days',
-  unknown: 'No commit has ever been seen',
+const fmtDays = (n: number) => `${Math.abs(n)} ${Math.abs(n) === 1 ? 'day' : 'days'}`;
+
+/** What this row is waiting on, in a few words, before the brief has been fetched. */
+function restingHint(r: InternRow): string {
+  if (!r.project) return 'No project yet';
+  if (r.activity.level === 'unknown') return 'No commit has ever been seen';
+  if (r.activity.level === 'green') return 'Committed today';
+  return `Quiet ${r.activity.level === 'black' ? '10+' : r.activity.level === 'red' ? '7-9' : r.activity.level === 'orange' ? '4-6' : '1-3'} days`;
+}
+
+const OutcomeLine: React.FC<{ r: BriefSendOutcome }> = ({ r }) => {
+  if (r.outcome === 'sent') return <span className="aint-ok">Sent to {r.email}</span>;
+  if (r.outcome === 'dry_run') return <span className="aint-muted">Preview only, nothing sent</span>;
+  if (r.outcome === 'skipped') return <span className="aint-warn">Held: {r.reason}</span>;
+  return <span className="aint-alert">Failed: {r.errorClass}</span>;
 };
 
-/** One builder's row. Split out so the table body stays readable. */
-const BuilderRow: React.FC<{
-  b: AgentNudgePreview;
-  expanded: boolean;
+const BriefPanel: React.FC<{
+  brief: NudgeBrief;
+  body: string;
+  subject: string;
   armed: boolean;
   busy: boolean;
-  result?: AgentNudgeOutcome;
-  onToggle: () => void;
+  onBody: (v: string) => void;
   onArm: () => void;
   onSend: () => void;
-}> = ({ b, expanded, armed, busy, result, onToggle, onArm, onSend }) => (
-  <>
-    <tr>
-      <td>
-        <div className="aint-name">{b.agent ?? b.domain}</div>
-        <div className="aint-sub">{b.domain}</div>
-      </td>
-      <td>
-        <div className="aint-strong">{b.firstName || '(no name)'}</div>
-        <div className="aint-sub">{b.email}</div>
-      </td>
-      <td className="aint-nowrap">
-        <span className="aint-lastseen">
-          <i className={`aint-dot lv-${b.band}`} aria-hidden="true" />
-          {b.daysSinceCommit === null
-            ? <span title={BAND_HINT.unknown}>never</span>
-            : <span title={BAND_HINT[b.band]}>{b.daysSinceCommit === 0 ? 'today' : `${b.daysSinceCommit}d`}</span>}
-        </span>
-      </td>
-      <td className="aint-nowrap">
-        <b>{b.verified}</b>/{b.stories}
-        {/* A zero that cannot be anything else is said out loud rather than shown as a score. */}
-        {b.gradeableStories === 0 && b.stories > 0 && (
-          <div className="aint-sub" title="No story has acceptance criteria, so nothing can be verified">
-            none gradeable
-          </div>
-        )}
-        {b.overdue > 0 && <div className="aint-sub">{b.overdue} overdue</div>}
-      </td>
-      <td>
-        <div className="aint-strong">{b.nudge.subject}</div>
-        <button
-          type="button"
-          className="aint-btn"
-          aria-expanded={expanded}
-          onClick={onToggle}
-        >
-          {expanded ? 'Hide the message' : 'Read the message'}
-        </button>
-      </td>
-      <td>
-        <span className={`aint-pill ${b.decision.send ? 'pace-yellow' : 'pace-green'}`}>
-          {b.decision.send ? 'would send' : 'would hold'}
-        </span>
-        <div className="aint-sub">{DECISION_LABEL[b.decision.reason]}</div>
-      </td>
-      <td className="aint-nowrap">
-        {!armed && (
-          <button type="button" className="aint-btn" disabled={busy || !b.email} onClick={onArm}>
-            Send
-          </button>
-        )}
-        {armed && (
-          <span className="aint-confirm-btns">
-            <button type="button" className="aint-btn" disabled={busy} onClick={onSend}>
-              {busy ? 'Sending…' : 'Confirm send'}
-            </button>
-            <button type="button" className="aint-btn" disabled={busy} onClick={onArm}>Cancel</button>
-          </span>
-        )}
-        {result && (
-          <div className="aint-sub" role="status">
-            {result.outcome === 'sent' && 'Sent'}
-            {result.outcome === 'skipped' && `Not sent: ${result.reason}`}
-            {result.outcome === 'failed' && `Failed: ${result.errorClass}`}
-            {result.outcome === 'dry_run' && 'Previewed only'}
-            {result.outcome === 'sent' && !result.decision.send
-              && ` (the weekday run would have held this: ${DECISION_LABEL[result.decision.reason]})`}
-          </div>
-        )}
-      </td>
-    </tr>
-    {expanded && (
-      <tr>
-        <td colSpan={7}>
-          <div className="aint-sub">Variant: {b.nudge.variant}</div>
-          {/* Rendered as text, never as the HTML body, so this panel cannot execute anything the
-              composer produced and a reader sees exactly the words, not a rendering of them. */}
-          <pre style={{ whiteSpace: 'pre-wrap', margin: 0, font: 'inherit' }}>{b.nudge.text}</pre>
-        </td>
-      </tr>
+}> = ({ brief, body, subject, armed, busy, onBody, onArm, onSend }) => (
+  <div className="aint-brief">
+    {brief.deadline && (
+      <p className={brief.deadline.daysLeft <= 3 ? 'aint-alert' : 'aint-warn'}>
+        <strong>
+          {brief.deadline.daysLeft < 0
+            ? `${fmtDays(brief.deadline.daysLeft)} past due`
+            : `${fmtDays(brief.deadline.daysLeft)} left`}
+        </strong>
+        {' '}to the {brief.deadline.what}, due {brief.deadline.dueOn}.
+        {' '}{brief.deadline.outstanding.length} outstanding.
+      </p>
     )}
-  </>
+
+    {brief.promises.length > 0 && (
+      <div className="aint-promises">
+        <strong>You promised, and it has a date in it:</strong>
+        <ul>
+          {brief.promises.map((p, i) => (
+            <li key={i}>&ldquo;{p.quote}&rdquo; <span className="aint-muted">({p.sentAt.slice(0, 10)})</span></li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {brief.warnings.length > 0 && (
+      <ul className="aint-warnings">
+        {brief.warnings.map((w, i) => <li key={i} className="aint-warn">{w}</li>)}
+      </ul>
+    )}
+
+    <label className="aint-field">
+      <span>Subject</span>
+      <input type="text" value={subject} readOnly />
+    </label>
+
+    <label className="aint-field">
+      <span>Message, editable before you send it</span>
+      <textarea value={body} rows={18} onChange={(e) => onBody(e.target.value)} />
+    </label>
+
+    {brief.attachment && (
+      <p className="aint-muted">Carries an attachment: {brief.attachment.filename}</p>
+    )}
+
+    <p className="aint-muted">
+      Generated {new Date(brief.generatedAt).toLocaleTimeString()} from live data.
+      {brief.email ? ` Goes to ${brief.email}, with Ali bcc'd.` : ' No email address on file, so this cannot be sent.'}
+    </p>
+
+    {!armed ? (
+      <button type="button" className="aint-btn" disabled={busy || !brief.email} onClick={onArm}>
+        Send this message
+      </button>
+    ) : (
+      <span className="aint-arm">
+        <strong>Send to {brief.email}?</strong>
+        <button type="button" className="aint-btn danger" disabled={busy} onClick={onSend}>
+          {busy ? 'Sending…' : 'Yes, send it'}
+        </button>
+      </span>
+    )}
+  </div>
 );
 
-export const ConsoleViewD: React.FC = () => {
-  const [data, setData] = useState<{ builders: AgentNudgePreview[]; disclosure: string } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [expanded, setExpanded] = useState<string | null>(null);
+export const ConsoleViewD: React.FC<{ rows: InternRow[] }> = ({ rows }) => {
+  const [open, setOpen] = useState<string | null>(null);
+  const [briefs, setBriefs] = useState<Record<string, NudgeBrief>>({});
+  const [bodies, setBodies] = useState<Record<string, string>>({});
+  const [loadingId, setLoadingId] = useState<string | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, AgentNudgeOutcome>>({});
-  const [bulk, setBulk] = useState<AgentNudgeBulkResult | null>(null);
+  const [results, setResults] = useState<Record<string, BriefSendOutcome>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const openRow = useCallback(async (id: string) => {
+    if (open === id) { setOpen(null); return; }
+    setOpen(id);
+    setArmed(null);
+    setLoadingId(id);
+    setErrors((e) => ({ ...e, [id]: '' }));
     try {
-      setData(await fetchAgentNudges());
+      // Always re-fetch. A cached brief is a stale brief, and this screen sends what it shows.
+      const brief = await fetchBrief(id);
+      setBriefs((b) => ({ ...b, [id]: brief }));
+      setBodies((b) => ({ ...b, [id]: brief.body }));
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not load the nudge roster.');
+      setErrors((e) => ({ ...e, [id]: err?.response?.data?.error ?? 'Could not generate that message.' }));
     } finally {
-      setLoading(false);
+      setLoadingId(null);
     }
-  }, []);
+  }, [open]);
 
-  useEffect(() => { load(); }, [load]);
-
-  const sendOne = async (domain: string) => {
-    setBusy(domain);
+  const send = async (id: string) => {
+    const brief = briefs[id];
+    if (!brief) return;
+    setBusy(id);
     try {
-      const outcome = await nudgeOneBuilder(domain, { send: true });
-      setResults((r) => ({ ...r, [domain]: outcome }));
+      const outcome = await sendBriefMessage(id, {
+        body: bodies[id] ?? brief.body,
+        subject: brief.subject,
+        generatedAt: brief.generatedAt,
+        send: true,
+      });
+      setResults((r) => ({ ...r, [id]: outcome }));
       setArmed(null);
-      // Re-read, because a send changes `priorNudgeCount` and therefore tomorrow's angle.
-      await load();
     } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not send that nudge.');
+      setErrors((e) => ({ ...e, [id]: err?.response?.data?.error ?? 'Could not send that message.' }));
     } finally {
       setBusy(null);
     }
   };
 
-  const sendAll = async (send: boolean) => {
-    setBusy('*');
-    try {
-      const r = await nudgeAllBuilders({ send });
-      setBulk(r);
-      if (send) { setArmed(null); await load(); }
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not run the nudges.');
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  if (loading) return <div className="aint-state">Loading the nudge roster…</div>;
-
-  if (error) {
-    return (
-      <div className="aint-state error">
-        <p>{error}</p>
-        <button type="button" className="aint-btn" onClick={load}>Try again</button>
-      </div>
-    );
+  if (!rows.length) {
+    return <div className="aint-state">No interns match this filter. Try All.</div>;
   }
 
-  const builders = data?.builders ?? [];
-  // No builders is a real state of the programme, not a failure. Say which it is.
-  if (builders.length === 0) {
-    return (
-      <div className="aint-state">
-        No agent domain has an assigned builder with an email address on file, so there is nobody to
-        nudge.
-      </div>
-    );
-  }
-
-  const wouldSend = builders.filter((b) => b.decision.send).length;
+  // Sort by how urgent the row looks before its brief exists, so the list is useful on arrival.
+  const ordered = [...rows].sort((a, b) => {
+    const rank = (r: InternRow) => (briefs[r.enrollment_id] ? TIER_RANK[briefs[r.enrollment_id].tier] : r.project ? 4 : 1);
+    return rank(a) - rank(b) || a.name.localeCompare(b.name);
+  });
 
   return (
-    <div className="aint-nudge">
-      <div className="aint-card">
-        <div className="aint-card-h">
-          <h2><i className="ri-send-plane-line" aria-hidden="true" /> Agent nudges</h2>
-          <span className="aint-sub">
-            {builders.length} builder{builders.length === 1 ? '' : 's'} · the weekday run would send{' '}
-            {wouldSend} today
-          </span>
-        </div>
-        <div className="aint-card-b">
-          {/* The backend's own sentence, rendered verbatim rather than paraphrased into something
-              softer. It is the one place that says nothing has been sent. */}
-          <p className="aint-sub">{data?.disclosure}</p>
+    <div className="aint-nudges">
+      <p className="aint-note">
+        Nothing is sent until you send it. Opening a row generates that intern&rsquo;s message from the
+        database at that moment, so it always describes where they are now. The text is editable, and
+        what you see is what goes out, with Ali bcc&rsquo;d.
+      </p>
 
-          <div className="aint-actbar">
-            <button type="button" className="aint-btn" disabled={busy !== null} onClick={() => sendAll(false)}>
-              {busy === '*' ? 'Working…' : 'Preview the whole run'}
-            </button>
-            {armed !== '*' && (
-              <button
-                type="button"
-                className="aint-btn"
-                disabled={busy !== null || wouldSend === 0}
-                title={wouldSend === 0 ? 'Nobody is due a nudge right now' : undefined}
-                onClick={() => setArmed('*')}
-              >
-                Send to all {wouldSend} who need it
-              </button>
-            )}
-            {armed === '*' && (
-              <span className="aint-confirm-btns">
-                <button type="button" className="aint-btn" disabled={busy !== null} onClick={() => sendAll(true)}>
-                  {busy === '*' ? 'Sending…' : `Confirm: email ${wouldSend} builder${wouldSend === 1 ? '' : 's'}`}
-                </button>
-                <button type="button" className="aint-btn" disabled={busy !== null} onClick={() => setArmed(null)}>
-                  Cancel
-                </button>
-              </span>
-            )}
-          </div>
-
-          {bulk && (
-            <div role="status" className="aint-sub">
-              {bulk.attempted === 0 && bulk.sent === 0
-                ? 'Nobody was due a nudge, so nothing was sent.'
-                : `${bulk.sent} sent, ${bulk.outcomes.length - bulk.attempted} held back.`}
-              <ul>
-                {bulk.outcomes.map((o) => (
-                  <li key={o.domain}>
-                    <b>{o.domain}</b>
-                    {o.outcome === 'skipped' && ` held back: ${DECISION_LABEL[o.decision.reason] ?? o.reason}`}
-                    {o.outcome === 'dry_run' && ` would receive "${o.subject}"`}
-                    {o.outcome === 'sent' && ' sent'}
-                    {o.outcome === 'failed' && ` failed: ${o.errorClass}`}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="aint-card">
-        <div className="aint-tbl">
-          <table>
-            <thead>
-              <tr>
-                <th>Agent</th>
-                <th>Builder</th>
-                <th>Last commit</th>
-                <th>Verified</th>
-                <th>Today&apos;s message</th>
-                <th>Weekday run</th>
-                <th>Send now</th>
-              </tr>
-            </thead>
-            <tbody>
-              {builders.map((b) => (
-                <BuilderRow
-                  key={b.domain}
-                  b={b}
-                  expanded={expanded === b.domain}
-                  armed={armed === b.domain}
-                  busy={busy === b.domain}
-                  result={results[b.domain]}
-                  onToggle={() => setExpanded(expanded === b.domain ? null : b.domain)}
-                  onArm={() => setArmed(armed === b.domain ? null : b.domain)}
-                  onSend={() => sendOne(b.domain)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <table className="aint-table">
+        <thead>
+          <tr>
+            <th>Intern</th>
+            <th>Project</th>
+            <th>Day</th>
+            <th>State</th>
+            <th>Message</th>
+            <th>Last send</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map((r) => {
+            const id = r.enrollment_id;
+            const brief = briefs[id];
+            const isOpen = open === id;
+            return (
+              <React.Fragment key={id}>
+                <tr>
+                  <td>
+                    <div className="aint-name">{r.name}</div>
+                    <div className="aint-muted">{r.email ?? 'No email on file'}</div>
+                  </td>
+                  <td>{r.project?.name ?? <span className="aint-warn">No project</span>}</td>
+                  <td>{r.day ?? '-'}</td>
+                  <td>
+                    {brief
+                      ? <span className={`aint-pill ${TIER_TONE[brief.tier]}`}>{TIER_LABEL[brief.tier]}</span>
+                      : <span className="aint-muted">{restingHint(r)}</span>}
+                    {brief && <div className="aint-muted">{brief.tierReason}</div>}
+                  </td>
+                  <td>
+                    <button type="button" className="aint-btn" onClick={() => openRow(id)}>
+                      {isOpen ? 'Close' : loadingId === id ? 'Generating…' : 'Write the message'}
+                    </button>
+                  </td>
+                  <td>{results[id] ? <OutcomeLine r={results[id]} /> : <span className="aint-muted">-</span>}</td>
+                </tr>
+                {isOpen && (
+                  <tr className="aint-expand">
+                    <td colSpan={6}>
+                      {errors[id] && <p className="aint-alert">{errors[id]}</p>}
+                      {loadingId === id && <p className="aint-muted">Reading their repository, tasks, training and mail…</p>}
+                      {brief && (
+                        <BriefPanel
+                          brief={brief}
+                          body={bodies[id] ?? brief.body}
+                          subject={brief.subject}
+                          armed={armed === id}
+                          busy={busy === id}
+                          onBody={(v) => setBodies((b) => ({ ...b, [id]: v }))}
+                          onArm={() => setArmed(id)}
+                          onSend={() => send(id)}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 };

@@ -196,8 +196,20 @@ function select<T>(sql: string, replacements: Record<string, unknown> = {}): Pro
   return sequelize.query(sql, { type: QueryTypes.SELECT, replacements }) as Promise<T[]>;
 }
 
-export async function collectInternshipPortfolio({ now = new Date() }: { now?: Date } = {}): Promise<CollectedPortfolio> {
-  const roster = await getConsoleRoster({ now });
+/**
+ * `enrollmentIds` narrows the roster before anything else is derived from it. Every query below is
+ * already keyed on `emails`, `ids` or `enrollmentIds`, so narrowing the roster narrows all of them,
+ * and the per-intern detail loop shrinks from the whole cohort to one. That is what makes an
+ * on-demand single-intern render cheap enough to run while a manager waits for it.
+ *
+ * Passing an empty array means "nobody" and is honoured; passing undefined means the whole roster.
+ */
+export async function collectInternshipPortfolio(
+  { now = new Date(), enrollmentIds }: { now?: Date; enrollmentIds?: readonly string[] } = {},
+): Promise<CollectedPortfolio> {
+  const all = await getConsoleRoster({ now });
+  const wanted = enrollmentIds ? new Set(enrollmentIds) : null;
+  const roster = wanted ? all.filter((r) => wanted.has(r.enrollment_id)) : all;
   const emails = roster.map((r) => String(r.email ?? '').toLowerCase()).filter((e) => e && !OPERATOR_EMAILS.includes(e));
 
   const agentTabs = await soft('agent tabs', () => select<AgentTab>(AGENT_SQL), []);
