@@ -21,7 +21,8 @@ jest.mock('../../communicationLogService', () => ({
 }));
 
 import { Op } from 'sequelize';
-import { sendPortalWelcome, alreadyWelcomed, WELCOME_EVENTS } from '../sendPortalWelcome';
+import { sendPortalWelcome, alreadyWelcomed, WELCOME_EVENTS, FIRST_ASSIGNMENT_PATH } from '../sendPortalWelcome';
+import { PROGRAM_VIDEO_ID } from '../../../data/week0ProgramVideoFirst';
 
 /**
  * The welcome that `/api/portal/free-signup` never sent.
@@ -88,9 +89,14 @@ describe('sendPortalWelcome - the send that was missing', () => {
 
     // The emailed link must carry the SAME token that was just persisted,
     // otherwise the mail is a login that cannot log anyone in.
+    //
+    // The `next` half was added by OH-4; this assertion used to end at the token.
+    // Kept exact rather than loosened to a `toContain`, because the token and the
+    // destination are the only two things in this URL and both matter.
     const link = (sendTrainingWelcome.mock.calls[0][0] as { portalLink: string }).portalLink;
     expect(link).toBe(
-      `https://enterprise.colaberry.ai/portal/verify?token=${written.portal_token}`,
+      `https://enterprise.colaberry.ai/portal/verify?token=${written.portal_token}`
+      + `&next=${encodeURIComponent(FIRST_ASSIGNMENT_PATH)}`,
     );
   });
 
@@ -329,5 +335,80 @@ describe('sendPortalWelcome - failure paths', () => {
 
     // The mail did go out, and that is what the caller is told.
     expect(r.sent).toBe(true);
+  });
+});
+
+/**
+ * OH-4: where the sign-in link lands.
+ *
+ * Ali, 2026-11-10: "a link to login which would take them to their 1st
+ * assignment which is my AI video." The link used to drop everyone on
+ * /portal/today and leave them to find it.
+ *
+ * The sanitizer is the interesting part. `safeNextPath` rejects query strings on
+ * purpose, so the portal's own auto-open link (/portal/today?stay=1&first=1)
+ * could not survive the round trip without widening a sanitizer that guards an
+ * emailed redirect. The path-only card route needs no such change - and because
+ * the value still goes THROUGH the sanitizer, a bad one degrades to the old
+ * behavior instead of producing a broken link.
+ */
+const linkOf = (): string =>
+  (sendTrainingWelcome.mock.calls[0][0] as { portalLink: string }).portalLink;
+
+describe('sendPortalWelcome - where the link lands (OH-4)', () => {
+  it('sends a new account to the first assignment by default', async () => {
+    const { enrollment } = enrollmentFake();
+    await sendPortalWelcome({ enrollment });
+    expect(linkOf()).toContain(`&next=${encodeURIComponent(FIRST_ASSIGNMENT_PATH)}`);
+  });
+
+  it('points at the program video card, by the id that defines it', async () => {
+    // Imported rather than written out, so replacing the video moves this link
+    // with it instead of leaving a stale uuid in an email.
+    expect(FIRST_ASSIGNMENT_PATH).toBe(`/portal/runtime/${PROGRAM_VIDEO_ID}`);
+    const { enrollment } = enrollmentFake();
+    await sendPortalWelcome({ enrollment });
+    expect(linkOf()).toContain(encodeURIComponent(PROGRAM_VIDEO_ID));
+  });
+
+  it('survives the sanitizer that rejects query strings', async () => {
+    // The whole reason for the card route. If this path ever grows a "?", this
+    // assertion fails rather than the destination silently disappearing.
+    const { safeNextPath } = require('../../../utils/safeNextPath');
+    expect(safeNextPath(FIRST_ASSIGNMENT_PATH)).toBe(FIRST_ASSIGNMENT_PATH);
+    expect(safeNextPath('/portal/today?stay=1&first=1')).toBeNull();
+  });
+
+  it('honors an explicit destination over the default', async () => {
+    const { enrollment } = enrollmentFake();
+    await sendPortalWelcome({ enrollment, next: '/portal/class-checkin/abc-123' });
+    expect(linkOf()).toContain(`&next=${encodeURIComponent('/portal/class-checkin/abc-123')}`);
+    expect(linkOf()).not.toContain(PROGRAM_VIDEO_ID);
+  });
+
+  it('treats an explicit null as "the dashboard, on purpose"', async () => {
+    // A recovery mail to someone who has used the product for weeks should not
+    // reopen the welcome video. `null` is distinct from omitting the field.
+    const { enrollment } = enrollmentFake();
+    await sendPortalWelcome({ enrollment, next: null });
+    expect(linkOf()).not.toContain('&next=');
+  });
+
+  it('ignores an unsafe destination rather than emailing it', async () => {
+    for (const hostile of [
+      'https://evil.example.com/steal',
+      '//evil.example.com',
+      '/portal/../../admin',
+      'javascript:alert(1)',
+      '/admin/settings',
+    ]) {
+      sendTrainingWelcome.mockClear();
+      const { enrollment } = enrollmentFake();
+      await sendPortalWelcome({ enrollment, next: hostile });
+      const link = linkOf();
+      expect(link).not.toContain('&next=');
+      // Still a working sign-in link - a rejected destination is ignored, not fatal.
+      expect(link).toContain('/portal/verify?token=');
+    }
   });
 });
