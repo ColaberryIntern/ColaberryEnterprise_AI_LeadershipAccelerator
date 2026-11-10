@@ -349,9 +349,15 @@ const LEDGER = [
       + 'field carries external references - Cloudflare video ids, occurrence rows, the viewer '
       + 'census - for uncaptured items, and the check refuses a file path inside it so the '
       + 'asymmetry rule is not quietly relaxed by the field sitting next to it. The pack also '
-      + 'now carries the one destructive risk on this ticket: the 13 October recording is the '
+      + 'now carries the one destructive risk on this ticket: the 13 October recording WAS the '
       + 'only copy of the first airing, it has no occurrence row, and its live input is marked '
-      + 'for deletion when the ticket closes.',
+      + 'for deletion when the ticket closes.\n\n'
+      + 'That risk was closed the same day. The footage was pulled out of Cloudflare and now '
+      + 'exists in two places independent of it, verified by a hash that is identical at every '
+      + 'hop and by a duration measured from the file rather than computed. Deleting the live '
+      + 'input is now safe. The capture it belongs to stays NOT YET all the same, because '
+      + 'preserving footage is not measuring an airing - and the self-check now refuses to let '
+      + 'that capture be promoted on the strength of the rescue.',
   },
 ];
 

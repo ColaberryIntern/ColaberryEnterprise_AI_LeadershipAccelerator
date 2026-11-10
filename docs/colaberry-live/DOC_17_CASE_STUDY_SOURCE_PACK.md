@@ -144,12 +144,14 @@ Blocked rather than merely pending: there is no studio to photograph. This also 
 
 Restated on 2026-11-09 after reading production and ticket L11.7. The earlier version of this entry said no live test had happened, which was wrong: three airings have. What has never happened is a MEASURED one, and that distinction is the whole value of this entry - a reader who believes nothing aired will plan a first airing, when what is actually needed is instrumentation on an airing the team already knows how to run.
 
-URGENT, and the reason this capture should be worked before the ticket closes: the 13 October recording is the only copy of the first airing, it has no occurrence row, and ticket L11.7 records a decision to delete its live input once this ticket is done. Deleting a live input takes its recordings with it. Pull that footage into the pack first; the deletion is the last step, not an early tidy-up.
+RESOLVED on 2026-11-09, and written down here because the risk it closed was real: the 13 October recording was the only copy of the first airing, it has no occurrence row, and ticket L11.7 records a decision to delete its live input once this ticket is done. Deleting a live input takes its recordings with it, and that input holds exactly one recording. It could not have been retrieved afterwards either - the video required signed URLs and no downloadable MP4 had ever been generated, so there was no link anyone could have clicked. The footage was pulled to colaberry-live-2026-10-13-first-airing.mp4, measured at 18m 00s from the file's own movie header rather than computed, and verified by SHA256 9f9df276403a98aa02e2243fa1be296d4a5b5150ee8708cc6da2051412052ed1, identical at every hop from Cloudflare to the final copy. It is held in two places independent of Cloudflare: the Basecamp vault on ticket L11.7 and OneDrive, outside this repository. Deleting the live input is now safe.
+
+This capture stays NOT YET regardless, and that is the point worth keeping: preserving footage is not measuring an airing. The bar above is the measurement.
 
 **What would settle it:** Not the airing - that has happened three times. What is missing is the measurement: three viewers on separate networks, with the real bitrate and latency recorded and the preview flag returned to false afterwards. None of the three airings recorded a single viewer, so none of them meets this bar.
 
 **What is on record, outside this repository:**
-- 13 Oct 2026, 18 min, Cloudflare video b4c0c11c60952605105180b02c0d3db4 on live input 08def3066403e44d507fc16709cc9a4e. Named on ticket L11.7 by Ali on 23 Oct. NO occurrence row exists for it in the production database.
+- 13 Oct 2026, 18 min, Cloudflare video b4c0c11c60952605105180b02c0d3db4 on live input 08def3066403e44d507fc16709cc9a4e. Named on ticket L11.7 by Ali on 23 Oct. NO occurrence row exists for it in the production database. The recording itself has since been copied off Cloudflare and preserved; the note below says where.
 - 15 Oct 2026, occurrence e5c4a59f-48de-4dba-815e-f14e165e0eef, titled "First Private Technical Airing", access_mode free, editorial_state ended with a NULL ended_at.
 - 20 Oct 2026, occurrence 21d0ce4f-cb55-4a7b-b9b6-0b42280fa5a8, titled "Test 2", access_mode private, ran 13:49 to 14:09 UTC.
 
