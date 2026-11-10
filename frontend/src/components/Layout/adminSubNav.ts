@@ -9,7 +9,7 @@ import { adminAgentNavEntries } from './useAdminAgentsNav';
  * (cards from /api/admin/...) and the Campus HQ building (the same cards from /api/portal/campus/hq-subnav, computed by the same
  * server functions for the same person) both go through THIS mapping, so a sub-item cannot differ between the two.
  */
-export interface NavSubEntry { key: string; label: string; to: string; owner?: string }
+export interface NavSubEntry { key: string; label: string; to: string; owner?: string; daysLeft?: number | null }
 export interface NavSubCards { gov?: GovContractCard[]; agents?: AgentFactoryCard[] }
 
 export function subNavEntries(source: NavSubListSource, cards: NavSubCards): NavSubEntry[] {

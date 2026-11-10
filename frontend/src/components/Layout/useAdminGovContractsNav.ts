@@ -24,8 +24,19 @@ export function useAdminGovContractsNav(enabled: boolean): GovContractCard[] {
   return cards;
 }
 
-/** One left-nav sub-item per contract that has a build. `owner` is the assigned active intern. */
-export interface AdminGovNavEntry { key: string; label: string; to: string; owner?: string; }
+/** One left-nav sub-item per contract that has a build. `owner` is the assigned active intern; `daysLeft` is the
+ *  whole days to the close date (the always-visible KPI badge), or null when no close date is resolvable yet. */
+export interface AdminGovNavEntry { key: string; label: string; to: string; owner?: string; daysLeft: number | null; }
+
+/** Whole days remaining to the contract's close date, or null when there is no resolvable date. Past dates are
+ *  already filtered out of the nav (closeDatePast), so a shown entry's daysLeft is >= 0. */
+function daysLeftOf(closeDate: string | null): number | null {
+  if (!closeDate) return null;
+  const parsed = parseDeadline(closeDate);
+  if (!parsed) return null;
+  const cd = countdownTo(parsed.ms, Date.now());
+  return cd.past ? null : cd.days;
+}
 
 /** True when a contract's close date has passed. Unknown (null) ≠ expired, so a contract with no
  *  resolvable date stays visible rather than being silently hidden. */
@@ -59,5 +70,6 @@ export function adminGovContractNavEntries(cards: GovContractCard[]): AdminGovNa
       label: c.title || c.key,
       to: `/admin/internship/gov-contract/${c.deliveryProjectId}`,
       owner: ownerLabel(c.assignedInterns),
+      daysLeft: daysLeftOf(c.closeDate),
     }));
 }

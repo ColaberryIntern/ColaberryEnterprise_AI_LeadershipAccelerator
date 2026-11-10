@@ -193,4 +193,10 @@ describe('resolveGovCloseDate', () => {
     expect(resolveGovCloseDate({ requirements_json: {} })).toBeNull();
     expect(resolveGovCloseDate({})).toBeNull();
   });
+  it('a management-set manualDeadline WINS everywhere — the date flows to list cards + the nav badge', () => {
+    // no snapshot at all -> the manual override is the resolved close date
+    expect(resolveGovCloseDate({ requirements_json: { manualDeadline: { closeDate: '2026-12-15' } } })).toBe('2026-12-15');
+    // and it beats a snapshot closeAt (management corrected the pursuit's date)
+    expect(resolveGovCloseDate({ requirements_json: { manualDeadline: { closeDate: '2026-12-15' } }, source_snapshot: { closeAt: '2026-11-06T17:00:00Z' } })).toBe('2026-12-15');
+  });
 });

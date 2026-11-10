@@ -24,8 +24,8 @@ describe('adminGovContractNavEntries — admin per-contract nav sub-items', () =
       live({ key: 'op:gov:b', title: 'Fairfax County ERP', deliveryProjectId: 'dp2' }),
     ];
     expect(adminGovContractNavEntries(cards)).toEqual([
-      { key: 'dp1', label: 'Saratoga Springs Municipal', to: '/admin/internship/gov-contract/dp1', owner: 'Omolola' },
-      { key: 'dp2', label: 'Fairfax County ERP', to: '/admin/internship/gov-contract/dp2', owner: 'Omolola' },
+      { key: 'dp1', label: 'Saratoga Springs Municipal', to: '/admin/internship/gov-contract/dp1', owner: 'Omolola', daysLeft: expect.any(Number) },
+      { key: 'dp2', label: 'Fairfax County ERP', to: '/admin/internship/gov-contract/dp2', owner: 'Omolola', daysLeft: expect.any(Number) },
     ]);
   });
 
@@ -41,14 +41,21 @@ describe('adminGovContractNavEntries — admin per-contract nav sub-items', () =
     expect(adminGovContractNavEntries([live({ deliveryProjectId: 'dp4', closeDate: '2020-01-01' })])).toEqual([]);
   });
 
-  it('shows a contract with no resolvable close date — unknown is not treated as expired', () => {
+  it('shows a contract with no resolvable close date — unknown is not treated as expired, and daysLeft is null', () => {
     expect(adminGovContractNavEntries([live({ deliveryProjectId: 'dp5', title: 'No Date', closeDate: null })]))
-      .toEqual([{ key: 'dp5', label: 'No Date', to: '/admin/internship/gov-contract/dp5', owner: 'Omolola' }]);
+      .toEqual([{ key: 'dp5', label: 'No Date', to: '/admin/internship/gov-contract/dp5', owner: 'Omolola', daysLeft: null }]);
+  });
+
+  it('carries the whole days left to the close date as the KPI badge value', () => {
+    const in10 = new Date(Date.now() + 10 * 86_400_000 + 3_600_000).toISOString(); // ~10 days out
+    const [e] = adminGovContractNavEntries([live({ deliveryProjectId: 'dpX', closeDate: in10 })]);
+    expect(e.daysLeft).toBeGreaterThanOrEqual(9);
+    expect(e.daysLeft).toBeLessThanOrEqual(10);
   });
 
   it('shows "First +N" for multiple assigned interns, and falls back to the key for a missing title', () => {
     const two: GovContractAssignedIntern[] = [omolola, { identityId: 'id-2', name: 'Obi', email: null }];
     expect(adminGovContractNavEntries([live({ key: 'op:gov:d', title: null, deliveryProjectId: 'dp9', assignedInterns: two })]))
-      .toEqual([{ key: 'dp9', label: 'op:gov:d', to: '/admin/internship/gov-contract/dp9', owner: 'Omolola +1' }]);
+      .toEqual([{ key: 'dp9', label: 'op:gov:d', to: '/admin/internship/gov-contract/dp9', owner: 'Omolola +1', daysLeft: expect.any(Number) }]);
   });
 });

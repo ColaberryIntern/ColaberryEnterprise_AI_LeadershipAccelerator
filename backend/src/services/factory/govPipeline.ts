@@ -163,6 +163,11 @@ function toIsoDate(d: unknown): string | null {
  *  else the submission line from the dossier's AI-extracted key dates (mirrors govDeadline.dossierDeadlineIso for a
  *  ZIP/decoupled pursuit with no OP close). null when none resolves — the client treats that as not-yet-expired. */
 export function resolveGovCloseDate(rec: any): string | null {
+  // A management-entered override (requirements_json.manualDeadline, set from the Studio bar) WINS everywhere this
+  // resolver is read — the pipeline list cards, the admin left-nav "days left" badge, and the discovery feed — so a
+  // manually-set due date flows through the WHOLE process, not just the Studio projection.
+  const manual = (rec && rec.requirements_json && rec.requirements_json.manualDeadline) || null;
+  if (manual && manual.closeDate) return String(manual.closeDate);
   const snap = (rec && rec.source_snapshot) || null;
   const op = snap && snap.opportunity ? snap.opportunity : null;
   const closeAt = (snap && snap.closeAt) || (op && op.closeAt);
