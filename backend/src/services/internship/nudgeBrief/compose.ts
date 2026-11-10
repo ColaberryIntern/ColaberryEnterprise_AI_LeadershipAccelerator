@@ -110,14 +110,11 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   para(lead(intern, focus, now.getTime()));
   para(theOneThing(intern, focus, deadline));
   para(nextAction(intern, focus, deadline));
+  const ask = focus === 'artifact_gap' ? askBlock(intern) : { lines: [] as string[], attachment: null };
+  if (ask.attachment) para([`A prompt to start it is attached as ${ask.attachment.filename}.`]);
   para(wayThrough(focus, deadline));
   para(close(focus));
 
-  // The prompt attachment rides along ONLY where a prompt is genuinely the deliverable. It used to
-  // be stapled to all six tiers with the same sentence, which is what made every message read as a
-  // template, and it told the intern our own prompt was probably wrong.
-  const ask = focus === 'artifact_gap' ? askBlock(intern) : { lines: [] as string[], attachment: null };
-  para(ask.lines);
 
   if (awaitingAli) {
     warnings.push('This one needs YOUR answer. The generated text only acknowledges their question; it deliberately does not attempt to answer it, because the answer is a judgement and no judgement is in the database. Write the answer before sending.');

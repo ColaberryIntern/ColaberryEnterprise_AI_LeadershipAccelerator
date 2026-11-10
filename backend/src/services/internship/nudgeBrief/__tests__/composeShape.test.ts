@@ -157,6 +157,44 @@ describe('what it refuses to say', () => {
   });
 });
 
+describe('the artifact ask reads like a sentence', () => {
+  /** `asks[].name` arrives as a command for presentations: "Record your Project introduction". */
+  it('turns a command-shaped ask name into a noun', () => {
+    const b = composeBrief({
+      intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', why: 'It is the next presentation in their project plan.', prompt: 'P', nudge: 'N' }] }),
+      deadline: null, now: NOW,
+    });
+    expect(b.body).toContain('your Project introduction recording');
+    expect(b.body).not.toContain('your Record your');
+  });
+
+  /** `ask.why` and `ask.nudge` are dashboard copy: `why` says "THEIR project plan". */
+  it('never pastes the dashboard-voiced why or nudge into the message', () => {
+    const b = composeBrief({
+      intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', why: 'It is the next presentation in their project plan.', prompt: 'P', nudge: 'Hi Quincy, paste the prompt below into Claude Code.' }] }),
+      deadline: null, now: NOW,
+    });
+    expect(b.body).not.toContain('their project plan');
+    expect(b.body).not.toContain('Claude Code');
+    expect(b.body).toContain('Presentation Studio');
+  });
+
+  it('says where to do it, differently for a recording and for a build', () => {
+    const rec = composeBrief({ intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', why: 'w', prompt: 'P', nudge: 'N' }] }), deadline: null, now: NOW });
+    const build = composeBrief({ intern: intern(), deadline: null, now: NOW });
+    expect(rec.body).toContain('Presentation Studio');
+    expect(build.body).toContain('send me the link when it is live');
+  });
+
+  it('mentions the attachment once, before the close, and without disclaiming it', () => {
+    const b = composeBrief({ intern: intern(), deadline: null, now: NOW });
+    const mentions = (b.body.match(/attached as/g) ?? []).length;
+    expect(mentions).toBe(1);
+    expect(b.body.indexOf('attached as')).toBeLessThan(b.body.lastIndexOf('Reply with the day'));
+    expect(b.body).not.toContain('correct what it gets wrong');
+  });
+});
+
 describe('the attachment is earned', () => {
   /** All six tiers used to end with the same "paste the prompt into Claude Code" sentence. */
   it('attaches a prompt ONLY where a prompt is the deliverable', () => {
