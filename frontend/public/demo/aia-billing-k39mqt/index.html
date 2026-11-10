@@ -1,0 +1,1315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<!-- Not for search engines: this page names a client, their address and their staff. -->
+<title>AIA Billing</title>
+<style>
+  :root {
+    --primary:#0060a0; --primary-dark:#004570; --primary-bg:#eaf2f8; --accent:#428bca;
+    --ink:#2d3748; --muted:#718096; --border:#e2e8f0; --bg:#f7fafc; --surface:#ffffff;
+    --ok:#2f7d32; --watch:#b26a00; --bad:#b3261e; --okbg:#eef8ee; --watchbg:#fff6e6; --badbg:#fdf0ef;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  button { font:inherit; cursor:pointer; }
+  .bar {
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:10px 20px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    position:sticky; top:0; z-index:20;
+  }
+  /* Middlesex's own bar. Their logo has a white background, so the bar is light and the brand
+     blue carries through the rest of the page instead. */
+  .bar { background:#fff; border-bottom:3px solid var(--primary); }
+  .bar .mglogo { height:38px; width:auto; }
+  .bar .app {
+    font-weight:700; color:var(--primary); letter-spacing:.07em; text-transform:uppercase;
+    font-size:12px; border-left:1px solid var(--border); padding-left:16px;
+  }
+  .bar .byline {
+    display:inline-flex; align-items:center; gap:5px; font-size:10.5px; color:var(--muted);
+    letter-spacing:.04em; margin-left:4px;
+  }
+  .bar .byline img { opacity:.55; }
+  .grow { flex:1; }
+  .picker { display:flex; align-items:center; gap:7px; font-size:13px; }
+  .picker label { color:var(--muted); font-size:11px; text-transform:uppercase;
+                  letter-spacing:.07em; font-weight:700; }
+  select {
+    font:inherit; font-size:13.5px; padding:5px 9px; border:1px solid var(--border);
+    border-radius:6px; background:var(--surface); color:var(--ink);
+  }
+  .wrap { max-width:1220px; margin:0 auto; padding:20px; }
+  h1 { font-size:21px; margin:0 0 3px; color:var(--primary-dark); }
+  h2 { font-size:16px; margin:26px 0 9px; color:var(--primary-dark); }
+  .sub { color:var(--muted); font-size:13.5px; margin:0 0 16px; }
+  .banner {
+    background:var(--primary-bg); border-left:4px solid var(--primary);
+    padding:11px 14px; border-radius:0 6px 6px 0; margin:0 0 18px; font-size:13.5px;
+  }
+  .cards { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  .card {
+    background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:11px 15px; min-width:150px; flex:1;
+  }
+  .card .n { font-size:23px; font-weight:700; color:var(--primary); line-height:1.1; }
+  .card .k { font-size:10.5px; color:var(--muted); text-transform:uppercase;
+             letter-spacing:.06em; margin-top:3px; font-weight:700; }
+  table { width:100%; border-collapse:collapse; background:var(--surface); font-size:13.5px; }
+  th {
+    text-align:left; background:#eef1f5; color:var(--ink); font-size:10.5px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.05em; padding:8px 10px;
+    border-bottom:2px solid var(--border); position:sticky; top:48px;
+  }
+  td { padding:7px 10px; border-bottom:1px solid var(--border); }
+  tbody tr:hover td { background:#fbfcfe; }
+  .r { text-align:right; font-variant-numeric:tabular-nums; }
+  .sec td {
+    background:#eef1f5; font-weight:700; font-size:11px; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--muted);
+  }
+  .chip {
+    display:inline-block; padding:2px 9px; border-radius:11px; font-size:11px;
+    font-weight:700; white-space:nowrap; border:1px solid;
+  }
+  .c-open   { background:var(--watchbg); color:var(--watch); border-color:var(--watch); }
+  .c-pm     { background:#eef4fd; color:#2b6cb0; border-color:#2b6cb0; }
+  .c-appr   { background:#f3eefc; color:#6b46c1; border-color:#6b46c1; }
+  .c-ready  { background:var(--okbg); color:var(--ok); border-color:var(--ok); }
+  .c-sent   { background:var(--okbg); color:var(--ok); border-color:var(--ok); }
+  .c-rej    { background:var(--badbg); color:var(--bad); border-color:var(--bad); }
+  .c-none   { background:#eceff3; color:#5a6676; border-color:#b6bec9; }
+  .btn {
+    border:1px solid var(--primary); background:var(--primary); color:#fff;
+    padding:7px 15px; border-radius:7px; font-weight:600; font-size:13.5px;
+  }
+  .btn:hover { background:var(--primary-dark); border-color:var(--primary-dark); }
+  .btn.ghost { background:var(--surface); color:var(--primary-dark); }
+  .btn.ghost:hover { background:var(--primary-bg); }
+  .btn.quiet { background:var(--surface); color:var(--ink); border-color:var(--border); }
+  .btn.quiet:hover { background:var(--bg); }
+  .btn[disabled] { opacity:.45; cursor:not-allowed; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input[type=number] {
+    font:inherit; font-size:13.5px; width:112px; text-align:right; padding:5px 8px;
+    border:1px solid var(--border); border-radius:5px; font-variant-numeric:tabular-nums;
+  }
+  input[type=number]:focus { outline:2px solid var(--primary); outline-offset:-1px; border-color:var(--primary); }
+  .edited { background:#fffbe9; border-color:#c79a1e; }
+  .panel {
+    background:var(--surface); border:1px solid var(--border); border-radius:9px;
+    padding:16px 18px; margin-bottom:16px;
+  }
+  .kv { display:flex; flex-wrap:wrap; gap:0 28px; font-size:13.5px; }
+  .kv div { margin-bottom:5px; }
+  .kv b { color:var(--muted); font-weight:700; font-size:10.5px; text-transform:uppercase;
+          letter-spacing:.06em; display:block; }
+  .tabs { display:flex; gap:6px; margin:0 0 16px; flex-wrap:wrap; }
+  .tab {
+    border:1px solid var(--border); background:var(--surface); color:var(--ink);
+    padding:7px 14px; border-radius:7px; font-size:13.5px;
+  }
+  .tab.on { background:var(--primary); color:#fff; border-color:var(--primary); font-weight:600; }
+  .empty { text-align:center; padding:52px 20px; color:var(--muted); }
+  .empty .big { font-size:17px; color:var(--ink); font-weight:600; margin-bottom:7px; }
+  .note { font-size:12.5px; color:var(--muted); margin-top:7px; }
+  .money { font-variant-numeric:tabular-nums; }
+
+  /* ---- the self-guided walkthrough ---- */
+  .spot {
+    position:absolute; z-index:60; pointer-events:none; border-radius:8px;
+    border:3px solid var(--primary); box-shadow:0 0 0 9999px rgba(15,23,42,.55);
+    transition:all .22s ease;
+  }
+  .tourcard {
+    position:fixed; z-index:70; right:24px; bottom:24px; width:390px; max-width:calc(100vw - 32px);
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    box-shadow:0 14px 40px rgba(15,23,42,.3); padding:17px 19px;
+  }
+  .tourcard .tnum {
+    font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--primary-dark); margin-bottom:5px;
+  }
+  .tourcard .ttitle { font-size:17px; font-weight:700; margin-bottom:6px; line-height:1.25; }
+  .tourcard .tbody { font-size:14px; line-height:1.55; color:var(--ink); }
+  .tourcard .tdo {
+    margin-top:10px; background:var(--primary-bg); border-left:3px solid var(--primary);
+    padding:8px 11px; border-radius:0 5px 5px 0; font-size:13.5px; font-weight:600;
+  }
+  .tourcard .tdo:empty { display:none; }
+  .tourcard .tfoot { display:flex; gap:8px; margin-top:14px; align-items:center; }
+  .tourcard #tquit { margin-left:auto; }
+  body.touring .bar { z-index:10; }
+
+  /* ---- the generated requisition, laid out to match their printed form ---- */
+  .docwrap { background:#e9edf2; padding:14px; border-radius:8px; }
+  .sheet {
+    background:#fff; width:1056px; max-width:100%; margin:0 auto 16px; padding:20px 24px;
+    font-family:'Times New Roman', Times, serif; font-size:11px; color:#000;
+    box-shadow:0 1px 4px rgba(0,0,0,.14);
+  }
+  .sheet table { background:transparent; font-size:10.5px; font-family:inherit; }
+  .sheet th, .sheet td { position:static; background:transparent; border:none; padding:1px 4px;
+                         text-transform:none; letter-spacing:0; color:#000; }
+  .g702head { display:flex; align-items:baseline; gap:26px; border-bottom:1.5px solid #000;
+              padding-bottom:3px; margin-bottom:5px; }
+  .g702head .t1 { font-size:15px; font-weight:700; letter-spacing:.01em; }
+  .g702head .t2 { font-style:italic; font-size:10px; }
+  .hdr, .hdr2 { width:100%; border-bottom:1.2px solid #000; margin-bottom:4px; }
+  .hdr .k, .hdr2 .k { font-size:9.5px; white-space:nowrap; vertical-align:top; }
+  .hdr .v, .hdr2 .v { font-size:10px; vertical-align:top; }
+  .hdr .v.b, .hdr2 .v.b { font-weight:700; }
+  .g702body { display:grid; grid-template-columns:1fr 1.05fr; gap:18px; margin:6px 0 8px; }
+  .t3 { font-size:12.5px; font-weight:700; margin-bottom:4px; }
+  .co { width:100%; border:1px solid #000; border-collapse:collapse; }
+  .co td, .co th { border:1px solid #000; font-size:9.5px; padding:2px 4px; }
+  .cohead { text-align:left; font-weight:700; }
+  .coh { font-size:9px; text-align:center; }
+  .coh2 { font-size:9px; }
+  .cor { font-weight:700; text-align:right; }
+  .cor2 { font-weight:700; }
+  .co .amt { text-align:right; }
+  .co tr.tall td { height:52px; }
+  .cert { font-size:9px; line-height:1.35; margin:7px 0 0; text-align:justify; }
+  .sig { margin-top:12px; font-size:10.5px; }
+  .sigline { margin-top:14px; font-size:10.5px; }
+  .rule { display:inline-block; border-bottom:1px solid #000; min-width:120px; height:11px; }
+  .rule.short { min-width:58px; }
+  .appnote { font-size:9.5px; margin-bottom:5px; }
+  .nine { width:100%; }
+  .nine .lbl { font-size:10px; white-space:nowrap; }
+  .nine .lbl.ind { padding-left:14px; }
+  .nine .sub { font-size:8.5px; padding-left:12px; }
+  .nine .lead { border-bottom:1px dotted #777; width:99%; }
+  .nine .dol { text-align:right; width:10px; }
+  .nine .amt { text-align:right; white-space:nowrap; min-width:78px; }
+  .nine .g702strong td { font-weight:700; border-top:1px solid #000; border-bottom:2px solid #000; }
+  .notary { width:100%; margin-top:8px; font-size:9.5px; }
+  .chk { width:100%; border:1px solid #000; border-collapse:collapse; margin-top:8px; }
+  .chk th { border:1px solid #000; font-size:10px; font-weight:700; text-align:center; padding:2px; }
+  .chk td { border:1px solid #000; vertical-align:top; padding:4px 6px; }
+  .chkcol { width:33.3%; }
+  .chknote { font-size:8px; line-height:1.3; }
+  .chksub { font-weight:700; font-size:9.5px; text-decoration:underline; margin-bottom:3px; }
+  .chkitem { font-size:9px; margin-top:3px; }
+  .chkpair { font-size:9px; margin-bottom:5px; }
+  .chkpair .rt { float:right; }
+  .coding { width:100%; border-collapse:collapse; margin-top:6px; }
+  .coding th, .coding td { border:1px solid #000; font-size:8.5px; text-align:center; }
+  .coding tr.tall td { height:30px; }
+  .g703head { display:flex; align-items:baseline; gap:20px; }
+  .g703head .t1b { font-size:17px; font-weight:700; }
+  .g703head .t2b { font-style:italic; font-size:11px; flex:1; text-align:center; }
+  .g703head .t3b { font-size:8.5px; }
+  .subhdr { width:100%; margin:3px 0 5px; border-top:1.2px solid #000; }
+  .subhdr .note { font-size:8.5px; }
+  .subhdr .k { text-align:right; font-size:10px; white-space:nowrap; }
+  .subhdr .v { text-align:center; font-size:10px; font-weight:600; width:70px; }
+  .subhdr .sc { font-size:10px; padding-top:6px; }
+  .subhdr .scn { padding:0 18px; }
+  table.g703 { width:100%; border-collapse:collapse; }
+  table.g703 th, table.g703 td { border:1px solid #000; font-size:9px; padding:1px 3px; }
+  table.g703 .ltr th { text-align:center; font-size:8px; }
+  table.g703 .hd th { text-align:center; font-size:7.6px; line-height:1.15; vertical-align:top; }
+  table.g703 .hd2 th { text-align:center; font-size:7.6px; line-height:1.15; }
+  table.g703 .span { border-bottom:1px solid #000; }
+  table.g703 .desc { font-size:9.5px; white-space:nowrap; }
+  table.g703 .sec { font-weight:700; font-size:9.5px; padding-left:16px; }
+  table.g703 .secrow td { border-left:1px solid #000; border-right:1px solid #000; }
+  table.g703 .dol { width:8px; text-align:left; }
+  table.g703 .amt { text-align:right; white-space:nowrap; }
+  table.g703 .totrow td { font-weight:700; }
+  table.g703 .tl { text-align:center; font-weight:700; }
+  .foot { font-size:9px; margin:8px 0 0; }
+
+  @media print {
+    @page { size: letter landscape; margin: 10mm; }
+    .bar, .tabs, .no-print, .panel, h1, .sub, .banner { display:none !important; }
+    body { background:#fff; }
+    .wrap { max-width:none; padding:0; }
+    .docwrap { background:#fff; padding:0; }
+    .sheet { width:auto; box-shadow:none; padding:0; margin:0; page-break-after:always; }
+    .sheet:last-child { page-break-after:auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <img class="mglogo" src="data:image/png;base64,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" alt="Middlesex Glass">
+  <span class="app">AIA Billing</span>
+  <div class="picker">
+    <label for="role">Signed in as</label>
+    <select id="role"></select>
+  </div>
+  <div class="grow"></div>
+  <button class="btn no-print" id="tour">Show me how</button>
+  <button class="btn quiet no-print" id="reset">Start over</button>
+  <span class="byline"><img src="data:image/png;base64,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" alt="" width="16" height="16">built by Colaberry</span>
+</div>
+
+<div class="wrap" id="app"></div>
+
+<div id="spot" class="spot" hidden></div>
+<div id="tourcard" class="tourcard" hidden>
+  <div class="tnum"></div>
+  <div class="ttitle"></div>
+  <div class="tbody"></div>
+  <div class="tdo"></div>
+  <div class="tfoot">
+    <button class="btn quiet" id="tback">Back</button>
+    <button class="btn" id="tnext">Next</button>
+    <button class="btn quiet" id="tquit">Close</button>
+  </div>
+</div>
+
+<script>
+const DATA = {"jobs":[{"jobNo":"1854","projectName":"Porsche - Boston","projectAddress":["1172 Commonwealth Ave","Boston , MA"],"gcName":"CM & B, INC.","gcAddress":["85 Sam Fonzo Drive","Beverly , MA 01915"],"subcontractor":"Middlesex Glass Co Inc","subAddress":["1635 Shawsheen Street","Tewksbury, MA 01876"],"applicationNo":12,"invoiceNo":"12","invoiceDate":"10/20/26","periodTo":"10/31/26","originalContract":1395000,"netChangeOrders":-10001.83,"previousCertificates":798683.24,"coAdditions":0,"coDeductions":10001.83,"retainageWorkPct":0.05,"retainageStoredPct":0,"printed":{"contractSumToDate":1384998.17,"completedToDate":1066829.67,"retainageTotal":53341.4835,"currentPaymentDue":214804.94649999996},"pm":"Dana Pires","accountant":"Terry","channel":"Textura","status":"period_open","lines":[{"id":"1854-0","section":"FINWALL","description":"SUBMITTALS","scheduled":750,"prev":750,"thisPeriod":0,"stored":0},{"id":"1854-1","section":"FINWALL","description":"ENGINEERING/SHOP DRAWINGS","scheduled":10217,"prev":10217,"thisPeriod":0,"stored":0},{"id":"1854-2","section":"FINWALL","description":"FINWALL MATERIALS","scheduled":158608,"prev":158608,"thisPeriod":0,"stored":0},{"id":"1854-3","section":"FINWALL","description":"RENTAL EQUIPMENT","scheduled":3925,"prev":3532.5,"thisPeriod":353,"stored":0},{"id":"1854-4","section":"FINWALL","description":"FABRICATION/SHIPPING","scheduled":968,"prev":871.2,"thisPeriod":96.8,"stored":0},{"id":"1854-5","section":"FINWALL","description":"INSTALLATION","scheduled":80952,"prev":72856.8,"thisPeriod":7286.2,"stored":0},{"id":"1854-6","section":"CURTAIN WALL","description":"SUBMITTALS","scheduled":750,"prev":750,"thisPeriod":0,"stored":0},{"id":"1854-7","section":"CURTAIN WALL","description":"ENGINEERING/SHOP DRAWINGS","scheduled":8683,"prev":8683,"thisPeriod":0,"stored":0},{"id":"1854-8","section":"CURTAIN WALL","description":"CURTAIN WALL MATERIALS","scheduled":92986,"prev":92986,"thisPeriod":0,"stored":0},{"id":"1854-9","section":"CURTAIN WALL","description":"RENTAL EQUIPMENT","scheduled":5038,"prev":4786,"thisPeriod":252,"stored":0},{"id":"1854-10","section":"CURTAIN WALL","description":"FABRICATION/SHIPPING","scheduled":21145,"prev":21145,"thisPeriod":0,"stored":0},{"id":"1854-11","section":"CURTAIN WALL","description":"INSTALLATION","scheduled":88480,"prev":84056,"thisPeriod":4424,"stored":0},{"id":"1854-12","section":"ALUMINUM STOREFRONT","description":"SUBMITTALS","scheduled":750,"prev":750,"thisPeriod":0,"stored":0},{"id":"1854-13","section":"ALUMINUM STOREFRONT","description":"ENGINEERING/SHOP DRAWINGS","scheduled":4793,"prev":4793,"thisPeriod":0,"stored":0},{"id":"1854-14","section":"ALUMINUM STOREFRONT","description":"ALUMINUM STOREFRONT MATERIALS","scheduled":56229,"prev":56229,"thisPeriod":0,"stored":0},{"id":"1854-15","section":"ALUMINUM STOREFRONT","description":"FABRICATION/SHIPPING","scheduled":7851,"prev":7851,"thisPeriod":0,"stored":0},{"id":"1854-16","section":"ALUMINUM STOREFRONT","description":"INSTALLATION","scheduled":50195,"prev":41367,"thisPeriod":7824,"stored":0},{"id":"1854-17","section":"ALUMINUM ENTRANCES","description":"SUBMITTALS","scheduled":750,"prev":750,"thisPeriod":0,"stored":0},{"id":"1854-18","section":"ALUMINUM ENTRANCES","description":"ENGINEERING/SHOP DRAWINGS","scheduled":4355,"prev":4355,"thisPeriod":0,"stored":0},{"id":"1854-19","section":"ALUMINUM ENTRANCES","description":"ALUMINUM DOOR MATERIALS","scheduled":88899,"prev":0,"thisPeriod":88899,"stored":0},{"id":"1854-20","section":"ALUMINUM ENTRANCES","description":"FABRICATION/SHIPPING","scheduled":7226,"prev":0,"thisPeriod":3613,"stored":0},{"id":"1854-21","section":"ALUMINUM ENTRANCES","description":"INSTALLATION","scheduled":7657,"prev":0,"thisPeriod":3828,"stored":0},{"id":"1854-22","section":"CAULKING","description":"SUBMITTALS","scheduled":750,"prev":750,"thisPeriod":0,"stored":0},{"id":"1854-23","section":"CAULKING","description":"CAULKING MATERIALS","scheduled":13856,"prev":13856,"thisPeriod":0,"stored":0},{"id":"1854-24","section":"CAULKING","description":"CAULKING SHIPPING","scheduled":572,"prev":250,"thisPeriod":322,"stored":0},{"id":"1854-25","section":"CAULKING","description":"CAULKING INSTALLATION","scheduled":19389,"prev":11786,"thisPeriod":3725,"stored":0},{"id":"1854-26","section":"FRAMELESS GLASS","description":"SUBMITTALS","scheduled":750,"prev":675,"thisPeriod":75,"stored":0},{"id":"1854-27","section":"FRAMELESS GLASS","description":"ENGINEERING/SHOP DRAWINGS","scheduled":16407,"prev":14766.3,"thisPeriod":1640.7,"stored":0},{"id":"1854-28","section":"FRAMELESS GLASS","description":"FRAMELESS GLASS MATERIALS","scheduled":278061,"prev":30000,"thisPeriod":102389,"stored":0},{"id":"1854-29","section":"FRAMELESS GLASS","description":"GLASS FILM","scheduled":6658,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-30","section":"FRAMELESS GLASS","description":"RENTAL EQUIPMENT","scheduled":2310,"prev":0,"thisPeriod":550,"stored":0},{"id":"1854-31","section":"FRAMELESS GLASS","description":"FABRICATION/SHIPPING","scheduled":6050.000000000001,"prev":800,"thisPeriod":200,"stored":0},{"id":"1854-32","section":"FRAMELESS GLASS","description":"INSTALLATION","scheduled":99943,"prev":10000,"thisPeriod":2000,"stored":0},{"id":"1854-33","section":"SKYLIGHTS","description":"SUBMITTALS","scheduled":750,"prev":750,"thisPeriod":0,"stored":0},{"id":"1854-34","section":"SKYLIGHTS","description":"ENGINEERING/SHOP DRAWINGS","scheduled":7195,"prev":7195,"thisPeriod":0,"stored":0},{"id":"1854-35","section":"SKYLIGHTS","description":"SKYLIGHT MATERIALS","scheduled":128101,"prev":128101,"thisPeriod":0,"stored":0},{"id":"1854-36","section":"SKYLIGHTS","description":"RENTAL EQUIPMENT","scheduled":3046,"prev":3046,"thisPeriod":0,"stored":0},{"id":"1854-37","section":"SKYLIGHTS","description":"FABRICATION/SHIPPING","scheduled":11842,"prev":11842,"thisPeriod":0,"stored":0},{"id":"1854-38","section":"SKYLIGHTS","description":"INSTALLATION","scheduled":28948,"prev":27501,"thisPeriod":1447,"stored":0},{"id":"1854-39","section":"GLASS RAILING","description":"SUBMITTALS","scheduled":750,"prev":675,"thisPeriod":75,"stored":0},{"id":"1854-40","section":"GLASS RAILING","description":"ENGINEERING/SHOP DRAWINGS","scheduled":1982,"prev":1783.8,"thisPeriod":198.2,"stored":0},{"id":"1854-41","section":"GLASS RAILING","description":"GLASS RAILING MATERIALS","scheduled":30300,"prev":0,"thisPeriod":5211,"stored":0},{"id":"1854-42","section":"GLASS RAILING","description":"RENTAL EQUIPMENT","scheduled":464,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-43","section":"GLASS RAILING","description":"FABRICATION/SHIPPING","scheduled":2277,"prev":0,"thisPeriod":250,"stored":0},{"id":"1854-44","section":"GLASS RAILING","description":"INSTALLATION","scheduled":13782,"prev":0,"thisPeriod":1275,"stored":0},{"id":"1854-45","section":"BORROW / VISION LITES / TRANSACTION WINDOW","description":"SUBMITTALS","scheduled":500,"prev":450,"thisPeriod":50,"stored":0},{"id":"1854-46","section":"BORROW / VISION LITES / TRANSACTION WINDOW","description":"ENGINEERING/SHOP DRAWINGS","scheduled":520,"prev":468,"thisPeriod":52,"stored":0},{"id":"1854-47","section":"BORROW / VISION LITES / TRANSACTION WINDOW","description":"GLASS MATERIALS","scheduled":7440,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-48","section":"BORROW / VISION LITES / TRANSACTION WINDOW","description":"SHIPPING","scheduled":220,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-49","section":"BORROW / VISION LITES / TRANSACTION WINDOW","description":"INSTALLATION","scheduled":4338,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-50","section":"MIRRORS","description":"SUBMITTALS","scheduled":500,"prev":450,"thisPeriod":50,"stored":0},{"id":"1854-51","section":"MIRRORS","description":"ENGINEERING/SHOP DRAWINGS","scheduled":264,"prev":237.6,"thisPeriod":26.4,"stored":0},{"id":"1854-52","section":"MIRRORS","description":"MIRROR MATERIALS","scheduled":1776,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-53","section":"MIRRORS","description":"FABRICATION/SHIPPING","scheduled":649,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-54","section":"MIRRORS","description":"INSTALLATION","scheduled":3403,"prev":0,"thisPeriod":0,"stored":0},{"id":"1854-55","section":"CHANGE ORDERS","description":"CO #1 DEDUCT FURNISH/INSTALL FIRE RATED GLASS","scheduled":-2908.85,"prev":0,"thisPeriod":-2908.85,"stored":0},{"id":"1854-56","section":"CHANGE ORDERS","description":"CO #2 CHANGES TO INTERIOR GLASS PARTITIONS","scheduled":-7092.98,"prev":0,"thisPeriod":-7092.98,"stored":0}]},{"jobNo":"1807","projectName":"Fairfield at 55 Summer St","projectAddress":["55 Summer St","Walpole, MA, 02071"],"gcName":"Fairfield Residential","gcAddress":["30 Braintree Hill Park Suite 105","Braintree, MA, 02184"],"subcontractor":"Middlesex Glass Co Inc","subAddress":["1635 Shawsheen Street","Tewksbury, MA 01876"],"applicationNo":17,"invoiceNo":"17","invoiceDate":"10/20/26","periodTo":"10/31/26","originalContract":356900,"netChangeOrders":391472.48,"previousCertificates":710953.856,"coAdditions":417679,"coDeductions":26206.52,"retainageWorkPct":0,"retainageStoredPct":0,"printed":{"contractSumToDate":748372.48,"completedToDate":748372.48,"retainageTotal":0,"currentPaymentDue":37418.62399999995},"pm":"Jack Stanwood","accountant":"Jamie Morse","channel":"Email","status":"period_open","lines":[{"id":"1807-0","section":"ALUMINUM STOREFRONT","description":"ENGINEERING/SHOP DRAWINGS","scheduled":14919,"prev":14919,"thisPeriod":0,"stored":0},{"id":"1807-1","section":"ALUMINUM STOREFRONT","description":"ALUM STOREFRONT MATERIALS","scheduled":22321,"prev":22321,"thisPeriod":0,"stored":0},{"id":"1807-2","section":"ALUMINUM STOREFRONT","description":"GLASS MATERIALS","scheduled":14164,"prev":14164,"thisPeriod":0,"stored":0},{"id":"1807-3","section":"ALUMINUM STOREFRONT","description":"STOERFRONT FABRICATION/SHIPPING","scheduled":6030,"prev":6030,"thisPeriod":0,"stored":0},{"id":"1807-4","section":"ALUMINUM STOREFRONT","description":"STOEFRONT CAULKING","scheduled":5803,"prev":5803,"thisPeriod":0,"stored":0},{"id":"1807-5","section":"ALUMINUM STOREFRONT","description":"STOREFRONT INSTALLATION","scheduled":21740,"prev":21740,"thisPeriod":0,"stored":0},{"id":"1807-6","section":"ALUMINUM ENTRANCES","description":"ENGINEERING/SHOP DRAWINGS","scheduled":15914,"prev":15914,"thisPeriod":0,"stored":0},{"id":"1807-7","section":"ALUMINUM ENTRANCES","description":"ALUMINUM DOOR MATERIALS","scheduled":39196,"prev":39196,"thisPeriod":0,"stored":0},{"id":"1807-8","section":"ALUMINUM ENTRANCES","description":"GLASS MATERIALS","scheduled":9462,"prev":9462,"thisPeriod":0,"stored":0},{"id":"1807-9","section":"ALUMINUM ENTRANCES","description":"HARDWARE","scheduled":64780,"prev":64780,"thisPeriod":0,"stored":0},{"id":"1807-10","section":"ALUMINUM ENTRANCES","description":"FABRICATION/SHIPPING","scheduled":10882,"prev":10882,"thisPeriod":0,"stored":0},{"id":"1807-11","section":"ALUMINUM ENTRANCES","description":"INSTALLATION","scheduled":12705,"prev":12705,"thisPeriod":0,"stored":0},{"id":"1807-12","section":"AMENITY/FITNESS MIRRORS","description":"ENGINEERING/SHOP DRAWINGS","scheduled":2157,"prev":2157,"thisPeriod":0,"stored":0},{"id":"1807-13","section":"AMENITY/FITNESS MIRRORS","description":"MIRROR MATERIALS","scheduled":7256,"prev":7256,"thisPeriod":0,"stored":0},{"id":"1807-14","section":"AMENITY/FITNESS MIRRORS","description":"FABRICATION/SHIPPING","scheduled":350,"prev":350,"thisPeriod":0,"stored":0},{"id":"1807-15","section":"AMENITY/FITNESS MIRRORS","description":"INSTALLATION","scheduled":3630,"prev":3630,"thisPeriod":0,"stored":0},{"id":"1807-16","section":"BORROW/VISION LITES","description":"ENGINEERING/SHOP DRAWINGS","scheduled":1430,"prev":1430,"thisPeriod":0,"stored":0},{"id":"1807-17","section":"BORROW/VISION LITES","description":"GLASS MATERIALS","scheduled":5408,"prev":5408,"thisPeriod":0,"stored":0},{"id":"1807-18","section":"BORROW/VISION LITES","description":"SHIPPING","scheduled":250,"prev":250,"thisPeriod":0,"stored":0},{"id":"1807-19","section":"BORROW/VISION LITES","description":"INSTALLATION","scheduled":2420,"prev":2420,"thisPeriod":0,"stored":0},{"id":"1807-20","section":"FRAMED/UNIT MIRRORS","description":"ENGINEERING/SHOP DRAWINGS","scheduled":7500,"prev":7500,"thisPeriod":0,"stored":0},{"id":"1807-21","section":"FRAMED/UNIT MIRRORS","description":"FRAMED MIRROR DEPOSIT (50% TO RELEASE ORDER)","scheduled":36166,"prev":36166,"thisPeriod":0,"stored":0},{"id":"1807-22","section":"FRAMED/UNIT MIRRORS","description":"FRAMED MIRROR DEPOSIT (BALANCE PRIOR TO SHIP)","scheduled":36165,"prev":36165,"thisPeriod":0,"stored":0},{"id":"1807-23","section":"FRAMED/UNIT MIRRORS","description":"SHIPPING","scheduled":1550,"prev":1550,"thisPeriod":0,"stored":0},{"id":"1807-24","section":"FRAMED/UNIT MIRRORS","description":"INSTALLATION","scheduled":14702,"prev":14702,"thisPeriod":0,"stored":0},{"id":"1807-25","section":"Change Order #1","description":"CO#01 Bath Acc Eng/Shop Drawings","scheduled":9511,"prev":9511,"thisPeriod":0,"stored":0},{"id":"1807-26","section":"Change Order #1","description":"CO#01 2000 Bath Accs Materials","scheduled":25110,"prev":25110,"thisPeriod":0,"stored":0},{"id":"1807-27","section":"Change Order #1","description":"CO#01 2000 Bath Accs L1 Install (18 Units)","scheduled":2754,"prev":2754,"thisPeriod":0,"stored":0},{"id":"1807-28","section":"Change Order #1","description":"CO#01 2000 Bath Accs L2 Install (18 Units)","scheduled":2754,"prev":2754,"thisPeriod":0,"stored":0},{"id":"1807-29","section":"Change Order #1","description":"CO#01 2000 Bath Accs L3 Install (18 Units)","scheduled":2754,"prev":2754,"thisPeriod":0,"stored":0},{"id":"1807-30","section":"Change Order #1","description":"CO#01 2000 Bath Accs L4 Install (18 Units)","scheduled":2754,"prev":2754,"thisPeriod":0,"stored":0},{"id":"1807-31","section":"Change Order #1","description":"CO#01 2000 Bath Accs L5 Install (18 Units)","scheduled":2754,"prev":2754,"thisPeriod":0,"stored":0},{"id":"1807-32","section":"Change Order #1","description":"CO#01 5000 Bath Accs Materials","scheduled":19530,"prev":19530,"thisPeriod":0,"stored":0},{"id":"1807-33","section":"Change Order #1","description":"CO#01 5000 Bath Accs L1 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-34","section":"Change Order #1","description":"CO#01 5000 Bath Accs L2 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-35","section":"Change Order #1","description":"CO#01 5000 Bath Accs L3 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-36","section":"OTHER","description":"CO#01 5000 Bath Accs L4 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-37","section":"OTHER","description":"CO#01 5000 Bath Accs L5 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-38","section":"OTHER","description":"CO#01 TH Bath Accs Materials (52 Units)","scheduled":14508,"prev":14508,"thisPeriod":0,"stored":0},{"id":"1807-39","section":"OTHER","description":"CO#01 TH Type 1 Bath Accs Install (18 Units)","scheduled":2754,"prev":2754,"thisPeriod":0,"stored":0},{"id":"1807-40","section":"OTHER","description":"CO#01 TH Type 2 Bath Accs Install (30 Units)","scheduled":4590,"prev":4590,"thisPeriod":0,"stored":0},{"id":"1807-41","section":"OTHER","description":"CO#01 TH Type 3 Bath Accs Install (4 Units)","scheduled":612,"prev":612,"thisPeriod":0,"stored":0},{"id":"1807-42","section":"OTHER","description":"CO#01 4000 Bath Accs Materials","scheduled":15624,"prev":15624,"thisPeriod":0,"stored":0},{"id":"1807-43","section":"OTHER","description":"CO#01 4000 Bath Accs L1 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-44","section":"OTHER","description":"CO#01 4000 Bath Accs L2 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-45","section":"OTHER","description":"CO#01 4000 Bath Accs L3 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-46","section":"OTHER","description":"CO#01 4000 Bath Accs L4 Install (14 Units)","scheduled":2142,"prev":2142,"thisPeriod":0,"stored":0},{"id":"1807-47","section":"OTHER","description":"CO#01 Amenity Bath Accs Materials","scheduled":837,"prev":837,"thisPeriod":0,"stored":0},{"id":"1807-48","section":"OTHER","description":"CO#01 Clubhouse Accs Install","scheduled":153,"prev":153,"thisPeriod":0,"stored":0},{"id":"1807-49","section":"OTHER","description":"CO#01 Cabana Accs Install","scheduled":153,"prev":153,"thisPeriod":0,"stored":0},{"id":"1807-50","section":"OTHER","description":"CO#01 Maintenance Accs Install","scheduled":153,"prev":153,"thisPeriod":0,"stored":0},{"id":"1807-51","section":"OTHER","description":"CO#01 Toilet Partition Eng/Shop Drawings","scheduled":1500,"prev":1500,"thisPeriod":0,"stored":0},{"id":"1807-52","section":"OTHER","description":"CO#01 Toilet Partition Materials","scheduled":5097,"prev":5097,"thisPeriod":0,"stored":0},{"id":"1807-53","section":"OTHER","description":"CO#01Toilet Partition Installaton","scheduled":3016,"prev":3016,"thisPeriod":0,"stored":0},{"id":"1807-54","section":"OTHER","description":"CO#01 Phase I Shower Door Eng/Shop Drawings","scheduled":2500,"prev":2500,"thisPeriod":0,"stored":0},{"id":"1807-55","section":"OTHER","description":"CO#01 Phase I Shower Door Materials","scheduled":14665,"prev":14665,"thisPeriod":0,"stored":0},{"id":"1807-56","section":"OTHER","description":"CO#01 Phase I Shower Door Installaton","scheduled":10698,"prev":10698,"thisPeriod":0,"stored":0},{"id":"1807-57","section":"OTHER","description":"CO#01 Phase II Shower Door Eng/Shop Drawings","scheduled":2600,"prev":2600,"thisPeriod":0,"stored":0},{"id":"1807-58","section":"OTHER","description":"CO#01 Phase II Shower Door Materials","scheduled":18571,"prev":18571,"thisPeriod":0,"stored":0},{"id":"1807-59","section":"OTHER","description":"CO#01 Phase II Shower Door Installaton","scheduled":10920,"prev":10920,"thisPeriod":0,"stored":0},{"id":"1807-60","section":"OTHER","description":"CO#01 Shelving Engineering/Shop Drawings","scheduled":7194,"prev":7194,"thisPeriod":0,"stored":0},{"id":"1807-61","section":"OTHER","description":"CO#01 2000 Shelving Materials","scheduled":31320,"prev":31320,"thisPeriod":0,"stored":0},{"id":"1807-62","section":"OTHER","description":"CO#01 2000 Shelving L1 Install (18 Units)","scheduled":1260,"prev":1260,"thisPeriod":0,"stored":0},{"id":"1807-63","section":"OTHER","description":"CO#01 2000 Shelving L2 Install (18 Units)","scheduled":1260,"prev":1260,"thisPeriod":0,"stored":0},{"id":"1807-64","section":"OTHER","description":"CO#01 2000 Shelving L3 Install (18 Units)","scheduled":1260,"prev":1260,"thisPeriod":0,"stored":0},{"id":"1807-65","section":"OTHER","description":"CO#01 2000 Shelving L4 Install (18 Units)","scheduled":1260,"prev":1260,"thisPeriod":0,"stored":0},{"id":"1807-66","section":"OTHER","description":"CO#01 2000 Shelving L5 Install (18 Units)","scheduled":1260,"prev":1260,"thisPeriod":0,"stored":0},{"id":"1807-67","section":"OTHER","description":"CO#01 5000 Shelving Materials","scheduled":24360,"prev":24360,"thisPeriod":0,"stored":0},{"id":"1807-68","section":"OTHER","description":"CO#01 5000 Shelving L1 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-69","section":"OTHER","description":"CO#01 5000 Shelving L2 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-70","section":"OTHER","description":"CO#01 5000 Shelving L3 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-71","section":"OTHER","description":"CO#01 5000 Shelving L4 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-72","section":"OTHER","description":"CO#01 5000 Shelving L5 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-73","section":"OTHER","description":"CO#01 TH Shelving Materials (52 Units)","scheduled":18096,"prev":18096,"thisPeriod":0,"stored":0},{"id":"1807-74","section":"OTHER","description":"CO#01 TH Type 1 Shelving Install (18 Units)","scheduled":1260,"prev":1260,"thisPeriod":0,"stored":0},{"id":"1807-75","section":"OTHER","description":"CO#01 TH Type 2 Shelving Install (30 Units)","scheduled":2100,"prev":2100,"thisPeriod":0,"stored":0},{"id":"1807-76","section":"OTHER","description":"CO#01 TH Type 3 Shelving Install (4 Units)","scheduled":280,"prev":280,"thisPeriod":0,"stored":0},{"id":"1807-77","section":"OTHER","description":"CO#01 4000 Shelving Materials","scheduled":19488,"prev":19488,"thisPeriod":0,"stored":0},{"id":"1807-78","section":"OTHER","description":"CO#01 4000 Shelving L1 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-79","section":"OTHER","description":"CO#01 4000 Shelving L2 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-80","section":"OTHER","description":"CO#01 4000 Shelving L3 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-81","section":"OTHER","description":"CO#01 4000 Shelving L4 Install (14 Units)","scheduled":980,"prev":980,"thisPeriod":0,"stored":0},{"id":"1807-82","section":"OTHER","description":"CO#01 Mail Kiosk Shelving Materials","scheduled":348,"prev":348,"thisPeriod":0,"stored":0},{"id":"1807-83","section":"OTHER","description":"CO#01 Mail Kiosk Shelving Installatrion","scheduled":70,"prev":70,"thisPeriod":0,"stored":0},{"id":"1807-84","section":"OTHER","description":"CO#01 Clubhouse Workroom Shelving Materials","scheduled":348,"prev":348,"thisPeriod":0,"stored":0},{"id":"1807-85","section":"OTHER","description":"CO#01 Clubhouse Workroom Shelving Install","scheduled":70,"prev":70,"thisPeriod":0,"stored":0},{"id":"1807-86","section":"OTHER","description":"CO#01 Mailbox Shop Drawings","scheduled":4500,"prev":4500,"thisPeriod":0,"stored":0},{"id":"1807-87","section":"OTHER","description":"CO#01 Mailbox Materials","scheduled":50089,"prev":50089,"thisPeriod":0,"stored":0},{"id":"1807-88","section":"OTHER","description":"CO#01 Mailbox Installation","scheduled":7905,"prev":7905,"thisPeriod":0,"stored":0},{"id":"1807-89","section":"OTHER","description":"CO#01 Bike Rack Shop Drawings","scheduled":1000,"prev":1000,"thisPeriod":0,"stored":0},{"id":"1807-90","section":"OTHER","description":"CO#01 Bike Rack Materials","scheduled":5985,"prev":5985,"thisPeriod":0,"stored":0},{"id":"1807-91","section":"OTHER","description":"CO#01 Bike Rack Install","scheduled":3317,"prev":3317,"thisPeriod":0,"stored":0},{"id":"1807-92","section":"OTHER","description":"CO#02 Supply and Install Bldg 4000 Unit Mirrors","scheduled":25776,"prev":25776,"thisPeriod":0,"stored":0},{"id":"1807-93","section":"OTHER","description":"CO#03 Remove & Reinstall S17","scheduled":2903,"prev":2903,"thisPeriod":0,"stored":0},{"id":"1807-94","section":"OTHER","description":"CO#04 OCIP Deduct","scheduled":-1436.32,"prev":-1436.32,"thisPeriod":0,"stored":0},{"id":"1807-95","section":"OTHER","description":"CO#05 Credit for Borrowed Lite","scheduled":-7270.2,"prev":-7270.2,"thisPeriod":0,"stored":0},{"id":"1807-96","section":"OTHER","description":"CO#06 BackCharge for Leak Repairs","scheduled":-17500,"prev":-17500,"thisPeriod":0,"stored":0}]}],"generatedAt":"2026-11-05"};
+
+/* ---- money, in the accounting style the form uses ---- */
+function m2(n) {
+  if (n == null || n === '') return '';
+  if (Math.abs(n) < 0.005) return '-';
+  const s = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  return n < 0 ? '(' + s + ')' : s;
+}
+/** A money cell: narrow $ column then the right-aligned amount, as on the form. */
+function mc(n, cls) {
+  const v = m2(n);
+  return '<td class="dol">' + (v ? '$' : '') + '</td>'
+    + '<td class="amt ' + (cls || '') + '">' + v + '</td>';
+}
+function pct2(g, c) {
+  if (!c) return '';
+  return ((g / c) * 100).toFixed(2) + '%';
+}
+
+/** The nine numbered lines, exactly as the form defines them. */
+function coverLines(job, x) {
+  const l1 = job.originalContract;
+  const l2 = job.netChangeOrders;
+  const l3 = l1 + l2;
+  const l4 = x.completed;
+  const l5 = x.retainage;
+  const l6 = l4 - l5;
+  const l7 = job.previousCertificates;
+  const l8 = l6 - l7;
+  const l9 = l3 - l6;
+  return { l1, l2, l3, l4, l5, l6, l7, l8, l9 };
+}
+
+function g702Html(job, x) {
+  const L = coverLines(job, x);
+  const row = (label, val, sub, strong) =>
+    '<tr class="' + (strong ? 'g702strong' : '') + '">'
+    + '<td class="lbl">' + label + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</td>'
+    + '<td class="lead"></td>'
+    + '<td class="dol">$</td><td class="amt">' + m2(val) + '</td></tr>';
+
+  return '<div class="sheet">'
+    + '<div class="g702head">'
+    + '<div class="t1">APPLICATION AND CERTIFICATE FOR PAYMENT</div>'
+    + '<div class="t2">AIA DOCUMENT G702</div></div>'
+    + '<table class="hdr"><tr>'
+    + '<td class="k">TO:</td><td class="v">' + esc(job.gcName) + '<br>'
+    + job.gcAddress.map(esc).join('<br>') + '</td>'
+    + '<td class="k">PROJECT:</td><td class="v">' + esc(job.projectName) + '<br>'
+    + job.projectAddress.map(esc).join('<br>') + '</td>'
+    + '<td class="k">APPLICATION NO:</td><td class="v b">' + esc(String(job.applicationNo)) + '</td>'
+    + '<td class="k">DISTRIBUTION TO:</td></tr>'
+    + '<tr><td class="k">FROM:</td><td class="v">' + esc(job.subcontractor) + '<br>'
+    + job.subAddress.map(esc).join('<br>') + '</td>'
+    + '<td></td><td></td>'
+    + '<td class="k">INVOICE NO:</td><td class="v b">' + esc(String(job.invoiceNo || job.applicationNo)) + '</td>'
+    + '<td class="v">[X] CONTRACTOR</td></tr>'
+    + '<tr><td></td><td></td><td></td><td></td>'
+    + '<td class="k">INVOICE DATE:</td><td class="v">' + esc(job.invoiceDate) + '</td><td></td></tr>'
+    + '<tr><td></td><td></td><td></td><td></td>'
+    + '<td class="k">PERIOD TO:</td><td class="v">' + esc(job.periodTo) + '</td><td></td></tr>'
+    + '</table>'
+    + '<table class="hdr2"><tr>'
+    + '<td class="k">CONTRACT NO:</td><td class="v"></td>'
+    + '<td class="k">SUBCONTRACTOR&rsquo;S JOB NO:</td><td class="v b"># ' + esc(job.jobNo) + '</td>'
+    + '<td class="k">CONTRACT DATE:</td><td class="v"></td></tr></table>'
+
+    + '<div class="g702body">'
+    + '<div class="left">'
+    + '<div class="t3">SUBCONTRACTOR&rsquo;S APPLICATION FOR PAYMENT</div>'
+    + '<table class="co"><tr><th colspan="4" class="cohead">CHANGE ORDER SUMMARY</th></tr>'
+    + '<tr><td class="conote">Change Orders approved in<br>previous months by Contractor</td>'
+    + '<th class="coh">ADDITIONS</th><th class="coh" colspan="2">DEDUCTIONS</th></tr>'
+    + '<tr><td class="cor">TOTAL</td>'
+    + '<td class="amt">$ ' + m2(job.coAdditions) + '</td>'
+    + '<td class="amt" colspan="2">$ ' + m2(job.coDeductions) + '</td></tr>'
+    + '<tr><td class="cor2" colspan="4">Approved this Month</td></tr>'
+    + '<tr><td class="coh2">Number</td><td class="coh2">Date Approved</td>'
+    + '<td class="coh2"></td><td class="coh2"></td></tr>'
+    + '<tr class="tall"><td></td><td></td><td></td><td></td></tr>'
+    + '<tr><td class="cor">TOTALS</td><td class="amt">$ -</td>'
+    + '<td class="amt" colspan="2">$ -</td></tr>'
+    + '<tr><td class="cor">Net Change by Change Orders</td>'
+    + '<td class="amt">$ ' + m2(job.coAdditions) + '</td>'
+    + '<td class="amt" colspan="2">$ ' + m2(job.coDeductions) + '</td></tr>'
+    + '</table>'
+    + '<p class="cert">The undersigned Contractor certifies that to the best of the '
+    + 'Contractor&rsquo;s knowledge, information and belief the Work covered by this Application '
+    + 'for Payment has been completed in accordance with the Contract Documents, that all amounts '
+    + 'have been paid by the Contractor for Work for which previous Certificates for Payment were '
+    + 'issued and payments received from the Owner, and that current payment shown herein is now '
+    + 'due.</p>'
+    + '<div class="sig">SUBCONTRACTOR: ' + esc(job.subcontractor) + '</div>'
+    + '<div class="sigline">By: <span class="rule"></span> Date: <span class="rule short"></span></div>'
+    + '</div>'
+
+    + '<div class="right">'
+    + '<div class="appnote">Application is made for Payment, as shown below, in connection with '
+    + 'the Contract.<br><strong>Continuation Sheet, AIA Document G703, is attached.</strong></div>'
+    + '<table class="nine">'
+    + row('1. ORIGINAL CONTRACT SUM', L.l1)
+    + row('2. Net change by Change Orders', L.l2)
+    + row('3. CONTRACT SUM TO DATE', L.l3, '(Line 1 +/- 2)')
+    + row('4. TOTAL COMPLETED AND STORED TO DATE', L.l4, '(Column G on G703)')
+    + '<tr><td class="lbl">5. RETAINAGE:</td><td></td><td></td><td></td></tr>'
+    + '<tr><td class="lbl ind">a. ' + (job.retainageWorkPct * 100) + '% of Completed Work'
+    + '<div class="sub">(Column D + E on G703)</div></td><td class="lead"></td>'
+    + '<td class="dol">' + (x.retWork ? '$' : '') + '</td>'
+    + '<td class="amt">' + (x.retWork ? m2(x.retWork) : '') + '</td></tr>'
+    + '<tr><td class="lbl ind">b. ' + (job.retainageStoredPct * 100) + '% of Stored Material'
+    + '<div class="sub">(Column F on G703)</div></td><td class="lead"></td>'
+    + '<td class="dol">' + (x.retStored ? '$' : '') + '</td>'
+    + '<td class="amt">' + (x.retStored ? m2(x.retStored) : '') + '</td></tr>'
+    + row('Total Retainage (Line 5a + 5b or', L.l5, 'Total in Column I of G703)')
+    + row('6. TOTAL EARNED LESS RETAINAGE', L.l6, '(Line 4 less Line 5 Total)')
+    + row('7. LESS PREVIOUS CERTIFICATES FOR PAYMENT', L.l7, '(Line 6 from prior Certificate)')
+    + row('8. CURRENT PAYMENT DUE', L.l8, '', true)
+    + row('9. BALANCE TO FINISH, PLUS RETAINAGE', L.l9, '(Line 3 less Line 6)')
+    + '</table>'
+    + '<table class="notary"><tr><td>State of Massachusetts</td>'
+    + '<td>County of Middlesex</td></tr>'
+    + '<tr><td colspan="2">Subscribed and sworn to before me this <span class="rule short"></span> '
+    + 'of <span class="rule short"></span> <span class="rule short"></span></td></tr>'
+    + '<tr><td colspan="2">Notary Public: <span class="rule"></span></td></tr>'
+    + '<tr><td colspan="2">My Commission Expires: <span class="rule short"></span></td></tr>'
+    + '<tr><td colspan="2">Witness my hand and official seal:</td></tr></table>'
+    + '</div></div>'
+
+    + '<table class="chk"><tr><th colspan="3">APPLICATION FOR PAYMENT CHECKLIST - TO BE COMPLETED '
+    + 'BY CONTRACTOR</th></tr>'
+    + '<tr><td colspan="3" class="chknote">NOTE: PAYMENT WILL BE DELAYED IF APPLICATION IS NOT '
+    + 'ACCURATE, IF ITEMS ARE MISSING OR IF UNAPPROVED CHANGE ORDERS ARE BILLED.</td></tr>'
+    + '<tr><td class="chkcol"><div class="chknote">WLB Project Accountant: Check list below for '
+    + 'completeness. If items are missing, contact Subcontractor for completion before approval is '
+    + 'given to Project Manager.</div>'
+    + ['Original Application', 'Original Continuation Sheet', 'Conditional Lien Release',
+      'Unconditional Supplier Releases', 'Conditional Supplier Releases']
+      .map((t) => '<div class="chkitem">' + t + ' <span class="rule"></span></div>').join('')
+    + '</td>'
+    + '<td class="chkcol"><div class="chkpair">Approved By: <span class="rule"></span>'
+    + '<span class="rt">Gross: <span class="rule short"></span></span></div>'
+    + '<div class="chkpair">Invoice #: <span class="rule"></span>'
+    + '<span class="rt">Retention: <span class="rule short"></span></span></div>'
+    + '<div class="chkpair">Date: <span class="rule"></span>'
+    + '<span class="rt">Discount: <span class="rule short"></span></span></div>'
+    + '<table class="coding"><tr><th>Job #</th><th>CSI #</th><th>Type</th><th>Amount</th></tr>'
+    + '<tr class="tall"><td></td><td></td><td></td><td></td></tr></table></td>'
+    + '<td class="chkcol"><div class="chksub">Notes for Subcontractor:</div>'
+    + '<div class="chknote">Only bill for change orders that have been approved by Contractor. '
+    + 'Billing for unapproved change orders may result in invoice being kicked back for revision '
+    + 'and eliminated from current billing to owner.</div>'
+    + '<div class="chknote">Attach all appropriate Supplier and Subcontractor lien releases with '
+    + 'completed Application for Payment.</div></td></tr></table>'
+    + '</div>';
+}
+
+/** Column band shared by every continuation page. */
+function g703Head(job, pageNo, pageCount) {
+  return '<div class="g703head">'
+    + '<div class="t1b">CONTINUATION SHEET</div>'
+    + '<div class="t2b">AIA DOCUMENT G703</div>'
+    + '<div class="t3b">PAGE OF PAGES ' + pageNo + ' of ' + pageCount + '</div></div>'
+    + '<table class="subhdr"><tr>'
+    + '<td class="note">AIA Document G702, APPLICATION AND CERTIFICATION FOR PAYMENT, containing'
+    + '<br>Subcontractor&rsquo;s signed certification is attached.</td>'
+    + '<td class="k">APPLICATION NO:</td><td class="v">' + esc(String(job.applicationNo)) + '</td>'
+    + '</tr><tr><td></td><td class="k">INVOICE NO:</td>'
+    + '<td class="v">' + esc(String(job.invoiceNo || job.applicationNo)) + '</td></tr>'
+    + '<tr><td class="sc">SUBCONTRACTOR: <span class="scn">' + esc(job.subcontractor) + '</span>'
+    + ' <strong>' + esc(job.projectName) + '</strong></td>'
+    + '<td class="k">INVOICE DATE:</td><td class="v">' + esc(job.invoiceDate) + '</td></tr>'
+    + '<tr><td></td><td class="k">PERIOD TO:</td><td class="v">' + esc(job.periodTo) + '</td></tr>'
+    + '</table>'
+    + '<table class="g703"><thead>'
+    + '<tr class="ltr"><th>A</th><th>B</th><th colspan="2">C</th><th colspan="2">D</th>'
+    + '<th colspan="2">E</th><th colspan="2">F</th><th colspan="2">G</th><th>H</th>'
+    + '<th colspan="2">I</th><th colspan="2"></th></tr>'
+    + '<tr class="hd"><th>ITEM<br>NO.</th><th>DESCRIPTION OF WORK</th>'
+    + '<th colspan="2">SCHEDULED<br>VALUE</th>'
+    + '<th colspan="4" class="span">WORK COMPLETED</th>'
+    + '<th colspan="2">MATERIALS<br>PRESENTLY<br>STORED<br>(NOT IN<br>D OR E)</th>'
+    + '<th colspan="2">TOTAL<br>COMPLETED<br>AND STORED<br>TO DATE<br>(D+E+F)</th>'
+    + '<th>%<br>(G &divide; C)</th>'
+    + '<th colspan="2">BALANCE<br>TO FINISH<br>(C - G)</th>'
+    + '<th colspan="2">RETAINAGE</th></tr>'
+    + '<tr class="hd2"><th></th><th></th><th colspan="2"></th>'
+    + '<th colspan="2">FROM PREVIOUS<br>APPLICATION<br>(D + E)</th>'
+    + '<th colspan="2">THIS PERIOD</th>'
+    + '<th colspan="2"></th><th colspan="2"></th><th></th>'
+    + '<th colspan="2"></th><th colspan="2"></th></tr>'
+    + '</thead><tbody>';
+}
+
+function g703Rows(rows, job) {
+  let h = '';
+  for (const r of rows) {
+    if (r.heading) {
+      h += '<tr class="secrow"><td></td><td class="sec"><u>' + esc(r.heading) + '</u></td>'
+        + '<td colspan="14"></td></tr>';
+      continue;
+    }
+    const g = G(r);
+    const bal = I(r);
+    const ret = job.retainageWorkPct * (r.prev + r.thisPeriod)
+      + job.retainageStoredPct * r.stored;
+    h += '<tr><td></td><td class="desc">' + esc(r.description) + '</td>'
+      + mc(r.scheduled) + mc(r.prev || '') + mc(r.thisPeriod || '') + mc(r.stored || '')
+      + mc(g || '') + '<td class="amt">' + pct2(g, r.scheduled) + '</td>'
+      + mc(bal || '') + mc(ret || '') + '</tr>';
+  }
+  return h;
+}
+
+function g703Total(label, t, job) {
+  return '<tr class="totrow"><td></td><td class="tl">' + esc(label) + '</td>'
+    + mc(t.scheduled) + mc(t.prev) + mc(t.thisPeriod) + mc(t.stored) + mc(t.completed)
+    + '<td class="amt">' + pct2(t.completed, t.scheduled) + '</td>'
+    + mc(t.balance) + mc(t.retainage) + '</tr>';
+}
+
+const G703_FOOT = '</tbody></table>'
+  + '<p class="foot">Only bill for change orders that have been approved by Contractor. Billing '
+  + 'for unapproved change orders may result in invoice being kicked back for revision and '
+  + 'eliminated from current billing to owner.</p>'
+  + '<p class="foot">Attach all appropriate Supplier and Subcontractor lien releases with '
+  + 'completed Application for Payment.</p>';
+
+
+/* ---------- CRC32, needed for the zip entry headers ---------- */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+const utf8 = (s) => new TextEncoder().encode(s);
+
+/** Build a STORED-entry zip. Good enough for xlsx and needs no compressor. */
+function zipStore(files) {
+  const enc = files.map((f) => {
+    const name = utf8(f.name);
+    const data = typeof f.data === 'string' ? utf8(f.data) : f.data;
+    return { name, data, crc: crc32(data) };
+  });
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  const u16 = (n) => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = (n) => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+
+  for (const e of enc) {
+    const local = [].concat(
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(e.crc), u32(e.data.length), u32(e.data.length),
+      u16(e.name.length), u16(0),
+    );
+    chunks.push(new Uint8Array(local), e.name, e.data);
+    central.push([].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+      u32(e.crc), u32(e.data.length), u32(e.data.length),
+      u16(e.name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset),
+    ));
+    offset += local.length + e.name.length + e.data.length;
+  }
+  const cdStart = offset;
+  let cdLen = 0;
+  const cdChunks = [];
+  central.forEach((c, i) => {
+    const arr = new Uint8Array(c);
+    cdChunks.push(arr, enc[i].name);
+    cdLen += arr.length + enc[i].name.length;
+  });
+  const end = new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(enc.length), u16(enc.length),
+    u32(cdLen), u32(cdStart), u16(0),
+  ));
+  const all = chunks.concat(cdChunks, [end]);
+  const total = all.reduce((a, c) => a + c.length, 0);
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const c of all) { out.set(c, p); p += c.length; }
+  return out;
+}
+
+/* ---------- sheet XML ---------- */
+const xesc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const colName = (n) => {
+  let s = '';
+  n += 1;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = (n - r - 1) / 26; }
+  return s;
+};
+
+/**
+ * A cell is { v, t, s } where t is 'n' or 's' and s is a style index:
+ *   0 plain, 1 bold, 2 currency, 3 percent, 4 bold currency, 5 bold underlined, 6 title
+ */
+function sheetXml(rows, cols) {
+  let x = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  if (cols && cols.length) {
+    x += '<cols>' + cols.map((w, i) =>
+      '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>')
+      .join('') + '</cols>';
+  }
+  x += '<sheetData>';
+  rows.forEach((row, r) => {
+    if (!row || !row.length) return;
+    x += '<row r="' + (r + 1) + '">';
+    row.forEach((cell, c) => {
+      if (cell == null || cell.v == null || cell.v === '') return;
+      const ref = colName(c) + (r + 1);
+      const s = cell.s ? ' s="' + cell.s + '"' : '';
+      if (cell.t === 'n') {
+        x += '<c r="' + ref + '"' + s + '><v>' + cell.v + '</v></c>';
+      } else {
+        x += '<c r="' + ref + '"' + s + ' t="inlineStr"><is><t xml:space="preserve">'
+          + xesc(cell.v) + '</t></is></c>';
+      }
+    });
+    x += '</row>';
+  });
+  return x + '</sheetData></worksheet>';
+}
+
+const STYLES_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+  + '<numFmts count="2">'
+  + '<numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00;(&quot;$&quot;#,##0.00)"/>'
+  + '<numFmt numFmtId="165" formatCode="0.00%"/></numFmts>'
+  + '<fonts count="4">'
+  + '<font><sz val="10"/><name val="Calibri"/></font>'
+  + '<font><b/><sz val="10"/><name val="Calibri"/></font>'
+  + '<font><b/><u/><sz val="10"/><name val="Calibri"/></font>'
+  + '<font><b/><sz val="13"/><name val="Calibri"/></font></fonts>'
+  + '<fills count="2"><fill><patternFill patternType="none"/></fill>'
+  + '<fill><patternFill patternType="gray125"/></fill></fills>'
+  + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+  + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+  + '<cellXfs count="7">'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+  + '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/>'
+  + '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+  + '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+  + '<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
+  + '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0"/>'
+  + '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0"/>'
+  + '</cellXfs></styleSheet>';
+
+function buildXlsx(sheets) {
+  const names = sheets.map((s) => s.name);
+  const files = [
+    { name: '[Content_Types].xml',
+      data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + sheets.map((s, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1)
+          + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')
+        + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        + '</Types>' },
+    { name: '_rels/.rels',
+      data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        + '</Relationships>' },
+    { name: 'xl/workbook.xml',
+      data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+        + names.map((n, i) => '<sheet name="' + xesc(n) + '" sheetId="' + (i + 1)
+          + '" r:id="rId' + (i + 1) + '"/>').join('')
+        + '</sheets></workbook>' },
+    { name: 'xl/_rels/workbook.xml.rels',
+      data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + names.map((n, i) => '<Relationship Id="rId' + (i + 1)
+          + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"'
+          + ' Target="worksheets/sheet' + (i + 1) + '.xml"/>').join('')
+        + '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        + '</Relationships>' },
+    { name: 'xl/styles.xml', data: STYLES_XML },
+  ];
+  sheets.forEach((s, i) => {
+    files.push({ name: 'xl/worksheets/sheet' + (i + 1) + '.xml',
+      data: sheetXml(s.rows, s.cols) });
+  });
+  return zipStore(files);
+}
+
+/* ---------- the requisition workbook, shaped like theirs ---------- */
+const S_PLAIN = 0, S_BOLD = 1, S_CUR = 2, S_PCT = 3, S_BOLDCUR = 4, S_SECT = 5, S_TITLE = 6;
+const sT = (v, s) => ({ v, t: 's', s: s || 0 });
+const sN = (v, s) => ({ v, t: 'n', s: s == null ? S_CUR : s });
+
+function requisitionWorkbook(job, x) {
+  const L = coverLines(job, x);
+  const cover = [
+    [sT('APPLICATION AND CERTIFICATE FOR PAYMENT', S_TITLE)],
+    [sT('AIA DOCUMENT G702', S_BOLD)],
+    [],
+    [sT('TO:', S_BOLD), sT(job.gcName)],
+    [sT(''), sT(job.gcAddress[0] || '')],
+    [sT(''), sT(job.gcAddress[1] || '')],
+    [sT('FROM:', S_BOLD), sT(job.subcontractor)],
+    [sT(''), sT(job.subAddress[0] || '')],
+    [sT(''), sT(job.subAddress[1] || '')],
+    [],
+    [sT('PROJECT:', S_BOLD), sT(job.projectName)],
+    [sT(''), sT(job.projectAddress[0] || '')],
+    [sT(''), sT(job.projectAddress[1] || '')],
+    [sT('SUBCONTRACTOR\'S JOB NO:', S_BOLD), sT('# ' + job.jobNo)],
+    [sT('APPLICATION NO:', S_BOLD), sT(String(job.applicationNo))],
+    [sT('INVOICE NO:', S_BOLD), sT(String(job.invoiceNo || job.applicationNo))],
+    [sT('INVOICE DATE:', S_BOLD), sT(job.invoiceDate)],
+    [sT('PERIOD TO:', S_BOLD), sT(job.periodTo)],
+    [],
+    [sT('CHANGE ORDER SUMMARY', S_BOLD)],
+    [sT('Additions'), sN(job.coAdditions)],
+    [sT('Deductions'), sN(job.coDeductions)],
+    [sT('Net Change by Change Orders', S_BOLD), sN(job.netChangeOrders, S_BOLDCUR)],
+    [],
+    [sT('1. ORIGINAL CONTRACT SUM'), sN(L.l1)],
+    [sT('2. Net change by Change Orders'), sN(L.l2)],
+    [sT('3. CONTRACT SUM TO DATE (Line 1 +/- 2)'), sN(L.l3)],
+    [sT('4. TOTAL COMPLETED AND STORED TO DATE (Column G on G703)'), sN(L.l4)],
+    [sT('5. RETAINAGE:')],
+    [sT('    a. ' + (job.retainageWorkPct * 100) + '% of Completed Work (Column D + E)'),
+      sN(x.retWork)],
+    [sT('    b. ' + (job.retainageStoredPct * 100) + '% of Stored Material (Column F)'),
+      sN(x.retStored)],
+    [sT('    Total Retainage'), sN(L.l5)],
+    [sT('6. TOTAL EARNED LESS RETAINAGE (Line 4 less Line 5)'), sN(L.l6)],
+    [sT('7. LESS PREVIOUS CERTIFICATES FOR PAYMENT'), sN(L.l7)],
+    [sT('8. CURRENT PAYMENT DUE', S_BOLD), sN(L.l8, S_BOLDCUR)],
+    [sT('9. BALANCE TO FINISH, PLUS RETAINAGE (Line 3 less Line 6)'), sN(L.l9)],
+  ];
+
+  const sheets = [{ name: 'G702 Application', rows: cover, cols: [46, 18] }];
+  const pages = paginate(job, 28);
+  const pts = pages.map((rows) => pageTotals(rows, job));
+  const HEAD = [
+    [sT('CONTINUATION SHEET', S_TITLE)],
+    [sT('AIA DOCUMENT G703'), sT(''), sT('APPLICATION NO:', S_BOLD), sT(String(job.applicationNo))],
+    [sT(job.subcontractor), sT(job.projectName, S_BOLD), sT('PERIOD TO:', S_BOLD),
+      sT(job.periodTo)],
+    [],
+    [sT('ITEM NO.', S_BOLD), sT('DESCRIPTION OF WORK', S_BOLD), sT('SCHEDULED VALUE', S_BOLD),
+      sT('FROM PREVIOUS APPLICATION', S_BOLD), sT('THIS PERIOD', S_BOLD),
+      sT('MATERIALS PRESENTLY STORED', S_BOLD), sT('TOTAL COMPLETED AND STORED', S_BOLD),
+      sT('%', S_BOLD), sT('BALANCE TO FINISH', S_BOLD), sT('RETAINAGE', S_BOLD)],
+  ];
+  pages.forEach((rows, i) => {
+    const body = [];
+    for (const r of rows) {
+      if (r.heading) { body.push([sT(''), sT(r.heading, S_SECT)]); continue; }
+      const g = G(r);
+      body.push([sT(''), sT(r.description), sN(r.scheduled),
+        r.prev ? sN(r.prev) : sT(''), r.thisPeriod ? sN(r.thisPeriod) : sT(''),
+        r.stored ? sN(r.stored) : sT(''), g ? sN(g) : sT(''),
+        r.scheduled ? sN(g / r.scheduled, S_PCT) : sT(''),
+        I(r) ? sN(I(r)) : sT(''), J(r, job) ? sN(J(r, job)) : sT('')]);
+    }
+    const t = pts[i];
+    body.push([]);
+    body.push([sT(''), sT('Page ' + (i + 2) + ' Total', S_BOLD), sN(t.scheduled, S_BOLDCUR),
+      sN(t.prev, S_BOLDCUR), sN(t.thisPeriod, S_BOLDCUR), sN(t.stored, S_BOLDCUR),
+      sN(t.completed, S_BOLDCUR),
+      sN(t.scheduled ? t.completed / t.scheduled : 0, S_PCT),
+      sN(t.balance, S_BOLDCUR), sN(t.retainage, S_BOLDCUR)]);
+    if (i === pages.length - 1) {
+      body.push([sT(''), sT('GRAND TOTAL', S_BOLD), sN(x.scheduled, S_BOLDCUR),
+        sN(x.prev, S_BOLDCUR), sN(x.thisPeriod, S_BOLDCUR), sN(x.stored, S_BOLDCUR),
+        sN(x.completed, S_BOLDCUR),
+        sN(x.scheduled ? x.completed / x.scheduled : 0, S_PCT),
+        sN(x.balance, S_BOLDCUR), sN(x.retainage, S_BOLDCUR)]);
+    }
+    sheets.push({
+      name: 'G703 Page ' + (i + 2),
+      rows: HEAD.concat(body),
+      cols: [8, 38, 15, 15, 14, 14, 16, 9, 15, 13],
+    });
+  });
+  return buildXlsx(sheets);
+}
+
+function downloadWorkbook(job, x) {
+  const bytes = requisitionWorkbook(job, x);
+  const blob = new Blob([bytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = job.jobNo + '_' + job.projectName.replace(/[^A-Za-z0-9]+/g, '_')
+    + '_REQ_' + job.applicationNo + '.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+
+const ROLES = [
+  { id:'pm',   name:'Jack Stanwood - Project Manager' },
+  { id:'acct', name:'Jamie Morse - Accountant / Controller' },
+  { id:'own',  name:'Nick Arena - Owner / Approver' },
+];
+
+const KEY = 'mgi-aia-proto-v1';
+let S = null;
+
+function fresh() {
+  return { role:'acct', jobNo:null, tab:'board',
+    jobs: JSON.parse(JSON.stringify(DATA.jobs)) };
+}
+function load() {
+  // Browser storage is a convenience here, never the source of truth: the demo must work in a
+  // private window and on a machine that blocks site data.
+  try { const r = localStorage.getItem(KEY); if (r) return JSON.parse(r); } catch (e) {}
+  return fresh();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+/* ---- the calculation engine, matching their form's own definitions ---- */
+const G = (l) => l.prev + l.thisPeriod + l.stored;          // total completed and stored
+const H = (l) => (l.scheduled ? G(l) / l.scheduled : 0);     // percent
+const I = (l) => l.scheduled - G(l);                         // balance to finish
+/**
+ * Retainage, per G702 line 5: a percentage of COMPLETED WORK (columns D + E) plus a separate
+ * percentage of STORED MATERIAL (column F). The first build applied one rate to column G, which
+ * happens to give the same answer only while stored material is zero.
+ */
+const J = (l, job) => job.retainageWorkPct * (l.prev + l.thisPeriod)
+  + job.retainageStoredPct * l.stored;
+
+function totals(job) {
+  const t = { scheduled:0, prev:0, thisPeriod:0, stored:0, completed:0,
+    retWork:0, retStored:0, retainage:0, balance:0 };
+  for (const l of job.lines) {
+    t.scheduled += l.scheduled; t.prev += l.prev; t.thisPeriod += l.thisPeriod;
+    t.stored += l.stored; t.completed += G(l); t.balance += I(l);
+    t.retWork += job.retainageWorkPct * (l.prev + l.thisPeriod);
+    t.retStored += job.retainageStoredPct * l.stored;
+  }
+  t.retainage = t.retWork + t.retStored;
+  // Lines 1, 2 and 7 are facts about the contract and the prior certificate, not things we can
+  // derive from this period's grid. They come off the cover sheet.
+  t.contractSum = job.originalContract + job.netChangeOrders;
+  t.earnedLessRet = t.completed - t.retainage;
+  t.prevCertificates = job.previousCertificates;
+  t.currentDue = t.earnedLessRet - t.prevCertificates;
+  t.balancePlusRet = t.contractSum - t.earnedLessRet;
+  return t;
+}
+
+const money = (n) => (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US',
+  { minimumFractionDigits:2, maximumFractionDigits:2 });
+const pct = (n) => (n * 100).toFixed(2) + '%';
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+const STATUS = {
+  period_open: ['Period open', 'c-open'],
+  with_pm:     ['With project manager', 'c-pm'],
+  in_approval: ['Awaiting approval', 'c-appr'],
+  ready:       ['Ready to send', 'c-ready'],
+  sent:        ['Submitted', 'c-sent'],
+  rejected:    ['Rejected, line removed', 'c-rej'],
+  no_billing:  ['No billing this month', 'c-none'],
+};
+const chip = (s) => {
+  const [t, c] = STATUS[s] || ['Unknown','c-none'];
+  return '<span class="chip ' + c + '">' + t + '</span>';
+};
+
+const myJobs = () => (S.role === 'pm'
+  ? S.jobs.filter((j) => j.pm === 'Jack Stanwood')
+  : S.jobs);
+
+/* ------------------------------- views ------------------------------- */
+
+function viewBoard() {
+  const js = myJobs();
+  const t = js.reduce((a, j) => {
+    const x = totals(j);
+    a.lines += j.lines.length; a.due += x.currentDue; a.sched += x.scheduled; return a;
+  }, { lines:0, due:0, sched:0 });
+
+  let h = '<h1>October billing</h1>'
+    + '<p class="sub">' + (S.role === 'pm'
+      ? 'The jobs assigned to you. You enter what was completed this period; accounting does the rest.'
+      : 'Every job in the period, in one place. This replaces the spreadsheet that is rebuilt each month.')
+    + '</p>';
+
+  h += '<div class="cards">'
+    + '<div class="card"><div class="n">' + js.length + '</div><div class="k">jobs in period</div></div>'
+    + '<div class="card"><div class="n">' + t.lines + '</div><div class="k">cost lines</div></div>'
+    + '<div class="card"><div class="n">' + money(t.sched) + '</div><div class="k">contract value</div></div>'
+    + '<div class="card"><div class="n">' + money(t.due) + '</div><div class="k">current payment due</div></div>'
+    + '</div>';
+
+  h += '<table><thead><tr><th>Job</th><th>Project</th><th>General contractor</th>'
+    + '<th>PM</th><th>Channel</th><th class="r">Contract</th><th class="r">This period</th>'
+    + '<th class="r">Due now</th><th>Status</th><th></th></tr></thead><tbody>';
+  for (const j of js) {
+    const x = totals(j);
+    h += '<tr>'
+      + '<td><strong>' + esc(j.jobNo) + '</strong></td>'
+      + '<td>' + esc(j.projectName) + '<div class="note">Application #' + j.applicationNo + '</div></td>'
+      + '<td>' + esc(j.gcName) + '</td>'
+      + '<td>' + esc(j.pm) + '</td>'
+      + '<td>' + esc(j.channel) + '</td>'
+      + '<td class="r money">' + money(x.scheduled) + '</td>'
+      + '<td class="r money">' + money(x.thisPeriod + x.stored) + '</td>'
+      + '<td class="r money"><strong>' + money(x.currentDue) + '</strong></td>'
+      + '<td>' + chip(j.status) + '</td>'
+      + '<td><button class="btn ghost" data-open="' + j.jobNo + '">Open</button></td>'
+      + '</tr>';
+  }
+  h += '</tbody></table>';
+
+  if (S.role === 'acct') {
+    h += '<h2>Close the month</h2>'
+      + '<div class="panel"><div class="row">'
+      + '<button class="btn" id="rollfwd">Roll forward to November</button>'
+      + '<span class="note" style="margin:0">Moves each line\'s total completed to date into '
+      + '<em>work completed from previous application</em>, clears this period and stored '
+      + 'materials, and advances the application number. This is the column that is retyped by '
+      + 'hand today.</span></div></div>';
+  }
+  return h;
+}
+
+function viewJob() {
+  const job = S.jobs.find((j) => j.jobNo === S.jobNo);
+  if (!job) return viewBoard();
+  const x = totals(job);
+  const editable = S.role === 'pm' || S.role === 'acct';
+
+  let h = '<div class="row" style="justify-content:space-between;align-items:flex-start">'
+    + '<div><h1>' + esc(job.projectName) + '</h1>'
+    + '<p class="sub">Job ' + esc(job.jobNo) + ' &middot; ' + esc(job.gcName)
+    + ' &middot; application #' + job.applicationNo + ' &middot; period to '
+    + esc(job.periodTo) + '</p></div>'
+    + '<button class="btn quiet" id="back">Back to billing</button></div>';
+
+  h += '<div class="tabs">'
+    + '<button class="tab ' + (S.tab === 'entry' ? 'on' : '') + '" data-tab="entry">'
+    + (S.role === 'pm' ? 'Enter this period' : 'Schedule of values') + '</button>'
+    + '<button class="tab ' + (S.tab === 'aia' ? 'on' : '') + '" data-tab="aia">AIA document</button>'
+    + '</div>';
+
+  if (S.tab === 'aia') return h + viewAiaDoc(job, x);
+
+  h += '<div class="panel"><div class="kv">'
+    + '<div><b>Contract sum</b>' + money(x.contractSum) + '</div>'
+    + '<div><b>Completed and stored</b><span data-s="completed">' + money(x.completed) + '</span></div>'
+    + '<div><b>This period</b><span data-s="period">' + money(x.thisPeriod + x.stored) + '</span></div>'
+    + '<div><b>Retainage (' + pct(job.retainageWorkPct) + ' of work)</b><span data-s="retainage">'
+    + money(x.retainage) + '</span></div>'
+    + '<div><b>Current payment due</b><strong data-s="due">' + money(x.currentDue) + '</strong></div>'
+    + '<div><b>Status</b>' + chip(job.status) + '</div>'
+    + '</div>';
+  if (S.role === 'acct') {
+    h += '<div class="row" style="margin-top:12px">'
+      + '<label class="note" style="margin:0">Retainage rate for this contract</label>'
+      + '<select id="retrate">'
+      + [0, 0.05, 0.07, 0.10].map((r) => '<option value="' + r + '"'
+        + (Math.abs(job.retainageWorkPct - r) < 1e-9 ? ' selected' : '') + '>'
+        + (r * 100) + '%</option>').join('')
+      + '</select>'
+      + '<span class="note" style="margin:0">Their workbook hardcodes 5% in every G703 row even '
+      + 'on this job, which bills at ' + pct(job.retainageWorkPct) + ' on the cover. Here the rate '
+      + 'belongs to the contract, so cover and continuation can never disagree.</span>'
+      + '</div>';
+  }
+  h += '</div>';
+
+  if (S.role === 'pm') {
+    h += '<div class="banner">Fill in <strong>completed this period</strong> and, if material is '
+      + 'bought but not yet on site, <strong>stored materials</strong>. Everything else is worked '
+      + 'out for you. You cannot change a description or a scheduled value, which is how it works '
+      + 'on paper today.</div>';
+  }
+
+  h += '<table><thead><tr>'
+    + '<th style="width:30%">Description of work</th>'
+    + '<th class="r">Scheduled value</th><th class="r">From previous</th>'
+    + '<th class="r">This period</th><th class="r">Stored materials</th>'
+    + '<th class="r">Completed and stored</th><th class="r">%</th>'
+    + '<th class="r">Balance to finish</th><th class="r">Retainage</th>'
+    + '</tr></thead><tbody>';
+
+  let section = null;
+  for (const l of job.lines) {
+    if (l.section !== section) {
+      section = l.section;
+      h += '<tr class="sec"><td colspan="9">' + esc(section) + '</td></tr>';
+    }
+    const g = G(l);
+    const edited = l.thisPeriod > 0 || l.stored > 0;
+    h += '<tr>'
+      + '<td>' + esc(l.description) + '</td>'
+      + '<td class="r money">' + money(l.scheduled) + '</td>'
+      + '<td class="r money">' + money(l.prev) + '</td>'
+      + '<td class="r">' + (editable
+        ? '<input type="number" step="0.01" class="' + (edited ? 'edited' : '') + '" '
+          + 'data-f="thisPeriod" data-id="' + l.id + '" value="' + l.thisPeriod + '">'
+        : '<span class="money">' + money(l.thisPeriod) + '</span>') + '</td>'
+      + '<td class="r">' + (editable
+        ? '<input type="number" step="0.01" class="' + (l.stored > 0 ? 'edited' : '') + '" '
+          + 'data-f="stored" data-id="' + l.id + '" value="' + l.stored + '">'
+        : '<span class="money">' + money(l.stored) + '</span>') + '</td>'
+      + '<td class="r money"><strong data-g="' + l.id + '">' + (g ? money(g) : '') + '</strong></td>'
+      + '<td class="r" data-h="' + l.id + '">' + (l.scheduled ? pct(H(l)) : '') + '</td>'
+      + '<td class="r money" data-i="' + l.id + '">' + (I(l) ? money(I(l)) : '') + '</td>'
+      + '<td class="r money" data-j="' + l.id + '">'
+      + (J(l, job) ? money(J(l, job)) : '') + '</td>'
+      + '</tr>';
+  }
+  h += '<tr class="tot"><td><strong>Totals</strong></td>'
+    + '<td class="r money"><strong>' + money(x.scheduled) + '</strong></td>'
+    + '<td class="r money"><strong data-t="prev">' + money(x.prev) + '</strong></td>'
+    + '<td class="r money"><strong data-t="thisPeriod">' + money(x.thisPeriod) + '</strong></td>'
+    + '<td class="r money"><strong data-t="stored">' + money(x.stored) + '</strong></td>'
+    + '<td class="r money"><strong data-t="completed">' + money(x.completed) + '</strong></td>'
+    + '<td class="r"><strong data-t="pct">'
+    + pct(x.scheduled ? x.completed / x.scheduled : 0) + '</strong></td>'
+    + '<td class="r money"><strong data-t="balance">' + money(x.balance) + '</strong></td>'
+    + '<td class="r money"><strong data-t="retainage">' + money(x.retainage) + '</strong></td></tr>';
+  h += '</tbody></table>';
+
+  h += '<div class="panel" style="margin-top:16px"><div class="row">';
+  if (S.role === 'pm') {
+    h += '<button class="btn" data-act="to_approval">Send to accounting</button>'
+      + '<button class="btn quiet" data-act="no_billing">No billing this month</button>';
+  } else if (S.role === 'acct') {
+    h += '<button class="btn" data-tab2="aia">Generate the AIA</button>'
+      + '<button class="btn ghost" data-act="to_approval">Send for approval</button>'
+      + '<button class="btn quiet" data-act="sent">Mark submitted</button>'
+      + '<button class="btn quiet" data-act="rejected">GC rejected a line</button>';
+  } else {
+    h += '<button class="btn" data-act="ready">Approve</button>'
+      + '<button class="btn quiet" data-act="with_pm">Send back to the project manager</button>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+/** Group the cost lines into continuation pages, repeating the section heading after a break. */
+function paginate(job, perPage) {
+  const pages = [];
+  let cur = [];
+  let section = null;
+  for (const l of job.lines) {
+    if (l.section !== section) {
+      section = l.section;
+      if (cur.length >= perPage - 2) { pages.push(cur); cur = []; }
+      cur.push({ heading: section });
+    }
+    cur.push(l);
+    if (cur.length >= perPage) { pages.push(cur); cur = []; cur.push({ heading: section }); }
+  }
+  if (cur.filter((r) => !r.heading).length) pages.push(cur);
+  return pages;
+}
+
+function pageTotals(rows, job) {
+  const t = { scheduled:0, prev:0, thisPeriod:0, stored:0, completed:0, balance:0, retainage:0 };
+  for (const r of rows) {
+    if (r.heading) continue;
+    t.scheduled += r.scheduled; t.prev += r.prev; t.thisPeriod += r.thisPeriod;
+    t.stored += r.stored; t.completed += G(r); t.balance += I(r); t.retainage += J(r, job);
+  }
+  return t;
+}
+
+function viewAiaDoc(job, x) {
+  // 28 rows a page reproduces their own page counts exactly: Fairfield prints "of 5" and Porsche
+  // "of 4", which is what their October requisitions say. 26 gave Fairfield an extra page.
+  const pages = paginate(job, 28);
+  const count = pages.length + 1;
+  let h = '<div class="row no-print" style="margin-bottom:12px">'
+    + '<button class="btn" onclick="window.print()">Print or save as PDF</button>'
+    + '<button class="btn ghost" id="dlxlsx">Download the spreadsheet</button>'
+    + '<span class="note" style="margin:0">Laid out to match the requisition they send today: '
+    + 'landscape, the G702 cover then one continuation page per block, with the change order '
+    + 'summary and the contractor checklist. This is the button Jamie described wanting.</span>'
+    + '</div>'
+    + '<div class="docwrap">' + g702Html(job, x);
+
+  const pts = pages.map((rows) => pageTotals(rows, job));
+  pages.forEach((rows, i) => {
+    h += '<div class="sheet">' + g703Head(job, i + 2, count)
+      + g703Rows(rows, job)
+      + g703Total('Page ' + (i + 2) + ' Total', pts[i], job);
+    if (i === pages.length - 1) {
+      // The last sheet carries the recap, exactly as theirs does.
+      for (let k = pages.length - 1; k >= 0; k--) {
+        if (k === i) continue;
+        h += g703Total('TOTAL PAGE ' + (k + 2), pts[k], job);
+      }
+      h += g703Total('GRAND TOTAL', {
+        scheduled: x.scheduled, prev: x.prev, thisPeriod: x.thisPeriod, stored: x.stored,
+        completed: x.completed, balance: x.balance, retainage: x.retainage,
+      }, job);
+    }
+    h += G703_FOOT + '</div>';
+  });
+  return h + '</div>';
+}
+
+/* ------------------------------ wiring ------------------------------ */
+
+function render() {
+  document.getElementById('role').innerHTML = ROLES
+    .map((r) => '<option value="' + r.id + '"' + (S.role === r.id ? ' selected' : '') + '>'
+      + esc(r.name) + '</option>').join('');
+
+  const app = document.getElementById('app');
+  app.innerHTML = S.jobNo ? viewJob() : viewBoard();
+  save();
+}
+
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.id === 'role') { S.role = t.value; S.jobNo = null; S.tab = 'entry'; return render(); }
+  if (t.id === 'retrate') {
+    const job = S.jobs.find((j) => j.jobNo === S.jobNo);
+    job.retainageWorkPct = parseFloat(t.value);
+    return render();
+  }
+});
+
+/**
+ * Entry fields update the page by patching the cells that changed, NOT by re-rendering.
+ *
+ * Re-rendering on every edit looked fine until the prototype was driven by a browser: typing a
+ * number and then clicking a button loses the click, because the field blurs, the page rebuilds,
+ * and the button that was being clicked is destroyed between mousedown and mouseup. Jamie typing
+ * a figure and pressing "Generate the AIA" would have hit exactly that. Patching also keeps the
+ * cursor where it was and makes the row update as you type.
+ */
+function patchEntry(input) {
+  const job = S.jobs.find((j) => j.jobNo === S.jobNo);
+  if (!job) return;
+  const line = job.lines.find((l) => l.id === input.dataset.id);
+  if (!line) return;
+  const v = parseFloat(input.value);
+  line[input.dataset.f] = Number.isFinite(v) ? v : 0;
+  input.classList.toggle('edited', (line.thisPeriod || 0) > 0 || (line.stored || 0) > 0);
+
+  const set = (sel, text) => { const el = document.querySelector(sel); if (el) el.textContent = text; };
+  const q = (attr) => '[data-' + attr + '="' + CSS.escape(line.id) + '"]';
+  const g = G(line);
+  set(q('g'), g ? money(g) : '');
+  set(q('h'), line.scheduled ? pct(H(line)) : '');
+  set(q('i'), I(line) ? money(I(line)) : '');
+  set(q('j'), J(line, job) ? money(J(line, job)) : '');
+
+  const x = totals(job);
+  set('[data-t="prev"]', money(x.prev));
+  set('[data-t="thisPeriod"]', money(x.thisPeriod));
+  set('[data-t="stored"]', money(x.stored));
+  set('[data-t="completed"]', money(x.completed));
+  set('[data-t="pct"]', pct(x.scheduled ? x.completed / x.scheduled : 0));
+  set('[data-t="balance"]', money(x.balance));
+  set('[data-t="retainage"]', money(x.retainage));
+  set('[data-s="completed"]', money(x.completed));
+  set('[data-s="period"]', money(x.thisPeriod + x.stored));
+  set('[data-s="retainage"]', money(x.retainage));
+  set('[data-s="due"]', money(x.currentDue));
+  save();
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target.dataset && e.target.dataset.f) patchEntry(e.target);
+});
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'reset') { S = fresh(); return render(); }
+  if (b.id === 'back') { S.jobNo = null; S.tab = 'entry'; return render(); }
+  if (b.dataset.open) { S.jobNo = b.dataset.open; S.tab = 'entry'; return render(); }
+  if (b.dataset.tab) { S.tab = b.dataset.tab; return render(); }
+  if (b.dataset.tab2) { S.tab = b.dataset.tab2; return render(); }
+  if (b.dataset.act) {
+    const job = S.jobs.find((j) => j.jobNo === S.jobNo);
+    job.status = b.dataset.act;
+    return render();
+  }
+  if (b.id === 'dlxlsx') {
+    const job = S.jobs.find((j) => j.jobNo === S.jobNo);
+    downloadWorkbook(job, totals(job));
+    return;
+  }
+  if (b.id === 'rollfwd') {
+    // The roll-forward their spreadsheet does by hand: this period's total becomes next
+    // period's "from previous", and the entry columns clear.
+    for (const job of S.jobs) {
+      for (const l of job.lines) { l.prev = G(l); l.thisPeriod = 0; l.stored = 0; }
+      job.applicationNo += 1;
+      job.status = 'period_open';
+    }
+    return render();
+  }
+});
+
+/* --------------------------- the walkthrough ---------------------------
+ * A guided tour rather than a manual, because the people who have to learn this describe
+ * themselves as manual by nature and will not read a PDF. Each step puts the app into the state
+ * it is talking about, spotlights the one control that matters, and says what to try. Nothing is
+ * narrated that the screen is not showing.
+ */
+const TOUR = [
+  { title: 'This replaces the spreadsheet you rebuild every month',
+    body: 'You are signed in as Jamie, the accountant. Every job due to be billed this period is '
+      + 'on one screen, with what each one is worth and what is owed right now.',
+    target: '.cards',
+    act: () => { S.role = 'acct'; S.jobNo = null; } },
+
+  { title: 'Everyone sees the same jobs through their own door',
+    body: 'There are three kinds of user: the project manager who says what got built, the '
+      + 'accountant who bills it, and the owner who approves it. Change who you are signed in as '
+      + 'using this box at any time.',
+    target: '#role',
+    act: () => { S.role = 'acct'; S.jobNo = null; } },
+
+  { title: 'A project manager only sees their own jobs',
+    body: 'Signed in as Jack Stanwood, the Porsche job has gone. He cannot see it, open it or '
+      + 'bill it. Nobody has to remember to hide it from him.',
+    target: '#app table',
+    act: () => { S.role = 'pm'; S.jobNo = null; },
+    doThis: 'Notice only Fairfield is listed now.' },
+
+  { title: 'The project manager fills in two columns, and only two',
+    body: 'This is the sheet that is printed blank and handwritten today. The description and the '
+      + 'scheduled value cannot be changed here, which is exactly how it works on paper.',
+    target: 'input[data-f="thisPeriod"]',
+    act: () => { S.role = 'pm'; S.jobNo = '1807'; S.tab = 'entry'; },
+    doThis: 'Type a number into the highlighted box. Everything to the right of it works itself out.' },
+
+  { title: 'Stored materials have their own column',
+    body: 'Material that is bought and sitting in the yard, not yet on site, is billed here rather '
+      + 'than as completed work. The form keeps the two apart, and so does this.',
+    target: 'input[data-f="stored"]',
+    act: () => { S.role = 'pm'; S.jobNo = '1807'; S.tab = 'entry'; } },
+
+  { title: 'The requisition is a button, not an afternoon',
+    body: 'The G702 cover and every continuation page, built from the figures you just entered, '
+      + 'laid out the way the general contractor already receives them.',
+    target: '.docwrap',
+    act: () => { S.role = 'acct'; S.jobNo = '1807'; S.tab = 'aia'; },
+    doThis: 'Scroll down to see the continuation sheets, then use Print or save as PDF.' },
+
+  { title: 'The owner approves and cannot change a figure',
+    body: 'Signed in as Nick, there is nothing to type. This is the folder that walks the office '
+      + 'today, except it leaves a record of who approved what and when.',
+    target: '#app .panel:last-of-type',
+    act: () => { S.role = 'own'; S.jobNo = '1807'; S.tab = 'entry'; } },
+
+  { title: 'Retainage belongs to the contract',
+    body: 'This job holds 5 percent. Fairfield holds none. Today that percentage is written into '
+      + 'every row of the spreadsheet, which is why a cover sheet can end up disagreeing with its '
+      + 'own continuation pages.',
+    target: '#retrate',
+    act: () => { S.role = 'acct'; S.jobNo = '1854'; S.tab = 'entry'; },
+    doThis: 'Change it to 10% and watch the retainage column and the amount due move together.' },
+
+  { title: 'Closing the month',
+    body: 'This carries every line\'s total completed to date into next month\'s "from previous" '
+      + 'column, clears the entry columns and moves the application number on. That column is the '
+      + 'one retyped by hand today, with a note in the margin to remember to do it.',
+    target: '#rollfwd',
+    act: () => { S.role = 'acct'; S.jobNo = null; },
+    doThis: 'Press Roll forward to November and then open a job to see what changed.' },
+
+  { title: 'What this is, and what it is not yet',
+    body: 'This is a working model of the screens and the arithmetic, running on your own October '
+      + 'figures from Fairfield and Porsche Boston. Every number on the generated cover sheet '
+      + 'matches the requisitions you actually sent. It does not yet have logins, a database or '
+      + 'your other jobs in it. Press Start over at any time to put it back as you found it.',
+    target: '#reset',
+    act: () => { S.role = 'acct'; S.jobNo = null; } },
+];
+
+let tourAt = -1;
+
+function tourShow() {
+  const card = document.getElementById('tourcard');
+  const spot = document.getElementById('spot');
+  if (tourAt < 0 || tourAt >= TOUR.length) {
+    card.hidden = true; spot.hidden = true;
+    document.body.classList.remove('touring');
+    return;
+  }
+  const step = TOUR[tourAt];
+  document.body.classList.add('touring');
+  if (step.act) step.act();
+  render();
+
+  card.hidden = false;
+  card.querySelector('.tnum').textContent = 'Step ' + (tourAt + 1) + ' of ' + TOUR.length;
+  card.querySelector('.ttitle').textContent = step.title;
+  card.querySelector('.tbody').textContent = step.body;
+  card.querySelector('.tdo').textContent = step.doThis || '';
+  document.getElementById('tback').disabled = tourAt === 0;
+  document.getElementById('tnext').textContent =
+    tourAt === TOUR.length - 1 ? 'Finish' : 'Next';
+
+  // Spotlight the control this step is about. If it is not on screen the step still reads fine,
+  // so a missing target dims the page rather than throwing.
+  const el = step.target ? document.querySelector(step.target) : null;
+  if (!el) { spot.hidden = true; return; }
+  el.scrollIntoView({ block: 'center', behavior: 'instant' });
+  const r = el.getBoundingClientRect();
+  spot.hidden = false;
+  spot.style.top = (r.top + window.scrollY - 6) + 'px';
+  spot.style.left = (r.left + window.scrollX - 6) + 'px';
+  spot.style.width = (r.width + 12) + 'px';
+  spot.style.height = (r.height + 12) + 'px';
+}
+
+document.getElementById('tour').addEventListener('click', () => { tourAt = 0; tourShow(); });
+document.getElementById('tnext').addEventListener('click', () => { tourAt++; tourShow(); });
+document.getElementById('tback').addEventListener('click', () => { tourAt--; tourShow(); });
+document.getElementById('tquit').addEventListener('click', () => { tourAt = -1; tourShow(); });
+window.addEventListener('resize', () => { if (tourAt >= 0) tourShow(); });
+
+S = load();
+render();
+</script>
+</body>
+</html>
