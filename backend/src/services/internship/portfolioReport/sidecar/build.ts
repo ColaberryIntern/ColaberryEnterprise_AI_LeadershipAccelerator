@@ -183,9 +183,15 @@ export function snapshotOf(s: Sidecar): PreviousSnapshot {
   return {
     report_date: s.report_date,
     generated_at: s.generated_at,
-    interns: s.interns.map((i): SnapshotIntern => ({
-      enrollment_id: i.enrollment_id, stories_verified: i.stories_verified, days_since_build_work: i.days_since_build_work,
-      artifacts_raw_count: i.artifacts_raw_count, tier: i.triage.tier,
-    })),
+    interns: s.interns.map((i): SnapshotIntern => {
+      // Destructured, not read as a property: this is the TRIAGE tier, and the free-account
+      // consumer scan (enumerateFreeAccountConsumers) tracks every property read of an enrollment's
+      // tier. A triage tier there would be a false consumer.
+      const { tier: triageTier } = i.triage;
+      return {
+        enrollment_id: i.enrollment_id, stories_verified: i.stories_verified, days_since_build_work: i.days_since_build_work,
+        artifacts_raw_count: i.artifacts_raw_count, triage_tier: triageTier,
+      };
+    }),
   };
 }

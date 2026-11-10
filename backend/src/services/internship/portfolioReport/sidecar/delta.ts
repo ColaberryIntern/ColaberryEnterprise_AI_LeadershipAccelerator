@@ -25,6 +25,8 @@ export function delta(
 ): SidecarIntern['delta'] {
   if (!previous) return null;
   const then = previous.interns.find((x) => x.enrollment_id === c.enrollmentId) ?? null;
+  // Destructured: a triage tier, not an enrollment tier (see build.ts snapshotOf).
+  const { tier: nowTier } = current.triage;
   const since = Date.parse(previous.generated_at);
   const diff = (a: number | null, b: number | null | undefined): number | null => (a !== null && b !== null && b !== undefined ? a - b : null);
   const commitsCovered = Number.isFinite(since) && nowMs - since <= commitWindowDays * DAY;
@@ -34,6 +36,6 @@ export function delta(
     commits_since_last: then && c.project && commitsCovered ? c.project.commitsRecent.filter((x) => Date.parse(x.date) > since).length : null,
     artifacts_since_last: then && Number.isFinite(since) ? c.artifacts.published.filter((a) => Date.parse(a.at) > since).length : null,
     days_quiet_change: then ? diff(current.days_since_build_work, then.days_since_build_work) : null,
-    tier_changed_from: then && then.tier !== current.triage.tier ? (then.tier as TriageTier) : null,
+    tier_changed_from: then && then.triage_tier !== nowTier ? (then.triage_tier as TriageTier) : null,
   };
 }

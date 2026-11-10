@@ -145,6 +145,6 @@ export interface SnapshotIntern {
   stories_verified: number | null;
   days_since_build_work: number | null;
   artifacts_raw_count: number;
-  tier: TriageTier;
+  triage_tier: TriageTier;
 }
 export interface PreviousSnapshot { report_date: string; generated_at: string; interns: SnapshotIntern[] }

@@ -195,7 +195,7 @@ describe('sidecar: delta against the previous report', () => {
     const prev = snapshotOf({ ...prevRun, report_date: '2026-11-07' });
     prev.interns[0].stories_verified = 0;
     prev.interns[0].days_since_build_work = 6;
-    prev.interns[0].tier = 'quiet';
+    prev.interns[0].triage_tier = 'quiet';
     const d = build(richData(), NOW, prev).s.interns[0].delta!;
     expect(d.previous_report_date).toBe('2026-11-07');
     expect(d.verified_since_last).toBe(1);
