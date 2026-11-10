@@ -52,6 +52,7 @@ import {
   StoryVerdict,
   RepoTreeContext,
 } from './verifyDecision';
+import { boardStatusFor } from './boardStatus';
 import { summariseRejectedClaims } from './rejectedClaimsSignal';
 import { writeAccessOf } from '../repoConnect/connectionAccess';
 import {
@@ -436,7 +437,20 @@ export async function verifyBuildFromRepo(
     }
 
     stories.push({ story_id: verdict.story_id, ...record });
-    await StudentTask.update({ verification_json: record }, { where: { id: task.id } });
+
+    /*
+     * Carry the state onto the board, not just into the blob. From `record`,
+     * not `verdict`, so the latch has already run and a verified story cannot
+     * be lowered by a repo read that no longer confirms it. The `verified_at`
+     * guard is belt and braces: `complete` belongs to markTaskVerifiedComplete.
+     */
+    const nextStatus = task.verified_at ? null : boardStatusFor(record.state);
+    await StudentTask.update(
+      nextStatus && nextStatus !== task.status
+        ? { verification_json: record, status: nextStatus }
+        : { verification_json: record },
+      { where: { id: task.id } },
+    );
 
     // Awarding still requires a LIVE verified verdict with a commit behind it.
     // The latch protects what was already earned; it must never be a second
