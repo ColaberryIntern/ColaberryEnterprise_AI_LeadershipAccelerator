@@ -13,7 +13,7 @@ interns", "who needs a message today", or when the daily Internship Report arriv
 
 ---
 
-## The five that cost something
+## The six that cost something
 
 ### 1. NEVER judge the report from a screenshot. Read the whole thing.
 
@@ -69,7 +69,34 @@ A live URL changes the message completely. "Record a demo of the system you buil
 different instruction from "build a system to demo", and only one of them is achievable in
 two days.
 
-### 4. The report counts replies owed. It does not count PROMISES due.
+### 4. A Command Center is NOT the system. Never tell someone to demo one as the other.
+
+Every build has two separate things, and they look alike from outside:
+
+| | What it is | Where it lives |
+|---|---|---|
+| **Command Center** | STORY-000. The **window onto** the build: plan, progress, manifest. It fulfils no requirement of the system because it is not part of it | usually `index.html` at the repo root, reading `.colaberry/plan.json`, `progress.json`, `manifest.json` |
+| **The system** | What the RFP or the capability actually asked for | usually `app/` plus `server/`, calling its own API |
+
+On 2026-11-10 I found Omolola's published GitHub Pages site, counted eight screens, and told
+her to record it as her Working-System Demo. It was her **Command Center**. Her real system
+is `app/` plus a Node backend, and those screens call `/api/permits` and `/api/auth/me`, so
+they **do not work on GitHub Pages at all** - Pages serves files and does not run a server.
+Following my instruction she would have filmed a progress dashboard, or empty pages.
+
+**Before telling anyone to demo anything:**
+
+```bash
+gh api repos/:owner/:repo/contents/index.html --jq '.content' | base64 -d | grep -i '<title>'
+gh api repos/:owner/:repo/contents/app --jq '.[].name'        # the system's screens
+gh api repos/:owner/:repo/contents/app/<page>.js --jq '.content' | base64 -d | grep 'fetch('
+```
+
+If the screens call an API, the demo is **local, with their server running** (`npm start`),
+not a published link. Say the command. A Command Center still belongs in the stakeholder
+update as how they track the build; it is just never the working-system demo.
+
+### 5. The report counts replies owed. It does not count PROMISES due.
 
 On 2026-11-10 the report said 4 replies owed. There were also **five dated promises** made
 the day before ("I will tell you the hour it is live", "by Tuesday", "this week with a date
@@ -80,7 +107,7 @@ commitment with a date in it. Each one is either kept in today's message, or exp
 re-dated in today's message. Never silently let one lapse. If you cannot keep it and have no
 answer, say that plainly and give a new date rather than omitting it.
 
-### 5. One tier does not fit all. "Needs attention" flattens everyone.
+### 6. One tier does not fit all. "Needs attention" flattens everyone.
 
 The report put a productive builder quiet for 5 days in the same bucket as someone at day 50
 with no project. They need completely different messages.
