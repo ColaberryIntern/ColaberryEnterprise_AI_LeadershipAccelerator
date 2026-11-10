@@ -18,6 +18,9 @@
  *   --no-store          do not read or write the snapshot / model-cache tables (no delta, live model)
  *   --sidecar-out <f>   also write the JSON sidecar to <f> (it is always attached to the email as
  *                       internship-report-<YYYY-MM-DD>.json; contract in portfolioReport/sidecar/types.ts)
+ *   --dashboard-out <f> also write the interactive page to <f> (always attached as
+ *                       internship-report-<YYYY-MM-DD>.html: filter by person or tier, the 10 most
+ *                       insightful communications, every suggested prompt with copy buttons)
  *
  * Sidecar: built from the same composed report the HTML renders from. A real send also saves a
  * snapshot (internship_report_snapshots) that the next run's `delta` compares against; dry runs
@@ -42,6 +45,7 @@ import { claimSend, recordSendFailure, recordSendSuccess } from '../services/ema
 import { lintAliEmail } from '../services/email/aliEmailStyle';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { buildSidecar, serializeSidecar, sidecarProblems, snapshotOf } from '../services/internship/portfolioReport/sidecar/build';
+import { renderDashboard } from '../services/internship/portfolioReport/dashboard/renderDashboard';
 import { cachedChatClient, ensureSidecarSchema, loadPreviousSnapshot, saveSnapshot } from '../services/internship/portfolioReport/sidecar/store';
 
 const argv = process.argv.slice(2);
@@ -117,13 +121,21 @@ async function main(): Promise<number> {
   // The JSON sidecar: built from the SAME report object the HTML was just rendered from.
   const reportDate = centralDate(reportNow);
   const previous = useStore ? await loadPreviousSnapshot(reportDate) : null;
-  const sidecar = buildSidecar(report, { reportDate, previous, lastOutbound: data.lastOutbound ?? [] });
+  const sidecar = buildSidecar(report, { reportDate, previous, lastOutbound: data.lastOutbound ?? [], conversations: data.conversations ?? [] });
   const sidecarText = serializeSidecar(sidecar);
   const problems = sidecarProblems(sidecarText);
   if (problems.length) throw new Error(`ContractViolation: sidecar ${problems.slice(0, 5).join('; ')}`);
   const sidecarOut = opt('--sidecar-out');
   if (sidecarOut) { fs.writeFileSync(sidecarOut, sidecarText); log('sidecar_written', { file: sidecarOut, previous: previous?.report_date ?? null }); }
-  const attachment: Attachment = { filename: `internship-report-${reportDate}.json`, content: sidecarText, contentType: 'application/json; charset=utf-8' };
+  // The interactive page (filter by person or tier, top communications, every prompt in full),
+  // rendered ONLY from the sidecar, so it cannot disagree with the JSON beside it.
+  const dashboard = renderDashboard(sidecar);
+  const dashboardOut = opt('--dashboard-out');
+  if (dashboardOut) { fs.writeFileSync(dashboardOut, dashboard); log('dashboard_written', { file: dashboardOut }); }
+  const attachments: Attachment[] = [
+    { filename: `internship-report-${reportDate}.html`, content: dashboard, contentType: 'text/html; charset=utf-8' },
+    { filename: `internship-report-${reportDate}.json`, content: sidecarText, contentType: 'application/json; charset=utf-8' },
+  ];
 
   const lint = lintAliEmail({ subject, html, text });
   // Only the dash rule is a gate here: the others (branded signature, one full name) are for mail
@@ -132,7 +144,7 @@ async function main(): Promise<number> {
 
   let outcome: string = 'dry';
   if (!has('--dry') && !fromJson) {
-    outcome = await send(subject, html, text, now, [attachment]);
+    outcome = await send(subject, html, text, now, attachments);
     // Only a real send moves the delta baseline; a dry run must never change tomorrow's comparison.
     if (outcome === 'sent') log('snapshot', { saved: await saveSnapshot(snapshotOf(sidecar), sidecarText), report_date: reportDate });
   }

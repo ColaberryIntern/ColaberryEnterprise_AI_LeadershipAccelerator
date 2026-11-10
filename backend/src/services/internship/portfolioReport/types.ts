@@ -71,7 +71,12 @@ export interface CollectedPortfolio {
   artifacts?: PublishedArtifact[];
   /** The latest message sent TO each intern (sidecar `last_ask` only). Optional for older saved collections. */
   lastOutbound?: LastOutbound[];
+  /** Both sides of every conversation in the email window (sidecar `communications` only). */
+  conversations?: Conversation[];
 }
+
+/** One row of COMMS_SQL. */
+export interface Conversation { from_address: string; to_text: string | null; subject: string | null; body: string | null; received_at: string }
 
 /** One row of LAST_ASK_SQL. */
 export interface LastOutbound { email: string; sent_at: string; subject: string | null; body_text: string | null; body_truncated: boolean | null; from_address: string }
