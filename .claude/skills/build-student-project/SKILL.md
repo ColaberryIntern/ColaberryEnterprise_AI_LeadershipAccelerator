@@ -283,6 +283,31 @@ Then four more that will bite you specifically:
    `task_status_client_complete_refused` in the logs — the frontend still maps a ticked
    task to `complete` and eats the 409.
 
+   **And until 2026-11-10, nothing ever wrote `in_progress` either.** The client was
+   always allowed to set it and the enum has always accepted it, but no code path did:
+   production held **2235 `not_started`, 537 `complete` and zero `in_progress`**, across
+   every project and every builder, for the life of the system. `buildVerificationService`
+   had counted `stories_in_progress` for its rollup the whole time and never carried that
+   number to the board.
+
+   The failure this produces is a builder mid-flight being indistinguishable from one who
+   never started. One sales project showed 116 `not_started` against a `progress.json`
+   reporting **37 stories in progress**; fifteen commits in four days rendered as a zero
+   next to the builder's name, and she was asked to account for it. If you are triaging a
+   builder on a low number, check the date of this line first — before the fix, that
+   number could not tell you anything.
+
+   `sbp/verification/boardStatus.ts` closes it. Pure, no I/O: it maps a story's
+   `StoryVerificationState` onto a `student_tasks.status`, with `submitted` folding into
+   `in_progress` because the board has no fifth value. It **cannot return `complete`** —
+   the return type excludes it and a test asserts that for every member of the state
+   union — so it never becomes a second route around `markTaskVerifiedComplete`.
+   `verified` returns `null`, meaning "not mine to set".
+
+   Existing rows move only when their story is next read. There is deliberately **no
+   backfill**: one would write to every builder's board at once, which is a decision
+   rather than a side effect.
+
 8. **Agent scoping is flagged per enrollment and fails soft.** `SBP_AGENT_SCOPING` is
    `off` (default), `all`, or a comma-separated list of enrollment ids. It runs after the
    gate; any failure returns the plan **unchanged**. With it off, `owner_agent` is
