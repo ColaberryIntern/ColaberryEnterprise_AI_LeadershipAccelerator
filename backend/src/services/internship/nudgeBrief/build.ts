@@ -51,7 +51,7 @@ export class UnknownInternError extends Error {
  * not, and the brief never writes a snapshot of its own for the same reason.
  */
 export async function buildBriefFor(enrollmentId: string, { now = new Date() }: { now?: Date } = {}): Promise<NudgeBrief> {
-  const data = await collectInternshipPortfolio({ now, enrollmentIds: [enrollmentId] });
+  const data = await collectInternshipPortfolio({ now, onlyEnrollments: [enrollmentId] });
   if (!data.roster.length) throw new UnknownInternError(enrollmentId);
 
   const report = composeInternshipPortfolio(data, { now });
