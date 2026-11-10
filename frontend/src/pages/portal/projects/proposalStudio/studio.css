@@ -118,8 +118,11 @@
 
 /* overview */
 .gps-pipe{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
-.gps-pipe div{flex:1;min-width:96px;padding:8px 10px;border-radius:6px;background:var(--gps-sunk);font-size:12px;color:var(--gps-muted)}
-.gps-pipe div b{display:block;color:var(--gps-fg);font-size:13px}
+.gps-pipe>*{flex:1;min-width:96px;padding:8px 10px;border-radius:6px;background:var(--gps-sunk);font-size:12px;color:var(--gps-muted)}
+.gps-pipe>* b{display:block;color:var(--gps-fg);font-size:13px}
+.gps-pipe button{border:0;font-family:inherit;text-align:left;cursor:pointer}
+.gps-pipe button:hover{filter:brightness(1.06)}
+.gps-pipe button:focus-visible{outline:2px solid var(--gps-accent);outline-offset:1px}
 .gps-pipe .d{background:var(--gps-ok-soft)}.gps-pipe .d b::before{content:"\2713 ";color:var(--gps-ok)}
 .gps-pipe .h{background:var(--gps-accent);color:var(--gps-surface)}.gps-pipe .h b{color:var(--gps-surface)}
 .gps-ring{display:flex;gap:16px;align-items:center}

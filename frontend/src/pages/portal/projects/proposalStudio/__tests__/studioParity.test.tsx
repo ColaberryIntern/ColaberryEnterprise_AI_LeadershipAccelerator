@@ -15,6 +15,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { StudentGovProjectView, GovProposalDocument, GovStudioApi, GovReviewApi } from '../../../../../services/govProjectPortalApi';
 
 import ContractBar from '../ContractBar';
+import StageDetail from '../StageDetail';
 import StageRail from '../StageRail';
 import AgentPanel from '../AgentPanel';
 import WhereWeAre from '../WhereWeAre';
@@ -211,5 +212,49 @@ describe('ContractBar — management can set a due date when the pursuit carried
     await act(async () => { (q('bar-due-save') as HTMLButtonElement).click(); });
     await flush();
     expect(calls).toEqual([['2026-12-15', 55]]);
+  });
+});
+
+describe('StageDetail — read-only vetting-stage panels (Snapshot/Solicitation/Fit/Decide/Outcome)', () => {
+  const text = (id: string) => container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+
+  it('Solicitation shows the requirement count, key dates and the blueprint summary from the projection', async () => {
+    await render(<StageDetail stage="solicitation" view={VIEW} />);
+    expect(present('stage-solicitation')).toBe(true);
+    expect(text('stage-reqcount')).toContain('12');
+    expect(present('stage-blueprint')).toBe(true);
+    expect(text('stage-blueprint')).toContain('100'); // Section M total points
+    expect(present('stage-coming')).toBe(false);       // the rich stage carries real data, not a placeholder
+  });
+
+  it('Snapshot surfaces agency + readiness and flags the deeper record as the next increment', async () => {
+    await render(<StageDetail stage="snapshot" view={VIEW} />);
+    expect(present('stage-snapshot')).toBe(true);
+    expect(text('stage-snapshot')).toContain('City of Saratoga');
+    expect(text('stage-snapshot')).toContain('64%');
+    expect(present('stage-coming')).toBe(true);
+  });
+
+  it('Fit, Decide and Outcome each render their panel from available projection data', async () => {
+    await render(<StageDetail stage="fit" view={VIEW} />);
+    expect(text('stage-fit')).toContain('6 / 10'); // build stories verified
+    act(() => root.unmount()); container.remove();
+    await render(<StageDetail stage="decide" view={VIEW} />);
+    expect(text('stage-decision')).toContain('Approved');
+    act(() => root.unmount()); container.remove();
+    await render(<StageDetail stage="outcome" view={VIEW} />);
+    expect(present('stage-outcome-status')).toBe(true);
+  });
+});
+
+describe('WhereWeAre pursuit-stage chips are now clickable and route to the stage panels', () => {
+  it('each chip navigates to its stage view (Build→evidence, Proposal→overview, Submit→package)', async () => {
+    const calls: string[] = [];
+    const onNav = (v: string) => { calls.push(v); };
+    await render(<WhereWeAre view={VIEW} onNavigate={onNav as any} studioApi={studioApi} onReload={noop} onToast={noop} />);
+    const click = async (id: string) => { await act(async () => { (container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click(); }); };
+    await click('pipe-snapshot'); await click('pipe-solicitation'); await click('pipe-fit'); await click('pipe-decide');
+    await click('pipe-build'); await click('pipe-proposal'); await click('pipe-submit'); await click('pipe-outcome');
+    expect(calls).toEqual(['snapshot', 'solicitation', 'fit', 'decide', 'evidence', 'overview', 'package', 'outcome']);
   });
 });

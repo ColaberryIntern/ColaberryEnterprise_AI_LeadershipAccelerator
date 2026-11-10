@@ -50,14 +50,14 @@ export default function WhereWeAre(
         </div>
       )}
       <div className="gps-pipe" aria-label="Pursuit stages">
-        <div className="d"><b>Snapshot</b>advisory read</div>
-        <div className="d"><b>Solicitation</b>{view.requirementCounts.total} requirements</div>
-        <div className="d"><b>Fit</b>approved</div>
-        <div className="d"><b>Decide</b>bid approved</div>
-        <div className="d"><b>Build</b>{view.buildSummary ? `${view.buildSummary.rollup.verified} / ${view.buildSummary.rollup.total} verified` : 'in progress'}</div>
-        <div className="h"><b>Proposal</b>you are here</div>
-        <div><b>Submit</b>export + record</div>
-        <div><b>Outcome</b>win / loss</div>
+        <button type="button" className="d" data-testid="pipe-snapshot" onClick={() => onNavigate('snapshot')}><b>Snapshot</b>advisory read</button>
+        <button type="button" className="d" data-testid="pipe-solicitation" onClick={() => onNavigate('solicitation')}><b>Solicitation</b>{view.requirementCounts.total} requirements</button>
+        <button type="button" className="d" data-testid="pipe-fit" onClick={() => onNavigate('fit')}><b>Fit</b>approved</button>
+        <button type="button" className="d" data-testid="pipe-decide" onClick={() => onNavigate('decide')}><b>Decide</b>bid approved</button>
+        <button type="button" className="d" data-testid="pipe-build" onClick={() => onNavigate('evidence')}><b>Build</b>{view.buildSummary ? `${view.buildSummary.rollup.verified} / ${view.buildSummary.rollup.total} verified` : 'in progress'}</button>
+        <button type="button" className="h" data-testid="pipe-proposal" onClick={() => onNavigate('overview')}><b>Proposal</b>you are here</button>
+        <button type="button" data-testid="pipe-submit" onClick={() => onNavigate('package')}><b>Submit</b>export + record</button>
+        <button type="button" data-testid="pipe-outcome" onClick={() => onNavigate('outcome')}><b>Outcome</b>win / loss</button>
       </div>
       <div className="gps-grid2">
         <div className="gps-panel" data-testid="overview-readiness">
