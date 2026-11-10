@@ -246,9 +246,10 @@ export const NAV_GROUPS: NavGroup[] = [
     // Gov-contract entry page (Phase 5 slice 1): best-fit proposals -> start -> the Command Center.
     // Same 'program' section as /admin/factory (backend mgmtSectionGate covers /api/admin/factory/*).
     { path: '/admin/gov-opportunities', label: 'Gov Opportunities', icon: 'government-line' },
-    // Gov qualification workspace (Phase 2): review an opportunity's source evidence before a bid pursuit is
-    // approved. Same 'program' section (backend mgmtSectionGate covers /api/admin/factory/qualification/*).
-    { path: '/admin/gov-qualification', label: 'Gov Qualification', icon: 'shield-check-line' },
+    // Gov Qualification workspace is INTAKE-ONLY: no standalone sidebar item (it is reached from the Opportunities
+    // "Qualify" flow + the gov-pursuit-morning ZIP routine). Its /admin/gov-qualification route stays registered so
+    // those entry points keep working; only the left-nav link is removed (per Ali, the duplicate post-award viewing of
+    // steps 1-5 now lives on the assigned Gov Contract view's stage panels).
     // Our Services: Colaberry's own offering catalog, matched (advisory) against opportunities. Same 'program'
     // section (backend mgmtSectionGate covers /api/admin/factory/services).
     { path: '/admin/gov-services', label: 'Our Services', icon: 'service-line' },
