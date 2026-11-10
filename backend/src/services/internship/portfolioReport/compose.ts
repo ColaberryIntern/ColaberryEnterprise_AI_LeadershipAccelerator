@@ -87,7 +87,9 @@ export function trainingView(training: ConsoleRosterRow['training'] | null | und
     gateDone: weeks.filter((w) => w.week >= 1 && w.week <= 3 && w.weekDone).length,
     strip: weeks.map((w) => ({ week: w.week, pct: Math.round(w.completedPct || 0), done: !!w.weekDone })),
     nextWeek: next ? { week: next.week, pct: Math.round(next.completedPct || 0), cards: next.publishedCardCount } : null,
-    pace: training?.pace ? { band: String(training.pace.band) } : null,
+    // scheduledWeek: the week the cohort's live sessions have reached; the sidecar paces on it.
+    pace: training?.pace ? { band: String(training.pace.band), scheduledWeek: training.pace.scheduled_week } : null,
+    paceUnavailable: training?.pace_unavailable ?? null,
   };
 }
 
@@ -257,6 +259,8 @@ function projectFor(r: ConsoleRosterRow, agent: AgentNudgeState | null, tab: Age
   const own = ownCommits(pr.commits, nowMs, 3650);
   const verified = pr.recently_verified ?? [];
   return {
+    id: projectId,
+    kind: tab?.student_project_id ? 'agent' : gov?.build?.studentProjectId ? 'gov' : 'console',
     name: gov?.title || tab?.project_name || cp?.name || gov?.build?.studentProjectName || 'Project',
     stage: cp ? cp.stage : gov ? gov.stage : null,
     tasksTotal: agent ? agent.stories : gov?.build ? gov.build.total : cp ? cp.tasks_total : null,

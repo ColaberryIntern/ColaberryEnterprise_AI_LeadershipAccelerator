@@ -19,6 +19,7 @@ import PortfolioArtifact from '../../models/PortfolioArtifact';
 import { award } from '../pointsService';
 import { MAX_FIELD_GUIDE_SIZE } from '../../config/upload';
 import { isCardServable } from '../timeline/curriculumScope';
+import { decodeUploadFilename } from '../../utils/textEncoding';
 
 export const FIELD_GUIDE_KIND = 'field_guide';
 export const FIELD_GUIDE_POINTS = 100;
@@ -56,7 +57,8 @@ export function parseFieldGuideUpload(file: UploadFile | null | undefined, maxBy
   if (!/<!doctype html/i.test(html) && !/<html[\s>]/i.test(html)) {
     throw Object.assign(new Error('That does not look like an HTML Field Guide. Upload the .html file Claude Code built for you.'), { status: 400 });
   }
-  const filename = (file.originalname || 'field-guide.html').slice(0, 200);
+  // multer hands back the browser's UTF-8 filename decoded as Latin-1; undo that before storing it.
+  const filename = (decodeUploadFilename(file.originalname) || 'field-guide.html').slice(0, 200);
   return { html, filename, size_bytes };
 }
 

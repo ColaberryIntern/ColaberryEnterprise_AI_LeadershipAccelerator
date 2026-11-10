@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { fetchArtifactFile, fetchArtifactXlsx, saveBlob, type ArtifactFileKind, type InternArtifactView } from '../../../services/internArtifactApi';
+import { fetchArtifactFile, fetchArtifactPreview, fetchArtifactXlsx, saveBlob, type ArtifactFileKind, type InternArtifactView } from '../../../services/internArtifactApi';
 
 /**
  * Viewers for an intern's uploaded artifact file, picked by file kind (Ali, 10 Nov 2026: "I also
@@ -117,6 +117,34 @@ function CsvViewer({ id, file }: { id: string; file: File }): React.ReactElement
   );
 }
 
+/**
+ * Word and PowerPoint, rendered in the page (Ali, 10 Nov 2026: "We also need a MS word viewer").
+ * The HTML is built server-side from the document (officeToHtml.ts, every value escaped) and shown
+ * in an iframe with an EMPTY sandbox: no scripts, no same-origin, no forms, no popups.
+ */
+function OfficeViewer({ id, file }: { id: string; file: File }): React.ReactElement {
+  const [html, setHtml] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchArtifactPreview(id)
+      .then((h) => { if (live) setHtml(h); })
+      .catch((e: { response?: { data?: { error?: string } } }) => { if (live) setError(e?.response?.data?.error ?? 'Could not preview this document.'); });
+    return () => { live = false; };
+  }, [id]);
+  return (
+    <>
+      <div className="mb-2"><DownloadViewer id={id} file={file} /></div>
+      {error && <div className="alert alert-warning py-2 small" role="alert">{error} Use the download button to open it in {OPENS_IN[file.kind]}.</div>}
+      {!error && !html && <div className="text-muted" aria-busy="true">Rendering document...</div>}
+      {html && (
+        <iframe title={file.name} srcDoc={html} sandbox=""
+          style={{ width: '100%', height: '85vh', border: '1px solid var(--bs-border-color)', borderRadius: 6, background: '#f1f5f9' }} />
+      )}
+    </>
+  );
+}
+
 const OPENS_IN: Partial<Record<ArtifactFileKind, string>> = { word: 'Word', slides: 'PowerPoint', spreadsheet: 'Excel', image: 'your image viewer', other: 'its app' };
 
 function DownloadViewer({ id, file }: { id: string; file: File }): React.ReactElement {
@@ -138,6 +166,7 @@ export function ArtifactFileViewer({ id, file }: { id: string; file: File }): Re
   if (!file.available && file.kind !== 'text' && file.kind !== 'csv') body = <span className="text-muted">{file.note ?? 'File is no longer on the server.'}</span>;
   else if (file.kind === 'pdf') body = <PdfViewer id={id} file={file} />;
   else if (file.kind === 'csv') body = <CsvViewer id={id} file={file} />;
+  else if (file.kind === 'word' || file.kind === 'slides') body = <OfficeViewer id={id} file={file} />;
   else if (file.kind === 'text') {
     body = (
       <>

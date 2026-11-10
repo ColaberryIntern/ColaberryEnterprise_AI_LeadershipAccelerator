@@ -24,6 +24,7 @@ import path from 'path';
 import { parse as parseCsv } from 'csv-parse/sync';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
+import { repairMojibake } from '../../utils/textEncoding';
 
 export const UPLOADS_ROOT = path.resolve(process.env.UPLOADS_ROOT || '/app/uploads');
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -111,7 +112,8 @@ export function readUpload(storedPath: unknown, mimetype: unknown, root = UPLOAD
 
 /** The file part of the view: binary kinds are only located (the page streams them), text kinds are read. */
 function shapeFile(content: Record<string, unknown>): NonNullable<InternArtifactView['file']> {
-  const name = String(content.filename ?? path.basename(String(content.stored_path)));
+  // Repaired: older uploads stored the filename double-encoded (utils/textEncoding.ts).
+  const name = repairMojibake(String(content.filename ?? path.basename(String(content.stored_path))));
   const kind = fileKind(name, content.mimetype);
   const abs = safeUploadPath(content.stored_path);
   const available = !!abs && fs.existsSync(abs);
@@ -136,7 +138,7 @@ export function shapeArtifact(row: { id: string; kind: string; title: string; cr
   return {
     id: row.id,
     kind: row.kind,
-    title: row.title,
+    title: repairMojibake(row.title),
     createdAt: new Date(row.created_at).toISOString(),
     intern: row.intern,
     html,
@@ -167,7 +169,7 @@ export async function getInternArtifactFile(id: string): Promise<InternArtifactF
   if (!content) return null;
   const absPath = safeUploadPath(content.stored_path);
   if (!absPath || !fs.existsSync(absPath)) return null;
-  const name = String(content.filename ?? path.basename(absPath));
+  const name = repairMojibake(String(content.filename ?? path.basename(absPath)));
   const kind = fileKind(name, content.mimetype);
   return { absPath, name, kind, contentType: SERVE_MIME[kind], title: rows[0].title };
 }

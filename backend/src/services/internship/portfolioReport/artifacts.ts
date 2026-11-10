@@ -266,6 +266,7 @@ export function publishedArtifacts(enrollmentId: string, published: PublishedArt
     .map((a) => ({
       id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a),
       source: artifactSource(a) as ArtifactSource, provenance: artifactProvenance(a), fileType: artifactFileType(a),
+      repoPath: a.repo_path ?? null, uploadName: a.upload_name ?? null,
     }))
     .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] || new Date(b.at).getTime() - new Date(a.at).getTime());
 }

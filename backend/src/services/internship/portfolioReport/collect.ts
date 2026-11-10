@@ -25,7 +25,8 @@ import { internshipProjectReadiness } from '../internshipProjectReadiness';
 import { loadAgentNudgeStates } from '../agentNudgeState';
 import { listGovContractsFor } from '../../factory/govContractsList';
 import type { GovPipelineCard } from '../../factory/govPipeline';
-import type { AgentTab, CollectedPortfolio, FeedItem, InternEmail, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
+import type { AgentTab, CollectedPortfolio, FeedItem, InternEmail, LastOutbound, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
+import { repairMojibake } from '../../../utils/textEncoding';
 
 // One window for the whole story: commits, verified stories, emails and replies all cover 21 days.
 export const LOOKBACK_DAYS = 21;
@@ -121,6 +122,30 @@ const AGENT_SQL = `
     LEFT JOIN enrollments en ON en.id = p.enrollment_id
    WHERE d.intended_builder IS NOT NULL`;
 
+/**
+ * Undo filenames stored double-encoded by the upload path (utils/textEncoding.ts has the root
+ * cause). Applied where the rows enter the report, so the HTML and the JSON sidecar both read the
+ * repaired text from this one place.
+ */
+export function repairArtifactText(a: PublishedArtifact): PublishedArtifact {
+  return { ...a, title: repairMojibake(a.title), upload_name: repairMojibake(a.upload_name) ?? null, repo_path: repairMojibake(a.repo_path) ?? null };
+}
+
+// The most recent message sent TO each intern from a colaberry.com address (Ali's own sends are
+// BCC'd into his inbox mirror, so they are here). Feeds the sidecar's `last_ask`; the HTML does
+// not use it. Body capped so one long thread cannot bloat the report.
+const LAST_ASK_SQL = `
+  SELECT e AS email, x.received_at AS sent_at, x.subject, left(x.body_text, 8000) AS body_text,
+         length(x.body_text) > 8000 AS body_truncated, x.from_address
+    FROM unnest(ARRAY[:emails]::text[]) AS e
+    JOIN LATERAL (
+      SELECT i.received_at, i.subject, i.body_text, i.from_address
+        FROM inbox_emails i
+       WHERE lower(i.from_address) LIKE '%@colaberry.com'
+         AND i.to_addresses::text ILIKE '%' || e || '%'
+       ORDER BY i.received_at DESC
+       LIMIT 1) x ON true`;
+
 async function soft<T>(source: string, run: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await run();
@@ -153,14 +178,15 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     ...agentTabs.map((a) => a.student_project_id),
   ].filter((x): x is string => !!x))];
 
-  const [readiness, agentStates, projects, emailRows, weWrote, replies, artifacts] = await Promise.all([
+  const [readiness, agentStates, projects, emailRows, weWrote, replies, lastOutbound, artifacts] = await Promise.all([
     soft('project readiness', () => internshipProjectReadiness(), []),
     soft('agent nudge state', () => loadAgentNudgeStates({ query: (s) => select(s), now: now.toISOString() }), []),
     soft('project detail', () => (projectIds.length ? select<ProjectFacts>(PROJECT_SQL, { ids: projectIds }) : Promise.resolve([])), []),
     soft('intern emails', () => (emails.length ? select<InternEmail>(EMAIL_SQL, { emails }) : Promise.resolve([])), []),
     soft('our last reply', () => (emails.length ? select<WeWrote>(WE_WROTE_SQL, { emails }) : Promise.resolve([])), []),
     soft('our replies', () => (emails.length ? select<OurReply>(REPLIES_SQL, { emails }) : Promise.resolve([])), []),
-    soft('published artifacts', () => (roster.length ? select<PublishedArtifact>(ARTIFACTS_SQL, { enrollmentIds: roster.map((r) => r.enrollment_id) }) : Promise.resolve([])), []),
+    soft('last outbound', () => (emails.length ? select<LastOutbound>(LAST_ASK_SQL, { emails }) : Promise.resolve([])), []),
+    soft('published artifacts', () => (roster.length ? select<PublishedArtifact>(ARTIFACTS_SQL, { enrollmentIds: roster.map((r) => r.enrollment_id) }).then((rows) => rows.map(repairArtifactText)) : Promise.resolve([])), []),
   ]);
 
   // Sequential on purpose: ~14 interns, each detail is a handful of queries.
@@ -187,5 +213,6 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     weWrote,
     replies,
     artifacts,
+    lastOutbound,
   };
 }
