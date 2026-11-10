@@ -148,6 +148,9 @@ export interface StudentGovProjectView {
   vetting?: StudentGovVetting | null;
   /** Advisory "what they want / what we'd build" summary for the Snapshot stage. Null when none saved. Optional. */
   opportunitySummary?: StudentGovOpportunitySummary | null;
+  /** The pursuit's canonical opportunity id (`gws:<uuid>`), set ONLY for an admin viewer (viewerCanVerify) so the
+   *  admin contract view can open the real Gov Qualification Workspace for steps 1-4. Withheld from an intern. */
+  canonicalOpportunityId?: string | null;
   /** The build-repo commit feed: every matched push for this project, newest first (public commit facts, no identity). */
   commitFeed: CommitFeedItem[];
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
@@ -307,6 +310,7 @@ export function toStudentGovProjectView(project: any, tracks: any[], requirement
     meetings: [], // filled by the async loader from the qualification dossier's public meeting lines
     vetting: null, // filled by the async loader from the saved AI vetting (advisory)
     opportunitySummary: null, // filled by the async loader from the saved AI "what they want / what we'd build"
+    canonicalOpportunityId: null, // admin-only; the async loader sets it from the qualification when viewerCanVerify
     commitFeed: [],
     buildSummary: null, // filled by the async loader from the materialized SBP build
     proposalDocuments: [], // filled by the async loader from the derived + synced documents
@@ -488,6 +492,9 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       // The dossier's public MEETING lines (e.g. the pre-proposal conference) — student-safe (date + the solicitation's
       // own sentence, never contacts). The Solicitation stage surfaces these; they lived only in the legacy workspace.
       view.meetings = toStudentMeetings((qual.requirements_json && (qual.requirements_json as any).dossier) || null);
+      // Admin-only: the canonical opportunity id, so the admin contract view can deep-link steps 1-4 to the real
+      // Qualification Workspace. Withheld from an intern (viewerCanVerify=false) — they keep the student-safe panels.
+      if (viewerCanVerify) view.canonicalOpportunityId = qual.canonical_opportunity_id != null ? String(qual.canonical_opportunity_id) : null;
     }
   } catch { /* additive; agency/keyDates/closeDate/priorityScore/meetings stay at their safe defaults */ }
 

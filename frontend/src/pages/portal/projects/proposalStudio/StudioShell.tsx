@@ -4,6 +4,7 @@ import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi, 
 import ContractBar from './ContractBar';
 import StageDetail from './StageDetail';
 import StageRail, { type StudioView } from './StageRail';
+import { viewOpensQualification } from './buildHelpers';
 import WhereWeAre from './WhereWeAre';
 import AgentPanel from './AgentPanel';
 import './studio.css';
@@ -32,8 +33,11 @@ const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', '
  * reuses the shipped govCockpit panel.
  */
 export default function StudioShell(
-  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint }:
-  { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean; bugReportEndpoint?: string },
+  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification }:
+  { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean; bugReportEndpoint?: string;
+    /** ADMIN mount only: open the real Gov Qualification Workspace for a pre-award assessment stage (Snapshot/
+     *  Solicitation/Fit/Decide). Absent on the intern mount, so the intern keeps the student-safe StageDetail. */
+    onOpenQualification?: (step: string) => void },
 ): React.ReactElement {
   const [sp, setSp] = useSearchParams();
   const raw = sp.get('view');
@@ -64,6 +68,14 @@ export default function StudioShell(
     try { window.scrollTo({ top: 0 }); } catch { /* noop */ }
   }, [sp, setSp]);
 
+  // ADMIN contract view only: the four pre-award assessment chips (Snapshot/Solicitation/Fit/Decide) open the REAL
+  // Gov Qualification Workspace rather than the student-safe StageDetail. Every other navigation — and the entire
+  // intern mount (which never passes onOpenQualification) — falls through to `go` unchanged.
+  const navTo = useCallback((v: StudioView) => {
+    if (onOpenQualification && viewOpensQualification(v)) { onOpenQualification(v); return; }
+    go(v);
+  }, [onOpenQualification, go]);
+
   const toast = useCallback((m: string) => {
     setToastMsg(m);
     window.setTimeout(() => setToastMsg((cur) => (cur === m ? null : cur)), 3400);
@@ -85,7 +97,7 @@ export default function StudioShell(
   let center: React.ReactNode;
   switch (current) {
     case 'overview':
-      center = <WhereWeAre view={view} onNavigate={go} studioApi={studioApi} onReload={onReload} onToast={toast} />;
+      center = <WhereWeAre view={view} onNavigate={navTo} studioApi={studioApi} onReload={onReload} onToast={toast} />;
       break;
     case 'blueprint':
       center = <Blueprint view={view} onReanalyze={onReanalyze} reanalyzing={reanalyzing} onToast={toast} />;
