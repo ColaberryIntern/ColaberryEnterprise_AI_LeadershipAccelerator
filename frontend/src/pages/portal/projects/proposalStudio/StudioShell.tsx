@@ -4,7 +4,9 @@ import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi, 
 import ContractBar from './ContractBar';
 import StageDetail from './StageDetail';
 import StageRail, { type StudioView } from './StageRail';
-import { viewOpensQualification } from './buildHelpers';
+import { viewOpensQualification, deriveContractStepState, STEP_TO_STUDIO_VIEW } from './buildHelpers';
+import { StepBar } from '../../../admin/govWorkspace/StepBar';
+import { WORKSPACE_STEPS, type WorkspaceStep } from '../../../admin/govWorkspace/workspaceSteps';
 import WhereWeAre from './WhereWeAre';
 import AgentPanel from './AgentPanel';
 import './studio.css';
@@ -76,6 +78,17 @@ export default function StudioShell(
     go(v);
   }, [onOpenQualification, go]);
 
+  // The UNIFIED pursuit stepper — the same numbered 1-8 bar the Qualification Workspace shows, so the two views blend
+  // into one flow. Steps 1-5 (Snapshot..Build) hand off to the real Qualification Workspace on the ADMIN mount; 6-8
+  // (Proposal/Submit/Outcome) stay in the Proposal Studio. The intern mount passes no onOpenQualification, so its 1-5
+  // fall through to the student-safe in-studio views (StageDetail / build evidence).
+  const onStep = useCallback((key: WorkspaceStep) => {
+    const isQual = key === 'snapshot' || key === 'solicitation' || key === 'fit' || key === 'decide' || key === 'build';
+    if (onOpenQualification && isQual) { onOpenQualification(key); return; }
+    go(STEP_TO_STUDIO_VIEW[key] as StudioView);
+  }, [onOpenQualification, go]);
+  const stepState = deriveContractStepState(view, current);
+
   const toast = useCallback((m: string) => {
     setToastMsg(m);
     window.setTimeout(() => setToastMsg((cur) => (cur === m ? null : cur)), 3400);
@@ -142,6 +155,9 @@ export default function StudioShell(
           ? async (closeDate, priorityScore) => { await studioApi.setProposalDueDate!(projectId, { closeDate, priorityScore }); toast('Proposal due date saved'); onReload(); }
           : undefined}
       />
+      <div className="gps-gut" style={{ paddingTop: 12 }}>
+        <StepBar steps={WORKSPACE_STEPS} statuses={stepState.statuses} frontier={stepState.frontier} onStep={onStep} />
+      </div>
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
         <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>

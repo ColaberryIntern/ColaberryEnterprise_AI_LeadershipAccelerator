@@ -59,6 +59,7 @@ export function StepBar({
             )}
             <button type="button" role="tab" aria-selected={isCurrent}
               aria-current={isCurrent ? 'step' : undefined}
+              data-testid={`step-${s.key}`}
               className="gov-step btn btn-link text-decoration-none d-flex flex-column align-items-center gap-1 px-2 pt-1"
               style={{ minWidth: 132, maxWidth: 160, flex: '0 0 auto' }}
               onClick={() => onStep(s.key)}>
