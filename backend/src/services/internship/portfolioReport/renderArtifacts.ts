@@ -28,7 +28,9 @@ export function commandCenterHtml(c: InternCard): string {
 export function artifactsHtml(c: InternCard): string {
   const a = c.artifacts;
   const pub = a.published.slice(0, MAX_PUBLISHED).map((p) => {
-    const href = safeHref(p.url);
+    // A null url means the artifact has no page of its own. The pill below still names it; what it
+    // no longer does is promise a destination that is not there.
+    const href = p.url ? safeHref(p.url) : null;
     const text = `<strong>${esc(kindLabel(p.kind))}</strong>: ${esc(p.title.length > 60 ? `${p.title.slice(0, 59)}...` : p.title)}`;
     return href
       ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;background:#4338ca;color:#ffffff;text-decoration:none">${text} &#8599;</a>`
@@ -66,7 +68,8 @@ export function asksHtml(c: InternCard): string {
 export function artifactsText(c: InternCard): string[] {
   const a = c.artifacts;
   const out = [`  Artifacts: ${a.published.length} published${a.overdue.length ? `, ${a.overdue.length} overdue` : ''}${c.project?.commandCenterUrl ? `. Command Center: ${c.project.commandCenterUrl}` : ''}`];
-  for (const p of a.published.slice(0, 5)) out.push(`    ${kindLabel(p.kind)}: ${p.title} ${p.url}`);
+  // Append the url only when there is one: the alternative is a line ending in "null".
+  for (const p of a.published.slice(0, 5)) out.push(`    ${kindLabel(p.kind)}: ${p.title}${p.url ? ` ${p.url}` : ''}`);
   for (const o of a.overdue.slice(0, 5)) out.push(`    OVERDUE week ${o.week} ${kindLabel(o.kind)}: ${o.title}`);
   for (const k of a.asks) out.push(`  ASK: ${k.name}. ${k.why}`, `    Nudge: ${k.nudge}`, ...k.prompt.split('\n').map((l) => `    > ${l}`));
   return out;

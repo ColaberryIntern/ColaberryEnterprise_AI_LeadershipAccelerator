@@ -44,15 +44,36 @@ describe('artifacts: what should exist by now', () => {
 });
 
 describe('artifacts: links', () => {
-  it('a Claude Studio artifact opens its own claude.ai page; everything else opens the admin viewer', () => {
-    expect(artifactUrl({ id: 'x', external_url: 'https://claude.ai/artifact/abc' })).toBe('https://claude.ai/artifact/abc');
-    expect(artifactUrl({ id: 'x', external_url: null })).toBe('https://enterprise.colaberry.ai/admin/internship/artifact/x');
-    expect(artifactUrl({ id: 'x', external_url: 'javascript:alert(1)' })).toBe('https://enterprise.colaberry.ai/admin/internship/artifact/x');
+  it('an artifact with its own page links to it; one without links nowhere', () => {
+    expect(artifactUrl({ external_url: 'https://claude.ai/artifact/abc' })).toBe('https://claude.ai/artifact/abc');
+    // Null, NOT a constructed admin URL: there is no /admin/internship/artifact route to send
+    // anyone to. These two assertions used to require the dead link, which is how it shipped.
+    expect(artifactUrl({ external_url: null })).toBeNull();
+    expect(artifactUrl({ external_url: 'javascript:alert(1)' })).toBeNull();
   });
 
-  it('published artifacts appear on the timeline as chips that open in a new tab', () => {
+  it('an artifact with its own page renders as a chip that opens in a new tab', () => {
+    const { html } = renderInternshipPortfolio(report({ artifacts: [pub({ external_url: 'https://claude.ai/artifact/abc' })] }));
+    expect(html).toContain('href="https://claude.ai/artifact/abc" target="_blank"');
+  });
+
+  it('an artifact with no page of its own is still named, as a chip that is not a link', () => {
+    // The fixture publishes one artifact with external_url null.
     const { html } = renderInternshipPortfolio(report());
-    expect(html).toContain('href="https://enterprise.colaberry.ai/admin/internship/artifact/11111111-2222-4333-8444-555555555555" target="_blank"');
+    expect(html).toContain('Field Guide');
+    expect(html).not.toContain('<a href="https://enterprise.colaberry.ai/admin/internship/artifact/');
+  });
+
+  it('no part of the report ever emits the admin artifact route, which does not exist', () => {
+    // A guard, not a detail. The dead fallback shipped precisely because a test asserted it, so the
+    // regression test has to be the one that cannot be satisfied by reintroducing it.
+    const { html, text } = renderInternshipPortfolio(report({
+      artifacts: [pub(), pub({ id: '66666666-7777-4888-8999-aaaaaaaaaaaa', external_url: 'https://claude.ai/artifact/abc' })],
+    }));
+    expect(html).not.toContain('/admin/internship/artifact/');
+    expect(text).not.toContain('/admin/internship/artifact/');
+    // And the text part must not print a bare "null" where a url would have gone.
+    expect(text).not.toMatch(/Field Guide: [^\n]*\bnull\b/);
   });
 
   it('a published Command Center is a button; a missing one says so', () => {

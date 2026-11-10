@@ -210,8 +210,8 @@ export interface ArtifactAsk {
 }
 
 export interface ArtifactsView {
-  /** Newest first, each with the link that opens it. */
-  published: Array<{ id: string; kind: string; title: string; at: string; url: string }>;
+  /** Newest first. `url` is null when the artifact has no page of its own to open. */
+  published: Array<{ id: string; kind: string; title: string; at: string; url: string | null }>;
   /** Artifact cards from weeks before their current training week with nothing published. */
   overdue: Array<{ week: number; kind: string; title: string }>;
   /** Artifact cards in their current training week, not yet published. */

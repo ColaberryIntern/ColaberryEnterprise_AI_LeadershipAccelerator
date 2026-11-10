@@ -18,12 +18,25 @@
  */
 import type { ArtifactAsk, ArtifactCard, ArtifactsView, InternCard, PublishedArtifact } from './types';
 
-export const ADMIN_BASE = 'https://enterprise.colaberry.ai';
 const MAX_ASKS = 3;
 
-/** Where a published artifact opens: its own claude.ai page when it has one, else the admin viewer. */
-export function artifactUrl(a: Pick<PublishedArtifact, 'id' | 'external_url'>): string {
-  return a.external_url && /^https:\/\//.test(a.external_url) ? a.external_url : `${ADMIN_BASE}/admin/internship/artifact/${a.id}`;
+/**
+ * Where a published artifact opens: its own page when it has one, and NOTHING when it does not.
+ *
+ * This used to fall back to `https://enterprise.colaberry.ai/admin/internship/artifact/<id>`, a
+ * route the admin app does not register. It serves exactly three paths under /admin/internship --
+ * the index, the gov-contract cockpit and the agent domain page -- so every badge built from that
+ * fallback opened a blank page. In the 9 Nov report 58 of the 80 artifact badges were dead this
+ * way. The only reason CI stayed green on a feature called "openable artifacts" is that two unit
+ * tests asserted the dead URL verbatim, which made the defect look like the specification.
+ *
+ * Returning null is what makes the absence visible. `renderArtifacts` already falls back to a
+ * non-link pill, so the artifact is still named and still counted; it is simply no longer dressed
+ * up as a destination. An artifact becomes clickable by gaining a real `external_url`, or by
+ * someone building the viewer route -- never by this function inventing one.
+ */
+export function artifactUrl(a: Pick<PublishedArtifact, 'external_url'>): string | null {
+  return a.external_url && /^https:\/\//.test(a.external_url) ? a.external_url : null;
 }
 
 const KIND_LABEL: Record<string, string> = {
