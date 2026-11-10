@@ -34,12 +34,16 @@ function build() {
 function resolveFile(urlPath) {
   const clean = decodeURIComponent(urlPath.split('?')[0]);
   if (/^\/ws-/.test(clean) || clean.startsWith('/api/')) return { status: 410, json: '{"error":"retired"}' };
+  // Mirrors nginx/hire-refactored.conf: the bare collections redirect, and nothing else
+  // falls to a directory listing or nginx's own error page.
+  if (clean === '/talent/') return { status: 302, location: '/#talent' };
+  if (clean === '/case-studies/') return { status: 302, location: '/#published' };
   const tryFile = (p) => { const f = path.join(DIST, p); return f.startsWith(DIST) && fs.existsSync(f) && fs.statSync(f).isFile() ? f : null; };
   const direct = tryFile(clean) || tryFile(path.join(clean, 'index.html'));
   if (direct) return { file: direct };
   if (clean.startsWith('/talent/')) return { file: path.join(DIST, 'talent', 'record', 'index.html') };
   if (clean.startsWith('/case-studies/')) return { file: path.join(DIST, 'case-studies', 'record', 'index.html') };
-  return { status: 404 };
+  return { status: 404, file: path.join(DIST, '404.html') };
 }
 
 function serve() {
@@ -47,8 +51,9 @@ function serve() {
     const server = http.createServer((req, res) => {
       const r = resolveFile(req.url);
       if (r.json) { res.writeHead(r.status, { 'Content-Type': 'application/json' }); res.end(r.json); return; }
+      if (r.location) { res.writeHead(r.status, { Location: r.location }); res.end(); return; }
       if (!r.file) { res.writeHead(404); res.end('not found'); return; }
-      res.writeHead(200, { 'Content-Type': TYPES[path.extname(r.file)] || 'application/octet-stream' });
+      res.writeHead(r.status || 200, { 'Content-Type': TYPES[path.extname(r.file)] || 'application/octet-stream' });
       fs.createReadStream(r.file).pipe(res);
     });
     server.listen(0, '127.0.0.1', () => resolve({ server, base: `http://127.0.0.1:${server.address().port}` }));
@@ -124,7 +129,9 @@ function scorer(name) {
 
 async function launch() {
   const { chromium } = require(process.env.PW_PATH || 'playwright');
-  return chromium.launch({ headless: true });
+  // PW_CHROME: a full Chromium to use when this machine has no headless-shell build for the
+  // installed Playwright version. Unset = Playwright's own browser, as in CI.
+  return chromium.launch({ headless: true, ...(process.env.PW_CHROME ? { executablePath: process.env.PW_CHROME } : {}) });
 }
 
 module.exports = { ROOT, API_ORIGIN, build, serve, resolveFile, person, directory, portfolio, caseStudy, routeApi, scorer, launch };

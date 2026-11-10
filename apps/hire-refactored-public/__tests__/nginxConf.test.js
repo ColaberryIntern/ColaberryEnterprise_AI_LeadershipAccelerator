@@ -30,8 +30,20 @@ describe('hire-refactored.conf', () => {
   });
 
   test('falls every unknown portfolio and case-study path through to its shell', () => {
-    assert.match(block(/location \^~ \/talent\//), /try_files \$uri \$uri\/ \/talent\/record\/index\.html;/);
-    assert.match(block(/location \^~ \/case-studies\//), /try_files \$uri \$uri\/ \/case-studies\/record\/index\.html;/);
+    assert.match(block(/location \^~ \/talent\//), /try_files \$uri \/talent\/record\/index\.html;/);
+    assert.match(block(/location \^~ \/case-studies\//), /try_files \$uri \/case-studies\/record\/index\.html;/);
+  });
+
+  test('never answers with nginx\'s own 403 or 404 page (production verification, 2026-11-09)', () => {
+    // `$uri/` matched the bare /talent/ directory, found no index and returned a plain 403.
+    assert.doesNotMatch(code, /try_files[^;]*\$uri\/[ ;][^;]*record/);
+    assert.match(code, /error_page 404 \/404\.html;/);
+    assert.match(block(/location = \/404\.html/), /internal;/);
+    // Read from the raw file: `code` strips `#...` as a comment, anchors included. The
+    // targets are quoted so nginx never reads the `#` as one either.
+    assert.match(conf, /location = \/talent\/ \{\s*return 302 "\/#talent";/);
+    assert.match(conf, /location = \/case-studies\/ \{\s*return 302 "\/#published";/);
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'src', '404.html')), 'the branded page ships with the app');
   });
 
   test('answers the legacy /ws-* API and /api/ with 410 JSON, never the HTML shell', () => {
