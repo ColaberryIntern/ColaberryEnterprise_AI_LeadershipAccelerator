@@ -11,6 +11,7 @@ export const KIND: Record<EventKind, { fg: string; bg: string; solid?: boolean; 
   stuck: { fg: '#b91c1c', bg: '#fee2e2', name: 'Stuck' },
   unstuck: { fg: '#3f6212', bg: '#d9f99d', name: 'Unstuck' },
   verified: { fg: '#ffffff', bg: '#15803d', solid: true, name: 'Verified story' },
+  artifact: { fg: '#ffffff', bg: '#4338ca', solid: true, name: 'Published artifact (click to open)' },
   commit: { fg: '#1d4ed8', bg: '#dbeafe', name: 'Commits' },
   question: { fg: '#6d28d9', bg: '#ede9fe', name: 'Question' },
   update: { fg: '#475569', bg: '#f1f5f9', name: 'Update' },
@@ -19,7 +20,7 @@ export const KIND: Record<EventKind, { fg: string; bg: string; solid?: boolean; 
 };
 /** Strip and rail colors: strong for story moments, pale for routine training so it never dominates. */
 const STRIP_COLOR: Record<EventKind, string> = {
-  late: '#9f1239', stuck: '#dc2626', unstuck: '#84cc16', verified: '#15803d', commit: '#3b82f6',
+  late: '#9f1239', stuck: '#dc2626', unstuck: '#84cc16', verified: '#15803d', artifact: '#4338ca', commit: '#3b82f6',
   question: '#7c3aed', update: '#cbd5e1', reply: '#06b6d4', training: '#fde68a',
 };
 const NEXT_STYLE: Record<TimelineNext['kind'], { fg: string; bg: string; border: string }> = {
@@ -29,6 +30,7 @@ const NEXT_STYLE: Record<TimelineNext['kind'], { fg: string; bg: string; border:
   noproject: { fg: '#9a3412', bg: '#ffedd5', border: '#ea580c' },
   next: { fg: '#1a365d', bg: '#ffffff', border: '#1a365d' },
   training: { fg: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
+  artifact: { fg: '#4338ca', bg: '#e0e7ff', border: '#4338ca' },
 };
 
 const esc = (s: unknown): string => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -38,15 +40,20 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const fmtDay = (d: string): string => `${MONTHS[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8, 10))}`;
 const dow = (d: string): string => DOW[new Date(`${d}T12:00:00Z`).getUTCDay()];
 
-function chip(kind: EventKind, label: string, detail?: string, meta?: string, slow?: boolean): string {
+function chip(kind: EventKind, label: string, detail?: string, meta?: string, slow?: boolean, href?: string): string {
   const k = KIND[kind];
   const metaHtml = meta ? ` <span style="font-weight:700;color:${slow ? '#b45309' : k.fg}">(${esc(meta)})</span>` : '';
   const border = slow ? 'border:2px solid #f59e0b;' : `border:1px solid ${k.solid ? k.bg : k.fg}33;`;
-  return `<span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;line-height:1.35;background:${k.bg};color:${k.fg};${border}"><strong>${esc(label)}</strong>${detail ? `: ${esc(clip(detail, 80))}` : ''}${metaHtml}</span>`;
+  const style = `display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;line-height:1.35;background:${k.bg};color:${k.fg};${border}`;
+  const inner = `<strong>${esc(label)}</strong>${detail ? `: ${esc(clip(detail, 80))}` : ''}${metaHtml}`;
+  // A chip with somewhere to go is a link that opens in a new tab.
+  return href && /^https:\/\//.test(href)
+    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" style="${style};text-decoration:none">${inner} &#8599;</a>`
+    : `<span style="${style}">${inner}</span>`;
 }
 
 export function legendHtml(): string {
-  const order: EventKind[] = ['late', 'stuck', 'unstuck', 'verified', 'commit', 'question', 'reply', 'training'];
+  const order: EventKind[] = ['late', 'stuck', 'unstuck', 'verified', 'artifact', 'commit', 'question', 'reply', 'training'];
   return order.map((k) => chip(k, KIND[k].name)).join('')
     + ` <span style="font-size:12px;color:#b91c1c;border-left:3px dashed #dc2626;padding-left:6px;margin-left:6px">red dashed gap = 4+ days with no build work</span>`
     + ` <span style="font-size:12px;color:#b45309;border:2px solid #f59e0b;border-radius:12px;padding:1px 6px;margin-left:6px">amber ring = reply took 2+ days</span>`;
@@ -106,7 +113,7 @@ export function timelineHtml(t: Timeline): string {
   parts.push(gapRow(t.sinceLastRow, t.quietNow !== null && t.quietNow >= 4 && t.sinceLastRow >= 4));
   for (const r of [...t.rows].reverse()) {
     const top = r.events[0]?.kind ?? 'update';
-    const chips = r.events.map((e) => chip(e.kind, e.label, e.detail, e.meta, e.slow)).join('');
+    const chips = r.events.map((e) => chip(e.kind, e.label, e.detail, e.meta, e.slow, e.href)).join('');
     const { label, sub } = rowLabel(r);
     // Routine spans get a quiet rail; story moments get the strong color of what happened.
     const accent = r.onlyTraining ? '#fde68a' : r.mode === 'build' ? '#93c5fd' : r.mode === 'talk' ? '#a5f3fc' : STRIP_COLOR[top];

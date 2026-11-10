@@ -31,6 +31,7 @@ export interface ProjectFacts {
   next_tasks: Array<{ story_id: string | null; title: string; due_on: string | null; status: string | null }> | null;
   overdue: number;
   overdue_tasks?: Array<{ story_id: string | null; title: string; due_on: string }> | null;
+  command_center_url?: string | null;
 }
 
 export interface InternEmail { email: string; subject: string | null; snippet: string | null; received_at: string }
@@ -66,6 +67,10 @@ export interface CollectedPortfolio {
   weWrote: WeWrote[];
   /** Optional so older saved collections still render. */
   replies?: OurReply[];
+  /** Optional so older saved collections still render. */
+  artifacts?: PublishedArtifact[];
+  artifactCards?: ArtifactCard[];
+  completedCards?: Array<{ enrollment_id: string; card_id: string }>;
 }
 
 export type Track = 'agent' | 'gov' | 'other' | 'none';
@@ -108,6 +113,8 @@ export interface ProjectView {
   verifiedRecent: Array<{ storyId: string | null; title: string; at: string }>;
   next: { title: string; dueOn: string | null } | null;
   overdueTasks: Array<{ title: string; due_on: string }>;
+  /** The published Command Center (GitHub Pages), when the project has one. */
+  commandCenterUrl: string | null;
 }
 
 export interface InternCard {
@@ -145,6 +152,8 @@ export interface InternCard {
   /** 2-3 sentences: where they are and what part they are building (summary.ts). */
   summary: string;
   summaryFromModel: boolean;
+  /** Published artifacts (with links), overdue/due artifact cards, and what to ask them to produce. */
+  artifacts: ArtifactsView;
   /** Filled by narrate.ts; empty when the model is unavailable. */
   asks: string[];
   asksFromModel: boolean;
@@ -161,11 +170,12 @@ export interface PortfolioReport {
   operatorsExcluded: string[];
 }
 
-export type EventKind = 'commit' | 'verified' | 'question' | 'stuck' | 'update' | 'reply' | 'unstuck' | 'late' | 'training';
-export interface TimelineEvent { kind: EventKind; day: string; at: string; label: string; detail?: string; meta?: string; slow?: boolean }
+export type EventKind = 'commit' | 'verified' | 'artifact' | 'question' | 'stuck' | 'update' | 'reply' | 'unstuck' | 'late' | 'training';
+/** `href`: where the chip opens (a published artifact). */
+export interface TimelineEvent { kind: EventKind; day: string; at: string; label: string; detail?: string; meta?: string; slow?: boolean; href?: string }
 /** One row: a single day, or (when `routine`) a span of routine days from `day` to `dayEnd`. */
 export interface TimelineRow { day: string; dayEnd: string; routine: boolean; mode: 'build' | 'talk' | 'story'; gapBefore: number; gapStuck: boolean; onlyTraining: boolean; events: TimelineEvent[] }
-export interface TimelineNext { kind: 'owed' | 'late' | 'stuck' | 'next' | 'training' | 'noproject'; label: string; detail: string }
+export interface TimelineNext { kind: 'owed' | 'late' | 'stuck' | 'next' | 'training' | 'noproject' | 'artifact'; label: string; detail: string }
 export interface Timeline {
   windowDays: number;
   start: string;
@@ -180,4 +190,32 @@ export interface Timeline {
   lateBeforeWindow: Array<{ title: string; due: string }>;
   /** Days since the last build work; null = none in the window (or no project). */
   quietNow: number | null;
+}
+
+/** One row of ARTIFACTS_SQL: an artifact the intern published (content stays in the DB). */
+export interface PublishedArtifact { id: string; enrollment_id: string; card_id: string | null; kind: string; title: string; created_at: string; external_url: string | null }
+/** One row of ARTIFACT_CARDS_SQL: a curriculum card that produces an artifact. */
+export interface ArtifactCard { card_id: string; week: number; type: string; title: string; kind: string }
+
+/** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
+export interface ArtifactAsk {
+  key: string;
+  name: string;
+  /** What Ali learns from it. */
+  why: string;
+  /** Paste-ready prompt for Claude Code in their repo. */
+  prompt: string;
+  /** The message to send them, asking for it. */
+  nudge: string;
+}
+
+export interface ArtifactsView {
+  /** Newest first, each with the link that opens it. */
+  published: Array<{ id: string; kind: string; title: string; at: string; url: string }>;
+  /** Artifact cards from weeks before their current training week with nothing published. */
+  overdue: Array<{ week: number; kind: string; title: string }>;
+  /** Artifact cards in their current training week, not yet published. */
+  dueNow: Array<{ week: number; kind: string; title: string }>;
+  currentWeek: number | null;
+  asks: ArtifactAsk[];
 }

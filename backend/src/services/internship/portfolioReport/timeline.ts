@@ -48,9 +48,13 @@ export interface TimelineInput {
   activityDays: Array<{ date: string; events: number; by_category: Record<string, number> }>;
   training: TrainingView;
   awaitingReply: boolean;
+  /** Artifacts they published, with the link that opens each (optional for older callers). */
+  artifacts?: Array<{ at: string; kind: string; title: string; url: string }>;
+  /** Training artifacts overdue from weeks already behind them. */
+  overdueArtifacts?: number;
 }
 
-const ROUTINE = new Set<EventKind>(['commit', 'verified', 'training', 'update']);
+const ROUTINE = new Set<EventKind>(['commit', 'verified', 'artifact', 'training', 'update']);
 const plural = (n: number, w: string, many = `${w}s`): string => `${n} ${n === 1 ? w : many}`;
 
 /**
@@ -68,6 +72,7 @@ export function summarize(evs: TimelineEvent[], span: boolean): TimelineEvent[] 
     const latest = latestOf(commits);
     out.push({ ...latest, label: plural(n, 'commit'), detail: `latest: ${latest.detail ?? ''}` });
   }
+  out.push(...of('artifact'));
   const verified = of('verified');
   if (verified.length > 1 && span) out.push({ ...verified[0], label: `Verified ${verified.length}`, detail: verified.map((v) => v.detail).join('; ') });
   else out.push(...verified);
@@ -96,7 +101,7 @@ export function summarize(evs: TimelineEvent[], span: boolean): TimelineEvent[] 
   return out;
 }
 
-const TALK = new Set<EventKind>(['update', 'reply', 'training']);
+const TALK = new Set<EventKind>(['update', 'reply', 'training', 'artifact']);
 /** build = only routine build work; talk = only their updates and your replies; story = anything else. */
 export function rowMode(evs: TimelineEvent[]): TimelineRow['mode'] {
   if (evs.every((e) => ROUTINE.has(e.kind))) return 'build';
@@ -147,6 +152,11 @@ export function buildTimeline(i: TimelineInput): Timeline {
     });
   }
 
+  // Published artifacts: each its own chip, because each one opens.
+  for (const a of i.artifacts ?? []) {
+    add({ kind: 'artifact', day: dayKey(a.at), at: a.at, label: 'Published', detail: a.title, href: a.url });
+  }
+
   // Training days: a light chip, never a row of its own story.
   for (const d of i.activityDays) {
     const n = d.by_category?.training ?? 0;
@@ -193,7 +203,7 @@ export function buildTimeline(i: TimelineInput): Timeline {
   // Rows: one per day that has something, oldest first, with the gap to the previous row.
   const byDay = new Map<string, TimelineEvent[]>();
   for (const e of events) byDay.set(e.day, [...(byDay.get(e.day) ?? []), e]);
-  const ORDER: EventKind[] = ['late', 'stuck', 'unstuck', 'verified', 'commit', 'question', 'update', 'reply', 'training'];
+  const ORDER: EventKind[] = ['late', 'stuck', 'unstuck', 'verified', 'artifact', 'commit', 'question', 'update', 'reply', 'training'];
   const days = [...byDay.keys()].sort();
   // Rows. Story moments (stuck, unstuck, a question, something late) keep their own date. Days of
   // routine BUILD work (commits, verified stories, training, plain updates) that follow each other
@@ -253,6 +263,7 @@ export function buildTimeline(i: TimelineInput): Timeline {
   if (p?.next && !(p.overdueTasks ?? []).some((t) => t.title === p.next?.title)) {
     next.push({ kind: 'next', label: 'Up next', detail: `${p.next.title}${p.next.dueOn ? ` (due ${p.next.dueOn.slice(5)})` : ''}` });
   }
+  if (i.overdueArtifacts) next.push({ kind: 'artifact', label: `${i.overdueArtifacts} training ${i.overdueArtifacts === 1 ? 'artifact' : 'artifacts'} overdue`, detail: 'from weeks already behind them; see Artifacts below' });
   if (!i.training.gateClear && i.training.nextWeek) next.push({ kind: 'training', label: `Training Week ${i.training.nextWeek.week}`, detail: `${i.training.nextWeek.pct}% done; weeks 1-3 gate ${i.training.gateDone}/3` });
 
   // The one-line story.

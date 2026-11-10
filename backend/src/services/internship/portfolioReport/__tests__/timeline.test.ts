@@ -8,7 +8,7 @@ const ago = (d: number): string => new Date(NOW - d * 86400000).toISOString();
 function project(over: Partial<ProjectView> = {}): ProjectView {
   return {
     name: 'Admissions', stage: 'discovery', tasksTotal: 10, tasksDone: 2, pct: 20, repoUrl: 'https://github.com/x/y', overdue: 0,
-    commitsRecent: [], lastCommitDays: null, lastVerifiedDays: null, verifiedRecent: [], next: { title: 'Decision recording', dueOn: null }, overdueTasks: [],
+    commitsRecent: [], lastCommitDays: null, lastVerifiedDays: null, verifiedRecent: [], next: { title: 'Decision recording', dueOn: null }, overdueTasks: [], commandCenterUrl: null,
     ...over,
   };
 }
