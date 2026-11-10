@@ -81,11 +81,21 @@ function trainingLine(i: SidecarIntern): string[] {
   return ['', `Training is at week ${nf(t.weeks_completed)} of ${nf(t.weeks_total)}, with the weeks 1 to 3 gate at ${nf(t.gate_done)} of ${nf(t.gate_of)}.`];
 }
 
-function outstandingLines(i: SidecarIntern): string[] {
-  const all = [i.most_urgent, ...i.most_urgent_overflow].filter((x): x is NonNullable<typeof x> => !!x);
-  if (!all.length) return [];
-  return ['', 'What the platform has against your name right now:', '', ...all.map((n) => `  ${n.label}. ${n.detail}`)];
-}
+/**
+ * REMOVED, deliberately. Do not reinstate this without rewriting what it prints.
+ *
+ * It used to emit "What the platform has against your name right now:" followed by `most_urgent`
+ * and its overflow. Those entries are written for ALI'S DASHBOARD, about the intern, in the
+ * dashboard's voice. Pasting them into a message addressed to the intern flips the audience and
+ * produces lines that are simply untrue of the reader: Quincy, who was waiting on Ali, was sent
+ * "You owe a reply" on 10 Nov 2026 because that is how the item reads on the queue Ali looks at.
+ *
+ * The phrasing was wrong even where the facts were right. "What the platform has against your
+ * name" is the language of a charge sheet, not of a manager, and it was going to everybody.
+ *
+ * Anything an intern genuinely needs from that list is already said in their own words by the
+ * tier opening, the state paragraph and the ask.
+ */
 
 function askBlock(i: SidecarIntern): { lines: string[]; attachment: NudgeBrief['attachment'] } {
   const ask = i.asks[0];
@@ -132,11 +142,27 @@ function opening(i: SidecarIntern): string[] {
   const n = i.first_name;
   const { tier } = i.triage;
   switch (tier) {
+    /**
+     * This tier does NOT get a generated message, and that is the fix rather than a limitation.
+     *
+     * It used to open "Answering your message first.", quote the intern's own email back at them,
+     * and then never answer it, because the answer is Ali's judgement and no judgement is in the
+     * database. The quote made it worse twice over: it reads as being told what you already know,
+     * and `open_questions[].text` is a truncated SNIPPET, so the quote ended mid-word.
+     *
+     * So the opening now acknowledges the question by subject and date, says plainly that it is
+     * unanswered, and stops. `holdFor()` holds the row as `needs_your_answer`, and the warning
+     * says the same thing on the card. A short honest acknowledgement a person finishes is worth
+     * more than a long message that looks complete and answers nothing.
+     */
     case 'blocked_waiting_on_ali': {
       const q = i.open_questions[0];
-      const head = [`${n},`, '', 'Answering your message first.'];
-      if (q) head.push('', `You asked, on ${longDate(q.received_at)}, under "${q.subject}":`, '', `  ${q.text.replace(/\s+/g, ' ').trim()}`);
-      else if (i.asking_you.length) head.push('', `You asked: ${i.asking_you[0]}`);
+      const head = [`${n},`];
+      if (q) {
+        head.push('', `Your message of ${longDate(q.received_at)}, under "${q.subject}", is still sitting with me and I have not answered it yet.`);
+      } else {
+        head.push('', 'You are waiting on an answer from me and I have not given it yet.');
+      }
       return head;
     }
     case 'no_project_at_day_N':
@@ -202,21 +228,32 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   const { tier } = intern.triage;
   const leads = deadline !== null && deadline.daysLeft <= DEADLINE_LEADS_WITHIN_DAYS;
 
+  // Someone waiting on a decision gets a SHORT acknowledgement and nothing else: no statistics,
+  // no training line, no artifact ask. Stapling "your Project introduction was due 39 days ago"
+  // onto a message to a person who is blocked on us is the clearest way to look like nobody read
+  // what they wrote. Ali writes the answer itself, and `holdFor()` says so on the card.
+  const awaitingAli = tier === 'blocked_waiting_on_ali';
+
   const lines = leads ? deadlineBlock(deadline!, intern.first_name) : opening(intern);
-  if (leads && tier === 'blocked_waiting_on_ali' && intern.open_questions[0]) {
+  if (leads && awaitingAli && intern.open_questions[0]) {
     const q = intern.open_questions[0];
     lines.push('', `Separately, your message of ${longDate(q.received_at)} under "${q.subject}" is still waiting on me, and I have not forgotten it.`);
   }
 
-  lines.push(...stateParagraph(intern));
-  if (!leads) lines.push(...outstandingLines(intern));
-  lines.push(...trainingLine(intern));
-
   const ask = askBlock(intern);
-  lines.push(...ask.lines);
-  if (!intern.asks.length) warnings.push('No artifact ask was generated for this intern, so the message asks for a date rather than a deliverable.');
+
+  if (!awaitingAli) {
+    lines.push(...stateParagraph(intern));
+    lines.push(...trainingLine(intern));
+    lines.push(...ask.lines);
+    if (!intern.asks.length) warnings.push('No artifact ask was generated for this intern, so the message asks for a date rather than a deliverable.');
+  }
 
   lines.push(...close(tier, intern));
+
+  if (awaitingAli) {
+    warnings.push('This one needs YOUR answer. The generated text only acknowledges their question; it deliberately does not attempt to answer it, because the answer is a judgement and no judgement is in the database. Write the answer before sending.');
+  }
 
   if (intern.project && !intern.project.repo_url) {
     warnings.push('This project carries no repository URL. Repo provisioning writes to github_connections instead, so check there before telling them their project looks empty.');

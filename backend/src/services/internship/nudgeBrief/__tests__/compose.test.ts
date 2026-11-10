@@ -48,19 +48,84 @@ describe('composeBrief', () => {
     expect(b.body).toContain('6 tasks are past their due date.');
   });
 
-  it('answers the question first for someone waiting on a reply', () => {
-    const b = composeBrief({
+  /**
+   * Someone waiting on a decision gets an ACKNOWLEDGEMENT and nothing else.
+   *
+   * This replaces a test that asserted the opposite, and the old behaviour is the reason:
+   * the composer opened "Answering your message first.", quoted the intern's own email back at
+   * them, and then never answered it, because the answer is a judgement and no judgement is in the
+   * database. On 10 Nov 2026 Quincy received exactly that, with the quote cut off mid-word at
+   * "the live expor" because `open_questions[].text` is a truncated snippet, followed by a
+   * statistics dump and a presentation prompt he had not asked for.
+   *
+   * A short honest note that a person finishes beats a long one that looks complete and says
+   * nothing.
+   */
+  describe('someone waiting on a decision', () => {
+    const waiting = (over = {}) => composeBrief({
       intern: intern({
-        first_name: 'Mihret',
+        first_name: 'Quincy',
         triage: { tier: 'blocked_waiting_on_ali', reason: 'waiting' },
-        open_questions: [{ received_at: '2026-11-10T04:41:30.000Z', subject: 'PR #2 and the Aleem access', text: 'Should I wait for the platform sync?', kind: 'question' }],
+        open_questions: [{ received_at: '2026-11-10T04:41:30.000Z', subject: 'PR #2 and the Aleem access', text: 'Should I wait for the platform sync and the live expor', kind: 'question' }],
+        ...over,
       }),
       deadline: null,
       now: NOW,
     });
-    expect(b.body).toContain('Answering your message first.');
-    expect(b.body.indexOf('Should I wait for the platform sync?')).toBeLessThan(b.body.indexOf('Demo Walkthrough'));
-    expect(b.subject).toBe('Re: PR #2 and the Aleem access');
+
+    it('names the question by subject and date, and says plainly it is unanswered', () => {
+      const b = waiting();
+      expect(b.body).toContain('"PR #2 and the Aleem access"');
+      expect(b.body).toContain('still sitting with me and I have not answered it yet');
+      expect(b.subject).toBe('Re: PR #2 and the Aleem access');
+    });
+
+    /** Never quote their own words back: the snippet is truncated and it reads as not listening. */
+    it('does NOT quote the question text, which is a truncated snippet', () => {
+      expect(waiting().body).not.toContain('Should I wait for the platform sync');
+      expect(waiting().body).not.toContain('Answering your message first.');
+    });
+
+    it('does not staple on an artifact ask they never asked for', () => {
+      expect(waiting().body).not.toContain('Demo Walkthrough');
+      expect(waiting().body).not.toContain('The prompt is attached');
+    });
+
+    it('does not dump statistics at someone who is blocked on us', () => {
+      const b = waiting();
+      expect(b.body).not.toContain('Where you are:');
+      expect(b.body).not.toContain('Training is at week');
+    });
+
+    /** The card has to say this out loud, or the row looks like an ordinary review. */
+    it('warns that this one needs a human answer', () => {
+      expect(waiting().warnings.join(' ')).toContain('needs YOUR answer');
+    });
+
+    it('stays short enough to be finished by hand', () => {
+      expect(waiting().body.length).toBeLessThan(600);
+    });
+  });
+
+  /**
+   * `most_urgent` and its overflow are written for Ali's dashboard, ABOUT the intern. Pasting them
+   * into a message addressed TO the intern flips the audience: Quincy, who was waiting on Ali, was
+   * told "You owe a reply".
+   */
+  it('never addresses dashboard items to the intern', () => {
+    for (const tier of ['overdue_backlog', 'quiet', 'on_track', 'no_project_at_day_N'] as TriageTier[]) {
+      const b = composeBrief({
+        intern: intern({
+          triage: { tier, reason: 'because' },
+          most_urgent: { kind: 'reply', label: 'You owe a reply', detail: 'The Capability Map (0d waiting)' },
+          most_urgent_overflow: [{ kind: 'next', label: 'Up next', detail: 'Agent watch R2' } as never],
+        }),
+        deadline: null,
+        now: NOW,
+      });
+      expect(b.body).not.toContain('What the platform has against your name');
+      expect(b.body).not.toContain('You owe a reply');
+    }
   });
 
   it('does not put a day-50 no-project intern in the same shape as a quiet builder', () => {

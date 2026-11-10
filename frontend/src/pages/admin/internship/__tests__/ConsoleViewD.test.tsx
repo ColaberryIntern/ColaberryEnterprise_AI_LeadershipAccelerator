@@ -333,6 +333,29 @@ describe('preparing every message at once', () => {
     expect(text).toContain('overdue');
   });
 
+  /**
+   * The rows where the composer deliberately stops. The generated text only acknowledges their
+   * question, so the card has to say that on its face or the row looks like an ordinary review and
+   * a holding note goes out as if it were an answer.
+   */
+  it('tells you to write it yourself when the intern is waiting on your decision', async () => {
+    mockFetchAll.mockResolvedValue({
+      generatedAt: new Date().toISOString(),
+      attempts: [{
+        ok: true,
+        hold: null,
+        brief: brief({
+          enrollmentId: 'e-gov', tier: 'blocked_waiting_on_ali',
+          body: 'Quincy,\n\nYour message of November 10 is still sitting with me and I have not answered it yet.',
+        }),
+      }],
+    });
+    await mount(<ConsoleViewD rows={[row({ enrollment_id: 'e-gov', name: 'Omolola Makinde' })]} />);
+    await click(buttonText('Prepare the messages'));
+    expect(container.textContent).toContain('Write this one yourself');
+    expect(container.textContent).toContain('It does not answer it');
+  });
+
   it('says what went wrong if preparing fails, and stays on the roster', async () => {
     mockFetchAll.mockRejectedValue({ response: { data: { error: 'The report pipeline is down.' } } });
     await prepare();

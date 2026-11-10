@@ -158,8 +158,18 @@ const VIDEOS_SQL = `
 
 // The presentation tasks on each intern's projects (PREP-1..5 = the five recorded presentation
 // types, PREP-6 = Demo Day), with the due dates the build schedule gave them.
+//
+// `due_baseline_on` FIRST, and `due_on` only as a fallback. `due_on` is back-dated on gov projects
+// to a cohort schedule that can predate the project itself: measured on production 2026-11-10,
+// 12 of 348 PREP rows disagree between the two columns, by as much as 58 days. This query feeds
+// `presentationDue()`, whose text goes straight into an intern's message as a statement of fact,
+// so reading the wrong column tells somebody their work was due a month before it was. The case
+// study deadline in `nudgeBrief/deadline.ts` already reads the baseline for exactly this reason;
+// the two paths describing the same PREP task must not disagree inside one email.
 const PREP_SQL = `
-  SELECT p.enrollment_id, t.story_id, t.title, t.status, t.due_on, t.verified_at
+  SELECT p.enrollment_id, t.story_id, t.title, t.status,
+         COALESCE(t.due_baseline_on, t.due_on) AS due_on,
+         t.verified_at
     FROM student_tasks t JOIN projects p ON p.id = t.project_id
    WHERE p.enrollment_id IN (:enrollmentIds) AND t.story_id LIKE 'PREP-%'
    ORDER BY t.story_id`;

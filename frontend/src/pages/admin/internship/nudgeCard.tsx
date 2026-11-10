@@ -193,6 +193,18 @@ export const NudgeCard: React.FC<{
 
       <DeadlineLine brief={brief} />
 
+      {/* Said on the FACE of the card, not inside the expanded panel, because it changes whether
+          this row is a review or a piece of writing. These are the rows where the composer
+          deliberately stops: the answer is a judgement and no judgement is in the database, so a
+          generated paragraph here would be a guess wearing Ali's name. */}
+      {brief.tier === 'blocked_waiting_on_ali' && (
+        <p className="aint-yours">
+          <i className="ri-quill-pen-line" aria-hidden="true" />
+          <strong>Write this one yourself.</strong> They are waiting on your decision, so the text
+          below only acknowledges their message. It does not answer it.
+        </p>
+      )}
+
       <div className="aint-nchips">
         {chips.map((c) => (
           <span key={c.label} className={`aint-mchip ${c.tone ? `tone-${c.tone}` : ''}`} title={c.title}>
