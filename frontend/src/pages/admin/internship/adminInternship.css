@@ -488,6 +488,16 @@
 .aint-nstrip-cells { display: flex; gap: 2px; flex-wrap: nowrap; overflow: hidden; }
 .aint-nstrip-cells .aint-hc { width: 9px; height: 16px; border-radius: 2px; cursor: default; }
 
+/* "Write this one yourself": the rows where the composer stops on purpose. Styled as an
+ * instruction to the reader, not as an error, because nothing has gone wrong. */
+.aint-yours {
+  margin: 0; padding: var(--space-xs) var(--space-sm); border-radius: var(--r-6, 6px);
+  background: var(--cherry-bg, #FFF0F1); border-left: 3px solid var(--color-primary);
+  font-size: var(--font-size-sm); color: var(--color-text);
+  display: flex; gap: var(--space-xs); align-items: baseline; flex-wrap: wrap;
+}
+.aint-yours i { color: var(--color-primary); }
+
 .aint-reason { margin: 0; font-size: var(--font-size-sm); color: var(--color-text); }
 .aint-hold { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-light); display: flex; gap: var(--space-xs); align-items: baseline; flex-wrap: wrap; }
 
