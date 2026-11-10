@@ -6,12 +6,21 @@
  * projects, 3 gov contract projects), and the admin page /admin/internship is the record. This
  * report reads the same services that page renders from (see services/internship/portfolioReport).
  *
- * One email: per intern, training/triage, 28-day activity, what they built lately, what they have
- * emailed Ali for, next steps, and the nudge Ali would send; plus "Your move" for Ali.
+ * One email every morning (Ali, 10 Nov 2026: "focus on the 10 most impactful and I can open the
+ * html and take the guided tour or just dive into the data"):
+ *   the email    the 10 most impactful things, "Your move", everyone at a glance (renderBriefing.ts)
+ *   attached     internship-report-<date>.html: the full report with the guided tour, one timeline
+ *                for everyone, filter by person, every intern card (dashboard/renderDashboard.ts)
+ *   attached     internship-report-<date>.json: the same data for an agent (sidecar/)
+ *
+ * Autopilot: reportingRegistry.js "Internship Portfolio Report", sendCT 08:00 with a 09:00 retry,
+ * every day, fired by the --ct-now runner cron. The ledger below makes the retry a no-op once sent.
  *
  * Run inside the backend container (cron):  node dist/scripts/internshipPortfolioReport.js
  *   --dry               build only, never send
- *   --out <file>        also write the HTML to <file>
+ *   --test-to <email>   send ONE test copy to <email> only (subject marked TEST, own idempotency
+ *                       key, no snapshot): never consumes or changes the real daily send
+ *   --out <file>        also write the email HTML to <file>
  *   --json-out <file>   also write the collected facts to <file>
  *   --from-json <file>  render from saved facts (no DB); never sends
  *   --no-llm            skip the email-asks digest
@@ -19,8 +28,7 @@
  *   --sidecar-out <f>   also write the JSON sidecar to <f> (it is always attached to the email as
  *                       internship-report-<YYYY-MM-DD>.json; contract in portfolioReport/sidecar/types.ts)
  *   --dashboard-out <f> also write the interactive page to <f> (always attached as
- *                       internship-report-<YYYY-MM-DD>.html: filter by person or tier, the 10 most
- *                       insightful communications, every suggested prompt with copy buttons)
+ *                       internship-report-<YYYY-MM-DD>.html)
  *
  * Sidecar: built from the same composed report the HTML renders from. A real send also saves a
  * snapshot (internship_report_snapshots) that the next run's `delta` compares against; dry runs
@@ -39,7 +47,8 @@ import { collectInternshipPortfolio } from '../services/internship/portfolioRepo
 import { composeInternshipPortfolio } from '../services/internship/portfolioReport/compose';
 import { narrateAsks, type ChatClient } from '../services/internship/portfolioReport/narrate';
 import { summarizeInterns } from '../services/internship/portfolioReport/summary';
-import { renderInternshipPortfolio } from '../services/internship/portfolioReport/render';
+import { jsonFileName, pageFileName, renderBriefing } from '../services/internship/portfolioReport/renderBriefing';
+import { centralDate, sendPlanFor, testSubject, type SendPlan } from '../services/internship/portfolioReport/sendPlan';
 import type { CollectedPortfolio } from '../services/internship/portfolioReport/types';
 import { claimSend, recordSendFailure, recordSendSuccess } from '../services/email/idempotentSend';
 import { lintAliEmail } from '../services/email/aliEmailStyle';
@@ -52,22 +61,15 @@ const argv = process.argv.slice(2);
 const has = (f: string): boolean => argv.includes(f);
 const opt = (f: string): string | null => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] ?? null : null; };
 
-const TO = process.env.INTERN_REPORT_TO || 'ali@colaberry.com';
-const CC = (process.env.INTERN_REPORT_CC ?? 'alimuwwakkil@gmail.com,ram@colaberry.com').split(',').map((s) => s.trim()).filter(Boolean);
-
 function log(event: string, context: Record<string, unknown> = {}, level: 'info' | 'warn' | 'error' = 'info'): void {
   console.log(JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'internship-portfolio-report', event, context }));
 }
 
-export function centralDate(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-}
-
 interface Attachment { filename: string; content: string; contentType: string }
 
-async function send(subject: string, html: string, text: string, now: Date, attachments: Attachment[]): Promise<'sent' | 'skipped'> {
-  const businessEventId = `internship-report-${centralDate(now)}`;
-  const claim = await claimSend({ recipient: TO, subject, businessEventId });
+async function send(subject: string, html: string, text: string, plan: SendPlan, attachments: Attachment[]): Promise<'sent' | 'skipped'> {
+  const { to, cc, businessEventId } = plan;
+  const claim = await claimSend({ recipient: to, subject, businessEventId });
   if (!claim.granted) { log('send_skipped', { reason: claim.reason, businessEventId }); return 'skipped'; }
   const transport = nodemailer.createTransport({
     host: 'smtp.mandrillapp.com', port: 587, connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000,
@@ -75,11 +77,11 @@ async function send(subject: string, html: string, text: string, now: Date, atta
   });
   try {
     const r = await transport.sendMail({
-      from: '"Ali Muwwakkil" <ali@colaberry.com>', to: TO, cc: CC, subject, html, text, attachments,
+      from: '"Ali Muwwakkil" <ali@colaberry.com>', to, cc, subject, html, text, attachments,
       headers: { 'X-MC-Track': 'none', 'X-MC-AutoText': 'false' },
     });
     await recordSendSuccess(claim.ledgerId, r.messageId);
-    log('sent', { businessEventId, messageId: r.messageId, cc: CC.length });
+    log('sent', { businessEventId, messageId: r.messageId, cc: cc.length, attachments: attachments.map((a) => a.filename) });
     return 'sent';
   } catch (err) {
     const e = err as Error;
@@ -114,11 +116,7 @@ async function main(): Promise<number> {
   // After the asks, so the paragraph can use them.
   log('summaries', await summarizeInterns(report, client));
 
-  const { subject, html, text } = renderInternshipPortfolio(report);
-  const out = opt('--out');
-  if (out) { fs.writeFileSync(out, html); log('written', { file: out }); }
-
-  // The JSON sidecar: built from the SAME report object the HTML was just rendered from.
+  // The JSON sidecar: built from the composed report; the email and the page both render from it.
   const reportDate = centralDate(reportNow);
   const previous = useStore ? await loadPreviousSnapshot(reportDate) : null;
   const sidecar = buildSidecar(report, { reportDate, previous, lastOutbound: data.lastOutbound ?? [], conversations: data.conversations ?? [] });
@@ -127,15 +125,23 @@ async function main(): Promise<number> {
   if (problems.length) throw new Error(`ContractViolation: sidecar ${problems.slice(0, 5).join('; ')}`);
   const sidecarOut = opt('--sidecar-out');
   if (sidecarOut) { fs.writeFileSync(sidecarOut, sidecarText); log('sidecar_written', { file: sidecarOut, previous: previous?.report_date ?? null }); }
-  // The interactive page (filter by person or tier, top communications, every prompt in full),
-  // rendered ONLY from the sidecar, so it cannot disagree with the JSON beside it.
+  // The interactive page: the full report (guided tour, one timeline for everyone, filter by
+  // person, every intern card), from the same report and sidecar.
   const dashboard = renderDashboard(report, sidecar);
   const dashboardOut = opt('--dashboard-out');
   if (dashboardOut) { fs.writeFileSync(dashboardOut, dashboard); log('dashboard_written', { file: dashboardOut }); }
   const attachments: Attachment[] = [
-    { filename: `internship-report-${reportDate}.html`, content: dashboard, contentType: 'text/html; charset=utf-8' },
-    { filename: `internship-report-${reportDate}.json`, content: sidecarText, contentType: 'application/json; charset=utf-8' },
+    { filename: pageFileName(reportDate), content: dashboard, contentType: 'text/html; charset=utf-8' },
+    { filename: jsonFileName(reportDate), content: sidecarText, contentType: 'application/json; charset=utf-8' },
   ];
+
+  // The email: the 10 most impactful things, Ali's moves and everyone at a glance; the page is attached.
+  const testTo = opt('--test-to');
+  const briefing = renderBriefing(report, sidecar);
+  const subject = testTo ? testSubject(briefing.subject) : briefing.subject;
+  const { html, text } = briefing;
+  const out = opt('--out');
+  if (out) { fs.writeFileSync(out, html); log('written', { file: out }); }
 
   const lint = lintAliEmail({ subject, html, text });
   // Only the dash rule is a gate here: the others (branded signature, one full name) are for mail
@@ -144,9 +150,10 @@ async function main(): Promise<number> {
 
   let outcome: string = 'dry';
   if (!has('--dry') && !fromJson) {
-    outcome = await send(subject, html, text, now, attachments);
-    // Only a real send moves the delta baseline; a dry run must never change tomorrow's comparison.
-    if (outcome === 'sent') log('snapshot', { saved: await saveSnapshot(snapshotOf(sidecar), sidecarText), report_date: reportDate });
+    outcome = await send(subject, html, text, sendPlanFor(now, testTo), attachments);
+    // Only the real daily send moves the delta baseline; a dry run or a test copy never changes
+    // tomorrow's comparison.
+    if (outcome === 'sent' && !testTo && useStore) log('snapshot', { saved: await saveSnapshot(snapshotOf(sidecar), sidecarText), report_date: reportDate });
   }
   log('done', { duration_ms: Date.now() - started, outcome, totals: report.totals });
   // The instrumented OpenAI client records each call with a fire-and-forget emitAiEvent (no flush

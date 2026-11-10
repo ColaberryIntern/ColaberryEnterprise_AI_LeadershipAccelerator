@@ -16,6 +16,7 @@
  * Escaping: all markup comes from the email renderers (every value through esc()) or from esc()
  * here; the tour data is embedded with safeJson, so no text can close the script tag.
  */
+import { brandHeader } from '../brand';
 import { STATUS, esc, glanceRow, internCard, kpi } from '../render';
 import { STRIP_COLOR, chip, fmtDay, legendHtml, topNextHtml } from '../renderTimeline';
 import type { PortfolioReport } from '../types';
@@ -62,8 +63,7 @@ function tourList(s: Sidecar): string {
 const CSS = `
 :root{--navy:${NAVY};--red:${RED};--muted:#64748b;--line:#e2e8f0;--bg:#f1f5f9}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Roboto,Segoe UI,Arial,sans-serif;color:#1e293b}
-header{background:var(--navy);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-header .k{font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.8}header h1{margin:2px 0;font-size:22px}header .sub{font-size:13px;opacity:.85}
+header{background:var(--navy);border-bottom:4px solid var(--red)}header > table{max-width:1240px;margin:0 auto}
 .tour-btn{background:var(--red);color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer}
 .layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:16px;max-width:1240px;margin:0 auto;padding:16px}
 #side{position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px}
@@ -114,8 +114,8 @@ export function renderDashboard(report: PortfolioReport, s: Sidecar): string {
   const tourData = { highlights: s.highlights };
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Internship Report ${esc(s.report_date)}</title><style>${CSS}</style></head><body>
-<header><div><div class="k">Colaberry AI Internship</div><h1>Internship Report</h1><div class="sub">${esc(s.report_date)} &middot; ${esc(t.interns)} interns &middot; last ${esc(s.window_days)} days &middot; click any person to filter everything</div></div>
-<button type="button" class="tour-btn" id="tour-start"${s.highlights.length ? '' : ' disabled'}>&#9654; Take the guided tour (${s.highlights.length})</button></header>
+<header>${brandHeader('Internship Report', `${s.report_date} · ${t.interns} interns · last ${s.window_days} days · click any person to filter everything`,
+    `<button type="button" class="tour-btn" id="tour-start"${s.highlights.length ? '' : ' disabled'}>&#9654; Take the guided tour (${s.highlights.length})</button>`)}</header>
 <div class="layout">
 <aside id="side" aria-label="Interns"><input class="search" type="search" placeholder="Find a person" aria-label="Find a person">
 <button type="button" class="person on" data-person=""><span>All interns (${cards.length})<small>the whole cohort</small></span></button>${people}</aside>
