@@ -131,17 +131,20 @@ const REPORTS = [
     description: 'Daily intern nudge digest. BLACK = day 10+ exit cliff, RED 7-9d, ORANGE 4-6d, YELLOW 1-3d, GREEN today.',
   },
   {
-    name: 'Intern Weekly Report (last 10 days)',
-    scriptPath: 'backend/src/scripts/weeklyInternReport.js',
+    // Replaced the Basecamp-based "Intern Weekly Report" (weeklyInternReport.js, project 24865175)
+    // on 2026-11-09 per Ali: interns now build in repos on platform projects (7 agent + 3 gov), and
+    // /admin/internship is the record. Reads the same services that page renders from.
+    name: 'Internship Portfolio Report',
+    scriptPath: 'backend/src/scripts/runInternshipPortfolioReport.js', // host shim -> docker exec dist/scripts/internshipPortfolioReport.js
     args: [],
-    projectId: 24865175,
-    needsOpenai: true,
+    projectId: null, // platform DB, not Basecamp
+    needsOpenai: false, // the container has its own key; the email-asks digest degrades without one
     recipients: STANDARD_RECIPIENTS,
     cbRunnerState: null,
-    skipFlag: '--skip-intern-weekly',
-    cadence: { dayOfWeek: 6 }, // Saturday (matches existing cadence from "Week of May 23 - May 30" subject)
-    sendHourUTC: 13,  // 8 AM CT on Saturday (Saturday already has nothing else firing)
-    description: 'Weekly intern activity report. STRONG (3+ updates), LIGHT (1-2), INACTIVE (0) buckets over last 10 days.',
+    skipFlag: '--skip-internship-report',
+    cadence: 'daily', // Mon-Fri
+    sendHourUTC: 14,  // 8 AM CST / 9 AM CDT
+    description: 'Per intern: training/triage, 28-day activity, what they built lately (commits + verified stories), what they emailed Ali for, next steps and a suggested nudge. Grouped agent / gov / other. Idempotent per day via email_send_ledger.',
   },
   // ---- IPBC interview preparation ----
   {
