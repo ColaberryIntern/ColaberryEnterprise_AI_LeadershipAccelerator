@@ -22,10 +22,16 @@ import type { InternRow } from '../../../../services/adminInternConsoleApi';
  */
 
 const mockFetchBrief = jest.fn();
+const mockFetchAll = jest.fn();
 const mockSendBrief = jest.fn();
 jest.mock('../../../../services/internNudgeApi', () => ({
   fetchBrief: (...a: unknown[]) => mockFetchBrief(...a),
+  fetchAllBriefs: (...a: unknown[]) => mockFetchAll(...a),
   sendBriefMessage: (...a: unknown[]) => mockSendBrief(...a),
+  HOLD_LABEL: {
+    no_email: 'No address', unsendable_text: 'Would be refused',
+    paused: 'Paused', messaged_today: 'Written to today',
+  },
   TIER_LABEL: {
     blocked_waiting_on_ali: 'Waiting on you', no_project_at_day_N: 'No project',
     never_started_building: 'Never started', overdue_backlog: 'Overdue backlog',
@@ -52,14 +58,41 @@ const row = (over: Partial<InternRow> = {}): InternRow => ({
   ...over,
 });
 
+const SIGNALS = {
+  day: 50, percentBuilt: 40, storiesVerified: 4, storiesTotal: 10, overdueTasks: 6,
+  daysSinceBuildWork: 2, artifacts: 0, trainingWeeksCompleted: 3, trainingWeeksTotal: 10,
+  gateCleared: true, openQuestions: 0, hasRepo: true,
+};
+
 const brief = (over: Record<string, unknown> = {}) => ({
   enrollmentId: 'e-gov', name: 'Omolola Makinde', firstName: 'Omolola', email: 'o@example.test',
   tier: 'overdue_backlog', tierReason: 'Six tasks are past their due date.',
   trackLabel: 'Saratoga', projectName: 'Saratoga',
+  signals: SIGNALS, lastOutbound: null, inboundSince: null,
   deadline: { what: 'case study package', dueOn: '2026-11-12', daysLeft: 2, outstanding: ['Record Your Working-System Demo'] },
   promises: [], subject: '2 days to your case study package',
   body: 'Omolola,\n\nTwo days. Your case study package is due on November 12.',
   attachment: null, warnings: [], generatedAt: new Date().toISOString(),
+  ...over,
+});
+
+/** A prepared batch: one to send, one held, one that could not be generated at all. */
+const batch = (over: Record<string, unknown> = {}) => ({
+  generatedAt: new Date().toISOString(),
+  attempts: [
+    { ok: true, brief: brief(), hold: null },
+    {
+      ok: true,
+      brief: brief({
+        enrollmentId: 'e-agent', name: 'Kalkidan Bezabeh', firstName: 'Kalkidan',
+        email: 'k@example.test', tier: 'on_track', projectName: 'Admissions',
+        body: 'Kalkidan,\n\nYour Capability Map is the next thing.',
+        lastOutbound: { sentAt: new Date().toISOString(), subject: 'This morning' },
+      }),
+      hold: { reason: 'messaged_today', detail: 'We already wrote to them today, and they have not replied since.' },
+    },
+    { ok: false, enrollmentId: 'e-ali', name: 'Ali Muwwakkil', errorClass: 'UnknownInternError', error: 'No active intern with that enrollment' },
+  ],
   ...over,
 });
 
@@ -83,6 +116,7 @@ const buttonText = (text: string) =>
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchBrief.mockResolvedValue(brief());
+  mockFetchAll.mockResolvedValue(batch());
   mockSendBrief.mockResolvedValue({ enrollmentId: 'e-gov', email: 'o@example.test', outcome: 'sent', subject: 'x' });
 });
 
@@ -203,5 +237,114 @@ describe('what the row surfaces that the report never did', () => {
     await mount(<ConsoleViewD rows={[row({ enrollment_id: 'e-gov' })]} />);
     await click(buttonText('Write the message'));
     expect(container.textContent).toContain('no repository URL');
+  });
+});
+
+/**
+ * Preparing the whole day.
+ *
+ *     "we need a button that can prepare the messages that need to be sent out and also show of
+ *      the interns that shouldn't get messages."  (Ali, 10 Nov 2026)
+ *
+ * The three things that would make this button dangerous rather than useful, each asserted:
+ * that it does not send, that the held are shown rather than hidden, and that a row which could
+ * not be generated is reported rather than silently dropped from a count the manager then trusts.
+ */
+describe('preparing every message at once', () => {
+  /** The real roster shape: two interns and the operator account that sits on it alongside them. */
+  const theRoster = () => [
+    row({ enrollment_id: 'e-gov', name: 'Omolola Makinde' }),
+    row({ enrollment_id: 'e-agent', name: 'Kalkidan Bezabeh' }),
+    row({ enrollment_id: 'e-ali', name: 'Ali Muwwakkil' }),
+  ];
+
+  const prepare = async () => {
+    await mount(<ConsoleViewD rows={theRoster()} />);
+    await click(buttonText('Prepare the messages'));
+  };
+
+  it('prepares nothing until the button is pressed', async () => {
+    await mount(<ConsoleViewD rows={theRoster()} />);
+    expect(mockFetchAll).not.toHaveBeenCalled();
+    expect(buttonText('Prepare the messages')).toBeTruthy();
+  });
+
+  /** The single most important assertion on this screen. Preparing is a read. */
+  it('SENDS NOTHING', async () => {
+    await prepare();
+    expect(mockSendBrief).not.toHaveBeenCalled();
+  });
+
+  it('splits the roster into who to write to and who to leave alone', async () => {
+    await prepare();
+    const text = container.textContent ?? '';
+    expect(text).toContain('1 of 3 interns needs a message');
+    expect(text).toContain('Send these');
+    expect(text).toContain('Not sending');
+  });
+
+  /**
+   * The filter chips must reach the failures too. A row the chip excluded appearing under "could
+   * not be generated" would make the headline describe a different roster from the one on screen.
+   */
+  it('leaves a failed row out when the filter has excluded that intern', async () => {
+    await mount(<ConsoleViewD rows={[row({ enrollment_id: 'e-gov', name: 'Omolola Makinde' })]} />);
+    await click(buttonText('Prepare the messages'));
+    expect(container.textContent).not.toContain('No message could be generated');
+    expect(container.textContent).toContain('1 of 1 intern needs a message');
+  });
+
+  it('names the reason an intern is being held, not just that they are', async () => {
+    await prepare();
+    expect(container.textContent).toContain('We already wrote to them today');
+    expect(container.textContent).toContain('Written to today');
+  });
+
+  /** A held intern is a default, never a lock: their message is there and still sendable. */
+  it('still offers the held message, and sends it on the same two clicks', async () => {
+    await prepare();
+    await click(buttonText('Read it anyway'));
+    expect(container.textContent).toContain('Your Capability Map is the next thing.');
+    await click(buttonText('Send this message'));
+    expect(mockSendBrief).not.toHaveBeenCalled();
+    await click(buttonText('Yes, send it'));
+    expect(mockSendBrief).toHaveBeenCalledTimes(1);
+    expect(mockSendBrief.mock.calls[0][0]).toBe('e-agent');
+  });
+
+  /** The text already exists after a batch, so opening a card must not quietly re-run anything. */
+  it('does not re-fetch a single brief when a prepared card is opened', async () => {
+    await prepare();
+    await click(buttonText('Read and send'));
+    expect(mockFetchBrief).not.toHaveBeenCalled();
+  });
+
+  it('reports the rows it could not generate rather than dropping them from the count', async () => {
+    await prepare();
+    expect(container.textContent).toContain('No message could be generated');
+    expect(container.textContent).toContain('Ali Muwwakkil');
+  });
+
+  it('shows the evidence behind the message on the card, not only the words', async () => {
+    await prepare();
+    const text = container.textContent ?? '';
+    expect(text).toContain('Six tasks are past their due date.');
+    expect(text).toContain('2 days left');
+    expect(text).toContain('overdue');
+  });
+
+  it('says what went wrong if preparing fails, and stays on the roster', async () => {
+    mockFetchAll.mockRejectedValue({ response: { data: { error: 'The report pipeline is down.' } } });
+    await prepare();
+    expect(container.textContent).toContain('The report pipeline is down.');
+    expect(buttonText('Write the message')).toBeTruthy();
+  });
+
+  /** A brief for somebody the current filter has excluded must not appear under that filter. */
+  it('shows only the interns the active filter left on the roster', async () => {
+    await mount(<ConsoleViewD rows={[row({ enrollment_id: 'e-gov', name: 'Omolola Makinde' })]} />);
+    await click(buttonText('Prepare the messages'));
+    expect(container.textContent).toContain('Omolola Makinde');
+    expect(container.textContent).not.toContain('Kalkidan Bezabeh');
   });
 });

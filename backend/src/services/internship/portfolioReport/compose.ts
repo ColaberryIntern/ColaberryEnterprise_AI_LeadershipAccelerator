@@ -206,7 +206,7 @@ export function statusFor(c: CardCore): InternCard['status'] {
 export function nextStepsFor(c: CardCore): string[] {
   const steps: string[] = [];
   const p = c.project;
-  if (!p) steps.push('Start a project (Internship > Projects > Start a project).');
+  if (!p) steps.push('Start a project from the Projects tab in Internship.');
   if (p && p.overdue > 0) steps.push(`Clear ${plural(p.overdue, 'overdue task')}.`);
   if (p && p.next) steps.push(`Build next: "${p.next.title}"${p.next.dueOn ? ` (due ${p.next.dueOn})` : ''}.`);
   if (c.gov && c.gov.total > 0 && c.gov.verified < c.gov.total && c.gov.pct >= 75) {

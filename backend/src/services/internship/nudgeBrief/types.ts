@@ -39,6 +39,37 @@ export interface BriefPromise {
   readonly quote: string;
 }
 
+/**
+ * The numbers behind the message, carried so the screen can show the evidence next to the words.
+ *
+ * Every one of these already decided something in the body. Surfacing them is not decoration: a
+ * manager who is about to send "you have been quiet for nineteen days" should be able to see the
+ * nineteen, and the activity strip it came from, without opening another tab. Nothing here is
+ * computed on the client, so the chart and the paragraph can never disagree.
+ */
+export interface BriefSignals {
+  readonly day: number | null;
+  readonly percentBuilt: number | null;
+  readonly storiesVerified: number | null;
+  readonly storiesTotal: number | null;
+  readonly overdueTasks: number | null;
+  /** Null means no commit or verified story has ever been seen, which is not the same as zero. */
+  readonly daysSinceBuildWork: number | null;
+  readonly artifacts: number;
+  readonly trainingWeeksCompleted: number;
+  readonly trainingWeeksTotal: number;
+  readonly gateCleared: boolean;
+  /** Their questions still waiting on an answer from us. */
+  readonly openQuestions: number;
+  readonly hasRepo: boolean;
+}
+
+/** Our own last message to them. The one fact that decides whether a second one today is a nudge. */
+export interface BriefLastOutbound {
+  readonly sentAt: string;
+  readonly subject: string | null;
+}
+
 export interface NudgeBrief {
   readonly enrollmentId: string;
   readonly name: string;
@@ -48,6 +79,16 @@ export interface NudgeBrief {
   readonly tierReason: string;
   readonly trackLabel: string;
   readonly projectName: string | null;
+  readonly signals: BriefSignals;
+  readonly lastOutbound: BriefLastOutbound | null;
+  /**
+   * When they wrote back AFTER our last message, the time of that reply.
+   *
+   * This is the difference between "we already messaged them today, leave them alone" and "we
+   * messaged them today and they answered, so now we owe them one". Collapsing the two is how a
+   * reply gets left sitting while the queue reports the day as done.
+   */
+  readonly inboundSince: string | null;
   readonly deadline: BriefDeadline | null;
   readonly promises: readonly BriefPromise[];
   readonly subject: string;

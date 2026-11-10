@@ -338,3 +338,212 @@
 }
 .aint-tstrip.tr-project > span.on { background: var(--track-project); border-color: var(--track-project); }
 .aint-tstrip.tr-certification > span.on { background: var(--track-certification); border-color: var(--track-certification); }
+
+/* ── Intern Console · View D, Nudges ────────────────────────────────────────────
+ *
+ * This view shipped with no stylesheet at all: every class it used had zero rules, so a screen
+ * built to be read as a report rendered at browser defaults. That is what "formatting is terrible"
+ * meant, and it is the reason this block exists.
+ *
+ * Three rules it holds itself to, all of them the same rule as Views A to C:
+ *
+ *   1. **One tone scale, shared.** `tone-ok | tone-warn | tone-alert` maps to the same three
+ *      activity tokens the KPI tiles and the pace pills use. A tier, a deadline and a metric chip
+ *      that all mean "this is late" are the same red, because a second red would read as a second
+ *      meaning.
+ *   2. **Colour is never the only signal.** Every toned element carries an icon and a word as well,
+ *      so the card survives a colourblind reader, a printout and forced-colours mode intact.
+ *   3. **Tokens, never hex.** The brand bridge redefines these at runtime; a hardcoded colour here
+ *      would drift away from the rest of the console the first time the palette moves.
+ */
+
+.aint-nudges { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.aint-nhead { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm); }
+.aint-nhead-t { display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap; }
+.aint-nhead-t h2 { margin: 0; font-size: var(--font-size-lg); display: flex; align-items: center; gap: var(--space-xs); }
+.aint-nhead-t .aint-btn { margin-left: auto; }
+
+/* The headline is the screen's answer. It gets the size that implies. */
+.aint-headline {
+  margin: 0; font-size: var(--font-size-lg); font-weight: 700;
+  color: var(--color-text); letter-spacing: -0.01em;
+}
+
+.aint-note { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-light); max-width: 76ch; }
+
+.aint-btn.primary {
+  background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 600;
+}
+.aint-btn.primary:hover:not(:disabled) { background: var(--color-primary-light); border-color: var(--color-primary-light); color: #fff; }
+.aint-btn.primary:disabled:hover { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+.aint-btn.lg { padding: 8px 16px; font-size: var(--font-size-md); }
+.aint-btn i { margin-right: 2px; }
+
+/* The one spinner on this screen, on the button that is actually doing the waiting. */
+.aint-btn .ri-loader-4-line { display: inline-block; animation: aint-spin 1s linear infinite; }
+@keyframes aint-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .aint-btn .ri-loader-4-line { animation: none; } }
+
+/* ── the tier bar ───────────────────────────────────────────────────────────── */
+
+.aint-tierbar { display: flex; flex-direction: column; gap: var(--space-xs); }
+/* 2px of surface between segments, so two adjacent tones read as two bands and not a gradient. */
+.aint-tierbar .aint-seg { height: 14px; gap: 2px; background: transparent; }
+.aint-tierbar .aint-seg > span { border-radius: 3px; min-width: 4px; }
+.aint-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+.aint-seg > span.tone-ok, .aint-swatch.tone-ok { background: var(--activity-green); }
+.aint-seg > span.tone-warn, .aint-swatch.tone-warn { background: var(--activity-orange); }
+.aint-seg > span.tone-alert, .aint-swatch.tone-alert { background: var(--activity-red); }
+
+/* ── sections ───────────────────────────────────────────────────────────────── */
+
+.aint-nsec { display: flex; flex-direction: column; gap: var(--space-sm); }
+.aint-nsec h3 {
+  margin: 0; font-size: var(--font-size-md); display: flex; align-items: center; gap: var(--space-xs);
+  color: var(--color-text);
+}
+.aint-count {
+  background: var(--color-bg-alt); color: var(--color-text-light); border-radius: var(--r-pill);
+  padding: 0 8px; font-size: var(--font-size-sm); font-weight: 700;
+}
+.aint-nsec.held h3 { color: var(--color-text-light); }
+.aint-holdchips { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+
+/* ── one intern's card ──────────────────────────────────────────────────────── */
+
+.aint-ncard {
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-border); border-radius: var(--r-8, 8px);
+  padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-sm);
+}
+/* The left edge is the conditional format: the card's urgency, readable down a scrolling column. */
+.aint-ncard.tone-ok { border-left-color: var(--activity-green); }
+.aint-ncard.tone-warn { border-left-color: var(--activity-orange); }
+.aint-ncard.tone-alert { border-left-color: var(--activity-red); }
+/* Held cards recede rather than disappear. They are still readable, still sendable. */
+.aint-ncard.held { background: var(--color-bg-alt); border-left-color: var(--color-border); }
+
+.aint-ncard-h { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.aint-ncard-id { display: flex; flex-direction: column; min-width: 0; }
+
+.aint-avatar {
+  width: 36px; height: 36px; border-radius: var(--r-pill); flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-sm); font-weight: 700; color: #fff;
+  background: var(--color-text-light);
+}
+.aint-avatar.tone-ok { background: var(--activity-green); }
+.aint-avatar.tone-warn { background: var(--activity-orange); }
+.aint-avatar.tone-alert { background: var(--activity-red); }
+
+.aint-pill.tier, .aint-pill.hold, .aint-pill.resting {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; white-space: nowrap;
+}
+.aint-pill.tier.tone-ok { background: var(--color-success-bg); color: var(--activity-green); }
+.aint-pill.tier.tone-warn { background: var(--color-warning-bg); color: var(--activity-orange); }
+.aint-pill.tier.tone-alert { background: var(--color-danger-bg); color: var(--activity-red); }
+.aint-pill.hold { background: var(--color-bg-alt); color: var(--color-text-light); margin-left: 0; }
+.aint-pill.resting { background: var(--color-bg-alt); color: var(--color-text-light); }
+
+/* ── the deadline line ──────────────────────────────────────────────────────── */
+
+.aint-deadline {
+  margin: 0; padding: var(--space-xs) var(--space-sm); border-radius: var(--r-6, 6px);
+  font-size: var(--font-size-sm); display: flex; align-items: center; gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+.aint-deadline.tone-ok { background: var(--color-success-bg); color: var(--color-text); }
+.aint-deadline.tone-warn { background: var(--color-warning-bg); color: var(--color-text); }
+.aint-deadline.tone-alert { background: var(--color-danger-bg); color: var(--color-text); }
+.aint-deadline.tone-alert strong { color: var(--activity-red); }
+.aint-deadline.tone-warn strong { color: var(--activity-orange); }
+
+/* ── the evidence chips ─────────────────────────────────────────────────────── */
+
+.aint-nchips { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+.aint-mchip {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--color-border); border-radius: var(--r-pill);
+  padding: 2px 9px; font-size: var(--font-size-xs); color: var(--color-text-light);
+  background: var(--color-bg);
+}
+/* The number is ink; only the border and the icon carry the judgement. A coloured numeral next to
+ * a coloured numeral stops being a number and becomes a traffic light. */
+.aint-mchip b { color: var(--color-text); font-weight: 700; }
+.aint-mchip.tone-ok { border-color: var(--activity-green); }
+.aint-mchip.tone-ok i { color: var(--activity-green); }
+.aint-mchip.tone-warn { border-color: var(--activity-orange); }
+.aint-mchip.tone-warn i { color: var(--activity-orange); }
+.aint-mchip.tone-alert { border-color: var(--activity-red); background: var(--color-danger-bg); }
+.aint-mchip.tone-alert i { color: var(--activity-red); }
+
+/* ── the 28-day strip, View C's own cells at View D's scale ─────────────────── */
+
+.aint-nstrip { display: flex; align-items: center; gap: var(--space-sm); }
+.aint-nstrip-l, .aint-nstrip-n { font-size: var(--font-size-xs); color: var(--color-text-light); }
+.aint-nstrip-n { font-weight: 700; color: var(--color-text); }
+.aint-nstrip-cells { display: flex; gap: 2px; flex-wrap: nowrap; overflow: hidden; }
+.aint-nstrip-cells .aint-hc { width: 9px; height: 16px; border-radius: 2px; cursor: default; }
+
+.aint-reason { margin: 0; font-size: var(--font-size-sm); color: var(--color-text); }
+.aint-hold { margin: 0; font-size: var(--font-size-sm); color: var(--color-text-light); display: flex; gap: var(--space-xs); align-items: baseline; flex-wrap: wrap; }
+
+.aint-ncard-f { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.aint-ncard-out { margin-left: auto; font-size: var(--font-size-sm); }
+
+/* ── the message itself ─────────────────────────────────────────────────────── */
+
+.aint-nexpand {
+  border-top: 1px solid var(--color-border); padding-top: var(--space-sm);
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.aint-brief { display: flex; flex-direction: column; gap: var(--space-sm); }
+.aint-field textarea {
+  border: 1px solid var(--color-border); border-radius: var(--r-6, 6px);
+  padding: 10px 12px; font-size: var(--font-size-sm); line-height: 1.55;
+  color: var(--color-text); background: var(--color-bg);
+  font-family: inherit; width: 100%; resize: vertical;
+}
+.aint-field textarea:focus-visible, .aint-field input:focus-visible {
+  outline: 3px solid var(--color-primary-light); outline-offset: 2px;
+}
+.aint-field input[readonly] { background: var(--color-bg-alt); color: var(--color-text-light); max-width: none; }
+
+.aint-promises {
+  border-left: 3px solid var(--activity-orange); background: var(--color-warning-bg);
+  padding: var(--space-xs) var(--space-sm); border-radius: 0 var(--r-6, 6px) var(--r-6, 6px) 0;
+  font-size: var(--font-size-sm);
+}
+.aint-promises ul { margin: var(--space-xs) 0 0; padding-left: var(--space-md); }
+
+.aint-warnings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: var(--font-size-sm); }
+.aint-warnings li { display: flex; gap: var(--space-xs); align-items: baseline; }
+
+.aint-arm { display: inline-flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+
+.aint-ok { color: var(--activity-green); }
+.aint-warn { color: var(--activity-orange); }
+.aint-alert { color: var(--activity-red); }
+.aint-muted { color: var(--color-text-light); font-size: var(--font-size-sm); margin: 0; }
+
+/* ── the unprepared roster ──────────────────────────────────────────────────── */
+
+.aint-nlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.aint-nrow {
+  border: 1px solid var(--color-border); border-radius: var(--r-8, 8px);
+  background: var(--color-bg); padding: var(--space-sm) var(--space-md);
+}
+.aint-nrow.on { border-color: var(--color-primary); }
+.aint-nrow-t { display: flex; align-items: center; gap: var(--space-sm); flex-wrap: wrap; }
+.aint-nrow-t .aint-btn { margin-left: var(--space-sm); }
+.aint-nrow .aint-nexpand { margin-top: var(--space-sm); }
+
+@media (max-width: 640px) {
+  .aint-nhead-t .aint-btn { margin-left: 0; width: 100%; }
+  .aint-pill.tier, .aint-pill.resting { margin-left: 0; }
+  .aint-ncard-out { margin-left: 0; }
+  .aint-nstrip-cells .aint-hc { width: 7px; }
+}
