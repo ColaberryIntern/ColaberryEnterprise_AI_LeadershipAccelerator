@@ -264,6 +264,9 @@ export function buildTimeline(i: TimelineInput): Timeline {
   if (asked) bits.push(`${plural(asked, 'ask')} (${plural(count('stuck'), 'blocker')}), ${plural(count('reply'), 'reply', 'replies')} from you`);
   if (stuckSpells) bits.push(`stuck ${stuckSpells === 1 ? 'once' : `${stuckSpells} times`}`);
   if (p && quietNow !== null) bits.push(quietNow === 0 ? 'built today' : `last build work ${quietNow}d ago`);
+  // Training counts as activity: without this a no-project intern who trains daily read as "nothing recorded".
+  const trainingDays = new Set(events.filter((e) => e.kind === 'training').map((e) => e.day)).size;
+  if (trainingDays) bits.push(`training on ${plural(trainingDays, 'day')}`);
   const story = `Last ${WINDOW_DAYS} days: ${bits.join('; ') || 'nothing recorded'}.`;
 
   // The 21-day strip: every kind that happened each day.

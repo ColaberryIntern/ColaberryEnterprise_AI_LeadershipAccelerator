@@ -28,6 +28,7 @@ import { sequelize } from '../config/database';
 import { collectInternshipPortfolio } from '../services/internship/portfolioReport/collect';
 import { composeInternshipPortfolio } from '../services/internship/portfolioReport/compose';
 import { narrateAsks, type ChatClient } from '../services/internship/portfolioReport/narrate';
+import { summarizeInterns } from '../services/internship/portfolioReport/summary';
 import { renderInternshipPortfolio } from '../services/internship/portfolioReport/render';
 import type { CollectedPortfolio } from '../services/internship/portfolioReport/types';
 import { claimSend, recordSendFailure, recordSendSuccess } from '../services/email/idempotentSend';
@@ -88,6 +89,8 @@ async function main(): Promise<number> {
     ? null
     : getInstrumentedOpenAI({ workflow_id: 'internship_portfolio_report' }, { timeout: 30000, maxRetries: 0 }) as unknown as ChatClient;
   log('asks_digest', await narrateAsks(report, client));
+  // After the asks, so the paragraph can use them.
+  log('summaries', await summarizeInterns(report, client));
 
   const { subject, html, text } = renderInternshipPortfolio(report);
   const out = opt('--out');

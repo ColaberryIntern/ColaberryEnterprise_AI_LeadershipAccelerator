@@ -80,7 +80,8 @@ function internCard(c: InternCard): string {
     <td style="vertical-align:top;text-align:right;white-space:nowrap">${pill(c.status.label, st)}</td>
   </tr></table>
   ${c.status.reasons.length ? `<div style="margin-top:6px">${c.status.reasons.map((r) => pill(r, reasonStyle(r))).join('')}</div>` : ''}
-  <div style="font-size:13px;color:#1e293b;margin-top:8px;font-weight:600">${esc(c.timeline.story)}</div>
+  <div style="font-size:14px;line-height:1.55;color:#0f172a;margin-top:10px;padding:10px 14px;background:#f8fafc;border-left:4px solid ${NAVY};border-radius:4px">${esc(c.summary)}</div>
+  <div style="font-size:12px;color:${MUTED};margin-top:6px">${esc(c.timeline.story)}</div>
   ${factsLine(c)}
   <div style="margin-top:10px">${stripHtml(c.timeline, 22)}</div>
   <div style="margin-top:10px">${timelineHtml(c.timeline)}</div>
@@ -162,6 +163,7 @@ ${report.groups.map((g) => `<tr><td style="padding:18px 0 6px"><div style="font-
     ...report.groups.flatMap((g) => ['', `== ${g.title.toUpperCase()} (${g.interns.length}) ==`, ...g.interns.flatMap((c) => [
       '',
       `${c.name} - ${c.trackLabel} - ${c.status.label}${c.status.reasons.length ? ` (${c.status.reasons.join('; ')})` : ''}`,
+      `  ${c.summary}`,
       `  ${c.timeline.story}`,
       // Same order as the HTML: what needs attention now, then newest to oldest.
       ...c.timeline.next.map((n) => `  NEXT ${n.label}: ${n.detail}`),

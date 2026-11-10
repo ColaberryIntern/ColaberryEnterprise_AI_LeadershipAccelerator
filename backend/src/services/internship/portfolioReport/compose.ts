@@ -11,6 +11,7 @@
 import type { ConsoleRosterRow } from '../internConsoleRoster';
 import type { AgentNudgeState } from '../agentNudgeComposer';
 import type { GovPipelineCard } from '../../factory/govPipeline';
+import { fallbackSummary } from './summary';
 import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
@@ -154,7 +155,7 @@ export function buildQuietDays(p: Pick<ProjectView, 'lastCommitDays' | 'lastVeri
   return Math.min(a, b);
 }
 
-type CardCore = Omit<InternCard, 'timeline' | 'status' | 'lately' | 'nextSteps' | 'nudge' | 'aliMoves' | 'asks' | 'asksFromModel'>;
+type CardCore = Omit<InternCard, 'summary' | 'summaryFromModel' | 'timeline' | 'status' | 'lately' | 'nextSteps' | 'nudge' | 'aliMoves' | 'asks' | 'asksFromModel'>;
 
 function latelyFacts(c: CardCore, lookbackDays: number): string[] {
   const out: string[] = [];
@@ -317,9 +318,11 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     emails: data.emails.filter((e) => lc(e.email) === email),
     replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
   });
-  return {
+  const card: InternCard = {
     ...core,
     timeline,
+    summary: '',
+    summaryFromModel: false,
     status,
     lately: latelyFacts(core, lookback),
     nextSteps: nextStepsFor(core),
@@ -328,6 +331,9 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     asks: [],
     asksFromModel: false,
   };
+  // Every card always has a paragraph; summary.ts upgrades it with the model when one is available.
+  card.summary = fallbackSummary(card);
+  return card;
 }
 
 export function composeInternshipPortfolio(

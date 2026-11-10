@@ -142,6 +142,9 @@ export interface InternCard {
   nudge: string;
   aliMoves: string[];
   timeline: Timeline;
+  /** 2-3 sentences: where they are and what part they are building (summary.ts). */
+  summary: string;
+  summaryFromModel: boolean;
   /** Filled by narrate.ts; empty when the model is unavailable. */
   asks: string[];
   asksFromModel: boolean;

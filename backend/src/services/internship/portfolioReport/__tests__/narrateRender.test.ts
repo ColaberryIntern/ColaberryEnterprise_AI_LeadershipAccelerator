@@ -84,10 +84,11 @@ describe('render: timeline order', () => {
     const { html } = renderInternshipPortfolio(composeInternshipPortfolio(data, { now: NOW }));
     const card = html.slice(html.indexOf('Kalkidan Bezabeh</div>'));
     const today = card.indexOf('TODAY');
-    const newest = card.indexOf('NEWEST work');
-    const oldest = card.indexOf('OLDEST work');
+    // Search after TODAY: the summary paragraph above the timeline may quote the newest work too.
+    const newest = card.indexOf('NEWEST work', today);
+    const oldest = card.indexOf('OLDEST work', today);
     expect(today).toBeGreaterThan(-1);
-    expect(today).toBeLessThan(newest);
+    expect(newest).toBeGreaterThan(today);
     expect(newest).toBeLessThan(oldest);
   });
 });

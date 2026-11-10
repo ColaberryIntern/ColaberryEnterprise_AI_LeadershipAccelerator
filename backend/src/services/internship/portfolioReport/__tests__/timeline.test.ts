@@ -153,6 +153,14 @@ describe('timeline: chapters, not a list of dates', () => {
     expect(rowMode([ev('reply'), ev('question')])).toBe('story');
   });
 
+  it('a no-project intern who trains is not "nothing recorded"', () => {
+    const t = buildTimeline(input({ project: null, activityDays: [
+      { date: dayKey(ago(3)), events: 2, by_category: { training: 2 } },
+      { date: dayKey(ago(1)), events: 1, by_category: { training: 1 } },
+    ] }));
+    expect(t.story).toBe('Last 21 days: training on 2 days.');
+  });
+
   it('the story line counts and pluralizes correctly', () => {
     const t = buildTimeline(input({
       project: project({ commitsRecent: [{ date: ago(1), message: 'a' }] }),
