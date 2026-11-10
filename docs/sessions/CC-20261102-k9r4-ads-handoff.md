@@ -1,17 +1,17 @@
 # Handoff — the ADS ladder: ad attribution and ad spend
 
-Six tickets in Ali Personal, bucket `7463955`. Four are closed, two are blocked on a permission
-that is not ours to grant. This page is the forward-looking state; the evidence for everything
-closed is in the four session logs listed at the bottom.
+Six tickets in Ali Personal, bucket `7463955`. Four are closed. ADS-4 is one production credential
+write from done, and ADS-6 is one toggle behind it. This page is the forward-looking state; the
+evidence for everything closed is in the four session logs listed at the bottom.
 
 | Ticket | Subject | State |
 |---|---|---|
-| [ADS-1](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338755) | Ad spend ledger + profitability report | **Closed.** Code on `main`. **Deploy not verified — see below.** |
+| [ADS-1](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338755) | Ad spend ledger + profitability report | **Closed.** Code on `main`, and the ledger is deployed — both tables exist in production. See below. |
 | [ADS-2](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338730) | Landing-page signup CTAs same-origin | **Closed.** Live, verified in production. |
 | [ADS-3](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338843) | UTM-to-lead attribution hardening | **Closed**, and its closing condition re-verified on live rows 2026-11-09. See below. |
-| ADS-4 (`10467338894`) | Meta token / ad-account read access | **Blocked on Sohail.** |
+| ADS-4 (`10467338894`) | Meta token / ad-account read access | **Grant landed 2026-11-10.** Now waits on a production credential write. See below. |
 | [ADS-5](https://app.basecamp.com/3945211/buckets/7463955/todos/10467338811) | Are the live ads tagged? | **Closed.** Answer: yes, since 2026-10-21. |
-| ADS-6 (`10467338921`) | Daily spend sync | **Blocked — depends on ADS-4.** |
+| ADS-6 (`10467338921`) | Daily spend sync | **Waits on ADS-4.** One toggle once the credentials prove out. |
 
 ## ADS-3 is closed, and its closing condition holds — plus how this page got it wrong twice
 
@@ -54,17 +54,18 @@ Two things that measurement turned up, which are worth more than the status:
 
 ADS-1's code is on `origin/main` — `backend/src/services/marketing/adSpend/*`,
 `backend/src/routes/admin/adSpendRoutes.ts`, `backend/src/services/scheduling/adSpendCrons.ts`,
-`frontend/src/pages/admin/marketing/adSpend/*` and `performance/AdProfitabilityCard.tsx`. That is
-a merge, not a deploy.
+`frontend/src/pages/admin/marketing/adSpend/*` and `performance/AdProfitabilityCard.tsx`.
 
-**Nobody in this session verified that production is running it, or that the two new tables exist
-there.** The change adds `marketing_spend_facts` and `marketing_spend_syncs` plus a cron. Before
-reporting any figure off that page, confirm in `accelerator_prod` that both tables exist and that
-the running image postdates the merge — and use the running **image's** build time, not
-`git HEAD` on the box, which lies about what is actually serving.
+**Production was checked on 2026-11-06 and the ledger really is deployed, not merely merged:**
+`marketing_spend_facts` and `marketing_spend_syncs` both exist in `accelerator_prod`, the
+`MetaAdSpendSync` agent row is present but disabled and has never run, and the ledger holds **0
+rows** because no sync has ever been attempted. So the tables are not the thing to go and check.
+If you ever do need to confirm what is actually serving, use the running **image's** build time,
+not `git HEAD` on the box, which lies about it.
 
 The report will render with zeroes regardless, because **the ledger is empty and stays empty until
-ADS-4 and ADS-6 land.** An empty report is the expected state right now, not a bug.
+ADS-4's credentials are set and ADS-6 is enabled.** An empty report is the expected state right
+now, not a bug.
 
 ## The finding that reframes the whole ladder
 
@@ -85,14 +86,36 @@ independently of our own tagging.
 
 ## What ADS-4 actually needs, precisely
 
-One click, in Business Settings, by someone with admin on the Meta business account — Sohail:
+**The Meta-side grant is done.** Sohail assigned ad account `661181097279671` to the system user
+`colaberry-ads-read` on 2026-11-10 — with Full access rather than the View performance that was
+asked for, which is harmless because the token itself is scoped `ads_read` and can only read. The
+grant matches the failure recorded on 2026-11-06 exactly: before it, `GET /act_661181097279671`
+and the insights call both returned `403 (#200) Ad account owner has NOT grant ads_management or
+ads_read permission`, and `GET /me/adaccounts` returned zero accounts. That is an unassigned
+asset, not a bad token and not a wrong scope.
 
-> Business Settings → Users → System Users → `colaberry-ads-read` → Add Assets → Ad Accounts →
-> `661181097279671` → **View performance** → Save
+**What remains is a production credential write**, which belongs to Ali or whoever holds prod env
+access:
 
-Two emails have gone out. No reply as of 2026-11-08. A third was deliberately not sent; this needs
-a different channel or Ali, not more email. ADS-4 is also not assigned, because Sohail is not a
-member of the Commercialization project — adding him is an open, unanswered question.
+> Set `META_ADS_ACCESS_TOKEN` and `META_AD_ACCOUNT_ID` on the production backend and restart it,
+> then press **Sync now** on the admin Ad spend page.
+
+Those two names are exact. The account id must be numeric; the code strips an `act_` prefix either
+way. **The ad account must bill in USD** — a non-USD account is refused outright with a
+`ContractViolation` rather than converted, and the first sync says so plainly, so there is nothing
+to pre-check in Ads Manager. **Sync now** works whether or not the scheduled agent is enabled,
+which makes it the cheap credential test; do not wait for the cron, which is `40 11 * * *`, i.e.
+**5:40 AM Central** in November and not 6. Setting the two values while the grant was still missing
+was deliberately avoided, because it would have made the admin panel report "configured" while
+every call still 403'd — a worse state than unconfigured, since it reads as working.
+
+Two identifiers for the same system user will look like a mismatch and are not one: Business
+Settings shows `colaberry-ads-read` as `61596490402413`, while `debug_token` reported
+`122093983407549680`. Same principal, two ID schemes — do not go chasing it.
+
+**Sohail was deliberately not added to the Commercialization project** (decided 2026-11-10), so he
+cannot see this ticket and it stays assigned to Ali. The remaining work is a prod credential write
+and an agent toggle, neither of which he could do anyway.
 
 **There is a Meta access token in this workstream's history.** It arrived by email and screenshot,
 was never written to production, and every script redacts it in log output. **Rotate it once the
@@ -150,7 +173,6 @@ Merged PRs for ADS-2: #3731 (`18d7f531`), #3754 (`91832aac`), #3756 (`2a8824fc`)
 
 - A follow-up ticket for **ad-level spend**. The sync pulls `level=campaign`, which makes
   cost-per-creative impossible to compute. Not filed.
-- Whether to add **Sohail to the Commercialization project** so ADS-4 can be assigned to him.
 - **An audit of everything that reads `leads.utm_source` directly.** The piped `fb|paid` form is
   still written (56 of ~490 tagged leads in the last 30 days) and is only canonicalized on read
   inside `adSpend/utmSource.ts`. Every other consumer — report, export, segment, dashboard — splits
