@@ -1,22 +1,18 @@
 /**
- * artifacts - PURE. For one intern: what they have published (with links that open it), which
- * artifacts should exist by now and do not, and which project artifacts to ASK them for, each with
- * a paste-ready Claude Code prompt and the nudge that asks for it.
+ * artifacts - PURE. For one intern: what they have actually published (with links that open it),
+ * and which project artifacts to ASK them for, each with a paste-ready Claude Code prompt and the
+ * nudge that asks for it.
  *
- * Ali, 9 Nov 2026: "assess when artifacts should have been created and suggest the prompt that
- * would help them build an artifact you know they could produce easily based on where they are
- * that would help me understand the project better... and matching nudges."
- *
- * "Should have been created" is measured against the curriculum, not guessed: every training week
- * has cards that produce an artifact (ADR, field guide, case study, prompt library, build artifact,
- * Claude Studio). A card in a week BEFORE the intern's current training week with nothing published
- * from it is overdue; one in the current week is due now.
+ * Ali, 9 Nov 2026: "suggest the prompt that would help them build an artifact you know they could
+ * produce easily based on where they are that would help me understand the project better... and
+ * matching nudges." Then: "only artifacts that have actually been produced", so nothing in the
+ * Artifacts list is a curriculum placeholder.
  *
  * The asks are chosen by rules from where the intern is (stuck, no published Command Center, a gov
  * build nearly done, an agent with many verified stories, no project), so the same facts always
  * produce the same asks, and each prompt is filled with their project, repo and stories.
  */
-import type { ArtifactAsk, ArtifactCard, ArtifactsView, InternCard, PublishedArtifact } from './types';
+import type { ArtifactAsk, ArtifactsView, InternCard, PublishedArtifact } from './types';
 
 export const ADMIN_BASE = 'https://enterprise.colaberry.ai';
 const MAX_ASKS = 3;
@@ -80,7 +76,7 @@ function isStuck(c: Ctx): boolean {
 }
 
 /** The project artifacts worth asking for right now, most useful first. */
-export function chooseAsks(c: Ctx, overdue: ArtifactsView['overdue']): ArtifactAsk[] {
+export function chooseAsks(c: Ctx): ArtifactAsk[] {
   const p = c.project;
   const out: ArtifactAsk[] = [];
   if (p && isStuck(c)) {
@@ -88,16 +84,6 @@ export function chooseAsks(c: Ctx, overdue: ArtifactsView['overdue']): ArtifactA
       'Shows exactly what is blocking the build, what they already tried, and the one thing they need from you, so one reply can unblock them.',
       'It lets me unblock you in one reply instead of a back-and-forth.',
       `Create docs/BLOCKER_BRIEF.md. Use git log, the open stories in the build plan, and any error you can reproduce now. Sections:\n1. What I am trying to finish${p.next ? ` (the story "${p.next.title}")` : ''}.\n2. Exactly where it fails: the command, file and error text.\n3. What I already tried and what happened.\n4. The one decision, access or answer I need from Ali.\n5. What I will do the moment it is unblocked.`));
-  }
-  if (overdue.length) {
-    const list = overdue.slice(0, 4).map((o) => `Week ${o.week} ${kindLabel(o.kind)}: ${o.title}`);
-    out.push({
-      key: 'overdue_training',
-      name: 'Overdue training artifacts',
-      why: `${overdue.length} training ${overdue.length === 1 ? 'artifact is' : 'artifacts are'} missing from weeks already behind them; each one is evidence of how they think, and certification and case studies draw on them.`,
-      prompt: `These cards are already in your portal. Open each one, complete it, and submit the artifact it asks for:\n${lines(list)}`,
-      nudge: `Hi ${c.firstName}, your portfolio is missing ${overdue.length === 1 ? 'one artifact' : `${overdue.length} artifacts`} from weeks you have already moved past (${list.slice(0, 2).join('; ')}${overdue.length > 2 ? '; ...' : ''}). Please finish ${overdue.length === 1 ? 'it' : 'them'} in the portal this week.`,
-    });
   }
   if (p && !p.commandCenterUrl) {
     const started = p.verifiedRecent.some((v) => /command center|story-000/i.test(v.title)) || p.commitsRecent.some((x) => /command center|story-000/i.test(x.message));
@@ -133,29 +119,14 @@ export function chooseAsks(c: Ctx, overdue: ArtifactsView['overdue']): ArtifactA
 }
 
 /**
- * Step 1 (needs only training): what they published, and which artifact cards are overdue or due.
- * The timeline needs this before it is built, and the asks need the timeline, hence two steps.
+ * What this intern actually published, newest first, each with the link that opens it. Nothing
+ * here is inferred from the curriculum: Ali, 9 Nov, "artifacts should not be placeholders...
+ * only artifacts that have actually been produced and are able to be connected to". (A first
+ * version also listed curriculum cards as "overdue" and "due this week"; those were the same
+ * template on every card, so they were removed.) Rows with nothing to open are filtered in SQL.
  */
-export function artifactProgress(
-  training: InternCard['training'], enrollmentId: string, published: PublishedArtifact[], cards: ArtifactCard[],
-  completed: Array<{ enrollment_id: string; card_id: string }> = [],
-): Omit<ArtifactsView, 'asks'> {
-  const mine = published.filter((a) => a.enrollment_id === enrollmentId)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  // A card counts as handled if it produced an artifact OR they completed it: a completed card
-  // with no artifact did not require one (measured 9 Nov: setup labs and some prompt labs), so
-  // calling it overdue would ask an intern for something that does not exist.
-  const made = new Set([
-    ...mine.map((a) => a.card_id).filter(Boolean),
-    ...completed.filter((x) => x.enrollment_id === enrollmentId).map((x) => x.card_id),
-  ]);
-  const currentWeek = training.nextWeek ? training.nextWeek.week : (training.weeksTotal ? training.weeksTotal + 1 : null);
-  const open = cards.filter((k) => k.week >= 1 && !made.has(k.card_id));
-  const shape = (k: ArtifactCard): { week: number; kind: string; title: string } => ({ week: k.week, kind: k.kind, title: k.title });
-  return {
-    published: mine.map((a) => ({ id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a) })),
-    overdue: currentWeek === null ? [] : open.filter((k) => k.week < currentWeek).map(shape),
-    dueNow: currentWeek === null ? [] : open.filter((k) => k.week === currentWeek).map(shape),
-    currentWeek,
-  };
+export function publishedArtifacts(enrollmentId: string, published: PublishedArtifact[]): ArtifactsView['published'] {
+  return published.filter((a) => a.enrollment_id === enrollmentId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .map((a) => ({ id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a) }));
 }

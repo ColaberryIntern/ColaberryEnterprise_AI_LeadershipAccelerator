@@ -50,8 +50,6 @@ export interface TimelineInput {
   awaitingReply: boolean;
   /** Artifacts they published, with the link that opens each (optional for older callers). */
   artifacts?: Array<{ at: string; kind: string; title: string; url: string }>;
-  /** Training artifacts overdue from weeks already behind them. */
-  overdueArtifacts?: number;
 }
 
 const ROUTINE = new Set<EventKind>(['commit', 'verified', 'artifact', 'training', 'update']);
@@ -263,7 +261,6 @@ export function buildTimeline(i: TimelineInput): Timeline {
   if (p?.next && !(p.overdueTasks ?? []).some((t) => t.title === p.next?.title)) {
     next.push({ kind: 'next', label: 'Up next', detail: `${p.next.title}${p.next.dueOn ? ` (due ${p.next.dueOn.slice(5)})` : ''}` });
   }
-  if (i.overdueArtifacts) next.push({ kind: 'artifact', label: `${i.overdueArtifacts} training ${i.overdueArtifacts === 1 ? 'artifact' : 'artifacts'} overdue`, detail: 'from weeks already behind them; see Artifacts below' });
   if (!i.training.gateClear && i.training.nextWeek) next.push({ kind: 'training', label: `Training Week ${i.training.nextWeek.week}`, detail: `${i.training.nextWeek.pct}% done; weeks 1-3 gate ${i.training.gateDone}/3` });
 
   // The one-line story.

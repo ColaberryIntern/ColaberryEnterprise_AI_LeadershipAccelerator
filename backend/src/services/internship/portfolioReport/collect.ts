@@ -25,7 +25,7 @@ import { internshipProjectReadiness } from '../internshipProjectReadiness';
 import { loadAgentNudgeStates } from '../agentNudgeState';
 import { listGovContractsFor } from '../../factory/govContractsList';
 import type { GovPipelineCard } from '../../factory/govPipeline';
-import type { AgentTab, ArtifactCard, CollectedPortfolio, FeedItem, InternEmail, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
+import type { AgentTab, CollectedPortfolio, FeedItem, InternEmail, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
 
 // One window for the whole story: commits, verified stories, emails and replies all cover 21 days.
 export const LOOKBACK_DAYS = 21;
@@ -83,30 +83,20 @@ const WE_WROTE_SQL = `
                          AND x.to_addresses::text ILIKE '%' || e || '%') AS last_we_wrote
     FROM unnest(ARRAY[:emails]::text[]) AS e`;
 
-// Every artifact an intern has published (content is fetched only by the viewer page, never here).
+// Every artifact an intern has published that has something to OPEN (content is fetched only by the
+// viewer page, never here): an HTML page, a claude.ai link, an uploaded file, or written content.
+// A row with none of those is a shell and is not shown (measured 9 Nov: 1 of 750, a practice
+// presentation with only metadata; all 137 uploaded files exist on disk).
 const ARTIFACTS_SQL = `
   SELECT r.id, r.enrollment_id, r.card_id, r.kind, r.title, r.created_at,
          NULLIF(r.content->>'artifact_url', '') AS external_url
     FROM runtime_portfolio_artifacts r
    WHERE r.enrollment_id IN (:enrollmentIds)
+     AND (coalesce(r.content->>'body_html', '') <> ''
+          OR r.content->>'artifact_url' LIKE 'https://%'
+          OR coalesce(r.content->>'stored_path', '') <> ''
+          OR length(regexp_replace((r.content - 'mimetype' - 'filename' - 'size' - 'commit_sha' - 'repo_path')::text, '[^A-Za-z]', '', 'g')) >= 200)
    ORDER BY r.created_at DESC`;
-
-// The curriculum cards that produce an artifact, by week: active cards that at least 3 students have
-// produced an artifact from (measured 9 Nov: one-offs like a retired "Session 1 Evaluation" drop out).
-const ARTIFACT_CARDS_SQL = `
-  SELECT tc.id AS card_id, tc.week, tc.type, tc.title, mode() WITHIN GROUP (ORDER BY r.kind) AS kind
-    FROM timeline_cards tc JOIN runtime_portfolio_artifacts r ON r.card_id = tc.id
-   WHERE tc.status = 'active' AND tc.week IS NOT NULL
-   GROUP BY tc.id, tc.week, tc.type, tc.title
-  HAVING count(*) >= 3
-   ORDER BY tc.week, tc.type`;
-
-// Which artifact cards each intern has COMPLETED. A completed card with no artifact did not require
-// one (setup labs, some prompt labs), so it is not overdue; only cards never completed are.
-const COMPLETED_CARDS_SQL = `
-  SELECT p.enrollment_id, p.card_id
-    FROM timeline_card_progress p
-   WHERE p.status = 'completed' AND p.enrollment_id IN (:enrollmentIds)`;
 
 const AGENT_SQL = `
   SELECT d.domain_key, d.agent_id, d.student_project_id, d.intended_builder, p.name AS project_name,
@@ -151,7 +141,7 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     ...agentTabs.map((a) => a.student_project_id),
   ].filter((x): x is string => !!x))];
 
-  const [readiness, agentStates, projects, emailRows, weWrote, replies, artifacts, artifactCards, completedCards] = await Promise.all([
+  const [readiness, agentStates, projects, emailRows, weWrote, replies, artifacts] = await Promise.all([
     soft('project readiness', () => internshipProjectReadiness(), []),
     soft('agent nudge state', () => loadAgentNudgeStates({ query: (s) => select(s), now: now.toISOString() }), []),
     soft('project detail', () => (projectIds.length ? select<ProjectFacts>(PROJECT_SQL, { ids: projectIds }) : Promise.resolve([])), []),
@@ -159,8 +149,6 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     soft('our last reply', () => (emails.length ? select<WeWrote>(WE_WROTE_SQL, { emails }) : Promise.resolve([])), []),
     soft('our replies', () => (emails.length ? select<OurReply>(REPLIES_SQL, { emails }) : Promise.resolve([])), []),
     soft('published artifacts', () => (roster.length ? select<PublishedArtifact>(ARTIFACTS_SQL, { enrollmentIds: roster.map((r) => r.enrollment_id) }) : Promise.resolve([])), []),
-    soft('artifact cards', () => select<ArtifactCard>(ARTIFACT_CARDS_SQL), []),
-    soft('completed cards', () => (roster.length ? select<{ enrollment_id: string; card_id: string }>(COMPLETED_CARDS_SQL, { enrollmentIds: roster.map((r) => r.enrollment_id) }) : Promise.resolve([])), []),
   ]);
 
   // Sequential on purpose: ~14 interns, each detail is a handful of queries.
@@ -187,7 +175,5 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     weWrote,
     replies,
     artifacts,
-    artifactCards,
-    completedCards,
   };
 }
