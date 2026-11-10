@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
-import { buildAllBriefs, buildBriefFor, UnknownInternError } from '../../services/internship/nudgeBrief/build';
+import { buildAllBriefs, buildBriefFor, buildReportArtifacts, UnknownInternError } from '../../services/internship/nudgeBrief/build';
 import { sendBrief } from '../../services/internship/nudgeBrief/send';
 import { briefProblems } from '../../services/internship/nudgeBrief/types';
 
@@ -99,6 +99,37 @@ router.get(
       res.json(batch);
     } catch (err: any) {
       fail(res, 'intern_briefs_prepare_failed', err, 'Could not prepare today\'s messages.');
+    }
+  },
+);
+
+/**
+ * GET /api/admin/intern-nudges/report?format=html|json
+ *
+ * The two artifacts the nightly email attaches, regenerated from live data right now: the
+ * interactive page and the JSON sidecar.
+ *
+ *     "I think the problem is that you are not generating the html or json file that the email is
+ *      doing therefore you don't have all the right data to make the right message."  (Ali)
+ *
+ * Registered BEFORE `:enrollmentId`, or the param route swallows the word "report".
+ *
+ * It is a read. It regenerates rather than serving a cached copy, because the whole point is that
+ * the manager sees the same picture the messages were written from, at the moment they ask.
+ */
+router.get(
+  '/api/admin/intern-nudges/report',
+  requireSection('internship'),
+  async (req: Request, res: Response) => {
+    const wantsJson = String(req.query.format ?? 'html').toLowerCase() === 'json';
+    try {
+      const { reportDate, html, json } = await buildReportArtifacts();
+      const name = `internship-report-${reportDate}.${wantsJson ? 'json' : 'html'}`;
+      res.setHeader('Content-Type', wantsJson ? 'application/json; charset=utf-8' : 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="${name}"`);
+      res.send(wantsJson ? json : html);
+    } catch (err: any) {
+      fail(res, 'intern_report_artifact_failed', err, 'Could not build the report.');
     }
   },
 );

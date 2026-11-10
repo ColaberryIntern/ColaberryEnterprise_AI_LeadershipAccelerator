@@ -12,27 +12,23 @@
  * moment it was opened, not from whatever the page happened to load with. A manager who leaves the
  * tab open for an hour and then clicks a row still gets today's facts.
  *
- * ## No model call
+ * ## It runs the SAME pipeline as the email, including the model calls
  *
- * `narrateAsks` and `summarizeInterns` are deliberately NOT run here. They are the only parts of
- * the report that call OpenAI, they are what make the daily run slow, and both already degrade to
- * deterministic fallbacks. A brief must render the same way twice and must not fail because an
- * upstream model is down, so it uses the fallbacks. The daily email keeps the model-written prose.
+ * This file used to skip `narrateAsks` and `summarizeInterns` and to call `buildSidecar` without
+ * `conversations`, on the argument that a brief should be fast and deterministic. The result was a
+ * message written from build telemetry by something that could not read what the intern had
+ * actually said, with the same fallback ask sentence for everybody.
+ *
+ * `pipeline.ts` now runs exactly what `internshipPortfolioReport.ts` runs, and its header has the
+ * full account. Determinism is kept where it was real: the model client is the CACHED one, so
+ * unchanged data returns the stored reply, and a missing key still degrades to the fallback.
  */
-import { collectInternshipPortfolio } from '../portfolioReport/collect';
-import { composeInternshipPortfolio } from '../portfolioReport/compose';
-import { buildSidecar } from '../portfolioReport/sidecar/build';
 import { getConsoleRoster } from '../internConsoleRoster';
 import { composeBrief } from './compose';
 import { caseStudyDeadline } from './deadline';
 import { holdFor, type HoldDecision } from './hold';
+import { runPortfolioPipeline, type PipelineResult } from './pipeline';
 import type { NudgeBrief } from './types';
-
-function centralDate(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(d);
-}
 
 /** Raised when the enrollment is not on the active roster. The route turns this into a 404. */
 export class UnknownInternError extends Error {
@@ -43,34 +39,37 @@ export class UnknownInternError extends Error {
   }
 }
 
-/**
- * One intern's brief, generated now.
- *
- * `previous: null` means `delta` comes back null rather than wrong. The delta compares against the
- * last SENT report's snapshot, and an on-demand render is not a report, so there is nothing
- * legitimate to compare against. A null delta is honest; a delta against an arbitrary snapshot is
- * not, and the brief never writes a snapshot of its own for the same reason.
- */
-export async function buildBriefFor(enrollmentId: string, { now = new Date() }: { now?: Date } = {}): Promise<NudgeBrief> {
-  const data = await collectInternshipPortfolio({ now, onlyEnrollments: [enrollmentId] });
-  if (!data.roster.length) throw new UnknownInternError(enrollmentId);
-
-  const report = composeInternshipPortfolio(data, { now });
-  const sidecar = buildSidecar(report, {
-    reportDate: centralDate(now),
-    previous: null,
-    lastOutbound: data.lastOutbound ?? [],
-  });
-
-  const intern = sidecar.interns.find((i) => i.enrollment_id === enrollmentId);
+/** Compose one intern out of an already-run pipeline. Shared by the single and batch paths. */
+async function briefFromPipeline(
+  p: PipelineResult,
+  enrollmentId: string,
+  now: Date,
+  deadlines: Map<string, Awaited<ReturnType<typeof caseStudyDeadline>>>,
+): Promise<NudgeBrief> {
+  const intern = p.sidecar.interns.find((i) => i.enrollment_id === enrollmentId);
   if (!intern) throw new UnknownInternError(enrollmentId);
 
-  const deadline = await caseStudyDeadline(intern.project?.id ?? null, now);
-  const brief = composeBrief({ intern, deadline, now });
+  const key = intern.project?.id ?? '';
+  if (!deadlines.has(key)) deadlines.set(key, await caseStudyDeadline(intern.project?.id ?? null, now));
 
+  const brief = composeBrief({ intern, deadline: deadlines.get(key) ?? null, now });
   // The roster is the only place the address lives; the sidecar deliberately carries no email.
-  const email = data.roster.find((r) => r.enrollment_id === enrollmentId)?.email ?? null;
+  const row = p.roster.find((r) => r.enrollment_id === enrollmentId);
+  const email = row?.email ?? null;
   return { ...brief, email: email ? String(email) : null };
+}
+
+/**
+ * One intern's brief, generated now, from the same pipeline the email runs.
+ *
+ * Narrowed to one enrollment, which narrows every query behind it. It is slower than it was,
+ * because it now pays for the model narration the report pays for, and that is the trade Ali
+ * asked for: a message written from the whole picture beats a fast one written from a third of it.
+ */
+export async function buildBriefFor(enrollmentId: string, { now = new Date() }: { now?: Date } = {}): Promise<NudgeBrief> {
+  const p = await runPortfolioPipeline({ now, onlyEnrollments: [enrollmentId] });
+  if (!p.roster.length) throw new UnknownInternError(enrollmentId);
+  return briefFromPipeline(p, enrollmentId, now, new Map());
 }
 
 /** One intern's outcome in a batch: either their brief and its hold decision, or why they have none. */
@@ -81,6 +80,23 @@ export type BriefAttempt =
 export interface BriefBatch {
   readonly generatedAt: string;
   readonly attempts: readonly BriefAttempt[];
+  /**
+   * The two artifacts the nightly email attaches, built from this same run.
+   *
+   * Carried as sizes rather than content: the page is around 600KB and the sidecar around 300KB,
+   * and nothing is served by putting either inside a JSON response a browser has to parse to show
+   * a list of thirteen rows. The route serves them separately so a manager can open the identical
+   * report the email carries, generated from the data these messages were written from.
+   */
+  readonly artifacts: {
+    readonly reportDate: string;
+    readonly htmlBytes: number;
+    readonly jsonBytes: number;
+    readonly model: boolean;
+    readonly asksNarrated: number;
+    readonly conversations: number;
+    readonly previousReportDate: string | null;
+  };
 }
 
 /**
@@ -106,34 +122,19 @@ export interface BriefBatch {
  * baseline date and the query is the only per-intern I/O left in the loop.
  */
 export async function buildAllBriefs({ now = new Date() }: { now?: Date } = {}): Promise<BriefBatch> {
-  const data = await collectInternshipPortfolio({ now });
-  const report = composeInternshipPortfolio(data, { now });
-  const sidecar = buildSidecar(report, {
-    reportDate: centralDate(now),
-    previous: null,
-    lastOutbound: data.lastOutbound ?? [],
-  });
-
-  const emailOf = new Map(data.roster.map((r) => [r.enrollment_id, r.email ? String(r.email) : null]));
+  const p = await runPortfolioPipeline({ now });
   const deadlines = new Map<string, Awaited<ReturnType<typeof caseStudyDeadline>>>();
 
   const attempts: BriefAttempt[] = [];
-  for (const r of data.roster) {
-    const id = r.enrollment_id;
+  for (const r of p.roster) {
+    const id = String(r.enrollment_id);
     const name = String(r.name ?? id);
     try {
-      const intern = sidecar.interns.find((i) => i.enrollment_id === id);
-      if (!intern) throw new UnknownInternError(id);
-
-      const key = intern.project?.id ?? '';
-      if (!deadlines.has(key)) deadlines.set(key, await caseStudyDeadline(intern.project?.id ?? null, now));
-
-      const composed = composeBrief({ intern, deadline: deadlines.get(key) ?? null, now });
-      const brief = { ...composed, email: emailOf.get(id) ?? null };
+      const brief = await briefFromPipeline(p, id, now, deadlines);
       attempts.push({
         ok: true,
         brief,
-        hold: holdFor({ brief, applicationState: r.application_state ?? null, now }),
+        hold: holdFor({ brief, applicationState: (r.application_state as string | null) ?? null, now }),
       });
     } catch (err: any) {
       attempts.push({
@@ -146,7 +147,33 @@ export async function buildAllBriefs({ now = new Date() }: { now?: Date } = {}):
     }
   }
 
-  return { generatedAt: now.toISOString(), attempts };
+  return {
+    generatedAt: now.toISOString(),
+    attempts,
+    artifacts: {
+      reportDate: p.reportDate,
+      htmlBytes: Buffer.byteLength(p.dashboardHtml, 'utf8'),
+      jsonBytes: Buffer.byteLength(p.sidecarJson, 'utf8'),
+      model: p.enrichment.model,
+      asksNarrated: p.enrichment.asksNarrated,
+      conversations: p.enrichment.conversations,
+      previousReportDate: p.enrichment.previousReportDate,
+    },
+  };
+}
+
+/**
+ * The two artifacts the nightly email attaches, regenerated now.
+ *
+ * Served by the route so a manager can open the identical report the email carries, built from the
+ * same run the messages were written from. Returning them from their own call rather than from the
+ * batch keeps a 900KB payload out of a list of thirteen rows.
+ */
+export async function buildReportArtifacts({ now = new Date() }: { now?: Date } = {}): Promise<{
+  reportDate: string; html: string; json: string;
+}> {
+  const p = await runPortfolioPipeline({ now });
+  return { reportDate: p.reportDate, html: p.dashboardHtml, json: p.sidecarJson };
 }
 
 /** Every active intern, with no brief generated. This is what the tab lists. */
