@@ -137,9 +137,26 @@ const SOURCE_LABELS: Record<string, string> = {
   untagged: 'Untagged',
 };
 
+/**
+ * The frontend twin of the backend's `canonicalUtmSource`, duplicated rather than imported
+ * because the two stacks do not share a module.
+ *
+ * WHY IT IS NEEDED AT ALL. `leads.utm_source` holds two shapes for one source - `fb` and
+ * `fb|paid` - because the writers emit both. The backend funnel query now folds them, so this is
+ * the second line of defence rather than the first: during a rolling deploy this bundle can be
+ * served alongside an older backend that has not been updated yet, and a piped value arriving
+ * here would miss SOURCE_LABELS and render as a raw code. A label that reads like missing data is
+ * worse than one that reads like a bug, because nobody reports it.
+ */
+function canonicalSource(raw: string): string {
+  return raw.split('|')[0].trim().toLowerCase();
+}
+
 export function sourceLabel(raw: string | null): string {
   if (!raw) return 'Untagged';
-  return SOURCE_LABELS[raw.toLowerCase()] ?? raw;
+  const canonical = canonicalSource(raw);
+  if (!canonical) return 'Untagged';
+  return SOURCE_LABELS[canonical] ?? canonical;
 }
 
 export interface SourceSlice {
@@ -158,16 +175,23 @@ export interface SourceSlice {
  * total that happens to be right for the wrong reason.
  *
  * Zero-signup sources are dropped rather than drawn as a slice of nothing.
+ *
+ * IT BUCKETS ON THE CANONICAL SOURCE, not the raw one. `fb` and `fb|paid` are one source wearing
+ * two spellings, and bucketing raw drew Facebook as two slices - one at 308 and one at 29 - with
+ * both percentages wrong while the centre total stayed right. The slice carries the canonical
+ * code as its `source`, so the link or filter it addresses matches the folded group rather than
+ * one half of it.
  */
 export function signupsBySource(campaigns: FunnelCampaignRow[]): SourceSlice[] {
   const bucket = new Map<string, SourceSlice>();
   for (const row of campaigns) {
-    const key = row.utm_source ?? '\u0000untagged';
+    const canonical = row.utm_source ? canonicalSource(row.utm_source) : '';
+    const key = canonical || '\u0000untagged';
     const existing = bucket.get(key);
     if (existing) existing.signups += row.signups;
     else {
       bucket.set(key, {
-        source: row.utm_source,
+        source: canonical || null,
         label: sourceLabel(row.utm_source),
         signups: row.signups,
       });

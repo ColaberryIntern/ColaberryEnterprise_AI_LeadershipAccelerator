@@ -1,4 +1,5 @@
 import { groupForSource } from './leadSourceGroups';
+import { canonicalUtmSource } from '../marketing/adSpend/utmSource';
 
 /**
  * The tags that tell somebody in GoHighLevel where a contact came from.
@@ -65,7 +66,12 @@ export function provenanceTagsFor(lead: TaggableLead): string[] {
     tags.push(`src-${source}`);
   }
 
-  const utm = clean(lead.utm_source);
+  // CANONICALIZED FIRST, because the stored column holds two spellings of one source. Production
+  // over 30 days: `fb` 308, `ig` 123, `fb|paid` 29, `ig|paid` 27. Tagged raw, GHL carries both
+  // `utm-fb` and `utm-fb-paid`, so a smart list, workflow or ad audience built on `utm-fb`
+  // silently drops the other 29 people. That is the worst shape this bug takes, because the
+  // undercount happens outside the app where nothing surfaces it and nobody is counting.
+  const utm = clean(canonicalUtmSource(lead.utm_source));
   if (utm) tags.push(`utm-${utm}`);
 
   const campaign = clean(lead.utm_campaign);
