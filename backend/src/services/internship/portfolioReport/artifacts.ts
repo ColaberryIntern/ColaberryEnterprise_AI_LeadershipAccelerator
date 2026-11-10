@@ -77,10 +77,14 @@ export function artifactFileType(a: Provenanced): ArtifactFileType {
 /**
  * Ali, 10 Nov 2026: "Artifacts should not be .md files. They should be pdfs ... that use
  * conditional formatting, charts, graphs, icons, pictures ... to help communicate the story".
- * Markdown and plain text are notes, not artifacts, so the report does not list them (measured on
- * prod: 87 of 137 uploaded files were .md and 8 were .txt).
+ * Then, on whether to hide them: "show them but course correct". So Markdown and plain text ARE
+ * listed (they are real work), flagged as the wrong format, and drive the `format_correction` ask
+ * (measured on prod: 87 of 137 uploaded files were .md and 8 were .txt).
  */
-export const NOT_AN_ARTIFACT: ReadonlySet<ArtifactFileType> = new Set<ArtifactFileType>(['markdown', 'text']);
+export const WRONG_FORMAT: ReadonlySet<ArtifactFileType> = new Set<ArtifactFileType>(['markdown', 'text']);
+
+/** Only CURRENT habits get corrected: a Markdown file from months ago is not worth a nudge today. */
+export const FORMAT_CORRECTION_DAYS = 30;
 
 /** One short phrase naming where it came from, so the claim is checkable at a glance. */
 export function artifactProvenance(a: Provenanced): string {
@@ -160,16 +164,59 @@ function isStuck(c: Ctx): boolean {
   return !!lastBlocker && (!lastBuild || lastBuild < lastBlocker);
 }
 
+type Published = ArtifactsView['published'];
+
+/**
+ * Course correction for artifacts in the wrong format (Ali, 10 Nov 2026: "if they are creating the
+ * wrong type of documents ... we can say, stop creating .md files or here is feedback to make your
+ * prompt more picture and visually orientated"). Built only from their own recent wrong-format
+ * files, so the nudge names exactly what to redo.
+ */
+export function formatCorrection(c: Ctx, published: Published, nowMs: number): ArtifactAsk | null {
+  const cutoff = nowMs - FORMAT_CORRECTION_DAYS * 86400000;
+  const allWrong = published.filter((a) => WRONG_FORMAT.has(a.fileType)).sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
+  const newest = [...published].sort((x, y) => Date.parse(y.at) - Date.parse(x.at))[0];
+  // Still in the habit = a wrong-format file in the window, OR their most recent artifact of all is
+  // one (prod, 10 Nov: a 30-day window alone corrected 1 of 6 interns whose latest work is .md).
+  const recent = allWrong.filter((a) => Date.parse(a.at) >= cutoff);
+  const wrong = recent.length ? recent : (newest && WRONG_FORMAT.has(newest.fileType) ? allWrong : []);
+  if (!wrong.length) return null;
+  const names = wrong.map((a) => a.provenance.replace(/ @ [0-9a-f]+$/, '').replace(/, uploaded$/, '') || a.title);
+  const shown = names.slice(0, 5);
+  const n = wrong.length;
+  const files = n === 1 ? `one Markdown/text file (${shown[0]})` : `${n} Markdown/text files (${shown.slice(0, 2).join(', ')}${n > 2 ? ', ...' : ''})`;
+  const body = [
+    `Convert ${n === 1 ? 'this artifact' : 'these artifacts'} from Markdown/text into visual PDFs. For each file below, read it, then rebuild it as a visual page:`,
+    lines(shown),
+    '',
+    'Upgrade the way you prompt. Do not ask Claude Code to "write up" or "document" something; ask it to SHOW it. For example, instead of',
+    '  "Write a markdown doc describing my MCP server"',
+    'ask',
+    '  "Build a one-page HTML for an executive that shows my MCP server: a status table of each tool colored green (working), amber (partial), red (missing); a simple diagram of how requests flow; an icon per section; and a screenshot of it running. Lead with a one-sentence takeaway."',
+    'Use that style for every artifact from now on: a table with status colors, at least one chart or diagram, icons, and real screenshots.',
+  ].join('\n');
+  return {
+    key: 'format_correction',
+    name: 'Visual PDFs instead of Markdown',
+    why: `${recent.length ? `${n} of their artifacts from the last ${FORMAT_CORRECTION_DAYS} days ${n === 1 ? 'is' : 'are'}` : `Their most recent artifact, and ${n} in all, ${n === 1 ? 'is' : 'are'}`} Markdown or text; a visual PDF (status colors, charts, icons) tells you the story at a glance, and the prompt habit fixes every future artifact.`,
+    prompt: `${projectContext(c)}\n\n${body}\n\n${FINISH}`.trim(),
+    nudge: `Hi ${c.firstName}, a quick course correction on your artifacts: you have submitted ${files}. Please stop creating .md files for artifacts; an artifact should be a visual PDF built from HTML, with status colors, a chart or diagram, icons and screenshots, so it tells the story at a glance. When you prompt Claude Code, ask it to show the work, not write it up. Paste the prompt below to convert these, and upload the PDFs in the portal.`,
+  };
+}
+
 /** The project artifacts worth asking for right now, most useful first. */
-export function chooseAsks(c: Ctx): ArtifactAsk[] {
+export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()): ArtifactAsk[] {
   const p = c.project;
   const out: ArtifactAsk[] = [];
+  // Second only to a Blocker Brief: an intern who is blocked needs unblocking before reformatting.
+  const correction = formatCorrection(c, published, nowMs);
   if (p && isStuck(c)) {
     out.push(ask(c, 'blocker_brief', 'Blocker Brief',
       'Shows exactly what is blocking the build, what they already tried, and the one thing they need from you, so one reply can unblock them.',
       'It lets me unblock you in one reply instead of a back-and-forth.',
       `Create docs/BLOCKER_BRIEF.html (and its PDF). Use git log, the open stories in the build plan, and any error you can reproduce now. Sections:\n1. What I am trying to finish${p.next ? ` (the story "${p.next.title}")` : ''}.\n2. Exactly where it fails: the command, file and error text.\n3. What I already tried and what happened.\n4. The one decision, access or answer I need from Ali.\n5. What I will do the moment it is unblocked.`));
   }
+  if (correction) out.push(correction);
   if (p && !p.commandCenterUrl) {
     const started = p.verifiedRecent.some((v) => /command center|story-000/i.test(v.title)) || p.commitsRecent.some((x) => /command center|story-000/i.test(x.message));
     out.push(ask(c, 'command_center', started ? 'published Command Center' : 'Command Center',
@@ -215,10 +262,11 @@ const SOURCE_ORDER: Record<ArtifactSource, number> = { repo: 0, upload: 1, link:
  */
 export function publishedArtifacts(enrollmentId: string, published: PublishedArtifact[]): ArtifactsView['published'] {
   return published
-    .filter((a) => a.enrollment_id === enrollmentId && artifactSource(a) !== null && !NOT_AN_ARTIFACT.has(artifactFileType(a)))
+    .filter((a) => a.enrollment_id === enrollmentId && artifactSource(a) !== null)
     .map((a) => ({
       id: a.id, kind: a.kind, title: a.title, at: new Date(a.created_at).toISOString(), url: artifactUrl(a),
       source: artifactSource(a) as ArtifactSource, provenance: artifactProvenance(a), fileType: artifactFileType(a),
+      repoPath: a.repo_path ?? null, uploadName: a.upload_name ?? null,
     }))
     .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source] || new Date(b.at).getTime() - new Date(a.at).getTime());
 }

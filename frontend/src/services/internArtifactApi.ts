@@ -33,6 +33,12 @@ export async function fetchArtifactFile(id: string, as?: string): Promise<Blob> 
   return as ? new Blob([res.data], { type: as }) : res.data;
 }
 
+/** A Word / PowerPoint artifact rendered as a self-contained HTML page. */
+export async function fetchArtifactPreview(id: string): Promise<string> {
+  const res = await api.get<{ html: string }>(`${base(id)}/preview`);
+  return res.data.html;
+}
+
 /** A CSV artifact as a formatted Excel workbook. */
 export async function fetchArtifactXlsx(id: string): Promise<Blob> {
   const res = await api.get<Blob>(`${base(id)}/xlsx`, { responseType: 'blob' });

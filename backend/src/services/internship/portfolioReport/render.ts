@@ -12,6 +12,7 @@
 import type { InternCard, PortfolioReport, StatusKey } from './types';
 import { legendHtml, stripHtml, timelineHtml, topNextHtml } from './renderTimeline';
 import { artifactsHtml, artifactsText, asksHtml, commandCenterHtml } from './renderArtifacts';
+import { eventText } from './timeline';
 
 const NAVY = '#1a365d';
 const RED = '#C20E1E';
@@ -174,7 +175,7 @@ ${report.groups.map((g) => `<tr><td style="padding:18px 0 6px"><div style="font-
       `  ${c.timeline.story}`,
       // Same order as the HTML: what needs attention now, then newest to oldest.
       ...c.timeline.next.map((n) => `  NEXT ${n.label}: ${n.detail}`),
-      ...[...c.timeline.rows].reverse().map((r) => `  ${r.day.slice(5)}: ${r.events.map((e) => `${e.label}${e.detail ? ` ${e.detail}` : ''}${e.meta ? ` (${e.meta})` : ''}`).join(' | ')}${r.gapBefore >= 2 ? `  [${r.gapBefore}d before this]` : ''}`),
+      ...[...c.timeline.rows].reverse().map((r) => `  ${r.day.slice(5)}: ${r.events.map(eventText).join(' | ')}${r.gapBefore >= 2 ? `  [${r.gapBefore}d before this]` : ''}`),
       c.asks.length ? `  Asks: ${c.asks.join('; ')}` : null,
       `  Nudge: ${c.nudge}`,
       ...artifactsText(c),

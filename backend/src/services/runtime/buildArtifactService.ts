@@ -23,6 +23,7 @@ import path from 'path';
 import TimelineCard from '../../models/TimelineCard';
 import PortfolioArtifact from '../../models/PortfolioArtifact';
 import { isCardServable } from '../timeline/curriculumScope';
+import { decodeUploadFilename } from '../../utils/textEncoding';
 
 export const BUILD_ARTIFACT_KIND = 'build_artifact';
 
@@ -98,7 +99,9 @@ export async function uploadBuildArtifact(
     throw Object.assign(new Error('No file uploaded — pick the artifact file Claude Code built for you.'), { status: 400 });
   }
 
-  const filename = (file.originalname || 'artifact').slice(0, 200);
+  // multer hands back the browser's UTF-8 filename decoded as Latin-1 ("Build Day Lab â€” ..." on
+  // prod, 10 Nov 2026); undo that before the name reaches the title, the row and the report.
+  const filename = (decodeUploadFilename(file.originalname) || 'artifact').slice(0, 200);
   if (!isAcceptedBuildArtifact(filename)) {
     await fs.unlink(file.path).catch(() => {});
     throw Object.assign(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV.'), { status: 400 });

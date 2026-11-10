@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { getInternArtifact, getInternArtifactFile } from '../../services/internship/internArtifactViewer';
 import { csvRowsToXlsx } from '../../services/internship/internArtifactXlsx';
+import { OfficeParseError, renderOfficeFile } from '../../services/internship/officeToHtml';
 
 /**
  * Read one published intern artifact, for /admin/internship/artifact/:id, which the Internship
@@ -73,6 +74,28 @@ router.get('/api/admin/internship/artifacts/:id/file', requireSection('internshi
   } catch (err) {
     logFailure('intern_artifact_file_failed', err, { id: parsed.data.id });
     res.status(500).json({ error: 'Could not load this file.' });
+  }
+});
+
+/**
+ * A Word or PowerPoint artifact rendered as a self-contained HTML page (Ali, 10 Nov 2026: "We also
+ * need a MS word viewer"). JSON `{ html }`, which the page shows in a script-less sandboxed iframe.
+ * 400 for any other kind; 422 when the file cannot be read (the page then offers the download).
+ */
+router.get('/api/admin/internship/artifacts/:id/preview', requireSection('internship'), async (req: Request, res: Response) => {
+  const parsed = Params.safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Artifact id must be a UUID.' }); return; }
+  try {
+    const file = await getInternArtifactFile(parsed.data.id);
+    if (!file) { res.status(404).json({ error: 'No uploaded file for that artifact.' }); return; }
+    if (file.kind !== 'word' && file.kind !== 'slides') { res.status(400).json({ error: 'Only Word and PowerPoint files have a preview.' }); return; }
+    const html = await renderOfficeFile(file.absPath, file.name);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.json({ html });
+  } catch (err) {
+    if (err instanceof OfficeParseError) { res.status(422).json({ error: err.message }); return; }
+    logFailure('intern_artifact_preview_failed', err, { id: parsed.data.id });
+    res.status(500).json({ error: 'Could not preview this document.' });
   }
 });
 

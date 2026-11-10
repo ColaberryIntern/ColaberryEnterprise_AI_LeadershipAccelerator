@@ -69,7 +69,12 @@ export interface CollectedPortfolio {
   replies?: OurReply[];
   /** Optional so older saved collections still render. */
   artifacts?: PublishedArtifact[];
+  /** The latest message sent TO each intern (sidecar `last_ask` only). Optional for older saved collections. */
+  lastOutbound?: LastOutbound[];
 }
+
+/** One row of LAST_ASK_SQL. */
+export interface LastOutbound { email: string; sent_at: string; subject: string | null; body_text: string | null; body_truncated: boolean | null; from_address: string }
 
 export type Track = 'agent' | 'gov' | 'other' | 'none';
 export type StatusKey = 'on_track' | 'attention' | 'stalled';
@@ -83,7 +88,9 @@ export interface TrainingView {
   gateDone: number;
   strip: Array<{ week: number; pct: number; done: boolean }>;
   nextWeek: { week: number; pct: number; cards: number } | null;
-  pace: { band: string } | null;
+  pace: { band: string; scheduledWeek?: number } | null;
+  /** Why `pace` is null: the roster's honest refusal ('no_cohort' | 'cohort_has_no_sessions'). */
+  paceUnavailable?: string | null;
 }
 
 export interface EmailView {
@@ -113,6 +120,9 @@ export interface ProjectView {
   overdueTasks: Array<{ title: string; due_on: string }>;
   /** The published Command Center (GitHub Pages), when the project has one. */
   commandCenterUrl: string | null;
+  /** The platform project id, and which tab it is reported from (sidecar only). */
+  id?: string;
+  kind?: 'agent' | 'gov' | 'console';
 }
 
 export interface InternCard {
@@ -188,6 +198,19 @@ export interface Timeline {
   lateBeforeWindow: Array<{ title: string; due: string }>;
   /** Days since the last build work; null = none in the window (or no project). */
   quietNow: number | null;
+  /** The numbers behind `story`, computed once (timeline.ts) and read by both the HTML and the sidecar. */
+  counts: TimelineCounts;
+}
+
+/** Last-21-day counts. `verified` / `commits` are null for an intern with no project (not 0). */
+export interface TimelineCounts {
+  verified: number | null;
+  commits: number | null;
+  asks: number;
+  blockers: number;
+  replies: number;
+  stuckSpells: number;
+  trainingDays: number;
 }
 
 /**
@@ -238,6 +261,6 @@ export interface ArtifactsView {
    * `provenance` is the short phrase naming the file, commit or site it came from, so the claim
    * can be checked from the email without opening anything.
    */
-  published: Array<{ id: string; kind: string; title: string; at: string; url: string; source: ArtifactSource; provenance: string; fileType: ArtifactFileType }>;
+  published: Array<{ id: string; kind: string; title: string; at: string; url: string; source: ArtifactSource; provenance: string; fileType: ArtifactFileType; repoPath?: string | null; uploadName?: string | null }>;
   asks: ArtifactAsk[];
 }

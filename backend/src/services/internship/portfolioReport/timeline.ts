@@ -14,7 +14,7 @@
  *   reply     a message from colaberry.com to them; carries how long after their message it came
  *   late      an unverified task past its due date
  */
-import type { EventKind, InternEmail, OurReply, ProjectView, Timeline, TimelineEvent, TimelineNext, TimelineRow, TrainingView } from './types';
+import type { EventKind, InternEmail, OurReply, ProjectView, Timeline, TimelineCounts, TimelineEvent, TimelineNext, TimelineRow, TrainingView } from './types';
 
 const DAY = 86400000;
 export const WINDOW_DAYS = 21;
@@ -263,23 +263,41 @@ export function buildTimeline(i: TimelineInput): Timeline {
   }
   if (!i.training.gateClear && i.training.nextWeek) next.push({ kind: 'training', label: `Training Week ${i.training.nextWeek.week}`, detail: `${i.training.nextWeek.pct}% done; weeks 1-3 gate ${i.training.gateDone}/3` });
 
-  // The one-line story.
+  // The counts, ONCE. The story line below and the JSON sidecar both read this object, so the
+  // number in the email and the number an agent reads can never be computed two ways.
   const count = (k: EventKind): number => events.filter((e) => e.kind === k).length;
-  const commits = (p?.commitsRecent ?? []).filter((c) => inWindow(dayKey(c.date))).length;
-  const asked = count('question') + count('stuck');
-  const bits: string[] = [];
-  if (p) bits.push(`${count('verified')} verified, ${plural(commits, 'commit')}`);
-  if (asked) bits.push(`${plural(asked, 'ask')} (${plural(count('stuck'), 'blocker')}), ${plural(count('reply'), 'reply', 'replies')} from you`);
-  if (stuckSpells) bits.push(`stuck ${stuckSpells === 1 ? 'once' : `${stuckSpells} times`}`);
-  if (p && quietNow !== null) bits.push(quietNow === 0 ? 'built today' : `last build work ${quietNow}d ago`);
-  // Training counts as activity: without this a no-project intern who trains daily read as "nothing recorded".
-  const trainingDays = new Set(events.filter((e) => e.kind === 'training').map((e) => e.day)).size;
-  if (trainingDays) bits.push(`training on ${plural(trainingDays, 'day')}`);
-  const story = `Last ${WINDOW_DAYS} days: ${bits.join('; ') || 'nothing recorded'}.`;
+  const counts: TimelineCounts = {
+    // Only meaningful with a project; null (not 0) for someone who has none.
+    verified: p ? count('verified') : null,
+    commits: p ? (p.commitsRecent ?? []).filter((c) => inWindow(dayKey(c.date))).length : null,
+    asks: count('question') + count('stuck'),
+    blockers: count('stuck'),
+    replies: count('reply'),
+    stuckSpells,
+    // Training counts as activity: without this a no-project intern who trains daily read as "nothing recorded".
+    trainingDays: new Set(events.filter((e) => e.kind === 'training').map((e) => e.day)).size,
+  };
+  const story = storyLine(counts, p ? quietNow : null, !!p);
 
   // The 21-day strip: every kind that happened each day.
   const stripDays = Array.from({ length: WINDOW_DAYS }, (_, k) => dayKey(i.nowMs - (WINDOW_DAYS - 1 - k) * DAY));
   const strip21 = stripDays.map((d) => ({ day: d, kinds: [...new Set((byDay.get(d) ?? []).map((e) => e.kind))].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)) }));
 
-  return { windowDays: WINDOW_DAYS, start, today, rows, sinceLastRow, next, story, strip: strip21, stuckSpells, lateBeforeWindow, quietNow };
+  return { windowDays: WINDOW_DAYS, start, today, rows, sinceLastRow, next, story, strip: strip21, stuckSpells, lateBeforeWindow, quietNow, counts };
+}
+
+/** The one-line story, from the counts. PURE; the wording is unchanged from before counts existed. */
+export function storyLine(c: TimelineCounts, quietNow: number | null, hasProject: boolean): string {
+  const bits: string[] = [];
+  if (hasProject) bits.push(`${c.verified ?? 0} verified, ${plural(c.commits ?? 0, 'commit')}`);
+  if (c.asks) bits.push(`${plural(c.asks, 'ask')} (${plural(c.blockers, 'blocker')}), ${plural(c.replies, 'reply', 'replies')} from you`);
+  if (c.stuckSpells) bits.push(`stuck ${c.stuckSpells === 1 ? 'once' : `${c.stuckSpells} times`}`);
+  if (hasProject && quietNow !== null) bits.push(quietNow === 0 ? 'built today' : `last build work ${quietNow}d ago`);
+  if (c.trainingDays) bits.push(`training on ${plural(c.trainingDays, 'day')}`);
+  return `Last ${WINDOW_DAYS} days: ${bits.join('; ') || 'nothing recorded'}.`;
+}
+
+/** One timeline event as one line of text; the plain-text email and the JSON sidecar both use it. */
+export function eventText(e: Pick<TimelineEvent, 'label' | 'detail' | 'meta'>): string {
+  return `${e.label}${e.detail ? ` ${e.detail}` : ''}${e.meta ? ` (${e.meta})` : ''}`;
 }

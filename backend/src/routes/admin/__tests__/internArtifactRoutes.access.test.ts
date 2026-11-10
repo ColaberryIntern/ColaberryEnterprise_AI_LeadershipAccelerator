@@ -9,6 +9,11 @@ jest.mock('../../../services/internship/internArtifactViewer', () => ({
   getInternArtifactFile: (...a: unknown[]) => mockFile(...a),
 }));
 jest.mock('../../../config/database', () => ({ sequelize: { fake: true } }));
+const mockRender = jest.fn();
+jest.mock('../../../services/internship/officeToHtml', () => {
+  class OfficeParseError extends Error {}
+  return { OfficeParseError, renderOfficeFile: (...a: unknown[]) => mockRender(...a) };
+});
 
 import express, { type Express } from 'express';
 import jwt from 'jsonwebtoken';
@@ -133,5 +138,40 @@ describe('GET /api/admin/internship/artifacts/:id/xlsx (open a CSV in Excel)', (
     expect((await request(app()).get(`${URL}/xlsx`).set('Authorization', admin())).status).toBe(400);
     mockGet.mockResolvedValue({ id: ID, file: null });
     expect((await request(app()).get(`${URL}/xlsx`).set('Authorization', admin())).status).toBe(404);
+  });
+});
+
+describe('GET /api/admin/internship/artifacts/:id/preview (the Word / PowerPoint viewer)', () => {
+  const admin = (): string => `Bearer ${tokenFor(null, 'admin')}`;
+  const docx = { absPath: '/x/a.docx', name: 'a.docx', kind: 'word', contentType: 'x', title: 'A' };
+  beforeEach(() => mockRender.mockReset());
+
+  it('refuses an unauthenticated caller and never renders', async () => {
+    expect([401, 403]).toContain((await request(app()).get(`${URL}/preview`)).status);
+    expect(mockRender).not.toHaveBeenCalled();
+  });
+
+  it('renders a Word or PowerPoint file to { html }', async () => {
+    mockFile.mockResolvedValue(docx);
+    mockRender.mockResolvedValue('<html>doc</html>');
+    const res = await request(app()).get(`${URL}/preview`).set('Authorization', admin());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ html: '<html>doc</html>' });
+    expect(mockRender).toHaveBeenCalledWith('/x/a.docx', 'a.docx');
+    mockFile.mockResolvedValue({ ...docx, kind: 'slides', name: 'deck.pptx' });
+    expect((await request(app()).get(`${URL}/preview`).set('Authorization', admin())).status).toBe(200);
+  });
+
+  it('400 for other kinds, 404 with no file, 422 for an unreadable document', async () => {
+    mockFile.mockResolvedValue({ ...docx, kind: 'pdf' });
+    expect((await request(app()).get(`${URL}/preview`).set('Authorization', admin())).status).toBe(400);
+    mockFile.mockResolvedValue(null);
+    expect((await request(app()).get(`${URL}/preview`).set('Authorization', admin())).status).toBe(404);
+    const { OfficeParseError } = jest.requireMock('../../../services/internship/officeToHtml') as { OfficeParseError: new (m: string) => Error };
+    mockFile.mockResolvedValue(docx);
+    mockRender.mockRejectedValue(new OfficeParseError('Could not read this document: bad zip'));
+    const res = await request(app()).get(`${URL}/preview`).set('Authorization', admin());
+    expect(res.status).toBe(422);
+    expect(res.body.error).toMatch(/Could not read/);
   });
 });

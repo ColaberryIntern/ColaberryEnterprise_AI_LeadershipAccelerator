@@ -224,14 +224,46 @@ describe('artifacts: visual PDFs, not Markdown (Ali, 10 Nov 2026)', () => {
     expect(artifactFileType(upload({ upload_name: 'log.txt' }))).toBe('text');
   });
 
-  it('Markdown and plain-text files are not listed as artifacts', () => {
+  it('Markdown and plain-text files ARE listed ("show them but course correct"), flagged amber', () => {
     const p = publishedArtifacts('e1', [
       pub({ id: 'md', repo_path: 'artifacts/week-02/skill-sharing-guide.md' }),
       upload({ id: 'txt', upload_name: 'notes.txt' }),
       pub({ id: 'pdf' }),
-      pub({ id: 'csv', repo_path: 'artifacts/week-08/custom-commands.csv' }),
     ]);
-    expect(p.map((x) => x.id).sort()).toEqual(['csv', 'pdf']);
+    expect(p.map((x) => x.id).sort()).toEqual(['md', 'pdf', 'txt']);
+    const { html } = renderInternshipPortfolio(report({ artifacts: [pub({ id: 'md', repo_path: 'artifacts/week-02/skill-sharing-guide.md' }), pub()] }));
+    expect(html).toContain('Artifacts they made (2, 1 in the wrong format)');
+    expect(html).toContain('Markdown: convert to PDF 1');
+    expect(html).toContain('dashed #b45309');
+    expect(html.indexOf('Markdown: convert to PDF')).toBeGreaterThan(html.indexOf('PDF 1'));
+  });
+
+  it('recent Markdown produces a course-correction ask: stop .md, prompt for visuals, convert these files', () => {
+    const c = card({ artifacts: [pub({ id: 'md', repo_path: 'artifacts/week-02/skill-sharing-guide.md', created_at: daysAgo(4) })] });
+    const k = c.artifacts.asks.find((a) => a.key === 'format_correction');
+    expect(k).toBeDefined();
+    expect(k!.nudge).toMatch(/^Hi Kalkidan, a quick course correction on your artifacts/);
+    expect(k!.nudge).toContain('stop creating .md files');
+    expect(k!.nudge).toContain('artifacts/week-02/skill-sharing-guide.md');
+    expect(k!.prompt).toContain('- artifacts/week-02/skill-sharing-guide.md');
+    expect(k!.prompt).toContain('Upgrade the way you prompt');
+    expect(k!.prompt).toContain('Save as PDF');
+  });
+
+  it('old Markdown is corrected only while it is still their latest work', () => {
+    const keys = (artifacts: ReturnType<typeof pub>[]) => card({ artifacts }).artifacts.asks.map((a) => a.key);
+    // latest artifact is an old .md: still in the habit
+    expect(keys([pub({ id: 'a', repo_path: 'a/old.md', created_at: daysAgo(45) })])).toContain('format_correction');
+    // they have since switched to PDFs: leave the old .md alone
+    expect(keys([pub({ id: 'a', repo_path: 'a/old.md', created_at: daysAgo(45) }), pub({ id: 'b', created_at: daysAgo(10) })])).not.toContain('format_correction');
+    expect(keys([pub()])).not.toContain('format_correction');
+  });
+
+  it('a Blocker Brief still comes before the course correction', () => {
+    const data = collected({ artifacts: [pub({ repo_path: 'a/notes.md', created_at: daysAgo(2) })] });
+    data.projects[0].commits = [{ date: daysAgo(9), author: 'kal', message: 'old work' }];
+    const keys = composeInternshipPortfolio(data, { now: NOW }).groups[0].interns[0].artifacts.asks.map((a) => a.key);
+    expect(keys.slice(0, 2)).toEqual(['blocker_brief', 'format_correction']);
   });
 
   it('groups the chips by type, PDFs first, each group labeled and colored', () => {
