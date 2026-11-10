@@ -68,6 +68,7 @@ export interface SendBriefInput {
 }
 
 export async function sendBrief({ brief, body, subject, dryRun, now = new Date() }: SendBriefInput): Promise<BriefSendOutcome> {
+  const { tier } = brief; // Destructured, not dotted: see the note in compose.ts.
   const email = brief.email ?? '';
   const base = { enrollmentId: brief.enrollmentId, email };
 
@@ -110,7 +111,7 @@ export async function sendBrief({ brief, body, subject, dryRun, now = new Date()
   );
 
   if (result.outcome === 'sent') {
-    log('intern_brief_sent', 'success', { enrollment_id: brief.enrollmentId, tier: brief.tier, business_event_id: businessEventId });
+    log('intern_brief_sent', 'success', { enrollment_id: brief.enrollmentId, tier, business_event_id: businessEventId });
     return { ...base, outcome: 'sent', subject, messageId: result.messageId };
   }
   if (result.outcome === 'skipped') return { ...base, outcome: 'skipped', reason: result.reason };

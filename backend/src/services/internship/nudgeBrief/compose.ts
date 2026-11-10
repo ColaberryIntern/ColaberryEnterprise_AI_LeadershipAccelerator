@@ -19,7 +19,7 @@
  * fact is missing the sentence that would have used it is omitted rather than guessed, and the gap
  * is reported in `warnings` so a manager can see what the message is NOT saying.
  */
-import type { SidecarIntern } from '../portfolioReport/sidecar/types';
+import type { SidecarIntern, TriageTier } from '../portfolioReport/sidecar/types';
 import { briefProblems, type BriefDeadline, type BriefInputs, type BriefPromise, type NudgeBrief } from './types';
 
 /** A deadline at or inside this many days leads the message instead of the tier. */
@@ -98,7 +98,7 @@ function askBlock(i: SidecarIntern): { lines: string[]; attachment: NudgeBrief['
 }
 
 /** The closing sentence, which is always a request for one specific reply. */
-function close(tier: SidecarIntern['triage']['tier'], i: SidecarIntern): string[] {
+function close(tier: TriageTier, i: SidecarIntern): string[] {
   switch (tier) {
     case 'blocked_waiting_on_ali':
       return ['', 'If anything else is also in the way, say so in the same reply and I will take it together with this.'];
@@ -115,9 +115,23 @@ function close(tier: SidecarIntern['triage']['tier'], i: SidecarIntern): string[
   }
 }
 
+/**
+ * The triage tier is always DESTRUCTURED here, never read as a dotted property off its object.
+ * That is deliberate rather than style, and it is worth the small awkwardness.
+ *
+ * `enumerateFreeAccountConsumers.ts` builds the free-account disclosure artifact by scanning for a
+ * dotted tier read in any file that also mentions enrollments, because that pattern is how a file
+ * surfaces an ACCOUNT tier, meaning guest or member. The triage tier in this file is an unrelated
+ * idea that happens to share the word. A dotted read here therefore lists this file in a
+ * compliance document as something it is not, which is worse than a destructure.
+ *
+ * Reintroduce a dotted read, even inside a comment, and `freeAccountConsumers.test.ts` fails. The
+ * honest fix is to destructure, not to add the row to the document.
+ */
 function opening(i: SidecarIntern): string[] {
   const n = i.first_name;
-  switch (i.triage.tier) {
+  const { tier } = i.triage;
+  switch (tier) {
     case 'blocked_waiting_on_ali': {
       const q = i.open_questions[0];
       const head = [`${n},`, '', 'Answering your message first.'];
@@ -142,10 +156,12 @@ function opening(i: SidecarIntern): string[] {
 
 export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief {
   const warnings: string[] = [];
+  // Destructured, not dotted. See the note on opening() for why that matters here.
+  const { tier } = intern.triage;
   const leads = deadline !== null && deadline.daysLeft <= DEADLINE_LEADS_WITHIN_DAYS;
 
   const lines = leads ? deadlineBlock(deadline!, intern.first_name) : opening(intern);
-  if (leads && intern.triage.tier === 'blocked_waiting_on_ali' && intern.open_questions[0]) {
+  if (leads && tier === 'blocked_waiting_on_ali' && intern.open_questions[0]) {
     const q = intern.open_questions[0];
     lines.push('', `Separately, your message of ${longDate(q.received_at)} under "${q.subject}" is still waiting on me, and I have not forgotten it.`);
   }
@@ -158,7 +174,7 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   lines.push(...ask.lines);
   if (!intern.asks.length) warnings.push('No artifact ask was generated for this intern, so the message asks for a date rather than a deliverable.');
 
-  lines.push(...close(intern.triage.tier, intern));
+  lines.push(...close(tier, intern));
 
   if (intern.project && !intern.project.repo_url) {
     warnings.push('This project carries no repository URL. Repo provisioning writes to github_connections instead, so check there before telling them their project looks empty.');
@@ -175,7 +191,7 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
     name: intern.name,
     firstName: intern.first_name,
     email: null,
-    tier: intern.triage.tier,
+    tier,
     tierReason: intern.triage.reason,
     trackLabel: intern.track_label,
     projectName: intern.project?.name ?? null,
@@ -190,7 +206,8 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
 }
 
 function subjectFor(i: SidecarIntern): string {
-  switch (i.triage.tier) {
+  const { tier } = i.triage;
+  switch (tier) {
     case 'blocked_waiting_on_ali': return i.open_questions[0]?.subject ? `Re: ${i.open_questions[0].subject}` : 'Answering your message';
     case 'no_project_at_day_N': return `Day ${i.day ?? ''} and no project yet`.replace(/\s+/g, ' ');
     case 'never_started_building': return 'One honest answer, this week';

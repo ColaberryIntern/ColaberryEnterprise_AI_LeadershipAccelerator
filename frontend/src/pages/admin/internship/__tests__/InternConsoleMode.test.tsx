@@ -255,8 +255,10 @@ describe('states that are not data', () => {
 describe('the views', () => {
   it('offers every view, with none of them marked unbuilt any more', async () => {
     // Ali confirmed "all 3" of the original views, and all three exist — Command Center in Phase 3,
-    // Triage Board in Phase 4, Activity Timeline in Phase 5. Agent nudges came later and is scoped
-    // to the agent-domain builders rather than the whole roster, which is why it takes no `rows`.
+    // Triage Board in Phase 4, Activity Timeline in Phase 5. Nudges came later. It was called
+    // "Agent nudges" and showed only the agent-domain builders, which meant a gov-contract intern
+    // and an intern with no project were missing from the one screen that asks who needs a message
+    // today; it now takes the same filtered `rows` as its siblings and covers everybody.
     // A view that is not built says "soon" rather than rendering an empty panel that would read as
     // "no data"; there is nothing left to mark.
     //
@@ -267,7 +269,7 @@ describe('the views', () => {
 
     const tabs = Array.from(container.querySelectorAll('[role="tab"]'));
     expect(tabs.map((t) => t.textContent)).toEqual([
-      'Command Center', 'Triage Board', 'Activity Timeline', 'Agent nudges',
+      'Command Center', 'Triage Board', 'Activity Timeline', 'Nudges',
     ]);
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(container.textContent).not.toContain('soon');
