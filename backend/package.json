@@ -37,6 +37,7 @@
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.3",
     "mailparser": "^3.9.8",
+    "maxmind": "^5.0.8",
     "mssql": "^11.0.1",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",

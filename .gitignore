@@ -110,3 +110,10 @@ docs/gov-contracts-daily-*.html
 # They live on the Basecamp ticket and in its numbered Docs & Files folder, which is where the
 # evidence-workstream skill says artifacts belong. Rebuild them with scripts/artifacts/.
 docs/artifacts/
+
+# GeoLite2 City database. Downloaded at image-build time by
+# .github/workflows/build-images.yml, NEVER committed: MaxMind's EULA requires a
+# database to be deleted within 30 days of a new release, which is impossible once
+# it is in git history. `backend/geoip/.gitkeep` keeps the directory so the
+# Dockerfile's COPY works on a checkout that has no database.
+backend/geoip/*.mmdb
