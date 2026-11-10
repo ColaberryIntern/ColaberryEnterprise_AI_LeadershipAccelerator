@@ -41,6 +41,23 @@ async function main() {
     + 'counts, both mutated regions unchanged since the run');
 
   fs.mkdirSync(OUT, { recursive: true });
+
+  /**
+   * The VISUAL is rendered first, because that is the order it is read in: one page to decide
+   * whether the criteria are discharged, then the record behind it. `maxPages: 1` is the claim
+   * being made — the renderer throws rather than spilling, so a clean exit is the proof.
+   */
+  const vis = require('./tickets/l46Visual');
+  const v = vis.selfCheck();
+  console.log(`visual self-check passed: ${v.killed}/${v.mutations} killed with `
+    + `${v.narrow} resting on a single assertion, ${v.stages} plan stages each with a verdict, `
+    + `${v.findings} findings, and the zero-rows caveat present`);
+  const visPath = path.join(OUT, 'L46_MEASUREMENT_PATH_VISUAL.pdf');
+  const vres = await renderPdf({
+    html: vis.build(), outPath: visPath, landscape: true, maxPages: 1, margin: '10mm',
+  });
+  console.log(`L46_MEASUREMENT_PATH_VISUAL.pdf: ${vres.pages} page(s)`);
+
   const outPath = path.join(OUT, 'L46_TELEMETRY_MUTATION_AND_PLAN_EVIDENCE.pdf');
   const res = await renderPdf({
     html: doc.build(), outPath, landscape: false, maxPages: 0, margin: '12mm',
