@@ -83,7 +83,7 @@ export interface StudentSubmissionChecklist {
 /** A public meeting line from the qualification dossier (e.g. the pre-proposal conference) — student-safe. */
 export interface StudentGovMeeting { date: string | null; text: string | null; }
 /** Advisory AI vetting of the pursuit (student-safe subset): verdict + capability coverage + a one-line reason. */
-export interface StudentGovVetting { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; coveragePct: number | null; reason: string | null; }
+export interface StudentGovVetting { status: string; verdict: 'pursue' | 'pass' | 'inconclusive' | null; coveragePct: number | null; reason: string | null; quote: string | null; }
 /** Advisory "what they want / what we'd build" read, saved by the automatic AI checks on the ZIP. */
 export interface StudentGovOpportunitySummary { whatTheyWant: string | null; whatWedBuild: string | null; }
 export interface StudentGovProjectView {

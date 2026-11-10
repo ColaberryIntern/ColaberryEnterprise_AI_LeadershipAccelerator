@@ -420,13 +420,13 @@ describe('toStudentMeetings — the dossier meeting lines, student-safe', () => 
 
 describe('toStudentVetting / toStudentOpportunitySummary — the student-safe AI read', () => {
   const vv = {
-    status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'Core work matches Our Services.',
+    status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'Core work matches Our Services.', quote: 'The vendor shall provide an integrated data platform.',
     fit: { capabilities: [{ secret: 'internal' }] }, questions: { items: ['q'] }, extraction: { candidates: [] },
     summary: { whatTheyWant: 'An integrated data platform.', whatWedBuild: 'A cloud-native platform.' },
   };
 
-  it('projects only the verdict + coverage + reason (no capability internals, questions or extraction)', () => {
-    expect(toStudentVetting(vv)).toEqual({ status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'Core work matches Our Services.' });
+  it('projects only the verdict + coverage + reason + source quote (no capability internals, questions or extraction)', () => {
+    expect(toStudentVetting(vv)).toEqual({ status: 'completed', verdict: 'pursue', coveragePct: 75, reason: 'Core work matches Our Services.', quote: 'The vendor shall provide an integrated data platform.' });
     expect(JSON.stringify(toStudentVetting(vv))).not.toMatch(/capabilit|questions|extraction|internal/i);
   });
 
