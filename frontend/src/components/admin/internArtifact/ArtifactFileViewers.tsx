@@ -23,7 +23,7 @@ export const KIND_STYLE: Record<ArtifactFileKind, { label: string; color: string
   word: { label: 'Word document', color: '#1d4ed8', icon: 'file-word-2-line' },
   slides: { label: 'Slides', color: '#c2410c', icon: 'file-ppt-2-line' },
   image: { label: 'Image', color: '#a21caf', icon: 'image-line' },
-  text: { label: 'Text notes', color: '#475569', icon: 'file-text-line' },
+  text: { label: 'Markdown / text: wrong format', color: '#b45309', icon: 'error-warning-line' },
   other: { label: 'File', color: '#475569', icon: 'file-line' },
 };
 
@@ -141,7 +141,7 @@ export function ArtifactFileViewer({ id, file }: { id: string; file: File }): Re
   else if (file.kind === 'text') {
     body = (
       <>
-        <div className="alert alert-secondary py-1 px-2 small mb-2">Text notes, not an artifact: artifacts are visual PDFs built from HTML.</div>
+        <div className="alert alert-warning py-1 px-2 small mb-2">Wrong format for an artifact: this is Markdown/text. Artifacts should be visual PDFs built from HTML (status colors, charts, icons). The Internship Report asks the intern to convert it.</div>
         {file.text !== null ? <pre className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{file.text}</pre> : <span className="text-muted">{file.note}</span>}
       </>
     );

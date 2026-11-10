@@ -323,7 +323,7 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
     artifacts: published,
   });
-  const artifacts = { published, asks: chooseAsks({ ...core, timeline }) };
+  const artifacts = { published, asks: chooseAsks({ ...core, timeline }, published, nowMs) };
   const card: InternCard = {
     ...core,
     timeline,

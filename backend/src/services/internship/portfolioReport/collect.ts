@@ -108,10 +108,7 @@ const ARTIFACTS_SQL = `
           (coalesce(r.content->>'repo_path', '') <> '' AND coalesce(r.content->>'commit_sha', '') <> '')
           OR coalesce(r.content->>'stored_path', '') <> ''
           OR r.content->>'artifact_url' LIKE 'https://%'
-         )
-     -- Markdown and plain text are notes, not artifacts (Ali, 10 Nov 2026); artifacts.ts NOT_AN_ARTIFACT.
-     AND lower(coalesce(NULLIF(r.content->>'filename', ''), r.content->>'repo_path', '')) !~ '[.](md|markdown|txt)$'
-   ORDER BY r.created_at DESC`;
+         )   ORDER BY r.created_at DESC`;
 
 const AGENT_SQL = `
   SELECT d.domain_key, d.agent_id, d.student_project_id, d.intended_builder, p.name AS project_name,

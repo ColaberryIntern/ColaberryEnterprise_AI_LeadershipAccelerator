@@ -4,7 +4,7 @@
  * "Ask them for" cards (why, the Claude Code prompt to paste, and the matching nudge).
  * Email-safe: tables, inline styles, every value escaped.
  */
-import { kindLabel } from './artifacts';
+import { WRONG_FORMAT, kindLabel } from './artifacts';
 import type { ArtifactFileType, InternCard } from './types';
 
 const NAVY = '#1a365d';
@@ -25,11 +25,12 @@ const FILE_TYPE: Record<ArtifactFileType, { label: string; color: string; tint: 
   claude: { label: 'claude.ai', color: '#6d28d9', tint: '#f5f3ff', icon: '&#10024;' },
   link: { label: 'Link', color: '#475569', tint: '#f8fafc', icon: '&#128279;' },
   file: { label: 'File', color: '#475569', tint: '#f8fafc', icon: '&#128206;' },
-  markdown: { label: 'Markdown', color: '#475569', tint: '#f8fafc', icon: '&#128221;' },
-  text: { label: 'Text', color: '#475569', tint: '#f8fafc', icon: '&#128221;' },
+  // Wrong format: shown (it is real work) but amber, so it reads as "needs converting to a PDF".
+  markdown: { label: 'Markdown: convert to PDF', color: '#b45309', tint: '#fffbeb', icon: '&#9888;' },
+  text: { label: 'Text: convert to PDF', color: '#b45309', tint: '#fffbeb', icon: '&#9888;' },
 };
 /** PDFs first: they are the artifacts Ali asked for. */
-const TYPE_ORDER: ArtifactFileType[] = ['pdf', 'spreadsheet', 'word', 'slides', 'html', 'image', 'claude', 'link', 'file'];
+const TYPE_ORDER: ArtifactFileType[] = ['pdf', 'spreadsheet', 'word', 'slides', 'html', 'image', 'claude', 'link', 'file', 'markdown', 'text'];
 
 /** Keep the tail: the filename at the end of a repo path is the part worth reading. */
 const shorten = (s: string, max = 44): string => (s.length <= max ? s : `...${s.slice(-(max - 3))}`);
@@ -56,7 +57,8 @@ export function artifactsHtml(c: InternCard): string {
     const name = esc(p.title.length > 60 ? `${p.title.slice(0, 59)}...` : p.title);
     const from = p.provenance ? ` <span style="color:${MUTED}">${esc(shorten(p.provenance))}</span>` : '';
     const text = `<strong>${esc(kindLabel(p.kind))}</strong>: ${name}${from}`;
-    const style = `display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;background:${t.tint};color:#0f172a;border:1px solid ${t.color};text-decoration:none`;
+    const border = WRONG_FORMAT.has(p.fileType) ? 'dashed' : 'solid';
+    const style = `display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;font-size:12px;background:${t.tint};color:#0f172a;border:1px ${border} ${t.color};text-decoration:none`;
     return href ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="${style}">${text} <span style="color:${t.color}">&#8599;</span></a>` : `<span style="${style}">${text}</span>`;
   };
   // One row per file type, so a PDF, a spreadsheet and a claude.ai page never look alike
@@ -68,8 +70,9 @@ export function artifactsHtml(c: InternCard): string {
     const badge = `<span style="display:inline-block;min-width:92px;margin:2px 6px 2px 0;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;background:${t.color};color:#ffffff;text-align:center">${t.icon} ${esc(t.label)} ${items.length}</span>`;
     return `<div style="margin:3px 0">${badge}${items.map(chip).join('')}</div>`;
   }).join('');
-  const caption = `<div style="font-size:11px;color:${MUTED};margin:0 0 4px">Their own work only: files in their repo, files they uploaded, artifacts they built elsewhere. Markdown and plain-text notes are not counted as artifacts.</div>`;
-  return `${label(`Artifacts they made (${a.published.length})`)}${caption}
+  const wrong = a.published.filter((p) => WRONG_FORMAT.has(p.fileType)).length;
+  const caption = `<div style="font-size:11px;color:${MUTED};margin:0 0 4px">Their own work only: files in their repo, files they uploaded, artifacts they built elsewhere. Amber = wrong format (Markdown or text); artifacts should be visual PDFs.</div>`;
+  return `${label(`Artifacts they made (${a.published.length}${wrong ? `, ${wrong} in the wrong format` : ''})`)}${caption}
 <div>${rows || `<span style="font-size:12px;color:${MUTED}">Nothing published yet.</span>`}</div>`;
 }
 
