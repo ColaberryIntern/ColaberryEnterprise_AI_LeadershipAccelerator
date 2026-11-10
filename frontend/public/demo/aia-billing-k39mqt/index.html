@@ -84,6 +84,36 @@
   .c-sent   { background:var(--okbg); color:var(--ok); border-color:var(--ok); }
   .c-rej    { background:var(--badbg); color:var(--bad); border-color:var(--bad); }
   .c-none   { background:#eceff3; color:#5a6676; border-color:#b6bec9; }
+
+  /* The approval chain, drawn so the sequence and Jamie's place in it are visible at a glance. */
+  .chain {
+    display:flex; align-items:stretch; gap:4px; flex-wrap:wrap;
+    margin:14px 0 2px; padding:12px; border:1px solid var(--border);
+    border-radius:9px; background:var(--bg);
+  }
+  .chain-step {
+    flex:1 1 118px; min-width:118px; text-align:center;
+    padding:9px 6px; border-radius:8px; border:1px solid transparent;
+  }
+  .chain-dot {
+    width:24px; height:24px; line-height:22px; margin:0 auto 6px;
+    border-radius:50%; border:1px solid currentColor;
+    font-size:12px; font-weight:700;
+  }
+  .chain-who   { font-size:12.5px; font-weight:700; line-height:1.25; }
+  .chain-title { font-size:11px; color:var(--muted); line-height:1.3; margin-top:2px; }
+  .chain-note  {
+    font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    margin-top:4px; color:var(--primary);
+  }
+  .chain-arrow { align-self:center; color:#b6bec9; font-size:15px; }
+  .chain-done  { color:var(--ok); background:var(--okbg); border-color:var(--ok); }
+  .chain-here  { color:#6b46c1; background:#f3eefc; border-color:#6b46c1; }
+  .chain-todo  { color:#5a6676; background:#fff; border-color:var(--border); }
+  /* The approver nobody has named yet reads as provisional rather than real. */
+  .chain-unnamed .chain-who { font-style:italic; }
+  .chain-unnamed { border-style:dashed; }
+  @media (max-width:700px) { .chain-arrow { display:none; } }
   .btn {
     border:1px solid var(--primary); background:var(--primary); color:#fff;
     padding:7px 15px; border-radius:7px; font-weight:600; font-size:13.5px;
@@ -780,23 +810,72 @@ function downloadWorkbook(job, x) {
 }
 
 
-const ROLES = [
-  { id:'pm',   name:'Jack Stanwood - Project Manager' },
-  { id:'acct', name:'Jamie Morse - Accountant / Controller' },
-  { id:'own',  name:'Nick Arena - Owner / Approver' },
+/**
+ * THE APPROVAL CHAIN, as Jamie corrected it on 9 November.
+ *
+ * Her words: "it was me, then it was the PM writes all what they want... It's three approvers.
+ * I'm not included as one of the approvers. I'm the end person." And on the old button that said
+ * Send to accounting: "but it really would end up going to you. Okay, so there's one additional
+ * person."
+ *
+ * So the first build had it wrong in a way that matters. It put her in the MIDDLE of the chain as
+ * the approving accountant. She is the END of it: three approvers sign off in order, and then the
+ * requisition lands with her to package and submit. She performs the accounting step; she does not
+ * gate.
+ *
+ * Two of the three approvers are named. The third is not, and is deliberately shown as unnamed
+ * rather than guessed at or quietly dropped - the question is on the list for Wednesday.
+ */
+const APPROVERS = [
+  { id:'ap1', who:'Brian Dempster', title:'Executive PM' },
+  { id:'ap2', who:'Nick Arena',     title:'Owner' },
+  { id:'ap3', who:'Third approver', title:'name still to be confirmed' },
 ];
 
-const KEY = 'mgi-aia-proto-v1';
+const ROLES = [
+  { id:'pm', name:'Jack Stanwood - Project Manager' },
+].concat(APPROVERS.map((a, i) => ({
+  id: a.id,
+  name: a.who + ' - ' + a.title + '  (approver ' + (i + 1) + ' of 3)',
+}))).concat([
+  { id:'acct', name:'Jamie Morse - Accounting  (receives it, does not approve)' },
+]);
+
+const APPROVER_IDS = APPROVERS.map((a) => a.id);
+const isApprover = (id) => APPROVER_IDS.indexOf(id) !== -1;
+
+// v2: the role ids changed with the corrected chain, so a session saved by the 9 November build
+// would restore a role ('own') that no longer exists and leave the switcher on nothing. Bumping
+// the key retires that state instead of trying to migrate it.
+const KEY = 'mgi-aia-proto-v2';
 let S = null;
 
 function fresh() {
-  return { role:'acct', jobNo:null, tab:'board',
-    jobs: JSON.parse(JSON.stringify(DATA.jobs)) };
+  const jobs = JSON.parse(JSON.stringify(DATA.jobs));
+  // Which of the three approvers the job is sitting with, 1-based. Only meaningful while the
+  // status is in_approval, but always present so nothing has to test for undefined.
+  for (const j of jobs) { j.apprStep = 1; j.apprLog = []; }
+  return { role:'acct', jobNo:null, tab:'board', jobs };
 }
 function load() {
   // Browser storage is a convenience here, never the source of truth: the demo must work in a
   // private window and on a machine that blocks site data.
-  try { const r = localStorage.getItem(KEY); if (r) return JSON.parse(r); } catch (e) {}
+  try {
+    const r = localStorage.getItem(KEY);
+    if (r) {
+      const s = JSON.parse(r);
+      // Defend against a half-written or hand-edited state rather than rendering a broken page:
+      // an unknown role would leave the switcher on nothing and fall through to the approver
+      // branch, and a job without apprStep would sit in approval forever.
+      if (!s || !Array.isArray(s.jobs) || !s.jobs.length) return fresh();
+      if (s.role !== 'pm' && s.role !== 'acct' && !isApprover(s.role)) s.role = 'acct';
+      for (const j of s.jobs) {
+        if (typeof j.apprStep !== 'number' || j.apprStep < 1 || j.apprStep > APPROVERS.length) j.apprStep = 1;
+        if (!Array.isArray(j.apprLog)) j.apprLog = [];
+      }
+      return s;
+    }
+  } catch (e) {}
   return fresh();
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
@@ -843,15 +922,56 @@ const STATUS = {
   period_open: ['Period open', 'c-open'],
   with_pm:     ['With project manager', 'c-pm'],
   in_approval: ['Awaiting approval', 'c-appr'],
-  ready:       ['Ready to send', 'c-ready'],
-  sent:        ['Submitted', 'c-sent'],
+  // Was "Ready to send", which read as though accounting were the approver. It is the opposite:
+  // the third approval DELIVERS the requisition to accounting, and Jamie then packages and sends.
+  ready:       ['Delivered to accounting', 'c-ready'],
+  sent:        ['Submitted to the GC', 'c-sent'],
   rejected:    ['Rejected, line removed', 'c-rej'],
   no_billing:  ['No billing this month', 'c-none'],
 };
-const chip = (s) => {
+/** `step` is the job's apprStep, so a job in approval says WHICH of the three has it. */
+const chip = (s, step) => {
   const [t, c] = STATUS[s] || ['Unknown','c-none'];
-  return '<span class="chip ' + c + '">' + t + '</span>';
+  const suffix = (s === 'in_approval' && step) ? ' - ' + step + ' of 3' : '';
+  return '<span class="chip ' + c + '">' + t + suffix + '</span>';
 };
+
+/**
+ * The chain itself, drawn. This exists because the model was wrong in the first build and the
+ * correction is invisible unless the screen shows the whole sequence and where Jamie sits in it.
+ */
+function approvalChain(job) {
+  const steps = [{ who:'Jack Stanwood', title:'Project Manager', kind:'pm' }]
+    .concat(APPROVERS.map((a) => ({ who:a.who, title:a.title, kind:'appr' })))
+    .concat([{ who:'Jamie Morse', title:'Accounting - packages and submits', kind:'end' }]);
+
+  // How far the job has actually travelled, as an index into `steps`.
+  let reached;
+  if (job.status === 'period_open' || job.status === 'with_pm') reached = 0;
+  else if (job.status === 'in_approval') reached = job.apprStep;
+  else if (job.status === 'no_billing') reached = 0;
+  else reached = steps.length - 1;            // ready, sent, rejected: it is with accounting
+
+  let h = '<div class="chain">';
+  let apprSeen = 0;
+  steps.forEach((st, i) => {
+    const state = i < reached ? 'done' : (i === reached ? 'here' : 'todo');
+    const unnamed = st.who === 'Third approver' ? ' chain-unnamed' : '';
+    // Only the three approvers carry a number, and it counts 1-2-3 across them alone. Numbering
+    // all five positions put a "3" on Nick while the status chip called him approver 2 of 3.
+    if (st.kind === 'appr') apprSeen += 1;
+    const mark = i < reached ? '&#10003;' : (st.kind === 'appr' ? apprSeen : '&middot;');
+    h += '<div class="chain-step chain-' + state + unnamed + '">'
+      + '<div class="chain-dot">' + mark + '</div>'
+      + '<div class="chain-who">' + esc(st.who) + '</div>'
+      + '<div class="chain-title">' + esc(st.title) + '</div>'
+      + (st.kind === 'end' ? '<div class="chain-note">not an approver</div>' : '')
+      + '</div>';
+    if (i < steps.length - 1) h += '<div class="chain-arrow">&rarr;</div>';
+  });
+  h += '</div>';
+  return h;
+}
 
 const myJobs = () => (S.role === 'pm'
   ? S.jobs.filter((j) => j.pm === 'Jack Stanwood')
@@ -893,7 +1013,7 @@ function viewBoard() {
       + '<td class="r money">' + money(x.scheduled) + '</td>'
       + '<td class="r money">' + money(x.thisPeriod + x.stored) + '</td>'
       + '<td class="r money"><strong>' + money(x.currentDue) + '</strong></td>'
-      + '<td>' + chip(j.status) + '</td>'
+      + '<td>' + chip(j.status, j.apprStep) + '</td>'
       + '<td><button class="btn ghost" data-open="' + j.jobNo + '">Open</button></td>'
       + '</tr>';
   }
@@ -939,8 +1059,9 @@ function viewJob() {
     + '<div><b>Retainage (' + pct(job.retainageWorkPct) + ' of work)</b><span data-s="retainage">'
     + money(x.retainage) + '</span></div>'
     + '<div><b>Current payment due</b><strong data-s="due">' + money(x.currentDue) + '</strong></div>'
-    + '<div><b>Status</b>' + chip(job.status) + '</div>'
-    + '</div>';
+    + '<div><b>Status</b>' + chip(job.status, job.apprStep) + '</div>'
+    + '</div>'
+    + approvalChain(job);
   if (S.role === 'acct') {
     h += '<div class="row" style="margin-top:12px">'
       + '<label class="note" style="margin:0">Retainage rate for this contract</label>'
@@ -1012,16 +1133,32 @@ function viewJob() {
 
   h += '<div class="panel" style="margin-top:16px"><div class="row">';
   if (S.role === 'pm') {
-    h += '<button class="btn" data-act="to_approval">Send to accounting</button>'
+    // It does not go to accounting from here. It goes into the approval chain, and only reaches
+    // accounting once all three have signed.
+    h += '<button class="btn" data-act="to_approval">Submit for approval</button>'
       + '<button class="btn quiet" data-act="no_billing">No billing this month</button>';
   } else if (S.role === 'acct') {
+    // No approve button, deliberately. Jamie is the end recipient, not a gate: she packages what
+    // the three approvers have already signed and sends it to the general contractor.
     h += '<button class="btn" data-tab2="aia">Generate the AIA</button>'
-      + '<button class="btn ghost" data-act="to_approval">Send for approval</button>'
-      + '<button class="btn quiet" data-act="sent">Mark submitted</button>'
+      + '<button class="btn quiet" data-act="sent">Mark submitted to the GC</button>'
       + '<button class="btn quiet" data-act="rejected">GC rejected a line</button>';
   } else {
-    h += '<button class="btn" data-act="ready">Approve</button>'
-      + '<button class="btn quiet" data-act="with_pm">Send back to the project manager</button>';
+    const mine = APPROVER_IDS.indexOf(S.role) + 1;       // 1-based position in the chain
+    if (job.status !== 'in_approval') {
+      h += '<p class="note" style="margin:0">Nothing to approve on this job yet. It is '
+        + (STATUS[job.status] || ['in an unknown state'])[0].toLowerCase() + '.</p>';
+    } else if (job.apprStep !== mine) {
+      // Sequential, not parallel. Showing a disabled reason beats showing a button that silently
+      // does the wrong thing, and it is the behaviour to confirm with Jamie on Wednesday.
+      h += '<p class="note" style="margin:0">Not your turn yet. This job is with '
+        + esc(APPROVERS[job.apprStep - 1].who) + ', approver ' + job.apprStep + ' of 3. '
+        + 'You are approver ' + mine + '.</p>';
+    } else {
+      h += '<button class="btn" data-act="approve">Approve as '
+        + esc(APPROVERS[mine - 1].who) + '</button>'
+        + '<button class="btn quiet" data-act="with_pm">Send back to the project manager</button>';
+    }
   }
   h += '</div></div>';
   return h;
@@ -1167,7 +1304,29 @@ document.addEventListener('click', (e) => {
   if (b.dataset.tab2) { S.tab = b.dataset.tab2; return render(); }
   if (b.dataset.act) {
     const job = S.jobs.find((j) => j.jobNo === S.jobNo);
-    job.status = b.dataset.act;
+    const act = b.dataset.act;
+    if (act === 'approve') {
+      // Only ever called when it is this approver's turn (the button is not rendered otherwise),
+      // but the guard stays: a stale click after a state change must not advance the chain twice.
+      const mine = APPROVER_IDS.indexOf(S.role) + 1;
+      if (job.status !== 'in_approval' || job.apprStep !== mine) return render();
+      job.apprLog.push({ who: APPROVERS[mine - 1].who, at: new Date().toISOString() });
+      // The THIRD approval is what delivers it to accounting. That is the whole correction.
+      if (job.apprStep >= APPROVERS.length) job.status = 'ready';
+      else job.apprStep += 1;
+    } else if (act === 'to_approval') {
+      job.status = 'in_approval';
+      job.apprStep = 1;
+      job.apprLog = [];
+    } else if (act === 'with_pm') {
+      // A send-back restarts the chain: an approval given against figures that then changed is
+      // not an approval of what finally goes out.
+      job.status = 'with_pm';
+      job.apprStep = 1;
+      job.apprLog = [];
+    } else {
+      job.status = act;
+    }
     return render();
   }
   if (b.id === 'dlxlsx') {
@@ -1182,6 +1341,9 @@ document.addEventListener('click', (e) => {
       for (const l of job.lines) { l.prev = G(l); l.thisPeriod = 0; l.stored = 0; }
       job.applicationNo += 1;
       job.status = 'period_open';
+      // A new period starts the approval chain over; last month's signatures do not carry.
+      job.apprStep = 1;
+      job.apprLog = [];
     }
     return render();
   }
@@ -1200,12 +1362,15 @@ const TOUR = [
     target: '.cards',
     act: () => { S.role = 'acct'; S.jobNo = null; } },
 
-  { title: 'Everyone sees the same jobs through their own door',
-    body: 'There are three kinds of user: the project manager who says what got built, the '
-      + 'accountant who bills it, and the owner who approves it. Change who you are signed in as '
-      + 'using this box at any time.',
+  { title: 'Five seats, and you are the last one',
+    body: 'This is the chain you corrected on our call. The project manager says what got built, '
+      + 'then three approvers sign it off in order, and then it reaches you to package and send. '
+      + 'You are not one of the approvers. Change who you are signed in as using this box at any '
+      + 'time.',
     target: '#role',
-    act: () => { S.role = 'acct'; S.jobNo = null; } },
+    act: () => { S.role = 'acct'; S.jobNo = null; },
+    doThis: 'Open the box. Two of the three approvers are named; the third is the one we still '
+      + 'need from you.' },
 
   { title: 'A project manager only sees their own jobs',
     body: 'Signed in as Jack Stanwood, the Porsche job has gone. He cannot see it, open it or '
@@ -1234,11 +1399,30 @@ const TOUR = [
     act: () => { S.role = 'acct'; S.jobNo = '1807'; S.tab = 'aia'; },
     doThis: 'Scroll down to see the continuation sheets, then use Print or save as PDF.' },
 
-  { title: 'The owner approves and cannot change a figure',
-    body: 'Signed in as Nick, there is nothing to type. This is the folder that walks the office '
-      + 'today, except it leaves a record of who approved what and when.',
+  { title: 'Three approvers, in order, and none of them can change a figure',
+    body: 'Signed in as Brian Dempster, the first approver, there is nothing to type. This is the '
+      + 'red folder that walks the office today, except it moves in a fixed order and leaves a '
+      + 'record of who approved what and when. Until Brian signs, Nick does not get a button.',
     target: '#app .panel:last-of-type',
-    act: () => { S.role = 'own'; S.jobNo = '1807'; S.tab = 'entry'; } },
+    act: () => {
+      const j = S.jobs.find((x) => x.jobNo === '1807');
+      j.status = 'in_approval'; j.apprStep = 1; j.apprLog = [];
+      S.role = 'ap1'; S.jobNo = '1807'; S.tab = 'entry';
+    },
+    doThis: 'Press Approve, then switch to Nick Arena and approve again.' },
+
+  { title: 'It ends with you, not through you',
+    body: 'The first build had you approving in the middle of this chain. You told us that was '
+      + 'wrong: three approvers, and you are the end person. So the third approval is what hands '
+      + 'the requisition to you, and the status now says delivered to accounting rather than '
+      + 'approved by accounting. Nothing waits on you to say yes.',
+    target: '#app .chain',
+    act: () => {
+      const j = S.jobs.find((x) => x.jobNo === '1807');
+      j.status = 'ready'; j.apprStep = APPROVERS.length;
+      S.role = 'acct'; S.jobNo = '1807'; S.tab = 'entry';
+    },
+    doThis: 'The third box is dashed because that approver has not been named yet. Who is it?' },
 
   { title: 'Retainage belongs to the contract',
     body: 'This job holds 5 percent. Fairfield holds none. Today that percentage is written into '
