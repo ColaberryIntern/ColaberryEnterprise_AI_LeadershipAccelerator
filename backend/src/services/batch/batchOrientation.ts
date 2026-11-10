@@ -3,7 +3,8 @@
  *
  * The monthly batch model (`directives/run-monthly-enrollment-batches.md`) states the rule:
  * orientation is the first Monday of the month AFTER the batch closes, in the batch's own evening
- * slot. For the November 2026 batch that is Monday 7 December 2026.
+ * slot. November 2026 is the one exception (see FIRST_SESSION_EXCEPTIONS): 12 November, then
+ * Thursday 3 December.
  *
  * ── WHY THIS IS COMPUTED AND NOT READ FROM `start_date` ──
  *
@@ -125,30 +126,33 @@ export function formatOrientationDate(date: string): string | null {
 /**
  * One-off first sessions that come BEFORE the convention's orientation, keyed by batch month.
  *
- * Ali, 2026-11-09: the November 2026 batch holds a live session on 12 November as well as its
- * 7 December orientation. A member who joins on or before 12 November is told 12 November; from the
- * 13th on, the November batch is told 7 December like every other batch is told its own first
- * Monday. December onward has no entry and follows the convention.
+ * Ali, 2026-11-09: the November 2026 batch holds a live session on 12 November. A member who joins
+ * on or before 12 November is told 12 November. From the 13th on, the November batch is told
+ * Thursday 3 December (Ali moved it off the first Monday, 7 December, so it falls on a Thursday
+ * like the 12th). December onward has no entry and follows the first-Monday convention.
  *
  * `through` is inclusive: on the 12th itself the 6:30 PM session is still ahead of a member who
- * pays that day, so it is still the right date to give them.
+ * pays that day, so it is still the right date to give them. `thereafter` is the date given once
+ * `through` has passed, and also when the caller has no clock: it is not time-limited, so it can
+ * never be stale the way `date` can.
  */
-export const FIRST_SESSION_EXCEPTIONS: Readonly<Record<string, { date: string; through: string }>> = {
-  '2026-11': { date: '2026-11-12', through: '2026-11-12' },
+export const FIRST_SESSION_EXCEPTIONS: Readonly<Record<string, { date: string; through: string; thereafter: string }>> = {
+  '2026-11': { date: '2026-11-12', through: '2026-11-12', thereafter: '2026-12-03' },
 };
 
 /**
  * The date a member should be given as their batch's first live session, as 'YYYY-MM-DD'.
  *
- * `todayCentral` is the Central calendar date the member is being told on. Without it the answer is
- * the convention's orientation, so a caller that has no clock can never pick up an exception that
+ * `todayCentral` is the Central calendar date the member is being told on. Without it an exception
+ * batch gets its `thereafter` date, so a caller that has no clock can never pick up a `date` that
  * may already have passed.
  */
 export function firstSessionDateFor(monthKey: string, todayCentral?: string | null): string | null {
   const exception = FIRST_SESSION_EXCEPTIONS[String(monthKey ?? '').trim()];
+  if (!exception) return orientationDateFor(monthKey);
   const today = String(todayCentral ?? '').trim();
-  if (exception && /^\d{4}-\d{2}-\d{2}$/.test(today) && today <= exception.through) return exception.date;
-  return orientationDateFor(monthKey);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(today) && today <= exception.through) return exception.date;
+  return exception.thereafter;
 }
 
 /**

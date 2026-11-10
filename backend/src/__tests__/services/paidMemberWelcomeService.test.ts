@@ -162,11 +162,11 @@ describe('what the email is actually given', () => {
     const row = await welcomeOnePaidMember(member(), true);
     expect(row.outcome).toBe('sent');
     expect(row.batchLabel).toBe('November 2026');
-    expect(row.orientation).toBe('Monday, December 7, 2026 at 6:30 PM CT');
+    expect(row.orientation).toBe('Thursday, December 3, 2026 at 6:30 PM CT');
     const sent = send.mock.calls[0][0];
     expect(sent.subject).toContain('November 2026');
     expect(sent.html).toContain('/portal/rooms/room-1');
-    expect(sent.text).toContain('Monday, December 7, 2026 at 6:30 PM CT');
+    expect(sent.text).toContain('Thursday, December 3, 2026 at 6:30 PM CT');
   });
 
   it('on or before 12 November (Central): the November batch is told 12 November', async () => {
