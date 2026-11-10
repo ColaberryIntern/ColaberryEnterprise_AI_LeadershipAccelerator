@@ -132,10 +132,12 @@ describe('the November 2026 first-session exception (Ali, 2026-11-09)', () => {
     }
   });
 
-  it('from 13 November the November batch is told 7 December, for good', () => {
+  it('from 13 November the November batch is told Thursday 3 December, for good', () => {
     for (const today of ['2026-11-13', '2026-11-30', '2027-06-01']) {
-      expect(firstSessionDateFor('2026-11', today)).toBe('2026-12-07');
+      expect(firstSessionDateFor('2026-11', today)).toBe('2026-12-03');
     }
+    // Ali picked it because it is a Thursday, like the 12th. Pin the weekday, not just the string.
+    expect(new Date('2026-12-03T00:00:00Z').getUTCDay()).toBe(4);
   });
 
   it('no other batch is touched, whatever the date', () => {
@@ -145,17 +147,17 @@ describe('the November 2026 first-session exception (Ali, 2026-11-09)', () => {
     }
   });
 
-  it('with no usable date the convention answers, so a caller with no clock never uses a stale exception', () => {
+  it('with no usable date the lasting answer is used, so a caller with no clock never gets 12 November', () => {
     for (const today of [undefined, null, '', 'today', '2026/11/09']) {
-      expect(firstSessionDateFor('2026-11', today as any)).toBe('2026-12-07');
+      expect(firstSessionDateFor('2026-11', today as any)).toBe('2026-12-03');
     }
   });
 
   it('orientationOf passes the date through and labels the exception like any other date', () => {
     const nov = { id: 'c', name: 'Cohort - November 2026', cohort_type: 'accelerator' } as any;
     expect(orientationOf(nov, '2026-11-09')!.label).toBe('Thursday, November 12, 2026 at 6:30 PM CT');
-    expect(orientationOf(nov, '2026-11-13')!.label).toBe('Monday, December 7, 2026 at 6:30 PM CT');
-    expect(orientationOf(nov)!.date).toBe('2026-12-07');
+    expect(orientationOf(nov, '2026-11-13')!.label).toBe('Thursday, December 3, 2026 at 6:30 PM CT');
+    expect(orientationOf(nov)!.date).toBe('2026-12-03');
   });
 
   it('the exception table holds only November 2026', () => {
@@ -164,11 +166,16 @@ describe('the November 2026 first-session exception (Ali, 2026-11-09)', () => {
 });
 
 describe('orientationOf — the whole answer for a row', () => {
-  it('gives the live November batch its real orientation, not its start_date', () => {
+  it('gives the live November batch its real first session, not its start_date', () => {
     const o = orientationOf(row())!;
     expect(o.batchMonth).toBe('2026-11');
-    expect(o.date).toBe('2026-12-07');
-    expect(o.label).toBe('Monday, December 7, 2026 at 6:30 PM CT');
+    expect(o.date).toBe('2026-12-03');
+    expect(o.label).toBe('Thursday, December 3, 2026 at 6:30 PM CT');
+  });
+
+  it('a non-exception batch still gets the first Monday', () => {
+    const dec = orientationOf(row({ name: 'Cohort - December 2026', settings_json: { batch_month: '2026-12' } }), '2026-11-20')!;
+    expect(dec.label).toBe('Monday, January 4, 2027 at 6:30 PM CT');
   });
 
   it('IGNORES start_date entirely, even when the row carries a contradicting one', () => {
@@ -176,16 +183,16 @@ describe('orientationOf — the whole answer for a row', () => {
     // 2026-11-08. If this module ever starts reading the column, this assertion is what catches it
     // before an email tells a paying member the wrong date.
     const o = orientationOf(row({ start_date: '2026-11-12' }))!;
-    expect(o.date).toBe('2026-12-07');
+    expect(o.date).toBe('2026-12-03');
     const moved = orientationOf(row({ start_date: '2099-01-01' }))!;
-    expect(moved.date).toBe('2026-12-07');
+    expect(moved.date).toBe('2026-12-03');
   });
 
   it('works on the live row as it actually is, with no batch_month key at all', () => {
     // Production reality on 2026-11-08: the open November row carries no settings_json.batch_month,
     // so the month comes from the name. An email for the current batch depends on this path.
     const o = orientationOf({ id: 'c', name: 'Cohort - November 2026', cohort_type: 'accelerator' } as any)!;
-    expect(o.date).toBe('2026-12-07');
+    expect(o.date).toBe('2026-12-03');
     expect(o.time).toBe('18:30');
   });
 
