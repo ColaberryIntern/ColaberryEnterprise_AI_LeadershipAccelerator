@@ -1,4 +1,4 @@
-import portalApi from '../../../utils/portalApi';
+import portalApi, { keepaliveConfig } from '../../../utils/portalApi';
 import type { AttachmentRef } from '../../../services/agentAttachmentApi';
 
 /**
@@ -199,8 +199,9 @@ export const runtimeApi = {
   reflection: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/reflection`).then((r) => r.data as { questions: string[] }),
   promptLab: (cardId: string, prompt: string, output?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/prompt-lab`, { prompt, output }).then((r) => r.data as PromptEval),
   complete: (cardId: string, work?: string, reflection?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/complete`, { work, reflection }).then((r) => r.data as { outcome: any; artifact: any; readiness: Readiness }),
-  watch: (cardId: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }) =>
-    portalApi.post(`/api/portal/runtime/cards/${cardId}/watch`, beat).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
+  // `exiting` (C119): the learner is leaving the page, so send it as keepalive to survive unload.
+  watch: (cardId: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }, exiting?: boolean) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/watch`, beat, keepaliveConfig(exiting)).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
   // Current watch verdict, no write: hydrates Mark complete on open so it starts dimmed until the bar is met.
   watchVerdict: (cardId: string) =>
     portalApi.get(`/api/portal/runtime/cards/${cardId}/watch`).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
@@ -211,8 +212,8 @@ export const runtimeApi = {
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/collect`, {}).then((r) => r.data as { points_awarded: number; already: boolean }),
   // Podcast / testimonial listen-to-earn (ambient media, keyed on the provider id):
   // playback beat → verdict → collect. 75% bar, 35 / 10 points, server-authoritative.
-  mediaWatch: (kind: 'podcast' | 'testimonial', id: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }) =>
-    portalApi.post(`/api/portal/runtime/today/media/${kind}/${encodeURIComponent(id)}/watch`, beat)
+  mediaWatch: (kind: 'podcast' | 'testimonial', id: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }, exiting?: boolean) =>
+    portalApi.post(`/api/portal/runtime/today/media/${kind}/${encodeURIComponent(id)}/watch`, beat, keepaliveConfig(exiting))
       .then((r) => r.data as { watched_pct: number; required_pct: number; met: boolean }),
   mediaVerdict: (kind: 'podcast' | 'testimonial', id: string) =>
     portalApi.get(`/api/portal/runtime/today/media/${kind}/${encodeURIComponent(id)}/watch`)

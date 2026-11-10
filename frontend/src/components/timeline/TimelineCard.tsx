@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { bandRungForLevel } from '../../services/bandLadder';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
-import VideoEmbed from './VideoEmbed';
+import VideoEmbed, { type WatchBeatMeta } from './VideoEmbed';
 import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
-import portalApi from '../../utils/portalApi';
+import portalApi, { keepaliveConfig } from '../../utils/portalApi';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import { ambientMediaOf } from './ambientMedia';
@@ -300,9 +300,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // in the drawer, gated server-side at 75%, exactly like a video card.
   const ambient = ambientMediaOf(card);
   const mediaTracked = !!ambient && pts > 0 && !!onComplete && !done;
-  const mediaBeat = (beat: WatchBeatPayload) => {
+  const mediaBeat = (beat: WatchBeatPayload, meta?: WatchBeatMeta) => {
     if (!ambient) return;
-    runtimeApi.mediaWatch(ambient.kind, ambient.id, beat).then((r) => setWatch(r)).catch(() => { /* best-effort */ });
+    runtimeApi.mediaWatch(ambient.kind, ambient.id, beat, !!meta?.exiting).then((r) => setWatch(r)).catch(() => { /* best-effort */ });
   };
   const audioBeats = useMediaBeats(mediaTracked && ambient?.kind === 'podcast' ? mediaBeat : undefined, 'audio');
   // Hydrate the % on mount so a half-listened episode shows its progress before
@@ -444,7 +444,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         // moment the student collected points (75%), so the stored value was
         // capped at the unlock threshold instead of measuring real playback.
         onWatchBeat={watchable
-          ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
+          ? (beat, meta) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat, keepaliveConfig(meta?.exiting)).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
           : mediaTracked && ambient?.kind === 'testimonial'
             ? mediaBeat   // ambient testimonial: same beats, the media gate instead of the card gate
             : undefined}

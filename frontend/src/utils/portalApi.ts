@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type AxiosRequestConfig } from 'axios';
 import { PARTICIPANT_TOKEN_KEY, VIEW_AS_TOKEN_KEY, getParticipantToken } from './participantToken';
 import { loginHrefPreserving } from './portalLoginHref';
 
@@ -38,5 +38,14 @@ portalApi.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * C119: request options for a call that must outlive the page (a watch beat sent as the learner closes the tab). A
+ * keepalive fetch survives unload and, unlike navigator.sendBeacon, still carries the Authorization header the
+ * interceptor adds. Undefined when not exiting, so ordinary calls keep axios's default adapter.
+ */
+export function keepaliveConfig(exiting: boolean | undefined): AxiosRequestConfig | undefined {
+  return exiting ? { adapter: 'fetch', fetchOptions: { keepalive: true } } : undefined;
+}
 
 export default portalApi;
