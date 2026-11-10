@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { StudentGovProjectView, GovCockpitApi, GovReviewApi, GovStudioApi, GovProposalDocument } from '../../../../services/govProjectPortalApi';
 import ContractBar from './ContractBar';
+import StageDetail from './StageDetail';
 import StageRail, { type StudioView } from './StageRail';
 import WhereWeAre from './WhereWeAre';
 import AgentPanel from './AgentPanel';
@@ -20,7 +21,7 @@ import ProposalDocumentDrawer from '../govCockpit/ProposalDocumentDrawer';
 import ReportAProblem from '../../../admin/marketing/bugReport/ReportAProblem';
 
 // v4: the Needs view's param is `needs`; `openitems` stays a working alias.
-const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'needs', 'openitems'];
+const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', 'editor', 'gates', 'package', 'needs', 'openitems', 'snapshot', 'solicitation', 'fit', 'decide', 'outcome'];
 
 /**
  * StudioShell — the Proposal Studio desk: a sticky contract bar, a left process rail, a center workspace, and the
@@ -103,6 +104,13 @@ export default function StudioShell(
       break;
     case 'editor':
       center = <DraftVersions view={view} projectId={projectId} docs={docs} studioApi={studioApi} reviewApi={reviewApi} initialDocKey={sp.get('doc')} onReload={onReload} onToast={toast} />;
+      break;
+    case 'snapshot':
+    case 'solicitation':
+    case 'fit':
+    case 'decide':
+    case 'outcome':
+      center = <StageDetail stage={current} view={view} />;
       break;
     case 'needs':
     case 'openitems':

@@ -2,7 +2,9 @@ import React from 'react';
 import type { StudentGovProjectView } from '../../../../services/govProjectPortalApi';
 
 /** The Proposal Studio center-workspace views, in rail order. */
-export type StudioView = 'overview' | 'blueprint' | 'documents' | 'evidence' | 'editor' | 'gates' | 'package' | 'needs' | 'openitems';
+export type StudioView = 'overview' | 'blueprint' | 'documents' | 'evidence' | 'editor' | 'gates' | 'package' | 'needs' | 'openitems'
+  // vetting-stage read-only panels, opened from the pursuit-stage chips (StageDetail)
+  | 'snapshot' | 'solicitation' | 'fit' | 'decide' | 'outcome';
 
 type Icon = { kind: 'done' | 'now' | 'num'; label: string };
 
