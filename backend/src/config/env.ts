@@ -443,6 +443,9 @@ export const env = {
   // `scripts/previewPaidMemberWelcome.ts` renders it for exactly that, and the sweep's dry run
   // names every member it would mail without sending anything.
   paidMemberWelcomeEnabled: process.env.PAID_MEMBER_WELCOME_ENABLED === 'true',
+  // ISO timestamp with a zone. Only members who FIRST pay at or after it are welcomed; with the
+  // switch on and this missing, the sweep refuses to send (Ali, 2026-11-09: new payers only).
+  paidMemberWelcomeSince: process.env.PAID_MEMBER_WELCOME_SINCE || null,
   // Colaberry Live — the broadcast surface. OFF by default so the routes 404 and the
   // feature ships dark, exactly as the community rooms above do. Deliberately its OWN flag
   // rather than riding COMMUNITY_ROOMS_ENABLED: the blast radii differ (this one gates a

@@ -11,8 +11,10 @@ jest.mock('../../models', () => ({
   Cohort: { findByPk: jest.fn() },
   Enrollment: { findAll: jest.fn() },
 }));
+jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 jest.mock('../../config/env', () => ({ env: {
   paidMemberWelcomeEnabled: true,
+  paidMemberWelcomeSince: '2026-11-10T05:00:00Z',
   frontendUrl: 'https://enterprise.colaberry.ai',
   trainingWelcomeFromEmail: 'training@colaberry.com',
 } }));
@@ -36,6 +38,7 @@ import { alreadyWelcomed } from '../../services/welcome/sendPortalWelcome';
 import { guardedSendMail, resolveEmailRecipient } from '../../services/emailService';
 import { logCommunication } from '../../services/communicationLogService';
 import { ensureRoomForCohort } from '../../services/communityRooms/cohortRoomService';
+import { sequelize } from '../../config/database';
 import {
   PAID_MEMBER_WELCOME_EVENT,
   runPaidMemberWelcomeSweep,
@@ -48,6 +51,7 @@ const welcomed = alreadyWelcomed as unknown as jest.Mock;
 const send = guardedSendMail as unknown as jest.Mock;
 const logged = logCommunication as unknown as jest.Mock;
 const ensureRoom = ensureRoomForCohort as unknown as jest.Mock;
+const newPayers = sequelize.query as unknown as jest.Mock;
 
 const NOV = {
   id: 'c-nov',
@@ -64,6 +68,8 @@ const member = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   (env as any).paidMemberWelcomeEnabled = true;
+  (env as any).paidMemberWelcomeSince = '2026-11-10T05:00:00Z';
+  newPayers.mockResolvedValue([{ id: 'enr-1' }, { id: 'enr-2' }]);
   welcomed.mockResolvedValue(false);
   findCohort.mockResolvedValue(NOV);
   ensureRoom.mockResolvedValue({ id: 'room-1' });
@@ -279,5 +285,74 @@ describe('the sweep around it', () => {
     const second = await runPaidMemberWelcomeSweep({ execute: true });
     expect(second.rows[0].outcome).toBe('already-welcomed');
     expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('new payers only (Ali, 2026-11-09, option A)', () => {
+  // The dry run that day: with no cutoff, 50 existing members per run, including the July batch
+  // told a first session of August 3, two canceled members, staff and test accounts.
+  const at = (iso: string) => jest.spyOn(Date, 'now').mockReturnValue(new Date(iso).getTime());
+  afterEach(() => jest.restoreAllMocks());
+
+  it('REFUSES to execute with no cutoff, because no cutoff would mean mailing everyone', async () => {
+    for (const bad of [null, '', '2026-11-10', 'tonight', '2026-11-10T05:00:00']) {
+      (env as any).paidMemberWelcomeSince = bad;
+      findAllMembers.mockResolvedValue([member()]);
+      const report = await runPaidMemberWelcomeSweep({ execute: true });
+      expect(report.executed).toBe(false);
+      expect(report.rows[0].outcome).toBe('disabled');
+      expect(report.rows[0].error).toMatch(/PAID_MEMBER_WELCOME_SINCE/);
+    }
+    expect(newPayers).not.toHaveBeenCalled();
+    expect(findAllMembers).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('asks the database for new payers since the cutoff, parameterized, and mails only those', async () => {
+    findAllMembers.mockResolvedValue([member()]);
+    await runPaidMemberWelcomeSweep({ execute: true });
+    const [sql, options] = newPayers.mock.calls[0];
+    expect(sql).toMatch(/MIN\(created_at\)/);
+    expect(sql).not.toContain('2026-11-10');
+    expect(options.replacements).toEqual({ since: '2026-11-10T05:00:00.000Z', limit: 50 });
+    const and: any[] = findAllMembers.mock.calls[0][0].where[Op.and];
+    expect(and).toContainEqual({ id: { [Op.in]: ['enr-1', 'enr-2'] } });
+  });
+
+  it('nobody new since the cutoff: no member is loaded and nothing is sent', async () => {
+    newPayers.mockResolvedValue([]);
+    const report = await runPaidMemberWelcomeSweep({ execute: true });
+    expect(report.rows).toEqual([]);
+    expect(findAllMembers).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('a dry run may override the cutoff to ask who a given one would mail', async () => {
+    findAllMembers.mockResolvedValue([]);
+    await runPaidMemberWelcomeSweep({ execute: false, since: '2026-11-01T00:00:00Z' });
+    expect(newPayers.mock.calls[0][1].replacements.since).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('a dry run with no cutoff lists everyone, for inspection, and sends nothing', async () => {
+    (env as any).paidMemberWelcomeSince = null;
+    findAllMembers.mockResolvedValue([member()]);
+    const report = await runPaidMemberWelcomeSweep({ execute: false });
+    expect(newPayers).not.toHaveBeenCalled();
+    expect(report.rows[0].outcome).toBe('would-send');
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('never prints a first session that has already happened', async () => {
+    at('2026-12-04T18:00:00Z'); // the November batch's Dec 3 is now behind us
+    const row = await welcomeOnePaidMember(member(), true);
+    expect(row.outcome).toBe('sent');
+    expect(row.orientation).toBeNull();
+    expect(send.mock.calls[0][0].text).not.toMatch(/first live session/i);
+  });
+
+  it('on the day of the session it is still printed: it is an evening session', async () => {
+    at('2026-12-03T15:00:00Z');
+    const row = await welcomeOnePaidMember(member(), true);
+    expect(row.orientation).toBe('Thursday, December 3, 2026 at 6:30 PM CT');
   });
 });

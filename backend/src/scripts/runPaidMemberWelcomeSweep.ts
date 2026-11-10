@@ -14,6 +14,9 @@
  *   node dist/scripts/runPaidMemberWelcomeSweep.js                 (dry run - default)
  *   node dist/scripts/runPaidMemberWelcomeSweep.js --limit 5
  *   node dist/scripts/runPaidMemberWelcomeSweep.js --execute
+ *   node dist/scripts/runPaidMemberWelcomeSweep.js --since 2026-11-01T00:00:00Z   (dry run, given cutoff)
+ *
+ * `--execute` also needs `PAID_MEMBER_WELCOME_SINCE`: only members who first pay after it are mailed.
  */
 
 import { runPaidMemberWelcomeSweep, PaidWelcomeRow } from '../services/welcome/paidMemberWelcomeService';
@@ -27,12 +30,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const report = await runPaidMemberWelcomeSweep({ execute, limit });
+  // --since <ISO> asks "who would this cutoff mail"; without it the env cutoff applies.
+  const sinceAt = process.argv.indexOf('--since');
+  const since = sinceAt >= 0 ? process.argv[sinceAt + 1] : undefined;
+
+  const report = await runPaidMemberWelcomeSweep({ execute, limit, since });
 
   console.log(`=== Paid member welcome sweep (${execute ? 'EXECUTE' : 'DRY RUN'}) ===`);
   for (const r of report.rows) {
     if (r.outcome === 'disabled') {
-      console.log('[disabled] PAID_MEMBER_WELCOME_ENABLED is not true, so nothing was sent.');
+      console.log(`[disabled] ${r.error ?? 'switched off'}, so nothing was sent.`);
       console.log('           Read the copy first: node dist/scripts/previewPaidMemberWelcome.js');
       continue;
     }

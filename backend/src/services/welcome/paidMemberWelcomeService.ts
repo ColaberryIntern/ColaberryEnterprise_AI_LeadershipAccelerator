@@ -58,6 +58,7 @@ import { batchMonthOf } from '../batch/batchCohort';
 import { formatBatchMonth, orientationOf } from '../batch/batchOrientation';
 import { centralDateKey } from '../centralDate';
 import { buildPaidMemberWelcomeCopy } from './paidMemberWelcomeCopy';
+import { isFirstSessionPast, NEW_PAID_MEMBERS_SQL, parseWelcomeSince } from './paidMemberWelcomeCutoff';
 import { alreadyWelcomed } from './sendPortalWelcome';
 
 /** What this writes into `communication_logs.metadata.event`. Deliberately NOT in WELCOME_EVENTS. */
@@ -184,7 +185,11 @@ export async function welcomeOnePaidMember(enrollment: any, execute: boolean): P
   if (!cohort || !batchLabel) return { ...base, outcome: 'not-in-a-batch' };
 
   // Today in Central decides whether the November batch's 12 November exception still applies.
-  const orientation = orientationOf(cohort as any, centralDateKey(Date.now()));
+  const today = centralDateKey(Date.now());
+  const computed = orientationOf(cohort as any, today);
+  // Never tell anyone a first session that has already happened. The copy drops the line when the
+  // label is null, which is the same honest degradation as a batch with no readable date.
+  const orientation = computed && !isFirstSessionPast(computed.date, today) ? computed : null;
   const roomUrl = await batchRoomUrl(cohort);
   const copy = buildPaidMemberWelcomeCopy({
     fullName: enrollment.full_name,
@@ -243,34 +248,51 @@ export async function welcomeOnePaidMember(enrollment: any, execute: boolean): P
 }
 
 /**
- * Every paid, active member who has not been welcomed yet.
+ * Every NEW paid, active member who has not been welcomed yet: new meaning first paid at or after
+ * `PAID_MEMBER_WELCOME_SINCE` (see `paidMemberWelcomeCutoff.ts`).
  *
  * Ordered oldest first so a backlog is cleared in the order people paid, and capped so one run
  * cannot empty a large backlog into the mail provider in one burst.
+ *
+ * `opts.since` overrides the env cutoff, for a dry run that asks "who would a given cutoff mail".
+ * A dry run with no cutoff at all lists every paid member, for inspection; an EXECUTE with no
+ * readable cutoff refuses, because no cutoff would mean mailing everyone.
  */
 export async function runPaidMemberWelcomeSweep(
-  opts: { execute?: boolean; limit?: number } = {},
+  opts: { execute?: boolean; limit?: number; since?: string } = {},
 ): Promise<PaidWelcomeReport> {
   const execute = opts.execute === true;
   const limit = Number.isFinite(opts.limit as number) && (opts.limit as number) > 0 ? Number(opts.limit) : 50;
-
-  if (execute && !env.paidMemberWelcomeEnabled) {
-    log('warn', 'sweep_disabled', { reason: 'PAID_MEMBER_WELCOME_ENABLED is not true' });
+  const disabled = (reason: string): PaidWelcomeReport => {
+    log('warn', 'sweep_disabled', { reason });
     return { executed: false, rows: [{
       enrollmentId: '(none)', email: '', batchLabel: null, orientation: null,
-      hasRoom: false, outcome: 'disabled',
+      hasRoom: false, outcome: 'disabled', error: reason,
     }] };
+  };
+
+  if (execute && !env.paidMemberWelcomeEnabled) return disabled('PAID_MEMBER_WELCOME_ENABLED is not true');
+  const since = parseWelcomeSince(opts.since ?? env.paidMemberWelcomeSince);
+  if (execute && !since) return disabled('PAID_MEMBER_WELCOME_SINCE is missing or not an ISO timestamp with a zone');
+
+  const and: any[] = [
+    { payment_status: 'paid' },
+    { status: 'active' },
+    { cohort_id: { [Op.ne]: null } },
+    { email: { [Op.ne]: null } },
+  ];
+  if (since) {
+    const { sequelize } = await import('../../config/database');
+    const found = (await sequelize.query(NEW_PAID_MEMBERS_SQL, {
+      replacements: { since: since.toISOString(), limit },
+      type: 'SELECT',
+    })) as Array<{ id: string }>;
+    if (!found.length) return { executed: execute, rows: [] };
+    and.push({ id: { [Op.in]: found.map((r) => String(r.id)) } });
   }
 
   const members = await Enrollment.findAll({
-    where: {
-      [Op.and]: [
-        { payment_status: 'paid' },
-        { status: 'active' },
-        { cohort_id: { [Op.ne]: null } },
-        { email: { [Op.ne]: null } },
-      ],
-    } as any,
+    where: { [Op.and]: and } as any,
     order: [['enrolled_at', 'ASC'], ['id', 'ASC']],
     limit,
   });

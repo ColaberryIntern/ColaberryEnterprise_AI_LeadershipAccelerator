@@ -142,6 +142,9 @@ const PAID_FILES: Record<string, string> = {
     + 'column at all: its only write anywhere is a communication_logs row recording that the mail '
     + 'went out, which is the same row that makes it idempotent. So it is a read rather than a '
     + 'fifth writer, and it cannot make an enrollment incoherent in the sense this tripwire guards.',
+  'services/welcome/paidMemberWelcomeCutoff.ts':
+    'READ. The same sweep\'s "new payers only" selection (C10.18, 2026-11-09) as a parameterized '
+    + 'SELECT over paid, active enrollments and their first paid subscription row. Writes nothing.',
   'scripts/createTestUsers.ts': 'SEED/DEV script. Creates test people; never runs in production.',
   'scripts/internshipJourneyE2E.ts': 'E2E script. Creates a fixture journey.',
   'scripts/seedTimelineDemo.ts':
