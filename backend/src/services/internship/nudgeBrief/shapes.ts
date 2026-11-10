@@ -168,9 +168,21 @@ export function theOneThing(i: SidecarIntern, focus: Focus, deadline: BriefDeadl
 
     default: {
       const ask = i.asks[0];
-      return ask ? [`The one gap is your ${ask.name}.`] : ['There is one small thing I would like from you.'];
+      return ask ? [`The one thing still missing is your ${askNoun(ask.name)}.`] : ['There is one small thing I would like from you.'];
     }
   }
+}
+
+/**
+ * The ask as a NOUN, so it can follow "your" without reading like a command spliced into a clause.
+ *
+ * `asks[].name` is a mixture: "Capability Map" and "Command Center" are nouns, while the
+ * presentation asks arrive as "Record your Project introduction". Used raw, the latter produced
+ * "The one gap is your Record your Project introduction."
+ */
+export function askNoun(name: string): string {
+  const m = name.match(/^record your (.+)$/i);
+  return m ? `${m[1]} recording` : name;
 }
 
 /** The specific thing to do, named, and where. Never a category. */
@@ -203,9 +215,22 @@ export function nextAction(i: SidecarIntern, focus: Focus, deadline: BriefDeadli
         : ['Push whatever you have today, even partially, so I can see where it stands.'];
     }
 
+    /**
+     * Written here rather than taken from `ask.why` or `ask.nudge`.
+     *
+     * Both of those are composed for Ali's dashboard and are in the third person: `why` on the
+     * presentation ask reads "It is the next presentation in THEIR project plan". Pasting either
+     * into the message reintroduced the exact defect the third-person fix removed, and `nudge`
+     * additionally carries the "paste the prompt and correct what it gets wrong" boilerplate and
+     * repeats the due date a second time.
+     */
     default: {
       const ask = i.asks[0];
-      return ask ? [ask.why] : [];
+      if (!ask) return [];
+      const where = /^presentation/i.test(ask.key)
+        ? 'Record it in the Presentation Studio in your project. Fifteen minutes is enough, and it does not need to be perfect.'
+        : 'Build it in your repository and send me the link when it is live.';
+      return [where];
     }
   }
 }
