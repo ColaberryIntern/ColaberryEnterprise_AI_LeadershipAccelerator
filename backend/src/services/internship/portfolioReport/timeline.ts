@@ -49,7 +49,8 @@ export interface TimelineInput {
   training: TrainingView;
   awaitingReply: boolean;
   /** Artifacts they published, with the link that opens each (optional for older callers). */
-  artifacts?: Array<{ at: string; kind: string; title: string; url: string }>;
+  /** `url` is null for an artifact with no page of its own; such a chip is rendered unlinked. */
+  artifacts?: Array<{ at: string; kind: string; title: string; url: string | null }>;
   /** Training artifacts overdue from weeks already behind them. */
   overdueArtifacts?: number;
 }
@@ -154,7 +155,10 @@ export function buildTimeline(i: TimelineInput): Timeline {
 
   // Published artifacts: each its own chip, because each one opens.
   for (const a of i.artifacts ?? []) {
-    add({ kind: 'artifact', day: dayKey(a.at), at: a.at, label: 'Published', detail: a.title, href: a.url });
+    // `href` is optional, not nullable: undefined leaves the chip unlinked, which is what an
+    // artifact with no page of its own should be. renderTimeline already requires an https href
+    // before it builds an anchor, so this never produces a dead link.
+    add({ kind: 'artifact', day: dayKey(a.at), at: a.at, label: 'Published', detail: a.title, href: a.url ?? undefined });
   }
 
   // Training days: a light chip, never a row of its own story.
