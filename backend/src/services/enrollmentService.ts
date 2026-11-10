@@ -478,6 +478,15 @@ export async function createExplorerEnrollment(input: {
       enrollment: enrollment as unknown as import('./welcome/sendPortalWelcome').WelcomeEnrollment,
       leadId,
       event: 'open_house_welcome',
+      // This door's reader has not enrolled in anything. They clicked an ad about
+      // an Open House, gave an email, and now have an account they did not ask
+      // for in so many words - so they get the Explorer welcome, which opens on
+      // the two-minute video rather than on "your seat is reserved" and "what to
+      // expect week one". Ali, 2026-11-10, on the standard one rendered for this
+      // path: "This is not the right message."
+      //
+      // No subjectOverride: the template carries its own.
+      template: 'explorer',
     });
     // Preserved verbatim from the old block: a genuine failure still names the
     // enrollment and the redacted address. A SKIP is not a failure - it means the

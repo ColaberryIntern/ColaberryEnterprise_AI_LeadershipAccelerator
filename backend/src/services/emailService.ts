@@ -11,6 +11,9 @@ import { redactForLogs } from '../utils/piiRedaction';
 import { sessionDayLabel } from './centralDate';
 import { SessionReminderData, buildSessionReminderHtml } from './email/sessionReminderEmail';
 import { buildPortalAccessEmailHtml } from './email/portalAccessEmail';
+// Same shape as the two imports above: a template that owns its own layout and
+// copy, kept out of this file so neither can inherit a change meant for the other.
+import { buildExplorerWelcomeHtml, EXPLORER_WELCOME_SUBJECT } from './welcome/explorerWelcomeEmail';
 import {
   CommunityDigestEmailData,
   DigestEvent,
@@ -354,6 +357,23 @@ export interface TrainingWelcomeData {
   hideHighlights?: boolean;
   /** An extra paragraph after the sign-in link. Plain text; escaped. */
   closing?: string;
+  /**
+   * Which welcome to render. Defaults to `standard`, so every existing caller is
+   * unchanged, character for character.
+   *
+   * `explorer` is the landing-page / Open House funnel's first contact, and it is
+   * a different MESSAGE rather than a restyling of this one: the standard welcome
+   * greets somebody who enrolled in a program ("your seat is reserved", "what to
+   * expect week one"), while an Explorer clicked an ad, gave an email, and now has
+   * an account they did not explicitly ask for. Ali, 2026-11-10, on the rendered
+   * original: "This is not the right message."
+   *
+   * Only the HTML and the default subject differ. Recipient resolution, the kill
+   * switch, the Mandrill tag and the deliberate absence of List-Unsubscribe are
+   * shared below, because those are properties of "a transactional welcome that is
+   * also a login" and have nothing to do with which words it carries.
+   */
+  template?: 'standard' | 'explorer';
 }
 
 function escapeHtml(s: string): string {
@@ -448,6 +468,13 @@ export async function sendCommunityReplyEmail(data: CommunityReplyEmailData): Pr
 }
 
 export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
+  // The Explorer welcome is its own layout and its own copy, in its own module.
+  // Delegated at the top rather than branching through the body below, so the
+  // standard template stays exactly the markup it has always been and neither
+  // template can accidentally inherit a change meant for the other.
+  if (data.template === 'explorer') {
+    return buildExplorerWelcomeHtml({ fullName: data.fullName, portalLink: data.portalLink });
+  }
   const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
   const name = escapeHtml(firstName);
   const link = data.portalLink;
@@ -534,7 +561,11 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
     console.warn('[Email] SMTP not configured. Skipping training welcome to:', redactForLogs(data.to));
     return { sent: false };
   }
-  const subject = data.subjectOverride || 'Welcome to Colaberry: your AI journey starts now';
+  // An explicit override still wins. Otherwise each template brings its own
+  // subject, because a subject written for "you enrolled" reads wrong above a
+  // message about a two-minute video.
+  const subject = data.subjectOverride
+    || (data.template === 'explorer' ? EXPLORER_WELCOME_SUBJECT : 'Welcome to Colaberry: your AI journey starts now');
   // NEVER REDIRECTED: `portalLink` is built as /portal/verify?token=... by
   // enrollmentService, so this welcome email is also a login.
   const r = await resolveEmailRecipient(data.to, subject, { neverRedirect: true });
