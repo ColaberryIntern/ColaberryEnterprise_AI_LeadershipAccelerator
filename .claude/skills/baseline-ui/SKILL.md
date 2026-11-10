@@ -8,29 +8,47 @@ user-invocable: true
 
 When invoked, read and reference these canonical source files before answering any design question:
 
-- **`frontend/src/styles/tokens.css` — the design tokens. This is the source of truth.**
-  `global.css` *consumes* the tokens; it does not define them. Read `tokens.css`.
-- `frontend/src/styles/global.css` — element styling and custom classes built on the tokens
-- `frontend/src/styles/responsive.css` — breakpoints, accessibility rules
-- `frontend/src/components/Layout/AdminLayout.tsx` — admin shell layout
+**There is no single token file. The tokens resolve through a three-layer cascade, and the
+LAST layer wins.** Read all three, in this order:
+
+1. `frontend/src/styles/tokens.css` — 101 custom properties on `:root`. Reached via
+   `global.css`, which `@import`s it. **Imported at `index.tsx:23`.**
+2. `frontend/src/styles/brand-bridge.css` — **redefines 21 of those same properties on
+   `:root`, and is imported at `index.tsx:26`, AFTER `global.css`.** Same selector, same
+   specificity, later source order, so for those 21 this file is what renders.
+3. `frontend/src/colaberry/tokens/*.css` (`colors.css`, `fonts.css`, …) — what layer 2
+   points `var()` at, and therefore where the literal value actually lives.
+
+Also: `frontend/src/styles/responsive.css` (breakpoints, accessibility rules) and
+`frontend/src/components/Layout/AdminLayout.tsx` (admin shell layout).
 
 ---
 
 ## Color Palette (CSS Custom Properties)
 
-| Token | Value | Usage |
-|---|---|---|
-| `--color-primary` | `#FB2832` | **Colaberry cherry** — headings, primary buttons, brand |
-| `--color-primary-light` | `#C20E1E` | Cherry deep — links, hover states, focus outlines |
-| `--color-secondary` | `#e53e3e` | Red — CTAs, warnings, destructive actions |
-| `--color-accent` | `#38a169` | Green — success states, positive indicators |
-| `--color-bg` | `#ffffff` | Page background |
-| `--color-bg-alt` | `#f7fafc` | Alternate section backgrounds |
-| `--color-text` | `#2d3748` | Body text |
-| `--color-text-light` | `#718096` | Muted/secondary text |
-| `--color-border` | `#e2e8f0` | Card borders, dividers |
+**Use the RENDERS column.** The `tokens.css` column is what that one file says and is kept
+here only so the difference is visible — it is not what the browser paints.
 
-**Brand palette** (also in `tokens.css`, used by the cherry/leaf/berry designs):
+| Token | RENDERS AS | `tokens.css` says | Usage |
+|---|---|---|---|
+| `--color-primary` | `#FB2832` | `#FB2832` | **Colaberry cherry** — headings, primary buttons, brand |
+| `--color-primary-light` | **`#FD5760`** | ~~`#C20E1E`~~ | Links, hover, focus outlines. A light coral, **not** a deep cherry |
+| `--color-secondary` | **`#E5121D`** | ~~`#e53e3e`~~ | CTAs, warnings, destructive actions |
+| `--color-accent` | **`#5BA63C`** | ~~`#38a169`~~ | Green — success states, positive indicators |
+| `--color-bg` | `#FFFFFF` | `#ffffff` | Page background |
+| `--color-bg-alt` | **`#F8F8F7`** | ~~`#f7fafc`~~ | Alternate section backgrounds |
+| `--color-text` | **`#2B2B2B`** | ~~`#2d3748`~~ | Body text. Neutral, **not** blue-tinted slate |
+| `--color-text-light` | **`#6B6B6B`** | ~~`#718096`~~ | Muted/secondary text |
+| `--color-border` | **`#E4E4E3`** | ~~`#e2e8f0`~~ | Card borders, dividers |
+| `--color-muted` | **`#6B6B6B`** | ~~`#9ca3af`~~ | **Identical to `--color-text-light` at runtime** — the two are no longer distinguishable, so do not rely on the contrast between them |
+
+Only `--color-primary` and `--color-bg` survive the cascade unchanged. The other nine are
+re-pointed, and the neutrals shift from blue-tinted slate to true grey.
+
+**Brand palette** (in `tokens.css`, used by the cherry/leaf/berry designs). **These four are
+NOT redefined by `brand-bridge.css`**, so unlike the table above, `tokens.css` is the
+rendered value here. Note the trap: `--cherry-deep` really is `#C20E1E`, while
+`--color-primary-light` — which this file used to label "Cherry deep" — is not:
 
 | Token | Value | Usage |
 |---|---|---|
@@ -41,18 +59,32 @@ When invoked, read and reference these canonical source files before answering a
 
 **Rule**: Never hardcode hex values. Always use `var(--color-*)` in CSS or reference Bootstrap utility classes that map to these values.
 
-> **This table was wrong until 2026-08-25.** It listed `--color-primary: #1a365d` (navy) and
-> `--color-primary-light: #2b6cb0`, values that appear nowhere in `tokens.css`. Anything
-> built from the old table rendered in a colour scheme the product does not use — caught
-> only because the 16 Delivery OS screens were checked against `tokens.css` before being
-> drawn, and then looked at on a real deployment. **Verify against `tokens.css` rather than
-> trusting this table**; a summary can go stale, the source file cannot.
+> **This table has now been wrong twice, and the second time was caused by the fix to the
+> first.**
+>
+> Until 2026-08-25 it listed `--color-primary: #1a365d` (navy) — values that appear nowhere
+> in `tokens.css`. The correction told readers to **"verify against `tokens.css` rather than
+> trusting this table; a summary can go stale, the source file cannot."**
+>
+> That advice is the second bug. `tokens.css` is a source file and it *is* stale: nine of
+> the ten colours above, and the entire font stack, are overridden at runtime by
+> `brand-bridge.css`, which loads three lines later in `index.tsx`. So anyone who followed
+> the 2026-08-25 instruction read one real file, correctly, and still got the wrong colour —
+> `#C20E1E` where the browser paints `#FD5760`.
+>
+> **A single source file is not evidence of a rendered value when more than one file defines
+> the same property.** Resolve the whole cascade in load order, or read the computed value off
+> a real page. Corrected 2026-11-09, from a drift audit Mihret Netsereab ran on
+> `product_experience`; her three-layer finding is what exposed it.
 
 ---
 
 ## Typography
 
-- **Font stack**: `'Segoe UI', system-ui, -apple-system, sans-serif`
+- **Font stack**: `'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif` —
+  `brand-bridge.css:48-49` sets `--font-heading` and `--font-body`, overriding the
+  `'Segoe UI'`-first stack in `tokens.css`. **The product renders in Roboto, not Segoe UI.**
+  Monospace is `'Roboto Mono', ui-monospace, 'Consolas', 'Monaco', monospace`.
 - **Headings**: `font-weight: 700`, `line-height: 1.2`, `color: var(--color-primary)`
 - **Body**: `line-height: 1.6`, `color: var(--color-text)`
 - **Links**: `color: var(--color-primary-light)`, underline on hover

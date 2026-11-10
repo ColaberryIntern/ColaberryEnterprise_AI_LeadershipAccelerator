@@ -53,7 +53,7 @@
         "unknown values left as unknown where a raw colour has no token equivalent"
       ],
       "workflow": [
-        "Parse tokens.css to build the authoritative token set (101 custom properties measured 2026-10-09 in the :root block at tokens.css:6).",
+        "Build the token set from the whole cascade, in load order, not from tokens.css alone: global.css imports tokens.css (101 custom properties in the :root block at tokens.css:6), then brand-bridge.css redefines 21 of them on :root and is imported AFTER it in index.tsx, then those point at the colaberry token layer. The resolved value is what the audit compares against; tokens.css alone reports the wrong value for 19 of the 21.",
         "Walk frontend/src and record every raw hex, rgb()/rgba() and inline style={{ }} occurrence with file and line.",
         "Classify each occurrence: has an exact token equivalent, has a near equivalent, or has none.",
         "Exclude allow-listed cases; any occurrence the classifier cannot categorise is reported as unclassified, never as a pass.",
@@ -69,7 +69,7 @@
       "dependencies": [
         "read access to the frontend source tree",
         "an agreed allow-list, which does not exist yet",
-        "tokens.css remaining the single token authority"
+        "a resolver for the three-layer token cascade (tokens.css, then brand-bridge.css, then the colaberry token layer), because no single file is the token authority at runtime"
       ],
       "application_pages": [
         "all 445 route-reachable pages measured 2026-10-09; the audit is surface-wide rather than per-page"
