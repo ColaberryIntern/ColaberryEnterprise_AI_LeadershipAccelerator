@@ -46,6 +46,10 @@ describe('hire-refactored.conf', () => {
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'src', '404.html')), 'the branded page ships with the app');
   });
 
+  test('redirects are relative, so they never send a visitor to http:// (production verification, 2026-11-10)', () => {
+    assert.match(code, /absolute_redirect off;/);
+  });
+
   test('answers the legacy /ws-* API and /api/ with 410 JSON, never the HTML shell', () => {
     for (const loc of [/location ~ \^\/ws- \{/, /location \^~ \/api\/ \{/]) {
       const b = block(loc);

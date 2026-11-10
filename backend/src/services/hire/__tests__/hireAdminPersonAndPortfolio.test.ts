@@ -119,6 +119,27 @@ describe('getHirePortfolio - reachable, not only listed', () => {
     expect(out?.hire.caseStudies[0]).not.toHaveProperty('outcomes');
     expect(out?.hire.signature?.slug).toBe('a');
   });
+
+  it('never carries the email address on Hire, and leaves the rest of the identity alone', async () => {
+    m(loadHireIndex).mockResolvedValue([entry('public')]);
+    const identity = { full_name: 'Ann Lee', headline: 'Architect', email: 'ann@example.com', linkedin_url: 'https://linkedin.com/in/ann' };
+    m(getPublicPortfolioBySlug).mockResolvedValue({ portfolio: { identity, projects: [] }, indexable: true });
+    const out: any = await getHirePortfolio('ann-lee');
+    expect(out.portfolio.identity.email).toBeNull();
+    expect(JSON.stringify(out)).not.toContain('ann@example.com');
+    expect(out.portfolio.identity).toMatchObject({ full_name: 'Ann Lee', headline: 'Architect', linkedin_url: 'https://linkedin.com/in/ann' });
+    expect(out.portfolio.projects).toEqual([]);
+    // The source object is not mutated: the enterprise read keeps its email.
+    expect(identity.email).toBe('ann@example.com');
+    // Idempotent: a second read is the same answer.
+    expect(JSON.stringify(await getHirePortfolio('ann-lee'))).toBe(JSON.stringify(out));
+  });
+
+  it('is null, not a partial payload, when the portfolio cannot be read', async () => {
+    m(loadHireIndex).mockResolvedValue([entry('public')]);
+    m(getPublicPortfolioBySlug).mockResolvedValue(null);
+    expect(await getHirePortfolio('ann-lee')).toBeNull();
+  });
 });
 
 describe('builderPortfolioSlugForCaseStudySlug - the "Built by" link', () => {

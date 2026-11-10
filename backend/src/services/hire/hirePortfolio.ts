@@ -38,7 +38,11 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
   const result = await getPublicPortfolioBySlug(entry.page.slug, now, 'hire');
   if (!result) return null;
   return {
-    portfolio: result.portfolio,
+    // NO EMAIL ON HIRE (Ali, 2026-11-10). The enterprise portfolio keeps `identity.email`
+    // (his 2026-09-03 decision: there the learner is the one being contacted). On Hire the
+    // employer's route to a person is Request intro, and /intro/ promises "contact details
+    // are never shown here", so the address is nulled before it leaves this surface.
+    portfolio: { ...result.portfolio, identity: { ...result.portfolio.identity, email: null } },
     hire: {
       signature: pickSignature(entry.cases),
       caseStudies: entry.cases.map(({ slug: s, title, summary, industry, featured, publishedAt }) => ({
