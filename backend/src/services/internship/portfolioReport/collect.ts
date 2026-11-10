@@ -25,7 +25,7 @@ import { internshipProjectReadiness } from '../internshipProjectReadiness';
 import { loadAgentNudgeStates } from '../agentNudgeState';
 import { listGovContractsFor } from '../../factory/govContractsList';
 import type { GovPipelineCard } from '../../factory/govPipeline';
-import type { AgentTab, CollectedPortfolio, FeedItem, InternEmail, LastOutbound, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
+import type { AgentTab, CollectedPortfolio, Conversation, FeedItem, InternEmail, LastOutbound, OurReply, ProjectFacts, PublishedArtifact, WeWrote } from './types';
 import { repairMojibake } from '../../../utils/textEncoding';
 
 // One window for the whole story: commits, verified stories, emails and replies all cover 21 days.
@@ -131,6 +131,19 @@ export function repairArtifactText(a: PublishedArtifact): PublishedArtifact {
   return { ...a, title: repairMojibake(a.title), upload_name: repairMojibake(a.upload_name) ?? null, repo_path: repairMojibake(a.repo_path) ?? null };
 }
 
+// Both sides of every conversation with the interns in the email window, with enough body to judge
+// what it says (sidecar `communications`; the HTML does not use it). Their mail by sender; ours by
+// a colaberry.com sender addressed to them. Body capped at 1,500 characters, whitespace collapsed.
+const COMMS_SQL = `
+  SELECT lower(from_address) AS from_address, to_addresses::text AS to_text, subject,
+         left(regexp_replace(COALESCE(body_text, ''), '\\s+', ' ', 'g'), 1500) AS body, received_at
+    FROM inbox_emails
+   WHERE received_at > now() - interval '${EMAIL_LOOKBACK_DAYS} days'
+     AND (lower(from_address) IN (:emails)
+          OR (lower(from_address) LIKE '%@colaberry.com' AND to_addresses::text ILIKE ANY (ARRAY[:likes]::text[])))
+   ORDER BY received_at DESC
+   LIMIT 2000`;
+
 // The most recent message sent TO each intern from a colaberry.com address (Ali's own sends are
 // BCC'd into his inbox mirror, so they are here). Feeds the sidecar's `last_ask`; the HTML does
 // not use it. Body capped so one long thread cannot bloat the report.
@@ -178,7 +191,7 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     ...agentTabs.map((a) => a.student_project_id),
   ].filter((x): x is string => !!x))];
 
-  const [readiness, agentStates, projects, emailRows, weWrote, replies, lastOutbound, artifacts] = await Promise.all([
+  const [readiness, agentStates, projects, emailRows, weWrote, replies, lastOutbound, artifacts, conversations] = await Promise.all([
     soft('project readiness', () => internshipProjectReadiness(), []),
     soft('agent nudge state', () => loadAgentNudgeStates({ query: (s) => select(s), now: now.toISOString() }), []),
     soft('project detail', () => (projectIds.length ? select<ProjectFacts>(PROJECT_SQL, { ids: projectIds }) : Promise.resolve([])), []),
@@ -187,6 +200,7 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     soft('our replies', () => (emails.length ? select<OurReply>(REPLIES_SQL, { emails }) : Promise.resolve([])), []),
     soft('last outbound', () => (emails.length ? select<LastOutbound>(LAST_ASK_SQL, { emails }) : Promise.resolve([])), []),
     soft('published artifacts', () => (roster.length ? select<PublishedArtifact>(ARTIFACTS_SQL, { enrollmentIds: roster.map((r) => r.enrollment_id) }).then((rows) => rows.map(repairArtifactText)) : Promise.resolve([])), []),
+    soft('conversations', () => (emails.length ? select<Conversation>(COMMS_SQL, { emails, likes: emails.map((e) => `%${e}%`) }) : Promise.resolve([])), []),
   ]);
 
   // Sequential on purpose: ~14 interns, each detail is a handful of queries.
@@ -214,5 +228,6 @@ export async function collectInternshipPortfolio({ now = new Date() }: { now?: D
     replies,
     artifacts,
     lastOutbound,
+    conversations,
   };
 }

@@ -12,6 +12,9 @@
  */
 export const SIDECAR_VERSION = 1;
 
+import type { Communication } from './communications';
+export type { Communication };
+
 export type TriageTier =
   | 'no_project_at_day_N'
   | 'never_started_building'
@@ -109,6 +112,8 @@ export interface SidecarIntern {
     weeks_behind: number | null;
   };
   last_ask: { sent_at: string; from: string; subject: string | null; body_text: string | null; body_truncated: boolean; satisfied: boolean | null; satisfied_by: string | null } | null;
+  /** This intern's most insightful messages (both directions), best first, at most 10 (communications.ts). */
+  communications: Communication[];
   delta: {
     previous_report_date: string;
     verified_since_last: number | null;
@@ -128,6 +133,8 @@ export interface Sidecar {
   counts: SidecarCounts;
   your_move: string[];
   operators_excluded: string[];
+  /** The 10 most insightful communications in the report window, at most 3 per intern. */
+  top_communications: Communication[];
   interns: SidecarIntern[];
 }
 
@@ -136,7 +143,7 @@ export const REQUIRED_INTERN_KEYS: ReadonlyArray<keyof SidecarIntern> = [
   'name', 'first_name', 'enrollment_id', 'track', 'track_label', 'link', 'day', 'status', 'chips', 'narrative', 'narrative_from_model',
   'story', 'project', 'stories_verified', 'stories_total', 'percent_built', 'overdue_tasks', 'training', 'days_since_build_work',
   'build_work_in_window', 'counts', 'most_urgent', 'most_urgent_overflow', 'timeline', 'asking_you', 'asking_you_from_model',
-  'open_questions', 'nudge', 'artifacts', 'artifacts_raw_count', 'artifacts_real_count', 'asks', 'triage', 'pacing', 'last_ask', 'delta',
+  'open_questions', 'nudge', 'artifacts', 'artifacts_raw_count', 'artifacts_real_count', 'asks', 'triage', 'pacing', 'last_ask', 'communications', 'delta',
 ];
 
 /** What the previous run persisted, per intern: the minimum needed to compute `delta`. */
