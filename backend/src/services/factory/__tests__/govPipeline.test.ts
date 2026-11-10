@@ -199,4 +199,20 @@ describe('resolveGovCloseDate', () => {
     // and it beats a snapshot closeAt (management corrected the pursuit's date)
     expect(resolveGovCloseDate({ requirements_json: { manualDeadline: { closeDate: '2026-12-15' } }, source_snapshot: { closeAt: '2026-11-06T17:00:00Z' } })).toBe('2026-12-15');
   });
+  it('ignores a boilerplate "effective on or after" policy line — the Harris County Precinct 4 nav-miss', () => {
+    // The ONLY dossier key date on the Harris County Constable Precinct 4 pursuit is a general-requirements policy
+    // line. It contains "proposals" and "due", so the old resolver read it as a 2009 close date and the nav hid the
+    // assigned build as expired. It must now resolve to null (unknown -> the nav keeps the assigned build visible).
+    const harris = { requirements_json: { dossier: { keyDates: [
+      { date: 'November 1, 2009', text: 'This policy is effective for all bids/proposals due on or after November 1, 2009.' },
+    ] } } };
+    expect(resolveGovCloseDate(harris)).toBeNull();
+  });
+  it('still picks the real submission line when boilerplate sits alongside it', () => {
+    const rec = { requirements_json: { dossier: { keyDates: [
+      { date: 'November 1, 2009', text: 'This policy is effective for all bids/proposals due on or after November 1, 2009.' },
+      { date: 'Dec. 15th, 2026', text: 'Proposals must be received by' },
+    ] } } };
+    expect(resolveGovCloseDate(rec)).toBe('2026-12-15');
+  });
 });
