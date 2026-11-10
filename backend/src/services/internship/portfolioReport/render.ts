@@ -112,7 +112,11 @@ export function renderInternshipPortfolio(report: PortfolioReport): { subject: s
   const all = report.groups.flatMap((g) => g.interns);
   // Stable per day on purpose: the send ledger keys on (recipient, subject, event), so counts in the
   // subject would let a same-day re-run send a second copy. The counts live in the body.
-  const subject = noDash(`[Internship Report] ${date}`);
+  // Starts "Ali, here's" ON PURPOSE: the report is self-sent (from and to ali@colaberry.com), and
+  // the inbox manager keeps self-sent system mail in the INBOX only on a few subject patterns
+  // (hardRuleEngine rule 0a). "[Internship Report] <date>" matched none, fell to the LLM
+  // classifier as AUTOMATION and was archived unseen (10 Nov 2026, the first test send).
+  const subject = noDash(`Ali, here's your Internship Report for ${date}`);
 
   const html = noDash(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Internship Report</title></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Roboto,Segoe UI,Arial,sans-serif;color:#1e293b">

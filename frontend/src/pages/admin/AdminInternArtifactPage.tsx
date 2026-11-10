@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
+import { ArtifactFileViewer } from '../../components/admin/internArtifact/ArtifactFileViewers';
 import { fetchInternArtifact, type InternArtifactView } from '../../services/internArtifactApi';
 
 /**
@@ -67,16 +68,7 @@ export default function AdminInternArtifactPage(): React.ReactElement {
           style={{ width: '100%', height: '80vh', border: '1px solid var(--bs-border-color)', borderRadius: 6, background: '#fff' }}
         />
       )}
-      {artifact.file && (
-        <div className="card mb-3">
-          <div className="card-header small fw-semibold">{artifact.file.name}</div>
-          <div className="card-body">
-            {artifact.file.text !== null
-              ? <pre className="mb-0" style={{ whiteSpace: 'pre-wrap' }}>{artifact.file.text}</pre>
-              : <span className="text-muted">{artifact.file.note}</span>}
-          </div>
-        </div>
-      )}
+      {artifact.file && <ArtifactFileViewer id={artifact.id} file={artifact.file} />}
       {Object.keys(artifact.data).length > 0 && (
         <div className="card"><div className="card-body"><DataBlock value={artifact.data} /></div></div>
       )}

@@ -3,7 +3,11 @@
  * not an active intern's artifact.
  */
 const mockGet = jest.fn();
-jest.mock('../../../services/internship/internArtifactViewer', () => ({ getInternArtifact: (...a: unknown[]) => mockGet(...a) }));
+const mockFile = jest.fn();
+jest.mock('../../../services/internship/internArtifactViewer', () => ({
+  getInternArtifact: (...a: unknown[]) => mockGet(...a),
+  getInternArtifactFile: (...a: unknown[]) => mockFile(...a),
+}));
 jest.mock('../../../config/database', () => ({ sequelize: { fake: true } }));
 
 import express, { type Express } from 'express';
@@ -26,7 +30,7 @@ function app(): Express {
   return a;
 }
 
-beforeEach(() => mockGet.mockReset());
+beforeEach(() => { mockGet.mockReset(); mockFile.mockReset(); });
 
 describe('GET /api/admin/internship/artifacts/:id', () => {
   it('refuses an unauthenticated caller and never reads', async () => {
@@ -62,5 +66,72 @@ describe('GET /api/admin/internship/artifacts/:id', () => {
     expect(res.status).toBe(500);
     expect(JSON.stringify(res.body)).not.toContain('10.0.0.5');
     err.mockRestore();
+  });
+});
+
+describe('GET /api/admin/internship/artifacts/:id/file (the PDF viewer and downloads)', () => {
+  const fs = jest.requireActual('fs') as typeof import('fs');
+  const os = jest.requireActual('os') as typeof import('os');
+  const path = jest.requireActual('path') as typeof import('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-artifact-'));
+  const pdf = path.join(dir, 'brief.pdf');
+  fs.writeFileSync(pdf, '%PDF-1.4 test');
+  const admin = (): string => `Bearer ${tokenFor(null, 'admin')}`;
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it('refuses an unauthenticated caller and never looks up the file', async () => {
+    const res = await request(app()).get(`${URL}/file`);
+    expect([401, 403]).toContain(res.status);
+    expect(mockFile).not.toHaveBeenCalled();
+  });
+
+  it('serves a PDF inline so the browser viewer opens it', async () => {
+    mockFile.mockResolvedValue({ absPath: pdf, name: 'brief.pdf', kind: 'pdf', contentType: 'application/pdf', title: 'Brief' });
+    const res = await request(app()).get(`${URL}/file`).set('Authorization', admin());
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/pdf');
+    expect(res.headers['content-disposition']).toMatch(/^inline; filename="brief.pdf"/);
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('?download=1 and every non-PDF file are attachments, never rendered on our origin', async () => {
+    mockFile.mockResolvedValue({ absPath: pdf, name: 'brief.pdf', kind: 'pdf', contentType: 'application/pdf', title: 'Brief' });
+    expect((await request(app()).get(`${URL}/file?download=1`).set('Authorization', admin())).headers['content-disposition']).toMatch(/^attachment/);
+    mockFile.mockResolvedValue({ absPath: pdf, name: 'page.html', kind: 'other', contentType: 'application/octet-stream', title: 'x' });
+    const res = await request(app()).get(`${URL}/file`).set('Authorization', admin());
+    expect(res.headers['content-disposition']).toMatch(/^attachment/);
+    expect(res.headers['content-type']).toBe('application/octet-stream');
+  });
+
+  it('404 when there is no file; 400 for a bad id', async () => {
+    mockFile.mockResolvedValue(null);
+    expect((await request(app()).get(`${URL}/file`).set('Authorization', admin())).status).toBe(404);
+    expect((await request(app()).get('/api/admin/internship/artifacts/nope/file').set('Authorization', admin())).status).toBe(400);
+  });
+});
+
+describe('GET /api/admin/internship/artifacts/:id/xlsx (open a CSV in Excel)', () => {
+  const admin = (): string => `Bearer ${tokenFor(null, 'admin')}`;
+  const csvArtifact = { id: ID, file: { name: 'inventory.csv', kind: 'csv', available: true, text: 'a,b\n1,2', table: [['Deliverable', 'Verdict'], ['MCP server', 'Solid']], note: null } };
+
+  it('refuses an unauthenticated caller', async () => {
+    expect([401, 403]).toContain((await request(app()).get(`${URL}/xlsx`)).status);
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('returns a real .xlsx workbook for a CSV artifact', async () => {
+    mockGet.mockResolvedValue(csvArtifact);
+    const res = await request(app()).get(`${URL}/xlsx`).set('Authorization', admin()).buffer(true)
+      .parse((r, cb) => { const chunks: Buffer[] = []; r.on('data', (c: Buffer) => chunks.push(c)); r.on('end', () => cb(null, Buffer.concat(chunks))); });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="inventory.xlsx"/);
+    expect((res.body as Buffer).subarray(0, 2).toString()).toBe('PK'); // xlsx is a zip
+  });
+
+  it('400 for a non-CSV artifact, 404 with no file', async () => {
+    mockGet.mockResolvedValue({ id: ID, file: { ...csvArtifact.file, kind: 'pdf', table: null } });
+    expect((await request(app()).get(`${URL}/xlsx`).set('Authorization', admin())).status).toBe(400);
+    mockGet.mockResolvedValue({ id: ID, file: null });
+    expect((await request(app()).get(`${URL}/xlsx`).set('Authorization', admin())).status).toBe(404);
   });
 });

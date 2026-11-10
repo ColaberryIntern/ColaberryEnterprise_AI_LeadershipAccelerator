@@ -16,7 +16,7 @@
  *   --from-json <file>  render from saved facts (no DB); never sends
  *   --no-llm            skip the email-asks digest
  *
- * Idempotency: the send is claimed in email_send_ledger on (recipient, "[Internship Report] <date>",
+ * Idempotency: the send is claimed in email_send_ledger on (recipient, "Ali, here's your Internship Report for <date>",
  * "internship-report-<CT date>"), so a re-run the same day sends nothing; a FAILED send is retried
  * by the next run. Failure path: roster failure or Mandrill failure exits 1 (cron log + the ledger
  * row record it); any other source degrades to empty and is logged; the asks digest failing leaves
