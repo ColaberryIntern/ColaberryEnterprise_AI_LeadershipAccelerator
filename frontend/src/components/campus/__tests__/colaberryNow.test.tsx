@@ -238,6 +238,16 @@ describe('Colaberry Now', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('C137: Esc while the TV is full screen leaves full screen only; Colaberry Now stays open', async () => {
+    await open();
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => q('[data-testid="cn-tv-vid"]') });
+    key('Escape');
+    expect(onClose).not.toHaveBeenCalled();
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => null });
+    key('Escape');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('search narrows the stream (debounced)', async () => {
     jest.useFakeTimers();
     await open();

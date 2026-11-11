@@ -59,6 +59,7 @@ export function ColaberryNow({ me, compose = null, onClose }: { me: string; comp
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (document.fullscreenElement) return; // C137: Esc leaves full screen (the browser's job), never closes Colaberry Now
       if (escapeRef.current?.()) return;
       if (managing) { setManaging(false); return; }
       onClose();

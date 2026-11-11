@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { follow, mmss, nextIndex, prevIndex, readMuted, saveMuted, thumbOf, type TvShort } from './tvPlaylist';
 import { useTvChannel } from './useTvChannel';
+import { useFullscreen } from './useFullscreen';
 
 /**
  * Colaberry TV, the left column of Colaberry Now (Campus v20 N2, Basecamp C132; the prototype's .nTV in
@@ -51,6 +52,7 @@ export default function ColaberryTv({ videos, canManage, onManage, restart = 0, 
     onDuration: (id, s) => { if (lengths.get(id) !== Math.round(s)) { lengths.set(id, Math.round(s)); setTick((t) => t + 1); } },
     onMutedChange: saveMuted,
   });
+  const fs = useFullscreen<HTMLDivElement>(); // C137: for showing the shorts at the start of an event
   const lengthOf = (s: TvShort): string => mmss(s.duration_s ?? lengths.get(s.youtube_id) ?? null);
 
   return (
@@ -61,7 +63,7 @@ export default function ColaberryTv({ videos, canManage, onManage, restart = 0, 
       </div>
       {cur ? (
         <>
-          <div className="cn-tv-vid">
+          <div className={`cn-tv-vid${fs.active ? ' is-full' : ''}`} ref={fs.ref} data-testid="cn-tv-vid">
             <iframe
               key={`${cur.id}-${tv.src.includes('mute=1') ? 'm' : 's'}`}
               ref={tv.frameRef}
@@ -74,6 +76,9 @@ export default function ColaberryTv({ videos, canManage, onManage, restart = 0, 
             {tv.needsTap && (
               <button type="button" className="cn-tv-tap" onClick={tv.tapForSound} data-testid="cn-tv-tap">🔊 Tap for sound</button>
             )}
+            {fs.active && (
+              <button type="button" className="cn-tv-fsx" onClick={fs.toggle} aria-label="Leave full screen" data-testid="cn-tv-fs-exit">✕ Exit full screen</button>
+            )}
           </div>
           <div className="cn-tv-cap">
             <b data-testid="cn-tv-title">{cur.title}</b>
@@ -84,6 +89,9 @@ export default function ColaberryTv({ videos, canManage, onManage, restart = 0, 
             <button type="button" onClick={next} aria-label="Next short" data-testid="cn-tv-next">▼</button>
             <button type="button" className={tv.muted ? '' : 'on'} onClick={() => tv.setMuted(!tv.muted)} aria-pressed={!tv.muted}
               aria-label={tv.muted ? 'Turn the sound on' : 'Mute'} data-testid="cn-tv-mute">{tv.muted ? '🔇' : '🔊'}</button>
+            {fs.supported && (
+              <button type="button" onClick={fs.toggle} aria-pressed={fs.active} aria-label="Full screen" title="Full screen" data-testid="cn-tv-fullscreen">⛶</button>
+            )}
             {canManage && <button type="button" className="cn-tv-mg" onClick={onManage} data-testid="cn-tv-manage">⚙ Manage TV</button>}
           </div>
           <div className="cn-tv-reel" aria-label="Every short on Colaberry TV">

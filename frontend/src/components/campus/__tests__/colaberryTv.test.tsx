@@ -85,6 +85,52 @@ describe('the play order (pure)', () => {
   });
 });
 
+describe('C137: full screen for events', () => {
+  // jsdom has no Fullscreen API: a small stand-in that behaves like the browser's (sets fullscreenElement, fires fullscreenchange)
+  let fsEl: Element | null = null;
+  const fire = () => document.dispatchEvent(new Event('fullscreenchange'));
+  const install = (enabled: boolean) => {
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => enabled });
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fsEl });
+    (HTMLElement.prototype as unknown as { requestFullscreen: () => Promise<void> }).requestFullscreen = jest.fn(function (this: HTMLElement) { fsEl = this; fire(); return Promise.resolve(); });
+    (document as unknown as { exitFullscreen: () => Promise<void> }).exitFullscreen = jest.fn(() => { fsEl = null; fire(); return Promise.resolve(); });
+  };
+  afterEach(() => { fsEl = null; });
+
+  it('no full-screen support (iPhone Safari): no button, rather than a broken one', () => {
+    install(false);
+    render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} />);
+    expect(screen.queryByTestId('cn-tv-fullscreen')).toBeNull();
+  });
+
+  it('the button puts OUR player box full screen; the shorts keep advancing by themselves; Exit leaves it', () => {
+    install(true);
+    render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} />);
+    fireEvent.click(screen.getByTestId('cn-tv-fullscreen'));
+    expect(fsEl).toBe(screen.getByTestId('cn-tv-vid'));
+    expect(screen.getByTestId('cn-tv-fullscreen').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('cn-tv-vid').contains(frame())).toBe(true);
+    send({ event: 'onStateChange', info: 0 });
+    expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 2');
+    expect(fsEl).toBe(screen.getByTestId('cn-tv-vid')); // still full screen on the next short
+    fireEvent.click(screen.getByTestId('cn-tv-fs-exit'));
+    expect(fsEl).toBeNull();
+    expect(screen.queryByTestId('cn-tv-fs-exit')).toBeNull();
+  });
+
+  it('a refused request is logged and changes nothing', async () => {
+    install(true);
+    (HTMLElement.prototype as unknown as { requestFullscreen: () => Promise<void> }).requestFullscreen = jest.fn(() => Promise.reject(Object.assign(new Error('no gesture'), { name: 'TypeError' })));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} />);
+    fireEvent.click(screen.getByTestId('cn-tv-fullscreen'));
+    await act(async () => { await Promise.resolve(); });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('colaberry_tv_fullscreen_failed'));
+    expect(screen.queryByTestId('cn-tv-fs-exit')).toBeNull();
+    warn.mockRestore();
+  });
+});
+
 describe('C136: a shuffled order per opening', () => {
   const IDS = ['a', 'b', 'c', 'd', 'e'];
   it('is a permutation (every short once per loop)', () => {
