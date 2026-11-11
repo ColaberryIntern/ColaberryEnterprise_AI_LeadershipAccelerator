@@ -7,7 +7,7 @@ import { fetchOnboardingProfile, ResumeProfileFields, ResumePersonalization } fr
 import { soundEnabled, setSoundEnabled, playEarnSound } from '../../../services/pointsFx';
 import {
   fetchSettings, updateProfile, uploadAvatar, removeAvatar,
-  uploadResume, removeResume, downloadResume,
+  uploadResume, removeResume, downloadResume, resumeParseProblem,
   fileToBase64, downscaleImageToSquare, formatBytes,
   SettingsView, SettingsPreferences,
 } from '../../../services/portalSettingsApi';
@@ -261,6 +261,8 @@ const SettingsPage: React.FC = () => {
       // the extracted profile/personalization — so re-read it and prefill.
       const updated = await uploadResume({ file_name: file.name, mime, data_base64 });
       applySettings(updated);
+      const problem = resumeParseProblem(updated);
+      if (problem) { flash(problem); return; }
       try {
         const op = await fetchOnboardingProfile();
         const filled = prefillEmpty(op.profile, op.personalization, op.linkedin_url);

@@ -15,7 +15,7 @@ import {
 import portalApi from '../../../utils/portalApi';
 import { trackLeadOnce } from '../../../services/metaPixel';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../services/pointsFx';
-import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi';
+import { uploadResume, fileToBase64, resumeParseProblem } from '../../../services/portalSettingsApi';
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import { ambientMediaOf } from '../../../components/timeline/ambientMedia';
@@ -246,6 +246,7 @@ const TodayShell: React.FC = () => {
     const prevTotal = points?.total ?? 0;
     try {
       const isText = /\.(txt|md)$/i.test(file.name) || file.type.startsWith('text/');
+      let problem: string | null = null;
       if (isText) {
         await ingestBackground({ resume_text: await file.text() });
       } else {
@@ -253,7 +254,7 @@ const TodayShell: React.FC = () => {
         // file bytes to the extracting endpoint, NOT a placeholder, so the
         // resume/LinkedIn actually parses server-side and fills the profile.
         const data_base64 = await fileToBase64(file);
-        await uploadResume({ file_name: file.name, mime: file.type || 'application/octet-stream', data_base64 });
+        problem = resumeParseProblem(await uploadResume({ file_name: file.name, mime: file.type || 'application/octet-stream', data_base64 }));
       }
       await loadAll();
       // Refresh the HUD total and celebrate any newly-awarded points (+25 the
@@ -265,7 +266,7 @@ const TodayShell: React.FC = () => {
         if (gained > 0) emitPointsEarned(gained);
       } catch { /* keep prior total */ }
       setShowUpload(false);
-      flash('Got it — personalizing your experience in the background');
+      flash(problem || 'Got it — personalizing your experience in the background');
     } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
   };
 
