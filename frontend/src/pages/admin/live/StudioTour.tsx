@@ -1,25 +1,45 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 /**
- * "Show me how this works" for Studio setup.
+ * A guided walkthrough that points at the thing it is talking about.
  *
- * ## What it is, and what it deliberately is not
+ * ## It used to be a stack of panels, and that was wrong
  *
- * It is six short panels explaining what each card decides and which of those decisions cannot
- * be taken back. It is NOT a spotlight walkthrough that dims the page and points at elements:
- * that kind of tour breaks the moment a card moves, it has to be maintained alongside every
- * layout change, and it is the first thing to go stale and start pointing at nothing.
+ * The first version was six paragraphs in a dialog. I argued in this file that a spotlight tour
+ * is fragile - it breaks when a card moves and goes stale pointing at nothing - and shipped
+ * prose instead. Ali's answer on 2026-11-11: "The walkthrough should move pages and highlight
+ * the areas you want us to see. You are just throwing words at us now."
  *
- * The thing an operator actually needs here is not "this box is the title box" - they can see
- * that. It is "access mode cannot be changed afterwards", which no amount of pointing at the
- * control conveys.
+ * He is right, and the argument I made was about MY maintenance cost rather than about whether
+ * the thing worked for the person using it. Reading six paragraphs and then hunting for the
+ * cards they describe is work the tour was supposed to remove.
  *
- * ## It opens itself the first time and then stops
+ * ## How it stays non-fragile anyway
  *
- * Somebody landing on this screen for the first time has no idea there is a tour. Somebody
- * landing on it for the thirtieth time does not want one. `localStorage` is wrapped: in a
- * private window the read throws, the tour opens, and that is the harmless direction.
+ * Steps target `data-tour` attributes rather than CSS classes or DOM shapes. A class name is a
+ * styling decision that changes for styling reasons; `data-tour="people"` exists only for this,
+ * so it moves when the card moves and nothing else touches it.
+ *
+ * And a step whose target is missing does NOT break the tour or point at the corner of the
+ * screen: it falls back to a centered callout with the same words. That is the specific failure
+ * I was worried about, handled rather than avoided.
  */
+
+export interface TourStep {
+  /** The `data-tour` value to highlight. Omitted for a step about the page as a whole. */
+  target?: string;
+  title: string;
+  body: string;
+  /** Said in amber. Only where getting it wrong cannot be undone from this screen. */
+  warning?: string;
+  /**
+   * Move to another page before showing this step.
+   *
+   * A function rather than a string because the destination is often not known until the tour
+   * runs - the class list has to pick a class first.
+   */
+  goto?: () => string | null;
+}
 
 const SEEN_KEY = 'clv-tour-seen';
 
@@ -27,74 +47,78 @@ export function hasSeenTour(): boolean {
   try { return window.localStorage.getItem(SEEN_KEY) === '1'; } catch { return false; }
 }
 
-function markSeen(): void {
+export function markTourSeen(): void {
   try { window.localStorage.setItem(SEEN_KEY, '1'); } catch { /* private window */ }
 }
 
-interface Step {
-  title: string;
-  body: string;
-  /** Said in red. Only where getting it wrong cannot be undone from this screen. */
-  warning?: string;
-}
-
-const STEPS: Step[] = [
-  {
-    title: 'What this screen does',
-    body: 'It sets up one class to be broadcast: who is teaching, who is running the show, who '
-      + 'may watch, and whether it is recorded. Nothing here starts a broadcast. Pressing '
-      + 'Create builds the airing; going live happens later, from the class page itself.',
-  },
-  {
-    title: 'The show',
-    body: 'The title and timing come from the class that already exists, so there is nothing to '
-      + 'retype. If the class is on the wrong day, fix it where classes are scheduled rather '
-      + 'than here, so the two cannot disagree.',
-  },
-  {
-    title: 'People',
-    body: 'Start typing a name and pick from the list. Anyone with the staff role can be named. '
-      + 'The producer has to be someone other than the presenter, and Create stays disabled '
-      + 'until that is true.',
-    warning: 'Whoever is teaching cannot also watch the feed health and run the show. That is '
-      + 'why two different people are required rather than suggested.',
-  },
-  {
-    title: 'Audience',
-    body: 'This is an explicit choice: the enrolled cohort only, or guests as well. It used to '
-      + 'be decided by whether the class title contained the words "Open House", which meant '
-      + 'renaming a class changed who could see it.',
-  },
-  {
-    title: 'Access mode',
-    body: 'Who may watch the recording afterwards. Read the sentence under each option; it says '
-      + 'what a remote viewer gets.',
-    warning: 'THIS ONE CANNOT BE CHANGED LATER. The access mode is written once and there is no '
-      + 'undo on this screen, because the alternative is quietly widening who could watch '
-      + 'something after people were told otherwise. Getting it wrong means deleting the airing '
-      + 'by hand in the database, which is why there is an acknowledgement box.',
-  },
-  {
-    title: 'Create',
-    body: 'The summary at the bottom lists four things and Create stays disabled until all four '
-      + 'read Done. Once created, the class page shows the producer controls: go backstage, '
-      + 'mark content started, go live, mark a moment for the editor, and end.',
-  },
-];
+interface Box { top: number; left: number; width: number; height: number }
 
 export interface StudioTourProps {
   open: boolean;
+  steps: TourStep[];
   onClose: () => void;
+  /** Called with a path when a step wants the browser somewhere else. */
+  onNavigate?: (path: string) => void;
 }
 
-export default function StudioTour({ open, onClose }: StudioTourProps): React.ReactElement | null {
-  const [step, setStep] = useState(0);
+export default function StudioTour(
+  { open, steps, onClose, onNavigate }: StudioTourProps,
+): React.ReactElement | null {
+  const [i, setI] = useState(0);
+  const [box, setBox] = useState<Box | null>(null);
+
+  const step = steps[i];
 
   const close = useCallback(() => {
-    markSeen();
-    setStep(0);
+    markTourSeen();
+    setI(0);
+    setBox(null);
     onClose();
   }, [onClose]);
+
+  /**
+   * Measure the target and bring it on screen.
+   *
+   * `useLayoutEffect` so the highlight is painted in the same frame as the step change; with a
+   * plain effect the ring lands a frame late and visibly jumps from the previous card.
+   */
+  useLayoutEffect(() => {
+    if (!open || !step) return undefined;
+
+    const measure = () => {
+      if (!step.target) { setBox(null); return; }
+      const el = document.querySelector(`[data-tour="${step.target}"]`);
+      if (!el) { setBox(null); return; }
+      const r = el.getBoundingClientRect();
+      setBox({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+
+    const el = step.target ? document.querySelector(`[data-tour="${step.target}"]`) : null;
+    /**
+     * Feature-detected, not assumed. `scrollIntoView` is absent in jsdom, so calling it
+     * unguarded threw inside a layout effect and took the whole page down with it - every
+     * Studio setup test failed at once, including the accessibility sweep.
+     *
+     * The guard is right beyond the test environment too: a walkthrough is an aid, and an aid
+     * that can crash the screen it is explaining is worse than no aid.
+     */
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    // Measure after the smooth scroll has had a chance to run, then keep it honest while the
+    // page moves underneath: a tour that keeps its ring where the card USED to be is worse
+    // than one with no ring.
+    const t = window.setTimeout(measure, 260);
+    measure();
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure);
+    };
+  }, [open, step, i]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -103,38 +127,70 @@ export default function StudioTour({ open, onClose }: StudioTourProps): React.Re
     return () => window.removeEventListener('keydown', onKey);
   }, [open, close]);
 
-  if (!open) return null;
+  const go = useCallback((next: number) => {
+    const s = steps[next];
+    if (s?.goto) {
+      const path = s.goto();
+      if (path && onNavigate) onNavigate(path);
+    }
+    setI(next);
+  }, [steps, onNavigate]);
 
-  const s = STEPS[step];
-  const last = step === STEPS.length - 1;
+  if (!open || !step) return null;
+
+  const last = i === steps.length - 1;
+  const PAD = 8;
+
+  /**
+   * The callout sits under the highlight, or above it when there is no room below. Centered
+   * when there is nothing to point at, which is also the fallback for a missing target.
+   */
+  const below = box ? box.top + box.height + 14 : 0;
+  const room = box ? window.innerHeight - below : 0;
+  const style: React.CSSProperties = box
+    ? room > 220
+      ? { top: below, left: Math.max(12, Math.min(box.left, window.innerWidth - 400)) }
+      : { bottom: window.innerHeight - box.top + 14, left: Math.max(12, Math.min(box.left, window.innerWidth - 400)) }
+    : { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
 
   return (
-    <div className="clv-tour-backdrop" data-testid="studio-tour" role="dialog" aria-modal="true" aria-label="How Studio setup works">
-      <div className="clv-tour">
-        <div className="clv-tour-count" data-testid="tour-count">
-          {step + 1} of {STEPS.length}
-        </div>
-        <h2 className="clv-tour-title" data-testid="tour-title">{s.title}</h2>
-        <p className="clv-tour-body">{s.body}</p>
-        {s.warning && (
-          <p className="clv-tour-warning" data-testid="tour-warning">{s.warning}</p>
-        )}
+    <div className="clv-tour-layer" data-testid="studio-tour" role="dialog" aria-modal="true" aria-label={step.title}>
+      {/*
+        * The dim and the hole are ONE element: a box the size of the target with a 9999px
+        * spread shadow. Four separate dimming panels would have to be kept in sync with each
+        * other on every scroll, and any disagreement shows as a seam across the page.
+        */}
+      {box ? (
+        <div
+          className="clv-tour-ring"
+          data-testid="tour-ring"
+          style={{
+            top: box.top - PAD,
+            left: box.left - PAD,
+            width: box.width + PAD * 2,
+            height: box.height + PAD * 2,
+          }}
+        />
+      ) : (
+        <div className="clv-tour-dim" data-testid="tour-dim" />
+      )}
+
+      <div className="clv-tour-callout" style={style} data-testid="tour-callout">
+        <div className="clv-tour-count" data-testid="tour-count">{i + 1} of {steps.length}</div>
+        <h2 className="clv-tour-title" data-testid="tour-title">{step.title}</h2>
+        <p className="clv-tour-body">{step.body}</p>
+        {step.warning && <p className="clv-tour-warning" data-testid="tour-warning">{step.warning}</p>}
 
         <div className="clv-tour-actions">
-          <button
-            type="button"
-            className="clv-tour-skip"
-            onClick={close}
-            data-testid="tour-close"
-          >
+          <button type="button" className="clv-tour-skip" onClick={close} data-testid="tour-close">
             {last ? 'Done' : 'Skip'}
           </button>
           <div className="clv-tour-move">
             <button
               type="button"
               className="clv-tour-btn"
-              onClick={() => setStep((n) => Math.max(0, n - 1))}
-              disabled={step === 0}
+              onClick={() => go(Math.max(0, i - 1))}
+              disabled={i === 0}
               data-testid="tour-back"
             >
               Back
@@ -143,7 +199,7 @@ export default function StudioTour({ open, onClose }: StudioTourProps): React.Re
               <button
                 type="button"
                 className="clv-tour-btn clv-tour-next"
-                onClick={() => setStep((n) => Math.min(STEPS.length - 1, n + 1))}
+                onClick={() => go(Math.min(steps.length - 1, i + 1))}
                 data-testid="tour-next"
               >
                 Next

@@ -8,6 +8,7 @@ import './studioSetup.css';
 import StaffPicker from './StaffPicker';
 import StudioRail from './StudioRail';
 import StudioTour, { hasSeenTour } from './StudioTour';
+import { setupTourSteps } from './studioTourSteps';
 
 /**
  * Studio setup (D4, P4-01) — everything about a Colaberry Live class that has to be decided
@@ -166,7 +167,11 @@ export default function StudioSetupPage(): React.ReactElement {
   return (
     <div className="cls-root">
       <StudioRail onTour={() => setTourOpen(true)} />
-      <StudioTour open={tourOpen} onClose={() => setTourOpen(false)} />
+      <StudioTour
+        open={tourOpen}
+        steps={setupTourSteps()}
+        onClose={() => setTourOpen(false)}
+      />
       <div className="cls-shell">
         <header className="cls-head">
           <h1 className="cls-title">Studio setup</h1>
@@ -179,7 +184,7 @@ export default function StudioSetupPage(): React.ReactElement {
 
         <div className="cls-grid">
           <div>
-            <section className="cls-card">
+            <section className="cls-card" data-tour="show">
               <h2 className="cls-card-title">The show</h2>
               <div className="cls-field">
                 <label className="cls-label" htmlFor="cls-title-input">Title</label>
@@ -191,7 +196,7 @@ export default function StudioSetupPage(): React.ReactElement {
               </p>
             </section>
 
-            <section className="cls-card">
+            <section className="cls-card" data-tour="people">
               <h2 className="cls-card-title">People</h2>
               {/*
                 * Both were text boxes asking for an enrollment id. Nobody knows their
@@ -218,7 +223,7 @@ export default function StudioSetupPage(): React.ReactElement {
               )}
             </section>
 
-            <section className="cls-card">
+            <section className="cls-card" data-tour="audience">
               <h2 className="cls-card-title">Audience</h2>
               <div className="cls-options">
                 <button
@@ -247,7 +252,7 @@ export default function StudioSetupPage(): React.ReactElement {
               </p>
             </section>
 
-            <section className="cls-card">
+            <section className="cls-card" data-tour="access">
               <h2 className="cls-card-title">Access mode</h2>
               <div className="cls-options">
                 {ACCESS_MODES.map((m) => (
@@ -295,7 +300,7 @@ export default function StudioSetupPage(): React.ReactElement {
               )}
             </section>
 
-            <section className="cls-card">
+            <section className="cls-card" data-tour="recording">
               <h2 className="cls-card-title">Recording</h2>
               <label className="cls-check" htmlFor="cls-rec">
                 <input
@@ -321,7 +326,7 @@ export default function StudioSetupPage(): React.ReactElement {
             </section>
           </div>
 
-          <aside className="cls-card cls-summary">
+          <aside className="cls-card cls-summary" data-tour="summary">
             <h2 className="cls-card-title">Before you create</h2>
             {summary.map((item) => (
               <div className="cls-sum-item" data-testid="cls-sum" key={item.label}>

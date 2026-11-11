@@ -199,7 +199,7 @@
   text-decoration: underline;
 }
 
-.cls-options {
+.cls-pickmenu {
   position: absolute; left: 0; right: 0; z-index: 20;
   margin: 4px 0 0; padding: 4px; list-style: none;
   max-height: 260px; overflow-y: auto;
@@ -207,32 +207,41 @@
   border: 1px solid var(--border-subtle, #d8dde5); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
 }
-.cls-option {
+.cls-pickitem {
   display: flex; flex-direction: column; gap: 1px;
   width: 100%; padding: 7px 9px; border: 0; border-radius: 6px;
   background: transparent; font: inherit; text-align: left; cursor: pointer;
 }
-.cls-option:hover { background: var(--surface-sunken, #eef1f6); }
-.cls-option-name { font-size: 14px; color: var(--text-body, #1d2430); }
-.cls-option-email { font-size: 12px; color: var(--text-muted, #55606f); }
-.cls-option-empty { padding: 9px; font-size: 13px; color: var(--text-muted, #55606f); }
+.cls-pickitem:hover { background: var(--surface-sunken, #eef1f6); }
+.cls-pickitem-name { font-size: 14px; color: var(--text-body, #1d2430); }
+.cls-pickitem-email { font-size: 12px; color: var(--text-muted, #55606f); }
+.cls-pickitem-empty { padding: 9px; font-size: 13px; color: var(--text-muted, #55606f); }
 
-/* The tour. A plain dialog rather than a spotlight: a tour that points at elements breaks the
-   first time a card moves, and what an operator needs here is the consequence, not the location. */
-.clv-tour-backdrop {
-  position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px; background: rgba(16, 24, 40, .55);
+/*
+ * THE WALKTHROUGH. It points at the card it is talking about.
+ *
+ * The dim and the hole are ONE element: a box the size of the target carrying a 9999px spread
+ * shadow. Four separate dimming panels would have to agree with each other on every scroll,
+ * and any disagreement shows as a seam across the page.
+ */
+.clv-tour-layer { position: fixed; inset: 0; z-index: 60; }
+.clv-tour-dim { position: absolute; inset: 0; background: rgba(16, 24, 40, .55); }
+.clv-tour-ring {
+  position: absolute; border-radius: 12px;
+  border: 2px solid var(--red-600, #E5121D);
+  box-shadow: 0 0 0 9999px rgba(16, 24, 40, .55);
+  pointer-events: none;
+  transition: top .18s ease, left .18s ease, width .18s ease, height .18s ease;
 }
-.clv-tour {
-  width: 100%; max-width: 540px;
-  padding: 22px; border-radius: 14px;
+.clv-tour-callout {
+  position: absolute; width: min(380px, calc(100vw - 24px));
+  padding: 18px; border-radius: 14px;
   background: var(--surface-default, #fff);
   box-shadow: 0 20px 48px rgba(16, 24, 40, .28);
 }
 .clv-tour-count { font-size: 12px; color: var(--text-muted, #55606f); letter-spacing: .04em; }
-.clv-tour-title { margin: 4px 0 10px; font-size: 20px; }
-.clv-tour-body { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-body, #1d2430); }
+.clv-tour-title { margin: 4px 0 8px; font-size: 17px; }
+.clv-tour-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-body, #1d2430); }
 /* #8a4b00 on #fff8ec measures 6.5:1. The same warning pair the producer strip uses. */
 .clv-tour-warning {
   margin: 12px 0 0; padding: 10px 12px; border-radius: 8px;
