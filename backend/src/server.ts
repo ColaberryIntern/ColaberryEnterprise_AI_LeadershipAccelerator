@@ -115,6 +115,7 @@ import { ensureTaskClaimSchema } from './db/ensureTaskClaimSchema';
 import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
 import { ensureBroadcastEndReasonSchema } from './db/ensureBroadcastEndReasonSchema';
 import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerSchema';
+import { ensureBroadcastClipMarkSchema } from './db/ensureBroadcastClipMarkSchema';
 import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -3088,6 +3089,9 @@ async function start(): Promise<void> {
   // L7.3 - clip markers, recorded while the show runs. After the end_reason ensure because
   // both alter or hang off broadcast_occurrences, which must exist first.
   await ensureBroadcastClipMarkerSchema();
+  // D10 - a moment somebody chose, in its own table. After the markers ensure for the same
+  // reason: both hang off broadcast_occurrences, which must exist first.
+  await ensureBroadcastClipMarkSchema();
   await ensureStudioSetupSchema();
   // L8.3 - the partial index the replay list reads through. The live ticker's index covers
   // backstage/live/reconnecting only, so replay_ready would otherwise scan the whole table.

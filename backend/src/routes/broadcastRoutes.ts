@@ -7,6 +7,7 @@ import * as c from '../controllers/broadcastController';
 // Its own module, because `broadcastController` is past the hard line-ceiling — see the
 // rundown route's note at the bottom of this file.
 import * as rundown from '../controllers/broadcastRundownController';
+import * as clipMark from '../controllers/broadcastClipMarkController';
 
 /**
  * Colaberry Live — broadcast routes.
@@ -193,6 +194,20 @@ router.get(
   `${P}/session/:sessionId/rundown`,
   flagGate, producerStateLimiter, requireParticipant, attachCommunityStaffContext,
   rundown.getSessionRundown,
+);
+
+/**
+ * D10 - mark a moment while the show runs.
+ *
+ * THE COMMAND LIMITER, not the producer-read one. A press is a deliberate act like Go Live,
+ * not a poll, and sizing it like a read would let a producer tapping during a good stretch eat
+ * the budget the End button needs. The reverse mistake is on record in this file: the audience
+ * route was sized like a command and throttled the control it sits next to.
+ */
+router.post(
+  `${P}/session/:sessionId/clip-mark`,
+  flagGate, commandLimiter, requireParticipant, attachCommunityStaffContext,
+  clipMark.postClipMark,
 );
 
 export default router;
