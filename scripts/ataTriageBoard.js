@@ -41,6 +41,7 @@ const arg = (k, d) => {
 const OUT = arg('out', '/tmp/triage.html');
 const DAYS = Number(arg('days', '60'));
 const LIMIT = Number(arg('limit', '400'));
+const HOLDER = arg('holder', 'board');
 const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older code is an OAuth id.
 
 (async () => {
@@ -82,7 +83,27 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
     .slice(0, 20);
 
   const orderRows = [...live, ...recentDormant].map((i) => i.__row).filter(Boolean);
-  const workOrders = orderRows.map((r) => buildWorkOrder(r, now));
+  let workOrders = orderRows.map((r) => buildWorkOrder(r, now));
+
+  /**
+   * Subtract what another worker already holds.
+   *
+   * Without this the board hands the same ticket to every tab that opens it, which is the exact
+   * collision the claims table exists to prevent - and the board is the most likely place for it
+   * to happen, because it is what people paste from.
+   *
+   * partitionByClaim is fail-open: if the claims table cannot be read, nothing is withheld. A
+   * board that silently showed no work would look like a quiet day rather than a broken query.
+   */
+  let claimedOut = [];
+  try {
+    const { partitionByClaim } = require('/app/dist/services/ops/taskClaims');
+    const split = await partitionByClaim(workOrders, HOLDER);
+    workOrders = split.available;
+    claimedOut = split.claimed;
+  } catch (e) {
+    console.warn(`[board] claims unavailable (${e && e.message}); showing all work orders`);
+  }
 
   /**
    * The list lens is built over EVERY task, not over the work-order subset.
@@ -140,6 +161,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
   // A one-line summary to stdout so the run is auditable without opening the file.
   const s = summarize(items, new Date(), { dormantAfterDays: DAYS });
   console.log(`rows=${items.length} live=${s.liveCount} dormant=${s.dormantCount} `
+    + `claimed=${claimedOut.length} `
     + `(${Math.round(s.dormantShare * 100)}%) oldest=${s.worst ? s.worst.days + 'd' : 'n/a'} -> ${OUT}`);
 
   await sequelize.close();
