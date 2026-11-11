@@ -18,6 +18,7 @@ import ContractBar from '../ContractBar';
 import StageDetail from '../StageDetail';
 import StageRail from '../StageRail';
 import AgentPanel from '../AgentPanel';
+import QualRail from '../QualRail';
 import WhereWeAre from '../WhereWeAre';
 import NeedsInbox from '../NeedsInbox';
 import DocumentSet from '../DocumentSet';
@@ -409,6 +410,51 @@ describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualificat
     const txt = (container.querySelector('[data-testid="step-proposal"]') as HTMLElement)?.textContent ?? '';
     expect(txt).toContain('2030-01-15'); // the auto-populated due date drives step 6 (no manual entry)
     expect(txt).toContain('left');       // ...with a days-left countdown
+  });
+
+  it('INTERN mount: steps 1-5 show the student-safe Qualification rail in place of the agent panel', async () => {
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    // A proposal-production view (overview) keeps the Proposal-agent panel.
+    expect(present('agent-panel')).toBe(true);
+    expect(present('qual-rail')).toBe(false);
+    // Stepping to a pre-award stage (Fit) swaps in the admin-mirror rail and drops the agent panel.
+    await act(async () => { (container.querySelector('[data-testid="step-fit"]') as HTMLButtonElement).click(); });
+    expect(present('qual-rail')).toBe(true);
+    expect(present('agent-panel')).toBe(false);
+  });
+});
+
+describe('QualRail — the student-safe mirror of the admin workspace right rail (steps 1-5)', () => {
+  const vetted = {
+    ...VIEW,
+    closeDate: '2030-02-01',
+    vetting: { status: 'completed', verdict: 'pursue', coveragePct: 50, reason: 'Core work is software delivery.', quote: 'The Vendor shall provide all professional services.' },
+    meetings: [{ date: '2030-01-10', text: 'Pre-proposal conference' }],
+    keyDates: [{ date: '2030-01-20', text: 'Questions due' }],
+  } as unknown as StudentGovProjectView;
+  const textOf = (id: string) => container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+
+  it('shows the AI vetting verdict, capability coverage, deadline and key dates from the projection', async () => {
+    await render(<QualRail view={vetted} />);
+    expect(present('qual-rail')).toBe(true);
+    expect(textOf('qual-vetting-verdict')).toContain('recommends pursuing');
+    expect(textOf('qual-vetting-card')).toContain('50%');
+    expect(textOf('qual-deadline-card')).toContain('2030-02-01');
+    expect(present('qual-keydates')).toBe(true);
+  });
+
+  it('shows an in-progress note while the AI vetting is still running (no verdict)', async () => {
+    const running = { ...vetted, vetting: { status: 'running', verdict: null, coveragePct: null, reason: null, quote: null } } as unknown as StudentGovProjectView;
+    await render(<QualRail view={running} />);
+    expect(present('qual-vetting-pending')).toBe(true);
+    expect(present('qual-vetting-verdict')).toBe(false);
+  });
+
+  it('stays student-safe — no dollars and no buyer contact emails in the rail', async () => {
+    await render(<QualRail view={vetted} />);
+    const body = container.textContent ?? '';
+    expect(body).not.toMatch(/\$[0-9]/);
+    expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
   });
 });
 
