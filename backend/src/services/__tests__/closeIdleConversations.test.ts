@@ -187,3 +187,44 @@ describe('the defaults are the ones the comment claims', () => {
     expect(DEFAULT_BATCH_LIMIT).toBe(200);
   });
 });
+
+describe('the cron registration stays discoverable to the registry guard', () => {
+  // The agent name is written as a string literal at the instrumentCronJob call site, because
+  // cronRegistryReconciliation's parser resolves a literal statically and treats an identifier
+  // as a dynamicArg that resolves to NO name. A job whose name cannot be resolved is invisible
+  // to the invariant that every scheduled job has a seed row to track it, which is how a cron
+  // silently stops being accounted for. These assertions keep the literal, the exported
+  // constant and the seed row from drifting apart.
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  const cronsFile = path.join(__dirname, '..', 'scheduling', 'chatConversationCrons.ts');
+  const seedFile = path.join(__dirname, '..', 'agentRegistrySeed.ts');
+
+  it('passes the agent name to instrumentCronJob as a resolvable string literal', () => {
+    const src = fs.readFileSync(cronsFile, 'utf8');
+    expect(src).toContain("instrumentCronJob('ChatCloseIdleConversations'");
+    // A control: if this were ever switched back to the identifier form, the guard goes blind.
+    expect(src).not.toContain('instrumentCronJob(CLOSE_IDLE_AGENT');
+  });
+
+  it('exports a constant equal to the literal it registers under', () => {
+    // Read from source rather than importing the module: importing it pulls in
+    // cronInstrumentation, which pulls in models/index.ts and wires the real Sequelize
+    // associations. ChatConversation is mocked at the top of this file, so that import throws
+    // "not a subclass of Sequelize.Model". Parsing the source keeps this a unit test.
+    const src = fs.readFileSync(cronsFile, 'utf8');
+    const agent = src.match(/export const CLOSE_IDLE_AGENT = '([^']+)'/);
+    const schedule = src.match(/export const CLOSE_IDLE_SCHEDULE = '([^']+)'/);
+    expect(agent?.[1]).toBe('ChatCloseIdleConversations');
+    expect(schedule?.[1]).toBe('*/10 * * * *');
+  });
+
+  it('has a seed row whose name and schedule match the registration', () => {
+    const seed = fs.readFileSync(seedFile, 'utf8');
+    expect(seed).toContain("agent_name: 'ChatCloseIdleConversations'");
+    // The seed row's schedule must be the schedule that actually fires, which is the
+    // invariant the registry guard calls (iii).
+    const block = seed.slice(seed.indexOf("agent_name: 'ChatCloseIdleConversations'"));
+    expect(block.slice(0, 400)).toContain("schedule: '*/10 * * * *'");
+  });
+});

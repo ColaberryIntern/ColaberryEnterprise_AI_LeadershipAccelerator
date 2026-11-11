@@ -266,6 +266,7 @@ export const EXPECTED_CRON_IMPORT_FILES: ReadonlyArray<string> = [
   'services/scheduling/growthJourneyCrons.ts', // the three Growth Journey crons
   'services/scheduling/adSpendCrons.ts', // the daily Meta ad spend pull (2026-11-02), seed row MetaAdSpendSync
   'services/scheduling/explorerNightlySequence.ts', // Explorer recompute, then Governor, then draft render (C108)
+  'services/scheduling/chatConversationCrons.ts', // closes idle chat conversations (R4, 2026-11-11), seed row ChatCloseIdleConversations
 ];
 
 /** Files where the identifier is used as a VALUE rather than called — `const run =

@@ -38,8 +38,13 @@ export function registerChatConversationCrons(): void {
   // This job SENDS NOTHING to a lead. Closing a conversation writes a summary, a memory row,
   // a behavioral signal and a CRM tag. The one outbound-looking call, `addMayaInteractionTag`,
   // tags the CRM record; it does not message the person.
+  // The agent name is passed as a STRING LITERAL, not as CLOSE_IDLE_AGENT, deliberately.
+  // cronRegistryReconciliation's parser resolves a literal statically; an identifier is a
+  // `dynamicArg` that resolves to no name, which would make this registration invisible to the
+  // invariant that every scheduled job has a seed row. The constant stays exported for the seed
+  // row and the tests, and a test pins the two together so they cannot drift apart.
   cron.schedule(CLOSE_IDLE_SCHEDULE, () => {
-    instrumentCronJob(CLOSE_IDLE_AGENT, async () => {
+    instrumentCronJob('ChatCloseIdleConversations', async () => {
       await closeIdleConversations();
     }).catch((err) => {
       console.error(`[Scheduler] ${CLOSE_IDLE_AGENT} failed:`, err);
