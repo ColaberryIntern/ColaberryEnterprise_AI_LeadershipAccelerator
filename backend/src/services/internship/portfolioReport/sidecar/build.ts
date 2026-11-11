@@ -11,6 +11,7 @@
 import { WRONG_FORMAT, kindLabel } from '../artifacts';
 import { classifyEmail, eventText } from '../timeline';
 import type { Conversation, InternCard, LastOutbound, PortfolioReport, TimelineNext } from '../types';
+import { answeredInThread, newestReplyByThread } from '../threadReply';
 import { classifyArtifact } from './classify';
 import { delta } from './delta';
 import { pacing } from './pacing';
@@ -46,11 +47,18 @@ function timelineRows(c: InternCard): SidecarTimelineRow[] {
   return out;
 }
 
-/** Their question / blocker emails with nothing sent to them since: verbatim subject and text. */
-function openQuestions(c: InternCard): SidecarIntern['open_questions'] {
-  const answeredUpTo = c.emails.lastWeWrote ? Date.parse(c.emails.lastWeWrote) : null;
+/**
+ * Their question / blocker emails we have not answered IN THEIR THREAD: verbatim subject and text.
+ *
+ * This used to ask whether we had sent them anything later, which counted our own nudge as an
+ * answer and emptied the field for all 13 interns the morning after a nudge run. A nudge asks them
+ * for something; it does not answer what they asked. Same rule and same module as the reply-owed
+ * test in compose.ts, so the two cannot drift. See threadReply.ts.
+ */
+export function openQuestions(c: InternCard): SidecarIntern['open_questions'] {
+  const byThread = newestReplyByThread(c.replies);
   return c.emails.threads
-    .filter((th) => answeredUpTo === null || Date.parse(th.date) > answeredUpTo)
+    .filter((th) => !answeredInThread(th.subject, Date.parse(th.date), byThread))
     .map((th) => ({ th, kind: classifyEmail(th.subject, th.snippet) }))
     .filter((x): x is { th: typeof x.th; kind: 'question' | 'stuck' } => x.kind === 'question' || x.kind === 'stuck')
     .map(({ th, kind }) => ({ received_at: new Date(th.date).toISOString(), subject: th.subject, text: th.snippet, kind }));
