@@ -59,6 +59,8 @@ export interface SettingsView {
   profile: SettingsProfile;
   avatar_data_url: string | null;
   resume: SettingsResume | null;
+  /** Present only on the resume-upload response: whether the server could read the file. */
+  resume_parse?: { status: 'parsed' | 'unreadable' | 'failed'; attempts: number; error_class: string | null };
   personalization: SettingsPersonalization;
   preferences: SettingsPreferences;
 }
@@ -179,6 +181,18 @@ export function downscaleImageToSquare(file: File, size = 256): Promise<string> 
     };
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * What to tell the learner after an upload the server could NOT read. Null when it was read (or
+ * an older server sent no outcome), so the caller keeps its own success wording. The file is
+ * stored either way; these words say what to do next.
+ */
+export function resumeParseProblem(view: Pick<SettingsView, 'resume_parse'> | null | undefined): string | null {
+  const s = view?.resume_parse?.status;
+  if (s === 'unreadable') return 'Resume saved, but we could not read any text in it (a scanned image?). Try a Word file or a text-based PDF.';
+  if (s === 'failed') return 'Resume saved, but we could not read it just now. Upload it again in a few minutes, or fill in your profile below.';
+  return null;
 }
 
 /** Human-readable file size for the resume row. */

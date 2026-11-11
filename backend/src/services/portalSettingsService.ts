@@ -9,6 +9,7 @@
 // error the caller maps to a 400; only genuine DB faults bubble to a 500.
 
 import { Enrollment, OnboardingProfile, Cohort, Organization, OrgMember } from '../models';
+import { parseUploadedResume, ResumeParseOutcome } from './resumeUploadParse';
 
 // ── Caps + allow-lists ───────────────────────────────────────────────────────
 
@@ -80,6 +81,8 @@ export interface SettingsView {
   };
   avatar_data_url: string | null;
   resume: { file_name: string; mime: string | null; size_bytes: number; uploaded_at: Date | null } | null;
+  /** Present only on the resume-upload response: whether the file was actually read. */
+  resume_parse?: ResumeParseOutcome;
   personalization: Record<PersonalizationKey, string | null>;
   preferences: Record<PrefStringKey, string | null> & Record<PrefBoolKey, boolean>;
 }
@@ -371,14 +374,21 @@ export async function setResume(
 
   // Parse the uploaded resume (pdf/docx/rtf/txt) and prefill the profile from it.
   // Runs inline so the profile is ready when the client re-reads the prefill.
-  // Fully best-effort — a parse/LLM failure never fails the upload.
+  // A parse failure never fails the upload, but it is no longer silent: the outcome
+  // is logged and returned, so the page can say "we couldn't read this" (see
+  // resumeUploadParse.ts for the failure modes and the one retry).
+  let resume_parse: ResumeParseOutcome;
   try {
     const { extractTextFromBuffer } = await import('./fileExtractionService');
     const { ingestResumeFileText } = await import('./resumeIngestService');
-    const text = await extractTextFromBuffer(Buffer.from(cleanB64, 'base64'), input.file_name);
-    if (text && text.trim().length > 40) await ingestResumeFileText(enrollmentId, text);
+    resume_parse = await parseUploadedResume(enrollmentId, Buffer.from(cleanB64, 'base64'), input.file_name, {
+      extractText: extractTextFromBuffer,
+      ingest: (id, text) => ingestResumeFileText(id, text),
+    });
   } catch (err: any) {
-    console.warn('[Settings] resume parse (non-fatal):', err?.message);
+    // Only a module that fails to load lands here; the parser itself never throws.
+    console.warn(JSON.stringify({ level: 'warn', service: 'backend', event: 'resume_upload_parse', outcome: 'failure', error_class: 'ModuleLoadError', context: { enrollment_id: enrollmentId, message: err?.message } }));
+    resume_parse = { status: 'failed', attempts: 0, error_class: 'ExtractionError' };
   }
 
   // Award the one-time "profile set up" points (+25) for uploading a resume /
@@ -392,7 +402,8 @@ export async function setResume(
     console.warn('[Settings] resume points award (non-fatal):', err?.message);
   }
 
-  return getSettings(enrollmentId);
+  const settings = await getSettings(enrollmentId);
+  return settings ? { ...settings, resume_parse } : null;
 }
 
 export async function clearResume(enrollmentId: string): Promise<SettingsView | null> {

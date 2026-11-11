@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { fileToBase64, removeResume, uploadResume } from '../../../services/portalSettingsApi';
+import { fileToBase64, removeResume, resumeParseProblem, uploadResume } from '../../../services/portalSettingsApi';
 import { refreshMyProgress } from './myProgressApi';
 import { RESUME_EXT, resumeFileProblem } from './myProgressView';
 
@@ -31,8 +31,8 @@ export function useResumeUpload(testId: string): ResumeUploadApi {
     try {
       const data_base64 = await fileToBase64(file);
       const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      await uploadResume({ file_name: file.name, mime: file.type || (ext === '.pdf' ? 'application/pdf' : 'text/plain'), data_base64 });
-      setNote('Resume uploaded. Here is where you came from.');
+      const updated = await uploadResume({ file_name: file.name, mime: file.type || (ext === '.pdf' ? 'application/pdf' : 'text/plain'), data_base64 });
+      setNote(resumeParseProblem(updated) || 'Resume uploaded. Here is where you came from.');
       await refreshMyProgress();
     } catch (err) {
       const msg = (err as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
