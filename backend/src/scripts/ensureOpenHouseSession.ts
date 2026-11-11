@@ -28,6 +28,7 @@
  *   node dist/scripts/ensureOpenHouseSession.js            # create or update
  *   node dist/scripts/ensureOpenHouseSession.js --dry-run  # report, write nothing
  */
+import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getCurrentOpenHouseEvent } from '../services/openHouseEventService';
@@ -164,15 +165,30 @@ async function main(): Promise<void> {
   // overload is typed as returning [undefined, number] and has no row generic, so
   // asking it for the new id is the TS2769 the first push earned. SELECT is the
   // idiom for a statement that genuinely returns rows.
+  //
+  // `id` IS SUPPLIED HERE, AND IT HAS TO BE. `live_sessions.id` is `uuid NOT NULL`
+  // with NO column default - the UUID comes from the Sequelize model's `UUIDV4`,
+  // which is application-side and therefore absent from every raw-SQL insert. The
+  // first real run of this script died on exactly that: `null value in column "id"
+  // of relation "live_sessions" violates not-null constraint`. Nothing was written,
+  // because the statement never reached the table.
+  //
+  // Minted with `crypto.randomUUID()` rather than `gen_random_uuid()` so the insert
+  // carries no dependency on pgcrypto being present. Production has the extension,
+  // but a preview or local database is not obliged to, and a script that works on
+  // one database and not another is a script that fails at the worst moment. The id
+  // is logged below, which also means the row can be found again from the log alone.
+  const id = randomUUID();
   const inserted = await sequelize.query<{ id: string }>(
     `INSERT INTO live_sessions
-       (cohort_id, session_number, title, description, session_date, start_time, end_time,
+       (id, cohort_id, session_number, title, description, session_date, start_time, end_time,
         status, open_house_event_id, created_at)
-     VALUES (:cohort, 0, :title, :description, :date, :start, :end,
+     VALUES (:id, :cohort, 0, :title, :description, :date, :start, :end,
              'scheduled', :eventId, NOW())
      RETURNING id`,
     {
       replacements: {
+        id,
         cohort: cohort.id,
         title: event.name,
         description: 'Open House. Registrations are taken on our own landing page; reminders go to those registrants only.',
@@ -185,7 +201,10 @@ async function main(): Promise<void> {
     },
   );
 
-  log('created', { id: inserted[0]?.id ?? null, outcome: 'success' });
+  // Falls back to the minted id rather than null: the row exists either way by the
+  // time this line runs, so logging null would misreport a successful write as
+  // untraceable.
+  log('created', { id: inserted[0]?.id ?? id, outcome: 'success' });
   await sequelize.close();
 }
 
