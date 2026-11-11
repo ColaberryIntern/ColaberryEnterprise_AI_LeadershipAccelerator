@@ -14,7 +14,7 @@
  * build nearly done, an agent with many verified stories, no project), so the same facts always
  * produce the same asks, and each prompt is filled with their project, repo and stories.
  */
-import type { ArtifactAsk, ArtifactFileType, ArtifactSource, ArtifactsView, InternCard, PublishedArtifact } from './types';
+import type { ArtifactAsk, AskTheme, ArtifactFileType, ArtifactSource, ArtifactsView, InternCard, PublishedArtifact } from './types';
 import { presentationAsk, type PresentationDue } from './presentations';
 
 export const ADMIN_BASE = 'https://enterprise.colaberry.ai';
@@ -136,13 +136,57 @@ export const FINISH = [
 
 const LIVE_PAGE = 'Write it for Ali, the program lead: plain English, status colors (green done, amber in progress, red blocked), at least one chart. Commit and push, then reply to Ali with the live URL.';
 
+/**
+ * What a prompt is FOR, declared beside the prompt rather than inferred later.
+ *
+ * Ali, 2026-11-11: three prompts, one per theme, and the message is picked around the theme. A
+ * theme is a property of the prompt itself, so it is set here and carried into the sidecar
+ * untouched.
+ *
+ * `evidence` produces something we can open. `diagnose` produces an understanding of why
+ * something is not moving. `advance` produces a decision about what happens next.
+ */
+// AskTheme is declared in ./types, because types cannot import from here.
+
+const ASK_THEME: Record<string, AskTheme> = {
+  blocker_brief: 'diagnose',
+  stall_audit: 'diagnose',
+  project_proposal: 'advance',
+  next_three_stories: 'advance',
+  smallest_shippable: 'advance',
+  command_center: 'evidence',
+  capability_map: 'evidence',
+  demo_walkthrough: 'evidence',
+  project_one_pager: 'evidence',
+  presentation: 'evidence',
+  format_correction: 'evidence',
+};
+
+export const themeOfAsk = (key: string): AskTheme => ASK_THEME[key] ?? 'evidence';
+
+/**
+ * The finish for a prompt whose output is an ANSWER rather than an artifact.
+ *
+ * `FINISH` asks for a self-contained HTML page with conditional formatting and a chart. That is
+ * right for evidence and wrong for everything else: telling somebody who has not committed in nine
+ * days that step one is a styled page with a chart adds the exact friction that kept them stopped.
+ * Diagnosis and decisions come back as a reply, in plain text, in twenty minutes.
+ */
+export const FINISH_REPLY = [
+  'Do not build a page for this, do not add charts, and do not spend more than twenty minutes on it.',
+  'Put the answers in plain text and send them straight back as a reply. Short is fine. Honest is the whole point, including if the honest answer is that you are not sure or that you stopped for a reason that has nothing to do with the code.',
+].join('\n');
+
 function ask(c: Ctx, key: string, name: string, why: string, forThem: string, body: string, finish = FINISH): ArtifactAsk {
   const prompt = `${projectContext(c)}\n\n${body}\n\n${finish}`.trim();
   const project = c.project ? ` for ${c.project.name}` : '';
-  const deliver = finish === FINISH ? 'and upload the PDF in the portal when it is done' : 'and send me the link when it is live';
+  const deliver = finish === FINISH ? 'and upload the PDF in the portal when it is done'
+    : finish === FINISH_REPLY ? 'and reply with what it tells you'
+      : 'and send me the link when it is live';
+  const verb = finish === FINISH_REPLY ? 'could you run this' : `could you put together a ${name}${project}`;
   return {
-    key, name, why, prompt,
-    nudge: `Hi ${c.firstName}, could you put together a ${name}${project} in the next two days? ${forThem} Open Claude Code in your repo, paste the prompt below, ${deliver}.`,
+    key, name, theme: themeOfAsk(key), why, prompt,
+    nudge: `Hi ${c.firstName}, ${verb} in the next two days? ${forThem} Open Claude Code in your repo, paste the prompt below, ${deliver}.`,
   };
 }
 
@@ -198,6 +242,7 @@ export function formatCorrection(c: Ctx, published: Published, nowMs: number): A
   ].join('\n');
   return {
     key: 'format_correction',
+    theme: themeOfAsk('format_correction'),
     name: 'Visual PDFs instead of Markdown',
     why: `${recent.length ? `${n} of their artifacts from the last ${FORMAT_CORRECTION_DAYS} days ${n === 1 ? 'is' : 'are'}` : `Their most recent artifact, and ${n} in all, ${n === 1 ? 'is' : 'are'}`} Markdown or text; a visual PDF (status colors, charts, icons) tells you the story at a glance, and the prompt habit fixes every future artifact.`,
     prompt: `${projectContext(c)}\n\n${body}\n\n${FINISH}`.trim(),
@@ -211,7 +256,29 @@ export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()
   const out: ArtifactAsk[] = [];
   // Second only to a Blocker Brief: an intern who is blocked needs unblocking before reformatting.
   const correction = formatCorrection(c, published, nowMs);
-  if (p && isStuck(c)) {
+  /**
+   * Exactly ONE diagnosis prompt, and which one depends on whether anything is visibly broken.
+   *
+   * `blocker_brief` asks for the command, the file and the error text. That is the right prompt
+   * when something failed and the wrong one when nothing did: most stalls in this roster are not a
+   * reproducible error, they are "it got bigger than I thought" or "I lost the thread", and a
+   * prompt that insists on an error message teaches the intern to invent one or to say nothing.
+   */
+  const reportedBlocker = p ? c.timeline.rows.flatMap((r) => r.events).some((e) => e.kind === 'stuck') : false;
+  if (p && isStuck(c) && !reportedBlocker) {
+    out.push(ask(c, 'stall_audit', 'Stall Audit',
+      'Their own honest account of why the build stopped, which is the one thing no dashboard can tell you.',
+      'It takes twenty minutes and it tells us both what is actually in the way.',
+      [
+        'Answer these five, in order, and do not fix anything before you do. The point is an accurate picture, not a tidy one.',
+        '1. Run `git log --since="21 days ago" --oneline` and paste exactly what it prints. If it prints nothing, say so.',
+        '2. Open your build plan and name the story you are actually on right now.',
+        '3. For that story, what is the precise next action? If you cannot say it in one sentence, that IS the finding; write down what is unclear instead.',
+        '4. Why has it not moved? Pick the honest one and say it plainly: I do not know how, I am waiting on someone, it turned out bigger than I thought, I lost the thread, or something outside the internship took the time.',
+        '5. What is the smallest piece you could genuinely finish in two hours?',
+      ].join('\n'), FINISH_REPLY));
+  }
+  if (p && isStuck(c) && reportedBlocker) {
     out.push(ask(c, 'blocker_brief', 'Blocker Brief',
       'Shows exactly what is blocking the build, what they already tried, and the one thing they need from you, so one reply can unblock them.',
       'It lets me unblock you in one reply instead of a back-and-forth.',
@@ -220,13 +287,9 @@ export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()
   // The next presentation, once their own plan says it is due (presentations.presentationDue).
   if (presentation) out.push(presentationAsk(c.firstName, p?.name ?? null, presentation));
   if (correction) out.push(correction);
-  if (p && !p.commandCenterUrl) {
-    const started = p.verifiedRecent.some((v) => /command center|story-000/i.test(v.title)) || p.commitsRecent.some((x) => /command center|story-000/i.test(x.message));
-    out.push(ask(c, 'command_center', started ? 'published Command Center' : 'Command Center',
-      'Gives you a live page for this project you can open any time, instead of reading the repo.',
-      started ? 'You have built it; publishing it means I can open it from my report any time.' : 'It is the page I open first to see where your build is.',
-      `${started ? 'My Command Center (STORY-000) is built in this repo.' : 'Build my Command Center (STORY-000): one static page showing the project, the stories verified so far, what is in progress, and what is next.'}\nPublish it on GitHub Pages: put the static files under docs/command-center/, enable Pages from the /docs folder on the main branch, and confirm the URL loads in a private browser window. Add that URL to the README under "Command Center".`, LIVE_PAGE));
-  }
+  // Ranked ABOVE the Command Center on purpose: once one per theme survives, the within-theme
+  // order decides everything, and a pursuit-specific walkthrough or capability map is worth more
+  // than a generic project page to somebody judging whether the build is real.
   if (c.gov && c.gov.total > 0 && c.gov.pct >= 75) {
     out.push(ask(c, 'demo_walkthrough', 'Demo Walkthrough',
       'Shows the working system story by story against the RFP, which is what the proposal and the demo call will need.',
@@ -238,11 +301,51 @@ export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()
       'You have verified enough stories that I want to see what the agent can do today.',
       'Create docs/CAPABILITY_MAP.html (and its PDF). For every verified story: the capability it gives the agent in one sentence, the evidence (file, commit or screenshot), and whether it runs autonomously or needs a human. Group by capability area and finish with the three capabilities that are next.'));
   }
+  if (p && !p.commandCenterUrl) {
+    const started = p.verifiedRecent.some((v) => /command center|story-000/i.test(v.title)) || p.commitsRecent.some((x) => /command center|story-000/i.test(x.message));
+    out.push(ask(c, 'command_center', started ? 'published Command Center' : 'Command Center',
+      'Gives you a live page for this project you can open any time, instead of reading the repo.',
+      started ? 'You have built it; publishing it means I can open it from my report any time.' : 'It is the page I open first to see where your build is.',
+      `${started ? 'My Command Center (STORY-000) is built in this repo.' : 'Build my Command Center (STORY-000): one static page showing the project, the stories verified so far, what is in progress, and what is next.'}\nPublish it on GitHub Pages: put the static files under docs/command-center/, enable Pages from the /docs folder on the main branch, and confirm the URL loads in a private browser window. Add that URL to the README under "Command Center".`, LIVE_PAGE));
+  }
   if (p && (p.verifiedRecent.length || p.commitsRecent.length)) {
     out.push(ask(c, 'project_one_pager', 'Project One-Pager',
       'One page in their own words: the problem, what is built, how it fits together, and what is next, which is the fastest way to understand the project.',
       'It is the fastest way for me to understand where the whole project stands.',
       'Create docs/PROJECT_ONE_PAGER.html (and its PDF) from what is actually in this repo:\n1. The problem and who it is for.\n2. What is built: link each verified story to the file or commit that proves it.\n3. How it fits together: components, data and outside services, as a simple diagram.\n4. What is next and the biggest open question.'));
+  }
+  /**
+   * Every intern gets exactly one ADVANCE prompt, which until 2026-11-11 was not true of anybody
+   * who had a project: `project_proposal` fires only when there is no project, so the entire
+   * roster of active builders had no "what happens next" prompt at all. Six of the eight prompts
+   * asked for an artifact, which is the one thing a stalled person is least able to produce.
+   */
+  if (p && (p.tasksDone ?? 0) === 0 && p.commitsRecent.length > 0) {
+    out.push(ask(c, 'smallest_shippable', 'Smallest Shippable Thing',
+      'Converts a repo of commits with nothing verified into one working path, which is what makes the rest of the build judgeable.',
+      'You have been committing, and nothing is finished end to end yet. This picks the one path to close.',
+      [
+        'You have commits but no verified story. The aim here is one path that works end to end, however small.',
+        '1. Name the single user-visible thing this project should do first. One sentence.',
+        '2. List what already exists in the repo that supports it, with file names.',
+        '3. List what is missing for that one path, shortest first.',
+        '4. Pick the smallest version that a person could actually use, and say what you are deliberately leaving out.',
+        '5. Write the three commits you will make to close it, in order.',
+        'Then start commit one now and push it.',
+      ].join('\n'), FINISH_REPLY));
+  } else if (p) {
+    out.push(ask(c, 'next_three_stories', 'Next Three Stories',
+      'Their own plan for the next week, so the build has a direction you can hold them to rather than a backlog.',
+      'It gets the next week decided in one pass instead of story by story.',
+      [
+        'Decide what happens next on this project, then start.',
+        '1. Read the build plan and list every story that is open.',
+        '2. Pick the three that should happen next and put them in order. For each, say in one sentence why it comes before the others.',
+        '3. For the first one: what is the opening move, and what would tell you it is done?',
+        '4. Name anything in those three you do not yet know how to do, and what you would try first.',
+        '5. Give each a day you expect it finished.',
+        'Then begin the first one and push something today, even if it is small.',
+      ].join('\n'), FINISH_REPLY));
   }
   if (!p) {
     out.push(ask(c, 'project_proposal', 'Project Proposal',
@@ -250,7 +353,17 @@ export function chooseAsks(c: Ctx, published: Published = [], nowMs = Date.now()
       'It lets us pick your project this week.',
       `Create PROJECT_PROPOSAL.html (and its PDF) in your training repo with three project ideas you could build in the internship. For each: the problem, who has it, what you would build in four weeks, and what it would prove about you. Mark the one you want most and why. You are ${c.training.weeksCompleted} weeks into training; pick ideas that use what you have learned so far.`));
   }
-  return out.slice(0, MAX_ASKS);
+  /**
+   * The three best prompts: the top-ranked one in each theme, never two of a kind.
+   *
+   * This used to be `slice(0, 3)`, which on a productive intern returned three ways of asking for
+   * a document and on a stalled one could return none of the two things that would actually move
+   * them. One per theme is what makes the downstream choice a real choice: diagnose, advance, or
+   * evidence, with the ranking inside each theme already decided by the order above.
+   */
+  const bestPerTheme = new Map<AskTheme, ArtifactAsk>();
+  for (const a of out) if (!bestPerTheme.has(a.theme)) bestPerTheme.set(a.theme, a);
+  return [...bestPerTheme.values()].slice(0, MAX_ASKS);
 }
 
 /** Repo first, because that is the evidence Ali asked for; newest first inside each class. */
