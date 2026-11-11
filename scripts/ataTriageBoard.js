@@ -47,7 +47,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
 (async () => {
   const rows = await sequelize.query(`
     SELECT bc_id, project_id, title, description, category, status, due_on, urgency_score,
-           bc_app_url, todolist_name, assignee_ids, bc_updated_at
+           bc_app_url, todolist_id, todolist_name, assignee_ids, bc_updated_at
       FROM ops_bc_todos
      WHERE status = 'active'
        AND (is_dismissed IS NOT TRUE)
@@ -112,7 +112,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
    * see the whole of it, and the work orders deliberately cover only what is worth working now. A
    * list card built from the subset would report "3 tasks" for a list holding 39.
    */
-  const { byList, withSiblings, looksGenerated } = require(path.join(libDir, 'listLens'));
+  const { byList, withSiblings, looksGenerated, sequenceOf } = require(path.join(libDir, 'listLens'));
   const { bandFor } = require(path.join(libDir, 'ageBands'));
   const taskViews = items.map((i) => {
     const r = i.__row || {};
@@ -122,6 +122,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
       projectId: r.project_id == null ? null : String(r.project_id),
       title: r.title,
       list: r.todolist_name || '(no list)',
+      listId: r.todolist_id == null ? null : String(r.todolist_id),
       url: r.bc_app_url || null,
       dueOn: r.due_on || null,
       daysOverdue: daysOverdue(r.due_on, now),
@@ -134,7 +135,50 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
       humanOnly: desc.includes('\u{1F9D1}'),
     };
   });
-  const lists = withSiblings(byList(taskViews));
+  const grouped = byList(taskViews);
+
+  /**
+   * Ask Basecamp what each list really is (list or group, current title, still exists). Read-only
+   * GETs with timeouts and one capped retry; see listMeta for the failure modes. If the token or
+   * the API is unavailable the board still renders from the mirror and says the names are unchecked.
+   */
+  const { fetchListMeta } = require(path.join(libDir, 'listMeta'));
+  let token = null;
+  try {
+    const { refreshBcToken } = require('/app/dist/services/ops/basecampToken');
+    token = await refreshBcToken();
+  } catch (e) {
+    console.warn(JSON.stringify({ level: 'warn', service: 'backlog-board', event: 'bc_token_unavailable',
+      error_class: (e && e.name) || 'Error' }));
+  }
+  const t0 = Date.now();
+  const meta = await fetchListMeta(
+    grouped.filter((l) => l.listId).map((l) => ({ projectId: l.projectId, listId: l.listId, name: l.key })),
+    { token, fetchImpl: typeof fetch === 'function' ? fetch : null,
+      accountId: process.env.BASECAMP_ACCOUNT_ID || '3945211' },
+  );
+  const metaVals = [...meta.values()];
+  console.log(JSON.stringify({ level: 'info', service: 'backlog-board', event: 'list_meta',
+    duration_ms: Date.now() - t0, lists: metaVals.length,
+    checked: metaVals.filter((m) => m.checked).length, groups: metaVals.filter((m) => m.isGroup).length,
+    missing: metaVals.filter((m) => m.found === false).length,
+    outcome: metaVals.every((m) => m.checked) ? 'success' : 'partial' }));
+
+  grouped.forEach((l) => {
+    const m = l.listId ? meta.get(`${l.projectId}/${l.listId}`) : null;
+    if (!m) return;
+    // Basecamp's current title is the truth: 4 mirror names were stale on 2026-11-11.
+    if (m.title && m.title !== l.key) {
+      l.mirrorName = l.key;
+      l.key = m.title;
+      const seq = sequenceOf(m.title);
+      l.name = seq.name;
+      l.position = seq.position;
+    }
+    Object.assign(l, { url: m.url, isGroup: m.isGroup, parentTitle: m.parentTitle,
+      found: m.found, checked: m.checked });
+  });
+  const lists = withSiblings(grouped);
 
   const html = renderTriageBoard({
     items, today: now, runId, dormantAfterDays: DAYS, workOrders, lists, listLimit: 12,
@@ -152,7 +196,9 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
     dormantAfterDays: DAYS,
     command: runCommand(runId, { top: 5 }),
     counts: { total: items.length, live: live.length, dormant: dormant.length, lists: lists.length },
-    lists: lists.map((l) => ({ key: l.key, projectId: l.projectId, name: l.name, position: l.position, total: l.total,
+    lists: lists.map((l) => ({ id: l.id, key: l.key, listId: l.listId, url: l.url || null,
+      isGroup: l.isGroup == null ? null : l.isGroup, parentTitle: l.parentTitle || null, found: l.found,
+      projectId: l.projectId, name: l.name, position: l.position, total: l.total,
       live: l.live, dormant: l.dormant, generatedShare: l.generatedShare, humanShare: l.humanShare,
       oldestDue: l.oldestDue, lead: l.lead ? { id: l.lead.id, title: l.lead.title } : null,
       suggestions: l.suggestions, taskIds: l.tasks.map((t) => t.id) })),

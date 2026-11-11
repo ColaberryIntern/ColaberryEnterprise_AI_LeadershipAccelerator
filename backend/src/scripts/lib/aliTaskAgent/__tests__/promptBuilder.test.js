@@ -74,3 +74,26 @@ describe('optionsBlock', () => {
     expect(optionsBlock({ key: 'x', total: 0, live: 0, dormant: 0 })).toMatch(/D\. SOMETHING ELSE/);
   });
 });
+
+describe('naming the exact list', () => {
+  const { listArg } = require('../promptBuilder');
+
+  it('targets a list by id when it has one, because names are not unique', () => {
+    expect(listArg({ listId: '10406215994', key: 'S1' })).toBe('--list-id 10406215994');
+    expect(buildListPrompt({ ...dormantScaffold, listId: '77' })).toContain('ataListAction.js --list-id 77 --dismiss');
+  });
+
+  it('falls back to the quoted name only without an id', () => {
+    expect(listArg({ key: 'a "b"' })).toBe('--list "a \\"b\\""');
+  });
+
+  it('queries the list by id in the access block', () => {
+    expect(buildListPrompt({ ...dormantScaffold, listId: '77' })).toMatch(/WHERE todolist_id = :l/);
+  });
+
+  it('says when the list is a group, and when Basecamp no longer has it', () => {
+    const p = buildListPrompt({ ...dormantScaffold, listId: '77', isGroup: true, parentTitle: 'Parent', found: false });
+    expect(p).toContain('GROUP inside the list "Parent"');
+    expect(p).toContain('Basecamp returns 404');
+  });
+});

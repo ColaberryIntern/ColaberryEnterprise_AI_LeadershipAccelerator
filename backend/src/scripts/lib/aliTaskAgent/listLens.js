@@ -155,26 +155,39 @@ function dominantProject(items) {
 
 /**
  * Group task views into list summaries.
- * @param {Array} tasks task views: {id,title,list,dueOn,daysOverdue,band,urgency,generated,humanOnly,url}
+ *
+ * Grouped by the list's ID when the view carries one, NOT by its name: measured 2026-11-11, 7 names
+ * on the board each covered 2-3 separate lists ("S1 - Core MVP (wk 4)" is two groups), and grouping
+ * by name merged them into one card that no single Basecamp list matches. Views without a listId
+ * (older callers, tests) still group by name.
+ *
+ * Each summary carries:
+ *   id      unique: "<projectId>/<listId>", or the name when there is no listId
+ *   key     the list NAME, which is what categories, prompts and sibling detection read
+ *   listId  the Basecamp todolist id (null without one)
+ * @param {Array} tasks task views: {id,title,list,listId,projectId,dueOn,band,urgency,generated,humanOnly,url}
  * @returns {Array} summaries, biggest first
  */
 function byList(tasks) {
   const groups = new Map();
   for (const t of Array.isArray(tasks) ? tasks : []) {
-    const key = t.list || '(no list)';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(t);
+    const gid = t.listId ? `${t.projectId || dominantProject([t])}/${t.listId}` : (t.list || '(no list)');
+    if (!groups.has(gid)) groups.set(gid, []);
+    groups.get(gid).push(t);
   }
 
   const summaries = [];
-  for (const [key, items] of groups) {
+  for (const [gid, items] of groups) {
+    const key = items[0].list || '(no list)';
     const seq = sequenceOf(key);
     const dormant = items.filter((t) => t.band === 'dormant').length;
     const generated = items.filter((t) => t.generated).length;
     const human = items.filter((t) => t.humanOnly).length;
     const dated = items.filter((t) => t.dueOn).map((t) => t.dueOn).sort();
     const summary = {
+      id: gid,
       key,
+      listId: items[0].listId || null,
       projectId: dominantProject(items),
       name: seq.name,
       position: seq.position,
@@ -198,7 +211,8 @@ function byList(tasks) {
     summaries.push(summary);
   }
 
-  return summaries.sort((a, b) => b.total - a.total || String(a.key).localeCompare(String(b.key)));
+  return summaries.sort((a, b) => b.total - a.total || String(a.key).localeCompare(String(b.key))
+    || String(a.id).localeCompare(String(b.id)));
 }
 
 /**

@@ -38,21 +38,40 @@ const arg = (k, d = null) => {
 };
 const has = (k) => process.argv.includes(`--${k}`);
 
-const LIST = arg('list');
+const LIST_ID = arg('list-id');
+const LIST = arg('list') || (LIST_ID ? `list ${LIST_ID}` : null);
 const APPLY = has('apply');
 const ALI = 17454835;
 
-if (!LIST) { console.error('--list "<exact list name>" is required'); process.exit(1); }
+if (!arg('list') && !LIST_ID) {
+  console.error('--list-id <todolist id> (preferred) or --list "<exact list name>" is required');
+  process.exit(1);
+}
 
 (async () => {
+  // --list-id is exact. A NAME is not: measured 2026-11-11, 7 names on the board each cover 2-3
+  // separate lists or groups ("MILESTONE APPROVALS - Ali" is three groups in two projects), so a
+  // name that matches more than one list is refused below rather than acted on as one.
   const rows = await sequelize.query(`
-    SELECT bc_id, project_id, title, due_on, todolist_name, is_dismissed
+    SELECT bc_id, project_id, todolist_id, title, due_on, todolist_name, is_dismissed
       FROM ops_bc_todos
      WHERE status = 'active' AND is_dismissed IS NOT TRUE
-       AND todolist_name = $1
+       AND ${LIST_ID ? 'todolist_id = $1' : 'todolist_name = $1'}
        AND assignee_ids::text LIKE $2
      ORDER BY due_on ASC NULLS LAST`,
-  { type: QueryTypes.SELECT, bind: [LIST, `%${ALI}%`] });
+  { type: QueryTypes.SELECT, bind: [LIST_ID || LIST, `%${ALI}%`] });
+
+  const distinct = [...new Set(rows.map((r) => `${r.project_id}/${r.todolist_id}`))];
+  if (!LIST_ID && distinct.length > 1) {
+    console.error(`REFUSED: "${LIST}" names ${distinct.length} separate lists. Pick one with --list-id:`);
+    distinct.forEach((d) => {
+      const [p, l] = d.split('/');
+      const n = rows.filter((r) => r.todolist_id === l).length;
+      console.error(`  --list-id ${l}   (project ${p}, ${n} task(s))`);
+    });
+    await sequelize.close();
+    process.exit(1);
+  }
 
   if (!rows.length) {
     console.log(`No active, undismissed tasks assigned to Ali in list "${LIST}".`);

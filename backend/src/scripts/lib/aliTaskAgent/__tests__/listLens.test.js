@@ -217,3 +217,25 @@ describe('dominantProject', () => {
     expect(s.projectId).toBe('47126345');
   });
 });
+
+/** Measured 2026-11-11: 7 names on the board each covered 2-3 separate Basecamp lists. */
+describe('byList groups by list id, not by name', () => {
+  const { byList: group } = require('../listLens');
+  const v = (listId, list = 'S1 - Core MVP (wk 4)') => ({ id: `7463955/${listId}9`, projectId: '7463955', listId, list, band: 'fresh' });
+
+  it('keeps two lists that share a name apart', () => {
+    const out = group([v('1'), v('1'), v('2')]);
+    expect(out.map((s) => [s.id, s.total])).toEqual([['7463955/1', 2], ['7463955/2', 1]]);
+    expect(out.every((s) => s.key === 'S1 - Core MVP (wk 4)')).toBe(true);
+  });
+
+  it('carries the list id on the summary', () => {
+    expect(group([v('42')])[0].listId).toBe('42');
+  });
+
+  it('still groups by name when no list id is known', () => {
+    const out = group([{ id: 'p/1', list: 'x', band: 'fresh' }, { id: 'p/2', list: 'x', band: 'fresh' }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('x');
+  });
+});
