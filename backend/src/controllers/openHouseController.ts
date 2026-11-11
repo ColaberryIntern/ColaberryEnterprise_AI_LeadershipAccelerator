@@ -6,6 +6,7 @@ import { createExplorerEnrollment } from '../services/enrollmentService';
 import { getCurrentOpenHouseEvent, OpenHouseEventInfo } from '../services/openHouseEventService';
 import { recordOpenHouseRegistration } from '../services/openHouseRegistrationStore';
 import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
+import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
 
 function log(
   level: 'info' | 'warn' | 'error',
@@ -194,6 +195,28 @@ async function attachToCurrentOpenHouse(args: {
   }
 }
 
+/**
+ * What the success screen says. Copy stays clear of the word barred by 40 TAC 807.172(d) for a licensed career school;
+ * "$0" is the approved phrasing.
+ *
+ * - New account with a session (C121): start now; the email is the way back.
+ * - New account without one (should not happen; the email went out): check your email, as before.
+ * - Existing account: sign in. `createExplorerEnrollment` sends an existing account NO email, and the old copy told
+ *   these people to wait for one that never came (found in C121).
+ */
+export function signupMessage(created: boolean, hasAccess: boolean, registered: boolean): string {
+  const later = registered ? '' : ' We will confirm the Open House date separately.';
+  if (created && hasAccess) {
+    return `${registered ? 'You are signed up, and your $0 account is ready.' : 'Your $0 account is ready.'} Start now: we also emailed you a link to come back any time.${later}`;
+  }
+  if (created) {
+    return registered
+      ? 'You are signed up. Check your email for your login link and start learning for $0.'
+      : 'Your account is ready - check your email for your login link. We will confirm the Open House date separately.';
+  }
+  return `${registered ? 'You are signed up. ' : ''}You already have an account with this email, so sign in to pick up where you left off.${later}`;
+}
+
 // POST /api/v1/open-house/signup
 //
 // THE PUBLIC DOOR (OH-2). A stranger arrives from an ad, gives a name and an
@@ -263,9 +286,20 @@ export async function handlePublicOpenHouseSignup(req: Request, res: Response, n
       });
     }
 
+    // C121: a brand-new account is signed in on the spot ("Access your account"); an existing one never is, because
+    // this form is public. See services/openHouse/instantAccess.ts.
+    const access = instantAccessFor(enrollment, created);
+    if (access) {
+      void greetInBackground(enrollment.id, (err) => log('warn', 'open_house_instant_access_greeting_failed', 'failure', {
+        correlation_id,
+        error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+        message: err instanceof Error ? err.message : String(err),
+      }));
+    }
+
     const status = created ? 201 : 200;
     log('info', 'open_house_public_signup_end', 'success', {
-      correlation_id, status, created, registered: attached.registered, duration_ms: Date.now() - start,
+      correlation_id, status, created, registered: attached.registered, instant_access: !!access, duration_ms: Date.now() - start,
     });
 
     res.status(status).json({
@@ -283,11 +317,9 @@ export async function handlePublicOpenHouseSignup(req: Request, res: Response, n
             seats_remaining: attached.event.seats_remaining,
           }
         : null,
-      // Copy stays clear of the word barred by 40 TAC 807.172(d) for a licensed
-      // career school. "$0 to start" is the approved phrasing.
-      message: attached.registered
-        ? 'You are signed up. Check your email for your login link and start learning for $0.'
-        : 'Your account is ready - check your email for your login link. We will confirm the Open House date separately.',
+      // C121: the session for "Access your account". Null for an existing account, which must sign in instead.
+      access,
+      message: signupMessage(created, !!access, attached.registered),
     });
   } catch (err) {
     if (err instanceof ZodError) {
