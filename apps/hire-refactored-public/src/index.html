@@ -37,14 +37,17 @@
   </header>
 
   <main id="main" tabindex="-1">
-    <!-- The honest state ships in the HTML. directory.js only ever upgrades it, so a
-         reader whose API call fails sees this, never a spinner and never sample data. -->
-    <section class="block" id="directory-empty">
+    <!-- While the directory loads: neutral placeholder cards, never a message. Shipping
+         "Nobody is listed yet" here flashed that FALSE sentence for 2-3 seconds on every visit
+         (Ali, 2026-11-11). directory-page.js replaces this with the real page, with "Nobody is
+         listed yet" only when the API says so, or with "could not be reached" when it fails. -->
+    <section class="block" id="directory-loading" aria-busy="true">
       <div class="wrap">
-        <div class="empty">
-          <h1 class="mono">Nobody is listed yet</h1>
-          <p>Engineers appear here only after a project they built is verified and published as a case study.</p>
+        <h1 class="sr-only">Loading listed talent</h1>
+        <div class="grid loading-grid" aria-hidden="true">
+          <div class="tcard skel"></div><div class="tcard skel"></div><div class="tcard skel"></div>
         </div>
+        <noscript><div class="empty"><p>This directory needs JavaScript to load the listed engineers.</p></div></noscript>
       </div>
     </section>
   </main>
