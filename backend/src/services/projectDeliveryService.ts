@@ -366,6 +366,10 @@ export async function getProjectDelivery(
           OR EXISTS (SELECT 1 FROM case_studies cs WHERE cs.project_id = p.id)
         )
         AND (e.status IS NULL OR e.status NOT IN (:departed))
+        -- Archived projects are removed from every surface, and this board IS the main admin
+        -- surface. It already SELECTed p.archived_at and returned it without ever filtering on
+        -- it, so an archived project stayed on the delivery board looking like live work.
+        AND p.archived_at IS NULL
         ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}
         ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}
         ${opts.internsOnly ? `AND EXISTS (

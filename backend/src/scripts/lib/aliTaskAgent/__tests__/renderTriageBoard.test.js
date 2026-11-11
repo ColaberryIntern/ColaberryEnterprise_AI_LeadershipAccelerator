@@ -66,7 +66,7 @@ describe('the page is clicked, not read', () => {
   it('gives every list a clickable target carrying its key', () => {
     const h = html();
     expect(h).toMatch(/data-prompt="R3 - Set-Aside Entity/);
-    expect(h).toMatch(/Copy the prompt for this list/);
+    expect(h).toMatch(/Copy prompt/);
   });
 
   /**
@@ -96,8 +96,31 @@ describe('filtering rebuilds rather than hides', () => {
     expect(html()).toMatch(/data-cat="government"/);
   });
 
+  /** Level 2 (Ali, 2026-11-11): Category / Project, filterable on both levels. */
+  it('tags every filterable element with its project as well as its category', () => {
+    const h = html({ lists: [list({ key: 'TMS - Transportation lifecycle', name: 'TMS', projectId: '47126345' })] });
+    expect(h).toMatch(/data-cat="delivery" data-sub="47126345"/);
+    expect(h).toMatch(/"sub":"47126345"/);
+    expect(h).toMatch(/"subs":{"47126345":"ShipCES"}/);
+    expect(h).toContain('Client delivery / ShipCES');
+  });
+
+  it('provides the project row the runtime fills', () => {
+    expect(html()).toContain('id="subs"');
+  });
+
+  it('puts both levels into the copied prompt', () => {
+    const h = html({ lists: [list({ key: 'TMS - Transportation lifecycle', name: 'TMS', projectId: '47126345' })] });
+    expect(h).toContain('It sits under \\"Client delivery / ShipCES\\"');
+  });
+
+  it('escapes a hostile project label on the way into the page', () => {
+    const h = html({ lists: [list({ projectId: '<b>x</b>' })] });
+    expect(h).not.toContain('data-sub="<b>');
+  });
+
   it('says, in the page, that the numbers describe the selection', () => {
-    expect(html()).toMatch(/rebuilds every chart|describe what you selected|Rebuilt from the current selection/i);
+    expect(html()).toMatch(/every chart redraws for what is selected/i);
   });
 });
 
@@ -184,5 +207,74 @@ describe('sizeStep', () => {
 
   it('does not divide by zero on a single-list backlog', () => {
     expect(sizeStep(1, 1)).toBe(1);
+  });
+});
+
+/** Ali, 2026-11-11: every list gets two controls, one of them straight to Basecamp. */
+describe('two controls per list', () => {
+  const bc = { id: '7463955/10406215994', listId: '10406215994', projectId: '7463955',
+    url: 'https://app.basecamp.com/3945211/buckets/7463955/todolists/10406215994', found: true };
+
+  it('gives every chip a copy button AND a Basecamp link', () => {
+    const h = html({ lists: [list(bc)] });
+    expect(h).toMatch(/<button class="chip" data-prompt="7463955\/10406215994"/);
+    expect(h).toMatch(/class="chip-bc" href="https:\/\/app\.basecamp\.com\/3945211\/buckets\/7463955\/todolists\/10406215994"/);
+  });
+
+  it('gives every card a copy button AND a Basecamp link', () => {
+    const h = html({ lists: [list(bc)] });
+    expect(h).toMatch(/class="getp" data-prompt="7463955\/10406215994"/);
+    expect(h).toMatch(/class="getbc" href="https:\/\/app\.basecamp\.com/);
+  });
+
+  it('opens Basecamp in a new tab without handing it the opener', () => {
+    expect(html({ lists: [list(bc)] })).toMatch(/target="_blank" rel="noopener noreferrer"/);
+  });
+
+  it('shows a deleted list as gone instead of linking to a 404', () => {
+    const h = html({ lists: [list({ ...bc, found: false })] });
+    expect(h).toMatch(/class="chip-bc is-missing"[^>]*>gone</);
+    expect(h).not.toMatch(/class="chip-bc" href=/);
+  });
+
+  it('says when a "list" is really a group inside another list', () => {
+    const h = html({ lists: [list({ ...bc, isGroup: true, parentTitle: 'Gov Contracts + intern rollout' })] });
+    expect(h).toContain('group in Gov Contracts + intern rollout');
+  });
+
+  it('keeps two lists that share a name as two lists', () => {
+    const h = html({ lists: [list({ ...bc, id: '7463955/1', listId: '1' }), list({ ...bc, id: '7463955/2', listId: '2' })] });
+    expect(h).toMatch(/data-list="7463955\/1"/);
+    expect(h).toMatch(/data-list="7463955\/2"/);
+    expect(h).toMatch(/"7463955\/1":"Work the backlog/);
+    expect(h).toMatch(/"7463955\/2":"Work the backlog/);
+  });
+
+  it('escapes a hostile Basecamp link', () => {
+    const h = html({ lists: [list({ ...bc, url: '"><script>x()</script>' })] });
+    expect(h).not.toContain('"><script>x()');
+  });
+});
+
+/** Ali, 2026-11-11: dashboard moved up, and clicking it filters everything. */
+describe('dashboard first, and clickable', () => {
+  it('orders the page filters, dashboard, every list, then cards', () => {
+    const h = html();
+    const at = (id) => h.indexOf(`<section id="${id}"`);
+    expect(at('filters')).toBeGreaterThan(-1);
+    expect(at('filters')).toBeLessThan(at('now'));
+    expect(at('now')).toBeLessThan(at('pick'));
+    expect(at('pick')).toBeLessThan(at('lists'));
+  });
+
+  it('has a place to show and clear the active filters', () => {
+    expect(html()).toContain('id="f-pills"');
+  });
+
+  it('ships a runtime whose bars are buttons that set a filter', () => {
+    const h = html();
+    expect(h).toContain('data-dim="');
+    expect(h).toContain('aria-pressed');
+    expect(h).toContain('data-clear');
   });
 });

@@ -24,6 +24,25 @@ const { groupByCategory, categoryOf, CATEGORY_COLORS } = require('./listCategori
 const { buildListPrompt } = require('./promptBuilder');
 const { RUNTIME_JS, RUNTIME_CSS } = require('./boardRuntime');
 
+/** The unique id a list is addressed by on the page (its Basecamp id, else its name). */
+const idOf = (l) => l.id || l.key;
+
+/**
+ * The second control every list carries: straight to Basecamp. A list Basecamp no longer has gets
+ * a visible "gone" marker instead of a link that would 404, because a dead link reads as a bug.
+ */
+function bcLink(l, cls) {
+  if (l.found === false) {
+    return `<span class="${cls} is-missing" title="Basecamp returns 404 for this list: deleted or moved, though the mirror still marks its tasks active">gone</span>`;
+  }
+  if (!l.url) return '';
+  return `<a class="${cls}" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"
+    title="Open this ${l.isGroup ? 'group' : 'list'} in Basecamp">Basecamp &#8599;</a>`;
+}
+
+/** "group in <parent>" for a group inside a list, so it is never mistaken for a list. */
+const groupNote = (l) => (l.isGroup ? `group in ${l.parentTitle || 'a list'}` : '');
+
 /** Chip size from task count. Five steps; more reads as noise. */
 function sizeStep(n, max) {
   if (max <= 1) return 1;
@@ -48,7 +67,7 @@ function categoryTiles(groups, total) {
 }
 
 function wordChart(groups) {
-  const all = groups.flatMap((g) => g.lists.map((l) => ({ ...l, cat: g.key, icon: g.icon })));
+  const all = groups.flatMap((g) => g.lists.map((l) => ({ ...l, cat: g.key, catLabel: g.label, icon: g.icon })));
   if (!all.length) return '<p class="empty">No lists.</p>';
   const max = Math.max(...all.map((l) => l.total));
   return `<div class="chips">${all
@@ -57,17 +76,19 @@ function wordChart(groups) {
     .map((l) => {
       const deadness = l.total ? l.dormant / l.total : 0;
       const tone = deadness > 0.8 ? 'chip-dead' : deadness > 0.3 ? 'chip-mixed' : 'chip-live';
-      return `<button class="chip s${sizeStep(l.total, max)} ${tone}" data-cat="${esc(l.cat)}"
-        data-prompt="${esc(l.key)}" type="button" style="--c:var(--cat-${esc(l.cat)})"
-        title="${esc(l.key)} - ${l.total} task(s), ${l.dormant} dormant. Click to copy the full prompt.">
-        <span class="chip-icon">${l.icon}</span><span class="chip-label">${esc(l.name)}</span><span class="chip-n">${l.total}</span>
-      </button>`;
+      const g = groupNote(l);
+      return `<span class="chipwrap s${sizeStep(l.total, max)} ${tone}" data-cat="${esc(l.cat)}"
+        data-sub="${esc(l.sub.key)}" data-list="${esc(idOf(l))}" style="--c:var(--cat-${esc(l.cat)})">
+        <button class="chip" data-prompt="${esc(idOf(l))}" type="button"
+          title="${esc(l.catLabel)} / ${esc(l.sub.label)} - ${esc(l.key)}${g ? ` (${esc(g)})` : ''} - ${l.total} task(s), ${l.dormant} dormant. Click to copy the full prompt.">
+          <span class="chip-icon">${l.icon}</span><span class="chip-label">${esc(l.name)}</span><span class="chip-n">${l.total}</span>
+        </button>${bcLink(l, 'chip-bc')}</span>`;
     }).join('')}</div>`;
 }
 
 /** A list card. Carries no command text: the button is the way out of the page. */
 function listCard(s) {
-  const cat = categoryOf(s.key);
+  const cat = categoryOf(s.key, s.projectId);
   const dormantPct = s.total ? Math.round((s.dormant / s.total) * 100) : 0;
   const tone = s.dormant === s.total ? 'card-dead' : (s.dormant ? 'card-mixed' : 'card-live');
   const top = (s.suggestions || [])[0];
@@ -77,12 +98,13 @@ function listCard(s) {
     return n ? `<span class="seg seg-${b.key}" style="flex:${n}" title="${n} ${esc(b.label)}"></span>` : '';
   }).join('');
 
-  return `<article class="card ${tone}" data-cat="${esc(cat.key)}" style="--c:var(--cat-${esc(cat.key)})">
+  return `<article class="card ${tone}" data-cat="${esc(cat.key)}" data-sub="${esc(cat.sub.key)}" data-list="${esc(idOf(s))}" style="--c:var(--cat-${esc(cat.key)})">
     <header class="card-head">
       <span class="card-cat" title="${esc(cat.label)}">${cat.icon}</span>
       <h3 class="card-title">${esc(s.name)}</h3>
       <span class="card-count">${s.total}</span>
     </header>
+    <div class="path-line">${esc(cat.label)} / ${esc(cat.sub.label)}${s.isGroup ? ` &middot; ${esc(groupNote(s))}` : ''}</div>
     ${s.phaseOf ? `<div class="phase-line">Phase ${s.phaseOf.position} of ${s.phaseOf.of}</div>` : ''}
     <div class="bar">${bar}</div>
     <div class="card-stats">
@@ -92,8 +114,11 @@ function listCard(s) {
     ${s.lead ? `<div class="lead"><div class="lead-cap">Spearhead</div>
       <div class="lead-title">${esc(s.lead.title)}</div></div>` : ''}
     ${top ? `<div class="rec"><span class="rec-cap">Proposed</span>${esc(top.label)}</div>` : ''}
-    <button class="getp" data-prompt="${esc(s.key)}" type="button">
-      <span class="chip-label">Copy the prompt for this list</span></button>
+    <div class="card-actions">
+      <button class="getp" data-prompt="${esc(idOf(s))}" type="button">
+        <span class="chip-label">Copy prompt</span></button>
+      ${bcLink(s, 'getbc')}
+    </div>
   </article>`;
 }
 
@@ -109,16 +134,25 @@ function renderTriageBoard(input) {
   // What the page draws itself from, plus the prompt lookup. Prompts are never rendered.
   const prompts = {};
   lists.forEach((l) => {
-    prompts[l.key] = buildListPrompt(l, {
-      category: categoryOf(l.key),
+    const c = categoryOf(l.key, l.projectId);
+    prompts[idOf(l)] = buildListPrompt(l, {
+      category: { label: `${c.label} / ${c.sub.label}` },
       totals: { tasks: total || items.length, lists: lists.length, dormant: s.dormantCount },
     });
   });
   const payload = {
-    lists: lists.map((l) => ({
-      key: l.key, name: l.name, cat: categoryOf(l.key).key, total: l.total,
+    lists: lists.map((l) => {
+      const c = categoryOf(l.key, l.projectId);
+      return {
+      id: idOf(l), name: l.name, cat: c.key, sub: c.sub.key, total: l.total,
       live: l.live, dormant: l.dormant,
       bands: Object.fromEntries((l.bands || []).map((b) => [b.band, b.n])),
+      };
+    }),
+    // Level-2 labels, keyed by project id. The project row is built from these in the browser.
+    subs: Object.fromEntries(lists.map((l) => {
+      const sub = categoryOf(l.key, l.projectId).sub;
+      return [sub.key, sub.label];
     })),
     cats: Object.fromEntries(groups.map((g) => [g.key, {
       label: g.label, color: CATEGORY_COLORS.light[g.key],
@@ -173,15 +207,21 @@ function renderTriageBoard(input) {
   .cat-dormant{font-size:10px;color:var(--ink-3);border:1px solid var(--line);
     border-radius:999px;padding:1px 6px}
   .chips{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
-  .chip{cursor:pointer;border:1px solid var(--line);border-left:4px solid var(--c,var(--ink-3));
-    border-radius:999px;padding:5px 11px;color:var(--ink);background:var(--surface);
-    font-family:'Segoe UI',system-ui,sans-serif;display:inline-flex;align-items:center;
-    gap:6px;max-width:100%}
-  .chip:hover{transform:translateY(-1px);border-color:var(--c)}
+  .chipwrap{display:inline-flex;align-items:stretch;border:1px solid var(--line);
+    border-left:4px solid var(--c,var(--ink-3));border-radius:999px;background:var(--surface);
+    max-width:100%;overflow:hidden}
+  .chipwrap:hover{border-color:var(--c)}
+  .chip{cursor:pointer;border:0;background:transparent;padding:5px 9px 5px 11px;color:var(--ink);
+    font-family:'Segoe UI',system-ui,sans-serif;display:inline-flex;align-items:center;gap:6px;
+    min-width:0}
+  .chip-bc{display:inline-flex;align-items:center;padding:0 10px;font-size:11px;font-weight:600;
+    color:var(--ink-2);text-decoration:none;border-left:1px solid var(--line);white-space:nowrap}
+  .chip-bc:hover{color:var(--brand);background:color-mix(in srgb,var(--brand) 6%,transparent)}
+  .is-missing{color:var(--band-dormant);font-style:italic;cursor:help}
   .chip-icon{font-size:12px;opacity:.85}
   .chip-n{font-weight:700;opacity:.6;font-size:11px}
-  .chip.s1{font-size:11.5px} .chip.s2{font-size:13px} .chip.s3{font-size:14.5px}
-  .chip.s4{font-size:16.5px;font-weight:600} .chip.s5{font-size:19px;font-weight:700}
+  .s1 .chip{font-size:11.5px} .s2 .chip{font-size:13px} .s3 .chip{font-size:14.5px}
+  .s4 .chip{font-size:16.5px;font-weight:600} .s5 .chip{font-size:19px;font-weight:700}
   .chip-dead{opacity:.62} .chip-dead:hover{opacity:1}
   .tiles{display:flex;gap:10px;flex-wrap:wrap}
   .tile{flex:1 1 110px;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
@@ -193,6 +233,7 @@ function renderTriageBoard(input) {
   .card-head{display:flex;align-items:baseline;gap:8px}
   .card-title{font-size:14.5px;margin:0;flex:1}
   .card-count{font-size:19px;font-weight:700;color:var(--ink-2)}
+  .path-line{font-size:11px;color:var(--ink-3);margin-top:3px}
   .phase-line{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin-top:4px}
   .bar{display:flex;gap:2px;height:7px;margin:9px 0 7px}
   .seg{border-radius:2px}
@@ -206,6 +247,12 @@ function renderTriageBoard(input) {
   .rec{margin-top:9px;font-size:12px;color:var(--ink-2)}
   .rec-cap{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);
     margin-right:5px}
+  .card-actions{display:flex;gap:8px;margin-top:11px}
+  .card-actions .getp{margin-top:0;flex:1}
+  .getbc{flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);
+    border-radius:8px;padding:8px;font:600 12px/1.2 'Segoe UI',system-ui,sans-serif;
+    color:var(--ink-2);text-decoration:none}
+  .getbc:hover{border-color:var(--brand);color:var(--brand)}
   .getp{margin-top:11px;width:100%;cursor:pointer;border:1px dashed var(--c,var(--ink-3));
     background:transparent;color:var(--c,var(--ink-2));border-radius:8px;padding:8px;
     font:12px/1.2 'Segoe UI',system-ui,sans-serif;font-weight:600}
@@ -225,16 +272,37 @@ function renderTriageBoard(input) {
     ${esc(today.toISOString().slice(0, 16).replace('T', ' '))} UTC &middot;
     read-only &middot; click anything to copy its prompt</p>
 
-  <nav class="jump"><a href="#pick">Pick a part</a><a href="#now">Where it stands</a>
-    <a href="#lists">The lists</a></nav>
+  <nav class="jump"><a href="#filters">Filters</a><a href="#now">Dashboard</a>
+    <a href="#pick">Every list</a><a href="#lists">List cards</a></nav>
+
+  <section id="filters">
+    <h2>Filter</h2>
+    <p class="lede">Pick a category, then a project, or click any bar in the dashboard. Every
+      filter narrows the whole page, and every chart redraws for what is selected.</p>
+    ${categoryTiles(groups, total)}
+    <div class="subs" id="subs" aria-label="Filter by project"></div>
+    <div class="pills" id="f-pills" aria-live="polite"></div>
+  </section>
+
+  <section id="now">
+    <h2>Dashboard</h2>
+    <p class="lede">Click a bar to filter everything by it; click it again to clear. The chart you
+      clicked keeps its other bars, dimmed, so you can see what you filtered out.</p>
+    <div class="tiles" id="f-tiles"></div>
+    <div class="fgrid">
+      <div class="fpane"><h4>How much is alive</h4><div id="f-gauge"></div></div>
+      <div class="fpane"><h4>By age band</h4><div id="f-bands"></div></div>
+      <div class="fpane"><h4 id="f-cats-h">By part of the business</h4><div id="f-cats"></div></div>
+      <div class="fpane"><h4>Biggest lists</h4><div id="f-lists"></div></div>
+    </div>
+    <p id="f-note"></p>
+  </section>
 
   <section id="pick">
-    <h2>Pick a part of the business</h2>
-    <p class="lede">Choosing a category filters the whole page and rebuilds every chart, so the
-      numbers always describe what you selected. Clicking a list copies a full prompt, already
-      carrying its history, its state, the options, and the branded report to produce.</p>
-    ${categoryTiles(groups, total)}
-    <h3 class="sub-h">Every list, sized by how much work is in it</h3>
+    <h2>Every list</h2>
+    <p class="lede">Sized by how much work is in it. The name copies a full prompt for that list;
+      <em>Basecamp &#8599;</em> opens it. A <em>group</em> is a section inside a Basecamp list,
+      and says so.</p>
     ${wordChart(groups)}
     <p class="legend">
       <span class="key" style="background:var(--band-overdue)"></span> mostly live
@@ -245,22 +313,9 @@ function renderTriageBoard(input) {
     </p>
   </section>
 
-  <section id="now">
-    <h2>Where it stands</h2>
-    <p class="lede">Rebuilt from the current selection.</p>
-    <div class="tiles" id="f-tiles"></div>
-    <div class="fgrid">
-      <div class="fpane"><h4>How much is alive</h4><div id="f-gauge"></div></div>
-      <div class="fpane"><h4>By age band</h4><div id="f-bands"></div></div>
-      <div class="fpane"><h4>By part of the business</h4><div id="f-cats"></div></div>
-      <div class="fpane"><h4>Biggest lists</h4><div id="f-lists"></div></div>
-    </div>
-    <p id="f-note"></p>
-  </section>
-
   <section id="lists">
     <h2>The lists</h2>
-    <p class="lede">One card per list. The button copies the full prompt for it.</p>
+    <p class="lede">One card per list, biggest first. Copy the prompt, or open it in Basecamp.</p>
     <div class="cards">${lists.slice(0, input.listLimit || 24).map(listCard).join('')}</div>
   </section>
 

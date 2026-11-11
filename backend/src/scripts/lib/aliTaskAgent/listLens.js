@@ -138,27 +138,57 @@ function suggestFor(summary) {
 }
 
 /**
+ * The project most of a list's tasks live in. A list name can recur across projects, so the
+ * majority wins; ties go to the lexically lower id so the answer is stable between runs. Falls back to the
+ * "<project>/<todo>" id prefix when a view carries no explicit projectId.
+ */
+function dominantProject(items) {
+  const n = new Map();
+  for (const t of items) {
+    const p = t.projectId != null ? String(t.projectId)
+      : (String(t.id || '').includes('/') ? String(t.id).split('/')[0] : null);
+    if (p) n.set(p, (n.get(p) || 0) + 1);
+  }
+  const ranked = [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return ranked.length ? ranked[0][0] : null;
+}
+
+/**
  * Group task views into list summaries.
- * @param {Array} tasks task views: {id,title,list,dueOn,daysOverdue,band,urgency,generated,humanOnly,url}
+ *
+ * Grouped by the list's ID when the view carries one, NOT by its name: measured 2026-11-11, 7 names
+ * on the board each covered 2-3 separate lists ("S1 - Core MVP (wk 4)" is two groups), and grouping
+ * by name merged them into one card that no single Basecamp list matches. Views without a listId
+ * (older callers, tests) still group by name.
+ *
+ * Each summary carries:
+ *   id      unique: "<projectId>/<listId>", or the name when there is no listId
+ *   key     the list NAME, which is what categories, prompts and sibling detection read
+ *   listId  the Basecamp todolist id (null without one)
+ * @param {Array} tasks task views: {id,title,list,listId,projectId,dueOn,band,urgency,generated,humanOnly,url}
  * @returns {Array} summaries, biggest first
  */
 function byList(tasks) {
   const groups = new Map();
   for (const t of Array.isArray(tasks) ? tasks : []) {
-    const key = t.list || '(no list)';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(t);
+    const gid = t.listId ? `${t.projectId || dominantProject([t])}/${t.listId}` : (t.list || '(no list)');
+    if (!groups.has(gid)) groups.set(gid, []);
+    groups.get(gid).push(t);
   }
 
   const summaries = [];
-  for (const [key, items] of groups) {
+  for (const [gid, items] of groups) {
+    const key = items[0].list || '(no list)';
     const seq = sequenceOf(key);
     const dormant = items.filter((t) => t.band === 'dormant').length;
     const generated = items.filter((t) => t.generated).length;
     const human = items.filter((t) => t.humanOnly).length;
     const dated = items.filter((t) => t.dueOn).map((t) => t.dueOn).sort();
     const summary = {
+      id: gid,
       key,
+      listId: items[0].listId || null,
+      projectId: dominantProject(items),
       name: seq.name,
       position: seq.position,
       total: items.length,
@@ -181,7 +211,8 @@ function byList(tasks) {
     summaries.push(summary);
   }
 
-  return summaries.sort((a, b) => b.total - a.total || String(a.key).localeCompare(String(b.key)));
+  return summaries.sort((a, b) => b.total - a.total || String(a.key).localeCompare(String(b.key))
+    || String(a.id).localeCompare(String(b.id)));
 }
 
 /**
@@ -202,4 +233,4 @@ function withSiblings(summaries) {
   });
 }
 
-module.exports = { byList, withSiblings, leadTask, suggestFor, sequenceOf, looksGenerated };
+module.exports = { byList, withSiblings, leadTask, suggestFor, sequenceOf, looksGenerated, dominantProject };

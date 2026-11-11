@@ -8,6 +8,10 @@ import {
   getProjectDelivery, getProjectGantt, getProjectEvidence, getProjectArtifacts,
 } from '../../services/projectDeliveryService';
 import { getEnrollmentsWithoutProjects } from '../../services/enrollmentsWithoutProjects';
+import {
+  adminArchiveProject, adminRestoreProject, listArchivedProjects,
+} from '../../services/projects/projectAdminArchiveService';
+import { ArchiveError } from '../../services/projects/projectArchiveService';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 
@@ -32,9 +36,11 @@ router.get('/api/admin/projects/overview', requireAdmin, async (_req: Request, r
 
       if (enrollmentIds.length === 0) continue;
 
-      // Find projects for these enrollments
+      // Find projects for these enrollments. archived_at IS NULL because an archived project is
+      // removed from every surface: counting it here inflated the phase distribution and the
+      // maturity averages with builds nobody can open.
       const projects = await Project.findAll({
-        where: { enrollment_id: { [Op.in]: enrollmentIds } },
+        where: { enrollment_id: { [Op.in]: enrollmentIds }, archived_at: null } as any,
       });
 
       // Phase distribution
@@ -112,7 +118,12 @@ router.get('/api/admin/projects/cohort/:cohortId/students', requireAdmin, async 
 
     const students = [];
     for (const e of enrollments) {
-      const project = await Project.findOne({ where: { enrollment_id: e.id } });
+      // Live only, and newest first: this had no filter AND no order, so it returned an
+      // arbitrary row and could show an archived project as the student's project.
+      const project = await Project.findOne({
+        where: { enrollment_id: e.id, archived_at: null } as any,
+        order: [['created_at', 'DESC']],
+      });
       const artifactCount = project ? await ProjectArtifact.count({ where: { project_id: project.id } }) : 0;
 
       // Progress metrics
@@ -425,6 +436,58 @@ router.get('/api/admin/projects/:projectId/artifacts', requireAdmin, async (req:
     res.json({ artifacts: await getProjectArtifacts(id) });
   } catch (err: any) {
     console.error('[AdminProjectOverview] GET /artifacts error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Archive, restore, and the one listing that shows archived projects.
+ *
+ * THE REVEAL IS ITS OWN ROUTE, not an "includeArchived" flag on the listings above. A flag
+ * defaults to false in one place and is forgotten in the next, and the failure mode is archived
+ * projects quietly reappearing in an ordinary admin view - which is the exact thing archiving is
+ * supposed to prevent. A route that only ever returns archived rows cannot be reached by accident.
+ */
+
+/** GET /api/admin/projects/archived - the reinstatement surface. Archived rows only. */
+router.get('/api/admin/projects/archived', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = Number(req.query.limit ?? 200);
+    res.json({ projects: await listArchivedProjects(Number.isFinite(limit) ? limit : 200) });
+  } catch (err: any) {
+    console.error('[AdminProjectOverview] GET /archived error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /api/admin/projects/:projectId/archive - remove a project from every surface. */
+router.post('/api/admin/projects/:projectId/archive', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  try {
+    const actor = String((req as any).user?.email || (req as any).user?.username || 'admin');
+    res.json(await adminArchiveProject(id, actor, req.body?.reason));
+  } catch (err: any) {
+    if (err instanceof ArchiveError) {
+      return res.status(err.status).json({ error: err.message, error_class: err.code });
+    }
+    console.error('[AdminProjectOverview] POST /archive error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /api/admin/projects/:projectId/restore - put it back. */
+router.post('/api/admin/projects/:projectId/restore', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  try {
+    const actor = String((req as any).user?.email || (req as any).user?.username || 'admin');
+    res.json(await adminRestoreProject(id, actor));
+  } catch (err: any) {
+    if (err instanceof ArchiveError) {
+      return res.status(err.status).json({ error: err.message, error_class: err.code });
+    }
+    console.error('[AdminProjectOverview] POST /restore error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

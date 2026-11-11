@@ -8,6 +8,7 @@ import BuildEvidencePanel, { ProjectEvidence } from './projectDelivery/BuildEvid
 import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
 import LinkChip from './projectDelivery/LinkChip';
 import WithoutProjectPanel, { WithoutProjectSummary } from './projectDelivery/WithoutProjectPanel';
+import ArchivedProjectsPanel from './projectDelivery/ArchivedProjectsPanel';
 import {
   RiskPill, SortToggle, sortRows, countAttention, RiskAssessment, SortMode,
 } from './projectDelivery/RiskControls';
@@ -371,6 +372,7 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
       </div>
 
       <WithoutProjectPanel data={without} />
+      <ArchivedProjectsPanel onRestored={load} />
 
       {visible.length === 0 && (
         <div className="border rounded p-4 text-center text-muted small">

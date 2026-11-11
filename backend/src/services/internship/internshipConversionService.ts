@@ -301,7 +301,8 @@ async function countPreserved(enrollmentId: string): Promise<ConversionPlanRow['
 
   const [enrollment, projects, attendance, certs] = await Promise.all([
     EnrollmentModel.findByPk(enrollmentId, { attributes: ['enrolled_at', 'created_at'] }),
-    Project.count({ where: { enrollment_id: enrollmentId } }),
+    // Live only, same reason as internshipTrackingService: archived is not "has a project".
+    Project.count({ where: { enrollment_id: enrollmentId, archived_at: null } as any }),
     AttendanceRecord.count({ where: { enrollment_id: enrollmentId } }),
     CertReadinessSnapshot.count({ where: { enrollment_id: enrollmentId } }),
   ]);

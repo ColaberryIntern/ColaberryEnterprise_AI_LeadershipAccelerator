@@ -84,6 +84,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // their own post-conditions.
 import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
+import { ensureProjectArchiveAuditSchema } from './db/ensureProjectArchiveAuditSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
@@ -2873,6 +2874,9 @@ async function start(): Promise<void> {
   // student-project listing query now filters on this column and a missing
   // column would 500 the whole Projects surface rather than degrade it.
   await ensureProjectArchiveSchema();
+  // Immediately after the schema it extends: archived_by and archived_reason are ALTERs on the
+  // same table, and ordering them together keeps the pair readable as one thing.
+  await ensureProjectArchiveAuditSchema();
   // projects.approval_state and friends — "review your project, then approve it".
   // Additive and default-free: NULL means never gated, so this changes nothing
   // for existing projects. Runs next to the archive schema for the same reason —

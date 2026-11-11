@@ -33,10 +33,21 @@ const BRAND = {
   line: '#e2e8f0',
 };
 
+/**
+ * How a command names THIS list. By id when there is one: a name can cover several separate lists
+ * (measured 2026-11-11: 7 names on the board did), and ataListAction refuses an ambiguous name.
+ */
+function listArg(s) {
+  return s.listId ? `--list-id ${s.listId}` : `--list ${JSON.stringify(s.key)}`;
+}
+
 /** The measured facts. Nothing inferred, and anything unknown is said to be unknown. */
 function factsBlock(s) {
   const L = [];
   L.push(`LIST: ${s.key}`);
+  if (s.listId) L.push(`  Basecamp todolist id ${s.listId}, project ${s.projectId}${s.url ? `: ${s.url}` : ''}`);
+  if (s.isGroup) L.push(`  This is a GROUP inside the list "${s.parentTitle || 'unknown'}", not a list of its own.`);
+  if (s.found === false) L.push('  WARNING: Basecamp returns 404 for this list. It was deleted or moved, but the mirror still marks its tasks active. Confirm before acting on any of it.');
   if (s.position) L.push(`  Phase ${s.position} of a numbered programme. The other phases are siblings; the programme may be live or dead as a whole.`);
   L.push(`  ${s.total} task(s) assigned to Ali: ${s.live} live, ${s.dormant} dormant (overdue by more than 60 days).`);
   if (s.oldestDue) L.push(`  Oldest due date in the list: ${s.oldestDue}${s.newestDue ? `; newest: ${s.newestDue}` : ''}.`);
@@ -70,9 +81,9 @@ All of this runs inside the accelerator-backend container, where the database cr
     const {sequelize}=require('/app/dist/config/database');
     const {QueryTypes}=require('/app/node_modules/sequelize');
     sequelize.query(\\\`SELECT bc_id, title, due_on, is_dismissed, description
-      FROM ops_bc_todos WHERE todolist_name = :l AND status='active'
+      FROM ops_bc_todos WHERE ${s.listId ? 'todolist_id' : 'todolist_name'} = :l AND status='active'
        AND assignee_ids::text LIKE '%17454835%' ORDER BY due_on\\\`,
-      {type:QueryTypes.SELECT, replacements:{l:${JSON.stringify(s.key)}}})
+      {type:QueryTypes.SELECT, replacements:{l:${JSON.stringify(s.listId || s.key)}}})
       .then(r=>{console.log(JSON.stringify(r,null,2));process.exit(0)});"
 
   # the board and the machine-readable bundle, rebuilt from live data
@@ -103,13 +114,13 @@ function optionsBlock(s) {
   const opts = [];
   if (allDormant && mostlyGenerated) {
     opts.push(`A. DISMISS THE LIST. Every task is dormant and most of it is machine-generated.
-     node scripts/ataListAction.js --list ${JSON.stringify(s.key)} --dismiss --reason "<=40 chars"
+     node scripts/ataListAction.js ${listArg(s)} --dismiss --reason "<=40 chars"
      Dry run first. Reversible. Does not touch Basecamp.`);
   }
   if (allDormant && !mostlyGenerated) {
     opts.push(`A. RE-DATE THE LIST AS A BLOCK. It is dormant but hand-authored, so the dates are
      wrong rather than the work.
-     node scripts/ataListAction.js --list ${JSON.stringify(s.key)} --redate-from <YYYY-MM-DD> --per-week 3
+     node scripts/ataListAction.js ${listArg(s)} --redate-from <YYYY-MM-DD> --per-week 3
      Spreads across working days in the order the tasks were originally promised.
      NOTE: this writes to Basecamp, so the script plans it and refuses to apply. Hand Ali the plan.`);
   }
@@ -224,4 +235,4 @@ signal in this data - they average 648 characters and carry the author's own fra
   ].join('\n');
 }
 
-module.exports = { buildListPrompt, factsBlock, accessBlock, optionsBlock, deliverableBlock, BRAND };
+module.exports = { listArg, buildListPrompt, factsBlock, accessBlock, optionsBlock, deliverableBlock, BRAND };

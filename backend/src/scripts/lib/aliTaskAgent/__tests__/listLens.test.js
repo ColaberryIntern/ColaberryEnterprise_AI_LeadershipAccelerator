@@ -191,3 +191,51 @@ describe('looksGenerated', () => {
     expect(looksGenerated({ title: null, description: null })).toBe(false);
   });
 });
+
+describe('dominantProject', () => {
+  const { dominantProject, byList: group } = require('../listLens');
+
+  it('picks the project most of the list lives in', () => {
+    expect(dominantProject([{ projectId: '1' }, { projectId: '2' }, { projectId: '2' }])).toBe('2');
+  });
+
+  it('falls back to the "<project>/<todo>" id prefix', () => {
+    expect(dominantProject([{ id: '47126345/99' }])).toBe('47126345');
+  });
+
+  it('breaks a tie the same way every run', () => {
+    const a = dominantProject([{ projectId: '9' }, { projectId: '10' }]);
+    expect(dominantProject([{ projectId: '10' }, { projectId: '9' }])).toBe(a);
+  });
+
+  it('returns null rather than a guess when nothing carries a project', () => {
+    expect(dominantProject([{ id: 'x' }, {}])).toBeNull();
+  });
+
+  it('is carried onto every list summary', () => {
+    const [s] = group([{ id: '47126345/1', list: 'TMS', band: 'fresh' }]);
+    expect(s.projectId).toBe('47126345');
+  });
+});
+
+/** Measured 2026-11-11: 7 names on the board each covered 2-3 separate Basecamp lists. */
+describe('byList groups by list id, not by name', () => {
+  const { byList: group } = require('../listLens');
+  const v = (listId, list = 'S1 - Core MVP (wk 4)') => ({ id: `7463955/${listId}9`, projectId: '7463955', listId, list, band: 'fresh' });
+
+  it('keeps two lists that share a name apart', () => {
+    const out = group([v('1'), v('1'), v('2')]);
+    expect(out.map((s) => [s.id, s.total])).toEqual([['7463955/1', 2], ['7463955/2', 1]]);
+    expect(out.every((s) => s.key === 'S1 - Core MVP (wk 4)')).toBe(true);
+  });
+
+  it('carries the list id on the summary', () => {
+    expect(group([v('42')])[0].listId).toBe('42');
+  });
+
+  it('still groups by name when no list id is known', () => {
+    const out = group([{ id: 'p/1', list: 'x', band: 'fresh' }, { id: 'p/2', list: 'x', band: 'fresh' }]);
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe('x');
+  });
+});
