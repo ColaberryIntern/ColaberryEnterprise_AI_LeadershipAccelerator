@@ -42,8 +42,27 @@ async function main() {
     + `every diagram carrying its "what you should learn" caption, and all `
     + `${D.TOTALS.notBuiltNodes} unbuilt nodes styled as unbuilt in both directions`);
 
-  // 3. Render. A clean exit here is the evidence the diagrams rendered.
+  // 3. The one-pager carries its own check: the document's check is about the Mermaid source,
+  //    this one is about whether the page can be misread as "ten diagrams, done".
+  const vis = require('./tickets/l112Visual');
+  const v = vis.selfCheck();
+  console.log(`one-pager self-check passed: ${v.withNotBuilt} of ${v.diagrams} diagrams carry `
+    + `${v.nodes} unbuilt nodes, every diagram named on the page, the styling rule stated, `
+    + `and the ${v.needed} the Operator Manual needs each listed`);
+
+  // 4. Render. A clean exit here is the evidence the diagrams rendered.
+  //
+  //    THE ONE-PAGER IS RENDERED FIRST because that is the order it is read in: one page to
+  //    decide whether the ticket is discharged, then the diagrams behind it. `maxPages: 1` is
+  //    the claim being made - the renderer throws rather than spilling onto a second page.
   fs.mkdirSync(OUT, { recursive: true });
+  const visPath = path.join(OUT, 'L112_DIAGRAM_COVERAGE_1PAGE.pdf');
+  const vres = await renderPdf({
+    html: vis.build(), outPath: visPath, landscape: true, maxPages: 1, margin: '10mm',
+  });
+  console.log(`L112_DIAGRAM_COVERAGE_1PAGE.pdf: ${vres.pages} page(s) — what the ten diagrams `
+    + 'say about the system, and how much of it does not exist');
+
   const outPath = path.join(OUT, 'L112_ARCHITECTURE_DIAGRAMS.pdf');
   const res = await renderPdf({
     html: doc.build(), outPath, landscape: false, maxPages: 0, margin: '12mm',
