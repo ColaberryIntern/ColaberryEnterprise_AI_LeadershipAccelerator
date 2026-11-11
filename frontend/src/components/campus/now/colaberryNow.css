@@ -117,7 +117,8 @@
 .cn-mgr-tl small{font:11px ui-monospace,Menlo,monospace;color:var(--cm-art-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cn-mgr-row select{height:34px;border-radius:8px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);color:var(--cm-art-ink)}
 .cn-mgr-air{display:flex;gap:6px;align-items:center;font-weight:700}
-.cn-mgr-del{border:0;border-radius:8px;background:var(--cm-art-red-tint);color:var(--cm-art-red);height:34px;min-width:34px;cursor:pointer}
+.cn-mgr-del{border:0;border-radius:8px;background:var(--cm-art-red-tint);color:var(--cm-art-red);height:34px;width:34px;justify-self:end;cursor:pointer}
+.cn-mgr-del.yes{width:auto}
 .cn-mgr-del.yes{background:var(--cm-art-red);color:var(--cm-art-white);padding:0 8px}
 .cn-mgr-confirm{display:flex;gap:4px}
 .cn-mgr-keep{border:1px solid var(--cm-art-line);border-radius:8px;background:var(--cm-art-card);color:var(--cm-art-ink);height:34px;padding:0 6px;cursor:pointer}
@@ -138,6 +139,9 @@
   .cn-compose input{flex:1 1 calc(100% - 44px)}
   .cn-compose select{flex:1;min-width:0;margin-left:42px}
   .cn-mgr-th{display:none}
+  .cn-mgr-add{flex-wrap:wrap}
+  .cn-mgr-add input{flex:1 1 100%}
+  .cn-mgr-addbtn{flex:1}
   .cn-mgr-row{grid-template-columns:30px minmax(0,1fr);row-gap:6px}
   .cn-mgr-row > select,.cn-mgr-row > .cn-mgr-air,.cn-mgr-row > .cn-mgr-del,.cn-mgr-row > .cn-mgr-confirm{grid-column:2}
 }

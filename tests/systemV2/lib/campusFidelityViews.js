@@ -279,6 +279,15 @@ const VIEWS = [
   { name: '38-colaberry-now', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-sub' }, { wait: 1200 }],
     required: () => ['cm-cnow', 'cn-tv', 'cn-stream', 'cn-sub', 'cn-compose', 'cn-lanes', 'cn-list'],
     assert: () => CN_ASSERT },
+  { name: '38-colaberry-now-after-post', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'],
+    steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-compose-input' },
+      { evaluate: `(() => { const s = document.querySelector('[data-testid="cn-compose-kind"]'); s.value = 'q'; s.dispatchEvent(new Event('change', { bubbles: true }));
+        const i = document.querySelector('[data-testid="cn-compose-input"]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        set.call(i, 'Fidelity check question: how do I connect Claude Code to my GitHub repository when the workstation still says no repo linked?'); i.dispatchEvent(new Event('input', { bubbles: true })); })()` },
+      { click: '[data-testid="cn-compose-post"]' }, { waitFor: 'cn-toast' }, { wait: 800 }],
+    required: () => ['cm-cnow', 'cn-toast', 'cn-post'],
+    assert: () => `(() => { const top = document.querySelector('[data-testid="cn-post"]:not(.pinned)'); if (!top || !top.textContent.includes('Fidelity check question')) return 'the new question is not first';
+      return /open/.test(document.querySelector('[data-testid="cn-lane-q"]').textContent) ? '' : 'Questions does not count it open'; })()` },
   { name: '38-colaberry-now-questions', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-sub' }, { click: '[data-testid="cn-lane-q"]' }, { wait: 1200 }],
     required: () => ['cm-cnow', 'cn-lanes'], assert: () => CN_ASSERT },
   { name: '38-colaberry-now-thread', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-post' }, { click: '[data-testid="cn-post"]' }, { wait: 1200 }],

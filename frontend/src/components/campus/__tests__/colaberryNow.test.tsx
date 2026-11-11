@@ -122,7 +122,10 @@ describe('Colaberry Now', () => {
 
   it('the section chips: counts, Questions "n open", red dots where there is something new', async () => {
     await open();
-    expect(q('[data-testid="cn-lane-q"]')!.textContent).toContain('2 open');
+    // as the prototype reads: "Questions 2 open" (the open count, not the total and then the open count)
+    expect(q('[data-testid="cn-lane-q"] small')!.textContent).toBe('2 open');
+    expect(q('[data-testid="cn-lane-mine"] small')!.textContent).toBe('2');
+    expect(q('[data-testid="cn-lane-wins"] small')!.textContent).toBe('8');
     expect(q('[data-testid="cn-dot-q"]')).toBeTruthy();
     expect(q('[data-testid="cn-dot-wins"]')).toBeNull();
     press(q('[data-testid="cn-lane-q"]'));
