@@ -1,0 +1,69 @@
+{
+  "slug": "the-question-was-in-plain-english-the-query-still-had-to-be-safe",
+  "output": "toolsmith-ai-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "The Question Was in Plain English. The Query Still Had to Be Safe.",
+      "subtitle": "ToolSmithAI, built by Harpreet Kaur, read at commit 4c777f3",
+      "caption": "A leader's question often waits for someone who writes SQL. A text-to-SQL tool shortens the wait, and adds a risk: the model can pick the wrong table or write an unsafe statement."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "The model writes a candidate, not a query that runs.",
+      "subtitle": "Code with no model in it decides what may run.",
+      "caption": "A model proposes one candidate plan per question. Code parses it into a syntax tree and refuses anything that is not a single read-only statement over known tables, columns and joins."
+    },
+    {
+      "kind": "cards",
+      "seconds": 11,
+      "accent_index": 0,
+      "rows": [
+        ["17 statement forms", "write and control forms the validator is tested to reject"],
+        ["1,000 rows, 30 seconds", "the default ceiling on every validated query"]
+      ],
+      "caption": "Seventeen write and control statement forms each have a test that the validator rejects them. Even a valid query runs under a one thousand row cap and a thirty second timeout."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "An ambiguous question gets a question back.",
+      "subtitle": "A clarification instead of a guessed query.",
+      "caption": "When a question could mean two different things, the tool asks which one was meant instead of guessing, because a confident answer to the wrong question looks exactly like a right one."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "One route, and the old one kept only as history.",
+      "subtitle": "The retired planner's tests stay, marked skipped.",
+      "caption": "Questions go through one route. The planner it replaced is retired, and eight of its tests are kept in the repository and marked skipped, so the history is visible rather than deleted."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "accent_index": 0,
+      "rows": [
+        ["6,136 tests", "backend tests defined across 258 files"],
+        ["175 test cases", "frontend test cases defined in 14 files"],
+        ["4 commits", "in the public repository history, all on 9 November 2026"]
+      ],
+      "caption": "Counted from the repository at the pinned commit: six thousand one hundred thirty six backend tests and one hundred seventy five frontend cases are defined. They were not run for this record."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "What this record cannot show yet.",
+      "subtitle": "Stated as gaps, most of them by the builder first.",
+      "caption": "Answer accuracy, response latency and business impact have not been measured. Live questions support SQL Server only, and nothing shows a deployment or a user."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The model may suggest. Only code may let a query run.",
+      "subtitle": "Harpreet Kaur, AI Systems Architect",
+      "caption": "ToolSmithAI draws the line a text-to-SQL tool most needs: the model may suggest a query, and only code with no model in it may let one run."
+    }
+  ]
+}
