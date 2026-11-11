@@ -11,6 +11,8 @@
  *   2. Never inflate on a failed read. An approximate larger number is
  *      indistinguishable from a real one.
  */
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { addOwnRegistrations, getOwnRegisteredEventIds } from '../publicEventsService';
 import { sequelize } from '../../config/database';
 
@@ -46,6 +48,33 @@ beforeEach(() => {
 
 afterEach(() => {
   (console.error as jest.Mock).mockRestore?.();
+});
+
+describe('this module must not pull in the database at import time', () => {
+  // THE REGRESSION THIS PINS. The first push of this change added a top-level
+  // `import { sequelize } from '../config/database'`. That module builds its
+  // Sequelize instance as a SIDE EFFECT of being imported, from a connection URL
+  // absent in the test environment - so it took down `publicEventsService.test.ts`
+  // and `openHouseEventService.test.ts` with "Test suite failed to run", not with a
+  // failing assertion. Two suites that have nothing to do with this feature.
+  //
+  // A static read of the source is the right check: it fails for the exact reason a
+  // human would, and it does not depend on whether DATABASE_URL happens to be set
+  // in whichever tier is running.
+  const SOURCE = readFileSync(join(__dirname, '..', 'publicEventsService.ts'), 'utf8');
+  // Imports only - the lazy `await import(...)` inside a function is the fix, not
+  // the defect, so the check must not match it.
+  const TOP_LEVEL_IMPORTS = SOURCE.split(/\n(?=(?:export )?(?:async )?function |const |let )/)[0];
+
+  it('does not import config/database at the top level', () => {
+    expect(TOP_LEVEL_IMPORTS).not.toMatch(/^import .*config\/database/m);
+  });
+
+  it('CONTROL: the lazy import inside a function IS present', () => {
+    // Without this, the check above would also pass if the Postgres access were
+    // simply deleted, which is the wrong way to make a test go green.
+    expect(SOURCE).toMatch(/await import\('\.\.\/config\/database'\)/);
+  });
 });
 
 describe('getOwnRegisteredEventIds', () => {

@@ -1,7 +1,6 @@
 import * as sql from 'mssql';
 import { QueryTypes } from 'sequelize';
 import { env } from '../config/env';
-import { sequelize } from '../config/database';
 import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
 import { centralWallClockToInstant, CCPP_NOW_CENTRAL } from './centralDate';
@@ -433,6 +432,25 @@ function normEmail(raw: string | null | undefined): string {
 }
 
 /**
+ * Postgres, fetched LAZILY and never at module load.
+ *
+ * `config/database` constructs its Sequelize instance as a side effect of being
+ * imported, from a connection URL that does not exist in the test environment. A
+ * top-level `import { sequelize }` here therefore breaks every suite that imports
+ * this module - not with a failing assertion but with "Test suite failed to run",
+ * which is how the first push of this change took `publicEventsService.test.ts`
+ * and `openHouseEventService.test.ts` down with it.
+ *
+ * This module's reason for existing is CCPP. Postgres is a late addition used by
+ * two functions, so it is pulled in where it is used, the same way
+ * `marketingFunnelRoutes` defers `acquisitionFunnel`.
+ */
+async function pg() {
+  const { sequelize } = await import('../config/database');
+  return sequelize;
+}
+
+/**
  * Which of `eventIds` this email registered for through OUR OWN pages.
  *
  * The Postgres twin of `getRegisteredEventIds`. Fails SOFT for the same reason:
@@ -444,7 +462,7 @@ export async function getOwnRegisteredEventIds(email: string, eventIds: string[]
   const e = normEmail(email);
   if (!e || eventIds.length === 0) return new Set();
   try {
-    const rows = await sequelize.query<{ event_id: string }>(
+    const rows = await (await pg()).query<{ event_id: string }>(
       `SELECT DISTINCT event_id FROM open_house_registrations
         WHERE lower(email_lower) = :email AND event_id IN (:ids)`,
       { replacements: { email: e, ids: eventIds.map(String) }, type: QueryTypes.SELECT },
@@ -497,7 +515,7 @@ export async function addOwnRegistrations(events: OpenHouseView[]): Promise<Open
 
   let rows: Array<{ event_id: string; email_lower: string }>;
   try {
-    rows = await sequelize.query<{ event_id: string; email_lower: string }>(
+    rows = await (await pg()).query<{ event_id: string; email_lower: string }>(
       `SELECT event_id, email_lower FROM open_house_registrations WHERE event_id IN (:ids)`,
       { replacements: { ids: events.map((e) => String(e.id)) }, type: QueryTypes.SELECT },
     );
