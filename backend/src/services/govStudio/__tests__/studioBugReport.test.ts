@@ -7,7 +7,22 @@ import { buildGovStudioSubject, handleGovStudioBugReport, __resetDedupeForTests 
 import { guardedSendMail } from '../../emailService';
 import { getSetting } from '../../settingsService';
 
-jest.mock('../../emailService', () => ({ guardedSendMail: jest.fn().mockResolvedValue({ messageId: 'x' }) }));
+// A REALISTIC RESOLVED VALUE, not `{ messageId: 'x' }`.
+//
+// The route now reads the transport's result, because on 2026-11-11 three Marketing bug
+// reports were accepted and silently dropped and the route reported all three as a
+// success. `{ messageId: 'x' }` has no `accepted` and no envelope, so it is
+// indistinguishable from that drop - the old mock was asserting a success the real
+// transport could not have produced. This is the shape production actually returns.
+jest.mock('../../emailService', () => ({
+  guardedSendMail: jest.fn().mockResolvedValue({
+    response: '250 2.0.0 Ok: queued as 53ED6100508D',
+    messageId: '<41a1dd01-d6a2-859d-f286-10aa1fd5cdf3@colaberry.com>',
+    accepted: ['gov@colaberry.com'],
+    rejected: [],
+    envelope: { from: 'info@colaberry.com', to: ['gov@colaberry.com'] },
+  }),
+}));
 jest.mock('../../settingsService', () => ({ getSetting: jest.fn() }));
 jest.mock('../../../routes/admin/marketingBugReportRoutes', () => ({
   decodeScreenshot: () => null,
@@ -75,5 +90,40 @@ describe('handleGovStudioBugReport', () => {
     const r = await handleGovStudioBugReport('p1', 'ali@colaberry.com', validBody());
     expect(r.status).toBe(201);
     expect(mockSend.mock.calls[0][0].to).toBe('gov@colaberry.com');
+  });
+});
+
+describe('a report that was accepted but not delivered', () => {
+  /**
+   * The 2026-11-11 defect, from the reporter's side.
+   *
+   * The relay answers `250 ... Ok: queued` for a message with an empty envelope sender
+   * and then discards it, so `accepted` is populated and the send resolves. The route
+   * used to return 201 for exactly this. Being thanked for a report that reached nobody
+   * is the worst of the outcomes: the problem stays broken AND nobody is looking for it.
+   */
+  it('answers 502 and tells the reporter to find a person, instead of thanking them', async () => {
+    mockSend.mockResolvedValueOnce({
+      response: '250 2.0.0 Ok: queued as C066C1005088',
+      messageId: '<318e94ff-ceac-9047-4a31-909b5b4cabea@localhost>',
+      accepted: ['gov@colaberry.com'],
+      rejected: [],
+      envelope: { from: '', to: ['gov@colaberry.com'] }, // the whole defect, in one field
+    });
+
+    const res = await handleGovStudioBugReport('p1', 'ali@colaberry.com', validBody());
+
+    expect(res.status).toBe(502);
+    expect(String(res.body.error)).toContain('tell Ali directly');
+    expect(res.body.sent).toBeUndefined();
+  });
+
+  it('CONTROL: the identical report WITH a sender returns 201', () => {
+    // Without this the case above would also pass if the route had started answering
+    // 502 for every send. The suite's beforeEach resets the dedupe, so this is clean.
+    return handleGovStudioBugReport('p1', 'ali@colaberry.com', validBody()).then((res) => {
+      expect(res.status).toBe(201);
+      expect(res.body.sent).toBe(true);
+    });
   });
 });

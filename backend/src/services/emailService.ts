@@ -74,6 +74,44 @@ export async function guardedSendMail(options: nodemailer.SendMailOptions): Prom
   // services/__tests__/emailServiceBrandPreflight.test.ts
   //
   // validateBeforeSend(options.html ?? '', options.text ?? '');
+
+  // EVERY MESSAGE LEAVES WITH A SENDER.
+  //
+  // 2026-11-11: Sohail filed three bug reports from the Marketing composer. All three
+  // returned 201 and logged `outcome: "success"`, and not one was delivered or even
+  // appeared in Mandrill's message log. The cause was one absent field. With no `from`,
+  // nodemailer hands Mandrill an EMPTY envelope sender; Mandrill answers
+  // `250 2.0.0 Ok: queued as ...`, which is why the send looked successful, and then
+  // discards a message it cannot attribute to a sending domain. Proved by sending the
+  // same mail twice from production, once without `from` and once with it: only the
+  // second reached the message log.
+  //
+  // THE DEFAULT LIVES HERE, not at the call sites. Five senders had the same omission -
+  // the Marketing bug report, the Gov Studio's report button, and all three internship
+  // nudge senders - and a sixth written next month would inherit the bug too. This is
+  // the one chokepoint every sender in this file already passes through.
+  if (!options.from) {
+    const fallback = (env.emailFrom || '').trim();
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: fallback ? 'warn' : 'error',
+      service: 'backend',
+      event: 'email.from_missing',
+      outcome: fallback ? 'success' : 'failure',
+      error_class: 'MissingFromAddress',
+      context: {
+        subject: String(options.subject ?? '').slice(0, 120),
+        // The repaired value, so a log reader can tell a defaulted send from a
+        // configured one. This is our own role address, never a recipient's.
+        applied: fallback || null,
+        note: fallback
+          ? 'Caller passed no from address; defaulted. Fix the caller.'
+          : 'Caller passed no from address AND env.emailFrom is empty - the relay will drop this send.',
+      },
+    }));
+    if (fallback) options = { ...options, from: fallback };
+  }
+
   if (await isKillSwitchActive()) {
     const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
     console.warn(`[Email] BLOCKED by kill switch — not sending to ${redactForLogs(to)} (subject: ${options.subject ?? ''})`);
@@ -105,6 +143,7 @@ export async function guardedSendMail(options: nodemailer.SendMailOptions): Prom
 
   return transporter!.sendMail(routed);
 }
+
 
 /**
  * Apply the dev-environment guard, resolving the sink at call time.
