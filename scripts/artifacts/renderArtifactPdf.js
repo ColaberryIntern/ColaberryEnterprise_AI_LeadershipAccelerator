@@ -68,7 +68,7 @@ const MERMAID_BOOT = `
 /**
  * The paper every artifact is emitted on, exported so the preview tool cannot model a different
  * one. It used to be an inline `format: 'Letter'` here and a separate `A4_MM` constant in
- * previewArtifactPage, which quietly modelled a page 17.6mm wider and 5.9mm shorter than the real
+ * previewArtifactPage, which quietly modeled a page 17.6mm wider and 5.9mm shorter than the real
  * surface — in the very file whose docstring says a preview that is not the real surface is not
  * verification. One definition, two readers.
  */

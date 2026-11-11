@@ -84,7 +84,7 @@ A note on the count: this report describes 87 todos, and L0.5 — the ticket tha
 
 **Flag state.** `BROADCAST_ENABLED`, `COMMUNITY_ROOMS_ENABLED` — Both are read in backend/src/config/env.ts and both default to false in code, so the routes answer 404 until they are set. They are separate switches, but broadcast_occurrences.room_id points at a community room, so room-scoped access needs both on.
 
-**Blockers.** Only two creation paths exist: historical backfill, and ensureOccurrenceForSession called from the Accelerator session flow. The cancelled state is a one-way door with no outbound transition, so a cancelled class can never air again.
+**Blockers.** Only two creation paths exist: historical backfill, and ensureOccurrenceForSession called from the Accelerator session flow. The `cancelled` state is a one-way door with no outbound transition, so a `cancelled` class can never air again.
 
 ### Phase 3 — In-app player, live discovery, and audience measurement
 

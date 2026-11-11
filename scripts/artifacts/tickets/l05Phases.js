@@ -90,9 +90,13 @@ const PHASES = [
       + 'broadcast_occurrences.room_id points at a community room, so room-scoped access needs '
       + 'both on.',
     deployed: 'Code deployed. Schema bootstrapped at server start.',
+    // The state is spelled `cancelled` in the shipped state machine, so naming it any other way // spelling-exempt: naming the shipped state
+    // would send a reader grepping for a literal that is not there. Backticked so it reads as
+    // code rather than as British prose, and exempted with a reason — the same treatment the
+    // shipped state names already get in l112Data.
     blockers: 'Only two creation paths exist: historical backfill, and ensureOccurrenceForSession '
-      + 'called from the Accelerator session flow. The cancelled state is a one-way door with no '
-      + 'outbound transition, so a cancelled class can never air again.',
+      + 'called from the Accelerator session flow. The `cancelled` state is a one-way door ' // spelling-exempt: shipped state name
+      + 'with no outbound transition, so a `cancelled` class can never air again.', // spelling-exempt: shipped state name
   },
   {
     id: 3,
@@ -223,7 +227,7 @@ const PHASES = [
 /**
  * The 56 parent tasks and what carries them on the board.
  *
- * `work` is a compressed clause from the §5 table, enough to recognise the task without
+ * `work` is a compressed clause from the §5 table, enough to recognize the task without
  * reproducing the whole specification - the document links to the source for that. `todos` are
  * Basecamp ids, checked against the census. `gap` is required whenever coverage is not COVERED.
  */

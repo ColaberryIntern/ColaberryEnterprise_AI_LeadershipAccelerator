@@ -51,7 +51,7 @@ const MM_TO_PX = 96 / 25.4;
  * The page size is READ FROM THE RENDERER, not restated here.
  *
  * This constant used to be `A4_MM = { w: 210, h: 297 }` with a comment calling A4 "the only size
- * renderArtifactPdf emits". The renderer emits Letter, and always has. So this tool modelled a
+ * renderArtifactPdf emits". The renderer emits Letter, and always has. So this tool modeled a
  * page 17.6mm wider and 5.9mm shorter than the real one: looser on width, stricter on height,
  * and wrong in both directions at once — the exact failure the docstring above describes, living
  * in the file that describes it. Importing the renderer's own constant makes the two impossible
