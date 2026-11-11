@@ -165,3 +165,23 @@ export async function listStudioSessions(): Promise<StudioSessionRow[]> {
   const { data } = await api.get('/api/admin/accelerator/live/sessions');
   return data.sessions as StudioSessionRow[];
 }
+
+export interface StudioStaff {
+  enrollment_id: string;
+  name: string;
+  email: string;
+}
+
+/**
+ * Who can be named presenter or producer, searched by name or email.
+ *
+ * Returns an EMPTY LIST on a bad shape and THROWS on a failed request, deliberately. The
+ * picker renders those two differently - "nobody called that" against "the lookup is not
+ * answering" - and it can only do that if this does not flatten them into one.
+ */
+export async function searchStudioStaff(q: string): Promise<StudioStaff[]> {
+  const res = await api.get<{ staff?: StudioStaff[] }>(
+    `/api/admin/accelerator/live/staff?q=${encodeURIComponent(q)}`,
+  );
+  return Array.isArray(res.data?.staff) ? res.data.staff : [];
+}

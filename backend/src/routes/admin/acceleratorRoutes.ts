@@ -46,6 +46,7 @@ import { strategyPrepUpload } from '../../config/upload';
 import {
   handleGetStudioConfig,
   handleListStudioSessions,
+  handleListStudioStaff,
   handleUpdateStudioConfig,
 } from '../../controllers/studioSetupController';
 
@@ -138,6 +139,8 @@ router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession
  * in.
  */
 router.get('/api/admin/accelerator/live/sessions', requireAdmin, handleListStudioSessions);
+// Who can be named presenter or producer: community role 'staff', searchable by name or email.
+router.get('/api/admin/accelerator/live/staff', requireAdmin, handleListStudioStaff);
 router.get('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleGetStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleUpdateStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);

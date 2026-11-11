@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listStudioSessions, type StudioSessionRow } from '../../../services/studioSetupApi';
 import './studioSetup.css';
+import StudioRail from './StudioRail';
 
 /**
  * The Studio setup index (D4, P4-01) — pick the class to configure.
@@ -49,6 +50,7 @@ export default function StudioIndexPage(): React.ReactElement {
 
   return (
     <div className="cls-root">
+      <StudioRail />
       <div className="cls-shell">
         <header className="cls-head">
           <h1 className="cls-title">Studio setup</h1>
