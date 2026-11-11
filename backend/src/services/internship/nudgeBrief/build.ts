@@ -25,6 +25,7 @@
  */
 import { getConsoleRoster } from '../internConsoleRoster';
 import { composeBrief } from './compose';
+import { factsForBrief, upgradeBody } from './modelBody';
 import { caseStudyDeadline } from './deadline';
 import { holdFor, type HoldDecision } from './hold';
 import { runPortfolioPipeline, type PipelineResult } from './pipeline';
@@ -52,11 +53,20 @@ async function briefFromPipeline(
   const key = intern.project?.id ?? '';
   if (!deadlines.has(key)) deadlines.set(key, await caseStudyDeadline(intern.project?.id ?? null, now));
 
-  const brief = composeBrief({ intern, deadline: deadlines.get(key) ?? null, now });
+  const deadline = deadlines.get(key) ?? null;
+  const brief = composeBrief({ intern, deadline, now });
   // The roster is the only place the address lives; the sidecar deliberately carries no email.
   const row = p.roster.find((r) => r.enrollment_id === enrollmentId);
   const email = row?.email ?? null;
-  return { ...brief, email: email ? String(email) : null };
+  const withEmail = { ...brief, email: email ? String(email) : null };
+
+  /**
+   * The model may rewrite the MIDDLE of the message, and only if the draft passes every check in
+   * modelBody.ts. A refusal, a timeout or a missing client all land in the same place: the
+   * deterministic body, unchanged. `deterministicBody` is never touched either way, because that
+   * is what an unattended send uses.
+   */
+  return upgradeBody(withEmail, factsForBrief(intern, withEmail, deadline), p.chatClient);
 }
 
 /**

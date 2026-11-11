@@ -111,11 +111,18 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
 
   const lines: string[] = [`${intern.first_name},`];
   para(lead(intern, focus, now.getTime()));
+  // Where the HEAD ends. The name line and the opener are structural: the sender and several
+  // tests depend on the first line being their name, and `lead` is the one block that already
+  // references their own words. A model rewriting the middle never touches either.
+  const headLines = lines.length;
+
   para(theOneThing(intern, focus, deadline));
   para(nextAction(intern, focus, deadline));
   const ask = focus === 'artifact_gap' ? askBlock(intern) : { lines: [] as string[], attachment: null };
   if (ask.attachment) para([`A prompt to start it is attached as ${ask.attachment.filename}.`]);
   para(wayThrough(focus, deadline));
+  const middleLines = lines.length;
+
   para(close(focus));
 
 
@@ -130,7 +137,19 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   }
   const subject = subjectFor(intern, focus, deadline);
 
-  const body = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const tidy = (xs: string[]): string => xs.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const body = tidy(lines);
+  /**
+   * The same body in three pieces, so a model may rewrite the middle without being able to touch
+   * the first line or the last. `assembleBody` in modelBody.ts puts it back together; keeping the
+   * split here means the pieces can never drift from the body this function already returned,
+   * which a second assembly site would allow.
+   */
+  const bodyParts = {
+    head: tidy(lines.slice(0, headLines)),
+    middle: tidy(lines.slice(headLines, middleLines)),
+    tail: tidy(lines.slice(middleLines)),
+  };
 
   /**
    * A dated promise WE made that today's message neither keeps nor re-dates.
@@ -178,6 +197,12 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
     promises,
     subject,
     body,
+    // What ships when nobody has read it. Ali, 2026-11-11: an unattended send uses the
+    // deterministic wording, and a model-written body stays in the console for approval. So this
+    // field is never overwritten by the upgrade step, and the 48 hour worker sends THIS.
+    deterministicBody: body,
+    bodyFromModel: false,
+    bodyParts,
     // Gated on the SAME condition as the ask lines. Dropping only the lines left Sarbjit's message
     // carrying `format-correction.md` with nothing in the body mentioning it: an unexplained
     // attachment on a four-line note, which reads as a mistake because it is one.

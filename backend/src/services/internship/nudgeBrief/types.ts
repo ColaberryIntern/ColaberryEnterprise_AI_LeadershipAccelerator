@@ -103,6 +103,21 @@ export interface NudgeBrief {
   readonly promises: readonly BriefPromise[];
   readonly subject: string;
   readonly body: string;
+  /**
+   * The purely deterministic body, never rewritten by the model.
+   *
+   * Ali, 2026-11-11: when nobody has read the message first, it sends the deterministic wording.
+   * A model-written body is for the console, where a person approves it. Keeping both on the
+   * brief is what lets the 48 hour worker honour that without a second composer.
+   */
+  readonly deterministicBody: string;
+  /** True when `body` was written by the model and passed every check in modelBody.ts. */
+  readonly bodyFromModel: boolean;
+  /**
+   * `body` in three pieces: the name line and opener, the middle, and the closing ask. Only the
+   * middle may be rewritten; the first line and the last are structural promises.
+   */
+  readonly bodyParts: { readonly head: string; readonly middle: string; readonly tail: string };
   /** The attachment this ask needs, when it needs one; the file is staged by the send path. */
   readonly attachment: { readonly filename: string; readonly prompt: string } | null;
   /** Anything the composer could not evidence, shown on the row so nobody sends a guess. */
