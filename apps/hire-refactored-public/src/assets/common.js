@@ -117,6 +117,19 @@
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
   }
 
+  /* A case study's cover for any card: its picked thumbnail with the walkthrough length on it,
+     or the generated art when the record has no cover (never a blank box). `c` is a Hire case
+     card or signature: { slug, look: { coverImageUrl, walkthroughSeconds } }. */
+  function cover(c, api, n) {
+    var L = (c && c.look && typeof c.look === 'object') ? c.look : {};
+    var url = mediaUrl(api, L.coverImageUrl);
+    var len = duration(L.walkthroughSeconds);
+    var media = url
+      ? '<img class="cover" src="' + esc(url) + '" alt="" loading="lazy" decoding="async">'
+      : art((c && c.slug) || '', { n: n });
+    return media + (len ? '<span class="play" aria-label="Walkthrough video, ' + esc(len) + '">▶ ' + esc(len) + '</span>' : '');
+  }
+
   /* The avatar: photo or initials on a slug-derived gradient; gold ring + star when listed. */
   function avatar(person, size, ring) {
     var withRing = ring !== false;
@@ -170,7 +183,7 @@
 
   return {
     esc: esc, rnd: rnd, hueOf: hueOf, art: art, initials: initials, safeImageUrl: safeImageUrl,
-    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
+    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, cover: cover, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
     readShortlist: readShortlist, writeShortlist: writeShortlist, toggleShortlist: toggleShortlist,
     track: track, SHORT_KEY: SHORT_KEY,
   };

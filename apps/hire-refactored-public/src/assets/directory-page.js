@@ -22,7 +22,7 @@
     C.fetchJson(endpoint(filters), 10000).then(function (res) {
       if (!res.ok || !D.isPayload(res.body)) return; // keep "Nobody is listed yet"
       var main = doc.getElementById('main');
-      main.innerHTML = D.renderDirectory(res.body, filters, window.HirePage.shortlist());
+      main.innerHTML = D.renderDirectory(res.body, filters, window.HirePage.shortlist(), api);
       wireFilters();
       doc.dispatchEvent(new CustomEvent('hire:directory-rendered', { detail: res.body }));
     });

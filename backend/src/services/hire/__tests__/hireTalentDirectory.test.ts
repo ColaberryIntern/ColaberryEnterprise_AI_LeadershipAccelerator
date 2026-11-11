@@ -81,6 +81,13 @@ describe('cards', () => {
     expect(c.verifiedCommitCount).toBe(3);
     expect(c.spotlight).toBe(true);
   });
+
+  it('the signature carries its look, so the home page can show the record\'s own cover', () => {
+    const portfolio: any = { identity: { full_name: 'Ann' }, capabilities: [], verified_commits: [] };
+    const look = { coverImageUrl: '/site-v2/thumb-x.jpg', walkthroughSeconds: 90, capability: null, verified: true, workflowDiagram: true, decisions: 3, repositories: 1 };
+    const c = toTalentCard(portfolio, { slug: 'ann', availabilityStatus: null, availabilityLabel: null, hireSpotlight: false }, [cs('x', { look })]);
+    expect(c.signature?.look).toEqual(look);
+  });
 });
 
 describe('assembleDirectory', () => {

@@ -110,6 +110,37 @@ describe('the page', () => {
   });
 });
 
+describe('the home page uses each record\'s own cover (Ali, 2026-11-11: "shouldn\'t we use the pictures here")', () => {
+  const API = 'https://enterprise.colaberry.ai';
+  const look = { coverImageUrl: '/site-v2/thumb-claims.jpg?v=1', walkthroughSeconds: 125, capability: null, verified: true, workflowDiagram: true, decisions: 3, repositories: 1 };
+  const withCover = person({ signature: { slug: 'claims-triage', title: 'Claims triage', industry: 'Insurance', heroMetric: null, look } });
+
+  test('the proof-library strip shows the cover and the walkthrough length', () => {
+    const html = D.renderStrip([withCover], API);
+    assert.match(html, /<img class="cover" src="https:\/\/enterprise\.colaberry\.ai\/site-v2\/thumb-claims\.jpg\?v=1"/);
+    assert.match(html, /▶ 2:05/);
+    assert.doesNotMatch(html, /<svg/);
+  });
+
+  test('the spotlight card shows the signature cover under its ribbon', () => {
+    const html = D.renderSpotlight([withCover], 'flagged', API);
+    assert.match(html, /<img class="cover"[^>]*>[\s\S]*class="ribbon">★ Spotlight/);
+  });
+
+  test('a record with no cover, or an older payload with no look, keeps the generated art', () => {
+    for (const t of [person(), person({ signature: { slug: 'x', title: 'X', industry: null, heroMetric: null, look: { coverImageUrl: null } } })]) {
+      const strip = D.renderStrip([t], API);
+      assert.match(strip, /<svg/);
+      assert.doesNotMatch(strip, /<img|class="play"/);
+    }
+  });
+
+  test('the whole page passes the API origin through to both places', () => {
+    const html = D.renderDirectory(payload({ talent: [withCover], spotlight: [withCover], spotlightSource: 'flagged' }), D.parseFilters(''), [], API);
+    assert.equal((html.match(/<img class="cover"/g) || []).length, 2);
+  });
+});
+
 describe('art', () => {
   test('is deterministic per slug, with unique ids per instance', () => {
     const strip = (s) => s.replace(/\b(bg|g|p)a\d+-\d+\b/g, 'ID');
