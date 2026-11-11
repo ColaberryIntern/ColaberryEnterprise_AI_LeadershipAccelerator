@@ -14,7 +14,7 @@
  *   reply     a message from colaberry.com to them; carries how long after their message it came
  *   late      an unverified task past its due date
  */
-import { classifiableText } from './emailText';
+import { classifiableText, sentences } from './emailText';
 import type { EventKind, InternEmail, OurReply, ProjectView, Timeline, TimelineCounts, TimelineEvent, TimelineNext, TimelineRow, TrainingView } from './types';
 
 const DAY = 86400000;
@@ -51,6 +51,28 @@ export function classifyEmail(subject: string | null, snippet: string | null): '
   if (STUCK_RE.test(text)) return 'stuck';
   if (QUESTION_RE.test(text)) return 'question';
   return 'update';
+}
+
+/**
+ * The one sentence that made this a blocker or a question, or null.
+ *
+ * Exists because knowing a message IS a question is not the same as showing somebody WHAT was
+ * asked. `open_questions` carried the first 300 characters of the body, which for a real intern
+ * message is the greeting: a manager saw "Hi, here is where the case study stands" and not "should
+ * I remove the API key stub before anything goes public?". Carrying the whole body instead is not
+ * an option - `narrate.ts` feeds this text to a model for up to eight threads per intern.
+ *
+ * Blocker before question, matching `classifyEmail`, so the sentence agrees with the label.
+ * Returns null when the match came from the subject alone, because then there is no sentence in
+ * the body to point at and inventing one would be worse than saying nothing.
+ */
+export function keySentence(snippet: string | null): string | null {
+  const parts = sentences(classifiableText(snippet));
+  for (const re of [STUCK_RE, QUESTION_RE]) {
+    const hit = parts.find((s) => re.test(s));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 export interface TimelineInput {
