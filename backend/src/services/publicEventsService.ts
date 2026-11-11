@@ -347,3 +347,67 @@ export async function annotateRegistration(events: OpenHouseView[], email: strin
 
 /** Test-only: clear the in-memory cache between cases. */
 export function __resetPublicEventsCache(): void { cache = null; }
+
+/**
+ * Every attendee address Eventbrite holds for ONE event, de-duplicated and
+ * un-corrupted. Used by the Open House attendee reconciliation (OH-9).
+ *
+ * ── WHY THIS THROWS, WHEN EVERYTHING ELSE HERE FALLS BACK ──
+ *
+ * The rest of this module is viewer-facing: a portal page that cannot reach CCPP
+ * should still render, so those paths swallow the error and degrade. This one is
+ * the opposite. Its caller compares two rosters and reports who is missing from
+ * which, and an empty list from a broken query is indistinguishable from an event
+ * with no attendees — it would render "0 registered on Eventbrite, all 6 of yours
+ * are missing from it" with total confidence, which is a lie that looks like a
+ * finding.
+ *
+ * That is not hypothetical. `getRegisteredEventIds` returns an empty Set on any
+ * failure, and on 2026-11-11 it produced exactly that ambiguity while I was
+ * checking this data by hand. So: this one throws, and the caller is required to
+ * say "unavailable" rather than "zero".
+ *
+ * ── THE ADDRESS SHAPE ──
+ *
+ * CCPP's ingestion bakes the delimiters into the stored value — literally
+ * `'someone@example.com',` — for 100% of 2026 rows. `getRegisteredEventIds`
+ * handles this by matching both exact forms in SQL, which keeps its index usable.
+ * Here the whole roster is being read rather than probed for one address, so the
+ * unwrapping happens in JS, where it can be applied uniformly and tested.
+ *
+ * Addresses are returned lowercased and trimmed so callers can compare them
+ * directly against `open_house_registrations.email_lower` without re-normalising
+ * — two normalisers for one comparison is how a false "no overlap" gets made.
+ */
+export function unwrapCcppEmail(raw: string | null | undefined): string {
+  return String(raw ?? '')
+    .trim()
+    .replace(/^'/, '')
+    .replace(/',?$/, '')
+    .trim()
+    .toLowerCase();
+}
+
+export async function getEventAttendeeEmails(eventId: string): Promise<string[]> {
+  const id = String(eventId || '').trim();
+  if (!id) return [];
+
+  let pool: sql.ConnectionPool | null = null;
+  try {
+    pool = await connectCcpp();
+    const res = await pool
+      .request()
+      .input('eid', sql.VarChar, id)
+      .query<{ Email: string }>(
+        'SELECT Email FROM EventBrite_EventAttendees WHERE EventId = @eid',
+      );
+    const seen = new Set<string>();
+    for (const row of res.recordset) {
+      const email = unwrapCcppEmail(row.Email);
+      if (email) seen.add(email);
+    }
+    return [...seen];
+  } finally {
+    if (pool) { try { await pool.close(); } catch { /* ignore */ } }
+  }
+}

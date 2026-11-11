@@ -41,6 +41,7 @@ export const MARKETING_DESTINATIONS: readonly MarketingHubDestination[] = [
   { to: '/admin/marketing/publishing', group: 'Ship & measure', label: 'Publishing queue', blurb: 'What is in flight, what failed, and what needs a person.', icon: 'send-plane-line' },
   { to: '/admin/marketing/performance', group: 'Ship & measure', label: 'Performance', blurb: 'Funnel, revenue, campaign links and the outreach queue.', icon: 'line-chart-line' },
   { to: '/admin/marketing/ad-spend', group: 'Ship & measure', label: 'Ad spend', blurb: 'What the ads cost, typed, imported or pulled from Meta.', icon: 'money-dollar-box-line' },
+  { to: '/admin/marketing/open-house-attendees', group: 'Ship & measure', label: 'Open House signups', blurb: 'Everyone coming to the next Open House, from Eventbrite and our own funnel.', icon: 'group-line' },
   { to: '/admin/marketing/brands', group: 'Set up', label: 'Brands & channels', blurb: 'Where each brand posts from, and whether it still can.', icon: 'price-tag-3-line' },
 ];
 

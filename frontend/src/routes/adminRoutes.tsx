@@ -74,6 +74,7 @@ const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminC
 const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
 const AdminLandingPagesPage = lazy(() => import('../pages/admin/marketing/AdminLandingPagesPage'));
 const AdminAdSpendPage = lazy(() => import('../pages/admin/marketing/adSpend/AdminAdSpendPage'));
+const AdminOpenHouseAttendeesPage = lazy(() => import('../pages/admin/marketing/AdminOpenHouseAttendeesPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -297,6 +298,12 @@ const adminRoutes = (
           {/* Ad spend ledger: typed, imported, or synced from Meta. Feeds the profitability card on
               Performance. Section `campaigns` by prefix, matching /api/admin/marketing/ad-spend. */}
           <Route path="/admin/marketing/ad-spend" element={<AdminAdSpendPage />} />
+          {/* Open House signups: BOTH rosters on one screen. The portal Events page counts
+              Eventbrite's attendees from CCPP; our own landing page writes to Postgres. On
+              2026-11-11 that was 7 and 6 with zero overlap - thirteen people, and no screen
+              showed more than seven. Section `campaigns` by prefix, matching
+              /api/admin/marketing/open-house/attendees. */}
+          <Route path="/admin/marketing/open-house-attendees" element={<AdminOpenHouseAttendeesPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />

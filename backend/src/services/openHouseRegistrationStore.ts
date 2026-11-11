@@ -80,6 +80,18 @@ export interface OpenHouseRegistrationRow {
   enrollment_id: string | null;
   source: string;
   created_at: Date;
+  /**
+   * When each reminder actually went out, or null if it has not. Added for the
+   * attendee view (OH-9): "has this person been told when to turn up" is the
+   * first thing anyone looks for on an attendee list, and before this the columns
+   * were written by the reminder sweep and read by nothing.
+   *
+   * These are timestamps rather than booleans on purpose - "reminded" and
+   * "reminded three days ago" are different facts, and the stamp is also the
+   * idempotency guard the sweep checks.
+   */
+  reminder_24h_sent_at: Date | null;
+  reminder_1h_sent_at: Date | null;
 }
 
 /**
@@ -93,7 +105,8 @@ export async function listOpenHouseRegistrations(
 ): Promise<OpenHouseRegistrationRow[]> {
   const capped = Math.max(1, Math.min(5000, Math.floor(limit)));
   return sequelize.query<OpenHouseRegistrationRow>(
-    `SELECT email_lower, name, enrollment_id, source, created_at
+    `SELECT email_lower, name, enrollment_id, source, created_at,
+            reminder_24h_sent_at, reminder_1h_sent_at
        FROM open_house_registrations
       WHERE event_id = :eventId
       ORDER BY created_at DESC
