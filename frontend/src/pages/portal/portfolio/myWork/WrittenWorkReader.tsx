@@ -11,7 +11,6 @@ const paras = (text: string): string[] => text.split(/\n\s*\n/).map((p) => p.tri
 export default function WrittenWorkReader({ title, body }: { title: string; body: WrittenBody }): React.ReactElement {
   return (
     <article className="mw-reader" aria-label={title}>
-      <h2 className="mw-reader-title">{title}</h2>
       {body.form === 'sections' && body.sections.map((s, i) => (
         <section key={i} className="mw-reader-sec">
           {s.heading && <h3>{s.heading}</h3>}

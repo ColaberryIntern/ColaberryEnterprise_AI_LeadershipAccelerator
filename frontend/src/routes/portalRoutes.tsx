@@ -40,6 +40,7 @@ const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'))
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
 const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/PortfolioPreviewPage'));
 const MyWorkPage = lazy(() => import('../pages/portal/portfolio/myWork/MyWorkPage'));
+const PortfolioDashboardPage = lazy(() => import('../pages/portal/portfolio/myWork/DashboardPage'));
 const WorkPiecePage = lazy(() => import('../pages/portal/portfolio/myWork/WorkPiecePage'));
 const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
@@ -157,6 +158,8 @@ const portalRoutes = (
       <Route path="/portal/portfolio" element={<PageGate feature="portfolio"><PortfolioPage /></PageGate>} />
       {/* C128: My work, every piece the learner made, and each piece's own viewer page. Same gate as the
           Studio; the server only ever answers for the caller's own pieces. */}
+      {/* C129: the Gallery's landing room, a summary of the learner's own work. */}
+      <Route path="/portal/portfolio/dashboard" element={<PageGate feature="portfolio"><PortfolioDashboardPage /></PageGate>} />
       <Route path="/portal/portfolio/work" element={<PageGate feature="portfolio"><MyWorkPage /></PageGate>} />
       <Route path="/portal/portfolio/work/:id" element={<PageGate feature="portfolio"><WorkPiecePage /></PageGate>} />
       {/* The learner's own page as a PAGE, opened in a new tab from Publishing. `preview`

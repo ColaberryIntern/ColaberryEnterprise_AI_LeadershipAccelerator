@@ -31,6 +31,7 @@ import { openOrderSheet } from '../../chow/OrderSheet';
 import { CAMPUS_BUILDINGS } from '../../campusMap';
 import MyProgressScreen from '../../progress/MyProgressScreen';
 import { useMyProgress } from '../../progress/myProgressApi';
+import WorkGlanceBoard, { useMyWorkGlance } from '../../gallery/WorkGlanceBoard';
 
 const placeName = (b: BuildingId): string => CAMPUS_BUILDINGS.find((x) => x.id === b)?.name ?? b;
 import { useLiveNow } from '../../campusOnAir';
@@ -149,6 +150,7 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
   const games = useGameRoomData(arcade);
   // C120: My Progress's screen is the celebration of the learner (their own data only); until it loads, the plain sign
   const progress = useMyProgress(id === 'observatory').data;
+  const galleryWork = useMyWorkGlance(id === 'gallery'); // C129: the Gallery's board is the learner's own work at a glance
   const { openMap, settings } = useCampus();
   // C37/C38 (v9 W5, v10 W5): the right wall's window: the weather and time of day outside, and the real buildings east of this one
   const wx = useCampusWeather(true);
@@ -194,7 +196,8 @@ export default function Room3D(p: Room3DProps): React.ReactElement | null {
         : id === 'amphi' && events ? <NextEventBoard event={upcoming(events, new Date(), 1)[0] ?? null} onSection={section} />
         : hall ? <HallwayBoard hallway={hallway} onOpen={p.onOpen} />
         : arcade ? <ArcadeBoard d={games} onOpen={p.onOpen} />
-        : id === 'observatory' && progress ? <MyProgressScreen p={progress} /> : undefined} />
+        : id === 'observatory' && progress ? <MyProgressScreen p={progress} />
+        : id === 'gallery' ? <WorkGlanceBoard items={galleryWork} onOpen={p.onOpen} /> : undefined} />
   );
   // The left wall's one piece (the hallway's doors are doors, not a board, and do not enlarge)
   const leftPiece = (isBig: boolean): React.ReactNode => {
