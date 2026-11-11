@@ -40,6 +40,14 @@ import { generateSessionRecap } from './sessionRecapService';
 import { ensureSessionMeetLink } from './meetingService';
 import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
+// OH-6. `classInstant` is the one helper that turns a session_date plus a
+// start_time into a real instant in Central, and it is imported rather than
+// re-derived here on purpose: OH-1 existed because two services each kept their
+// own idea of what Central means, and the Open House was advertised six hours
+// wrong for it.
+import { classInstant } from './centralDate';
+import { hoursUntil, openHouseEventIdOf, reminderWindowFor } from './openHouseReminderPolicy';
+import { listRegistrationsAwaitingReminder, markRegistrationReminded } from './openHouseReminders';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
@@ -2755,6 +2763,91 @@ export function startScheduler(): void {
 
   // -- Accelerator Session Lifecycle --
 
+  /**
+   * OH-6: remind the people who registered for an Open House, and nobody else.
+   *
+   * Eventbrite reminds the people who registered on Eventbrite. Nobody who signs
+   * up on our landing page is one of them, so without this they are told when and
+   * how to attend by nothing at all.
+   *
+   * Three things make this different from the cohort sweep beside it, and each is
+   * a correctness property rather than a style choice:
+   *
+   *  1. RECIPIENTS ARE THE REGISTRATIONS. Not the cohort. Confirmed by Ali on
+   *     2026-11-10, against a standing rule never to bulk-email students.
+   *
+   *  2. ARMING IS PER RECIPIENT. An Open House's roster grows until the doors
+   *     open, so a single stamp on the session would either silence a late
+   *     registrant for ever or re-mail everybody every thirty minutes.
+   *
+   *  3. IT FAILS CLOSED. Anything unresolvable — no event id, no start, a session
+   *     already under way — sends to nobody and says so in the log. A missed
+   *     reminder can be re-sent by hand; mail that went out cannot be recalled.
+   */
+  async function runOpenHouseReminderSweep(session: any): Promise<void> {
+    const eventId = openHouseEventIdOf(session);
+    if (!eventId) return; // unreachable from the call site; kept so this is safe alone
+
+    const startsAt = classInstant(session.session_date, session.start_time);
+    if (!startsAt || Number.isNaN(startsAt.getTime())) {
+      console.error(`[Scheduler] Open House ${session.id}: unreadable start, sending nothing`);
+      return;
+    }
+
+    const window = reminderWindowFor(hoursUntil(startsAt, new Date()));
+    if (!window) return; // too early, or already started
+
+    const pending = await listRegistrationsAwaitingReminder(eventId, window);
+    if (pending.length === 0) return;
+
+    // Suppression is checked where the account is known. A registration with no
+    // enrollment still gets its reminder: they asked for this specific event, and
+    // the note is transactional rather than marketing.
+    const withAccounts = pending.filter((r) => r.enrollment_id);
+    const enrollments = withAccounts.length
+      ? await Enrollment.findAll({ where: { id: withAccounts.map((r) => r.enrollment_id as string) } })
+      : [];
+    const suppressedIds = new Set(
+      enrollments.filter((e: any) => isNotificationSuppressed(e)).map((e: any) => String(e.id)),
+    );
+
+    let sent = 0;
+    let withheld = 0;
+    for (const r of pending) {
+      if (r.enrollment_id && suppressedIds.has(String(r.enrollment_id))) {
+        // Stamped anyway: the decision for this window has been made for this
+        // person, and leaving it null would re-evaluate them every thirty minutes.
+        await markRegistrationReminded(r.registration_id, window);
+        withheld += 1;
+        continue;
+      }
+      try {
+        await sendSessionReminder({
+          to: r.email,
+          fullName: r.name || '',
+          sessionTitle: session.title,
+          sessionNumber: session.session_number,
+          sessionDate: session.session_date,
+          startTime: session.start_time,
+          sessionId: String(session.id),
+          meetingLink: session.meeting_link || null,
+          materialsJson: session.materials_json || null,
+          isOneHour: window === '1h',
+        });
+        // Stamped immediately after the send, per recipient, so an interrupted
+        // sweep re-sends at most the one in flight rather than the whole list.
+        await markRegistrationReminded(r.registration_id, window);
+        sent += 1;
+      } catch (err: any) {
+        // NOT stamped: a failed send is retried on the next tick while the window
+        // is still open. That is the one case where a duplicate is possible, and
+        // it is the right trade against silence.
+        console.error(`[Scheduler] Open House ${window} reminder failed for ${redactForLogs(r.email)}:`, err.message);
+      }
+    }
+    console.log(`[Scheduler] Open House ${eventId}: ${window} reminder sent to ${sent}, withheld from ${withheld} paused`);
+  }
+
   // Session reminders: check every 30 minutes. Arming is persisted on the session
   // row (reminder_24h_sent_at / reminder_1h_sent_at), NOT in process memory: this
   // used to be an in-process Set, so every deploy re-armed both sends and the next
@@ -2769,6 +2862,18 @@ export function startScheduler(): void {
         await ensureSessionMeetLink(session).catch((err: any) =>
           console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
         );
+        // OH-6: an Open House is reminded from its REGISTRATIONS, never from the
+        // cohort, and is handled entirely here — this sweep's 24h query is a
+        // superset of the 1h one, so the window is decided once, below.
+        //
+        // The `continue` is the safety property, not a tidiness one: an Open
+        // House session must never reach the cohort path underneath. Its
+        // registrants are Explorers, and that cohort held 957 accounts against 2
+        // registrations on 2026-11-10.
+        if (openHouseEventIdOf(session)) {
+          await runOpenHouseReminderSweep(session);
+          continue;
+        }
         if (session.reminder_24h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
@@ -2804,6 +2909,10 @@ export function startScheduler(): void {
       // 1-hour reminders
       const upcoming1h = await getUpcomingSessions(1);
       for (const session of upcoming1h) {
+        // Already handled by the 24h pass above, which sees every session this
+        // query returns. Skipped rather than re-entered so an Open House cannot
+        // be swept twice in one tick.
+        if (openHouseEventIdOf(session)) continue;
         if (session.reminder_1h_sent_at) continue; // Already sent, and it survives restarts
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
