@@ -4,6 +4,7 @@ import {
   handleGetSessionClipList,
   handleGetSessionClipListCsv,
 } from '../../controllers/broadcastClipListController';
+import { putClipDecision } from '../../controllers/broadcastClipDecisionController';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
@@ -158,6 +159,9 @@ router.get('/api/admin/accelerator/sessions/:id/clip-list', requireAdmin, handle
 // R7's first brick (§9 item 6): the same list as a file an editor can open. Same auth as the
 // JSON, because it is the same editorial material — the format is the only difference.
 router.get('/api/admin/accelerator/sessions/:id/clip-list.csv', requireAdmin, handleGetSessionClipListCsv);
+// D11 - keep it or cut it, one segment at a time. Same auth as the list it edits: this is the
+// editing pass after the class, done in the admin tool by whoever is cutting the video.
+router.put('/api/admin/accelerator/sessions/:id/clip-decisions/:segmentId', requireAdmin, putClipDecision);
 // Plain-language class outline (teaching plan) — review / prepare / print.
 router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
 // Instructor readiness report (prep + source/evidence ledger).
