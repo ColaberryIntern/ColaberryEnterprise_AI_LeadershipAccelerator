@@ -66,6 +66,16 @@ const MERMAID_BOOT = `
 `;
 
 /**
+ * The paper every artifact is emitted on, exported so the preview tool cannot model a different
+ * one. It used to be an inline `format: 'Letter'` here and a separate `A4_MM` constant in
+ * previewArtifactPage, which quietly modelled a page 17.6mm wider and 5.9mm shorter than the real
+ * surface — in the very file whose docstring says a preview that is not the real surface is not
+ * verification. One definition, two readers.
+ */
+const PAGE_FORMAT = 'Letter';
+const PAGE_MM = { w: 215.9, h: 279.4 };
+
+/**
  * Render one PDF.
  *
  * @param {string} html      full document HTML
@@ -104,7 +114,7 @@ async function renderPdf({ html, outPath, landscape = false, maxPages = 0, margi
 
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     const buf = await page.pdf({
-      format: 'Letter',
+      format: PAGE_FORMAT,
       landscape,
       printBackground: true,
       margin: { top: margin, right: margin, bottom: margin, left: margin },
@@ -130,4 +140,4 @@ function htmlDoc({ title, css, body }) {
 <title>${title}</title><style>${css}</style></head><body>${body}</body></html>`;
 }
 
-module.exports = { renderPdf, htmlDoc, countPdfPages };
+module.exports = { renderPdf, htmlDoc, countPdfPages, PAGE_FORMAT, PAGE_MM };

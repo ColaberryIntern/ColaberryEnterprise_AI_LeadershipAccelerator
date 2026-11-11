@@ -10,8 +10,10 @@
  * Building AF10.2's one-pager took five rebuilds for exactly that reason, and the first four were
  * spent on a wrong number. The preview used 1754x1240 ("A4 landscape at 150dpi") and reported the
  * page as 60 percent empty. **That was the preview being wrong, not the page.** Chromium lays a
- * PDF out in CSS pixels at 96dpi, so A4 landscape minus 9mm margins is 1054x726. A 1240px-tall
- * viewport invents 500px of room the page does not have.
+ * PDF out in CSS pixels at 96dpi, so the real box is a few hundred pixels shorter than that; a
+ * 1240px-tall viewport invents room the page does not have. The dpi was fixed then. The PAPER
+ * stayed wrong afterwards — see `PAGE_MM` below — and is now read from the renderer so the two
+ * cannot drift again.
  *
  * The damage was not cosmetic: a nearly full page looked half empty, so content was ADDED, and the
  * build then threw at two pages. Once the preview matched the page box, its measurement agreed
@@ -45,8 +47,17 @@ const { chromium } = require('playwright');
 /** Chromium lays out print in CSS pixels at 96dpi. This is the conversion, not a guess. */
 const MM_TO_PX = 96 / 25.4;
 
-/** A4, the only size `renderArtifactPdf` emits. */
-const A4_MM = { w: 210, h: 297 };
+/**
+ * The page size is READ FROM THE RENDERER, not restated here.
+ *
+ * This constant used to be `A4_MM = { w: 210, h: 297 }` with a comment calling A4 "the only size
+ * renderArtifactPdf emits". The renderer emits Letter, and always has. So this tool modelled a
+ * page 17.6mm wider and 5.9mm shorter than the real one: looser on width, stricter on height,
+ * and wrong in both directions at once — the exact failure the docstring above describes, living
+ * in the file that describes it. Importing the renderer's own constant makes the two impossible
+ * to disagree.
+ */
+const { PAGE_MM, PAGE_FORMAT } = require('./renderArtifactPdf');
 
 /** Screenshot width ceiling. A wider PNG has made a session unrecoverable here before. */
 const MAX_PNG_WIDTH = 1800;
@@ -59,8 +70,8 @@ const MAX_PNG_WIDTH = 1800;
  * equal to the box still paginates. Leave headroom rather than trimming to the boundary.
  */
 function pageBox({ landscape = false, marginMm = 14 }) {
-  const w = landscape ? A4_MM.h : A4_MM.w;
-  const h = landscape ? A4_MM.w : A4_MM.h;
+  const w = landscape ? PAGE_MM.h : PAGE_MM.w;
+  const h = landscape ? PAGE_MM.w : PAGE_MM.h;
   return {
     width: Math.round((w - marginMm * 2) * MM_TO_PX),
     height: Math.round((h - marginMm * 2) * MM_TO_PX),
@@ -154,7 +165,7 @@ async function previewPage({ html, outPath, landscape = false, marginMm = 14, qu
 
     if (!quiet) {
       console.log(`page box ${box.width}x${box.height} css px `
-        + `(A4 ${landscape ? 'landscape' : 'portrait'}, ${marginMm}mm margins), png scale ${scale.toFixed(2)}`);
+        + `(${PAGE_FORMAT} ${landscape ? 'landscape' : 'portrait'}, ${marginMm}mm margins), png scale ${scale.toFixed(2)}`);
       console.log('\nheight budget by top-level block:');
       for (const b of budget) {
         console.log(`  ${String(b.height).padStart(4)}px  top=${String(b.top).padStart(4)}  `
