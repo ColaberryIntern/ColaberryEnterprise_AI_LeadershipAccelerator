@@ -11,7 +11,7 @@ import {
 } from '../../services/broadcastProducer';
 import { clockTicks, producerClock } from './producerClock';
 import ProducerRundown from './ProducerRundown';
-import { CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel } from './producerStripCopy';
+import { CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel, blockedReasonCopy } from './producerStripCopy';
 import { CPS_CSS } from './producerStripStyles';
 
 /**
@@ -318,7 +318,7 @@ export default function ProducerStrip(
         <style>{CPS_CSS}</style>
         <p className="cps-notice" role="status" data-testid="producer-revoked">
           <b>Producer controls are no longer available for this class.</b> The server stopped
-          authorizing this session — most often an expired sign-in, or the broadcast feature
+          authorizing this session. Most often an expired sign-in, or the broadcast feature
           being switched off. Sign in again to get them back. If a class is on air and needs
           ending now, use the API fallback in the go-live directive.
         </p>
@@ -419,7 +419,7 @@ export default function ProducerStrip(
 
       {blocked.map((c) => (
         <p className="cps-blocked" key={c.command} data-testid={`producer-blocked-${c.command}`}>
-          <b>{LABELS[c.command]}</b> is not available yet — {c.reason}
+          {blockedReasonCopy(c.command, c.reason ?? '')}
         </p>
       ))}
 
@@ -429,7 +429,7 @@ export default function ProducerStrip(
 
       {readFailed && (
         <p className="cps-notice" role="status" data-testid="producer-read-notice">
-          Could not reach the broadcast just now — still trying. What you see below is the last
+          Could not reach the broadcast just now, and is still trying. What you see below is the last
           answer that arrived.
         </p>
       )}

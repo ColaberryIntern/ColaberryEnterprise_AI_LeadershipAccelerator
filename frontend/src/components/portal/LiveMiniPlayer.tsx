@@ -85,7 +85,7 @@ function statusLine(snapshot: PlaybackSnapshot): string | null {
 function previewLabel(seconds: number | null): string | null {
   if (seconds === null) return null;
   const whole = Math.max(0, Math.ceil(seconds / 60));
-  return `Preview — about ${whole} min left`;
+  return `Preview, about ${whole} min left`;
 }
 
 export default function LiveMiniPlayer({ fetchGrant, postHeartbeat, endBroadcast }: LiveMiniPlayerProps): React.ReactElement | null {
@@ -362,7 +362,7 @@ export default function LiveMiniPlayer({ fetchGrant, postHeartbeat, endBroadcast
             work, rather than render a control that does nothing when pressed.
           */
           <span className="lmp-note" data-testid="lmp-fullscreen-unavailable">
-            Full screen is unavailable on this device — use Theater.
+            Full screen is unavailable on this device. Use Theater instead.
           </span>
         )}
         <button
@@ -425,7 +425,7 @@ export default function LiveMiniPlayer({ fetchGrant, postHeartbeat, endBroadcast
         {endError
           ? endError
           : needsGesture
-          ? 'Ready to play — press Play to start. Your browser blocked playback from starting on its own.'
+          ? 'Ready to play. Press Play to start. Your browser blocked playback from starting on its own.'
           : (captionsFailed ? 'Captions are unavailable for this broadcast.' : status)}
         {status && snapshot.offerUpgrade && (
           <a className="lmp-upgrade" href="/portal/settings">Upgrade for full access</a>

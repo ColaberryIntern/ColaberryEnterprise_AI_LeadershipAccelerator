@@ -285,7 +285,7 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
 
             {moment === 'not_started' && (
               <p className="clv-text clv-text-sub">
-                You can close this and come back &mdash; the link stays the same for this class.
+                You can close this and come back. The link stays the same for this class.
               </p>
             )}
           </div>

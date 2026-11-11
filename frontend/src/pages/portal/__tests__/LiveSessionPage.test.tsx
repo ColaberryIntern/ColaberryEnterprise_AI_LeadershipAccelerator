@@ -127,7 +127,7 @@ describe('what someone who clicks the link actually sees', () => {
     expect(titleOf()).toContain('has not started yet');
     // The reassurance matters as much as the state: this link is clicked days early by design.
     expect(text()).toContain('It will update on its own');
-    expect(text()).toContain('the link stays the same for this class');
+    expect(text()).toContain('The link stays the same for this class');
     expect(workspace()).toBeNull();
   });
 
