@@ -1,0 +1,121 @@
+{
+  "_README": "C123/C124 decision ledger for the Open House funnel. The weekly report reads this file from main and renders it as the timeline and the hypothesis board; the recommendation engine skips any move still inside its measure window. APPEND ONLY: never delete or rewrite an entry. To change direction, add a 'retraction' or 'pivot' entry that names the id it supersedes in 'supersedes'. Kinds: decision, pivot, build, measurement, correction, retraction, hypothesis. Hypothesis 'test' is graded every week against the snapshot: metric is a key in targets.js (rates), op '>=' or '<=', value in percent. Times are Central.",
+  "entries": [
+    {
+      "id": "D-2026-10-29-round11",
+      "date": "2026-10-29",
+      "kind": "decision",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10489483829",
+      "title": "Round 11 opens: an ad visitor's first win is the goal",
+      "detail": "The paid-ad funnel is judged by one thing: does a stranger from an ad reach a first win (the welcome video and its Quick check) on the platform?"
+    },
+    {
+      "id": "B-2026-11-09-C118",
+      "date": "2026-11-09 11:25",
+      "kind": "build",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10489483829",
+      "pr": "https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3777",
+      "title": "C118: Ali's 109-second avatar welcome video replaces the program video",
+      "detail": "Self-hosted, first assignment for every Explorer who had not finished it (804 learners), with a Quick check rewritten from its transcript.",
+      "move": "finish",
+      "measure_until": "2026-11-16"
+    },
+    {
+      "id": "H-2026-11-09-video",
+      "date": "2026-11-09 11:25",
+      "kind": "hypothesis",
+      "title": "The avatar video gets at least 20% of the people who press play to watch 75%",
+      "detail": "Baseline with the old YouTube video: 7 of 51 brand-new sign-ups finished (14%). First 27.8 hours with the new one: 2 of 10 (20%), too few to call. 8 of the 9 who quit left within 18 seconds.",
+      "test": { "metric": "finish", "op": ">=", "value": 20 },
+      "status": "open"
+    },
+    {
+      "id": "M-2026-11-10-C119",
+      "date": "2026-11-10 07:03",
+      "kind": "measurement",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10493820271",
+      "pr": "https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3808",
+      "title": "C119: the player records exactly where a learner leaves the video",
+      "detail": "Closing the tab now sends a final watch beat. Proven on production: a tab closed at 8.3 seconds recorded 8 seconds. Before this, a quit under 15 seconds left no trace."
+    },
+    {
+      "id": "P-2026-11-10-open-house",
+      "date": "2026-11-10 15:10",
+      "kind": "pivot",
+      "title": "The landing page now promotes the Open House; the account is created by the Open House sign-up",
+      "detail": "Ali's call. Visitors save a seat at the live Open House, and that one form also creates their $0 account and sends a welcome email pointing at the video. Every number in this report starts here.",
+      "move": "seatClick"
+    },
+    {
+      "id": "H-2026-11-10-seat",
+      "date": "2026-11-10 15:10",
+      "kind": "hypothesis",
+      "title": "Asking for an Open House seat converts at least 20% of landing page visitors",
+      "test": { "metric": "signup", "op": ">=", "value": 20 },
+      "status": "open"
+    },
+    {
+      "id": "M-2026-11-11-C120",
+      "date": "2026-11-11 05:40",
+      "kind": "measurement",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10498337159",
+      "pr": "https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3861",
+      "title": "C120: the Open House funnel tested end to end, with a rerunnable step report",
+      "detail": "A test sign-up passed every step on production. The real numbers showed the leak: 5 sign-ups, 5 accounts, 5 welcome emails, 0 people entered. The welcome email lands in Gmail's Updates tab."
+    },
+    {
+      "id": "B-2026-11-11-C121",
+      "date": "2026-11-11 07:20",
+      "kind": "build",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10498443776",
+      "pr": "https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3865",
+      "title": "C121: an Access your account button signs a new sign-up straight in",
+      "detail": "Ali's idea: skip the trip to the inbox. The email stays as the way back. An address that already has an account is told to sign in.",
+      "move": "enter",
+      "measure_until": "2026-11-18"
+    },
+    {
+      "id": "H-2026-11-11-button",
+      "date": "2026-11-11 07:20",
+      "kind": "hypothesis",
+      "title": "With the button, at least 70% of brand-new accounts go in",
+      "detail": "Before the button: 0 of 5. Note that this week's window still includes sign-ups from before 7:20 AM on 11 Nov, who never saw the button.",
+      "test": { "metric": "enter", "op": ">=", "value": 70 },
+      "status": "open"
+    },
+    {
+      "id": "M-2026-11-11-C123",
+      "date": "2026-11-11 12:20",
+      "kind": "measurement",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10499958973",
+      "pr": "https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3895",
+      "title": "C123: a weekly report follows every person through every fork",
+      "detail": "First edition: 53 visitors, 14 sign-ups, 13 new accounts, 4 entered (all by the button), 0 pressed play. Facebook converted 40.7% of its visitors, Instagram 9.1%."
+    },
+    {
+      "id": "C-2026-11-11-finished",
+      "date": "2026-11-11 13:00",
+      "kind": "correction",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10500110271",
+      "title": "\"Finished the video\" now means watched 75%, and collecting the credit is its own step",
+      "detail": "C120 and the first C123 edition counted a finish only when the credit was collected. A learner who watched 97% and never clicked showed as not finishing. Both numbers are now shown."
+    },
+    {
+      "id": "H-2026-11-11-play",
+      "date": "2026-11-11 13:00",
+      "kind": "hypothesis",
+      "title": "Once the page makes play the obvious next step on a phone, at least half of the people who reach the welcome video press play",
+      "detail": "4 brand-new accounts, all on phones, opened the welcome video card within 4 seconds of signing up and sent no watch beat at all. A later phone learner played to 97% and was recorded, so phone beats work: these 4 most likely never pressed play.",
+      "test": { "metric": "play", "op": ">=", "value": 50 },
+      "status": "proposed"
+    },
+    {
+      "id": "D-2026-11-11-C124",
+      "date": "2026-11-11 13:00",
+      "kind": "decision",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10500110271",
+      "title": "C124: one starred move a week, emailed Wednesdays 8 AM CT to Taiwo, Sohail and Ali",
+      "detail": "The report now names the single move with the greatest impact and attaches a prompt that makes it. Every move made is added to this ledger with the hypothesis it tests, so the next report grades it."
+    }
+  ]
+}
