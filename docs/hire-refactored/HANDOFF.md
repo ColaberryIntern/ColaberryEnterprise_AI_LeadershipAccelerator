@@ -59,7 +59,8 @@ Kes and Swati are Colaberry employees, listed as real test profiles; they are no
   needs a re-approval.
 - Email addresses are not shown on Hire, on the page or in its data (Ali, 2026-11-10; live
   from the release after PR #3800). Employers reach people through Request intro. The enterprise portfolio still carries email by the 2026-09-03 decision.
-- Kes's portfolio says "9 published" but links only 2; the other 7 open by direct link.
+- Fixed 2026-11-10: Kes's portfolio said "9 published" but linked only 2. Every published case study
+  not reached through the signature or a project card is now listed under "Published case studies".
 - "Verified commits" shows 0: commit verification is not wired for his private repos.
 - The certificate does not renew itself. The host's certbot cannot do Route 53, so it was
   issued with the `certbot/dns-route53` docker image; a scheduled renewal is still to do.
@@ -86,9 +87,8 @@ box. To take the site offline without a deploy: disable the host nginx site
 
 1. Automate certificate renewal (production infrastructure change: needs Ali's go-ahead).
 2. Optional: fix Kes's headline (needs a re-approval).
-3. Resume upload can store the file and silently skip extraction (Obi, 2026-11-09:
-   `extracted` null, no log line). `portalSettingsService.setResume` swallows the failure
-   with only a warn; it needs a retry or a visible "we couldn't read this" state.
+3. Fixed 2026-11-10 (PR #3844): a resume upload that is stored but not read now retries once,
+   logs `resume_upload_parse`, and tells the learner "saved, but we could not read it".
 4. Kes could not connect the AI-inbox-Manager repository to its project in the portal
    (2026-11-08). The listing does not depend on it; the connect failure is not diagnosed.
 

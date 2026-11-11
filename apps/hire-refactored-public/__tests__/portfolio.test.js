@@ -50,6 +50,45 @@ describe('project cards', () => {
   });
 });
 
+describe('every published case study is reachable (Kes: "9 published", 2 linked, 2026-11-10)', () => {
+  const cs = (slug) => ({ slug, title: 'T ' + slug, summary: 'S ' + slug, industry: 'Ops' });
+  const nine = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'].map(cs);
+
+  test('lists the ones neither the signature nor a project card links, once each, in API order', () => {
+    const projects = [{ title: 'P1', case_study_slug: 'b' }, { title: 'P2', case_study_slug: 'c' }, { title: 'P3', case_study_slug: null }];
+    const more = P.unlinkedCaseStudies({ caseStudies: nine.concat([cs('d')]) }, projects, { slug: 'a' });
+    assert.deepEqual(more.map((c) => c.slug), ['d', 'e', 'f', 'g', 'h', 'i']);
+  });
+
+  test('without a signature, nothing is dropped; empty and malformed input are safe', () => {
+    assert.equal(P.unlinkedCaseStudies({ caseStudies: nine }, [], null).length, 9);
+    assert.deepEqual(P.unlinkedCaseStudies({}, null, null), []);
+    assert.deepEqual(P.unlinkedCaseStudies({ caseStudies: [null, {}, { slug: '' }] }, [], null), []);
+  });
+
+  test('the page links exactly as many distinct case studies as the badge counts', () => {
+    const b = body({
+      hire: { signature: { ...cs('a'), outcomes: [] }, caseStudies: nine, availability: null, spotlight: false, indexable: true },
+    });
+    b.portfolio.projects = [{ title: 'P1', case_study_slug: 'b' }, { title: 'P2', case_study_slug: 'c' }];
+    const html = P.renderPortfolio(b, 'ann-lee', [], NOW);
+    assert.match(html, /9 published/);
+    const linked = new Set([...html.matchAll(/href="\/case-studies\/([^/"]+)\/"/g)].map((m) => m[1]));
+    assert.deepEqual([...linked].sort(), nine.map((c) => c.slug));
+    assert.match(html, /More of their published work/);
+  });
+
+  test('a listed case card opens in a new tab with the launch hook and its own source', () => {
+    const html = P.caseCard(cs('e'), 'ann-lee');
+    assert.match(html, /<a class="proj" href="\/case-studies\/e\/" target="_blank" rel="noopener" data-launch data-from="case-list" data-case="e" data-talent-slug="ann-lee">/);
+  });
+
+  test('draws no extra section when every case study is already linked', () => {
+    const html = P.renderPortfolio(body(), 'ann-lee', [], NOW);
+    assert.doesNotMatch(html, /Published case studies/);
+  });
+});
+
 describe('years of experience', () => {
   test('prints only when it reconciles with the roles listed', () => {
     const xp = [{ start: '2016-09-01', end: null }];

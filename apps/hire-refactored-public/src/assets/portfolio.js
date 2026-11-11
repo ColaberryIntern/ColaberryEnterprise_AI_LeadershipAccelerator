@@ -94,6 +94,32 @@
       + '<div class="row"><span class="state wip">◌ Case study in review</span></div></div></div>';
   }
 
+  /*
+   * Published case studies the page would otherwise never link: not the signature, and not
+   * reached through a project card. Kes's page said "9 published" and linked 2 (2026-11-10),
+   * because a case study only appeared through its project and he has 2 projects. The count
+   * on the badge and the links on the page now always agree. Order is the API's order.
+   */
+  function unlinkedCaseStudies(hire, projects, sig) {
+    var linked = {};
+    if (sig) linked[sig.slug] = true;
+    arr(projects).forEach(function (x) { if (x && x.case_study_slug) linked[x.case_study_slug] = true; });
+    var seen = {};
+    return arr(hire.caseStudies).filter(function (c) {
+      if (!c || !c.slug || linked[c.slug] || seen[c.slug]) return false;
+      seen[c.slug] = true;
+      return true;
+    });
+  }
+
+  function caseCard(cs, talentSlug) {
+    return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="case-list" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
+      + '<div class="art">' + C.art(cs.slug, { n: 8 }) + '</div><div class="b"><h4>' + esc(cs.title) + '</h4>'
+      + (cs.industry ? '<span class="org">' + esc(cs.industry) + '</span>' : '')
+      + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '')
+      + '<div class="row"><span class="state pub">★ Case study</span><span class="open-cue">Open ' + C.ARROW + '</span></div></div></a>';
+  }
+
   function commits(list) {
     return list.map(function (c) {
       var crit = num(c.criteria_passed) !== null && num(c.criteria_total) !== null ? '<span class="crit">' + c.criteria_passed + '/' + c.criteria_total + ' criteria ✓</span>' : '<span></span>';
@@ -145,6 +171,7 @@
     var sig = hire.signature && published[hire.signature.slug] ? hire.signature : null;
     var projects = arr(p.projects).filter(function (x) { return !sig || x.case_study_slug !== sig.slug; });
     var csCount = arr(hire.caseStudies).length;
+    var more = unlinkedCaseStudies(hire, arr(p.projects), sig);
     var on = shortlist.indexOf(slug) >= 0;
     var avail = hire.availability && hire.availability.label
       ? '<span class="avail ' + (['open', 'interviewing', 'placed'].indexOf(hire.availability.kind) >= 0 ? hire.availability.kind : 'open') + '">' + esc(hire.availability.label) + '</span>' : '';
@@ -162,6 +189,7 @@
       + '<button type="button" class="btn btn-ghost" data-copy>Copy link</button></div></div>'
       + ledger(p, hire, now)
       + '<div class="p-cols"><div>' + signature(sig, slug)
+      + (more.length ? '<div class="card"><div class="label">Published case studies</div><h3 class="t">' + (sig ? 'More of their published work' : 'Their published work') + '</h3><div class="projs">' + more.map(function (c) { return caseCard(c, slug); }).join('') + '</div></div>' : '')
       + (projects.length ? '<div class="card"><div class="label">Projects</div><h3 class="t">Everything they\'ve built</h3><div class="projs">' + projects.map(function (x) { return projectCard(x, published, slug); }).join('') + '</div></div>' : '')
       + (about.length ? '<div class="card about"><div class="label">About <span class="src">from their record and resume</span></div>' + about.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>' : '')
       + (vc.length ? '<div class="card"><div class="label">Verified commits</div><h3 class="t">The work, commit by commit</h3>' + commits(vc) + '</div>' : '')
@@ -177,6 +205,7 @@
 
   return {
     isPayload: isPayload, experienceSpanYears: experienceSpanYears, reconciledYears: reconciledYears,
-    projectCard: projectCard, renderPortfolio: renderPortfolio, slugFromPath: slugFromPath,
+    projectCard: projectCard, unlinkedCaseStudies: unlinkedCaseStudies, caseCard: caseCard,
+    renderPortfolio: renderPortfolio, slugFromPath: slugFromPath,
   };
 }));
