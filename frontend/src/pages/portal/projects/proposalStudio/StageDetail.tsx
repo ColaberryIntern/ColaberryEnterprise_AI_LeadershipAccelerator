@@ -147,6 +147,10 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
           {keyDates.map((k, i) => (<div className="gps-r" key={i}><span>{k.text ?? 'Date'}</span><b className="gps-num">{k.date ?? ''}</b></div>))}
         </div>
         <MeetingsPanel meetings={view.meetings ?? []} />
+        {/* Blueprint (how they score it, submission rules, required forms, elimination risks) leads here,
+            above the full requirements list, to match the admin Qualification Workspace's prominence: the
+            "under what rules" read is the point of this step and must not sit below a 200-row requirement dump. */}
+        {bp && <StageBlueprint bp={bp} />}
         <div className="gps-panel">
           <h3>Requirements <span className="gps-tag gps-small" data-testid="stage-reqcount">{view.requirementCounts.total}</span></h3>
           <div className="gps-muted gps-small" style={{ marginBottom: 8 }}>{view.requirementCounts.proposal} for the proposal &middot; {view.requirementCounts.build} for the build</div>
@@ -158,7 +162,6 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
             </div>
           ))}
         </div>
-        {bp && <StageBlueprint bp={bp} />}
       </div>
     );
   }

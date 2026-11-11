@@ -330,6 +330,16 @@ describe('StageDetail — FULL workspace depth on the intern side (admin-parity 
     expect(body).not.toMatch(/\$[0-9]/);           // no dollar amounts
     expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i); // no email contacts
   });
+
+  it('leads with the blueprint ABOVE the requirements list (admin prominence, not buried under a 200-row dump)', async () => {
+    await render(<StageDetail stage="solicitation" view={VIEW} />);
+    const bp = container.querySelector('[data-testid="stage-blueprint"]');
+    const reqs = container.querySelector('[data-testid="stage-reqcount"]');
+    expect(bp).toBeTruthy();
+    expect(reqs).toBeTruthy();
+    // DOCUMENT_POSITION_FOLLOWING: the requirements panel comes AFTER the blueprint in document order.
+    expect(bp!.compareDocumentPosition(reqs!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe('deriveContractStepState — unified stepper statuses for an assigned contract', () => {
