@@ -6,6 +6,7 @@ import {
   toCsv,
 } from '../broadcastClipListExport';
 import type { StoredClipMarker } from '../broadcastClipMarkerService';
+import type { StoredClipMark } from '../broadcastClipMarkService';
 
 /**
  * R7's first brick — the clip list as a file an editor can open.
@@ -191,17 +192,17 @@ describe('the file', () => {
 
   it('opens with a header naming every column', () => {
     expect(lines[0]).toBe(
-      'clip,in,out,duration,candidate,label,segment,slide_title,in_seconds,out_seconds,slide_index',
+      'clip,in,out,duration,source,candidate,label,segment,slide_title,in_seconds,out_seconds,slide_index',
     );
   });
 
   it('keeps a label with a comma in it as ONE field', () => {
     expect(lines[1]).toContain('"Cold open, then the promise"');
-    // Why the quoting is load-bearing rather than decorative: the header has 11 columns, and a
-    // naive comma split of this row yields 12. Without the quotes an importer would read the
-    // same 12 and shift every column after the label by one.
-    expect(lines[0].split(',')).toHaveLength(11);
-    expect(lines[1].split(',')).toHaveLength(12);
+    // Why the quoting is load-bearing rather than decorative: the header has 12 columns, and a
+    // naive comma split of this row yields 13. Without the quotes an importer would read the
+    // same 13 and shift every column after the label by one.
+    expect(lines[0].split(',')).toHaveLength(12);
+    expect(lines[1].split(',')).toHaveLength(13);
   });
 
   it('marks the authored row as a candidate and the fallback row as not', () => {
@@ -233,5 +234,113 @@ describe('the download filename', () => {
 
   it('says undated rather than guessing a date', () => {
     expect(clipListFilename('abc', null)).toBe('clips-undated-abc.csv');
+  });
+});
+
+/**
+ * D10 — PRESSES AND ADVANCES BECOME ONE ORDERED LIST.
+ *
+ * They live in two tables because they are deduped differently: an advance is unique per slide,
+ * a press is unique per second. An editor does not care which table a moment came from, only
+ * when it was, so the merge happens here.
+ *
+ * The assertion that carries the weight is the SPLIT. A press inside a long segment ends the
+ * clip that was running: appending presses after the advances instead of merging them would
+ * leave every advance's out point pointing past a moment somebody deliberately flagged, which
+ * is the exact opposite of what the flag was for.
+ */
+describe('a producer press, merged into the clip list', () => {
+  const mark = (over: Partial<StoredClipMark> = {}): StoredClipMark => ({
+    timecode_seconds: 0,
+    slide_index: 0,
+    label: 'Marked live',
+    segment_id: null,
+    segment_label: null,
+    slide_title: null,
+    labelled: false,
+    ...over,
+  });
+
+  const airing = { contentStartedAt: '2026-10-24T14:00:00.000Z', endedAt: '2026-10-24T14:10:00.000Z' };
+
+  it('SPLITS the clip it lands inside, rather than being appended after it', () => {
+    const rows = buildClipRows(
+      [marker({ slide_index: 1, timecode_seconds: 0, label: 'Opening' })],
+      airing,
+      [mark({ timecode_seconds: 120, slide_index: 1 })],
+    );
+
+    expect(rows.map((r) => [r.inSeconds, r.outSeconds, r.source])).toEqual([
+      [0, 120, 'advance'],
+      [120, 600, 'live'],
+    ]);
+  });
+
+  it('orders by timecode across both kinds', () => {
+    const rows = buildClipRows(
+      [
+        marker({ slide_index: 1, timecode_seconds: 0, label: 'Opening' }),
+        marker({ slide_index: 2, timecode_seconds: 300, label: 'Build' }),
+      ],
+      airing,
+      [mark({ timecode_seconds: 120 }), mark({ timecode_seconds: 420 })],
+    );
+
+    expect(rows.map((r) => r.inSeconds)).toEqual([0, 120, 300, 420]);
+    expect(rows.map((r) => r.source)).toEqual(['advance', 'live', 'advance', 'live']);
+    expect(rows.map((r) => r.clip)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('puts the advance first when both land on the same second', () => {
+    // The segment begins, then something inside it is flagged. The reverse would read as a
+    // flag on a segment that had not started.
+    const rows = buildClipRows(
+      [marker({ slide_index: 3, timecode_seconds: 60, label: 'Build' })],
+      airing,
+      [mark({ timecode_seconds: 60 })],
+    );
+
+    expect(rows.map((r) => r.source)).toEqual(['advance', 'live']);
+    // Zero-length is honest here: the two really are at the same second.
+    expect(rows[0].durationSeconds).toBe(0);
+  });
+
+  it('trusts the STORED labelled flag rather than re-deriving it', () => {
+    // The advance path has to guess, and its own comment records the false negative: a
+    // publicValue written character-for-character like the segment label reads back as a
+    // fallback. The press path stores what it chose, so it cannot be guessed wrong.
+    const rows = buildClipRows([], airing, [
+      mark({ timecode_seconds: 10, label: 'Build Block', segment_label: 'Build Block', labelled: true }),
+    ]);
+
+    expect(rows[0].candidate).toBe(true);
+    expect(rows[0].label).toBe('Build Block');
+  });
+
+  it('CONTROL: an unlabelled press is not a candidate', () => {
+    const rows = buildClipRows([], airing, [mark({ timecode_seconds: 10, labelled: false })]);
+    expect(rows[0].candidate).toBe(false);
+  });
+
+  it('changes nothing when there are no presses', () => {
+    // The whole existing suite runs through this path, but asserting it directly means the
+    // default argument cannot quietly start injecting something.
+    const markers = [marker({ slide_index: 1, timecode_seconds: 0, label: 'Opening' })];
+
+    expect(buildClipRows(markers, airing)).toEqual(buildClipRows(markers, airing, []));
+    expect(buildClipRows(markers, airing)[0].source).toBe('advance');
+  });
+
+  it('is in the CSV, where an editor actually reads it', () => {
+    const csv = toCsv(buildClipRows(
+      [marker({ slide_index: 1, timecode_seconds: 0, label: 'Opening' })],
+      airing,
+      [mark({ timecode_seconds: 120 })],
+    ));
+    const lines = csv.trim().split('\r\n');
+
+    expect(lines[0].split(',')[4]).toBe('source');
+    expect(lines[1].split(',')[4]).toBe('advance');
+    expect(lines[2].split(',')[4]).toBe('live');
   });
 });

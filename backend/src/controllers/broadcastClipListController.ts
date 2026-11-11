@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { listClipMarkers } from '../services/broadcast/broadcastClipMarkerService';
+import { listClipMarks } from '../services/broadcast/broadcastClipMarkService';
 import {
   buildClipRows,
   clipListFilename,
@@ -79,6 +80,7 @@ function wireClip(r: ReturnType<typeof buildClipRows>[number]) {
     label: r.label,
     segment_label: r.segmentLabel,
     slide_title: r.slideTitle,
+    source: r.source,
   };
 }
 
@@ -96,6 +98,8 @@ export async function handleGetSessionClipList(req: Request, res: Response, next
     }
 
     const markers = await listClipMarkers(occurrence.id);
+    // D10 - the moments a producer chose. A second table, merged at the read.
+    const marks = await listClipMarks(occurrence.id);
 
     /**
      * THE RANGES ARE DERIVED HERE, ONCE.
@@ -121,7 +125,7 @@ export async function handleGetSessionClipList(req: Request, res: Response, next
       clips: buildClipRows(markers, {
         contentStartedAt: occurrence.content_started_at,
         endedAt: occurrence.ended_at,
-      }).map(wireClip),
+      }, marks).map(wireClip),
     });
   } catch (err) { next(err); }
 }
@@ -150,10 +154,12 @@ export async function handleGetSessionClipListCsv(req: Request, res: Response, n
     }
 
     const markers = await listClipMarkers(occurrence.id);
+    // D10 - the moments a producer chose. A second table, merged at the read.
+    const marks = await listClipMarks(occurrence.id);
     const clips = buildClipRows(markers, {
       contentStartedAt: occurrence.content_started_at,
       endedAt: occurrence.ended_at,
-    });
+    }, marks);
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader(
