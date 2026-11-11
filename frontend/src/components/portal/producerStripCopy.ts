@@ -40,7 +40,7 @@ export const LABELS: Record<ProducerCommand, string> = {
  */
 export const CONFIRM_Q: Partial<Record<ProducerCommand, string>> = {
   end: 'End it? This cannot be undone.',
-  cancel: 'Cancel this airing? The class cannot be put back on air afterwards — re-scheduling it '
+  cancel: 'Cancel this airing? The class cannot be put back on air afterwards. Re-scheduling it '
     + 'will not bring the broadcast back.',
 };
 
@@ -84,4 +84,69 @@ export function stateLabel(editorialState: string): string {
   if (editorialState === 'live') return 'ON AIR';
   if (editorialState === 'reconnecting') return 'RECONNECTING';
   return editorialState.replace(/_/g, ' ').toUpperCase();
+}
+
+/**
+ * WHY A BLOCKED COMMAND IS BLOCKED, in a sentence rather than in the server's own words.
+ *
+ * The strip used to print the state machine's `reason` verbatim, so a producer with a class
+ * about to start read `mark_content_started_first` or
+ * `provider_health is unknown, expected ready`. Both are exactly right and neither tells a
+ * person under time pressure what to do next. The second is worse than useless: "unknown" is the
+ * health value before the first provider poll lands, so the honest answer is usually "wait a
+ * moment", and nothing in that string says so.
+ *
+ * The wire values stay the contract and are still logged. This is the translation layer, and it
+ * lives here with the rest of the words rather than in the component.
+ *
+ * TWO OF THESE REASONS ARE DYNAMIC, which is why this is a function and not a map:
+ * `provider_health is X, expected ready` carries the current health, and the version-conflict
+ * reason carries two numbers. Matching on a prefix keeps the sentence stable while the server is
+ * free to put whatever detail it likes after it.
+ */
+export function blockedReasonCopy(command: ProducerCommand, reason: string): string {
+  const name = LABELS[command];
+
+  if (reason === 'mark_content_started_first') {
+    return `${name} is not available yet. Press Mark content started first - it starts the clock `
+      + 'that the recording and the clip timecodes are measured from.';
+  }
+
+  if (reason.startsWith('provider_health is')) {
+    // `unknown` is the value before the first health poll lands, and is the one a producer sees
+    // most often. It means wait, not fix.
+    const waiting = reason.includes('unknown');
+    return waiting
+      ? `${name} is not available yet. The stream has not reached us. If Zoom is already `
+        + 'pushing, give it a few seconds and this will clear by itself.'
+      : `${name} is not available yet. The stream is not healthy enough to go out. Check that `
+        + 'Zoom is still streaming to the custom service before trying again.';
+  }
+
+  if (reason === 'content_start_requires_backstage_or_live') {
+    return `${name} is not available yet. Open backstage first, then mark the content started.`;
+  }
+
+  if (reason === 'not_a_producer') {
+    return `${name} is not available to this account. Producer controls need staff access.`;
+  }
+
+  if (reason.startsWith('expected version')) {
+    return `${name} is not available yet. Someone else changed this broadcast while this page `
+      + 'was open. Reload to see their change before acting.';
+  }
+
+  if (reason === 'no_change') {
+    return `${name} would not change anything from here.`;
+  }
+
+  /*
+   * The fallback says nothing rather than saying the code.
+   *
+   * A reason this layer has not been taught is a reason a producer cannot act on, and printing
+   * the identifier would put us back where we started. The raw value is still in the network
+   * response and the server's own log, which is where someone debugging should read it.
+   */
+  return `${name} is not available yet. The system did not give a reason this screen can `
+    + 'explain - the detail is in the broadcast log.';
 }

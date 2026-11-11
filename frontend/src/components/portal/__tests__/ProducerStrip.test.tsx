@@ -189,7 +189,17 @@ describe('what it offers', () => {
     expect(find('producer-cmd-go_live')).toBeNull();
   });
 
-  it('SHOWS WHY go live is blocked, which is the whole pre-air wait', async () => {
+  /**
+   * This used to assert the raw server reason was on screen, which was the behaviour at the
+   * time: the strip printed `provider_health is unknown, expected ready` verbatim. That is
+   * exactly right and tells a producer with a class about to start nothing they can act on -
+   * and `unknown` is simply the value before the first health poll lands, so the honest answer
+   * is usually "wait a moment", which the raw string never says.
+   *
+   * The assertion now goes both ways: the sentence has to be there, AND the identifier has to
+   * be gone. Checking only the first would pass a screen that printed both.
+   */
+  it('EXPLAINS why go live is blocked, without printing the server reason', async () => {
     await render(ok({
       occurrence: occurrence({ editorial_state: 'backstage' }),
       commands: cmds({
@@ -199,7 +209,46 @@ describe('what it offers', () => {
         error_class: 'ProviderNotReady',
       }),
     }));
-    expect(find('producer-blocked-go_live')!.textContent).toContain('provider_health is unknown');
+    const shown = find('producer-blocked-go_live')!.textContent || '';
+    expect(shown).toContain('The stream has not reached us');
+    expect(shown).toContain('give it a few seconds');
+    expect(shown).not.toContain('provider_health');
+    expect(shown).not.toMatch(/[a-z]+_[a-z_]+/);
+  });
+
+  it('tells the producer to mark content started, rather than naming the error', async () => {
+    await render(ok({
+      occurrence: occurrence({ editorial_state: 'backstage' }),
+      commands: cmds({
+        command: 'go_live',
+        available: false,
+        reason: 'mark_content_started_first',
+        error_class: 'ContentNotStarted',
+      }),
+    }));
+    const shown = find('producer-blocked-go_live')!.textContent || '';
+    expect(shown).toContain('Press Mark content started first');
+    expect(shown).not.toMatch(/[a-z]+_[a-z_]+/);
+  });
+
+  /**
+   * The fallback matters more than the translated cases. A reason this layer has not been taught
+   * is precisely when it would be tempting to print the identifier "just so something is shown",
+   * and that is how the original behaviour got there.
+   */
+  it('says nothing useful rather than printing a reason it does not understand', async () => {
+    await render(ok({
+      occurrence: occurrence({ editorial_state: 'backstage' }),
+      commands: cmds({
+        command: 'go_live',
+        available: false,
+        reason: 'some_future_reason_nobody_has_translated',
+        error_class: 'InvalidStateTransition',
+      }),
+    }));
+    const shown = find('producer-blocked-go_live')!.textContent || '';
+    expect(shown).toContain('did not give a reason this screen can explain');
+    expect(shown).not.toContain('some_future_reason');
   });
 
   it('stays quiet about a command that is merely already done', async () => {
