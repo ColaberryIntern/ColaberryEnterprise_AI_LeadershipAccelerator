@@ -1,0 +1,28 @@
+/* Colaberry Now's phone on the Quad (Campus v20 N1, Basecamp C131; the prototype's drawBoard + .phn / .phring). Campus art tokens only. */
+.cm-cnow-phone:focus-visible .ph-body{stroke:var(--cm-art-red);stroke-width:3}
+.cm-cnow-phone .ph-shadow{fill:var(--cm-art-ph-shadow)}
+.cm-cnow-phone .ph-ring{fill:none;stroke:var(--cm-art-red);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:cm-ph-ring 2.4s ease-out infinite}
+.cm-cnow-phone .ph-base{fill:var(--cm-art-ph-base)}
+.cm-cnow-phone .ph-body{fill:var(--cm-art-ph-body);stroke:var(--cm-art-ph-frame);stroke-width:2}
+.cm-cnow-phone .ph-screen{fill:var(--cm-art-ph-screen)}
+.cm-cnow-phone .ph-thumb-ph{fill:var(--cm-art-cn-navy)}
+.cm-cnow-phone .ph-play{fill:var(--cm-art-cb-shadow);stroke:var(--cm-art-white)}
+.cm-cnow-phone .ph-play-t{fill:var(--cm-art-white)}
+.cm-cnow-phone .ph-bar{fill:var(--cm-art-ph-bar)}
+.cm-cnow-phone .ph-clock{fill:var(--cm-art-white);font:700 5.5px 'DM Sans',system-ui,sans-serif}
+.cm-cnow-phone .ph-notch{fill:var(--cm-art-ph-bar)}
+.cm-cnow-phone .ph-tv{fill:var(--cm-art-red)}
+.cm-cnow-phone .ph-tv-t{fill:var(--cm-art-white);font:800 4.2px 'DM Sans',system-ui,sans-serif;letter-spacing:.3px}
+.cm-cnow-phone .phn{opacity:0;animation:cm-phn 3.6s ease-in-out infinite}
+.cm-cnow-phone .phn-card{fill:var(--cm-art-white);opacity:.96}
+.cm-cnow-phone .phn-win .phn-dot{fill:var(--cm-art-ph-win)}
+.cm-cnow-phone .phn-q .phn-dot{fill:var(--cm-art-ph-q)}
+.cm-cnow-phone .phn-intro .phn-dot{fill:var(--cm-art-ph-intro)}
+.cm-cnow-phone .phn-l1{fill:var(--cm-art-ph-frame)}
+.cm-cnow-phone .phn-l2{fill:var(--cm-art-ph-line)}
+@keyframes cm-phn{0%{opacity:0;transform:translateX(8px)}12%,70%{opacity:1;transform:none}85%,100%{opacity:0;transform:translateX(-4px)}}
+@keyframes cm-ph-ring{0%{opacity:.8;transform:scale(.7)}100%{opacity:0;transform:scale(1.5)}}
+/* reduced motion: the cards sit still and visible, the ring does not pulse */
+.cm-cnow-phone.is-still .phn,.cm-map.is-reduced .cm-cnow-phone .phn{animation:none;opacity:1}
+.cm-cnow-phone.is-still .ph-ring,.cm-map.is-reduced .cm-cnow-phone .ph-ring{animation:none}
+@media (prefers-reduced-motion:reduce){.cm-cnow-phone .phn{animation:none;opacity:1}.cm-cnow-phone .ph-ring{animation:none}}

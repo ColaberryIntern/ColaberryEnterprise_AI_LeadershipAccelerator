@@ -8,6 +8,7 @@ import { Everything, Section, YourNotes } from './BoardViews';
 import BoardDrawer from './BoardDrawer';
 import BoardComposer, { type ComposeType } from './BoardComposer';
 import './communityBoard.css';
+import { ColaberryNow } from '../now/ColaberryNow';
 
 /**
  * The Community Board 2.0 (Campus v14 B2-B5, Basecamp C67-C71; the prototype's #cboard in docs/design/campus/colaberry-campus-v14.html):
@@ -162,8 +163,12 @@ export function CommunityBoard({ compose = null, onClose }: { compose?: 'q' | 'p
   );
 }
 
-/** The one host: mounted on the campus home and with the campus layers. A walk-and-open waits for the avatar to arrive. */
-export default function CommunityBoardHost({ reduceMotion = false }: { reduceMotion?: boolean }): React.ReactElement | null {
+/**
+ * The one host: mounted on the campus home and with the campus layers. A walk-and-open waits for the avatar to arrive.
+ * Campus v20 (C132 / C133): every opener (the phone on the Quad, the side panel chip, Where to?) now opens COLABERRY NOW, the TV and
+ * this board's stream side by side (now/ColaberryNow.tsx). The v14 dialog above stays exported for its own tests only.
+ */
+export default function CommunityBoardHost({ reduceMotion = false, me = '' }: { reduceMotion?: boolean; me?: string }): React.ReactElement | null {
   const [openReq, setOpenReq] = useState<BoardOpen | null>(null);
   const timer = useRef<number | null>(null);
   useEffect(() => onBoard((o) => {
@@ -173,5 +178,5 @@ export default function CommunityBoardHost({ reduceMotion = false }: { reduceMot
   }), [reduceMotion]);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
   const close = useCallback(() => setOpenReq(null), []);
-  return openReq ? <CommunityBoard compose={openReq.compose ?? null} onClose={close} /> : null;
+  return openReq ? <ColaberryNow me={me} compose={openReq.compose ?? null} onClose={close} /> : null;
 }

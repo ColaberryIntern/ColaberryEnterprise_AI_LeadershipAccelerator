@@ -31,8 +31,8 @@ export const meansBooking = (q: string): boolean => {
   return t.length >= 3 && BOOK_WORDS.some((w) => w.startsWith(t) || t.split(/\s+/).includes(w));
 };
 
-/** C30 (v7 R3): "community", "post", "question", "ask", "board" or "forum" offer the Community Board on the Quad. */
-export const BOARD_RESULT: SearchResult = { kind: 'board', id: 'board', label: 'Community Board', buildingId: '', detail: 'on the Quad · Walk →' };
+/** C30 (v7 R3), v20 (C131): "community", "board", "post", "question", "tv" or "now" (and "ask", "forum") offer Colaberry Now on the Quad. */
+export const BOARD_RESULT: SearchResult = { kind: 'board', id: 'board', label: 'Colaberry Now', buildingId: '', detail: 'on the Quad · Walk →' };
 
 const isNamed = (e: unknown): e is CampusPerson => !!e && typeof e === 'object' && !('anonymous' in (e as object));
 

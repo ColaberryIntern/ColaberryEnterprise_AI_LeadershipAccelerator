@@ -253,3 +253,12 @@
 
 /* WP-3: while the gate is up the panel waits (laid out, so the camera can measure it, but invisible); revealed, it slides in */
 .cm-cc.is-waiting{visibility:hidden;animation:none}
+
+/* v20 N4 (C135): the left panel's "New on Colaberry TV" note (the prototype's .tvnudge) */
+.cm-tvnote{display:flex;align-items:center;gap:8px;border:1px solid var(--cm-art-line);background:var(--cm-art-card);border-radius:12px;padding:8px 10px;margin-top:10px}
+.cm-tvnote-go{display:flex;align-items:center;gap:10px;flex:1;min-width:0;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;color:var(--cm-art-ink)}
+.cm-tvnote-th{position:relative;width:40px;height:56px;border-radius:8px;overflow:hidden;flex:none;background:linear-gradient(160deg,var(--cm-art-cn-navy),var(--cm-art-red))}
+.cm-tvnote-th img{width:100%;height:100%;object-fit:cover}
+.cm-tvnote-th i{position:absolute;inset:0;display:grid;place-items:center;color:var(--cm-art-white);font-style:normal;text-shadow:0 1px 3px var(--cm-art-cn-tv)}
+.cm-tvnote-tx{display:flex;flex-direction:column;min-width:0}.cm-tvnote-tx b{font-size:13.5px}.cm-tvnote-tx small{color:var(--cm-art-muted);font-size:12px}
+.cm-tvnote-x{border:0;background:transparent;color:var(--cm-art-muted);cursor:pointer;font-size:14px;width:32px;height:32px;flex:none}

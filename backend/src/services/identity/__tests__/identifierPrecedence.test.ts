@@ -264,6 +264,10 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     // to look like one. Added by the Agent Factory run (CC-20261006-a4k7), whose author did not
     // know this tripwire existed until it fired -- which is the tripwire working.
     'backend/src/scripts/seedAgentDomainIdentityPrereqs.js',
+    // `enrollment:<id>` as the ACTOR on a colaberry_tv_audit row (Campus v20, C134): a who-did-it label written next to
+    // admin:<email> actors, never looked up, joined or compared as a subject reference. Classified per this block's rule;
+    // the author found this tripwire when it fired in CI (CC-20261016-sqcm).
+    'backend/src/routes/colaberryTvRoutes.ts',
   ];
 
   it('names every non-test file that constructs a subject key', () => {

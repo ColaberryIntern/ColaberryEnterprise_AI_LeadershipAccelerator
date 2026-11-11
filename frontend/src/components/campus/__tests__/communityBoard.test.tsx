@@ -33,7 +33,7 @@ const counts = (newCount: number, replies: number) => ({ new_since: { at: null, 
 it('Where to? words find it, on pages and in the home Wayfinder; other words do not', () => {
   for (const w of ['community', 'post', 'question', 'ask', 'board', 'forum']) expect(means(w)).toBe(true);
   expect(means('library')).toBe(false);
-  expect(searchCampus('forum', [...CAMPUS_BUILDINGS], null, false)[0]).toMatchObject({ kind: 'board', label: 'Community Board', detail: 'on the Quad · Walk →' });
+  expect(searchCampus('forum', [...CAMPUS_BUILDINGS], null, false)[0]).toMatchObject({ kind: 'board', label: 'Colaberry Now', detail: 'on the Quad · Walk →' });
   expect(searchCampus('library', [...CAMPUS_BUILDINGS], null, false).some((r) => r.kind === 'board')).toBe(false);
   const ctx = { audience: 'member' as const, workplace: false, buildings: [...CAMPUS_BUILDINGS], accessOf: () => 'open' as const, presence: null, desks: [], urgent: null, suggested: [] };
   expect(wayfinderSearch('question', ctx).some((i) => i.kind === 'board')).toBe(true);

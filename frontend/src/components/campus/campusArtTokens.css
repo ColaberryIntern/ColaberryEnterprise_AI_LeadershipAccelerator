@@ -143,7 +143,7 @@
   --cm-art-door-plate:#fffdf6; --cm-art-door-booked:#b8860b; --cm-art-door-knob:#ffd36e; --cm-art-door-more:#5b4a3a;
   /* C30 (v7 R3): the Community Board (prototype #cboard): cork, its frame and little roof, and the pinned notes (questions yellow,
      posts white, announcements teal) */
-  --cm-art-cork:#c99a63; --cm-art-cork-frame:#7a5230; --cm-art-cork-roof:#5b3d24;
+  --cm-art-cork:#c99a63; --cm-art-cork-frame:#7a5230;
   --cm-art-note-q:#fff3a8; --cm-art-note-post:#ffffff; --cm-art-note-ann:#c9f0e8;
   /* v14 (C67): Community Board 2.0, lane colours (prototype LANES) and the cork's papers, browns, ritual strip and NEW ribbon */
   --cm-art-lane-all:#2b1d12; --cm-art-lane-mine:#d4a017; --cm-art-lane-ann:#0f766e; --cm-art-lane-q:#c99700; --cm-art-lane-intro:#2f6f73;
@@ -183,8 +183,16 @@
   --cm-art-hq-office:#5b3d22; --cm-art-hq-office2:#3e2914; --cm-art-hq-glass:rgba(220,235,245,.95); --cm-art-hq-glass2:rgba(170,200,220,.85); --cm-art-hq-glass-hi:#fffbe8; --cm-art-hq-glass-hi2:#f5e6b0; --cm-art-hq-code:#4a5a70;
   --cm-art-hq-office-lock:#9c968c; --cm-art-hq-office-lock2:#7e776d; --cm-art-hq-glass-lock:#dcd6cc; --cm-art-hq-glass-lock2:#d2cbc0; --cm-art-hq-lock-icon:#a39a8e; --cm-art-hq-plaque-lock:#c9c2b6;
   --cm-art-hq-row-lock:#f4f1ec; --cm-art-hq-row-lock-edge:#ece5da; --cm-art-hq-n-lock:#d9d3ca; --cm-art-hq-ink-lock:#8a8178; --cm-art-hq-paper:#fbf7f0; --cm-art-hq-legend:rgba(255,253,249,.92); --cm-art-hq-guide:rgba(255,253,249,.96);
+  /* C131-C134 (v20): Colaberry Now (docs/design/campus/colaberry-campus-v20.html: .nTV, .nB, .nPost, the phone on the Quad) */
+  --cm-art-cn-shell:#e9e4da; --cm-art-cn-tv:#120e16; --cm-art-cn-tv-btn:#2a2233; --cm-art-cn-tv-sub:#bfb6cc; --cm-art-cn-navy:#1f3a5f;
+  --cm-art-cn-gold:#ffd27a; --cm-art-cn-gold-ink:#2a1d04; --cm-art-cn-hover:#fffaf2; --cm-art-cn-mine:#fffbea; --cm-art-cn-pinned:#e6f3f1;
+  --cm-art-cn-teal:#2f6f73; --cm-art-cn-q:#a87c00; --cm-art-cn-excerpt:#4f463d; --cm-art-cn-line2:#f1ece3; --cm-art-cn-scrim:rgba(20,16,10,.45);
+  --cm-art-cn-shadow:0 30px 70px rgba(0,0,0,.35); --cm-art-cn-pill-shadow:0 8px 20px rgba(227,27,35,.35); --cm-art-cn-glow:rgba(255,211,110,.85);
+  --cm-art-ph-body:#15111a; --cm-art-ph-frame:#3a3044; --cm-art-ph-screen:#1d1626; --cm-art-ph-bar:#120e16; --cm-art-ph-base:#2a2233;
+  --cm-art-ph-win:#1f7a5a; --cm-art-ph-q:#a87c00; --cm-art-ph-intro:#2f6f73; --cm-art-ph-line:#bdb4c7; --cm-art-ph-shadow:rgba(60,70,40,.18);
 }
 [data-theme="dark"]{
+  --cm-art-cn-shell:#141210; --cm-art-cn-hover:#2a2620; --cm-art-cn-mine:#2e2a1c; --cm-art-cn-pinned:#16302c; --cm-art-cn-excerpt:#c9c0b2; --cm-art-cn-line2:#2e2a25;
   --cm-art-paper:#1e1e1e; --cm-art-ink:#f4f4f4; --cm-art-muted:#b5ad9f; --cm-art-line:#3a352d;
   --cm-art-card:#262421; --cm-art-help-bg:#3a3018; --cm-art-help-edge:#6b5524; --cm-art-help-hover:#e0b54a;
   --cm-art-plan-bg:#16302c; --cm-art-plan-edge:#2b5a52; --cm-art-plan:#5fd0c0; --cm-art-plan-hover:#1d3d38;

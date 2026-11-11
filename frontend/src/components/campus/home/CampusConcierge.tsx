@@ -37,6 +37,7 @@ import type { OpenHouseView } from '../../../services/onboardingApi';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
 import { ComingUpAgenda } from '../events/Agenda';
 import { openBoard } from '../board/boardApi';
+import TvNote from './TvNote';
 import { openOrderSheet } from '../chow/OrderSheet';
 import type { AgendaItem } from '../events/agendaModel';
 import { usePathAhead } from '../interior/usePageSummary';
@@ -106,14 +107,14 @@ export interface ConciergeProps {
 /** The prototype's "I want to..." chips per account (CHIPS, CHIPS_EXP, CHIPS_SP, CHIPS_WORK), each a walk to a real building. "I'm
  *  running late" runs to the urgent class, or walks to the Schedule; the Explorer's sign-up shortcut waits for the sign-up sheet. */
 export const LATE = 'late';
-/** C30 (v7 R3): "📌 Ask the community" walks to the Community Board and opens it on a question. */
+/** C30 (v7 R3), v20 (C131): "📱 Colaberry Now" walks to the phone on the Quad and opens Colaberry Now. */
 export const BOARD = 'board';
 /** C39 (v11): "🍔 Grab food" walks to Chow Hall and opens the order sheet. */
 export const FOOD = 'food';
 type ChipTo = BuildingId | typeof LATE | typeof BOARD | typeof FOOD;
 export const CHIPS: Record<'member' | 'explorer' | 'business' | 'work', [string, ChipTo][]> = {
-  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'commons'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
-  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📌 Ask the community', BOARD], ['Upcoming events', 'commons'], ['See how projects work', 'studio'], ['🍔 Grab food', FOOD]],
+  member: [['Learn', 'lecture'], ['Build', 'studio'], ['Prep for cert', 'testing'], ['Meet people', 'commons'], ['📱 Colaberry Now', BOARD], ['See my progress', 'observatory'], ['Show my work', 'gallery'], ['Find events', 'commons'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
+  explorer: [['Try the course', 'library'], ['Meet people', 'commons'], ['📱 Colaberry Now', BOARD], ['Upcoming events', 'commons'], ['See how projects work', 'studio'], ['🍔 Grab food', FOOD]],
   business: [['…learns', 'lecture'], ['…builds', 'studio'], ['…gets certified', 'testing'], ['…connects', 'commons'], ['…shows their work', 'gallery'], ['Seats & reporting', 'career'], ['🍔 Grab food', FOOD]],
   work: [['Upskill', 'lecture'], ['Ship work', 'studio'], ['Get certified', 'testing'], ['Meet the team', 'commons'], ['My performance', 'observatory'], ['Show clients', 'gallery'], ['Town halls', 'amphi'], ['🍔 Grab food', FOOD], ['I’m running late', LATE]],
 };
@@ -159,7 +160,7 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
     presence: p.presence, presenceError: p.presenceError, live: !!p.live, urgent: p.urgent ?? null, skipPlan: true });
   const chip = (id: ChipTo) => {
     if (id === FOOD) { p.onWalk('chow'); openOrderSheet(); return; }
-    if (id === BOARD) openBoard({ walk: true, compose: 'q' }); else if (id === LATE) { if (p.urgent) run(p.urgent.buildingId); else p.onWalk('tower'); } else p.onWalk(id);
+    if (id === BOARD) openBoard({ walk: true }); else if (id === LATE) { if (p.urgent) run(p.urgent.buildingId); else p.onWalk('tower'); } else p.onWalk(id);
   };
   return (
     <aside className={`cm-cc${p.cardOpen ? ' has-card' : ''}${p.waiting ? ' is-waiting' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Campus concierge" data-testid="cm-concierge">
@@ -183,6 +184,8 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {/* C50 (v13 T2): Today, the Explorer's home base, first in the panel (a slim row for everyone else) */}
       {audience !== 'business' && <TodayCard audience={audience} stops={p.stops} desks={p.desks} now={p.now} />}
       <Pulse p={p} />
+      {/* v20 N4 (C135): new shorts on Colaberry TV, once a day, dismissible; opens Colaberry Now */}
+      <TvNote />
       {/* C20 (v3 2.6 #2): Coming up, a booked admissions call, above Up next */}
       <OpenHouseCard audience={audience} ev={p.openHouse?.ev ?? null} registered={!!p.openHouse?.registered} now={p.now} onRegistered={p.openHouse?.markRegistered} />
       <ComingUpCall booking={p.call ?? null} now={p.now} />

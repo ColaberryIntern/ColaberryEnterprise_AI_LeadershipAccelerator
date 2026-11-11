@@ -4,7 +4,7 @@ import { getBoard } from './boardData';
 /**
  * The board badge count (Campus v14 B5, Basecamp C70): notes new since your last look plus new replies on your posts, from the light
  * GET /community/board?counts_only=1, polled at the campus presence cadence (30 s). One shared poll for every badge on the page (the map
- * sign and the side panel's "Ask the community" chip). A failure keeps the last number (no badge flicker), never an invented one.
+ * sign and the side panel's "Colaberry Now" chip). A failure keeps the last number (no badge flicker), never an invented one.
  */
 export const BADGE_POLL_MS = 30_000;
 type Listener = (n: number) => void;

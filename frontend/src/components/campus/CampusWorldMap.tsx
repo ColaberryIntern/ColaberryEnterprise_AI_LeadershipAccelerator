@@ -310,7 +310,7 @@ export default function CampusWorldMap(p: CampusMapProps): React.ReactElement {
           onPeek={compact ? undefined : p.onPeek} onPick={pick} setRef={p.buildingRef} />
       ))}
       {live.length > 0 && <LiveFront buildings={live} mark={compact ? null : p.liveMark} />}
-      {!compact && <BoardSign />}
+      {!compact && <BoardSign reduceMotion={reduceMotion} />}
       {!compact && p.todayFlag && tower && <TodayFlag tower={tower} place={buildingName(tower, workplaceNames)} onWalk={pick} />}
       {!compact && p.todayFlag && gateIsBuilding && tower && <GateTodaySign place={buildingName(tower, workplaceNames)} onWalk={pick} />}
       {!compact && p.desks && p.desks.length > 0 && <StaffTokens desks={p.desks} buildings={buildings} onPick={pick} />}
