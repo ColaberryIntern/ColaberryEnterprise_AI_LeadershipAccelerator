@@ -192,6 +192,17 @@ export function resolveGovCloseDate(rec: any): string | null {
   return chosen ? toIsoDate(chosen.date) : null;
 }
 
+/** PURE. The pursuit close date, falling back to the AI-vetting opportunity's FEED close date when the record's own
+ *  snapshot/dossier carry none. A ZIP-uploaded (decoupled) pursuit never captures the feed close date on its own
+ *  source_snapshot — it survives only on the gov_ai_vettings.opportunity_json taken when the ZIP was vetted — so
+ *  without this fallback the left-nav "days left" badge and the Studio countdown stay empty for every ZIP pursuit. */
+export function resolveGovCloseDateWithVetting(rec: any, vettingOpportunity: any): string | null {
+  const own = resolveGovCloseDate(rec);
+  if (own) return own;
+  const cd = vettingOpportunity && vettingOpportunity.closeDate;
+  return cd != null ? (toIsoDate(String(cd)) ?? String(cd)) : null;
+}
+
 /** PURE. Project a qualification thread-head row (plain object, e.g. `row.get()`) + its build progress into a
  *  funnel card. Field extraction mirrors getDecoupledWorkspace: title/agency prefer the decoupled provenance, then
  *  fall back to the canonical source snapshot. */
@@ -199,6 +210,7 @@ export function projectGovPipelineCard(
   rec: any,
   build: GovPipelineBuildProgress | null,
   assignedInterns: GovAssignedIntern[] = [],
+  vettingOpportunity: any = null,
 ): GovPipelineCard {
   const rj = (rec && rec.requirements_json) || {};
   const established: any[] = Array.isArray(rj.established) ? rj.established : [];
@@ -241,7 +253,7 @@ export function projectGovPipelineCard(
     zipAttested,
     pursuitKind,
     build,
-    closeDate: resolveGovCloseDate(rec),
+    closeDate: resolveGovCloseDateWithVetting(rec, vettingOpportunity),
     assignedInterns,
     hasActiveIntern: assignedInterns.length > 0,
     updatedAt: toIso(rec && rec.updated_at),
@@ -297,6 +309,26 @@ export async function listGovPipeline(tenantId: string): Promise<GovPipelineCard
     }
   } catch { /* best-effort: no roster -> no active-intern owners resolved */ }
 
+  // Batch-load the FEED-sourced opportunity snapshot (closeDate / priority) each pursuit was vetted against, so a
+  // ZIP-uploaded pursuit with no close date on its own record still shows a deadline + "days left" badge in the
+  // left-nav. Newest vetting per key wins. Best-effort: a failure leaves the fallback empty (own-record resolution).
+  const vetOppByKey = new Map<string, any>();
+  try {
+    const { default: GovAiVetting } = await import('../../models/GovAiVetting');
+    const keys = rows.map((r) => String(((r && r.get) ? r.get() : r).canonical_opportunity_id ?? '')).filter(Boolean);
+    if (keys.length > 0) {
+      const vrows: any[] = await GovAiVetting.findAll({
+        where: { tenant_id: tenantId, qualification_key: keys },
+        attributes: ['qualification_key', 'opportunity_json', 'last_uploaded_at'],
+        order: [['last_uploaded_at', 'DESC']],
+      });
+      for (const v of vrows) {
+        const p = (v && v.get) ? v.get() : v;
+        if (p && p.qualification_key && !vetOppByKey.has(String(p.qualification_key))) vetOppByKey.set(String(p.qualification_key), p.opportunity_json ?? null);
+      }
+    }
+  } catch { /* best-effort: no vetting fallback -> cards resolve closeDate from their own record only */ }
+
   const cards: GovPipelineCard[] = [];
   for (const row of rows) {
     const rec = row && row.get ? row.get() : row;
@@ -320,7 +352,7 @@ export async function listGovPipeline(tenantId: string): Promise<GovPipelineCard
           });
       } catch { assignedInterns = []; }
     }
-    cards.push(projectGovPipelineCard(rec, build, assignedInterns));
+    cards.push(projectGovPipelineCard(rec, build, assignedInterns, vetOppByKey.get(String(rec.canonical_opportunity_id ?? '')) ?? null));
   }
   return cards;
 }

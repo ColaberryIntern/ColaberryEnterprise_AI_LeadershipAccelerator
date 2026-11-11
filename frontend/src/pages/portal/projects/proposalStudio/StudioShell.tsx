@@ -7,6 +7,7 @@ import StageRail, { type StudioView } from './StageRail';
 import { viewOpensQualification, deriveContractStepState, STEP_TO_STUDIO_VIEW } from './buildHelpers';
 import { StepBar } from '../../../admin/govWorkspace/StepBar';
 import { WORKSPACE_STEPS, type WorkspaceStep } from '../../../admin/govWorkspace/workspaceSteps';
+import { parseDeadline, countdownTo, formatCountdown } from '../../../admin/govDeadline';
 import WhereWeAre from './WhereWeAre';
 import AgentPanel from './AgentPanel';
 import './studio.css';
@@ -88,6 +89,14 @@ export default function StudioShell(
     go(STEP_TO_STUDIO_VIEW[key] as StudioView);
   }, [onOpenQualification, go]);
   const stepState = deriveContractStepState(view, current);
+  // Step 6 (Proposal) is DRIVEN BY the proposal due date: its sub-line shows the auto-resolved deadline + days-left
+  // countdown (from view.closeDate — now auto-populated from the feed, no manual entry) instead of the generic prompt.
+  const stepBarSteps = useMemo(() => {
+    const pd = view.closeDate ? parseDeadline(view.closeDate) : null;
+    if (!pd) return WORKSPACE_STEPS;
+    const label = formatCountdown(countdownTo(pd.ms, Date.now()), pd.hasTime);
+    return WORKSPACE_STEPS.map((s) => (s.key === 'proposal' ? { ...s, question: `Due ${view.closeDate} · ${label}` } : s));
+  }, [view.closeDate]);
 
   const toast = useCallback((m: string) => {
     setToastMsg(m);
@@ -156,7 +165,7 @@ export default function StudioShell(
           : undefined}
       />
       <div className="gps-gut" style={{ paddingTop: 12 }}>
-        <StepBar steps={WORKSPACE_STEPS} statuses={stepState.statuses} frontier={stepState.frontier} onStep={onStep} />
+        <StepBar steps={stepBarSteps} statuses={stepState.statuses} frontier={stepState.frontier} onStep={onStep} />
       </div>
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />

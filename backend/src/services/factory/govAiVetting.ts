@@ -235,6 +235,10 @@ export async function loadAiVettingView(tenantId: string, qualificationKey: stri
     aiEnabled: FLAGS.govAiVetting, status: row.status, verdict: row.verdict ?? null, reason: row.reason ?? null, quote: row.reason_quote ?? null,
     coveragePct: row.coverage_pct ?? null, errorClass: row.error_class ?? null,
     fit: row.fit_json ?? null, summary: row.summary_json ?? null, questions: row.questions_json ?? null,
+    // The feed-sourced opportunity snapshot taken when the ZIP was vetted — it carries the proposal close date +
+    // priority that a decoupled (ZIP-uploaded) pursuit never captured on its own source_snapshot. The projection and
+    // the pipeline fall back to this so the deadline/days-left auto-populate instead of forcing a manual due date.
+    opportunity: row.opportunity_json ?? null,
     extraction: Array.isArray(payload?.candidates) && payload.candidates.length > 0
       ? { candidates: payload.candidates, items: payload.items ?? null, files: payload.files ?? null, extraction: payload.extraction ?? null }
       : null,

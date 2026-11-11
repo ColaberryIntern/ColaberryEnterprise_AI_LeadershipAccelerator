@@ -1,4 +1,4 @@
-import { assignedOpportunityUuids, deriveGovPipelineStage, projectGovPipelineCard, resolveGovCloseDate } from '../govPipeline';
+import { assignedOpportunityUuids, deriveGovPipelineStage, projectGovPipelineCard, resolveGovCloseDate, resolveGovCloseDateWithVetting } from '../govPipeline';
 
 describe('assignedOpportunityUuids', () => {
   const card = (key: string, deliveryProjectId: string | null, hasActiveIntern: boolean) => ({ key, deliveryProjectId, hasActiveIntern });
@@ -214,5 +214,29 @@ describe('resolveGovCloseDate', () => {
       { date: 'Dec. 15th, 2026', text: 'Proposals must be received by' },
     ] } } };
     expect(resolveGovCloseDate(rec)).toBe('2026-12-15');
+  });
+});
+
+describe('resolveGovCloseDateWithVetting — the feed close date on the vetting record is the fallback', () => {
+  it('falls back to the vetting opportunity close date when the pursuit record carries none (ZIP-uploaded case)', () => {
+    const rec = { requirements_json: { dossier: {} }, source_snapshot: null }; // no own close date
+    expect(resolveGovCloseDate(rec)).toBeNull();
+    expect(resolveGovCloseDateWithVetting(rec, { closeDate: '2026-11-25', priorityScore: 74 })).toBe('2026-11-25');
+  });
+
+  it('keeps the pursuit record own close date when it has one (the vetting is only a fallback)', () => {
+    const rec = { source_snapshot: { closeDate: '2026-12-01' }, requirements_json: {} };
+    expect(resolveGovCloseDateWithVetting(rec, { closeDate: '2026-11-25' })).toBe('2026-12-01');
+  });
+
+  it('is null when neither the record nor the vetting carries a close date', () => {
+    expect(resolveGovCloseDateWithVetting({ requirements_json: {} }, null)).toBeNull();
+    expect(resolveGovCloseDateWithVetting({ requirements_json: {} }, { closeDate: null })).toBeNull();
+  });
+
+  it('projectGovPipelineCard uses the vetting fallback for the left-nav days-left badge', () => {
+    const rec = { canonical_opportunity_id: 'gws:2ac2fdbc', requirements_json: { dossier: {} }, source_snapshot: null, delivery_project_id: 'dp1' };
+    expect(projectGovPipelineCard(rec, null).closeDate).toBeNull();                                   // without the vetting, no date
+    expect(projectGovPipelineCard(rec, null, [], { closeDate: '2026-11-25' }).closeDate).toBe('2026-11-25'); // with it, the deadline resolves
   });
 });

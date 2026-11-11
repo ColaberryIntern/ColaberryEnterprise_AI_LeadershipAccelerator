@@ -327,4 +327,12 @@ describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualificat
     await act(async () => { (container.querySelector('[data-testid="step-fit"]') as HTMLButtonElement).click(); });
     expect(present('stage-fit')).toBe(true); // in-studio StageDetail — the intern never reaches the admin workspace
   });
+
+  it('step 6 (Proposal) is driven by the proposal due date — shows the auto-resolved deadline + countdown', async () => {
+    const dated = { ...VIEW, closeDate: '2030-01-15' } as unknown as StudentGovProjectView;
+    await render(<StudioShell view={dated} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    const txt = (container.querySelector('[data-testid="step-proposal"]') as HTMLElement)?.textContent ?? '';
+    expect(txt).toContain('2030-01-15'); // the auto-populated due date drives step 6 (no manual entry)
+    expect(txt).toContain('left');       // ...with a days-left countdown
+  });
 });

@@ -19,6 +19,8 @@ const gpsgFindOne = jest.fn();
 jest.mock('../../../models/GovProposalShareGrant', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gpsgFindOne(...a) } }));
 const gqFindOne = jest.fn();
 jest.mock('../../../models/GovQualification', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gqFindOne(...a) } }));
+const loadAiVettingView = jest.fn();
+jest.mock('../govAiVetting', () => ({ loadAiVettingView: (...a: any[]) => loadAiVettingView(...a) }));
 const gpbFindOne = jest.fn();
 jest.mock('../../../models/GovProposalBlueprint', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gpbFindOne(...a) } }));
 const gpdFindOrCreate = jest.fn();
@@ -154,7 +156,7 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
@@ -234,6 +236,15 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     const v = await getStudentGovProjectView('dp-1', false, 'id-1');
     expect(v!.closeDate).toBeNull();
     expect(v!.priorityScore).toBeNull();
+  });
+
+  it('COCKPIT: falls the close date + priority back to the FEED opportunity on the vetting record when the snapshot carries none (ZIP pursuit)', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    gqFindOne.mockResolvedValue({ canonical_opportunity_id: 'gws:2ac2fdbc', tenant_id: 'ten-1', requirements_json: { provenance: { agency: 'TxDOT' }, dossier: {} }, source_snapshot: null });
+    loadAiVettingView.mockResolvedValue({ opportunity: { closeDate: '2026-11-25', priorityScore: 74 } });
+    const v = await getStudentGovProjectView('dp-1', true, 'id-1'); // the deadline auto-populates — no manual set-due-date needed
+    expect(v!.closeDate).toBe('2026-11-25');
+    expect(v!.priorityScore).toBe(74);
   });
 
   it('COCKPIT: exposes the qualification canonical id to an ADMIN viewer only (for the real-workspace deep-link)', async () => {
