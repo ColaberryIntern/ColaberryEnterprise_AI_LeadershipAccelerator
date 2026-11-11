@@ -91,7 +91,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
    * see the whole of it, and the work orders deliberately cover only what is worth working now. A
    * list card built from the subset would report "3 tasks" for a list holding 39.
    */
-  const { byList, withSiblings } = require(path.join(libDir, 'listLens'));
+  const { byList, withSiblings, looksGenerated } = require(path.join(libDir, 'listLens'));
   const { bandFor } = require(path.join(libDir, 'ageBands'));
   const taskViews = items.map((i) => {
     const r = i.__row || {};
@@ -108,7 +108,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
       // The generated shape and the human marker, both measured rather than guessed: 1,386 of
       // 2,403 tasks in the main project carry "Type:" plus "Done when:", and the task split marks
       // human work with an emoji.
-      generated: desc.includes('Type:') && desc.includes('Done when:'),
+      generated: looksGenerated({ title: r.title, description: desc }),
       humanOnly: desc.includes('\u{1F9D1}'),
     };
   });

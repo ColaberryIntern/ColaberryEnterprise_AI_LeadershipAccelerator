@@ -24,6 +24,29 @@
 
 const SEQ = /^\s*(\d{1,2})\s*[.)-]\s*(.+)$/;
 
+/**
+ * Is this task machine-generated scaffolding rather than something a person wrote?
+ *
+ * THE FIRST VERSION OF THIS TEST WAS WRONG IN THE EXPENSIVE DIRECTION, and it was only caught by
+ * reading a real plan. It checked the description for "Type:" and "Done when:" alone, which
+ * catches one generator. Story-build output carries a different signature entirely - "[BUILD]" and
+ * "[BREAK]" prefixes from the Build/Break/Harden split, and the 🤖 / 🧑 task-split emoji - and that
+ * signature appears in the TITLE, not the description.
+ *
+ * Measured: the narrow test found 1,386 of 2,693 (51%); the widened one finds 2,238 (83%). It was
+ * missing 852 tasks, and two whole lists were being proposed for RE-DATING, which would have put
+ * dead scaffolding back on the calendar instead of taking it off. Dismissing real work and
+ * re-dating dead work are both bad, but only one of them wastes the next three months.
+ */
+function looksGenerated(task) {
+  const title = String(task.title || '');
+  const desc = String(task.description || '');
+  if (desc.includes('Type:') && desc.includes('Done when:')) return true;
+  if (/^\[(BUILD|BREAK|HARDEN)\]/.test(title.trim())) return true;
+  if (/[\u{1F916}\u{1F9D1}]/u.test(title)) return true;
+  return false;
+}
+
 /** Split "9. Ensuring Data Security" into its position and its name, when it is a numbered phase. */
 function sequenceOf(listName) {
   const m = String(listName || '').match(SEQ);
@@ -179,4 +202,4 @@ function withSiblings(summaries) {
   });
 }
 
-module.exports = { byList, withSiblings, leadTask, suggestFor, sequenceOf };
+module.exports = { byList, withSiblings, leadTask, suggestFor, sequenceOf, looksGenerated };

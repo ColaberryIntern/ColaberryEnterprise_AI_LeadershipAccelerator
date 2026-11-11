@@ -155,3 +155,39 @@ describe('withSiblings', () => {
     expect(s.siblings).toEqual([]);
   });
 });
+
+/**
+ * looksGenerated.
+ *
+ * The first version checked the description for "Type:" plus "Done when:" and nothing else. It
+ * missed 852 of 2,693 tasks on production and, worse, scored two whole lists at 0% generated -
+ * which made the lens propose RE-DATING them. Re-dating dead scaffolding puts it back on the
+ * calendar for three months. These cases are the real signatures, taken from live titles.
+ */
+describe('looksGenerated', () => {
+  const { looksGenerated } = require('../listLens');
+
+  it.each([
+    ['description carries the Type/Done-when pair', { title: 'anything', description: 'Type: Handle mistakes · Done when: it works' }],
+    ['[BUILD] prefix from the Build/Break/Harden split', { title: '[BUILD] 🧑 Define the required inputs', description: '' }],
+    ['[BREAK] prefix', { title: '[BREAK] 🤖 Create test cases for invalid input', description: '' }],
+    ['[HARDEN] prefix', { title: '[HARDEN] 🤖 Add a retry', description: '' }],
+    ['the robot task-split emoji in the title', { title: '🤖 Monitor for unusual activity', description: '' }],
+    ['the human task-split emoji in the title', { title: '🧑 Limit access to sensitive information', description: '' }],
+  ])('catches %s', (_label, task) => {
+    expect(looksGenerated(task)).toBe(true);
+  });
+
+  it.each([
+    ['a hand-written ladder ticket', { title: 'C10.4 - Decide the beachhead segment', description: 'Decision owner: Ali' }],
+    ['an ordinary sentence', { title: 'Send the interns the material from the 14 Oct call', description: 'Please send it.' }],
+    ['a description mentioning Type: alone', { title: 'x', description: 'Type: something' }],
+  ])('does not catch %s', (_label, task) => {
+    expect(looksGenerated(task)).toBe(false);
+  });
+
+  it('survives missing fields instead of throwing', () => {
+    expect(looksGenerated({})).toBe(false);
+    expect(looksGenerated({ title: null, description: null })).toBe(false);
+  });
+});
