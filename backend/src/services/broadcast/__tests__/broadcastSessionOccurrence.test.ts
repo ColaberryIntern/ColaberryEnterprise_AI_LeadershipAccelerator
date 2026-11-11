@@ -105,6 +105,29 @@ describe('creation', () => {
     expect(opts).toEqual({ transaction: 'TX' });
   });
 
+  /**
+   * D4 — the access mode is the caller's choice at creation, and ONLY at creation.
+   *
+   * Before this, `createLinked` hardcoded 'private' and `ensureOccurrenceForSession` took no
+   * argument for it, so no code path in the backend could ever write any other value. Studio
+   * setup asks an operator to choose between four modes; without these four tests that choice
+   * could have been collected, confirmed on screen, and silently discarded.
+   */
+  it('stamps the access mode the caller chose', async () => {
+    const r = await ensureOccurrenceForSession(SESSION, 'room-1', 'paid');
+
+    expect(r.outcome).toBe('created');
+    expect(mockCreate.mock.calls[0][0].access_mode).toBe('paid');
+  });
+
+  it('still defaults to the most restrictive mode when the caller says nothing', async () => {
+    // The whole reason the parameter is optional: every pre-existing caller, including the
+    // session setup flow, must keep producing a private occurrence without being changed.
+    await ensureOccurrenceForSession(SESSION, 'room-1');
+
+    expect(mockCreate.mock.calls[0][0].access_mode).toBe('private');
+  });
+
   it('binds the occurrence to a live input, or playback has nothing to sign', async () => {
     await ensureOccurrenceForSession(SESSION, 'room-1');
     const fields = mockCreate.mock.calls[0][0];
@@ -202,6 +225,26 @@ describe('an occurrence that already exists', () => {
     expect(update).toBeDefined();
     expect(update![0]).toMatch(/version = version \+ 1/);
     expect(update![1].replacements.id).toBe('occ-1');
+  });
+
+  /**
+   * D4 — re-timing must never touch the access policy, even now that a parameter exists.
+   *
+   * `ensureBroadcastSchema.ts:101-102`: "a later policy edit is a new version, never an in-place
+   * widening of who could watch." A caller passing an access mode to a session that already has
+   * an occurrence is asking for something the schema forbids, and the right answer is to ignore
+   * it rather than to honour it quietly. This is the test that stops a future refactor from
+   * "helpfully" adding access_mode to the UPDATE.
+   */
+  it('ignores a passed access mode when re-timing an existing occurrence', async () => {
+    wireDb([{ id: 'occ-1', occurrence_key: 'live_session:x:2026-10-19T09:00', editorial_state: 'scheduled' }]);
+
+    const r = await ensureOccurrenceForSession(SESSION, 'room-1', 'free');
+
+    expect(r.outcome).toBe('retimed');
+    expect(mockCreate).not.toHaveBeenCalled();
+    const update = mockQuery.mock.calls.find(([s]) => /UPDATE broadcast_occurrences/.test(s));
+    expect(update![0]).not.toMatch(/access_mode/);
   });
 
   it('refuses to move a show that has already gone live', async () => {
