@@ -6,6 +6,7 @@ import { createExplorerEnrollment } from '../services/enrollmentService';
 import { getCurrentOpenHouseEvent, OpenHouseEventInfo } from '../services/openHouseEventService';
 import { recordOpenHouseRegistration } from '../services/openHouseRegistrationStore';
 import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
+import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
 
 function log(
@@ -283,6 +284,34 @@ export async function handlePublicOpenHouseSignup(req: Request, res: Response, n
         correlation_id,
         error_class: consentErr instanceof Error ? consentErr.constructor.name : 'UnknownError',
         message: consentErr instanceof Error ? consentErr.message : String(consentErr),
+      });
+    }
+
+    // THE TELEPHONE GRANT, which is a different grant from the email opt-in above.
+    //
+    // The form now REQUIRES a number (Ali, 2026-11-11), so every signup arrives with
+    // one - which makes recording the permission separately the whole point rather
+    // than a nicety. Keyed on the number inside the helper, not the email: a voice or
+    // SMS send looks consent up by phone, so an email-keyed row would be invisible to
+    // the gate while looking perfectly valid in the table.
+    //
+    // Its own try/catch, not folded into the one above: a failure writing the email
+    // grant must not skip the phone grant, and neither may cost the person their seat.
+    try {
+      await capturePhoneConsent({
+        phone: payload.phone,
+        email: payload.email,
+        phoneConsent: payload.phone_consent,
+        source: 'open_house_signup',
+        correlationId: correlation_id,
+        ipAddress: req.ip ?? null,
+        userAgent: req.get('user-agent') ?? null,
+      });
+    } catch (phoneConsentErr) {
+      log('error', 'phone_consent_capture_failed', 'failure', {
+        correlation_id,
+        error_class: phoneConsentErr instanceof Error ? phoneConsentErr.constructor.name : 'UnknownError',
+        message: phoneConsentErr instanceof Error ? phoneConsentErr.message : String(phoneConsentErr),
       });
     }
 

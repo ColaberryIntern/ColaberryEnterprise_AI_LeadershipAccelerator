@@ -10,7 +10,11 @@ import {
 } from '../services/openHouseApi';
 import OpenHouseSignedUp from './OpenHouseSignedUp';
 import { identifyVisitor } from '../utils/tracker';
-import { SIGNUP_CONSENT_TEXT } from '../config/consentText';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../config/consentText';
+// The GATE and the WORDING are shared; the markup is not. PhoneConsentCheckbox renders
+// Bootstrap, and this page has its own `cboh-*` sheet - so it calls the rule and renders
+// with its own primitives, which is the path that component's own docs prescribe.
+import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
 
 /**
  * The Open House front door (OH-3) — where the ads actually land people.
@@ -57,6 +61,34 @@ import { SIGNUP_CONSENT_TEXT } from '../config/consentText';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+/**
+ * Why the phone number is mandatory here (Ali, 2026-11-11).
+ *
+ * The landing page's CTAs used to point at /portal/signup, which asks for a phone
+ * number. OH-3 pointed them here instead, and this page asked for a name and an email
+ * only - so from the day it shipped, the funnel stopped collecting phone numbers.
+ * This puts the field back and makes it required.
+ *
+ * Counted in DIGITS, matching `PHONE_MIN_DIGITS` on the route, so the page never
+ * accepts something the backend will refuse.
+ */
+const PHONE_MIN_DIGITS = 10;
+const PHONE_MAX_DIGITS = 15;
+// The route caps the raw string at 50 characters as well as the digit count. Without
+// this line a long entry passed here and came back a 400 - the visitor told the number
+// was fine and then refused. Caught by running both rules against one table of inputs
+// before shipping, which is the only reason it is not a bug report.
+const PHONE_MAX_CHARS = 50;
+
+export function phoneProblem(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '');
+  if (digits === '') return 'Please enter your phone number.';
+  if (raw.trim().length > PHONE_MAX_CHARS) return 'That number is too long. Please enter just the number.';
+  if (digits.length < PHONE_MIN_DIGITS) return 'That number looks too short. Please include the area code.';
+  if (digits.length > PHONE_MAX_DIGITS) return 'That number has too many digits.';
+  return null;
+}
+
 /** "394 seats left", or nothing at all. 0 and null both mean "do not claim a number". */
 export function seatsLabel(seatsRemaining: number | null | undefined): string {
   if (typeof seatsRemaining !== 'number' || !Number.isFinite(seatsRemaining) || seatsRemaining <= 0) return '';
@@ -78,6 +110,11 @@ function OpenHouseSignupPage(): React.ReactElement {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  // Required. See phoneProblem above.
+  const [phone, setPhone] = useState('');
+  // The NUMBER is mandatory; PERMISSION TO RING IT IS NOT. Unticked on arrival, never
+  // a condition of submitting, and no grant is recorded unless it is ticked.
+  const [phoneConsent, setPhoneConsent] = useState(false);
   // UNCHECKED, and NOT required to submit. A pre-ticked box is not an affirmative
   // act, and this becomes the consent of record for every marketing email after.
   // Their seat, their account and their login link are all transactional and need
@@ -104,12 +141,18 @@ function OpenHouseSignupPage(): React.ReactElement {
     setError('');
     if (!fullName.trim()) { setError('Please enter your name.'); return; }
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email.'); return; }
+    const phoneErr = phoneProblem(phone);
+    if (phoneErr) { setError(phoneErr); return; }
     setLoading(true);
     try {
       const person = {
         name: fullName.trim(),
         email: email.trim(),
+        phone: phone.trim(),
         marketing_opt_in: marketingOptIn,
+        // Sent ONLY when ticked. An absent key records nothing, which is not the same
+        // as recording a refusal - and a `false` would be a grant row saying "no".
+        ...(phoneConsent ? { phone_consent: true } : {}),
       };
       const acquisition = openHouseAcquisitionFields();
       let res;
@@ -213,6 +256,34 @@ function OpenHouseSignupPage(): React.ReactElement {
                 onChange={(e) => setEmail(e.target.value)} disabled={loading}
               />
 
+              {/* Required, and said so on the label rather than only in the error after a
+                  failed submit. `type="tel"` brings up the numeric keypad on a phone, which
+                  is where most of this traffic arrives from. */}
+              <label className="cboh-label" htmlFor="cboh-phone">Phone number</label>
+              <input
+                id="cboh-phone" className="cboh-input" type="tel" autoComplete="tel"
+                inputMode="tel" placeholder="(555) 555-5555" value={phone}
+                onChange={(e) => setPhone(e.target.value)} disabled={loading}
+                aria-describedby="cboh-phone-why" required
+              />
+              <p className="cboh-why" id="cboh-phone-why">
+                So we can reach you about your seat and the joining link.
+              </p>
+
+              {/* Asked only once a number is typed: permission to call somebody we have
+                  no number for grants nothing, and a box sitting above an empty field
+                  reads as a condition of submitting, which it is not. */}
+              {shouldAskPhoneConsent(phone) && (
+                <label className="cboh-consent" htmlFor="cboh-phone-consent">
+                  <input
+                    id="cboh-phone-consent" className="cboh-check" type="checkbox"
+                    checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
+                    disabled={loading}
+                  />
+                  <span>{PHONE_CONSENT_TEXT}</span>
+                </label>
+              )}
+
               {/* Beside the field it is about, which is where PortalFreeSignupPage moved
                   its own to after measuring 59 ticks on 347 signups with it sitting last. */}
               <label className="cboh-consent" htmlFor="cboh-consent">
@@ -269,6 +340,7 @@ const CBOH_CSS = `
   background:#fff;color:#2B2B2B;outline:none;transition:border-color .15s,box-shadow .15s}
 .cboh-input:focus{border-color:#367895;box-shadow:0 0 0 3px rgba(54,120,149,.22)}
 .cboh-input:disabled{background:#F1F1F0}
+.cboh-why{margin:6px 0 0;font-size:12.5px;color:#8A8A8A;line-height:1.45}
 .cboh-consent{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:13px;
   line-height:1.5;color:#6B6B6B;cursor:pointer}
 .cboh-check{width:16px;height:16px;margin:1px 0 0;flex:0 0 auto;accent-color:#FB2832;cursor:pointer}
