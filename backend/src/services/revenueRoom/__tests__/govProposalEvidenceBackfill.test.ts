@@ -24,7 +24,7 @@ const doc = (over: Record<string, unknown> = {}) => ({
 
 function mockDb(opts: { tables?: Record<string, boolean>; docs?: Array<Record<string, unknown>> } = {}) {
   const tables = {
-    gov_proposal_documents: true, gov_qualifications: true, evidence_links: true,
+    gov_proposal_documents: true, gov_qualifications: true, revenue_evidence_links: true,
     ...(opts.tables ?? {}),
   };
   m.query.mockImplementation((sql: string, o?: { replacements?: Record<string, string> }) => {
@@ -44,7 +44,7 @@ beforeEach(() => {
 });
 
 describe('a missing table stops it, and says so rather than reporting nothing to do', () => {
-  it.each(['gov_proposal_documents', 'gov_qualifications', 'evidence_links'])(
+  it.each(['gov_proposal_documents', 'gov_qualifications', 'revenue_evidence_links'])(
     'returns absent when %s is missing', async (missing) => {
       mockDb({ tables: { [missing]: false }, docs: [doc()] });
       const r = await backfillGovProposalEvidence();
@@ -134,7 +134,7 @@ describe('it is safe on every boot', () => {
     // So R3's guarantees apply unchanged instead of being re-implemented here.
     await backfillGovProposalEvidence();
     const sqls = m.query.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(sqls).not.toMatch(/INSERT INTO evidence_links/);
+    expect(sqls).not.toMatch(/INSERT INTO revenue_evidence_links/);
     expect(e.linkEvidence).toHaveBeenCalled();
   });
 

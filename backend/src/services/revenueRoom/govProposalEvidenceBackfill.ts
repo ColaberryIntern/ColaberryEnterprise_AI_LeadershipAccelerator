@@ -86,7 +86,7 @@ export async function backfillGovProposalEvidence(): Promise<BackfillResult> {
   const empty: BackfillResult = {
     state: 'absent', considered: 0, created: 0, alreadyLinked: 0, refusedByUnlink: 0, rejected: [],
   };
-  for (const t of ['gov_proposal_documents', 'gov_qualifications', 'evidence_links']) {
+  for (const t of ['gov_proposal_documents', 'gov_qualifications', 'revenue_evidence_links']) {
     if (!(await tableExists(t))) return empty;
   }
 

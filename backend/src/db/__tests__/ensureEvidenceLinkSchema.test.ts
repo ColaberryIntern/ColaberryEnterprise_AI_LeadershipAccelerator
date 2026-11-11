@@ -46,7 +46,7 @@ describe('exactly one new table', () => {
     const created = (SQL.match(/CREATE TABLE IF NOT EXISTS (\w+)/g) || [])
       .map((c) => c.replace('CREATE TABLE IF NOT EXISTS ', ''));
     expect(created).toEqual([...NEW_TABLES]);
-    expect(created).toEqual(['evidence_links']);
+    expect(created).toEqual(['revenue_evidence_links']);
   });
 
   it('only ALTERs the table it creates itself', () => {
@@ -54,30 +54,30 @@ describe('exactly one new table', () => {
     // path creates, and it was right to.
     const altered = new Set((SQL.match(/ALTER TABLE\s+(\w+)/gi) || [])
       .map((a) => a.replace(/ALTER TABLE\s+/i, '').toLowerCase()));
-    expect([...altered]).toEqual(['evidence_links']);
+    expect([...altered]).toEqual(['revenue_evidence_links']);
   });
 });
 
 describe('scheduled ingestion cannot double a timeline', () => {
   it('has the unique index that makes linking idempotent', () => {
-    expect(SQL).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_evidence_links_source_initiative/);
-    expect(SQL).toMatch(/ON evidence_links \(source_system, source_id, initiative_type, initiative_key\)/);
+    expect(SQL).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_revenue_evidence_links_source_initiative/);
+    expect(SQL).toMatch(/ON revenue_evidence_links \(source_system, source_id, initiative_type, initiative_key\)/);
   });
 
   it('deliberately leaves `relation` OUT of the unique key', () => {
     // If a classifier changes its mind about how a document relates to an initiative, the
     // right outcome is one row that gets corrected, not two that both claim to be it.
-    const uq = S.find((x) => x.includes('uq_evidence_links_source_initiative'))!;
+    const uq = S.find((x) => x.includes('uq_revenue_evidence_links_source_initiative'))!;
     expect(uq).not.toMatch(/relation/);
   });
 
   it('indexes the drill-down query on observed_at, not created_at', () => {
     // The reader is asking "what happened and when", not "when did we find out".
-    expect(SQL).toMatch(/idx_evidence_links_initiative_observed[\s\S]*?observed_at DESC/);
+    expect(SQL).toMatch(/idx_revenue_evidence_links_initiative_observed[\s\S]*?observed_at DESC/);
   });
 
   it('keeps a partial index for live links, so unlinked rows stay out of the hot path', () => {
-    const live = S.find((x) => x.includes('idx_evidence_links_live'))!;
+    const live = S.find((x) => x.includes('idx_revenue_evidence_links_live'))!;
     expect(live).toMatch(/WHERE unlinked_at IS NULL/);
   });
 });
@@ -105,10 +105,10 @@ describe('the database vocabulary and the TypeScript vocabulary cannot drift', (
   const checkFor = (name: string) => S.find((x) => x.includes(`ADD CONSTRAINT ${name}`))!;
 
   it.each([
-    ['ck_evidence_links_source_system', SOURCE_SYSTEMS],
-    ['ck_evidence_links_initiative_type', INITIATIVE_TYPES],
-    ['ck_evidence_links_relation', RELATIONS],
-    ['ck_evidence_links_link_method', LINK_METHODS],
+    ['ck_revenue_evidence_links_source_system', SOURCE_SYSTEMS],
+    ['ck_revenue_evidence_links_initiative_type', INITIATIVE_TYPES],
+    ['ck_revenue_evidence_links_relation', RELATIONS],
+    ['ck_revenue_evidence_links_link_method', LINK_METHODS],
   ] as const)('%s lists exactly the exported values', (name, values) => {
     const stmt = checkFor(name);
     expect(stmt).toBeDefined();
@@ -137,14 +137,14 @@ describe('a confidence score only means something on a machine-made link', () =>
   const added = (name: string) => S.find((x) => x.includes(`ADD CONSTRAINT ${name}`))!;
 
   it('forbids confidence on a human link and requires it on an automatic one', () => {
-    const c = added('ck_evidence_links_confidence');
+    const c = added('ck_revenue_evidence_links_confidence');
     expect(c).toMatch(/link_method = 'human' AND confidence IS NULL/);
     expect(c).toMatch(/link_method = 'automatic' AND confidence IS NOT NULL/);
     expect(c).toMatch(/confidence >= 0 AND confidence <= 1/);
   });
 
   it('requires an unlink to name who did it', () => {
-    expect(added('ck_evidence_links_unlink_attributed'))
+    expect(added('ck_revenue_evidence_links_unlink_attributed'))
       .toMatch(/unlinked_at IS NULL OR unlinked_by IS NOT NULL/);
   });
 });
@@ -176,7 +176,7 @@ describe('additive only', () => {
       ...(SQL.match(/ALTER TABLE\s+(\w+)/gi) || [])
         .map((a) => a.replace(/ALTER TABLE\s+/i, '')),
     ]);
-    expect([...touched]).toEqual(['evidence_links']);
+    expect([...touched]).toEqual(['revenue_evidence_links']);
   });
 });
 
