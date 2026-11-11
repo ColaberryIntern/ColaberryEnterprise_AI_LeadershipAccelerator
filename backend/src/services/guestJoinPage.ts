@@ -56,6 +56,9 @@ button{font:inherit}
 <div id="live" style="display:none">
   <div class="hello">You're in, <b id="who"></b>. Keep this page open.</div>
   <div class="card" id="panel"><div class="wait"><span class="dot"></span>Waiting for the next question…</div></div>
+  <!-- Why a tap did nothing. Outside #panel so a refresh of the question does not wipe the
+       explanation before it has been read. -->
+  <div class="err" id="verr" role="status"></div>
 </div>
 </div>
 <script>
@@ -65,6 +68,7 @@ button{font:inherit}
   var KEY = 'oh-guest-' + SID;
   var saved = null; try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
   var pass = saved && saved.pass, name = saved && saved.name, last = '';
+  var voteErr = document.getElementById('verr');
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   function showLive(){ document.getElementById('join').style.display = 'none'; document.getElementById('live').style.display = 'block'; document.getElementById('who').textContent = name; tick(); }
   document.getElementById('f').addEventListener('submit', function(ev){
@@ -88,6 +92,9 @@ button{font:inherit}
     var q = s.question;
     var sig = JSON.stringify(q);
     if (sig === last) return; last = sig;
+    // A new question means the last failure is no longer the thing in front of them. A failed
+    // vote deliberately does NOT refresh, so this only fires when the question really moved.
+    voteErr.textContent = '';
     if (!q) { panel.innerHTML = '<div class="wait"><span class="dot"></span>Waiting for the next question…<br><small>' + esc(s.title || '') + '</small></div>'; return; }
     var state = q.revealed ? 'Results are on the big screen' : q.locked ? 'Voting is locked' : (q.my_choice != null ? 'Vote counted. You can change it until it locks.' : 'Tap your answer');
     panel.innerHTML = '<div class="q">' + esc(q.q) + '</div>' + q.options.map(function(o, k){
@@ -97,8 +104,42 @@ button{font:inherit}
     panel.querySelectorAll('.opt').forEach(function(btn){
       btn.addEventListener('click', function(){
         var k = Number(btn.getAttribute('data-k'));
+        voteErr.textContent = '';
         fetch(BASE + '/guest-vote', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Guest-Pass': pass },
-          body: JSON.stringify({ poll_key: q.key, choice: k }) }).then(function(){ last = ''; tick(); }).catch(function(){});
+          body: JSON.stringify({ poll_key: q.key, choice: k }) })
+          .then(function(r){
+            /*
+             * A VOTE THAT DID NOT COUNT MUST SAY SO.
+             *
+             * This was .then(refresh).catch(function(){}), which is two separate silent
+             * failures. fetch only rejects on a network error, so a 401, a 409 or a 400 all
+             * landed in the success path: the panel refreshed, the guest's choice was simply
+             * not highlighted, and nothing said why. A guest at an Open House taps, sees
+             * nothing change, and taps again.
+             *
+             * 401 is the one worth handling separately. The pass lasts 12 hours and this page
+             * is meant to be left open, so an expired pass is ordinary rather than exceptional
+             * - and the state poll already handles it by clearing the pass and reloading into
+             * the join form. The vote path did not, so an expired guest could tap forever.
+             */
+            if (r.status === 401) {
+              try { localStorage.removeItem(KEY); } catch (e) {}
+              location.reload();
+              return;
+            }
+            if (!r.ok) {
+              voteErr.textContent = r.status === 409
+                ? 'Too late for that one. Voting has closed.'
+                : 'That vote did not go through. Tap again.';
+              return;
+            }
+            last = ''; tick();
+          })
+          .catch(function(){
+            // A network failure, as against a refusal. Different cause, different fix, and the
+            // guest needs to know their tap did nothing either way.
+            voteErr.textContent = 'No connection. Your vote did not go through.';
+          });
       });
     });
   }
