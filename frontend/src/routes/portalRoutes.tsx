@@ -39,6 +39,8 @@ const CampusHomePage = lazy(() => import('../pages/portal/campus/CampusHomePage'
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
 const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/PortfolioPreviewPage'));
+const MyWorkPage = lazy(() => import('../pages/portal/portfolio/myWork/MyWorkPage'));
+const WorkPiecePage = lazy(() => import('../pages/portal/portfolio/myWork/WorkPiecePage'));
 const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
@@ -153,6 +155,10 @@ const portalRoutes = (
       {/* Living Career Portfolio — the private Career Studio. Gated like its
           siblings; the resume prerequisite inside it is enforced server-side. */}
       <Route path="/portal/portfolio" element={<PageGate feature="portfolio"><PortfolioPage /></PageGate>} />
+      {/* C128: My work, every piece the learner made, and each piece's own viewer page. Same gate as the
+          Studio; the server only ever answers for the caller's own pieces. */}
+      <Route path="/portal/portfolio/work" element={<PageGate feature="portfolio"><MyWorkPage /></PageGate>} />
+      <Route path="/portal/portfolio/work/:id" element={<PageGate feature="portfolio"><WorkPiecePage /></PageGate>} />
       {/* The learner's own page as a PAGE, opened in a new tab from Publishing. `preview`
           is a static segment and /portal/portfolio has no dynamic child, so it shadows
           nothing. Same entitlement gate as the Studio it is reached from. */}

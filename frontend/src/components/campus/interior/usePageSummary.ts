@@ -7,11 +7,11 @@ import type { BuildingId, CampusAudience } from '../campusMap';
 import { fetchLibrary } from '../../../services/roomsApi';
 import { eventsFor } from '../events/eventsModel';
 import { fetchPublicEvents } from '../../../services/onboardingApi';
-import { fetchCareerProfile } from '../../../services/careerApi';
+import { fetchMyWork } from '../../../services/myWorkApi';
 import { fetchInternshipDashboard } from '../../../services/internshipApi';
 import { useCampus } from '../CampusContext';
 import type { SideRow, SideTop } from './pageSummary';
-import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard, towerCard } from './wallBoards';
+import { careerBoard, eventsBoard, libraryBoard, myWorkBoard, progressBoard, scheduleBoard, towerCard } from './wallBoards';
 import { certPrepSummary, classroomSummary, plainSummary, projectsSummary } from './pageSummary';
 import type { ClassroomFeed, PageSummary } from './pageSummary';
 import { accountRows, useAccountFacts } from '../admissions/accountFacts';
@@ -74,7 +74,7 @@ const WALL_FETCH: Partial<Record<BuildingId, (section: string, audience?: Campus
   library: (s) => cached('library', fetchLibrary).then((v) => libraryBoard(v, s), () => libraryBoard(null, s)),
   commons: (s, a) => loadEvents30().then((e) => eventsBoard(eventsFor(a, e), new Date(), s), () => eventsBoard(null, new Date(), s)), // C62 where, C60 who
   observatory: (s) => loadClassroom().then((f) => progressBoard(f, s), () => progressBoard(null, s)),
-  gallery: (s) => cached('career-profile', fetchCareerProfile).then((p) => portfolioBoard(p, s), () => portfolioBoard(null, s)),
+  gallery: () => cached('my-work', fetchMyWork).then((items) => myWorkBoard(items), () => myWorkBoard(null)), // C128: the left wall is My work
   // a non-intern gets a 404 from the dashboard: the empty state, not an error
   career: (s) => cached('intern-dash', fetchInternshipDashboard).then((d) => careerBoard(d, s), () => careerBoard(null, s)),
 };

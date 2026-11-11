@@ -1,7 +1,8 @@
 import api from '../utils/api';
+import { saveBlob, type ArtifactFile, type ArtifactFileKind, type ArtifactSource } from './artifactViewerTypes';
 
-/** Mirrors backend/src/services/internship/internArtifactViewer.ts ArtifactFileKind. */
-export type ArtifactFileKind = 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'image' | 'text' | 'other';
+export { saveBlob };
+export type { ArtifactFileKind };
 
 /** Mirrors backend/src/services/internship/internArtifactViewer.ts InternArtifactView. */
 export interface InternArtifactView {
@@ -12,7 +13,7 @@ export interface InternArtifactView {
   intern: string;
   html: string | null;
   externalUrl: string | null;
-  file: { name: string; kind: ArtifactFileKind; available: boolean; text: string | null; table: string[][] | null; note: string | null } | null;
+  file: ArtifactFile | null;
   data: Record<string, unknown>;
 }
 
@@ -45,14 +46,5 @@ export async function fetchArtifactXlsx(id: string): Promise<Blob> {
   return res.data;
 }
 
-/** Save a Blob under a file name (Excel, Word and PowerPoint open it from the download). */
-export function saveBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
+/** The admin viewer's byte source, for the shared ArtifactFileViewer. */
+export const adminArtifactSource: ArtifactSource = { file: fetchArtifactFile, preview: fetchArtifactPreview, xlsx: fetchArtifactXlsx };

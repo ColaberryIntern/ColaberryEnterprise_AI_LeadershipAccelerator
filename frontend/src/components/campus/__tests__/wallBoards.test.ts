@@ -3,7 +3,7 @@
  * board's empty line + "Open <section>" when there is none (never a blank wall, never an invented row). Career: the interns' real
  * standup with Team "Not assigned yet"; anyone else the empty state.
  */
-import { careerBoard, eventsBoard, libraryBoard, portfolioBoard, progressBoard, scheduleBoard, towerCard } from '../interior/wallBoards';
+import { careerBoard, eventsBoard, libraryBoard, myWorkBoard, progressBoard, scheduleBoard, towerCard } from '../interior/wallBoards';
 
 const NOW = new Date('2026-10-26T15:00:00Z');
 
@@ -53,11 +53,17 @@ it('My Progress: Builder / Learning / Community XP from the classroom feed; no p
   expect(progressBoard(null, 'My Progress')).toMatchObject({ rows: [], empty: 'No points yet' });
 });
 
-it('Gallery: real portfolio counts and readiness; nothing: the empty line', () => {
-  const p = { artifacts: [{}, {}], projects: [{}], readiness: { met_count: 3, total_count: 4 } } as never;
-  expect(portfolioBoard(p, 'Showcase Gallery').rows).toEqual([
-    { label: 'Artifacts', value: '2' }, { label: 'Projects', value: '1' }, { label: 'Portfolio readiness', value: '3 of 4', pct: 75 }]);
-  expect(portfolioBoard({ artifacts: [], projects: [], readiness: null } as never, 'Showcase Gallery')).toMatchObject({ rows: [], empty: 'Nothing in your portfolio yet' });
+it('Gallery (C128): My work, the three newest pieces opening their own pages, the total, See all N; nothing: the empty line', () => {
+  const piece = (id: string, title: string, createdAt: string) => ({ id, title, createdAt, group: 'written', kind: 'case_study', from: 'Case study', week: null, project: null, skills: [], state: 'x' });
+  const items = [piece('a', 'Oldest', '2026-08-01T15:00:00Z'), piece('b', 'Capstone Studio', '2026-09-18T15:00:00Z'),
+    piece('c', 'Inventory.csv', '2026-08-27T15:00:00Z'), piece('d', '', '2026-09-17T15:00:00Z')] as never;
+  expect(myWorkBoard(items)).toEqual({ title: '🗂 My work', rows: [
+    { label: 'Capstone Studio', value: 'Sep 18', route: '/portal/portfolio/work/b' },
+    { label: 'Untitled piece', value: 'Sep 17', route: '/portal/portfolio/work/d' },
+    { label: 'Inventory.csv', value: 'Aug 27', route: '/portal/portfolio/work/c' },
+    { label: 'All pieces', value: '4' }], open: 'See all 4', route: '/portal/portfolio/work' });
+  expect(myWorkBoard([])).toEqual({ title: '🗂 My work', rows: [], empty: 'Nothing here yet', open: 'Open My work', route: '/portal/portfolio/work' });
+  expect(myWorkBoard(null)).toMatchObject({ rows: [], empty: 'Nothing here yet' });
 });
 
 it('Career Center: interns see the real standup and Team Not assigned yet, opening the standup room; others: Not assigned yet', () => {
@@ -72,6 +78,6 @@ it('Career Center: interns see the real standup and Team Not assigned yet, openi
 });
 
 it('never says free', () => {
-  const all = JSON.stringify([libraryBoard(null, 'L'), scheduleBoard(null, 'S'), eventsBoard(null, NOW, 'E'), progressBoard(null, 'P'), portfolioBoard(null, 'G'), careerBoard(null, 'C')]);
+  const all = JSON.stringify([libraryBoard(null, 'L'), scheduleBoard(null, 'S'), eventsBoard(null, NOW, 'E'), progressBoard(null, 'P'), myWorkBoard(null), careerBoard(null, 'C')]);
   expect(all).not.toMatch(/\bfree\b/i);
 });

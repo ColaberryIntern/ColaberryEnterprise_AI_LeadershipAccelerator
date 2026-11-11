@@ -1,0 +1,95 @@
+/* My work + the work page (C128). Portal tokens only (TodayShell.css: --surface, --sunken, --border,
+   --border-sub, --strong, --body, --muted, --cherry, --cherry-text, --berry, --shadow-md), so light and
+   dark come for free. The kind colors are the same ones the admin viewer and the Internship Report use. */
+
+.mw-tools { display: flex; gap: 10px; margin: 0 0 12px; }
+.mw-search { position: relative; flex: 1 1 320px; max-width: 420px; }
+.mw-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.mw-search input {
+  width: 100%; font: inherit; font-size: 15px; color: var(--body); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px 9px 34px;
+}
+.mw-search input:focus-visible { outline: 2px solid var(--berry); outline-offset: 1px; }
+
+.mw-chips, .mw-groupby { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.mw-groupby { margin-bottom: 18px; font-size: 14px; color: var(--muted); }
+.mw-groupby-l { margin-right: 2px; }
+.mw-groupby-r { margin-left: auto; }
+.mw-chip {
+  appearance: none; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px;
+  color: var(--body); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px;
+}
+.mw-chip.sm { min-height: 32px; padding: 4px 12px; font-size: 13px; }
+.mw-chip:hover { border-color: var(--cherry-text); }
+.mw-chip.on { background: var(--cherry); border-color: var(--cherry); color: #fff; }
+.mw-chip:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.mw-chip-n { font-size: 12px; font-weight: 700; background: var(--sunken); color: var(--muted); border-radius: 999px; padding: 1px 8px; }
+.mw-chip.on .mw-chip-n { background: rgba(255, 255, 255, .25); color: #fff; }
+
+.mw-section { margin-bottom: 22px; }
+.mw-section-h { font-size: 16px; font-weight: 700; color: var(--strong); margin: 0 0 10px; }
+.mw-section-h span { font-weight: 500; color: var(--muted); font-size: 14px; }
+.mw-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+
+.mw-card { min-width: 0; }
+.mw-card-link {
+  display: flex; flex-direction: column; gap: 6px; height: 100%; text-decoration: none; color: var(--body);
+  background: var(--surface); border: 1px solid var(--border-sub); border-radius: 14px; padding: 14px; box-shadow: var(--shadow-md);
+  transition: border-color .15s ease;
+}
+.mw-card-link:hover { border-color: var(--cherry-text); color: var(--body); }
+.mw-card-link:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.mw-card-title { font-weight: 700; color: var(--strong); font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.mw-card-meta { font-size: 13px; color: var(--muted); }
+.mw-card-state { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border-sub); font-size: 12px; color: var(--muted); }
+
+.mw-badge {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; border-radius: 6px; padding: 3px 8px;
+}
+.mw-badge.lg { font-size: 12px; padding: 5px 10px; flex: none; }
+.mw-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.mw-tag { font-size: 12px; color: var(--body); background: var(--sunken); border-radius: 999px; padding: 2px 9px; }
+
+/* ── the work page ─────────────────────────────────────────────────── */
+.mw-piece-h { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.mw-piece-h .crumb { flex-basis: 100%; }
+.mw-piece-title { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 420px; }
+.mw-piece-title h1 { margin: 0; overflow-wrap: anywhere; }
+.mw-prevnext { display: flex; gap: 8px; }
+.cp-btn.is-off { opacity: .45; cursor: default; }
+
+.mw-piece { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+@media (max-width: 1000px) { .mw-piece { grid-template-columns: 1fr; } }
+.mw-piece-side .cp-card h2 { font-size: 15px; }
+.mw-about { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px; }
+.mw-about dt { color: var(--muted); font-weight: 600; }
+.mw-about dd { margin: 0; color: var(--body); overflow-wrap: anywhere; }
+.mw-mini { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.mw-mini li + li { margin-top: 6px; }
+.mw-mini a { color: var(--body); text-decoration: none; display: flex; gap: 8px; align-items: baseline; }
+.mw-mini a:hover { color: var(--cherry-text); }
+.mw-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; transform: translateY(-1px); }
+
+.mw-frame { width: 100%; height: 80vh; border: 1px solid var(--border); border-radius: 12px; background: #fff; display: block; margin-bottom: 18px; }
+.mw-quote { border-left: 3px solid var(--cherry); padding-left: 12px; color: var(--body); margin: 0; white-space: pre-wrap; }
+
+/* The reader: a calm reading column, not a dashboard. */
+.mw-reader {
+  background: var(--surface); border: 1px solid var(--border-sub); border-radius: 14px; box-shadow: var(--shadow-md);
+  padding: 32px 36px; margin-bottom: 18px; max-width: 760px; color: var(--body); font-size: 16px; line-height: 1.7;
+}
+@media (max-width: 560px) { .mw-reader { padding: 22px 18px; } }
+.mw-reader-title { font-size: 24px; font-weight: 700; color: var(--strong); margin: 0 0 18px; line-height: 1.25; }
+.mw-reader-sec + .mw-reader-sec { margin-top: 20px; }
+.mw-reader h3 { font-size: 17px; font-weight: 700; color: var(--strong); margin: 0 0 6px; }
+.mw-reader p { margin: 0 0 12px; }
+.mw-reader-dl { margin: 0; }
+.mw-reader-row + .mw-reader-row { margin-top: 16px; }
+.mw-reader-row dt { font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--cherry-text); margin-bottom: 4px; }
+.mw-reader-row dd { margin: 0; }
+.mw-receipt { margin-top: 22px; background: var(--sunken); border-radius: 10px; padding: 14px 16px; font-size: 14px; }
+.mw-receipt ul { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.mw-receipt b { color: var(--strong); font-size: 18px; margin-right: 4px; }
+.mw-receipt p { margin: 0; color: var(--muted); font-style: italic; }

@@ -103,6 +103,7 @@ Array [
     "name": "Showcase Gallery",
     "primary": "Open my portfolio -> /portal/portfolio",
     "rooms": Array [
+      "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
       "Showcase -> /portal/showcase",
@@ -257,6 +258,7 @@ Array [
     "name": "Showcase Gallery",
     "primary": "Open my portfolio -> /portal/portfolio",
     "rooms": Array [
+      "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
       "Showcase -> /portal/showcase",
@@ -420,6 +422,7 @@ Array [
     "name": "Showcase Gallery",
     "primary": "Open my portfolio -> /portal/portfolio",
     "rooms": Array [
+      "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
       "Showcase -> /portal/showcase",
@@ -574,6 +577,7 @@ Array [
     "name": "Showcase Gallery",
     "primary": "Open my portfolio -> /portal/portfolio",
     "rooms": Array [
+      "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
       "Showcase -> /portal/showcase",

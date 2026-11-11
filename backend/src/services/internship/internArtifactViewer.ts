@@ -165,13 +165,21 @@ export interface InternArtifactFile { absPath: string; name: string; kind: Artif
  */
 export async function getInternArtifactFile(id: string): Promise<InternArtifactFile | null> {
   const rows = await sequelize.query<{ title: string; content: Record<string, unknown> | null }>(SQL, { replacements: { id }, type: QueryTypes.SELECT });
-  const content = rows[0]?.content;
+  return rows[0] ? locateArtifactFile(rows[0].title, rows[0].content) : null;
+}
+
+/**
+ * The uploaded file named by an artifact's content, or null when there is none, it sits outside the
+ * uploads root, or it is gone. Scope is the CALLER's job: this only resolves a row already allowed.
+ * Shared by the admin viewer and the learner's own My work (C128).
+ */
+export function locateArtifactFile(title: string, content: Record<string, unknown> | null): InternArtifactFile | null {
   if (!content) return null;
   const absPath = safeUploadPath(content.stored_path);
   if (!absPath || !fs.existsSync(absPath)) return null;
   const name = repairMojibake(String(content.filename ?? path.basename(absPath)));
   const kind = fileKind(name, content.mimetype);
-  return { absPath, name, kind, contentType: SERVE_MIME[kind], title: rows[0].title };
+  return { absPath, name, kind, contentType: SERVE_MIME[kind], title };
 }
 
 export async function getInternArtifact(id: string): Promise<InternArtifactView | null> {

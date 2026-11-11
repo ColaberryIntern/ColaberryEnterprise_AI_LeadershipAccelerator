@@ -11,6 +11,7 @@ import {
 } from '../controllers/careerPortfolioPageController';
 import { handleListPostConsent, handleSetPostConsent } from '../controllers/postConsentController';
 import { handleGetMyHireSettings, handleSetMyAvailability } from '../controllers/hireListingController';
+import myWorkRoutes from './myWorkRoutes';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -131,5 +132,9 @@ router.put(
   requireContentEntitlement('portfolio'),
   handleSetPostConsent,
 );
+
+// My work (C128): the learner's own pieces and each piece's viewer, under /api/portal/career/work. Its own router
+// file; the same two gates are applied per route inside it.
+router.use(myWorkRoutes);
 
 export default router;

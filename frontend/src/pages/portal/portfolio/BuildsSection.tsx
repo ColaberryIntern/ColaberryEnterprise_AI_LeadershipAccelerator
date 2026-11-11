@@ -1,8 +1,9 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { CareerArtifact, CareerProject, CareerGithub } from '../../../services/careerApi';
 
 /**
- * BuildsSection — artifacts, projects and connected repositories
+ * BuildsSection — a pointer to My work (C128), projects and connected repositories
  * (build plan §15, §13).
  *
  * Note what is deliberately NOT rendered: no "Led", "Architected" or "Built"
@@ -15,55 +16,26 @@ import { CareerArtifact, CareerProject, CareerGithub } from '../../../services/c
  * projects — plan §13: "a repo is not automatically a portfolio project."
  */
 
-const KIND_LABEL: Record<string, string> = {
-  architecture_doc: 'Architecture doc',
-  prompt_library: 'Prompt library',
-  case_study: 'Case study',
-  reflection: 'Reflection',
-  implementation_notes: 'Implementation notes',
-  presentation: 'Presentation',
-};
-
-const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString() : null);
-
 const BuildsSection: React.FC<{
   artifacts: CareerArtifact[];
   projects: CareerProject[];
   github: CareerGithub | null;
 }> = ({ artifacts, projects, github }) => (
   <div className="cp-builds">
+    {/* C128 (approved C127 design): the piece cards moved to My work, where every piece opens in its own viewer. */}
     <section className="cp-card" aria-labelledby="cp-artifacts-h">
-      <h2 id="cp-artifacts-h">Build artifacts</h2>
+      <h2 id="cp-artifacts-h">Your work</h2>
       {artifacts.length === 0 ? (
         <p className="cp-empty">
-          No artifacts yet. Completing a lab, build task, demo or reflection generates one
-          automatically — you never have to write a portfolio entry by hand.
+          Nothing yet. Completing a lab, build task, demo or reflection adds a piece automatically.
+          You never have to write a portfolio entry by hand.
         </p>
       ) : (
-        <>
-          <p className="cp-muted">
-            {artifacts.length} artifact{artifacts.length === 1 ? '' : 's'}, generated from work you
-            already completed.
-          </p>
-          <ul className="cp-artifacts">
-            {artifacts.map((a) => (
-              <li key={a.id} className="cp-artifact">
-                <div className="cp-artifact-head">
-                  <span className="cp-kind">{KIND_LABEL[a.kind] || a.kind.replace(/_/g, ' ')}</span>
-                  {fmt(a.created_at) && <span className="cp-muted cp-date">{fmt(a.created_at)}</span>}
-                </div>
-                <h3 className="cp-artifact-title">{a.title}</h3>
-                {a.summary && <p className="cp-artifact-sum">{a.summary}</p>}
-                {a.competencies.length > 0 && (
-                  <ul className="cp-chips" aria-label="Competencies demonstrated">
-                    {a.competencies.slice(0, 6).map((c) => <li key={c} className="cp-chip">{c}</li>)}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
+        <p className="cp-muted">
+          {artifacts.length} piece{artifacts.length === 1 ? '' : 's'} of work, generated from what you already completed.
+        </p>
       )}
+      <p className="cp-ok"><Link className="cp-link" to="/portal/portfolio/work">Open My work</Link> to see every piece and open each one.</p>
     </section>
 
     <section className="cp-card" aria-labelledby="cp-projects-h">
