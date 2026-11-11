@@ -1,11 +1,15 @@
 /**
  * The substance guard in `saveConversationToMemory` (R4 follow-up).
  *
- * THE DEFECT THESE PIN. Before the guard, closing a conversation the visitor never spoke in
+ * THE DEFECT THESE PIN. Before the guard, closing a conversation with no readable transcript
  * still wrote memory: `conversation_count` incremented and a summary entry reading
  * "0 messages exchanged" appended, which `buildMemoryContext()` injects into Maya's system
  * prompt. Measured in production on 2026-11-11, 8 such entries existed across 7 memory rows and
  * 5 of those rows held nothing else.
+ *
+ * WHY A TRANSCRIPT GOES MISSING. `ChatMessageCleanup` deletes chat_messages older than 180
+ * days. Nothing closed conversations for eight months, so by the time the idle sweep closed
+ * them, 113 of 145 conversations had no message rows left. Retention worked; closing did not.
  *
  * THE CASE THAT MATTERS MOST is the second test. `visitor_message_count` is NOT trustworthy:
  * of the 17 conversations closed that day, 5 carried a non-zero counter while having zero

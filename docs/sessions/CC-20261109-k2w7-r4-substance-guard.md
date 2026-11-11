@@ -86,13 +86,41 @@ updates, so an undo exists even if the run dies partway.
   visitor spoke`. The suite distinguishes the correct fix from the tempting wrong one.
 - Both mutations confirmed applied by grep, and the service restored byte-identical afterwards
 
+## Root cause: retention met conversations that were never closed
+
+The counter does not lie. The transcripts are gone.
+
+`sendMessage` creates the visitor `ChatMessage` at line 365 and increments the counter at line
+526, so the counter cannot outrun the row. The rows were deleted afterwards:
+`schedulerService.ts:2568` runs **`ChatMessageCleanup` every night at 3:30, deleting
+`chat_messages` older than 180 days**. 180 days before 2026-11-11 is 2026-05-15, and the oldest
+surviving message is `2026-05-15 17:22:18`. Exact match.
+
+| Measure | Value |
+|---|---|
+| conversations | 145 |
+| conversations with **zero** message rows | **113** |
+| surviving message rows in total | 76 |
+| oldest surviving message | 2026-05-15 |
+| oldest conversation | 2026-03-16 |
+
+So the sequence was: a conversation opens in March, its transcript is deleted in September by a
+retention policy doing exactly its job, and nothing closes it until the idle sweep runs in
+November, by which point there is nothing left to summarize. The junk entries are the wreckage
+where a working retention policy met a closing step that never ran.
+
+**This is history, not an ongoing stream.** New conversations now close within about 40
+minutes, so their transcripts are read long before the 180-day retention can reach them. The
+8 entries are a one-time artifact of eight months of unclosed conversations, which is why
+cleaning them up finishes the problem rather than papering over a leak.
+
 ## Still open on R4 after this
 
-1. **Why the counter lies.** `visitor_message_count` is incremented in `sendMessage` alongside
-   a `ChatMessage.create`, yet 5 conversations have the increment and no row. Either the create
-   failed silently or the increment happens on a path that does not create one. Not chased
-   here; this change makes the memory correct regardless, but the counter is still wrong and
-   anything else reading it inherits the lie.
+1. **`message_count` and `visitor_message_count` outlive their transcripts.** The counters stay
+   at their historical values after retention deletes the rows, so any future reader of those
+   columns will believe it can fetch messages that no longer exist. This change makes memory
+   correct regardless, but the columns remain a trap. Worth either zeroing them when retention
+   deletes, or documenting them as historical-only.
 2. **The 128 greeting-only conversations** stay `active` on purpose. With this guard in place,
    closing them would no longer pollute memory, so that product decision is now reversible
    cheaply.
