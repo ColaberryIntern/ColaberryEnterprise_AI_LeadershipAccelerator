@@ -14,7 +14,8 @@ import type { GovPipelineCard } from '../../factory/govPipeline';
 import { fallbackSummary } from './summary';
 import { chooseAsks, publishedArtifacts } from './artifacts';
 import { presentationDue, videoArtifacts } from './presentations';
-import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
+import { buildTimeline, classifyEmail, dayKey, daysBetween, keySentence, STUCK_GAP_DAYS } from './timeline';
+import { ownText, trimToSentence } from './emailText';
 import { answeredInThread, cleanSubject, newestReplyByThread } from './threadReply';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
@@ -26,6 +27,8 @@ export { cleanSubject };
 
 const DAY = 86400000;
 export const OWED_WINDOW_DAYS = 7;          // matches agentNudgeState.OWED_WINDOW_DAYS
+/** Display bound for a thread snippet. narrate.ts hands this to a model for 8 threads per intern. */
+export const THREAD_SNIPPET = 300;
 export const TRAINING_GATE_DAY = 21;        // weeks 1-3 are three weeks of training
 export const COMMIT_QUIET_DAYS = 3;         // the nudge asks for a commit after this many quiet days
 /** The status calls it stuck at the same point the timeline does (timeline.STUCK_GAP_DAYS). */
@@ -116,7 +119,18 @@ export function emailView(email: string, emails: InternEmail[], weWrote: WeWrote
     const subject = cleanSubject(e.subject);
     if (seen.has(subject.toLowerCase())) continue;
     seen.add(subject.toLowerCase());
-    threads.push({ subject, date: e.received_at, snippet: String(e.snippet ?? '').slice(0, 300) });
+    // Classified from the WHOLE body, then cut. The other order is what hid 35 intern questions:
+    // the thread was sliced to 300 raw characters first, so the classifier only ever saw the
+    // greeting and the context, and the question at the end of the message never existed.
+    const body = String(e.snippet ?? '');
+    const kind = classifyEmail(subject, body);
+    threads.push({
+      subject,
+      date: e.received_at,
+      snippet: trimToSentence(ownText(body), THREAD_SNIPPET),
+      kind,
+      ask: kind === 'update' ? null : keySentence(body),
+    });
   }
   const lastTheyMs = mine.length ? ms(mine[0].received_at) : null;
   const we = weWrote.find((w) => lc(w.email) === email);

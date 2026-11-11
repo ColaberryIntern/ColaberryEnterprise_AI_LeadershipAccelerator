@@ -113,7 +113,20 @@ export interface TrainingView {
 }
 
 export interface EmailView {
-  threads: Array<{ subject: string; date: string; snippet: string }>;
+  /**
+   * One entry per subject, newest first.
+   *
+   * `kind` is decided ONCE here, from the whole body, because everything downstream sees only
+   * `snippet` and `snippet` is bounded. `ask` is the sentence that earned a non-update `kind`, so
+   * a reader is shown what was actually asked rather than the greeting.
+   */
+  threads: Array<{
+    subject: string;
+    date: string;
+    snippet: string;
+    kind: 'stuck' | 'question' | 'update';
+    ask: string | null;
+  }>;
   count: number;
   lastTheyWrote: string | null;
   lastWeWrote: string | null;

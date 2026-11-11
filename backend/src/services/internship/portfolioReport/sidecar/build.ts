@@ -9,7 +9,7 @@
  * except `generated_at` (key order is fixed by these literals; arrays keep the report's order).
  */
 import { WRONG_FORMAT, kindLabel } from '../artifacts';
-import { classifyEmail, eventText } from '../timeline';
+import { eventText } from '../timeline';
 import type { Conversation, InternCard, LastOutbound, PortfolioReport, TimelineNext } from '../types';
 import { answeredInThread, newestReplyByThread } from '../threadReply';
 import { classifyArtifact } from './classify';
@@ -59,9 +59,13 @@ export function openQuestions(c: InternCard): SidecarIntern['open_questions'] {
   const byThread = newestReplyByThread(c.replies);
   return c.emails.threads
     .filter((th) => !answeredInThread(th.subject, Date.parse(th.date), byThread))
-    .map((th) => ({ th, kind: classifyEmail(th.subject, th.snippet) }))
-    .filter((x): x is { th: typeof x.th; kind: 'question' | 'stuck' } => x.kind === 'question' || x.kind === 'stuck')
-    .map(({ th, kind }) => ({ received_at: new Date(th.date).toISOString(), subject: th.subject, text: th.snippet, kind }));
+    // `th.kind` was decided in compose.emailView from the WHOLE body. Re-classifying here would
+    // only see `th.snippet`, which is bounded for display, and that is exactly the bug: a question
+    // asked after the first 300 characters never reached this list at all.
+    .filter((th): th is typeof th & { kind: 'question' | 'stuck' } => th.kind === 'question' || th.kind === 'stuck')
+    // `ask` is the sentence that earned the label, so a manager reads the question rather than the
+    // greeting. It falls back to the snippet when the label came from the subject alone.
+    .map((th) => ({ received_at: new Date(th.date).toISOString(), subject: th.subject, text: th.ask ?? th.snippet, kind: th.kind }));
 }
 
 /**
