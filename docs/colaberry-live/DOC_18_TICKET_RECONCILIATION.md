@@ -39,6 +39,33 @@ Correction 12 named four files. The real scope: **266 files** under `frontend/sr
 
 The reason they accumulated: **there is no gate.** `scripts/artifacts/checkAmericanSpelling.js:35` sets `SCAN_DIRS = ['scripts/artifacts']`. Frontend strings are unchecked by anything.
 
+> **CORRECTED 2026-11-11, both numbers and the claim.** Two errors above, found while building the
+> fix.
+>
+> **"Unchecked by anything" is wrong.** `backend/src/services/content/__tests__/frontendCopyLint.test.ts`
+> already lints `frontend/src` for the word "free" under 40 TAC 807.172(d), as a shrink-only
+> ratchet over `FRONTEND_COPY_BASELINE`. It uses the TypeScript parser rather than a regex, so it
+> genuinely separates copy from comments and identifiers — which is why it catches what a grep
+> cannot. Em dashes are also enforced, but only on **outbound email**, through the brand
+> governance preflight. What has no gate is em dashes and emoji **in frontend source strings**,
+> which is narrower than the sentence above claims.
+>
+> **"266 files" is scoped and was not labelled as such.** That count covers
+> `components/portal/` and `pages/portal/` only. Across all of `frontend/src`, **1,143 files**
+> contain an em or en dash, comments included. Neither number is the one that matters, because
+> the existing scanner counts only string and JSX text; the honest figure needs that scanner, not
+> a grep.
+>
+> I also reported this file's own search as finding **zero** at one point. That was a broken
+> `grep -P "[\x{2014}]"` pattern erroring out and returning nothing — a check that could not fail,
+> which is indistinguishable from a clean result. The literal-character search is what found 1,143.
+>
+> **What D1 actually needs**, as a result: a second rule in the existing
+> `bannedCopyScanner`, not a second scanner. `BANNED_COPY_RULES` is already plural. The blocker is
+> that `BannedWordRule` matches a `word` on word boundaries, and an em dash is not a word — so it
+> needs an optional pattern form, which touches matcher code the Explorer guard shares. That is
+> why the sweep is a phase of its own rather than a line in this one.
+
 Ticket this as a lint rule plus a sweep, ordered so the rule lands first and the sweep cannot regress.
 
 ### 0.4 The placeholder air date is self-contradictory, and it is mine.
@@ -178,7 +205,7 @@ Not created. Drafted here for approval.
 
 | Draft | Title | Screen | Acceptance criteria (observable) | Files |
 |---|---|---|---|---|
-| **D1** | Copy gate: no emoji, no em dashes, in frontend strings | all | A lint rule fails on an emoji or em/en dash inside a user-visible string under `frontend/src`; the rule runs in CI; the existing 334 lines are swept; a deliberately added violation fails the build (mutation evidence) | new lint rule; `checkAmericanSpelling.js` SCAN_DIRS; 266 files |
+| **D1** | Copy gate: no emoji, no em dashes, in frontend strings | all | A SECOND RULE in the existing `bannedCopyScanner` (not a second scanner) fails on an emoji or em/en dash inside a user-visible string; a baseline records what exists and may only shrink; a deliberately added violation fails the build (mutation evidence). Needs `BannedWordRule` to grow an optional pattern form, because an em dash is not a word - which touches matcher code the Explorer guard shares, so this is its own phase | `bannedCopyRule.ts`, `bannedCopyScanner.ts`, `frontendCopyBaseline.ts` |
 | **D2** | Plain-language blocked reasons on the producer strip | `#producer` | Go live blocked by health reads a sentence, not `provider_health is unknown, expected ready`; blocked by content reads a sentence, not `mark_content_started_first`; the raw reason is still logged; no server reason code reaches a person | `ProducerStrip.tsx:420-424`, `producerStripCopy.ts` |
 | **D3** | State matrix document and viewer-visible tests | `#states` | 17 states × 4 surfaces in `docs/colaberry-live/`; one test per row asserting what a **non-staff** viewer sees; backstage is byte-identical to scheduled for a non-staff viewer | new doc; `frontend/src/**/__tests__/` |
 | **D4** | Studio setup screen | `#studio` | Opens in its own tab from admin nav; deep-linkable; Create disabled until all four summary items read Done; producer ≠ presenter blocks Create; access mode requires an explicit acknowledgement; the chosen mode is echoed as a sentence about what remote viewers get; audience is an explicit field that replaces the title match | new route outside `AdminLayout`; `adminNav.ts`; `sessionGuestService.ts` |
