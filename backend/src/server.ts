@@ -111,6 +111,7 @@ import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
+import { ensureTaskClaimSchema } from './db/ensureTaskClaimSchema';
 import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
 import { ensureBroadcastEndReasonSchema } from './db/ensureBroadcastEndReasonSchema';
 import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerSchema';
@@ -3074,6 +3075,11 @@ async function start(): Promise<void> {
   // After ensureBroadcastSchema, not before: the telemetry tables foreign-key into
   // broadcast_occurrences, so the parent has to exist first.
   await ensureBroadcastTelemetrySchema();
+  // Task leases, so two workers never pick up the same ticket. Standalone: one additive table,
+  // no foreign keys, no ordering requirement against its neighbours. Created unconditionally like
+  // the rest - the table existing grants nothing on its own, and the alternative is a consumer
+  // that has to create its own schema at call time.
+  await ensureTaskClaimSchema();
   // L7.4 — end_reason on broadcast_occurrences, so an occurrence that ended itself after a
   // sustained stream loss is distinguishable from one a producer ended. Alters an existing
   // table, so it lives in its own file per ensureBroadcastSchema's header rule.
