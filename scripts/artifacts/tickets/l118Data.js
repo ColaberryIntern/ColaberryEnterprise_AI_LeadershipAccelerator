@@ -281,13 +281,31 @@ const LEDGER = [
     note: 'Generated from l04DodData.js with a self-check — do not hand-edit.',
   },
   {
-    id: 10, title: 'Current State Migration Ledger', ticket: null, file: null,
-    state: 'NOT_WRITTEN',
-    gapSource: 'bootstrap §17, which names the report COLABERRY LIVE — CURRENT BUILD MIGRATION '
-      + 'REPORT, lists its six sections A-F, and names docs/colaberry-live/ as its repo home',
+    id: 10, title: 'Current State Migration Ledger', ticket: 'L0.5',
+    file: 'docs/colaberry-live/DOC_10_CURRENT_BUILD_MIGRATION_REPORT.md', state: 'WRITTEN',
+    /**
+     * THE GAP IS RECORDED, NOT ERASED. This row read `ticket: null` until 2026-11-10 and was the
+     * only coverage gap on the program's document list. Flipping it to a ticket and deleting the
+     * history would make the ledger say the gap never existed, which is the one thing a ledger
+     * must not do - the finding is more useful than the clean state. `wasGap` keeps it countable
+     * so the documents can report "found and closed" rather than silently dropping to zero.
+     */
+    wasGap: {
+      foundOn: '2026-11-03',
+      closedOn: '2026-11-10',
+      closedBy: 'L0.5',
+      source: 'bootstrap §17, which names the report COLABERRY LIVE — CURRENT BUILD MIGRATION '
+        + 'REPORT, lists its six sections A-F, and names docs/colaberry-live/ as its repo home',
+      howFound: 'by counting §3.1 and §17 against all 61 todos then on the board, done and open - '
+        + 'a board cannot show this about itself',
+    },
     note: 'Required by bootstrap §17 as COLABERRY LIVE — CURRENT BUILD MIGRATION REPORT, with six '
-      + 'named sections A-F. NO TICKET ON THE BOARD COVERS IT. Found 2026-11-03 while scoping '
-      + 'L11.8, by counting §3.1 and §17 against all 61 todos.',
+      + 'named sections A-F. HAD NO TICKET ON THE BOARD until 2026-11-10; found 2026-11-03 while '
+      + 'scoping L11.8, by counting §3.1 and §17 against all 61 todos. Ticket L0.5 was created '
+      + 'and the document written 2026-11-10. Generated from l05Data.js + l05Phases.js: section A '
+      + 'is a frozen git snapshot, section B stats 40 reference paths on every build, and '
+      + 'sections C and D are an 87-row Basecamp census committed beside the data so the counts '
+      + 'can be re-run rather than trusted.',
   },
   {
     id: 11, title: 'System Architecture Handbook', ticket: 'L11.1',
@@ -395,6 +413,10 @@ const TOTALS = (() => {
     written: by.WRITTEN,
     thisPass: WRITTEN.length,
     noTicket: LEDGER.filter((d) => !d.ticket).length,
+    // Gaps this program FOUND, whether or not they are still open. Counting only the open ones
+    // would make a closed gap indistinguishable from one that never existed.
+    gapsFound: LEDGER.filter((d) => d.wasGap || !d.ticket).length,
+    gapsClosed: LEDGER.filter((d) => d.wasGap).length,
     requirements: WRITTEN.reduce((n, d) => n + d.requires.length, 0),
     declaredRequirements: WRITTEN.reduce((n, d) => n + d.requiredCount, 0),
     headings,
