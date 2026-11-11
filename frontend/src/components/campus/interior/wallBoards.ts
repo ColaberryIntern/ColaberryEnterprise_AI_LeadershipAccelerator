@@ -1,7 +1,7 @@
 import type { SideTop } from './pageSummary';
 import type { LibraryView } from '../../../services/roomsApi';
 import type { OpenHouseView } from '../../../services/onboardingApi';
-import type { CareerProfile } from '../../../services/careerApi';
+import type { WorkItem } from '../../../services/myWorkApi';
 import type { InternDashboard } from '../../../services/internshipApi';
 import type { PlanStop } from '../campusPlan';
 import type { ClassroomFeed } from './pageSummary';
@@ -13,8 +13,8 @@ import { eventWhen, upcoming } from '../events/eventsModel';
  * stands with its empty line and "Open <section>" (never a blank wall, never an invented row).
  *
  * Two boards differ from the design because the data does not exist (logged in the session log): the Library has no "saved" or
- * "% read" record, so its board shows what the library really holds (items, pinned, newest); the portfolio has no per-item
- * published / draft count, so the Gallery shows its real counts (artifacts, projects, verified skills, readiness).
+ * "% read" record, so its board shows what the library really holds (items, pinned, newest). The Gallery's wall is My work
+ * since C128: the learner's newest pieces and the total.
  */
 const MAX_ROWS = 4;
 const board = (title: string, rows: SideTop['rows'], empty: string, open: string): SideTop =>
@@ -64,13 +64,24 @@ export function progressBoard(feed: ClassroomFeed | null, section: string): Side
   ], open: `Open ${section}` };
 }
 
-export function portfolioBoard(p: CareerProfile | null, section: string): SideTop {
-  const rows: SideTop['rows'] = [];
-  if (p?.artifacts?.length) rows.push({ label: 'Artifacts', value: String(p.artifacts.length) });
-  if (p?.projects?.length) rows.push({ label: 'Projects', value: String(p.projects.length) });
-  const r = p?.readiness;
-  if (r && r.total_count > 0) rows.push({ label: 'Portfolio readiness', value: `${r.met_count} of ${r.total_count}`, pct: Math.round((r.met_count / r.total_count) * 100) });
-  return board('🖼 Portfolio', rows, 'Nothing in your portfolio yet', `Open ${section}`);
+/**
+ * C128 (approved C127 design, "Left wall: becomes My work"): the Gallery's left wall is the learner's three newest pieces, each
+ * opening its own work page, and the total, with "See all N" opening My work. Their real pieces only; none: the empty line.
+ */
+const MY_WORK = '/portal/portfolio/work';
+export function myWorkBoard(items: WorkItem[] | null): SideTop {
+  if (!items?.length) return { title: '🗂 My work', rows: [], empty: 'Nothing here yet', open: 'Open My work', route: MY_WORK };
+  const newest = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 3);
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Chicago' });
+  return {
+    title: '🗂 My work',
+    rows: [
+      ...newest.map((it) => ({ label: it.title || 'Untitled piece', value: day(it.createdAt), route: `${MY_WORK}/${encodeURIComponent(it.id)}` })),
+      { label: 'All pieces', value: String(items.length) },
+    ],
+    open: `See all ${items.length}`,
+    route: MY_WORK,
+  };
 }
 
 /** Interns: the real standup (the cohort's interns-only standup in required_meetings) and Team "Not assigned yet" (there is no

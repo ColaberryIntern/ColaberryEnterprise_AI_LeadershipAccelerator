@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { CareerProfile, isVerifiedLevel } from '../../../services/careerApi';
 
 /**
@@ -120,10 +121,11 @@ const StudioOverview: React.FC<{
               </button>
             </li>
             <li>
-              <button type="button" className="cp-stat" onClick={() => onJump('builds')}>
+              {/* C128: every piece now lives in My work, so the count opens it */}
+              <Link className="cp-stat" to="/portal/portfolio/work">
                 <span className="cp-stat-n">{artifacts.length}</span>
-                <span className="cp-stat-l">build artifacts</span>
-              </button>
+                <span className="cp-stat-l">pieces of work</span>
+              </Link>
             </li>
             <li>
               <button type="button" className="cp-stat" onClick={() => onJump('builds')}>
