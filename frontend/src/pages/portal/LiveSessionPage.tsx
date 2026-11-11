@@ -192,12 +192,28 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
    */
   const showWorkspace = !companion && moment === 'live';
 
+  /**
+   * THE CARD ALSO HAS TO GROW FOR A PRODUCER BEFORE ANYTHING IS AIRING (D6).
+   *
+   * `showWorkspace` keyed the width to `moment === 'live'`, but the producer strip renders at
+   * every moment on purpose - `not_started` is exactly when Go Backstage has to be pressed.
+   * So a producer arriving before the class got the controls, the clock, the feed health, the
+   * audience chip and a row of command buttons inside a 440px column.
+   *
+   * It cannot be keyed to `isAuthenticated` instead, because that is true for every signed-in
+   * STUDENT, and they would get a 980px card with nothing in it. Only the strip knows whether
+   * the server calls this viewer a producer, so it reports it and the width follows.
+   */
+  const [isProducer, setIsProducer] = useState(false);
+  const onProducerConfirmed = useCallback(() => setIsProducer(true), []);
+  const wide = showWorkspace || (!companion && isProducer);
+
   return (
     <div className="clv-root">
       <style>{CLV_CSS}</style>
 
       <main
-        className={`clv-card${showWorkspace ? ' is-wide' : ''}`}
+        className={`clv-card${wide ? ' is-wide' : ''}`}
         data-testid="live-session-page"
       >
         <div className="clv-brand">
@@ -275,7 +291,12 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
                 self-hides for anyone the server does not call a producer, so this condition
                 is about which screen it suits, not about who may use it. Gated on
                 authentication only to avoid a guaranteed 401 poll on a public page. */}
-            {!companion && isAuthenticated && <ProducerStrip sessionId={sessionId} />}
+            {!companion && isAuthenticated && (
+              <ProducerStrip
+                sessionId={sessionId}
+                onProducerConfirmed={onProducerConfirmed}
+              />
+            )}
 
             {moment === 'unknown' && (
               <button type="button" className="clv-btn clv-btn-ghost" onClick={() => { void read(); }}>

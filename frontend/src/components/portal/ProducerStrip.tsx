@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   readLiveAudience as readLiveAudienceRequest,
   readProducerState,
@@ -9,9 +9,15 @@ import {
   type ProducerStateResult,
   type RundownResult,
 } from '../../services/broadcastProducer';
+import { readRoomPulse as readRoomPulseRequest, type RoomPulseResult } from '../../services/liveRoomPulse';
 import { clockTicks, producerClock } from './producerClock';
+import ProducerHeader from './ProducerHeader';
+import ProducerRehearsalNotice from './ProducerRehearsalNotice';
 import ProducerRundown from './ProducerRundown';
-import { CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel, blockedReasonCopy } from './producerStripCopy';
+import {
+  CONFIRM_Q, LABELS, needsConfirm, noActionsNote, blockedReasonCopy,
+  audienceChip, roomChip, stuckChip, endReasonCopy,
+} from './producerStripCopy';
 import { CPS_CSS } from './producerStripStyles';
 
 /**
@@ -66,6 +72,21 @@ export interface ProducerStripProps {
    * test — the thing `broadcastRoutes.test.ts` had to go back and fix on the backend.
    */
   loadRundown?: (sessionId: string) => Promise<RundownResult>;
+  /** Injected in tests. A THIRD request, keyed on the session rather than the occurrence (D8). */
+  loadRoomPulse?: (sessionId: string) => Promise<RoomPulseResult>;
+  /**
+   * Called once, when the server has confirmed this viewer is a producer (D6).
+   *
+   * The page above needs to know, because the card it draws is 440px wide and a producer's
+   * controls do not fit in it. It cannot work this out for itself: the only signal it has is
+   * `isAuthenticated`, and widening on that would hand every signed-in STUDENT a 980px card
+   * with nothing in it. The strip is the only thing that knows, so the strip says so.
+   *
+   * One-shot, matching `everAuthorized`, which never goes back to false. A strip that stopped
+   * being authorized mid-class keeps the width it had, because the explanation it renders in
+   * that case needs the room more than the state it replaced did.
+   */
+  onProducerConfirmed?: () => void;
 }
 
 /**
@@ -93,6 +114,15 @@ const POLL_MS = 5000;
  */
 const AUDIENCE_POLL_MS = 15_000;
 
+/**
+ * States in which the room count is worth asking for (D8).
+ *
+ * Starts at `scheduled`, not at `live`: the room fills up before the class does, and "is
+ * anyone here yet" is the question a producer asks backstage. Stops at `ended`, because a room
+ * count left on screen after the class is over is a claim about a room that has emptied.
+ */
+const ROOM_WATCHED_STATES = ['scheduled', 'backstage', 'live', 'reconnecting'];
+
 /** The commands worth showing a refusal for, rather than simply omitting. */
 const EXPLAIN_WHEN_BLOCKED: ProducerCommand[] = ['go_live', 'mark_content_started'];
 
@@ -118,44 +148,16 @@ function useProducerTick(on: boolean): number {
   return now;
 }
 
-/**
- * The viewer-count chip, as four distinct readings that must never be mistaken for each other.
- *
- * `12 watching` is a measurement. `not measuring` is the server saying collection is down —
- * it answers 503 and omits the count entirely so that no client can print a fabricated zero,
- * and a producer who read that as "nobody is here" would stop a class people are watching.
- * `no answer` is this tab failing to ask or failing to hear, which is a different fault with a
- * different fix. And a kept number marked `not updating` is the honest version of the last two
- * when there IS a last good count worth showing.
- *
- * `0 watching` is a measurement like any other and renders as a number, not as an absence.
- *
- * Only shown while on air: a viewer count on a scheduled occurrence is a count of nothing, and
- * one left on screen after the class ended is a stale claim about a broadcast that is over.
- */
-function audienceChip(
-  onAir: boolean, aud: LiveAudienceResult | null, stale: boolean,
-): { state: string; text: string } | null {
-  if (!onAir) return null;
-  if (aud?.outcome === 'ok') {
-    return {
-      state: stale ? 'stale' : 'ok',
-      text: `${aud.watchingNow} watching${stale ? ' · not updating' : ''}`,
-    };
-  }
-  if (aud?.outcome === 'unknown') return { state: 'unknown', text: 'not measuring' };
-  // Nothing good has arrived and the last attempt failed. `forbidden`, and the moment before
-  // the first read lands, both fall through to nothing at all.
-  if (stale) return { state: 'failed', text: 'no answer' };
-  return null;
-}
-
 export default function ProducerStrip(
-  { sessionId, loadState, sendCommand, loadAudience, loadRundown }: ProducerStripProps,
+  {
+    sessionId, loadState, sendCommand, loadAudience, loadRundown, loadRoomPulse,
+    onProducerConfirmed,
+  }: ProducerStripProps,
 ): React.ReactElement | null {
   const read = loadState ?? readProducerState;
   const send = sendCommand ?? sendProducerCommandRequest;
   const readAudience = loadAudience ?? readLiveAudienceRequest;
+  const readPulse = loadRoomPulse ?? readRoomPulseRequest;
 
   const [state, setState] = useState<ProducerStateResult | null>(null);
   const [busy, setBusy] = useState<ProducerCommand | null>(null);
@@ -208,6 +210,21 @@ export default function ProducerStrip(
     const timer = setInterval(tick, POLL_MS);
     return () => { alive = false; clearInterval(timer); };
   }, [sessionId, refresh]);
+
+  /**
+   * Tell the page above that this viewer is a producer, exactly once (D6).
+   *
+   * In an effect rather than inside `refresh`, because calling a parent's setState from inside
+   * a fetch callback ties the parent's render to this component's poll. The ref guard rather
+   * than the flag alone, because the callback may be a fresh arrow on every parent render,
+   * which would otherwise re-fire this on every render for the rest of the class.
+   */
+  const toldParent = useRef(false);
+  useEffect(() => {
+    if (!everAuthorized || toldParent.current) return;
+    toldParent.current = true;
+    onProducerConfirmed?.();
+  }, [everAuthorized, onProducerConfirmed]);
 
   /**
    * The occurrence, pulled out ahead of the render guards because the hooks below need it and
@@ -263,6 +280,36 @@ export default function ProducerStrip(
     const timer = setInterval(() => { void tick(); }, AUDIENCE_POLL_MS);
     return () => { alive = false; clearInterval(timer); };
   }, [onAir, occurrenceId, readAudience]);
+
+  /**
+   * THE ROOM, which is a different question from the audience (D8).
+   *
+   * Keyed on the SESSION rather than the occurrence, and polled from backstage onward rather
+   * than only on air, because "is anyone here yet" is a backstage question - the room fills up
+   * before the class starts. Same stale-rather-than-overwrite handling as the audience count,
+   * for the same reason: a failed request has no number, and writing it over the last good one
+   * would throw away the only figure there is.
+   */
+  const [pulse, setPulse] = useState<RoomPulseResult | null>(null);
+  const [pulseStale, setPulseStale] = useState(false);
+  const roomWatched = occ ? ROOM_WATCHED_STATES.includes(occ.editorial_state) : false;
+
+  useEffect(() => {
+    if (!roomWatched || !sessionId) return undefined;
+    setPulse(null);
+    setPulseStale(false);
+    let alive = true;
+    const tick = async (): Promise<void> => {
+      const r = await readPulse(sessionId);
+      if (!alive) return;
+      if (r.outcome === 'failed') { setPulseStale(true); return; }
+      setPulseStale(false);
+      setPulse(r);
+    };
+    void tick();
+    const timer = setInterval(() => { void tick(); }, AUDIENCE_POLL_MS);
+    return () => { alive = false; clearInterval(timer); };
+  }, [roomWatched, sessionId, readPulse]);
 
   const run = useCallback(async (command: ProducerCommand): Promise<void> => {
     const occurrence = state?.occurrence;
@@ -332,48 +379,36 @@ export default function ProducerStrip(
     (c) => !c.available && c.error_class && EXPLAIN_WHEN_BLOCKED.includes(c.command),
   );
   const audience = audienceChip(onAir, aud, audStale);
+  /**
+   * The two chip inputs, derived once rather than twice. `measured` is the only shape that
+   * carries numbers; `unmeasured` is the server saying it is not collecting, which the chips
+   * must render as words. `forbidden` deliberately produces neither, so the chips disappear
+   * for a viewer who is not entitled to the counts instead of nagging about a failed read.
+   */
+  const measured = pulse && pulse.outcome === 'ok' ? pulse : null;
+  const unmeasured = pulse?.outcome === 'unknown';
+  const endReason = endReasonCopy(occurrence.editorial_state, occurrence.end_reason);
 
   return (
     <section className="cps" data-testid="producer-strip" aria-label="Producer controls">
       <style>{CPS_CSS}</style>
 
-      <header className="cps-head">
-        <span
-          className={`cps-badge${onAir ? ' is-live' : ''}`}
-          data-testid="producer-state"
-        >
-          {onAir && <span className="cps-dot" aria-hidden="true" />}
-          {stateLabel(occurrence.editorial_state)}
-        </span>
-        {/*
-          * NEITHER THE CLOCK NOR THE COUNT IS A LIVE REGION, deliberately. Both change on their
-          * own — one every second, one every fifteen — and `aria-live` on either would make a
-          * screen reader read the time out loud over the class a producer is running. They are
-          * plain text, readable on demand, which is how a wall clock works.
-          */}
-        {reading && (
-          <span
-            className="cps-clock"
-            data-testid="producer-clock"
-            data-kind={reading.kind}
-          >
-            {reading.text}
-          </span>
-        )}
-        <span className="cps-health" data-testid="producer-health">
-          feed: {occurrence.provider_health}
-        </span>
-        {audience && (
-          <span
-            className="cps-aud"
-            data-testid="producer-audience"
-            data-state={audience.state}
-          >
-            {audience.text}
-          </span>
-        )}
-        <span className="cps-version">v{occurrence.version}</span>
-      </header>
+      <ProducerHeader
+        occurrence={occurrence}
+        onAir={onAir}
+        reading={reading}
+        audience={audience}
+        room={roomChip(measured, unmeasured, pulseStale)}
+        stuck={stuckChip(measured, unmeasured, pulseStale)}
+      />
+
+      {/* A rehearsal says what it does and does not reach. See the component. */}
+      {occurrence.editorial_state === 'backstage' && <ProducerRehearsalNotice />}
+
+      {/* Who ended it, once it is over (D8). The value was already on the wire and unread. */}
+      {endReason && (
+        <p className="cps-note" data-testid="producer-end-reason">{endReason}</p>
+      )}
 
       <div className="cps-actions">
         {available.map((c) => (
