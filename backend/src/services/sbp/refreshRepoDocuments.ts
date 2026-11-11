@@ -48,13 +48,14 @@ export type RefreshOutcome =
   | 'no_plan'
   | 'no_repo'
   | 'no_enrollment'
+  | 'pull_only'        // the platform has read-only access — docs can't be pushed (a known state, not a failure)
   | 'write_failed';
 
 export interface RefreshResult {
   outcome: RefreshOutcome;
   commit_sha: string | null;
   changed_paths: string[];
-  /** Set only when `outcome` is `write_failed`. */
+  /** Set when `outcome` is `write_failed` or `pull_only` (the GitHub error class, e.g. `NoPushAccess`). */
   error_class: string | null;
 }
 
@@ -220,6 +221,11 @@ export async function refreshRepoDocuments(
           projectId, error_class: recordErr?.name ?? 'Error',
         });
       }
+      // Pull-only is a KNOWN, CORRECT state, not a failure: GitHub told us the platform can only READ this repo,
+      // so the docs genuinely cannot be pushed. Return a distinct `pull_only` outcome (not the generic
+      // `write_failed`) so the caller treats it as a clear state and surfaces the read-only guidance, instead of
+      // reporting it as an error the student can do nothing with.
+      return result('pull_only', { error_class: errorClass });
     }
 
     return result('write_failed', { error_class: errorClass });
