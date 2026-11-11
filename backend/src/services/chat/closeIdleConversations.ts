@@ -36,6 +36,15 @@ import { closeConversation } from '../chatService';
  * `closeConversation()` returns early when the status is already 'closed', and this only
  * selects `status='active'`. Running the sweep twice in the same minute closes nothing twice
  * and sends nothing twice.
+ *
+ * WHAT ACTUALLY HAPPENED ON DEPLOY, measured in production.
+ * The sweep first ran at 11:50 UTC on 2026-11-11, ten minutes after the merge, and closed 17
+ * conversations in that one tick - every conversation in eight months that a visitor had
+ * actually spoken in. `behavioral_signals` of type `chat_engagement` went from 0 to 5, which
+ * is exactly the number of conversations carrying three or more visitor messages, and
+ * `admissions_memory.conversation_count` went from 0 across all 116 rows to non-zero on 9.
+ * The remaining 128 rows are greeting-only and are left alone on purpose; see
+ * `findIdleConversations` for why closing them would make Maya's memory worse, not better.
  */
 
 /** Minutes of inactivity after which a conversation is considered finished. */
@@ -66,12 +75,31 @@ export interface CloseIdleOptions {
 }
 
 /**
- * Finds conversations that are still 'active' but have had no activity for `idleMinutes`.
+ * Finds conversations the visitor took part in, which are still 'active' but have had no
+ * activity for `idleMinutes`.
  *
- * `updated_at` is the activity marker because `sendMessage()` calls `conversation.update()`
- * on every exchange, so it moves whenever the visitor or the assistant says anything. A
- * conversation that was opened and never used still has its `created_at`-time `updated_at`,
- * so abandoned widget opens are swept too, which is correct: they are finished.
+ * THE ACTIVITY MARKER IS NOT JUST `updated_at`.
+ * `ChatConversation` declares `timestamps: false`, so Sequelize maintains neither timestamp
+ * column. `updated_at` is written only by the code paths that explicitly set it -
+ * `sendMessage()` and `closeConversation()` do, and the greeting write in
+ * `startConversation()` does not. So a bare `updated_at < cutoff` is BLIND to every row where
+ * the column is null, because `null < cutoff` evaluates to null and never to true. Measured in
+ * production on 2026-11-11: 128 of 145 conversations had a null `updated_at` and were
+ * invisible to exactly that predicate. The marker is therefore `updated_at` when set and
+ * `started_at` when it is not, expressed as two OR'd clauses rather than a COALESCE so both
+ * sides stay plain indexed column comparisons.
+ *
+ * WHY `visitor_message_count > 0` IS PART OF BEING SWEEPABLE.
+ * All 128 of those rows were greeting-only: `message_count = 1`,
+ * `visitor_message_count = 0`, a widget opened and abandoned without the visitor ever typing.
+ * Closing one is not harmless. `closeConversation()` fires `saveConversationToMemory()`, which
+ * has no substance guard: it would increment `admissions_memory.conversation_count` and append
+ * a summary entry reading "0 messages exchanged", and `buildMemoryContext()` injects those
+ * summaries into Maya's system prompt. Sweeping them would therefore inflate the very metric
+ * R4 exists to make meaningful, and feed Maya a memory of a conversation that never happened.
+ * A visitor who never spoke is not someone to remember, so these rows are deliberately left
+ * `active`. They are inert: `sendMessage()` would accept a late message on one, which is the
+ * correct outcome if the visitor ever returns in that session.
  */
 export async function findIdleConversations(
   idleMinutes: number,
@@ -82,9 +110,19 @@ export async function findIdleConversations(
   return ChatConversation.findAll({
     where: {
       status: 'active',
-      updated_at: { [Op.lt]: cutoff },
+      visitor_message_count: { [Op.gt]: 0 },
+      [Op.or]: [
+        { updated_at: { [Op.lt]: cutoff } },
+        // `Op.is` states the IS NULL rather than leaning on Sequelize's coercion of a bare
+        // null. Expressing this at all required correcting `ChatConversation.updated_at` to
+        // `Date | null`: typed as a plain `Date`, the comparison would not compile, which is
+        // part of how the blindness survived review in the first place.
+        { updated_at: { [Op.is]: null }, started_at: { [Op.lt]: cutoff } },
+      ],
     },
-    order: [['updated_at', 'ASC']],
+    // `started_at` is NOT NULL and indexed, so it orders deterministically where `updated_at`
+    // cannot: ordering by a column that is null on most rows leaves the batch arbitrary.
+    order: [['started_at', 'ASC']],
     limit,
   });
 }
