@@ -61,17 +61,17 @@ function mockDb(opts: {
     if (/FROM information_schema\.tables/.test(sql)) {
       return Promise.resolve([{ n: tableExists ? 1 : 0 }]);
     }
-    if (/^\s*INSERT INTO evidence_links/.test(sql)) {
+    if (/^\s*INSERT INTO revenue_evidence_links/.test(sql)) {
       return Promise.resolve(inserted ? [{ id: 'link-new' }] : []);
     }
-    if (/SELECT id, unlinked_at FROM evidence_links/.test(sql)) {
+    if (/SELECT id, unlinked_at FROM revenue_evidence_links/.test(sql)) {
       return Promise.resolve([{ id: 'link-existing', unlinked_at: existingUnlinkedAt }]);
     }
-    if (/^\s*UPDATE evidence_links/.test(sql)) {
+    if (/^\s*UPDATE revenue_evidence_links/.test(sql)) {
       return Promise.resolve(opts.updated === false ? [] : [{ id: 'link-1' }]);
     }
     if (/GROUP BY 1, 2/.test(sql)) return Promise.resolve(opts.counts ?? []);
-    if (/FROM evidence_links/.test(sql)) return Promise.resolve(opts.rows ?? []);
+    if (/FROM revenue_evidence_links/.test(sql)) return Promise.resolve(opts.rows ?? []);
     return Promise.resolve([]);
   });
 }
@@ -210,7 +210,7 @@ describe('rule 2 — automation cannot resurrect a human unlink', () => {
     mockDb({ inserted: false, existingUnlinkedAt: new Date('2026-11-01T00:00:00Z') });
     await linkEvidence(input({ linkMethod: 'automatic', confidence: 0.9 }));
     const sqls = m.query.mock.calls.map((c) => String(c[0])).join('\n');
-    expect(sqls).not.toMatch(/UPDATE evidence_links/);
+    expect(sqls).not.toMatch(/UPDATE revenue_evidence_links/);
   });
 
   it('gives a human an explicit door to restore it', async () => {

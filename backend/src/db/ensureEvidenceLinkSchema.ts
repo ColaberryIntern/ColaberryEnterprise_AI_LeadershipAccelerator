@@ -10,6 +10,27 @@ import { sequelize } from '../config/database';
  * rather than through five bespoke queries. R4 through R9 all depend on it, which is why it
  * is P0 and why it is deliberately boring.
  *
+ * ── WHY THE TABLE IS `revenue_evidence_links` AND NOT `evidence_links` ───────────────────
+ *
+ * It was `evidence_links`, and that name was already taken. The ticket/evidence feature owns
+ * a table of the same name with a completely different shape
+ * (`id, evidence_id, ticket_id, link_role, created_at`), created by `ensureEvidenceSchema`
+ * and read by `services/evidence/evidenceService`, `workforce/liveAgentsService` and
+ * `workLedger/summaryGeneratorService`.
+ *
+ * `CREATE TABLE IF NOT EXISTS` turned that collision into SILENCE. The table already
+ * existed, so the create was a no-op, and every index and constraint after it failed
+ * against someone else's columns. All ten failures were logged at `warn` and the boot
+ * continued, so nothing was visibly broken until a user clicked a card: from 2026-11-11,
+ * every Revenue Room drill-down returned "Could not build the drill-down." because
+ * `getEvidenceTimeline` was selecting `source_system` from a table that has no such column.
+ *
+ * The lesson is about the idiom rather than this table. `IF NOT EXISTS` protects against a
+ * SECOND RUN; it does not protect against a SECOND OWNER, and it cannot tell the two apart.
+ * A prefixed name is the cheap fix, so this one is namespaced to the feature that owns it.
+ * `tableExists()` in `evidenceLinkService` was never the problem: it correctly found a table
+ * called `evidence_links`, which is exactly what made the failure confusing.
+ *
  * THE TABLE HOLDS NO EVIDENCE, ONLY A POINTER TO IT. Copied from
  * `ensureAccountArtifactLinkSchema` and, before that, `models/CertEvidenceMapping.ts`,
  * which says it plainest: copying artifacts in "would create a second source of truth that
@@ -61,7 +82,7 @@ import { sequelize } from '../config/database';
  */
 
 /** The one new table. Named so the test can assert there is exactly one. */
-export const NEW_TABLES: ReadonlyArray<string> = ['evidence_links'];
+export const NEW_TABLES: ReadonlyArray<string> = ['revenue_evidence_links'];
 
 /**
  * Where a piece of evidence lives. Each value names a system this repo can already read,
@@ -127,7 +148,7 @@ function valueList(values: ReadonlyArray<string>): string {
   for (const v of values) {
     if (!/^[a-z][a-z0-9_]*$/.test(v)) {
       throw new Error(
-        `evidence_links vocabulary value ${JSON.stringify(v)} is not a bare identifier. `
+        `revenue_evidence_links vocabulary value ${JSON.stringify(v)} is not a bare identifier. `
         + 'These values are interpolated into DDL, so only [a-z0-9_] is allowed.',
       );
     }
@@ -137,7 +158,7 @@ function valueList(values: ReadonlyArray<string>): string {
 
 export function evidenceLinkStatements(): string[] {
   return [
-    `CREATE TABLE IF NOT EXISTS evidence_links (
+    `CREATE TABLE IF NOT EXISTS revenue_evidence_links (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
        source_system VARCHAR(40) NOT NULL,
@@ -171,24 +192,24 @@ export function evidenceLinkStatements(): string[] {
     // deliberately NOT part of the key: if a classifier changes its mind about how a
     // document relates to an initiative, the right outcome is one row that gets corrected,
     // not two rows that both claim to be the same document.
-    `CREATE UNIQUE INDEX IF NOT EXISTS uq_evidence_links_source_initiative
-       ON evidence_links (source_system, source_id, initiative_type, initiative_key)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_revenue_evidence_links_source_initiative
+       ON revenue_evidence_links (source_system, source_id, initiative_type, initiative_key)`,
 
     // The drill-down timeline query: everything for one initiative, newest first. Ordered
     // on observed_at because that is the question a reader is asking ("what happened, and
     // when"), not created_at, which would answer "when did we find out".
-    `CREATE INDEX IF NOT EXISTS idx_evidence_links_initiative_observed
-       ON evidence_links (initiative_type, initiative_key, observed_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_revenue_evidence_links_initiative_observed
+       ON revenue_evidence_links (initiative_type, initiative_key, observed_at DESC)`,
 
     // The reverse lookup: "what is this document already linked to?", which is what stops
     // a human linking the same thing twice by hand.
-    `CREATE INDEX IF NOT EXISTS idx_evidence_links_source
-       ON evidence_links (source_system, source_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_revenue_evidence_links_source
+       ON revenue_evidence_links (source_system, source_id)`,
 
     // Live links only, which is every read the Room performs. A partial index keeps the
     // unlinked rows out of the hot path without deleting the audit trail.
-    `CREATE INDEX IF NOT EXISTS idx_evidence_links_live
-       ON evidence_links (initiative_type, initiative_key, observed_at DESC)
+    `CREATE INDEX IF NOT EXISTS idx_revenue_evidence_links_live
+       ON revenue_evidence_links (initiative_type, initiative_key, observed_at DESC)
        WHERE unlinked_at IS NULL`,
 
     // ── THE VOCABULARY CONSTRAINTS, GENERATED FROM THE EXPORTED ARRAYS ───────────────────
@@ -196,27 +217,27 @@ export function evidenceLinkStatements(): string[] {
     // ensureStrategicAccountSchema. Kept as VARCHAR + CHECK rather than a Postgres enum
     // because the sets will grow as the motion runs, and an enum makes that a migration
     // instead of a one-line change.
-    `ALTER TABLE evidence_links DROP CONSTRAINT IF EXISTS ck_evidence_links_source_system`,
-    `ALTER TABLE evidence_links ADD CONSTRAINT ck_evidence_links_source_system
+    `ALTER TABLE revenue_evidence_links DROP CONSTRAINT IF EXISTS ck_revenue_evidence_links_source_system`,
+    `ALTER TABLE revenue_evidence_links ADD CONSTRAINT ck_revenue_evidence_links_source_system
        CHECK (source_system IN (${valueList(SOURCE_SYSTEMS)}))`,
 
-    `ALTER TABLE evidence_links DROP CONSTRAINT IF EXISTS ck_evidence_links_initiative_type`,
-    `ALTER TABLE evidence_links ADD CONSTRAINT ck_evidence_links_initiative_type
+    `ALTER TABLE revenue_evidence_links DROP CONSTRAINT IF EXISTS ck_revenue_evidence_links_initiative_type`,
+    `ALTER TABLE revenue_evidence_links ADD CONSTRAINT ck_revenue_evidence_links_initiative_type
        CHECK (initiative_type IN (${valueList(INITIATIVE_TYPES)}))`,
 
-    `ALTER TABLE evidence_links DROP CONSTRAINT IF EXISTS ck_evidence_links_relation`,
-    `ALTER TABLE evidence_links ADD CONSTRAINT ck_evidence_links_relation
+    `ALTER TABLE revenue_evidence_links DROP CONSTRAINT IF EXISTS ck_revenue_evidence_links_relation`,
+    `ALTER TABLE revenue_evidence_links ADD CONSTRAINT ck_revenue_evidence_links_relation
        CHECK (relation IN (${valueList(RELATIONS)}))`,
 
-    `ALTER TABLE evidence_links DROP CONSTRAINT IF EXISTS ck_evidence_links_link_method`,
-    `ALTER TABLE evidence_links ADD CONSTRAINT ck_evidence_links_link_method
+    `ALTER TABLE revenue_evidence_links DROP CONSTRAINT IF EXISTS ck_revenue_evidence_links_link_method`,
+    `ALTER TABLE revenue_evidence_links ADD CONSTRAINT ck_revenue_evidence_links_link_method
        CHECK (link_method IN (${valueList(LINK_METHODS)}))`,
 
     // A confidence score only means something for a machine-made link, and a human link
     // carrying 0.72 would invite someone to average the two. Enforced here because the
     // alternative is a comment nobody reads.
-    `ALTER TABLE evidence_links DROP CONSTRAINT IF EXISTS ck_evidence_links_confidence`,
-    `ALTER TABLE evidence_links ADD CONSTRAINT ck_evidence_links_confidence
+    `ALTER TABLE revenue_evidence_links DROP CONSTRAINT IF EXISTS ck_revenue_evidence_links_confidence`,
+    `ALTER TABLE revenue_evidence_links ADD CONSTRAINT ck_revenue_evidence_links_confidence
        CHECK (
          (link_method = 'human' AND confidence IS NULL)
          OR (link_method = 'automatic' AND confidence IS NOT NULL
@@ -225,8 +246,8 @@ export function evidenceLinkStatements(): string[] {
 
     // An unlink must say who did it. A row that fell out of the timeline with nobody's name
     // on it is the kind of thing that gets argued about later.
-    `ALTER TABLE evidence_links DROP CONSTRAINT IF EXISTS ck_evidence_links_unlink_attributed`,
-    `ALTER TABLE evidence_links ADD CONSTRAINT ck_evidence_links_unlink_attributed
+    `ALTER TABLE revenue_evidence_links DROP CONSTRAINT IF EXISTS ck_revenue_evidence_links_unlink_attributed`,
+    `ALTER TABLE revenue_evidence_links ADD CONSTRAINT ck_revenue_evidence_links_unlink_attributed
        CHECK (unlinked_at IS NULL OR unlinked_by IS NOT NULL)`,
   ];
 }
