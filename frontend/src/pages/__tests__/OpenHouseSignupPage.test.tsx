@@ -30,6 +30,8 @@ jest.mock('../../services/openHouseApi', () => ({
   openHouseAcquisitionFields: jest.fn(),
 }));
 jest.mock('../../utils/tracker', () => ({ identifyVisitor: jest.fn() }));
+// C121: the real helper navigates the window; here it only records the call.
+jest.mock('../../utils/startPortalSession', () => ({ startPortalSession: jest.fn(() => true) }));
 jest.mock('react-router-dom', () => ({
   Link: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
 }));
@@ -335,6 +337,55 @@ describe('the advertising rule', () => {
     expect(text()).toMatch(/\$0/);
     expect(text()).toContain('No card needed');
     expect(text().toLowerCase()).not.toMatch(/\bfree\b/);
+    await fillAndSubmit();
+    expect(text().toLowerCase()).not.toMatch(/\bfree\b/);
+  });
+});
+
+// C121 (Ali, 11 Nov): a brand-new account opens with one click instead of a trip to the inbox.
+describe("C121: Access your account", () => {
+  const { startPortalSession } = jest.requireMock("../../utils/startPortalSession");
+  const ACCESS = { jwt: "jwt-new", next: "/portal/runtime/b0c844c0-01b0-439e-bc28-6a1b76b09afb" };
+
+  it("shows Access your account for a new account and opens the welcome video with its session", async () => {
+    mockSignUp.mockResolvedValue({ ...OK, access: ACCESS });
+    await mount();
+    await fillAndSubmit();
+    expect(text()).toContain("Your account is ready");
+    expect(text()).toContain("come back any time");
+    expect(text()).not.toContain("Check your email for your login link");
+    const btn = container.querySelector("[data-testid=\"cboh-access\"]") as HTMLButtonElement;
+    expect(btn.textContent).toBe("Access your account");
+    await act(async () => { btn.click(); });
+    expect(startPortalSession).toHaveBeenCalledWith("jwt-new", ACCESS.next, undefined);
+  });
+
+  it("sends an existing account to sign in, with no Access button", async () => {
+    mockSignUp.mockResolvedValue({ ...OK, created: false, access: null,
+      message: "You are signed up. You already have an account with this email, so sign in to pick up where you left off." });
+    await mount();
+    await fillAndSubmit();
+    expect(text()).toContain("Your seat is saved");
+    expect(container.querySelector("[data-testid=\"cboh-access\"]")).toBeNull();
+    // This file's router mock renders Link as a bare <span> (props dropped), so assert on what the person reads.
+    expect(text()).toContain("already have an account with this email, so sign in");
+    expect(text()).toContain("Sign in");
+    expect(text()).not.toContain("Check your email for your login link");
+  });
+
+  it("falls back to the email when the browser will not keep the session", async () => {
+    (startPortalSession as jest.Mock).mockReturnValueOnce(false);
+    mockSignUp.mockResolvedValue({ ...OK, access: ACCESS });
+    await mount();
+    await fillAndSubmit();
+    await act(async () => { (container.querySelector("[data-testid=\"cboh-access\"]") as HTMLButtonElement).click(); });
+    expect(text()).toContain("sign-in link we just emailed you");
+    expect(container.querySelector("[data-testid=\"cboh-access\"]")).toBeNull();
+  });
+
+  it("never says the barred word on the new-account screen", async () => {
+    mockSignUp.mockResolvedValue({ ...OK, access: ACCESS });
+    await mount();
     await fillAndSubmit();
     expect(text().toLowerCase()).not.toMatch(/\bfree\b/);
   });

@@ -5,8 +5,10 @@ import {
   openHouseAcquisitionFields,
   signUpForOpenHouse,
   type NextOpenHouse,
+  type OpenHouseSignupResult,
   type SignedUpEvent,
 } from '../services/openHouseApi';
+import OpenHouseSignedUp from './OpenHouseSignedUp';
 import { identifyVisitor } from '../utils/tracker';
 import { SIGNUP_CONSENT_TEXT } from '../config/consentText';
 
@@ -85,7 +87,7 @@ function OpenHouseSignupPage(): React.ReactElement {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState<{ message: string; event: SignedUpEvent | null } | null>(null);
+  const [done, setDone] = useState<{ message: string; event: SignedUpEvent | null; access: OpenHouseSignupResult['access'] } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -133,7 +135,7 @@ function OpenHouseSignupPage(): React.ReactElement {
         });
       } catch { /* instrumentation is never load-bearing */ }
 
-      setDone({ message: res.message, event: res.event });
+      setDone({ message: res.message, event: res.event, access: res.access ?? null });
       setLoading(false);
     } catch (err: any) {
       const status = err?.response?.status;
@@ -159,22 +161,13 @@ function OpenHouseSignupPage(): React.ReactElement {
         </div>
 
         {done ? (
-          <div data-testid="cboh-done">
-            <div className="cboh-head">
-              <span className="cboh-badge">You are in</span>
-              <h1 className="cboh-title">Your seat is saved</h1>
-              <p className="cboh-text" role="status">{done.message}</p>
-            </div>
-            {done.event && whenLabel(done.event) !== '' && (
-              <div className="cboh-when" data-testid="cboh-done-when">
-                <span className="cboh-when-main">{whenLabel(done.event)}</span>
-                {done.event.format_label && <span className="cboh-when-sub">{done.event.format_label}</span>}
-              </div>
-            )}
-            <p className="cboh-foot">
-              Already have an account? <Link className="cboh-link" to="/portal/login">Sign in</Link>
-            </p>
-          </div>
+          // C121: a new account opens with one click ("Access your account"); an existing one is sent to sign in.
+          <OpenHouseSignedUp
+            message={done.message}
+            when={done.event ? whenLabel(done.event) : ''}
+            formatLabel={done.event?.format_label ?? null}
+            access={done.access}
+          />
         ) : (
           <>
             <div className="cboh-head">
@@ -286,6 +279,8 @@ const CBOH_CSS = `
   font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:filter .15s;min-height:48px}
 .cboh-btn:hover:not(:disabled){filter:brightness(.95)}
 .cboh-btn:disabled{opacity:.6;cursor:default}
+.cboh-btn-block{display:block;width:100%;box-sizing:border-box;text-align:center;text-decoration:none}
+.cboh-btn:focus-visible{outline:3px solid #367895;outline-offset:2px}
 .cboh-fine{margin:10px 0 0;font-size:12.5px;color:#8A8A8A;text-align:center;line-height:1.45}
 .cboh-foot{margin:20px 0 0;text-align:center;font-size:14px;color:#6B6B6B}
 .cboh-link{color:#2E6A86;font-weight:700;text-decoration:none}
