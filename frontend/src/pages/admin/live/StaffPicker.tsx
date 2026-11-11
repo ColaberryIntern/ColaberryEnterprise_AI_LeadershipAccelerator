@@ -137,17 +137,17 @@ export default function StaffPicker(
             data-testid={`search-${id}`}
           />
           {open && (
-            <ul className="cls-options" data-testid={`options-${id}`}>
+            <ul className="cls-pickmenu" data-testid={`options-${id}`}>
               {rows.map((s) => (
                 <li key={s.enrollment_id}>
                   <button
                     type="button"
-                    className="cls-option"
+                    className="cls-pickitem"
                     onClick={() => pick(s)}
                     data-testid={`option-${s.enrollment_id}`}
                   >
-                    <span className="cls-option-name">{s.name}</span>
-                    <span className="cls-option-email">{s.email}</span>
+                    <span className="cls-pickitem-name">{s.name}</span>
+                    <span className="cls-pickitem-email">{s.email}</span>
                   </button>
                 </li>
               ))}
@@ -157,12 +157,12 @@ export default function StaffPicker(
                 * first when the second is true turns an outage into a reassuring sentence.
                 */}
               {rows.length === 0 && failed && (
-                <li className="cls-option-empty" data-testid={`failed-${id}`}>
+                <li className="cls-pickitem-empty" data-testid={`failed-${id}`}>
                   The staff list is not answering. Try again in a moment.
                 </li>
               )}
               {rows.length === 0 && !failed && query.trim() !== '' && (
-                <li className="cls-option-empty" data-testid={`none-${id}`}>
+                <li className="cls-pickitem-empty" data-testid={`none-${id}`}>
                   No staff match that. Only people with the staff role can run a class.
                 </li>
               )}
