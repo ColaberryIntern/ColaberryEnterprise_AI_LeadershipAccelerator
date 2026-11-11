@@ -7,6 +7,7 @@ import ColaberryTv from './ColaberryTv';
 import NowStream from './NowStream';
 import TvManager from './TvManager';
 import { markTvSeen } from './tvNote';
+import { applyOrder, readLastFirst, saveLastFirst, shuffleOrder } from './tvPlaylist';
 import type { NowChip } from './nowModel';
 import type { Happening } from './nowApi';
 import './colaberryNow.css';
@@ -33,8 +34,17 @@ export function ColaberryNow({ me, compose = null, onClose }: { me: string; comp
   const openPostRef = useRef<((id: string) => void) | null>(null);
 
   // A failed re-read keeps what is playing (the TV never stops for a network blip) and is logged with its class.
+  // C136: this opening's play order, shuffled once when the playlist first arrives (never starting on last time's first short),
+  // then kept for the whole visit so the 30 s re-read never reshuffles what someone is watching.
+  const order = useRef<string[] | null>(null);
   const refreshTv = useCallback(() => {
-    getTv().then(setTv).catch((err: unknown) => {
+    getTv().then((d) => {
+      if (!order.current && d.videos.length) {
+        order.current = shuffleOrder(d.videos.map((v) => v.id), readLastFirst());
+        saveLastFirst(order.current[0]);
+      }
+      setTv({ ...d, videos: order.current ? applyOrder(d.videos, order.current) : d.videos });
+    }).catch((err: unknown) => {
       console.warn(JSON.stringify({ level: 'warn', service: 'campus', event: 'colaberry_tv_refresh_failed', outcome: 'failure',
         error_class: (err as { name?: string })?.name || 'Error' }));
     });
