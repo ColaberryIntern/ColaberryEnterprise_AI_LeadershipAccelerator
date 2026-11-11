@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { findInSource, identifiersIn, peopleIn, redact } from '../researchPacket';
+import { findInSource, identifiersIn, peopleIn, redact, spellingNote } from '../researchPacket';
 
 /**
  * The research packet.
@@ -123,5 +123,52 @@ describe('reading the shipped code', () => {
 
   it('survives an unreadable file instead of throwing', () => {
     expect(findInSource('anything', [path.join(dir, 'missing.js')])).toBeNull();
+  });
+});
+
+/**
+ * The spelling note, cased on the four names that were actually tried against production.
+ *
+ * Three of the four missed before the lookup was widened, and then the note itself was wrong for
+ * one of the three: it told Ali that "Mohammed Abdul Aleem" was "not quite how the question spelled
+ * it" when the spelling was exactly right and the name just sits last. These cases exist so that a
+ * false note cannot come back, because a false note is worse than no note - it makes the whole
+ * panel something to second-guess.
+ */
+describe('the spelling note fires only when the spelling really differs', () => {
+  it('says nothing when the asked-for name is the whole record', () => {
+    expect(spellingNote('Kes', 'Kes')).toBe('');
+  });
+
+  it('says nothing when the asked-for name is the first of several words', () => {
+    expect(spellingNote('Taiwo Oludimimu', 'Taiwo')).toBe('');
+  });
+
+  /** The case that was wrong in production: right spelling, last position. */
+  it('says nothing when the asked-for name is the LAST word of a longer name', () => {
+    expect(spellingNote('Mohammed Abdul Aleem', 'Aleem')).toBe('');
+  });
+
+  it('names the differing word, not the whole record, when the spelling really differs', () => {
+    const note = spellingNote('Roselen Flores', 'Roselyn');
+    expect(note).toContain('"Roselen"');
+    expect(note).toContain('not "Roselyn"');
+    expect(note).not.toContain('Flores');
+  });
+
+  it('is case-insensitive about an exact match', () => {
+    expect(spellingNote('KES', 'kes')).toBe('');
+  });
+
+  it('ignores punctuation around a word rather than reading it as a difference', () => {
+    expect(spellingNote('Flores, Roselyn', 'Roselyn')).toBe('');
+  });
+
+  it('says nothing when there is no record at all', () => {
+    expect(spellingNote(null, 'Roselyn')).toBe('');
+  });
+
+  it('says nothing when no word is even close, rather than inventing a difference', () => {
+    expect(spellingNote('Quincy Adams', 'Roselyn')).toBe('');
   });
 });
