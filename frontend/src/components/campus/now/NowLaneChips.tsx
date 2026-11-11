@@ -10,8 +10,9 @@ import type { StreamResponse } from './nowApi';
 export default function NowLaneChips({ head, lane, onLane }: { head: StreamResponse | null; lane: Lane; onLane: (l: Lane) => void }): React.ReactElement {
   const countOf = (k: Lane): string => {
     if (!head) return '';
-    if (k === 'q') return `${head.counts.q}${head.open_questions > 0 ? ` ${head.open_questions} open` : ''}`;
-    if (k === 'mine') return `${head.counts.mine}${head.my_new_replies > 0 ? ` ${head.my_new_replies} new` : ''}`;
+    // as the prototype reads them: "Questions 3 open", "Your notes 2 new"; the plain count when nothing is open or new
+    if (k === 'q') return head.open_questions > 0 ? `${head.open_questions} open` : String(head.counts.q);
+    if (k === 'mine') return head.my_new_replies > 0 ? `${head.my_new_replies} new` : String(head.counts.mine);
     return String(head.counts[k]);
   };
   const hasDot = (k: Lane): boolean => !!head && (k === 'mine' ? head.my_new_replies > 0 : (head.new_since.by_lane[k] ?? 0) > 0);
