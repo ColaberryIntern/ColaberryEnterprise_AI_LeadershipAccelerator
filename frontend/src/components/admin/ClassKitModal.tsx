@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/api';
 import SessionClipList from './SessionClipList';
+import SessionHandoff from './SessionHandoff';
 
 // Class Kit — the instructor's one-page, projector-friendly launch panel for a
 // single live session. Opened from the Kit button on each session row.
@@ -216,6 +217,8 @@ const ClassKitModal: React.FC<Props> = ({ sessionId, onClose }) => {
                     broadcast, which most are not. Never printed: the handout is for the room,
                     and a clip list is editorial material for afterwards. */}
                 <SessionClipList sessionId={sessionId} />
+                {/* D12 - beside the clip list, because that is already the editor's surface. */}
+                <SessionHandoff sessionId={sessionId} />
               </div>
             ) : null}
           </div>
