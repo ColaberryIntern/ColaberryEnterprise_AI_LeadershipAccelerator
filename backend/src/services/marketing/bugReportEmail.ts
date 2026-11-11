@@ -38,7 +38,7 @@ export interface BugReportInput {
   reporterName: string;
   reporterEmail: string;
   errors?: Array<{ at: string; kind: string; message: string; stack?: string }>;
-  failedRequests?: Array<{ at: string; method: string; url: string; status: number | string; ms: number }>;
+  failedRequests?: Array<{ at: string; method: string; url: string; status: number | string; ms: number; count?: number }>;
   hasScreenshot: boolean;
 }
 
@@ -102,7 +102,13 @@ export function buildPlainTextBody(input: BugReportInput): string {
 
   const reqs = input.failedRequests ?? [];
   parts.push(section(`FAILED REQUESTS (${reqs.length})`, reqs.length
-    ? reqs.map((r) => `${r.method} ${r.url} -> ${r.status}  (${r.ms}ms)`).join('\n')
+    // "x46" is the difference between a page that stumbled once and an endpoint that
+    // is being refused every thirty seconds, which is exactly the distinction the
+    // reporter cannot make for us.
+    ? reqs.map((r) => {
+        const times = (r.count ?? 1) > 1 ? `  x${r.count}` : '';
+        return `${r.method} ${r.url} -> ${r.status}  (${r.ms}ms)${times}`;
+      }).join('\n')
     : 'None captured. Every request this page made came back OK.'));
 
   parts.push(section('ENVIRONMENT', [

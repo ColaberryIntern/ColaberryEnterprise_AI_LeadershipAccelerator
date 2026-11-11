@@ -41,6 +41,9 @@ const CapturedRequest = z.object({
   url: z.string().max(600),
   status: z.union([z.number(), z.string().max(40)]),
   ms: z.number(),
+  // How many times the same failure repeated. Optional, so a browser running an older
+  // bundle than the backend still posts a valid report rather than a 400.
+  count: z.number().optional(),
 });
 
 const BugReportSchema = z.object({

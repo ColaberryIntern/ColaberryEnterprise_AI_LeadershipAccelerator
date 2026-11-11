@@ -1,29 +1,78 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const POLL_INTERVAL_MS = 30_000;
 
+/**
+ * The "Safe Mode Active" strip across the top of the admin.
+ *
+ * ── WHY THIS STOPS POLLING ON A 403 ─────────────────────────────────────────
+ *
+ * 2026-11-11. Sohail filed three bug reports from the Marketing composer. Each one
+ * carried `failed_requests: 15` — the recorder's cap — and every entry was the same
+ * line: `GET /api/admin/system/safe-mode -> 403`. nginx counted **46** of them in a
+ * single 23-minute session.
+ *
+ * This component is mounted in `AdminLayout`, so it runs on every admin page, and
+ * `/api/admin/system/safe-mode` is section-gated. A section-scoped admin — which is
+ * what Sohail is, and what every future marketing hire will be — is refused every
+ * thirty seconds for as long as the tab is open. Nothing surfaced, because the error
+ * was swallowed below; the only visible effect was that the evidence in his bug
+ * reports was almost entirely this.
+ *
+ * A 403 is an ANSWER, not a blip. It says "this account may not read this", and the
+ * forty-sixth ask gets the same answer as the first. So the poll stops on 401/403 and
+ * keeps retrying on anything else, because a network error genuinely can be transient.
+ *
+ * WHAT THIS DOES NOT DO: widen who may read the endpoint. The same path also accepts a
+ * POST that toggles safe mode, so loosening its gate is a security decision rather than
+ * a frontend one. The scoped admin simply never sees this banner — which was already
+ * true, just expensively.
+ */
 export default function SafeModeBanner() {
   const [active, setActive] = useState(false);
   const [disabling, setDisabling] = useState(false);
 
+  /**
+   * A ref rather than state, deliberately. The interval closes over this, and a state
+   * update would re-run the effect and start a fresh interval — which is the loop this
+   * is trying to end.
+   */
+  const refused = useRef(false);
+
   const fetchStatus = useCallback(async () => {
+    if (refused.current) return;
     try {
       const token = localStorage.getItem('admin_token');
       const res = await fetch('/api/admin/system/safe-mode', {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401 || res.status === 403) {
+        // Not an error to retry. This account is not permitted to read it, and that
+        // will not change while the page is open.
+        refused.current = true;
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setActive(data.safe_mode_active === true);
       }
     } catch {
-      // Silently ignore — banner stays in last known state
+      // A network failure IS transient — keep polling. Silently, as before: a banner
+      // that cannot reach its endpoint has nothing useful to say to the operator.
     }
   }, []);
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, POLL_INTERVAL_MS);
+    void fetchStatus();
+    const interval = setInterval(() => {
+      if (refused.current) {
+        // Stop the timer too, not just the body of it. Leaving it running would keep
+        // waking the tab every thirty seconds to do nothing.
+        clearInterval(interval);
+        return;
+      }
+      void fetchStatus();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 

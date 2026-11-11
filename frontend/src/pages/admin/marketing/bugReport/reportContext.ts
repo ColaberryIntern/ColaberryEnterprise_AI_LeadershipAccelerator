@@ -30,6 +30,8 @@ export interface CapturedRequest {
   url: string;
   status: number | 'network-failure';
   ms: number;
+  /** How many times this same failure happened. Absent or 1 means once. */
+  count?: number;
 }
 
 const MAX_ERRORS = 15;
@@ -50,6 +52,41 @@ function pushCapped<T extends { message?: string }>(list: T[], item: T, cap: num
   if (previous && item.message && previous.message === item.message) return;
   list.push(item);
   while (list.length > cap) list.shift();
+}
+
+/**
+ * Record a failed request, COUNTING a repeat rather than taking another slot.
+ *
+ * WHY. On 2026-11-11 Sohail filed three bug reports from the Marketing composer and all
+ * three arrived with `failed_requests` at the cap of 15 — every entry the same line,
+ * `GET /api/admin/system/safe-mode -> 403`, which a globally-mounted banner was asking
+ * for every thirty seconds and being refused. nginx counted 46 in one session.
+ *
+ * The cap did its job and the ring buffer did its job, and between them they threw away
+ * the only thing the report was for. A reporter cannot be asked to notice that; the
+ * recorder has to not do it. So identical failures — same method, same path, same status
+ * — collapse into one entry carrying how many times it happened, which is strictly more
+ * information in less space, and 15 slots now hold 15 DISTINCT failures.
+ *
+ * The banner itself was fixed too (it stops asking after a 403). This is the half that
+ * means the next endpoint to misbehave in a loop cannot do the same damage.
+ */
+function recordFailedRequest(entry: CapturedRequest): void {
+  const sameFailure = (r: CapturedRequest) =>
+    r.method === entry.method && r.url === entry.url && r.status === entry.status;
+
+  const existing = requests.find(sameFailure);
+  if (existing) {
+    existing.count = (existing.count ?? 1) + 1;
+    // The LATEST occurrence is the useful timestamp: it answers "is this still
+    // happening" rather than "when did this page first stumble".
+    existing.at = entry.at;
+    existing.ms = entry.ms;
+    return;
+  }
+
+  requests.push(entry);
+  while (requests.length > MAX_REQUESTS) requests.shift();
 }
 
 /** `?token=abc` is the one thing in a URL that must never reach an inbox. */
@@ -113,13 +150,11 @@ export function installRecorders(): void {
     try {
       const res = await originalFetch(input as RequestInfo, init);
       if (!res.ok) {
-        requests.push({ at: now(), method, url: redactUrl(url), status: res.status, ms: Date.now() - started });
-        while (requests.length > MAX_REQUESTS) requests.shift();
+        recordFailedRequest({ at: now(), method, url: redactUrl(url), status: res.status, ms: Date.now() - started });
       }
       return res;
     } catch (err) {
-      requests.push({ at: now(), method, url: redactUrl(url), status: 'network-failure', ms: Date.now() - started });
-      while (requests.length > MAX_REQUESTS) requests.shift();
+      recordFailedRequest({ at: now(), method, url: redactUrl(url), status: 'network-failure', ms: Date.now() - started });
       throw err;
     }
   };
