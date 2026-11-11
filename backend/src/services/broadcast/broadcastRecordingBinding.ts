@@ -54,6 +54,8 @@ export interface BindingDecision {
      * Already bound to a DIFFERENT video. Refused, loudly: see the comment below.
      */
     | 'conflict'
+    /** A rehearsal. Recorded by the provider, but never this occurrence's replay. */
+    | 'not_on_air'
     /** Not a Cloudflare occurrence; this binding has no meaning. */
     | 'not_cloudflare';
 }
@@ -62,6 +64,43 @@ export interface BindingDecision {
 const CLOUDFLARE = 'cloudflare';
 /** Cloudflare uids are 32 lowercase hex characters. Anything else is not a uid. */
 const UID_PATTERN = /^[0-9a-f]{32}$/;
+
+/**
+ * States whose video is the class. `backstage` is observed by the health loop but is NOT here.
+ *
+ * THE DEFECT THIS GUARD FIXES: a rehearsal could become the published replay.
+ *
+ * Every piece was already true and documented separately, which is why nothing caught it:
+ *
+ *   - `OBSERVED_STATES` includes `backstage` (broadcastHealthRunner.ts:29), because entering
+ *     backstage is "what makes the health loop start watching for a feed".
+ *   - the live input is created with `recording: { mode: 'automatic' }`
+ *     (cloudflareStreamProvider.ts:310), so Cloudflare records whatever is pushed to it,
+ *     whatever our editorial state happens to say.
+ *   - this function bound the FIRST uid it saw, in any observed state.
+ *   - a second, different uid is then refused as a `conflict` rather than replacing the first.
+ *
+ * Put together: a producer enters backstage and starts OBS to check the feed, which is exactly
+ * what backstage is for. Cloudflare records that and mints uid A. The loop binds A. The producer
+ * stops OBS, goes live, and Cloudflare mints uid B for the real class - which is refused as a
+ * conflict. The occurrence ends bound to A, and `resolvePlaybackTarget` serves the REHEARSAL as
+ * the replay. A student opening the replay watches staff setting up.
+ *
+ * The conflict branch's own reasoning is what gives it away: it keeps the first recording
+ * because that is "the one the audience actually watched". During backstage the audience
+ * watched nothing, so the premise does not hold and the tie-break silently picks the wrong one.
+ *
+ * WHY WAITING FOR ON-AIR IS SAFE IN BOTH DIRECTIONS. Cloudflare mints one video per continuous
+ * RTMP connection, not per editorial state:
+ *
+ *   - OBS pushes from backstage straight through go_live: ONE uid. Skipping the backstage ticks
+ *     costs nothing; the same uid is bound on the first live tick.
+ *   - OBS is stopped after the rehearsal and restarted for the class: TWO uids. The rehearsal's
+ *     is never bound, and the class's is captured cleanly instead of being refused.
+ *
+ * So no path loses a recording it would otherwise have had, and the broken path is fixed.
+ */
+const ON_AIR_STATES = ['live', 'reconnecting'];
 
 /**
  * Decide whether to record this observation against the occurrence.
@@ -74,6 +113,12 @@ export function decideRecordingBinding(
 ): BindingDecision {
   if (occurrence.provider !== CLOUDFLARE) {
     return { capture: null, reason: 'not_cloudflare' };
+  }
+
+  // Before the uid is even looked at: a rehearsal's video is not this occurrence's replay, so
+  // there is nothing to decide. See ON_AIR_STATES.
+  if (!ON_AIR_STATES.includes(occurrence.editorial_state)) {
+    return { capture: null, reason: 'not_on_air' };
   }
 
   const uid = observation.videoUid;
