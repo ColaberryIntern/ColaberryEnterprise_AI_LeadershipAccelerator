@@ -48,7 +48,7 @@ describe('summarize', () => {
   });
 
   it('nothing in: zeros and empty lists, never invented rows', () => {
-    expect(summarize([])).toEqual({ total: 0, first: null, last: null, kinds: [], weeks: [], skills: [], newest: [], activeWeeks: 0, projects: 0 });
+    expect(summarize([])).toEqual({ total: 0, first: null, last: null, kinds: [], weeks: [], skills: [], newest: [], activeWeeks: 0, projects: 0, featured: 0 });
   });
 });
 

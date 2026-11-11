@@ -96,7 +96,7 @@
 
 /* ── Dashboard (C129) ──────────────────────────────────────────────── */
 .db-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.db-kpis { list-style: none; margin: 0 0 18px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.db-kpis { list-style: none; margin: 0 0 18px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 @media (max-width: 760px) { .db-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .db-bars { list-style: none; margin: 10px 0 0; padding: 0; }
 .db-bar { display: grid; grid-template-columns: minmax(120px, 190px) 1fr 34px; gap: 10px; align-items: center; padding: 5px 4px; border-radius: 8px; color: var(--body); text-decoration: none; font-size: 14px; }
@@ -114,3 +114,6 @@
 .db-new a { align-items: center; }
 .db-new-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-new-d { color: var(--muted); font-size: 13px; flex: none; }
+
+/* C130: a featured piece, and the featured-only filter note */
+.mw-feat { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--cherry-text); }

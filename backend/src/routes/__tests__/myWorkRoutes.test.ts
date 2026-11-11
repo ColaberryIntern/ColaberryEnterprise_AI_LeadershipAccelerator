@@ -26,6 +26,15 @@ jest.mock('../../services/internship/officeToHtml', () => {
   class OfficeParseError extends Error {}
   return { OfficeParseError, renderOfficeFile: (...a: unknown[]) => mockRender(...a) };
 });
+const mockSet = jest.fn();
+const mockStatus = jest.fn();
+const mockLive = jest.fn();
+jest.mock('../../services/career/featuredWork', () => ({
+  MAX_FEATURED: 12,
+  setFeatured: (...a: unknown[]) => mockSet(...a),
+  featureStatus: (...a: unknown[]) => mockStatus(...a),
+  liveFeaturedIds: (...a: unknown[]) => mockLive(...a),
+}));
 jest.mock('../../services/internship/internArtifactXlsx', () => ({ csvRowsToXlsx: async () => Buffer.from('xlsx') }));
 
 import fs from 'fs';
@@ -40,13 +49,15 @@ import myWorkRoutes from '../myWorkRoutes';
 const ID = '11111111-2222-4333-8444-555555555555';
 const P = '/api/portal/career/work';
 const token = (extra: Record<string, unknown> = {}) => jwt.sign({ sub: 'enr-9', email: 'l@example.com', role: 'participant', ...extra }, env.jwtSecret, { expiresIn: '5m' });
-const app = (): Express => { const a = express(); a.use(myWorkRoutes); return a; };
+const app = (): Express => { const a = express(); a.use(express.json()); a.use(myWorkRoutes); return a; };
 const get = (url: string, t: string | null = token()) => (t ? request(app()).get(url).set('Authorization', `Bearer ${t}`) : request(app()).get(url));
 
 let errSpy: jest.SpyInstance;
 beforeEach(() => {
   mockEntitled = true;
-  [mockList, mockPiece, mockFile, mockRender].forEach((m) => m.mockReset());
+  [mockList, mockPiece, mockFile, mockRender, mockSet, mockStatus, mockLive].forEach((m) => m.mockReset());
+  mockLive.mockResolvedValue([]);
+  mockStatus.mockResolvedValue({ featured: false, onPublicPage: false });
   errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => errSpy.mockRestore());
@@ -61,7 +72,7 @@ describe('GET /api/portal/career/work', () => {
     mockList.mockResolvedValue([{ id: ID, title: 'Guide' }]);
     const res = await get(P);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ items: [{ id: ID, title: 'Guide' }] });
+    expect(res.body).toEqual({ items: [{ id: ID, title: 'Guide', featured: false }] });
     expect(mockList).toHaveBeenCalledWith('enr-9');
     expect(res.headers['cache-control']).toContain('no-store');
   });
@@ -101,6 +112,15 @@ describe('GET /api/portal/career/work/:id', () => {
     const res = await get(`${P}/${ID}`);
     expect(res.status).toBe(200);
     expect(mockPiece).toHaveBeenCalledWith('enr-9', ID);
+    expect(res.body.feature).toEqual({ featured: false, onPublicPage: false });
+  });
+
+  it("marks the caller's live featured pieces in the list", async () => {
+    mockList.mockResolvedValue([{ id: ID }, { id: 'other' }]);
+    mockLive.mockResolvedValue([ID]);
+    const res = await get(P);
+    expect(res.body.items).toEqual([{ id: ID, featured: true }, { id: 'other', featured: false }]);
+    expect(mockLive).toHaveBeenCalledWith('enr-9');
   });
 
   it('404 for a piece that is not the caller\'s (the service answers null), with no detail', async () => {
@@ -174,5 +194,50 @@ describe('the file routes', () => {
     expect((await get(`${P}/${ID}/xlsx`)).status).toBe(400);
     mockPiece.mockResolvedValue(null);
     expect((await get(`${P}/${ID}/xlsx`)).status).toBe(404);
+  });
+});
+
+describe('PUT /api/portal/career/work/:id/feature (C130)', () => {
+  const URL_F = `${P}/${ID}/feature`;
+  const put = (url: string, body: unknown, t: string | null = token()) => {
+    const r = request(app()).put(url);
+    return (t ? r.set('Authorization', `Bearer ${t}`) : r).send(body as object);
+  };
+
+  it("features the caller's own piece, by the token enrollment, and reports where it shows", async () => {
+    mockSet.mockResolvedValue({ featured: true, count: 1 });
+    mockStatus.mockResolvedValue({ featured: true, onPublicPage: false });
+    const res = await put(URL_F, { featured: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ featured: true, count: 1, onPublicPage: false });
+    expect(mockSet).toHaveBeenCalledWith('enr-9', ID, true);
+  });
+
+  it('404 for a piece that is not theirs, 409 past the cap', async () => {
+    mockSet.mockResolvedValue('not_found');
+    expect((await put(URL_F, { featured: true })).status).toBe(404);
+    mockSet.mockResolvedValue('limit');
+    const res = await put(URL_F, { featured: true });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('12');
+  });
+
+  it('400 for a malformed body or id; refuses no token, staff, read-only view-as and the unentitled, never writing', async () => {
+    expect((await put(URL_F, { featured: 'yes' })).status).toBe(400);
+    expect((await put(URL_F, { featured: true, extra: 1 })).status).toBe(400);
+    expect((await put(`${P}/nope/feature`, { featured: true })).status).toBe(400);
+    expect((await put(URL_F, { featured: true }, null)).status).toBe(401);
+    expect((await put(URL_F, { featured: true }, token({ role: 'admin' }))).status).toBe(403);
+    expect((await put(URL_F, { featured: true }, token({ read_only: true }))).status).toBe(403);
+    mockEntitled = false;
+    expect((await put(URL_F, { featured: true })).status).toBe(402);
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('500 without leaking the error', async () => {
+    mockSet.mockRejectedValue(new Error('deadlock at 10.0.0.5'));
+    const res = await put(URL_F, { featured: false });
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('10.0.0.5');
   });
 });

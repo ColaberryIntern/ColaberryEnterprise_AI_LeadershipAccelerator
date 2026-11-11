@@ -22,6 +22,8 @@ export interface WorkItem {
   project: string | null;
   skills: string[];
   state: string;
+  /** C130: in the learner's LIVE featured set (shows on Preview; public only after review). */
+  featured?: boolean;
 }
 
 export type WrittenBody =
@@ -39,6 +41,8 @@ export interface MyWorkPiece extends WorkItem {
   written: WrittenBody | null;
   link: LinkBody | null;
   recording: RecordingBody | null;
+  /** C130: featured now, and on the public page right now (approved, content unchanged). */
+  feature?: { featured: boolean; onPublicPage: boolean };
 }
 
 const P = '/api/portal/career/work';
@@ -51,6 +55,12 @@ export async function fetchMyWork(): Promise<WorkItem[]> {
 
 export async function fetchMyWorkPiece(id: string): Promise<MyWorkPiece> {
   const { data } = await portalApi.get<MyWorkPiece>(one(id));
+  return data;
+}
+
+/** Feature or unfeature one of the learner's own pieces (C130). Idempotent. 409 past the cap. */
+export async function setMyWorkFeatured(id: string, featured: boolean): Promise<{ featured: boolean; count: number; onPublicPage: boolean }> {
+  const { data } = await portalApi.put<{ featured: boolean; count: number; onPublicPage: boolean }>(`${one(id)}/feature`, { featured });
   return data;
 }
 

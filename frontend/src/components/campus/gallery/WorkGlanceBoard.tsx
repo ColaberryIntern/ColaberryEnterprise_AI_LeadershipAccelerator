@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchMyWork, type WorkItem } from '../../../services/myWorkApi';
-import { dayShort, summarize } from '../../../pages/portal/portfolio/myWork/workSummary';
+import { rangePhrase, summarize } from '../../../pages/portal/portfolio/myWork/workSummary';
 import './workGlance.css';
 
 /**
@@ -39,7 +39,7 @@ export default function WorkGlanceBoard({ items, onOpen }: { items: WorkItem[] |
         <>
           <div className="cm-wg-total" data-testid="cm-wg-total">
             <b>{s.total}</b>
-            <span>{s.total === 1 ? 'piece of work' : 'pieces of work'} · {dayShort(s.first)} to {dayShort(s.last)}</span>
+            <span>{s.total === 1 ? 'piece of work' : 'pieces of work'} · {rangePhrase(s.first, s.last)}</span>
           </div>
           <div className="cm-wg-kinds" data-testid="cm-wg-kinds">
             {kinds.map((k) => (

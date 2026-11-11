@@ -98,5 +98,7 @@ export interface Portfolio {
    * An absent list renders no section rather than an empty heading.
    */
   verified_commits?: VerifiedCommit[];
+  /** C130: featured pieces (public page: reviewer-approved only; Preview: the learner's live choice). Absent on older payloads. */
+  featured_work?: import('./FeaturedWorkSection').FeaturedWorkItem[];
   generated_at: string;
 }

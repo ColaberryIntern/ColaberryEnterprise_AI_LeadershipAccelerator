@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { getMyWorkFile, getMyWorkPiece, listMyWork } from '../services/myWork/myWorkService';
+import { featureStatus, liveFeaturedIds, MAX_FEATURED, setFeatured } from '../services/career/featuredWork';
 import { logFailure, sendArtifactFile, sendCsvXlsx, sendOfficePreview } from './artifactFileResponses';
 
 /**
@@ -18,7 +19,9 @@ import { logFailure, sendArtifactFile, sendCsvXlsx, sendOfficePreview } from './
  * enrollment in the query, and any piece that is not the caller's answers 404, the same as one that
  * does not exist, so the id space cannot be probed.
  *
- * Nothing here publishes or changes anything: every route is a GET. Deliberately NOT gated on the
+ * Nothing here publishes. The one write (PUT /:id/feature, C130) changes the learner's LIVE featured set only, which shows on
+ * their own Preview; a stranger sees a featured piece only after a reviewer approves the page (Ali, 11 Nov 2026: "After review").
+ * Every other route is a GET. Deliberately NOT gated on the
  * resume prerequisite the profile uses: that gate decides what CAREER evidence is assembled for a
  * page others may see, and this is the learner looking at their own submissions.
  */
@@ -38,7 +41,9 @@ const NOT_FOUND = { error: 'No piece of yours with that id.' };
 
 router.get(P, ...gates, async (req: Request, res: Response) => {
   try {
-    const items = await listMyWork(eid(req));
+    const [list, featured] = await Promise.all([listMyWork(eid(req)), liveFeaturedIds(eid(req))]);
+    const on = new Set(featured);
+    const items = list.map((it) => ({ ...it, featured: on.has(it.id) }));
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({ items });
   } catch (err) {
@@ -54,7 +59,7 @@ router.get(`${P}/:id`, ...gates, async (req: Request, res: Response) => {
     const piece = await getMyWorkPiece(eid(req), id);
     if (!piece) { res.status(404).json(NOT_FOUND); return; }
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json(piece);
+    res.json({ ...piece, feature: await featureStatus(eid(req), id) });
   } catch (err) {
     logFailure('my_work_piece_failed', err, { id });
     res.status(500).json({ error: 'Could not load this piece.' });
@@ -97,6 +102,28 @@ router.get(`${P}/:id/xlsx`, ...gates, async (req: Request, res: Response) => {
   } catch (err) {
     logFailure('my_work_xlsx_failed', err, { id });
     res.status(500).json({ error: 'Could not build the Excel file.' });
+  }
+});
+
+const FeatureBody = z.object({ featured: z.boolean() }).strict();
+
+/**
+ * Feature or unfeature one of the caller's own pieces (C130). Idempotent: the same call twice is the same end state. 404 for a piece
+ * that is not theirs; 409 past the cap. requireParticipant already refuses this write in read-only view-as.
+ */
+router.put(`${P}/:id/feature`, ...gates, async (req: Request, res: Response) => {
+  const id = pieceId(req, res);
+  if (!id) return;
+  const body = FeatureBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: 'Send { featured: true } or { featured: false }.' }); return; }
+  try {
+    const r = await setFeatured(eid(req), id, body.data.featured);
+    if (r === 'not_found') { res.status(404).json(NOT_FOUND); return; }
+    if (r === 'limit') { res.status(409).json({ error: `You can feature up to ${MAX_FEATURED} pieces. Unfeature one first.` }); return; }
+    res.json({ ...r, ...(await featureStatus(eid(req), id)) });
+  } catch (err) {
+    logFailure('my_work_feature_failed', err, { id });
+    res.status(500).json({ error: 'Could not change this piece.' });
   }
 });
 

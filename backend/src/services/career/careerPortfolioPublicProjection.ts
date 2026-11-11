@@ -280,6 +280,8 @@ export interface PublicPortfolio {
    * decision and the reason the join is on project rather than enrollment.
    */
   verified_commits: PublicVerifiedCommit[];
+  /** C130: pieces the learner featured AND a reviewer approved (frozen at review). Set by buildPortfolio, not this pure module. */
+  featured_work?: import('./featuredWork').PublicFeaturedWork[];
   generated_at: string;
 }
 

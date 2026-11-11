@@ -75,7 +75,7 @@ const PublicPortfolioProfilePage: React.FC = () => {
     );
   }
 
-  return <PortfolioBody portfolio={portfolio} />;
+  return <PortfolioBody portfolio={portfolio} featuredHref={(id) => `/portfolio/${encodeURIComponent(slug ?? '')}/work/${encodeURIComponent(id)}`} />;
 };
 
 export default PublicPortfolioProfilePage;

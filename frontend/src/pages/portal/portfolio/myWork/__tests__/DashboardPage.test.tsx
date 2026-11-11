@@ -59,7 +59,7 @@ describe('Gallery board: Your work at a glance', () => {
     const onOpen = jest.fn();
     H.mount(<div className="cm-r3-screen"><WorkGlanceBoard items={ITEMS as never} onOpen={onOpen} /></div>, '/portal/campus');
     expect(H.text()).toContain('Your work at a glance');
-    expect(document.querySelector('[data-testid="cm-wg-total"]')?.textContent).toBe('3pieces of work · Aug 25 to Sep 18');
+    expect(document.querySelector('[data-testid="cm-wg-total"]')?.textContent).toBe('3pieces of work · from Aug 25 to Sep 18');
     expect(document.querySelectorAll('.cm-wg-row').length).toBe(3);
     act(() => { (document.querySelector('[data-testid="cm-board-primary"]') as HTMLElement).click(); });
     act(() => { (document.querySelector('[data-testid="cm-board-section"]') as HTMLElement).click(); });
