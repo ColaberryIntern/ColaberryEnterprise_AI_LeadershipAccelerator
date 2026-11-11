@@ -1,4 +1,5 @@
 import * as sql from 'mssql';
+import { QueryTypes } from 'sequelize';
 import { env } from '../config/env';
 import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
@@ -240,6 +241,9 @@ async function loadUpcoming(): Promise<OpenHouseView[]> {
       events = [];
     }
   }
+  // Fold our OWN registrations into the counts before caching, so every viewer of
+  // the calendar sees one number for the event rather than Eventbrite's share of it.
+  events = await addOwnRegistrations(events);
   cache = { at: Date.now(), events };
   return events;
 }
@@ -341,8 +345,15 @@ export async function getRegisteredEventIds(email: string, eventIds: string[]): 
  */
 export async function annotateRegistration(events: OpenHouseView[], email: string | null | undefined): Promise<OpenHouseView[]> {
   if (!email || events.length === 0) return events.map((e) => ({ ...e, is_registered: false }));
-  const mine = await getRegisteredEventIds(email, events.map((e) => e.id));
-  return events.map((e) => ({ ...e, is_registered: mine.has(e.id) }));
+  const ids = events.map((e) => e.id);
+  // BOTH ledgers. Someone who signed up on our own landing page is registered, and
+  // before this they were shown a "Sign up" button pointing at Eventbrite - which
+  // invited the very double-registration this pair of tables already suffers from.
+  const [onEventbrite, onOurs] = await Promise.all([
+    getRegisteredEventIds(email, ids),
+    getOwnRegisteredEventIds(email, ids),
+  ]);
+  return events.map((e) => ({ ...e, is_registered: onEventbrite.has(e.id) || onOurs.has(e.id) }));
 }
 
 /** Test-only: clear the in-memory cache between cases. */
@@ -410,4 +421,142 @@ export async function getEventAttendeeEmails(eventId: string): Promise<string[]>
   } finally {
     if (pool) { try { await pool.close(); } catch { /* ignore */ } }
   }
+}
+
+/**
+ * Normalise an address the SAME way on both sides of every comparison. One
+ * normaliser, used everywhere, is what stops a false "no overlap".
+ */
+function normEmail(raw: string | null | undefined): string {
+  return String(raw ?? '').trim().toLowerCase();
+}
+
+/**
+ * Postgres, fetched LAZILY and never at module load.
+ *
+ * `config/database` constructs its Sequelize instance as a side effect of being
+ * imported, from a connection URL that does not exist in the test environment. A
+ * top-level `import { sequelize }` here therefore breaks every suite that imports
+ * this module - not with a failing assertion but with "Test suite failed to run",
+ * which is how the first push of this change took `publicEventsService.test.ts`
+ * and `openHouseEventService.test.ts` down with it.
+ *
+ * This module's reason for existing is CCPP. Postgres is a late addition used by
+ * two functions, so it is pulled in where it is used, the same way
+ * `marketingFunnelRoutes` defers `acquisitionFunnel`.
+ */
+async function pg() {
+  const { sequelize } = await import('../config/database');
+  return sequelize;
+}
+
+/**
+ * Which of `eventIds` this email registered for through OUR OWN pages.
+ *
+ * The Postgres twin of `getRegisteredEventIds`. Fails SOFT for the same reason:
+ * a database blip should degrade to "nothing marked registered" rather than break
+ * the calendar. `lower()` on both sides rather than `iLike`, because an address
+ * containing `_` or `%` is an ordinary address and a LIKE wildcard.
+ */
+export async function getOwnRegisteredEventIds(email: string, eventIds: string[]): Promise<Set<string>> {
+  const e = normEmail(email);
+  if (!e || eventIds.length === 0) return new Set();
+  try {
+    const rows = await (await pg()).query<{ event_id: string }>(
+      `SELECT DISTINCT event_id FROM open_house_registrations
+        WHERE lower(email_lower) = :email AND event_id IN (:ids)`,
+      { replacements: { email: e, ids: eventIds.map(String) }, type: QueryTypes.SELECT },
+    );
+    return new Set(rows.map((r) => String(r.event_id)));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'own_registration_lookup_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, events: eventIds.length },
+    }));
+    return new Set();
+  }
+}
+
+/**
+ * Add the people who registered through OUR pages to each event's `signup_count`.
+ *
+ * ── WHY ──
+ *
+ * The badge on the portal Events page was Eventbrite's roster alone. On 2026-11-11
+ * the Nov 19 Open House read "7 signed up" while eight more people had registered
+ * through our own landing page and the training site, with ZERO overlap between
+ * the two lists. The number was not wrong about Eventbrite; it was answering a
+ * narrower question than the one anyone reading it was asking.
+ *
+ * ── UNION, NOT SUM ──
+ *
+ * Someone can be on both lists. Adding the two counts would double-count them, and
+ * the overlap being zero today is a fact about today, not a property of the system.
+ * So the roster is read and the union taken.
+ *
+ * The union is computed from the UNWRAPPED roster rather than from CCPP's own
+ * `COUNT(DISTINCT Email)`, which counts the raw column: one person stored once as
+ * `a@b.com` and once as `'a@b.com',` is two rows to that COUNT and one person to
+ * this one. Taking the roster's deduplicated size therefore also removes a latent
+ * over-count from the badge.
+ *
+ * ── NEVER INFLATES ON A FAILED READ ──
+ *
+ * If the roster cannot be read, the count is left exactly as CCPP reported it. An
+ * approximate larger number would be indistinguishable from a real one, and a
+ * headcount nobody can trust is worse than a conservative one. Same if the event
+ * has no registrations of ours, or if `signup_count` is already unknown: unknown
+ * stays unknown.
+ */
+export async function addOwnRegistrations(events: OpenHouseView[]): Promise<OpenHouseView[]> {
+  if (events.length === 0) return events;
+
+  let rows: Array<{ event_id: string; email_lower: string }>;
+  try {
+    rows = await (await pg()).query<{ event_id: string; email_lower: string }>(
+      `SELECT event_id, email_lower FROM open_house_registrations WHERE event_id IN (:ids)`,
+      { replacements: { ids: events.map((e) => String(e.id)) }, type: QueryTypes.SELECT },
+    );
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'own_registrations_count_unavailable', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { message: err?.message },
+    }));
+    return events;
+  }
+  if (rows.length === 0) return events;
+
+  const byEvent = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const id = String(r.event_id);
+    if (!byEvent.has(id)) byEvent.set(id, new Set());
+    byEvent.get(id)!.add(normEmail(r.email_lower));
+  }
+
+  const out: OpenHouseView[] = [];
+  for (const e of events) {
+    const mine = byEvent.get(String(e.id));
+    // No registrations of ours, or Eventbrite's count already unknown: leave it be.
+    if (!mine || mine.size === 0 || typeof e.signup_count !== 'number') {
+      out.push(e);
+      continue;
+    }
+    try {
+      const roster = new Set((await getEventAttendeeEmails(String(e.id))).map(normEmail));
+      const extra = [...mine].filter((m) => !roster.has(m)).length;
+      out.push({ ...e, signup_count: roster.size + extra });
+    } catch (err: any) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+        event: 'signup_union_roster_unavailable', outcome: 'partial',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { event_id: String(e.id), message: err?.message, kept: 'eventbrite_count_only' },
+      }));
+      out.push(e);
+    }
+  }
+  return out;
 }
