@@ -31,6 +31,7 @@ const libDir = fs.existsSync(path.join(__dirname, 'renderTriageBoard.js'))
   : path.join(__dirname, '../backend/src/scripts/lib/aliTaskAgent');
 const { renderTriageBoard } = require(path.join(libDir, 'renderTriageBoard'));
 const { summarize } = require(path.join(libDir, 'ageBands'));
+const { buildWorkOrder, runCommand } = require(path.join(libDir, 'workOrder'));
 
 const arg = (k, d) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -44,8 +45,8 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
 
 (async () => {
   const rows = await sequelize.query(`
-    SELECT bc_id, project_id, title, status, due_on, urgency_score, bc_app_url,
-           todolist_name, assignee_ids, bc_updated_at
+    SELECT bc_id, project_id, title, description, category, status, due_on, urgency_score,
+           bc_app_url, todolist_name, assignee_ids, bc_updated_at
       FROM ops_bc_todos
      WHERE status = 'active'
        AND (is_dismissed IS NOT TRUE)
@@ -54,21 +55,53 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
      LIMIT $2`,
   { type: QueryTypes.SELECT, bind: [`%${ALI_BC_ID}%`, LIMIT] });
 
+  // __row keeps the raw mirror row attached, so the work-order builder can read description,
+  // category and the rest without a second query.
   const items = rows.map((r) => ({
     projectId: r.project_id,
     projectName: r.todolist_name || '',
     url: r.bc_app_url || '',
     score: r.urgency_score == null ? null : Number(r.urgency_score),
     todo: { id: r.bc_id, title: r.title, due_on: r.due_on, updated_at: r.bc_updated_at },
+    __row: r,
   }));
 
+  const now = new Date();
+  const runId = `TRIAGE-${now.toISOString().slice(0, 10)}`;
+
+  /**
+   * Work orders are built for the LIVE set plus the most recently dormant, not for all 2,694.
+   * A handoff bundle that contains the whole backlog is a bundle nobody opens, and the dormant
+   * tail is a disposition exercise rather than a work queue.
+   */
+  const { partition } = require(path.join(libDir, 'ageBands'));
+  const { live, dormant } = partition(items, now, { dormantAfterDays: DAYS });
+  const recentDormant = dormant
+    .slice()
+    .sort((a, b) => String(b.todo.due_on || '').localeCompare(String(a.todo.due_on || '')))
+    .slice(0, 20);
+
+  const orderRows = [...live, ...recentDormant].map((i) => i.__row).filter(Boolean);
+  const workOrders = orderRows.map((r) => buildWorkOrder(r, now));
+
   const html = renderTriageBoard({
-    items,
-    today: new Date(),
-    runId: `TRIAGE-${new Date().toISOString().slice(0, 10)}`,
-    dormantAfterDays: DAYS,
+    items, today: now, runId, dormantAfterDays: DAYS, workOrders,
   });
   fs.writeFileSync(OUT, html, 'utf8');
+
+  /**
+   * The bundle is the machine half of the same report. The HTML is what Ali reads; this is what a
+   * session reads, so it carries every work order rather than the eight shown per group.
+   */
+  const bundlePath = OUT.replace(/\.html?$/i, '') + '.bundle.json';
+  fs.writeFileSync(bundlePath, JSON.stringify({
+    runId,
+    generatedAt: now.toISOString(),
+    dormantAfterDays: DAYS,
+    command: runCommand(runId, { top: 5 }),
+    counts: { total: items.length, live: live.length, dormant: dormant.length },
+    workOrders,
+  }, null, 2), 'utf8');
 
   // A one-line summary to stdout so the run is auditable without opening the file.
   const s = summarize(items, new Date(), { dormantAfterDays: DAYS });

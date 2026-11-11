@@ -17,8 +17,59 @@
 
 const { BANDS, bandFor, partition, summarize, urgencyVsAge } = require('./ageBands');
 const { RAMP_LIGHT, RAMP_DARK, histogramSvg, scatterSvg, tile, bandPill, esc } = require('./triageCharts');
+const { renderWorkOrderText, runCommand, DISPOSITION_LABEL } = require('./workOrder');
 
 const pct = (n) => `${Math.round(n * 100)}%`;
+
+/**
+ * The handoff. This is the section that makes the report worth more paired with a session than
+ * read alone.
+ *
+ * A session's first ten minutes on any ticket are rediscovery: which ticket, which project, who
+ * owns the decision, where the artifact goes, what done means, is anyone else on it. Every one of
+ * those is already knowable at render time, so the report carries the answers and the session
+ * starts on the work instead of the archaeology.
+ *
+ * Grouped by DISPOSITION rather than by urgency, because the disposition decides who has to be
+ * involved. `act` and `draft` need no human at all; `ask` needs one sentence from Ali and nothing
+ * else. Sorting by urgency would interleave them and put a human in the loop every third item.
+ */
+function handoffSection(orders, runId) {
+  if (!orders.length) return '';
+  const groups = ['act', 'draft', 'prep', 'ask', 'close']
+    .map((k) => [k, orders.filter((o) => o.disposition === k)])
+    .filter(([, v]) => v.length);
+
+  const blocks = groups.map(([key, list]) => {
+    const items = list.slice(0, 8).map((wo) => {
+      const text = renderWorkOrderText(wo);
+      return `<div class="wo">
+        <div class="wo-head">
+          <span class="disp disp-${key}">${esc(DISPOSITION_LABEL[key])}</span>
+          <span class="wo-title">${esc(wo.title)}</span>
+          <button class="copy" data-copy="${esc(text)}" type="button">copy</button>
+        </div>
+        <pre class="wo-body">${esc(text)}</pre>
+      </div>`;
+    }).join('');
+    const more = list.length > 8 ? `<p class="more">and ${list.length - 8} more in the bundle</p>` : '';
+    return `<h3 class="grp">${esc(DISPOSITION_LABEL[key])} <span class="sub">(${list.length})</span></h3>${items}${more}`;
+  }).join('');
+
+  const noHuman = orders.filter((o) => o.disposition === 'act' || o.disposition === 'draft').length;
+
+  return `<section id="handoff">
+    <h2>Hand to Claude Code</h2>
+    <p class="lede">Paste this one line into a session. Everything below is already in the bundle,
+      so it starts on the work rather than on the archaeology.</p>
+    <div class="cmd"><code>${esc(runCommand(runId, { top: 5 }))}</code>
+      <button class="copy" data-copy="${esc(runCommand(runId, { top: 5 }))}" type="button">copy</button></div>
+    <p class="callout"><strong>${noHuman} of ${orders.length}</strong> of these need no decision from
+      you at all. They were dropped rather than blocked, which is the cheapest work in the backlog
+      to put back in motion.</p>
+    ${blocks}
+  </section>`;
+}
 
 function rowsTable(items, today, opts = {}) {
   if (!items.length) return `<p class="empty">${esc(opts.emptyMsg || 'Nothing here.')}</p>`;
@@ -152,6 +203,31 @@ function renderTriageBoard(input) {
   .empty,.more,.fallback{color:var(--ink-3);font-size:13px;margin:10px 0 0}
   .callout{border-left:3px solid var(--band-aging);padding:10px 0 10px 14px;margin:14px 0 0;
     color:var(--ink-2);font-size:14px}
+  /* Handoff */
+  .cmd{display:flex;align-items:center;gap:10px;background:color-mix(in srgb,var(--ink) 6%,transparent);
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0 0}
+  .cmd code{font:13px/1.4 ui-monospace,Consolas,monospace;color:var(--ink)}
+  .copy{margin-left:auto;font:11px/1 'Segoe UI',system-ui,sans-serif;cursor:pointer;
+    background:var(--surface);color:var(--ink-2);border:1px solid var(--line);
+    border-radius:6px;padding:5px 10px}
+  .copy:hover{color:var(--ink);border-color:var(--ink-3)}
+  .copy.done{color:#fff;background:var(--band-overdue);border-color:var(--band-overdue)}
+  h3.grp{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);
+    margin:22px 0 8px;font-weight:700}
+  .wo{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+  .wo-head{display:flex;align-items:center;gap:9px;padding:9px 12px;
+    background:color-mix(in srgb,var(--ink) 3%,transparent);border-bottom:1px solid var(--line)}
+  .wo-title{font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .wo-body{margin:0;padding:11px 12px;font:12px/1.65 ui-monospace,Consolas,monospace;
+    color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
+  .disp{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+    padding:3px 8px;border-radius:5px;white-space:nowrap;color:#fff}
+  .disp-act{background:var(--band-overdue)}
+  .disp-draft{background:var(--band-aging)}
+  .disp-ask{background:var(--band-fresh);color:#1f1300}
+  .disp-close{background:var(--band-dormant)}
+  .disp-prep{background:var(--band-dormant)}
   .mermaid{margin-top:12px;background:transparent}
   footer{color:var(--ink-3);font-size:12px;margin-top:28px;text-align:center}
 </style></head>
@@ -195,6 +271,8 @@ function renderTriageBoard(input) {
     ${decisionDiagram()}
   </section>
 
+  ${handoffSection(Array.isArray(input.workOrders) ? input.workOrders : [], input.runId || 'run')}
+
   <section>
     <h2>Live queue <span class="sub">(${liveSorted.length})</span></h2>
     <p class="lede">What dies today. Sorted by urgency, which is meaningful inside this set because
@@ -217,6 +295,28 @@ function renderTriageBoard(input) {
     const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (window.mermaid) window.mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'neutral' });
   } catch (e) { /* the written rule sits under the diagram, so a failure here loses nothing */ }
+
+  /*
+   * Copy buttons. The work order is already visible in the block below each one, so if the
+   * clipboard API is unavailable (an http origin, a locked-down browser) the reader loses a
+   * convenience and not the content - which is why the text is rendered rather than hidden
+   * behind the button.
+   */
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.copy');
+    if (!b) return;
+    var text = b.getAttribute('data-copy') || '';
+    var done = function () {
+      b.classList.add('done');
+      var was = b.textContent; b.textContent = 'copied';
+      setTimeout(function () { b.classList.remove('done'); b.textContent = was; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { b.textContent = 'select it below'; });
+    } else {
+      b.textContent = 'select it below';
+    }
+  });
 </script>
 </body></html>`;
 }
