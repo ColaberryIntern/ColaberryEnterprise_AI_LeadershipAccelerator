@@ -8,7 +8,7 @@
  *
  * The names below are real list names from production.
  */
-const { categoryOf, groupByCategory, CATEGORIES } = require('../listCategories');
+const { categoryOf, groupByCategory, CATEGORIES, CATEGORY_COLORS, PROJECT_CATEGORIES } = require('../listCategories');
 
 describe('categoryOf', () => {
   it.each([
@@ -81,5 +81,67 @@ describe('groupByCategory', () => {
 
   it('handles an empty input', () => {
     expect(groupByCategory([])).toEqual([]);
+  });
+});
+
+/**
+ * Tiers 2 and 3. Names, ids and expected homes are real: measured on production 2026-11-11.
+ */
+describe('categoryOf by project', () => {
+  it.each([
+    ['TMS - Transportation lifecycle', '47126345', 'delivery'],
+    ['Cadence + Weekly Demo Prep', '47126345', 'delivery'],
+    ['FC1 - Build the class', '49210714', 'learning'],
+    ['08 - Documentation and Enablement', '49210714', 'learning'],
+    ['Marriage Goals', '33392153', 'personal'],
+    ['P2 - Convert to LLC', '47346103', 'government'],
+    ['Design Systems', '12724483', 'platform'],
+  ])('%s in project %s -> %s', (name, pid, key) => {
+    expect(categoryOf(name, pid).key).toBe(key);
+  });
+
+  it('accepts a numeric project id as well as the VARCHAR string', () => {
+    expect(categoryOf('TMS - Transportation lifecycle', 47126345).key).toBe('delivery');
+  });
+
+  /** The promise that makes this safe: a list sorted by name today is never re-filed. */
+  it('lets a name rule beat the project', () => {
+    expect(categoryOf('R1 - Opportunity Visibility', '6593808').key).toBe('government');
+  });
+
+  it('lets the project beat the catch-all rules', () => {
+    expect(categoryOf('00 - Control, Source of Truth and Governance', '49210714').key).toBe('learning');
+  });
+
+  it('uses the catch-all rules for lists in the catch-all project', () => {
+    expect(categoryOf('00 - Control, Source of Truth & Governance', '7463955').key).toBe('platform');
+    expect(categoryOf('S1 - Core MVP (wk 4)', '7463955').key).toBe('platform');
+    expect(categoryOf('09 - Open Risks, Escalations & Standing Obligations', '7463955').key).toBe('decisions');
+  });
+
+  it('never maps the catch-all projects themselves', () => {
+    expect(PROJECT_CATEGORIES['7463955']).toBeUndefined();
+    expect(PROJECT_CATEGORIES['12724441']).toBeUndefined();
+    expect(categoryOf('Reference Kits', '7463955').key).toBe('unsorted');
+  });
+
+  it('records the project as the matched rule', () => {
+    expect(categoryOf('TMS - Transportation lifecycle', '47126345').matched).toMatch(/project 47126345 \(ShipCES/);
+  });
+
+  it('maps only to categories that exist and have a colour in both modes', () => {
+    Object.values(PROJECT_CATEGORIES).forEach(([key]) => {
+      expect(CATEGORIES.some((c) => c.key === key)).toBe(true);
+    });
+    CATEGORIES.forEach((c) => {
+      expect(CATEGORY_COLORS.light[c.key]).toMatch(/^#[0-9a-f]{6}$/);
+      expect(CATEGORY_COLORS.dark[c.key]).toMatch(/^#[0-9a-f]{6}$/);
+    });
+  });
+
+  it('groups by project when the summary carries one', () => {
+    const g = groupByCategory([{ key: 'TMS - Transportation lifecycle', projectId: '47126345',
+      total: 6, dormant: 0, live: 6 }]);
+    expect(g[0].key).toBe('delivery');
   });
 });

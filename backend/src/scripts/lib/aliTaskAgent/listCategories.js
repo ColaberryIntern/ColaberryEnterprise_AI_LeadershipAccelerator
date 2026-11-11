@@ -28,11 +28,16 @@
  *
  * Colour follows the CATEGORY, never its rank, so filtering the page cannot repaint anything.
  */
+// `personal` (8th slot) was added 2026-11-11 and re-validated with the dataviz validator in both
+// modes: light worst adjacent CVD dE 17.1, normal 19.1; dark CVD 12.7, normal 15.1. Olive, teal
+// and stone candidates all FAILED (CVD 2.6 / chroma floor / chroma floor) and were rejected.
 const CATEGORY_COLORS = {
   light: { government: '#c2410c', learning: '#1d4ed8', revenue: '#15803d', decisions: '#7e22ce',
-    platform: '#b45309', delivery: '#0891b2', growth: '#be123c', unsorted: '#64748b' },
+    platform: '#b45309', delivery: '#0891b2', growth: '#be123c', personal: '#a21caf',
+    unsorted: '#64748b' },
   dark: { government: '#d4652f', learning: '#5a86e8', revenue: '#45975c', decisions: '#9c74d8',
-    platform: '#b5842c', delivery: '#2f9ec0', growth: '#d4566e', unsorted: '#94a3b8' },
+    platform: '#b5842c', delivery: '#2f9ec0', growth: '#d4566e', personal: '#c25ad0',
+    unsorted: '#94a3b8' },
 };
 
 const CATEGORIES = [
@@ -103,6 +108,65 @@ const CATEGORIES = [
     patterns: [/\bmarketing\b/i, /\bcampaign/i, /\bbrand\b/i, /\boutreach\b/i, /\bsocial\b/i,
       /\bSEO\b/i, /\bfunnel\b/i, /\blead\b/i, /\bwebsite\b/i],
   },
+  {
+    key: 'personal',
+    label: 'Personal and household',
+    icon: '\u{1F3E0}',
+    blurb: 'Family, home, personal finances and taxes',
+    // No name patterns: filed by project only (Family Goals & Life Planning). Words like
+    // "insurance" or "tax" also appear in business lists, so a name rule here would mis-file.
+    patterns: [],
+  },
+];
+
+/**
+ * TIER 2: the Basecamp project a list lives in. Measured on production 2026-11-11: 241 of 511
+ * tasks matched no name rule, and the project was the one signal that separated them ("TMS",
+ * "Cadence + Weekly Demo Prep" and "OMS" are all ShipCES; every "FC" list is Colaberry Live).
+ * Keyed on project id (VARCHAR in the mirror, so string keys), name kept alongside for audit.
+ * Catch-all projects (Ali Personal 7463955, Management Team 12724441) are deliberately ABSENT:
+ * a project that holds everything says nothing about any one list.
+ */
+const PROJECT_CATEGORIES = {
+  47126345: ['delivery', 'ShipCES - Autonomous Brokerage'],
+  49361096: ['delivery', 'Middlesex Glass - AIA billing automation'],
+  49506070: ['delivery', 'MAPLOCA CRM AI - Strategic Partner RFP'],
+  46699826: ['delivery', 'LandJet Growth Engine'],
+  49210714: ['learning', 'Colaberry Live'],
+  47502609: ['learning', 'AI Systems Architect Accelerator'],
+  24865175: ['learning', 'Internship / Apprenticeship Projects'],
+  46697389: ['learning', 'AI Pathway'],
+  47346103: ['government', 'Gov Contracts'],
+  17200971: ['government', 'TWC'],
+  33392153: ['personal', 'Family Goals & Life Planning'],
+  7482752: ['growth', 'Marketing Team'],
+  19325887: ['growth', 'Partnerships'],
+  47477101: ['growth', 'Anthropic Partner Network - 10-Person Onboarding'],
+  17648766: ['growth', 'MIT Solve'],
+  6593808: ['platform', 'Dev Team'],
+  7009750: ['platform', 'Data Analytics Sales Team'],
+  15139308: ['platform', 'Data Analytics Management Team'],
+  12724483: ['platform', 'UX Design Team'],
+  47472041: ['platform', 'Operations Engine'],
+  49468897: ['platform', 'Systems & Data Inventory'],
+  8245527: ['platform', 'DS, AI and Refactored Team'],
+};
+
+/**
+ * TIER 3: narrow name rules for lists in the catch-all projects. Applied only after the name
+ * rules and the project map, so they can never re-file a list that was already sorted.
+ */
+const CATCHALL_RULES = [
+  ['decisions', /\bOpen Risks\b|\bescalations?\b/i],
+  ['decisions', /\bstrategy\b/i],
+  ['revenue', /\bpaid lighthouse\b/i],
+  ['growth', /\bpartnerships?\b|\bAnthropic\b|\bOpenAI\b/i],
+  ['growth', /\bGrowth OS\b|\bad traffic\b/i],
+  ['learning', /\bcampus\b/i],
+  ['platform', /^S[0-9] - /],
+  ['platform', /Source of Truth|Harden, Replay|Ship, Activate|Operator Review Surface/i],
+  ['platform', /Allocation, Workspaces|Capability Validation|lifecycle backbone|UI\/UX/i],
+  ['platform', /\brollout\b|\bintern readiness\b|\bIntern Repos\b|\bTool Requests\b|\bClaude Sessions\b/i],
 ];
 
 const UNSORTED = {
@@ -113,16 +177,27 @@ const UNSORTED = {
   patterns: [],
 };
 
+const hitFor = (key, matched) => {
+  const c = CATEGORIES.find((x) => x.key === key);
+  return { key: c.key, label: c.label, icon: c.icon, matched };
+};
+
 /**
+ * Three tiers, first match wins: name rules, then project, then catch-all name rules.
  * @param {string} name a list name
+ * @param {string|number} [projectId] the Basecamp project the list lives in
  * @returns {{key:string,label:string,icon:string,matched:?string}}
  */
-function categoryOf(name) {
+function categoryOf(name, projectId) {
   const s = String(name || '');
   for (const c of CATEGORIES) {
     const hit = c.patterns.find((p) => p.test(s));
-    if (hit) return { key: c.key, label: c.label, icon: c.icon, matched: String(hit) };
+    if (hit) return hitFor(c.key, String(hit));
   }
+  const proj = projectId == null ? null : PROJECT_CATEGORIES[String(projectId)];
+  if (proj) return hitFor(proj[0], `project ${projectId} (${proj[1]})`);
+  const rule = CATCHALL_RULES.find(([, p]) => p.test(s));
+  if (rule) return hitFor(rule[0], String(rule[1]));
   return { key: UNSORTED.key, label: UNSORTED.label, icon: UNSORTED.icon, matched: null };
 }
 
@@ -130,7 +205,7 @@ function categoryOf(name) {
 function groupByCategory(summaries) {
   const byKey = new Map();
   for (const s of Array.isArray(summaries) ? summaries : []) {
-    const c = categoryOf(s.key);
+    const c = categoryOf(s.key, s.projectId);
     if (!byKey.has(c.key)) {
       const def = CATEGORIES.find((x) => x.key === c.key) || UNSORTED;
       byKey.set(c.key, { ...c, blurb: def.blurb, lists: [], total: 0, dormant: 0, live: 0 });
@@ -151,4 +226,5 @@ function groupByCategory(summaries) {
   return out;
 }
 
-module.exports = { CATEGORIES, UNSORTED, CATEGORY_COLORS, categoryOf, groupByCategory };
+module.exports = { CATEGORIES, UNSORTED, CATEGORY_COLORS, PROJECT_CATEGORIES, CATCHALL_RULES,
+  categoryOf, groupByCategory };

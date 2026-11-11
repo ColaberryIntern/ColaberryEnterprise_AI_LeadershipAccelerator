@@ -119,6 +119,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
     const desc = String(r.description || '');
     return {
       id: `${r.project_id}/${r.bc_id}`,
+      projectId: r.project_id == null ? null : String(r.project_id),
       title: r.title,
       list: r.todolist_name || '(no list)',
       url: r.bc_app_url || null,
@@ -151,7 +152,7 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
     dormantAfterDays: DAYS,
     command: runCommand(runId, { top: 5 }),
     counts: { total: items.length, live: live.length, dormant: dormant.length, lists: lists.length },
-    lists: lists.map((l) => ({ key: l.key, name: l.name, position: l.position, total: l.total,
+    lists: lists.map((l) => ({ key: l.key, projectId: l.projectId, name: l.name, position: l.position, total: l.total,
       live: l.live, dormant: l.dormant, generatedShare: l.generatedShare, humanShare: l.humanShare,
       oldestDue: l.oldestDue, lead: l.lead ? { id: l.lead.id, title: l.lead.title } : null,
       suggestions: l.suggestions, taskIds: l.tasks.map((t) => t.id) })),

@@ -67,7 +67,7 @@ function wordChart(groups) {
 
 /** A list card. Carries no command text: the button is the way out of the page. */
 function listCard(s) {
-  const cat = categoryOf(s.key);
+  const cat = categoryOf(s.key, s.projectId);
   const dormantPct = s.total ? Math.round((s.dormant / s.total) * 100) : 0;
   const tone = s.dormant === s.total ? 'card-dead' : (s.dormant ? 'card-mixed' : 'card-live');
   const top = (s.suggestions || [])[0];
@@ -110,13 +110,13 @@ function renderTriageBoard(input) {
   const prompts = {};
   lists.forEach((l) => {
     prompts[l.key] = buildListPrompt(l, {
-      category: categoryOf(l.key),
+      category: categoryOf(l.key, l.projectId),
       totals: { tasks: total || items.length, lists: lists.length, dormant: s.dormantCount },
     });
   });
   const payload = {
     lists: lists.map((l) => ({
-      key: l.key, name: l.name, cat: categoryOf(l.key).key, total: l.total,
+      key: l.key, name: l.name, cat: categoryOf(l.key, l.projectId).key, total: l.total,
       live: l.live, dormant: l.dormant,
       bands: Object.fromEntries((l.bands || []).map((b) => [b.band, b.n])),
     })),

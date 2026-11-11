@@ -138,6 +138,22 @@ function suggestFor(summary) {
 }
 
 /**
+ * The project most of a list's tasks live in. A list name can recur across projects, so the
+ * majority wins; ties go to the lexically lower id so the answer is stable between runs. Falls back to the
+ * "<project>/<todo>" id prefix when a view carries no explicit projectId.
+ */
+function dominantProject(items) {
+  const n = new Map();
+  for (const t of items) {
+    const p = t.projectId != null ? String(t.projectId)
+      : (String(t.id || '').includes('/') ? String(t.id).split('/')[0] : null);
+    if (p) n.set(p, (n.get(p) || 0) + 1);
+  }
+  const ranked = [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return ranked.length ? ranked[0][0] : null;
+}
+
+/**
  * Group task views into list summaries.
  * @param {Array} tasks task views: {id,title,list,dueOn,daysOverdue,band,urgency,generated,humanOnly,url}
  * @returns {Array} summaries, biggest first
@@ -159,6 +175,7 @@ function byList(tasks) {
     const dated = items.filter((t) => t.dueOn).map((t) => t.dueOn).sort();
     const summary = {
       key,
+      projectId: dominantProject(items),
       name: seq.name,
       position: seq.position,
       total: items.length,
@@ -202,4 +219,4 @@ function withSiblings(summaries) {
   });
 }
 
-module.exports = { byList, withSiblings, leadTask, suggestFor, sequenceOf, looksGenerated };
+module.exports = { byList, withSiblings, leadTask, suggestFor, sequenceOf, looksGenerated, dominantProject };

@@ -91,7 +91,7 @@ function taskRows(s, limit = 6) {
 function listCard(s) {
   const dormantPct = pctOf(s.dormant, s.total);
   const tone = s.dormant === s.total ? 'card-dead' : (s.dormant ? 'card-mixed' : 'card-live');
-  const cat = categoryOf(s.key);
+  const cat = categoryOf(s.key, s.projectId);
   return `<article class="card ${tone}" data-cat="${esc(cat.key)}">
     <header class="card-head">
       <h3 class="card-title"><span class="card-cat" title="${esc(cat.label)}">${cat.icon}</span> ${esc(s.name)}</h3>
