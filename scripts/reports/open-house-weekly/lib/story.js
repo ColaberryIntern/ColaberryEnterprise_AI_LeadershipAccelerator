@@ -46,6 +46,8 @@ function supersededIds(entries) {
 /** Grade one hypothesis: supported / not yet / too few / retracted, with this week's number. */
 function gradeHypothesis(h, w, email, targets, retracted) {
   if (retracted.has(h.id) || h.status === 'retracted') return { status: 'retracted', label: 'Retracted' };
+  // A bet about a move not made yet: grading it now would judge the fix by the numbers from before it.
+  if (h.status === 'proposed') return { status: 'none', label: 'Proposed: graded once the move ships' };
   if (h.status === 'confirmed') return { status: 'good', label: 'Confirmed' };
   if (h.status === 'rejected') return { status: 'bad', label: 'Rejected' };
   const r = rateOf(h.test.metric, w, email);
@@ -69,7 +71,7 @@ function build(entries, w, email, targets, today) {
   const timeline = [...entries].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     .map((e) => ({ ...e, ...KINDS[e.kind], superseded: gone.has(e.id) }));
   const hypotheses = entries.filter((e) => e.kind === 'hypothesis')
-    .map((h) => ({ ...h, grade: gradeHypothesis(h, w, email, targets, retracted) }));
+    .map((h) => ({ ...h, grade: gone.has(h.id) ? { status: 'retracted', label: 'Superseded' } : gradeHypothesis(h, w, email, targets, retracted) }));
   return { timeline, hypotheses, inFlight: movesInFlight(entries, today) };
 }
 

@@ -104,10 +104,10 @@
       "id": "H-2026-11-11-play",
       "date": "2026-11-11 13:00",
       "kind": "hypothesis",
-      "title": "Phone visitors who reach the video do not press play unless the page makes it the obvious next step",
+      "title": "Once the page makes play the obvious next step on a phone, at least half of the people who reach the welcome video press play",
       "detail": "4 brand-new accounts, all on phones, opened the welcome video card within 4 seconds of signing up and sent no watch beat at all. A later phone learner played to 97% and was recorded, so phone beats work: these 4 most likely never pressed play.",
       "test": { "metric": "play", "op": ">=", "value": 50 },
-      "status": "open"
+      "status": "proposed"
     },
     {
       "id": "D-2026-11-11-C124",

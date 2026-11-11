@@ -62,7 +62,7 @@ function overviewCard(rows) {
 
 function storyCard(story) {
   const hyp = story.hypotheses.map((h) => `<tr><td style="padding:4px 8px 4px 0;font-size:12.5px">${esc(h.title)}</td>
-    <td style="padding:4px 0;white-space:nowrap" align="right">${K.chip(VERDICT[h.grade.status] || h.grade.label, h.grade.status === 'good' ? 'good' : h.grade.status === 'bad' ? 'risk' : 'neutral')}</td></tr>`).join('');
+    <td style="padding:4px 0;white-space:nowrap" align="right">${K.chip(h.grade.label || VERDICT[h.grade.status], h.grade.status === 'good' ? 'good' : h.grade.status === 'bad' ? 'risk' : 'neutral')}</td></tr>`).join('');
   const latest = story.timeline.slice(-5).reverse().map((e) => `<div style="font-size:12.5px;margin:0 0 6px 0"><span style="color:${C.muted}">${esc(e.date)}</span> · <b>${esc(e.label)}</b>: ${esc(e.title)}</div>`).join('');
   return `${K.sectionOpen('The story so far')}${K.hTitle('Hypotheses, graded this week')}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${hyp}</table>
     <div style="font-size:14px;font-weight:700;margin:14px 0 6px 0">Latest decisions</div>${latest}
@@ -89,7 +89,7 @@ function renderEmail(view) {
     '***** THE ONE MOVE *****', rec.star ? rec.star.title : 'None this week', ...(rec.star ? rec.star.how.map((h, i) => `${i + 1}. ${h}`) : []), '',
     'THE 10 NUMBERS THAT MATTER MOST', ...view.top10.map((f) => `${f.rank}. ${f.text}${f.why ? ` (${f.why})` : ''}`), '',
     'EVERY STEP AGAINST ITS TARGET', ...view.overview.map((r) => `- ${r.label}: ${r.d ? `${r.pct}% (${r.n}/${r.d})` : 'n/a'}, target ${r.target}%`), '',
-    'HYPOTHESES', ...view.story.hypotheses.map((h) => `- ${h.title}: ${VERDICT[h.grade.status] || h.grade.label}`), '',
+    'HYPOTHESES', ...view.story.hypotheses.map((h) => `- ${h.title}: ${h.grade.label || VERDICT[h.grade.status]}`), '',
     'Attached: OPEN_HOUSE_WEEKLY_REPORT.html (open in a browser) and ONE_MOVE_PROMPT.md (say "make the Open House move" in inbox zero).',
     '', SIG_TEXT].join('\n');
   return { subject: K.stripEmDash(subject), html, text: K.stripEmDash(text) };

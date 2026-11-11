@@ -87,7 +87,7 @@ ${s.executor === 'build' ? '' : '**This move needs a person.** Build nothing. Wr
 
 ## 4. Record the decision in the story (same PR, append only)
 
-Append BOTH entries below to \`entries\` in \`${LEDGER}\`, filled in. Never edit or delete an older entry: if this changes or reverses an earlier direction, also append a \`"kind": "retraction"\` or \`"pivot"\` entry with \`"supersedes": "<old id>"\`.
+Append BOTH entries below to \`entries\` in \`${LEDGER}\`, filled in. Never edit or delete an older entry: if this changes or reverses an earlier direction, also append a \`"kind": "retraction"\` or \`"pivot"\` entry with \`"supersedes": "<old id>"\`. If the ledger already holds a \`"status": "proposed"\` hypothesis on \`${hyp.metric}\`, give your new hypothesis entry \`"supersedes": "<that id>"\` so the board grades yours from now on.
 
 \`\`\`json
 ${JSON.stringify(entry, null, 2)},

@@ -92,7 +92,7 @@ function hypotheses(story) {
     const g = h.grade;
     return `<tr${g.status === 'retracted' ? ' class="gone"' : ''}><td>${esc(h.date.slice(0, 10))}</td><td>${esc(h.title)}</td>
       <td class="num">${esc(h.test.metric)} ${esc(h.test.op)} ${h.test.value}%</td><td class="num">${g.pct === undefined || g.pct === null ? 'n/a' : `${g.pct}% (${g.n}/${g.d})`}</td>
-      <td><span class="pill p-${g.status === 'retracted' ? 'low' : g.status}">${esc(PILL[g.status] || g.label)}</span></td></tr>`;
+      <td><span class="pill p-${g.status === 'retracted' ? 'low' : g.status}">${esc(g.label || PILL[g.status])}</span></td></tr>`;
   }).join('');
   return `<section id="sec-hyp"><h2>🔬 Hypothesis board</h2><p class="lede">Every bet we have made, graded against this week's numbers.</p>
     <table class="tbl"><thead><tr><th>Made</th><th>Hypothesis</th><th>Test</th><th>This week</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></section>`;

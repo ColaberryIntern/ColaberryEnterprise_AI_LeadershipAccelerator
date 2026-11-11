@@ -51,6 +51,13 @@ test('hypotheses: holding / not holding / too few / retracted', () => {
   assert.equal(g(H({ test: { metric: 'bounce', op: '<=', value: 60 } })), 'good');
 });
 
+test('hypotheses: a proposed bet is not graded on numbers from before its move; a superseded one leaves the board', () => {
+  assert.match(S.gradeHypothesis(H({ status: 'proposed' }), win(), null, targets, new Set()).label, /^Proposed/);
+  const story = S.build([H(), H({ id: 'H-2', supersedes: 'H-1' })], win(), null, targets, '2026-11-18');
+  assert.equal(story.hypotheses.find((h) => h.id === 'H-1').grade.label, 'Superseded');
+  assert.equal(story.hypotheses.find((h) => h.id === 'H-2').grade.status, 'bad');
+});
+
 test('moves in flight: only until measure_until, and never once superseded', () => {
   const b = { id: 'B', date: '2026-11-11', kind: 'build', title: 't', move: 'play', measure_until: '2026-11-18' };
   assert.deepEqual(S.movesInFlight([b], '2026-11-18').map((m) => m.move), ['play']);
