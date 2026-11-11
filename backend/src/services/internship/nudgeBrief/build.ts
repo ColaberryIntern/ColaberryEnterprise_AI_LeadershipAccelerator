@@ -26,6 +26,7 @@
 import { getConsoleRoster } from '../internConsoleRoster';
 import { composeBrief } from './compose';
 import { caseStudyDeadline } from './deadline';
+import { coverage, engagementState, type Coverage, type EngagementState } from './engagement';
 import { holdFor, type HoldDecision } from './hold';
 import { runPortfolioPipeline, type PipelineResult } from './pipeline';
 import type { NudgeBrief } from './types';
@@ -74,12 +75,21 @@ export async function buildBriefFor(enrollmentId: string, { now = new Date() }: 
 
 /** One intern's outcome in a batch: either their brief and its hold decision, or why they have none. */
 export type BriefAttempt =
-  | { readonly ok: true; readonly brief: NudgeBrief; readonly hold: HoldDecision | null }
+  | { readonly ok: true; readonly brief: NudgeBrief; readonly hold: HoldDecision | null; readonly engagement: EngagementState }
   | { readonly ok: false; readonly enrollmentId: string; readonly name: string; readonly errorClass: string; readonly error: string };
 
 export interface BriefBatch {
   readonly generatedAt: string;
   readonly attempts: readonly BriefAttempt[];
+  /**
+   * The roster in one line: who is owed a message, and whether the last one landed.
+   *
+   * Ali, 2026-11-11: the goal is "a process that keeps the engagement up and doesn't let anyone
+   * slide from the cracks". `coverage.overdue` is the number that has to be zero for that to be
+   * true, and it is reported on every batch rather than being something somebody has to go and
+   * compute.
+   */
+  readonly coverage: Coverage;
   /**
    * The two artifacts the nightly email attaches, built from this same run.
    *
@@ -135,6 +145,9 @@ export async function buildAllBriefs({ now = new Date() }: { now?: Date } = {}):
         ok: true,
         brief,
         hold: holdFor({ brief, applicationState: (r.application_state as string | null) ?? null, now }),
+        // Computed from the sidecar this brief was already composed from, so the coverage number
+        // and the message can never disagree about when we last wrote to somebody.
+        engagement: engagementState(p.sidecar.interns.find((x) => x.enrollment_id === id) as never, now),
       });
     } catch (err: any) {
       attempts.push({
@@ -149,6 +162,7 @@ export async function buildAllBriefs({ now = new Date() }: { now?: Date } = {}):
 
   return {
     generatedAt: now.toISOString(),
+    coverage: coverage(attempts.filter((a) => a.ok).map((a) => (a as { engagement: EngagementState }).engagement)),
     attempts,
     artifacts: {
       reportDate: p.reportDate,
