@@ -185,6 +185,31 @@ describe('<ColaberryTv />', () => {
     expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 3');
   });
 
+  it('a reorder keeps the playing short playing (independent verifier, T3 attempt 1)', () => {
+    const { rerender } = render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} />);
+    fireEvent.click(screen.getByTestId('cn-tv-next'));
+    const src = frame().src;
+    rerender(<ColaberryTv videos={[LIST[1], LIST[0], LIST[2]]} canManage={false} onManage={jest.fn()} />);
+    expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 2');
+    expect(frame().src).toBe(src);
+    expect(screen.getByTestId('cn-tv-count').textContent).toBe('1 OF 3 · LOOPS');
+  });
+
+  it('removing a short BEFORE the playing one keeps the playing short playing', () => {
+    const { rerender } = render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} />);
+    fireEvent.click(screen.getByTestId('cn-tv-next'));
+    rerender(<ColaberryTv videos={[LIST[1], LIST[2]]} canManage={false} onManage={jest.fn()} />);
+    expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 2');
+  });
+
+  it('a fresh copy of the same list (the 30 s poll) changes nothing', () => {
+    const { rerender } = render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} />);
+    fireEvent.click(screen.getByTestId('cn-tv-next'));
+    fireEvent.click(screen.getByTestId('cn-tv-next'));
+    rerender(<ColaberryTv videos={LIST.map((s) => ({ ...s }))} canManage={false} onManage={jest.fn()} />);
+    expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 3');
+  });
+
   it('restart jumps back to the first short', () => {
     const { rerender } = render(<ColaberryTv videos={LIST} canManage={false} onManage={jest.fn()} restart={0} />);
     fireEvent.click(screen.getByTestId('cn-tv-next'));

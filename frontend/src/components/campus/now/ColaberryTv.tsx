@@ -13,28 +13,38 @@ import { useTvChannel } from './useTvChannel';
  */
 const lengths = new Map<string, number>(); // lengths the player reported this visit, by YouTube id
 
-export default function ColaberryTv({ videos, canManage, onManage, restart = 0 }: {
-  videos: TvShort[]; canManage: boolean; onManage: () => void; restart?: number;
+export default function ColaberryTv({ videos, canManage, onManage, restart = 0, onPlaying }: {
+  videos: TvShort[]; canManage: boolean; onManage: () => void; restart?: number; onPlaying?: (youtubeId: string | null) => void;
 }): React.ReactElement {
-  const [index, setIndex] = useState(0);
+  // The playing short is held by ID with the list it was chosen from, so a reorder or a removal ABOVE it never changes what plays.
+  // When the list changes, the selection is adjusted during render (React's "adjust state on a prop change"), before any frame shows.
+  const [sel, setSel] = useState<{ id: string | null; list: TvShort[] }>(() => ({ id: videos[0]?.id ?? null, list: videos }));
   const [, setTick] = useState(0);
-  const prev = useRef<TvShort[]>(videos);
-  const currentId = useRef<string | null>(videos[0]?.id ?? null);
-
+  if (sel.list !== videos) {
+    const f = follow(sel.list, videos, sel.id);
+    setSel({ id: videos[f.index]?.id ?? null, list: videos });
+  }
+  const lastRestart = useRef(restart);
   useEffect(() => {
-    const f = follow(prev.current, videos, currentId.current);
-    prev.current = videos;
-    setIndex(f.index);
-  }, [videos]);
-  useEffect(() => { if (restart) setIndex(0); }, [restart]);
+    if (restart === lastRestart.current) return;
+    lastRestart.current = restart;
+    setSel((s) => ({ ...s, id: s.list[0]?.id ?? null }));
+  }, [restart]);
 
   const n = videos.length;
-  const i = n ? Math.min(index, n - 1) : 0;
+  const found = videos.findIndex((s) => s.id === sel.id);
+  const i = found >= 0 ? found : 0;
   const cur = n ? videos[i] : null;
-  currentId.current = cur?.id ?? null;
+  const playingYt = cur?.youtube_id ?? null;
+  useEffect(() => { onPlaying?.(playingYt); }, [playingYt, onPlaying]);
 
-  const next = useCallback(() => setIndex((x) => nextIndex(x, n)), [n]);
-  const back = useCallback(() => setIndex((x) => prevIndex(x, n)), [n]);
+  const go = useCallback((pick: (at: number, len: number) => number) => setSel((s) => {
+    const at = Math.max(0, s.list.findIndex((x) => x.id === s.id));
+    return { ...s, id: s.list[pick(at, s.list.length)]?.id ?? null };
+  }), []);
+  const next = useCallback(() => go(nextIndex), [go]);
+  const back = useCallback(() => go(prevIndex), [go]);
+  const setIndex = (k: number) => setSel((s) => ({ ...s, id: s.list[k]?.id ?? s.id }));
   const tv = useTvChannel(cur?.youtube_id ?? null, {
     startMuted: readMuted(),
     onEnded: next,

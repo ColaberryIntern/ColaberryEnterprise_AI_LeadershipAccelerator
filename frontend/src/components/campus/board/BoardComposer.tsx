@@ -18,7 +18,7 @@ const RITUAL_LANE: Record<string, PostLane> = {
 export const laneForType = (type: ComposeType, ritualKey?: string | null): PostLane =>
   type === 'q' ? 'q' : type === 'ritual' && ritualKey ? RITUAL_LANE[ritualKey] ?? 'general' : 'general';
 
-const serverWords = (e: unknown): string => {
+export const serverWords = (e: unknown): string => {
   const d = (e as { response?: { data?: { details?: { fieldErrors?: { body?: string[] } }; error?: string } } }).response?.data;
   return d?.details?.fieldErrors?.body?.[0] ?? d?.error ?? 'Could not post it right now. Please try again.';
 };
