@@ -87,7 +87,7 @@ export async function listSourceDocuments(projectId: string): Promise<GovProposa
   return GovProposalSourceDocument.findAll({ where: { project_id: projectId }, order: [['created_at', 'DESC']] });
 }
 
-export async function approveSourceDocument(documentId: string, identityId: string, approved = true): Promise<GovProposalSourceDocument | null> {
+export async function approveSourceDocument(documentId: string, identityId: string | null, approved = true): Promise<GovProposalSourceDocument | null> {
   const doc = await GovProposalSourceDocument.findByPk(documentId);
   if (!doc) return null;
   await doc.update({ approved, approved_by_identity_id: approved ? identityId : null, updated_at: new Date() });
