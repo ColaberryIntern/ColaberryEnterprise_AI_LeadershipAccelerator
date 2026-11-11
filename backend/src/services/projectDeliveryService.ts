@@ -259,7 +259,11 @@ export async function getProjectDelivery(
 ): Promise<ProjectRow[]> {
   const rows = await sequelize.query<any>(
     `SELECT p.id                AS project_id,
-            p.name,
+            -- Empty string collapsed to NULL so a caller's nullish-coalescing fallback to the
+            -- track label actually fires: that operator does not treat '' as nullish, and a
+            -- project admitted by the evidence branches below may have no name at all.
+            -- (No backticks in this comment. See the warning further down.)
+            NULLIF(btrim(p.name), '') AS name,
             p.enrollment_id,
             e.full_name         AS student_name,
             e.email             AS student_email,
@@ -334,7 +338,33 @@ export async function getProjectDelivery(
       --     withdrawn student's project is not a case-study candidate anyway.
       --     This is the SAME rule the current-classes snapshot applies.
       --   * unnamed projects: scratch/system rows, not somebody's build.
-      WHERE p.name IS NOT NULL AND p.name <> ''
+      -- A project with no NAME can still be somebody's build. (No backticks anywhere in this
+      -- comment: see the warning above, one ends the template literal. It has now happened twice.)
+      --
+      -- The old predicate was p.name IS NOT NULL AND p.name <> '' on its own, on the reasoning
+      -- that an unnamed row is scratch or system noise rather than a student's work. That held
+      -- until a nameless project appeared with real work on it.
+      --
+      -- Measured 2026-11-11: Harpreet Kaur's project 50a24430 was created at 01:42 that morning
+      -- with a NULL name, carrying her repository Harpreet-95/ToolSmithAI, a github_connections
+      -- row, and an APPROVED case study. This predicate dropped it, so the internship report saw
+      -- no project for her, triage returned the no-project tier, and the message generated for
+      -- her said "It is day 51 and there is still no project on your name." That sentence was
+      -- false, and it was false because of a missing write of ours, not because of anything she
+      -- did or did not do. Telling an intern their work does not exist is the most expensive
+      -- thing this report can get wrong.
+      --
+      -- So: keep excluding genuinely empty rows, and stop inferring emptiness from a missing name
+      -- alone. A repository, a task list or a case study is evidence of a build whatever the row
+      -- is called. The name is still what gets DISPLAYED, and callers already fall back to the
+      -- track label when it is absent.
+      WHERE (
+             (p.name IS NOT NULL AND btrim(p.name) <> '')
+          OR NULLIF(btrim(p.github_repo_url), '') IS NOT NULL
+          OR NULLIF(btrim(gc.repo_url), '') IS NOT NULL
+          OR EXISTS (SELECT 1 FROM student_tasks t WHERE t.project_id = p.id)
+          OR EXISTS (SELECT 1 FROM case_studies cs WHERE cs.project_id = p.id)
+        )
         AND (e.status IS NULL OR e.status NOT IN (:departed))
         ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}
         ${opts.enrollmentId ? 'AND p.enrollment_id = :enrollmentId' : ''}
