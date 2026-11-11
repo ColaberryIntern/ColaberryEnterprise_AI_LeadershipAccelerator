@@ -1,0 +1,37 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:12.370
+Staffing teams tend to learn that a role is hard to fill after a competitor has already placed someone. The early clues are public, but nobody has time to read thousands of postings.
+
+2
+00:00:13.500 --> 00:00:26.670
+TalentSignal reads public postings from Greenhouse and Lever, ranks open roles by how hard they look to fill, and shows why. A person releases every outreach draft, and releasing sends nothing.
+
+3
+00:00:27.800 --> 00:00:38.540
+None of its thirteen runtime dependencies is a language model client, so no model produces the scores. Its live ingestion is configured for two real companies.
+
+4
+00:00:39.600 --> 00:00:51.110
+Nothing in the requirements said how much each clue should count. She confirmed the gap, put every weight in one place, and recorded each choice as a proposal for the owner to settle.
+
+5
+00:00:52.200 --> 00:01:04.620
+Her own validation check needs twenty high-score requisitions before it will answer, and it had four, so the hardness score is unproven. Twenty four of fifty four decisions still await the owner.
+
+6
+00:01:05.700 --> 00:01:16.420
+When the two job boards disagreed wildly about how long roles stay open, she excluded the one whose dates did not hold up, and kept a named keyword list as the fallback.
+
+7
+00:01:17.500 --> 00:01:30.020
+Counted from the repository at the pinned commit: one hundred forty two commits, fifty five decision files, and one hundred fourteen frontend test definitions. The tests were not run for this record.
+
+8
+00:01:31.100 --> 00:01:40.930
+The hardness score is not proven. Ingestion runs locally and by hand, there is no hosted deployment, and nothing shows a staffing team using it.
+
+9
+00:01:42.000 --> 00:01:49.550
+TalentSignal makes every score explain itself, and it says plainly what its own data cannot prove yet.

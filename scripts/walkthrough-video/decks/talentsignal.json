@@ -1,0 +1,79 @@
+{
+  "slug": "the-score-shows-its-work-the-data-cannot-prove-it-yet",
+  "output": "talentsignal-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "The Score Shows Its Work. The Data Cannot Prove It Yet.",
+      "subtitle": "TalentSignal, built by Megan Dimiyo-Mbenoun, read at commit c6ac0da",
+      "caption": "Staffing teams tend to learn that a role is hard to fill after a competitor has already placed someone. The early clues are public, but nobody has time to read thousands of postings."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "Every score shows its reasons.",
+      "subtitle": "And the version of the weights behind it.",
+      "caption": "TalentSignal reads public postings from Greenhouse and Lever, ranks open roles by how hard they look to fill, and shows why. A person releases every outreach draft, and releasing sends nothing."
+    },
+    {
+      "kind": "cards",
+      "seconds": 11,
+      "accent_index": 0,
+      "rows": [
+        ["0 of 13", "runtime dependencies is a language-model client"],
+        ["2 real companies", "GitLab and gopuff, in the ingestion config"]
+      ],
+      "caption": "None of its thirteen runtime dependencies is a language model client, so no model produces the scores. Its live ingestion is configured for two real companies."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "The spec gave no weights, so every weight became a proposal.",
+      "subtitle": "Every weight lives in one config object.",
+      "caption": "Nothing in the requirements said how much each clue should count. She confirmed the gap, put every weight in one place, and recorded each choice as a proposal for the owner to settle."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "accent_index": 0,
+      "rows": [
+        ["4 of 20", "high-score requisitions the hardness check needs"],
+        ["24 of 54", "decision records still marked proposed"]
+      ],
+      "caption": "Her own validation check needs twenty high-score requisitions before it will answer, and it had four, so the hardness score is unproven. Twenty four of fifty four decisions still await the owner."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "One job board was left out rather than averaged in.",
+      "subtitle": "Role scarcity is measured from Greenhouse only.",
+      "caption": "When the two job boards disagreed wildly about how long roles stay open, she excluded the one whose dates did not hold up, and kept a named keyword list as the fallback."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "accent_index": 0,
+      "rows": [
+        ["142 commits", "from 22 July to 11 November 2026"],
+        ["55 decision files", "one for each business-logic choice"],
+        ["114 frontend tests", "defined in 19 files, counted, not run here"]
+      ],
+      "caption": "Counted from the repository at the pinned commit: one hundred forty two commits, fifty five decision files, and one hundred fourteen frontend test definitions. The tests were not run for this record."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "What this record cannot show yet.",
+      "subtitle": "Stated as gaps, by the builder first.",
+      "caption": "The hardness score is not proven. Ingestion runs locally and by hand, there is no hosted deployment, and nothing shows a staffing team using it."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "A person releases every draft, and nothing is sent.",
+      "subtitle": "Megan Dimiyo-Mbenoun, Colaberry learner",
+      "caption": "TalentSignal makes every score explain itself, and it says plainly what its own data cannot prove yet."
+    }
+  ]
+}
