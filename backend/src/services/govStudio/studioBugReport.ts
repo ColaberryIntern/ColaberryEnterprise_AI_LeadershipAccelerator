@@ -27,6 +27,8 @@ const CapturedError = z.object({
 });
 const CapturedRequest = z.object({
   at: z.string().max(40), method: z.string().max(10), url: z.string().max(600), status: z.union([z.number(), z.string().max(40)]), ms: z.number(),
+  // Optional, so an older bundle still posts a valid report rather than a 400.
+  count: z.number().optional(),
 });
 
 export const StudioBugReportSchema = z.object({
