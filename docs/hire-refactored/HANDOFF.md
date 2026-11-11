@@ -57,7 +57,9 @@ Kes and Swati are Colaberry employees, listed as real test profiles; they are no
 
 - Kes's headline reads "AI Leadership Accelerator — QA", frozen at approval. Changing it
   needs a re-approval.
-- His portfolio shows his email address publicly.
+- Email addresses are not shown on Hire, on the page or in its data (Ali, 2026-11-10; live
+  from the release after PR #3800). Employers reach people through Request intro. The enterprise portfolio still carries email by the 2026-09-03 decision.
+- Kes's portfolio says "9 published" but links only 2; the other 7 open by direct link.
 - "Verified commits" shows 0: commit verification is not wired for his private repos.
 - The certificate does not renew itself. The host's certbot cannot do Route 53, so it was
   issued with the `certbot/dns-route53` docker image; a scheduled renewal is still to do.
@@ -83,7 +85,7 @@ box. To take the site offline without a deploy: disable the host nginx site
 ## Open items
 
 1. Automate certificate renewal (production infrastructure change: needs Ali's go-ahead).
-2. Optional: fix Kes's headline and hide his email (needs a re-approval).
+2. Optional: fix Kes's headline (needs a re-approval).
 3. Resume upload can store the file and silently skip extraction (Obi, 2026-11-09:
    `extracted` null, no log line). `portalSettingsService.setResume` swallows the failure
    with only a warn; it needs a retry or a visible "we couldn't read this" state.
@@ -92,4 +94,23 @@ box. To take the site offline without a deploy: disable the host nginx site
 
 ## Production verification
 
-PENDING
+**PASS, 10 of 10 criteria**, cycle 2 of 2, by the independent read-only production verifier,
+2026-11-10 3:14-3:25 pm CST, against the live release of PR #3800 (merge commit cc18db0c7,
+deployed 3:12 pm CST).
+
+| Cycle | When (CST) | Result | What failed |
+|---|---|---|---|
+| 1 | 2026-11-09 4:11-4:30 pm | FAIL, 7 of 10 | Masthead overflowed at 390px on `/` and portfolios; unknown paths showed nginx's stock 404; one "Approved profile" link opened in the same tab |
+| 2 | 2026-11-10 3:14-3:25 pm | **PASS, 10 of 10** | None. All three fixed live: branded 404 on every unknown path, `/talent/` and `/case-studies/` redirect to the directory, no sideways scroll on 9 pages at 390px, the link opens in a new tab |
+
+Also confirmed live in cycle 2: 3 people listed (talent API `listed=3`, no email or phone),
+Kes is the spotlight, Swati's and Obi's pages each show a case study with video, Built by,
+VERIFIED, provenance and Request intro; reduced motion respected; `/ws-post-job` 410 JSON;
+an empty intro POST is refused with 400; 0 uncaught JavaScript errors.
+
+Follow-ups the verifier flagged, fixed in the next release (PR
+`workstream/hire-hide-email-and-https-redirects`): email removed from the Hire portfolio data,
+and redirects made relative so they never point at `http://`. Live once that PR is deployed.
+
+Not checkable read-only, so not claimed: a newly published person appearing without a deploy,
+a withdrawn person disappearing, the admin HIRE preview and publish controls.
