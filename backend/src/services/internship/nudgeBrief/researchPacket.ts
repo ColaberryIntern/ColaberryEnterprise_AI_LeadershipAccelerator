@@ -191,6 +191,28 @@ export async function findAgent(term: string): Promise<ResearchLead | null> {
  * one section grant, and the platform's own diagnostic reported it as a missing account. Role and
  * extra grants together are what decide access, so both are returned.
  */
+/**
+ * Say so when the record spells the name differently, and ONLY then.
+ *
+ * The first version of this note tested `display_name.startsWith(asked)`, which fires on any
+ * record where the asked-for name is not the first word. Live, that made it tell a lie: Aleem is
+ * filed as "Mohammed Abdul Aleem", so the panel said the record was "not quite how the question
+ * spelled it" when the spelling was exactly right and the name simply sits last. A panel whose job
+ * is to be trusted as evidence cannot afford a false note; one wrong line costs more than the four
+ * right ones earn.
+ *
+ * So the test is per word. An exact word match means there is nothing to report. A word that only
+ * matches on the prefix is the genuine case (Roselyn / "Roselen"), and the note names that one word
+ * rather than the whole record, because the word is what differs.
+ */
+export function spellingNote(displayName: string | null, asked: string): string {
+  const words = (displayName ?? '').split(/\s+/).map((w) => w.replace(/[^\p{L}'-]/gu, '')).filter(Boolean);
+  const want = asked.toLowerCase();
+  if (words.some((w) => w.toLowerCase() === want)) return '';
+  const near = words.find((w) => w.toLowerCase().startsWith(want.slice(0, 5)));
+  return near ? ` Note the record spells it "${near}", not "${asked}".` : '';
+}
+
 export async function findPerson(firstName: string): Promise<ResearchLead | null> {
   type Row = { display_name: string | null; mgmt_role: string | null; mgmt_extra_sections: string[] | null };
   let row: Row | undefined;
@@ -233,9 +255,7 @@ export async function findPerson(firstName: string): Promise<ResearchLead | null
     kind: 'person',
     term: firstName,
     finding: `${row.display_name ?? firstName} holds the management role "${row.mgmt_role}" with extra section grants: ${extra}. Access is decided by the role's sections plus those grants, not by whether they have an admin account.`
-      + ((row.display_name ?? '').toLowerCase().startsWith(firstName.toLowerCase())
-        ? ''
-        : ` Note the record is filed as "${row.display_name}", which is not quite how the question spelled it.`),
+      + spellingNote(row.display_name, firstName),
     evidence: 'community_members.mgmt_role and mgmt_extra_sections, the same source requireSection() reads',
   };
 }
