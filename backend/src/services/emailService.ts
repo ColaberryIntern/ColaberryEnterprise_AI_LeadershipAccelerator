@@ -1679,9 +1679,18 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
   const urgency = data.isOneHour
     ? 'Starting in 1 Hour'
     : sessionDayLabel(data.sessionDate, Date.now());
+  // OH-6: "Session 0" is not a thing a reader should ever see.
+  //
+  // An Open House is stored with `session_number: 0` because it is not part of the
+  // numbered curriculum, and this subject line would have told its attendees
+  // "[Accelerator] Tomorrow: Session 0 - ... Open House". Numbered sessions are
+  // unaffected: the prefix is dropped only when there is no real number to show.
+  const sessionLabel = Number.isInteger(data.sessionNumber) && data.sessionNumber > 0
+    ? `Session ${data.sessionNumber} - `
+    : '';
   const r = await resolveEmailRecipient(
     data.to,
-    `[Accelerator] ${urgency}: Session ${data.sessionNumber} - ${data.sessionTitle}`
+    `[Accelerator] ${urgency}: ${sessionLabel}${data.sessionTitle}`
   );
   const html = buildSessionReminderHtml(data, urgency);
 
