@@ -40,13 +40,16 @@ describe('project cards', () => {
     assert.match(html, /<a class="proj" href="\/case-studies\/claims-triage\/" target="_blank" rel="noopener" data-launch data-from="project"/);
   });
 
-  test('say "Case study in review" with the PROJECT title when the case study is not published there', () => {
-    const html = P.projectCard({ title: 'Intake Router', case_study_slug: 'draft-only-slug' }, published, 'ann-lee');
-    assert.match(html, /class="proj pending"/);
-    assert.match(html, /Case study in review/);
-    assert.match(html, /<h4>Intake Router<\/h4>/);
-    assert.doesNotMatch(html, /draft-only-slug/, 'an unpublished case study slug must not reach the page');
-    assert.doesNotMatch(html, /<a /, 'a pending card is not a link');
+  test('render NOTHING for a project whose case study is not published on Hire (Ali, 2026-11-11)', () => {
+    assert.equal(P.projectCard({ title: 'Intake Router', case_study_slug: 'draft-only-slug' }, published, 'ann-lee'), '');
+    assert.equal(P.projectCard({ title: 'Ledger Bot', case_study_slug: null }, published, 'ann-lee'), '');
+  });
+
+  test('a whole page never names an unconverted project, a draft slug, or "in review"', () => {
+    const b = body({ hire: { signature: null, caseStudies: [{ slug: 'claims-triage', title: 'Claims triage that flags itself' }], availability: null, spotlight: false, indexable: true } });
+    const html = P.renderPortfolio(b, 'ann-lee', [], NOW);
+    assert.match(html, /Claims triage that flags itself/);
+    for (const banned of [/Intake Router/, /Ledger Bot/, /draft-only-slug/, /in review/i, /proj pending/]) assert.doesNotMatch(html, banned);
   });
 });
 

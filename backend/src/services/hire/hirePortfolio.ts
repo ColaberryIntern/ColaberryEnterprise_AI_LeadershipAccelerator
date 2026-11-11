@@ -16,6 +16,7 @@ import CaseStudy from '../../models/CaseStudy';
 import { getPublicPortfolioBySlug, type PublicPortfolioResult } from '../career/careerPortfolioPageService';
 import { linkedPeopleForCaseStudy } from '../career/caseStudyLinkedPerson';
 import { loadHireIndex } from './hireTalentIndex';
+import { restrictToHireCaseStudies } from './hireCaseStudyOnly';
 import { availabilityOf, pickSignature, type HireCaseStudyCard } from './hireTalentProjection';
 
 export interface HirePortfolioBlock {
@@ -43,7 +44,12 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
     // (his 2026-09-03 decision: there the learner is the one being contacted). On Hire the
     // employer's route to a person is Request intro, and /intro/ promises "contact details
     // are never shown here", so the address is nulled before it leaves this surface.
-    portfolio: { ...result.portfolio, identity: { ...result.portfolio.identity, email: null } },
+    // CASE STUDIES ONLY (Ali, 2026-11-11). Projects, records, commits and repositories that are
+    // not an approved, Hire-published case study never leave this surface. See hireCaseStudyOnly.
+    portfolio: restrictToHireCaseStudies(
+      { ...result.portfolio, identity: { ...result.portfolio.identity, email: null } },
+      new Set(entry.cases.map((c) => c.slug)),
+    ),
     hire: {
       signature: pickSignature(entry.cases),
       caseStudies: entry.cases.map(({ slug: s, title, summary, industry, featured, publishedAt, heroMetric, look }) => ({
