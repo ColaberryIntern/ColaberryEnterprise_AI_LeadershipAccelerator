@@ -113,6 +113,16 @@ describe('C137: full screen for events', () => {
     send({ event: 'onStateChange', info: 0 });
     expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 2');
     expect(fsEl).toBe(screen.getByTestId('cn-tv-vid')); // still full screen on the next short
+    // the controls are reachable INSIDE full screen: next, previous, and sound (a muted TV can be unmuted)
+    const box = screen.getByTestId('cn-tv-vid');
+    for (const id of ['cn-tv-fs-prev', 'cn-tv-fs-next', 'cn-tv-fs-mute', 'cn-tv-fs-exit']) expect(box.contains(screen.getByTestId(id))).toBe(true);
+    fireEvent.click(screen.getByTestId('cn-tv-fs-next'));
+    expect(screen.getByTestId('cn-tv-title').textContent).toBe('Short 3');
+    fireEvent.click(screen.getByTestId('cn-tv-fs-mute'));
+    expect(screen.getByTestId('cn-tv-fs-mute').getAttribute('aria-label')).toBe('Turn the sound on');
+    fireEvent.click(screen.getByTestId('cn-tv-fs-mute'));
+    expect(screen.getByTestId('cn-tv-fs-mute').getAttribute('aria-label')).toBe('Mute');
+    expect(frame().getAttribute('allow')).not.toContain('fullscreen'); // YouTube's own button is off; ours is the one
     fireEvent.click(screen.getByTestId('cn-tv-fs-exit'));
     expect(fsEl).toBeNull();
     expect(screen.queryByTestId('cn-tv-fs-exit')).toBeNull();

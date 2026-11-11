@@ -70,14 +70,22 @@ export default function ColaberryTv({ videos, canManage, onManage, restart = 0, 
               src={tv.src}
               onLoad={tv.onLoad}
               title={`Colaberry TV: ${cur.title}`}
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              // no "fullscreen": YouTube's own button would fullscreen only this frame and drop out at the next short; ours (C137) keeps going
+              allow="autoplay; encrypted-media; picture-in-picture"
               data-testid="cn-tv-frame"
             />
             {tv.needsTap && (
               <button type="button" className="cn-tv-tap" onClick={tv.tapForSound} data-testid="cn-tv-tap">🔊 Tap for sound</button>
             )}
             {fs.active && (
-              <button type="button" className="cn-tv-fsx" onClick={fs.toggle} aria-label="Leave full screen" data-testid="cn-tv-fs-exit">✕ Exit full screen</button>
+              // in full screen the row below is out of reach, so its controls come inside (a muted TV can still be unmuted)
+              <div className="cn-tv-fsbar" data-testid="cn-tv-fsbar">
+                <button type="button" onClick={back} aria-label="Previous short" data-testid="cn-tv-fs-prev">▲</button>
+                <button type="button" onClick={next} aria-label="Next short" data-testid="cn-tv-fs-next">▼</button>
+                <button type="button" onClick={() => tv.setMuted(!tv.muted)} aria-pressed={!tv.muted} aria-label={tv.muted ? 'Turn the sound on' : 'Mute'}
+                  data-testid="cn-tv-fs-mute">{tv.muted ? '🔇' : '🔊'}</button>
+                <button type="button" className="cn-tv-fsx" onClick={fs.toggle} aria-label="Leave full screen" data-testid="cn-tv-fs-exit">✕ Exit full screen</button>
+              </div>
             )}
           </div>
           <div className="cn-tv-cap">
