@@ -58,7 +58,7 @@ export async function createSession(data: {
  * broadcast occurrence to anything else in the portal. `ensureRoomForSession` returns the room
  * whether it created one or found one, so this is safe to call for an existing session.
  */
-async function resolveRoomId(session: { id: string }): Promise<string | null> {
+export async function resolveRoomId(session: { id: string }): Promise<string | null> {
   if (!env.communityRoomsEnabled) return null;
   try {
     const { ensureRoomForSession } = await import('./communityRooms/roomService');

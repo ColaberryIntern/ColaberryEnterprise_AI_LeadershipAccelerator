@@ -41,6 +41,10 @@ import {
   handleGetCohortCurriculumProgress,
 } from '../../controllers/acceleratorDashboardController';
 import { strategyPrepUpload } from '../../config/upload';
+import {
+  handleGetStudioConfig,
+  handleUpdateStudioConfig,
+} from '../../controllers/studioSetupController';
 
 const router = Router();
 
@@ -120,6 +124,18 @@ router.get('/api/admin/accelerator/enrollments/:id/success-snapshot', requireAdm
 // Assessment history — every structured health assessment ever run for one student.
 router.get('/api/admin/accelerator/enrollments/:id/assessment-history', requireAdmin, handleGetAssessmentHistory);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
+
+/*
+ * D4 (P4-01) Studio setup — the configuration a class needs before it can air.
+ *
+ * Same `requireAdmin` gate as every other accelerator route, which `mgmtSectionGate.ts:100`
+ * maps to the `program` section. The screen these serve opens in its own browser tab and
+ * therefore starts with no in-app state at all, which is why the GET returns everything the
+ * page renders from a session id alone rather than assuming a prior navigation filled anything
+ * in.
+ */
+router.get('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleGetStudioConfig);
+router.patch('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleUpdateStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);
 // Schedule management: skip a session's day (push forward), un-skip a date, per-session curriculum
