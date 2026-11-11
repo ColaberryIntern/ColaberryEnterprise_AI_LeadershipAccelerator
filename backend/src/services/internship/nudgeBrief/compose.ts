@@ -82,15 +82,32 @@ function signalsOf(i: SidecarIntern): NudgeBrief['signals'] {
  * Compared in milliseconds rather than on the date string, because the two timestamps routinely
  * fall on the same day and a date comparison would call a reply that arrived ninety minutes later
  * "not since".
+ *
+ * READS `last_inbound_at`, NOT `open_questions`, and the distinction is the whole point. This used
+ * to walk `open_questions`, which only ever holds mail `classifyEmail` scored `question` or
+ * `stuck` - so "did they write back?" was being decided by "did they ask us something?", and an
+ * intern who replied with a progress update counted as silent. Measured on production 2026-11-11:
+ * null for 13 of 13 interns, which disabled the reply check in `hold.ts` and held the whole
+ * roster. The guard there exists specifically to keep a replying intern OFF the hold list, so the
+ * failure buried exactly the people it was written to protect.
  */
 function inboundSince(i: SidecarIntern): string | null {
   const ours = i.last_ask ? Date.parse(i.last_ask.sent_at) : null;
+  // No record of us writing means there is no "since" to measure from. Returning their mail here
+  // would assert we are waiting on an answer to a question we never asked.
+  if (ours === null || Number.isNaN(ours)) return null;
+
+  // Both inbound sources, newest wins. `last_inbound_at` is the real answer; the open_questions
+  // scan is kept only so a sidecar saved before that field existed still reports something rather
+  // than silently losing the signal.
+  const candidates = [i.last_inbound_at, ...i.open_questions.map((q) => q.received_at)];
   let newest: string | null = null;
-  for (const q of i.open_questions) {
-    const at = Date.parse(q.received_at);
-    if (Number.isNaN(at)) continue;
-    if (ours !== null && !Number.isNaN(ours) && at <= ours) continue;
-    if (newest === null || at > Date.parse(newest)) newest = q.received_at;
+  let newestMs = -Infinity;
+  for (const iso of candidates) {
+    if (!iso) continue;
+    const at = Date.parse(iso);
+    if (Number.isNaN(at) || at <= ours) continue;
+    if (at > newestMs) { newest = iso; newestMs = at; }
   }
   return newest;
 }
