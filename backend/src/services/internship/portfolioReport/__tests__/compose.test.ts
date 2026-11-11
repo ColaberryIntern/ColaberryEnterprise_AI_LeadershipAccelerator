@@ -80,12 +80,25 @@ describe('portfolio compose: status, quiet days and nudge', () => {
 });
 
 describe('portfolio compose: email asks and replies owed', () => {
-  it('owes a reply only when their latest is newer than ours AND under 7 days old', () => {
+  /**
+   * The rule changed on 2026-11-11. It used to be "their latest is newer than anything we sent
+   * them", and the second case below asserted that writing to them the same day cleared it. That
+   * counted a NUDGE as a reply, so our own nudge run answered every outstanding question in the
+   * data without answering one in fact. It is now a thread test: see threadReply.ts, and
+   * __tests__/repliesOwed.test.ts for the full set.
+   *
+   * Note that `last_we_wrote` is the same in both of the first two cases. It is no longer what
+   * decides this, which is the whole point.
+   */
+  it('owes a reply only when we have not written back in THEIR thread, and it is under 7 days old', () => {
     const emails = [{ email: 'kal@example.com', subject: 'Re: Need a read route', snippet: 'please add', received_at: daysAgo(1) }];
-    expect(emailView('kal@example.com', emails, [{ email: 'kal@example.com', last_we_wrote: daysAgo(3) }], NOW.getTime()).awaitingReply).toBe(true);
-    expect(emailView('kal@example.com', emails, [{ email: 'kal@example.com', last_we_wrote: daysAgo(0) }], NOW.getTime()).awaitingReply).toBe(false);
+    const weWrote = [{ email: 'kal@example.com', last_we_wrote: daysAgo(0) }];
+    const nudge = [{ email: 'kal@example.com', subject: 'Two days to your case study package', received_at: daysAgo(0) }];
+    const answer = [{ email: 'kal@example.com', subject: 'Re: Need a read route', received_at: daysAgo(0) }];
+    expect(emailView('kal@example.com', emails, weWrote, NOW.getTime(), nudge).awaitingReply).toBe(true);
+    expect(emailView('kal@example.com', emails, weWrote, NOW.getTime(), answer).awaitingReply).toBe(false);
     const old = [{ ...emails[0], received_at: daysAgo(9) }];
-    expect(emailView('kal@example.com', old, [], NOW.getTime()).awaitingReply).toBe(false);
+    expect(emailView('kal@example.com', old, [], NOW.getTime(), []).awaitingReply).toBe(false);
   });
 
   it('collapses Re:/Fwd: threads into one subject each', () => {

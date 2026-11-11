@@ -169,6 +169,13 @@ export interface InternCard {
   project: ProjectView | null;
   feed: FeedView;
   emails: EmailView;
+  /**
+   * Everything colaberry.com sent THIS intern in the window, with subjects. Carried on the card so
+   * the sidecar can apply the same thread rule compose.ts applies (threadReply.ts); without it,
+   * `openQuestions` had to fall back to "did we send them anything since", which counts a nudge as
+   * an answer. Optional so a card saved before this existed still renders.
+   */
+  replies?: OurReply[];
   subscriptions: ReportSubscription[];
   status: { key: StatusKey; label: string; reasons: string[] };
   lately: string[];

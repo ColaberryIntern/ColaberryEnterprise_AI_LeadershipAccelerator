@@ -15,10 +15,14 @@ import { fallbackSummary } from './summary';
 import { chooseAsks, publishedArtifacts } from './artifacts';
 import { presentationDue, videoArtifacts } from './presentations';
 import { buildTimeline, dayKey, daysBetween, STUCK_GAP_DAYS } from './timeline';
+import { answeredInThread, cleanSubject, newestReplyByThread } from './threadReply';
 import type {
   ActivityTotals, AgentTab, CollectedPortfolio, CommitSummary, EmailView, FeedItem, FeedView, InternCard,
-  InternEmail, PortfolioReport, ProjectFacts, ProjectView, StatusKey, Track, TrainingView, WeWrote,
+  InternEmail, OurReply, PortfolioReport, ProjectFacts, ProjectView, StatusKey, Track, TrainingView, WeWrote,
 } from './types';
+
+// Re-exported because it moved to threadReply.ts, where the thread rule that uses it lives.
+export { cleanSubject };
 
 const DAY = 86400000;
 export const OWED_WINDOW_DAYS = 7;          // matches agentNudgeState.OWED_WINDOW_DAYS
@@ -60,10 +64,6 @@ export function firstName(name: unknown): string {
   return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : '';
 }
 
-export function cleanSubject(s: unknown): string {
-  return String(s || '(no subject)').replace(/^((re|fwd?|fw)\s*:\s*)+/i, '').trim() || '(no subject)';
-}
-
 const IRREGULAR: Record<string, string> = { story: 'stories', reply: 'replies', activity: 'activities' };
 export function plural(n: number, word: string): string {
   return `${n} ${n === 1 ? word : IRREGULAR[word] ?? `${word}s`}`;
@@ -95,11 +95,20 @@ export function trainingView(training: ConsoleRosterRow['training'] | null | und
 }
 
 /**
- * Their emails to Ali, newest first, one per subject, and whether a reply is owed: their latest
- * is newer than anything colaberry.com sent them AND under OWED_WINDOW_DAYS old (a months-old
- * miss is fixed by a reply, not flagged forever). Same rule as agentNudgeState.
+ * Their emails to Ali, newest first, one per subject, and whether a reply is owed: we have not
+ * written back IN THEIR THREAD since their latest message, AND it is under OWED_WINDOW_DAYS old
+ * (a months-old miss is fixed by a reply, not flagged forever).
+ *
+ * The thread clause replaced "newer than anything colaberry.com sent them" on 2026-11-11. The old
+ * test counted a NUDGE as a reply, so our own nudge run answered every outstanding question in the
+ * data without answering any of them in fact: by 11 Nov no intern was `blocked_waiting_on_ali`,
+ * nothing reached the `answer_owed` focus, and "Replies you owe" read lower than the truth. See
+ * threadReply.ts for why the thread is both the available evidence and the right evidence.
+ *
+ * `lastWeWrote` below deliberately keeps its plain meaning - the last time we sent them anything
+ * at all, nudge included - because it reports what we did, not whether we answered.
  */
-export function emailView(email: string, emails: InternEmail[], weWrote: WeWrote[], nowMs: number): EmailView {
+export function emailView(email: string, emails: InternEmail[], weWrote: WeWrote[], nowMs: number, replies: ReadonlyArray<OurReply> = []): EmailView {
   const mine = emails.filter((e) => lc(e.email) === email).sort((a, b) => (ms(b.received_at) ?? 0) - (ms(a.received_at) ?? 0));
   const seen = new Set<string>();
   const threads: EmailView['threads'] = [];
@@ -112,7 +121,10 @@ export function emailView(email: string, emails: InternEmail[], weWrote: WeWrote
   const lastTheyMs = mine.length ? ms(mine[0].received_at) : null;
   const we = weWrote.find((w) => lc(w.email) === email);
   const lastWeMs = we ? ms(we.last_we_wrote) : null;
-  const awaitingReply = lastTheyMs !== null && (lastWeMs === null || lastTheyMs > lastWeMs) && nowMs - lastTheyMs <= OWED_WINDOW_DAYS * DAY;
+  const byThread = newestReplyByThread(replies);
+  const awaitingReply = lastTheyMs !== null
+    && !answeredInThread(mine[0].subject, lastTheyMs, byThread)
+    && nowMs - lastTheyMs <= OWED_WINDOW_DAYS * DAY;
   return {
     threads,
     count: mine.length,
@@ -292,6 +304,10 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
   const track: Track = agent ? 'agent' : gov ? 'gov' : project ? 'other' : 'none';
   const days = (r.activity?.days ?? []) as unknown as Day[];
   const readiness = data.readiness.find((x) => x.enrollment_id === r.enrollment_id);
+  // Everything colaberry.com sent THIS intern in the window, with subjects. Filtered once here
+  // because three things need it: the reply-owed rule, the timeline, and the card itself.
+  const ourReplies = (data.replies ?? []).filter((x) => lc(x.email) === email);
+
   const core: CardCore = {
     enrollmentId: r.enrollment_id,
     name: r.name,
@@ -317,7 +333,7 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
     cert: r.cert ? { sittings: r.cert.sittings, completed: r.cert.completed, available: r.cert.available } : null,
     project,
     feed: feedView(data.feeds[r.enrollment_id]),
-    emails: emailView(email, data.emails, data.weWrote, nowMs),
+    emails: emailView(email, data.emails, data.weWrote, nowMs, ourReplies),
     subscriptions: tab?.subscriptions ?? [],
   };
   const status = statusFor(core);
@@ -327,12 +343,16 @@ function cardFor(r: ConsoleRosterRow, data: CollectedPortfolio, l: Lookups, nowM
   const timeline = buildTimeline({
     nowMs, firstName: core.firstName, project, training: core.training, awaitingReply: core.emails.awaitingReply, activityDays: days,
     emails: data.emails.filter((e) => lc(e.email) === email),
-    replies: (data.replies ?? []).filter((x) => lc(x.email) === email),
+    replies: ourReplies,
     artifacts: published,
   });
   const artifacts = { published, asks: chooseAsks({ ...core, timeline }, published, nowMs, presentation) };
   const card: InternCard = {
     ...core,
+    // Carried onto the card so the sidecar can apply the same thread rule this file applies.
+    // Previously only `CollectedPortfolio` held these, so `openQuestions` had no per-thread
+    // evidence and fell back to "did we send them anything since", which a nudge satisfies.
+    replies: ourReplies,
     timeline,
     presentation,
     summary: '',
