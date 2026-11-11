@@ -109,12 +109,18 @@ afterEach(() => {
 });
 
 describe('AgentDetailLayout — sidebar nav', () => {
-  it('renders exactly the 6 real tabs, in the mockup\'s order, and clicking one calls onTabChange with the real tab key', async () => {
+  it('renders exactly the 7 real tabs, in the mockup\'s order, and clicking one calls onTabChange with the real tab key', async () => {
     const props = baseProps();
     await render(props);
 
     const labels = [
       'Overview', 'Talk to Reese', 'Work & commitments', 'Decisions & evidence',
+      // 2026-11-11: Tools & access joined the nav, after Decisions because granting a tool is
+      // the same kind of act as the decisions recorded there. Ali: "I would like to add a tools
+      // section to the Agent dashboard which will facilitate the request, approval and access to
+      // the tools." This count is a deliberate product change, raised the same way the HomeV2
+      // section budget was — never by loosening the assertion to stop it failing.
+      'Tools & access',
       // 2026-10-26: Email joined the nav, after Decisions because Ali asked for the agent's
       // inbox to sit beside her decision making rather than on a page of its own.
       'Email',
