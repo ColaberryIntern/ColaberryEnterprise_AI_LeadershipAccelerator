@@ -21,6 +21,7 @@ jest.mock('../chatService', () => ({
   closeConversation: jest.fn(),
 }));
 
+import { Op } from 'sequelize';
 import ChatConversation from '../../models/ChatConversation';
 import {
   closeIdleConversations,
@@ -145,39 +146,64 @@ describe('closeIdleConversations', () => {
 });
 
 describe('findIdleConversations', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('selects only active conversations older than the cutoff, oldest first', async () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
     findAll.mockResolvedValue([]);
-    const now = new Date('2026-11-11T12:00:00.000Z');
+  });
 
-    await findIdleConversations(30, 200, now);
+  const NOW = new Date('2026-11-11T12:00:00.000Z');
+  const CUTOFF = new Date('2026-11-11T11:30:00.000Z');
+  const queryArg = () => findAll.mock.calls[0][0];
+  const orClauses = () => queryArg().where[Op.or] as any[];
 
-    const arg = findAll.mock.calls[0][0];
+  it('selects only active conversations, oldest first, bounded by the limit', async () => {
+    await findIdleConversations(30, 200, NOW);
+
+    const arg = queryArg();
     expect(arg.where.status).toBe('active');
     expect(arg.limit).toBe(200);
-    expect(arg.order).toEqual([['updated_at', 'ASC']]);
+    // started_at, NOT updated_at: ordering by a column that is null on most rows leaves the
+    // batch arbitrary, so the oldest-first guarantee would be a fiction.
+    expect(arg.order).toEqual([['started_at', 'ASC']]);
+  });
 
-    // The cutoff must be exactly 30 minutes before "now", not before the epoch or after now.
-    const opLt = Object.getOwnPropertySymbols(arg.where.updated_at)
-      .map((s) => (arg.where.updated_at as any)[s])
-      .find((v) => v instanceof Date);
-    expect(opLt).toEqual(new Date('2026-11-11T11:30:00.000Z'));
+  it('is not blind to a null updated_at, which is how 128 production rows went unswept', async () => {
+    // The regression this pins: `updated_at < cutoff` alone matches nothing when the column is
+    // null, because `null < cutoff` is null, not true. The model sets `timestamps: false`, so
+    // nothing maintains that column except the code paths that write it by hand.
+    await findIdleConversations(30, 200, NOW);
+
+    const clauses = orClauses();
+    expect(clauses).toHaveLength(2);
+
+    // The fallback clause asks for `updated_at IS NULL` and then measures idleness on
+    // started_at. Op.is, not a bare null, because the attribute is typed as a Date.
+    const fallback = clauses.find((c) => c.updated_at?.[Op.is] === null);
+    expect(fallback).toBeDefined();
+    expect(fallback.started_at[Op.lt]).toEqual(CUTOFF);
+
+    const direct = clauses.find((c) => c.updated_at?.[Op.lt] !== undefined);
+    expect(direct).toBeDefined();
+    expect(direct.updated_at[Op.lt]).toEqual(CUTOFF);
+  });
+
+  it('refuses to sweep a conversation the visitor never spoke in', async () => {
+    // Closing one is not harmless: it increments admissions_memory.conversation_count and
+    // appends a summary reading "0 messages exchanged", which buildMemoryContext then feeds
+    // into Maya's prompt. All 128 unswept production rows were exactly this shape.
+    await findIdleConversations(30, 200, NOW);
+
+    expect(queryArg().where.visitor_message_count[Op.gt]).toBe(0);
   });
 
   it('uses a cutoff that would NOT catch a conversation active one minute ago', async () => {
-    findAll.mockResolvedValue([]);
-    const now = new Date('2026-11-11T12:00:00.000Z');
+    await findIdleConversations(DEFAULT_IDLE_MINUTES, DEFAULT_BATCH_LIMIT, NOW);
 
-    await findIdleConversations(DEFAULT_IDLE_MINUTES, DEFAULT_BATCH_LIMIT, now);
-
-    const arg = findAll.mock.calls[0][0];
-    const cutoff = Object.getOwnPropertySymbols(arg.where.updated_at)
-      .map((s) => (arg.where.updated_at as any)[s])
-      .find((v) => v instanceof Date) as Date;
-
-    const oneMinuteAgo = new Date(now.getTime() - 60_000);
-    expect(cutoff.getTime()).toBeLessThan(oneMinuteAgo.getTime());
+    const oneMinuteAgo = new Date(NOW.getTime() - 60_000);
+    for (const clause of orClauses()) {
+      const cutoff = (clause.updated_at?.[Op.lt] ?? clause.started_at[Op.lt]) as Date;
+      expect(cutoff.getTime()).toBeLessThan(oneMinuteAgo.getTime());
+    }
   });
 });
 

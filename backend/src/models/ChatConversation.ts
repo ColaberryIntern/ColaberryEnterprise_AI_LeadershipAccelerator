@@ -19,7 +19,12 @@ interface ChatConversationAttributes {
   summary?: string | null;
   metadata?: Record<string, any> | null;
   created_at?: Date;
-  updated_at?: Date;
+  // Nullable in the schema and nullable in fact: the column has no NOT NULL and no default,
+  // and `timestamps: false` below means Sequelize never maintains it, so only the code paths
+  // that set it by hand ever write it. Measured in production on 2026-11-11, 128 of 145 rows
+  // had it null. Typing it as a plain `Date` made `updated_at IS NULL` un-expressible in a
+  // typed where clause, which is how a sweep came to be silently blind to those 128 rows.
+  updated_at?: Date | null;
 }
 
 class ChatConversation extends Model<ChatConversationAttributes> implements ChatConversationAttributes {
@@ -40,7 +45,7 @@ class ChatConversation extends Model<ChatConversationAttributes> implements Chat
   declare summary: string | null;
   declare metadata: Record<string, any> | null;
   declare created_at: Date;
-  declare updated_at: Date;
+  declare updated_at: Date | null;
 }
 
 ChatConversation.init(
