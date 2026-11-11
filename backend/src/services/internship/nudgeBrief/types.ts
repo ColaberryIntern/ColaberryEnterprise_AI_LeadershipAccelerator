@@ -79,6 +79,16 @@ export interface NudgeBrief {
   readonly tierReason: string;
   readonly trackLabel: string;
   readonly projectName: string | null;
+  readonly projectId: string | null;
+  /**
+   * Their unanswered questions, in FULL rather than as a snippet.
+   *
+   * Carried so the research packet can resolve the identifiers in them, and so a reader can see
+   * what is actually being answered. Until 2026-11-10 the inbound body was truncated to 400
+   * characters in SQL, which is about one paragraph; Victoria's message asked four numbered
+   * questions and the composer could see the first.
+   */
+  readonly openQuestions: ReadonlyArray<{ readonly receivedAt: string; readonly subject: string; readonly text: string }>;
   readonly signals: BriefSignals;
   readonly lastOutbound: BriefLastOutbound | null;
   /**

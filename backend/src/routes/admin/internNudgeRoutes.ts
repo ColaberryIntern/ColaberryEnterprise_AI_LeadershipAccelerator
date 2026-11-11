@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { buildAllBriefs, buildBriefFor, buildReportArtifacts, UnknownInternError } from '../../services/internship/nudgeBrief/build';
+import { buildResearchPacket } from '../../services/internship/nudgeBrief/researchPacket';
 import { sendBrief } from '../../services/internship/nudgeBrief/send';
 import { briefProblems } from '../../services/internship/nudgeBrief/types';
 
@@ -157,6 +158,49 @@ router.get(
         return;
       }
       fail(res, 'intern_brief_build_failed', err, 'Could not build that brief.');
+    }
+  },
+);
+
+/**
+ * GET /api/admin/intern-nudges/:enrollmentId/research
+ *
+ * What this intern asked, and the records that answer it.
+ *
+ *     "build the research-packet path, giving the nudge flow read access to source, prod logs and
+ *      auth tables"  (Ali, 10 Nov 2026)
+ *
+ * It does NOT write the reply. It reads the question, resolves the identifiers in it against the
+ * shipped code, the agent registry and the permission tables, and returns evidence with its source
+ * attached, plus an explicit list of the questions that are a judgement rather than a lookup.
+ *
+ * Read-only throughout, and every field is redacted before it leaves: a packet becomes a draft
+ * email, and a credential reaching one would be a disclosure.
+ */
+router.get(
+  '/api/admin/intern-nudges/:enrollmentId/research',
+  requireSection('internship'),
+  async (req: Request, res: Response) => {
+    const id = String(req.params.enrollmentId);
+    try {
+      const brief = await buildBriefFor(id);
+      const packet = await buildResearchPacket({
+        enrollmentId: id,
+        projectId: brief.projectId ?? null,
+        questions: brief.openQuestions,
+      });
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'intern-nudge-brief',
+        event: 'research_packet_built', outcome: 'success',
+        context: { questions: packet.questions.length, leads: packet.leads.length, needsHuman: packet.needsHuman.length },
+      }));
+      res.json(packet);
+    } catch (err: any) {
+      if (err instanceof UnknownInternError) {
+        res.status(404).json({ error: 'That is not an active intern.' });
+        return;
+      }
+      fail(res, 'research_packet_failed', err, 'Could not build the research packet.');
     }
   },
 );
