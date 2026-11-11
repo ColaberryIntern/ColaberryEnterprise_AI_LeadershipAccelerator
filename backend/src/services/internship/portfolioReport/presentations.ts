@@ -17,7 +17,7 @@
  */
 import { templateById } from '../../presentation';
 import { DEMO_DAY_PREP_ID, PREP_TASK_VIDEO_TYPES } from '../../presentation/prepTaskVideoTypes';
-import type { ArtifactsView, PrepTask, RecordedVideo } from './types';
+import type { ArtifactAsk, ArtifactsView, PrepTask, RecordedVideo } from './types';
 
 export const DUE_SOON_DAYS = 7;
 const DAY = 86400000;
@@ -85,11 +85,11 @@ export function presentationDue(enrollmentId: string, tasks: PrepTask[], videos:
 }
 
 /** The ask that moves them to it: a Claude Code prompt built from that type's own talk track. */
-export function presentationAsk(firstName: string, projectName: string | null, d: PresentationDue): { key: string; name: string; why: string; prompt: string; nudge: string } {
+export function presentationAsk(firstName: string, projectName: string | null, d: PresentationDue): ArtifactAsk {
   const when = d.daysLate > 0 ? `was due ${d.daysLate} day${d.daysLate === 1 ? '' : 's'} ago (${d.dueOn})` : d.daysLate === 0 ? 'is due today' : `is due in ${-d.daysLate} day${d.daysLate === -1 ? '' : 's'} (${d.dueOn})`;
   if (d.demoDay) {
     return {
-      key: 'presentation_demo_day', name: 'Demo Day rehearsal',
+      key: 'presentation_demo_day', name: 'Demo Day rehearsal', theme: 'evidence',
       why: `Demo Day (${d.storyId}) ${when}; a rehearsed run-through is what makes the live presentation land.`,
       prompt: `Project: ${projectName ?? 'my internship project'}.\n\nHelp me prepare for Demo Day (${d.storyId}). Read this repo and my recorded presentations, then build ONE self-contained HTML page: a run sheet with the order of what I show, the exact screen for each step, timings, the one-sentence takeaway, and the three questions I am most likely to be asked with my answers. Use status colors and a simple timeline graphic. Export it to PDF (Chrome: Print > Save as PDF, background graphics on) and upload it as an artifact.`,
       nudge: `Hi ${firstName}, Demo Day ${when}. Please do a full rehearsal in the Presentation Studio this week, and paste the prompt below into Claude Code first to build your run sheet.`,
@@ -100,6 +100,8 @@ export function presentationAsk(firstName: string, projectName: string | null, d
   const length = tpl?.defaultSeconds ? `${Math.round(tpl.defaultSeconds / 60 * 10) / 10} minutes` : 'the target length';
   return {
     key: `presentation_${d.storyId.toLowerCase().replace('-', '_')}`,
+    // A recorded demo is something Ali can open and judge, so it is evidence.
+    theme: 'evidence' as const,
     name: `Record your ${d.label}`,
     why: `${d.storyId}, the ${d.label}, ${when}. It is the next presentation in their project plan, and a recorded take is evidence you can watch in under ${length}.`,
     prompt: [

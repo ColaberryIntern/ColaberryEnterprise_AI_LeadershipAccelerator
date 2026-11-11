@@ -281,6 +281,9 @@ export type ArtifactSource = 'repo' | 'upload' | 'link' | 'recording';
 export type ArtifactFileType = 'video' | 'pdf' | 'spreadsheet' | 'word' | 'slides' | 'html' | 'image' | 'claude' | 'link' | 'markdown' | 'text' | 'file';
 
 /** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
+/** What a prompt is FOR. Defined here because `types` cannot import from `artifacts`. */
+export type AskTheme = 'evidence' | 'diagnose' | 'advance';
+
 export interface ArtifactAsk {
   key: string;
   name: string;
@@ -288,6 +291,8 @@ export interface ArtifactAsk {
   why: string;
   /** Paste-ready prompt for Claude Code in their repo. */
   prompt: string;
+  /** What this prompt is FOR: evidence, diagnose or advance. Declared where the prompt is written. */
+  theme: AskTheme;
   /** The message to send them, asking for it. */
   nudge: string;
 }

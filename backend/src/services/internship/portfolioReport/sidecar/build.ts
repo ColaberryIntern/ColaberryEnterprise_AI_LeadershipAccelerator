@@ -141,7 +141,9 @@ function internJson(c: InternCard, report: PortfolioReport, inp: SidecarInputs, 
     artifacts,
     artifacts_raw_count: artifacts.length,
     artifacts_real_count: artifacts.filter((a) => a.classification !== 'test_or_scratch').length,
-    asks: c.artifacts.asks.map((k) => ({ key: k.key, name: k.name, why: k.why, prompt: k.prompt, nudge: k.nudge })),
+    // `theme` rides along untouched: it is declared beside the prompt in artifacts.ts and is what
+    // the choice downstream is made on, so re-deriving it here would be a second source of truth.
+    asks: c.artifacts.asks.map((k) => ({ key: k.key, name: k.name, theme: k.theme, why: k.why, prompt: k.prompt, nudge: k.nudge })),
     triage: tr,
     pacing: pacing(c),
     last_ask: lastAsk(c, inp.lastOutbound, nowMs, report.lookbackDays),
