@@ -69,6 +69,42 @@ that silently corrects it is a lookup you cannot trust.
 **Worth acting on separately:** Roselyn is filed as `Roselen Flores`. Her access looked broken to
 the platform's own diagnostics, and a name mismatch in the user record is a plausible contributor.
 
+## Deployed, and then the deploy found another defect
+
+- [x] Deployed to production
+  - Date: 2026-11-10 · Session: CC-20261110-k8v2
+  - What changed: nothing in code. `scripts/deploy-prod.sh backend nginx` at main tip
+    `0a6cd56ac8ad`, which contains `d9e373a9f` (asserted by `git merge-base --is-ancestor`, not by
+    SHA equality).
+  - Verification: `GET /api/admin/intern-nudges/:id/research` answers **401, not 404**, through the
+    real hostname, which proves the guarded route is deployed rather than missing. The panel's own
+    strings are in a served chunk, `static/js/7053.6b230415.chunk.js`, found by enumerating all 187
+    chunks in `asset-manifest.json` and grepping each: `Research their questions`,
+    `Only you can answer these`, and all four lead labels.
+  - Notes: **the Build images run for my own merge commit `33382877` was cancelled**, by #3828
+    merging a minute later into the same concurrency group. That is the second cancelled build in
+    two hours. The useful generalisation: on a busy night the image you deploy is almost never built
+    from your own merge commit, it is built from whoever merged last, so checking
+    `conclusion=success` on your own SHA is the wrong assertion and ancestry is the right one.
+
+- [x] The spelling note was lying about one person in four
+  - Date: 2026-11-10 · Session: CC-20261110-k8v2
+  - What changed: extracted `spellingNote()` in `researchPacket.ts`. The note now compares **per
+    word** instead of testing `display_name.startsWith(asked)`, and names the one word that
+    differs rather than the whole record.
+  - Verification: 8 new cases, one per live name plus casing, punctuation, null and
+    no-near-match. **Mutation-tested**: restoring the old `startsWith` predicate fails exactly 2 of
+    them, so they catch the real defect rather than passing vacuously. 915 internship backend tests
+    pass; backend `tsc` 0 errors in `src/` with a planted control error proving the compiler was
+    live; `checkTestTypecheck` baseline matched exactly in both directions.
+  - Notes: found by re-running the lookup against the deployed image. All four names resolve now
+    against one of four before — but Aleem's finding read *"the record is filed as 'Mohammed Abdul
+    Aleem', which is not quite how the question spelled it"*, and that is false: the spelling is
+    exactly right, the name simply sits last. The old predicate fired on any record where the
+    asked-for name was not the first word. A panel that exists to be trusted as evidence cannot
+    carry a false line; one wrong note costs more than the four right ones earn. Roselyn's note is
+    the genuine case and survives, now reading `spells it "Roselen", not "Roselyn"`.
+
 ## Two discrepancies this surfaced, both unresolved
 
 1. The Apollo cron in `ai_agents` reads `0 14 * * 1` — **Monday only**. Ali's hand-written reply to
@@ -105,7 +141,8 @@ would have outlived the reason for the exemption.
 
 ## Not done
 
-- **Not deployed at time of writing.** Both PRs merged; `33382877` was still building.
+- **Deployed.** See above. The panel itself has not been exercised on a real card, because no
+  intern currently has an unanswered question.
 - **No Basecamp ticket for any of today's nudge work.** Bulk Basecamp writes as Ali are
   classifier-blocked in this session, so it is logged here and needs a ticket opening by hand.
 - Thirteen prepared messages remain **prepared, not sent**.
