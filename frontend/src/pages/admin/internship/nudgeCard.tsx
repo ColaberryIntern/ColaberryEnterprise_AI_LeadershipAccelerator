@@ -4,6 +4,7 @@ import {
   HOLD_LABEL, TIER_LABEL, TIER_TONE,
   type BriefSendOutcome, type HoldDecision, type NudgeBrief,
 } from '../../../services/internNudgeApi';
+import ResearchPanel from './researchPanel';
 import { dominantTrack, heatRow, heatStep, TRACK_LABEL } from './consoleFormat';
 import {
   HOLD_ICON, TIER_ICON, deadlineTone, initials, metricChips, sinceLabel,
@@ -241,6 +242,9 @@ export const NudgeCard: React.FC<{
       {open && (
         <div className="aint-nexpand">
           {error && <p className="aint-alert">{error}</p>}
+          {/* Only where somebody is waiting on an answer. The packet costs source reads and
+              database lookups, and those rows are the only ones it earns its cost on. */}
+          {brief.tier === 'blocked_waiting_on_ali' && <ResearchPanel enrollmentId={brief.enrollmentId} />}
           <BriefPanel
             brief={brief}
             body={body}

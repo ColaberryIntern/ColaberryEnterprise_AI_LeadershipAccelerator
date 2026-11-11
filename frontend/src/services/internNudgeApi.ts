@@ -137,6 +137,44 @@ export interface BriefBatch {
  * makes this answerable in seconds. It prepares and never sends: delivery is still two clicks on
  * the individual row.
  */
+/**
+ * The research packet: what they asked, and the records that answer it.
+ *
+ * Deliberately NOT part of the brief. It costs source reads and database lookups, and it is only
+ * worth paying for on the rows where somebody is actually waiting on an answer. So it is fetched
+ * when a manager asks for it, on the card that needs it.
+ */
+export type LeadKind = 'source' | 'agent' | 'person' | 'domain';
+
+export interface ResearchLead {
+  kind: LeadKind;
+  term: string;
+  finding: string;
+  evidence: string;
+}
+
+export interface ResearchPacket {
+  enrollmentId: string;
+  generatedAt: string;
+  questions: Array<{ receivedAt: string; subject: string; text: string }>;
+  leads: ResearchLead[];
+  /** Questions nothing could evidence. These are the ones only a person can answer. */
+  needsHuman: string[];
+  notes: string[];
+}
+
+export const LEAD_LABEL: Record<LeadKind, string> = {
+  source: 'In the shipped code',
+  agent: 'In the agent registry',
+  person: 'In the access records',
+  domain: 'Domain ownership',
+};
+
+export async function fetchResearchPacket(enrollmentId: string): Promise<ResearchPacket> {
+  const { data } = await api.get(`/api/admin/intern-nudges/${encodeURIComponent(enrollmentId)}/research`);
+  return data as ResearchPacket;
+}
+
 export async function fetchAllBriefs(): Promise<BriefBatch> {
   const { data } = await api.get('/api/admin/intern-nudges');
   return data as BriefBatch;
