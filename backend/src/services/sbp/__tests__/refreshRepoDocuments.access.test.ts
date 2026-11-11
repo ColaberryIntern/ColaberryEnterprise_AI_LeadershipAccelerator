@@ -91,7 +91,9 @@ describe('a refused write is recorded, not discarded', () => {
 
     const result = await refreshRepoDocuments(PRJ);
 
-    expect(result.outcome).toBe('write_failed');
+    // A read-only repo is a KNOWN state, not a failure: the outcome is `pull_only` (distinct from `write_failed`)
+    // so the caller renders the read-only guidance instead of a generic write error the student cannot act on.
+    expect(result.outcome).toBe('pull_only');
     expect(result.error_class).toBe('NoPushAccess');
     expect(mockRecordWriteAccess).toHaveBeenCalledWith(PRJ, false);
   });
@@ -101,7 +103,7 @@ describe('a refused write is recorded, not discarded', () => {
     // Even the bookkeeping write failing must not break the contract.
     mockRecordWriteAccess.mockRejectedValue(new Error('db down'));
 
-    await expect(refreshRepoDocuments(PRJ)).resolves.toMatchObject({ outcome: 'write_failed' });
+    await expect(refreshRepoDocuments(PRJ)).resolves.toMatchObject({ outcome: 'pull_only' });
   });
 });
 
