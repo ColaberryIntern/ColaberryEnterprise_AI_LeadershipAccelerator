@@ -133,3 +133,132 @@
 @media (prefers-reduced-motion: reduce) {
   .cls-btn { transition: none; }
 }
+
+/*
+ * ---------------------------------------------------------------------------------------------
+ * THE RAIL, THE PICKER AND THE TOUR (2026-11-11)
+ *
+ * Three additions, all from the same round of feedback on the live surface.
+ */
+
+/*
+ * The rail is 48px against the admin sidebar's 240px: the "about a fifth" that was asked for.
+ * It is fixed rather than in flow so the page content does not reflow when it expands, which
+ * would otherwise move a half-filled form under the operator's cursor.
+ */
+.clv-rail {
+  position: fixed; inset: 0 auto 0 0; z-index: 40;
+  width: 48px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 6px;
+  background: var(--surface-default, #fff);
+  border-right: 1px solid var(--border-subtle, #d8dde5);
+  overflow: hidden;
+  transition: width .14s ease;
+}
+.clv-rail.is-open { width: 200px; }
+
+/* The page sits clear of the collapsed rail. It does NOT shift when the rail expands: the rail
+   overlays, so a form in progress stays exactly where the eye left it. */
+.cls-root { padding-left: 64px; }
+
+.clv-rail-toggle,
+.clv-rail-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 36px; padding: 0 8px;
+  border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-muted, #55606f);
+  font: inherit; font-size: 13px; text-align: left; text-decoration: none;
+  cursor: pointer; white-space: nowrap;
+}
+.clv-rail-toggle:hover,
+.clv-rail-item:hover { background: var(--surface-sunken, #eef1f6); color: var(--text-body, #1d2430); }
+.clv-rail i { font-size: 18px; flex: 0 0 18px; text-align: center; }
+
+/* Hidden by width, not by display: the labels stay in the accessibility tree, so a screen
+   reader reads "Dashboard" rather than announcing an unlabelled icon button. */
+.clv-rail-text { opacity: 0; transition: opacity .1s ease; }
+.clv-rail.is-open .clv-rail-text { opacity: 1; }
+
+.clv-rail-links { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.clv-rail-tour { color: var(--red-600, #E5121D); }
+.clv-rail-home { margin-top: auto; }
+
+/* The picker. The chosen person reads as a name, never as the id the field actually holds. */
+.cls-picker { position: relative; }
+.cls-picked {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--border-subtle, #d8dde5); border-radius: 8px;
+  background: var(--surface-default, #fff);
+}
+.cls-picked-name { font-weight: 600; }
+.cls-picked-email { font-size: 12px; color: var(--text-muted, #55606f); }
+.cls-picked-clear {
+  margin-left: auto; border: 0; background: transparent; padding: 0;
+  color: var(--red-600, #E5121D); font: inherit; font-size: 12px; cursor: pointer;
+  text-decoration: underline;
+}
+
+.cls-options {
+  position: absolute; left: 0; right: 0; z-index: 20;
+  margin: 4px 0 0; padding: 4px; list-style: none;
+  max-height: 260px; overflow-y: auto;
+  background: var(--surface-default, #fff);
+  border: 1px solid var(--border-subtle, #d8dde5); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
+}
+.cls-option {
+  display: flex; flex-direction: column; gap: 1px;
+  width: 100%; padding: 7px 9px; border: 0; border-radius: 6px;
+  background: transparent; font: inherit; text-align: left; cursor: pointer;
+}
+.cls-option:hover { background: var(--surface-sunken, #eef1f6); }
+.cls-option-name { font-size: 14px; color: var(--text-body, #1d2430); }
+.cls-option-email { font-size: 12px; color: var(--text-muted, #55606f); }
+.cls-option-empty { padding: 9px; font-size: 13px; color: var(--text-muted, #55606f); }
+
+/* The tour. A plain dialog rather than a spotlight: a tour that points at elements breaks the
+   first time a card moves, and what an operator needs here is the consequence, not the location. */
+.clv-tour-backdrop {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: rgba(16, 24, 40, .55);
+}
+.clv-tour {
+  width: 100%; max-width: 540px;
+  padding: 22px; border-radius: 14px;
+  background: var(--surface-default, #fff);
+  box-shadow: 0 20px 48px rgba(16, 24, 40, .28);
+}
+.clv-tour-count { font-size: 12px; color: var(--text-muted, #55606f); letter-spacing: .04em; }
+.clv-tour-title { margin: 4px 0 10px; font-size: 20px; }
+.clv-tour-body { margin: 0; font-size: 14px; line-height: 1.6; color: var(--text-body, #1d2430); }
+/* #8a4b00 on #fff8ec measures 6.5:1. The same warning pair the producer strip uses. */
+.clv-tour-warning {
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid #e3b982; border-left-width: 4px;
+  background: #fff8ec; color: #8a4b00;
+  font-size: 13px; line-height: 1.5;
+}
+.clv-tour-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px;
+}
+.clv-tour-move { display: flex; gap: 8px; }
+.clv-tour-skip {
+  border: 0; background: transparent; padding: 0;
+  color: var(--text-muted, #55606f); font: inherit; font-size: 13px; cursor: pointer;
+  text-decoration: underline;
+}
+.clv-tour-btn {
+  min-height: 38px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid var(--border-strong, #aab3c0);
+  background: var(--surface-default, #fff); color: var(--text-body, #1d2430);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.clv-tour-btn:disabled { opacity: .5; cursor: default; }
+/* #E5121D, not #FB2832: white on the latter is 3.85:1 and fails AA at this size. */
+.clv-tour-next { background: var(--red-600, #E5121D); border-color: var(--red-600, #E5121D); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .clv-rail, .clv-rail-text { transition: none; }
+}

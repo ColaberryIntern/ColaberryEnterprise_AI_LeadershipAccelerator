@@ -5,6 +5,9 @@ import {
   type StudioConfig, type StudioRefusal, type BroadcastAccessMode,
 } from '../../../services/studioSetupApi';
 import './studioSetup.css';
+import StaffPicker from './StaffPicker';
+import StudioRail from './StudioRail';
+import StudioTour, { hasSeenTour } from './StudioTour';
 
 /**
  * Studio setup (D4, P4-01) — everything about a Colaberry Live class that has to be decided
@@ -54,6 +57,14 @@ export default function StudioSetupPage(): React.ReactElement {
 
   // Local edits. Kept separate from `config` so a refused save can re-render the server's truth
   // without silently discarding what the operator typed.
+  /**
+   * The tour opens itself the first time and never again.
+   *
+   * Somebody landing here for the first time does not know there is a tour to ask for; somebody
+   * landing for the thirtieth time does not want one. The flag is read once at mount rather
+   * than watched, so dismissing it cannot re-trigger the effect that opened it.
+   */
+  const [tourOpen, setTourOpen] = useState(() => !hasSeenTour());
   const [presenter, setPresenter] = useState('');
   const [producer, setProducer] = useState('');
   const [guestAccess, setGuestAccess] = useState<boolean | null>(null);
@@ -121,11 +132,12 @@ export default function StudioSetupPage(): React.ReactElement {
     }
   }
 
-  if (loading) return <div className="cls-root"><div className="cls-shell">Loading the class.</div></div>;
+  if (loading) return <div className="cls-root"><StudioRail /><div className="cls-shell">Loading the class.</div></div>;
 
   if (notFound) {
     return (
       <div className="cls-root">
+        <StudioRail onTour={() => setTourOpen(true)} />
         <div className="cls-shell">
           <h1 className="cls-title">That class could not be found</h1>
           <p className="cls-sub">
@@ -140,6 +152,7 @@ export default function StudioSetupPage(): React.ReactElement {
   if (!config) {
     return (
       <div className="cls-root">
+        <StudioRail />
         <div className="cls-shell">
           <h1 className="cls-title">Studio setup is unavailable</h1>
           <p className="cls-sub">The class could not be loaded. Reload the page to try again.</p>
@@ -152,6 +165,8 @@ export default function StudioSetupPage(): React.ReactElement {
 
   return (
     <div className="cls-root">
+      <StudioRail onTour={() => setTourOpen(true)} />
+      <StudioTour open={tourOpen} onClose={() => setTourOpen(false)} />
       <div className="cls-shell">
         <header className="cls-head">
           <h1 className="cls-title">Studio setup</h1>
@@ -178,22 +193,23 @@ export default function StudioSetupPage(): React.ReactElement {
 
             <section className="cls-card">
               <h2 className="cls-card-title">People</h2>
-              <div className="cls-field">
-                <label className="cls-label" htmlFor="cls-presenter">Presenter</label>
-                <input
-                  id="cls-presenter" className="cls-input" value={presenter}
-                  onChange={(e) => setPresenter(e.target.value)}
-                  placeholder="Enrollment id of whoever is teaching"
-                />
-              </div>
-              <div className="cls-field">
-                <label className="cls-label" htmlFor="cls-producer">Producer</label>
-                <input
-                  id="cls-producer" className="cls-input" value={producer}
-                  onChange={(e) => setProducer(e.target.value)}
-                  placeholder="Enrollment id of whoever runs the show"
-                />
-              </div>
+              {/*
+                * Both were text boxes asking for an enrollment id. Nobody knows their
+                * colleagues' enrollment ids, so the screen was asking for something it already
+                * knew how to look up.
+                */}
+              <StaffPicker
+                id="presenter"
+                label="Presenter"
+                value={presenter}
+                onChange={setPresenter}
+              />
+              <StaffPicker
+                id="producer"
+                label="Producer"
+                value={producer}
+                onChange={setProducer}
+              />
               {producerIsPresenter && (
                 <p className="cls-note cls-note-error" role="alert">
                   The producer has to be someone other than the presenter. Whoever is teaching
