@@ -33,13 +33,22 @@ import { AutonomyLevel } from '../../../services/workforceOrgChartApi';
 // mockup's own real sidebar exactly: Overview, Talk to Reese, Work &
 // commitments, Decisions & evidence, Performance & settings — joined on
 // 2026-10-26 by Email (see the note on that entry below).
-export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'email' | 'performance_settings';
+//
+// Agent Tools section (2026-11-11), Ali: "I would like to add a tools section to the Agent
+// dashboard which will facilitate the request, approval and access to the tools." Promoted to a
+// top-level tab rather than left as the read-only "Tools & channels" sub-tab under Performance &
+// settings, because a request-and-approval surface is not a performance setting. The sub-tab
+// stays where it is: it answers what a tool reads and produces, this tab answers who authorized
+// it and which capability it serves. Placed after Decisions & evidence, since granting a tool is
+// the same kind of act as the decisions recorded there.
+export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'tools' | 'email' | 'performance_settings';
 
 export const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'talk', label: 'Talk to Reese' },
   { key: 'work', label: 'Work & commitments' },
   { key: 'decisions', label: 'Decisions & evidence' },
+  { key: 'tools', label: 'Tools & access' },
   // 2026-10-26, Ali: "Maya's inbox should go in her Agent dashboard that also has her decision
   // making and tickets." Placed immediately after Decisions for that reason.
   //
