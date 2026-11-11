@@ -14,6 +14,7 @@
  *   reply     a message from colaberry.com to them; carries how long after their message it came
  *   late      an unverified task past its due date
  */
+import { classifiableText } from './emailText';
 import type { EventKind, InternEmail, OurReply, ProjectView, Timeline, TimelineCounts, TimelineEvent, TimelineNext, TimelineRow, TrainingView } from './types';
 
 const DAY = 86400000;
@@ -31,8 +32,22 @@ export function dayKey(iso: string | number | Date): string {
 export const daysBetween = (a: string, b: string): number => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY);
 const strip = (s: string | null | undefined): string => String(s ?? '').replace(/^((re|fwd?|fw)\s*:\s*)+/i, '').trim() || '(no subject)';
 
+/**
+ * Which of the three a message is, judged on THEIR words.
+ *
+ * This read the subject plus the first 250 characters of the raw body until 2026-11-11. Measured
+ * on production that day: of 110 intern emails in the window, 83 were longer than 250 characters
+ * and **35 read as `update` while actually asking something**, because people put the courtesy and
+ * the context first and the question last. Megan's "Is it fine to leave that in my repo, or should
+ * I remove it before anything goes public?" was filed as a status update.
+ *
+ * Reading the raw body in full would have been worse, and that was measured rather than assumed:
+ * with nothing stripped, 378 classifications changed, including a tracking URL scoring `stuck` on
+ * characters inside its query string. So `classifiableText` cuts quoted history and URLs first,
+ * and only then does the window open to CLASSIFY_CHARS. See emailText.ts.
+ */
 export function classifyEmail(subject: string | null, snippet: string | null): 'stuck' | 'question' | 'update' {
-  const text = `${subject ?? ''} ${String(snippet ?? '').slice(0, 250)}`;
+  const text = `${subject ?? ''} ${classifiableText(snippet)}`;
   if (STUCK_RE.test(text)) return 'stuck';
   if (QUESTION_RE.test(text)) return 'question';
   return 'update';

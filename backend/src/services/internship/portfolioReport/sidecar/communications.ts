@@ -19,6 +19,7 @@
  * thread it quotes. One message per subject per intern (the best one). The report-wide top 10 takes
  * at most MAX_PER_INTERN from any one intern, so one prolific writer cannot fill the list.
  */
+import { ownText } from '../emailText';
 import { classifyEmail } from '../timeline';
 import type { Conversation } from '../types';
 
@@ -52,14 +53,10 @@ const EVIDENCE = [
 ] as const;
 const AUTOMATED_FROM = /(noreply|no-reply|notifications?@|info@colaberry|support@colaberry|mailer)/i;
 const AUTOMATED_SUBJECT = /^(re:\s*)?(\[?(internship report|daily|weekly|reminder|notification|digest|alert)\b|ali, here's)/i;
-const QUOTED = /\s(On (Mon|Tue|Wed|Thu|Fri|Sat|Sun)[^]{0,120}?wrote:|-{3,}\s*Original Message|From:\s.{3,80}Sent:)/i;
-
-/** The new text of a message: quoted history cut, whitespace collapsed. */
-export function ownText(body: string | null): string {
-  const t = String(body ?? '').replace(/\s+/g, ' ').trim();
-  const m = QUOTED.exec(t);
-  return (m ? t.slice(0, m.index) : t).trim();
-}
+// `ownText` moved to ../emailText so `timeline.classifyEmail` can clean the same way without
+// importing this module, which would have been circular (this file imports classifyEmail).
+// Re-exported because this is where its callers and its tests already look for it.
+export { ownText };
 
 /**
  * `content` = the message SAYS something (a blocker, a question, a finding, evidence, or 80+ words).
