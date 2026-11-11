@@ -7,6 +7,45 @@ const L = (listId, name = 'n') => ({ projectId: '7463955', listId, name });
 const res = (status, body) => ({ status, json: async () => body });
 const opts = (fetchImpl) => ({ token: 't', fetchImpl, retryDelayMs: 0, timeoutMs: 50 });
 
+/** Measured 2026-11-11: a single 1s retry left 5 of 177 lists unchecked under Basecamp's rate limit. */
+describe('rate limiting', () => {
+  const limited = (status, retryAfter) => ({
+    status, json: async () => ({}), headers: { get: (h) => (h === 'Retry-After' ? retryAfter : null) },
+  });
+
+  it('retries a 429 up to three times, then gives up honestly', async () => {
+    let calls = 0;
+    const m = await fetchListMeta([L('1', 'x')], opts(async () => { calls += 1; return limited(429, '0'); }));
+    expect(calls).toBe(4);
+    expect(m.get('7463955/1')).toMatchObject({ checked: false, why: 'HTTP 429' });
+  });
+
+  it('succeeds when the rate limit clears within the retries', async () => {
+    let calls = 0;
+    const m = await fetchListMeta([L('2')], opts(async () => {
+      calls += 1;
+      return calls < 3 ? limited(429, '0') : res(200, { title: 'ok', parent: {} });
+    }));
+    expect(m.get('7463955/2')).toMatchObject({ checked: true, title: 'ok' });
+  });
+
+  it('waits what Retry-After asks', async () => {
+    const t0 = Date.now();
+    let calls = 0;
+    await fetchListMeta([L('3')], opts(async () => {
+      calls += 1;
+      return calls === 1 ? limited(429, '0.2') : res(200, { title: 'ok', parent: {} });
+    }));
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(180);
+  });
+
+  it('still retries a 5xx only once', async () => {
+    let calls = 0;
+    await fetchListMeta([L('4')], opts(async () => { calls += 1; return res(502); }));
+    expect(calls).toBe(2);
+  });
+});
+
 describe('fetchListMeta', () => {
   it('marks a real list as a list', async () => {
     const m = await fetchListMeta([L('1')], opts(async () => res(200, { title: 'Real', parent: { type: 'Todoset' } })));

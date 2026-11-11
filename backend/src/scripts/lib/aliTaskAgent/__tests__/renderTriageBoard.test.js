@@ -79,16 +79,16 @@ describe('the page is clicked, not read', () => {
 });
 
 describe('filtering rebuilds rather than hides', () => {
-  it('ships the per-list data the charts are drawn from', () => {
+  it('ships the data the charts are drawn from: lists plus one fact row per task', () => {
     const h = html();
     expect(h).toMatch(/"lists":\[/);
-    expect(h).toMatch(/"bands":\{/);
+    expect(h).toMatch(/"facts":\[\[0,"dormant","none","hand"\]/);
     expect(h).toMatch(/"cat":"government"/);
   });
 
   it('provides the chart mount points the runtime fills', () => {
     const h = html();
-    ['f-tiles', 'f-gauge', 'f-bands', 'f-cats', 'f-lists', 'f-note']
+    ['f-tiles', 'f-gauge', 'f-bands', 'f-cats', 'f-lists', 'f-kind', 'f-shape', 'f-period', 'f-heat', 'f-note']
       .forEach((id) => expect(h).toContain(`id="${id}"`));
   });
 
@@ -276,5 +276,23 @@ describe('dashboard first, and clickable', () => {
     expect(h).toContain('data-dim="');
     expect(h).toContain('aria-pressed');
     expect(h).toContain('data-clear');
+  });
+});
+
+/** Ali, 2026-11-11: "fill out the space on the dashboard to make it even more interactive". */
+describe('the fuller dashboard', () => {
+  it('ships one fact row per task, so the totals still add up', () => {
+    const facts = JSON.parse(html().match(/"facts":(\[\[.*?\]\])/)[1]);
+    expect(facts).toHaveLength(39);
+  });
+
+  it('defines the heatmap ramp in both modes', () => {
+    const h = html();
+    expect(h).toMatch(/--heat-0:#7fb2f5/);
+    expect(h).toMatch(/--heat-4:#c4dcfc/);
+  });
+
+  it('ships a heatmap whose cells filter on two dimensions at once', () => {
+    expect(html()).toContain('data-dim2');
   });
 });
