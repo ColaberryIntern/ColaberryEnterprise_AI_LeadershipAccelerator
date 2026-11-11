@@ -12,7 +12,8 @@
  * asks Basecamp, read-only, once per list. Nothing here writes.
  *
  * FAILURE MODES
- *   - each GET has a timeout (default 10s) and ONE retry on 429 / 5xx / timeout, after a 1s pause
+ *   - each GET has a timeout (default 10s); a 429 is retried up to 3 times honouring Retry-After
+ *     (capped 10s); a 5xx / timeout gets one retry. Default concurrency is 4, under the rate limit.
  *   - 404 is an answer, not a failure: the list is gone, and the board says so
  *   - anything else, or no token at all, degrades to the mirror's name and a link built from ids;
  *     the result says `checked: false` so the page can admit the names were not verified
@@ -41,7 +42,9 @@ async function getOnce(fetchImpl, url, token, timeoutMs) {
       headers: { Authorization: `Bearer ${token}`, 'User-Agent': 'colaberry-backlog-board' },
       signal: ctl.signal,
     });
-    return { status: res.status, body: res.status === 200 ? await res.json() : null };
+    const ra = res.headers && typeof res.headers.get === 'function' ? Number(res.headers.get('Retry-After')) : NaN;
+    return { status: res.status, body: res.status === 200 ? await res.json() : null,
+      retryAfterMs: Number.isFinite(ra) && ra >= 0 ? ra * 1000 : null };
   } catch (e) {
     return { status: 0, error: e && e.name === 'AbortError' ? 'TimeoutError' : 'NetworkError' };
   } finally {
@@ -49,7 +52,30 @@ async function getOnce(fetchImpl, url, token, timeoutMs) {
   }
 }
 
+/**
+ * Retry policy, bounded:
+ *   429 (rate limited)   up to 3 retries, waiting what Basecamp's Retry-After asks (capped at
+ *                        10s), else the base delay doubling. Measured 2026-11-11: 177 GETs in ~7s
+ *                        at concurrency 6 left 5 lists unchecked after a single 1s retry.
+ *   5xx / timeout / net  one retry after the base delay.
+ */
+const MAX_429_RETRIES = 3;
+const RETRY_AFTER_CAP_MS = 10000;
 const retryable = (r) => r.status === 0 || r.status === 429 || r.status >= 500;
+
+async function getWithRetry(fetchImpl, url, token, timeoutMs, baseDelayMs) {
+  let r = await getOnce(fetchImpl, url, token, timeoutMs);
+  let attempt = 0;
+  while (retryable(r) && attempt < (r.status === 429 ? MAX_429_RETRIES : 1)) {
+    const wait = r.status === 429 && r.retryAfterMs != null
+      ? Math.min(r.retryAfterMs, RETRY_AFTER_CAP_MS)
+      : Math.min(baseDelayMs * 2 ** attempt, RETRY_AFTER_CAP_MS);
+    await sleep(wait);
+    attempt += 1;
+    r = await getOnce(fetchImpl, url, token, timeoutMs);
+  }
+  return r;
+}
 
 /**
  * @param {Array<{projectId:string,listId:string,name:string}>} lists
@@ -77,8 +103,7 @@ async function fetchListMeta(lists, opts = {}) {
     while (queue.length) {
       const l = queue.shift();
       const api = `https://3.basecampapi.com/${accountId}/buckets/${l.projectId}/todolists/${l.listId}.json`;
-      let r = await getOnce(opts.fetchImpl, api, opts.token, timeoutMs);
-      if (retryable(r)) { await sleep(retryDelayMs); r = await getOnce(opts.fetchImpl, api, opts.token, timeoutMs); }
+      const r = await getWithRetry(opts.fetchImpl, api, opts.token, timeoutMs, retryDelayMs);
       const key = `${l.projectId}/${l.listId}`;
       if (r.status === 200 && r.body) {
         const parent = r.body.parent || {};
@@ -95,7 +120,7 @@ async function fetchListMeta(lists, opts = {}) {
       }
     }
   }
-  const n = Math.max(1, Math.min(opts.concurrency || 6, lists.length));
+  const n = Math.max(1, Math.min(opts.concurrency || 4, lists.length));
   await Promise.all(Array.from({ length: n }, worker));
   return out;
 }

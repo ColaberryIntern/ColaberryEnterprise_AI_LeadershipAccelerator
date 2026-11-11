@@ -23,6 +23,8 @@ const { RAMP_LIGHT, RAMP_DARK, esc } = require('./triageCharts');
 const { groupByCategory, categoryOf, CATEGORY_COLORS } = require('./listCategories');
 const { buildListPrompt } = require('./promptBuilder');
 const { RUNTIME_JS, RUNTIME_CSS } = require('./boardRuntime');
+const { buildFacts } = require('./boardFacts');
+const { heatVars } = require('./boardCharts');
 
 /** The unique id a list is addressed by on the page (its Basecamp id, else its name). */
 const idOf = (l) => l.id || l.key;
@@ -140,15 +142,14 @@ function renderTriageBoard(input) {
       totals: { tasks: total || items.length, lists: lists.length, dormant: s.dormantCount },
     });
   });
+  // One row per task, so any combination of filters is exact. See boardFacts / boardRuntime.
+  const table = buildFacts(lists, (l) => {
+    const c = categoryOf(l.key, l.projectId);
+    return { id: idOf(l), name: l.name, cat: c.key, sub: c.sub.key };
+  });
   const payload = {
-    lists: lists.map((l) => {
-      const c = categoryOf(l.key, l.projectId);
-      return {
-      id: idOf(l), name: l.name, cat: c.key, sub: c.sub.key, total: l.total,
-      live: l.live, dormant: l.dormant,
-      bands: Object.fromEntries((l.bands || []).map((b) => [b.band, b.n])),
-      };
-    }),
+    lists: table.lists,
+    facts: table.facts,
     // Level-2 labels, keyed by project id. The project row is built from these in the browser.
     subs: Object.fromEntries(lists.map((l) => {
       const sub = categoryOf(l.key, l.projectId).sub;
@@ -169,14 +170,14 @@ function renderTriageBoard(input) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Backlog Navigator</title>
 <style>
-  :root{ ${bandVars(RAMP_LIGHT)} ${catVars('light')}
+  :root{ ${bandVars(RAMP_LIGHT)} ${catVars('light')} ${heatVars('light')}
     --bg:#fcfcfb; --surface:#ffffff; --ink:#0f172a; --ink-2:#475569; --ink-3:#94a3b8;
     --line:#e2e8f0; --brand:#FB2832; }
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-    ${bandVars(RAMP_DARK)} ${catVars('dark')}
+    ${bandVars(RAMP_DARK)} ${catVars('dark')} ${heatVars('dark')}
     --bg:#1a1a19; --surface:#232322; --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8;
     --line:#334155; --brand:#FB2832; } }
-  :root[data-theme="dark"]{ ${bandVars(RAMP_DARK)} ${catVars('dark')}
+  :root[data-theme="dark"]{ ${bandVars(RAMP_DARK)} ${catVars('dark')} ${heatVars('dark')}
     --bg:#1a1a19; --surface:#232322; --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8;
     --line:#334155; --brand:#FB2832; }
   *{box-sizing:border-box}
@@ -286,14 +287,28 @@ function renderTriageBoard(input) {
 
   <section id="now">
     <h2>Dashboard</h2>
-    <p class="lede">Click a bar to filter everything by it; click it again to clear. The chart you
-      clicked keeps its other bars, dimmed, so you can see what you filtered out.</p>
+    <p class="lede">Click any bar, column, heatmap cell, or the dormant and need-a-person tiles to
+      filter everything by it; click it again to clear. Filters stack. The chart you clicked keeps
+      its other marks, dimmed, so you can see what you filtered out.</p>
     <div class="tiles" id="f-tiles"></div>
     <div class="fgrid">
       <div class="fpane"><h4>How much is alive</h4><div id="f-gauge"></div></div>
       <div class="fpane"><h4>By age band</h4><div id="f-bands"></div></div>
       <div class="fpane"><h4 id="f-cats-h">By part of the business</h4><div id="f-cats"></div></div>
+      <div class="fpane"><h4>Who does the work</h4>
+        <p class="hint">Marked as needing a person, machine-generated scaffolding, or hand-written.</p>
+        <div id="f-kind"></div></div>
+      <div class="fpane"><h4>Where the tasks sit in Basecamp</h4>
+        <p class="hint">Tasks, by the container Basecamp says they are in, checked when this page was
+          built. Every chart counts tasks; the Lists tile counts lists.</p>
+        <div id="f-shape"></div></div>
       <div class="fpane"><h4>Biggest lists</h4><div id="f-lists"></div></div>
+      <div class="fpane wide"><h4>When it is due, by quarter</h4>
+        <p class="hint">Every quarter in the span is shown, so a gap in the plan is visible. Click a quarter to filter.</p>
+        <div id="f-period"></div></div>
+      <div class="fpane wide"><h4 id="f-heat-h">Category &times; age: where the old work sits</h4>
+        <p class="hint">Darker means more tasks. Click a cell to filter by both at once.</p>
+        <div id="f-heat"></div></div>
     </div>
     <p id="f-note"></p>
   </section>
