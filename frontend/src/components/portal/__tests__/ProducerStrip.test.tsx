@@ -9,6 +9,7 @@ import type {
   CommandAvailability, LiveAudienceResult, ProducerOccurrence, ProducerStateResult,
   RundownResult,
 } from '../../../services/broadcastProducer';
+import type { RoomPulseResult } from '../../../services/liveRoomPulse';
 
 /**
  * P4-02 — the producer's control.
@@ -58,6 +59,7 @@ let loadState: jest.Mock;
 let sendCommand: jest.Mock;
 let loadAudience: jest.Mock;
 let loadRundown: jest.Mock;
+let loadRoomPulse: jest.Mock;
 
 async function render(
   state: ProducerStateResult = ok(),
@@ -71,11 +73,18 @@ async function render(
    * inside a parent's unit test is unmocked I/O in every one of the tests in this file.
    */
   rundown: RundownResult = { outcome: 'none' },
+  /**
+   * The room pulse (D8), stubbed for exactly the reason above. It polls on its own from
+   * `scheduled` onward, so leaving it unstubbed would put a real XHR inside every test here
+   * even though only a handful of them are about the counts.
+   */
+  pulse: RoomPulseResult = { outcome: 'ok', present: 0, stuck: 0 },
 ) {
   loadState = jest.fn().mockResolvedValue(state);
   sendCommand = jest.fn().mockResolvedValue(result);
   loadAudience = jest.fn().mockResolvedValue(audience);
   loadRundown = jest.fn().mockResolvedValue(rundown);
+  loadRoomPulse = jest.fn().mockResolvedValue(pulse);
 
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -88,6 +97,7 @@ async function render(
         sendCommand={sendCommand}
         loadAudience={loadAudience}
         loadRundown={loadRundown}
+        loadRoomPulse={loadRoomPulse}
       />,
     );
   });
@@ -644,5 +654,138 @@ describe('the rundown under it', () => {
     await render(onAir(), undefined, undefined, plan());
     expect(find('producer-clock')!.textContent).toBe('on air 4:12');
     expect(find('rundown-pace')!.textContent).toBe('on time');
+  });
+});
+
+/**
+ * THE REHEARSAL BANNER, AND THE CLAIM IT MUST NOT MAKE (D7).
+ *
+ * D18's draft asked for a banner saying nothing reaches "viewers or the recording". The viewer
+ * half is true. The recording half is false: the live input is created with
+ * `recording: { mode: 'automatic' }`, so Cloudflare records whatever is pushed to it whatever
+ * our editorial state says.
+ *
+ * That makes this the most consequential piece of copy in the strip. A producer who believes
+ * the rehearsal is not recorded speaks accordingly, and the bytes exist either way. So the
+ * absence of the false reassurance is asserted, not only the presence of the true warning -
+ * otherwise a later edit could add it back and every test here would still pass.
+ */
+describe('the rehearsal banner', () => {
+  const backstage = () => ok({ occurrence: occurrence({ editorial_state: 'backstage' }) });
+
+  it('appears backstage and says nothing reaches viewers', async () => {
+    await render(backstage());
+    expect(find('producer-rehearsal')).not.toBeNull();
+    expect(text()).toMatch(/nothing you do here reaches viewers/i);
+  });
+
+  it('says the rehearsal will not become the replay', async () => {
+    // True only because `broadcastRecordingBinding` now binds on air. Before that guard the
+    // rehearsal WAS the replay, so this sentence would have been a lie.
+    await render(backstage());
+    expect(text()).toMatch(/will not become\s+the class replay/i);
+  });
+
+  it('WARNS that the feed is still recorded, and never claims otherwise', async () => {
+    await render(backstage());
+    expect(text()).toMatch(/still recorded/i);
+    // The false reassurance, in the shapes it would plausibly be written in.
+    expect(text()).not.toMatch(/not recorded/i);
+    expect(text()).not.toMatch(/nothing is being recorded/i);
+  });
+
+  it('does not appear in any other state', async () => {
+    for (const s of ['scheduled', 'live', 'reconnecting', 'ended']) {
+      await render(ok({ occurrence: occurrence({ editorial_state: s }) }));
+      expect(find('producer-rehearsal')).toBeNull();
+      await act(async () => { root.unmount(); });
+      container.remove();
+    }
+  });
+});
+
+/**
+ * THE ROOM AND STUCK COUNTS (D8), as the strip renders them.
+ *
+ * `producerStripCopy.test.ts` proves the chip RULE. These prove the chips are actually wired,
+ * polled on the session rather than the occurrence, and stopped once the class is over - which
+ * the pure functions cannot say anything about.
+ */
+describe('the room counts', () => {
+  it('reads the room on the SESSION, not the occurrence', async () => {
+    // Two different routes with two different keys. Passing the occurrence id would ask for a
+    // count of a broadcast rather than a count of the room.
+    await render();
+    expect(loadRoomPulse).toHaveBeenCalledWith('s1');
+  });
+
+  it('shows both counts', async () => {
+    await render(ok(), undefined, undefined, undefined, { outcome: 'ok', present: 23, stuck: 3 });
+    expect(find('producer-room')!.textContent).toBe('23 in the room');
+    expect(find('producer-stuck')!.textContent).toBe('3 stuck');
+  });
+
+  it('raises the stuck chip when somebody is stuck, and not when nobody is', async () => {
+    await render(ok(), undefined, undefined, undefined, { outcome: 'ok', present: 9, stuck: 2 });
+    expect(find('producer-stuck')!.getAttribute('data-raised')).toBe('yes');
+    await act(async () => { root.unmount(); });
+    container.remove();
+    await render(ok(), undefined, undefined, undefined, { outcome: 'ok', present: 9, stuck: 0 });
+    expect(find('producer-stuck')!.getAttribute('data-raised')).toBeNull();
+  });
+
+  it('NEVER prints a digit when the server is not measuring', async () => {
+    // The failure this exists for: a fabricated 0 reads as an empty room, and a producer who
+    // believes the room is empty may end a class people are sitting in.
+    await render(ok(), undefined, undefined, undefined, { outcome: 'unknown' });
+    expect(find('producer-room')!.textContent).not.toMatch(/\d/);
+    expect(find('producer-stuck')!.textContent).not.toMatch(/\d/);
+  });
+
+  it('shows nothing at all to a viewer the counts are not for', async () => {
+    // `forbidden` is not a measurement failure worth reporting; it means these chips are not
+    // this person's business. Nagging about it would be a dead affordance.
+    await render(ok(), undefined, undefined, undefined, { outcome: 'forbidden' });
+    expect(find('producer-room')).toBeNull();
+    expect(find('producer-stuck')).toBeNull();
+  });
+
+  it('asks for the room from SCHEDULED onward, because the room fills up first', async () => {
+    await render(ok({ occurrence: occurrence({ editorial_state: 'scheduled' }) }));
+    expect(loadRoomPulse).toHaveBeenCalled();
+  });
+
+  it('stops asking once the class is over', async () => {
+    // A room count left on screen after the class is a claim about a room that has emptied.
+    await render(ok({ occurrence: occurrence({ editorial_state: 'ended' }) }));
+    expect(loadRoomPulse).not.toHaveBeenCalled();
+    expect(find('producer-room')).toBeNull();
+  });
+});
+
+/**
+ * WHO ENDED IT (D8). `end_reason` was on the producer payload from the first day and nothing
+ * rendered it, so a producer returning to a finished class could not tell whether a colleague
+ * pressed End or the watchdog fired. Those have opposite next actions.
+ */
+describe('the end reason', () => {
+  const ended = (reason: string | null) =>
+    ok({ occurrence: occurrence({ editorial_state: 'ended', end_reason: reason }), commands: [] });
+
+  it('names a producer who ended it', async () => {
+    await render(ended('producer'));
+    expect(find('producer-end-reason')!.textContent).toBe('Ended by a producer.');
+  });
+
+  it('says the safety net ended it, and what that means for the recording', async () => {
+    await render(ended('auto_stream_gone'));
+    const t = find('producer-end-reason')!.textContent || '';
+    expect(t).toMatch(/automatically/i);
+    expect(t).toMatch(/recording/i);
+  });
+
+  it('shows nothing before the class ends', async () => {
+    await render(ok({ occurrence: occurrence({ editorial_state: 'live', end_reason: null }) }));
+    expect(find('producer-end-reason')).toBeNull();
   });
 });

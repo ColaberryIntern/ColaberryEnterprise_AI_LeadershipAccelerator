@@ -79,6 +79,147 @@ export function noActionsNote(editorialState: string): string {
   return 'Nothing to do from here.';
 }
 
+/**
+ * A reading in the header, and whether it is a measurement at all.
+ *
+ * `state` is what the stylesheet keys off, and the italic treatment for `unknown` and `failed`
+ * is the whole point: those two are NOT numbers and must not be read as numbers at a glance.
+ */
+export interface Chip {
+  state: 'ok' | 'stale' | 'unknown' | 'failed';
+  text: string;
+  /** Worth a producer's attention right now. Only the stuck count sets it. */
+  raised?: boolean;
+}
+
+/**
+ * THE RULE SHARED BY EVERY COUNT IN THE HEADER, in one place so a new count cannot invent its
+ * own version of it.
+ *
+ * Three things that look alike and mean completely different things:
+ *
+ *   - a measurement, including a measurement of zero, which renders as a number;
+ *   - a measurement that has stopped arriving, which keeps the last good number and says so,
+ *     because a producer mid-show needs the stale figure more than an empty panel;
+ *   - no measurement at all, which says so in words and never prints a digit.
+ *
+ * A fabricated `0` is the failure this exists to prevent: it reads as an empty room, and a
+ * producer who believes an empty room may end a class people are in.
+ */
+function countChip(
+  value: number | null, unmeasurable: boolean, stale: boolean, unit: string, noneLabel: string,
+): Chip | null {
+  if (unmeasurable) return { state: 'unknown', text: noneLabel };
+  if (value === null) {
+    // Nothing good has ever arrived. Only worth saying once an attempt has actually failed;
+    // before the first answer lands there is nothing to report.
+    return stale ? { state: 'failed', text: 'no answer' } : null;
+  }
+  return {
+    state: stale ? 'stale' : 'ok',
+    text: `${value} ${unit}${stale ? ' · not updating' : ''}`,
+  };
+}
+
+/**
+ * The viewer-count chip, as four distinct readings that must never be mistaken for each other.
+ *
+ * `12 watching` is a measurement. `not measuring` is the server saying collection is down - it
+ * answers 503 and omits the count entirely so that no client can print a fabricated zero, and a
+ * producer who read that as "nobody is here" would stop a class people are watching. `no answer`
+ * is this tab failing to ask or failing to hear, which is a different fault with a different
+ * fix. And a kept number marked `not updating` is the honest version of the last two when there
+ * IS a last good count worth showing.
+ *
+ * `0 watching` is a measurement like any other and renders as a number, not as an absence.
+ *
+ * Only shown while on air: a viewer count on a scheduled occurrence is a count of nothing, and
+ * one left on screen after the class ended is a stale claim about a broadcast that is over.
+ */
+export function audienceChip(
+  onAir: boolean,
+  aud: { outcome: string; watchingNow?: number } | null,
+  stale: boolean,
+): Chip | null {
+  if (!onAir) return null;
+  return countChip(
+    aud?.outcome === 'ok' ? aud.watchingNow ?? 0 : null,
+    aud?.outcome === 'unknown',
+    stale,
+    'watching',
+    'not measuring',
+  );
+}
+
+/**
+ * HOW MANY PHONES ARE IN THE ROOM (D8), which is a different question from how many are watching.
+ *
+ * The audience chip counts remote viewers on the broadcast. This counts people who scanned the
+ * code and are following along on the companion, which is the number a presenter in the room
+ * actually asks for. They are read from two different routes and either can fail without the
+ * other, so they are two chips rather than one sum.
+ *
+ * Shown from backstage onward rather than only on air, because the room fills up BEFORE the
+ * class starts and "is anyone here yet" is a backstage question.
+ */
+export function roomChip(
+  pulse: { present: number } | null, unmeasurable: boolean, stale: boolean,
+): Chip | null {
+  return countChip(
+    pulse ? pulse.present : null, unmeasurable, stale, 'in the room', 'room not measured',
+  );
+}
+
+/**
+ * HOW MANY OF THEM ARE STUCK (D8). The one reading here that asks for a decision.
+ *
+ * `raised` only when somebody actually is stuck. A plain `0 stuck` is good news and should not
+ * be colored like a problem, and `raised` is deliberately NOT set for the unmeasurable states:
+ * "stuck not measured" is a gap in instrumentation, not a room full of stuck people, and
+ * coloring it would invent an alarm out of a failed request.
+ */
+export function stuckChip(
+  pulse: { stuck: number } | null, unmeasurable: boolean, stale: boolean,
+): Chip | null {
+  const chip = countChip(
+    pulse ? pulse.stuck : null, unmeasurable, stale, 'stuck', 'stuck not measured',
+  );
+  if (!chip) return null;
+  const isCount = chip.state === 'ok' || chip.state === 'stale';
+  return { ...chip, raised: isCount && !!pulse && pulse.stuck > 0 };
+}
+
+/**
+ * WHO ENDED IT (D8). A human, or the safety net, or nobody can tell.
+ *
+ * `end_reason` has been on the producer payload all along and nothing rendered it, so a
+ * producer coming back to a class that is over could not tell whether a colleague pressed End
+ * or the auto-end watchdog fired because the stream vanished. Those call for opposite next
+ * actions: one is finished, the other means the feed broke and the recording may be short.
+ *
+ * The third case is the one worth being careful about. `null` on an ended occurrence is not
+ * evidence of either, and it is reachable: every occurrence that ended before the column
+ * existed carries null. So it says the reason was not recorded rather than guessing `producer`,
+ * which is the same rule the counts obey - no fabricated value where there is no measurement.
+ *
+ * Deliberately NOT linked to a post-show check. D12 adds that route; linking to it now would
+ * ship a dead link, which is the failure this subsystem keeps finding in its own surfaces.
+ */
+export function endReasonCopy(editorialState: string, endReason: string | null): string | null {
+  if (!ENDED_STATES.includes(editorialState)) return null;
+  if (endReason === 'producer') return 'Ended by a producer.';
+  if (endReason === 'auto_stream_gone') {
+    return 'Ended automatically: the feed stopped and did not come back. Check the recording '
+      + 'before publishing a replay, because it ends where the feed did.';
+  }
+  if (endReason === null) return 'No end reason was recorded for this airing.';
+  // An unrecognized value is still a fact about this airing, and printing it beats hiding it.
+  return `Ended: ${endReason.replace(/_/g, ' ')}.`;
+}
+
+/** Everything after the airing. `cancelled` is excluded: it never aired, so nothing ended it. */
+const ENDED_STATES = ['ended', 'processing', 'replay_ready'];
+
 /** The badge. `live` and `reconnecting` read as a broadcast; the rest read as the state name. */
 export function stateLabel(editorialState: string): string {
   if (editorialState === 'live') return 'ON AIR';

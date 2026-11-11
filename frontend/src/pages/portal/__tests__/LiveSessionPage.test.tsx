@@ -41,9 +41,20 @@ jest.mock('../../../components/portal/BroadcastWatchButton', () => ({
 // Stubbed for the same reason, and for one more: the real strip polls its own endpoint, which
 // `wire()` below deliberately rejects as an unexpected URL. Whether a producer may see it is
 // the strip's own suite; what this file asks is WHERE the page puts it.
+// The stub exposes `onProducerConfirmed` as a button rather than firing it on mount, because
+// the page's behaviour differs BEFORE and AFTER the server answers (D6) and a stub that always
+// confirmed could only ever show one of those two states.
 jest.mock('../../../components/portal/ProducerStrip', () => ({
   __esModule: true,
-  default: ({ sessionId }: { sessionId: string }) => <div data-testid="producer-stub">{sessionId}</div>,
+  default: ({ sessionId, onProducerConfirmed }: {
+    sessionId: string; onProducerConfirmed?: () => void;
+  }) => (
+    <div data-testid="producer-stub" data-session={sessionId}>
+      <button type="button" data-testid="confirm-producer" onClick={onProducerConfirmed}>
+        confirm
+      </button>
+    </div>
+  ),
 }));
 // The desktop rail. Same deal: it polls the companion state and the chat, and its own suite
 // covers what it contains. This file asks when the page mounts it and with what.
@@ -118,6 +129,8 @@ const text = () => container.textContent || '';
 const titleOf = () => container.querySelector('[data-testid="live-session-title"]')?.textContent || '';
 const workspace = () => container.querySelector('[data-testid="workspace-stub"]') as HTMLElement | null;
 const card = () => container.querySelector('[data-testid="live-session-page"]') as HTMLElement;
+/** The stubbed strip's way of saying "the server called this viewer a producer" (D6). */
+const producerConfirm = () => container.querySelector('[data-testid="confirm-producer"]') as HTMLElement | null;
 
 describe('what someone who clicks the link actually sees', () => {
   it('tells an early arrival the class has not started, and does not look like an error', async () => {
@@ -325,6 +338,39 @@ describe('the desktop workspace (DOC 04)', () => {
     expect(card().className).not.toContain('is-wide');
   });
 
+  /**
+   * THE CARD HAS TO GROW FOR A PRODUCER BEFORE ANYTHING IS AIRING (D6).
+   *
+   * The width was keyed to `moment === 'live'`, but the strip renders at every moment on
+   * purpose: `not_started` is exactly when Go Backstage has to be pressed. So a producer
+   * arriving before the class got the controls, the clock, the feed health, the counts and a
+   * row of command buttons inside a 440px column.
+   *
+   * The pair of tests matters more than either alone. Widening on `isAuthenticated` would pass
+   * the first and fail the second, and that is the tempting shortcut: it is the only signal
+   * the page has without asking the strip.
+   */
+  it('widens for a PRODUCER before anything is airing', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: true });
+    wire('not_started');
+    await render();
+    expect(card().className).not.toContain('is-wide');
+
+    await act(async () => { producerConfirm()!.click(); });
+
+    expect(card().className).toContain('is-wide');
+  });
+
+  it('leaves a signed-in STUDENT narrow, because the strip never confirms them', async () => {
+    // The strip self-hides for anyone the server does not call a producer, so it never calls
+    // back. A card widened on sign-in alone would be 980px of empty space for every student.
+    mockAuth.mockReturnValue({ isAuthenticated: true });
+    wire('not_started');
+    await render();
+
+    expect(card().className).not.toContain('is-wide');
+  });
+
   it('is not mounted before the class is on air', async () => {
     // Unlike the producer strip, which is needed precisely while nothing is airing, there is
     // nothing for a VIEWER to do on a class that has not started.
@@ -373,7 +419,9 @@ describe('the producer strip (P4-02)', () => {
     wire('not_started');
     await render();
 
-    expect(strip()!.textContent).toBe('sess-1');
+    // Read off an attribute rather than the stub's text, so the assertion survives the stub
+    // growing a child. It gained one when D6 needed a way to fire `onProducerConfirmed`.
+    expect(strip()!.getAttribute('data-session')).toBe('sess-1');
   });
 });
 
