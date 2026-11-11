@@ -1,7 +1,7 @@
 import React from 'react';
 import { badgeLabel, useBoardBadge } from './useBoardBadge';
 
-/** The side panel's "📌 Ask the community" chip count (Campus v14 B5, C70): the same number as the map sign, nothing when zero. */
+/** The side panel's "📱 Colaberry Now" chip count (Campus v14 B5, C70): the same number as the map sign, nothing when zero. */
 export function BoardChipBadge(): React.ReactElement | null {
   const n = useBoardBadge();
   if (n <= 0) return null;

@@ -1,5 +1,5 @@
 /**
- * The Community Board's opener (C30): any entry point (the board on the map, the "📌 Ask the community" chip, Where to?) calls
+ * The Community Board's opener (C30): any entry point (the board on the map, the "📱 Colaberry Now" chip, Where to?) calls
  * openBoard(); the one host shows the board; the map, if it is on screen, walks you to it first (walk: true).
  */
 export const BOARD_EVENT = 'cm-open-board';

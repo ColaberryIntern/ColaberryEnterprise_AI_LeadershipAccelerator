@@ -6,6 +6,7 @@ import { buildingName, CAMPUS_BUILDINGS, type BuildingId } from '../campusMap';
 import ColaberryTv from './ColaberryTv';
 import NowStream from './NowStream';
 import TvManager from './TvManager';
+import { markTvSeen } from './tvNote';
 import type { NowChip } from './nowModel';
 import type { Happening } from './nowApi';
 import './colaberryNow.css';
@@ -31,8 +32,15 @@ export function ColaberryNow({ me, compose = null, onClose }: { me: string; comp
   const escapeRef = useRef<(() => boolean) | null>(null);
   const openPostRef = useRef<((id: string) => void) | null>(null);
 
-  const refreshTv = useCallback(() => { getTv().then(setTv).catch(() => { /* keep what is playing */ }); }, []);
+  // A failed re-read keeps what is playing (the TV never stops for a network blip) and is logged with its class.
+  const refreshTv = useCallback(() => {
+    getTv().then(setTv).catch((err: unknown) => {
+      console.warn(JSON.stringify({ level: 'warn', service: 'campus', event: 'colaberry_tv_refresh_failed', outcome: 'failure',
+        error_class: (err as { name?: string })?.name || 'Error' }));
+    });
+  }, []);
   useEffect(() => {
+    markTvSeen();
     refreshTv();
     const id = window.setInterval(refreshTv, TV_POLL_MS);
     return () => window.clearInterval(id);

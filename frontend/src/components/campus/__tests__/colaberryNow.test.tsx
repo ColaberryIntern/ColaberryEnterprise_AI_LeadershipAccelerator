@@ -31,7 +31,11 @@ jest.mock('../CampusContext', () => ({
   useCampus: () => ({ openMap: mockOpenMap, settings: { workplaceNames: false } }),
 }));
 // eslint-disable-next-line import/first
-import { ColaberryNow } from '../now/ColaberryNow';
+import { ColaberryNow, TV_POLL_MS } from '../now/ColaberryNow';
+// eslint-disable-next-line import/first
+import CommunityBoardHost from '../board/CommunityBoard';
+// eslint-disable-next-line import/first
+import { openBoard } from '../board/boardApi';
 // eslint-disable-next-line import/first
 import { appendPage, happeningChips, insertNew, newestOthers, sectionOf } from '../now/nowModel';
 // eslint-disable-next-line import/first
@@ -236,6 +240,39 @@ describe('Colaberry Now', () => {
     await act(async () => { jest.advanceTimersByTime(300); });
     await flush();
     expect(mockStream).toHaveBeenLastCalledWith({ lane: 'all', q: 'mcp' });
+  });
+
+  it('the TV re-reads its playlist every 30 s; a failed re-read keeps what is playing and is logged', async () => {
+    jest.useFakeTimers();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await open();
+    expect(mockGetTv).toHaveBeenCalledTimes(1);
+    mockGetTv.mockRejectedValueOnce(Object.assign(new Error('down'), { name: 'NetworkError' }));
+    await act(async () => { jest.advanceTimersByTime(TV_POLL_MS); });
+    await flush();
+    expect(mockGetTv).toHaveBeenCalledTimes(2);
+    expect(q('[data-testid="cn-tv-title"]')!.textContent).toBe('Short one');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('colaberry_tv_refresh_failed'));
+    warn.mockRestore();
+  });
+
+  it('opening Colaberry Now marks the TV as looked at (the left panel note stops saying "new")', async () => {
+    window.localStorage.removeItem('cm-tv-seen');
+    await open();
+    expect(window.localStorage.getItem('cm-tv-seen')).toBeTruthy();
+  });
+
+  it('through the real host: any opener shows Colaberry Now, and closing it stops the TV (about:blank)', async () => {
+    act(() => { root.render(<MemoryRouter><CommunityBoardHost reduceMotion me="Ali Muwwakkil" /></MemoryRouter>); });
+    expect(q('[data-testid="cm-cnow"]')).toBeNull();
+    act(() => { openBoard({ walk: true }); });
+    await flush();
+    expect(q('[data-testid="cm-cnow"]')).toBeTruthy();
+    const f = q('[data-testid="cn-tv-frame"]') as HTMLIFrameElement;
+    expect(f.getAttribute('src')).toContain('youtube-nocookie.com/embed/Pa5J5T6MZok');
+    key('Escape');
+    expect(q('[data-testid="cm-cnow"]')).toBeNull();
+    expect(f.getAttribute('src')).toBe('about:blank');
   });
 
   it('a stream that fails to load says so, and the TV still plays', async () => {
