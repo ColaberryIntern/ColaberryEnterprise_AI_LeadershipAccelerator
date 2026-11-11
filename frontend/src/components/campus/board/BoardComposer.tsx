@@ -88,7 +88,7 @@ export default function BoardComposer({ initial, weekRitual, onPosted, onCancel 
       )}
       {message && <p className="cb-msg" role="alert">{message}</p>}
       <div className="ft">
-        <small data-testid="cb-compose-where">It goes to the top of Fresh and into {laneMeta(lane).label}. You&rsquo;ll get a notification when someone replies.
+        <small data-testid="cb-compose-where">It goes to the top of the stream and into {laneMeta(lane).label}. You&rsquo;ll get a notification when someone replies.
           {type !== 'ritual' && <> · <span data-testid="cb-words">{words} {words === 1 ? 'word' : 'words'} · posts need at least {MIN_WORDS}</span></>}</small>
         <button type="button" className="cb-btn" onClick={onCancel}>Cancel</button>
         <button type="button" className="cb-btn pri" onClick={post} disabled={busy || !ready} data-testid="cb-compose-post">{busy ? 'Pinning…' : 'Pin it to the board'}</button>

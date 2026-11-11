@@ -130,6 +130,13 @@
   .cn-tv{padding:46px 64px 10px 10px}
   .cn-search{display:none}
   .cn-b h2{font-size:22px}
+  /* the whole stream column scrolls (header, strip and posts together), so posts are reachable under the TV */
+  .cn-b{overflow-y:auto}
+  .cn-hd,.cn-now{flex:none}
+  .cn-s{flex:none;overflow:visible;min-height:0}
+  .cn-compose{flex-wrap:wrap}
+  .cn-compose input{flex:1 1 calc(100% - 44px)}
+  .cn-compose select{flex:1;min-width:0;margin-left:42px}
   .cn-mgr-th{display:none}
   .cn-mgr-row{grid-template-columns:30px minmax(0,1fr);row-gap:6px}
   .cn-mgr-row > select,.cn-mgr-row > .cn-mgr-air,.cn-mgr-row > .cn-mgr-del,.cn-mgr-row > .cn-mgr-confirm{grid-column:2}

@@ -54,7 +54,7 @@ export default function NowComposer({ me, initial = 'post', weekRitual, onPosted
       )}
       {message && <p className="cn-msg" role="alert" data-testid="cn-compose-error">{message}</p>}
       {kind === 'ritual' && ritual && (
-        <BoardComposer initial="ritual" weekRitual={weekRitual} onCancel={() => setKind('post')} onPosted={(lane) => { setKind('post'); onPosted(lane); }} />
+        <div className="cb2 cn-ritual"><BoardComposer initial="ritual" weekRitual={weekRitual} onCancel={() => setKind('post')} onPosted={(lane) => { setKind('post'); onPosted(lane); }} /></div>
       )}
     </div>
   );

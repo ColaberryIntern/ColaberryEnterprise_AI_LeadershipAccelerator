@@ -73,7 +73,8 @@ export default function NowStream({ me, compose = null, onClose, onFeed, nameOf,
   const row = (p: BoardPost) => <NowPost key={p.id} p={p} now={now} isNew={isNew(p)} glow={glowId === p.id} onOpen={openPost} />;
 
   return (
-    <section className="cn-b" aria-labelledby="cn-h" data-testid="cn-stream">
+    // on phones the whole column scrolls (colaberryNow.css), so paging listens on both the column and the list
+    <section className="cn-b" aria-labelledby="cn-h" data-testid="cn-stream" onScroll={onScroll}>
       <header className="cn-hd">
         <div className="cn-top">
           <div className="cn-ttl">
@@ -101,7 +102,7 @@ export default function NowStream({ me, compose = null, onClose, onFeed, nameOf,
         {s.head && !s.posts.length && !s.head.pinned.length && <p className="cn-more">{s.q ? 'Nothing matches that search.' : 'Nothing here yet. Be the first to post.'}</p>}
         {s.head && s.posts.length > 0 && <p className="cn-more" data-testid="cn-more">{s.loadingMore ? 'Loading older posts…' : s.cursor ? 'Scroll for older posts' : 'You’re all caught up.'}</p>}
       </div>
-      {open && <div className="cn-drawer"><BoardDrawer p={open} now={now} onClose={closeDrawer} onChanged={(p) => { setOpen((o) => (o && o.id === p.id ? p : o)); s.patch(p); }} onFeed={onFeed} /></div>}
+      {open && <div className="cn-drawer cb2"><BoardDrawer p={open} now={now} onClose={closeDrawer} onChanged={(p) => { setOpen((o) => (o && o.id === p.id ? p : o)); s.patch(p); }} onFeed={onFeed} /></div>}
       {toast && <div className="cn-toast" role="status" data-testid="cn-toast">{toast}</div>}
     </section>
   );

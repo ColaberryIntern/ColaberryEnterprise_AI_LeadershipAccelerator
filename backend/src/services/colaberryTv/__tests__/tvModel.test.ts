@@ -90,7 +90,7 @@ describe('fetchShortTitle (oEmbed)', () => {
     expect(String(f.mock.calls[0][0])).toContain(encodeURIComponent(`https://www.youtube.com/shorts/${ID}`));
     expect(f.mock.calls[0][1].signal).toBeDefined();
   });
-  it.each([
+  it.each<[string, () => Promise<unknown>]>([
     ['a 404', () => Promise.resolve({ ok: false, status: 404, json: async () => ({}) })],
     ['a timeout', () => Promise.reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' }))],
     ['a body without a title', () => Promise.resolve({ ok: true, json: async () => ({ html: '<iframe>' }) })],

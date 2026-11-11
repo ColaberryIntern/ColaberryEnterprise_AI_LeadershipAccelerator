@@ -202,4 +202,11 @@ describe('nothing else on campus plays Colaberry TV (spec N3)', () => {
     const embeds = campus.filter((f) => /<iframe|<video|parseVideoUrl\(|withAutoplay\(|youtube-nocookie/.test(code(f))).map(rel).sort();
     expect(embeds).toEqual(['components/campus/now/ColaberryTv.tsx', 'components/campus/now/useTvChannel.ts']);
   });
+
+  it('no campus surface imports another player (VideoEmbed, the timeline cards, the live player)', () => {
+    const campus = files.filter((f) => /components\/campus\/|pages\/portal\/campus\//.test(rel(f)));
+    // a type-only import (import type ...) runs nothing, so it is not a player
+    const players = campus.filter((f) => /^import (?!type )[^;]*from '[^']*(timeline\/VideoEmbed|timeline\/TimelineCard|LiveMiniPlayer)'/m.test(fs.readFileSync(f, 'utf8'))).map(rel);
+    expect(players).toEqual([]);
+  });
 });

@@ -13,7 +13,14 @@ export function useTvPeek(): TvShort[] {
   const [list, setList] = useState<TvShort[]>([]);
   useEffect(() => {
     let alive = true;
-    if (!cache) cache = getTv().then((d) => d.videos).catch(() => { cache = null; return []; });
+    if (!cache) {
+      cache = getTv().then((d) => d.videos).catch((err: unknown) => {
+        cache = null; // the next page asks again
+        console.warn(JSON.stringify({ level: 'warn', service: 'campus', event: 'colaberry_tv_peek_failed', outcome: 'failure',
+          error_class: (err as { name?: string })?.name || 'Error' }));
+        return [];
+      });
+    }
     cache.then((v) => { if (alive) setList(v); });
     return () => { alive = false; };
   }, []);

@@ -42,6 +42,14 @@ const SIGNATURE = { member: 'commons', explorer: 'lecture', business: 'career', 
 const tap = (id) => ({ evaluate: `(async () => { for (let i = 0; i < 50; i++) { const el = document.querySelector('[data-testid="cm-bld-${id}"]'); if (el) { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; } await new Promise((r) => setTimeout(r, 200)); } throw new Error('no building ${id}'); })()` });
 /** WP-3: the prototype walk (330 units/s, eased, at least 600 ms): the longest walk on the campus settles inside this. */
 const WALKED = { wait: 2600 };
+// v20: Colaberry Now opened: nine sections, the TV beside the stream at desktop (about 42%) or above it when stacked, and no text in the
+// dialog overflowing its box.
+const CN_ASSERT = `(() => { const n = document.querySelectorAll('[data-testid="cn-lanes"] [data-testid^="cn-lane-"]').length; if (n !== 9) return 'sections: ' + n;
+  const d = document.querySelector('[data-testid="cm-cnow"]').getBoundingClientRect(), tv = document.querySelector('[data-testid="cn-tv"]').getBoundingClientRect();
+  if (innerWidth > 900 && (tv.width / d.width < 0.36 || tv.width / d.width > 0.48)) return 'TV share ' + (tv.width / d.width).toFixed(2);
+  if (innerWidth <= 900 && tv.bottom > document.querySelector('[data-testid="cn-stream"]').getBoundingClientRect().top + 1) return 'not stacked';
+  const over = Array.from(document.querySelectorAll('[data-testid="cm-cnow"] button, [data-testid="cm-cnow"] h2, [data-testid="cm-cnow"] b')).filter((el) => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== 'auto' && !el.closest('.cn-now, .cn-f')).map((el) => el.textContent.trim());
+  return over.length ? 'text overflows: ' + over.slice(0, 3).join(' | ') : ''; })()`;
 
 /** Campus HQ: the accounts whose signature building is the elevator tower (career). */
 const isHqAccount = (a) => SIGNATURE[a] === 'career';
@@ -261,13 +269,22 @@ const VIEWS = [
   // C30 (v7 R3): the Community Board on the Quad: the noticeboard is on the map; clicking it walks there and opens the cork board with
   // the real notes from the community feed. v14 (C67-C71): the board in sections: the header (status, search, Add a note, the Community
   // page), the ritual bar, nine sections, and Everything's Fresh grid; the drawer and the composer have their own views below.
-  { name: '27-community-board', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'half', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cb-status' }],
-    required: () => ['cm-cboard-sign', 'cm-cboard', 'cb-status', 'cb-search', 'cb-add', 'cm-cb-feed', 'cb-lanes'],
-    assert: () => `(() => { const n = document.querySelectorAll('[data-testid="cb-lanes"] [data-testid^="cb-lane-"]').length; return n === 9 ? '' : 'sections: ' + n; })()` },
-  { name: '33-board-compose', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }, { click: '[data-testid="cb-add"]' }, { wait: 400 }],
-    required: () => ['cb-compose', 'cb-type-q', 'cb-type-post', 'cb-compose-where', 'cb-compose-body', 'cb-compose-post'] },
-  { name: '33-board-your-notes', route: '/portal/campus', accounts: ['member'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { wait: 2200 }, { click: '[data-testid="cb-lane-mine"]' }, { wait: 1200 }],
-    required: () => ['cb-lanes'] },
+  // v20 (C131-C135): the board became COLABERRY NOW (docs/design/campus/colaberry-campus-v20.html): the phone on the Quad, then a
+  // split dialog (Colaberry TV 42%, the stream 58%; stacked at 900px and below). Each view at 1440x900, 900x900 and 390x844, and no
+  // text in the dialog overflows its box. The manager needs a staff account (Campaigns).
+  { name: '38-colaberry-now-map', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ wait: 1500 }],
+    required: () => ['cm-cboard-sign', 'cm-cnow-ring'],
+    assert: () => `(() => { const s = document.querySelector('[data-testid="cm-cboard-sign"]'); if (!s.textContent.includes('Colaberry Now')) return 'label: ' + s.textContent;
+      return document.querySelector('[data-testid="cm-world"] iframe, [data-testid="cm-world"] video') ? 'something plays on the map' : ''; })()` },
+  { name: '38-colaberry-now', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-sub' }, { wait: 1200 }],
+    required: () => ['cm-cnow', 'cn-tv', 'cn-stream', 'cn-sub', 'cn-compose', 'cn-lanes', 'cn-list'],
+    assert: () => CN_ASSERT },
+  { name: '38-colaberry-now-questions', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-sub' }, { click: '[data-testid="cn-lane-q"]' }, { wait: 1200 }],
+    required: () => ['cm-cnow', 'cn-lanes'], assert: () => CN_ASSERT },
+  { name: '38-colaberry-now-thread', route: '/portal/campus', accounts: ['member'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-post' }, { click: '[data-testid="cn-post"]' }, { wait: 1200 }],
+    required: () => ['cm-cnow', 'cb-drawer'] },
+  { name: '38-colaberry-now-manager', route: '/portal/campus', accounts: ['staff'], sizes: ['desktop', 'mid', 'phone'], steps: () => [{ click: '[data-testid="cm-cboard-sign"]' }, { waitFor: 'cn-tv-manage' }, { click: '[data-testid="cn-tv-manage"]' }, { wait: 1200 }],
+    required: () => ['cm-cnow', 'cn-manager', 'cn-mgr-link', 'cn-mgr-add'] },
   // C34 (v8 G1): the Game Room page: the hero, both side cards, five game cards, the leaderboard, recent highs and the side column; no
   // control's text overflows its box.
   { name: '29-game-room', route: '/portal/game-room', accounts: ['member'], steps: () => [{ wait: 2500 }],

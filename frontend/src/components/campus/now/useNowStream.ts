@@ -63,15 +63,18 @@ export function useNowStream() {
 
   const showPending = () => { setPosts((p) => insertNew(p, pending)); setPending([]); };
 
+  // one older-page request at a time (a scroll can fire on the list and the column in the same frame)
+  const inFlight = useRef(false);
   const loadMore = useCallback(async (): Promise<boolean> => {
-    if (!cursor || loadingMore) return true;
+    if (!cursor || inFlight.current) return true;
+    inFlight.current = true;
     setLoadingMore(true);
     try {
       const d = await getStream({ lane, q, cursor });
       setPosts((p) => appendPage(p, d.posts)); setCursor(d.next_cursor);
       return true;
-    } catch (err) { logNow('colaberry_now_older_failed', err); return false; } finally { setLoadingMore(false); }
-  }, [cursor, loadingMore, lane, q]);
+    } catch (err) { logNow('colaberry_now_older_failed', err); return false; } finally { inFlight.current = false; setLoadingMore(false); }
+  }, [cursor, lane, q]);
 
   /** After your own post: back to Everything from the top. Returns your newest post's id (for the glow), or null. */
   const reloadAfterPost = async (): Promise<string | null> => {
