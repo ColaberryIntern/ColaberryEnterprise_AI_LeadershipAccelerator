@@ -18,6 +18,7 @@
 const { BANDS, bandFor, partition, summarize, urgencyVsAge } = require('./ageBands');
 const { RAMP_LIGHT, RAMP_DARK, histogramSvg, scatterSvg, tile, bandPill, esc } = require('./triageCharts');
 const { renderWorkOrderText, runCommand, DISPOSITION_LABEL } = require('./workOrder');
+ const { renderListLens, LIST_LENS_CSS } = require('./renderListLens');
 
 const pct = (n) => `${Math.round(n * 100)}%`;
 
@@ -230,6 +231,7 @@ function renderTriageBoard(input) {
   .disp-prep{background:var(--band-dormant)}
   .mermaid{margin-top:12px;background:transparent}
   footer{color:var(--ink-3);font-size:12px;margin-top:28px;text-align:center}
+  ${LIST_LENS_CSS}
 </style></head>
 <body data-palette="${esc([RAMP_LIGHT.fresh, RAMP_LIGHT.overdue, RAMP_LIGHT.aging].join(','))}">
 <div class="wrap">
@@ -272,6 +274,8 @@ function renderTriageBoard(input) {
   </section>
 
   ${handoffSection(Array.isArray(input.workOrders) ? input.workOrders : [], input.runId || 'run')}
+
+  ${renderListLens(Array.isArray(input.lists) ? input.lists : [], { limit: input.listLimit || 12 })}
 
   <section>
     <h2>Live queue <span class="sub">(${liveSorted.length})</span></h2>

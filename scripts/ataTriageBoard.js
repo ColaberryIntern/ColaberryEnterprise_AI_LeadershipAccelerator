@@ -30,7 +30,7 @@ const libDir = fs.existsSync(path.join(__dirname, 'renderTriageBoard.js'))
   ? __dirname
   : path.join(__dirname, '../backend/src/scripts/lib/aliTaskAgent');
 const { renderTriageBoard } = require(path.join(libDir, 'renderTriageBoard'));
-const { summarize } = require(path.join(libDir, 'ageBands'));
+const { summarize, daysOverdue } = require(path.join(libDir, 'ageBands'));
 const { buildWorkOrder, runCommand } = require(path.join(libDir, 'workOrder'));
 
 const arg = (k, d) => {
@@ -84,8 +84,38 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
   const orderRows = [...live, ...recentDormant].map((i) => i.__row).filter(Boolean);
   const workOrders = orderRows.map((r) => buildWorkOrder(r, now));
 
+  /**
+   * The list lens is built over EVERY task, not over the work-order subset.
+   *
+   * That difference is the point of the lens: a list is only worth deciding as a whole if you can
+   * see the whole of it, and the work orders deliberately cover only what is worth working now. A
+   * list card built from the subset would report "3 tasks" for a list holding 39.
+   */
+  const { byList, withSiblings } = require(path.join(libDir, 'listLens'));
+  const { bandFor } = require(path.join(libDir, 'ageBands'));
+  const taskViews = items.map((i) => {
+    const r = i.__row || {};
+    const desc = String(r.description || '');
+    return {
+      id: `${r.project_id}/${r.bc_id}`,
+      title: r.title,
+      list: r.todolist_name || '(no list)',
+      url: r.bc_app_url || null,
+      dueOn: r.due_on || null,
+      daysOverdue: daysOverdue(r.due_on, now),
+      band: bandFor(r.due_on, now).key,
+      urgency: r.urgency_score == null ? null : Number(r.urgency_score),
+      // The generated shape and the human marker, both measured rather than guessed: 1,386 of
+      // 2,403 tasks in the main project carry "Type:" plus "Done when:", and the task split marks
+      // human work with an emoji.
+      generated: desc.includes('Type:') && desc.includes('Done when:'),
+      humanOnly: desc.includes('\u{1F9D1}'),
+    };
+  });
+  const lists = withSiblings(byList(taskViews));
+
   const html = renderTriageBoard({
-    items, today: now, runId, dormantAfterDays: DAYS, workOrders,
+    items, today: now, runId, dormantAfterDays: DAYS, workOrders, lists, listLimit: 12,
   });
   fs.writeFileSync(OUT, html, 'utf8');
 
@@ -99,7 +129,11 @@ const ALI_BC_ID = 17454835; // Ali's Basecamp person id. The 16988292 in older c
     generatedAt: now.toISOString(),
     dormantAfterDays: DAYS,
     command: runCommand(runId, { top: 5 }),
-    counts: { total: items.length, live: live.length, dormant: dormant.length },
+    counts: { total: items.length, live: live.length, dormant: dormant.length, lists: lists.length },
+    lists: lists.map((l) => ({ key: l.key, name: l.name, position: l.position, total: l.total,
+      live: l.live, dormant: l.dormant, generatedShare: l.generatedShare, humanShare: l.humanShare,
+      oldestDue: l.oldestDue, lead: l.lead ? { id: l.lead.id, title: l.lead.title } : null,
+      suggestions: l.suggestions, taskIds: l.tasks.map((t) => t.id) })),
     workOrders,
   }, null, 2), 'utf8');
 
