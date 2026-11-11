@@ -47,6 +47,26 @@
 .state.pub{background:var(--star-soft);color:var(--star-text)}
 .state.wip{background:var(--bg-elevated);color:var(--fg-faint);border:1px solid var(--line)}
 
+/* the differentiators (2026-11-11): each record's own cover, video length, capability, figure, proof */
+/* Covers are 16:9 thumbnails: frame them at 16:9 so nothing on them is cropped. */
+.proj .art{height:auto;aspect-ratio:16/9;background:var(--bg-elevated)}
+.proj .art svg{position:absolute;inset:0;height:100%}
+.sig{align-items:start}
+.sig .art{min-height:0;aspect-ratio:16/9}
+@media(min-width:861px){.sig{grid-template-columns:1.25fr 1fr}}
+.art img.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.art .play{position:absolute;left:10px;bottom:10px;font-family:var(--font-mono);font-size:.72rem;font-weight:600;color:#fff;background:rgba(10,10,14,.72);padding:3px 8px;border-radius:6px;letter-spacing:.02em}
+.cap-line{display:block;font-family:var(--font-mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--star-text);margin:0 0 6px}
+.sig .cap-line{margin:10px 0 0}
+.proj .fig{margin:10px 0 0;padding:8px 10px;border-left:2px solid var(--star);background:var(--star-soft);border-radius:0 6px 6px 0}
+.proj .fig b{display:block;font-family:var(--font-mono);font-size:1.05rem;color:var(--star-text);line-height:1.2}
+.proj .fig span{font-size:.76rem;color:var(--fg-muted)}
+.proj p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.proof{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.sig .proof{margin:0 0 16px}
+.proof span{font-family:var(--font-mono);font-size:.66rem;padding:2px 7px;border-radius:5px;border:1px solid var(--line);color:var(--fg-muted);background:var(--bg-elevated)}
+.proof span.ok{color:var(--ok, #2f8f5b);border-color:color-mix(in srgb,var(--ok, #2f8f5b) 40%,transparent)}
+
 /* capabilities, commits, experience, sidebar */
 .cap{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:10px 0;border-top:1px solid var(--line)}
 .cap:first-of-type{border-top:0}

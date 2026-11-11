@@ -89,6 +89,70 @@ describe('every published case study is reachable (Kes: "9 published", 2 linked,
   });
 });
 
+describe('cards show what makes each record different (Ali, 2026-11-11)', () => {
+  const C = require('../src/assets/common.js');
+  const API = 'https://enterprise.colaberry.ai';
+  const full = {
+    slug: 'recovering-calls', title: 'Recovering the Calls', summary: 'S', industry: 'education',
+    heroMetric: { value: '97%', label: 'of lost events resolved' },
+    look: { coverImageUrl: '/site-v2/thumb-cora-recovery.jpg?v=8d', walkthroughSeconds: 94, capability: 'operational-ai-voice-call-event-recovery', verified: true, workflowDiagram: true, decisions: 3, repositories: 1 },
+  };
+
+  test('helpers: media URLs resolve against the platform, lengths read as m:ss, capabilities lose the shared prefix', () => {
+    assert.equal(C.mediaUrl(API, '/site-v2/a.jpg'), API + '/site-v2/a.jpg');
+    assert.equal(C.mediaUrl(API + '/', '/a.jpg'), API + '/a.jpg');
+    assert.equal(C.mediaUrl(API, 'https://cdn.x/a.jpg'), 'https://cdn.x/a.jpg');
+    assert.equal(C.mediaUrl(API, 'javascript:alert(1)'), '');
+    assert.equal(C.mediaUrl(API, '//evil.example/a.jpg'), '', 'protocol-relative is refused');
+    assert.equal(C.mediaUrl(API, null), '');
+    assert.equal(C.duration(94), '1:34');
+    assert.equal(C.duration(60), '1:00');
+    assert.equal(C.duration(5), '0:05');
+    assert.equal(C.duration(0), '');
+    assert.equal(C.duration(null), '');
+    assert.equal(C.capabilityLabel('operational-ai-voice-call-event-recovery'), 'Voice call event recovery');
+    assert.equal(C.capabilityLabel('agent-assisted-software-delivery'), 'Agent assisted software delivery');
+    assert.equal(C.capabilityLabel(null), '');
+  });
+
+  test('a full record: its own cover with the walkthrough length, capability, figure and proof row', () => {
+    const html = P.caseCard(full, 'kes', API);
+    assert.match(html, /<img class="cover" src="https:\/\/enterprise\.colaberry\.ai\/site-v2\/thumb-cora-recovery\.jpg\?v=8d"/);
+    assert.match(html, /class="play"[^>]*>▶ 1:34</);
+    assert.match(html, /class="cap-line">Voice call event recovery</);
+    assert.match(html, /class="fig"><b>97%<\/b><span>of lost events resolved/);
+    assert.match(html, /<span class="ok">✓ Verified<\/span><span>Workflow diagram<\/span><span>3 decisions<\/span><span>1 repo<\/span>/);
+  });
+
+  test('an unfinished record collapses: generated art instead of a cover, and no empty figure, chip or badge', () => {
+    const bare = { slug: 'bare', title: 'Bare', summary: null, industry: null, heroMetric: null,
+      look: { coverImageUrl: null, walkthroughSeconds: null, capability: null, verified: false, workflowDiagram: false, decisions: 0, repositories: 0 } };
+    for (const c of [bare, { slug: 'old', title: 'Old payload with no look' }]) {
+      const html = P.caseCard(c, 'kes', API);
+      assert.doesNotMatch(html, /<img/);
+      assert.match(html, /<svg/, 'falls back to the generated art, never a blank box');
+      for (const cls of ['play', 'cap-line', 'fig', 'proof']) assert.doesNotMatch(html, new RegExp('class="' + cls + '"'), cls + ' must not render empty');
+    }
+  });
+
+  test('two records by the same person no longer render the same card', () => {
+    const other = { ...full, slug: 'intent', title: 'Intent', heroMetric: null,
+      look: { ...full.look, coverImageUrl: '/site-v2/thumb-cora-intent-routing.jpg', walkthroughSeconds: 101, capability: 'operational-ai-call-intent-routing' } };
+    const strip = (h) => h.replace(/recovering-calls|intent|Recovering the Calls|Intent/g, '');
+    assert.notEqual(strip(P.caseCard(full, 'kes', API)), strip(P.caseCard(other, 'kes', API)));
+  });
+
+  test('the signature and a linked project card use the same cover and proof', () => {
+    const b = body({ hire: { signature: { ...full, outcomes: [] }, caseStudies: [full], availability: null, spotlight: false, indexable: true } });
+    b.portfolio.projects = [];
+    const html = P.renderPortfolio(b, 'kes', [], NOW, API);
+    assert.match(html, /class="sig"[\s\S]*<img class="cover"[\s\S]*▶ 1:34[\s\S]*✓ Verified/);
+    const proj = P.projectCard({ title: 'Cora', case_study_slug: 'recovering-calls' }, { 'recovering-calls': full }, 'kes', API);
+    assert.match(proj, /<img class="cover"/);
+    assert.match(proj, /class="org">Cora</);
+  });
+});
+
 describe('years of experience', () => {
   test('prints only when it reconciles with the roles listed', () => {
     const xp = [{ start: '2016-09-01', end: null }];

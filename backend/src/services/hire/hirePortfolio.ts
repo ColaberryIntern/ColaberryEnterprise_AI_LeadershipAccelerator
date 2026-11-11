@@ -20,7 +20,8 @@ import { availabilityOf, pickSignature, type HireCaseStudyCard } from './hireTal
 
 export interface HirePortfolioBlock {
   readonly signature: HireCaseStudyCard | null;
-  readonly caseStudies: readonly Omit<HireCaseStudyCard, 'outcomes' | 'heroMetric'>[];
+  /** Every card carries its headline figure and its look; only the full outcome list stays on the signature. */
+  readonly caseStudies: readonly Omit<HireCaseStudyCard, 'outcomes'>[];
   readonly availability: { readonly label: string; readonly kind: string } | null;
   readonly spotlight: boolean;
   /** True only for an explicit `public` opt-in. Unlisted pages stay noindex. */
@@ -45,8 +46,8 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
     portfolio: { ...result.portfolio, identity: { ...result.portfolio.identity, email: null } },
     hire: {
       signature: pickSignature(entry.cases),
-      caseStudies: entry.cases.map(({ slug: s, title, summary, industry, featured, publishedAt }) => ({
-        slug: s, title, summary, industry, featured, publishedAt,
+      caseStudies: entry.cases.map(({ slug: s, title, summary, industry, featured, publishedAt, heroMetric, look }) => ({
+        slug: s, title, summary, industry, featured, publishedAt, heroMetric, look,
       })),
       availability: availabilityOf(entry.facts),
       spotlight: entry.facts.hireSpotlight,
