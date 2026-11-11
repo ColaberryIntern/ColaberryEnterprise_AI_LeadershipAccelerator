@@ -109,6 +109,9 @@ const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
 import lifecycleRoutes from './lifecycleRoutes';
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
+// D4 (P4-01) Colaberry Live. Both render outside AdminLayout; see the routes below.
+const StudioIndexPage = lazy(() => import('../pages/admin/live/StudioIndexPage'));
+const StudioSetupPage = lazy(() => import('../pages/admin/live/StudioSetupPage'));
 // Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
 // no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
 // in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
@@ -157,6 +160,20 @@ const adminRoutes = (
           projection layer would be doing its job while the chrome advertised the lead
           pipeline. Found by deploying to dev and LOOKING; CI cannot see this.
           Staff auth is retained via ProtectedRoute. */}
+      {/* D4 (P4-01) Colaberry Live Studio setup renders OUTSIDE AdminLayout, like
+          /admin/ai-training-enter above, and is reached from a nav entry marked newTab.
+
+          Two reasons, and the second is the one that makes it a requirement rather than a
+          preference. First, this is show-running tooling: an operator setting up a class should
+          not lose their place in the admin app, and the live surfaces should not inherit the
+          portal shell's persistent mini-player and navigation. Second, a new tab is a COLD
+          RENDER - it carries no in-app state at all - so every one of these screens reads
+          everything it shows from the URL and one request. That is enforced by a test rather
+          than left as an intention.
+
+          The index exists because a nav entry is a fixed string and cannot carry a session id. */}
+      <Route path="/admin/live/studio" element={<StudioIndexPage />} />
+      <Route path="/admin/live/studio/:sessionId" element={<StudioSetupPage />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/people" element={<PeoplePage />} />

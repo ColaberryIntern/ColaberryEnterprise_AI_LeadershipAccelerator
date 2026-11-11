@@ -43,6 +43,7 @@ import {
 import { strategyPrepUpload } from '../../config/upload';
 import {
   handleGetStudioConfig,
+  handleListStudioSessions,
   handleUpdateStudioConfig,
 } from '../../controllers/studioSetupController';
 
@@ -134,6 +135,7 @@ router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession
  * page renders from a session id alone rather than assuming a prior navigation filled anything
  * in.
  */
+router.get('/api/admin/accelerator/live/sessions', requireAdmin, handleListStudioSessions);
 router.get('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleGetStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleUpdateStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);

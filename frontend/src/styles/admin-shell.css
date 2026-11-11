@@ -280,3 +280,32 @@
 @media (max-width: 991.98px) {
   .admin-content { margin-left: 0; }
 }
+
+/*
+ * Text that only a screen reader reads.
+ *
+ * Added for the admin nav's new-tab links (`NavLink.newTab`). A sighted user watches the link
+ * open a new tab; a screen-reader user is told nothing unless the accessible name says so, and
+ * arrives in a tab with no in-app way back. WCAG 3.2.5.
+ *
+ * `clip-path` rather than `display:none` or `visibility:hidden`, because both of those remove
+ * the text from the accessibility tree as well as from the page, which would defeat the point.
+ * The 1px box with `clip-path: inset(50%)` keeps it readable to assistive technology while
+ * taking no visual space.
+ *
+ * This lives here rather than in the token base layer because the base layer has no such helper
+ * and adding one there would change every surface in the product. Two other modules already
+ * carry their own copy for the same reason; a single shared one is worth doing, but it is a
+ * design-system change rather than part of this screen.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

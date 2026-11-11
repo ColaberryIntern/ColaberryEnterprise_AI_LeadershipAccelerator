@@ -60,8 +60,12 @@ function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean
   // Portal link).
   if (link.newTab) {
     return (
+      /* The visually-hidden suffix is not decoration. A sighted user sees the link move them to
+         a new tab; a screen-reader user is given no warning at all unless the accessible name
+         says so, and arrives somewhere with no way back. WCAG 3.2.5. */
       <a href={link.path} className="admin-nav-link" target="_blank" rel="noopener noreferrer" onClick={onNavigate}>
         {inner}
+        <span className="visually-hidden"> (opens in a new tab)</span>
       </a>
     );
   }

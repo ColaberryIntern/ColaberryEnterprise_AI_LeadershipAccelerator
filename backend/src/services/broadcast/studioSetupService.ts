@@ -81,6 +81,56 @@ export interface StudioWriteInput {
   create?: boolean;
 }
 
+export interface StudioSessionRow {
+  id: string;
+  title: string;
+  session_date: string | null;
+  start_time: string | null;
+  cohort_id: string;
+  cohort_name: string | null;
+  /** Null when this class has no broadcast yet. */
+  editorial_state: string | null;
+  access_mode: string | null;
+}
+
+/**
+ * The classes an operator might want to configure.
+ *
+ * A nav entry is static, so it cannot carry a session id — which is why this list exists at all.
+ * Without it, "reach Studio setup from the admin menu" has nowhere to land.
+ *
+ * Scoped to a window around today rather than every session ever taught: the operator is setting
+ * up a class that is about to happen or just did, and a list of several hundred historical
+ * sessions would bury the handful that matter. The window is generous on the past side because a
+ * class that aired yesterday is still something you might open to check what it was set to.
+ *
+ * LEFT JOIN, deliberately: a session with no broadcast must still appear, because configuring one
+ * for the first time is the whole point of the screen. An INNER JOIN would show only classes that
+ * are already set up.
+ */
+export async function listStudioSessions(): Promise<StudioSessionRow[]> {
+  const [rows] = await sequelize.query(
+    `SELECT s.id,
+            s.title,
+            s.session_date,
+            s.start_time,
+            s.cohort_id,
+            c.name AS cohort_name,
+            o.editorial_state,
+            o.access_mode
+       FROM live_sessions s
+       LEFT JOIN cohorts c ON c.id = s.cohort_id
+       LEFT JOIN broadcast_source_refs r
+              ON r.source_type = 'live_session' AND r.source_id = s.id
+       LEFT JOIN broadcast_occurrences o ON o.id = r.occurrence_id
+      WHERE s.session_date >= (CURRENT_DATE - INTERVAL '30 days')
+        AND s.session_date <= (CURRENT_DATE + INTERVAL '120 days')
+      ORDER BY s.session_date ASC, s.start_time ASC
+      LIMIT 200`,
+  );
+  return rows as StudioSessionRow[];
+}
+
 /**
  * The occurrence for a session, reached the only way this schema allows.
  *

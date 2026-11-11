@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { readStudioConfig, writeStudioConfig, StudioWriteRefusal } from '../services/broadcast/studioSetupService';
+import {
+  readStudioConfig, writeStudioConfig, listStudioSessions, StudioWriteRefusal,
+} from '../services/broadcast/studioSetupService';
 import { studioSetupBodySchema } from '../schemas/studioSetupSchema';
 
 /**
@@ -69,5 +71,19 @@ export async function handleUpdateStudioConfig(req: Request, res: Response, next
       });
     }
     res.json({ config: result.config });
+  } catch (err) { next(err); }
+}
+
+
+/**
+ * The classes an operator can configure.
+ *
+ * This exists because a nav entry is static and cannot carry a session id, so the menu link
+ * lands here and the operator picks the class. Without it, criterion 1 - reach Studio setup from
+ * the admin nav - has nowhere to go.
+ */
+export async function handleListStudioSessions(_req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ sessions: await listStudioSessions() });
   } catch (err) { next(err); }
 }

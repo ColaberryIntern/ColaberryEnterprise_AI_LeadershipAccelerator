@@ -1,0 +1,118 @@
+/*
+ * Studio setup (D4, P4-01) — a standalone admin surface that opens in its own browser tab.
+ *
+ * Every class here is prefixed `cls-` (Colaberry Live Studio). Nothing in this file may reach
+ * `.te-btn`, `.te-card` or any other portal class, because this screen renders OUTSIDE both the
+ * portal shell and AdminLayout and must not inherit, or alter, either.
+ *
+ * ## The button colour, and why it is not the portal's
+ *
+ * `.cls-btn-primary` uses `--red-600` (#E5121D), not `--red-500`/`--cherry` (#FB2832).
+ *
+ * White on #FB2832 is 3.85:1. WCAG AA needs 4.5:1 for 14px bold, which is exactly what portal
+ * buttons are (`TodayShell.css:419,423`) — so the portal's primary button fails AA today. #E5121D
+ * is 4.73:1 and passes.
+ *
+ * Ali's decision on 2026-11-11 was: new Live surfaces use the darker step, the existing portal is
+ * left alone. So this file deliberately does NOT touch `.te-btn.cherry`. The inconsistency between
+ * old and new buttons is accepted and recorded rather than hidden, and D15 carries the question of
+ * what to do about the rest of the portal.
+ *
+ * No hex literals. `--red-600` is a real token in `colaberry/tokens/colors.css:17`.
+ */
+
+.cls-root {
+  min-height: 100dvh;
+  background: var(--surface-subtle);
+  color: var(--text-body);
+  padding: 24px;
+}
+
+.cls-shell { max-width: 1180px; margin: 0 auto; }
+
+.cls-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+.cls-title { font-size: 30px; line-height: 1.12; letter-spacing: -0.01em; font-weight: 700;
+  color: var(--text-strong); margin: 0; }
+.cls-sub { color: var(--text-muted); font-size: 15px; margin: 0; max-width: 70ch; }
+
+/* Two columns, summary on the right. One column below the tablet breakpoint. */
+.cls-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 22px;
+  align-items: start; }
+
+.cls-card { background: var(--surface-card); border: 1px solid var(--border-default);
+  border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; }
+.cls-card-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted); margin: 0 0 10px; }
+
+.cls-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.cls-label { font-size: 13px; color: var(--text-muted); }
+.cls-input, .cls-select {
+  min-height: 44px; /* the 44px touch target applies to a mouse too; it is not a phone-only rule */
+  padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-default);
+  background: var(--surface-subtle); color: var(--text-body); font: inherit;
+}
+.cls-input:disabled, .cls-select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Options rendered as buttons rather than radios, so each can carry its own explanation. */
+.cls-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.cls-option {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left;
+  min-height: 44px; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border-default); background: var(--surface-subtle); color: var(--text-body);
+  font: inherit;
+}
+.cls-option:hover:not(:disabled) { border-color: var(--status-info); }
+.cls-option[aria-pressed="true"] { border-color: var(--action-bg); background: var(--surface-card); }
+.cls-option:disabled { opacity: 0.55; cursor: not-allowed; }
+.cls-option-name { font-weight: 600; }
+.cls-option-note { font-size: 13px; color: var(--text-muted); }
+
+.cls-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer;
+  min-height: 44px; }
+.cls-check input { margin-top: 4px; width: 18px; height: 18px; }
+
+/* Notices. Each carries a word as well as a colour: colour alone is never the signal. */
+.cls-note { border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 10px 0;
+  border: 1px solid var(--border-default); background: var(--surface-subtle); }
+.cls-note-warn { border-color: var(--status-warning); }
+.cls-note-error { border-color: var(--status-danger); }
+
+.cls-summary { position: sticky; top: 24px; }
+.cls-sum-item { display: flex; gap: 10px; align-items: center; padding: 7px 0; font-size: 14px; }
+.cls-sum-state { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.cls-sum-done { color: var(--status-success); }
+.cls-sum-todo { color: var(--text-muted); }
+
+.cls-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 11px 20px; border-radius: 999px;
+  font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none;
+  transition: filter 0.14s;
+}
+.cls-btn:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
+.cls-btn:hover:not(:disabled) { filter: brightness(0.96); }
+/* 4.73:1 against white. See the header note. */
+.cls-btn-primary { background: var(--red-600); color: var(--neutral-0); width: 100%; }
+.cls-btn-ghost { background: transparent; color: var(--text-body);
+  border: 1px solid var(--border-default); }
+
+.cls-link { color: var(--status-info); }
+
+/* A list row on the index. */
+.cls-row { display: flex; gap: 14px; align-items: center; justify-content: space-between;
+  padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+.cls-row:last-child { border-bottom: none; }
+.cls-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cls-row-when { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.cls-empty { color: var(--text-muted); padding: 20px 0; }
+
+@media (max-width: 900px) {
+  .cls-grid { grid-template-columns: 1fr; }
+  .cls-summary { position: static; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cls-btn { transition: none; }
+}
