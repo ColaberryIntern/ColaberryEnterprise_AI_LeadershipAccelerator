@@ -89,10 +89,10 @@ beforeEach(() => {
 });
 
 describe('every route carries its own guard', () => {
-  it('POSITIVE CONTROL: the router registers all four routes, so the enumeration is not empty', () => {
+  it('POSITIVE CONTROL: the router registers all five routes, so the enumeration is not empty', () => {
     const routes = registeredRoutes();
-    expect(routes).toHaveLength(4);
-    expect(routes.filter((r) => r.methods.includes('get'))).toHaveLength(3);
+    expect(routes).toHaveLength(5);
+    expect(routes.filter((r) => r.methods.includes('get'))).toHaveLength(4);
     expect(routes.filter((r) => r.methods.includes('post'))).toHaveLength(1);
   });
 
@@ -114,7 +114,7 @@ describe('every route carries its own guard', () => {
     const src = fs.readFileSync(ROUTER_SRC, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const sections = [...src.matchAll(/requireSection\(\s*'([a-z_]+)'\s*\)/g)].map((m) => m[1]);
     expect(sections).toHaveLength(registeredRoutes().length);
-    expect(sections).toEqual(['internship', 'internship', 'internship', 'internship']);
+    expect(sections).toEqual(Array(5).fill('internship'));
   });
 });
 

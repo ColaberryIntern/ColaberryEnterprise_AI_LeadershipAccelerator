@@ -139,6 +139,10 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
     tierReason: intern.triage.reason,
     trackLabel: intern.track_label,
     projectName: intern.project?.name ?? null,
+    projectId: intern.project?.id ?? null,
+    openQuestions: intern.open_questions.map((q) => ({
+      receivedAt: q.received_at, subject: q.subject, text: q.text,
+    })),
     signals: signalsOf(intern),
     lastOutbound: intern.last_ask
       ? { sentAt: intern.last_ask.sent_at, subject: intern.last_ask.subject ?? null }
