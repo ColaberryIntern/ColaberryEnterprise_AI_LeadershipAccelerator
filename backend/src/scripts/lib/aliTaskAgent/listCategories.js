@@ -52,9 +52,9 @@ const CATEGORIES = [
   },
   {
     key: 'learning',
-    label: 'Students and curriculum',
+    label: 'School and curriculum',
     icon: '\u{1F393}',
-    blurb: 'The programme, the content engine and everything learners touch',
+    blurb: 'The programme, the content engine, everything learners touch, and school compliance',
     // `intern` was removed after it claimed "Agent Factory - Ten AI Employees, Interns Building
     // Them", which is platform work that happens to be staffed by interns. A word that names the
     // PEOPLE doing the work is a poor signal for what the work IS.
@@ -120,41 +120,65 @@ const CATEGORIES = [
 ];
 
 /**
- * TIER 2: the Basecamp project a list lives in. Measured on production 2026-11-11: 241 of 511
- * tasks matched no name rule, and the project was the one signal that separated them ("TMS",
- * "Cadence + Weekly Demo Prep" and "OMS" are all ShipCES; every "FC" list is Colaberry Live).
- * Keyed on project id (VARCHAR in the mirror, so string keys), name kept alongside for audit.
- * Catch-all projects (Ali Personal 7463955, Management Team 12724441) are deliberately ABSENT:
- * a project that holds everything says nothing about any one list.
+ * Every Basecamp project in Ali's queue: its category (TIER 2) and its short label (LEVEL 2).
+ *
+ * Measured on production 2026-11-11: 241 of 511 tasks matched no name rule, and the project was
+ * the one signal that separated them ("TMS", "Cadence + Weekly Demo Prep" and "OMS" are all
+ * ShipCES; every "FC" list is Colaberry Live). The mirror carries no project names, so the
+ * labels are read once from the Basecamp API and kept here.
+ *
+ * `owns: true` marks a project that IS the business of every list in it (a client, the family,
+ * TWC compliance, gov contracting): there the project outranks the list name. Internal team and
+ * programme projects do not own their lists that way ("Billing issues" in the Accelerator project
+ * is revenue), so for them the name decides and the project is only the fallback.
+ *
+ * `cat: null` marks a CATCH-ALL project (Ali Personal, Management Team, ...): a project that holds
+ * everything says nothing about any one list, so it never decides a category. It still gets a
+ * label, because "which project is this in" is worth seeing and filtering on regardless.
+ *
+ * Classifications from Ali, 2026-11-11: AI Pathway is the client NuOrg; TWC is the school's
+ * compliance with the Texas Workforce Commission.
+ * Keyed on project id (VARCHAR in the mirror, so string keys).
  */
-const PROJECT_CATEGORIES = {
-  47126345: ['delivery', 'ShipCES - Autonomous Brokerage'],
-  49361096: ['delivery', 'Middlesex Glass - AIA billing automation'],
-  49506070: ['delivery', 'MAPLOCA CRM AI - Strategic Partner RFP'],
-  46699826: ['delivery', 'LandJet Growth Engine'],
-  49210714: ['learning', 'Colaberry Live'],
-  47502609: ['learning', 'AI Systems Architect Accelerator'],
-  24865175: ['learning', 'Internship / Apprenticeship Projects'],
-  46697389: ['learning', 'AI Pathway'],
-  47346103: ['government', 'Gov Contracts'],
-  17200971: ['government', 'TWC'],
-  33392153: ['personal', 'Family Goals & Life Planning'],
-  7482752: ['growth', 'Marketing Team'],
-  19325887: ['growth', 'Partnerships'],
-  47477101: ['growth', 'Anthropic Partner Network - 10-Person Onboarding'],
-  17648766: ['growth', 'MIT Solve'],
-  6593808: ['platform', 'Dev Team'],
-  7009750: ['platform', 'Data Analytics Sales Team'],
-  15139308: ['platform', 'Data Analytics Management Team'],
-  12724483: ['platform', 'UX Design Team'],
-  47472041: ['platform', 'Operations Engine'],
-  49468897: ['platform', 'Systems & Data Inventory'],
-  8245527: ['platform', 'DS, AI and Refactored Team'],
+const PROJECTS = {
+  7463955: { cat: null, label: 'Ali Personal', name: 'Ali Personal' },
+  12724441: { cat: null, label: 'Management Team', name: 'Management Team' },
+  18619695: { cat: null, label: 'Data Project', name: 'Data Project' },
+  16753550: { cat: null, label: 'New Leaders Group', name: 'New Leaders Group' },
+  47126345: { cat: 'delivery', owns: true, label: 'ShipCES', name: 'ShipCES - Autonomous Brokerage' },
+  49361096: { cat: 'delivery', owns: true, label: 'Middlesex', name: 'Middlesex Glass - AIA billing automation' },
+  49506070: { cat: 'delivery', owns: true, label: 'MAPLOCA', name: 'MAPLOCA CRM AI - Strategic Partner RFP' },
+  46699826: { cat: 'delivery', owns: true, label: 'LandJet', name: 'LandJet Growth Engine' },
+  46697389: { cat: 'delivery', owns: true, label: 'NuOrg', name: 'AI Pathway' },
+  49210714: { cat: 'learning', label: 'Colaberry Live', name: 'Colaberry Live' },
+  47502609: { cat: 'learning', label: 'AI Systems Architect', name: 'AI Systems Architect Accelerator' },
+  24865175: { cat: 'learning', label: 'Internships', name: 'Internship / Apprenticeship Projects' },
+  17200971: { cat: 'learning', owns: true, label: 'TWC compliance', name: 'TWC' },
+  47346103: { cat: 'government', owns: true, label: 'Gov Contracts', name: 'Gov Contracts' },
+  33392153: { cat: 'personal', owns: true, label: 'Family', name: 'Family Goals & Life Planning' },
+  7482752: { cat: 'growth', label: 'Marketing Team', name: 'Marketing Team' },
+  19325887: { cat: 'growth', label: 'Partnerships', name: 'Partnerships' },
+  47477101: { cat: 'growth', label: 'Anthropic', name: 'Anthropic Partner Network - 10-Person Onboarding' },
+  17648766: { cat: 'growth', label: 'MIT Solve', name: 'MIT Solve' },
+  6593808: { cat: 'platform', label: 'Dev Team', name: 'Dev Team' },
+  7009750: { cat: 'platform', label: 'DA Sales Team', name: 'Data Analytics Sales Team' },
+  15139308: { cat: 'platform', label: 'DA Management Team', name: 'Data Analytics Management Team' },
+  12724483: { cat: 'platform', label: 'UX Design Team', name: 'UX Design Team' },
+  47472041: { cat: 'platform', label: 'Operations Engine', name: 'Operations Engine' },
+  49468897: { cat: 'platform', label: 'Systems & Data Inventory', name: 'Systems & Data Inventory' },
+  8245527: { cat: 'platform', label: 'DS, AI & Refactored', name: 'DS, AI and Refactored Team' },
 };
 
+/** Level 2: the project, as {key,label}. An unknown project is named by id, never guessed. */
+function projectOf(projectId) {
+  if (projectId == null || projectId === '') return { key: 'none', label: 'No project' };
+  const p = PROJECTS[String(projectId)];
+  return { key: String(projectId), label: p ? p.label : `Project ${projectId}` };
+}
+
 /**
- * TIER 3: narrow name rules for lists in the catch-all projects. Applied only after the name
- * rules and the project map, so they can never re-file a list that was already sorted.
+ * TIER 3: narrow name rules for lists in the catch-all projects. Applied last, after the project
+ * and the general name rules, so they only ever decide a list nothing else could.
  */
 const CATCHALL_RULES = [
   ['decisions', /\bOpen Risks\b|\bescalations?\b/i],
@@ -169,6 +193,9 @@ const CATCHALL_RULES = [
   ['platform', /\brollout\b|\bintern readiness\b|\bIntern Repos\b|\bTool Requests\b|\bClaude Sessions\b/i],
 ];
 
+/** Tier 0: approval gates are cross-cutting, so no project can claim one. */
+const GATE = /\bapprovals?\b/i;
+
 const UNSORTED = {
   key: 'unsorted',
   label: 'Unsorted',
@@ -177,28 +204,39 @@ const UNSORTED = {
   patterns: [],
 };
 
-const hitFor = (key, matched) => {
-  const c = CATEGORIES.find((x) => x.key === key);
-  return { key: c.key, label: c.label, icon: c.icon, matched };
-};
-
 /**
- * Three tiers, first match wins: name rules, then project, then catch-all name rules.
+ * Level 1 is the category; level 2 is the project, attached to every answer including Unsorted.
+ *
+ * Level 1, first match wins (order set 2026-11-11, once two-level labels made mismatches visible):
+ *   0. an approval gate is always Decisions: a gate is Ali's whatever project it sits in
+ *   1. an OWNING project decides: Middlesex's "AIA progress billing" is Client delivery /
+ *      Middlesex, not Revenue; ShipCES's "RMS - RFQ intake" is client work, not Government
+ *   2. the name rules
+ *   3. a non-owning project (internal teams and programmes) as the fallback
+ *   4. the catch-all name rules (lists in Ali Personal and the other catch-alls)
  * @param {string} name a list name
  * @param {string|number} [projectId] the Basecamp project the list lives in
- * @returns {{key:string,label:string,icon:string,matched:?string}}
+ * @returns {{key:string,label:string,icon:string,matched:?string,sub:{key:string,label:string}}}
  */
 function categoryOf(name, projectId) {
   const s = String(name || '');
+  const sub = projectOf(projectId);
+  const hitFor = (key, matched) => {
+    const c = CATEGORIES.find((x) => x.key === key);
+    return { key: c.key, label: c.label, icon: c.icon, matched, sub };
+  };
+  if (GATE.test(s)) return hitFor('decisions', String(GATE));
+  const proj = projectId == null ? null : PROJECTS[String(projectId)];
+  const byProject = () => hitFor(proj.cat, `project ${projectId} (${proj.name})`);
+  if (proj && proj.cat && proj.owns) return byProject();
   for (const c of CATEGORIES) {
     const hit = c.patterns.find((p) => p.test(s));
     if (hit) return hitFor(c.key, String(hit));
   }
-  const proj = projectId == null ? null : PROJECT_CATEGORIES[String(projectId)];
-  if (proj) return hitFor(proj[0], `project ${projectId} (${proj[1]})`);
+  if (proj && proj.cat) return byProject();
   const rule = CATCHALL_RULES.find(([, p]) => p.test(s));
   if (rule) return hitFor(rule[0], String(rule[1]));
-  return { key: UNSORTED.key, label: UNSORTED.label, icon: UNSORTED.icon, matched: null };
+  return { key: UNSORTED.key, label: UNSORTED.label, icon: UNSORTED.icon, matched: null, sub };
 }
 
 /** Roll list summaries up into categories, biggest first, with unsorted always last. */
@@ -208,13 +246,23 @@ function groupByCategory(summaries) {
     const c = categoryOf(s.key, s.projectId);
     if (!byKey.has(c.key)) {
       const def = CATEGORIES.find((x) => x.key === c.key) || UNSORTED;
-      byKey.set(c.key, { ...c, blurb: def.blurb, lists: [], total: 0, dormant: 0, live: 0 });
+      const { sub: _sub, ...head } = c;
+      byKey.set(c.key, { ...head, blurb: def.blurb, lists: [], subs: new Map(),
+        total: 0, dormant: 0, live: 0 });
     }
     const g = byKey.get(c.key);
-    g.lists.push({ ...s, matched: c.matched });
+    g.lists.push({ ...s, matched: c.matched, sub: c.sub });
     g.total += s.total;
     g.dormant += s.dormant;
     g.live += s.live;
+    if (!g.subs.has(c.sub.key)) g.subs.set(c.sub.key, { ...c.sub, total: 0, dormant: 0, live: 0 });
+    const sg = g.subs.get(c.sub.key);
+    sg.total += s.total;
+    sg.dormant += s.dormant;
+    sg.live += s.live;
+  }
+  for (const g of byKey.values()) {
+    g.subs = [...g.subs.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
   }
 
   const out = [...byKey.values()].sort((a, b) => {
@@ -226,5 +274,5 @@ function groupByCategory(summaries) {
   return out;
 }
 
-module.exports = { CATEGORIES, UNSORTED, CATEGORY_COLORS, PROJECT_CATEGORIES, CATCHALL_RULES,
+module.exports = { CATEGORIES, UNSORTED, CATEGORY_COLORS, PROJECTS, CATCHALL_RULES, projectOf,
   categoryOf, groupByCategory };

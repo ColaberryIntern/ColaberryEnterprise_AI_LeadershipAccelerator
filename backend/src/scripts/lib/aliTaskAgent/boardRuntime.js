@@ -21,11 +21,39 @@
 
 const RUNTIME_JS = `
 (function () {
-  var DATA = window.__BOARD__ || { lists: [], prompts: {}, cats: {} };
+  var DATA = window.__BOARD__ || { lists: [], prompts: {}, cats: {}, subs: {} };
+  DATA.subs = DATA.subs || {};
+  /* Two levels: sel is the category, selSub the project inside it. Picking a category resets the
+     project, because a project chosen under one category may not exist under the next. */
   var sel = 'all';
+  var selSub = 'all';
 
-  function lists() {
+  function inCat() {
     return sel === 'all' ? DATA.lists : DATA.lists.filter(function (l) { return l.cat === sel; });
+  }
+  function lists() {
+    var ls = inCat();
+    return selSub === 'all' ? ls : ls.filter(function (l) { return l.sub === selSub; });
+  }
+  function subLabel(k) { return DATA.subs[k] || k; }
+
+  /* The project row: built from the CATEGORY selection only, so every project that is still
+     reachable stays visible while one of them is picked. */
+  function subRow() {
+    var el = document.getElementById('subs');
+    if (!el) return;
+    var by = {};
+    inCat().forEach(function (l) { by[l.sub] = (by[l.sub] || 0) + l.total; });
+    var keys = Object.keys(by).sort(function (a, b) {
+      return by[b] - by[a] || subLabel(a).localeCompare(subLabel(b)); });
+    var all = sum(inCat(), function (l) { return l.total; });
+    el.innerHTML = '<span class="subs-cap">Project</span>'
+      + '<button class="subcat' + (selSub === 'all' ? ' is-on' : '') + '" data-sub-pick="all" type="button">All '
+      + '<b>' + all + '</b></button>'
+      + keys.map(function (k) {
+        return '<button class="subcat' + (selSub === k ? ' is-on' : '') + '" data-sub-pick="' + esc(k)
+          + '" type="button">' + esc(subLabel(k)) + ' <b>' + by[k] + '</b></button>';
+      }).join('');
   }
   function sum(a, f) { return a.reduce(function (t, x) { return t + f(x); }, 0); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
@@ -91,12 +119,20 @@ const RUNTIME_JS = `
       { label: 'Dormant', n: sum(ls, function (l) { return l.bands.dormant || 0; }), color: 'var(--band-dormant)' }
     ]);
 
-    var byCat = {};
-    (sel === 'all' ? DATA.lists : ls).forEach(function (l) {
-      byCat[l.cat] = (byCat[l.cat] || 0) + l.total;
+    /* With nothing picked this pane compares categories. Once one is picked, comparing it with
+       itself says nothing, so the pane drops a level and compares its projects instead. */
+    var byProject = sel !== 'all' || selSub !== 'all';
+    var head = document.getElementById('f-cats-h');
+    if (head) head.textContent = byProject ? 'By project' : 'By part of the business';
+    var byKey = {};
+    (byProject ? ls : DATA.lists).forEach(function (l) {
+      var k = byProject ? l.sub : l.cat;
+      byKey[k] = (byKey[k] || 0) + l.total;
     });
-    bars(document.getElementById('f-cats'), Object.keys(byCat).map(function (k) {
-      return { label: (DATA.cats[k] || {}).label || k, n: byCat[k], color: (DATA.cats[k] || {}).color };
+    bars(document.getElementById('f-cats'), Object.keys(byKey).map(function (k) {
+      return byProject
+        ? { label: subLabel(k), n: byKey[k], color: sel === 'all' ? 'var(--ink-3)' : (DATA.cats[sel] || {}).color }
+        : { label: (DATA.cats[k] || {}).label || k, n: byKey[k], color: (DATA.cats[k] || {}).color };
     }).sort(function (a, b) { return b.n - a.n; }));
 
     bars(document.getElementById('f-lists'), ls.slice()
@@ -105,22 +141,30 @@ const RUNTIME_JS = `
 
     document.querySelectorAll('[data-cat]').forEach(function (el) {
       if (el.classList.contains('cat')) return;
-      el.classList.toggle('is-hidden', sel !== 'all' && el.getAttribute('data-cat') !== sel);
+      el.classList.toggle('is-hidden',
+        (sel !== 'all' && el.getAttribute('data-cat') !== sel)
+        || (selSub !== 'all' && el.getAttribute('data-sub') !== selSub));
     });
+    subRow();
     document.querySelectorAll('.cat').forEach(function (b) {
       b.classList.toggle('is-on', b.getAttribute('data-cat') === sel);
     });
     var note = document.getElementById('f-note');
     if (note) {
-      note.textContent = sel === 'all'
+      var path = (sel === 'all' ? 'Everything' : ((DATA.cats[sel] || {}).label || sel))
+        + (selSub === 'all' ? '' : ' / ' + subLabel(selSub));
+      note.textContent = sel === 'all' && selSub === 'all'
         ? 'Showing everything.'
-        : 'Filtered to ' + ((DATA.cats[sel] || {}).label || sel) + '. Every number and chart above describes only this selection.';
+        : 'Filtered to ' + path + '. Every number and chart above describes only this selection.';
     }
   }
 
   document.addEventListener('click', function (ev) {
     var cat = ev.target.closest && ev.target.closest('.cat');
-    if (cat) { sel = cat.getAttribute('data-cat'); redraw(); return; }
+    if (cat) { sel = cat.getAttribute('data-cat'); selSub = 'all'; redraw(); return; }
+
+    var sub = ev.target.closest && ev.target.closest('[data-sub-pick]');
+    if (sub) { selSub = sub.getAttribute('data-sub-pick'); redraw(); return; }
 
     var chip = ev.target.closest && ev.target.closest('[data-prompt]');
     if (!chip) return;
@@ -161,6 +205,14 @@ const RUNTIME_CSS = `
   .g-val{font:700 21px 'Segoe UI',system-ui,sans-serif;fill:var(--ink)}
   .g-cap{font:11px 'Segoe UI',system-ui,sans-serif;fill:var(--ink-3)}
   #f-note{font-size:12px;color:var(--ink-3);margin-top:12px}
+  .subs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 2px}
+  .subs-cap{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);
+    font-weight:700;margin-right:4px}
+  .subcat{cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--ink-2);
+    border-radius:999px;padding:4px 10px;font:12px/1.2 'Segoe UI',system-ui,sans-serif}
+  .subcat b{color:var(--ink);font-weight:700;margin-left:2px}
+  .subcat:hover{border-color:var(--ink-3)}
+  .subcat.is-on{border-color:var(--brand);color:var(--ink);box-shadow:inset 0 0 0 1px var(--brand)}
   .chip.copied{background:var(--band-overdue);color:#fff;border-color:var(--band-overdue)}
   .chip.failed{background:var(--band-aging);color:#fff;border-color:var(--band-aging)}
 `;

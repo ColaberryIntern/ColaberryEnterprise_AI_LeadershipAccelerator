@@ -96,6 +96,29 @@ describe('filtering rebuilds rather than hides', () => {
     expect(html()).toMatch(/data-cat="government"/);
   });
 
+  /** Level 2 (Ali, 2026-11-11): Category / Project, filterable on both levels. */
+  it('tags every filterable element with its project as well as its category', () => {
+    const h = html({ lists: [list({ key: 'TMS - Transportation lifecycle', name: 'TMS', projectId: '47126345' })] });
+    expect(h).toMatch(/data-cat="delivery" data-sub="47126345"/);
+    expect(h).toMatch(/"sub":"47126345"/);
+    expect(h).toMatch(/"subs":{"47126345":"ShipCES"}/);
+    expect(h).toContain('Client delivery / ShipCES');
+  });
+
+  it('provides the project row the runtime fills', () => {
+    expect(html()).toContain('id="subs"');
+  });
+
+  it('puts both levels into the copied prompt', () => {
+    const h = html({ lists: [list({ key: 'TMS - Transportation lifecycle', name: 'TMS', projectId: '47126345' })] });
+    expect(h).toContain('It sits under \\"Client delivery / ShipCES\\"');
+  });
+
+  it('escapes a hostile project label on the way into the page', () => {
+    const h = html({ lists: [list({ projectId: '<b>x</b>' })] });
+    expect(h).not.toContain('data-sub="<b>');
+  });
+
   it('says, in the page, that the numbers describe the selection', () => {
     expect(html()).toMatch(/rebuilds every chart|describe what you selected|Rebuilt from the current selection/i);
   });

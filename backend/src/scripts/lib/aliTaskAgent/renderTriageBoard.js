@@ -48,7 +48,7 @@ function categoryTiles(groups, total) {
 }
 
 function wordChart(groups) {
-  const all = groups.flatMap((g) => g.lists.map((l) => ({ ...l, cat: g.key, icon: g.icon })));
+  const all = groups.flatMap((g) => g.lists.map((l) => ({ ...l, cat: g.key, catLabel: g.label, icon: g.icon })));
   if (!all.length) return '<p class="empty">No lists.</p>';
   const max = Math.max(...all.map((l) => l.total));
   return `<div class="chips">${all
@@ -57,9 +57,9 @@ function wordChart(groups) {
     .map((l) => {
       const deadness = l.total ? l.dormant / l.total : 0;
       const tone = deadness > 0.8 ? 'chip-dead' : deadness > 0.3 ? 'chip-mixed' : 'chip-live';
-      return `<button class="chip s${sizeStep(l.total, max)} ${tone}" data-cat="${esc(l.cat)}"
+      return `<button class="chip s${sizeStep(l.total, max)} ${tone}" data-cat="${esc(l.cat)}" data-sub="${esc(l.sub.key)}"
         data-prompt="${esc(l.key)}" type="button" style="--c:var(--cat-${esc(l.cat)})"
-        title="${esc(l.key)} - ${l.total} task(s), ${l.dormant} dormant. Click to copy the full prompt.">
+        title="${esc(l.catLabel)} / ${esc(l.sub.label)} - ${esc(l.key)} - ${l.total} task(s), ${l.dormant} dormant. Click to copy the full prompt.">
         <span class="chip-icon">${l.icon}</span><span class="chip-label">${esc(l.name)}</span><span class="chip-n">${l.total}</span>
       </button>`;
     }).join('')}</div>`;
@@ -77,12 +77,13 @@ function listCard(s) {
     return n ? `<span class="seg seg-${b.key}" style="flex:${n}" title="${n} ${esc(b.label)}"></span>` : '';
   }).join('');
 
-  return `<article class="card ${tone}" data-cat="${esc(cat.key)}" style="--c:var(--cat-${esc(cat.key)})">
+  return `<article class="card ${tone}" data-cat="${esc(cat.key)}" data-sub="${esc(cat.sub.key)}" style="--c:var(--cat-${esc(cat.key)})">
     <header class="card-head">
       <span class="card-cat" title="${esc(cat.label)}">${cat.icon}</span>
       <h3 class="card-title">${esc(s.name)}</h3>
       <span class="card-count">${s.total}</span>
     </header>
+    <div class="path-line">${esc(cat.label)} / ${esc(cat.sub.label)}</div>
     ${s.phaseOf ? `<div class="phase-line">Phase ${s.phaseOf.position} of ${s.phaseOf.of}</div>` : ''}
     <div class="bar">${bar}</div>
     <div class="card-stats">
@@ -109,16 +110,25 @@ function renderTriageBoard(input) {
   // What the page draws itself from, plus the prompt lookup. Prompts are never rendered.
   const prompts = {};
   lists.forEach((l) => {
+    const c = categoryOf(l.key, l.projectId);
     prompts[l.key] = buildListPrompt(l, {
-      category: categoryOf(l.key, l.projectId),
+      category: { label: `${c.label} / ${c.sub.label}` },
       totals: { tasks: total || items.length, lists: lists.length, dormant: s.dormantCount },
     });
   });
   const payload = {
-    lists: lists.map((l) => ({
-      key: l.key, name: l.name, cat: categoryOf(l.key, l.projectId).key, total: l.total,
+    lists: lists.map((l) => {
+      const c = categoryOf(l.key, l.projectId);
+      return {
+      key: l.key, name: l.name, cat: c.key, sub: c.sub.key, total: l.total,
       live: l.live, dormant: l.dormant,
       bands: Object.fromEntries((l.bands || []).map((b) => [b.band, b.n])),
+      };
+    }),
+    // Level-2 labels, keyed by project id. The project row is built from these in the browser.
+    subs: Object.fromEntries(lists.map((l) => {
+      const sub = categoryOf(l.key, l.projectId).sub;
+      return [sub.key, sub.label];
     })),
     cats: Object.fromEntries(groups.map((g) => [g.key, {
       label: g.label, color: CATEGORY_COLORS.light[g.key],
@@ -193,6 +203,7 @@ function renderTriageBoard(input) {
   .card-head{display:flex;align-items:baseline;gap:8px}
   .card-title{font-size:14.5px;margin:0;flex:1}
   .card-count{font-size:19px;font-weight:700;color:var(--ink-2)}
+  .path-line{font-size:11px;color:var(--ink-3);margin-top:3px}
   .phase-line{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin-top:4px}
   .bar{display:flex;gap:2px;height:7px;margin:9px 0 7px}
   .seg{border-radius:2px}
@@ -230,10 +241,11 @@ function renderTriageBoard(input) {
 
   <section id="pick">
     <h2>Pick a part of the business</h2>
-    <p class="lede">Choosing a category filters the whole page and rebuilds every chart, so the
-      numbers always describe what you selected. Clicking a list copies a full prompt, already
+    <p class="lede">Choosing a category, then a project inside it, filters the whole page and
+      rebuilds every chart, so the numbers always describe what you selected. Clicking a list copies a full prompt, already
       carrying its history, its state, the options, and the branded report to produce.</p>
     ${categoryTiles(groups, total)}
+    <div class="subs" id="subs" aria-label="Filter by project"></div>
     <h3 class="sub-h">Every list, sized by how much work is in it</h3>
     ${wordChart(groups)}
     <p class="legend">
@@ -252,7 +264,7 @@ function renderTriageBoard(input) {
     <div class="fgrid">
       <div class="fpane"><h4>How much is alive</h4><div id="f-gauge"></div></div>
       <div class="fpane"><h4>By age band</h4><div id="f-bands"></div></div>
-      <div class="fpane"><h4>By part of the business</h4><div id="f-cats"></div></div>
+      <div class="fpane"><h4 id="f-cats-h">By part of the business</h4><div id="f-cats"></div></div>
       <div class="fpane"><h4>Biggest lists</h4><div id="f-lists"></div></div>
     </div>
     <p id="f-note"></p>
