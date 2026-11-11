@@ -51,7 +51,7 @@
     return { lines: at, fadeAt: last + HOLD, removeAt: last + HOLD + REMOVE, fadeMs: FADE };
   }
 
-  var LAUNCH_FROM = ['signature', 'project', 'strip'];
+  var LAUNCH_FROM = ['signature', 'project', 'strip', 'case-list'];
 
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return { bootLines: bootLines, bootSchedule: bootSchedule, CAP: CAP, LAUNCH_FROM: LAUNCH_FROM };
