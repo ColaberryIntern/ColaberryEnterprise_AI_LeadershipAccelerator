@@ -6,8 +6,10 @@
  * passes. So there are two sets:
  *   live     rows in `career_featured_work`, the learner's current choice; Preview and the reviewer read this
  *   frozen   `approved_identity.featured_work`, written by `decidePortfolioReview` at approval; the public page reads ONLY this
- * Each frozen entry carries a sha256 of the piece's stored content. If the piece's content changes after approval (a Claude Studio
+ * Each frozen entry carries a sha256 of the piece's title and stored content. If either changes after approval (a Claude Studio
  * resubmission updates its row in place), the hash no longer matches and the piece drops off the public page until the next review.
+ * PUBLIC = APPROVED AND STILL FEATURED. Unfeaturing only ever makes the page less public, so it takes effect at once: every public
+ * read intersects the frozen set with the live one (independent verifier, C130 attempt 1: an unfeatured piece stayed public).
  *
  * Nothing is public by default: no row, nothing featured; a page approved before this shipped has no `featured_work`, so nothing.
  * A public read of a piece answers null (the route's 404) for any id that is not in the frozen set of a viewable page, whether it
@@ -19,7 +21,7 @@ import { sequelize } from '../../config/database';
 import { locateArtifactFile, type InternArtifactFile } from '../internship/internArtifactViewer';
 import { asObject, toWorkItem, type WorkGroup, type WorkRow } from '../myWork/myWorkModel';
 import { toPiece, type MyWorkPiece } from '../myWork/myWorkService';
-import { findPageBySlug, publicViewDecision } from './careerPortfolioPageAccess';
+import { findPageBySlug, publicViewDecision, type PortfolioPageStatus, type PortfolioPageVisibility } from './careerPortfolioPageAccess';
 
 export const MAX_FEATURED = 12;
 
@@ -37,9 +39,9 @@ export function featuredSource(approvedProjects: unknown[] | null, approvedIdent
   return approvedProjects === null ? null : (approvedIdentity ?? {});
 }
 
-/** sha256 of a piece's stored content. JSONB returns keys in a normalized order, so the same content hashes the same. */
-export function contentHash(content: unknown): string {
-  return crypto.createHash('sha256').update(JSON.stringify(content ?? {})).digest('hex');
+/** sha256 of what a stranger would read: the title and the stored content. JSONB returns keys in a normalized order. */
+export function pieceHash(row: Pick<WorkRow, 'title' | 'content'>): string {
+  return crypto.createHash('sha256').update(JSON.stringify({ title: row.title, content: row.content ?? {} })).digest('hex');
 }
 
 /** The frozen list on an approved page, or [] (approved before this shipped, or malformed). */
@@ -51,11 +53,17 @@ export function frozenFeaturedOf(approved: unknown): FrozenFeature[] {
     .map((f) => ({ artifact_id: f.artifact_id as string, content_sha256: f.content_sha256 as string }));
 }
 
-/** Keep only rows still matching what was approved, in the approved order. Pure. */
-export function stillApproved(rows: WorkRow[], frozen: FrozenFeature[]): WorkRow[] {
+/**
+ * The pieces a stranger may see: approved (in `frozen`), STILL FEATURED (in `live`), and unchanged since approval; in the approved
+ * order. Pure.
+ */
+export function publicPieces(rows: WorkRow[], frozen: FrozenFeature[], live: readonly string[]): WorkRow[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return frozen.map((f) => byId.get(f.artifact_id)).filter((r): r is WorkRow => !!r)
-    .filter((r) => contentHash(r.content) === frozen.find((f) => f.artifact_id === r.id)!.content_sha256);
+  const on = new Set(live);
+  return frozen.filter((f) => on.has(f.artifact_id))
+    .map((f) => ({ f, r: byId.get(f.artifact_id) }))
+    .filter((x): x is { f: FrozenFeature; r: WorkRow } => !!x.r && pieceHash(x.r) === x.f.content_sha256)
+    .map((x) => x.r);
 }
 
 export const toPublicListing = (r: WorkRow): PublicFeaturedWork => {
@@ -115,7 +123,7 @@ export async function freezeFeatured(enrollmentId: string): Promise<FrozenFeatur
   const ids = await liveFeaturedIds(enrollmentId);
   const rows = await rowsFor(enrollmentId, ids);
   const byId = new Map(rows.map((r) => [r.id, r]));
-  return ids.filter((id) => byId.has(id)).map((id) => ({ artifact_id: id, content_sha256: contentHash(byId.get(id)!.content) }));
+  return ids.filter((id) => byId.has(id)).map((id) => ({ artifact_id: id, content_sha256: pieceHash(byId.get(id)!) }));
 }
 
 /**
@@ -129,7 +137,9 @@ export async function featuredWorkFor(enrollmentId: string, approved: unknown | 
     return ids.map((id) => byId.get(id)).filter((r): r is WorkRow => !!r).map(toPublicListing);
   }
   const frozen = frozenFeaturedOf(approved);
-  return stillApproved(await rowsFor(enrollmentId, frozen.map((f) => f.artifact_id)), frozen).map(toPublicListing);
+  if (!frozen.length) return [];
+  const live = await liveFeaturedIds(enrollmentId);
+  return publicPieces(await rowsFor(enrollmentId, frozen.map((f) => f.artifact_id)), frozen, live).map(toPublicListing);
 }
 
 /** For decidePortfolioReview: a failed read freezes nothing (nothing goes public), logged, never blocking the approval. */
@@ -158,16 +168,18 @@ export async function featuredWorkSafe(enrollmentId: string, approved: unknown |
 
 /** For the learner's own work page: is it featured, and is it on the public page right now? */
 export async function featureStatus(enrollmentId: string, artifactId: string): Promise<{ featured: boolean; onPublicPage: boolean }> {
-  const featured = (await liveFeaturedIds(enrollmentId)).includes(artifactId);
-  const pages = await sequelize.query<{ status: string; visibility: string; approved_identity: unknown }>(
+  const live = await liveFeaturedIds(enrollmentId);
+  const featured = live.includes(artifactId);
+  if (!featured) return { featured, onPublicPage: false };
+  const pages = await sequelize.query<{ status: PortfolioPageStatus; visibility: PortfolioPageVisibility; approved_identity: unknown }>(
     'SELECT status, visibility, approved_identity FROM career_portfolio_pages WHERE enrollment_id = :enrollmentId LIMIT 1',
     { replacements: { enrollmentId }, type: QueryTypes.SELECT },
   );
   const page = pages[0];
-  if (!page || !publicViewDecision(page as never).viewable) return { featured, onPublicPage: false };
+  if (!page || !publicViewDecision(page).viewable) return { featured, onPublicPage: false };
   const frozen = frozenFeaturedOf(page.approved_identity).filter((f) => f.artifact_id === artifactId);
   if (!frozen.length) return { featured, onPublicPage: false };
-  return { featured, onPublicPage: stillApproved(await rowsFor(enrollmentId, [artifactId]), frozen).length === 1 };
+  return { featured, onPublicPage: publicPieces(await rowsFor(enrollmentId, [artifactId]), frozen, live).length === 1 };
 }
 
 /** The row behind a PUBLIC work page: a viewable page, the id in its frozen set, the content unchanged. Else null. */
@@ -177,7 +189,8 @@ async function publicRow(slug: string, artifactId: string): Promise<{ row: WorkR
   if (!page || !decision.viewable) return null;
   const frozen = frozenFeaturedOf(page.approved_identity).filter((f) => f.artifact_id === artifactId);
   if (!frozen.length) return null;
-  const row = stillApproved(await rowsFor(page.enrollment_id, [artifactId]), frozen)[0];
+  const live = await liveFeaturedIds(page.enrollment_id);
+  const row = publicPieces(await rowsFor(page.enrollment_id, [artifactId]), frozen, live)[0];
   return row ? { row, indexable: decision.indexable } : null;
 }
 
