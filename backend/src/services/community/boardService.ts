@@ -59,7 +59,7 @@ export interface BoardResponse {
 
 export interface BoardQuery { lane: Lane; q?: string; olderCursor: string | null; countsOnly: boolean }
 
-interface Raw {
+export interface Raw {
   id: string; member_id: string; category: string | null; pinned: boolean; created_at: Date; comment_count: number; like_count: number;
   min_level: number; body: string; week: number | null; ritual_meta: { ritual?: string; values?: Record<string, string | string[]> } | null;
 }
@@ -84,8 +84,24 @@ async function weekRitualFor(cohortId: string, rows: BoardRow[], now: number): P
   return { week, ritual: publicRitual(ritual), posted, category: ritual.category };
 }
 
-export async function getBoard(enrollmentId: string, query: BoardQuery, now = Date.now()): Promise<BoardResponse> {
-  const started = Date.now();
+/** Everything a board read needs, loaded once: the viewer, their cohort's visible posts (light columns), authors, seen marks and the
+ *  replies on the viewer's posts. Shared by getBoard and the Colaberry Now stream (boardStreamService, Campus v20 N2, C133). */
+export interface BoardContext {
+  viewer: { id: string; level: number };
+  cohortId: string;
+  raw: Raw[];
+  rows: BoardRow[];
+  listed: BoardRow[];
+  term: string;
+  byId: Map<string, Raw>;
+  ritualById: Map<string, PostRitual | null>;
+  memberById: Map<string, BoardPost['member']>;
+  marks: Map<string, string>;
+  newReplies: Map<string, number>;
+  myNewReplies: number;
+}
+
+export async function loadBoardContext(enrollmentId: string, q?: string): Promise<BoardContext> {
   const [viewer, cohortId] = await Promise.all([getOrCreateMember(enrollmentId), resolveCohortId(enrollmentId)]);
   const raw = (await CommunityPost.findAll({
     where: { cohort_id: cohortId, status: 'visible' },
@@ -105,7 +121,7 @@ export async function getBoard(enrollmentId: string, query: BoardQuery, now = Da
   const memberById = new Map(members.map((m) => [m.id, m]));
 
   const byId = new Map(raw.map((p) => [p.id, p]));
-  const term = (query.q ?? '').trim().toLowerCase();
+  const term = (q ?? '').trim().toLowerCase();
   const listed = term
     ? rows.filter((r) => {
       const p = byId.get(r.id)!;
@@ -120,20 +136,19 @@ export async function getBoard(enrollmentId: string, query: BoardQuery, now = Da
     { replacements: { me: viewer.id }, type: QueryTypes.SELECT },
   );
   const newReplies = myNewReplies(replyRows, marks);
-  const shape = assembleBoard(rows, listed, { lane: query.lane, viewerMemberId: viewer.id, seenAt: marks.get('board') ?? null, now, olderCursor: query.olderCursor });
-  const head = {
-    counts: shape.counts, open_questions: shape.open_questions, new_since: shape.new_since,
-    my_new_replies: Array.from(newReplies.values()).reduce((a, b) => a + b, 0),
+  return {
+    viewer, cohortId, raw, rows, listed, term, byId, ritualById, memberById, marks, newReplies,
+    myNewReplies: Array.from(newReplies.values()).reduce((a, b) => a + b, 0),
   };
-  if (query.countsOnly) {
-    return { ...head, pinned: [], unanswered: [], fresh: [], this_week: [], last_week: [], older: { posts: [], next_cursor: null }, week_ritual: null };
-  }
+}
 
-  const wanted = [...shape.ids.pinned, ...shape.ids.unanswered, ...shape.ids.fresh, ...shape.ids.this_week, ...shape.ids.last_week, ...shape.ids.older.ids];
-  const liked = wanted.length
-    ? new Set(((await CommunityLike.findAll({ where: { likeable_type: 'post', likeable_id: wanted, member_id: viewer.id }, attributes: ['likeable_id'], raw: true })) as unknown as { likeable_id: string }[]).map((l) => l.likeable_id))
+/** Full post cards for these ids (one likes read), exactly as the board shows them: a post above the viewer's level is a locked teaser. */
+export async function cardsFor(ctx: BoardContext, ids: string[]): Promise<BoardPost[]> {
+  const { viewer, byId, ritualById, memberById, newReplies } = ctx;
+  const liked = ids.length
+    ? new Set(((await CommunityLike.findAll({ where: { likeable_type: 'post', likeable_id: ids, member_id: viewer.id }, attributes: ['likeable_id'], raw: true })) as unknown as { likeable_id: string }[]).map((l) => l.likeable_id))
     : new Set<string>();
-  const card = (id: string): BoardPost => {
+  return ids.map((id): BoardPost => {
     const p = byId.get(id)!;
     const mine = p.member_id === viewer.id;
     const locked = !mine && viewer.level < p.min_level;
@@ -148,14 +163,33 @@ export async function getBoard(enrollmentId: string, query: BoardQuery, now = Da
       lane: laneOf({ pinned: !!p.pinned, category: p.category, ritual_key: ritual?.key ?? null }), mine, new_replies: mine ? newReplies.get(id) ?? 0 : 0,
       ...noteText({ body: locked ? null : p.body, locked, min_level: p.min_level, ritual_key: ritual?.key ?? null, ritual_values: p.ritual_meta?.values ?? null }),
     };
-  };
+  });
+}
+
+/** This week's ritual for the context's cohort (null without a cohort week). */
+export function weekRitualOf(ctx: BoardContext, now: number): Promise<BoardResponse['week_ritual']> {
+  return weekRitualFor(ctx.cohortId, ctx.rows, now);
+}
+
+export async function getBoard(enrollmentId: string, query: BoardQuery, now = Date.now()): Promise<BoardResponse> {
+  const started = Date.now();
+  const ctx = await loadBoardContext(enrollmentId, query.q);
+  const shape = assembleBoard(ctx.rows, ctx.listed, { lane: query.lane, viewerMemberId: ctx.viewer.id, seenAt: ctx.marks.get('board') ?? null, now, olderCursor: query.olderCursor });
+  const head = { counts: shape.counts, open_questions: shape.open_questions, new_since: shape.new_since, my_new_replies: ctx.myNewReplies };
+  if (query.countsOnly) {
+    return { ...head, pinned: [], unanswered: [], fresh: [], this_week: [], last_week: [], older: { posts: [], next_cursor: null }, week_ritual: null };
+  }
+
+  const wanted = [...shape.ids.pinned, ...shape.ids.unanswered, ...shape.ids.fresh, ...shape.ids.this_week, ...shape.ids.last_week, ...shape.ids.older.ids];
+  const cards = new Map((await cardsFor(ctx, wanted)).map((c) => [c.id, c]));
+  const card = (id: string): BoardPost => cards.get(id)!;
   const res: BoardResponse = {
     ...head,
     pinned: shape.ids.pinned.map(card), unanswered: shape.ids.unanswered.map(card), fresh: shape.ids.fresh.map(card),
     this_week: shape.ids.this_week.map(card), last_week: shape.ids.last_week.map(card),
     older: { posts: shape.ids.older.ids.map(card), next_cursor: shape.ids.older.next_cursor },
-    week_ritual: await weekRitualFor(cohortId, rows, now),
+    week_ritual: await weekRitualOf(ctx, now),
   };
-  console.log(JSON.stringify({ level: 'info', service: 'community-board', event: 'board_read', outcome: 'success', duration_ms: Date.now() - started, posts: raw.length, lane: query.lane, searched: !!term }));
+  console.log(JSON.stringify({ level: 'info', service: 'community-board', event: 'board_read', outcome: 'success', duration_ms: Date.now() - started, posts: ctx.raw.length, lane: query.lane, searched: !!ctx.term }));
   return res;
 }
