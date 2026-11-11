@@ -7,8 +7,39 @@
  * the guest signed in; losing it just means typing the email again, which
  * maps back to the same guest server-side). All rendering escapes text.
  */
+/** What has to be escaped, and what it becomes. One entry per character, nothing derived. */
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+};
+
+/**
+ * The character class is BUILT from the map's own keys rather than written as a regex literal.
+ *
+ * Two reasons, and the second one is the surprising one.
+ *
+ * The ordinary reason: a hand-written class and a hand-written map are two lists of the same
+ * characters, and they can disagree. Deriving one from the other makes that impossible.
+ *
+ * The reason this changed today: `fetchTimeoutRatchet` tokenizes every file under
+ * `backend/src` to count outbound `fetch(` calls in CODE context, correctly ignoring the ones
+ * inside strings and template literals. Its tokenizer has modes for single quotes, double
+ * quotes, template literals and comments, but none for a REGEX LITERAL - so the class written
+ * `[&<>"']` read to it as an opening double-quoted string, and every mode decision after that
+ * line in the file was out of step.
+ *
+ * That matters here more than almost anywhere, because this file is one long HTML template
+ * holding three BROWSER-side `fetch` calls. Out of step, the guard counted one of them as a
+ * backend call with no timeout. It is not one: nothing in this file makes an outbound request.
+ * Built this way there is no regex literal to mis-read, the quote characters appear only inside
+ * ordinary strings the tokenizer handles correctly, and the count is 0 - which is the truth.
+ *
+ * The guard's limitation is reported rather than only worked around: the same blind spot HIDES
+ * three genuinely unbounded calls in `services/architectProxyService.ts`.
+ */
+const NEEDS_ESCAPE = new RegExp(`[${Object.keys(HTML_ESCAPES).join('')}]`, 'g');
+
 function escHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+  return s.replace(NEEDS_ESCAPE, (c) => HTML_ESCAPES[c]);
 }
 
 export function renderGuestJoinPage(sessionId: string, title: string): string {

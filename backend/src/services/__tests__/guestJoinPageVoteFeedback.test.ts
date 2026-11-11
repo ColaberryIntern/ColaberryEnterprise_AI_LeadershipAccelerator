@@ -122,4 +122,27 @@ describe('the rest of the page still stands', () => {
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
+
+  /**
+   * ALL FIVE CHARACTERS, because the escaper was rewritten in this change.
+   *
+   * Its character class is now built from the escape map's own keys instead of being a regex
+   * literal - which removed a real drift risk (two hand-written lists of the same characters)
+   * and, less obviously, stopped `fetchTimeoutRatchet` mis-tokenizing the rest of the file. Its
+   * tokenizer has no regex-literal mode, so `[&<>"']` read as an opening double-quoted string
+   * and a BROWSER-side fetch in the template below was counted as an unbounded backend call.
+   *
+   * A refactor of an escaper is exactly the kind of change that quietly drops a character, and
+   * the two it would drop are the quote characters - the ones that matter inside an attribute.
+   */
+  it('escapes every character it claims to, the quotes included', () => {
+    const html = renderGuestJoinPage('s1', 'a & b < c > d " e \' f');
+
+    expect(html).toContain('a &amp; b &lt; c &gt; d &quot; e &#39; f');
+  });
+
+  it('CONTROL: leaves ordinary text alone', () => {
+    // So the assertion above cannot be satisfied by a function that mangles everything.
+    expect(renderGuestJoinPage('s1', 'Open House November')).toContain('Open House November');
+  });
 });
