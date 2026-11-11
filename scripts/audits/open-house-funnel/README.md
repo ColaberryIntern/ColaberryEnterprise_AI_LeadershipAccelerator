@@ -17,7 +17,7 @@ bash scripts/audits/open-house-funnel/run.sh 'since=2026-11-16 06:00:00+00'
 | 3 | New account created | the registration's enrollment was created within 2 minutes of the sign-up |
 | 4 | Welcome email sent | `communication_logs`, `metadata->>'event' = 'open_house_welcome'`, sent by this sign-up |
 | 5 | Email opened / clicked | **not in our database.** It is read from Mandrill by `mandrillFunnel.js` (search lags about 10 minutes) |
-| 6 | Signed in from a link | `sign_in_link_uses` after the welcome email |
+| 6 | Entered the account | Either path, split out in its own table:<br>- the C121 **Access your account** button: the video card's progress row was created after the sign-up (opening a card creates it);<br>- a sign-in link: `sign_in_link_uses` after the welcome email |
 | 7 | Played the video | `timeline_card_progress.started_at` on the welcome video card (first watch beat) |
 | 8 | Finished the video | `completed_at` (75% watched, credit collected) |
 | 9 | Took the Quick check | `runtime_assessment_attempts` on the Quick check card |

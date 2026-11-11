@@ -7,7 +7,8 @@
 --   3 new account           the registration created a new Explorer enrollment (within 2 minutes)
 --   4 welcome email sent    communication_logs open_house_welcome, status sent
 --   5 email opened/clicked  NOT in our DB: Mandrill only (see mandrillFunnel.js); reported separately
---   6 signed in from link   a sign_in_link_uses row after the welcome email (any link, not only this email)
+--   6 entered the account   C121: either the Access your account button (the video card opened after sign-up) or a
+--                           sign-in link (a sign_in_link_uses row after the welcome email); split out below
 --   7 played the video      timeline_card_progress.started_at set on the video card (first watch beat)
 --   8 finished the video    completed_at set (75% watched, credit collected)
 --   9 took the Quick check  a runtime_assessment_attempts row on the Quick check card
@@ -32,6 +33,9 @@ CREATE TEMP TABLE steps AS
 SELECT o.*,
   w.sent_at AS email_at,
   (SELECT min(u.used_at) FROM sign_in_link_uses u WHERE u.enrollment_id = o.enrollment_id AND u.used_at >= w.sent_at) AS signin_at,
+  -- Opening a card creates its progress row (runtimeService findOrCreate), so a row created after the sign-up means the
+  -- person reached the video, by the C121 button or by a link.
+  CASE WHEN p.created_at >= o.reg_at THEN p.created_at END AS opened_at,
   p.started_at AS played_at, p.completed_at AS finished_at,
   (p.analytics->'watch'->>'max_position_s')::numeric AS exit_s,
   (SELECT min(a.submitted_at) FROM runtime_assessment_attempts a WHERE a.enrollment_id = o.enrollment_id AND a.card_id = :'check') AS check_at,
@@ -51,7 +55,7 @@ SELECT to_char(:'since'::timestamptz AT TIME ZONE 'America/Chicago', 'MM-DD HH24
        round(extract(epoch FROM now() - :'since'::timestamptz) / 3600.0, 1) AS hours;
 
 \echo == funnel (people), ad landing page door only ==
-CREATE TEMP VIEW lp AS SELECT * FROM steps WHERE source = 'landing_page';
+CREATE TEMP VIEW lp AS SELECT *, LEAST(signin_at, opened_at) AS entered_at FROM steps WHERE source = 'landing_page';
 WITH f AS (
   SELECT 1 AS n, 'LP visitors' AS step, (
     SELECT count(DISTINCT visitor_id) FROM page_events
@@ -59,17 +63,23 @@ WITH f AS (
   UNION ALL SELECT 2, 'Open House sign-ups', count(*) FROM lp
   UNION ALL SELECT 3, 'new account created', count(*) FILTER (WHERE new_account) FROM lp
   UNION ALL SELECT 4, 'welcome email sent', count(*) FILTER (WHERE new_account AND email_at IS NOT NULL) FROM lp
-  UNION ALL SELECT 6, 'signed in from a link', count(*) FILTER (WHERE new_account AND signin_at IS NOT NULL) FROM lp
-  UNION ALL SELECT 7, 'played the video', count(*) FILTER (WHERE new_account AND signin_at IS NOT NULL AND played_at IS NOT NULL) FROM lp
-  UNION ALL SELECT 8, 'finished the video', count(*) FILTER (WHERE new_account AND signin_at IS NOT NULL AND finished_at IS NOT NULL) FROM lp
-  UNION ALL SELECT 9, 'took the Quick check', count(*) FILTER (WHERE new_account AND signin_at IS NOT NULL AND check_at IS NOT NULL) FROM lp
-  UNION ALL SELECT 10, 'aced the Quick check (5/5)', count(*) FILTER (WHERE new_account AND signin_at IS NOT NULL AND aced) FROM lp
+  UNION ALL SELECT 6, 'entered the account', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL) FROM lp
+  UNION ALL SELECT 7, 'played the video', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND played_at IS NOT NULL) FROM lp
+  UNION ALL SELECT 8, 'finished the video', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND finished_at IS NOT NULL) FROM lp
+  UNION ALL SELECT 9, 'took the Quick check', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND check_at IS NOT NULL) FROM lp
+  UNION ALL SELECT 10, 'aced the Quick check (5/5)', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND aced) FROM lp
 )
 SELECT n, step, people,
        CASE WHEN n = 1 THEN NULL ELSE round(100.0 * people / NULLIF(lag(people) OVER (ORDER BY n), 0), 0) END AS pct_of_prev,
        round(100.0 * people / NULLIF(first_value(people) OVER (ORDER BY n), 0), 1) AS pct_of_visitors,
        round(100.0 * people / NULLIF((SELECT count(*) FROM lp), 0), 0) AS pct_of_signups
 FROM f ORDER BY n;
+
+\echo == how new landing-page accounts entered (C121: button vs email link) ==
+SELECT count(*) FILTER (WHERE entered_at IS NOT NULL) AS entered,
+       count(*) FILTER (WHERE signin_at IS NOT NULL) AS via_email_link,
+       count(*) FILTER (WHERE entered_at IS NOT NULL AND signin_at IS NULL) AS via_button_only
+FROM lp WHERE new_account;
 
 \echo == sign-ups by door ==
 SELECT source, count(*) AS signups, count(*) FILTER (WHERE new_account) AS new_accounts,
@@ -81,8 +91,8 @@ SELECT width_bucket(exit_s, 0, 110, 11) * 10 AS up_to_s, count(*) AS learners
 FROM lp WHERE played_at IS NOT NULL AND finished_at IS NULL GROUP BY 1 ORDER BY 1;
 
 \echo == timing for landing-page sign-ups (median minutes) ==
-SELECT round(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY signin_at - email_at)) / 60.0, 1) AS email_to_signin,
-       round(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY played_at - signin_at)) / 60.0, 1) AS signin_to_play
+SELECT round(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY entered_at - reg_at)) / 60.0, 1) AS signup_to_enter,
+       round(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP (ORDER BY played_at - entered_at)) / 60.0, 1) AS enter_to_play
 FROM lp;
 
 -- Recipients for mandrillFunnel.js (step 5): one address per line, written to the server file the caller names.
