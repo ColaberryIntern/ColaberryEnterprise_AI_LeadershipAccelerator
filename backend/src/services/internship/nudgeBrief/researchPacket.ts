@@ -194,14 +194,35 @@ export async function findAgent(term: string): Promise<ResearchLead | null> {
 export async function findPerson(firstName: string): Promise<ResearchLead | null> {
   type Row = { display_name: string | null; mgmt_role: string | null; mgmt_extra_sections: string[] | null };
   let row: Row | undefined;
+  /**
+   * Matched at the start of ANY word, plus a five-character prefix fallback.
+   *
+   * The first version matched `display_name ILIKE 'Firstname %'` and missed three people out of
+   * four on live data, each for a different reason:
+   *
+   *   - **Kes** is stored as a single word, so there is no trailing space to match.
+   *   - **Aleem** is "Mohammed Abdul Aleem": the name people use is the LAST token, not the first.
+   *   - **Roselyn** is stored "Roselen Flores". People spell colleagues' names from memory, and an
+   *     intern writing to Ali is not consulting the user table first.
+   *
+   * Word-start matching fixes the first two. The five-character prefix fixes the third without
+   * opening the door to matching on a fragment: with 22 management records a scan is free, and the
+   * alternative is a panel that silently finds nobody.
+   */
+  const prefix = firstName.slice(0, 5);
   try {
     const rows = await sequelize.query<Row>(
       `SELECT display_name, mgmt_role, mgmt_extra_sections
          FROM community_members
         WHERE mgmt_role IS NOT NULL
-          AND display_name ILIKE $1
+          AND (display_name ILIKE $1 OR display_name ILIKE $2
+               OR display_name ILIKE $3 OR display_name ILIKE $4)
+        ORDER BY length(display_name) ASC
         LIMIT 1`,
-      { bind: [`${firstName} %`], type: QueryTypes.SELECT },
+      {
+        bind: [`${firstName}%`, `% ${firstName}%`, `${prefix}%`, `% ${prefix}%`],
+        type: QueryTypes.SELECT,
+      },
     );
     row = rows[0];
   } catch { return null; }
@@ -211,7 +232,10 @@ export async function findPerson(firstName: string): Promise<ResearchLead | null
   return {
     kind: 'person',
     term: firstName,
-    finding: `${row.display_name ?? firstName} holds the management role "${row.mgmt_role}" with extra section grants: ${extra}. Access is decided by the role's sections plus those grants, not by whether they have an admin account.`,
+    finding: `${row.display_name ?? firstName} holds the management role "${row.mgmt_role}" with extra section grants: ${extra}. Access is decided by the role's sections plus those grants, not by whether they have an admin account.`
+      + ((row.display_name ?? '').toLowerCase().startsWith(firstName.toLowerCase())
+        ? ''
+        : ` Note the record is filed as "${row.display_name}", which is not quite how the question spelled it.`),
     evidence: 'community_members.mgmt_role and mgmt_extra_sections, the same source requireSection() reads',
   };
 }

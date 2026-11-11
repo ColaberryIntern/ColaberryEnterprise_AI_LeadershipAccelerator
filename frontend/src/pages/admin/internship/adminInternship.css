@@ -488,6 +488,46 @@
 .aint-nstrip-cells { display: flex; gap: 2px; flex-wrap: nowrap; overflow: hidden; }
 .aint-nstrip-cells .aint-hc { width: 9px; height: 16px; border-radius: 2px; cursor: default; }
 
+/* ── the research panel ─────────────────────────────────────────────────────
+ * Evidence, not an answer. Every lead shows where it came from, and the questions nothing
+ * could evidence get the loudest treatment on the panel, because those are the ones only a
+ * person can answer and a quiet gap is a missed one. */
+.aint-research {
+  border: 1px solid var(--color-border); border-left: 4px solid var(--berry, #2563a8);
+  border-radius: var(--r-8, 8px); padding: var(--space-sm) var(--space-md);
+  display: flex; flex-direction: column; gap: var(--space-sm); background: var(--color-bg-alt);
+}
+.aint-research h4 {
+  margin: 0; font-size: var(--font-size-md); display: flex; align-items: center;
+  gap: var(--space-xs); color: var(--color-text);
+}
+
+.aint-rq { font-size: var(--font-size-sm); }
+.aint-rq summary { cursor: pointer; color: var(--color-text); }
+.aint-rq-text {
+  margin: var(--space-xs) 0 0; padding: var(--space-xs) var(--space-sm);
+  background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--r-6, 6px);
+  white-space: pre-wrap; max-height: 320px; overflow: auto; color: var(--color-text);
+}
+
+.aint-leads { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
+.aint-leads li { display: flex; gap: var(--space-sm); align-items: flex-start; flex-wrap: wrap; }
+.aint-lead-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; }
+.aint-lead-find { font-size: var(--font-size-sm); color: var(--color-text); word-break: break-word; }
+
+.aint-pill.lead-source { background: var(--color-bg-alt); color: var(--color-text-light); }
+.aint-pill.lead-agent { background: var(--color-warning-bg); color: var(--activity-orange); }
+.aint-pill.lead-person { background: var(--color-danger-bg); color: var(--activity-red); }
+.aint-pill.lead-domain { background: var(--color-success-bg); color: var(--activity-green); }
+.aint-pill[class*="lead-"] { display: inline-flex; align-items: center; gap: 4px; margin-left: 0; white-space: nowrap; }
+
+.aint-needshuman {
+  border-left: 3px solid var(--color-primary); background: var(--cherry-bg, #FFF0F1);
+  padding: var(--space-xs) var(--space-sm); border-radius: 0 var(--r-6, 6px) var(--r-6, 6px) 0;
+  font-size: var(--font-size-sm);
+}
+.aint-needshuman ul { margin: var(--space-xs) 0 0; padding-left: var(--space-md); }
+
 /* "Write this one yourself": the rows where the composer stops on purpose. Styled as an
  * instruction to the reader, not as an error, because nothing has gone wrong. */
 .aint-yours {
