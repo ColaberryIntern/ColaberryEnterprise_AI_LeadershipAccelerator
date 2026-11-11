@@ -24,9 +24,9 @@ function funnelTable(rows, prevRows, targets) {
   const tr = rows.map((r, i) => {
     const t = r.rate ? targets.rates[r.rate] : null, p = prevRows && prevRows[i];
     return `<tr><td>${r.icon} ${esc(r.step)}</td><td class="num">${r.n}</td>
-      <td class="num"><span class="cf cf-${r.status}">${r.pctPrev === null ? '—' : r.pctPrev + '%'}</span></td>
-      <td class="num">${r.pctTop === null ? '—' : r.pctTop + '%'}</td>
-      <td class="num">${t ? t.good + '%' : '—'}</td>
+      <td class="num"><span class="cf cf-${r.status}">${r.pctPrev === null ? 'n/a' : r.pctPrev + '%'}</span></td>
+      <td class="num">${r.pctTop === null ? 'n/a' : r.pctTop + '%'}</td>
+      <td class="num">${t ? t.good + '%' : 'n/a'}</td>
       <td>${r.status !== 'none' ? `<span class="pill p-${r.status}">${PILL[r.status]}</span>` : ''}</td>
       <td class="num">${p ? arrow(M.delta(r.n, p.n)) : arrow(null)}</td></tr>`;
   }).join('');
@@ -36,7 +36,7 @@ function funnelTable(rows, prevRows, targets) {
 function forkCards(forks) {
   return `<div class="forks">${forks.map((f) => {
     const bar = f.options.filter((o) => o.n > 0).map((o) => `<span class="seg ${o.good ? 'g' : o.bad ? 'b' : 'n'}" style="flex:${o.n}" title="${esc(o.label)}">${o.pct >= 12 ? o.pct + '%' : ''}</span>`).join('') || '<span class="seg e" style="flex:1">nobody reached this fork yet</span>';
-    const opts = f.options.map((o) => `<li><i class="${o.good ? 'g' : o.bad ? 'b' : 'n'}"></i>${esc(o.label)}<b>${o.n}</b><em>${o.pct === null ? '—' : o.pct + '%'}</em></li>`).join('');
+    const opts = f.options.map((o) => `<li><i class="${o.good ? 'g' : o.bad ? 'b' : 'n'}"></i>${esc(o.label)}<b>${o.n}</b><em>${o.pct === null ? 'n/a' : o.pct + '%'}</em></li>`).join('');
     const g = f.grade && f.grade.status !== 'none' ? `<span class="pill p-${f.grade.status}">${PILL[f.grade.status]}</span>` : '';
     return `<div class="fork"><div class="fh"><span class="fi">${f.icon}</span><span class="fq">${esc(f.q)}</span>${g}</div>
       <div class="split">${bar}</div><ul>${opts}</ul><div class="ft">${f.total} people at this fork${f.source ? ' · source: ' + esc(f.source) : ''}</div></div>`;
@@ -69,13 +69,15 @@ function mermaidTree(cur) {
     n('W', '📭 Not entered yet', Math.max(0, j.new_account - j.entered), j.new_account, 'bad'),
     n('P', '▶️ Pressed play', j.played, j.entered, 'good'),
     n('X', '⏸️ Did not press play', Math.max(0, j.entered - j.played), j.entered, 'bad'),
-    n('D', '🏁 Finished video', j.finished, j.played, 'good'),
+    n('D', '🏁 Watched 75%+', j.finished, j.played, 'good'),
     n('Q', '🚪 Quit video', Math.max(0, j.played - j.finished), j.played, 'bad'),
-    n('C', '✅ Quick check', j.took_check, j.finished, 'good'),
+    n('R', '🎖️ Collected credit', M.credited(j), j.finished, 'good'),
+    n('Y', '🙈 No credit collected', Math.max(0, j.finished - M.credited(j)), j.finished, 'bad'),
+    n('C', '✅ Quick check', Math.min(j.took_check, M.credited(j)), M.credited(j), 'good'),
     n('A', '🏆 5 of 5', j.aced, j.took_check, 'good'),
     n('E', '🎥 At the welcome video', j.entered, null, 'mid'),
     '  V --> S & L & Z', '  S --> U & F', '  U --> N & H', '  N --> B & K & W', '  B --> E', '  K --> E', '  E --> P & X',
-    '  P --> D & Q', '  D --> C', '  C --> A',
+    '  P --> D & Q', '  D --> R & Y', '  R --> C', '  C --> A',
     `  classDef top fill:${C.navy},color:#fff,stroke:${C.navy}`,
     '  classDef good fill:#c6f6d5,color:#22543d,stroke:#2f855a', '  classDef bad fill:#fed7d7,color:#742a2a,stroke:#c53030',
     '  classDef mid fill:#bee3f8,color:#2a4365,stroke:#2b6cb0'];

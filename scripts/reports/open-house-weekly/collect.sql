@@ -80,7 +80,12 @@ CREATE TEMP TABLE regx AS
 SELECT g.*, wl.sent_at AS email_at,
   (SELECT min(u.used_at) FROM sign_in_link_uses u WHERE u.enrollment_id = g.enrollment_id AND u.used_at >= wl.sent_at) AS signin_at,
   CASE WHEN p.created_at >= g.reg_at THEN p.created_at END AS opened_at,
-  p.started_at AS played_at, p.completed_at AS finished_at,
+  -- Finished = watched 75%+ (the credit gate), whether or not they then clicked to collect the credit: on 11 Nov one
+  -- learner watched 97% and never collected. credited_at is the click, its own step.
+  p.started_at AS played_at,
+  CASE WHEN p.completed_at IS NOT NULL THEN p.completed_at
+       WHEN (p.analytics->'watch'->>'watched_pct')::numeric >= 75 THEN (p.analytics->'watch'->>'last_beat_at')::timestamptz END AS finished_at,
+  p.completed_at AS credited_at,
   (p.analytics->'watch'->>'max_position_s')::numeric AS exit_s,
   (SELECT min(a.submitted_at) FROM runtime_assessment_attempts a WHERE a.enrollment_id = g.enrollment_id AND a.card_id = :'check') AS check_at,
   EXISTS (SELECT 1 FROM runtime_assessment_attempts a WHERE a.enrollment_id = g.enrollment_id AND a.card_id = :'check' AND a.score = 1) AS aced,
@@ -162,6 +167,7 @@ SELECT json_build_object(
         'entered_link', count(*) FILTER (WHERE new_account AND entered_by = 'link'),
         'played', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND played_at IS NOT NULL),
         'finished', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND finished_at IS NOT NULL),
+        'credited', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND credited_at IS NOT NULL),
         'took_check', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND check_at IS NOT NULL),
         'aced', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND aced),
         'kept_going', count(*) FILTER (WHERE new_account AND entered_at IS NOT NULL AND kept_going),

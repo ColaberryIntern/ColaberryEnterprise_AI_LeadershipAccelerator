@@ -5,6 +5,9 @@
  */
 'use strict';
 
+/** Snapshots from before 11 Nov PM have no `credited`; then finished meant credited. */
+const credited = (j) => (j.credited === undefined ? j.finished : j.credited);
+
 const pct = (n, d) => (d > 0 ? Math.round((1000 * n) / d) / 10 : null);
 
 /** Grade one rate against its target. Under minSample people it is 'low' (grey), never green or red. */
@@ -34,7 +37,8 @@ function funnel(w, targets) {
     { icon: '✉️', step: 'Welcome email sent', n: j.email_sent },
     { icon: '🚪', step: 'Entered the account', n: j.entered, rate: 'enter', base: 'new_account' },
     { icon: '▶️', step: 'Pressed play on the video', n: j.played, rate: 'play' },
-    { icon: '🏁', step: 'Finished the video', n: j.finished, rate: 'finish' },
+    { icon: '🏁', step: 'Watched 75%+ of the video', n: j.finished, rate: 'finish' },
+    { icon: '🎖️', step: 'Collected the credit', n: credited(j), rate: 'credit' },
     { icon: '✅', step: 'Took the Quick check', n: j.took_check, rate: 'check' },
     { icon: '🏆', step: 'Scored 5 of 5', n: j.aced, rate: 'ace' },
   ];
@@ -73,9 +77,12 @@ function forks(w, email, targets) {
     { id: 'finish', icon: '🎬', q: 'Did they watch to the end?', rate: 'finish', options: [
       { label: 'Finished (75%+)', n: j.finished, good: true },
       { label: 'Quit partway', n: Math.max(0, j.played - j.finished), bad: true }] },
-    { id: 'check', icon: '✅', q: 'After the video, did they take the Quick check?', rate: 'check', options: [
-      { label: 'Took it', n: j.took_check, good: true },
-      { label: 'Skipped it', n: Math.max(0, j.finished - j.took_check), bad: true }] },
+    { id: 'credit', icon: '🎖️', q: 'After watching 75%+, did they collect the credit?', rate: 'credit', options: [
+      { label: 'Collected it', n: credited(j), good: true },
+      { label: 'Watched but never collected', n: Math.max(0, j.finished - credited(j)), bad: true }] },
+    { id: 'check', icon: '✅', q: 'After the credit, did they take the Quick check?', rate: 'check', options: [
+      { label: 'Took it', n: Math.min(j.took_check, credited(j)), good: true },
+      { label: 'Skipped it', n: Math.max(0, credited(j) - j.took_check), bad: true }] },
     { id: 'ace', icon: '🏆', q: 'How did they score?', rate: 'ace', options: [
       { label: '5 of 5', n: j.aced, good: true },
       { label: 'Missed at least one', n: Math.max(0, j.took_check - j.aced) }] },
@@ -118,7 +125,8 @@ function people(w) {
     { key: 'notin', label: 'Signed up, not entered yet', n: Math.max(0, j.new_account - j.entered), tone: 'warn' },
     { key: 'noplay', label: 'Entered, did not press play', n: Math.max(0, j.entered - j.played), tone: 'warn' },
     { key: 'quit', label: 'Played, quit partway', n: Math.max(0, j.played - j.finished), tone: 'warn' },
-    { key: 'finished', label: 'Finished the video', n: Math.max(0, j.finished - j.took_check), tone: 'good' },
+    { key: 'nocredit', label: 'Watched 75%+, no credit collected', n: Math.max(0, j.finished - credited(j)), tone: 'warn' },
+    { key: 'finished', label: 'Collected the credit', n: Math.max(0, credited(j) - j.took_check), tone: 'good' },
     { key: 'checked', label: 'Took the Quick check', n: j.took_check, tone: 'best' },
   ];
   const total = stages.reduce((a, x) => a + x.n, 0);
@@ -139,7 +147,8 @@ function sankey(w) {
     ['New account', 'Entered', j.entered], ['New account', 'Not entered yet', Math.max(0, j.new_account - j.entered)],
     ['Entered', 'Pressed play', j.played], ['Entered', 'Did not press play', Math.max(0, j.entered - j.played)],
     ['Pressed play', 'Finished video', j.finished], ['Pressed play', 'Quit video', Math.max(0, j.played - j.finished)],
-    ['Finished video', 'Quick check', j.took_check], ['Finished video', 'Skipped check', Math.max(0, j.finished - j.took_check)]);
+    ['Finished video', 'Collected credit', credited(j)], ['Finished video', 'No credit collected', Math.max(0, j.finished - credited(j))],
+    ['Collected credit', 'Quick check', Math.min(j.took_check, credited(j))], ['Collected credit', 'Skipped check', Math.max(0, credited(j) - j.took_check)]);
   return edges.filter((x) => x[2] > 0);
 }
 
@@ -148,4 +157,4 @@ function exitBins(exits) {
   return EXIT_BINS.map(([lo, hi, label]) => ({ label, n: exits.filter((s) => s >= lo && s < hi).length }));
 }
 
-module.exports = { pct, grade, delta, funnel, forks, people, sankey, exitBins };
+module.exports = { credited, pct, grade, delta, funnel, forks, people, sankey, exitBins };

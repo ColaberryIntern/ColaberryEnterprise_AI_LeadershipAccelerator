@@ -18,6 +18,44 @@ node scripts/reports/open-house-weekly/render.js docs/reports/open-house-weekly/
 
 `docs/reports/` is gitignored, so the reports and weekly snapshots stay on the machine that renders them. Data never goes into git.
 
+## C124: the starred move, the tour, the story, the Wednesday email
+
+**Wednesdays at 08:00 CT,** Taiwo, Sohail and Ali receive the email edition.
+
+| Part | What it holds |
+|---|---|
+| Email body | The ★ recommendation, the 10 most impactful numbers, a summary overview chart, the hypothesis verdicts and the latest decisions |
+| `OPEN_HOUSE_WEEKLY_REPORT.html` (attached) | The full report, starting with the same three blocks. It has a **Take the tour** button that walks the 10 stops through the page. |
+| `ONE_MOVE_PROMPT.md` (attached) | A detailed Claude Code prompt that makes the starred move. Ali runs it from inbox zero with "make the Open House move". |
+
+**One view, three outputs.**
+- `lib/view.js` computes the move, the 10 numbers and the overview once. The email, the report and the prompt are all rendered from it, so they cannot disagree.
+- The move is chosen by `lib/recommend.js` from the steps in `lib/playbook.js`:
+  - **Score:** people short of target × closeness to the first win × sample confidence × whether Claude Code can build it.
+  - **Top-of-funnel moves count half** while the sign-up rate is on target.
+  - **A move someone must make by hand** wins only if it scores 1.5× the best move Claude Code can build.
+
+**The story.**
+- `story/decisions.json` is an append-only ledger. It holds every decision, change of direction, build, measurement, correction and hypothesis.
+- The report renders the ledger as the decision timeline and grades every hypothesis against the week's numbers.
+- A move whose `measure_until` has not passed is never starred again. It shows as "being measured" instead.
+- The prompt makes the build append its own entries in the same PR, so each move adds a little more to the report.
+- To reverse a direction, append a `retraction` or `pivot` entry with `supersedes`. Never edit or delete an older entry.
+
+**Schedule** (`scheduled.js`, house pattern: the script decides the Central slot):
+
+```
+0 13,14 * * 3 /opt/colaberry-accelerator/scripts/cron-env-wrapper.sh /opt/colaberry-accelerator/scripts/reports/open-house-weekly/scheduled.js >> /var/log/open-house-weekly.log 2>&1
+```
+
+- **Fresh code every run:** each run extracts this folder, the C120 audit and `backend/src/scripts/lib` from `origin/main` into a work dir. A merged ledger or playbook change reaches the next email with no deploy.
+- **Never twice:** a ledger in `/var/lib/colaberry/open-house-weekly/` keys each send on its Wednesday, so a second run the same week doesn't send again.
+- **Never silent:** a failure sends Ali an alert email.
+- **Manual commands:**
+  - `--dry-run` builds everything and sends nothing.
+  - `--force --to ali@colaberry.com` sends a test copy.
+  - `--ref origin/<branch>` runs a branch's code.
+
 ## What is in it
 
 | Section | What it shows | Source |
