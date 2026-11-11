@@ -109,7 +109,19 @@ describe('the query asks for NO project, not no ACTIVE project', () => {
   );
 
   it('uses NOT EXISTS against projects', () => {
-    expect(source).toMatch(/NOT EXISTS \(SELECT 1 FROM projects p WHERE p\.enrollment_id = e\.id\)/);
+    expect(source).toMatch(/NOT EXISTS \(SELECT 1 FROM projects p WHERE p\.enrollment_id = e\.id/);
+  });
+
+  /**
+   * Tightened when admin archiving landed. An archived project is removed from every surface,
+   * so counting one here reports a student as covered by a build they can no longer open - the
+   * exact inverse of what this intervention list is for. The assertion above was relaxed at its
+   * closing bracket only; the property it guards (NO project, not no ACTIVE project) is unchanged.
+   */
+  it('does not count an archived project as having a project', () => {
+    const predicates = source.match(/SELECT 1 FROM projects p WHERE p\.enrollment_id = e\.id[^)]*/g) || [];
+    expect(predicates.length).toBeGreaterThan(0);
+    predicates.forEach((p: string) => expect(p).toMatch(/AND p\.archived_at IS NULL/));
   });
 
   it('never filters on active_project_id alone', () => {

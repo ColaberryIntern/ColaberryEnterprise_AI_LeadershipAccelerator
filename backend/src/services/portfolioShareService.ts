@@ -44,8 +44,22 @@ export async function setPortfolioSharing(
   return { share_token: project.share_token, share_enabled: project.share_enabled };
 }
 
+/**
+ * `archived_at: null` is the load-bearing clause here, not a tidiness filter.
+ *
+ * This is the one PUBLIC, unauthenticated read of a project: anyone holding the token gets the
+ * portfolio. Without the clause an archived project stayed reachable by its old share link
+ * forever, so "removed from every surface" was false in the single place where being wrong is
+ * visible outside the company.
+ *
+ * It is the same 404 as a bad token, deliberately. A distinguishable response would tell the
+ * holder of a dead link that the project still exists and was withdrawn, which is more than a
+ * public endpoint should say.
+ */
 export async function getPortfolioByShareToken(token: string): Promise<PortfolioResult> {
-  const project = await Project.findOne({ where: { share_token: token, share_enabled: true } });
+  const project = await Project.findOne({
+    where: { share_token: token, share_enabled: true, archived_at: null } as any,
+  });
   if (!project) throw notFoundError('Shared portfolio not found');
   return generatePortfolio(project.enrollment_id);
 }

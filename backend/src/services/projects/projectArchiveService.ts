@@ -112,7 +112,13 @@ async function loadOwnedLiveProject(enrollmentId: string, projectId: string): Pr
  * list and a "start a new build" tile). A null pointer is strictly better than a
  * pointer to something they removed, and far better than one to infrastructure.
  */
-async function nextActiveAfterArchiving(
+/**
+ * Exported so the ADMIN archive path can reuse it rather than re-deriving where the active
+ * pointer goes. There must be exactly one answer to that question: the comment above explains
+ * that getting it wrong can silently make the platform's own 144k-row record a student's active
+ * build, and two implementations is two chances to do that.
+ */
+export async function nextActiveAfterArchiving(
   enrollmentId: string,
   archivingProjectId: string,
 ): Promise<Project | null> {

@@ -83,7 +83,7 @@ export async function getEnrollmentsWithoutProjects(
       WHERE (e.status IS NULL OR e.status NOT IN (:departed))
         -- Stricter than active_project_id IS NULL on purpose: someone who built
         -- something and cleared the pointer has still built something.
-        AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.enrollment_id = e.id)
+        AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.enrollment_id = e.id AND p.archived_at IS NULL)
         ${opts.cohortId ? 'AND e.cohort_id = :cohortId' : ''}
       ORDER BY e.created_at`,
     {
@@ -98,7 +98,7 @@ export async function getEnrollmentsWithoutProjects(
   const counts = await sequelize.query<any>(
     `SELECT COUNT(*)::int AS active_enrollments,
             COUNT(*) FILTER (
-              WHERE EXISTS (SELECT 1 FROM projects p WHERE p.enrollment_id = e.id)
+              WHERE EXISTS (SELECT 1 FROM projects p WHERE p.enrollment_id = e.id AND p.archived_at IS NULL)
             )::int AS with_project
        FROM enrollments e
       WHERE (e.status IS NULL OR e.status NOT IN (:departed))
