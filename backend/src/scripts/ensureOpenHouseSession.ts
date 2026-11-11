@@ -55,12 +55,22 @@ function log(event: string, context: Record<string, unknown> = {}): void {
 
 /** "2026-11-19" and "6:30 PM" in Central, from the instant the endpoint reports. */
 export function centralParts(startsAt: Date): { date: string; time: string } {
-  // instantToWallClock gives "YYYY-MM-DD HH:mm:ss" in the zone asked for, which
-  // is exactly the pair live_sessions stores. Derived here rather than reformatted
-  // from a label, so this cannot drift from what the endpoint advertises.
+  // instantToWallClock returns ISO-SHAPED: "YYYY-MM-DDTHH:mm:ss", separated by a
+  // literal T. The first version of this split on a SPACE, so it never matched:
+  // `date` came back as the whole timestamp and `time` as an empty string. A dry
+  // run caught it, which is the only reason it is not in the database - start_time
+  // is NOT NULL, so the insert would have failed outright, and the update path
+  // would have quietly written an empty time.
+  //
+  // Split on the separator rather than slicing by index, and assert the shape, so
+  // a future change to that helper's format fails loudly here instead of writing
+  // a blank clock.
   const wall = instantToWallClock(startsAt, CENTRAL_TZ);
-  const [date, clock] = wall.split(' ');
-  return { date, time: (clock || '').slice(0, 5) };
+  const [date, clock] = wall.split('T');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !/^\d{2}:\d{2}/.test(clock || '')) {
+    throw new Error(`unreadable wall clock from instantToWallClock: ${JSON.stringify(wall)}`);
+  }
+  return { date, time: clock.slice(0, 5) };
 }
 
 async function main(): Promise<void> {
