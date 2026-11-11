@@ -30,6 +30,7 @@ export function WorkCard({ it }: { it: WorkItem }): React.ReactElement {
         </span>
         <span className="mw-card-title">{it.title || 'Untitled piece'}</span>
         <span className="mw-card-meta">{shortDate(it.createdAt)} · {it.from}</span>
+        {it.featured && <span className="mw-feat">★ Featured</span>}
         {it.skills.length > 0 && (
           <span className="mw-tags">{it.skills.slice(0, 2).map((sk) => <span key={sk} className="mw-tag">{skillLabel(sk)}</span>)}</span>
         )}
@@ -48,6 +49,8 @@ const MyWorkPage: React.FC = () => {
   const byParam = params.get('by') as GroupBy | null;
   const by: GroupBy = byParam && BY_KEYS.has(byParam) ? byParam : 'week';
   const q = params.get('q') ?? '';
+  // C130: ?featured=1 (the Dashboard's "featured on your page" tile) shows only the learner's featured pieces
+  const featuredOnly = params.get('featured') === '1';
 
   const load = useCallback(() => {
     setUi('loading');
@@ -64,7 +67,7 @@ const MyWorkPage: React.FC = () => {
   };
 
   const chips = useMemo(() => chipsFor(items), [items]);
-  const shown = useMemo(() => filterItems(items, kind, q), [items, kind, q]);
+  const shown = useMemo(() => filterItems(items, kind, q).filter((it) => !featuredOnly || it.featured), [items, kind, q, featuredOnly]);
   const sections = useMemo(() => sectionsFor(shown, by), [shown, by]);
   useEffect(() => { if (ui === 'loaded') saveOrder(orderOf(sections)); }, [sections, ui]);
 
@@ -118,6 +121,9 @@ const MyWorkPage: React.FC = () => {
               <input type="search" value={q} placeholder="Search titles, lessons and skills" onChange={(e) => set('q', e.target.value, '')} />
             </label>
           </div>
+          {featuredOnly && (
+            <p className="cp-muted" role="status">Showing only the pieces you featured. <button type="button" className="cp-link" onClick={() => set('featured', '', '')}>Show all</button></p>
+          )}
           <div className="mw-chips" role="group" aria-label="Show one kind of work">
             {chips.map((c) => (
               <button key={c.key} type="button" className={`mw-chip${kind === c.key ? ' on' : ''}`} aria-pressed={kind === c.key}

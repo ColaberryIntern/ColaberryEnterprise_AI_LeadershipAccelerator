@@ -70,7 +70,8 @@ const PortfolioPreviewPage: React.FC = () => {
       >
         Preview — this is exactly what a reviewer, and then a stranger, will see.
       </div>
-      <PortfolioBody portfolio={portfolio} />
+      {/* C130: on Preview a featured piece opens the learner's own work page (strangers get the public one after review). */}
+      <PortfolioBody portfolio={portfolio} featuredHref={(id) => `/portal/portfolio/work/${encodeURIComponent(id)}`} />
     </>
   );
 };

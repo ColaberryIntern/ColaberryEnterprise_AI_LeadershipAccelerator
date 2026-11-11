@@ -205,13 +205,30 @@ const HIRE_LISTING: string[] = [
    )`,
 ];
 
+/**
+ * Featured work (C130, phase 3 of the approved C127 design). ADDITIVE ONLY: one new table, nothing altered. One row per piece the
+ * learner chose to feature; the primary key makes a repeat feature a no-op. This is the LIVE set (what Preview shows). What a
+ * stranger sees is frozen into `approved_identity.featured_work` at review (Ali, 11 Nov 2026: featured work goes public "After
+ * review"), so a row here never reaches the public page on its own. Rollback needs no down step.
+ */
+const FEATURED_WORK: string[] = [
+  `CREATE TABLE IF NOT EXISTS career_featured_work (
+     enrollment_id UUID NOT NULL,
+     artifact_id UUID NOT NULL,
+     featured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     PRIMARY KEY (enrollment_id, artifact_id)
+   )`,
+];
+
 const STATEMENTS: string[] = [
   ...DROP_SUPERSEDED,
   ...CAPSTONE_REVIEWS,
   ...MENTOR_SCOPES,
   ...PORTFOLIO_PAGES,
   ...HIRE_LISTING,
+  ...FEATURED_WORK,
 ];
+export const FEATURED_WORK_STATEMENTS: readonly string[] = FEATURED_WORK;
 
 /** Exported for the additive/idempotent test. */
 export const HIRE_LISTING_STATEMENTS: readonly string[] = HIRE_LISTING;

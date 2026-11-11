@@ -5,7 +5,7 @@ import { PaywallScreen } from '../../../../components/paywall/PageGate';
 import { GATED_FEATURES } from '../../../../components/paywall/gatedFeatures';
 import { fetchMyWork, type WorkItem } from '../../../../services/myWorkApi';
 import { GROUP_STYLE } from './myWorkModel';
-import { dayShort, myWorkLink, summarize } from './workSummary';
+import { dayShort, myWorkLink, rangePhrase, summarize } from './workSummary';
 import '../PortfolioPage.css';
 import './MyWork.css';
 
@@ -49,7 +49,7 @@ const DashboardPage: React.FC = () => {
         <h1>Your body of work</h1>
         <div className="sub">
           {ui === 'loaded' && s.total > 0 && s.first && s.last
-            ? `${s.total} piece${s.total === 1 ? '' : 's'} of work from ${dayShort(s.first)} to ${dayShort(s.last)}. Everything you made in the program, in one place.`
+            ? `${s.total} piece${s.total === 1 ? '' : 's'} of work ${rangePhrase(s.first, s.last)}. Everything you made in the program, in one place.`
             : 'Everything you make in the program, in one place.'}
         </div>
       </div>
@@ -93,6 +93,7 @@ const DashboardPage: React.FC = () => {
     [s.kinds.length, s.kinds.length === 1 ? 'kind of work' : 'kinds of work', myWorkLink({ by: 'kind' })],
     [s.activeWeeks, s.activeWeeks === 1 ? 'week with work' : 'weeks with work', myWorkLink()],
     [s.projects, s.projects === 1 ? 'project in your work' : 'projects in your work', myWorkLink({ by: 'project' })],
+    [s.featured, 'featured on your page', myWorkLink({ featured: true })],
   ];
   return (
     <PortalShell>

@@ -1,4 +1,5 @@
 import React from 'react';
+import FeaturedWorkSection from './FeaturedWorkSection';
 import './portfolio.css';
 import {
   ExperienceSection, EducationSection, SectionHead, Rule,
@@ -118,9 +119,10 @@ const StatTile: React.FC<{ value: number | null | undefined; label: string }> = 
  * halfway down somebody else's layout is a bug, not a feature. The CONTENT is identical
  * in all three, which is the property worth protecting.
  */
-const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
-  portfolio, embedded = false,
+const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean; featuredHref?: (id: string) => string }> = ({
+  portfolio, embedded = false, featuredHref,
 }) => {
+  const featuredWork = portfolio.featured_work || [];
   const { identity, capabilities, records, repositories, private_repository_count } = portfolio;
   const projects = portfolio.projects || [];
   const experience = portfolio.experience || [];
@@ -149,7 +151,7 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
 
   const isEmpty = !capabilities.length && !records.length && !repositories.length
     && !projects.length && !experience.length && !education.length && !about.length
-    && !verifiedCommits.length;
+    && !verifiedCommits.length && !featuredWork.length;
 
   return (
     <div className={embedded ? 'pf pf-embedded' : 'pf'}>
@@ -289,6 +291,9 @@ const PortfolioBody: React.FC<{ portfolio: Portfolio; embedded?: boolean }> = ({
               </div>
             </section>
           )}
+
+          {/* C130: what the learner chose to show leads the page body (approved C127 design). */}
+          <FeaturedWorkSection items={featuredWork} hrefFor={featuredHref} />
 
           <ExperienceSection items={experience} badge="parsed from their resume" />
 

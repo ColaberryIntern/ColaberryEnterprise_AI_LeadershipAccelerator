@@ -23,6 +23,8 @@ export interface WorkSummary {
   /** Distinct weeks with at least one piece. */
   activeWeeks: number;
   projects: number;
+  /** C130: pieces in the learner's live featured set. */
+  featured: number;
 }
 
 const MAX_WEEKS = 8;
@@ -38,6 +40,9 @@ export const weekShort = (key: string): string =>
   new Date(`${key}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 export const dayShort = (iso: string): string =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Chicago' });
+/** "from Aug 3 to Sep 18", or "on Oct 29" when every piece is from one day (C130, the C129 production nit). */
+export const rangePhrase = (first: string, last: string): string =>
+  (dayShort(first) === dayShort(last) ? `on ${dayShort(last)}` : `from ${dayShort(first)} to ${dayShort(last)}`);
 
 export function summarize(items: WorkItem[]): WorkSummary {
   const sorted = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -79,12 +84,14 @@ export function summarize(items: WorkItem[]): WorkSummary {
     newest: sorted.slice(0, MAX_NEWEST),
     activeWeeks: byWeek.size,
     projects: projects.size,
+    featured: sorted.filter((it) => it.featured).length,
   };
 }
 
 /** Where a Dashboard tile lands in My work, already filtered (design: "every tile and bar is a link into My work"). */
-export const myWorkLink = (q: { kind?: WorkGroup; by?: 'week' | 'project' | 'skill' | 'kind'; q?: string } = {}): string => {
+export const myWorkLink = (q: { kind?: WorkGroup; by?: 'week' | 'project' | 'skill' | 'kind'; q?: string; featured?: boolean } = {}): string => {
   const p = new URLSearchParams();
+  if (q.featured) p.set('featured', '1');
   if (q.kind) p.set('kind', q.kind);
   if (q.by && q.by !== 'week') p.set('by', q.by);
   if (q.q) p.set('q', q.q);

@@ -26,6 +26,7 @@ import StoriesV2 from './pages/publicV2/StoriesV2';
 import StoryDetailV2 from './pages/publicV2/StoryDetailV2';
 import CapstoneRecordPage from './pages/CapstoneRecordPage';
 import PublicPortfolioProfilePage from './pages/PublicPortfolioProfilePage';
+import PublicWorkPage from './pages/PublicWorkPage';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -241,6 +242,8 @@ function App() {
               already renders standalone is the one that survives that move unchanged.
           */}
           <Route path="/portfolio/:slug" element={<PublicPortfolioProfilePage />} />
+          {/* C130: one featured, reviewer-approved piece of work on a public portfolio. */}
+          <Route path="/portfolio/:slug/work/:id" element={<PublicWorkPage />} />
           {/*
               Client reviewer sign-in. Deliberately OUTSIDE both marketing layouts,
               for the same reasons that moved p/:slug out of the legacy block — and
