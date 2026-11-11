@@ -1,0 +1,13 @@
+/* The Gallery's back board (C129). Sized off the screen's own width variables (--fwg / --fw, room3d.css) like the other custom
+   boards, so it scales with the wall and with the enlarged board. Colors are the board's art tokens plus each kind's color. */
+.cm-r3-screen .cm-wg-h { font-size: calc(var(--fwg, var(--fw)) * .06); line-height: 1.1; margin: calc(var(--fwg, var(--fw)) * .006) 0 calc(var(--fwg, var(--fw)) * .012); color: var(--cm-art-sp-ink); }
+.cm-r3-screen .cm-wg-total { display: flex; align-items: baseline; gap: calc(var(--fwg, var(--fw)) * .02); margin-bottom: calc(var(--fwg, var(--fw)) * .016); }
+.cm-r3-screen .cm-wg-total b { font-size: calc(var(--fwg, var(--fw)) * .1); line-height: 1; color: var(--cm-art-sp-ink); }
+.cm-r3-screen .cm-wg-total span { font-size: calc(var(--fwg, var(--fw)) * .03); color: var(--cm-art-muted); }
+.cm-r3-screen .cm-wg-kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: calc(var(--fwg, var(--fw)) * .04); row-gap: calc(var(--fwg, var(--fw)) * .012); margin-bottom: calc(var(--fwg, var(--fw)) * .024); }
+.cm-r3-screen .cm-wg-row { display: grid; grid-template-columns: calc(var(--fwg, var(--fw)) * .25) 1fr calc(var(--fwg, var(--fw)) * .045); gap: calc(var(--fwg, var(--fw)) * .012); align-items: center; font-size: calc(var(--fwg, var(--fw)) * .026); }
+.cm-r3-screen .cm-wg-row .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-r3-screen .cm-wg-row .t { height: calc(var(--fwg, var(--fw)) * .016); background: var(--cm-art-line); border-radius: 99px; overflow: hidden; }
+.cm-r3-screen .cm-wg-row .t i { display: block; height: 100%; border-radius: 99px; }
+.cm-r3-screen .cm-wg-row b { text-align: right; }
+.cm-r3-screen .cm-wg-empty { font-size: calc(var(--fwg, var(--fw)) * .032); color: var(--cm-art-muted); margin: 0 0 calc(var(--fwg, var(--fw)) * .024); }

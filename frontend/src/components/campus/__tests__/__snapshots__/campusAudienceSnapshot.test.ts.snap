@@ -101,8 +101,9 @@ Array [
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
-    "primary": "Open my portfolio -> /portal/portfolio",
+    "primary": "Open my dashboard -> /portal/portfolio/dashboard",
     "rooms": Array [
+      "Dashboard -> /portal/portfolio/dashboard",
       "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
@@ -256,8 +257,9 @@ Array [
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
-    "primary": "Open my portfolio -> /portal/portfolio",
+    "primary": "Open my dashboard -> /portal/portfolio/dashboard",
     "rooms": Array [
+      "Dashboard -> /portal/portfolio/dashboard",
       "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
@@ -420,8 +422,9 @@ Array [
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
-    "primary": "Open my portfolio -> /portal/portfolio",
+    "primary": "Open my dashboard -> /portal/portfolio/dashboard",
     "rooms": Array [
+      "Dashboard -> /portal/portfolio/dashboard",
       "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",
@@ -575,8 +578,9 @@ Array [
     "gate": "portfolio",
     "id": "gallery",
     "name": "Showcase Gallery",
-    "primary": "Open my portfolio -> /portal/portfolio",
+    "primary": "Open my dashboard -> /portal/portfolio/dashboard",
     "rooms": Array [
+      "Dashboard -> /portal/portfolio/dashboard",
       "My work -> /portal/portfolio/work",
       "Portfolio -> /portal/portfolio",
       "Preview -> /portal/portfolio/preview",

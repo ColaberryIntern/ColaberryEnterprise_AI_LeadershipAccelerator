@@ -44,6 +44,13 @@ describe('trailFor', () => {
     expect(trailFor('/portal/rooms', campusBuildingsFor('member'), true).map((c) => c.label)).toEqual(['Campus', 'Meeting Rooms', 'Meeting rooms']);
   });
 
+  it('C129: a page inside a room keeps that room (a work page reads Campus > Showcase Gallery > My work); the primary room never claims deeper pages', () => {
+    const m = campusBuildingsFor('member');
+    expect(trailFor('/portal/portfolio/work/11111111-2222-4333-8444-555555555555', m, false).map((c) => c.label)).toEqual(['Campus', 'Showcase Gallery', 'My work']);
+    expect(trailFor('/portal/portfolio/work/x', m, false)[2]).toEqual({ label: 'My work', route: '/portal/portfolio/work' });
+    expect(trailFor('/portal/portfolio/dashboard/anything', m, false).map((c) => c.label)).toEqual(['Campus', 'Showcase Gallery']);
+  });
+
   it('buildingIdForPath follows the same rules', () => {
     expect(buildingIdForPath('/portal/company', campusBuildingsFor('business'))).toBe('career');
     expect(buildingIdForPath('/portal/settings', campusBuildingsFor('member'))).toBeNull();
