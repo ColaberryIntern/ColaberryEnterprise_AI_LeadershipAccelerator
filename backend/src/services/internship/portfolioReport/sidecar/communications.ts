@@ -91,6 +91,46 @@ export function scoreMessage(m: { direction: Communication['direction']; from: s
 }
 
 const EXCERPT = 600;
+
+/**
+ * Cut an excerpt so it ends where a sentence ends, never in the middle of a word.
+ *
+ * ## Why this is not a cosmetic change
+ *
+ * `shapes.ts` refuses to reference an intern's own words, and the reason is written into a test
+ * called "never quotes the excerpt": a 600-character hard slice ended Quincy's message at
+ * `"the live expor"`. That was the correct call about a broken snippet, and it left the composer
+ * with only a subject line and a date to write from. The measured consequence on 2026-11-11 was
+ * that 13 of 13 messages opened with the identical sentence.
+ *
+ * So fix the snippet rather than overriding the objection. A sentence-complete excerpt can be
+ * referenced safely; a mid-word one cannot, and should not be.
+ *
+ * Falls back to a word boundary with an ellipsis when there is no sentence end late enough to use
+ * - better a clean "..." than a sentence fragment presented as a whole thought. The 40% floor
+ * stops a single early period (an initial, "e.g.", a version number) from cutting a long message
+ * down to one clause.
+ */
+export function trimToSentence(text: string, max: number = EXCERPT): string {
+  if (text.length <= max) return text;
+  const window = text.slice(0, max);
+  const end = Math.max(window.lastIndexOf('. '), window.lastIndexOf('? '), window.lastIndexOf('! '));
+  if (end >= Math.floor(max * 0.4)) return window.slice(0, end + 1).trimEnd();
+  const space = window.lastIndexOf(' ');
+  return `${window.slice(0, space > 0 ? space : max - 3).trimEnd()}...`;
+}
+
+/**
+ * True when an excerpt ends on a sentence, so a composer may reference it as a whole thought.
+ *
+ * A trailing ellipsis is explicitly NOT complete, even though it ends in a period. That is the
+ * whole case this predicate exists to catch, and a naive `/[.?!]$/` passes it.
+ */
+export function isSentenceComplete(excerpt: string): boolean {
+  const t = excerpt.trim();
+  return /[.?!]$/.test(t) && !/\.\.\.$/.test(t);
+}
+
 const subjectKey = (s: string): string => s.replace(/^((re|fw|fwd):\s*)+/i, '').trim().toLowerCase();
 
 /** Every scored message, per intern, best first. `interns` = (enrollment id, name, lower-case email). */
@@ -115,7 +155,7 @@ export function rankCommunications(rows: Conversation[], interns: Array<{ enroll
       if (!content) continue;
       const c: Communication = {
         enrollment_id: it.enrollmentId, intern: it.name, direction: x.direction, received_at: new Date(x.atMs).toISOString(),
-        subject, excerpt: text.length > EXCERPT ? `${text.slice(0, EXCERPT - 3)}...` : text, score, signals, answered,
+        subject, excerpt: trimToSentence(text, EXCERPT), score, signals, answered,
       };
       const key = `${x.direction}:${subjectKey(subject)}`;
       const prev = best.get(key);

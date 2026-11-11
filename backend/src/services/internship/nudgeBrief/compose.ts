@@ -30,6 +30,9 @@ export const DEADLINE_LEADS_WITHIN_DAYS = 14;
 
 const nf = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
+/** The day-word a promise was made with. Keeping the promise means naming this day again. */
+const PROMISE_WHEN = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|this week|next week)\b/i;
+
 export function findPromises(intern: SidecarIntern): BriefPromise[] {
   const last = intern.last_ask;
   if (!last?.body_text || last.from?.toLowerCase().includes('@colaberry.com') === false) return [];
@@ -128,6 +131,29 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   const subject = subjectFor(intern, focus, deadline);
 
   const body = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  /**
+   * A dated promise WE made that today's message neither keeps nor re-dates.
+   *
+   * `findPromises` reads our own last outbound, so these are commitments Ali made to them. On
+   * 2026-11-11 Quincy's brief carried "On the six: you will have them before Friday." verbatim and
+   * his message did not contain the word Friday, or any content word from that sentence. The data
+   * was present and the composer walked past it.
+   *
+   * This is a warning rather than a generated sentence on purpose: whether a promise is kept or
+   * moved is a decision about what Ali will actually do, and no judgement of that kind is in the
+   * database. The composer's job here is to make sure it cannot lapse in silence.
+   */
+  const promises = findPromises(intern);
+  for (const p of promises) {
+    const when = PROMISE_WHEN.exec(p.quote)?.[0];
+    if (when && !new RegExp(`\\b${when}\\b`, 'i').test(body)) {
+      warnings.push(
+        `We promised them a date and this message does not mention it: "${p.quote}" Decide before sending whether today's message holds that date or gives them a new one.`,
+      );
+    }
+  }
+
   warnings.push(...briefProblems(body));
 
   return {
@@ -149,7 +175,7 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
       : null,
     inboundSince: inboundSince(intern),
     deadline,
-    promises: findPromises(intern),
+    promises,
     subject,
     body,
     // Gated on the SAME condition as the ask lines. Dropping only the lines left Sarbjit's message

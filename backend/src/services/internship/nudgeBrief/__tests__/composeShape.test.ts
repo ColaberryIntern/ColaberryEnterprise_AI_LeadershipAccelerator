@@ -78,13 +78,59 @@ describe('what the message is about', () => {
 });
 
 describe('it reads their mail', () => {
+  /**
+   * REPLACES an assertion that required the literal opener "Thank you for your note of
+   * November 9". That assertion encoded the defect: measured on production 2026-11-11, all
+   * thirteen generated messages opened with that same sentence, whether the person had reported a
+   * blocker, asked a question, or sent a status update. The opener now says which of those it was.
+   */
   it('opens by naming their own last message, not by a deficit', () => {
     const b = composeBrief({
       intern: intern({ communications: [comm()], days_since_build_work: 9 }),
       deadline: null, now: NOW,
     });
-    expect(b.body).toContain('Thank you for your note of November 9');
+    expect(b.body).toContain('November 9');
     expect(b.body).toContain('"The Capability Map, and where your decisions stand"');
+    // Not a deficit, and not a count.
+    expect(b.body.split('\n')[2] ?? '').not.toMatch(/^(There has been no|It is day|Nothing has been)/);
+  });
+
+  it('opens differently depending on WHAT they sent', () => {
+    const open = (over: Record<string, unknown>) => composeBrief({
+      intern: intern({ communications: [comm(over)], days_since_build_work: 9 }),
+      deadline: null, now: NOW,
+    }).body;
+
+    // A blocker. "Thank you for your note" is the wrong thing to say to somebody stuck behind one.
+    expect(open({ subject: 'Read route needed for admissions enrichment', excerpt: 'I am blocked on this and cannot get access.' }))
+      .toContain('You flagged something in the way on');
+
+    // A question.
+    expect(open({ subject: 'Can you confirm the agent naming', excerpt: 'Could you confirm which name to use.' }))
+      .toContain('You asked me something on');
+
+    // A plain status update, which is the only case the old single opener actually fitted.
+    expect(open({ subject: 'Saratoga project update', excerpt: 'Here is where the system stands today. Ten of eleven stories are verified.' }))
+      .toContain('Thank you for the update of');
+  });
+
+  /**
+   * Omolola Makinde, 2026-11-11. Her brief was held `unsendable_text` and the only offending
+   * character in it was the en dash SHE typed in her own subject line. See `inherited.ts`.
+   */
+  it('repeats their subject back without the dash that made it unsendable', () => {
+    const subject = 'Saratoga Springs Municipal System – project update and stakeholder briefing';
+    const b = composeBrief({
+      intern: intern({
+        communications: [comm({ subject, excerpt: 'Here is where it stands. Ten of eleven stories are verified.', answered: false })],
+        triage: { tier: 'blocked_waiting_on_ali', reason: 'waiting' },
+      }),
+      deadline: null, now: NOW,
+    });
+    expect(b.body).toContain('Saratoga Springs Municipal System - project update');
+    expect(b.body).not.toMatch(/[–—]/);
+    expect(b.subject).not.toMatch(/[–—]/);
+    expect(b.warnings).not.toContain('contains an em or en dash');
   });
 
   /** The excerpt is a truncated snippet. Quoting one is how a message ended at "the live expor". */
@@ -247,5 +293,63 @@ describe('length', () => {
     const a = composeBrief({ intern: intern({ communications: [comm()] }), deadline: DEADLINE, now: NOW });
     const b = composeBrief({ intern: intern({ communications: [comm()] }), deadline: DEADLINE, now: NOW });
     expect(a.body).toBe(b.body);
+  });
+});
+
+/**
+ * A promise WE made cannot lapse in silence.
+ *
+ * Measured 2026-11-11: Quincy's brief carried the quote "On the six: you will have them before
+ * Friday." in `promises`, and his generated message contained no content word from that sentence
+ * and never mentioned Friday. The data was present; the composer walked past it. The skill has
+ * this as rule 5, and the brief had already done the hard part of finding it.
+ */
+describe('a dated promise in our last message', () => {
+  const withPromise = (over: Record<string, unknown> = {}) => intern({
+    last_ask: {
+      sent_at: '2026-11-10T21:13:37Z',
+      subject: 'Re: The Capability Map, and where your decisions stand',
+      from: 'ali@colaberry.com',
+      body_text: 'Thanks for the list. On the six: you will have them before Friday.',
+    },
+    days_since_build_work: 9,
+    ...over,
+  } as Record<string, unknown>);
+
+  it('POSITIVE CONTROL: the promise is actually found', () => {
+    const b = composeBrief({ intern: withPromise(), deadline: null, now: NOW });
+    expect(b.promises.map((p) => p.quote)).toEqual(['On the six: you will have them before Friday.']);
+  });
+
+  it('warns when today message neither keeps it nor re-dates it', () => {
+    const b = composeBrief({ intern: withPromise(), deadline: null, now: NOW });
+    expect(b.body).not.toMatch(/friday/i);
+    expect(b.warnings.join(' ')).toContain('We promised them a date and this message does not mention it');
+    expect(b.warnings.join(' ')).toContain('before Friday');
+  });
+
+  it('stays quiet when the message does name the day', () => {
+    // `close()` for no_project says "Send me the paragraph by Thursday", so a Thursday promise is
+    // already honoured by the body and must not be flagged.
+    const b = composeBrief({
+      intern: withPromise({
+        project: null,
+        last_ask: {
+          sent_at: '2026-11-10T21:13:37Z', subject: 'Your project', from: 'ali@colaberry.com',
+          body_text: 'I will send you two options by Thursday.',
+        },
+      }),
+      deadline: null,
+      now: NOW,
+    });
+    expect(b.promises).toHaveLength(1);
+    expect(b.body).toMatch(/Thursday/);
+    expect(b.warnings.join(' ')).not.toContain('does not mention it');
+  });
+
+  it('says nothing when there was no promise to keep', () => {
+    const b = composeBrief({ intern: intern({ days_since_build_work: 9 }), deadline: null, now: NOW });
+    expect(b.promises).toEqual([]);
+    expect(b.warnings.join(' ')).not.toContain('We promised them a date');
   });
 });
