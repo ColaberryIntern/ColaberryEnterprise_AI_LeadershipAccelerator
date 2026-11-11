@@ -1,5 +1,6 @@
 import {
-  decideClipMarker, formatTimecode, type MarkerInput, type ResolvedSlide,
+  decideClipMarker, decideLiveClipMark, formatTimecode, LIVE_MARK_LABEL,
+  type MarkerInput, type ResolvedSlide,
 } from '../broadcastClipMarkerPolicy';
 
 /**
@@ -149,5 +150,102 @@ describe('the timecode a human reads', () => {
 
   it('never renders a negative time', () => {
     expect(formatTimecode(-5)).toBe('00:00');
+  });
+});
+
+/**
+ * D10 - A DELIBERATE PRESS, which is not an advance with a different name.
+ *
+ * The whole reason this is a second function rather than a flag is that the two disagree about
+ * what makes a moment worth recording, and a flag would have hidden the disagreement:
+ *
+ *   - an advance IS its slide, so an unresolvable slide means there was no moment;
+ *   - a press IS a timecode, so an unresolvable slide means an unlabelled moment.
+ *
+ * Getting that backwards is the expensive mistake. Somebody watching a class presses the button
+ * because something good just happened, and discarding it because the server could not name the
+ * slide throws away the only record that it happened at all.
+ */
+describe('a press, as against an advance', () => {
+  it('records the timecode and the segment label when everything resolves', () => {
+    const d = decideLiveClipMark(at());
+
+    expect(d.record).toBe(true);
+    if (!d.record) throw new Error('unreachable');
+    expect(d.marker.timecodeSeconds).toBe(167);
+    expect(d.marker.label).toBe('The 90-second "it actually works" moment');
+    expect(d.labelled).toBe(true);
+  });
+
+  it('KEEPS the mark when the slide cannot be resolved, and says it is unlabelled', () => {
+    // The advance path refuses here, correctly. A press must not: the moment happened.
+    const d = decideLiveClipMark(at({ slide: null }));
+
+    expect(d.record).toBe(true);
+    if (!d.record) throw new Error('unreachable');
+    expect(d.marker.timecodeSeconds).toBe(167);
+    expect(d.marker.label).toBe(LIVE_MARK_LABEL);
+    expect(d.labelled).toBe(false);
+  });
+
+  it('CONTROL: the advance path still refuses the same input', () => {
+    // Without this the test above only says what this function does, not that it differs.
+    const advance = decideClipMarker(at({ slide: null }));
+    expect(advance.record).toBe(false);
+  });
+
+  /**
+   * DRIFT KEEPS THE TIME AND DROPS THE LABEL.
+   *
+   * The press claims nothing, but the slide it hangs on comes from the index the DECK last
+   * broadcast. A deck on a different slide list hands this a confidently wrong label, and a clip
+   * labelled as the wrong segment sends an editor to the wrong part of the video - worse than a
+   * clip with no label, which costs them a few seconds.
+   */
+  it('drops the label when the deck has drifted, but keeps the moment', () => {
+    const d = decideLiveClipMark(at({ deckTitle: 'A completely different slide' }));
+
+    expect(d.record).toBe(true);
+    if (!d.record) throw new Error('unreachable');
+    expect(d.marker.timecodeSeconds).toBe(167);
+    expect(d.marker.label).toBe(LIVE_MARK_LABEL);
+    expect(d.marker.segmentLabel).toBe('');
+    expect(d.marker.slideTitle).toBe('');
+    expect(d.labelled).toBe(false);
+  });
+
+  it('refuses when there is no broadcast to mark into', () => {
+    expect(decideLiveClipMark(at({ occurrenceId: null })).record).toBe(false);
+    expect(decideLiveClipMark(at({ editorialState: 'backstage' })).record).toBe(false);
+    expect(decideLiveClipMark(at({ editorialState: 'ended' })).record).toBe(false);
+  });
+
+  it('refuses before content has started, which is what the button waits for', () => {
+    // D10's own wording: enabled once content has started. Before that there is no anchor, so
+    // "how far into the recording" has no answer at all.
+    expect(decideLiveClipMark(at({ contentStartedAtMs: null })))
+      .toEqual({ record: false, reason: 'no_content_anchor' });
+    expect(decideLiveClipMark(at({ nowMs: STARTED - 1 })))
+      .toEqual({ record: false, reason: 'before_content_start' });
+  });
+
+  it('refuses when the deck has never said which slide is up', () => {
+    // Not the same as an unresolvable slide. Here there is no index at all, so the row has
+    // nothing to put in a NOT NULL column - the refusal is honest rather than inventing a 0,
+    // which is a real slide.
+    expect(decideLiveClipMark(at({ slideIndex: null as unknown as number })))
+      .toEqual({ record: false, reason: 'no_slide_context' });
+  });
+
+  it('marks at the same second as an advance without either blocking the other', () => {
+    // They are deduped by different partial indexes, so one slide can carry both an advance
+    // and a press. This asserts the POLICY produces both; the schema header explains the keys.
+    const advance = decideClipMarker(at());
+    const press = decideLiveClipMark(at());
+
+    expect(advance.record).toBe(true);
+    expect(press.record).toBe(true);
+    if (!advance.record || !press.record) throw new Error('unreachable');
+    expect(press.marker.timecodeSeconds).toBe(advance.marker.timecodeSeconds);
   });
 });

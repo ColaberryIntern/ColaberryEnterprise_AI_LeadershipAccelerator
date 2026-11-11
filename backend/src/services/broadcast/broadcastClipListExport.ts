@@ -27,6 +27,7 @@
  */
 import { formatTimecode } from './broadcastClipMarkerPolicy';
 import type { StoredClipMarker } from './broadcastClipMarkerService';
+import type { StoredClipMark } from './broadcastClipMarkService';
 
 /** The two instants that bound the recording. Either may be absent. */
 export interface ClipListAiring {
@@ -51,6 +52,15 @@ export interface ClipRow {
   label: string;
   segmentLabel: string;
   slideTitle: string;
+  /**
+   * Where this row came from (D10).
+   *
+   * `advance` is a by-product of the instructor moving the show on. `live` is a producer who
+   * watched something happen and pressed a button about it. For an editor deciding what to cut
+   * first, that difference is the single most useful column in the file: one of them is a
+   * person saying "this bit".
+   */
+  source: 'advance' | 'live';
 }
 
 function instantMs(value: string | Date | null): number | null {
@@ -92,6 +102,7 @@ export function isCandidate(marker: StoredClipMarker): boolean {
 export function buildClipRows(
   markers: ReadonlyArray<StoredClipMarker>,
   airing: ClipListAiring,
+  marks: ReadonlyArray<StoredClipMark> = [],
 ): ClipRow[] {
   const started = instantMs(airing.contentStartedAt);
   const ended = instantMs(airing.endedAt);
@@ -100,8 +111,44 @@ export function buildClipRows(
     ? Math.floor((ended - started) / 1000)
     : null;
 
-  const sorted = [...markers].sort(
-    (a, b) => a.timecode_seconds - b.timecode_seconds || a.slide_index - b.slide_index,
+  /**
+   * ADVANCES AND PRESSES BECOME ONE ORDERED LIST HERE (D10).
+   *
+   * They are stored in two tables because they are deduped differently - an advance is unique
+   * per slide, a press is unique per second - but an editor does not care which table a moment
+   * came from, only when it was. So the merge happens at the read, which is also the only place
+   * that can get the out points right: a press inside a long segment SPLITS it, and the clip
+   * that was running now ends where the press starts. Appending the presses afterwards instead
+   * would leave every advance's out point pointing past a moment somebody flagged.
+   *
+   * A press and an advance can legitimately share a second, so the tie-break puts the advance
+   * first: the segment begins, then something inside it is flagged.
+   */
+  const sorted = [
+    ...markers.map((m) => ({
+      timecode_seconds: m.timecode_seconds,
+      slide_index: m.slide_index,
+      label: m.label,
+      segment_label: m.segment_label,
+      slide_title: m.slide_title,
+      candidate: isCandidate(m),
+      source: 'advance' as const,
+    })),
+    ...marks.map((m) => ({
+      timecode_seconds: m.timecode_seconds,
+      slide_index: m.slide_index,
+      label: m.label,
+      segment_label: m.segment_label,
+      slide_title: m.slide_title,
+      // STORED, not derived. The press path records whether its label was authored, which is
+      // the gap this file's own `isCandidate` comment documents as unfixable after the fact.
+      candidate: m.labelled === true,
+      source: 'live' as const,
+    })),
+  ].sort(
+    (a, b) => a.timecode_seconds - b.timecode_seconds
+      || (a.source === b.source ? 0 : a.source === 'advance' ? -1 : 1)
+      || a.slide_index - b.slide_index,
   );
 
   return sorted.map((m, i) => {
@@ -126,10 +173,11 @@ export function buildClipRows(
       inTimecode: formatTimecode(inSeconds),
       outTimecode: outSeconds === null ? '' : formatTimecode(outSeconds),
       durationTimecode: durationSeconds === null ? '' : formatTimecode(durationSeconds),
-      candidate: isCandidate(m),
+      candidate: m.candidate,
       label: (m.label || '').trim(),
       segmentLabel: (m.segment_label || '').trim(),
       slideTitle: (m.slide_title || '').trim(),
+      source: m.source,
     };
   });
 }
@@ -148,7 +196,7 @@ export function csvCell(value: string | number | boolean): string {
 }
 
 const COLUMNS = [
-  'clip', 'in', 'out', 'duration', 'candidate', 'label', 'segment', 'slide_title',
+  'clip', 'in', 'out', 'duration', 'source', 'candidate', 'label', 'segment', 'slide_title',
   'in_seconds', 'out_seconds', 'slide_index',
 ] as const;
 
@@ -168,6 +216,7 @@ export function toCsv(rows: ReadonlyArray<ClipRow>): string {
       csvCell(r.inTimecode),
       csvCell(r.outTimecode),
       csvCell(r.durationTimecode),
+      csvCell(r.source),
       csvCell(r.candidate),
       csvCell(r.label),
       csvCell(r.segmentLabel),

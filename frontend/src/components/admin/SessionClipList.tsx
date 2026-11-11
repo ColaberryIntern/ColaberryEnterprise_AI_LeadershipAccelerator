@@ -34,6 +34,8 @@ interface Clip {
   out_timecode: string;
   duration_timecode: string;
   candidate: boolean;
+  /** D10: `advance` is a by-product of the deck moving on; `live` is a producer who pressed. */
+  source?: 'advance' | 'live';
   label: string;
   segment_label: string;
   slide_title: string;
@@ -157,7 +159,21 @@ const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
 
   if (!data || !data.aired) return null;
 
-  const candidates = data.clips.filter((c) => c.candidate);
+  /**
+   * A PRESS BELONGS IN THIS TABLE WHETHER OR NOT IT CARRIES A LABEL (D10).
+   *
+   * The filter used to be `c.candidate` alone, which reads a row as worth showing when a human
+   * authored a sentence about the segment it fell in. That is the right test for an advance,
+   * where the only evidence of worth IS the authored note.
+   *
+   * It is the wrong test for a press, and wrong in the direction that hides the feature. A
+   * producer pressing the button while the class runs is the strongest signal of worth this
+   * system has - stronger than a note written days earlier - and an unlabelled press is exactly
+   * the case the button exists for: something good happened that no slide was going to capture.
+   * Filtering on `candidate` alone would have shown the labelled presses and silently dropped
+   * the rest.
+   */
+  const candidates = data.clips.filter((c) => c.candidate || c.source === 'live');
   const plain = data.clips.length - candidates.length;
 
   return (
@@ -200,6 +216,17 @@ const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
                       {c.duration_timecode || <span className="text-muted">—</span>}
                     </td>
                     <td>
+                      {/* Said first, because it is the thing that decides what an editor cuts
+                          first: a person watching the class chose this moment. */}
+                      {c.source === 'live' && (
+                        <span
+                          className="badge bg-danger-subtle text-danger-emphasis me-2"
+                          style={{ fontSize: 11 }}
+                          data-testid="clip-marked-live"
+                        >
+                          Marked live
+                        </span>
+                      )}
                       {c.label}
                       {c.segment_label && (
                         <span className="text-muted ms-2" style={{ fontSize: 12 }}>{c.segment_label}</span>

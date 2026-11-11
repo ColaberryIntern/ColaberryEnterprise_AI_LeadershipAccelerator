@@ -190,3 +190,63 @@ describe('the download', () => {
     expect(text()).toContain('Could not build the clip file');
   });
 });
+
+/**
+ * D10 — a moment a producer chose, in the list an editor reads.
+ *
+ * The assertion that matters is the UNLABELLED one. The table filters on `candidate`, which
+ * means "a human authored a sentence about this segment" - the right test for an advance, where
+ * that note is the only evidence of worth, and the wrong test for a press.
+ *
+ * A press IS the evidence. Somebody watching the class decided this moment was worth cutting,
+ * which is a stronger signal than a note written days earlier, and an unlabelled press is
+ * exactly the case the button exists for: something good that no slide was going to capture.
+ * Filtering on `candidate` alone would have shown the labelled presses and silently dropped the
+ * rest - the feature working for the easy half and vanishing for the half it was built for.
+ */
+describe('a moment the producer marked live', () => {
+  it('appears even with NO authored label', async () => {
+    await render(aired({
+      clips: [
+        clip({ clip: 1, candidate: false, source: 'live', label: 'Marked live', in_timecode: '02:47' }),
+      ],
+    }));
+
+    expect(find('clip-candidates')).not.toBeNull();
+    expect(text()).toContain('02:47');
+  });
+
+  it('is badged, so an editor can tell it from an advance at a glance', async () => {
+    await render(aired({
+      clips: [clip({ clip: 1, candidate: false, source: 'live', label: 'Marked live' })],
+    }));
+
+    expect(find('clip-marked-live')).not.toBeNull();
+    expect(find('clip-marked-live')!.textContent).toBe('Marked live');
+  });
+
+  it('CONTROL: a plain advance is still kept out of the table and carries no badge', async () => {
+    // Without this, the filter above could be one that shows everything.
+    await render(aired({
+      clips: [
+        clip({ clip: 1, candidate: true, source: 'advance', label: 'The promise' }),
+        clip({ clip: 2, candidate: false, source: 'advance', label: 'Build Bay' }),
+      ],
+    }));
+
+    expect(find('clip-marked-live')).toBeNull();
+    expect(text()).toContain('The promise');
+    expect(find('clip-candidates')!.querySelectorAll('tr')).toHaveLength(1);
+  });
+
+  it('shows a labelled press with its own words, not the fallback', async () => {
+    await render(aired({
+      clips: [clip({
+        clip: 1, candidate: true, source: 'live', label: 'The question that landed',
+      })],
+    }));
+
+    expect(text()).toContain('The question that landed');
+    expect(find('clip-marked-live')).not.toBeNull();
+  });
+});
