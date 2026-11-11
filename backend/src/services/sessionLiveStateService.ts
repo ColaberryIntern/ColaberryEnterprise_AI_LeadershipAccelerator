@@ -13,6 +13,7 @@ import { sequelize } from '../config/database';
 import { getRecentPresenceEvents, PresenceEvent, formatDisplayName } from './sessionPresenceService';
 import { addTallies, countGuests, getGuestCorrectNames, getGuestTally } from './sessionGuestStore';
 import type { KitSlide } from './classKit/kitSpec';
+import { readPresenterTally, type PresenterTally } from './broadcast/broadcastPresenterTally';
 
 export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
 const VALID_STATES: PulseState[] = ['here', 'building', 'stuck', 'finished'];
@@ -305,6 +306,15 @@ export interface PresenterNotes {
    * carries no per-student identity and no vote control — this view reads the
    * room, it never participates in it. */
   poll: { options: string[]; tally: number[]; total: number } | null;
+  /**
+   * Whether the room can hear the presenter (D9).
+   *
+   * On THIS payload rather than the deck's, because the deck is the projected picture and OBS
+   * captures the teaching monitor into both the stream and the recording master - so a badge
+   * there would end up burned into a replay, reading ON AIR when it is not. This page is the
+   * presenter's own device and never projected, which makes it the tally.
+   */
+  tally: PresenterTally;
   updated_at: string | null;
 }
 
@@ -415,6 +425,13 @@ export async function getPresenterNotes(sessionId: string): Promise<PresenterNot
     poll = { options: opts, tally: filled, total: filled.reduce((a, b) => a + b, 0) };
   }
 
+  /**
+   * The tally (D9). Read even when the deck has never broadcast, because the question "can the
+   * room hear me" does not depend on which slide is up - and an instructor who opens this page
+   * before touching the deck is exactly the person who needs the answer.
+   */
+  const tally = await readPresenterTally(sessionId);
+
   return {
     title: bc?.title || '',
     segment_label: bc?.segment_label || '',
@@ -423,6 +440,7 @@ export async function getPresenterNotes(sessionId: string): Promise<PresenterNot
     next_title: bc?.next_title || '',
     diagram_fullscreen: !!bc?.diagram_fullscreen,
     poll,
+    tally,
     updated_at: bc?.updated_at || null,
   };
 }
