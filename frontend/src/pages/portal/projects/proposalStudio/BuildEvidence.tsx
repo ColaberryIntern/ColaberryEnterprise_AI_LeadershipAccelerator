@@ -34,6 +34,14 @@ export default function BuildEvidence(
   const usedCount = artifacts.filter((a) => a.caption && /figure|§/i.test(a.caption)).length;
 
   const insertTargets = (view.proposalDocuments ?? []).filter((d) => d.key !== 'pricing' && !d.superseded && (d.docType === 'build' || d.docType === 'derived' || d.docType === 'generated'));
+
+  // The build artifacts REPOSITORY the proposal writer can draw from: what the intern has actually built and submitted
+  // from their repo (each story's evidence — an artifactRef link and/or a matched commit), the deliverables behind the
+  // verified stories. Demo videos join here as interns record their demos; until then this is the repo + commit work.
+  const builtArtifacts = (view.build?.stories ?? [])
+    .flatMap((s) => (s.evidence ?? []).map((e) => ({ story: s, e })))
+    .filter((x) => x.e.artifactRef || x.e.commitSha || x.e.description);
+  const isHttp = (u: string | null | undefined): boolean => !!u && /^https?:\/\//i.test(u);
   const [demoUrl, setDemoUrl] = useState('');
   const [savingUrl, setSavingUrl] = useState(false);
 
@@ -99,6 +107,27 @@ export default function BuildEvidence(
           );
         })}
       </div>
+
+      {/* Build artifacts REPOSITORY — what the intern has built + submitted from their repo, for the proposal writer. */}
+      <div className="gps-vh" style={{ marginTop: 24 }}><div><h3>Build artifacts</h3><p>What the intern has built and submitted from their repo &mdash; the deliverables behind the verified stories, for the proposal to draw from. Demo videos join here as interns record their demos.</p></div></div>
+      {builtArtifacts.length === 0 ? (
+        <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo &mdash; and their demo videos once recorded.</div>
+      ) : (
+        <div className="gps-gallery">
+          {builtArtifacts.map(({ story, e }, i) => (
+            <div className="gps-panel" key={e.id || `${story.id}-${i}`} data-testid="ev-artifact" data-source={e.source ?? 'student'}>
+              <div className="gps-row"><b>{story.title}</b>{e.status === 'verified' ? <span className="gps-tag ok">Verified</span> : e.status === 'rejected' ? <span className="gps-tag warn">Rejected</span> : <span className="gps-tag">Submitted</span>}</div>
+              {e.description && <div className="gps-small gps-muted" style={{ marginBottom: 6 }}>{e.description}</div>}
+              <div className="gps-foot">
+                {e.artifactRef && (isHttp(e.artifactRef)
+                  ? <a className="gps-small" data-testid="ev-artifact-link" href={e.artifactRef} target="_blank" rel="noreferrer">Open artifact</a>
+                  : <span className="gps-small gps-mono">{e.artifactRef}</span>)}
+                <span className="gps-small gps-muted">{e.source === 'github_push' ? 'from commit' : 'submitted'}{e.commitSha ? ` · ${e.commitSha.slice(0, 7)}` : ''}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

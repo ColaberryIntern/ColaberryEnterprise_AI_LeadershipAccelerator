@@ -336,3 +336,28 @@ describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualificat
     expect(txt).toContain('left');       // ...with a days-left countdown
   });
 });
+
+describe('BuildEvidence — the build-artifacts repository the proposal writer draws from', () => {
+  const withBuild = {
+    ...VIEW,
+    build: { releases: [], buildStoryCount: 1, stories: [
+      {
+        id: 'STORY-1', requirementId: 'R-1', title: 'Search screen', statement: 'Build search', release: 'R1',
+        acceptance: [], status: 'assigned', prompt: '', stage: 'done', owner: 'ai', mine: false,
+        commit: { sha: 'abc1234', message: 'search' },
+        evidence: [{ id: 'EV1', storyId: 'STORY-1', canonicalReqId: 'R-1', description: 'Search screen deployed', artifactRef: 'https://demo.example.com/search', status: 'verified', submittedAt: null, source: 'student', commitSha: 'abc1234' }],
+      },
+    ] },
+  } as unknown as StudentGovProjectView;
+
+  it('lists the submitted build artifacts with an openable link', async () => {
+    await render(<BuildEvidence view={withBuild} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
+    expect(present('ev-artifact')).toBe(true);
+    expect(container.querySelector('[data-testid="ev-artifact-link"]')?.getAttribute('href')).toBe('https://demo.example.com/search');
+  });
+
+  it('shows the empty state (ready for repo artifacts + demo videos) when nothing is submitted yet', async () => {
+    await render(<BuildEvidence view={VIEW} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
+    expect(present('ev-artifacts-empty')).toBe(true);
+  });
+});
