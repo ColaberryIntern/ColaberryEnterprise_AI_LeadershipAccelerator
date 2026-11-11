@@ -15,7 +15,13 @@ import type { EditorialState, EndReason, ProviderHealth } from '../services/broa
  * editorial_state and provider_health are deliberately separate — see broadcastStateMachine
  * for why a producer's intent and the provider's reality must not share a column.
  */
-export type BroadcastAccessMode = 'free' | 'paid' | 'preview' | 'private';
+/**
+ * The four access modes as VALUES, so anything that must validate or enumerate them reads one
+ * list rather than restating the literals. The Studio setup request schema is the first caller.
+ */
+export const BROADCAST_ACCESS_MODES = ['free', 'paid', 'preview', 'private'] as const;
+
+export type BroadcastAccessMode = typeof BROADCAST_ACCESS_MODES[number];
 
 export interface BroadcastOccurrenceAttributes {
   id: string;

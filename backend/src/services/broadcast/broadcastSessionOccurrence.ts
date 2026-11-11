@@ -32,7 +32,7 @@
  * one thing that is not true about a show cancelled before it ever aired.
  */
 import { sequelize } from '../../config/database';
-import BroadcastOccurrence from '../../models/BroadcastOccurrence';
+import BroadcastOccurrence, { BroadcastAccessMode } from '../../models/BroadcastOccurrence';
 import { deriveStartInstant, occurrenceKeyFor } from './broadcastIdentity';
 import { resolveLiveInput } from './broadcastInputBinding';
 
@@ -122,6 +122,7 @@ async function createLinked(
   startsAt: Date,
   provider: string,
   providerSessionId: string,
+  accessMode: BroadcastAccessMode,
 ): Promise<string> {
   let createdId = '';
   await sequelize.transaction(async (tx) => {
@@ -131,11 +132,21 @@ async function createLinked(
         title: session.title,
         room_id: roomId,
         scheduled_start_at: startsAt,
-        // Both stated explicitly even though they match the column defaults. The acceptance
-        // criterion is that the default is the most restrictive, and an explicit value is what
-        // a test can assert on; a silent reliance on a default cannot be distinguished from a
-        // default that has since been changed.
-        access_mode: 'private',
+        /*
+         * Stated explicitly even when it matches the column default. The acceptance criterion is
+         * that the default is the most restrictive, and an explicit value is what a test can
+         * assert on; a silent reliance on a default cannot be distinguished from a default that
+         * has since been changed.
+         *
+         * D4: this is now the caller's choice rather than a constant, because Studio setup asks
+         * the operator for it. The PARAMETER still defaults to 'private', so every caller that
+         * does not care — including the session setup flow at acceleratorService.ts:89 — behaves
+         * exactly as it did, and the most restrictive value remains what you get by saying
+         * nothing. This is the only place access_mode is ever written: the retime path below
+         * deliberately does not touch it, per ensureBroadcastSchema.ts:101-102, "a later policy
+         * edit is a new version, never an in-place widening of who could watch".
+         */
+        access_mode: accessMode,
         editorial_state: 'scheduled',
         // L5.4: without these, playback has nothing telling it which live input to sign, and
         // the occurrence is real, correctly gated, and unplayable.
@@ -172,6 +183,15 @@ async function createLinked(
 export async function ensureOccurrenceForSession(
   session: SessionForOccurrence,
   roomId: string | null,
+  /**
+   * D4. The access mode to stamp on a NEWLY CREATED occurrence. Ignored on every other path,
+   * because an existing occurrence's policy is write-once by the invariant at
+   * ensureBroadcastSchema.ts:101-102 — a change there is a new version, not an edit.
+   *
+   * Defaulted rather than required so existing callers are untouched and the value you get by
+   * saying nothing is still the most restrictive one.
+   */
+  accessMode: BroadcastAccessMode = 'private',
 ): Promise<EnsureOccurrenceResult> {
   // A private occurrence with no room is unreachable by design: room eligibility fails closed
   // on a null room_id. Creating one would be an orphan nobody, Ali included, could ever watch.
@@ -218,6 +238,7 @@ export async function ensureOccurrenceForSession(
     try {
       const id = await createLinked(
         session, roomId, key, instant.startsAt, binding.provider, binding.providerSessionId,
+        accessMode,
       );
       log('broadcast_occurrence_created', 'success', { sessionId: session.id, occurrenceId: id, key });
       return { outcome: 'created', occurrenceId: id };

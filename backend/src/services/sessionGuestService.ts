@@ -8,11 +8,12 @@
  * email can never open that student's account; the email is only matched to
  * an enrollment for follow-up.
  *
- * Only Open House sessions accept guests (title contains "Open House", the
- * same rule kitSpec.detectDayKind uses), so this cannot open voting on a
- * normal class.
+ * A session accepts guests when `guest_access` is true, and only then. This was
+ * a match on the class TITLE until D4 (P4-01) made it an explicit setting on
+ * Studio setup; see `assertGuestSession` for why the title was not kept as a
+ * fallback.
  *
- * Failure modes handled: unknown/non-Open-House session (GuestError 404),
+ * Failure modes handled: a session that does not accept guests (GuestError 404),
  * malformed input (400 at the controller), expired/forged pass (401), a vote
  * after the instructor locked the question (PollLockedError → 409), a vote on
  * a question that is not on screen (409). Re-joining with the same email is
@@ -45,10 +46,34 @@ export function verifyGuestPass(token: string | undefined, sessionId: string): s
   }
 }
 
+/**
+ * D4 — guest access is a SETTING on the session, not a property of its title.
+ *
+ * This used to read `/open house/i` against the class title, so whether an outsider could watch
+ * depended on what the class was called. Renaming a class changed who could see it; a class that
+ * wanted guests had to be called "Open House" whatever it was actually about.
+ *
+ * `guest_access` now decides, and nothing else does. The title is still returned because callers
+ * display it, but it no longer gates anything.
+ *
+ * NULL and false both refuse, and they are not the same thing: NULL is "never configured", false
+ * is "somebody decided no". Both deny, so the fail-closed default survives either way — but the
+ * distinction is why `ensureStudioSetupSchema`'s backfill is scoped to `guest_access IS NULL`.
+ * An operator who turns guests OFF on a session that happens to be called "Open House" stays off.
+ * Keeping the title as an OR-fallback would have let the name of the class override that explicit
+ * refusal, which is the opposite of what this change is for.
+ *
+ * Capability is untouched: a guest may still only read the current question and vote. This
+ * decides WHO may join, never WHAT they may do.
+ */
 export async function assertGuestSession(sessionId: string): Promise<{ title: string }> {
-  const s = await LiveSession.findByPk(sessionId, { attributes: ['id', 'title'] });
+  const s = await LiveSession.findByPk(sessionId, {
+    attributes: ['id', 'title', 'guest_access'],
+  });
   const title = s ? String(s.get('title') || '') : '';
-  if (!s || !/open house/i.test(title)) throw new GuestError(404, 'This session is not open to guests');
+  if (!s || s.get('guest_access') !== true) {
+    throw new GuestError(404, 'This session is not open to guests');
+  }
   return { title };
 }
 

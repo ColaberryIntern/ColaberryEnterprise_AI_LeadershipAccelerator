@@ -23,7 +23,18 @@ import { PollLockedError } from '../sessionLiveStateService';
 
 const S1 = '11111111-1111-4111-8111-111111111111';
 const S2 = '22222222-2222-4222-8222-222222222222';
-const session = (title: string) => ({ get: (k: string) => (k === 'title' ? title : S1) });
+/**
+ * D4: a session now carries `guest_access`, and that alone decides whether guests may join.
+ * The title is still passed because callers display it, but it no longer gates anything — so
+ * every case below states the flag explicitly rather than relying on what the class is called.
+ */
+const session = (title: string, guestAccess: boolean | null = true) => ({
+  get: (k: string) => {
+    if (k === 'title') return title;
+    if (k === 'guest_access') return guestAccess;
+    return S1;
+  },
+});
 const question = (state: 'voting' | 'locked' | 'revealed', revealed = false) => ({
   phase: 'question', title: 'Poll', question: { key: 'oh-where', q: 'Where?', options: ['A', 'B'], answer: 1, revealed, theater: { state } },
 });
@@ -53,13 +64,49 @@ describe('joinAsGuest', () => {
     expect(r.matched).toBe(true);
   });
   it('refuses guests on a normal class', async () => {
-    mockFindByPk.mockResolvedValue(session('Week 3 · Build Day — Agents'));
+    mockFindByPk.mockResolvedValue(session('Week 3 · Build Day — Agents', null));
     await expect(joinAsGuest(S1, 'Ana', 'a@x.com')).rejects.toBeInstanceOf(GuestError);
     expect(store.upsertGuest).not.toHaveBeenCalled();
   });
   it('refuses an unknown session', async () => {
     mockFindByPk.mockResolvedValue(null);
     await expect(joinAsGuest(S1, 'Ana', 'a@x.com')).rejects.toMatchObject({ status: 404 });
+  });
+
+  /**
+   * D4 — the four cases that prove guest access is the SETTING and not the title.
+   *
+   * Before this change a class could only take guests by being called "Open House", so these
+   * four were not expressible: the first was impossible, and the third was impossible in the
+   * other direction, which is the one that matters. An operator must be able to turn guests OFF
+   * on a class that happens to be named Open House; if the title could still admit them, the
+   * setting would be decorative.
+   */
+  it('admits a guest to a class that is NOT called Open House, when the setting is on', async () => {
+    mockFindByPk.mockResolvedValue(session('Architecture day, week 3', true));
+    store.upsertGuest.mockResolvedValue({ id: 'g1', name: 'Ana R', enrollment_id: null });
+    const r = await joinAsGuest(S1, 'Ana R', 'a@x.com');
+    expect(verifyGuestPass(r.pass, S1)).toBe('g1');
+  });
+
+  it('refuses when the setting has never been configured (null)', async () => {
+    mockFindByPk.mockResolvedValue(session('Architecture day, week 3', null));
+    await expect(joinAsGuest(S1, 'Ana', 'a@x.com')).rejects.toMatchObject({ status: 404 });
+    expect(store.upsertGuest).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the setting is OFF even if the class is called Open House', async () => {
+    mockFindByPk.mockResolvedValue(session('Open House — The Forward Deployed Engineer', false));
+    await expect(joinAsGuest(S1, 'Ana', 'a@x.com')).rejects.toMatchObject({ status: 404 });
+    expect(store.upsertGuest).not.toHaveBeenCalled();
+  });
+
+  it('still admits an existing Open House, because the backfill set its flag', async () => {
+    // ensureStudioSetupSchema sets guest_access = TRUE for every title matching open house, so
+    // no currently-working Open House loses its guests when the title match is deleted.
+    mockFindByPk.mockResolvedValue(session('Open House — The Forward Deployed Engineer', true));
+    store.upsertGuest.mockResolvedValue({ id: 'g1', name: 'Ana R', enrollment_id: 'e1' });
+    await expect(joinAsGuest(S1, 'Ana R', 'a@x.com')).resolves.toMatchObject({ matched: true });
   });
 });
 

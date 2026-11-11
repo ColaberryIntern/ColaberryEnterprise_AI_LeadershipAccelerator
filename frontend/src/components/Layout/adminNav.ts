@@ -199,6 +199,15 @@ export const NAV_GROUPS: NavGroup[] = [
   // failure is the one the case-studies comment used to warn about here.
   { label: 'Program', section: 'program', links: [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'graduation-cap-line' },
+    /*
+     * D4 (P4-01) Colaberry Live Studio setup. `newTab` because this is show-running tooling:
+     * an operator configuring a class should not lose their place in admin, and the live
+     * surfaces render outside AdminLayout rather than inheriting the operations sidebar.
+     *
+     * Points at the INDEX, not a session. A nav entry is a fixed string and cannot carry a
+     * session id, so the menu lands on the list and the operator picks the class from there.
+     */
+    { path: '/admin/live/studio', label: 'Live Studio setup', icon: 'broadcast-line', newTab: true },
     // Renamed from "Orchestration": this is the curriculum authoring surface
     // (Composer, Experience Studio, Timeline, Feed Control), and "Curriculum"
     // is what it is called everywhere except this label. The PATH is unchanged

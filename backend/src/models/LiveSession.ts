@@ -33,6 +33,18 @@ export interface LiveSessionAttributes {
   // Restart-durable arming for the reminder cron — see ensureSessionReminderSchema.ts.
   /** OH-6: the Eventbrite id when this session IS an Open House; null for every ordinary class. */
   open_house_event_id?: string | null;
+  /**
+   * D4 (P4-01) Studio setup. All three are nullable because every row predates the screen, and
+   * NULL truthfully means "never configured here".
+   *
+   * They live on the SESSION rather than on broadcast_occurrences because an occurrence does not
+   * exist until Create, and Create is gated on a producer being chosen - and because who teaches
+   * and who produces are true of the class whether or not it is ever broadcast.
+   */
+  presenter_enrollment_id?: string | null;
+  producer_enrollment_id?: string | null;
+  /** Replaces the /open house/i title match. NULL and false both refuse; see sessionGuestService. */
+  guest_access?: boolean | null;
   reminder_24h_sent_at?: Date | null;
   reminder_1h_sent_at?: Date | null;
   created_at?: Date;
@@ -43,6 +55,9 @@ class LiveSession extends Model<LiveSessionAttributes> implements LiveSessionAtt
   declare cohort_id: string;
   declare session_number: number;
   declare title: string;
+  declare presenter_enrollment_id: string | null;
+  declare producer_enrollment_id: string | null;
+  declare guest_access: boolean | null;
   declare description: string;
   declare session_date: string;
   declare start_time: string;
@@ -90,6 +105,9 @@ LiveSession.init(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    presenter_enrollment_id: { type: DataTypes.UUID, allowNull: true },
+    producer_enrollment_id: { type: DataTypes.UUID, allowNull: true },
+    guest_access: { type: DataTypes.BOOLEAN, allowNull: true },
     title: {
       type: DataTypes.STRING(255),
       allowNull: false,
