@@ -1,0 +1,33 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:12.350
+A leader's question often waits for someone who writes SQL. A text-to-SQL tool shortens the wait, and adds a risk: the model can pick the wrong table or write an unsafe statement.
+
+2
+00:00:13.400 --> 00:00:26.210
+A model proposes one candidate plan per question. Code parses it into a syntax tree and refuses anything that is not a single read-only statement over known tables, columns and joins.
+
+3
+00:00:27.300 --> 00:00:39.050
+Seventeen write and control statement forms each have a test that the validator rejects them. Even a valid query runs under a one thousand row cap and a thirty second timeout.
+
+4
+00:00:40.200 --> 00:00:50.730
+When a question could mean two different things, the tool asks which one was meant instead of guessing, because a confident answer to the wrong question looks exactly like a right one.
+
+5
+00:00:51.800 --> 00:01:03.460
+Questions go through one route. The planner it replaced is retired, and eight of its tests are kept in the repository and marked skipped, so the history is visible rather than deleted.
+
+6
+00:01:04.600 --> 00:01:16.660
+Counted from the repository at the pinned commit: six thousand one hundred thirty six backend tests and one hundred seventy five frontend cases are defined. They were not run for this record.
+
+7
+00:01:17.800 --> 00:01:28.860
+Answer accuracy, response latency and business impact have not been measured. Live questions support SQL Server only, and nothing shows a deployment or a user.
+
+8
+00:01:30.000 --> 00:01:40.140
+ToolSmithAI draws the line a text-to-SQL tool most needs: the model may suggest a query, and only code with no model in it may let one run.

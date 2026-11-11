@@ -23,6 +23,39 @@ verified.
   chosen to land only on placeholder-state frames, and the highest frame index used was
   opened and looked at before shipping. **Re-check this for every new subject.**
 
+## Setting up a machine (Windows)
+
+Every slot below has one value. Check first; install only what the check says is missing.
+
+| Slot | Value | Check (prints a version, or it is missing) |
+|---|---|---|
+| Python | 3.12, per-user | `"$LOCALAPPDATA/Programs/Python/Python312/python.exe" --version` |
+| Narration | `edge-tts` (pip) | `python -c "import edge_tts"` |
+| Imaging | `Pillow` (pip) | `python -c "import PIL; print(PIL.__version__)"` |
+| Video | ffmpeg + ffprobe, gyan.dev full build | `ffprobe -version` |
+| Fonts | `C:/Windows/Fonts/arial.ttf`, `arialbd.ttf` | present on every Windows install |
+| Voice | `en-US-AndrewNeural` | set in `make_narration.py` (`VOICE`) |
+
+Install, when a check fails (about 5 minutes, no cost, user scope where offered):
+
+```powershell
+winget install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements
+winget install --id Gyan.FFmpeg -e --silent --accept-package-agreements --accept-source-agreements
+& "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe" -m pip install --user edge-tts Pillow
+```
+
+**PATH, the one that bites.** winget's `Links` shim folder is not enough: Python's
+`subprocess` cannot start `ffprobe` through it (`FileNotFoundError: [WinError 2]`, measured
+2026-11-11). Put ffmpeg's real `bin` folder first on PATH in the shell that runs the build:
+
+```powershell
+$bin = Split-Path (Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter ffprobe.exe | Select-Object -First 1 -ExpandProperty FullName)
+$env:PATH = "$bin;$env:PATH"
+```
+
+First installed on AliSuperStation on 2026-11-11 (Python 3.12.10, ffmpeg 9.0.2, Pillow 13.0.0)
+for the ToolSmithAI record; nothing was installed into the repository.
+
 ## Running it
 
 One deck per record, under `decks/`. Everything is written beside the deck file, so two

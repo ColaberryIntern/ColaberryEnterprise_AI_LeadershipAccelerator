@@ -838,6 +838,19 @@ the reader scrolling past the first to reach the second.
 Toolchain: `scripts/walkthrough-video/`. Read its README before starting; it carries the
 failures below with the commands attached.
 
+**Machine setup has one value per slot, in the README's "Setting up a machine" table**
+(Python 3.12, `edge-tts`, `Pillow`, ffmpeg/ffprobe from `Gyan.FFmpeg`, Arial from
+`C:/Windows/Fonts`, voice `en-US-AndrewNeural`), each with its check and its install line.
+Run the checks before telling anyone a tool is missing, and install from that table rather
+than choosing tools again (Ali, 2026-11-11: "the skill should have all this information - no
+need to recreate the wheel"). Put ffmpeg's real `bin` folder on PATH: winget's `Links` shim
+is not enough for Python's `subprocess`.
+
+A record with no usable footage or screenshots (for example a login screen showing features
+that are not built) gets a deck of `title` and `cards` slides carrying the record's own
+sentences and its verified figures only (preference 4 below). ToolSmithAI, 2026-11-11, is
+the reference: `decks/toolsmith-ai.json`.
+
 ```bash
 python make_narration.py --deck <dir>/deck.json   # neural voice -> audio/ + timings.json
 python build_video.py    --deck <dir>/deck.json   # slides + footage + audio -> mp4
