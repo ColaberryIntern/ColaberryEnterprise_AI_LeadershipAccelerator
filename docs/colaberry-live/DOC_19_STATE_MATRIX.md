@@ -6,7 +6,7 @@ Generated from `scripts/artifacts/tickets/l19StateMatrixData.js`. **Do not hand-
 
 ## Why each row names a test
 
-A state matrix is the easiest document in this repository to write as fiction. Every cell is a sentence about behaviour, nothing forces the behaviour to match, and it stays plausible for months after the code moves. P1-07 asked for this document and never got one; DOC 18 recorded the sharper version of the gap, that **no test asserted what a viewer actually sees**.
+A state matrix is the easiest document in this repository to write as fiction. Every cell is a sentence about behavior, nothing forces the behavior to match, and it stays plausible for months after the code moves. P1-07 asked for this document and never got one; DOC 18 recorded the sharper version of the gap, that **no test asserted what a viewer actually sees**.
 
 So a row that cannot name a passing test is a row describing an intention, and the build treats it as a failure rather than printing it.
 
@@ -32,7 +32,7 @@ So a row that cannot name a passing test is a row describing an intention, and t
 | `ended` | `ended` | Off air. | The class has ended. | Terminal for the producer. The end reason says whether a human or the safety net did it. | Ended, with a replay promised only conditionally. |
 | `processing` | `ended` | Off air. | The class has ended. | Not driven by the producer: begin_processing and publish_replay are not client-sendable. | Ended. The replay is conditional because processing can fail BACK to ended. |
 | `replay_ready` | `ended` | Off air. | The class has ended; the replay is in the portal. | Terminal. Nothing further to command. | Ended, and the replay now exists. |
-| `cancelled` | `cancelled` | Off air. An in-room class can still be taught; nothing is broadcast. | This class was cancelled. Neither a start nor a replay is promised. | Terminal and unreachable. No second occurrence can be minted for the session. | Cancelled, stated plainly. |
+| `cancelled` | `cancelled` | Off air. An in-room class can still be taught; nothing is broadcast. | This class was canceled. Neither a start nor a replay is promised. | Terminal and unreachable. No second occurrence can be minted for the session. | Canceled, stated plainly. |
 
 ### Rows with something to say beyond the cells
 
@@ -65,7 +65,7 @@ Seven reason shapes, two of them dynamic. An untranslated reason says the system
 
 ### Cannot reach the broadcast
 
-**The last answer that arrived stays on screen, labelled as such.**
+**The last answer that arrived stays on screen, labeled as such.**
 
 A producer mid-show needs the stale number more than they need an empty panel.
 
@@ -86,4 +86,4 @@ A viewer who meets an error page concludes the link is broken and does not come 
 | `ended` | `frontend/src/pages/portal/__tests__/LiveSessionPage.test.tsx` - "%s: says the class ended and does not promise a replay that may not exist" |
 | `processing` | `backend/src/services/broadcast/__tests__/broadcastSessionLinks.test.ts` - "says ended once it is over, and offers nothing to watch" |
 | `replay_ready` | `backend/src/services/broadcast/__tests__/broadcastSessionLinks.test.ts` - "says ended once it is over, and offers nothing to watch" |
-| `cancelled` | `frontend/src/pages/portal/__tests__/LiveSessionPage.test.tsx` - "CANCELLED: says so, and promises neither a start nor a replay" |
+| `cancelled` | `frontend/src/pages/portal/__tests__/LiveSessionPage.test.tsx` - "CANCELED: says so, and promises neither a start nor a replay" |

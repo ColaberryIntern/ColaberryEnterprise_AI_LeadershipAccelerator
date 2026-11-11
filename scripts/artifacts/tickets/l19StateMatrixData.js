@@ -8,7 +8,7 @@
  * ## Why each row names the test that proves it
  *
  * A state matrix is the easiest document in this repository to write as fiction. Every cell is a
- * sentence about behaviour, nothing forces the behaviour to match, and the document stays
+ * sentence about behavior, nothing forces the behavior to match, and the document stays
  * plausible for months after the code moves. So `provenIn` is a required field: a row that
  * cannot name a test asserting it is a row describing an intention.
  *
@@ -118,15 +118,18 @@ const STATES = [
     provenIn: { file: TESTS.resolver, test: 'says ended once it is over, and offers nothing to watch' },
   },
   {
-    state: 'cancelled',
-    moment: 'cancelled',
+    // The state name is the DATABASE's spelling, not ours, so the two identifier lines below
+    // carry the marker rather than being "corrected" into a value the machine does not hold.
+    // Everything a person reads says "canceled", which is the American form the repo requires.
+    state: 'cancelled', // spelling-exempt: the editorial_state value, not prose
+    moment: 'cancelled', // spelling-exempt: the resolved moment name, not prose
     presenter: 'Off air. An in-room class can still be taught; nothing is broadcast.',
-    phone: 'This class was cancelled. Neither a start nor a replay is promised.',
+    phone: 'This class was canceled. Neither a start nor a replay is promised.',
     producer: 'Terminal and unreachable. No second occurrence can be minted for the session.',
-    viewer: 'Cancelled, stated plainly.',
+    viewer: 'Canceled, stated plainly.',
     note: 'THE BUG THIS MATRIX FOUND. It resolved to `not_started`, so the page told everyone who '
       + 'scanned the code to leave it open and wait for a class that was called off.',
-    provenIn: { file: TESTS.viewer, test: 'CANCELLED: says so, and promises neither a start nor a replay' },
+    provenIn: { file: TESTS.viewer, test: 'CANCELED: says so, and promises neither a start nor a replay' },
   },
 ];
 
@@ -153,7 +156,7 @@ const CONDITIONS = [
   },
   {
     condition: 'Cannot reach the broadcast',
-    rule: 'The last answer that arrived stays on screen, labelled as such.',
+    rule: 'The last answer that arrived stays on screen, labeled as such.',
     detail: 'A producer mid-show needs the stale number more than they need an empty panel.',
   },
   {

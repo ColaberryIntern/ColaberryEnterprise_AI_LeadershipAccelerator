@@ -2,15 +2,15 @@
  * l19StateMatrixDocument — DOC 19's generated Markdown and the checks that make it trustworthy.
  *
  * THE LOAD-BEARING CHECK IS THAT EVERY ROW'S TEST EXISTS. A state matrix is the easiest document
- * here to write as fiction: every cell is a sentence about behaviour, nothing forces the
- * behaviour to match, and it stays plausible long after the code moves. So this does not merely
+ * here to write as fiction: every cell is a sentence about behavior, nothing forces the
+ * behavior to match, and it stays plausible long after the code moves. So this does not merely
  * require a `provenIn` field to be present - it opens the named file and requires the named test
  * to be in it. Deleting a test leaves the document unbuildable rather than quietly wrong.
  *
  * THE STATE LIST COMES FROM THE MACHINE, not from this data. If someone adds a ninth editorial
  * state and does not decide what each surface shows, the build fails. That is the specific
- * failure that put `cancelled` in the fall-through, telling viewers a called-off class was about
- * to start.
+ * failure that left the canceled state sitting in the fall-through, telling viewers a
+ * called-off class was about to start.
  */
 const fs = require('fs');
 const path = require('path');
@@ -36,7 +36,7 @@ function selfCheck() {
   const documented = D.STATES.map((s) => s.state).sort();
   if (machine.join(',') !== documented.join(',')) {
     fail(`the machine holds [${machine}] and the matrix documents [${documented}]. A state with `
-      + 'no decided treatment is how `cancelled` came to tell viewers a called-off class had not '
+      + 'no decided treatment is how a canceled class came to tell viewers it had not '
       + 'started yet.');
   }
 
@@ -110,7 +110,7 @@ function markdown() {
   p('## Why each row names a test');
   p('');
   p('A state matrix is the easiest document in this repository to write as fiction. Every cell is '
-    + 'a sentence about behaviour, nothing forces the behaviour to match, and it stays plausible '
+    + 'a sentence about behavior, nothing forces the behavior to match, and it stays plausible '
     + 'for months after the code moves. P1-07 asked for this document and never got one; DOC 18 '
     + 'recorded the sharper version of the gap, that **no test asserted what a viewer actually '
     + 'sees**.');

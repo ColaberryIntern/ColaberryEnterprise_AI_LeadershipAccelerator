@@ -102,8 +102,8 @@ const COPY: Record<Moment, { eyebrow: string; title: string; body: string }> = {
    * recorded anything to publish.
    */
   cancelled: {
-    eyebrow: 'Cancelled',
-    title: 'This class was cancelled',
+    eyebrow: 'Canceled',
+    title: 'This class was canceled',
     body: 'It will not be broadcast, and there will be no replay. Check your schedule for the '
       + 'next class.',
   },

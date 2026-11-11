@@ -3,7 +3,7 @@
  *
  * CHECK BEFORE WRITE. The checks are about the DATA and about files on disk - that every state
  * the machine can hold has a treatment, and that every named test really exists - so a matrix
- * describing behaviour nobody tests must fail rather than reach the repository looking finished.
+ * describing behavior nobody tests must fail rather than reach the repository looking finished.
  *
  *   node scripts/artifacts/buildL19Artifacts.js
  */

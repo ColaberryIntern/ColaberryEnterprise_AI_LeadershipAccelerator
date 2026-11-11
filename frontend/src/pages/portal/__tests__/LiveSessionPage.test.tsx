@@ -500,10 +500,10 @@ describe('the state matrix: what a NON-STAFF viewer sees in every state', () => 
    * Both wrong answers are asserted against, not just the right one. Folding it into `ended`
    * would be the other easy mistake, and that promises a replay that was never recorded.
    */
-  it('CANCELLED: says so, and promises neither a start nor a replay', async () => {
+  it('CANCELED: says so, and promises neither a start nor a replay', async () => {
     wire('cancelled');
     await render();
-    expect(text()).toContain('This class was cancelled');
+    expect(text()).toContain('This class was canceled');
     expect(text()).toContain('no replay');
     expect(text()).not.toContain('has not started yet');
     expect(text()).not.toContain('It will update on its own');
