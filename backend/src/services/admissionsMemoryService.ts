@@ -79,10 +79,6 @@ export async function saveConversationToMemory(conversationId: string): Promise<
   const conversation = await ChatConversation.findByPk(conversationId);
   if (!conversation) return;
 
-  // The conversation row carries the person. Passing it means a conversation closed on a
-  // second device folds into the SAME memory instead of starting a parallel history.
-  const memory = await loadMemory(conversation.visitor_id, conversation.lead_id);
-
   const messages = await ChatMessage.findAll({
     where: { conversation_id: conversationId },
     order: [['timestamp', 'ASC']],
@@ -90,6 +86,45 @@ export async function saveConversationToMemory(conversationId: string): Promise<
 
   // Extract questions from visitor messages
   const visitorMessages = messages.filter((m) => m.role === 'visitor');
+
+  // THE SUBSTANCE GUARD. A conversation the visitor never spoke in is not a memory.
+  //
+  // Without this, such a conversation still wrote a row: conversation_count incremented and a
+  // summary entry reading "0 messages exchanged" appended, which `buildMemoryContext()` then
+  // injects verbatim into Maya's system prompt. She would be told about a conversation that
+  // never happened, and the count that is supposed to mean "how well do we know this person"
+  // would be inflated by silence.
+  //
+  // THIS IS NOT HYPOTHETICAL. Measured in production on 2026-11-11, after the idle sweep first
+  // ran: 8 such entries existed across 7 memory rows, and 5 of those rows held NOTHING ELSE.
+  //
+  // THE TEST IS THE MESSAGE ROWS, NOT `visitor_message_count`. The counter disagrees with
+  // reality: of the 17 conversations closed that day, 5 carried a non-zero counter while having
+  // zero `role='visitor'` rows, and every one of those 5 wrote junk. A guard on the counter
+  // would have caught only 3 of the 8. The rows are the evidence; the counter is a claim.
+  //
+  // A generated summary still counts as substance, so a conversation summarized by the model
+  // is kept even if the transcript shape is unusual.
+  if (visitorMessages.length === 0 && !(conversation as { summary?: string | null }).summary) {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        service: 'admissions-memory',
+        event: 'memory_write_skipped_no_substance',
+        outcome: 'success',
+        context: {
+          conversation_id: conversationId,
+          visitor_message_rows: 0,
+          visitor_message_count_column: conversation.visitor_message_count ?? null,
+        },
+      })
+    );
+    return;
+  }
+
+  // The conversation row carries the person. Passing it means a conversation closed on a
+  // second device folds into the SAME memory instead of starting a parallel history.
+  const memory = await loadMemory(conversation.visitor_id, conversation.lead_id);
   const newQuestions = visitorMessages
     .filter((m) => m.content.includes('?'))
     .map((m) => m.content.trim())
