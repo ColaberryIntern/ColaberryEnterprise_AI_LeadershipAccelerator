@@ -1,5 +1,46 @@
 import { z } from 'zod';
 
+/**
+ * A phone number we will actually be able to call.
+ *
+ * Counted in DIGITS, not characters, because "(512) 555-0142" is 14 characters and
+ * "5125550142" is 10 and both are the same number. The ceiling is E.164's 15 digits.
+ */
+export const PHONE_MIN_DIGITS = 10;
+export const PHONE_MAX_DIGITS = 15;
+export const phoneDigits = (raw: string): string => raw.replace(/\D/g, '');
+
+/**
+ * REQUIRED on our own landing page (Ali, 2026-11-11: "We need to collect phone number
+ * mandatory in this process").
+ *
+ * It is required on THIS route only. `openHouseRegisterSchema` below keeps phone
+ * optional because that route is called by training.colaberry.com, a separate
+ * deployment in a separate repo; making it mandatory here would start 400ing their
+ * signups the moment this deploys, with no coordinated release.
+ *
+ * COLLECTING A NUMBER IS NOT CONSENT TO RING IT. This makes the field mandatory and
+ * nothing more - no box is pre-ticked and no consent record is written from it. The
+ * marketing opt-in below remains separate, freely given, and about email.
+ */
+// NOTE ON THE OPTIONS OBJECT. This deliberately passes none. zod 4 removed
+// 'required_error' (it is 'error' now), and an unknown key here is a typecheck
+// failure, not a runtime nicety - which is exactly how the first push of this change
+// broke the build. An ABSENT phone therefore gets zod's own
+// "expected string, received undefined", which is only ever a backstop: the form
+// validates first and gives the friendly wording.
+const requiredPhone = z
+  .string()
+  .trim()
+  .min(1, 'phone is required')
+  .max(50)
+  .refine((v) => phoneDigits(v).length >= PHONE_MIN_DIGITS, {
+    message: `a phone number with at least ${PHONE_MIN_DIGITS} digits is required`,
+  })
+  .refine((v) => phoneDigits(v).length <= PHONE_MAX_DIGITS, {
+    message: 'that phone number has too many digits',
+  });
+
 // Contract for POST /api/v1/open-house/register (called by training.colaberry.com).
 export const openHouseRegisterSchema = z.object({
   name: z.string().trim().min(1, 'name is required').max(200),
@@ -54,13 +95,19 @@ export const openHousePublicSignupSchema = z
   .object({
     name: z.string().trim().min(1, 'name is required').max(200),
     email: z.string().trim().email('a valid email is required').max(255),
-    phone: z.string().trim().max(50).optional(),
+    phone: requiredPhone,
     utm_source: z.string().trim().max(255).optional(),
     utm_campaign: z.string().trim().max(255).optional(),
     page_url: z.string().trim().max(500).optional(),
     // Same permissive shape and the same meaning as above: a tick records
     // consent, an absence records nothing at all.
     marketing_opt_in: z.union([z.boolean(), z.string().max(10)]).optional(),
+    // PERMISSION TO CALL OR TEXT, which is a different grant from the email opt-in
+    // above and is keyed on the NUMBER rather than the address. This schema is
+    // `.strict()`, so the key has to be declared here or a form that sends it gets a
+    // 400 for the whole signup - and the tick would be lost between the box and the
+    // table with nothing logged.
+    phone_consent: z.union([z.boolean(), z.string().max(10)]).optional(),
   })
   .strict();
 

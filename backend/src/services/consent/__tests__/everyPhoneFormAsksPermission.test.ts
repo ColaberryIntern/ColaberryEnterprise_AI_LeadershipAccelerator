@@ -138,6 +138,8 @@ describe('the backend endpoints those forms post to record the grant', () => {
     'controllers/calendarController.ts': 'POST /api/calendar/book — the strategy-call modal behind fifteen landing pages',
     'controllers/leadController.ts': 'POST /api/leads — the contact form, the shared lead-capture form, the AI pilot pages, the publicV2 pages',
     'controllers/enrollmentController.ts': 'POST /api/create-free-account — /enroll',
+    'controllers/openHouseController.ts':
+      'POST /api/v1/open-house/signup — the Open House landing page, where the number is REQUIRED (2026-11-11), which is precisely why the permission must be recorded separately',
   };
 
   it.each(Object.entries(ENTRY_POINTS))(
@@ -156,6 +158,9 @@ describe('the backend endpoints those forms post to record the grant', () => {
       'schemas/calendarSchema.ts',
       'schemas/enrollmentSchema.ts',
       'services/leadService.ts',
+      // `.strict()`, so this one is worse than a dropped key: an undeclared
+      // phone_consent is a 400 for the whole signup.
+      'schemas/openHouseSchema.ts',
     ];
 
     for (const f of files) {

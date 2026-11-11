@@ -102,6 +102,8 @@ export async function fetchNextOpenHouse(): Promise<NextOpenHouse | null> {
 export interface OpenHouseSignupBody {
   name: string;
   email: string;
+  /** REQUIRED. The route refuses a signup without a reachable number. */
+  phone: string;
   /** Absent or false records NO consent. It is not a revocation and not a default to flip on. */
   marketing_opt_in?: boolean;
   utm_source?: string;

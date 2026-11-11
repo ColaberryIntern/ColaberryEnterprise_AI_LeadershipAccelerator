@@ -1,6 +1,10 @@
 jest.mock('../../services/enrollmentService', () => ({ createExplorerEnrollment: jest.fn() }));
 jest.mock('../../services/openHouseEventService', () => ({ getCurrentOpenHouseEvent: jest.fn() }));
 jest.mock('../../services/openHouseRegistrationStore', () => ({ recordOpenHouseRegistration: jest.fn() }));
+// Mocked in its own right, not left to run through the mocked captureSignupConsent:
+// this is a separate grant on a separate key (the NUMBER, not the address), and the
+// assertions below are about what this controller asks for.
+jest.mock('../../services/consent/capturePhoneConsent', () => ({ capturePhoneConsent: jest.fn() }));
 jest.mock('../../services/consent/captureSignupConsent', () => ({
   captureSignupConsent: jest.fn(),
   SIGNUP_CONSENT_TEXT: 'consent wording',
@@ -18,11 +22,13 @@ import { createExplorerEnrollment } from '../../services/enrollmentService';
 import { getCurrentOpenHouseEvent } from '../../services/openHouseEventService';
 import { recordOpenHouseRegistration } from '../../services/openHouseRegistrationStore';
 import { captureSignupConsent } from '../../services/consent/captureSignupConsent';
+import { capturePhoneConsent } from '../../services/consent/capturePhoneConsent';
 
 const mkEnrollment = createExplorerEnrollment as unknown as jest.Mock;
 const mkEvent = getCurrentOpenHouseEvent as unknown as jest.Mock;
 const mkRecord = recordOpenHouseRegistration as unknown as jest.Mock;
 const mkConsent = captureSignupConsent as unknown as jest.Mock;
+const mkPhoneConsent = capturePhoneConsent as unknown as jest.Mock;
 
 const EVENT = {
   announced: true,
@@ -43,7 +49,8 @@ const res = () => {
   return r as Response & { status: jest.Mock; json: jest.Mock };
 };
 
-const body = (over: Record<string, unknown> = {}) => ({ name: 'Ada L', email: 'ada@example.com', ...over });
+const body = (over: Record<string, unknown> = {}) =>
+  ({ name: 'Ada L', email: 'ada@example.com', phone: '(512) 555-0142', ...over });
 
 describe('handlePublicOpenHouseSignup', () => {
   beforeEach(() => {
@@ -172,7 +179,20 @@ describe('handlePublicOpenHouseSignup', () => {
   });
 
   it('rejects a missing or malformed email with 400 and creates nothing', async () => {
-    for (const bad of [{ name: 'A' }, { name: 'A', email: 'not-an-email' }, { email: 'a@b.com' }]) {
+    for (const bad of [
+      { name: 'A' },
+      { name: 'A', email: 'not-an-email' },
+      { email: 'a@b.com' },
+      // Phone is REQUIRED on this route (Ali, 2026-11-11). Absent, blank and
+      // too-few-digits are each a refusal, so "mandatory" is not satisfied by a
+      // field the visitor can leave empty or fill with a 3-digit placeholder.
+      { name: 'A', email: 'a@b.com' },
+      { name: 'A', email: 'a@b.com', phone: '' },
+      { name: 'A', email: 'a@b.com', phone: '   ' },
+      { name: 'A', email: 'a@b.com', phone: '555' },
+      { name: 'A', email: 'a@b.com', phone: 'not a phone' },
+      { name: 'A', email: 'a@b.com', phone: '1234567890123456' },
+    ]) {
       jest.clearAllMocks();
       const r = res();
       await handlePublicOpenHouseSignup(req(bad), r, jest.fn());
@@ -279,5 +299,72 @@ describe('C121: Access your account, no trip to the inbox', () => {
     await handlePublicOpenHouseSignup(req(body()), r, jest.fn());
     expect(r.json.mock.calls[0][0].access).toBeNull();
     expect(r.json.mock.calls[0][0].message).toMatch(/Check your email/);
+  });
+});
+
+/**
+ * The phone number is REQUIRED on this route (Ali, 2026-11-11), so every signup now
+ * arrives with one - which is exactly why the permission to use it has to be recorded
+ * as its own grant. `everyPhoneFormAsksPermission.test.ts` is the repo-wide invariant
+ * that says so, and this is this controller's half of it.
+ */
+describe('the telephone grant', () => {
+  // Its own setup: this block sits outside the suite above, so it cannot inherit that
+  // one's beforeEach. Same fixtures, stated rather than borrowed.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    mkEnrollment.mockResolvedValue({ enrollment: { id: 'enr-1' }, created: true, cohort_id: 'c1' });
+    mkEvent.mockResolvedValue(EVENT);
+    mkRecord.mockResolvedValue({ created: true, registration_id: 'reg-1' });
+    mkConsent.mockResolvedValue(undefined);
+    mkPhoneConsent.mockResolvedValue(2);
+  });
+  afterEach(() => (process.stdout.write as unknown as jest.Mock).mockRestore());
+
+  it('records it, keyed on the number and tagged to this surface', async () => {
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body({ phone_consent: true })), r, jest.fn());
+
+    expect(mkPhoneConsent).toHaveBeenCalledWith(expect.objectContaining({
+      phone: '(512) 555-0142',
+      email: 'ada@example.com',
+      phoneConsent: true,
+      source: 'open_house_signup',
+    }));
+  });
+
+  it('passes the tick through UNINTERPRETED when the box was left alone', async () => {
+    // Absent means "nothing to record", which the helper decides - not this controller.
+    // Coercing it to false here would turn silence into a grant row that says "no".
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body()), r, jest.fn());
+    expect(mkPhoneConsent).toHaveBeenCalledWith(expect.objectContaining({ phoneConsent: undefined }));
+  });
+
+  it('takes the IP and user agent from the request, never from the body', async () => {
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body({ phone_consent: true })), r, jest.fn());
+    expect(mkPhoneConsent).toHaveBeenCalledWith(expect.objectContaining({
+      ipAddress: '203.0.113.7',
+      userAgent: 'TestAgent/1.0',
+    }));
+  });
+
+  it('still answers successfully when the phone-consent write throws', async () => {
+    // The person gets their seat whatever happens to the consent row. Same rule as the
+    // email grant above, and the reason this has its own try/catch rather than sharing.
+    mkPhoneConsent.mockRejectedValueOnce(new Error('consent table locked'));
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body({ phone_consent: true })), r, jest.fn());
+    expect(r.status).toHaveBeenCalledWith(201);
+  });
+
+  it('records the EMAIL grant and the PHONE grant separately', async () => {
+    // Two different permissions on two different keys. One is not evidence of the other.
+    const r = res();
+    await handlePublicOpenHouseSignup(req(body({ marketing_opt_in: true })), r, jest.fn());
+    expect(mkConsent).toHaveBeenCalled();
+    expect(mkPhoneConsent).toHaveBeenCalledWith(expect.objectContaining({ phoneConsent: undefined }));
   });
 });
