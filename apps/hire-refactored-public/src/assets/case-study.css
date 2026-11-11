@@ -45,6 +45,11 @@
 .outcomes span{font-size:.8rem;color:var(--fg-muted)}
 .cs-body{display:grid;grid-template-columns:1fr 300px;gap:36px;padding-bottom:60px}
 @media(max-width:960px){.cs-body{grid-template-columns:1fr}}
+/* The aside must BE the grid item, or the sticky card has no room to travel: a sticky box
+   only moves inside its parent, and #hire-card-host wrapped the aside so the aside was only
+   as tall as the card (measured 592px beside a 12,199px record; the card scrolled away).
+   display:contents hands the aside to the grid, which stretches it to the record's height. */
+#hire-card-host{display:contents}
 .sticky{position:sticky;top:84px}
 .hire-cta{background:linear-gradient(160deg,var(--accent-soft),var(--bg-elevated));border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:var(--r);padding:22px;text-align:center}
 .hire-cta h4{margin:12px 0 4px}

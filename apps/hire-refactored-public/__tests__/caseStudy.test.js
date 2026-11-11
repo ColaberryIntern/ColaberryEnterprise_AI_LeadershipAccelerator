@@ -123,6 +123,16 @@ describe('the shell wiring', () => {
     assert.doesNotMatch(css, /#cs-record\s*>\s*\.cs-hero\s*\{\s*display:\s*none/, 'hiding the whole hero hid every video on Hire');
     assert.match(css, /#cs-record\s*>\s*\.cs-hero\s*>\s*\.cs-hero-copy\s*\{\s*display:\s*none/);
   });
+
+  test('the person card stays on screen: its aside is the grid item, not a card-high wrapper', () => {
+    // A sticky box only travels inside its parent. With #hire-card-host as an ordinary block, the
+    // aside was as tall as the card (592px beside a 12,199px record) and scrolled away.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'assets', 'case-study.css'), 'utf8');
+    assert.match(html, /<div class="cs-body">\s*<article[^>]*id="cs-record"[^>]*><\/article>\s*<div id="hire-card-host"><\/div>/);
+    assert.match(css, /#hire-card-host\s*\{\s*display:\s*contents\s*\}/);
+    assert.match(css, /\.sticky\s*\{\s*position:\s*sticky;\s*top:\s*\d+px\s*\}/);
+    assert.match(S.hireCard({ caseStudy: {} }, null), /^<aside><div class="sticky">/);
+  });
 });
 
 describe('the intro form', () => {
