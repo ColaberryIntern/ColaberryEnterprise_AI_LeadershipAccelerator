@@ -509,8 +509,14 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       const vv: any = await loadAiVettingView(String(govQual.tenant_id), String(govQual.canonical_opportunity_id));
       view.vetting = toStudentVetting(vv);
       view.opportunitySummary = toStudentOpportunitySummary(vv);
+      // Decoupled (ZIP-uploaded) pursuits carry no close date on their own source_snapshot, so the deadline shows as
+      // "unset" and the Studio forces a manual due date. The real proposal close date lives on the FEED-sourced
+      // opportunity the vetting captured — fall back to it so the countdown + step 6 auto-populate (no manual entry).
+      const vop: any = vv && vv.opportunity ? vv.opportunity : null;
+      if (!view.closeDate && vop && vop.closeDate) view.closeDate = String(vop.closeDate);
+      if (view.priorityScore == null && vop && vop.priorityScore != null) view.priorityScore = vop.priorityScore;
     }
-  } catch { /* additive; vetting/opportunitySummary stay null */ }
+  } catch { /* additive; vetting/opportunitySummary/closeDate stay as resolved */ }
 
   // v2 Build view: the SBP build summary (releases -> stories + progress) for the linked build project. Best-effort;
   // it also lazily publishes the plan so the commit->story loop runs. Null when no build is linked yet.
