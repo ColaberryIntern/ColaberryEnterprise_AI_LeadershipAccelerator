@@ -90,7 +90,24 @@
   font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none;
   transition: filter 0.14s;
 }
-.cls-btn:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
+/*
+ * Disabled is a CHANGE OF COLOUR, not only a change of opacity.
+ *
+ * Opacity alone was the first attempt and it fails in dark mode: a cherry button at 0.55 over a
+ * near-black page still reads as a solid, clickable red button, so the primary action looked
+ * available while four decisions were still outstanding. On the light page the same rule looked
+ * obviously disabled, which is exactly why this needed looking at in both themes rather than one.
+ *
+ * Dropping the brand fill entirely is what makes it unambiguous on any background. The cursor and
+ * the summary list carry the same message, so the state is never signalled by colour alone.
+ */
+.cls-btn:disabled {
+  cursor: not-allowed;
+  filter: none;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+}
 .cls-btn:hover:not(:disabled) { filter: brightness(0.96); }
 /* 4.73:1 against white. See the header note. */
 .cls-btn-primary { background: var(--red-600); color: var(--neutral-0); width: 100%; }
