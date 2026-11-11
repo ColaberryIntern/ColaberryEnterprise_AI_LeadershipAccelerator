@@ -80,3 +80,49 @@ export async function getAgentEffectiveAccess(agentId: string): Promise<AgentEff
   const res = await api.get<AgentEffectiveAccessReport>(`/api/admin/agents/${agentId}/effective-access`);
   return res.data;
 }
+
+// Agent Tools section, Phase 1 (2026-11-11). Mirrors
+// backend/src/services/workforce/agentToolGovernanceService.ts field for field, same deliberate
+// mirror convention as the types above.
+//
+// Kept separate from AgentEffectiveAccessReport on purpose: that report says what the RUNTIME
+// would do, this one says what the GOVERNANCE records. They disagree for every agent in
+// production today, and one blended type would hide the disagreement the section exists to show.
+
+export interface ToolGovernanceRow {
+  toolName: string;
+  held: boolean;
+  granted: boolean;
+  capabilityId: string | null;
+  capabilityName: string | null;
+  capabilityDomain: string | null;
+  /** null means there was no capability to check, which is not the same as false. */
+  capabilityRequiresThisTool: boolean | null;
+  approvedByIdentity: string | null;
+  approvedAt: string | null;
+  findings: string[];
+}
+
+export interface ToolGovernanceSummary {
+  held: number;
+  granted: number;
+  heldWithoutGrant: number;
+  grantedWithoutHolding: number;
+  capabilityMismatch: number;
+  capabilityUnknown: number;
+  clean: number;
+}
+
+export interface AgentToolGovernanceReport {
+  agentId: string;
+  agentName: string;
+  generatedAt: string;
+  rows: ToolGovernanceRow[];
+  summary: ToolGovernanceSummary;
+  posture: string;
+}
+
+export async function getAgentToolGovernance(agentId: string): Promise<AgentToolGovernanceReport> {
+  const res = await api.get<AgentToolGovernanceReport>(`/api/admin/agents/${agentId}/tool-governance`);
+  return res.data;
+}

@@ -8,6 +8,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { resolveEffectiveAccess, buildInventoryDriftReport, buildToolCatalog } from '../services/workforce/agentEffectiveAccessService';
+import { buildAgentToolGovernance } from '../services/workforce/agentToolGovernanceService';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -42,6 +43,34 @@ export async function handleGetAgentEffectiveAccess(req: Request, res: Response,
       return;
     }
     const report = await resolveEffectiveAccess(id);
+    if (!report) {
+      res.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    res.json(report);
+  } catch (err) {
+    fail(res, err, next);
+  }
+}
+
+/**
+ * GET /api/admin/agents/:id/tool-governance — who granted each tool this agent holds, and which
+ * capability it serves.
+ *
+ * Separate from effective-access on purpose. That route answers what the RUNTIME would do; this
+ * answers what the GOVERNANCE says. Today those two disagree for every agent in production, and
+ * one endpoint returning a blended answer would hide the disagreement rather than show it.
+ *
+ * Read-only. It grants nothing and changes no authorization decision.
+ */
+export async function handleGetAgentToolGovernance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = String(req.params.id || '');
+    if (!id) {
+      res.status(400).json({ error: 'Agent id is required' });
+      return;
+    }
+    const report = await buildAgentToolGovernance(id);
     if (!report) {
       res.status(404).json({ error: 'Agent not found' });
       return;
