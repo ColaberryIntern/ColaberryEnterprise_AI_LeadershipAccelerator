@@ -99,6 +99,57 @@ describe('what the persistent url should show right now', () => {
     }
   });
 
+  /**
+   * CANCELLED IS ITS OWN MOMENT, and used not to be.
+   *
+   * It fell through to `not_started`, so the page told everyone who scanned the code "Leave this
+   * page open. It will update on its own when the class goes live." Every clause of that is
+   * false for a cancelled class: `cancelled` is terminal (`broadcastStateMachine.ts:49`) and
+   * `uq_broadcast_source_ref` permits no second occurrence for the session, so the page can
+   * never update and the class can never go live.
+   *
+   * Both wrong answers are asserted against rather than only the right one. `ended` is the other
+   * easy mistake, and it promises a replay that a cancelled airing never recorded.
+   */
+  it('says cancelled, which is neither not_started nor ended', async () => {
+    rows([{ id: 'occ-1', editorial_state: 'cancelled' }]);
+    const r = await resolveSessionMoment(SID);
+    expect(r.moment).toBe('cancelled');
+    expect(r.moment).not.toBe('not_started');
+    expect(r.moment).not.toBe('ended');
+    expect(r.watchUrl).toBeNull();
+  });
+
+  /**
+   * Every editorial state the machine can hold resolves to SOMETHING deliberate.
+   *
+   * Written as a sweep over the state list rather than as eight separate cases, because the
+   * failure this guards against is a NEW state being added to the machine and silently landing
+   * in the fall-through - which is exactly how `cancelled` came to tell viewers the class had
+   * not started yet.
+   */
+  it('resolves every editorial state the machine can hold, with nothing falling through by accident', async () => {
+    const EXPECTED: Record<string, string> = {
+      scheduled: 'not_started',
+      backstage: 'not_started',
+      live: 'live',
+      reconnecting: 'live',
+      ended: 'ended',
+      processing: 'ended',
+      replay_ready: 'ended',
+      cancelled: 'cancelled',
+    };
+    // The machine's own list, so adding a state there without deciding its moment fails here.
+    // eslint-disable-next-line global-require
+    const { EDITORIAL_STATES } = require('../broadcastStateMachine');
+    expect([...EDITORIAL_STATES].sort()).toEqual(Object.keys(EXPECTED).sort());
+
+    for (const [state, moment] of Object.entries(EXPECTED)) {
+      rows([{ id: 'occ-1', editorial_state: state }]);
+      expect((await resolveSessionMoment(SID)).moment).toBe(moment);
+    }
+  });
+
   it('says unknown rather than throwing when the database is unreachable', async () => {
     // This answers a public landing page. A blip should render "we cannot tell you right now",
     // never a stack trace.
