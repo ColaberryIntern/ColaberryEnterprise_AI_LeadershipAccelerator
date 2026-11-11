@@ -87,6 +87,10 @@ beforeEach(() => {
   mockHappening.mockResolvedValue(HAPPENING);
   mockSeen.mockResolvedValue(null);
   mockGetTv.mockResolvedValue(TV);
+  // C136 shuffles the TV per opening; pinning random (0.99 leaves Fisher-Yates in order) and clearing the "last first" keeps these
+  // tests on the playlist order. The shuffle itself is tested on its own below.
+  window.localStorage.clear();
+  jest.spyOn(Math, 'random').mockReturnValue(0.99);
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.useRealTimers(); });
 
@@ -276,6 +280,29 @@ describe('Colaberry Now', () => {
     key('Escape');
     expect(q('[data-testid="cm-cnow"]')).toBeNull();
     expect(f.getAttribute('src')).toBe('about:blank');
+  });
+
+  it('C136: close and reopen, and a different short plays first; the 30 s re-read never reshuffles', async () => {
+    (Math.random as jest.Mock).mockRestore();
+    const NINE = { videos: Array.from({ length: 9 }, (_, k) => ({ id: `v${k}`, youtube_id: `yt_short_0${k}`.slice(0, 11), title: `Short ${k}`, duration_s: null, created_at: iso(5) })), can_manage: false };
+    mockGetTv.mockResolvedValue(NINE);
+    const firsts: string[] = [];
+    for (let n = 0; n < 12; n++) {
+      await open();
+      firsts.push(q('[data-testid="cn-tv-title"]')!.textContent!);
+      expect(all('[data-testid="cn-tv-reel-item"]')).toHaveLength(9);
+      act(() => { root.render(<div />); });
+    }
+    for (let n = 1; n < firsts.length; n++) expect(firsts[n]).not.toBe(firsts[n - 1]);
+    expect(new Set(firsts).size).toBeGreaterThan(2);
+    // the order holds for the visit: a re-read of the same playlist keeps the playing short and the reel order
+    jest.useFakeTimers();
+    await open();
+    const reel = () => all('[data-testid="cn-tv-reel-item"]').map((b) => b.getAttribute('aria-label'));
+    const before = [q('[data-testid="cn-tv-title"]')!.textContent, ...reel()];
+    await act(async () => { jest.advanceTimersByTime(TV_POLL_MS); });
+    await flush();
+    expect([q('[data-testid="cn-tv-title"]')!.textContent, ...reel()]).toEqual(before);
   });
 
   it('a stream that fails to load says so, and the TV still plays', async () => {

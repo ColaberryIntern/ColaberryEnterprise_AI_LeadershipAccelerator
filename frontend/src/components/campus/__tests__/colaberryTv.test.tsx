@@ -2,7 +2,7 @@ import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import ColaberryTv, { __resetTvLengthsForTests } from '../now/ColaberryTv';
-import { follow, mmss, nextIndex, prevIndex, type TvShort } from '../now/tvPlaylist';
+import { applyOrder, follow, mmss, nextIndex, prevIndex, readLastFirst, saveLastFirst, shuffleOrder, type TvShort } from '../now/tvPlaylist';
 import { AUTOPLAY_CHECK_MS, embedSrc } from '../now/useTvChannel';
 import { readYtMessage, YT_STATE, ytCommand, ytHandshake } from '../../../utils/youtubeChannel';
 
@@ -82,6 +82,34 @@ describe('the play order (pure)', () => {
   });
   it('a length is shown only when known', () => {
     expect([mmss(42), mmss(61.4), mmss(null), mmss(0)]).toEqual(['0:42', '1:01', '', '']);
+  });
+});
+
+describe('C136: a shuffled order per opening', () => {
+  const IDS = ['a', 'b', 'c', 'd', 'e'];
+  it('is a permutation (every short once per loop)', () => {
+    for (let n = 0; n < 50; n++) expect([...shuffleOrder(IDS, null)].sort()).toEqual(IDS);
+  });
+  it('never starts on last time\'s first short, even when the shuffle lands on it', () => {
+    const stuck = () => 0.99; // Fisher-Yates leaves the order as is, so 'a' would lead again
+    expect(shuffleOrder(IDS, null, stuck)[0]).toBe('a');
+    expect(shuffleOrder(IDS, 'a', stuck)[0]).not.toBe('a');
+    for (let n = 0; n < 200; n++) expect(shuffleOrder(IDS, 'c')[0]).not.toBe('c');
+  });
+  it('one short: it plays; none: nothing', () => {
+    expect(shuffleOrder(['a'], 'a')).toEqual(['a']);
+    expect(shuffleOrder([], 'a')).toEqual([]);
+  });
+  it('applyOrder keeps this opening\'s order and puts a newly added short at the end', () => {
+    const v = (id: string) => ({ id });
+    expect(applyOrder([v('a'), v('b'), v('c'), v('new')], ['c', 'a', 'b']).map((x) => x.id)).toEqual(['c', 'a', 'b', 'new']);
+    expect(applyOrder([v('a'), v('c')], ['c', 'b', 'a']).map((x) => x.id)).toEqual(['c', 'a']);
+  });
+  it('remembers the first short across visits', () => {
+    window.localStorage.clear();
+    expect(readLastFirst()).toBeNull();
+    saveLastFirst('b');
+    expect(readLastFirst()).toBe('b');
   });
 });
 
