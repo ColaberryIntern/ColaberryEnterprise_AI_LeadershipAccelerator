@@ -215,3 +215,68 @@ be.
 
 - No message was sent and nothing was marked as sent.
 - Not deployed. Built, typechecked and tested only.
+
+---
+
+# Follow-up, same session: the reply guard that could never fire
+
+- [x] `inboundSince` reads whether they wrote back, not whether they asked a question
+  - Date: 2026-11-11
+  - Session: CC-20261111-n4k8
+  - What changed: `SidecarIntern` gains `last_inbound_at` (the newest mail FROM them in the
+    window, unfiltered by content); `sidecar/build.ts` populates it from `emails.lastTheyWrote`;
+    `compose.ts`'s `inboundSince()` reads it instead of walking `open_questions`.
+  - Verification: new `nudgeBrief/__tests__/inboundSince.test.ts`, 11 cases, control-first (the
+    3 that matter failed before the change and pass after). nudgeBrief 87/87, portfolioReport
+    156/156. `tsc --noEmit` 0 errors, proven live by a planted control error that tsc reported
+    and nothing else. `checkTestTypecheck` baseline matched exactly in both directions.
+  - Notes: `hold.ts` documents a protection in its own words - *"someone who wrote back an hour
+    after our morning message is the most urgent person on the list, and a naive 'already
+    messaged today' would bury exactly them"* - and it keys on `brief.inboundSince`. Because
+    `inboundSince` walked `open_questions`, which only holds mail `classifyEmail` scored
+    `question` or `stuck`, the question "did they reply?" was decided by "did they ask us
+    something?". An intern replying with a progress update counted as silent. Measured on
+    production 2026-11-11: null for 13 of 13, so `messaged_today` held the whole roster on a
+    check with no working input, and the guard buried precisely the people it was written to
+    protect. `hold.test.ts` passed throughout because it hands `inboundSince` to `holdFor` as a
+    literal: it proved the consumer honours the field and never that the producer could populate
+    it. The new suite drives `composeBrief`, and its last two cases run compose and hold
+    together, because the seam between them is where this lived.
+
+## Correction to the previous section: main was never red
+
+The entry above this one reported 3 failing suites on main (`mountLearnerPortalRoutes`,
+`generateReeseBehaviourInventory`, `generateReeseToolInventory`) and diagnosed two as a committed
+generated file drifting from its generator. **Both the diagnosis and the premise were wrong.**
+
+All three compare file text read from disk against strings built in memory. My clone was created
+with `core.autocrlf=true`, so the working tree was CRLF while the generated strings are LF.
+Controlled on one commit (`f70e234`), nothing else varied:
+
+```
+LF   : 3 suites passed, 17 tests passed, exit 0
+CRLF : 3 suites failed,  3 failed / 14 passed, exit 1
+```
+
+Converting only those four input files to CRLF and back flipped it both ways, and 3-failed/14-passed
+is exactly the failure originally reported. No PR is needed to "clear main"; the two committed
+artifacts match their generators and must not be regenerated. The clone now has
+`core.autocrlf=false` and a renormalized tree.
+
+**Measurement error worth keeping.** I first "confirmed" CRLF with `grep -c $'\r' <file>`, which
+the shell mangled into an empty pattern. An empty pattern matches every line, so it reported CR on
+all 59 lines of a file that is LF-only, and I reported that number. `git ls-files --eol` disagreed,
+which is the only reason it surfaced. The replacement counter was run against a known-CRLF and a
+known-LF control before being trusted. Any byte-comparison test measured in a clone with
+`core.autocrlf=true` carries this failure mode.
+
+## Still open after this change
+
+- **`open_questions` is still emptied by our own nudge run.** This change fixed the *reply*
+  signal, not the *unanswered question* signal. Whether a nudge counts as answering a thread is a
+  question about intended behaviour, and changing it moves `chooseFocus` into `answer_owed` for
+  more people, which rewrites the message they get. Deliberately not bundled here.
+- Omolola's genuinely unanswered 11 Nov message is still dropped from `open_questions` because
+  `classifyEmail` scores it `update`.
+- Everything in the previous section's open list stands, except the three-failing-suites item,
+  which was my error and is withdrawn above.

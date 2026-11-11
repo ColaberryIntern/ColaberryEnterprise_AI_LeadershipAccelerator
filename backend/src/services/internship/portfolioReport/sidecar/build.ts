@@ -133,6 +133,12 @@ function internJson(c: InternCard, report: PortfolioReport, inp: SidecarInputs, 
     triage: tr,
     pacing: pacing(c),
     last_ask: lastAsk(c, inp.lastOutbound, nowMs, report.lookbackDays),
+    // The newest mail FROM them in the window, whatever it says. Deliberately NOT filtered by
+    // classification: `open_questions` answers "did they ask us something", and the separate
+    // question "did they write back at all" needs its own field. Reading the second off the first
+    // is what left `inboundSince` null for 13 of 13 interns on 2026-11-11, which in turn disabled
+    // the one guard in hold.ts that keeps a replying intern off the hold list.
+    last_inbound_at: c.emails.lastTheyWrote ?? null,
     communications: comms.slice(0, TOP_N),
   };
   return { ...base, delta: delta(c, { stories_verified: storiesVerified, days_since_build_work: quiet, triage: tr }, inp.previous, nowMs, report.lookbackDays) };
