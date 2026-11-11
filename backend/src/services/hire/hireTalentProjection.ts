@@ -79,7 +79,7 @@ export interface HireTalentCard {
   readonly caseStudyCount: number;
   readonly verifiedCommitCount: number;
   readonly capabilities: readonly { readonly name: string; readonly proven: boolean }[];
-  readonly signature: Pick<HireCaseStudyCard, 'slug' | 'title' | 'industry' | 'heroMetric'> | null;
+  readonly signature: Pick<HireCaseStudyCard, 'slug' | 'title' | 'industry' | 'heroMetric' | 'look'> | null;
   readonly spotlight: boolean;
 }
 
@@ -163,7 +163,7 @@ export function toTalentCard(
     verifiedCommitCount: Array.isArray(portfolio.verified_commits) ? portfolio.verified_commits.length : 0,
     capabilities: caps,
     signature: signature
-      ? { slug: signature.slug, title: signature.title, industry: signature.industry, heroMetric: signature.heroMetric }
+      ? { slug: signature.slug, title: signature.title, industry: signature.industry, heroMetric: signature.heroMetric, look: signature.look }
       : null,
     spotlight: facts.hireSpotlight,
   };

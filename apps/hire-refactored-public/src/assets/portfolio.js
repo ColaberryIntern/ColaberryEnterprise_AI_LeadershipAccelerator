@@ -75,15 +75,7 @@
    */
   function look(c) { return (c && c.look && typeof c.look === 'object') ? c.look : {}; }
 
-  function cover(c, api, n) {
-    var L = look(c);
-    var url = C.mediaUrl(api, L.coverImageUrl);
-    var len = C.duration(L.walkthroughSeconds);
-    var media = url
-      ? '<img class="cover" src="' + esc(url) + '" alt="" loading="lazy" decoding="async">'
-      : C.art(c.slug, { n: n });
-    return media + (len ? '<span class="play" aria-label="Walkthrough video, ' + esc(len) + '">▶ ' + esc(len) + '</span>' : '');
-  }
+  function cover(c, api, n) { return C.cover(c, api, n); } // shared with the directory
 
   function capability(c) {
     var label = C.capabilityLabel(look(c).capability);
