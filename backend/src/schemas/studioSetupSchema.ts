@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BROADCAST_ACCESS_MODES } from '../models/BroadcastOccurrence';
 
 /**
  * Request contract for Studio setup (D4).
@@ -29,7 +30,7 @@ export const studioSetupBodySchema = z
      * performing one, per the write-once invariant; this schema's job is only to reject a value
      * that is not one of the four.
      */
-    access_mode: z.enum(['free', 'paid', 'preview', 'private']).optional(),
+    access_mode: z.enum(BROADCAST_ACCESS_MODES).optional(),
     /**
      * Optimistic concurrency. Optional here rather than required, unlike the producer-command
      * schema, because most Studio setup saves happen BEFORE an occurrence exists and there is
