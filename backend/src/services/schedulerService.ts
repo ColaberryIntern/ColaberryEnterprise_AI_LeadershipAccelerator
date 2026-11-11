@@ -59,6 +59,7 @@ import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
 import { registerExplorerNightlySequence } from './scheduling/explorerNightlySequence';
 import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { registerAdSpendCrons } from './scheduling/adSpendCrons';
+import { registerChatConversationCrons } from './scheduling/chatConversationCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
   isWithinSendWindow,
@@ -1902,6 +1903,10 @@ export function startScheduler(): void {
   registerGrowthJourneyCrons();
   // Daily Meta ad spend pull; dormant until META_ADS_ACCESS_TOKEN is set. See adSpendCrons.ts.
   registerAdSpendCrons();
+  // Close idle chat conversations (R4). Nothing calls POST /api/chat/close, so closeConversation()
+  // had never run in production: 145 conversations all left 'active', and conversation_count 0 on
+  // every admissions_memory row as a result. See chatConversationCrons.ts.
+  registerChatConversationCrons();
 
   // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
   // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see

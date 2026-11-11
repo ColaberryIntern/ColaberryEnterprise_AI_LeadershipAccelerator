@@ -123,6 +123,29 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     enabled: false,
   },
   {
+    // Closes idle chat conversations (R4, 2026-11-11). The job that makes closing happen at all.
+    agent_name: 'ChatCloseIdleConversations',
+    agent_type: 'scheduled_processor',
+    module: 'closeIdleConversations',
+    source_file: 'backend/src/services/chat/closeIdleConversations.ts',
+    trigger_type: 'cron',
+    schedule: '*/10 * * * *',
+    category: 'behavioral',
+    description:
+      'Closes chat conversations idle for 30 minutes. Nothing in the frontend calls POST /api/chat/close, ' +
+      'so closeConversation() had never run in production: measured 2026-11-11, all 145 chat_conversations ' +
+      'were status=active with zero ended_at and zero summaries since 2026-03-16, and the five with 3+ visitor ' +
+      'messages had produced zero chat_engagement behavioral signals. Because closeConversation() is the only ' +
+      'caller of saveConversationToMemory(), conversation_count was 0 on all 116 admissions_memory rows. ' +
+      'A sweeper rather than a pagehide beacon: the widget restores its conversation from sessionStorage ' +
+      'across page loads and sendMessage() throws on a non-active conversation, so closing on unload would ' +
+      'break the visitor next message. Closing writes a summary, a memory row, a behavioral signal and a CRM ' +
+      'tag. SENDS NOTHING to a lead. Bounded at 200 conversations per run; one row failing does not stop the ' +
+      'sweep. SHIPPED ENABLED: every other effect of closing is already written and guarded, so shipping this ' +
+      'disabled would leave the defect exactly where it is.',
+    enabled: true,
+  },
+  {
     agent_name: 'ExplorerGovernorDecide',
     agent_type: 'scheduled_processor',
     module: 'runGovernor',
