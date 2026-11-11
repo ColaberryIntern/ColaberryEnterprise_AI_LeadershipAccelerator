@@ -286,6 +286,52 @@ describe('StageDetail — the legacy workspace read (meetings, AI vetting, what-
   });
 });
 
+describe('StageDetail — FULL workspace depth on the intern side (admin-parity enrichment, read-only)', () => {
+  const text = (id: string) => container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+
+  it('Solicitation renders the FULL blueprint — scoring factors and submission rules, not just counts', async () => {
+    await render(<StageDetail stage="solicitation" view={VIEW} />);
+    expect(present('stage-scoring')).toBe(true);
+    expect(present('stage-scoring-factor')).toBe(true);
+    expect(text('stage-scoring-factor')).toContain('Technical');
+    expect(text('stage-scoring-factor')).toContain('40');   // the factor's points, straight from the projection
+    expect(present('stage-rules')).toBe(true);
+    expect(present('stage-rule')).toBe(true);                // the Section L mechanics, each with its quote
+  });
+
+  it('Snapshot surfaces the close date and priority score from the projection', async () => {
+    const dated = { ...VIEW, closeDate: '2030-01-15', priorityScore: 70 } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="snapshot" view={dated} />);
+    expect(text('snapshot-close')).toContain('2030-01-15');
+    expect(text('snapshot-priority')).toContain('70');
+  });
+
+  it('Snapshot shows an in-progress note when the AI vetting is still running (no verdict yet)', async () => {
+    const running = { ...VIEW, vetting: { status: 'running', verdict: null, coveragePct: null, reason: null, quote: null } } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="snapshot" view={running} />);
+    expect(present('stage-vetting-pending')).toBe(true);
+    expect(text('stage-vetting-pending')).toContain('still running');
+    expect(present('stage-vetting')).toBe(false);           // no verdict badge while it runs
+  });
+
+  it('Fit lists each requirement with its coverage/evidence state', async () => {
+    const withReqs = { ...VIEW, requirements: [{ canonicalReqId: 'R-1', statement: 'Asset register', priority: 'must', tracks: ['build'], evidenceState: 'open' }] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={withReqs} />);
+    expect(present('fit-requirements')).toBe(true);
+    expect(text('fit-req')).toContain('Asset register');
+    expect(text('fit-req-evidence')).toContain('Not yet covered'); // 'open' → humanized, no jargon
+  });
+
+  it('stays student-safe — renders no dollars, no buyer contacts, no builder identities', async () => {
+    // The blueprint carries evaluation POINTS (public), never pricing. The projection itself drops contacts/$,
+    // so this asserts the enriched view introduces none by accident.
+    await render(<StageDetail stage="solicitation" view={VIEW} />);
+    const body = container.textContent ?? '';
+    expect(body).not.toMatch(/\$[0-9]/);           // no dollar amounts
+    expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i); // no email contacts
+  });
+});
+
 describe('deriveContractStepState — unified stepper statuses for an assigned contract', () => {
   it('marks the qualification steps done and the viewed step current', () => {
     const v = { proposalReadiness: { pct: 64, passing: 1, total: 3 }, submissionChecklist: { ready: false } } as any;
