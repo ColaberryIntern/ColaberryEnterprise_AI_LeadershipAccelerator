@@ -11,14 +11,30 @@
  *   2. Never inflate on a failed read. An approximate larger number is
  *      indistinguishable from a real one.
  */
+// Mocked BEFORE the module under test is imported, matching the setup in
+// publicEventsService.test.ts. `../../models` matters: models/index.ts calls
+// Cohort.init() against the real Sequelize instance at import time, so a stubbed
+// database without a working `define` makes the whole suite fail to run - which is
+// exactly how the second push of this change failed.
+jest.mock('mssql', () => {
+  const request = { input: jest.fn().mockReturnThis(), query: jest.fn() };
+  const pool = {
+    connect: jest.fn().mockResolvedValue(undefined),
+    request: jest.fn(() => request),
+    close: jest.fn().mockResolvedValue(undefined),
+  };
+  return { __esModule: true, ConnectionPool: jest.fn(() => pool), NVarChar: 'NVarChar', VarChar: 'VarChar', Int: 'Int' };
+});
+jest.mock('../../config/env', () => ({
+  env: { mssqlHost: 'h', mssqlPort: 1433, mssqlUser: 'u', mssqlPass: 'p', mssqlDatabase: 'CCPP' },
+}));
+jest.mock('../../models', () => ({ OpenHouseEvent: { findAll: jest.fn() } }));
+jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
+
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { addOwnRegistrations, getOwnRegisteredEventIds } from '../publicEventsService';
 import { sequelize } from '../../config/database';
-
-jest.mock('../../config/database', () => ({
-  sequelize: { query: jest.fn() },
-}));
 
 // mssql is mocked only so importing the module under test does not pull in the
 // driver. No case here reaches CCPP: each one either returns before the roster is
@@ -32,8 +48,6 @@ jest.mock('../../config/database', () => ({
 // mean testing the fake. That arithmetic was instead executed directly against the
 // real code, 10/10, and is recorded in the PR. What this file pins is everything
 // AROUND it: the guards that decide whether the arithmetic runs at all.
-jest.mock('mssql', () => ({ ConnectionPool: jest.fn(), VarChar: 'varchar' }));
-
 const mockQuery = sequelize.query as jest.Mock;
 
 type Row = { event_id: string; email_lower: string };
