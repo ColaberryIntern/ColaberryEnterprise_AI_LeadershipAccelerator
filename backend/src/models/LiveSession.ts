@@ -31,6 +31,8 @@ export interface LiveSessionAttributes {
   email_trigger_config?: any;
   reminder_trigger_config?: any;
   // Restart-durable arming for the reminder cron — see ensureSessionReminderSchema.ts.
+  /** OH-6: the Eventbrite id when this session IS an Open House; null for every ordinary class. */
+  open_house_event_id?: string | null;
   reminder_24h_sent_at?: Date | null;
   reminder_1h_sent_at?: Date | null;
   created_at?: Date;
@@ -66,6 +68,7 @@ class LiveSession extends Model<LiveSessionAttributes> implements LiveSessionAtt
   declare email_trigger_config: any;
   declare reminder_trigger_config: any;
   // Restart-durable arming for the reminder cron — see ensureSessionReminderSchema.ts.
+  declare open_house_event_id: string | null;
   declare reminder_24h_sent_at: Date | null;
   declare reminder_1h_sent_at: Date | null;
   declare created_at: Date;
@@ -192,6 +195,13 @@ LiveSession.init(
     },
     reminder_trigger_config: {
       type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    // OH-6. Declared here because the column exists: without it the model has no
+    // property in common with the shape the scheduler branches on, which is what
+    // TS2559 was saying rather than a complaint about the check itself.
+    open_house_event_id: {
+      type: DataTypes.STRING(64),
       allowNull: true,
     },
     reminder_24h_sent_at: {

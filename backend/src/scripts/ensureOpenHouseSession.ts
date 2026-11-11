@@ -150,6 +150,10 @@ async function main(): Promise<void> {
   // `cohort_id` is NOT NULL, so one is set - but nothing reads it for recipients.
   // The Explorer cohort is the honest answer for whose calendar this belongs on,
   // and the scheduler's `continue` is what guarantees it is never mailed.
+  // QueryTypes.SELECT, not INSERT, for an `INSERT ... RETURNING`: the INSERT
+  // overload is typed as returning [undefined, number] and has no row generic, so
+  // asking it for the new id is the TS2769 the first push earned. SELECT is the
+  // idiom for a statement that genuinely returns rows.
   const inserted = await sequelize.query<{ id: string }>(
     `INSERT INTO live_sessions
        (cohort_id, session_number, title, description, session_date, start_time, end_time,
@@ -167,11 +171,11 @@ async function main(): Promise<void> {
         end: end.time,
         eventId: event.event_id,
       },
-      type: QueryTypes.INSERT,
+      type: QueryTypes.SELECT,
     },
-  ) as unknown as [Array<{ id: string }>, number];
+  );
 
-  log('created', { id: inserted[0]?.[0]?.id ?? null, outcome: 'success' });
+  log('created', { id: inserted[0]?.id ?? null, outcome: 'success' });
   await sequelize.close();
 }
 
