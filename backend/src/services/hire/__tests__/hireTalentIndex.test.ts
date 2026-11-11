@@ -35,7 +35,7 @@ const record = (slug: string, over: Record<string, unknown> = {}) => ({
 });
 const card = (r: any): HireCaseStudyCard => ({
   slug: r.candidate.slug, title: 'T ' + r.candidate.slug, summary: null, industry: null,
-  featured: false, publishedAt: '2026-11-01', heroMetric: null, outcomes: [],
+  featured: false, publishedAt: '2026-11-01', heroMetric: null, outcomes: [], look: { coverImageUrl: null, walkthroughSeconds: null, capability: null, verified: false, workflowDiagram: false, decisions: 0, repositories: 0 },
 });
 const visible = (...slugs: string[]) => new Map(slugs.map((s) => [s, record(s) as any]));
 

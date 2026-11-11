@@ -8,7 +8,7 @@ import { availabilityOf, pickSignature, toTalentCard, type HireCaseStudyCard, ty
 
 const cs = (slug: string, over: Partial<HireCaseStudyCard> = {}): HireCaseStudyCard => ({
   slug, title: 'Title ' + slug, summary: null, industry: 'Insurance', featured: false,
-  publishedAt: '2026-11-01T00:00:00.000Z', heroMetric: null, outcomes: [], ...over,
+  publishedAt: '2026-11-01T00:00:00.000Z', heroMetric: null, outcomes: [], look: { coverImageUrl: null, walkthroughSeconds: null, capability: null, verified: false, workflowDiagram: false, decisions: 0, repositories: 0 }, ...over,
 });
 const tcard = (slug: string, over: Partial<HireTalentCard> = {}): HireTalentCard => ({
   slug, name: 'N ' + slug, avatarUrl: null, role: null, track: null, headline: null, location: null,

@@ -66,27 +66,78 @@
       + fourth + '</div>';
   }
 
-  function signature(sig, talentSlug) {
+  /*
+   * THE DIFFERENTIATORS (Ali, 2026-11-11: Kes's nine cards "on the surface they all look the
+   * same"). Each card now shows what is unique to its record: its picked cover with the
+   * walkthrough length on it, the capability it proves, its headline figure, and a proof row.
+   * EVERY PIECE COLLAPSES WHEN ABSENT: no cover keeps the generated art (never a blank box), no
+   * figure / capability / proof renders nothing at all, so an unfinished record shows no holes.
+   */
+  function look(c) { return (c && c.look && typeof c.look === 'object') ? c.look : {}; }
+
+  function cover(c, api, n) {
+    var L = look(c);
+    var url = C.mediaUrl(api, L.coverImageUrl);
+    var len = C.duration(L.walkthroughSeconds);
+    var media = url
+      ? '<img class="cover" src="' + esc(url) + '" alt="" loading="lazy" decoding="async">'
+      : C.art(c.slug, { n: n });
+    return media + (len ? '<span class="play" aria-label="Walkthrough video, ' + esc(len) + '">▶ ' + esc(len) + '</span>' : '');
+  }
+
+  function capability(c) {
+    var label = C.capabilityLabel(look(c).capability);
+    return label ? '<span class="cap-line">' + esc(label) + '</span>' : '';
+  }
+
+  function figure(c) {
+    var m = c && c.heroMetric;
+    return m && m.value && m.label ? '<div class="fig"><b>' + esc(m.value) + '</b><span>' + esc(m.label) + '</span></div>' : '';
+  }
+
+  function proof(c) {
+    var L = look(c);
+    var chips = [
+      L.verified ? '✓ Verified' : '',
+      L.workflowDiagram ? 'Workflow diagram' : '',
+      L.decisions > 0 ? L.decisions + ' ' + C.plural(L.decisions, 'decision', 'decisions') : '',
+      L.repositories > 0 ? L.repositories + ' ' + C.plural(L.repositories, 'repo', 'repos') : '',
+    ].filter(Boolean);
+    return chips.length ? '<div class="proof">' + chips.map(function (t) {
+      return '<span' + (t === '✓ Verified' ? ' class="ok"' : '') + '>' + esc(t) + '</span>';
+    }).join('') + '</div>' : '';
+  }
+
+  function signature(sig, talentSlug, api) {
     if (!sig || !sig.slug) return '';
     var outcomes = arr(sig.outcomes).slice(0, 3);
     return '<div class="label" style="margin-bottom:10px">★ Signature case study</div>'
       + '<a class="sig" href="' + caseLink(sig.slug) + '" target="_blank" rel="noopener" data-launch data-from="signature" data-case="' + esc(sig.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-      + '<div class="art">' + C.art(sig.slug, { n: 10 }) + '</div><div class="body">'
-      + '<span class="state pub">Published case study</span><h3>' + esc(sig.title) + '</h3>'
+      + '<div class="art">' + cover(sig, api, 10) + '</div><div class="body">'
+      + '<span class="state pub">Published case study</span>' + capability(sig) + '<h3>' + esc(sig.title) + '</h3>'
       + (sig.summary ? '<p>' + esc(sig.summary) + '</p>' : '')
       + (outcomes.length ? '<div class="metrics" style="margin:0 0 18px">' + outcomes.map(function (o) { return '<div><b class="gold">' + esc(o.value) + '</b><span>' + esc(o.label) + '</span></div>'; }).join('') + '</div>' : '')
+      + proof(sig)
       + '<span class="open-cue">Open the case study ' + C.ARROW + '</span></div></a>';
   }
 
-  function projectCard(project, published, talentSlug) {
+  /* The body every linked case-study card shares; `sub` is the line under the title. */
+  function caseBody(cs, sub) {
+    return '<div class="b">' + capability(cs) + '<h4>' + esc(cs.title) + '</h4>'
+      + (sub ? '<span class="org">' + sub + '</span>' : '')
+      + figure(cs)
+      + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '')
+      + proof(cs)
+      + '<div class="row"><span class="state pub">★ Case study</span><span class="open-cue">Open ' + C.ARROW + '</span></div></div>';
+  }
+
+  function projectCard(project, published, talentSlug, api) {
     var cs = project.case_study_slug ? published[project.case_study_slug] : null;
     var org = [project.organization, project.industry].filter(Boolean).map(esc).join(' · ');
     if (cs) {
       return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="project" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-        + '<div class="art">' + C.art(cs.slug, { n: 8 }) + '</div><div class="b"><h4>' + esc(cs.title) + '</h4>'
-        + '<span class="org">' + esc(project.title) + (org ? ' · ' + org : '') + '</span>'
-        + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '')
-        + '<div class="row"><span class="state pub">★ Case study</span><span class="open-cue">Open ' + C.ARROW + '</span></div></div></a>';
+        + '<div class="art">' + cover(cs, api, 8) + '</div>'
+        + caseBody(cs, esc(project.title) + (org ? ' · ' + org : '')) + '</a>';
     }
     return '<div class="proj pending"><div class="art">' + C.art('project:' + project.title, { n: 6 }) + '</div><div class="b">'
       + '<h4>' + esc(project.title) + '</h4>' + (org ? '<span class="org">' + org + '</span>' : '')
@@ -112,12 +163,12 @@
     });
   }
 
-  function caseCard(cs, talentSlug) {
+  function caseCard(cs, talentSlug, api) {
     return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="case-list" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-      + '<div class="art">' + C.art(cs.slug, { n: 8 }) + '</div><div class="b"><h4>' + esc(cs.title) + '</h4>'
-      + (cs.industry ? '<span class="org">' + esc(cs.industry) + '</span>' : '')
-      + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '')
-      + '<div class="row"><span class="state pub">★ Case study</span><span class="open-cue">Open ' + C.ARROW + '</span></div></div></a>';
+      + '<div class="art">' + cover(cs, api, 8) + '</div>'
+      // No industry line: it is the same on every card of one person ("education" nine
+      // times on Kes's page), which is the sameness this card exists to remove.
+      + caseBody(cs, '') + '</a>';
   }
 
   function commits(list) {
@@ -163,7 +214,7 @@
       + '<a class="btn btn-ghost btn-block" href="/">← Back to all talent</a></aside>';
   }
 
-  function renderPortfolio(body, slug, shortlist, now) {
+  function renderPortfolio(body, slug, shortlist, now, api) {
     var p = body.portfolio; var hire = body.hire; var id = p.identity;
     var person = { slug: slug, name: id.full_name, avatarUrl: id.avatar_data_url };
     var published = {};
@@ -188,9 +239,9 @@
       + '<button type="button" class="btn btn-star' + (on ? ' on' : '') + '" data-star="' + esc(slug) + '" data-name="' + esc(id.full_name) + '" aria-pressed="' + on + '">★ ' + (on ? 'Shortlisted' : 'Shortlist') + '</button>'
       + '<button type="button" class="btn btn-ghost" data-copy>Copy link</button></div></div>'
       + ledger(p, hire, now)
-      + '<div class="p-cols"><div>' + signature(sig, slug)
-      + (more.length ? '<div class="card"><div class="label">Published case studies</div><h3 class="t">' + (sig ? 'More of their published work' : 'Their published work') + '</h3><div class="projs">' + more.map(function (c) { return caseCard(c, slug); }).join('') + '</div></div>' : '')
-      + (projects.length ? '<div class="card"><div class="label">Projects</div><h3 class="t">Everything they\'ve built</h3><div class="projs">' + projects.map(function (x) { return projectCard(x, published, slug); }).join('') + '</div></div>' : '')
+      + '<div class="p-cols"><div>' + signature(sig, slug, api)
+      + (more.length ? '<div class="card"><div class="label">Published case studies</div><h3 class="t">' + (sig ? 'More of their published work' : 'Their published work') + '</h3><div class="projs">' + more.map(function (c) { return caseCard(c, slug, api); }).join('') + '</div></div>' : '')
+      + (projects.length ? '<div class="card"><div class="label">Projects</div><h3 class="t">Everything they\'ve built</h3><div class="projs">' + projects.map(function (x) { return projectCard(x, published, slug, api); }).join('') + '</div></div>' : '')
       + (about.length ? '<div class="card about"><div class="label">About <span class="src">from their record and resume</span></div>' + about.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>' : '')
       + (vc.length ? '<div class="card"><div class="label">Verified commits</div><h3 class="t">The work, commit by commit</h3>' + commits(vc) + '</div>' : '')
       + (xp.length ? '<div class="card"><div class="label">Experience <span class="src">parsed from their resume</span></div>' + experience(xp) + '</div>' : '')

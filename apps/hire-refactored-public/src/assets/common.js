@@ -93,6 +93,30 @@
     return /^https?:\/\//i.test(s) || /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(s) ? s : '';
   }
 
+  /* A record's media URL. The API sends covers origin-relative (`/site-v2/...`), and they live
+     on the platform origin, not this one, so a relative path is resolved against `api`. Only
+     http(s) survives; anything else is ''. */
+  function mediaUrl(api, url) {
+    var s = String(url || '').trim();
+    if (/^\/[^/]/.test(s)) s = String(api || '').replace(/\/+$/, '') + s;
+    return /^https?:\/\//i.test(s) ? s : '';
+  }
+
+  /* 105 -> "1:45". Nothing for a missing or non-positive length. */
+  function duration(secs) {
+    var n = typeof secs === 'number' && isFinite(secs) ? Math.round(secs) : 0;
+    if (n <= 0) return '';
+    var s = n % 60;
+    return Math.floor(n / 60) + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  /* "operational-ai-call-intent-routing" -> "Call intent routing". The taxonomy prefix is the
+     same on every record, so it is dropped: it is the part that does not differentiate. */
+  function capabilityLabel(slug) {
+    var s = String(slug || '').trim().toLowerCase().replace(/^operational-ai-/, '').replace(/[-_]+/g, ' ').trim();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  }
+
   /* The avatar: photo or initials on a slug-derived gradient; gold ring + star when listed. */
   function avatar(person, size, ring) {
     var withRing = ring !== false;
@@ -146,7 +170,7 @@
 
   return {
     esc: esc, rnd: rnd, hueOf: hueOf, art: art, initials: initials, safeImageUrl: safeImageUrl,
-    avatar: avatar, ARROW: ARROW, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
+    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
     readShortlist: readShortlist, writeShortlist: writeShortlist, toggleShortlist: toggleShortlist,
     track: track, SHORT_KEY: SHORT_KEY,
   };

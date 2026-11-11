@@ -16,7 +16,7 @@
     C.fetchJson(api + '/api/public/portfolios/' + encodeURIComponent(slug) + '?surface=hire', 10000).then(function (res) {
       if (!res.ok || !P.isPayload(res.body)) return;
       var body = res.body;
-      doc.getElementById('main').innerHTML = P.renderPortfolio(body, slug, window.HirePage.shortlist(), new Date());
+      doc.getElementById('main').innerHTML = P.renderPortfolio(body, slug, window.HirePage.shortlist(), new Date(), api);
       doc.title = body.portfolio.identity.full_name + ' · Hire · Refactored.ai';
       // Indexable only on an explicit public opt-in; unlisted pages stay noindex.
       if (body.hire.indexable === true) {
