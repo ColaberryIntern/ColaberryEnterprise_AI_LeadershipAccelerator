@@ -51,7 +51,13 @@ let root: Root;
 let load: jest.Mock;
 let download: jest.Mock;
 
-async function render(result: unknown = aired(), rejectLoad = false) {
+async function render(
+  result: unknown = aired(),
+  rejectLoad = false,
+  // D11. Stubbed for the reason this directory already states about every child that fetches:
+  // there is no global axios mock, so an unstubbed write is a real request inside a unit test.
+  decide: jest.Mock = jest.fn().mockResolvedValue(undefined),
+) {
   load = rejectLoad
     ? jest.fn().mockRejectedValue(new Error('nope'))
     : jest.fn().mockResolvedValue(result);
@@ -62,7 +68,7 @@ async function render(result: unknown = aired(), rejectLoad = false) {
   await act(async () => {
     root = createRoot(container);
     root.render(
-      <SessionClipList sessionId="11111111-2222" load={load} download={download} />,
+      <SessionClipList sessionId="11111111-2222" load={load} download={download} decide={decide} />,
     );
   });
 }
@@ -248,5 +254,88 @@ describe('a moment the producer marked live', () => {
 
     expect(text()).toContain('The question that landed');
     expect(find('clip-marked-live')).not.toBeNull();
+  });
+});
+
+/**
+ * D11 — keep it or cut it.
+ *
+ * Two behaviours here are the ones that make a review tool trustworthy or not.
+ *
+ * A DECISION MOVES THE WHOLE SEGMENT. The decision is per segment and the rows are per moment,
+ * so updating only the clicked row would leave an editor deciding the same thing once per slide
+ * and the screen disagreeing with the database about every other moment in it.
+ *
+ * AND A FAILED WRITE MUST NOT LOOK LIKE A SAVED ONE. The optimistic update is the tempting
+ * version and it is wrong here: it would leave the screen showing a decision the exported file
+ * will not contain, which is the one thing a tool somebody edits from must never do.
+ */
+describe('deciding to keep or cut a segment', () => {
+  const twoInOneSegment = () => aired({
+    clips: [
+      clip({ clip: 1, segment_id: 'reset', decision: 'cut', decided: false, label: 'Reset' }),
+      clip({ clip: 2, segment_id: 'reset', decision: 'cut', decided: false, label: 'Reset again' }),
+      clip({ clip: 3, segment_id: 'architecture', decision: 'keep', decided: false, label: 'Arch' }),
+    ],
+  });
+
+  it('writes the decision for the SEGMENT, not the row', async () => {
+    const decide = jest.fn().mockResolvedValue(undefined);
+    await render(twoInOneSegment(), false, decide);
+
+    await act(async () => { find('clip-decide-keep-1')!.click(); });
+
+    expect(decide).toHaveBeenCalledWith('11111111-2222', 'reset', 'keep');
+  });
+
+  it('moves EVERY row in that segment, and leaves the others alone', async () => {
+    const decide = jest.fn().mockResolvedValue(undefined);
+    await render(twoInOneSegment(), false, decide);
+
+    await act(async () => { find('clip-decide-keep-1')!.click(); });
+
+    // Both reset rows are now decided, so neither says "default" any more.
+    expect(find('clip-default-1')).toBeNull();
+    expect(find('clip-default-2')).toBeNull();
+    // The unrelated segment is untouched and still shows its default.
+    expect(find('clip-default-3')).not.toBeNull();
+  });
+
+  it('does NOT change the screen when the write fails', async () => {
+    const decide = jest.fn().mockRejectedValue(new Error('nope'));
+    await render(twoInOneSegment(), false, decide);
+
+    await act(async () => { find('clip-decide-keep-1')!.click(); });
+
+    expect(find('clip-decide-error')).not.toBeNull();
+    expect(text()).toMatch(/still has the old decision/i);
+    // Still a default, because nothing was recorded.
+    expect(find('clip-default-1')).not.toBeNull();
+  });
+
+  it('marks which answer is current, so the row can be read without pressing it', async () => {
+    await render(twoInOneSegment());
+
+    expect(find('clip-decide-cut-1')!.getAttribute('aria-pressed')).toBe('true');
+    expect(find('clip-decide-keep-1')!.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('says when a decision is only the default', async () => {
+    // "Cut because it is a break" and "cut because somebody watched it" look identical on a row
+    // that carries only the verdict.
+    await render(twoInOneSegment());
+
+    expect(find('clip-default-1')).not.toBeNull();
+    expect(find('clip-default-1')!.textContent).toBe('default');
+  });
+
+  it('offers nothing to press on a moment with no segment', async () => {
+    // A press whose slide did not resolve carries no segment id, so there is nothing to key a
+    // decision on. A button that cannot work is worse than no button.
+    await render(aired({
+      clips: [clip({ clip: 1, segment_id: '', source: 'live', candidate: false, decision: 'keep', decided: false })],
+    }));
+
+    expect((find('clip-decide-keep-1') as HTMLButtonElement).disabled).toBe(true);
   });
 });

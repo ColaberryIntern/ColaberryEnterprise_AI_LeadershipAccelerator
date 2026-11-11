@@ -26,6 +26,7 @@
  * silently corrupts a file if it is wrong, because labels are free text a human wrote.
  */
 import { formatTimecode } from './broadcastClipMarkerPolicy';
+import { resolveDecision } from './broadcastClipDecisionPolicy';
 import type { StoredClipMarker } from './broadcastClipMarkerService';
 import type { StoredClipMark } from './broadcastClipMarkService';
 
@@ -61,6 +62,12 @@ export interface ClipRow {
    * person saying "this bit".
    */
   source: 'advance' | 'live';
+  /** D11: the segment this moment fell in. The key a keep-or-cut decision is stored against. */
+  segmentId: string;
+  /** D11: keep it or cut it. A person's answer where there is one, the segment's default where there is not. */
+  decision: 'keep' | 'cut';
+  /** D11: true when a person chose, false when this is the default for the kind of segment. */
+  decided: boolean;
 }
 
 function instantMs(value: string | Date | null): number | null {
@@ -103,6 +110,11 @@ export function buildClipRows(
   markers: ReadonlyArray<StoredClipMarker>,
   airing: ClipListAiring,
   marks: ReadonlyArray<StoredClipMark> = [],
+  /**
+   * D11: the decisions a person has made, by segment id. Absent entries are not "keep" - they
+   * are "nobody has looked", which the policy resolves from the kind of segment.
+   */
+  decisions: Readonly<Record<string, 'keep' | 'cut'>> = {},
 ): ClipRow[] {
   const started = instantMs(airing.contentStartedAt);
   const ended = instantMs(airing.endedAt);
@@ -129,6 +141,7 @@ export function buildClipRows(
       timecode_seconds: m.timecode_seconds,
       slide_index: m.slide_index,
       label: m.label,
+      segment_id: m.segment_id,
       segment_label: m.segment_label,
       slide_title: m.slide_title,
       candidate: isCandidate(m),
@@ -138,6 +151,7 @@ export function buildClipRows(
       timecode_seconds: m.timecode_seconds,
       slide_index: m.slide_index,
       label: m.label,
+      segment_id: m.segment_id,
       segment_label: m.segment_label,
       slide_title: m.slide_title,
       // STORED, not derived. The press path records whether its label was authored, which is
@@ -178,6 +192,13 @@ export function buildClipRows(
       segmentLabel: (m.segment_label || '').trim(),
       slideTitle: (m.slide_title || '').trim(),
       source: m.source,
+      segmentId: (m.segment_id || '').trim(),
+      /**
+       * D11. Spread because the policy returns the decision AND whether a person made it, and
+       * the two must not drift apart on the way to the screen: "cut because it is a break" and
+       * "cut because somebody said so" look identical on a row that only carries the verdict.
+       */
+      ...resolveDecision(m.segment_id, decisions[(m.segment_id || '').trim()]),
     };
   });
 }
@@ -196,7 +217,7 @@ export function csvCell(value: string | number | boolean): string {
 }
 
 const COLUMNS = [
-  'clip', 'in', 'out', 'duration', 'source', 'candidate', 'label', 'segment', 'slide_title',
+  'clip', 'in', 'out', 'duration', 'source', 'decision', 'decided', 'candidate', 'label', 'segment', 'slide_title',
   'in_seconds', 'out_seconds', 'slide_index',
 ] as const;
 
@@ -217,6 +238,8 @@ export function toCsv(rows: ReadonlyArray<ClipRow>): string {
       csvCell(r.outTimecode),
       csvCell(r.durationTimecode),
       csvCell(r.source),
+      csvCell(r.decision),
+      csvCell(r.decided),
       csvCell(r.candidate),
       csvCell(r.label),
       csvCell(r.segmentLabel),

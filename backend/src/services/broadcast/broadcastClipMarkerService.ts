@@ -161,6 +161,8 @@ export interface StoredClipMarker {
   slide_index: number;
   timecode_seconds: number;
   label: string;
+  /** D11: the key a keep-or-cut decision is stored against. */
+  segment_id: string | null;
   segment_label: string | null;
   slide_title: string | null;
 }
@@ -168,7 +170,7 @@ export interface StoredClipMarker {
 /** The clip list for one airing, in the order it happened. */
 export async function listClipMarkers(occurrenceId: string): Promise<StoredClipMarker[]> {
   return sequelize.query<StoredClipMarker>(
-    `SELECT slide_index, timecode_seconds, label, segment_label, slide_title
+    `SELECT slide_index, timecode_seconds, label, segment_id, segment_label, slide_title
        FROM broadcast_clip_markers
       WHERE occurrence_id = :occurrenceId
       ORDER BY timecode_seconds ASC, slide_index ASC`,

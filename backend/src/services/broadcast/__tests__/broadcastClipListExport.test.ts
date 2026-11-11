@@ -30,6 +30,10 @@ const marker = (over: Partial<StoredClipMarker> = {}): StoredClipMarker => ({
   slide_index: 0,
   timecode_seconds: 0,
   label: 'The moment the demo lands',
+  // D11 added this to the row the clip list reads. Defaulted to null rather than to a real
+  // segment so every test written before it keeps the behaviour it was written against: with no
+  // segment id, no stored decision can apply and the policy keeps.
+  segment_id: null,
   segment_label: 'Build Bay',
   slide_title: 'Live build',
   ...over,
@@ -192,17 +196,17 @@ describe('the file', () => {
 
   it('opens with a header naming every column', () => {
     expect(lines[0]).toBe(
-      'clip,in,out,duration,source,candidate,label,segment,slide_title,in_seconds,out_seconds,slide_index',
+      'clip,in,out,duration,source,decision,decided,candidate,label,segment,slide_title,in_seconds,out_seconds,slide_index',
     );
   });
 
   it('keeps a label with a comma in it as ONE field', () => {
     expect(lines[1]).toContain('"Cold open, then the promise"');
-    // Why the quoting is load-bearing rather than decorative: the header has 12 columns, and a
-    // naive comma split of this row yields 13. Without the quotes an importer would read the
-    // same 13 and shift every column after the label by one.
-    expect(lines[0].split(',')).toHaveLength(12);
-    expect(lines[1].split(',')).toHaveLength(13);
+    // Why the quoting is load-bearing rather than decorative: the header has 14 columns, and a
+    // naive comma split of this row yields 15. Without the quotes an importer would read the
+    // same 15 and shift every column after the label by one.
+    expect(lines[0].split(',')).toHaveLength(14);
+    expect(lines[1].split(',')).toHaveLength(15);
   });
 
   it('marks the authored row as a candidate and the fallback row as not', () => {
@@ -342,5 +346,88 @@ describe('a producer press, merged into the clip list', () => {
     expect(lines[0].split(',')[4]).toBe('source');
     expect(lines[1].split(',')[4]).toBe('advance');
     expect(lines[2].split(',')[4]).toBe('live');
+  });
+});
+
+/**
+ * D11 — keep it or cut it, carried onto every row.
+ *
+ * The assertion that matters is that a DEFAULT and a DECISION stay distinguishable. They can
+ * agree on the verdict and still be different facts: "cut because the template calls it a
+ * break" versus "cut because somebody watched it and said so". An editor coming back to a
+ * half-reviewed list needs to know which rows have been through a pair of eyes, and a row that
+ * carried only the verdict would make that unknowable.
+ */
+describe('the keep-or-cut decision on a clip row', () => {
+  const airing = { contentStartedAt: '2026-10-24T14:00:00.000Z', endedAt: '2026-10-24T14:10:00.000Z' };
+  const inSegment = (segmentId: string, over: Partial<StoredClipMarker> = {}) =>
+    marker({ segment_id: segmentId, timecode_seconds: 0, ...over });
+
+  it('keeps an ordinary segment by default, and says nobody decided', () => {
+    const [row] = buildClipRows([inSegment('architecture')], airing);
+
+    expect(row.decision).toBe('keep');
+    expect(row.decided).toBe(false);
+    expect(row.segmentId).toBe('architecture');
+  });
+
+  it('CUTS a break by default, because its own template says it is edited out', () => {
+    const [row] = buildClipRows([inSegment('reset')], airing);
+
+    expect(row.decision).toBe('cut');
+    expect(row.decided).toBe(false);
+  });
+
+  it('lets a person overrule the default in both directions', () => {
+    const [kept] = buildClipRows([inSegment('reset')], airing, [], { reset: 'keep' });
+    expect(kept).toMatchObject({ decision: 'keep', decided: true });
+
+    const [cut] = buildClipRows([inSegment('architecture')], airing, [], { architecture: 'cut' });
+    expect(cut).toMatchObject({ decision: 'cut', decided: true });
+  });
+
+  it('distinguishes a decision from the default that AGREES with it', () => {
+    // The whole reason `decided` exists. Both of these read `cut`.
+    const [byDefault] = buildClipRows([inSegment('reset')], airing);
+    const [byHand] = buildClipRows([inSegment('reset')], airing, [], { reset: 'cut' });
+
+    expect(byDefault.decision).toBe(byHand.decision);
+    expect(byDefault.decided).toBe(false);
+    expect(byHand.decided).toBe(true);
+  });
+
+  it('applies a segment decision to EVERY moment in that segment', () => {
+    // The decision is per segment; the rows are per moment. One click has to move all of them,
+    // or an editor would be deciding the same thing once per slide.
+    const rows = buildClipRows([
+      inSegment('reset', { timecode_seconds: 0, slide_index: 1 }),
+      inSegment('reset', { timecode_seconds: 60, slide_index: 2 }),
+      inSegment('architecture', { timecode_seconds: 120, slide_index: 3 }),
+    ], airing, [], { reset: 'keep' });
+
+    expect(rows.map((r) => [r.segmentId, r.decision, r.decided])).toEqual([
+      ['reset', 'keep', true],
+      ['reset', 'keep', true],
+      ['architecture', 'keep', false],
+    ]);
+  });
+
+  it('keeps a moment whose segment could not be named', () => {
+    // Reachable: a press whose slide did not resolve carries no segment id. The failure
+    // direction is deliberate - a wrongly kept moment costs a few seconds of scrubbing, a
+    // wrongly cut one loses the footage.
+    const [row] = buildClipRows([inSegment('')], airing);
+
+    expect(row.decision).toBe('keep');
+    expect(row.segmentId).toBe('');
+  });
+
+  it('is in the CSV, with the default and the decision in separate columns', () => {
+    const csv = toCsv(buildClipRows([inSegment('reset')], airing, [], { reset: 'keep' }));
+    const cells = csv.trim().split('\r\n')[1].split(',');
+
+    // header: clip,in,out,duration,source,decision,decided,...
+    expect(cells[5]).toBe('keep');
+    expect(cells[6]).toBe('yes');
   });
 });

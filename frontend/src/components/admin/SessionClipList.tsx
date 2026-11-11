@@ -34,6 +34,10 @@ interface Clip {
   out_timecode: string;
   duration_timecode: string;
   candidate: boolean;
+  /** D11: the segment this moment fell in, and what has been decided about it. */
+  segment_id?: string;
+  decision?: 'keep' | 'cut';
+  decided?: boolean;
   /** D10: `advance` is a by-product of the deck moving on; `live` is a producer who pressed. */
   source?: 'advance' | 'live';
   label: string;
@@ -55,6 +59,23 @@ interface Props {
   /** Injected in tests. Defaults to the real admin request. */
   load?: (sessionId: string) => Promise<ClipListResponse>;
   download?: (sessionId: string) => Promise<{ blob: Blob; filename: string }>;
+  /** Injected in tests. The keep-or-cut write (D11). */
+  decide?: (sessionId: string, segmentId: string, decision: 'keep' | 'cut') => Promise<void>;
+}
+
+/**
+ * D11 — record a keep-or-cut decision for one segment.
+ *
+ * PUT because the decision is a value rather than an event: setting it twice leaves the same
+ * state. The server upserts, so changing your mind is the normal path and not a conflict.
+ */
+async function saveDecision(
+  sessionId: string, segmentId: string, decision: 'keep' | 'cut',
+): Promise<void> {
+  await api.put(
+    `/api/admin/accelerator/sessions/${sessionId}/clip-decisions/${encodeURIComponent(segmentId)}`,
+    { decision },
+  );
 }
 
 async function loadClipList(sessionId: string): Promise<ClipListResponse> {
@@ -117,11 +138,14 @@ function emptyReason(data: ClipListResponse): string {
   return 'This class aired and no moments were marked.';
 }
 
-const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
+const SessionClipList: React.FC<Props> = ({ sessionId, load, download, decide }) => {
   const [data, setData] = useState<ClipListResponse | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  /** D11: the segment currently being written, so one click cannot be pressed twice. */
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [decideError, setDecideError] = useState('');
 
   const loadList = load ?? loadClipList;
   const fetchCsv = download ?? downloadClipCsv;
@@ -156,6 +180,35 @@ const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
       </div>
     );
   }
+
+  /**
+   * D11 — set a segment's decision, and move every row in that segment with it.
+   *
+   * The decision is per segment; the rows are per moment. Updating only the clicked row would
+   * leave an editor deciding the same thing once per slide, and the screen disagreeing with the
+   * database about every other moment in the segment.
+   *
+   * The local state is updated only AFTER the write succeeds. The optimistic version of this is
+   * the tempting one and it is wrong here: a failed write would leave the screen showing a
+   * decision the file will not contain, which is the one thing a review tool must never do.
+   */
+  const setDecision = async (segmentId: string, decision: 'keep' | 'cut'): Promise<void> => {
+    if (!segmentId || deciding) return;
+    setDeciding(segmentId);
+    setDecideError('');
+    try {
+      await (decide ?? saveDecision)(sessionId, segmentId, decision);
+      setData((prev) => (prev ? {
+        ...prev,
+        clips: prev.clips.map((c) => (c.segment_id === segmentId
+          ? { ...c, decision, decided: true } : c)),
+      } : prev));
+    } catch {
+      setDecideError('That did not save. The clip list still has the old decision.');
+    } finally {
+      setDeciding(null);
+    }
+  };
 
   if (!data || !data.aired) return null;
 
@@ -204,6 +257,7 @@ const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
                   <th scope="col" style={{ width: 64 }}>In</th>
                   <th scope="col" style={{ width: 72 }}>Length</th>
                   <th scope="col">What it is worth</th>
+                  <th scope="col" style={{ width: 132 }}>Keep or cut</th>
                 </tr>
               </thead>
               <tbody data-testid="clip-candidates">
@@ -232,6 +286,39 @@ const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
                         <span className="text-muted ms-2" style={{ fontSize: 12 }}>{c.segment_label}</span>
                       )}
                     </td>
+                    <td>
+                      {/*
+                        * Two buttons rather than a single toggle, so the CURRENT answer is
+                        * readable without working out what the control would do if pressed. A
+                        * toggle labelled "Cut" does not say whether the row is kept or cut.
+                        */}
+                      <div className="btn-group btn-group-sm" role="group" aria-label="Keep or cut this segment">
+                        {(['keep', 'cut'] as const).map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            className={`btn btn-sm ${c.decision === d ? 'btn-dark' : 'btn-outline-secondary'}`}
+                            disabled={!c.segment_id || deciding !== null}
+                            onClick={() => { void setDecision(c.segment_id || '', d); }}
+                            data-testid={`clip-decide-${d}-${c.clip}`}
+                            aria-pressed={c.decision === d}
+                          >
+                            {d === 'keep' ? 'Keep' : 'Cut'}
+                          </button>
+                        ))}
+                      </div>
+                      {/*
+                        * Said out loud, because "cut because the template calls it a break" and
+                        * "cut because somebody watched it" look identical on a row that only
+                        * carries the verdict - and an editor returning to a half-reviewed list
+                        * needs to know which rows have been through a pair of eyes.
+                        */}
+                      {c.decided === false && (
+                        <div className="text-muted" style={{ fontSize: 11 }} data-testid={`clip-default-${c.clip}`}>
+                          default
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -257,6 +344,9 @@ const SessionClipList: React.FC<Props> = ({ sessionId, load, download }) => {
 
       {downloadError && (
         <div className="text-danger mt-2" style={{ fontSize: 13 }}>{downloadError}</div>
+      )}
+      {decideError && (
+        <div className="text-danger mt-2" style={{ fontSize: 13 }} data-testid="clip-decide-error">{decideError}</div>
       )}
     </div>
   );

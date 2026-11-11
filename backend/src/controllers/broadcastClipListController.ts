@@ -3,6 +3,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { listClipMarkers } from '../services/broadcast/broadcastClipMarkerService';
 import { listClipMarks } from '../services/broadcast/broadcastClipMarkService';
+import { listClipDecisions } from '../services/broadcast/broadcastClipDecisionService';
 import {
   buildClipRows,
   clipListFilename,
@@ -81,6 +82,9 @@ function wireClip(r: ReturnType<typeof buildClipRows>[number]) {
     segment_label: r.segmentLabel,
     slide_title: r.slideTitle,
     source: r.source,
+    segment_id: r.segmentId,
+    decision: r.decision,
+    decided: r.decided,
   };
 }
 
@@ -100,6 +104,8 @@ export async function handleGetSessionClipList(req: Request, res: Response, next
     const markers = await listClipMarkers(occurrence.id);
     // D10 - the moments a producer chose. A second table, merged at the read.
     const marks = await listClipMarks(occurrence.id);
+    // D11 - what a person has decided to keep or cut. Absent means nobody has looked.
+    const decisions = await listClipDecisions(occurrence.id);
 
     /**
      * THE RANGES ARE DERIVED HERE, ONCE.
@@ -125,7 +131,7 @@ export async function handleGetSessionClipList(req: Request, res: Response, next
       clips: buildClipRows(markers, {
         contentStartedAt: occurrence.content_started_at,
         endedAt: occurrence.ended_at,
-      }, marks).map(wireClip),
+      }, marks, decisions).map(wireClip),
     });
   } catch (err) { next(err); }
 }
@@ -156,10 +162,12 @@ export async function handleGetSessionClipListCsv(req: Request, res: Response, n
     const markers = await listClipMarkers(occurrence.id);
     // D10 - the moments a producer chose. A second table, merged at the read.
     const marks = await listClipMarks(occurrence.id);
+    // D11 - what a person has decided to keep or cut. Absent means nobody has looked.
+    const decisions = await listClipDecisions(occurrence.id);
     const clips = buildClipRows(markers, {
       contentStartedAt: occurrence.content_started_at,
       endedAt: occurrence.ended_at,
-    }, marks);
+    }, marks, decisions);
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader(
