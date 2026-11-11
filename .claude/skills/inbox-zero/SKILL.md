@@ -178,7 +178,15 @@ verify, recipients preserved and any add/remove called out.
 https://3.basecamp.com/3945211/buckets/7463955/todos/9982045924). The three non-negotiables are a
 GUARD in the backend, not a reminder here: no em-dashes or en-dashes anywhere, the branded signature
 on every send, no double sign-off (the signature names him, so the body ends on its last real
-sentence, never "Best, Ali"). The planner normalises every draft to that before Ali sees it and the
+sentence, never "Best, Ali").
+
+**The body is PLAIN TEXT. Never write HTML into it.** No `<p>`, `<br>`, `<a href>`, no `&nbsp;`: separate
+paragraphs with a blank line and paste links as bare URLs. `sendAsAli.js` builds the HTML itself and
+refuses any body containing tags or entities, in dry runs too (C122, 11 Nov 2026). That day a body written
+in HTML reached Jackie showing literal `<p>` tags and a garbled link; Ali's words were "can't send out html
+like this. EVER".
+
+The planner normalises every draft to that before Ali sees it and the
 executor refuses to send anything that still breaks it (`StyleViolationError`, shown as a FAILED
 action). The rest of the kit is how the draft should read: subject leads with the action and has no
 exclamation mark; salutation is the first name only; the first line is the point, never "hope
