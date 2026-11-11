@@ -163,6 +163,7 @@ describe('the sidebar advertises only what exists', () => {
       '/admin/marketing/brands',
       '/admin/marketing/performance',
       '/admin/marketing/ad-spend',
+      '/admin/marketing/open-house-attendees',
     ];
     const reachable = MARKETING_DESTINATIONS.map((d) => d.to);
     built.forEach((p) => expect(reachable).toContain(p));
@@ -198,7 +199,9 @@ describe('the sidebar advertises only what exists', () => {
     expect(MARKETING_DESTINATIONS.map((d) => d.label)).toEqual([
       'New post', 'All posts', 'Calendar', 'Landing pages',
       // Ad spend sits after Performance: record what the ads cost, next to where the return is read.
-      'Publishing queue', 'Performance', 'Ad spend', 'Brands & channels',
+      // Open House signups follows it: the ads buy registrations, and this is where you read who
+      // actually registered - across BOTH rosters, which is the whole reason the page exists.
+      'Publishing queue', 'Performance', 'Ad spend', 'Open House signups', 'Brands & channels',
     ]);
   });
 
