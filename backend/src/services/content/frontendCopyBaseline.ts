@@ -109,6 +109,15 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/UtilityIOULandingPage.tsx': 2,
   'frontend/src/pages/admin/AdminCommunityRolesPage.tsx': 5,
   'frontend/src/pages/admin/HandoffDetailPage.tsx': 1,
+  /*
+   * D4 (P4-01) Studio setup. The access_mode ENUM VALUE, rendered as one of four options an
+   * operator chooses between. It is the name of a column value, not an offer - the sentence
+   * beside it reads "Anyone admitted to the portal can watch the whole class", which is a
+   * description of a permission and makes no claim about price. Renaming it is a schema change,
+   * not a copy fix; the same value is baselined on the backend in ensureBroadcastSchema,
+   * broadcastEntitlement and BroadcastOccurrence for exactly this reason.
+   */
+  'frontend/src/pages/admin/live/StudioSetupPage.tsx': 1,
   'frontend/src/pages/admin/marketing/composer/ComposerSetup.tsx': 1,
   'frontend/src/pages/admin/orchestration/FeedControlTab.tsx': 2,
   'frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx': 2,
@@ -159,7 +168,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 273;
+export const FRONTEND_COPY_BASELINE_TOTAL = 274;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the
