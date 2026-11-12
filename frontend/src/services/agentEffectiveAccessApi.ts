@@ -159,7 +159,12 @@ export interface AgentToolRequestView {
   writes: boolean | null;
   decisions: ToolRequestDecisionView[];
   messages: ToolRequestMessageView[];
-  /** Derived server-side from status plus the decision log, so it cannot drift from them. */
+  /** Phase 3 delivery milestones. Always empty unless the request is approved. */
+  build_events: BuildEventView[];
+  /**
+   * Derived server-side from status, the decision log and the build events together, so it
+   * cannot drift from any of them.
+   */
   where_it_stands: string;
 }
 
@@ -180,6 +185,33 @@ export async function getAgentToolRequests(agentId: string): Promise<AgentToolRe
  * author off the verified session, and its body schema is strict, so sending one would be
  * refused by name rather than quietly ignored.
  */
+export interface BuildEventView {
+  id: string;
+  event: 'started_build' | 'handed_over';
+  actor_identity: string;
+  occurred_at: string;
+  note: string | null;
+}
+
+/**
+ * Records a delivery milestone. `actor_identity` is deliberately not a parameter: the server
+ * reads it from the verified session, and its body schema is strict.
+ *
+ * The server refuses any request whose governance status is not already `approved`, so this
+ * cannot mark something delivered that nobody allowed.
+ */
+export async function recordToolRequestBuildEvent(
+  changeRequestId: string,
+  event: 'started_build' | 'handed_over',
+  note?: string,
+): Promise<BuildEventView> {
+  const res = await api.post<BuildEventView>(
+    `/api/admin/agent-domain-tool-requests//build-events`,
+    note ? { event, note } : { event },
+  );
+  return res.data;
+}
+
 export async function postToolRequestMessage(
   changeRequestId: string,
   body: string,

@@ -36,6 +36,15 @@ jest.mock('../../../models/AgentDomainToolRequestDecision', () => ({
   default: { findAll: jest.fn(async () => decisionsHolder.current) },
 }));
 
+// Phase 3: the service now reads build events for an approved request, which pulls in this
+// model. Unmocked it builds a real Sequelize and the suite dies trying to reach Postgres, so it
+// is mocked here for the same reason as the three above, not because this suite tests it.
+jest.mock('../../../models/AgentDomainToolRequestBuildEvent', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn(async () => []), create: jest.fn() },
+  TOOL_REQUEST_BUILD_EVENTS: ['started_build', 'handed_over'],
+}));
+
 jest.mock('../../../models/AgentDomainToolRequestMessage', () => ({
   __esModule: true,
   default: {

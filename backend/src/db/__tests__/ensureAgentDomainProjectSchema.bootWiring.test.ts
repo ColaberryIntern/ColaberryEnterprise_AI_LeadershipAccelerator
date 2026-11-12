@@ -226,8 +226,24 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureAgentToolGrantSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
+      // Sorts here, not at the end: the assertion compares a `.sort()`ed list, and
+      // "BuildEvent" precedes "Decision" alphabetically.
+      'ensureToolRequestBuildEventSchema.ts',
       'ensureToolRequestDecisionSchema.ts',
       'ensureToolRequestMessageSchema.ts',
+      // Agent Tools Phase 3 added the tenth member, 2026-11-11.
+      // `ensureToolRequestBuildEventSchema.ts` records what happened to a request AFTER
+      // approval — started building, handed over — and asserts the same way for the same reason
+      // as the nine above.
+      //
+      // It is deliberately NOT a wider status on the parent request. That column governs
+      // APPROVAL, has a transition machine and existing readers; adding build states to it would
+      // make every reader silently acquire values it has never seen, and would conflate "was
+      // this allowed" with "did somebody do it". Different questions, different authors.
+      //
+      // Its CHECK constraints pin a two-value event vocabulary, because an open-ended milestone
+      // column is one nothing can read reliably, and the sentence the dashboard derives depends
+      // on knowing exactly which values exist.
     ]);
   });
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   getAgentToolRequests,
   postToolRequestMessage,
+  recordToolRequestBuildEvent,
   type AgentToolRequestsReport,
   type AgentToolRequestView,
 } from '../../../services/agentEffectiveAccessApi';
@@ -41,6 +42,73 @@ const VERB_LABEL: Record<string, string> = {
   assign_existing_tool: 'assigned an existing tool',
   send_back: 'sent back',
 };
+
+/**
+ * Phase 3: marking delivery progress on an APPROVED request.
+ *
+ * Shown only when the request is approved, because the server refuses a milestone on anything
+ * else — offering a control the API will refuse is how a UI teaches people it is unreliable.
+ * Once handed over, nothing is offered: handover is terminal, and a change after it is a new
+ * request.
+ */
+function BuildProgress({ request, onRecorded }: { request: AgentToolRequestView; onRecorded: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (request.status !== 'approved') return null;
+
+  const events = request.build_events || [];
+  const handedOver = events.some((e) => e.event === 'handed_over');
+  const started = events.some((e) => e.event === 'started_build');
+
+  const record = async (event: 'started_build' | 'handed_over') => {
+    setBusy(event);
+    setError(null);
+    try {
+      await recordToolRequestBuildEvent(request.change_request_id, event);
+      onRecorded();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string; issues?: Array<{ detail?: string }> } } };
+      setError(err?.response?.data?.issues?.[0]?.detail || err?.response?.data?.error || 'Could not record that');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <h3 style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+        Delivery <span className="adv2-hint">{events.length}</span>
+      </h3>
+
+      {events.map((e) => (
+        <div key={e.id} style={{ fontSize: 12, padding: '3px 0' }}>
+          <strong>{e.event === 'started_build' ? 'Started building' : 'Handed over'}</strong>{' '}
+          by {e.actor_identity} <span className="adv2-muted">{timeAgo(e.occurred_at)}</span>
+          {e.note && <div className="adv2-muted">{e.note}</div>}
+        </div>
+      ))}
+
+      {handedOver ? (
+        <p className="adv2-muted" style={{ fontSize: 12 }}>
+          Handed over, so this request is finished. A change after handover is a new request.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          {!started && (
+            <button className="btn btn-outline-secondary btn-sm" disabled={busy !== null} onClick={() => record('started_build')}>
+              {busy === 'started_build' ? 'Recording…' : 'Mark as being built'}
+            </button>
+          )}
+          <button className="btn btn-outline-primary btn-sm" disabled={busy !== null} onClick={() => record('handed_over')}>
+            {busy === 'handed_over' ? 'Recording…' : 'Mark as handed over'}
+          </button>
+          {error && <span className="adv2-gap" style={{ fontSize: 12 }}>{error}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Conversation({ request, onPosted }: { request: AgentToolRequestView; onPosted: () => void }) {
   const [draft, setDraft] = useState('');
@@ -218,6 +286,8 @@ export default function AgentToolRequests({ agentId }: Props) {
                       </div>
                     ))
                   )}
+
+                  <BuildProgress request={r} onRecorded={() => setReloadKey((k) => k + 1)} />
 
                   <Conversation request={r} onPosted={() => setReloadKey((k) => k + 1)} />
                 </div>
