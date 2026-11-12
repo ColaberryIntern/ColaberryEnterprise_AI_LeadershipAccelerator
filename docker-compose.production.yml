@@ -51,7 +51,17 @@ services:
     environment:
       DATABASE_URL: postgres://${DB_USER:-accelerator}:${DB_PASSWORD:-accelerator}@postgres:5432/${DB_NAME:-accelerator_prod}
       INTELLIGENCE_ENGINE_URL: http://intelligence:5000
-      NODE_OPTIONS: "--max-old-space-size=512"
+      # 2026-11-12: raised 512 -> 2048. At 512 the process sat around 630 MB RSS in
+      # steady state, so a single admin ZIP upload was enough to exhaust the V8 old
+      # space and abort the whole server with
+      #   FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+      # A 9.3 MB gov solicitation did it three times in one morning, each time
+      # restarting the container and serving 502s to everyone on the portal. The
+      # uploads are read into memory by multer (see govQualificationRoutes.ts), so
+      # upload size lands directly in the heap. The container has no memory limit and
+      # the host has ~10 GB free, so 512 was protecting nothing and costing uptime.
+      # The real fix is streaming those uploads to disk; this stops the bleeding.
+      NODE_OPTIONS: "--max-old-space-size=2048"
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       # Preview stack provisioning — see directives/per-user-project-previews.md
       PREVIEW_STACKS_ROOT: /var/preview-stacks
