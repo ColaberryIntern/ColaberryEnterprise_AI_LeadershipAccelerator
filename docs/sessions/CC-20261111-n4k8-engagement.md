@@ -59,3 +59,63 @@ stories, both of which count as engagement in `engagementState`.
 - No per-message ledger, so engagement cannot yet be attributed to a PROMPT. That is what would
   answer "which of the three themes actually gets people to reply", which is the question worth
   asking once the worker is running.
+
+---
+
+# Phase 2: the cadence worker
+
+- [x] The unattended pass: strategic triggers, a 2 day floor, deterministic body
+  - Date: 2026-11-11
+  - Session: CC-20261111-n4k8
+  - What changed: new `nudgeBrief/cadence.ts` (the decision) and `nudgeBrief/cadenceRun.ts` (the
+    pass). `decide()` returns who hears from us and why; `runCadence()` builds every brief, decides,
+    and sends, **dry by default**.
+  - Verification: new `__tests__/cadence.test.ts`, 13 cases. Internship subsystem 67 suites /
+    1002 tests pass. `tsc --noEmit` 0 errors. `checkTestTypecheck` baseline matched exactly.
+  - Notes: Ali, 2026-11-11, answered A to "what may it send unreviewed" (deterministic only) and
+    corrected the tolerance to 2 days.
+
+## A timer is the backstop, never the reason
+
+The triggers are ordered hardest truth first, and `contact_floor` is last:
+
+| trigger | fires when |
+|---|---|
+| `answer_owed` | their mail is waiting on a reply, or they have unanswered questions |
+| `promise_open` | we made a dated promise and nothing has come back since |
+| `deadline_near` | a deadline inside 14 days with work still outstanding |
+| `build_stalled` | no commit or verified story in 4+ days |
+| `contact_floor` | nothing above found them and the 2 day floor passed |
+
+A message that exists because 48 hours elapsed is the sameness problem wearing a schedule. The
+ordering test is the one that matters: somebody both overdue AND waiting on an answer gets the
+answer, not the backstop.
+
+## No presence detection, deliberately
+
+There is no "has Ali detached" flag. The clock keys on the intern's last contact FROM US, whoever
+sent it: his own sends reset it, and when he is not sending the floor fires. One rule covers both
+states and there is no mode to get wrong.
+
+## Three independent guards against a double message
+
+- `holdFor` carries `messaged_today`
+- `engagementState` collapses Saturday and Sunday into one slot
+- `sendBrief` is already idempotent on `intern-brief-<enrollment>-<central date>`
+
+The third holds when the first two are wrong, which is why the send path keeps its own key rather
+than trusting the decision layer to have been right.
+
+## A hold is reported, never swallowed
+
+"Nobody slides through the cracks" is only true if the reason somebody got nothing is visible. A
+withheld decision still records what the trigger WAS, so an intern with no address on file is
+counted as uncovered rather than as handled.
+
+## Not done
+
+- **Nothing schedules `runCadence` yet.** It is callable and dry by default; no cron registers it.
+  That is the last step, and it is the step that actually changes behaviour, so it should go in
+  deliberately rather than riding along with this.
+- `unreviewedBody()` returns `brief.body` today. When PR #3914 lands it returns `deterministicBody`
+  and nothing else in the worker changes.

@@ -1821,6 +1821,34 @@ export function startScheduler(): void {
     });
   });
 
+  /**
+   * The intern nudge cadence: the unattended pass that keeps coverage a process rather than a
+   * person.
+   *
+   * Until this existed, `buildAllBriefs` had exactly one caller — an admin HTTP route — so if Ali
+   * stopped pressing the button, communication stopped with him. Measured 2026-11-11: coverage was
+   * perfect, and it was perfect because he pressed it on the 10th and again on the 11th.
+   *
+   * DAILY, because the floor Ali set is two days and a daily evaluation cannot let anyone exceed
+   * it. The schedule is not what decides who hears from us: `cadence.decide` runs the strategic
+   * triggers first and the two-day floor only catches whoever none of them found.
+   *
+   * DRY UNLESS EXPLICITLY TOLD OTHERWISE. `INTERN_NUDGE_CADENCE_SEND` must be exactly `on`.
+   * Absent, misspelled, `true`, `1` and `yes` all mean dry, because the failure mode of a loose
+   * check here is mail going to real interns that nobody approved. Going live is a deliberate act.
+   *
+   * `instrumentCronJob` gives it the same enabled/paused kill switch every other agent cron has,
+   * so it can be stopped without a deploy.
+   */
+  cron.schedule('0 14 * * *', () => {
+    instrumentCronJob('InternNudgeCadence', async () => {
+      const { runCadence } = await import('./internship/nudgeBrief/cadenceRun');
+      await runCadence({ dryRun: process.env.INTERN_NUDGE_CADENCE_SEND !== 'on' });
+    }).catch((err) => {
+      console.error('[Scheduler] Intern nudge cadence error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
