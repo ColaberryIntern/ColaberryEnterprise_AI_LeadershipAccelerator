@@ -120,3 +120,52 @@ attached to the error as intended, and that the failure is caught and logged rat
 thrown unhandled.
 
 `tsc --noEmit` and jest run in CI, which are the real gates.
+
+## Production verification: the cron fired unattended (2026-11-12)
+
+The entry above was verified by hand, which proves the body and not the schedule. That
+left one open claim, and the `ai_agents` row now settles it:
+
+| | |
+|---|---|
+| `last_run_at` | `2026-11-12T09:35:00.932Z` |
+| `run_count` | 1 (was 0) |
+| `error_count` | 0 |
+| `last_error` | `null` |
+| `avg_duration_ms` | 803 |
+| `enabled` | `true` |
+
+**The timestamp is the evidence, not the counter.** 932 ms past the minute boundary on a
+`35 9 * * *` schedule, on a box whose timezone is UTC — so 09:35 UTC, 3:35 AM Central. A
+counter can be incremented by anything, including a hand-run; that offset can only come
+from cron.
+
+**803 ms contradicted the 170 ms measured earlier, so it was checked rather than waved
+through.** The earlier figure timed the enrichment pass itself; this one is
+`instrumentCronJob` wrapping the whole `execFile`, so it includes spawning a Node process
+and loading the GeoLite2 reader. 161 visitors were created in the preceding 28 hours — a
+day of traffic, not a backlog — which accounts for the work the run had to do.
+
+Coverage, with the residual classified rather than assumed: 6,129 of 6,637 visitors carry
+a city. The 508 without one break down as
+
+| rows | kind | enrichable? |
+|---|---|---|
+| 432 | private RFC1918 | no — GeoLite2 has no entry for private address space |
+| 72 | public IPv4 | should have resolved; 1.1% of all rows |
+| 3 | no IP stored at all | no |
+| 1 | IPv6 | not attempted |
+
+so only 72 rows are a genuine miss, which is ordinary GeoLite2 behaviour: city-level
+coverage is incomplete and some ranges resolve to country only. Not tracked as a defect.
+The control on that query is that the same filter finds 6,127 rows that *did* resolve, so
+the 72 is a real count rather than an artifact of a broken `WHERE` clause.
+
+One decision is written down here rather than left implicit: the seed row ships
+`enabled: true`, departing from `build-platform-agent`'s rule that new agents seed
+disabled. The job needs no token and no configuration and writes only `visitors.city` and
+`visitors.country`, and a disabled row would have left the snack bar dark until someone
+remembered to flip it. It has now completed one clean unattended run, which is the best
+evidence available for that call. Reversing it is one `UPDATE` on `ai_agents`.
+
+GEO-1 was closed on the board after this run.
