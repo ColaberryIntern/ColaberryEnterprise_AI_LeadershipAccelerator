@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import api from '../../../utils/api';
 import {
   getStudioConfig, patchStudioConfig, REFUSAL_COPY,
   type StudioConfig, type StudioRefusal, type BroadcastAccessMode,
@@ -66,6 +67,8 @@ export default function StudioSetupPage(): React.ReactElement {
    * than watched, so dismissing it cannot re-trigger the effect that opened it.
    */
   const [tourOpen, setTourOpen] = useState(() => !hasSeenTour());
+  const [bridging, setBridging] = useState(false);
+  const [bridgeFailed, setBridgeFailed] = useState(false);
   const [presenter, setPresenter] = useState('');
   const [producer, setProducer] = useState('');
   const [guestAccess, setGuestAccess] = useState<boolean | null>(null);
@@ -108,6 +111,38 @@ export default function StudioSetupPage(): React.ReactElement {
     { label: 'Permanence acknowledged', done: acknowledged },
   ];
   const canCreate = summary.every((s) => s.done) && !saving;
+
+  /**
+   * Cross from the admin session into this operator's own portal session, and land on the
+   * producer page for THIS class.
+   *
+   * The same exchange `/admin/ai-training-enter` performs - it posts to the same route and
+   * stores the token under the same key - with the one difference that matters here: it goes
+   * to the class instead of to `/portal/today`.
+   *
+   * `window.location.replace` rather than a router navigate, deliberately. The portal reads its
+   * token when the participant auth context initialises, so a client-side route change would
+   * carry the admin app's already-mounted context across and the new token would not be picked
+   * up until a reload. A full load is the simple, correct version of that.
+   */
+  async function runThisClass(): Promise<void> {
+    setBridging(true);
+    setBridgeFailed(false);
+    try {
+      const res = await api.post<{ portal_token?: string }>('/api/admin/portal/enter');
+      const token = res.data?.portal_token;
+      if (!token) throw new Error('no token');
+      localStorage.setItem('participant_token', token);
+      // The avatar is cached per session and belongs to whoever was signed in before.
+      localStorage.removeItem('te_avatar');
+      window.location.replace(`/portal/live/${sessionId}`);
+    } catch {
+      // Said out loud rather than swallowed: a button that looks like it did nothing is the
+      // reason this screen needed a button in the first place.
+      setBridgeFailed(true);
+      setBridging(false);
+    }
+  }
 
   async function save(create: boolean) {
     if (!sessionId) return;
@@ -359,6 +394,41 @@ export default function StudioSetupPage(): React.ReactElement {
             >
               Save without creating
             </button>
+
+            {/*
+              * RUN THIS CLASS — the step that was missing entirely.
+              *
+              * The producer controls live on `/portal/live/:id`, which is a PARTICIPANT surface.
+              * Setting a class up happens in admin. Those are two different sessions, so an
+              * operator who had just created a broadcast and opened its page got the public
+              * viewer card - "This class has not started yet" - with no hint that they were
+              * simply in the wrong session. The strip self-hides for anyone the server does not
+              * call a producer, and someone with no portal token at all is exactly that.
+              *
+              * The bridge already existed at `/admin/ai-training-enter`, behind a menu entry
+              * called "AI Training", and it lands on `/portal/today`. Finding it meant knowing
+              * it was there, and following it still did not get you to your class.
+              *
+              * This does the same exchange and then goes where you were already going.
+              */}
+            {occurrence && (
+              <button
+                type="button"
+                className="cls-btn cls-btn-ghost"
+                style={{ marginTop: 10, width: '100%' }}
+                data-testid="cls-run"
+                disabled={bridging}
+                onClick={() => { void runThisClass(); }}
+              >
+                {bridging ? 'Opening the producer view...' : 'Run this class'}
+              </button>
+            )}
+            {bridgeFailed && (
+              <p className="cls-note cls-note-error" role="alert" data-testid="cls-run-failed">
+                Could not open the producer view. Your setup is saved; try again, or open the
+                portal from the admin menu first.
+              </p>
+            )}
 
             {occurrence && occurrence.provider_session_id === null && (
               <p className="cls-note cls-note-warn">

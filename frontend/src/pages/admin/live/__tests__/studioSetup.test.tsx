@@ -28,6 +28,15 @@ const mockPatch = jest.fn();
  * inside every test here the moment the People card renders.
  */
 const mockStaff = jest.fn();
+/**
+ * The admin api client, because Run this class posts through it. Unmocked it would be a real
+ * request, and  would try to leave the test page.
+ */
+const mockApiPost = jest.fn();
+jest.mock('../../../../utils/api', () => ({
+  __esModule: true,
+  default: { post: (...a: unknown[]) => mockApiPost(...a) },
+}));
 jest.mock('../../../../services/studioSetupApi', () => {
   const actual = jest.requireActual('../../../../services/studioSetupApi');
   return {
@@ -272,5 +281,66 @@ describe('refusals reach the operator as sentences', () => {
      */
     expect(q('[data-testid="picked-presenter"]')).not.toBeNull();
     expect(q('[data-testid="picked-presenter"]')!.textContent).toContain('Ada Lovelace');
+  });
+});
+
+/**
+ * RUN THIS CLASS — the step that was missing between setting a class up and running it.
+ *
+ * The producer controls live on `/portal/live/:id`, a PARTICIPANT surface. Setting the class up
+ * happens in admin. Those are two different sessions, so an operator who created a broadcast
+ * and opened its page got the public viewer card - "This class has not started yet" - with no
+ * hint that they were merely in the wrong session. That is what happened on production, and the
+ * backend log confirmed the producer endpoint was never called at all.
+ *
+ * The assertions here are about the two halves of that: the button only exists once there is
+ * something to run, and a failure says so rather than looking like a dead control.
+ */
+describe('crossing from setup into the producer view', () => {
+  /** The page with a broadcast already created, which is when the button exists. */
+  const withBroadcast = () => config({
+    canSetAccessMode: false,
+    occurrence: {
+      id: 'occ-1', access_mode: 'free', editorial_state: 'scheduled', version: 2,
+      provider_session_id: 'input-1',
+    },
+  });
+
+  it('is NOT offered before the broadcast exists', async () => {
+    // Nothing to run yet. A button that navigated to a producer page for a class with no
+    // occurrence would land on the same viewer card it exists to avoid.
+    await renderCold();
+    expect(q('[data-testid="cls-run"]')).toBeNull();
+  });
+
+  it('appears once the class has a broadcast', async () => {
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+    expect(q('[data-testid="cls-run"]')).not.toBeNull();
+  });
+
+  it('says so when the exchange fails, rather than doing nothing visible', async () => {
+    // The reason this screen needed a button at all was a path that silently did not work.
+    // A button that silently does not work would be the same failure with extra steps.
+    mockApiPost.mockRejectedValue(new Error('no bridge'));
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+
+    await click(q('[data-testid="cls-run"]')!);
+
+    expect(q('[data-testid="cls-run-failed"]')).not.toBeNull();
+    expect(alertText()).toMatch(/could not open the producer view/i);
+  });
+
+  it('keeps the setup reachable after a failed exchange', async () => {
+    // The operator's work is saved; the only thing that failed is the hop. Losing the screen
+    // would make a recoverable problem look like a lost configuration.
+    mockApiPost.mockRejectedValue(new Error('no bridge'));
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+    await click(q('[data-testid="cls-run"]')!);
+
+    expect(q('[data-testid="cls-run"]')).not.toBeNull();
+    expect(q('[data-testid="cls-create"]')).not.toBeNull();
   });
 });
