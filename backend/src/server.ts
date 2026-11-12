@@ -207,6 +207,7 @@ import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomai
 import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAgentDomainToolDuplicateCheckSchema';
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
+import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
 
 // Import models to register associations before sync
@@ -3255,6 +3256,10 @@ async function start(): Promise<void> {
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
   await ensureCapabilityConfirmationSchemaGuarded();
   await ensureToolRequestDecisionSchemaGuarded();
+  // Agent Tools Phase 2. The CONVERSATION on a tool request, as distinct from the decision log
+  // above: a question and its answer are neither an approval nor a denial, and had nowhere to
+  // live. Same parent, same FK, so it sits with its siblings after the parent is ensured.
+  await ensureToolRequestMessageSchemaGuarded();
   // AF3.5. The ledger behind `ai_agents.tools_granted`.
   //
   // ORDERING MATTERS AND IS SATISFIED HERE, but not by the name you would expect:
