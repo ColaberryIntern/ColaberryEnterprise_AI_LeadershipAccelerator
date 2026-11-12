@@ -970,7 +970,22 @@ function CandidatePicker(): React.ReactElement {
   );
 }
 
-export default function AdminGovQualificationPage(): React.ReactElement {
+/** Read-only data source the page can be fed instead of the admin factoryApi calls, so the SAME page renders for an
+ *  intern off participant-scoped, award-stripped endpoints. When absent, the page behaves exactly as the admin page. */
+export interface QualPageApi {
+  getWorkspace: (key: string, biddingEntity?: string) => Promise<GovQualificationWorkspace>;
+  getOpportunityDetail: (key: string) => Promise<OppDetail>;
+}
+export interface AdminGovQualificationPageProps {
+  /** Hide every mutation control and the award-amount field; the page is a read-only render (intern mount). */
+  readOnly?: boolean;
+  /** The opportunity/gws key to render, instead of reading it from `?gws=`/`?canonical=` (intern route has no gws param). */
+  opportunityKey?: string;
+  /** Injected read-only data source (participant endpoints). When omitted, the admin factoryApi is used. */
+  api?: QualPageApi;
+}
+
+export default function AdminGovQualificationPage({ readOnly = false, opportunityKey, api }: AdminGovQualificationPageProps = {}): React.ReactElement {
   const [params, setParams] = useSearchParams();
   // The active pursuit step is URL-backed (?tab=<step>) so a reload restores it and the view is
   // shareable; legacy tab values resolve to the new steps so old links keep working.
@@ -983,7 +998,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   }, [params, setParams]);
   // Active workspace key: a canonical OP id, OR a decoupled discovery-ZIP key (`gws:<uuid>`). The whole body is
   // key-agnostic; `isDecoupled` (below) drives the source:null re-gating.
-  const canonical = params.get('canonical') ?? params.get('gws') ?? '';
+  const canonical = opportunityKey ?? params.get('canonical') ?? params.get('gws') ?? '';
   const fromParam = params.get('from') ?? '';
   const agencyParam = params.get('agency') ?? '';
   // Bidding entity comes from the URL (?biddingEntity=) or defaults to colaberry; it is not edited in-page since the
@@ -999,9 +1014,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     const toStudio: Partial<Record<WorkspaceStep, string>> = { proposal: 'overview', submit: 'package', outcome: 'outcome' };
     const studioView = toStudio[key];
     const dpid = ws?.build?.deliveryProjectId;
-    if (studioView && dpid) { navigate(`/admin/internship/gov-contract/${encodeURIComponent(dpid)}?view=${studioView}`); return; }
+    // The admin jumps to the Studio for steps 6-8; the read-only (intern) mount must NOT navigate into the admin
+    // surface — it stays in-page (the locked preview), and the intern's own StudioShell owns 6-8.
+    if (studioView && dpid && !readOnly) { navigate(`/admin/internship/gov-contract/${encodeURIComponent(dpid)}?view=${studioView}`); return; }
     setStep(key);
-  }, [ws, navigate, setStep]);
+  }, [ws, navigate, setStep, readOnly]);
   // The just-created monitored project, surfaced as a persistent success strip on the Proposal step (where
   // create now navigates) so the "open the intern's project" link is not lost when we leave the Build tab.
   const [materialized, setMaterialized] = useState<{ projectId: string } | null>(null);
@@ -1036,13 +1053,13 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     if (!canonical) return;
     setLoading(true); setError(null);
     try {
-      setWs(await getGovQualificationWorkspace(canonical, biddingEntity || undefined));
+      setWs(await (api?.getWorkspace ?? getGovQualificationWorkspace)(canonical, biddingEntity || undefined));
     } catch (err: any) {
       setError(err?.response?.data?.error ?? 'Could not load the qualification workspace.');
     } finally {
       setLoading(false);
     }
-  }, [canonical, biddingEntity]);
+  }, [canonical, biddingEntity, api]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -1086,30 +1103,40 @@ export default function AdminGovQualificationPage(): React.ReactElement {
   // Decoupled (ZIP) workspace: fetch the clicked discovery row's details by its uuid (the gws key), so the page
   // shows the Details-popup info + the Source link without going back. Best-effort; a 404 degrades to an honest note.
   useEffect(() => {
+    let active = true;
+    // Intern (injected api): always load the award-stripped opportunity detail for this project (the key is the
+    // project's, not a gws uuid). Admin: only the decoupled (gws:) path fetches the discovery row's detail.
+    if (api) {
+      api.getOpportunityDetail(canonical)
+        .then((r) => { if (active) setOppDetail(r); })
+        .catch(() => { if (active) setOppDetail({ opportunity: null, source: 'snapshot', snapshotDate: null }); });
+      return () => { active = false; };
+    }
     if (!canonical.startsWith('gws:')) { setOppDetail(null); return; }
     const uuid = canonical.slice(4);
-    let active = true;
     getGovOpportunityDetail(uuid)
       .then((r) => { if (active) setOppDetail(r); })
       .catch(() => { if (active) setOppDetail({ opportunity: null, source: 'snapshot', snapshotDate: null }); });
     return () => { active = false; };
-  }, [canonical]);
+  }, [canonical, api]);
 
   // Every write runs one at a time (in-flight guard → no duplicate qualification/decision from repeated clicks),
   // reloads the server truth, and maps its error to a recoverable state.
   // onSuccess (optional) fires ONLY after the write resolved and the server truth reloaded — never on a
   // thrown/blocked write (a 403 lands in catch), so a navigation passed here cannot fire on a failed approve.
   const run = useCallback(async (fn: () => Promise<any>, okNote: string, onSuccess?: () => void) => {
+    if (readOnly) return;                 // READ-ONLY choke point: no write ever fires on the intern mount
     if (inFlight.current) return;         // synchronous: blocks a same-tick double-click before any await
     inFlight.current = true; setBusy(true); setActionError(null); setNotice(null);
     try { await fn(); setNotice(okNote); await load(); onSuccess?.(); }
     catch (err: any) { setActionError(errToAction(err)); }
     finally { inFlight.current = false; setBusy(false); }
-  }, [load]);
+  }, [load, readOnly]);
 
   // READ-ONLY: extract candidate requirements from the uploaded solicitation ZIP. Persists nothing — the reviewer
   // confirms which candidates become established (gate-bearing) requirements below.
   const extract = useCallback(async (): Promise<boolean> => {
+    if (readOnly) return false;           // READ-ONLY choke point: never extract on the intern mount
     if (!extractFile || !canonical) return false;
     setExtractBusy(true); setExtractError(null);
     try {
@@ -1131,7 +1158,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
     } finally {
       setExtractBusy(false);
     }
-  }, [extractFile, canonical]);
+  }, [extractFile, canonical, readOnly]);
 
   const header = (
     <PageHeader
@@ -1268,7 +1295,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </div>
           )}
 
-          {stepModel && (
+          {!readOnly && stepModel && (
             <StepBar
               steps={WORKSPACE_STEPS}
               onStep={goStep}
@@ -1340,7 +1367,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
 
           {/* P4: the first-class Decide card — record a call, write the brief, route it to a second admin, approve
               or send back. Replaces the old "Open, decide & approve" drawer. */}
-          <DecidePanel
+          {!readOnly && (<DecidePanel
             record={record}
             canApprove={ws.canApprove}
             blockedReason={ws.canApprove ? null : (isDecoupled
@@ -1355,11 +1382,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             onQuickDecision={(d, rat) => run(() => recordGovQualificationDecision(canonical, { biddingEntity, expectedVersion: version, decision: d, rationale: rat || undefined }), d === 'no_bid' ? 'Recorded: no bid.' : 'Recorded: needs evidence.')}
             onRequest={(approverId, brief) => run(() => requestGovApproval(canonical, { biddingEntity, expectedVersion: version, approverIdentityId: approverId, decisionBrief: brief }), 'Approval requested.')}
             onSendBack={(n) => run(() => sendBackGovApproval(canonical, { biddingEntity, expectedVersion: version, note: n || undefined }), 'Sent back for revision.')}
-          />
+          />)}
 
           {/* Deadline countdown now lives in the persistent right rail (see RightRail below). */}
 
-          {stepModel && (
+          {!readOnly && stepModel && (
             <StepFooter
               ready={stepModel.approved}
               statusLine={stepModel.approved ? 'Approved — the build and submission steps are unlocked.' : 'Open the qualification, record your call, and approve (a second admin) below.'}
@@ -1427,7 +1454,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                   <div className="row g-3 mb-2">
                     <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Priority (legacy)</div><span className={`badge ${subtle(band(oppDetail.opportunity.priorityScore).tone)}`}>{oppDetail.opportunity.priorityScore ?? '—'} {band(oppDetail.opportunity.priorityScore).label}</span></div>
                     <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Fit (legacy)</div><span className={`badge ${subtle(band(oppDetail.opportunity.fitScore).tone)}`}>{oppDetail.opportunity.fitScore ?? '—'} {band(oppDetail.opportunity.fitScore).label}</span></div>
-                    <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Est. value</div><div className="fw-semibold">{fmtValue(oppDetail.opportunity.estimatedValue)} <span className="small text-secondary">unverified</span></div></div>
+                    {!readOnly && <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Est. value</div><div className="fw-semibold">{fmtValue(oppDetail.opportunity.estimatedValue)} <span className="small text-secondary">unverified</span></div></div>}
                     <div className="col-6 col-lg-3"><div className="small text-secondary text-uppercase">Closes</div><div>{closeLabel(oppDetail.opportunity.closeDate)}{daysLeft(oppDetail.opportunity.closeDate) !== null ? ` · ${daysLeft(oppDetail.opportunity.closeDate)} days` : ''} <span className="small text-secondary">(verify tz on portal)</span></div></div>
                   </div>
                   {oppDetail.opportunity.sourceUrl && (
@@ -1452,7 +1479,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {(ws.source || isDecoupled) && (
+          {!readOnly && (ws.source || isDecoupled) && (
             <SectionCard title="Upload the solicitation ZIP" icon="file-search-line"
               subtitle="Upload the Bonfire ZIP once. It does two things in one step: lists the requirements it detects as CANDIDATES (confirm the real ones to establish them), and — once the qualification is open — attests the same ZIP as the evidence of record (the server stores only a hash of it, never the bytes). A candidate is not a requirement until you confirm it.">
               <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -1520,7 +1547,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {/* ── Manual document review (the Bonfire ZIP is downloaded by hand) ─── */}
-          {ws.source && record && (() => {
+          {!readOnly && ws.source && record && (() => {
             const items = (ws.source.documents.items ?? []).filter((it) => AUTHORITATIVE_ROLES.includes(it.role));
             const reviewedIds = new Set((record.requirements_json?.reviewedDocuments ?? []).map((d) => d.docId));
             const stateOf = (it: { docId: string; retrieval: { status: string } }) =>
@@ -1569,7 +1596,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             );
           })()}
 
-          {stepModel && (
+          {!readOnly && stepModel && (
             <StepFooter
               ready={!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0}
               statusLine={!!(ws.zipAttestation && ws.zipAttestation.sha256) && (ws.evaluation?.evals.length ?? 0) > 0 ? 'Ready: the ZIP is attested and requirements are established.' : 'Not yet: attest the ZIP and establish the cited requirements.'}
@@ -1596,11 +1623,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               {oppDetail?.opportunity?.preliminarySummary && (
                 <div className="small mb-2"><span className="text-secondary">From the opportunity listing: </span>{oppDetail.opportunity.preliminarySummary}</div>
               )}
-              <ProposalSummaryPanel canonical={canonical}
+              {!readOnly && <ProposalSummaryPanel canonical={canonical}
                 requirements={(established ?? []).map((r) => ({ id: r.id, text: r.text }))}
                 saved={ws.aiVetting?.summary ?? null}
                 synopsis={oppDetail?.opportunity?.preliminarySummary ?? null}
-                title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null} />
+                title={oppDetail?.opportunity?.title ?? null} buyer={oppDetail?.opportunity?.agency ?? null} />}
             </SectionCard>
           )}
 
@@ -1608,7 +1635,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             <SectionCard title="Snapshot facts" icon="dashboard-3-line"
               subtitle="The quick read — value, timing and the legacy scores — so you can pass in two minutes if it is clearly not for us.">
               <div className="row g-3">
-                <div className="col-6 col-lg-3"><StatCard label="Estimated value" value={fmtValue(oppDetail?.opportunity?.estimatedValue ?? null)} icon="money-dollar-circle-line" tone="neutral" hint="unverified" /></div>
+                {!readOnly && <div className="col-6 col-lg-3"><StatCard label="Estimated value" value={fmtValue(oppDetail?.opportunity?.estimatedValue ?? null)} icon="money-dollar-circle-line" tone="neutral" hint="unverified" /></div>}
                 <div className="col-6 col-lg-3"><StatCard label="Closes" value={closeLabel(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null))} icon="calendar-event-line" tone="neutral" hint={daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null)) !== null ? `${daysLeft(oppDetail?.opportunity?.closeDate ?? ws.source?.deadline?.utc ?? dossierDeadlineIso(ws.dossier?.keyDates ?? null))} days` : undefined} /></div>
                 <div className="col-6 col-lg-3"><StatCard label="Legacy priority" value={oppDetail?.opportunity?.priorityScore ?? '—'} icon="bar-chart-box-line" tone="neutral" hint="advisory" /></div>
                 <div className="col-6 col-lg-3"><StatCard label="Legacy fit" value={oppDetail?.opportunity?.fitScore ?? '—'} icon="scales-3-line" tone="neutral" hint="advisory" /></div>
@@ -1616,7 +1643,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {stepModel && (
+          {!readOnly && stepModel && (
             <StepFooter
               ready
               statusLine="Read the short version. If it is clearly not for us, pass now."
@@ -1681,7 +1708,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           {/* Step 3 "Fit" (P3): AI capability assessment vs Our Services, write-back, and tickable eligibility. */}
-          {(ws.source || isDecoupled) && (
+          {!readOnly && (ws.source || isDecoupled) && (
             <FitCapabilitiesPanel
               canonicalOpportunityId={canonical}
               needs={needs}
@@ -1696,7 +1723,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             />
           )}
 
-          {(ws.source || isDecoupled) && (
+          {!readOnly && (ws.source || isDecoupled) && (
             <SectionCard title="Ask the buyer: clarification questions (AI)" icon="questionnaire-line" collapsible defaultOpen={false}
               subtitle="Advisory: finds the vague requirements (a line like 'connect to their system' with no system named) and drafts a sharp question for each, plus a ready-to-send email. Grounded only in the established requirements; this app sends nothing and changes no gate.">
               <ClarificationDraftPanel
@@ -1709,7 +1736,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          {stepModel && (
+          {!readOnly && stepModel && (
             <StepFooter
               ready
               statusLine="Confirm the matches and eligibility, then decide."
@@ -1728,7 +1755,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               inside the Decide step above (open / decide / brief + request approval / approve / send back). The
               bidding-entity field + the establish-a-requirement form live on their own steps now. */}
 
-          <GovTabPanel active={activeStep === 'build'}>
+          {!readOnly && (<GovTabPanel active={activeStep === 'build'}>
           {/* Pursuit type — a services (consulting) bid has no software to build, so the build machinery is hidden. */}
           <SectionCard title="Pursuit type" icon="route-line"
             subtitle="Is this a software build or a services (consulting) engagement? A services pursuit builds no software; the proposal is the deliverable, and the build spec / plan / materialize steps do not apply.">
@@ -1859,11 +1886,11 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           )}
 
           </>)}
-          </GovTabPanel>{/* end Build */}
+          </GovTabPanel>)}{/* end Build */}
 
           {/* Proposal — its OWN step/page (step 6): Build above is the software product we would deliver; this is the
               bid RESPONSE we submit. Unlocked after approval, same as Build. */}
-          <GovTabPanel active={activeStep === 'proposal'}>
+          {!readOnly && (<GovTabPanel active={activeStep === 'proposal'}>
           {(ws.build?.materialized || materialized) ? (
             /* Takeover: once an intern is assigned and the build is materialized (ws.build.materialized, or just
                materialized in this session), the mature Proposal Studio OWNS the proposal — it supersedes the legacy
@@ -1917,9 +1944,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             <GovProposalSourcesPanel projectId={ws.build.deliveryProjectId} />
           )}
 
-          </GovTabPanel>{/* end Proposal */}
+          </GovTabPanel>)}{/* end Proposal */}
 
-          <GovTabPanel active={activeStep === 'submit'}>
+          {!readOnly && (<GovTabPanel active={activeStep === 'submit'}>
           {/* P7: at-a-glance submit tiles (deadline / readiness / package / confirmation) — advisory, derived. */}
           <SubmitStatusTiles
             submission={ws.submission}
@@ -1962,9 +1989,9 @@ export default function AdminGovQualificationPage(): React.ReactElement {
             </SectionCard>
           )}
 
-          </GovTabPanel>{/* end Complete Your Submission */}
+          </GovTabPanel>)}{/* end Complete Your Submission */}
 
-          <GovTabPanel active={activeStep === 'outcome'}>
+          {!readOnly && (<GovTabPanel active={activeStep === 'outcome'}>
           {/* ── Outcome & Case Study (forward) ─ */}
           {(
             <SectionCard title="Outcome &amp; case study" icon="trophy-line"
@@ -1977,12 +2004,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
               />
             </SectionCard>
           )}
-          </GovTabPanel>{/* end Outcome & Case Study */}
+          </GovTabPanel>)}{/* end Outcome & Case Study */}
 
             </div>{/* end LEFT column */}
             <aside className="col-12 col-lg-4">{/* ── RIGHT: pursuit brief + persistent rail (deadline, dates+buyer, messages, team) ── */}
               <AiVettingCard vetting={ws.aiVetting} />
-              {stepModel && (
+              {!readOnly && stepModel && (
                 <PursuitBrief sections={WORKSPACE_STEPS.filter((s) => s.n <= 6).map((s): BriefSection => {
                   const st = stepModel.statuses[s.key];
                   const state: BriefSection['state'] = st === 'current' ? 'adding' : st === 'done' ? 'known' : 'future';

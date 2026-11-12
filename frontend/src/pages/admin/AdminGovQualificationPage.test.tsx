@@ -1078,3 +1078,47 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(factoryApi.recordGovOutcome).toHaveBeenCalledWith(CANON, 'won', null);
   });
 });
+
+describe('AdminGovQualificationPage — READ-ONLY intern mount (same page, injected api, no writes, no award)', () => {
+  // The intern mount feeds the page a participant data source and readOnly. The admin factoryApi reads must NOT be
+  // called (the injected api is used instead); every mutation control must be absent; and no award figure renders.
+  const roWs = () => cleanWs({
+    evaluation: { evals: [{ id: 'REQ-001', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'REQ-001', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' }], award: [], delivery: [], unknown: [] }, canApproveBid: false },
+  });
+  const roApi = {
+    getWorkspace: jest.fn(),
+    getOpportunityDetail: jest.fn(),
+  };
+  beforeEach(() => {
+    roApi.getWorkspace.mockResolvedValue(roWs());
+    roApi.getOpportunityDetail.mockResolvedValue({ opportunity: { estimatedValue: null, title: 'Crash Records', agency: 'TxDOT', closeDate: null, priorityScore: 70, fitScore: 80, preliminarySummary: null, sourceUrl: null }, source: 'snapshot', snapshotDate: null });
+  });
+  async function renderReadOnly(tab = 'fit') {
+    container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => { root.render(<MemoryRouter initialEntries={[`/portal/gov-projects/dp-A/qualification?tab=${tab}`]}><AdminGovQualificationPage readOnly opportunityKey={CANON} api={roApi as any} /></MemoryRouter>); });
+    await act(async () => { await Promise.resolve(); }); await act(async () => { await Promise.resolve(); });
+  }
+
+  it('uses the INJECTED api (not the admin factoryApi) and renders the real requirements-by-due-stage', async () => {
+    await renderReadOnly('fit');
+    expect(roApi.getWorkspace).toHaveBeenCalledWith(CANON, 'colaberry');
+    expect(factoryApi.getGovQualificationWorkspace).not.toHaveBeenCalled(); // the admin read is bypassed
+    expect(container.textContent).toContain('Requirements by due stage');
+    expect(container.textContent).toContain('REQ-001'); // the SAME requirement data the admin renders
+  });
+
+  it('renders NO award / estimated-value field anywhere', async () => {
+    await renderReadOnly('fit');
+    expect(container.textContent).not.toMatch(/Estimated value|Est\. value/);
+  });
+
+  it('renders NONE of the mutation controls (establish/approve/extract/upload/attest/assign/materialize/reanalyze/export/review)', async () => {
+    const labels = ['decide', 'fit', 'solicitation', 'build', 'snapshot'];
+    for (const tab of labels) {
+      await renderReadOnly(tab);
+      const buttonText = Array.from(container.querySelectorAll('button')).map((b) => b.textContent ?? '').join(' | ').toLowerCase();
+      expect(buttonText).not.toMatch(/establish|approve|extract|upload|attest|assign|materialize|re-?analyz|export|request changes|run checks|accept|open qualification|send back/);
+      act(() => { root.unmount(); }); container.remove();
+    }
+  });
+});

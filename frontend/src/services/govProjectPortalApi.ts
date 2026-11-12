@@ -1,5 +1,14 @@
 import portalApi from '../utils/portalApi';
-import type { QualRequirementEval } from './factoryApi';
+import type { QualRequirementEval, GovQualificationWorkspace, GovOpportunity, SnapshotReason } from './factoryApi';
+
+/** The opportunity-detail shape the admin page reads — reused verbatim so the intern renders the identical component.
+ *  estimatedValue is always null from the participant endpoint (the award amount never reaches a participant). */
+export interface PortalGovOpportunityDetail {
+  opportunity: GovOpportunity | null;
+  source: 'live' | 'snapshot';
+  snapshotDate: string | null;
+  snapshotReason?: SnapshotReason | null;
+}
 
 /**
  * govProjectPortalApi — the student client for an ASSIGNED government project. It calls the participant-guarded
@@ -293,6 +302,26 @@ export async function getStudentGovProject(projectId: string): Promise<StudentGo
 export async function listMyGovProjects(): Promise<MyGovProjectCard[]> {
   const { data } = await portalApi.get<{ projects: MyGovProjectCard[] }>('/api/portal/gov-projects');
   return Array.isArray(data?.projects) ? data.projects : [];
+}
+
+/**
+ * The intern's READ-ONLY Qualification Workspace — the SAME `GovQualificationWorkspace` payload the admin studio
+ * renders (built by the same server-side builder), member-gated, award amount stripped server-side. Feeds the REAL
+ * `AdminGovQualificationPage` mounted read-only for the intern.
+ */
+export async function getPortalGovQualification(projectId: string): Promise<GovQualificationWorkspace> {
+  const { data } = await portalApi.get<GovQualificationWorkspace>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/qualification`,
+  );
+  return data;
+}
+
+/** The intern's opportunity detail — same shape the admin reads, with estimatedValue forced null server-side. */
+export async function getPortalGovOpportunityDetail(projectId: string): Promise<PortalGovOpportunityDetail> {
+  const { data } = await portalApi.get<PortalGovOpportunityDetail>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/opportunity-detail`,
+  );
+  return data;
 }
 
 /** Hand in completion evidence for a build story. The server records it `submitted` — a reviewer verifies later. */
