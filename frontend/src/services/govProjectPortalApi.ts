@@ -298,6 +298,20 @@ export async function getStudentGovProject(projectId: string): Promise<StudentGo
   return data.project;
 }
 
+/**
+ * The READ-ONLY intern parity cockpit — the SAME Gov Contract cockpit projection the admin management portal gets
+ * (viewerCanVerify=true, so the reviewer/pricing PANELS appear), with every admin-only SUBSTANCE field redacted and
+ * the award amount stripped server-side. Feeds the StudioShell mounted `readOnly` for the assigned intern, so the
+ * intern sees the same screen the admin does, every control disabled. The server (not the client) is the trust
+ * boundary — this endpoint already withholds the admin-only content before it leaves the backend.
+ */
+export async function getPortalGovCockpitFull(projectId: string): Promise<StudentGovProjectView> {
+  const { data } = await portalApi.get<{ project: StudentGovProjectView }>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/cockpit-full`,
+  );
+  return data.project;
+}
+
 /** P6: the gov projects THIS intern is assigned to (membership-scoped server-side) — for the profile card. */
 export async function listMyGovProjects(): Promise<MyGovProjectCard[]> {
   const { data } = await portalApi.get<{ projects: MyGovProjectCard[] }>('/api/portal/gov-projects');
@@ -508,4 +522,37 @@ export const portalGovStudioApi: GovStudioApi = {
   resolveNeed: resolveGovNeed,
   buildAll: buildAllGovDocuments,
   fetchArtifactImage: fetchGovArtifactImage,
+};
+
+/** A read-only reviewApi WRITE member: it issues NO request and rejects. The read-only UI disables every control that
+ *  would call one of these, so this is defense in depth, not a reachable path. */
+const readOnlyReviewWrite = (): never => { throw new Error('This government project is read-only for you.'); };
+
+/**
+ * READ-ONLY reviewApi for the intern parity cockpit. The admin injects the real `adminGovReviewApi`; the intern gets
+ * THIS, so the reviewer/package PANELS render while every mutation is a no-op that never issues a write request. The
+ * deep reviewer drill-downs (per-document version history, version diff) return empty — the read-only UI disables the
+ * controls that would open them — and the one read the Package panel needs, the signature status, is served by the
+ * read-only participant mirror. The optional admin-only members (saveSectionPlan/editDocument/decideGold) are
+ * intentionally omitted, so the intern's DraftVersions shows no edit affordances.
+ */
+export const portalGovReviewApiReadOnly: GovReviewApi = {
+  // ── reads ──
+  listReview: async () => ({ versions: [], gates: [] }),
+  diffVersions: async () => ({ segments: [] }),
+  fetchArtifactImage: fetchGovArtifactImage,
+  listSignatures: async (projectId: string) => {
+    const { data } = await portalApi.get<{ signatures: GovSignatureView[] }>(`${portalBase(projectId)}/package/signatures`);
+    return data;
+  },
+  // ── writes: never reached (controls disabled); if ever called they issue NO request and reject ──
+  runChecks: async () => readOnlyReviewWrite(),
+  decideGate: async () => readOnlyReviewWrite(),
+  insertFigure: async () => readOnlyReviewWrite(),
+  setDemoUrl: async () => readOnlyReviewWrite(),
+  recapture: async () => readOnlyReviewWrite(),
+  runReviewCycle: async () => readOnlyReviewWrite(),
+  answerQuestion: async () => readOnlyReviewWrite(),
+  uploadSignedForm: async () => readOnlyReviewWrite(),
+  assemblePackage: async () => readOnlyReviewWrite(),
 };

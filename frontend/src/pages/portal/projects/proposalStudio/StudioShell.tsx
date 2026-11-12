@@ -6,6 +6,8 @@ import StageDetail from './StageDetail';
 import StageRail, { type StudioView } from './StageRail';
 import { viewOpensQualification, deriveContractStepState, STEP_TO_STUDIO_VIEW } from './buildHelpers';
 import { StepBar } from '../../../admin/govWorkspace/StepBar';
+import AdminGovQualificationPage, { type QualPageApi } from '../../../admin/AdminGovQualificationPage';
+import { getPortalGovQualification, getPortalGovOpportunityDetail } from '../../../../services/govProjectPortalApi';
 import { WORKSPACE_STEPS, type WorkspaceStep } from '../../../admin/govWorkspace/workspaceSteps';
 import { parseDeadline, countdownTo, formatCountdown } from '../../../admin/govDeadline';
 import WhereWeAre from './WhereWeAre';
@@ -37,11 +39,16 @@ const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', '
  * reuses the shipped govCockpit panel.
  */
 export default function StudioShell(
-  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification }:
+  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification, readOnly = false }:
   { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean; bugReportEndpoint?: string;
     /** ADMIN mount only: open the real Gov Qualification Workspace for a pre-award assessment stage (Snapshot/
      *  Solicitation/Fit/Decide). Absent on the intern mount, so the intern keeps the student-safe StageDetail. */
-    onOpenQualification?: (step: string) => void },
+    onOpenQualification?: (step: string) => void;
+    /** READ-ONLY intern parity mount: the intern sees the SAME cockpit the admin sees, but every mutation control is
+     *  disabled. The center panels are wrapped in a disabled <fieldset> (greys out every button/input/select/textarea
+     *  inside); the agent panel, the due-date setter and the document drawer take `readOnly` directly. Navigation
+     *  (the step bar + stage rail) stays enabled. Defaults OFF, so the admin cockpit is unchanged. */
+    readOnly?: boolean },
 ): React.ReactElement {
   const [sp, setSp] = useSearchParams();
   const raw = sp.get('view');
@@ -64,6 +71,15 @@ export default function StudioShell(
 
   const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
   const drawerDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
+
+  // READ-ONLY intern cockpit: the qualification steps (Snapshot/Solicitation/Fit/Decide) render the REAL admin
+  // Qualification Workspace INLINE (embedded, read-only) — the same content the admin sees, not the StageDetail
+  // subset — fed by the participant (award-stripped) qualification endpoints. The admin mount never reaches this
+  // branch (it navigates away via onOpenQualification), so this api is intern-only.
+  const qualApi = useMemo<QualPageApi>(() => ({
+    getWorkspace: () => getPortalGovQualification(projectId),
+    getOpportunityDetail: () => getPortalGovOpportunityDetail(projectId),
+  }), [projectId]);
 
   const go = useCallback((v: StudioView) => {
     const next = new URLSearchParams(sp);
@@ -144,6 +160,13 @@ export default function StudioShell(
     case 'solicitation':
     case 'fit':
     case 'decide':
+      // The intern's read-only cockpit shows the REAL qualification content inline (embedded); the admin mount never
+      // reaches here (it navigates to the standalone workspace). Pre-award assessment with no readOnly falls back to
+      // the student-safe StageDetail (legacy intern behaviour for any non-parity caller).
+      center = readOnly
+        ? <AdminGovQualificationPage readOnly embedded opportunityKey={projectId} step={current} api={qualApi} />
+        : <StageDetail stage={current} view={view} />;
+      break;
     case 'outcome':
       center = <StageDetail stage={current} view={view} />;
       break;
@@ -160,7 +183,7 @@ export default function StudioShell(
         view={view}
         onStartTour={() => setTourStep(0)}
         onNeeds={() => go('openitems')}
-        canManage={view.viewerCanVerify}
+        canManage={view.viewerCanVerify && !readOnly}
         onSetDueDate={studioApi.setProposalDueDate
           ? async (closeDate, priorityScore) => { await studioApi.setProposalDueDate!(projectId, { closeDate, priorityScore }); toast('Proposal due date saved'); onReload(); }
           : undefined}
@@ -170,16 +193,21 @@ export default function StudioShell(
       </div>
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
-        <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>
+        {/* READ-ONLY: a disabled <fieldset> greys out and blocks every form control in the center panels at once
+            (buttons, inputs, selects, textareas) — the one-point disable. Reset to no box so layout is unchanged.
+            Navigation lives outside it (the step bar + stage rail stay live). */}
+        <main id="gps-main" style={{ minWidth: 0 }}>
+          <fieldset disabled={readOnly} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>{center}</fieldset>
+        </main>
         {/* On the pre-award assessment steps (1-5), the right column mirrors the admin Qualification Workspace's
             persistent rail (AI vetting + deadline + key dates), read-only and student-safe, instead of the
             Proposal-agent panel. Every other view keeps the agent panel. */}
         {(current === 'snapshot' || current === 'solicitation' || current === 'fit' || current === 'decide' || current === 'outcome')
           ? <QualRail view={view} />
-          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} />}
+          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={readOnly} />}
       </div>
       {drawerDoc && (
-        gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
+        gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify && !readOnly} readOnly={readOnly} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
       {tourPrompt && tourStep === null && (

@@ -106,6 +106,38 @@ router.get(
 );
 
 /**
+ * GET /api/portal/gov-projects/:projectId/cockpit-full — the SAME Gov Contract cockpit the admin management portal
+ * renders. It calls the SAME builder with viewerCanVerify=true (so the reviewer/pricing PANELS appear), plus
+ * redactAdminOnly=true, which WITHHOLDS every admin-only SUBSTANCE field viewerCanVerify would otherwise add — the
+ * canonical opportunity id, the admin-only (pricing) document bodies + comments, and the pricing/Gold-approval needs —
+ * and the award amount is stripped too. The intern sees every panel (the read-only UI disables every control); all
+ * mutations stay on the admin routes. The guard chain 404s a non-member (they can't learn the project exists).
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/cockpit-full',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      // Pass the guard-resolved identity so the projection resolves THIS viewer's proposal share level (P6).
+      const viewerIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+      // viewerCanVerify=true lights up the reviewer/pricing PANELS; redactAdminOnly=true withholds their admin-only
+      // SUBSTANCE. The pairing is exactly "show every panel, read-only, no admin-only leak".
+      const view = await getStudentGovProjectView(projectId, true, viewerIdentityId, true);
+      if (!view) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      res.json({ project: stripAwardAmount(view) });
+    } catch {
+      res.status(500).json({ error: 'Could not load the project.' });
+    }
+  },
+);
+
+/**
  * GET /api/portal/gov-projects/:projectId/qualification — the SAME Qualification Workspace payload the admin studio
  * renders (getDecoupledWorkspace — identical by construction, not a reimplementation), for a MEMBER of this project,
  * READ-ONLY. The guard chain 404s a non-member (they can't learn the project exists). The award / estimated value is
@@ -153,6 +185,29 @@ router.get(
       res.json({ opportunity, source: feed.source, snapshotDate: feed.snapshotDate, snapshotReason: feed.snapshotReason ?? null });
     } catch {
       res.json({ opportunity: null, source: 'snapshot', snapshotDate: null, snapshotReason: null });
+    }
+  },
+);
+
+/**
+ * GET /api/portal/gov-projects/:projectId/package/signatures — the required-form signature STATUS (form key, role,
+ * signed/unsigned) the admin Package view shows, for a MEMBER of this project, READ-ONLY. It ONLY lists; it never
+ * seeds/writes (the admin route owns syncRequiredSignatures). The listSignatures shape is already student-safe — a
+ * form key, a role string, status/required/hasFile booleans; no signer name, no file path, no money. The read-only
+ * cockpit's Package panel shows these rows while the Export control is disabled.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/package/signatures',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const sig = await import('../services/factory/proposal/govProposalSignatures');
+      res.json({ signatures: await sig.listSignatures(projectId) });
+    } catch {
+      res.status(500).json({ error: 'Could not load the signatures.' });
     }
   },
 );

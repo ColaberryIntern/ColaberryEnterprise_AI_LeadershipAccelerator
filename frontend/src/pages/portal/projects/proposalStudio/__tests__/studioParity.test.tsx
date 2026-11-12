@@ -12,7 +12,7 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
-import type { StudentGovProjectView, GovProposalDocument, GovStudioApi, GovReviewApi } from '../../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovProposalDocument, GovStudioApi, GovReviewApi, GovCockpitApi } from '../../../../../services/govProjectPortalApi';
 
 import ContractBar from '../ContractBar';
 import StageDetail from '../StageDetail';
@@ -499,5 +499,44 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
   it('shows the empty state (ready for repo artifacts + demo videos) when nothing is submitted yet', async () => {
     await render(<BuildEvidence view={VIEW} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
     expect(present('ev-artifacts-empty')).toBe(true);
+  });
+});
+
+// ── READ-ONLY intern parity: the intern mounts the SAME StudioShell cockpit, but every mutation control is disabled.
+// The center panels are wrapped in a disabled <fieldset> (the one-point disable); the agent panel is threaded readOnly
+// directly (it is the right rail, a sibling of the center, so the fieldset does not reach it). The admin mount
+// (readOnly=false) is unchanged. jsdom does not propagate fieldset[disabled] to descendants' .disabled, so we assert
+// the fieldset itself carries disabled (the browser does the propagation) plus a directly-threaded control.
+describe('StudioShell read-only (intern parity) — same cockpit, mutation controls disabled', () => {
+  const cockpitApi = {
+    askCopilot: async () => ({ answer: 'ok' }),
+    draftDocument: async () => ({}),
+    acceptDocument: async () => ({}),
+    requestChanges: async () => ({}),
+    commentDocument: async () => ({}),
+  } as unknown as GovCockpitApi;
+  const mount = (readOnly: boolean) => (
+    <StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} readOnly={readOnly} />
+  );
+
+  it('readOnly: the center fieldset is disabled AND the agent Ask input is disabled', async () => {
+    await render(mount(true));
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs).not.toBeNull();
+    expect(fs!.disabled).toBe(true);
+    const ask = container.querySelector('[data-testid="agent-ask"]') as HTMLInputElement | null;
+    expect(ask).not.toBeNull();
+    expect(ask!.disabled).toBe(true); // AgentPanel is outside the fieldset; proves the direct readOnly threading
+    act(() => root.unmount()); container.remove();
+  });
+
+  it('admin mount (readOnly=false) is UNCHANGED — the center fieldset is not disabled and the agent Ask input is enabled', async () => {
+    await render(mount(false));
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs).not.toBeNull();
+    expect(fs!.disabled).toBe(false);
+    const ask = container.querySelector('[data-testid="agent-ask"]') as HTMLInputElement | null;
+    expect(ask!.disabled).toBe(false);
+    act(() => root.unmount()); container.remove();
   });
 });
