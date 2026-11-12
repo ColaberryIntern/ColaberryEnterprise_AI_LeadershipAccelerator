@@ -202,7 +202,7 @@ describe('the remove control sits in the new treatment without being easy to hit
     await mount(project());
 
     const open = byText('Open build');
-    const remove = byText('Remove');
+    const remove = byText('Delete');
     expect(open).toBeDefined();
     expect(remove).toBeDefined();
     expect(open).not.toBe(remove);
@@ -218,19 +218,19 @@ describe('the remove control sits in the new treatment without being easy to hit
 
   it('carries an accessible label naming the build it would remove', async () => {
     await mount(project());
-    expect(byText('Remove')!.getAttribute('aria-label')).toBe('Remove Student Early Warning');
+    expect(byText('Delete')!.getAttribute('aria-label')).toBe('Delete Student Early Warning');
   });
 
   it('is absent entirely when removal is not offered', async () => {
     await mount(project(), false);
-    expect(byText('Remove')).toBeUndefined();
+    expect(byText('Delete')).toBeUndefined();
     // Open build is still there — hiding removal must not disable the card.
     expect(byText('Open build')).toBeDefined();
   });
 
   it('does not open the build when Remove is clicked', async () => {
     await mount(project());
-    await act(async () => { byText('Remove')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { byText('Delete')!.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     // The regression this guards: a card-wide onClick would fire too, opening
     // the build behind the confirmation dialog.
     expect(opened).toBe(0);

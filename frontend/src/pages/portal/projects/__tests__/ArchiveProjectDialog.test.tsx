@@ -128,13 +128,18 @@ describe('the confirmation names exactly what the student is giving up', () => {
 
   it('leads with reversibility, because it changes how carefully the rest is read', async () => {
     await mount();
-    expect(text()).toContain('Nothing is deleted');
+    // The wording changed when the control was renamed to Delete: "Nothing is deleted" would now
+    // contradict the button. The PROPERTY is unchanged and is what is asserted - the dialog leads
+    // with recoverability and says where to get it back from.
+    expect(text()).toContain('It is recoverable');
+    expect(text()).toContain('nothing is erased');
+    expect(text()).toContain('Deleted builds');
   });
 
   it('names the project in the heading', async () => {
     await mount();
     const heading = container.querySelector('#pja-title');
-    expect(heading!.textContent).toBe('Remove “Student Early Warning”?');
+    expect(heading!.textContent).toBe('Delete “Student Early Warning”?');
   });
 
   it('does NOT claim a published plan when there is none', async () => {
@@ -255,13 +260,13 @@ describe('removal requires typing the project name', () => {
     expect(archivedWith).toEqual([PROJECT_ID]);
   });
 
-  it('asks for the literal word REMOVE when the build has no name', async () => {
+  it('asks for the literal word DELETE when the build has no name', async () => {
     mockPreviewResult = { ok: true, value: preview({ name: null }) };
     await mount();
 
     expect(text()).toContain('This build has no name yet');
     expect(removeBtn().disabled).toBe(true);
-    await type('REMOVE');
+    await type('DELETE');
     expect(removeBtn().disabled).toBe(false);
   });
 
