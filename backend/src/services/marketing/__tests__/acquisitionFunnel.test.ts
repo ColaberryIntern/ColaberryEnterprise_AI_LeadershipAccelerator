@@ -236,3 +236,79 @@ describe('the array is interpolated in a form Postgres accepts', () => {
     expect(Array.isArray(query.mock.calls[0][1].replacements.sources)).toBe(true);
   });
 });
+
+/**
+ * ADS-7: one campaign must read as ONE row, because the split was invisible as data.
+ *
+ * `leads.utm_source` holds two shapes for the same traffic. Measured in production:
+ * fb 315, ig 131, fb|paid 43, ig|paid 30. Grouping that column raw returned Facebook
+ * TWICE - once as "Facebook" and once as the literal `fb|paid` - with each half's
+ * CRM-sync and opt-in rate computed separately, and the donut drawing two slices whose
+ * percentages were both wrong. The centre total stayed correct, which is exactly what
+ * made it read as data rather than as a bug.
+ *
+ * It matters for `LIMIT 20` too: duplicate halves consume slots, so grouping raw can
+ * push a genuinely distinct campaign off the bottom of a top-20 list.
+ *
+ * ── WHY THESE ASSERT SQL AND NOT A COLLAPSED ROW ────────────────────────────────────
+ * The canonicalisation happens IN the statement, so a mocked `sequelize.query` can never
+ * exercise the collapse - whatever the mock returns is returned. The one property a unit
+ * test can hold is that the statement still canonicalises in BOTH clauses, which is the
+ * difference between the fixed form and the defect.
+ *
+ * Same posture as the IN/ANY block above, and the same caveat: a guard against
+ * regression, NOT a substitute for running the query. The collapse itself was verified
+ * against production on 2026-11-11 - the campaigns read returned 3 rows with 3 distinct
+ * sources (`fb`, `ig`, and untagged) and no piped shape surviving, while the raw column
+ * still held fb|paid 43 and ig|paid 30.
+ *
+ * Added because this suite had NO coverage of the canonicalisation at all: the fix could
+ * be reverted in acquisitionFunnel.ts and every test here would stay green, which is the
+ * definition of a contract too weak to be worth having.
+ */
+describe('one campaign reads as one row (ADS-7)', () => {
+  /** Runs the funnel and returns the campaigns statement. `downstream` is issued first. */
+  const campaignSql = async (): Promise<string> => {
+    landingPageTraffic.mockResolvedValue([page()]);
+    mockQueries({ signups: '1', accounts: '1', in_crm: '1', returned: '0' });
+    await acquisitionFunnel(30);
+    return String(query.mock.calls[1][0]);
+  };
+
+  /** Everything from GROUP BY up to ORDER BY - the clause the defect lived in. */
+  const groupByClause = (sql: string): string => (sql.match(/GROUP BY[\s\S]*?(?=ORDER BY)/) || [''])[0];
+
+  it('canonicalises utm_source in the SELECT, so the row is labelled by the canonical source', async () => {
+    expect(await campaignSql())
+      .toMatch(/lower\(btrim\(split_part\(l\.utm_source,\s*'\|',\s*1\)\)\)\s+AS\s+utm_source/);
+  });
+
+  it('and in the GROUP BY, which is where the split actually happened', async () => {
+    // The SELECT alone would not merge anything: grouping is what makes two halves one row.
+    expect(groupByClause(await campaignSql()))
+      .toMatch(/lower\(btrim\(split_part\(l\.utm_source,\s*'\|',\s*1\)\)\)/);
+  });
+
+  it('never groups by the RAW column, which is the defect itself', async () => {
+    // Anchored immediately after GROUP BY: the raw column legitimately appears INSIDE the
+    // canonicalising expression, so a bare substring check would pass either way.
+    expect(groupByClause(await campaignSql())).not.toMatch(/GROUP BY\s+l\.utm_source\b/);
+  });
+
+  it('still groups by campaign as well, so the fix did not flatten distinct campaigns together', async () => {
+    expect(groupByClause(await campaignSql())).toMatch(/l\.utm_campaign/);
+  });
+
+  it('CONTROL: the campaigns statement really was captured, so none of the above is vacuous', async () => {
+    const sql = await campaignSql();
+    expect(sql).toMatch(/FROM\s+leads/);
+    expect(sql).toMatch(/LIMIT 20/);
+    expect(sql.length).toBeGreaterThan(200);
+  });
+
+  it('CONTROL: a pattern that must NOT match, proving these regexes can fail', async () => {
+    // Without this, a typo in the expressions above could make every assertion match
+    // nothing and still pass as a `not.toMatch`.
+    expect(await campaignSql()).not.toMatch(/split_part\(l\.utm_campaign/);
+  });
+});
