@@ -34,7 +34,8 @@ export interface Grounding {
   sections: Array<{ heading: string; plan: string | null }>;
   artifacts: string[];
   facts: string[];
-  sourceExcerpts: Array<{ documentName: string; text: string }>;
+  /** Optional so existing Grounding fixtures (built as literals) stay valid; buildGrounding always sets it to []. */
+  sourceExcerpts?: Array<{ documentName: string; text: string }>;
 }
 
 /** Build the grounding from only the allowed inputs. Pure + total. */
@@ -66,9 +67,10 @@ export function groundingToPromptText(g: Grounding): string {
   if (g.artifacts.length) { lines.push('Build evidence you may cite:'); for (const a of g.artifacts) lines.push(`- ${a}`); }
   if (g.facts.length) { lines.push('Approved company facts (the ONLY specific facts you may assert):'); for (const f of g.facts) lines.push(`- ${f}`); }
   else lines.push('No approved company facts are available — insert a [PLACEHOLDER: …] for any specific fact rather than inventing one.');
-  if (g.sourceExcerpts.length) {
+  const excerpts = g.sourceExcerpts ?? [];
+  if (excerpts.length) {
     lines.push('Source excerpts (reference material from uploaded project documents. You MAY paraphrase these, naming the document, but any specific figure, date, dollar, or named metric still requires an approved company fact above or a [PLACEHOLDER]. Never assert a hard specific from an excerpt alone):');
-    for (const e of g.sourceExcerpts) lines.push(`- [${e.documentName}] ${e.text}`);
+    for (const e of excerpts) lines.push(`- [${e.documentName}] ${e.text}`);
   }
   return lines.join('\n');
 }

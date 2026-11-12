@@ -8,8 +8,9 @@ const baseInput = {
 describe('proposalGrounding — source-excerpts channel (P-SRC, P2)', () => {
   it('carries retrieved source excerpts on the grounding', () => {
     const g = buildGrounding({ ...baseInput, sourceExcerpts: [{ documentName: 'Saratoga Briefing', text: 'The system audits every action.' }] });
-    expect(g.sourceExcerpts).toHaveLength(1);
-    expect(g.sourceExcerpts[0].documentName).toBe('Saratoga Briefing');
+    const ex = g.sourceExcerpts ?? [];
+    expect(ex).toHaveLength(1);
+    expect(ex[0].documentName).toBe('Saratoga Briefing');
   });
 
   it('renders excerpts as cited reference material WITH the hard-specific safety rule intact', () => {
