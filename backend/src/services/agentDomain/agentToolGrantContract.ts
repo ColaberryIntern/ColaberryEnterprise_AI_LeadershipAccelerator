@@ -45,6 +45,13 @@ export type GrantRefusalRule =
   | 'capability_not_confirmed'
   | 'capability_rejected'
   | 'capability_id_missing'
+  // Agent Tools Phase 4. The tie between the two halves above: a grant names a tool AND the
+  // capability it is for, and until now nothing checked that the capability actually asks for
+  // that tool. Without this rule the `capability_id` on a grant is decoration — it records an
+  // intention nobody verified, which is exactly the gap that made "every action is tied to a
+  // tool" unprovable.
+  | 'tool_not_required_by_capability'
+  | 'capability_required_tools_unreadable'
   // -- who it is being granted to
   | 'agent_not_found';
 
@@ -71,6 +78,16 @@ export interface ProposedGrant {
   readonly proposedBy?: string | null;
   /** Compile-time tool names. `null` means the catalog could not be read, which is a refusal. */
   readonly registeredToolNames: readonly string[] | null;
+  /**
+   * The `required_tools` of the capability this grant cites.
+   *
+   * `null` means the capability record could not be read, which is a refusal for the same
+   * reason `registeredToolNames: null` is: "I could not check" is not "it is fine".
+   *
+   * An EMPTY array is a different thing and is also a refusal, via
+   * `tool_not_required_by_capability` — a capability that asks for no tools cannot justify one.
+   */
+  readonly capabilityRequiredTools: readonly string[] | null;
 }
 
 export interface AcceptedGrant {
@@ -196,6 +213,32 @@ function judgeSubject(p: ProposedGrant, issues: GrantIssue[]): void {
       detail: `Capability ${capabilityId} is ${p.capabilityState ?? 'unknown'}, not confirmed. A `
         + 'tool is granted on the strength of a capability somebody proved by hand and recorded.',
     });
+  }
+
+  // THE TIE, Agent Tools Phase 4. Only checked once BOTH halves are present and the capability
+  // is otherwise acceptable: telling somebody their tool is not required by a capability they
+  // have not named, or that was rejected, is noise on top of the real refusal.
+  if (toolName && capabilityId && issues.length === 0) {
+    if (p.capabilityRequiredTools === null) {
+      // FAIL CLOSED, same move as tool_catalog_unreadable.
+      issues.push({
+        rule: 'capability_required_tools_unreadable',
+        detail: `The required tools of capability ${capabilityId} could not be read, so it `
+          + 'cannot be established that it asks for this tool. Refused rather than assumed.',
+      });
+    } else if (!p.capabilityRequiredTools.includes(toolName)) {
+      const asked = p.capabilityRequiredTools.length === 0
+        ? 'it lists no required tools at all'
+        : `it asks for: ${p.capabilityRequiredTools.join(', ')}`;
+      issues.push({
+        rule: 'tool_not_required_by_capability',
+        detail: `Capability ${capabilityId} does not require "${toolName}" — ${asked}. A grant `
+          + 'records which capability a tool serves, so a tool the capability never asked for is '
+          + 'granted for a purpose nobody stated. Either grant a tool the capability requires, or '
+          + "add this one to that capability's required_tools and have the capability "
+          + 're-confirmed.',
+      });
+    }
   }
 
   if (!p.agent) {
