@@ -1,4 +1,5 @@
 import portalApi from '../utils/portalApi';
+import type { QualRequirementEval } from './factoryApi';
 
 /**
  * govProjectPortalApi — the student client for an ASSIGNED government project. It calls the participant-guarded
@@ -96,6 +97,10 @@ export interface StudentGovProjectView {
   tracks: StudentGovTrackView[];
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
+  /** Fit parity: the requirement evaluations the admin renders in "Requirements by due stage" — same shape, same
+   *  evaluateRequirements() source — so the intern Fit step renders the identical shared component. Absent on a
+   *  projection built before established requirements exist. */
+  requirementEvals?: QualRequirementEval[];
   build: StudentGovBuildPlan;
   /** P6: the proposal projected to this viewer's share level ('none' ⇒ not shared). Optional — absent on older backends. */
   proposal?: SharedProposalView;
