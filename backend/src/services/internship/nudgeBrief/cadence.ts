@@ -98,10 +98,24 @@ const TRIGGERS: ReadonlyArray<{
   },
   {
     key: 'build_stalled',
-    test: (b) => {
+    /**
+     * Quiet in the REPO is only a reason to write when they are also quiet with US.
+     *
+     * Found by previewing this against the live roster on 2026-11-11. Mihret came back
+     * `build_stalled` on 14 days without a verified story while she was mid-thread with us about
+     * why her verification was not crediting her merged work - she had emailed twelve minutes
+     * earlier. "You have not built in 14 days" is the worst sentence we could send that person,
+     * and it would have been true and useless at the same time.
+     *
+     * `holdFor` would have withheld it today, because we had written to her this morning. That is
+     * the guard working, and it is not the same as this being right: one day of silence from us
+     * and the hold lifts while she is still in the middle of the conversation.
+     */
+    test: (b, e) => {
+      if (e.engagedSinceContact === true) return null;
       const q = b.signals.daysSinceBuildWork;
       if (q === null || q < STALLED_DAYS) return null;
-      return `No commit or verified story in ${q} days.`;
+      return `No commit or verified story in ${q} days, and nothing back from them since we last wrote.`;
     },
   },
 ];

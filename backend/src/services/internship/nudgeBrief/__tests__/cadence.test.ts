@@ -100,6 +100,33 @@ describe('a reason to write beats the clock', () => {
     const d = decide({ brief: brief({ signals: { daysSinceBuildWork: STALLED_DAYS } as never }), engagement: engagement(), hold: null });
     expect(d.trigger).toBe('build_stalled');
   });
+
+  /**
+   * Found by previewing the worker against the live roster. Mihret came back `build_stalled` on
+   * 14 days without a verified story while she was mid-thread with us about why her verification
+   * was not crediting her merged work. She had emailed twelve minutes earlier.
+   *
+   * Quiet in the repo is only a reason to write when they are also quiet with US.
+   */
+  it('does NOT call someone stalled while they are actively talking to us', () => {
+    const d = decide({
+      brief: brief({ signals: { daysSinceBuildWork: 14 } as never }),
+      engagement: engagement({ engagedSinceContact: true, engagedBy: 'reply' }),
+      hold: null,
+    });
+    expect(d.trigger).not.toBe('build_stalled');
+    expect(d.send).toBe(false);
+  });
+
+  it('still calls it stalled when the repo AND the inbox are both quiet', () => {
+    const d = decide({
+      brief: brief({ signals: { daysSinceBuildWork: 14 } as never }),
+      engagement: engagement({ engagedSinceContact: false }),
+      hold: null,
+    });
+    expect(d.trigger).toBe('build_stalled');
+    expect(d.reason).toMatch(/nothing back from them since we last wrote/);
+  });
 });
 
 describe('the floor only catches who nothing else found', () => {
