@@ -39,6 +39,17 @@ function textFor(summary, names) {
     const when = p.late == null ? 'no date' : p.late > 0 ? `${p.late}d overdue` : p.late === 0 ? 'due today' : `due in ${-p.late}d`;
     L.push(`${i + 1}. ${p.title} (${when}, score ${p.score})`, `   ${p.path}`, `   ${p.url || ''}`, `   /ata-work-task ${p.id}`);
   });
+  const lists = (summary && summary.lists) || [];
+  if (lists.length) {
+    L.push('', 'THE FIVE LISTS');
+    lists.forEach((l, i) => {
+      L.push(`${i + 1}. ${l.key} (${l.pressing} pressing, ${l.total} open, ${l.dormant} dormant, score ${l.score})`,
+        `   ${l.path}`);
+      if (l.lead) L.push(`   Most pressing: ${l.lead.title}`);
+      if (l.proposal) L.push(`   Proposed: ${l.proposal}`);
+      L.push(`   ${l.url || ''}`, `   /ata-list "${l.key}"`);
+    });
+  }
   L.push('', `Attached: ${names.board} (the interactive board; open it in a browser) and ${names.pdf} (this report).`,
     `Today: ${c.tasks} active tasks, ${c.live} live, ${c.dormant} dormant. Read-only: nothing was changed in Basecamp.`);
   return L.join('\n');

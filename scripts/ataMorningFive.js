@@ -27,6 +27,8 @@ const { buildWorkOrder, renderWorkOrderText } = lib('workOrder');
 const { byList, looksGenerated } = lib('listLens');
 const { categoryOf } = lib('listCategories');
 const { pickFive, pickOneMove } = lib('pressingFive');
+const { pickFiveLists, proposalFor } = lib('pressingLists');
+const { listUrl } = lib('listMeta');
 const { buildTaskPrompt, buildListPrompt } = lib('promptBuilder');
 const { renderMorningFive } = lib('renderMorningFive');
 
@@ -67,7 +69,7 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
     const r = i.__row;
     const wo = buildWorkOrder(r, now);
     const cat = categoryOf(r.todolist_name, r.project_id);
-    return { ...wo, cat: cat.key, generated: looksGenerated({ title: r.title, description: r.description }),
+    return { ...wo, listId: r.todolist_id ? String(r.todolist_id) : null, cat: cat.key, generated: looksGenerated({ title: r.title, description: r.description }),
       path: `${cat.label} / ${cat.sub.label} / ${r.todolist_name || '(no list)'}` };
   });
 
@@ -81,7 +83,7 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
     log({ level: 'warn', event: 'claims_unavailable', error_class: (e && e.name) || 'Error' });
   }
 
-  const { picks, qualified } = pickFive(orders, now);
+  const { picks, qualified, scored } = pickFive(orders, now);
 
   // List summaries over EVERY task, for the "decide a whole list" candidate.
   const lists = byList(rows.map((r) => ({
@@ -90,6 +92,18 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
     generated: looksGenerated({ title: r.title, description: r.description }),
     humanOnly: String(r.description || '').includes('\u{1F9D1}'),
   })));
+
+  // The five LISTS (Ali, 2026-11-12), ranked from the same task scores as the five tasks.
+  const listPick = pickFiveLists(scored, lists);
+  const fiveLists = listPick.picks.map((l) => {
+    const cat = categoryOf(l.key, l.projectId);
+    return { key: l.key, url: l.listId && l.projectId ? listUrl(l.projectId, l.listId) : null,
+      path: `${cat.label} / ${cat.sub.label}`, score: l.score, reasons: l.reasons,
+      total: l.total, live: l.live, dormant: l.dormant, oldestDue: l.oldestDue,
+      pressing: l.pressing.map((t) => ({ id: t.id, title: t.title, url: t.url, late: t.late, score: t.score })),
+      // A decision list is decided; otherwise the list's own strongest suggestion (pressingLists.proposalFor).
+      proposal: proposalFor(l) };
+  });
 
   const move = pickOneMove({ picks, lists });
   const movePrompt = move.kind === 'task'
@@ -100,8 +114,9 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
       : '';
 
   const html = renderMorningFive({
-    today: now, runId: `MORNING-FIVE-${now.toISOString().slice(0, 10)}`, picks, move, movePrompt,
-    counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length },
+    today: now, runId: `MORNING-FIVE-${now.toISOString().slice(0, 10)}`, picks, lists: fiveLists, move, movePrompt,
+    counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length,
+      listsQualified: listPick.qualified },
     boardNote: BOARD_NOTE,
   });
   fs.writeFileSync(OUT, html, 'utf8');
@@ -114,6 +129,9 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
       movePrompt,
       picks: picks.map((p) => ({ id: p.id, title: p.title, url: p.url, path: p.path, dueOn: p.dueOn,
         late: p.late, score: p.score, isDecision: p.isDecision })),
+      lists: fiveLists.map((l) => ({ key: l.key, url: l.url, path: l.path, score: l.score, total: l.total,
+        live: l.live, dormant: l.dormant, pressing: l.pressing.length, lead: l.pressing[0] || null,
+        proposal: l.proposal ? l.proposal.label : null })),
     }, null, 2), 'utf8');
   }
 

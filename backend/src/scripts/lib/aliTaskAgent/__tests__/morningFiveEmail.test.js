@@ -52,4 +52,13 @@ describe('textFor', () => {
   it('says so when nothing qualified', () => {
     expect(textFor({ counts: {}, picks: [], move: {} }, names)).toMatch(/^Nothing qualified/);
   });
+  it('carries the five lists when there are any, and omits the section when not', () => {
+    const lists = [{ key: '1. RFP Response', path: 'Client delivery / MAPLOCA', score: 85, total: 12, dormant: 3, pressing: 3,
+      lead: { title: 'Internal debrief' }, proposal: 'Work the 9 live', url: 'https://app.basecamp.com/l' }];
+    const t = textFor({ ...summary, lists }, names);
+    expect(t).toContain('THE FIVE LISTS');
+    expect(t).toContain('1. 1. RFP Response (3 pressing, 12 open, 3 dormant, score 85)');
+    expect(t).toContain('/ata-list "1. RFP Response"');
+    expect(textFor(summary, names)).not.toContain('THE FIVE LISTS');
+  });
 });

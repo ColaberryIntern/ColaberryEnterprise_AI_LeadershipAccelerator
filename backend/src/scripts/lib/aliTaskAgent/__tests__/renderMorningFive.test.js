@@ -59,6 +59,42 @@ describe('renderMorningFive', () => {
     expect(html()).toMatch(/flat \+40/);
   });
 
+  describe('the five lists', () => {
+    const list = (over = {}) => ({ key: '1. RFP Response', url: 'https://app.basecamp.com/3945211/buckets/49506070/todolists/111',
+      path: 'Client delivery / MAPLOCA', score: 85, total: 12, live: 9, dormant: 3, oldestDue: '2026-10-01',
+      reasons: [{ pts: 75, why: 'its most pressing task scores 75' }, { pts: 10, why: '2 more pressing tasks in it' }],
+      pressing: [{ id: '49506070/1', title: 'Internal debrief', url: 'https://app.basecamp.com/x', late: 5, score: 75 },
+        { id: '49506070/2', title: 'Second', url: null, late: -2, score: 40 }],
+      proposal: { label: 'Work the 9 live, re-date the 3 dormant', why: 'the list is mixed' }, ...over });
+    const withLists = (lists) => html({ lists, counts: { tasks: 515, live: 379, dormant: 136, qualified: 295, claimed: 0, listsQualified: 40 } });
+
+    it('renders after the five tasks, in the same card shape', () => {
+      const h = withLists([list()]);
+      expect(h.indexOf('The five, most pressing first')).toBeLessThan(h.indexOf('The five lists, most pressing first'));
+      expect(h).toContain('List #1 &middot; score 85');
+      expect(h).toContain('1 of the 40 lists with something pressing');
+      expect(h).toContain('Why it is here');
+    });
+
+    it('links the list, names its lead task, its proposal and its command', () => {
+      const h = withLists([list()]);
+      expect(h).toContain('href="https://app.basecamp.com/3945211/buckets/49506070/todolists/111"');
+      expect(h).toContain('Internal debrief');
+      expect(h).toContain('Work the 9 live, re-date the 3 dormant');
+      expect(h).toContain('/ata-list &quot;1. RFP Response&quot;');
+      expect(h).toMatch(/How the lists were picked/);
+    });
+
+    it('escapes hostile list names', () => {
+      const h = withLists([list({ key: '<img src=x onerror=alert(1)>' })]);
+      expect(h).not.toContain('<img src=x');
+    });
+
+    it('omits the section when there are no lists', () => {
+      expect(html()).not.toContain('The five lists');
+    });
+  });
+
   it('says so plainly when nothing qualified', () => {
     const h = html({ picks: [], move: { kind: 'none', why: 'Nothing qualified as pressing today.', candidates: [] } });
     expect(h).toContain('Nothing qualified as pressing today.');
