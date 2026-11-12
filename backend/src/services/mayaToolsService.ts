@@ -65,6 +65,75 @@ async function logAction(
   }
 }
 
+/**
+ * One structured line per outbound-tool outcome, to CLAUDE.md's log contract.
+ *
+ * WHY THIS EXISTS. Before MR1 this file emitted only prefixed plain strings
+ * (`console.warn('[MayaTools] ...')`), so the one failure that mattered most - Maya reporting a
+ * call or a text that never happened - had no `event` name anybody could alert on, and the
+ * `outcome` she recorded was success. A string is not observability.
+ *
+ * `context` carries the visitor and the reason, never the phone number and never the message
+ * body: a log line is the easiest place for a contact detail to leak out of the trust boundary.
+ */
+function logOutboundOutcome(params: {
+  event: string;
+  outcome: 'success' | 'failure';
+  errorClass?: string;
+  context: Record<string, unknown>;
+}): void {
+  const line = {
+    timestamp: new Date().toISOString(),
+    level: params.outcome === 'failure' ? 'warn' : 'info',
+    service: 'maya-site-chat',
+    event: params.event,
+    outcome: params.outcome,
+    ...(params.errorClass ? { error_class: params.errorClass } : {}),
+    context: params.context,
+  };
+  (params.outcome === 'failure' ? console.warn : console.log)(JSON.stringify(line));
+}
+
+/**
+ * What the model is told when a voice call did not happen.
+ *
+ * These strings are read by the model, not spoken to the visitor verbatim - that is the house
+ * style for every other summary in this file ("No phone number on file. Ask for their phone
+ * first."). Two rules each one obeys:
+ *
+ *  1. It never implies a call is coming. The prompt used to script "I'm placing a call to you
+ *     now" BEFORE this function's answer was known, which is how two real visitors on
+ *     2026-10-24 and 2026-11-06 were told to expect a call that could not arrive.
+ *  2. It names the alternative that actually works, because an honest refusal with no route
+ *     forward is a worse visit than the lie it replaces. `schedule_callback` writes a real
+ *     `callback_requests` row; it is the live path while voice is off.
+ */
+const VOICE_SKIP_SUMMARY: Readonly<Record<string, string>> = Object.freeze({
+  feature_disabled:
+    'Voice calling is switched off, so no call was placed and none will arrive. Do not say a call '
+    + 'is coming. Offer to arrange a callback with schedule_callback, or the booking calendar.',
+  kill_switch_active:
+    'Outbound calling is stopped platform-wide, so no call was placed. Do not offer a call at '
+    + 'all. Offer the booking calendar instead.',
+  no_api_key:
+    'The calling system is not configured, so no call was placed. Do not say a call is coming. '
+    + 'Offer to arrange a callback with schedule_callback.',
+  no_agent_id:
+    'The calling system is not configured, so no call was placed. Do not say a call is coming. '
+    + 'Offer to arrange a callback with schedule_callback.',
+  no_prompt:
+    'The call could not be set up safely, so no call was placed. Offer to arrange a callback '
+    + 'with schedule_callback.',
+  no_phone:
+    'No phone number reached the calling system, so no call was placed. Ask for their phone '
+    + 'number before trying again.',
+});
+
+/** The fallback, for a skip reason this file has not seen before. Still never promises a call. */
+const VOICE_SKIP_SUMMARY_FALLBACK =
+  'No call was placed. Do not say a call is coming. Offer to arrange a callback with '
+  + 'schedule_callback instead.';
+
 // ─── Tool: Capture Lead Details ────────────────────────────────────────────────
 
 export async function captureLeadDetails(
@@ -424,52 +493,145 @@ Your goal: Continue the conversation naturally, answer their questions about the
       },
     });
 
-    // Log to CallContactLog
+    // ── THE PROVIDER'S `success` IS NOT A PLACED CALL (MR1, defect 4) ────────
+    //
+    // `triggerVoiceCall` returns `{ success: true, data: { skipped: true, reason } }` for SIX
+    // different reasons it did not dial: `kill_switch_active`, `feature_disabled`, `no_phone`,
+    // `no_api_key`, `no_agent_id`, `no_prompt`. That envelope is a 200-shaped success, nothing
+    // throws, and no error class is ever constructed.
+    //
+    // This handler used to read `result.success` alone. So on every one of those six paths it
+    // wrote a `CallContactLog` row with `call_status: 'pending'` and a NULL `synthflow_call_id`,
+    // tagged the lead, enrolled it in the Voice Call Requested campaign, logged
+    // `voice_call_initiated: completed`, and returned "should receive a call shortly".
+    //
+    // THAT ALREADY REACHED TWO REAL PEOPLE. Measured in production 2026-11-12:
+    // `admissions_action_logs` held exactly 2 `voice_call_initiated` rows, both `completed`
+    // (2026-10-24 and 2026-11-06), and `call_contact_logs` held 2 `pending` rows, BOTH with a
+    // null provider id. `ENABLE_VOICE_CALLS` is `false` in production, so every attempt takes
+    // the `feature_disabled` branch and no call can ever arrive.
+    //
+    // The worst of the six is `kill_switch_active`: the platform-wide stop would have halted the
+    // dial and left Maya still promising calls, which is the exact opposite of what that switch
+    // exists to do.
+    //
+    // THE PHANTOM ROW ALSO BROKE THE RETRY. The 24h dedup above matches ANY row for the visitor
+    // regardless of `call_status`, so a skipped attempt blocked the next genuine one for a day.
+    // That is why a not-placed attempt now writes NO row at all: the audit trail is the
+    // `AdmissionsActionLog` entry, which does not feed the dedup.
+    const skipReason = result.data?.skipped === true
+      ? String(result.data?.reason ?? 'unspecified')
+      : null;
+    const providerAccepted = result.success && !skipReason;
+    const callId = typeof result.data?.call_id === 'string' && result.data.call_id
+      ? result.data.call_id
+      : null;
+
+    if (!providerAccepted) {
+      // Nothing was dialled, and we know it. Report the refusal and write nothing that implies
+      // a call, so a retry is not blocked by an attempt that never left the building.
+      const errorClass = skipReason ? 'VoiceProviderSkipped' : 'VoiceProviderRejected';
+      logOutboundOutcome({
+        event: 'maya_voice_call_not_placed',
+        outcome: 'failure',
+        errorClass,
+        context: { visitor_id: visitorId, conversation_id: conversationId, reason: skipReason },
+      });
+      await logAction(visitorId, conversationId, 'voice_call_initiated', 'failed', {
+        lead_id: lead?.id,
+        error_class: errorClass,
+        provider_reason: skipReason,
+      });
+      return {
+        success: false,
+        summary: skipReason
+          ? (VOICE_SKIP_SUMMARY[skipReason] ?? VOICE_SKIP_SUMMARY_FALLBACK)
+          : VOICE_SKIP_SUMMARY_FALLBACK,
+      };
+    }
+
+    // The provider accepted the request, so a call MAY be dialling. Record it either way: the
+    // row is what stops a second dial, and a duplicate call to a stranger is worse than a
+    // duplicate row.
     await CallContactLog.create({
       visitor_id: visitorId,
       call_type: 'maya_initiated',
       call_timestamp: new Date(),
-      call_status: result.success ? 'pending' : 'failed',
+      call_status: 'pending',
       reason_for_call: 'Maya chat visitor requested voice call',
       approved_by_agent: 'Maya',
-      synthflow_call_id: result.data?.call_id || null,
+      synthflow_call_id: callId,
     } as any).catch(() => {});
+
+    if (!callId) {
+      // Accepted with no call id: a call may be ringing and we cannot track it, because the
+      // completion webhook matches on `provider_message_id`. This is the one genuinely UNKNOWN
+      // outcome, and it is reported as a failure deliberately - "we could not confirm it" is
+      // the only honest thing to say, and being silently surprised by a call is a far smaller
+      // harm than waiting for one that never comes.
+      logOutboundOutcome({
+        event: 'maya_voice_call_unconfirmed',
+        outcome: 'failure',
+        errorClass: 'VoiceProviderNoCallId',
+        context: {
+          visitor_id: visitorId,
+          conversation_id: conversationId,
+          response_keys: Object.keys(result.data || {}),
+        },
+      });
+      await logAction(visitorId, conversationId, 'voice_call_initiated', 'failed', {
+        lead_id: lead?.id,
+        error_class: 'VoiceProviderNoCallId',
+      });
+      return {
+        success: false,
+        summary: 'The call could not be confirmed, so do not tell them a call is coming. Offer to '
+          + 'arrange a callback with schedule_callback instead.',
+      };
+    }
 
     // Log to CommunicationLog so the Synthflow webhook can match this call
     // and store the transcript for post-call processing
-    if (result.success && result.data?.call_id) {
-      logCommunication({
-        lead_id: lead?.id || null,
-        channel: 'voice',
-        direction: 'outbound',
-        delivery_mode: 'live',
-        status: 'pending',
-        to_address: phone,
-        provider: 'synthflow',
-        provider_message_id: result.data.call_id,
-        metadata: { visitor_id: visitorId, conversation_id: conversationId, source: 'maya_chat' },
-      } as any).catch((err: any) => {
-        console.warn('[MayaTools] CommunicationLog failed:', err.message);
+    logCommunication({
+      lead_id: lead?.id || null,
+      channel: 'voice',
+      direction: 'outbound',
+      delivery_mode: 'live',
+      status: 'pending',
+      to_address: phone,
+      provider: 'synthflow',
+      provider_message_id: callId,
+      metadata: { visitor_id: visitorId, conversation_id: conversationId, source: 'maya_chat' },
+    } as any).catch((err: any) => {
+      logOutboundOutcome({
+        event: 'maya_voice_communication_log_failed',
+        outcome: 'failure',
+        errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
+        context: { visitor_id: visitorId, conversation_id: conversationId },
       });
-    } else if (result.success) {
-      console.warn('[MayaTools] Voice call succeeded but call_id is null — webhook matching will fail. Response keys:', Object.keys(result.data || {}));
-    }
-
-    await logAction(visitorId, conversationId, 'voice_call_initiated', result.success ? 'completed' : 'failed', {
-      lead_id: lead?.id,
-      phone,
-      synthflow_response: result.success,
     });
 
-    if (!result.success) {
-      return { success: false, summary: 'Unable to initiate call right now. The team will follow up.' };
-    }
+    logOutboundOutcome({
+      event: 'maya_voice_call_placed',
+      outcome: 'success',
+      context: { visitor_id: visitorId, conversation_id: conversationId, call_id: callId },
+    });
+    await logAction(visitorId, conversationId, 'voice_call_initiated', 'completed', {
+      lead_id: lead?.id,
+      phone,
+      synthflow_response: true,
+    });
 
     // Tag + auto-enroll in Voice Call Requested campaign
     if (lead?.id) {
       addMayaInteractionTag(lead.id, 'maya_voice_call_requested').catch(() => {});
       routeLeadToCampaign(lead.id, 'voice_call', visitorId, conversationId).catch((err: any) => {
-        console.warn('[MayaTools] Voice call campaign enrollment failed:', err.message);
+        logOutboundOutcome({
+          event: 'maya_voice_campaign_enrollment_failed',
+          outcome: 'failure',
+          errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
+          context: { visitor_id: visitorId, lead_id: lead.id },
+        });
       });
     }
 
@@ -479,10 +641,20 @@ Your goal: Continue the conversation naturally, answer their questions about the
       details: { phone, lead_name: leadName },
     };
   } catch (err: any) {
-    await logAction(visitorId, conversationId, 'voice_call_initiated', 'failed', {
-      error: err.message,
+    // A throw here means the request did not complete, so no call was placed. The provider's own
+    // error text is NOT handed to the model: it can carry a URL, an id or an upstream payload,
+    // and the visitor-facing reply is the wrong place for any of them.
+    logOutboundOutcome({
+      event: 'maya_voice_call_threw',
+      outcome: 'failure',
+      errorClass: err instanceof Error ? err.constructor.name : 'UnknownError',
+      context: { visitor_id: visitorId, conversation_id: conversationId },
     });
-    return { success: false, summary: `Failed to initiate call: ${err.message}` };
+    await logAction(visitorId, conversationId, 'voice_call_initiated', 'failed', {
+      error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+      error: err?.message,
+    });
+    return { success: false, summary: VOICE_SKIP_SUMMARY_FALLBACK };
   }
 }
 
