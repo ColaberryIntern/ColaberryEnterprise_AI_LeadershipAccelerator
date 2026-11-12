@@ -26,6 +26,11 @@ function clean(over: Partial<ProposedGrant> = {}): ProposedGrant {
     approvers: [ALI],
     proposedBy: 'kalkidan@colaberry.com',
     registeredToolNames: ['send_email', 'draft_marketing_email', 'read_attachments'],
+    // Agent Tools Phase 4. The clean case now needs a capability that actually ASKS for the tool
+    // being granted, because `tool_not_required_by_capability` refuses one that does not. This
+    // is the positive control for that rule as much as for the others: if the clean case did not
+    // include `send_email` here, every refusal below would be passing for the wrong reason.
+    capabilityRequiredTools: ['send_email', 'read_attachments'],
     ...over,
   };
 }
@@ -137,6 +142,82 @@ describe('what is being granted', () => {
 
   it('REFUSES an agent id that matched nothing', () => {
     expect(rules(acceptToolGrant(clean({ agent: null })))).toContain('agent_not_found');
+  });
+});
+
+/**
+ * Agent Tools Phase 4 — the tie between the tool and the capability it is granted for.
+ *
+ * Before this rule, `capability_id` on a grant was decoration: a grant could name any confirmed
+ * capability while granting a tool that capability never asked for, and nothing noticed. That is
+ * the gap that made "every action is tied to a tool" unprovable, because the tie was recorded
+ * and never checked.
+ */
+describe('the tool must be one the capability actually requires', () => {
+  it('REFUSES a tool the capability does not list', () => {
+    expect(rules(acceptToolGrant(clean({ capabilityRequiredTools: ['read_attachments'] }))))
+      .toContain('tool_not_required_by_capability');
+  });
+
+  it('REFUSES when the capability requires no tools at all', () => {
+    // Distinct from "unreadable": an empty list is a capability that asks for nothing, which
+    // cannot justify a tool.
+    expect(rules(acceptToolGrant(clean({ capabilityRequiredTools: [] }))))
+      .toContain('tool_not_required_by_capability');
+  });
+
+  it('FAILS CLOSED when the required tools cannot be read', () => {
+    // "I could not check" is not "it is fine" — the same posture as tool_catalog_unreadable.
+    const out = rules(acceptToolGrant(clean({ capabilityRequiredTools: null })));
+    expect(out).toContain('capability_required_tools_unreadable');
+    expect(out).not.toContain('tool_not_required_by_capability');
+  });
+
+  it('ACCEPTS when the capability does require it — the positive control for this rule', () => {
+    const verdict = acceptToolGrant(clean({ capabilityRequiredTools: ['send_email', 'other'] }));
+    expect(verdict.ok).toBe(true);
+  });
+
+  it('tells the person what the capability DOES ask for, so the refusal is actionable', () => {
+    const verdict = acceptToolGrant(clean({ capabilityRequiredTools: ['read_attachments'] }));
+    expect(verdict.ok).toBe(false);
+    const detail = (verdict as { issues: Array<{ rule: string; detail: string }> }).issues
+      .find((i) => i.rule === 'tool_not_required_by_capability')!.detail;
+    expect(detail).toContain('read_attachments');
+    expect(detail).toContain('required_tools');
+  });
+
+  it('says so plainly when the capability lists nothing', () => {
+    const verdict = acceptToolGrant(clean({ capabilityRequiredTools: [] }));
+    const detail = (verdict as { issues: Array<{ rule: string; detail: string }> }).issues
+      .find((i) => i.rule === 'tool_not_required_by_capability')!.detail;
+    expect(detail).toContain('no required tools at all');
+  });
+
+  it('does NOT pile this rule on top of a capability that was already refused', () => {
+    // Telling somebody their tool is not required by a capability that was rejected is noise on
+    // top of the real refusal, and a refusal list that cries wolf gets skimmed.
+    const out = rules(acceptToolGrant(clean({
+      capabilityState: 'rejected',
+      capabilityRequiredTools: ['read_attachments'],
+    })));
+    expect(out).toContain('capability_rejected');
+    expect(out).not.toContain('tool_not_required_by_capability');
+  });
+
+  it('does NOT pile this rule on top of a missing capability id', () => {
+    const out = rules(acceptToolGrant(clean({ capabilityId: '', capabilityRequiredTools: null })));
+    expect(out).toContain('capability_id_missing');
+    expect(out).not.toContain('capability_required_tools_unreadable');
+  });
+
+  it('does NOT pile this rule on top of an unregistered tool', () => {
+    const out = rules(acceptToolGrant(clean({
+      toolName: 'not_a_real_tool',
+      capabilityRequiredTools: ['send_email'],
+    })));
+    expect(out).toContain('tool_not_registered');
+    expect(out).not.toContain('tool_not_required_by_capability');
   });
 });
 
