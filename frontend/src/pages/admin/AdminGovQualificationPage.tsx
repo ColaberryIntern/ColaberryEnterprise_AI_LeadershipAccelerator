@@ -20,6 +20,7 @@ import { parseDeadline, countdownTo, deadlineTone, formatCountdown, dossierDeadl
 import { deriveNextStep } from './govNextStep';
 import { BidDecisionDashboard } from './govWorkspace/BidDecisionDashboard';
 import AiVettingCard from './govWorkspace/AiVettingCard';
+import GovProposalSourcesPanel from './govWorkspace/GovProposalSourcesPanel';
 import { buildCandidateRows } from './govWorkspace/candidateRows';
 import { ProposalSummaryPanel } from './govWorkspace/ProposalSummaryPanel';
 import { ClarificationDraftPanel } from './govWorkspace/ClarificationDraftPanel';
@@ -1952,6 +1953,12 @@ export default function AdminGovQualificationPage(): React.ReactElement {
                 </>
               )}
             </SectionCard>
+          )}
+
+          {/* P-SRC (P3): upload reference documents the proposal agent can retrieve from. Needs the delivery project id,
+              which exists once the pursuit is approved into a project (same gate the authoring controls use). */}
+          {ws.build?.deliveryProjectId && (
+            <GovProposalSourcesPanel projectId={ws.build.deliveryProjectId} />
           )}
 
           </GovTabPanel>{/* end Proposal */}
