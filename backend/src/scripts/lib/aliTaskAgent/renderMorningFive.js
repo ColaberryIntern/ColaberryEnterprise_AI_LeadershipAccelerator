@@ -142,6 +142,19 @@ function listCard(l, i) {
 </td></tr>`;
 }
 
+/**
+ * What the live Basecamp check found, said plainly. An unchecked link is admitted, not hidden.
+ * @param {{deadLists:number, deadTodos:number, unchecked:number}} v
+ */
+function verifyLine(v) {
+  const dropped = [];
+  if (v.deadLists) dropped.push(`${v.deadLists} list${v.deadLists === 1 ? '' : 's'}`);
+  if (v.deadTodos) dropped.push(`${v.deadTodos} to-do${v.deadTodos === 1 ? '' : 's'}`);
+  const head = `Every list and to-do linked above was checked live in Basecamp as this was built${dropped.length
+    ? `; ${dropped.join(' and ')} that the mirror still shows as open were trashed, archived or completed in Basecamp, and were left out` : ''}.`;
+  return v.unchecked ? `${head} ${v.unchecked} could not be checked (Basecamp did not answer) and were kept.` : head;
+}
+
 function moveBlock(move, prompt) {
   if (move.kind === 'none') {
     return `<p style="font:14px/1.6 ${FONT};color:${C.ink2}">${esc(move.why)}</p>`;
@@ -202,6 +215,7 @@ ${lists.map(listCard).join('')}` : ''}
   ${LW.dormantPileAt} or more of its tasks are dormant. At most two lists from one project.<br><br>` : ''}
   Today: ${c.tasks} active tasks, ${c.live} live, ${c.dormant} dormant${c.claimed ? `, ${c.claimed} held by another session and left out` : ''}.
   ${input.boardNote ? esc(input.boardNote) : ''}<br>
+  ${input.verify ? `${esc(verifyLine(input.verify))}<br>` : ''}
   Read-only: nothing was changed in Basecamp to make this. ${esc(input.runId || '')}
 </td></tr>
 </table></td></tr></table>

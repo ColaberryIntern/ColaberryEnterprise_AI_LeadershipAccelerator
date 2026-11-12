@@ -24,11 +24,12 @@ const libDir = fs.existsSync(path.join(__dirname, 'pressingFive.js'))
 const lib = (m) => require(path.join(libDir, m));
 const { partition, bandFor } = lib('ageBands');
 const { buildWorkOrder, renderWorkOrderText } = lib('workOrder');
-const { byList, looksGenerated } = lib('listLens');
+const { looksGenerated } = lib('listLens');
 const { categoryOf } = lib('listCategories');
-const { pickFive, pickOneMove } = lib('pressingFive');
-const { pickFiveLists, proposalFor } = lib('pressingLists');
-const { listUrl } = lib('listMeta');
+const { pickOneMove } = lib('pressingFive');
+const { proposalFor } = lib('pressingLists');
+const { verifiedPicks } = lib('verifiedPicks');
+const { listUrl, fetchListMeta, fetchTodoState } = lib('listMeta');
 const { buildTaskPrompt, buildListPrompt } = lib('promptBuilder');
 const { renderMorningFive } = lib('renderMorningFive');
 
@@ -83,18 +84,33 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
     log({ level: 'warn', event: 'claims_unavailable', error_class: (e && e.name) || 'Error' });
   }
 
-  const { picks, qualified, scored } = pickFive(orders, now);
-
-  // List summaries over EVERY task, for the "decide a whole list" candidate.
-  const lists = byList(rows.map((r) => ({
+  // Task views over EVERY task, for the list summaries ("decide a whole list" and the five lists).
+  const views = rows.map((r) => ({
     id: `${r.project_id}/${r.bc_id}`, projectId: String(r.project_id), listId: r.todolist_id ? String(r.todolist_id) : null,
     title: r.title, list: r.todolist_name || '(no list)', dueOn: r.due_on, band: bandFor(r.due_on, now).key, // bandFor's dormant line is fixed at 60 days, matching --days' default
     generated: looksGenerated({ title: r.title, description: r.description }),
     humanOnly: String(r.description || '').includes('\u{1F9D1}'),
-  })));
+  }));
+
+  // Pick from what is STILL LIVE in Basecamp (Ali, 2026-11-12: links opened trashed lists).
+  // Read-only GETs; with no token every check is "unchecked" and the report says so.
+  let token = null;
+  try {
+    const { refreshBcToken } = require('/app/dist/services/ops/basecampToken');
+    token = await refreshBcToken();
+  } catch (e) {
+    log({ level: 'warn', event: 'bc_token_unavailable', error_class: (e && e.name) || 'Error' });
+  }
+  const bcOpts = { token, fetchImpl: typeof fetch === 'function' ? fetch : null, accountId: process.env.BASECAMP_ACCOUNT_ID || '3945211' };
+  const v = await verifiedPicks({ orders, views, now,
+    checkLists: (ls) => fetchListMeta(ls, bcOpts), checkTodos: (ts) => fetchTodoState(ts, bcOpts) });
+  const { picks, qualified, listPick } = v;
+  const lists = v.summaries;
+  const verify = { deadLists: v.deadLists.size, deadTodos: v.deadTodos.size, unchecked: v.unchecked, rounds: v.rounds };
+  log({ level: 'info', event: 'links_verified', ...verify,
+    dead: [...v.deadLists.entries(), ...v.deadTodos.entries()].slice(0, 20) });
 
   // The five LISTS (Ali, 2026-11-12), ranked from the same task scores as the five tasks.
-  const listPick = pickFiveLists(scored, lists);
   const fiveLists = listPick.picks.map((l) => {
     const cat = categoryOf(l.key, l.projectId);
     return { key: l.key, url: l.listId && l.projectId ? listUrl(l.projectId, l.listId) : null,
@@ -117,6 +133,7 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
     today: now, runId: `MORNING-FIVE-${now.toISOString().slice(0, 10)}`, picks, lists: fiveLists, move, movePrompt,
     counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length,
       listsQualified: listPick.qualified },
+    verify,
     boardNote: BOARD_NOTE,
   });
   fs.writeFileSync(OUT, html, 'utf8');
@@ -124,6 +141,7 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
     fs.writeFileSync(JSON_OUT, JSON.stringify({
       generatedAt: new Date().toISOString(), // the real clock; `now` is the Central reading day
       counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length },
+      verify,
       move: { kind: move.kind, rule: move.rule, why: move.why,
         title: move.kind === 'task' ? move.item.title : move.kind === 'list' ? `Decide the list "${move.list.key}"` : null },
       movePrompt,
