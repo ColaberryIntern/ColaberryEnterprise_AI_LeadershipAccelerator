@@ -60,6 +60,7 @@ import { registerExplorerNightlySequence } from './scheduling/explorerNightlySeq
 import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { registerAdSpendCrons } from './scheduling/adSpendCrons';
 import { registerChatConversationCrons } from './scheduling/chatConversationCrons';
+import { registerVisitorGeoCrons } from './scheduling/visitorGeoCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
   isWithinSendWindow,
@@ -1907,6 +1908,11 @@ export function startScheduler(): void {
   // had never run in production: 145 conversations all left 'active', and conversation_count 0 on
   // every admissions_memory row as a result. See chatConversationCrons.ts.
   registerChatConversationCrons();
+  // Daily visitor geo-IP enrichment (GEO-1). The backfill was run by hand on 2026-11-11 and made
+  // the snack bar render for the first time; the feed only looks back 72 hours, so without this
+  // the bar goes dark again within about three days. Spawns the script as a child process on
+  // purpose - see visitorGeoCrons.ts for why the 50MB reader must not live in this process.
+  registerVisitorGeoCrons();
 
   // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
   // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
