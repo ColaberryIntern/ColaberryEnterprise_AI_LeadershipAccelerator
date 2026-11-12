@@ -60,6 +60,24 @@ import { isKillSwitchActiveStrict } from './launchSafety';
  * | sendInAppWelcome     | journeyExecution | inAppNudge    | same channel, different trigger                  |
  * | createJourneyHandoff | journeyHandoffs  | -             | the existing handoff capability IS this action   |
  * | readPerson360        | journeyDecisions | -             | see the caveat below                             |
+ * | sendEmail            | journeyExecution | -             | leaves the platform; see the note below          |
+ *
+ * `sendEmail` HAS NO EXPLORER GATE, AND THAT IS DELIBERATE (MR2). Every other
+ * outbound capability pairs `journeyExecution` with the Explorer flag for the
+ * channel it uses, because `inAppNudge` gates the in-product surface. Email has
+ * no such flag: the Explorer feature union is `signalIngest`,
+ * `journeyIntelligence`, `journeyGovernor`, `draftRender`, `commercial`,
+ * `aliOutreach`, `sms`, `autoDial`, `inAppNudge`, `aiRanking` - and none of them
+ * is an email channel. `draftRender` gates RENDERING a draft, not sending one,
+ * and borrowing it would make the gate read as something it is not.
+ *
+ * So the gate is `journeyExecution` alone, which the flags module itself calls
+ * the only flag that can cause a person to be contacted. Fewer gates is the
+ * uncomfortable direction here, so it is worth being explicit about what still
+ * stands between this capability and a real inbox: the promotion record (absent
+ * in production), `journeyExecution` (unset), Maya's agent row (`enabled=false`),
+ * her `send_email` grant (deliberately absent), a brand scope, and
+ * `evaluateSend`. This flag is one of six, not the only one.
  *
  * `readPerson360` IS THE ONE TO SANITY-CHECK. M34 calls Person 360 "her eyes",
  * and reading is not acting, so gating it on `journeyDecisions` is a judgement:
@@ -75,7 +93,8 @@ export type MayaCapability =
   | 'respondToExplorerDm'
   | 'sendInAppWelcome'
   | 'createJourneyHandoff'
-  | 'readPerson360';
+  | 'readPerson360'
+  | 'sendEmail';
 
 /**
  * Why a capability is off, or that it is on. A bare boolean would make an
@@ -109,6 +128,7 @@ export const MAYA_CAPABILITY_GATES: Readonly<Record<MayaCapability, CapabilityGa
   sendInAppWelcome: { growth: 'journeyExecution', explorer: 'inAppNudge' },
   createJourneyHandoff: { growth: 'journeyHandoffs' },
   readPerson360: { growth: 'journeyDecisions' },
+  sendEmail: { growth: 'journeyExecution' },
 });
 
 export const MAYA_CAPABILITIES = Object.freeze(

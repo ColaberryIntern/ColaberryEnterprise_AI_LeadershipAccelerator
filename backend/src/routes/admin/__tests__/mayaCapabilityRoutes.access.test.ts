@@ -65,8 +65,29 @@ describe('POST promote', () => {
     expect(mockPromote).not.toHaveBeenCalled();
   });
   it('400 for an unknown capability', async () => {
-    const res = await request(app()).post('/api/admin/maya/capabilities/sendEmail/promote').set('Authorization', ALI).send({ review_note: 'ok to go' });
+    // This used to probe `sendEmail`, which did not exist. MR2 added it, so the probe moved to a
+    // name nothing will ever register - otherwise the next capability to ship silently turns this
+    // assertion into a test of its own existence rather than of the unknown-name rejection.
+    const res = await request(app()).post('/api/admin/maya/capabilities/notACapability/promote').set('Authorization', ALI).send({ review_note: 'ok to go' });
     expect(res.status).toBe(400);
+    expect(mockPromote).not.toHaveBeenCalled();
+  });
+  it('200 for sendEmail, because MR2 registered it as a real capability', async () => {
+    // The inverse of the assertion above, and the reason it had to move: before MR2 this route
+    // rejected `sendEmail` as unknown. That rejection WAS the proof the capability was missing,
+    // so turning it into a 200 is the proof it now exists and is promotable through the same
+    // reviewed path as every other one. Promotion still requires Ali or a super_admin, still
+    // requires a note, and still leaves the capability in shadow until the M29 flags are on.
+    const res = await request(app()).post('/api/admin/maya/capabilities/sendEmail/promote').set('Authorization', ALI).send({ review_note: 'Reviewed the shadow drafts' });
+    expect(res.status).toBe(200);
+    expect(mockPromote).toHaveBeenCalledWith('sendEmail', { reviewerId: 'ali@colaberry.com', reviewNote: 'Reviewed the shadow drafts' });
+  });
+  it('403 for sendEmail when the admin is not Ali or a super_admin', async () => {
+    // The new capability is the one that can reach a stranger's inbox, so it must not be
+    // promotable by any admin who happens to be signed in.
+    const res = await request(app()).post('/api/admin/maya/capabilities/sendEmail/promote').set('Authorization', OTHER_ADMIN).send({ review_note: 'ok to go' });
+    expect(res.status).toBe(403);
+    expect(mockPromote).not.toHaveBeenCalled();
   });
   it('200 for Ali; the reviewer is the token identity, never a body field', async () => {
     const res = await request(app()).post(url).set('Authorization', ALI).send({ review_note: 'Reviewed it', reviewerId: 'someone-else' });

@@ -41,6 +41,7 @@ describe('resolveMayaMode defaults (Q2: A)', () => {
     expect(modes.sendInAppWelcome).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
     expect(modes.createJourneyHandoff).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
     expect(modes.readPerson360).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
+    expect(modes.sendEmail).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
     expect(DEFAULT_STATES.respondToExplorerDm).toBe('live');
   });
 
@@ -133,6 +134,76 @@ describe('promote, verify, revert, verify again', () => {
     const again = await promoteMayaCapability('createJourneyHandoff', review, t.deps);
     expect(again.changed).toBe(false);
     expect(t.writes).toHaveLength(1);
+  });
+});
+
+describe('sendEmail (MR2): the capability that leaves the platform', () => {
+  // sendEmail is the first Maya capability whose action reaches somebody outside the product, so
+  // the question these tests answer is not "can it be promoted" but "how many independent things
+  // must be true before it can send". The answer must be more than one.
+
+  it('defaults to shadow, because nothing has ever sent an email as Maya', () => {
+    expect(DEFAULT_STATES.sendEmail).toBe('shadow');
+  });
+
+  it('a promotion ALONE does not make it live: M29 still has to agree', async () => {
+    // This is the load-bearing one. Promoting is a recorded human decision, and it is still not
+    // sufficient - GROWTH_JOURNEY_EXECUTION_ENABLED is a separate switch with a separate owner.
+    // If this test ever passes with mode 'live', one signature has become enough to mail a
+    // stranger.
+    const t = harness({ m29On: false });
+    await promoteMayaCapability('sendEmail', review, t.deps);
+    const mode = await resolveMayaMode('sendEmail', t.deps);
+    expect(mode.mode).toBe('shadow');
+    expect(mode.reason).toBe('m29:growth_flag_off:journeyExecution');
+  });
+
+  it('goes live only when BOTH the promotion and the execution flag are in place', async () => {
+    const t = harness({ m29On: true });
+    await promoteMayaCapability('sendEmail', review, t.deps);
+    expect(await resolveMayaMode('sendEmail', t.deps)).toMatchObject({ mode: 'live', reason: 'promoted' });
+  });
+
+  it('the kill switch beats a promotion and the flag together', async () => {
+    const t = harness({ m29On: true, killSwitchActive: async () => true });
+    await promoteMayaCapability('sendEmail', review, harness({ m29On: true }).deps);
+    expect(await resolveMayaMode('sendEmail', t.deps)).toMatchObject({ mode: 'off', reason: 'kill_switch' });
+  });
+
+  it('an unreadable kill switch turns it off rather than giving it the benefit of the doubt', async () => {
+    const t = harness({ m29On: true, killSwitchActive: async () => { throw new Error('settings down'); } });
+    expect(await resolveMayaMode('sendEmail', t.deps)).toMatchObject({ mode: 'off', reason: 'kill_switch_unreadable' });
+  });
+
+  it('cannot be promoted without a reviewer and a note', async () => {
+    const t = harness({ m29On: true });
+    await expect(promoteMayaCapability('sendEmail', { reviewerId: '', reviewNote: 'ok' }, t.deps))
+      .rejects.toThrow(PromotionReviewError);
+    await expect(promoteMayaCapability('sendEmail', { reviewerId: 'ali@colaberry.com', reviewNote: 'x' }, t.deps))
+      .rejects.toThrow(PromotionReviewError);
+    expect(t.writes).toHaveLength(0);
+  });
+
+  it('reverting it returns it to shadow and records who and why', async () => {
+    const t = harness({ m29On: true });
+    await promoteMayaCapability('sendEmail', review, t.deps);
+    expect(await revertMayaCapability('sendEmail', { reviewerId: 'ops@colaberry.com', reviewNote: 'Pausing email' }, t.deps))
+      .toMatchObject({ capability: 'sendEmail', state: 'shadow', changed: true });
+    expect(await resolveMayaMode('sendEmail', t.deps)).toMatchObject({ mode: 'shadow' });
+    const last = t.writes[t.writes.length - 1];
+    expect(last.history[last.history.length - 1]).toMatchObject({
+      capability: 'sendEmail', action: 'revert', by: 'ops@colaberry.com', note: 'Pausing email',
+    });
+  });
+
+  it('promoting it does not promote anything else', async () => {
+    const t = harness({ m29On: true });
+    await promoteMayaCapability('sendEmail', review, t.deps);
+    const modes = Object.fromEntries((await resolveAllMayaModes(t.deps)).map((m) => [m.capability, m]));
+    expect(modes.sendEmail.mode).toBe('live');
+    expect(modes.sendInAppWelcome.mode).toBe('shadow');
+    expect(modes.createJourneyHandoff.mode).toBe('shadow');
+    expect(modes.readPerson360.mode).toBe('shadow');
   });
 });
 
