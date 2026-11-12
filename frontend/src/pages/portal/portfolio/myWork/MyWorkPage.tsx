@@ -31,6 +31,7 @@ export function WorkCard({ it }: { it: WorkItem }): React.ReactElement {
         <span className="mw-card-title">{it.title || 'Untitled piece'}</span>
         <span className="mw-card-meta">{shortDate(it.createdAt)} · {it.from}</span>
         {it.featured && <span className="mw-feat">★ Featured</span>}
+        {it.shared && <span className="mw-shared">Shared with cohort</span>}
         {it.skills.length > 0 && (
           <span className="mw-tags">{it.skills.slice(0, 2).map((sk) => <span key={sk} className="mw-tag">{skillLabel(sk)}</span>)}</span>
         )}

@@ -12,6 +12,7 @@ import {
 import { handleListPostConsent, handleSetPostConsent } from '../controllers/postConsentController';
 import { handleGetMyHireSettings, handleSetMyAvailability } from '../controllers/hireListingController';
 import myWorkRoutes from './myWorkRoutes';
+import cohortShowcaseRoutes from './cohortShowcaseRoutes';
 
 /**
  * Living Career Portfolio — the private Career Studio at /portal/portfolio.
@@ -136,5 +137,7 @@ router.put(
 // My work (C128): the learner's own pieces and each piece's viewer, under /api/portal/career/work. Its own router
 // file; the same two gates are applied per route inside it.
 router.use(myWorkRoutes);
+// The Showcase (C138): classmates' shared work, own cohort only, under /api/portal/career/showcase. Same two gates, inside it.
+router.use(cohortShowcaseRoutes);
 
 export default router;

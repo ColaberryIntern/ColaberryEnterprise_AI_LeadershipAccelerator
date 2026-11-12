@@ -95,7 +95,7 @@ const WorkPiecePage: React.FC = () => {
               <dt>Status</dt><dd>{piece.state}</dd>
             </dl>
           </div>
-          <FeatureCard key={piece.id} id={piece.id} initial={piece.feature ?? { featured: false, onPublicPage: false }} />
+          <FeatureCard key={piece.id} id={piece.id} initial={piece.feature ?? { featured: false, onPublicPage: false }} initialShare={piece.share ?? { shared: false }} />
           {sameWeek.length > 0 && (
             <div className="cp-card">
               <h2>Same week</h2>
