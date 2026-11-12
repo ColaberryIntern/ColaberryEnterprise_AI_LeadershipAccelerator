@@ -18,7 +18,10 @@ import { AI_DISCLOSURE } from '../mayaDisclosure';
  */
 
 const NOW = new Date('2026-11-09T15:00:00Z');
-const NEW_EXPLORER = { id: 'enr-1', enrollment_type: 'explorer', full_name: 'Sam Rivera', created_at: new Date('2026-11-09T14:00:00Z') };
+const NEW_EXPLORER = {
+  id: 'enr-1', enrollment_type: 'explorer', full_name: 'Sam Rivera',
+  email: 'sam.rivera@gmail.com', created_at: new Date('2026-11-09T14:00:00Z'),
+};
 
 function harness(mode: 'off' | 'shadow' | 'live', over: Partial<MayaWelcomeDeps> = {}) {
   const ledger = new Map<string, { mode: string; body: string; delivered: boolean }>();
@@ -117,6 +120,55 @@ describe('who is welcomed', () => {
   it('a throwing dependency is an outcome, never an exception (signup must not break)', async () => {
     const h = harness('shadow', { findEnrollment: async () => { throw new Error('db down'); } });
     await expect(maybeSendMayaWelcome('enr-1', h.deps)).resolves.toEqual({ outcome: 'error' });
+  });
+});
+
+describe('synthetic accounts are not people (MR4)', () => {
+  /**
+   * An end-to-end job creates one fixture enrollment every day at 13:30 UTC. Three of the
+   * first 13 ledger rows were for it, and the composed body read "Welcome to Colaberry,
+   * Points." The exclusion is by reserved domain rather than by name, so the next probe,
+   * which will have a different name, is excluded too.
+   */
+  const withEmail = (email: string | null) =>
+    harness('live', { findEnrollment: async () => ({ ...NEW_EXPLORER, email }) });
+
+  it.each([
+    ['the daily smoke fixture', 'e2e-points-1794490203287@colaberry-test.local'],
+    ['a probe on a reserved TLD', 'c107-probe-1793879440303@colaberry-test.local'],
+    ['a .test domain', 'someone@colaberry.test'],
+    ['a .example domain', 'aisha.patel@northwind-demo.example'],
+    ['a documentation domain', 'closecheck-1783337300@example.com'],
+  ])('skips %s, and sends nothing', async (_label, email) => {
+    const h = withEmail(email);
+    expect(await maybeSendMayaWelcome('enr-1', h.deps)).toMatchObject({ outcome: 'not_routable' });
+    expect(h.sendDm).not.toHaveBeenCalled();
+  });
+
+  it('leaves NO ledger row for a fixture, so a probe is not mistaken for a suppressed greeting', async () => {
+    const h = withEmail('e2e-points-1794490203287@colaberry-test.local');
+    await maybeSendMayaWelcome('enr-1', h.deps);
+    expect(h.ledger.size).toBe(0);
+  });
+
+  it('still welcomes a real person whose address merely contains "test"', async () => {
+    // 84 explorer rows contain that substring and most are real people. Matching it would
+    // silence Maya for real prospects, which is the worse failure.
+    const h = withEmail('testa.ngozi@gmail.com');
+    expect(await maybeSendMayaWelcome('enr-1', h.deps)).toMatchObject({ outcome: 'sent' });
+    expect(h.sendDm).toHaveBeenCalledTimes(1);
+  });
+
+  it('still welcomes someone whose company domain starts with "test"', async () => {
+    const h = withEmail('dana@testingtechnologies.com');
+    expect(await maybeSendMayaWelcome('enr-1', h.deps)).toMatchObject({ outcome: 'sent' });
+  });
+
+  it('does not skip an enrollment that simply has no address on file', async () => {
+    // "No address" is a different problem from "test account". Treating it as non-routable
+    // would silently drop a real person.
+    const h = withEmail(null);
+    expect(await maybeSendMayaWelcome('enr-1', h.deps)).toMatchObject({ outcome: 'sent' });
   });
 });
 

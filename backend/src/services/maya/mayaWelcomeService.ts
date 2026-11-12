@@ -3,6 +3,7 @@ import { sequelize } from '../../config/database';
 import { classifyError } from '../../utils/errorClassifier';
 import { resolveMayaMode, type MayaModeAnswer } from './mayaPromotion';
 import { AI_DISCLOSURE } from './mayaDisclosure';
+import { isNonRoutableAddress } from '../email/reservedDomains';
 
 /**
  * M32 - send_in_app_welcome: the first thing Maya would ever send a person unprompted. SHADOW FIRST.
@@ -29,7 +30,7 @@ import { AI_DISCLOSURE } from './mayaDisclosure';
  */
 
 export type MayaWelcomeOutcome =
-  | 'off' | 'not_found' | 'not_explorer' | 'not_new' | 'already_recorded' | 'recorded_shadow' | 'sent' | 'send_failed' | 'error';
+  | 'off' | 'not_found' | 'not_explorer' | 'not_routable' | 'not_new' | 'already_recorded' | 'recorded_shadow' | 'sent' | 'send_failed' | 'error';
 
 export interface MayaWelcomeResult { outcome: MayaWelcomeOutcome; mode?: MayaModeAnswer['mode'] }
 
@@ -43,7 +44,14 @@ export function mayaWelcomeMessage(firstName: string): string {
     + 'Just reply here.';
 }
 
-export interface EnrollmentFacts { id: string; enrollment_type: string | null; full_name: string | null; created_at: Date | string }
+export interface EnrollmentFacts {
+  id: string;
+  enrollment_type: string | null;
+  full_name: string | null;
+  /** Read only to decide whether this address could reach anybody. Never messaged. */
+  email: string | null;
+  created_at: Date | string;
+}
 
 export interface MayaWelcomeDeps {
   mode: () => Promise<MayaModeAnswer>;
@@ -81,12 +89,22 @@ export function ensureMayaWelcomeTable(): Promise<void> {
 /** Test-only: forget the memoized table check. */
 export function __resetMayaWelcomeTableForTests(): void { tableReady = null; }
 
+/**
+ * Test-only: the real dependency set, so the delivery glue can be covered.
+ *
+ * `maybeSendMayaWelcome` takes its deps as an argument, which makes the service logic easy
+ * to test and left the REAL `sendDm` with no coverage at all: every existing test passes a
+ * stub. This exposes the genuine wiring (getMayaEnrollmentId -> openDm -> sendDmMessage)
+ * without widening the production surface, since nothing else calls it.
+ */
+export function __mayaWelcomeDepsForTests(): MayaWelcomeDeps { return defaultDeps(); }
+
 function defaultDeps(): MayaWelcomeDeps {
   return {
     mode: () => resolveMayaMode('sendInAppWelcome'),
     findEnrollment: async (id) => {
       const rows = await sequelize.query<EnrollmentFacts>(
-        'SELECT id, enrollment_type, full_name, created_at FROM enrollments WHERE id = :id LIMIT 1',
+        'SELECT id, enrollment_type, full_name, email, created_at FROM enrollments WHERE id = :id LIMIT 1',
         { type: QueryTypes.SELECT, replacements: { id } },
       );
       return rows[0] ?? null;
@@ -143,6 +161,10 @@ export async function maybeSendMayaWelcome(enrollmentId: string, deps: MayaWelco
     const e = await deps.findEnrollment(enrollmentId);
     if (!e) return { outcome: 'not_found', mode: mode.mode };
     if (e.enrollment_type !== 'explorer') return { outcome: 'not_explorer', mode: mode.mode };
+    // Synthetic fixtures are not people. Checked BEFORE the ledger claim, so a probe leaves
+    // no row at all rather than a row that looks like a suppressed greeting. An end-to-end
+    // job creates one of these every day, and three of the first 13 ledger rows were for it.
+    if (isNonRoutableAddress(e.email)) return { outcome: 'not_routable', mode: mode.mode };
     if (deps.now().getTime() - new Date(e.created_at).getTime() > NEW_ENROLLMENT_WINDOW_MS) return { outcome: 'not_new', mode: mode.mode };
 
     await deps.ensureTable();
