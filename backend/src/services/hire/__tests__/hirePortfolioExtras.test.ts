@@ -47,6 +47,16 @@ it('adds the intro, the order (published slugs only) and the booking, read for t
   expect(JSON.stringify(out)).not.toMatch(/@|work_?auth/i);
 });
 
+it('leads with the candidate\'s starred case study, and falls back to the featured pick without an order', async () => {
+  const featured = { ...ENTRY, cases: [{ ...card('a'), featured: true }, card('b')] };
+  m(loadHireIndex).mockResolvedValue([featured]);
+  expect((await getHirePortfolio('ann-lee'))?.hire.signature?.slug).toBe('b'); // order ['b','gone','a']
+  m(readCaseStudyOrder).mockResolvedValue(['gone']);
+  expect((await getHirePortfolio('ann-lee'))?.hire.signature?.slug).toBe('a');
+  m(readCaseStudyOrder).mockResolvedValue([]);
+  expect((await getHirePortfolio('ann-lee'))?.hire.signature?.slug).toBe('a');
+});
+
 it('renders the profile as before when an extra cannot be read (logged, never a 500)', async () => {
   m(readPublicIntro).mockRejectedValue(new Error('relation "hire_profile_intro" does not exist'));
   m(bookingSummary).mockRejectedValue(new Error('timeout'));

@@ -40,13 +40,25 @@ function issues(err: ZodError): string {
 }
 
 /** The learner's published Hire case-study slugs: what their carousel may be ordered from. */
-async function myPublishedSlugs(enrollmentId: string): Promise<string[]> {
+interface MyHireCases {
+  /** Their Hire address, when the profile is reachable there (for "Preview my public profile"). */
+  readonly talentSlug: string | null;
+  readonly cases: readonly { readonly slug: string; readonly title: string; readonly coverImageUrl: string | null }[];
+}
+
+async function myHireCases(enrollmentId: string): Promise<MyHireCases> {
   const [rows] = await sequelize.query('SELECT slug FROM career_portfolio_pages WHERE enrollment_id = $1 LIMIT 1', { bind: [enrollmentId] });
   const slug = Array.isArray(rows) && rows[0] ? String((rows[0] as { slug: unknown }).slug || '') : '';
-  if (!slug) return [];
+  if (!slug) return { talentSlug: null, cases: [] };
   const [entry] = await loadHireIndex(['public', 'unlisted'], slug);
-  return entry ? entry.cases.map((c) => c.slug) : [];
+  if (!entry) return { talentSlug: null, cases: [] };
+  return {
+    talentSlug: entry.page.slug,
+    cases: entry.cases.map((c) => ({ slug: c.slug, title: c.title, coverImageUrl: c.look?.coverImageUrl ?? null })),
+  };
 }
+
+const myPublishedSlugs = async (enrollmentId: string) => (await myHireCases(enrollmentId)).cases.map((c) => c.slug);
 
 export async function handleGetHireIntro(req: Request, res: Response, next: NextFunction): Promise<void> {
   try { res.json({ ok: true, intro: await readHireIntro(eid(req)) }); } catch (e) { fail(res, e, next); }
@@ -70,8 +82,9 @@ export async function handlePutInterviewAvailability(req: Request, res: Response
 
 export async function handleGetCaseStudyOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const [slugs, published] = await Promise.all([readCaseStudyOrder(eid(req)), myPublishedSlugs(eid(req))]);
-    res.json({ ok: true, slugs: slugs.filter((s) => published.includes(s)), published });
+    const [slugs, mine] = await Promise.all([readCaseStudyOrder(eid(req)), myHireCases(eid(req))]);
+    const published = mine.cases.map((c) => c.slug);
+    res.json({ ok: true, slugs: slugs.filter((s) => published.includes(s)), published, cases: mine.cases, talentSlug: mine.talentSlug });
   } catch (e) { fail(res, e, next); }
 }
 

@@ -10,7 +10,7 @@ import CapabilityList from './CapabilityList';
 import BuildsSection from './BuildsSection';
 import PublishingPanel from './PublishingPanel';
 import PortfolioAddressPanel from './PortfolioAddressPanel';
-import HireAvailabilityPanel from './HireAvailabilityPanel';
+import HireStudio from './hire/HireStudio';
 import PostConsentPanel from './PostConsentPanel';
 import './PortfolioPage.css';
 
@@ -32,12 +32,13 @@ import './PortfolioPage.css';
  * evidence from the students who had the most of it. See BaselineBanner.
  */
 
-type Tab = 'overview' | 'capabilities' | 'builds' | 'publishing';
+type Tab = 'overview' | 'capabilities' | 'builds' | 'hire' | 'publishing';
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'overview', label: 'Overview' },
   { key: 'capabilities', label: 'Capabilities' },
   { key: 'builds', label: 'Builds' },
+  { key: 'hire', label: 'Hire profile' },
   { key: 'publishing', label: 'Publishing' },
 ];
 
@@ -201,13 +202,15 @@ const PortfolioPage: React.FC = () => {
             github={profile.github}
           />
         )}
+        {/* hire.refactored.ai: the candidate's own words, interview times, case-study order and
+            interview requests. Availability moved here from Publishing (kit §3: fold it into Overview). */}
+        {tab === 'hire' && <HireStudio profile={profile} onJumpTab={setTab} />}
         {/* Two separate things under one tab: the person-level page at /u/:slug, and
             the individual record at /p/:slug. Separate approvals, separate audiences;
             revoking one must not revoke the other. */}
         {tab === 'publishing' && (
           <>
             <PortfolioAddressPanel />
-            <HireAvailabilityPanel />
             <PostConsentPanel />
             <PublishingPanel />
           </>
