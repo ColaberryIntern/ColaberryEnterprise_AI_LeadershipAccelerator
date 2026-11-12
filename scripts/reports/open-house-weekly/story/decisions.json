@@ -26,7 +26,11 @@
       "kind": "hypothesis",
       "title": "The avatar video gets at least 20% of the people who press play to watch 75%",
       "detail": "Baseline with the old YouTube video: 7 of 51 brand-new sign-ups finished (14%). First 27.8 hours with the new one: 2 of 10 (20%), too few to call. 8 of the 9 who quit left within 18 seconds.",
-      "test": { "metric": "finish", "op": ">=", "value": 20 },
+      "test": {
+        "metric": "finish",
+        "op": ">=",
+        "value": 20
+      },
       "status": "open"
     },
     {
@@ -51,7 +55,11 @@
       "date": "2026-11-10 15:10",
       "kind": "hypothesis",
       "title": "Asking for an Open House seat converts at least 20% of landing page visitors",
-      "test": { "metric": "signup", "op": ">=", "value": 20 },
+      "test": {
+        "metric": "signup",
+        "op": ">=",
+        "value": 20
+      },
       "status": "open"
     },
     {
@@ -80,7 +88,11 @@
       "kind": "hypothesis",
       "title": "With the button, at least 70% of brand-new accounts go in",
       "detail": "Before the button: 0 of 5. Note that this week's window still includes sign-ups from before 7:20 AM on 11 Nov, who never saw the button.",
-      "test": { "metric": "enter", "op": ">=", "value": 70 },
+      "test": {
+        "metric": "enter",
+        "op": ">=",
+        "value": 70
+      },
       "status": "open"
     },
     {
@@ -106,7 +118,11 @@
       "kind": "hypothesis",
       "title": "Once the page makes play the obvious next step on a phone, at least half of the people who reach the welcome video press play",
       "detail": "4 brand-new accounts, all on phones, opened the welcome video card within 4 seconds of signing up and sent no watch beat at all. A later phone learner played to 97% and was recorded, so phone beats work: these 4 most likely never pressed play.",
-      "test": { "metric": "play", "op": ">=", "value": 50 },
+      "test": {
+        "metric": "play",
+        "op": ">=",
+        "value": 50
+      },
       "status": "proposed"
     },
     {
@@ -116,6 +132,14 @@
       "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10500110271",
       "title": "C124: one starred move a week, emailed Wednesdays 8 AM CT to Taiwo, Sohail and Ali",
       "detail": "The report now names the single move with the greatest impact and attaches a prompt that makes it. Every move made is added to this ledger with the hypothesis it tests, so the next report grades it."
+    },
+    {
+      "id": "M-2026-11-12-credit",
+      "date": "2026-11-12 07:00",
+      "kind": "measurement",
+      "ticket": "https://app.basecamp.com/3945211/buckets/7463955/todos/10500110271",
+      "title": "Collecting the credit runs at 88.4% across all 43 learners who earned it, not the 67% a three-person week suggested",
+      "detail": "The 12 Nov edition starred \"1 watched 75%+ and never collected the credit\" and graded the step at 66.7% (2 of 3). Measured across every learner with progress on the welcome video: 43 have watched 75%+, 38 collected, 5 did not - 88.4% against the 90% target, so the step is close to target and the weekly figure was small-sample noise. Of the 5, four never signed in again after crossing the threshold, so they left mid-session rather than being refused; the credit stays collectable because watchVerdictFor reads the stored watch state and returns met=true whenever they return. Exactly one crossed 100% and signed in again 14 minutes later without collecting, which is the only real signal here and is n=1. Also worth saying plainly: 0 learners hold the credit with under 75% watched, so the gate is sound, and the insight wording \"the platform did not count it\" overstates a deliberate design - 75% unlocks the button and the click awards the points."
     }
   ]
 }
