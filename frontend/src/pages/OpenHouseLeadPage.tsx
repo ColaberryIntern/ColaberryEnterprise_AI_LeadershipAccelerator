@@ -65,7 +65,14 @@ const OpenHouseLeadPage: React.FC<{ locationOverride?: Location }> = ({ location
     if (!signup || reported.current) return;
     reported.current = true;
     // Deliberately not awaited: the confirmation must not wait on an ad network.
-    void trackLeadOnce(signup.leadKey ?? null);
+    //
+    // The .catch() is not redundant. `trackLeadOnce` swallows its own errors today, but
+    // a floating promise that depends on that staying true is a defect waiting to be
+    // introduced by a change in another file: the moment it rejects, this becomes an
+    // unhandled rejection on a page somebody reaches right after handing us their
+    // details. The guarantee that tracking cannot break this page belongs here, where
+    // the page makes it, not in the service's current implementation.
+    void trackLeadOnce(signup.leadKey ?? null).catch(() => { /* never load-bearing */ });
   }, [signup]);
 
   if (!signup) {
