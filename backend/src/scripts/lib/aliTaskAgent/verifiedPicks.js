@@ -10,7 +10,9 @@
  * HOW, in order:
  *   1. score everything (pickFive), then ask Basecamp about every LIST holding a pressing task;
  *      drop every task in a list that is trashed, archived or gone
- *   2. pick the five tasks and the five lists from what is left
+ *   2. pick the five lists from what is left, then the five tasks from tasks NOT in a picked list
+ *      (Ali, 2026-11-12: one ranked ten of lists and tasks; a picked list already covers its own
+ *      tasks, so showing them again would be the same work twice)
  *   3. ask Basecamp about every TO-DO the email will link (the five, and the top three of each
  *      list); if any is dead (trashed, archived, completed, gone), drop it and pick again
  *   Bounded: at most `maxRounds` (3) rounds of step 3; nothing loops forever.
@@ -63,10 +65,12 @@ async function verifiedPicks({ orders, views, now, checkLists, checkTodos, maxRo
   for (let round = 1; round <= maxRounds; round += 1) {
     const alive = orders.filter((o) => !inDeadList(o) && !deadTodos.has(o.id));
     const aliveViews = views.filter((v) => !inDeadList(v) && !deadTodos.has(v.id));
-    const five = pickFive(alive, now);
+    const all = pickFive(alive, now);
     const summaries = byList(aliveViews);
-    const lists = pickFiveLists(five.scored, summaries);
-    result = { ...five, summaries, listPick: lists, rounds: round };
+    const lists = pickFiveLists(all.scored, summaries);
+    const pickedLists = new Set(lists.picks.map((l) => l.id));
+    const five = pickFive(alive.filter((o) => !(o.listId && pickedLists.has(`${o.projectId}/${o.listId}`))), now);
+    result = { ...five, qualified: all.qualified, scored: all.scored, summaries, listPick: lists, rounds: round };
 
     // 3. Every to-do the email will link.
     const linked = new Set(five.picks.map((p) => p.id));

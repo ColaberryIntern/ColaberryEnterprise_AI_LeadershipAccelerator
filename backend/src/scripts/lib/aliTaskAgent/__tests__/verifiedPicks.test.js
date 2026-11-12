@@ -57,6 +57,14 @@ describe('verifiedPicks', () => {
     expect(r.unchecked).toBeGreaterThan(0);
   });
 
+  /** Ali, 2026-11-12: one ranked ten; a ranked list covers its own tasks, so none repeat. */
+  it('never picks a task that sits in a picked list', async () => {
+    const r = await verifiedPicks({ orders, views, now: NOW, checkLists: allLive, checkTodos: todosLive });
+    const pickedLists = new Set(r.listPick.picks.map((l) => l.id));
+    expect(pickedLists.size).toBeGreaterThan(0);
+    r.picks.forEach((t) => expect(pickedLists.has(`${t.projectId}/${t.listId}`)).toBe(false));
+  });
+
   it('is idempotent: the same Basecamp answers give the same picks', async () => {
     const a = await verifiedPicks({ orders, views, now: NOW, checkLists: allLive, checkTodos: todosLive });
     const b = await verifiedPicks({ orders, views, now: NOW, checkLists: allLive, checkTodos: todosLive });

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Render the morning report: the five most pressing tasks, walked through, plus the prompt for
- * the one move worth making today. PREVIEW (Ali, 2026-11-11: "let me see what that looks like to
- * finalize"); scheduling and delivery are decided after he has seen it.
+ * Render the morning report: five lists and five tasks ranked together by impact, the most
+ * impactful framed in gold as the one move, each with an Open-in-Basecamp and a Copy-for-Claude-Code
+ * button, and a guided tour of the same ten (Ali, 2026-11-12). Sent daily by sendMorningFive.js.
  *
  * READ-ONLY. It queries the ops_bc_todos mirror and the claims table and writes one HTML file.
  * It sends nothing, posts nothing, and changes no ticket.
@@ -26,11 +26,11 @@ const { partition, bandFor } = lib('ageBands');
 const { buildWorkOrder, renderWorkOrderText } = lib('workOrder');
 const { looksGenerated } = lib('listLens');
 const { categoryOf } = lib('listCategories');
-const { pickOneMove } = lib('pressingFive');
 const { proposalFor } = lib('pressingLists');
 const { verifiedPicks } = lib('verifiedPicks');
 const { listUrl, fetchListMeta, fetchTodoState } = lib('listMeta');
-const { buildTaskPrompt, buildListPrompt } = lib('promptBuilder');
+const { buildFeed } = lib('morningFeed');
+const { copyLink, tourLink } = lib('tourLinks');
 const { renderMorningFive } = lib('renderMorningFive');
 
 const arg = (k, d) => {
@@ -105,7 +105,6 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
   const v = await verifiedPicks({ orders, views, now,
     checkLists: (ls) => fetchListMeta(ls, bcOpts), checkTodos: (ts) => fetchTodoState(ts, bcOpts) });
   const { picks, qualified, listPick } = v;
-  const lists = v.summaries;
   const verify = { deadLists: v.deadLists.size, deadTodos: v.deadTodos.size, unchecked: v.unchecked, rounds: v.rounds };
   log({ level: 'info', event: 'links_verified', ...verify,
     dead: [...v.deadLists.entries(), ...v.deadTodos.entries()].slice(0, 20) });
@@ -113,7 +112,8 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
   // The five LISTS (Ali, 2026-11-12), ranked from the same task scores as the five tasks.
   const fiveLists = listPick.picks.map((l) => {
     const cat = categoryOf(l.key, l.projectId);
-    return { key: l.key, url: l.listId && l.projectId ? listUrl(l.projectId, l.listId) : null,
+    return { id: l.id, key: l.key, projectId: l.projectId, listId: l.listId,
+      url: l.listId && l.projectId ? listUrl(l.projectId, l.listId) : null,
       path: `${cat.label} / ${cat.sub.label}`, score: l.score, reasons: l.reasons,
       total: l.total, live: l.live, dormant: l.dormant, oldestDue: l.oldestDue,
       pressing: l.pressing.map((t) => ({ id: t.id, title: t.title, url: t.url, late: t.late, score: t.score })),
@@ -121,16 +121,14 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
       proposal: proposalFor(l) };
   });
 
-  const move = pickOneMove({ picks, lists });
-  const movePrompt = move.kind === 'task'
-    ? buildTaskPrompt(move.item, renderWorkOrderText(move.item))
-    : move.kind === 'list'
-      ? buildListPrompt(move.list, { category: { label: (() => { const c = categoryOf(move.list.key, move.list.projectId); return `${c.label} / ${c.sub.label}`; })() },
-        totals: { tasks: rows.length, lists: lists.length, dormant: dormant.length } })
-      : '';
+  // ONE feed, lists and tasks ranked together by impact; #1 is the golden move (morningFeed).
+  const day = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Chicago' });
+  const feed = buildFeed({ tasks: picks, lists: fiveLists, workOrderTextFor: (t) => renderWorkOrderText(t) })
+    .map((it) => ({ ...it, copyHref: copyLink(it) }));
+  const tourHref = tourLink(feed, day);
 
   const html = renderMorningFive({
-    today: now, runId: `MORNING-FIVE-${now.toISOString().slice(0, 10)}`, picks, lists: fiveLists, move, movePrompt,
+    today: now, runId: `MORNING-FIVE-${now.toISOString().slice(0, 10)}`, items: feed, tourHref,
     counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length,
       listsQualified: listPick.qualified },
     verify,
@@ -140,22 +138,20 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
   if (JSON_OUT) {
     fs.writeFileSync(JSON_OUT, JSON.stringify({
       generatedAt: new Date().toISOString(), // the real clock; `now` is the Central reading day
-      counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length },
+      counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length,
+        listsQualified: listPick.qualified },
       verify,
-      move: { kind: move.kind, rule: move.rule, why: move.why,
-        title: move.kind === 'task' ? move.item.title : move.kind === 'list' ? `Decide the list "${move.list.key}"` : null },
-      movePrompt,
-      picks: picks.map((p) => ({ id: p.id, title: p.title, url: p.url, path: p.path, dueOn: p.dueOn,
-        late: p.late, score: p.score, isDecision: p.isDecision })),
-      lists: fiveLists.map((l) => ({ key: l.key, url: l.url, path: l.path, score: l.score, total: l.total,
-        live: l.live, dormant: l.dormant, pressing: l.pressing.length, lead: l.pressing[0] || null,
-        proposal: l.proposal ? l.proposal.label : null })),
+      tourHref,
+      items: feed.map((it) => ({ rank: it.rank, kind: it.kind, golden: it.golden, id: it.id, title: it.title,
+        url: it.url, path: it.path, when: it.when, score: it.score, tag: it.tag, copyHref: it.copyHref,
+        copyChars: it.copyText.length })),
     }, null, 2), 'utf8');
   }
 
   log({ level: 'info', event: 'rendered', outcome: 'success', duration_ms: Date.now() - t0,
-    tasks: rows.length, live: live.length, qualified, picks: picks.map((p) => `${p.id}:${p.score}`),
-    move: move.kind, rule: move.rule, bytes: Buffer.byteLength(html), out: OUT });
+    tasks: rows.length, live: live.length, qualified, feed: feed.map((it) => `${it.kind}:${it.id}:${it.score}`),
+    tourChars: tourHref.length, maxCopyChars: Math.max(0, ...feed.map((it) => it.copyHref.length)),
+    bytes: Buffer.byteLength(html), out: OUT });
   await sequelize.close();
   process.exit(0);
 })().catch((e) => {
