@@ -132,6 +132,30 @@ function shortProse(v: string | null | undefined): string | null {
   return t;
 }
 
+/*
+ * A role is either a FIELD ("BI / Support": "worked in BI / Support") or a JOB TITLE
+ * ("AI Systems Architect": "worked as an AI Systems Architect"). Treating every role as a
+ * field printed "has worked in AI Systems Architect at QUINAI" on a live Hire profile
+ * (Quincy, 2026-11-11). A role whose last word is a job noun is a title.
+ */
+const TITLE_NOUNS = new Set([
+  'architect', 'engineer', 'developer', 'programmer', 'analyst', 'scientist', 'manager',
+  'director', 'lead', 'consultant', 'specialist', 'administrator', 'officer', 'designer',
+  'coordinator', 'intern', 'associate', 'head', 'founder', 'cofounder', 'co-founder', 'owner',
+  'strategist', 'advisor', 'adviser', 'technician', 'instructor', 'mentor', 'recruiter',
+  'executive', 'representative', 'supervisor', 'partner', 'president', 'vp', 'ceo', 'cto',
+  'cio', 'cfo', 'coo', 'trainer', 'teacher', 'professor', 'researcher', 'tester', 'auditor',
+  'accountant', 'controller', 'planner', 'writer', 'editor', 'producer', 'agent', 'clerk',
+]);
+
+/** "in BI / Support" for a field, "as an AI Systems Architect" for a job title. */
+export function roleClause(role: string | null | undefined): string {
+  const r = (role || '').trim();
+  const last = (r.split(/\s+/).pop() || '').toLowerCase().replace(/[^a-z-]/g, '');
+  if (!TITLE_NOUNS.has(last)) return `in ${r}`;
+  return `as ${/^[aeiou]/i.test(r) ? 'an' : 'a'} ${r}`;
+}
+
 /** First name only, for the second sentence. Falls back to the whole name. */
 function firstName(fullName: string): string {
   const t = (fullName || '').trim();
@@ -157,12 +181,13 @@ export function composeAbout(input: OverviewInput): string[] {
   const role = input.headline || current?.title || null;
   const employer = input.company || current?.company || null;
   const since = longDate(current?.start);
+  const asRole = roleClause(role);
   if (role && employer && since && !current?.end) {
-    bits.push(`${name} has worked in ${role} at ${employer} since ${since}.`);
+    bits.push(`${name} has worked ${asRole} at ${employer} since ${since}.`);
   } else if (role && employer) {
-    bits.push(`${name} works in ${role} at ${employer}.`);
+    bits.push(`${name} works ${asRole} at ${employer}.`);
   } else if (role) {
-    bits.push(`${name} works in ${role}.`);
+    bits.push(`${name} works ${asRole}.`);
   }
 
   // Sentence 2: what they built here, and how big it actually is.

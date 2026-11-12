@@ -164,7 +164,7 @@
       var s = t.signature;
       return '<a class="mini" href="' + caseLink(s.slug) + '" target="_blank" rel="noopener" data-launch data-from="strip" data-case="' + esc(s.slug) + '" data-talent-slug="' + esc(t.slug) + '">'
         + '<div class="art">' + C.cover(s, api, 7) + '</div>'
-        + '<div class="t"><b>' + esc(s.title) + '</b><span>' + esc(t.name) + (s.industry ? ' · ' + esc(s.industry) : '') + '</span></div></a>';
+        + '<div class="t"><b>' + esc(s.title) + '</b><span>' + esc(t.name) + (s.industry ? ' · ' + esc(C.industryLabel(s.industry)) : '') + '</span></div></a>';
     });
     if (!cards.length) return '';
     return '<section class="block" id="published" style="padding-top:10px"><div class="wrap">'

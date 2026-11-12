@@ -1,4 +1,4 @@
-import { composeAbout, composeStats, yearsOfExperience } from '../portfolioOverview';
+import { composeAbout, composeStats, roleClause, yearsOfExperience } from '../portfolioOverview';
 
 const AT = new Date('2026-09-03T00:00:00.000Z');
 
@@ -79,7 +79,16 @@ describe('composeAbout', () => {
       fullName: 'Ada L', headline: 'Analyst', company: 'Acme',
       experience: [role({ end: '2023' })], capabilityCount: 0,
     });
-    expect(first).toBe('Ada L works in Analyst at Acme.');
+    expect(first).toBe('Ada L works as an Analyst at Acme.');
+  });
+
+  // Quincy, 2026-11-11: his live Hire profile read "has worked in AI Systems Architect at QUINAI".
+  it('says "as a/an" for a job title and "in" for a field', () => {
+    const [first] = composeAbout({
+      fullName: 'Quincy Nkwain Ninying', headline: 'AI Systems Architect', company: 'QUINAI',
+      experience: [role({ company: 'QUINAI', title: 'AI Systems Architect', start: '2023-09' })], capabilityCount: 0,
+    });
+    expect(first).toBe('Quincy Nkwain Ninying has worked as an AI Systems Architect at QUINAI since September 2023.');
   });
 
   it('names the project and its real size, and omits the size when unknown', () => {
@@ -167,5 +176,23 @@ describe('composeAbout descriptor guard', () => {
   it('accepts a genuine one-line descriptor', () => {
     const out = withDescriptor('A triage assistant that drafts support notes from ticket threads.');
     expect(out).toContain('A triage assistant that drafts support notes');
+  });
+});
+
+describe('roleClause', () => {
+  it.each([
+    ['AI Systems Architect', 'as an AI Systems Architect'],
+    ['Senior Data Engineer', 'as a Senior Data Engineer'],
+    ['VP', 'as a VP'],
+    ['BI / Support', 'in BI / Support'],
+    ['Data Engineering', 'in Data Engineering'],
+    ['Healthcare Operations', 'in Healthcare Operations'],
+  ])('%s -> %s', (r, want) => {
+    expect(roleClause(r)).toBe(want);
+  });
+
+  it('never throws on an empty role', () => {
+    expect(roleClause('')).toBe('in ');
+    expect(roleClause(null)).toBe('in ');
   });
 });
