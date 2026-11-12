@@ -211,6 +211,7 @@ import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDe
 import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
 import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
+import { ensurePageEventVisitorIndexGuarded } from './db/ensurePageEventVisitorIndex';
 
 // Import models to register associations before sync
 import './models';
@@ -3277,6 +3278,26 @@ async function start(): Promise<void> {
   // table is absent and the seed then leaves `tools_granted` untouched for that boot, which is
   // the safe direction: a boot of staleness rather than a reverted grant.
   await ensureAgentToolGrantSchemaGuarded();
+  // The `page_events (visitor_id, timestamp DESC)` index.
+  //
+  // NOT a schema module like the nine above, and the difference is the point: it owns no table.
+  // `page_events` already exists, is the largest table in this schema (~1.15M rows), and the
+  // tracker writes to it constantly. This adds one index to it and nothing else.
+  //
+  // Found by Kalkidan Bezabeh on 11 Nov 2026: every read keyed on the VISITOR rather than the
+  // lead planned as a sequential scan over the whole table, because none of the four existing
+  // indexes covered `visitor_id`. The companion fix in `admissionsSignalsReader.ts` capped the
+  // rows that query RETURNS; only an index can cap what it EXAMINES.
+  //
+  // The cost, stated rather than buried: `CREATE INDEX` takes a SHARE lock and blocks writes for
+  // a few seconds on the first boot after this merges. That lands during a deploy, when the
+  // backend is restarting and not serving tracker writes anyway, which is the argument for
+  // accepting it here rather than running the DDL by hand.
+  //
+  // `ensurePageEventVisitorIndexGuarded` cannot reject, so this await is safe bare — and a
+  // missing index must never be the reason the port fails to bind, because it is a performance
+  // problem and not a correctness one.
+  await ensurePageEventVisitorIndexGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
