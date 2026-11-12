@@ -2244,10 +2244,41 @@ interface AdmissionsDocumentParams {
   documentContent?: string;
 }
 
-export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): Promise<void> {
+/**
+ * What actually happened, so the caller cannot report a send that did not occur.
+ *
+ * This used to return `void` and return early on two different failures, which is how
+ * Maya came to tell visitors a document had been emailed when no mail had left. The
+ * caller now has to look at the outcome to make a claim about it.
+ */
+export type AdmissionsDocumentOutcome =
+  | { outcome: 'sent'; messageId: string }
+  | { outcome: 'refused'; reason: 'no_document_to_send' | 'smtp_not_configured' };
+
+export async function sendAdmissionsDocument(
+  params: AdmissionsDocumentParams,
+): Promise<AdmissionsDocumentOutcome> {
+  // REFUSE rather than send a letter that describes an enclosure we do not have.
+  //
+  // With neither a URL nor inline content there is nothing to deliver, and the body below
+  // used to fall through to a sentence telling the reader the document was enclosed. This
+  // function adds no attachment, ever, so that sentence was false every time it rendered.
+  // A false statement in outbound mail signed as Maya is worse than no mail, so this is a
+  // refusal and not a quieter fallback sentence. The suite asserts the phrase is absent
+  // from this whole file, so do not reintroduce it even in a comment.
+  if (!params.documentUrl && !params.documentContent) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'email',
+      event: 'admissions_document_refused', outcome: 'failure',
+      error_class: 'NoDocumentToSend',
+      context: { document_type: params.documentType, to: redactForLogs(params.to) },
+    }));
+    return { outcome: 'refused', reason: 'no_document_to_send' };
+  }
+
   if (!transporter) {
     console.warn('[Email] SMTP not configured. Skipping admissions document to:', redactForLogs(params.to));
-    return;
+    return { outcome: 'refused', reason: 'smtp_not_configured' };
   }
 
   const documentTitles: Record<string, string> = {
@@ -2262,11 +2293,12 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
 
   const r = await resolveEmailRecipient(params.to, subject);
 
+  // One of these two is guaranteed present: the no-document case refused above. There is
+  // deliberately no third branch, so a future edit cannot reintroduce a sentence that
+  // promises an enclosure this function never adds.
   const contentSection = params.documentUrl
     ? `<p><a href="${params.documentUrl}" class="cta">Download ${title}</a></p>`
-    : params.documentContent
-      ? `<div class="highlight">${params.documentContent}</div>`
-      : `<p>The ${title} is attached to this email.</p>`;
+    : `<div class="highlight">${params.documentContent}</div>`;
 
   const html = `
 <!DOCTYPE html>
@@ -2313,6 +2345,7 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
   });
 
   console.log(`[Email] Admissions document (${params.documentType}) sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
+  return { outcome: 'sent', messageId: info.messageId };
 }
 
 // ─── Alert Email ──────────────────────────────────────────────────────────
