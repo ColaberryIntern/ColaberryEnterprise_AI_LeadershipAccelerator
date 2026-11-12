@@ -37,6 +37,15 @@ const gbaFindByPk = jest.fn();
 jest.mock('../../models/GovBuildArtifact', () => ({ __esModule: true, default: { findByPk: (...a: any[]) => gbaFindByPk(...a) } }));
 const mockUpload: { GOV_BUILD_ARTIFACT_DIR: string } = { GOV_BUILD_ARTIFACT_DIR: '' };
 jest.mock('../../config/upload', () => mockUpload);
+// Participant read-only qualification endpoints: the project's qualification record resolves the (tenant, canonical
+// key, bidding entity); the SAME getDecoupledWorkspace the admin route calls builds the payload; the best-fit feed
+// backs opportunity-detail. The award amount must be stripped for a participant.
+const gqFindOne = jest.fn();
+jest.mock('../../models/GovQualification', () => ({ __esModule: true, default: { findOne: (...a: any[]) => gqFindOne(...a) } }));
+const getDecoupledWorkspace = jest.fn();
+jest.mock('../../services/factory/govQualification', () => ({ getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a) }));
+const fetchBestFitOpportunities = jest.fn();
+jest.mock('../../services/factory/opportunities/oppPulseClient', () => ({ fetchBestFitOpportunities: (...a: any[]) => fetchBestFitOpportunities(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -52,6 +61,63 @@ app.use(router);
 const SAFE_VIEW = { projectId: 'dp-A', name: 'TxDOT Claims Search', status: 'discovery', tracks: [], requirements: [], requirementCounts: { total: 0, proposal: 0, build: 0 } };
 
 beforeEach(() => { jest.clearAllMocks(); guardAllows = true; ctxIdentity = null; actorResult = { platformIdentityId: 'id-1', email: 'student@test' }; getStudentGovProjectView.mockResolvedValue(SAFE_VIEW); });
+
+describe('GET /api/portal/gov-projects/:projectId/qualification (the REAL admin workspace, read-only, member-gated)', () => {
+  beforeEach(() => {
+    gqFindOne.mockResolvedValue({ get: () => ({ tenant_id: 't1', canonical_opportunity_id: 'gws-abc', bidding_entity: 'colaberry' }) });
+    getDecoupledWorkspace.mockResolvedValue({ canonicalOpportunityId: 'gws-abc', evaluation: { evals: [{ id: 'REQ-001', blocking: true }] }, source: { estimatedValue: 500000, deadline: null } });
+  });
+
+  it('a MEMBER gets the SAME builder output as admin, with the award amount stripped', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/qualification');
+    expect(res.status).toBe(200);
+    expect(getDecoupledWorkspace).toHaveBeenCalledWith('t1', 'gws-abc', 'colaberry'); // the identical admin builder
+    expect(res.body.evaluation.evals[0].id).toBe('REQ-001'); // same requirement data the admin renders
+    expect(res.body.source.estimatedValue).toBeNull(); // award/estimated value NEVER reaches a participant
+  });
+
+  it('a NON-MEMBER is 404 — the builder is never called (guard denies first)', async () => {
+    guardAllows = false;
+    const res = await request(app).get('/api/portal/gov-projects/dp-OTHER/qualification');
+    expect(res.status).toBe(404);
+    expect(getDecoupledWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('a project with no qualification yet is 404 — the builder is never called', async () => {
+    gqFindOne.mockResolvedValue(null);
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/qualification');
+    expect(res.status).toBe(404);
+    expect(getDecoupledWorkspace).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/portal/gov-projects/:projectId/opportunity-detail (estimatedValue nulled)', () => {
+  beforeEach(() => {
+    gqFindOne.mockResolvedValue({ get: () => ({ tenant_id: 't1', canonical_opportunity_id: 'opp-1', bidding_entity: 'colaberry' }) });
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [{ uuid: 'opp-1', estimatedValue: 750000, title: 'X', agency: 'TxDOT' }], source: 'live', snapshotDate: null });
+  });
+
+  it('a MEMBER gets the opportunity detail with estimatedValue FORCED null (other fields intact)', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/opportunity-detail');
+    expect(res.status).toBe(200);
+    expect(res.body.opportunity.title).toBe('X');
+    expect(res.body.opportunity.estimatedValue).toBeNull();
+  });
+
+  it('a decoupled key with no matching feed row ⇒ opportunity null (no award figure)', async () => {
+    fetchBestFitOpportunities.mockResolvedValue({ opportunities: [], source: 'snapshot', snapshotDate: null });
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/opportunity-detail');
+    expect(res.status).toBe(200);
+    expect(res.body.opportunity).toBeNull();
+  });
+
+  it('a NON-MEMBER is 404 — the feed is never consulted', async () => {
+    guardAllows = false;
+    const res = await request(app).get('/api/portal/gov-projects/dp-OTHER/opportunity-detail');
+    expect(res.status).toBe(404);
+    expect(fetchBestFitOpportunities).not.toHaveBeenCalled();
+  });
+});
 
 const editProposalView = (responses: any[] = [{ requirementId: 'REQ-001', statement: 'x', status: 'unanswered', content: '', openGapCount: 0 }]) =>
   ({ ...SAFE_VIEW, proposal: { level: 'edit', canComment: true, canEdit: true, responses } });
