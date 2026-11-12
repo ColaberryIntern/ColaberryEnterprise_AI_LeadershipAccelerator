@@ -7,6 +7,7 @@ import {
 } from '../../../services/agentEffectiveAccessApi';
 import { timeAgo } from '../shell/trust';
 import { toolColors, toolLastUsed } from './agentDetailV2Correlation';
+import AgentToolRequests from './AgentToolRequests';
 
 // Agent Tools section, Phase 1 (2026-11-11) — Ali: "I would like to add a tools section to the
 // Agent dashboard which will facilitate the request, approval and access to the tools... when I
@@ -210,6 +211,11 @@ export default function AgentToolsTab({ detail }: Props) {
           ))
         )}
       </section>
+
+      {/* Phase 2: what has been REQUESTED, below what is currently HELD. Deliberately in that
+          order — the question "what can this agent do today" is answered above, and "what is
+          being asked for" is a different, slower-moving question that should not displace it. */}
+      <AgentToolRequests agentId={agentId} />
     </>
   );
 }

@@ -70,6 +70,7 @@ import internVideoRoutes from './admin/internVideoRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
+import toolRequestConversationRoutes from './admin/toolRequestConversationRoutes';
 import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
 import assignExistingToolRoutes from './admin/assignExistingToolRoutes';
 import ticketRoutes from './admin/ticketRoutes';
@@ -317,6 +318,8 @@ router.use(agentChangeRequestRoutes);
 // these two are `requireAdmin` on both -- settling a tool grant is not something the section
 // every mgmt role carries should reach.
 router.use(toolRequestDecisionRoutes);
+// Agent Tools Phase 2: the per-agent request pipeline and the conversation on a request.
+router.use(toolRequestConversationRoutes);
 router.use(agentToolGrantRoutes);
 router.use(assignExistingToolRoutes);
 router.use(ticketRoutes);

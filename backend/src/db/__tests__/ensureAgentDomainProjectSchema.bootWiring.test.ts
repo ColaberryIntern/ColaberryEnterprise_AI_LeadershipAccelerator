@@ -203,6 +203,21 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     // `__tests__/ensureAgentToolGrantSchema.test.ts` drives that failure path with a rejecting
     // driver, asserting it RESOLVES `{ ok: false }` with the derived error_class rather than
     // grepping server.ts for a try/catch.
+    // Agent Tools Phase 2 added the ninth member, 2026-11-11.
+    // `ensureToolRequestMessageSchema.ts` is the CONVERSATION on a tool request, and asserts the
+    // same way for the same reason as the eight above.
+    //
+    // It is a sibling of the decision log, not a replacement: that table holds the four VERBS,
+    // this one holds the question and the answer that are neither an approval nor a denial and
+    // previously had nowhere to live. It carries no verb and no status, so it cannot disagree
+    // with the decision log about what was decided.
+    //
+    // Its post-condition checks two CHECK constraints, `chk_adtrm_body_is_not_blank` and
+    // `chk_adtrm_author_is_not_blank`. A blank message is not a conversation, and an
+    // unattributed one is worse than none, so both are refused at the database rather than only
+    // by the application.
+    //
+    // It is wrapped: `ensureToolRequestMessageSchemaGuarded` cannot reject.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
@@ -212,6 +227,7 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
       'ensureToolRequestDecisionSchema.ts',
+      'ensureToolRequestMessageSchema.ts',
     ]);
   });
 
