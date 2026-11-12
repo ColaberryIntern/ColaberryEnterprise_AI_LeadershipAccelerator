@@ -27,37 +27,42 @@
  */
 export {};
 
+// Each spy declares `...args: unknown[]` rather than taking none. With a zero-parameter
+// implementation jest types `mock.calls` as an array of EMPTY TUPLES, so every
+// `mock.calls[0][0]` is a compile error - which the main `tsc` run does not catch, because
+// `tsconfig.json` excludes test files. Only the test-file typecheck ratchet sees it, and it
+// caught nine of them across three files in this change.
 const mockTriggerVoiceCall = jest.fn();
-const mockCallLogCreate = jest.fn(async () => ({ id: 'ccl-1' }));
-const mockCallLogFindOne = jest.fn(async () => null);
-const mockActionLogCreate = jest.fn(async () => ({ id: 'aal-1' }));
+const mockCallLogCreate = jest.fn(async (..._a: unknown[]) => ({ id: 'ccl-1' }));
+const mockCallLogFindOne = jest.fn(async (..._a: unknown[]) => null);
+const mockActionLogCreate = jest.fn(async (..._a: unknown[]) => ({ id: 'aal-1' }));
 const mockEvaluateSend = jest.fn();
-const mockLogCommunication = jest.fn(async () => undefined);
-const mockAddTag = jest.fn(async () => undefined);
-const mockRouteCampaign = jest.fn(async () => undefined);
+const mockLogCommunication = jest.fn(async (..._a: unknown[]) => undefined);
+const mockAddTag = jest.fn(async (..._a: unknown[]) => undefined);
+const mockRouteCampaign = jest.fn(async (..._a: unknown[]) => undefined);
 
 jest.mock('../../models', () => ({
   Lead: { findByPk: jest.fn(), findOne: jest.fn() },
   Visitor: { findByPk: jest.fn() },
-  ChatMessage: { findAll: jest.fn(async () => []) },
+  ChatMessage: { findAll: jest.fn(async (..._a: unknown[]) => []) },
 }));
 jest.mock('../../models/AdmissionsActionLog', () => ({
-  __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...(a as [])) },
+  __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...a) },
 }));
 jest.mock('../../models/AdmissionsMemory', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../models/CallContactLog', () => ({
   __esModule: true,
   default: {
-    findOne: (...a: unknown[]) => mockCallLogFindOne(...(a as [])),
-    create: (...a: unknown[]) => mockCallLogCreate(...(a as [])),
+    findOne: (...a: unknown[]) => mockCallLogFindOne(...a),
+    create: (...a: unknown[]) => mockCallLogCreate(...a),
   },
 }));
 jest.mock('../../models/AdmissionsKnowledgeEntry', () => ({
-  __esModule: true, default: { findAll: jest.fn(async () => []) },
+  __esModule: true, default: { findAll: jest.fn(async (..._a: unknown[]) => []) },
 }));
 jest.mock('../../models/StrategyCall', () => ({ __esModule: true, default: {} }));
 jest.mock('../synthflowService', () => ({
-  triggerVoiceCall: (...a: unknown[]) => mockTriggerVoiceCall(...(a as [])),
+  triggerVoiceCall: (...a: unknown[]) => mockTriggerVoiceCall(...a),
 }));
 jest.mock('../ghlService', () => ({
   syncNewLeadToGhl: jest.fn(), syncLeadToGhl: jest.fn(), sendSmsViaGhl: jest.fn(),
@@ -71,7 +76,7 @@ jest.mock('../admissionsKnowledgeGate', () => ({
   gateKnowledgeEntries: jest.fn(() => ({ allowed: [], withheld: [] })),
 }));
 jest.mock('../mayaConversationSummaryService', () => ({
-  generateConversationSummary: jest.fn(async () => ({ summary: 'a recap' })),
+  generateConversationSummary: jest.fn(async (..._a: unknown[]) => ({ summary: 'a recap' })),
   buildSmsSummaryContent: jest.fn(() => 'sms body'),
 }));
 jest.mock('../mayaConversationIntelligenceService', () => ({ updateBookingState: jest.fn() }));
@@ -79,19 +84,19 @@ jest.mock('../admissionsPricing', () => ({ pricingPitchRule: () => 'Membership i
 // Both of these are fired and `.catch`-ed by production code, so a bare jest.fn() returning
 // undefined would throw inside the handler rather than exercise it.
 jest.mock('../mayaCampaignRouter', () => ({
-  addMayaInteractionTag: (...a: unknown[]) => mockAddTag(...(a as [])),
-  routeLeadToCampaign: (...a: unknown[]) => mockRouteCampaign(...(a as [])),
+  addMayaInteractionTag: (...a: unknown[]) => mockAddTag(...a),
+  routeLeadToCampaign: (...a: unknown[]) => mockRouteCampaign(...a),
 }));
 jest.mock('../communicationLogService', () => ({
-  logCommunication: (...a: unknown[]) => mockLogCommunication(...(a as [])),
+  logCommunication: (...a: unknown[]) => mockLogCommunication(...a),
 }));
 // The consent chokepoint. `outboundConsent` imports it dynamically, so mocking the module
 // path is what intercepts it - there is no injected dep to pass.
 jest.mock('../communicationSafetyService', () => ({
-  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...(a as [])),
+  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...a),
 }));
 jest.mock('../settingsService', () => ({
-  getTestOverrides: jest.fn(async () => ({ enabled: false, phone: null, email: null })),
+  getTestOverrides: jest.fn(async (..._a: unknown[]) => ({ enabled: false, phone: null, email: null })),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires

@@ -22,31 +22,36 @@
  */
 export {};
 
+// Each spy declares `...args: unknown[]` rather than taking none. With a zero-parameter
+// implementation jest types `mock.calls` as an array of EMPTY TUPLES, so every
+// `mock.calls[0][0]` is a compile error - which the main `tsc` run does not catch, because
+// `tsconfig.json` excludes test files. Only the test-file typecheck ratchet sees it, and it
+// caught nine of them across three files in this change.
 const mockSendSmsViaGhl = jest.fn();
 const mockSyncLeadToGhl = jest.fn();
-const mockActionLogCreate = jest.fn(async () => ({ id: 'aal-1' }));
+const mockActionLogCreate = jest.fn(async (..._a: unknown[]) => ({ id: 'aal-1' }));
 const mockEvaluateSend = jest.fn();
 
 jest.mock('../../models', () => ({
   Lead: { findByPk: jest.fn(), findOne: jest.fn() },
   Visitor: { findByPk: jest.fn() },
-  ChatMessage: { findAll: jest.fn(async () => []) },
+  ChatMessage: { findAll: jest.fn(async (..._a: unknown[]) => []) },
 }));
 jest.mock('../../models/AdmissionsActionLog', () => ({
-  __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...(a as [])) },
+  __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...a) },
 }));
 jest.mock('../../models/AdmissionsMemory', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../models/CallContactLog', () => ({
-  __esModule: true, default: { findOne: jest.fn(async () => null), create: jest.fn() },
+  __esModule: true, default: { findOne: jest.fn(async (..._a: unknown[]) => null), create: jest.fn() },
 }));
 jest.mock('../../models/AdmissionsKnowledgeEntry', () => ({
-  __esModule: true, default: { findAll: jest.fn(async () => []) },
+  __esModule: true, default: { findAll: jest.fn(async (..._a: unknown[]) => []) },
 }));
 jest.mock('../../models/StrategyCall', () => ({ __esModule: true, default: {} }));
 jest.mock('../ghlService', () => ({
   syncNewLeadToGhl: jest.fn(),
-  syncLeadToGhl: (...a: unknown[]) => mockSyncLeadToGhl(...(a as [])),
-  sendSmsViaGhl: (...a: unknown[]) => mockSendSmsViaGhl(...(a as [])),
+  syncLeadToGhl: (...a: unknown[]) => mockSyncLeadToGhl(...a),
+  sendSmsViaGhl: (...a: unknown[]) => mockSendSmsViaGhl(...a),
 }));
 jest.mock('../synthflowService', () => ({ triggerVoiceCall: jest.fn() }));
 jest.mock('../calendarService', () => ({ getAvailableSlots: jest.fn(), createBooking: jest.fn() }));
@@ -58,23 +63,23 @@ jest.mock('../admissionsKnowledgeGate', () => ({
   gateKnowledgeEntries: jest.fn(() => ({ allowed: [], withheld: [] })),
 }));
 jest.mock('../mayaConversationSummaryService', () => ({
-  generateConversationSummary: jest.fn(async () => ({ summary: 'we discussed the program' })),
+  generateConversationSummary: jest.fn(async (..._a: unknown[]) => ({ summary: 'we discussed the program' })),
   buildSmsSummaryContent: jest.fn(() => 'Here is your recap. Reply CALL to book.'),
 }));
 jest.mock('../mayaConversationIntelligenceService', () => ({ updateBookingState: jest.fn() }));
 jest.mock('../admissionsPricing', () => ({ pricingPitchRule: () => 'Membership is monthly.' }));
 jest.mock('../mayaCampaignRouter', () => ({
-  addMayaInteractionTag: jest.fn(async () => undefined),
-  routeLeadToCampaign: jest.fn(async () => undefined),
+  addMayaInteractionTag: jest.fn(async (..._a: unknown[]) => undefined),
+  routeLeadToCampaign: jest.fn(async (..._a: unknown[]) => undefined),
 }));
-jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async () => undefined) }));
+jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async (..._a: unknown[]) => undefined) }));
 // The consent chokepoint. `outboundConsent` imports it dynamically, so mocking the module
 // path is what intercepts it - there is no injected dep to pass.
 jest.mock('../communicationSafetyService', () => ({
-  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...(a as [])),
+  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...a),
 }));
 jest.mock('../settingsService', () => ({
-  getTestOverrides: jest.fn(async () => ({ enabled: false, phone: null, email: null })),
+  getTestOverrides: jest.fn(async (..._a: unknown[]) => ({ enabled: false, phone: null, email: null })),
 }));
 
 // Required through the ORIGINAL module path, not the new one, so this also proves the MR1 split
@@ -115,7 +120,7 @@ beforeEach(() => {
     phone: PHONE,
     ghl_contact_id: 'ghl-123',
     getDataValue: (k: string) => (k === 'name' ? 'Dana Reyes' : undefined),
-    update: jest.fn(async () => undefined),
+    update: jest.fn(async (..._a: unknown[]) => undefined),
   });
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -228,7 +233,7 @@ describe('the working path is untouched', () => {
   it('still refuses when no messaging contact can be established', async () => {
     Lead.findByPk.mockResolvedValue({
       id: 77, phone: PHONE, ghl_contact_id: null,
-      getDataValue: () => 'Dana', update: jest.fn(async () => undefined),
+      getDataValue: () => 'Dana', update: jest.fn(async (..._a: unknown[]) => undefined),
     });
     mockSyncLeadToGhl.mockResolvedValue({ contactId: null, isTestMode: false });
 

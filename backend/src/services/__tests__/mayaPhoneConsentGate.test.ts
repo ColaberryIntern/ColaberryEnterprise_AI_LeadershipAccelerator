@@ -26,42 +26,47 @@
  */
 export {};
 
+// Each spy declares `...args: unknown[]` rather than taking none. With a zero-parameter
+// implementation jest types `mock.calls` as an array of EMPTY TUPLES, so every
+// `mock.calls[0][0]` is a compile error - which the main `tsc` run does not catch, because
+// `tsconfig.json` excludes test files. Only the test-file typecheck ratchet sees it, and it
+// caught nine of them across three files in this change.
 const mockEvaluateSend = jest.fn();
-const mockSendSmsViaGhl = jest.fn(async () => ({ success: true }));
-const mockTriggerVoiceCall = jest.fn(async () => ({ success: true, data: { call_id: 'sf-1' } }));
-const mockActionLogCreate = jest.fn(async () => ({ id: 'aal-1' }));
-const mockCallLogCreate = jest.fn(async () => ({ id: 'ccl-1' }));
+const mockSendSmsViaGhl = jest.fn(async (..._a: unknown[]) => ({ success: true }));
+const mockTriggerVoiceCall = jest.fn(async (..._a: unknown[]) => ({ success: true, data: { call_id: 'sf-1' } }));
+const mockActionLogCreate = jest.fn(async (..._a: unknown[]) => ({ id: 'aal-1' }));
+const mockCallLogCreate = jest.fn(async (..._a: unknown[]) => ({ id: 'ccl-1' }));
 
 jest.mock('../../models', () => ({
   Lead: { findByPk: jest.fn(), findOne: jest.fn() },
   Visitor: { findByPk: jest.fn() },
-  ChatMessage: { findAll: jest.fn(async () => []) },
+  ChatMessage: { findAll: jest.fn(async (..._a: unknown[]) => []) },
 }));
 jest.mock('../../models/AdmissionsActionLog', () => ({
-  __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...(a as [])) },
+  __esModule: true, default: { create: (...a: unknown[]) => mockActionLogCreate(...a) },
 }));
 jest.mock('../../models/AdmissionsMemory', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../models/CallContactLog', () => ({
   __esModule: true,
   default: {
-    findOne: jest.fn(async () => null),
-    create: (...a: unknown[]) => mockCallLogCreate(...(a as [])),
+    findOne: jest.fn(async (..._a: unknown[]) => null),
+    create: (...a: unknown[]) => mockCallLogCreate(...a),
   },
 }));
 jest.mock('../../models/AdmissionsKnowledgeEntry', () => ({
-  __esModule: true, default: { findAll: jest.fn(async () => []) },
+  __esModule: true, default: { findAll: jest.fn(async (..._a: unknown[]) => []) },
 }));
 jest.mock('../../models/StrategyCall', () => ({ __esModule: true, default: {} }));
 jest.mock('../communicationSafetyService', () => ({
-  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...(a as [])),
+  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...a),
 }));
 jest.mock('../ghlService', () => ({
   syncNewLeadToGhl: jest.fn(),
-  syncLeadToGhl: jest.fn(async () => ({ contactId: 'ghl-1', isTestMode: false })),
-  sendSmsViaGhl: (...a: unknown[]) => mockSendSmsViaGhl(...(a as [])),
+  syncLeadToGhl: jest.fn(async (..._a: unknown[]) => ({ contactId: 'ghl-1', isTestMode: false })),
+  sendSmsViaGhl: (...a: unknown[]) => mockSendSmsViaGhl(...a),
 }));
 jest.mock('../synthflowService', () => ({
-  triggerVoiceCall: (...a: unknown[]) => mockTriggerVoiceCall(...(a as [])),
+  triggerVoiceCall: (...a: unknown[]) => mockTriggerVoiceCall(...a),
 }));
 jest.mock('../calendarService', () => ({ getAvailableSlots: jest.fn(), createBooking: jest.fn() }));
 jest.mock('../calendarTarget', () => ({ admissionsCalendar: {} }));
@@ -72,18 +77,18 @@ jest.mock('../admissionsKnowledgeGate', () => ({
   gateKnowledgeEntries: jest.fn(() => ({ allowed: [], withheld: [] })),
 }));
 jest.mock('../mayaConversationSummaryService', () => ({
-  generateConversationSummary: jest.fn(async () => ({ summary: 'a recap' })),
+  generateConversationSummary: jest.fn(async (..._a: unknown[]) => ({ summary: 'a recap' })),
   buildSmsSummaryContent: jest.fn(() => 'recap body'),
 }));
 jest.mock('../mayaConversationIntelligenceService', () => ({ updateBookingState: jest.fn() }));
 jest.mock('../admissionsPricing', () => ({ pricingPitchRule: () => 'Membership is monthly.' }));
 jest.mock('../mayaCampaignRouter', () => ({
-  addMayaInteractionTag: jest.fn(async () => undefined),
-  routeLeadToCampaign: jest.fn(async () => undefined),
+  addMayaInteractionTag: jest.fn(async (..._a: unknown[]) => undefined),
+  routeLeadToCampaign: jest.fn(async (..._a: unknown[]) => undefined),
 }));
-jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async () => undefined) }));
+jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async (..._a: unknown[]) => undefined) }));
 jest.mock('../settingsService', () => ({
-  getTestOverrides: jest.fn(async () => ({ enabled: false, phone: null, email: null })),
+  getTestOverrides: jest.fn(async (..._a: unknown[]) => ({ enabled: false, phone: null, email: null })),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -110,7 +115,7 @@ beforeEach(() => {
   Lead.findByPk.mockResolvedValue({
     id: 77, phone: PHONE, ghl_contact_id: 'ghl-1',
     getDataValue: (k: string) => (k === 'name' ? 'Dana Reyes' : undefined),
-    update: jest.fn(async () => undefined),
+    update: jest.fn(async (..._a: unknown[]) => undefined),
   });
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
