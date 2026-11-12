@@ -1,0 +1,61 @@
+/*
+ * hire.refactored.ai tokens.
+ *
+ * The Refactored.ai "Terminal" token files sit under ./design and are imported here; no hex
+ * value from them is copied by hand into this file.
+ *
+ * THEY ARE NOT SYNCED, despite what this comment claimed until 2026-11-10. There is no
+ * `hire-refactored` entry in the design-system registry
+ * (backend/src/scripts/lib/designSystemSync.js lists five brands: ai-flotation, cpn,
+ * refactored, colaberry-enterprise, colaberry-training), this directory has no
+ * `.design-sync-manifest.json`, and ./design is byte-identical to
+ * apps/refactored-public/src/assets/design - itself a hand-authored replacement made after
+ * the real vendored copy and its manifest were deleted. So these files are unmanaged
+ * first-party code that LOOKS vendored, which is worse than either being honestly: review
+ * and audit passes that skip vendored paths skip these too, and nothing upstream will ever
+ * correct them.
+ *
+ * Design ownership across all Colaberry brands sits with Aleem; see
+ * frontend/src/colaberry/PROVENANCE.md. Bringing this brand under the sync needs a registry
+ * entry and a target, which is a decision rather than a drive-by edit.
+ *
+ * This file adds the ONE token hire.refactored.ai owns - `--star`, gold, reserved for
+ * proof and stardom (MOTION.md §1) - plus the hire motion durations. Both theme blocks and
+ * the light-preference block are set, mirroring the token file's three-state model.
+ */
+@import url("./design/tokens/colors.css");
+@import url("./design/tokens/typography.css");
+@import url("./design/tokens/spacing.css");
+@import url("./design/tokens/motion.css");
+
+:root {
+  --star: #F2C14E;
+  --star-soft: rgba(242, 193, 78, .14);
+  --star-ink: #1d1503;
+  /* Gold TEXT. Equal to --star in dark; in light it is darker, because #B7860B reaches only
+     2.87:1 on --star-soft (MOTION §9 asks 4.5:1). Fills, rings and borders keep --star. */
+  --star-text: #F2C14E;
+  --r: 14px;
+  --shadow: 0 20px 50px -24px rgba(0, 0, 0, .7);
+  --ease-launch: cubic-bezier(.2, .9, .3, 1);
+  --dur-lift: 220ms;
+  --dur-lift-lg: 250ms;
+  --dur-launch: 700ms;
+  --dur-fade: 450ms;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --star: #B7860B;
+    --star-soft: rgba(183, 134, 11, .12);
+    --star-text: #856106;
+    --shadow: 0 18px 40px -22px rgba(22, 34, 44, .35);
+  }
+}
+
+:root[data-theme="light"] {
+  --star: #B7860B;
+  --star-soft: rgba(183, 134, 11, .12);
+  --star-text: #856106;
+  --shadow: 0 18px 40px -22px rgba(22, 34, 44, .35);
+}

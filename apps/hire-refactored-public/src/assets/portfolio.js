@@ -2,9 +2,10 @@
  * hire.refactored.ai - the portfolio (`/talent/<slug>/`), rendered from
  * GET /api/public/portfolios/:slug?surface=hire.
  *
- * Section order (SPEC §5): banner art, head, proof ledger, signature case study, projects,
- * about, verified commits, experience; sidebar: proven in their repo, stack, industries,
- * contact, back to all talent. Pure render functions are exported for node's test runner.
+ * Section order (profile upgrade, docs/hire-refactored/profile-upgrade-demo/PROMPT.md §1.1):
+ * banner art, head, proof ledger, case-study carousel + thumbnails, about, verified commits,
+ * experience; sidebar: proven in their repo, industries, contact, back to all talent. Pure
+ * render functions are exported for node's test runner; carousel.js runs the carousel.
  *
  * TWO RULES THIS FILE EXISTS TO KEEP. (1) Hire shows a person's work ONLY as approved,
  * Hire-published case studies (Ali, 2026-11-11: "No projects they are working on or that
@@ -51,21 +52,58 @@
     return Math.abs(claimed - span) <= 1 ? Math.round(claimed) : null;
   }
 
-  function ledger(p, hire, now) {
+  /*
+   * A headline figure as a ledger tile: the leading number of the record's own display value,
+   * with the rest of that value as the caption. "97% of lost completion events resolved"
+   * becomes 97% / "of lost completion events resolved". A value that does not START with a
+   * number ("Recovered in 1m31s") is not a tile, and neither is a zero ("0 retries ...", a
+   * reduction, reads as nothing on a tile). Nothing is rounded, summed or invented.
+   */
+  function metricTile(m) {
+    var v = String((m && m.value) || '').trim();
+    var x = /^([-+]?\d[\d,]*(?:\.\d+)?%?)(?:\s+([\s\S]+))?$/.exec(v);
+    if (!x) return null;
+    var n = parseFloat(x[1].replace(/,/g, ''));
+    if (!isFinite(n) || n <= 0) return null;
+    var label = x[2] || String((m && m.label) || '').trim();
+    return label ? { big: x[1], label: label, n: n } : null;
+  }
+
+  /*
+   * The four ledger tiles. NEVER A ZERO TILE (profile upgrade, 2026-11-12): Kes's ledger read
+   * "0 verified commits · 0 capabilities" beside nine published case studies. A zero or
+   * missing figure is dropped and the next real figure takes its place: the record's headline
+   * figures, largest first, then how many case studies carry a video walkthrough.
+   */
+  function ledgerTiles(p, hire, now) {
     var stats = p.stats || {};
-    var cs = arr(hire.caseStudies).length;
+    var cases = arr(hire.caseStudies).filter(function (c) { return c && c.slug; });
+    var cs = cases.length;
     var commits = arr(p.verified_commits).length;
     var caps = arr(p.capabilities).filter(function (c) { return c && c.proven; }).length || arr(p.capabilities).length;
     var years = reconciledYears(stats, p.experience, now);
     var files = num(stats.files_committed);
-    var fourth = years !== null
-      ? '<div><b>' + years + '</b><span>years of experience</span></div>'
-      : (files !== null ? '<div><b>' + files + '</b><span>files committed</span></div>' : '');
-    return '<div class="p-ledger">'
-      + '<div class="gold"><b>' + cs + '</b><span>published case ' + C.plural(cs, 'study', 'studies') + '</span></div>'
-      + '<div><b>' + commits + '</b><span>verified commits</span></div>'
-      + '<div><b>' + caps + '</b><span>capabilities proven in code</span></div>'
-      + fourth + '</div>';
+    var tiles = [];
+    if (cs > 0) tiles.push({ big: String(cs), label: 'published case ' + C.plural(cs, 'study', 'studies'), gold: true });
+    if (commits > 0) tiles.push({ big: String(commits), label: 'verified commits' });
+    if (caps > 0) tiles.push({ big: String(caps), label: 'capabilities proven in code' });
+    if (years !== null && years > 0) tiles.push({ big: String(years), label: 'years of experience' });
+    else if (files !== null && files > 0) tiles.push({ big: String(files), label: 'files committed' });
+    var seen = {};
+    var figures = cases.map(function (c) { return metricTile(c.heroMetric); })
+      .filter(function (t) { if (!t || seen[t.big + t.label]) return false; seen[t.big + t.label] = true; return true; })
+      .sort(function (a, b) { return b.n - a.n; });
+    var walks = cases.filter(function (c) { return num(look(c).walkthroughSeconds) > 0; }).length;
+    var fill = figures.concat(walks > 0 ? [{ big: String(walks), label: 'video ' + C.plural(walks, 'walkthrough', 'walkthroughs') }] : []);
+    while (tiles.length < 4 && fill.length) tiles.push(fill.shift());
+    return tiles.slice(0, 4);
+  }
+
+  function ledger(p, hire, now) {
+    var tiles = ledgerTiles(p, hire, now);
+    return tiles.length ? '<div class="p-ledger">' + tiles.map(function (t) {
+      return '<div' + (t.gold ? ' class="gold"' : '') + '><b>' + esc(t.big) + '</b><span>' + esc(t.label) + '</span></div>';
+    }).join('') + '</div>' : '';
   }
 
   /*
@@ -102,37 +140,90 @@
     }).join('') + '</div>' : '';
   }
 
-  function signature(sig, talentSlug, api) {
-    if (!sig || !sig.slug) return '';
-    var outcomes = arr(sig.outcomes).slice(0, 3);
-    return '<div class="label" style="margin-bottom:10px">★ Signature case study</div>'
-      + '<a class="sig" href="' + caseLink(sig.slug) + '" target="_blank" rel="noopener" data-launch data-from="signature" data-case="' + esc(sig.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-      + '<div class="art">' + cover(sig, api, 10) + '</div><div class="body">'
-      + '<span class="state pub">Published case study</span>' + capability(sig) + '<h3>' + esc(sig.title) + '</h3>'
-      + (sig.summary ? '<p>' + esc(sig.summary) + '</p>' : '')
-      + (outcomes.length ? '<div class="metrics" style="margin:0 0 18px">' + outcomes.map(function (o) { return '<div><b class="gold">' + esc(o.value) + '</b><span>' + esc(o.label) + '</span></div>'; }).join('') + '</div>' : '')
-      + proof(sig)
-      + '<span class="open-cue">Open the case study ' + C.ARROW + '</span></div></a>';
+  /*
+   * THE CAROUSEL SLIDES (profile upgrade, 2026-11-12). Every published Hire case study,
+   * exactly once: the signature first, then the candidate's own order (`hire.caseStudyOrder`,
+   * set in the studio) where they set one, then the API's order. A project only ever appears
+   * AS its published case study, so a project with none contributes nothing: the slides are
+   * built from `hire.caseStudies`, never from `projects`. `projects` only decides the kicker.
+   */
+  function carouselSlides(hire, projects) {
+    var seen = {};
+    var cases = arr(hire && hire.caseStudies).filter(function (c) {
+      if (!c || !c.slug || seen[c.slug]) return false;
+      seen[c.slug] = true;
+      return true;
+    });
+    var sigSlug = hire && hire.signature && seen[hire.signature.slug] ? hire.signature.slug : null;
+    var viaProject = {};
+    arr(projects).forEach(function (x) { if (x && x.case_study_slug) viaProject[x.case_study_slug] = true; });
+    var order = arr(hire && hire.caseStudyOrder).filter(function (s) { return typeof s === 'string'; });
+    var rank = function (c, i) { var r = order.indexOf(c.slug); return r >= 0 ? r : order.length + i; };
+    var sorted = cases.map(function (c, i) { return { c: c, r: rank(c, i) }; })
+      .sort(function (a, b) { return a.r - b.r; }).map(function (x) { return x.c; });
+    if (sigSlug) sorted = sorted.filter(function (c) { return c.slug === sigSlug; }).concat(sorted.filter(function (c) { return c.slug !== sigSlug; }));
+    return sorted.map(function (c) {
+      return { cs: c, kind: c.slug === sigSlug ? 'signature' : (viaProject[c.slug] ? 'project' : 'published') };
+    });
   }
 
-  /* The body every linked case-study card shares; `sub` is the line under the title. */
-  function caseBody(cs, sub) {
-    return '<div class="b">' + capability(cs) + '<h4>' + esc(cs.title) + '</h4>'
-      + (sub ? '<span class="org">' + sub + '</span>' : '')
-      + figure(cs)
-      + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '')
-      + proof(cs)
-      + '<div class="row"><span class="state pub">★ Case study</span><span class="open-cue">Open ' + C.ARROW + '</span></div></div>';
+  var KICKER = { signature: '★ Signature case study', project: 'Project · published case study', published: 'Published case study' };
+  var ICON = {
+    pause: '<svg class="i-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>',
+    play: '<svg class="i-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>',
+    prev: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>',
+    next: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+    disc: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg>',
+  };
+  var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+
+  function launchAttrs(cs, talentSlug, from) {
+    return ' href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="' + from + '" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '"';
   }
 
-  /* A project only ever appears AS its published case study; anything else renders nothing. */
-  function projectCard(project, published, talentSlug, api) {
-    var cs = project && project.case_study_slug ? published[project.case_study_slug] : null;
-    if (!cs) return '';
-    var org = [project.organization, C.industryLabel(project.industry)].filter(Boolean).map(esc).join(' · ');
-    return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="project" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-      + '<div class="art">' + cover(cs, api, 8) + '</div>'
-      + caseBody(cs, esc(project.title) + (org ? ' · ' + org : '')) + '</a>';
+  function slide(s, i, n, talentSlug, api) {
+    var cs = s.cs;
+    return '<div class="car-slide' + (i === 0 ? ' on' : '') + '" role="group" aria-roledescription="slide" aria-label="' + (i + 1) + ' of ' + n + '"'
+      + ' data-kicker="' + esc(KICKER[s.kind]) + '"' + (i === 0 ? '' : ' hidden') + '>'
+      // One keyboard stop per slide: the visible "Open the case study" link. The cover is the
+      // same link for the mouse, kept out of the tab order and the accessibility tree.
+      + '<a class="car-art art"' + launchAttrs(cs, talentSlug, 'carousel') + ' tabindex="-1" aria-hidden="true">'
+      + '<span class="car-frame">' + cover(cs, api, 10) + '<span class="car-disc">' + ICON.disc + '</span></span></a>'
+      + '<div class="car-body">' + capability(cs) + '<h2>' + esc(cs.title) + '</h2>' + figure(cs)
+      + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '') + proof(cs)
+      + '<a class="open-cue"' + launchAttrs(cs, talentSlug, 'carousel') + ' aria-label="Open the case study: ' + esc(cs.title) + '">Open the case study ' + C.ARROW + '</a></div></div>';
+  }
+
+  /*
+   * The carousel, as markup only (carousel.js runs the timer). Slide 1 is shown, the rest
+   * carry `hidden`. With one case study there is nothing to page through, so it renders
+   * without controls, counter, progress line or thumbnails.
+   */
+  function carousel(slides, talentSlug, api) {
+    var n = arr(slides).length;
+    if (!n) return '';
+    var many = n > 1;
+    return '<section class="car" data-car aria-roledescription="carousel" aria-label="Published case studies">'
+      + '<div class="car-top"><div class="car-kicker" data-car-kicker>' + esc(KICKER[slides[0].kind]) + '</div>'
+      + (many ? '<div class="car-ctrls"><span class="car-count" data-car-count aria-live="polite">01 / ' + pad2(n) + '</span>'
+        + '<button type="button" class="btn btn-ghost btn-icon" data-car-play aria-label="Pause carousel">' + ICON.pause + ICON.play + '</button>'
+        + '<button type="button" class="btn btn-ghost btn-icon" data-car-prev aria-label="Previous case study">' + ICON.prev + '</button>'
+        + '<button type="button" class="btn btn-ghost btn-icon" data-car-next aria-label="Next case study">' + ICON.next + '</button></div>' : '')
+      + '</div>'
+      + (many ? '<div class="car-progress" aria-hidden="true"><i data-car-bar></i></div>' : '')
+      + slides.map(function (s, i) { return slide(s, i, n, talentSlug, api); }).join('')
+      + '</section>'
+      + (many ? thumbs(slides, api) : '');
+  }
+
+  /* One button per slide. The row WRAPS; nothing on this page scrolls sideways at 390px. */
+  function thumbs(slides, api) {
+    return '<div class="thumbs" data-car-thumbs role="group" aria-label="Jump to a case study">'
+      + slides.map(function (s, i) {
+        var url = C.mediaUrl(api, look(s.cs).coverImageUrl);
+        return '<button type="button" data-car-go="' + i + '" aria-current="' + (i === 0) + '" aria-label="Case study ' + (i + 1) + ': ' + esc(s.cs.title) + '">'
+          + (url ? '<img src="' + esc(url) + '" alt="" decoding="async">' : C.art(s.cs.slug, { n: 6 })) + '</button>';
+      }).join('') + '</div>';
   }
 
   /*
@@ -151,14 +242,6 @@
       seen[c.slug] = true;
       return true;
     });
-  }
-
-  function caseCard(cs, talentSlug, api) {
-    return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="case-list" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-      + '<div class="art">' + cover(cs, api, 8) + '</div>'
-      // No industry line: it is the same on every card of one person ("education" nine
-      // times on Kes's page), which is the sameness this card exists to remove.
-      + caseBody(cs, '') + '</a>';
   }
 
   function commits(list) {
@@ -204,17 +287,13 @@
       + '<a class="btn btn-ghost btn-block" href="/">← Back to all talent</a></aside>';
   }
 
+  var LINK_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg>';
+
   function renderPortfolio(body, slug, shortlist, now, api) {
     var p = body.portfolio; var hire = body.hire; var id = p.identity;
     var person = { slug: slug, name: id.full_name, avatarUrl: id.avatar_data_url };
-    var published = {};
-    arr(hire.caseStudies).forEach(function (c) { if (c && c.slug) published[c.slug] = c; });
-    var sig = hire.signature && published[hire.signature.slug] ? hire.signature : null;
-    var projects = arr(p.projects).filter(function (x) {
-      return x && x.case_study_slug && published[x.case_study_slug] && (!sig || x.case_study_slug !== sig.slug);
-    });
-    var csCount = arr(hire.caseStudies).length;
-    var more = unlinkedCaseStudies(hire, arr(p.projects), sig);
+    var slides = carouselSlides(hire, p.projects);
+    var csCount = slides.length;
     var on = shortlist.indexOf(slug) >= 0;
     var avail = hire.availability && hire.availability.label
       ? '<span class="avail ' + (['open', 'interviewing', 'placed'].indexOf(hire.availability.kind) >= 0 ? hire.availability.kind : 'open') + '">' + esc(hire.availability.label) + '</span>' : '';
@@ -229,11 +308,9 @@
       + (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>'
       + '<div class="p-actions"><a class="btn btn-primary" href="/intro/?talent=' + encodeURIComponent(slug) + '" data-intro="' + esc(slug) + '">Request intro</a>'
       + '<button type="button" class="btn btn-star' + (on ? ' on' : '') + '" data-star="' + esc(slug) + '" data-name="' + esc(id.full_name) + '" aria-pressed="' + on + '">★ ' + (on ? 'Shortlisted' : 'Shortlist') + '</button>'
-      + '<button type="button" class="btn btn-ghost" data-copy>Copy link</button></div></div>'
+      + '<button type="button" class="btn btn-ghost btn-icon" data-copy aria-label="Copy profile link">' + LINK_ICON + '</button></div></div>'
       + ledger(p, hire, now)
-      + '<div class="p-cols"><div>' + signature(sig, slug, api)
-      + (more.length ? '<div class="card"><div class="label">Published case studies</div><h3 class="t">' + (sig ? 'More of their published work' : 'Their published work') + '</h3><div class="projs">' + more.map(function (c) { return caseCard(c, slug, api); }).join('') + '</div></div>' : '')
-      + (projects.length ? '<div class="card"><div class="label">Projects</div><h3 class="t">Their projects, as published case studies</h3><div class="projs">' + projects.map(function (x) { return projectCard(x, published, slug, api); }).join('') + '</div></div>' : '')
+      + '<div class="p-cols"><div>' + carousel(slides, slug, api)
       + (about.length ? '<div class="card about"><div class="label">About <span class="src">from their record and resume</span></div>' + about.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>' : '')
       + (vc.length ? '<div class="card"><div class="label">Verified commits</div><h3 class="t">The work, commit by commit</h3>' + commits(vc) + '</div>' : '')
       + (xp.length ? '<div class="card"><div class="label">Experience <span class="src">parsed from their resume</span></div>' + experience(xp) + '</div>' : '')
@@ -248,7 +325,8 @@
 
   return {
     isPayload: isPayload, experienceSpanYears: experienceSpanYears, reconciledYears: reconciledYears,
-    projectCard: projectCard, unlinkedCaseStudies: unlinkedCaseStudies, caseCard: caseCard,
+    unlinkedCaseStudies: unlinkedCaseStudies, metricTile: metricTile, ledgerTiles: ledgerTiles,
+    carouselSlides: carouselSlides, carousel: carousel,
     renderPortfolio: renderPortfolio, slugFromPath: slugFromPath,
   };
 }));

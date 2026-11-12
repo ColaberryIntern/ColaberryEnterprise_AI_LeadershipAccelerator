@@ -45,8 +45,17 @@ a.proj:hover,a.proj:focus-visible{border-color:var(--star);transform:translateY(
 .builder{transition:border-color 200ms}
 .builder:hover,.builder:focus-visible{border-color:var(--star)}
 
+/* 4.9 the profile carousel (profile upgrade, 2026-11-12): a slide enters with opacity and a
+   12px slide; the progress line is scaleX, set by carousel.js; thumbnails lift like cards. */
+.car-slide.enter{animation:car-in var(--dur-fade) var(--ease-launch)}
+@keyframes car-in{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.thumbs button{transition:opacity 200ms,border-color 200ms,transform 200ms}
+.thumbs button:hover,.thumbs button:focus-visible{opacity:1;transform:translateY(-2px)}
+.car-art{transition:filter 200ms}
+.car-art:hover{filter:brightness(1.05)}
+
 /* 5 the launch: dip-and-spring + gold sweep, both 700ms, together */
-.sig,.proj,.mini{position:relative;overflow:hidden}
+.sig,.proj,.mini,.car-art{position:relative;overflow:hidden}
 .launch{animation:launch var(--dur-launch) var(--ease-launch)}
 .launch::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,color-mix(in srgb,var(--star) 55%,transparent) 50%,transparent 70%);transform:translateX(-100%);animation:sweep var(--dur-launch) forwards;pointer-events:none;z-index:5}
 @keyframes launch{0%{transform:scale(1)}35%{transform:scale(.97)}70%{transform:scale(1.03)}100%{transform:scale(1)}}
@@ -65,4 +74,6 @@ a.proj:hover,a.proj:focus-visible{border-color:var(--star);transform:translateY(
   .step.anim{opacity:1;transform:none}
   .launch::after{display:none}
   .boot{display:none}
+  /* the carousel starts paused and never auto-advances (carousel.js), so no progress line */
+  .car-progress{display:none}
 }
