@@ -4,6 +4,7 @@
  */
 jest.mock('../../services/hire/hireTalentDirectory', () => ({ getHireTalentDirectory: jest.fn() }));
 jest.mock('../../services/hire/hireIntro', () => ({ requestHireIntro: jest.fn() }));
+jest.mock('../../services/hire/hireInterviews', () => ({ talentSlots: jest.fn(), requestInterview: jest.fn() }));
 
 import express from 'express';
 import request from 'supertest';

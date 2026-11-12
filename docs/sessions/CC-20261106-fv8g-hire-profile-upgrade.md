@@ -31,3 +31,38 @@ with these.
     flex stretched the lone last thumbnail to full width at 390px. The demo's "26,773" is not in
     Kes's record; his figure is "268 of 20,773", and that is what renders. Thumbnails load the full
     1536px covers (170-330 KB each); a small thumbnail rendition is a follow-up.
+  - Shipped: merged 2026-11-12 (#3971), deployed 087c2b756 (backend + nginx), production-verified
+    in a real browser on all 6 listed profiles at 1320 and 390, light and dark: no sideways scroll,
+    0 page errors; Kes's carousel 9 slides, 9 thumbnails, advanced 01 -> 02 on its own.
+
+- [x] Phase 2: backend tables and endpoints, plus the extended profile payload
+  - Date: 2026-11-12
+  - Session: CC-20261106-fv8g
+  - What changed: `db/ensureHireInterviewSchema.ts` (4 new tables, additive, rollback statements
+    beside them, run at boot): `hire_profile_intro`, `hire_interview_availability`,
+    `hire_case_study_order`, `hire_interviews`. `services/hire/hireSlots.ts` (pure slot math: the
+    candidate's Mon-Fri morning/afternoon/evening blocks in THEIR zone, half-hour starts that end
+    inside the block, minus notice, overlaps with held times and full weeks; per-date UTC
+    conversion so DST weeks are right). `hireStudioSettings.ts` (intro, availability and order:
+    zod schemas, idempotent upserts, and the only public projections). `hireInterviews.ts` (public
+    slots, and a request decided under a per-candidate advisory lock, duplicate per employer +
+    slot). `hireInterviewInbox.ts` (the candidate's list and confirm / decline / propose).
+    Routes: `GET /api/public/hire/talent/:slug/slots` (no-store), `POST /api/public/hire/interviews`
+    (JSON or form 303 to a fixed URL), the five learner routes under the portfolio gates.
+    `GET /api/public/portfolios/:slug?surface=hire` now carries `hire.intro`,
+    `hire.caseStudyOrder` and `hire.booking`; each is optional and falls back on failure.
+  - Verification: backend tsc clean against a planted control error; test-file typecheck gate
+    clean (only the local-only enrichVisitorGeo maxmind error); jest (CI config) 18 suites /
+    158 tests pass, the integration suite skipping without a database
+    (new: hireSlots incl. both DST changes, hireInterviews, hireStudioSettings,
+    hireInterviewInbox, hirePortfolioExtras, publicHireInterviewRoutes, hireStudioController).
+    Mutation-checked: removing the overlap rule fails 2 suites; dropping the enrollment scope
+    from the inbox read fails its suite. New `hireInterviews.integration.test.ts` runs the DDL
+    twice, the upserts, duplicate and a 3-way race for one slot against real Postgres in the CI
+    integration tier.
+  - Notes: sends NOTHING. Emails, the .ics, the room link and the lead_sources ingest are Phase 4
+    (the kit ships notifications with the schedule page), so `confirm` records the decision only
+    and `auto_confirm` is stored but not yet acted on. Booking is OFF by default, so every
+    existing profile (Kes included) keeps Request intro and cannot receive a request. Holidays
+    are not removed from slots yet. Location is studio-only (the kit's public chips are roles,
+    setup and earliest start).
