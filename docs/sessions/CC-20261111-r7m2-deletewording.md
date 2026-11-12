@@ -137,3 +137,77 @@ The first change was not wrong in intent and its headline claim held - the contr
 what people search for. It was wrong in **completeness**, and it was reported as finished. The
 lesson is not "rename more carefully"; it is that a vocabulary change needs a test asserting the
 old vocabulary is **gone**, because that is the only assertion a half-finished rename can fail.
+
+## Merged (the completion)
+
+PR #3927 merged 2026-11-12 01:09Z as `3d443b81`, the tip of `main`.
+
+Verified by content on `main`, both directions - the five new strings present, and **all four old
+strings at zero**:
+
+```
+Delete this build                 -> 1      Remove this build  -> 0
+Deleting…                         -> 1      Removing…          -> 0
+restore it from “Deleted builds”  -> 1      Removed builds     -> 0
+Deleting it moves you to          -> 1      Removing it        -> 0
+Deleting it leaves you            -> 1
+```
+
+Checking the absence is the whole point of this PR, so the verification checks it too rather than
+only confirming the replacements arrived.
+
+https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3927
+
+### A trap worth recording
+
+`git fetch origin main` in this worktree **exits 0, writes `FETCH_HEAD`, and does not advance the
+`refs/remotes/origin/main` ref.** Branching from `origin/main` after a fetch put me three commits
+behind on a branch I was about to build on - it silently based work on an ancestor of my own merge
+commit. Caught because the session-log file showed as untracked when it is committed on `main`.
+
+The remote tip has to come from `gh api repos/<r>/commits/main`. `git update-ref` repairs the ref
+only when the object is already in the local store - it worked for `15008280` (pushed from here) and
+**failed** for `3d443b81` with "nonexistent object", because a merge commit GitHub created was never
+fetched. So the API SHA is the source of truth for *what* the tip is; it is not by itself enough to
+make the local ref usable. Both PRs in this session were branched using the API SHA for that reason.
+
+## Deployed and verified on the live surface
+
+Main moved twice during this. The first real deploy attempt **refused**, correctly:
+
+```
+[deploy] FAILED: HEAD (3d443b81…) is not origin/main (529e72ec…). Refusing to build.
+```
+
+Another session merged #3931 between the dry run and the deploy. The guard did its job - a dry
+run is a snapshot, and the only safe thing to do with a moved tip is stop. Re-checked that
+`529e72ec` was 2 ahead / 0 behind my merge and still carried the fix, waited for its image, and
+deployed that.
+
+- [x] Deploy the completed rename to production
+  - Date: 2026-11-11 · Session: CC-20261111-r7m2
+  - What changed: nginx recreated from `ghcr.io/colaberryintern/accelerator-nginx:main` at
+    `sha-529e72ece08d2b1474aa30d5554891e8979eb8de`. Registry mode. Frontend only; backend
+    untouched, which is why only nginx was named.
+  - Verification: **the served bundle, not the deploy's exit code.** All **193** JS chunks in the
+    live `asset-manifest.json` fetched from `https://enterprise.colaberry.ai` and grepped:
+    **0 hits for `Removed builds`, `Remove this build`, `Removing it moves you`**; `Deleted
+    builds`, `Delete this build` and `Deleting it moves you` all present in
+    `static/js/3058.674aee35.chunk.js`. The chunk hash moved from `3058.d70b6b3d` to
+    `3058.674aee35`, so this is a new bundle rather than a cached one.
+  - Notes: the deploy reported `Container accelerator-nginx Recreated / Started`. The earlier
+    deploy of #3924 reported only `Running`, which is the weaker signal - worth reading, since
+    "Running" can mean nothing was replaced.
+
+### What is NOT proved
+
+The strings are verified in the shipped bundle. **Nobody has clicked the button in a browser as a
+student.** The confirm-word path is covered by unit tests and the archive/restore behaviour did
+not change in either PR, so the risk is low - but "the correct text is in the bundle" and "a
+student successfully deleted and restored a build" are different claims and only the first one
+has evidence.
+
+### Open, and Ali's call
+
+**Project Studio still has no delete control.** Both PRs made the control on the Projects page
+findable and consistent. Neither put one where Swati actually looked when she emailed.
