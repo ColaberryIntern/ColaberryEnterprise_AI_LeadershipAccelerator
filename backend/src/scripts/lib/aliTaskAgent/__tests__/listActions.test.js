@@ -6,7 +6,7 @@
  * whole list onto one day, dismissing without a recorded reason, or an "assign" that silently
  * takes the work off whoever already holds it.
  */
-const { planDismiss, planRedate, planAssign, scheduleDates, workingOrder, renderPlan } = require('../listActions');
+const { planDismiss, dismissQuery, planRedate, planAssign, scheduleDates, workingOrder, renderPlan } = require('../listActions');
 
 const t = (id, title, dueOn) => ({ id, title, dueOn });
 const tasks = [
@@ -93,6 +93,50 @@ describe('planDismiss', () => {
 
   it('carries a reversal', () => {
     expect(planDismiss(tasks, { reason: 'x' }).reversal).toMatch(/is_dismissed = false/);
+  });
+
+  /** dismissed_reason is VARCHAR(40); a longer reason made the UPDATE itself fail. */
+  it('refuses a reason the column cannot hold, and accepts one exactly at the limit', () => {
+    expect(planDismiss(tasks, { reason: 'x'.repeat(41) }).problems[0]).toMatch(/41 characters; the column holds 40/);
+    expect(planDismiss(tasks, { reason: 'x'.repeat(40) }).problems).toEqual([]);
+  });
+});
+
+describe('dismissQuery', () => {
+  const real = [t('47126345/9001', 'a'), t('49506070/9002', 'b')];
+
+  /** The first version cast to bigint[] against a VARCHAR column: every --apply errored on prod. */
+  it('compares ids as text, never as bigint', () => {
+    const q = dismissQuery(planDismiss(real, { reason: 'demo' }), 'ata-list');
+    expect(q.sql).not.toMatch(/bigint/);
+    expect(q.sql).toMatch(/unnest\(\$3::text\[\], \$4::text\[\]\)/);
+    expect(q.bind).toEqual(['ata-list', 'demo', ['47126345', '49506070'], ['9001', '9002']]);
+    q.bind[2].concat(q.bind[3]).forEach((x) => expect(typeof x).toBe('string'));
+  });
+
+  it('matches each row on its (project, todo) pair and skips rows already dismissed, so a re-run is a no-op', () => {
+    const q = dismissQuery(planDismiss(real, { reason: 'demo' }), 'ata-list');
+    expect(q.sql).toMatch(/\(project_id, bc_id\) IN/);
+    expect(q.sql).toMatch(/is_dismissed IS NOT TRUE/);
+    expect(q.pairs).toBe(2);
+  });
+
+  it('drops malformed ids instead of passing them to SQL, and reports the count', () => {
+    const q = dismissQuery(planDismiss([...real, t("1/2'; DROP TABLE x;--", 'evil'), t('nope', 'c')], { reason: 'd' }), 'ata-list');
+    expect(q.pairs).toBe(2);
+    expect(q.undo).not.toMatch(/DROP/);
+  });
+
+  it('prints an undo that restores exactly these rows', () => {
+    const q = dismissQuery(planDismiss(real, { reason: 'demo' }), 'ata-list');
+    expect(q.undo).toMatch(/SET is_dismissed = false/);
+    expect(q.undo).toMatch(/dismissed_by = 'ata-list'/);
+    expect(q.undo).toContain("ARRAY['47126345','49506070']::text[]");
+    expect(q.undo).toContain("ARRAY['9001','9002']::text[]");
+  });
+
+  it('handles an empty plan without throwing', () => {
+    expect(dismissQuery({ changes: [] }, 'ata-list').pairs).toBe(0);
   });
 });
 

@@ -83,6 +83,9 @@ function planDismiss(tasks, opts = {}) {
   const reason = String(opts.reason || '').trim();
   const problems = [];
   if (!reason) problems.push('a reason is required: a dismissal nobody can explain later is a deletion');
+  if (reason.length > REASON_MAX) {
+    problems.push(`the reason is ${reason.length} characters; the column holds ${REASON_MAX}. Shorten it`);
+  }
 
   const changes = tasks.map((t) => ({
     id: t.id,
@@ -102,6 +105,42 @@ function planDismiss(tasks, opts = {}) {
       + 'The tickets stay OPEN in Basecamp and anyone else assigned still sees them.',
     reversal: `UPDATE ops_bc_todos SET is_dismissed = false, dismissed_at = NULL, `
       + `dismissed_by = NULL, dismissed_reason = NULL WHERE bc_id IN (...)`,
+  };
+}
+
+/** ops_bc_todos.dismissed_reason is VARCHAR(40) (measured on prod 2026-11-12). */
+const REASON_MAX = 40;
+
+/**
+ * The SQL that applies a dismiss plan, and the SQL that undoes it.
+ *
+ * bc_id and project_id are VARCHAR in ops_bc_todos. The first version compared bc_id to a
+ * bigint[] and failed on prod with "operator does not exist: character varying = bigint" (probed
+ * 2026-11-12), so every --apply would have errored. IDs stay TEXT end to end here, and each row is
+ * matched on its (project_id, bc_id) pair, the same identity the board uses.
+ * @param {{changes:Array<{id:string, reason:string}>}} plan  a planDismiss result
+ * @param {string} by  recorded in dismissed_by
+ * @returns {{sql:string, bind:Array, undo:string, pairs:number}}
+ */
+function dismissQuery(plan, by) {
+  const pairs = (plan.changes || [])
+    .map((c) => String(c.id || '').split('/'))
+    .filter((p) => p.length === 2 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1]));
+  const projects = pairs.map((p) => p[0]);
+  const todos = pairs.map((p) => p[1]);
+  const reason = (plan.changes[0] && plan.changes[0].reason) || '';
+  const match = '(project_id, bc_id) IN (SELECT * FROM unnest($3::text[], $4::text[]))';
+  // Undo is printed for a person to paste, so the ids are inlined; they are digits only (filtered above).
+  const lit = (xs) => `ARRAY[${xs.map((x) => `'${x}'`).join(',')}]::text[]`;
+  return {
+    sql: `UPDATE ops_bc_todos
+        SET is_dismissed = true, dismissed_at = now(), dismissed_by = $1, dismissed_reason = $2
+      WHERE ${match} AND is_dismissed IS NOT TRUE`,
+    bind: [by, reason, projects, todos],
+    undo: 'UPDATE ops_bc_todos SET is_dismissed = false, dismissed_at = NULL, dismissed_by = NULL, '
+      + `dismissed_reason = NULL WHERE dismissed_by = '${String(by).replace(/'/g, "''")}' AND (project_id, bc_id) IN `
+      + `(SELECT * FROM unnest(${lit(projects)}, ${lit(todos)}));`,
+    pairs: pairs.length,
   };
 }
 
@@ -195,4 +234,4 @@ function renderPlan(plan, opts = {}) {
   return L.join('\n');
 }
 
-module.exports = { planDismiss, planRedate, planAssign, scheduleDates, workingOrder, renderPlan };
+module.exports = { planDismiss, dismissQuery, REASON_MAX, planRedate, planAssign, scheduleDates, workingOrder, renderPlan };
