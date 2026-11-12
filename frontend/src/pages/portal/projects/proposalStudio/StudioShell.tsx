@@ -10,6 +10,7 @@ import { WORKSPACE_STEPS, type WorkspaceStep } from '../../../admin/govWorkspace
 import { parseDeadline, countdownTo, formatCountdown } from '../../../admin/govDeadline';
 import WhereWeAre from './WhereWeAre';
 import AgentPanel from './AgentPanel';
+import QualRail from './QualRail';
 import './studio.css';
 import Blueprint from './Blueprint';
 import DocumentSet from './DocumentSet';
@@ -170,7 +171,12 @@ export default function StudioShell(
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
         <main id="gps-main" style={{ minWidth: 0 }}>{center}</main>
-        <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} />
+        {/* On the pre-award assessment steps (1-5), the right column mirrors the admin Qualification Workspace's
+            persistent rail (AI vetting + deadline + key dates), read-only and student-safe, instead of the
+            Proposal-agent panel. Every other view keeps the agent panel. */}
+        {(current === 'snapshot' || current === 'solicitation' || current === 'fit' || current === 'decide' || current === 'outcome')
+          ? <QualRail view={view} />
+          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} />}
       </div>
       {drawerDoc && (
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
