@@ -314,7 +314,14 @@ describeIfDb('the scheduler claim is an owned lease, and stale recovery terminat
     it('reports nothing to do as nothing to do', async () => {
       const out = await recoverStaleActions();
 
-      expect(out).toEqual({ requeued: 0, exhausted: 0, ids: [] });
+      // The whole shape, deliberately: this is the one assertion that would notice a new field
+      // appearing on RecoveryOutcome without anyone deciding what it should be when there is
+      // nothing to recover. That strictness is also why it survived the L7.3 rename when the
+      // property-access sites did not - `toEqual` against a literal has no type relationship to
+      // `out`, so the test-file typecheck could not see it and only running it did.
+      expect(out).toEqual({
+        requeued: 0, exhausted: 0, requeuedIds: [], exhaustedIds: [],
+      });
     });
   });
 });
