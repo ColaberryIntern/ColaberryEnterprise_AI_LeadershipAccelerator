@@ -24,6 +24,7 @@ import PageGate from '../components/paywall/PageGate';
 const RuntimeWorkspace = lazy(() => import('../pages/portal/runtime/RuntimeWorkspace'));
 const ProjectWorkspacePage = lazy(() => import('../pages/portal/projects/ProjectWorkspacePage'));
 const GovProjectPortalPage = lazy(() => import('../pages/portal/projects/GovProjectPortalPage'));
+const GovProjectQualificationPage = lazy(() => import('../pages/portal/projects/GovProjectQualificationPage'));
 const PortalLessonPage = lazy(() => import('../pages/portal/PortalLessonPage'));
 const PortalSessionsPage = lazy(() => import('../pages/portal/PortalSessionsPage'));
 const PortalAssignmentsPage = lazy(() => import('../pages/portal/PortalAssignmentsPage'));
@@ -208,6 +209,9 @@ const portalRoutes = (
       {/* Student view of an ASSIGNED government project. Access is enforced server-side (the guarded
           /api/portal/gov-projects/:id endpoint); an unassigned project resolves to a "not found" page. */}
       <Route path="/portal/gov-projects/:projectId" element={<GovProjectPortalPage />} />
+      {/* The intern's READ-ONLY Qualification Workspace — the REAL admin page, award amount stripped. Reached from
+          the Proposal Studio stepper (steps 1-5). Access is enforced server-side by the participant endpoints. */}
+      <Route path="/portal/gov-projects/:projectId/qualification" element={<GovProjectQualificationPage />} />
       {/* Retired AI Project Builder entry points → student home. */}
       <Route path="/portal/home" element={<Navigate to="/portal/today" replace />} />
       <Route path="/portal/dashboard" element={<Navigate to="/portal/today" replace />} />
