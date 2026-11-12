@@ -201,7 +201,15 @@
       + renderHow();
   }
 
+  /* The first load failed. True, and different from "nobody is listed", which only the API may say. */
+  function renderUnavailable() {
+    return '<section class="block" id="directory-unavailable"><div class="wrap"><div class="empty">'
+      + '<h1 class="mono">The directory could not be reached just now</h1>'
+      + '<p>Refresh the page in a moment to see the listed engineers.</p></div></div></section>';
+  }
+
   return {
+    renderUnavailable: renderUnavailable,
     TRACKS: TRACKS, SORTS: SORTS, parseFilters: parseFilters, filtersToQuery: filtersToQuery,
     isPayload: isPayload, renderHero: renderHero, renderSpotlight: renderSpotlight,
     talentCard: talentCard, renderGrid: renderGrid, renderStrip: renderStrip,
