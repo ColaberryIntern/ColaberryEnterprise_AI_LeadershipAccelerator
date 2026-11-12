@@ -6,9 +6,11 @@
  * about, verified commits, experience; sidebar: proven in their repo, stack, industries,
  * contact, back to all talent. Pure render functions are exported for node's test runner.
  *
- * TWO RULES THIS FILE EXISTS TO KEEP. (1) A project card is a LINK only when its case
- * study is published on Hire; otherwise it says "Case study in review" and shows the
- * PROJECT's own title, never a draft case study's. (2) `years_experience` prints only when
+ * TWO RULES THIS FILE EXISTS TO KEEP. (1) Hire shows a person's work ONLY as approved,
+ * Hire-published case studies (Ali, 2026-11-11: "No projects they are working on or that
+ * haven't been converted"). A project with no published case study renders NOTHING: no
+ * "in review" card, no title. The API already strips them (backend hireCaseStudyOnly); this
+ * is the second layer. (2) `years_experience` prints only when
  * it reconciles with the experience the page itself lists; the old preview printed
  * "26 years" beside a ten-year history, and a hiring manager reads that as a lie.
  */
@@ -123,18 +125,14 @@
       + '<div class="row"><span class="state pub">★ Case study</span><span class="open-cue">Open ' + C.ARROW + '</span></div></div>';
   }
 
+  /* A project only ever appears AS its published case study; anything else renders nothing. */
   function projectCard(project, published, talentSlug, api) {
-    var cs = project.case_study_slug ? published[project.case_study_slug] : null;
+    var cs = project && project.case_study_slug ? published[project.case_study_slug] : null;
+    if (!cs) return '';
     var org = [project.organization, project.industry].filter(Boolean).map(esc).join(' · ');
-    if (cs) {
-      return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="project" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
-        + '<div class="art">' + cover(cs, api, 8) + '</div>'
-        + caseBody(cs, esc(project.title) + (org ? ' · ' + org : '')) + '</a>';
-    }
-    return '<div class="proj pending"><div class="art">' + C.art('project:' + project.title, { n: 6 }) + '</div><div class="b">'
-      + '<h4>' + esc(project.title) + '</h4>' + (org ? '<span class="org">' + org + '</span>' : '')
-      + '<p>This project is still becoming a case study. It counts toward the profile once it is published.</p>'
-      + '<div class="row"><span class="state wip">◌ Case study in review</span></div></div></div>';
+    return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="project" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
+      + '<div class="art">' + cover(cs, api, 8) + '</div>'
+      + caseBody(cs, esc(project.title) + (org ? ' · ' + org : '')) + '</a>';
   }
 
   /*
@@ -212,7 +210,9 @@
     var published = {};
     arr(hire.caseStudies).forEach(function (c) { if (c && c.slug) published[c.slug] = c; });
     var sig = hire.signature && published[hire.signature.slug] ? hire.signature : null;
-    var projects = arr(p.projects).filter(function (x) { return !sig || x.case_study_slug !== sig.slug; });
+    var projects = arr(p.projects).filter(function (x) {
+      return x && x.case_study_slug && published[x.case_study_slug] && (!sig || x.case_study_slug !== sig.slug);
+    });
     var csCount = arr(hire.caseStudies).length;
     var more = unlinkedCaseStudies(hire, arr(p.projects), sig);
     var on = shortlist.indexOf(slug) >= 0;
@@ -233,7 +233,7 @@
       + ledger(p, hire, now)
       + '<div class="p-cols"><div>' + signature(sig, slug, api)
       + (more.length ? '<div class="card"><div class="label">Published case studies</div><h3 class="t">' + (sig ? 'More of their published work' : 'Their published work') + '</h3><div class="projs">' + more.map(function (c) { return caseCard(c, slug, api); }).join('') + '</div></div>' : '')
-      + (projects.length ? '<div class="card"><div class="label">Projects</div><h3 class="t">Everything they\'ve built</h3><div class="projs">' + projects.map(function (x) { return projectCard(x, published, slug, api); }).join('') + '</div></div>' : '')
+      + (projects.length ? '<div class="card"><div class="label">Projects</div><h3 class="t">Their projects, as published case studies</h3><div class="projs">' + projects.map(function (x) { return projectCard(x, published, slug, api); }).join('') + '</div></div>' : '')
       + (about.length ? '<div class="card about"><div class="label">About <span class="src">from their record and resume</span></div>' + about.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>' : '')
       + (vc.length ? '<div class="card"><div class="label">Verified commits</div><h3 class="t">The work, commit by commit</h3>' + commits(vc) + '</div>' : '')
       + (xp.length ? '<div class="card"><div class="label">Experience <span class="src">parsed from their resume</span></div>' + experience(xp) + '</div>' : '')
