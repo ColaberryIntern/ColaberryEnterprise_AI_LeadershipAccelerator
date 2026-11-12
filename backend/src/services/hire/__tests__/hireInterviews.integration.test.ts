@@ -61,12 +61,10 @@ describeIfDb('hire interviews against Postgres', () => {
   });
 
   it('creates all four tables, every statement valid (none skipped)', async () => {
-    const [rows] = await sequelize.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'hire\\_%' ORDER BY table_name`,
-    );
-    expect((rows as { table_name: string }[]).map((r) => r.table_name)).toEqual(
-      expect.arrayContaining(['hire_case_study_order', 'hire_interview_availability', 'hire_interviews', 'hire_profile_intro']),
-    );
+    for (const t of ['hire_case_study_order', 'hire_interview_availability', 'hire_interviews', 'hire_profile_intro']) {
+      const [rows] = await sequelize.query('SELECT to_regclass($1)::text AS name', { bind: [t] });
+      expect((rows as { name: string | null }[])[0].name).toBe(t);
+    }
     const [idx] = await sequelize.query(`SELECT indexname FROM pg_indexes WHERE tablename = 'hire_interviews'`);
     expect((idx as { indexname: string }[]).map((r) => r.indexname)).toEqual(expect.arrayContaining(['uq_hire_interviews_repeat']));
   });
