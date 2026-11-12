@@ -30,7 +30,7 @@ const { QueryTypes } = require('/app/node_modules/sequelize');
 const libDir = fs.existsSync(path.join(__dirname, 'listActions.js'))
   ? __dirname
   : path.join(__dirname, '../backend/src/scripts/lib/aliTaskAgent');
-const { planDismiss, planRedate, planAssign, renderPlan } = require(path.join(libDir, 'listActions'));
+const { planDismiss, dismissQuery, planRedate, planAssign, renderPlan } = require(path.join(libDir, 'listActions'));
 
 const arg = (k, d = null) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -114,18 +114,18 @@ if (!arg('list') && !LIST_ID) {
   }
 
   // The one action this script performs: a local, reversible dismissal.
-  const ids = plan.changes.map((c) => Number(String(c.id).split('/')[1])).filter(Boolean);
-  const [, affected] = await sequelize.query(
-    `UPDATE ops_bc_todos
-        SET is_dismissed = true, dismissed_at = now(), dismissed_by = $1, dismissed_reason = $2
-      WHERE bc_id = ANY($3::bigint[]) AND is_dismissed IS NOT TRUE`,
-    { type: QueryTypes.UPDATE, bind: ['ata-list', plan.changes[0].reason, ids] },
-  );
+  // One UPDATE statement, so it is all-or-nothing; a re-run matches nothing (is_dismissed guard).
+  const q = dismissQuery(plan, 'ata-list');
+  if (q.pairs !== plan.changes.length) {
+    console.error(`REFUSED: ${plan.changes.length - q.pairs} task id(s) are not "<project>/<todo>" digits; nothing changed.`);
+    await sequelize.close();
+    process.exit(1);
+  }
+  const [, affected] = await sequelize.query(q.sql, { type: QueryTypes.UPDATE, bind: q.bind });
 
   console.log(`APPLIED. ${affected} row(s) dismissed from the queue.`);
-  console.log('The tickets remain OPEN in Basecamp. To undo:');
-  console.log(`  UPDATE ops_bc_todos SET is_dismissed = false, dismissed_at = NULL,`);
-  console.log(`    dismissed_by = NULL, dismissed_reason = NULL WHERE bc_id = ANY('{${ids.slice(0, 5).join(',')}${ids.length > 5 ? ',...' : ''}}'::bigint[]);`);
+  console.log('The tickets remain OPEN in Basecamp. To undo, paste:');
+  console.log(`  ${q.undo}`);
 
   await sequelize.close();
   process.exit(0);
