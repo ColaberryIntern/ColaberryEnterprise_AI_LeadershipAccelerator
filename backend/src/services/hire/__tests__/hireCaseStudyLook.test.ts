@@ -3,7 +3,7 @@
  * 2026-11-11: Kes's nine cards "on the surface they all look the same"). Pure; the input is
  * the record's own public projection, so nothing here can expose a field that page hides.
  */
-import { lookOf, toHireCaseStudyCard } from '../hireTalentProjection';
+import { lookOf, toHireCaseStudyCard, withUnit } from '../hireTalentProjection';
 import type { PublicCaseStudyDetail } from '../../../types/caseStudyPublic';
 
 const detail = (over: Record<string, unknown> = {}): PublicCaseStudyDetail => ({
@@ -57,5 +57,26 @@ describe('toHireCaseStudyCard', () => {
     const card = toHireCaseStudyCard(detail(), { featured: false, publishedAt: '2026-11-01' });
     expect(card.heroMetric).toEqual({ value: '97%', label: 'of lost events resolved' });
     expect(card.look.coverImageUrl).toBe('/site-v2/thumb-a.jpg?v=1');
+  });
+});
+
+// Quincy, 2026-11-12: his profile's headline card read "Recovered in 1m31s seconds".
+describe('withUnit', () => {
+  it.each([
+    ['Recovered in 1m31s', 'seconds', 'Recovered in 1m31s'],
+    ['1 of 6 sources live', 'sources', '1 of 6 sources live'],
+    ['448', 'tests', '448 tests'],
+    ['41%', 'percentage points', '41% percentage points'],
+    ['97%', null, '97%'],
+  ])('%s + %s -> %s', (v, u, want) => {
+    expect(withUnit(v, u)).toBe(want);
+  });
+
+  it('the card carries the phrase without a doubled unit', () => {
+    const card = toHireCaseStudyCard(
+      detail({ heroMetrics: [{ valueDisplay: 'Recovered in 1m31s', unit: 'seconds', label: 'once the failure was confirmed' }] }),
+      { featured: false, publishedAt: '2026-11-12T00:00:00.000Z' },
+    );
+    expect(card.heroMetric).toEqual({ value: 'Recovered in 1m31s', label: 'once the failure was confirmed' });
   });
 });

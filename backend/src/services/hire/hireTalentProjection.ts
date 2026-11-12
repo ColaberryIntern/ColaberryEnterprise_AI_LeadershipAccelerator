@@ -97,7 +97,17 @@ function metricOf(m: PublicCaseStudyDetail['heroMetrics'][number]): { value: str
   const value = text(m?.valueDisplay);
   const label = text(m?.label);
   if (!value || !label) return null;
-  return { value: m.unit ? `${value} ${m.unit}` : value, label };
+  return { value: withUnit(value, text(m.unit)), label };
+}
+
+/**
+ * The unit goes after a BARE number only ("448" + "tests"). A display value that is already
+ * a phrase carries its own noun, so appending printed "Recovered in 1m31s seconds" on
+ * Quincy's profile and "1 of 6 sources live sources" (2026-11-12). Same rule as the Hire
+ * case study page's figure() and the enterprise page's unitAlreadyInValue.
+ */
+export function withUnit(value: string, unit: string | null): string {
+  return unit && /^[-+]?[\d.,]+%?$/.test(value) ? `${value} ${unit}` : value;
 }
 
 /** A Hire case study from its public projection: only what that projection already shows. */
