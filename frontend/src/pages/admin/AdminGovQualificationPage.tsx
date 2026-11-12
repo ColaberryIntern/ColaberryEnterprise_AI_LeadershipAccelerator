@@ -990,7 +990,14 @@ export default function AdminGovQualificationPage({ readOnly = false, opportunit
   // The active pursuit step is URL-backed (?tab=<step>) so a reload restores it and the view is
   // shareable; legacy tab values resolve to the new steps so old links keep working.
   const tabParam = params.get('tab') ?? '';
-  const activeStep: WorkspaceStep = resolveStep(tabParam);
+  // In read-only (intern) mode only the four qualification steps exist (snapshot/solicitation/fit/decide, n<=4);
+  // steps 5-8 (build/proposal/submit/outcome) are the intern's OWN Proposal Studio, so they are not shown here.
+  // Clamp any stale or forward `?tab=` back to a qualification step so a shared/old URL never lands the intern on
+  // a step this page intentionally omits (which would render an empty body).
+  const resolvedStep = resolveStep(tabParam);
+  const activeStep: WorkspaceStep = (readOnly && !WORKSPACE_STEPS.some((s) => s.key === resolvedStep && s.n <= 4))
+    ? 'snapshot'
+    : resolvedStep;
   const setStep = useCallback((key: WorkspaceStep) => {
     const next = new URLSearchParams(params);
     next.set('tab', key);
@@ -1295,9 +1302,12 @@ export default function AdminGovQualificationPage({ readOnly = false, opportunit
             </div>
           )}
 
-          {!readOnly && stepModel && (
+          {/* The stepper shows for BOTH mounts. In read-only (intern) mode it is filtered to the four
+              qualification steps (n<=4); steps 5-8 are the intern's own Proposal Studio, so showing them here would
+              only produce empty tabs. `goStep` already refuses admin navigation when readOnly, so it is safe here. */}
+          {stepModel && (
             <StepBar
-              steps={WORKSPACE_STEPS}
+              steps={readOnly ? WORKSPACE_STEPS.filter((s) => s.n <= 4) : WORKSPACE_STEPS}
               onStep={goStep}
               statuses={stepModel.statuses}
               frontier={stepModel.frontier}
