@@ -103,6 +103,11 @@ const SKIP_REASONS = [
   'kill_switch_active',
   'feature_disabled',
   'no_phone',
+  // Found by a reviewer after the first six were enumerated: synthflowService.ts:222 raises it
+  // once the number has been normalised. The handler always refused it correctly, because the
+  // guard is keyed on data.skipped rather than on this list - but nothing pinned that, and the
+  // fallback summary told the model to offer a callback to the same unusable number.
+  'invalid_phone',
   'no_api_key',
   'no_agent_id',
   'no_prompt',
@@ -213,7 +218,10 @@ describe('the kill switch stops the promise, not just the dial', () => {
 
   it('every other skip reason names the alternative that actually works', async () => {
     // An honest refusal with no route forward is a worse visit than the lie it replaced.
-    for (const reason of SKIP_REASONS.filter((r) => r !== 'kill_switch_active' && r !== 'no_phone')) {
+    const OFFERS_CALLBACK = SKIP_REASONS.filter(
+      (r) => r !== 'kill_switch_active' && r !== 'no_phone' && r !== 'invalid_phone',
+    );
+    for (const reason of OFFERS_CALLBACK) {
       jest.clearAllMocks();
       mockTriggerVoiceCall.mockResolvedValue({ success: true, data: { skipped: true, reason } });
       const res = await initiateVoiceCall(ARGS, VISITOR, CONVO);

@@ -89,3 +89,80 @@ Two consequences worth naming separately:
   `mayaToolsService.ts(1049,7)` before being reverted, so the clean result is a measurement rather
   than an assumption.
 - **Playwright:** no coverage exists for this surface. Stated as a gap, not claimed.
+
+## T001 follow-up: what the independent verifier found, and what changed because of it
+
+T001 was graded **11/12, PASS** by `loop-task-verifier`, which reproduced every executable claim
+on its own runs (32/32 tests, the mutation at 8 failures, `tsc` clean, and its own planted control
+error landing at `mayaToolsService.ts(1049,7)` — the same coordinates the first commit claimed).
+Three findings were worth acting on rather than noting.
+
+### 1. The single deduction: the file broke CLAUDE.md's size ceilings
+
+`mayaToolsService.ts` went **875 to 1,047 lines** against a 500-line hard ceiling, and
+`initiateVoiceCall` went **169 to 272** against a 100-line ceiling, with no extraction. The
+Modular Composition Rule grandfathers an oversize file only *"until touched"*, and says the next
+change to it **must split it before adding new code**. T001 touched it and split nothing, so the
+deduction was correct.
+
+Split, with the public surface unchanged:
+
+| New module | Lines | Holds |
+|---|---|---|
+| `services/mayaTools/toolContext.ts` | 88 | `resolveLeadForVisitor`, `logAction`, `logOutboundOutcome` |
+| `services/mayaTools/voiceSummaries.ts` | 74 | the skip-reason table and `voiceSkipSummary()` |
+| `services/mayaTools/voiceTool.ts` | ~306 | `initiateVoiceCall` |
+| `services/mayaTools/smsTool.ts` | 105 | `sendSmsSummary` |
+
+`mayaToolsService.ts` re-exports all three public names, so **no caller and no test mock changed**
+— including `mayaSendDocumentGovernance.test.ts`, which mocks `'../mayaToolsService'` by name.
+`toolContext` is a deliberate leaf (models only), so `mayaToolsService -> voiceTool ->
+toolContext` stays acyclic.
+
+**The split is partial, and that is stated in the code rather than hidden.** The file is now
+**628 lines**, not under 500. Finishing it means moving the remaining six tools, which is a far
+larger change than MR1 asked for and would put the whole site chat at regression risk in one
+commit. The two tools this work actually modifies now live in compliant modules, and the file
+header records that the next tool to be touched is the next one to move.
+
+### 2. There are SEVEN skip reasons, not six
+
+The verifier found `invalid_phone` (`synthflowService.ts:222`), raised after the number is
+normalised. My comments, the test table and the commit message all said six.
+
+No behavioral gap existed, because the guard is keyed on `data.skipped === true` rather than on a
+list of names — so `invalid_phone` always refused correctly. But **nothing pinned that**, and it
+fell through to the generic fallback, which tells the model to offer a callback when *"ask for a
+number that works"* is the right answer. Now: the reason is in the table with its own guidance,
+it is in the test's table-driven cases, and it is excluded from the "offers a callback" assertion
+because a bad number does not need a callback to the same bad number. The code comment now
+records that correctness must not depend on the list being complete, since the list has already
+grown once under this code.
+
+### 3. The unconfirmed row was indistinguishable from the phantom rows
+
+The verifier noted that the accepted-but-untrackable row is written as `call_status: 'pending'`
+with `synthflow_call_id: null` — **byte-identical in shape to the two phantom production rows the
+fix exists to prevent**. Since the webhook matches on `provider_message_id`, that row can never
+resolve, so a future forensic query on "pending with a null id" could no longer separate a
+legitimately unconfirmed attempt from the old bug's output. It now carries a distinct
+`reason_for_call`, which makes that query possible without touching a `call_status` value other
+code may switch on.
+
+### Not charged, and worth recording
+
+`logAction(..., 'completed', { lead_id, phone, ... })` still writes the phone number into the
+`admissions_action_logs` row on the **success** path. Pre-existing, unchanged by this work, and
+the new tests only assert the *refusal* row is clean. The new structured log lines also omit
+`correlation_id` and `duration_ms`: no correlation id is plumbed into the site-chat tool entry
+point at all, so emitting the field would mean emitting null. Both are recorded in
+`toolContext.ts`'s header as known gaps rather than left to be rediscovered.
+
+### Verification after the split
+
+- **88 tests pass** across five suites: `mayaVoiceToolHonesty` (35, now including
+  `invalid_phone`), `mayaAgentRegistration`, `mayaSendDocumentGovernance`,
+  `admissionsKnowledgeGateCoverage`, `calendarTarget`. The last four are the neighbours that
+  would break if the re-export shim were wrong.
+- `tsc --noEmit`: 0 errors.
+
