@@ -241,7 +241,8 @@ describeIfDb('the scheduler claim is an owned lease, and stale recovery terminat
 
       const out = await recoverStaleActions();
 
-      expect(out.ids).toEqual([]);
+      expect(out.requeuedIds).toEqual([]);
+      expect(out.exhaustedIds).toEqual([]);
       const row = await readRow(id);
       expect(row.status).toBe('processing');
       expect(row.attempts_made).toBe(0);
@@ -262,7 +263,13 @@ describeIfDb('the scheduler claim is an owned lease, and stale recovery terminat
 
       expect(out.exhausted).toBe(1);
       expect(out.requeued).toBe(1);
-      expect(out.ids.sort()).toEqual([spent, alive].sort());
+      // Each row named in the outcome it actually got. The previous version compared one merged
+      // id list against both seeded ids, which passed whichever row landed in whichever branch -
+      // so it could not have caught the predicates being swapped. Naming them makes the
+      // docblock's claim above ("exactly one of the two outcomes") an assertion rather than a
+      // description.
+      expect(out.exhaustedIds).toEqual([spent]);
+      expect(out.requeuedIds).toEqual([alive]);
       expect((await readRow(spent)).status).toBe('failed');
       expect((await readRow(alive)).status).toBe('pending');
     });
@@ -307,7 +314,14 @@ describeIfDb('the scheduler claim is an owned lease, and stale recovery terminat
     it('reports nothing to do as nothing to do', async () => {
       const out = await recoverStaleActions();
 
-      expect(out).toEqual({ requeued: 0, exhausted: 0, ids: [] });
+      // The whole shape, deliberately: this is the one assertion that would notice a new field
+      // appearing on RecoveryOutcome without anyone deciding what it should be when there is
+      // nothing to recover. That strictness is also why it survived the L7.3 rename when the
+      // property-access sites did not - `toEqual` against a literal has no type relationship to
+      // `out`, so the test-file typecheck could not see it and only running it did.
+      expect(out).toEqual({
+        requeued: 0, exhausted: 0, requeuedIds: [], exhaustedIds: [],
+      });
     });
   });
 });
