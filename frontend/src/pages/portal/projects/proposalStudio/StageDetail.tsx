@@ -106,23 +106,45 @@ function evidenceLabel(state: string): string {
   return state || 'Unknown';
 }
 
-/** The requirements-coverage read behind the Fit step: each established requirement with its priority, tracks and the
- *  evidence state of our coverage. Student-safe — statements + priorities already on the projection, no eval internals. */
+/** Due-stage order + labels, matching the admin Qualification Workspace's "Requirements by due stage" grouping. */
+const DUE_STAGE_ORDER = ['submission', 'award', 'delivery', 'unknown'] as const;
+const DUE_STAGE_LABEL: Record<string, string> = {
+  submission: 'Due with the submission', award: 'Due at award', delivery: 'Due during delivery', unknown: 'Stage not classified',
+};
+
+/** The requirements-coverage read behind the Fit step: each established requirement with its priority and the evidence
+ *  state of our coverage, GROUPED BY DUE STAGE (submission / award / delivery) like the admin workspace. A projection
+ *  without due-stage data falls back to the single flat list. Student-safe — no eval internals, no service matches. */
 function RequirementsEvidence({ requirements }: { requirements: StudentGovRequirementView[] }): React.ReactElement | null {
   const rows = requirements ?? [];
   if (rows.length === 0) return null;
+
+  const row = (r: StudentGovRequirementView): React.ReactElement => (
+    <div className="gps-r" key={r.canonicalReqId} data-testid="fit-req">
+      <span>{r.statement}</span>
+      <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+        <span className="gps-tag gps-small">{r.priority}</span>
+        <span className="gps-tag gps-small" style={{ marginLeft: 4 }} data-testid="fit-req-evidence">{evidenceLabel(r.evidenceState)}</span>
+      </span>
+    </div>
+  );
+
+  const groups = DUE_STAGE_ORDER
+    .map((stage) => ({ stage, items: rows.filter((r) => (r.dueStage || 'unknown') === stage) }))
+    .filter((g) => g.items.length > 0);
+  const grouped = rows.some((r) => r.dueStage) && groups.length > 1;
+
   return (
     <div className="gps-panel" data-testid="fit-requirements">
       <h3>Requirements &amp; coverage <span className="gps-tag gps-small">{rows.length}</span></h3>
-      {rows.map((r) => (
-        <div className="gps-r" key={r.canonicalReqId} data-testid="fit-req">
-          <span>{r.statement}</span>
-          <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
-            <span className="gps-tag gps-small">{r.priority}</span>
-            <span className="gps-tag gps-small" style={{ marginLeft: 4 }} data-testid="fit-req-evidence">{evidenceLabel(r.evidenceState)}</span>
-          </span>
-        </div>
-      ))}
+      {grouped
+        ? groups.map((g) => (
+          <div key={g.stage} data-testid="fit-req-group">
+            <div className="gps-eyebrow" style={{ marginTop: 10 }}>{DUE_STAGE_LABEL[g.stage] ?? g.stage} <span className="gps-tag gps-small">{g.items.length}</span></div>
+            {g.items.map(row)}
+          </div>
+        ))
+        : rows.map(row)}
     </div>
   );
 }

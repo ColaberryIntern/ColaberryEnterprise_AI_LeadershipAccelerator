@@ -10,6 +10,9 @@ import portalApi from '../utils/portalApi';
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
+  /** Stage the requirement is due at (submission/award/delivery/unknown), for the Fit "requirements by due stage"
+   *  grouping that matches the admin workspace. Optional (absent on older projections). */
+  dueStage?: string;
 }
 /** The 4-stage cockpit board column a build story moves through (a commit reaches `matched` at most). */
 export type GovBuildStage = 'todo' | 'build' | 'matched' | 'done';

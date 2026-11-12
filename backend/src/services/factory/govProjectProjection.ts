@@ -64,6 +64,9 @@ export interface StudentProposalDocument {
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
+  /** The stage the requirement is due at (submission/award/delivery/unknown), for the Fit "requirements by due stage"
+   *  grouping that matches the admin workspace. Student-safe classification string; absent on older projections. */
+  dueStage?: string;
 }
 /** A student-facing build story — the derived story, its Claude Code prompt, and the student's submitted evidence. */
 export interface StudentGovBuildStory extends GovBuildStory {
@@ -492,6 +495,24 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       // The dossier's public MEETING lines (e.g. the pre-proposal conference) — student-safe (date + the solicitation's
       // own sentence, never contacts). The Solicitation stage surfaces these; they lived only in the legacy workspace.
       view.meetings = toStudentMeetings((qual.requirements_json && (qual.requirements_json as any).dossier) || null);
+      // Fit parity: carry each requirement's due-stage classification (submission/award/delivery/unknown) from the
+      // qualification's established[] onto the student requirements, so the Fit step can group "requirements by due
+      // stage" like the admin Qualification Workspace. Student-safe (a plain classification string, no dollars or
+      // identities). established[].id is the canonical req id (govBuildPublish.mapEstablishedToRequirements). Absent
+      // established[] leaves the flat requirements list unchanged.
+      try {
+        const established: any[] = Array.isArray((qual.requirements_json as any)?.established) ? (qual.requirements_json as any).established : [];
+        if (established.length) {
+          const stageByReq = new Map<string, string>();
+          for (const e of established) {
+            const ds = (String(e?.dueStage ?? '').trim() || 'unknown');
+            for (const k of [e?.id, e?.canonicalReqId, e?.canonical_req_id].filter(Boolean)) stageByReq.set(String(k), ds);
+          }
+          if (stageByReq.size && Array.isArray(view.requirements)) {
+            view.requirements = view.requirements.map((r) => ({ ...r, dueStage: stageByReq.get(r.canonicalReqId) ?? 'unknown' }));
+          }
+        }
+      } catch { /* additive; the flat requirements list stays unchanged on any failure */ }
       // Admin-only: the canonical opportunity id, so the admin contract view can deep-link steps 1-4 to the real
       // Qualification Workspace. Withheld from an intern (viewerCanVerify=false) — they keep the student-safe panels.
       if (viewerCanVerify) view.canonicalOpportunityId = qual.canonical_opportunity_id != null ? String(qual.canonical_opportunity_id) : null;

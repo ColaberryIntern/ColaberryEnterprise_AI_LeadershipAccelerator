@@ -322,6 +322,25 @@ describe('StageDetail — FULL workspace depth on the intern side (admin-parity 
     expect(text('fit-req-evidence')).toContain('Not yet covered'); // 'open' → humanized, no jargon
   });
 
+  it('Fit GROUPS requirements by due stage (admin-parity) when the projection carries it', async () => {
+    const withStages = { ...VIEW, requirements: [
+      { canonicalReqId: 'R-1', statement: 'Submit the cover letter', priority: 'must', tracks: [], evidenceState: 'open', dueStage: 'submission' },
+      { canonicalReqId: 'R-2', statement: 'Provide the asset register', priority: 'must', tracks: ['build'], evidenceState: 'covered', dueStage: 'delivery' },
+    ] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={withStages} />);
+    expect(present('fit-req-group')).toBe(true);
+    const body = text('fit-requirements');
+    expect(body).toContain('Due with the submission');
+    expect(body).toContain('Due during delivery');
+  });
+
+  it('Fit falls back to the flat list when no due stage is present (older projections)', async () => {
+    const flat = { ...VIEW, requirements: [{ canonicalReqId: 'R-1', statement: 'Asset register', priority: 'must', tracks: [], evidenceState: 'open' }] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={flat} />);
+    expect(present('fit-req')).toBe(true);
+    expect(present('fit-req-group')).toBe(false);
+  });
+
   it('stays student-safe — renders no dollars, no buyer contacts, no builder identities', async () => {
     // The blueprint carries evaluation POINTS (public), never pricing. The projection itself drops contacts/$,
     // so this asserts the enriched view introduces none by accident.
