@@ -68,7 +68,8 @@ export type AutoAdvanceRefusal =
   | 'act_does_not_match'  // the act reported is not the work this hop is made of
   | 'illegal_edge'        // not the forward hop from `from`
   | 'not_ready'           // prerequisites unmet
-  | 'stage_moved';        // the CAS lost: something else advanced first
+  | 'stage_moved'         // the CAS lost: something else advanced first
+  | 'needs_reapproval';   // a human marked this stale; the pipeline may not clear that
 
 export interface AutoAdvanceDecision {
   allowed: boolean;
@@ -162,10 +163,29 @@ export async function autoAdvance(input: {
   const decision = mayAutoAdvance(input);
   if (!decision.allowed || !decision.to) return decision;
 
+  // L7.2. `condition IS DISTINCT FROM 'needs_reapproval'` IS A GUARD, NOT A FILTER.
+  //
+  // Clearing `condition` on a successful advance is right for the other three conditions in
+  // LIFECYCLE_CONDITIONS - `blocked`, `failed` and `awaiting_input` all describe a situation that
+  // progressing work genuinely resolves. `needs_reapproval` is not one of those. It is set when a
+  // material change upstream invalidates the revision this work was authorized against, and
+  // lifecycleStages.ts says what it is for in its own words: such work "must mark it
+  // needs_reapproval rather than let it proceed on stale evidence".
+  //
+  // Without this clause the build pipeline did exactly what that sentence forbids. A project
+  // returned across an approval boundary sits at plan_ready with `needs_reapproval` set; the next
+  // build event calls autoAdvance, the hop plan_ready -> building is a legitimate WORK_HOP, and
+  // the UPDATE advanced the stage AND set condition = NULL. The re-approval requirement a human
+  // put there was erased by a background job, with nothing recording that it had existed.
+  //
+  // `IS DISTINCT FROM` rather than `<>` because `condition` is nullable and `NULL <> 'x'` is NULL,
+  // not true, which would make the guard refuse every unconditioned project - the whole normal
+  // case. That is the bug this clause would have had if written the obvious way.
   const updated = await sequelize.query(
     `UPDATE project_lifecycle_states
         SET stage = :to, condition = NULL, condition_reason = NULL, updated_at = NOW()
-      WHERE id = :id AND stage = :from`,
+      WHERE id = :id AND stage = :from
+        AND condition IS DISTINCT FROM 'needs_reapproval'`,
     {
       replacements: { id: input.lifecycleStateId, to: decision.to, from: input.from },
       type: QueryTypes.UPDATE,
@@ -175,6 +195,24 @@ export async function autoAdvance(input: {
   // Sequelize reports [results, rowCount] for UPDATE on Postgres; the count is what matters.
   const rowCount = Array.isArray(updated) ? Number(updated[1] ?? 0) : 0;
   if (rowCount !== 1) {
+    // Two different refusals now match zero rows, and reporting the wrong one would send a
+    // reader hunting a race that never happened. One SELECT to tell them apart. It is read AFTER
+    // the write lost, so it cannot introduce a check-then-act race: whatever it finds, this call
+    // has already changed nothing.
+    const rows = (await sequelize.query(
+      'SELECT stage, condition FROM project_lifecycle_states WHERE id = :id',
+      { replacements: { id: input.lifecycleStateId }, type: QueryTypes.SELECT },
+    )) as Array<{ stage: string; condition: string | null }>;
+
+    if (rows[0]?.condition === 'needs_reapproval') {
+      return no(
+        'needs_reapproval',
+        `${input.from} is marked needs_reapproval. A person has to re-approve it; the pipeline `
+        + 'does not clear that condition.',
+        input.from,
+        decision.to,
+      );
+    }
     return no(
       'stage_moved',
       `The project is no longer at ${input.from}; nothing was advanced.`,
