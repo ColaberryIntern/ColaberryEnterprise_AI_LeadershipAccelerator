@@ -71,6 +71,14 @@ describe('pickFive', () => {
     expect(picks.map((p) => p.list)).toContain('Other');
   });
 
+  it('takes at most three from one project, across its lists', () => {
+    const orders = ['a', 'b', 'c', 'd'].flatMap((list, i) => [wo({ n: i, id: `P1/${i}`, list })])
+      .concat([wo({ id: 'P2/9', list: 'elsewhere', dueOn: '2026-11-13' })]);
+    const { picks } = pickFive(orders, TODAY);
+    expect(picks.filter((p) => p.id.startsWith('P1/'))).toHaveLength(3);
+    expect(picks.map((p) => p.id)).toContain('P2/9');
+  });
+
   it('orders by score, then the more overdue, then id', () => {
     const { picks } = pickFive([wo({ n: 2, dueOn: '2026-11-10', list: 'a' }), wo({ n: 1, dueOn: '2026-11-05', list: 'b' })], TODAY);
     expect(picks.map((p) => p.id)).toEqual(['p/1', 'p/2']);

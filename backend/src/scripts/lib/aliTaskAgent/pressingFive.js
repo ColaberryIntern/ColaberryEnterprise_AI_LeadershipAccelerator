@@ -92,23 +92,34 @@ function scoreTask(wo, today) {
   return { score, reasons, late, usedDecideBy, isDecision: decision };
 }
 
+/** The Basecamp project a work order belongs to: its own field, else the "<project>/<todo>" id. */
+const projectOfOrder = (x) => String(x.projectId || String(x.id || '').split('/')[0] || '(no project)');
+
 /**
  * The five. Ties break on lateness (more overdue first), then id, so the order is stable.
+ *
+ * Spread: at most 2 from one list and 3 from one project (Ali, 2026-11-12, finalizing: the first
+ * real run put three MAPLOCA tasks in the five; a client deadline may lead, but it may not crowd
+ * out everything else).
  * @param {Array} orders work orders with { cat, generated }
  */
 function pickFive(orders, today, opts = {}) {
   const n = opts.n || 5;
   const perList = opts.perList || 2;
+  const perProject = opts.perProject || 3;
   const scored = (Array.isArray(orders) ? orders : [])
     .map((wo) => ({ ...wo, ...scoreTask(wo, today) }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score || (b.late ?? -999) - (a.late ?? -999) || String(a.id).localeCompare(String(b.id)));
   const out = [];
-  const perListCount = {};
+  const byList = {};
+  const byProject = {};
   for (const x of scored) {
     const k = x.list || '(no list)';
-    if ((perListCount[k] || 0) >= perList) continue;
-    perListCount[k] = (perListCount[k] || 0) + 1;
+    const p = projectOfOrder(x);
+    if ((byList[k] || 0) >= perList || (byProject[p] || 0) >= perProject) continue;
+    byList[k] = (byList[k] || 0) + 1;
+    byProject[p] = (byProject[p] || 0) + 1;
     out.push(x);
     if (out.length === n) break;
   }
