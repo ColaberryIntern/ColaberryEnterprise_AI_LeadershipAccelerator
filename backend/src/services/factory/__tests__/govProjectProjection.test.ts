@@ -389,7 +389,7 @@ describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness',
 
   it('READ-ONLY PARITY redaction: the admin-only pricing CARD stays (panel visible) but its body + comments are sealed, across all three modes', () => {
     const src: ProposalDocSummarySource[] = [
-      { view: mkView({ key: 'pricing', adminOnly: true, contentHtml: '<p>Total bid price: $482,000</p>', comments: [{ body: 'approved by finance', at: '2026-11-01T00:00:00.000Z' }] }), latest: null, gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'pricing', adminOnly: true, contentHtml: '<p>Total bid price: $482,000</p>', comments: [{ id: 'c1', authorIdentityId: 'admin-1', body: 'approved by finance', at: '2026-11-01T00:00:00.000Z' }] }), latest: null, gates: [], openGapCount: 0, latestRun: null },
     ];
     // false: non-reviewer never receives the pricing doc at all.
     expect(assembleProposalDocuments(src, false).documents.map((x) => x.key)).toEqual([]);
@@ -409,7 +409,7 @@ describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness',
 
   it('READ-ONLY PARITY redaction does NOT touch a non-adminOnly doc (intern sees its real body)', () => {
     const src: ProposalDocSummarySource[] = [
-      { view: mkView({ key: 'technical', contentHtml: '<p>Our approach</p>', comments: [{ body: 'looks good', at: '2026-11-01T00:00:00.000Z' }] }), latest: null, gates: [], openGapCount: 0, latestRun: null },
+      { view: mkView({ key: 'technical', contentHtml: '<p>Our approach</p>', comments: [{ id: 'c2', authorIdentityId: 'user-1', body: 'looks good', at: '2026-11-01T00:00:00.000Z' }] }), latest: null, gates: [], openGapCount: 0, latestRun: null },
     ];
     const parity = assembleProposalDocuments(src, true, { redactAdminOnlyContent: true }).documents[0];
     expect(parity.contentHtml).toBe('<p>Our approach</p>'); // unchanged — redaction is scoped to adminOnly docs only
