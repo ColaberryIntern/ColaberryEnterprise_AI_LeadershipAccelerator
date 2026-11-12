@@ -116,6 +116,21 @@ describe('cards show what makes each record different (Ali, 2026-11-11)', () => 
     assert.equal(C.capabilityLabel('operational-ai-voice-call-event-recovery'), 'Voice call event recovery');
     assert.equal(C.capabilityLabel('agent-assisted-software-delivery'), 'Agent assisted software delivery');
     assert.equal(C.capabilityLabel(null), '');
+    // Quincy, 2026-11-11: "Industries shows the raw tag data-infrastructure-operations".
+    assert.equal(C.industryLabel('data-infrastructure-operations'), 'Data infrastructure operations');
+    assert.equal(C.industryLabel('public-sector'), 'Public sector');
+    assert.equal(C.industryLabel('education'), 'Education');
+    assert.equal(C.industryLabel('Insurance'), 'Insurance');
+    assert.equal(C.industryLabel('Data infrastructure and operations'), 'Data infrastructure and operations');
+    assert.equal(C.industryLabel(null), '');
+  });
+
+  test('the industries sidebar never prints a raw facet key', () => {
+    const b = body();
+    b.hire.caseStudies = [{ slug: 'claims-triage', title: 'T', summary: 'S', industry: 'data-infrastructure-operations' }];
+    const html = P.renderPortfolio(b, 'ann-lee', [], NOW);
+    assert.match(html, /Data infrastructure operations/);
+    assert.doesNotMatch(html, /data-infrastructure-operations/);
   });
 
   test('a full record: its own cover with the walkthrough length, capability, figure and proof row', () => {

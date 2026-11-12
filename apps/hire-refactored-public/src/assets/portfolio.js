@@ -129,7 +129,7 @@
   function projectCard(project, published, talentSlug, api) {
     var cs = project && project.case_study_slug ? published[project.case_study_slug] : null;
     if (!cs) return '';
-    var org = [project.organization, project.industry].filter(Boolean).map(esc).join(' · ');
+    var org = [project.organization, C.industryLabel(project.industry)].filter(Boolean).map(esc).join(' · ');
     return '<a class="proj" href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="project" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '">'
       + '<div class="art">' + cover(cs, api, 8) + '</div>'
       + caseBody(cs, esc(project.title) + (org ? ' · ' + org : '')) + '</a>';
@@ -186,7 +186,7 @@
     var caps = arr(p.capabilities);
     var max = caps.reduce(function (m, c) { return Math.max(m, num(c.count) || 0); }, 0) || 1;
     var id = p.identity;
-    var industries = arr(hire.caseStudies).map(function (c) { return c.industry; }).filter(Boolean)
+    var industries = arr(hire.caseStudies).map(function (c) { return C.industryLabel(c.industry); }).filter(Boolean)
       .filter(function (v, i, a) { return a.indexOf(v) === i; });
     var contact = [
       id.linkedin_url && /^https:\/\//.test(id.linkedin_url) ? '<div class="row">in <a href="' + esc(id.linkedin_url) + '" target="_blank" rel="noopener">LinkedIn</a></div>' : '',

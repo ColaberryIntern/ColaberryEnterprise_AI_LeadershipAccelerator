@@ -72,7 +72,7 @@
       chip = who.slug ? '<a class="builder" href="' + talentHref(who.slug) + '">' + inner + '</a>' : '<span class="builder">' + inner + '</span>';
     }
     return '<section class="hire-hero"><div class="art">' + C.art(c.slug, { n: 12 }) + '</div><div class="wrap">'
-      + '<span class="eyebrow">★ Published case study' + (c.industry ? ' · ' + esc(c.industry) : '') + '</span>' + verifyBadge(c)
+      + '<span class="eyebrow">★ Published case study' + (c.industry ? ' · ' + esc(C.industryLabel(c.industry)) : '') + '</span>' + verifyBadge(c)
       + '<h1 id="cs-title" tabindex="-1">' + esc(c.title) + '</h1>'
       + (c.standfirst ? '<p class="dek">' + esc(c.standfirst) + '</p>' : '')
       + chip + '</div></section>';
