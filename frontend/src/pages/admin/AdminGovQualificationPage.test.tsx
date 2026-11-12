@@ -1096,7 +1096,9 @@ describe('AdminGovQualificationPage — READ-ONLY intern mount (same page, injec
   async function renderReadOnly(tab = 'fit') {
     container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
     await act(async () => { root.render(<MemoryRouter initialEntries={[`/portal/gov-projects/dp-A/qualification?tab=${tab}`]}><AdminGovQualificationPage readOnly opportunityKey={CANON} api={roApi as any} /></MemoryRouter>); });
-    await act(async () => { await Promise.resolve(); }); await act(async () => { await Promise.resolve(); });
+    // Fully drain the injected read AND the advisory service-match chain (match -> then -> finally), so no late
+    // setState lands outside act() and trips the teardown unmount.
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
   }
 
   it('uses the INJECTED api (not the admin factoryApi) and renders the real requirements-by-due-stage', async () => {
@@ -1120,5 +1122,28 @@ describe('AdminGovQualificationPage — READ-ONLY intern mount (same page, injec
       expect(buttonText).not.toMatch(/establish|approve|extract|upload|attest|assign|materialize|re-?analyz|export|request changes|run checks|accept|open qualification|send back/);
       act(() => { root.unmount(); }); container.remove();
     }
+  });
+
+  it('SHOWS the stepper (nav is not stripped) with ONLY the four qualification steps — not the studio steps', async () => {
+    await renderReadOnly('fit');
+    // the stepper itself renders in read-only (regression: it used to be hidden, stranding the intern)
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull();
+    // the four qualification steps are present
+    for (const key of ['snapshot', 'solicitation', 'fit', 'decide']) {
+      expect(container.querySelector(`[data-testid="step-${key}"]`)).not.toBeNull();
+    }
+    // the studio-owned steps (5-8) are NOT shown here — they are the intern's own Proposal Studio, and showing
+    // them produced the empty tabs Ali reported
+    for (const key of ['build', 'proposal', 'submit', 'outcome']) {
+      expect(container.querySelector(`[data-testid="step-${key}"]`)).toBeNull();
+    }
+  });
+
+  it('clamps a stale/forward ?tab= (a studio step) back to a qualification step instead of an empty body', async () => {
+    await renderReadOnly('build'); // a studio step the intern qual page does not own
+    // it does not sit on an empty "build" panel; the qualification stepper is shown and a qualification step is active
+    const selected = container.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected).not.toBeNull();
+    expect(selected?.getAttribute('data-testid')).toMatch(/^step-(snapshot|solicitation|fit|decide)$/);
   });
 });

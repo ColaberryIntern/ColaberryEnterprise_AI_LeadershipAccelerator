@@ -15,6 +15,13 @@ jest.mock('../../admin/AdminGovQualificationPage', () => ({
   __esModule: true,
   default: (props: any) => { mockLastProps.current = props; return null; },
 }));
+// PortalShell is the intern's portal nav chrome; mock it to a passthrough so this stays a pure wiring test and
+// does not fetch points/schedule in jsdom. Its real presence (nav restored) is what the fix is about, covered
+// by the assertion below that the page renders inside it.
+jest.mock('../today/PortalShell', () => ({
+  __esModule: true,
+  default: ({ children }: any) => children,
+}));
 const mockGetPortalGovQualification = jest.fn();
 const mockGetPortalGovOpportunityDetail = jest.fn();
 jest.mock('../../../services/govProjectPortalApi', () => ({
