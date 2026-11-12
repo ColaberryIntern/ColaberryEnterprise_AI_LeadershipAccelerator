@@ -85,7 +85,7 @@ describe('pickFive', () => {
   });
 
   it('returns nothing rather than padding with unqualified tasks', () => {
-    expect(pickFive([wo({ dueOn: null })], TODAY)).toEqual({ picks: [], qualified: 0 });
+    expect(pickFive([wo({ dueOn: null })], TODAY)).toEqual({ picks: [], qualified: 0, scored: [] });
     expect(pickFive(null, TODAY).picks).toEqual([]);
   });
 });

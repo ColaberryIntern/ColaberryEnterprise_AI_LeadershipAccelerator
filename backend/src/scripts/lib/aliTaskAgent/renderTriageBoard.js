@@ -35,7 +35,7 @@ const idOf = (l) => l.id || l.key;
  */
 function bcLink(l, cls) {
   if (l.found === false) {
-    return `<span class="${cls} is-missing" title="Basecamp returns 404 for this list: deleted or moved, though the mirror still marks its tasks active">gone</span>`;
+    return `<span class="${cls} is-missing" title="Basecamp says this list is trashed, archived or deleted, though the mirror still marks its tasks active">gone</span>`;
   }
   if (!l.url) return '';
   return `<a class="${cls}" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"

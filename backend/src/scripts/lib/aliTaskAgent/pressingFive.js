@@ -123,7 +123,9 @@ function pickFive(orders, today, opts = {}) {
     out.push(x);
     if (out.length === n) break;
   }
-  return { picks: out, qualified: scored.length };
+  // `scored` (every qualified task, scored) feeds the five LISTS (pressingLists), so a list is
+  // ranked from the same numbers as the five tasks.
+  return { picks: out, qualified: scored.length, scored };
 }
 
 /**

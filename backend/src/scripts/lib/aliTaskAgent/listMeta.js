@@ -105,7 +105,13 @@ async function fetchListMeta(lists, opts = {}) {
       const api = `https://3.basecampapi.com/${accountId}/buckets/${l.projectId}/todolists/${l.listId}.json`;
       const r = await getWithRetry(opts.fetchImpl, api, opts.token, timeoutMs, retryDelayMs);
       const key = `${l.projectId}/${l.listId}`;
-      if (r.status === 200 && r.body) {
+      // A trashed or archived list still answers 200, with status "trashed" / "archived"
+      // (measured 2026-11-12: "Path to Profitability - decisions for Ram" was in the trash while
+      // the Morning Five linked it). Only "active" is a live list.
+      if (r.status === 200 && r.body && r.body.status && r.body.status !== 'active') {
+        out.set(key, { ...fallback(l, `${r.body.status} in Basecamp`), checked: true, found: false,
+          status: r.body.status, title: r.body.title || l.name });
+      } else if (r.status === 200 && r.body) {
         const parent = r.body.parent || {};
         const isGroup = parent.type === 'Todolist';
         out.set(key, {
@@ -125,4 +131,44 @@ async function fetchListMeta(lists, opts = {}) {
   return out;
 }
 
-module.exports = { fetchListMeta, listUrl };
+/**
+ * Is each to-do still open in Basecamp? Read-only, same timeouts, retry policy and concurrency as
+ * fetchListMeta. Live means: 200, status "active", not completed. Dead means: 404, trashed,
+ * archived or completed. Anything else (no token, 401, timeout after retries) is UNCHECKED and
+ * kept (fail-open: never hide a real task because the API blinked); the caller reports the count.
+ * @param {Array<{projectId:string, bcId:string}>} todos
+ * @returns {Promise<Map<string, {checked:boolean, live:?boolean, why:string}>>} keyed "<projectId>/<bcId>"
+ */
+async function fetchTodoState(todos, opts = {}) {
+  const accountId = opts.accountId || DEFAULT_ACCOUNT;
+  const timeoutMs = opts.timeoutMs || 10000;
+  const retryDelayMs = opts.retryDelayMs == null ? 1000 : opts.retryDelayMs;
+  const out = new Map();
+  const key = (t) => `${t.projectId}/${t.bcId}`;
+  if (!opts.token || !opts.fetchImpl) {
+    todos.forEach((t) => out.set(key(t), { checked: false, live: null, why: 'no Basecamp token' }));
+    return out;
+  }
+  const queue = todos.slice();
+  async function worker() {
+    while (queue.length) {
+      const t = queue.shift();
+      const api = `https://3.basecampapi.com/${accountId}/buckets/${t.projectId}/todos/${t.bcId}.json`;
+      const r = await getWithRetry(opts.fetchImpl, api, opts.token, timeoutMs, retryDelayMs);
+      if (r.status === 200 && r.body) {
+        const dead = (r.body.status && r.body.status !== 'active') ? `${r.body.status} in Basecamp`
+          : r.body.completed ? 'completed in Basecamp' : null;
+        out.set(key(t), { checked: true, live: !dead, why: dead || 'open' });
+      } else if (r.status === 404) {
+        out.set(key(t), { checked: true, live: false, why: 'not found in Basecamp' });
+      } else {
+        out.set(key(t), { checked: false, live: null, why: r.error || `HTTP ${r.status}` });
+      }
+    }
+  }
+  const n = Math.max(1, Math.min(opts.concurrency || 4, todos.length));
+  await Promise.all(Array.from({ length: n }, worker));
+  return out;
+}
+
+module.exports = { fetchListMeta, fetchTodoState, listUrl };

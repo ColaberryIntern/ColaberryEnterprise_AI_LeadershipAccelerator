@@ -12,6 +12,7 @@
 
 const { DISPOSITION_LABEL } = require('./workOrder');
 const { WEIGHTS } = require('./pressingFive');
+const { LIST_WEIGHTS } = require('./pressingLists');
 
 const C = {
   cherry: '#FB2832', cherryDeep: '#C20E1E', cherryBg: '#FFF0F1', leaf: '#3f7d20',
@@ -95,6 +96,65 @@ function itemCard(it, i) {
 </td></tr>`;
 }
 
+/** "<title> (5d overdue, score 70)", linked when the task has a URL. */
+function taskLine(t) {
+  const when = t.late == null ? 'no date' : t.late > 0 ? `${t.late}d overdue` : t.late === 0 ? 'due today' : `due in ${-t.late}d`;
+  const name = t.url ? `<a href="${esc(t.url)}" style="color:${C.ink};text-decoration:underline">${esc(clip(t.title, 110))}</a>` : esc(clip(t.title, 110));
+  return `${name} <span style="color:${C.ink3}">(${esc(when)}, score ${esc(t.score)})</span>`;
+}
+
+/**
+ * One list, in the same shape as a task card: rank and score, the list, where it sits, timing,
+ * the facts, why it is here, and the two ways in (Basecamp, and the /ata-list command).
+ * @param {{key:string, url:?string, path:string, score:number, reasons:Array, total:number,
+ *          live:number, dormant:number, oldestDue:?string, pressing:Array, proposal:?object}} l
+ */
+function listCard(l, i) {
+  const lead = l.pressing[0] || {};
+  const others = l.pressing.slice(1, 3);
+  const reasons = l.reasons.filter((r) => r.pts).map((r) =>
+    `<tr><td style="font:700 12px/1.5 ${MONO};color:${r.pts > 0 ? C.leaf : C.cherryDeep};padding:1px 8px 1px 0;text-align:right;white-space:nowrap">${r.pts > 0 ? '+' : ''}${r.pts}</td><td style="font:13px/1.5 ${FONT};color:${C.ink2};padding:1px 0">${esc(r.why)}</td></tr>`).join('');
+  const name = l.url ? `<a href="${esc(l.url)}" style="color:${C.ink};text-decoration:none">${esc(l.key)}</a>` : esc(l.key);
+  const command = `/ata-list "${l.key}"`;
+  const why = l.proposal ? `${l.proposal.why.charAt(0).toUpperCase()}${l.proposal.why.slice(1)}.` : '';
+  return `
+<tr><td style="padding:0 0 14px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:1px solid ${C.line};border-left:4px solid ${C.ink2};border-radius:10px">
+<tr><td style="padding:14px 16px 12px 16px">
+  <div style="font:700 11px/1.4 ${FONT};color:${C.ink2};letter-spacing:.6px;text-transform:uppercase">List #${i + 1} &middot; score ${esc(l.score)}</div>
+  <div style="font:700 17px/1.35 ${FONT};color:${C.ink};margin:3px 0 6px 0">${name}</div>
+  <div style="font:12px/1.5 ${FONT};color:${C.ink3};margin:0 0 8px 0">${esc(l.path)}</div>
+  <div>${timingChip(lead)}${chip(`${l.pressing.length} pressing`, C.ink, '#e0e7ff')}${l.dormant ? chip(`${l.dormant} dormant`, C.ink2, '#f1f5f9') : ''}</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 2px 0">
+    ${fact('Open tasks', esc(`${l.total}: ${l.live} live, ${l.dormant} dormant${l.oldestDue ? `, oldest due ${fmtDate(l.oldestDue)}` : ''}`))}
+    ${fact('Most pressing', lead.title ? taskLine(lead) : '')}
+    ${fact('Also pressing', others.length ? others.map(taskLine).join('<br>') : '')}
+    ${fact('Proposed', l.proposal ? esc(l.proposal.label) : '')}
+    ${fact('Next step', esc(why))}
+  </table>
+  <div style="font:700 11px/1.4 ${FONT};color:${C.ink3};letter-spacing:.5px;text-transform:uppercase;margin:10px 0 2px 0">Why it is here</div>
+  <table role="presentation" cellpadding="0" cellspacing="0">${reasons}</table>
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr>
+    ${l.url ? `<td style="padding-right:8px"><a href="${esc(l.url)}" style="display:inline-block;font:600 12px/1 ${FONT};color:#ffffff;background:${C.ink2};border-radius:6px;padding:8px 12px;text-decoration:none">Open list in Basecamp</a></td>` : ''}
+    <td style="font:12px/1.4 ${MONO};color:${C.ink2};background:#f1f5f9;border-radius:6px;padding:7px 10px">${esc(command)}</td>
+  </tr></table>
+</td></tr></table>
+</td></tr>`;
+}
+
+/**
+ * What the live Basecamp check found, said plainly. An unchecked link is admitted, not hidden.
+ * @param {{deadLists:number, deadTodos:number, unchecked:number}} v
+ */
+function verifyLine(v) {
+  const dropped = [];
+  if (v.deadLists) dropped.push(`${v.deadLists} list${v.deadLists === 1 ? '' : 's'}`);
+  if (v.deadTodos) dropped.push(`${v.deadTodos} to-do${v.deadTodos === 1 ? '' : 's'}`);
+  const head = `Every list and to-do linked above was checked live in Basecamp as this was built${dropped.length
+    ? `; ${dropped.join(' and ')} that the mirror still shows as open were trashed, archived or completed in Basecamp, and were left out` : ''}.`;
+  return v.unchecked ? `${head} ${v.unchecked} could not be checked (Basecamp did not answer) and were kept.` : head;
+}
+
 function moveBlock(move, prompt) {
   if (move.kind === 'none') {
     return `<p style="font:14px/1.6 ${FONT};color:${C.ink2}">${esc(move.why)}</p>`;
@@ -122,6 +182,8 @@ function renderMorningFive(input) {
   const today = new Date(input.today || Date.now());
   const day = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Chicago' });
   const picks = input.picks || [];
+  const lists = input.lists || [];
+  const LW = LIST_WEIGHTS;
   const c = input.counts || {};
   const verdict = picks.length
     ? `${picks.length} pressing task${picks.length === 1 ? '' : 's'} out of ${c.qualified} that qualified. The one move: ${input.move.kind === 'task' ? input.move.item.title : input.move.kind === 'list' ? `decide "${input.move.list.key}"` : 'none today'}.`
@@ -139,14 +201,21 @@ function renderMorningFive(input) {
 <tr><td style="padding:0 0 18px 0">${moveBlock(input.move || { kind: 'none', why: '' }, input.movePrompt || '')}</td></tr>
 <tr><td style="padding:4px 0 10px 0;font:700 13px/1.4 ${FONT};color:${C.ink3};letter-spacing:.6px;text-transform:uppercase">The five, most pressing first</td></tr>
 ${picks.map(itemCard).join('')}
+${lists.length ? `<tr><td style="padding:14px 0 2px 0;font:700 13px/1.4 ${FONT};color:${C.ink3};letter-spacing:.6px;text-transform:uppercase">The five lists, most pressing first</td></tr>
+<tr><td style="padding:0 0 10px 0;font:13px/1.5 ${FONT};color:${C.ink2}">${esc(`${lists.length} of the ${c.listsQualified} lists with something pressing in them. Decide a list as a whole, or drop into its lead task.`)}</td></tr>
+${lists.map(listCard).join('')}` : ''}
 <tr><td style="padding:6px 2px 0 2px;font:12px/1.65 ${FONT};color:${C.ink3}">
   <strong style="color:${C.ink2}">How these were picked.</strong> A task qualifies only on time: due within 14 days, or up to 60 days overdue
   (older is dormant, a keep-or-dismiss question the board handles). Then: +${w.decision} if the ticket frames a decision only you can make,
   or else +${w.person} if it needs you rather than a session; +${w.gate} if it sits in an approval-gate list; +${w.outside} for a commitment
   to someone outside; ${w.generated} for machine-generated scaffolding. A ticket's own "Decide by" beats its due date. At most two from one list and three from one project.
   The urgency score in the mirror is not used: it adds a flat +40 to anything overdue, so it measures neglect.<br><br>
+  ${lists.length ? `<strong style="color:${C.ink2}">How the lists were picked.</strong> From the same task scores: a list qualifies only if one of its tasks does.
+  It starts at its most pressing task's score, then +${LW.each} for each further pressing task (at most +${LW.eachCap}), and +${LW.dormantPile} when
+  ${LW.dormantPileAt} or more of its tasks are dormant. At most two lists from one project.<br><br>` : ''}
   Today: ${c.tasks} active tasks, ${c.live} live, ${c.dormant} dormant${c.claimed ? `, ${c.claimed} held by another session and left out` : ''}.
   ${input.boardNote ? esc(input.boardNote) : ''}<br>
+  ${input.verify ? `${esc(verifyLine(input.verify))}<br>` : ''}
   Read-only: nothing was changed in Basecamp to make this. ${esc(input.runId || '')}
 </td></tr>
 </table></td></tr></table>
