@@ -52,3 +52,88 @@ stricter, checking three separate claims instead of one phrase.
   for anyone on the Projects page; it does not put one where Swati actually looked. That is a
   larger change and is Ali's call.
 - Not deployed.
+
+## Merged
+
+PR #3924 merged 2026-11-12 00:18Z as `15008280`, which is the tip of `main`.
+
+Verified by **file content on `main`**, not by the merge status: `CONFIRM_WORD = 'DELETE'` at
+`ArchiveProjectDialog.tsx:53`, `requiredPhrase` reading from it at `:152`, the dialog heading
+`Delete “…”?` at `:175`, and `ProjectsPage.tsx` rendering `aria-label={`Delete ${p.name}`}` at
+`:217` plus the `Deleted builds` heading at `:899`. A merge that reports success and a merge whose
+content landed are two different claims; this is the second one.
+
+https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/3924
+
+### Not live yet
+
+This is a **frontend** change, so merging it changes nothing a student can see. The bundle is
+baked into the nginx image at build time, so it needs the `Build images` run on `15008280` to
+publish, then a registry-mode deploy that rebuilds nginx. Deploy pending that run.
+
+---
+
+## The rename was HALF DONE, and the half that shipped was wrong
+
+Deployed, then verified the live bundle by grepping the served chunk rather than trusting the
+deploy's exit code. The chunk contained **both** vocabularies at once:
+
+```
+NEW FOUND in /static/js/3058.d70b6b3d.chunk.js   ("Deleted builds")
+OLD FOUND in /static/js/3058.d70b6b3d.chunk.js   ("Removed builds")
+```
+
+Four user-facing strings were never renamed, all in `ArchiveProjectDialog.tsx`:
+
+| Line | Shipped text | Why it matters |
+|---|---|---|
+| 244 | button: **"Remove this build"** / "Removing…" | the heading said *Delete "X"?* and the button the student actually clicks said Remove |
+| 231 | hint: *restore it from **"Removed builds"*** | **an instruction to a section that no longer exists** - the heading had just been renamed to *Deleted builds* |
+| 84 | "**Removing** it moves you to X." | old verb |
+| 86 | "**Removing** it leaves you with no active build." | old verb |
+
+Line 231 is the one that did real harm. Before the rename it was correct. After it, the dialog
+told a student to look for a label that was not on the page. **The change made one sentence
+worse than it found it**, which is a different and more serious thing than leaving a word alone.
+
+### Why 846 green tests did not notice
+
+Measured, not assumed. Reverting both files to the shipped commit `15008280` and running the
+suites gives **846 passed, 9 skipped, 0 failed** with the bug fully present.
+
+The cause is in the test file itself:
+
+```js
+const removeBtn = () => Array.from(container.querySelectorAll('button'))
+  .find((b) => (b.textContent || '').trim().startsWith('Remove this build'))
+```
+
+**The helper that finds the button matched the old label.** So the button never changed, and the
+tests that press it kept passing because they were looking for exactly what was still there.
+Every assertion in the suite was about the presence of some string; not one was about the
+absence of the old vocabulary. Presence and absence can both be satisfied at once, and for one
+deploy they were.
+
+- [x] Finish the rename, and make a partial one fail
+  - Date: 2026-11-11 · Session: CC-20261111-r7m2
+  - What changed: the four remaining strings; `removeBtn` -> `deleteBtn`; four new tests in a
+    new `the dialog speaks one word for the action, everywhere` block.
+  - Verification: **mutation-tested** - reintroducing the two shipped strings fails 9 tests,
+    including all three vocabulary tests; reverting passes 26/26. `tsc` 0 errors in `src/`
+    **with a planted control error proving tsc was grading this tree**; `CI=true npm run
+    build:frontend` compiled; **850 passed / 9 skipped** across the 74 projects suites
+    (846 before, +4 new).
+
+### Correction to the previous entry
+
+The entry above claims "853 tests pass". That number is wrong. The measured baseline at
+`15008280` is **846 passed, 855 total**. Nothing was derived from the wrong figure, but a
+verification line that cannot be reproduced is worth less than no figure at all, so it is
+corrected here rather than quietly left.
+
+### What this says about the first PR
+
+The first change was not wrong in intent and its headline claim held - the control is now called
+what people search for. It was wrong in **completeness**, and it was reported as finished. The
+lesson is not "rename more carefully"; it is that a vocabulary change needs a test asserting the
+old vocabulary is **gone**, because that is the only assertion a half-finished rename can fail.

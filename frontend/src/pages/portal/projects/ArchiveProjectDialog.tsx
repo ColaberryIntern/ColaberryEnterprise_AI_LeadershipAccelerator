@@ -81,9 +81,9 @@ export function buildActiveLine(p: ArchivePreview): string | null {
   if (!p.is_active) return null;
   if (p.next_active_project_id) {
     const name = p.next_active_project_name || 'your other build';
-    return `This is your current build. Removing it moves you to ${name}.`;
+    return `This is your current build. Deleting it moves you to ${name}.`;
   }
-  return 'This is your current build, and your only one. Removing it leaves you with no active build until you start a new one.';
+  return 'This is your current build, and your only one. Deleting it leaves you with no active build until you start a new one.';
 }
 
 /**
@@ -228,7 +228,7 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
               aria-describedby="pja-confirm-hint"
             />
             <div id="pja-confirm-hint" className="pja-hint">
-              You can restore it from “Removed builds” at the bottom of this page.
+              You can restore it from “Deleted builds” at the bottom of this page.
             </div>
 
             {submitError && <p className="pja-err" role="alert">{submitError}</p>}
@@ -241,7 +241,7 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
                 type="button" className="pja-danger" onClick={() => void submit()}
                 disabled={!matches || submitting}
               >
-                {submitting ? 'Removing…' : 'Remove this build'}
+                {submitting ? 'Deleting…' : 'Delete this build'}
               </button>
             </div>
           </div>
