@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20261112-q6l4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, November 12, 2026 at 12:17 PM</div>
+    <div><span class="sid">CC-20261112-q6l4</span><span class="count">6 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Morning Five: add &quot;The five lists, most pressing first&quot; beneath the five tasks</h2>
+          <span class="badge">2026-11-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">new `pressingLists.js` (pure): ranks lists from the SAME task scores as the</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">aliTaskAgent jest suites 316/316 pass (13 JS suites, run with a plain node jest</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Morning Five: every link verified live in Basecamp before it is sent</h2>
+          <span class="badge">2026-11-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali clicked list links that opened trashed lists. Root cause: Basecamp answers</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">aliTaskAgent jest 330/330; mutation check (removing the trashed rule fails 2</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the mirror sync (ops_bc_todos) still does not learn about trashing; this report now</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Morning Five redesign: one ranked ten, copy buttons, gold one move, guided tour, no PDF</h2>
+          <span class="badge">2026-11-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">per Ali, (1) no prompt text in the email: every card has &quot;Open in Basecamp&quot; and</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">aliTaskAgent jest 340/340; live dry run on prod data (10 items, tour link 6.8K</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Morning Five redesign deployed and sent (PR #3957)</h2>
+          <span class="badge">2026-11-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nginx deployed; companion page live at https://enterprise.colaberry.ai/bt-k7q2xm4p/ (title &quot;Backlog Tour&quot;, noindex). [TEST] email sent from the deployed host checkout.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">page served 200 with its own title; Mandrill id &lt;bd4b56f8-416f-243c-69c7-fef2851ee8d3@colaberry.com&gt;; BC comment https://app.basecamp.com/3945211/buckets/7463955/todos/10501226498#__recording_10504091486</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the staging tarball must include repo-root scripts/ as well as backend/src/scripts. The cron stages from the host checkout, so no backend image deploy was needed.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Morning Five: buttons survive Gmail&#39;s click redirect, and the email stays in the inbox</h2>
+          <span class="badge">2026-11-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">copy/tour links carry their data in the query string (?c= / ?t=) instead of the fragment, which Gmail&#39;s redirect dropped (Ali&#39;s click landed on the bare page); every link is held under 7,600 chars by evenly clipping prompt tails (prod nginx 414s past ~8K, probed); the page reads the query and still accepts old #links; inbox hard rule 0a now keeps self-sent &quot;Your ten for ...&quot; subjects in INBOX (the first send fell to the LLM and went to Trash). The trashed test email was restored to the inbox by hand.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">jest aliTaskAgent 343/343; hardRuleEngine 98/98 incl. 3 new, which fail when the rule is broken (mutation check); Edge browser test 6/6 (query tour, query copy + clipboard, old #link, bare page).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">trade-off: link payloads now appear in the nginx access log for the request (no storage, no endpoint).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Morning Five close-out: PR #3965 deployed and production-verified</h2>
+          <span class="badge">2026-11-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">nginx + backend deployed at 6be2782fe; fresh [TEST] email sent from the deployed checkout.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Mandrill &lt;138ff253-bae6-c11b-9eea-a9026b4d95c2@colaberry.com&gt;; Gmail labels UNREAD,INBOX ~10 min after arrival (the first send went to TRASH); all 11 page links pulled from the DELIVERED email opened on the live site in Edge (tour + 10 copy buttons, each put its /ata-list or /ata-work-task command on the clipboard).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">not verified: a click through Gmail&#39;s own redirect, which only Ali can do. Open follow-ups, not built: (1) the ops_bc_todos mirror never learns a to-do/list was trashed (worked around by the live check); (2) the board&#39;s suggestFor still proposes &quot;run unattended&quot; for decision-heavy lists.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>docs/sessions/CC-20261112-q6l4.md</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
