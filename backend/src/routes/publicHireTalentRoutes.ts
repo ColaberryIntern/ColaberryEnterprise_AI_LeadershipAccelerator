@@ -3,6 +3,8 @@
  *
  *   GET  /api/public/hire/talent   the directory (SPEC §4.1)
  *   POST /api/public/hire/intro    an employer asks for an introduction (SPEC §4.4)
+ *   GET  /api/public/hire/talent/:slug/slots   open interview times (profile upgrade §4.2), no-store
+ *   POST /api/public/hire/interviews           an employer requests one of them
  *
  * The static site at hire.refactored.ai calls these cross-origin; CORS is open on the
  * platform. Nothing here takes a session, so nothing here may return more than the public
@@ -17,6 +19,7 @@ import rateLimit from 'express-rate-limit';
 import { parseHireTalentQuery } from '../services/hire/hireTalentQuery';
 import { getHireTalentDirectory } from '../services/hire/hireTalentDirectory';
 import { requestHireIntro } from '../services/hire/hireIntro';
+import { requestInterview, talentSlots } from '../services/hire/hireInterviews';
 import { getCaseStudySurfaceProfile } from '../services/caseStudy/caseStudySurfaceProfiles';
 
 /**
@@ -84,6 +87,58 @@ async function postIntro(req: Request, res: Response): Promise<void> {
   }
 }
 
+/** GET /api/public/hire/talent/:slug/slots - open times, never cached (a slot can go any second). */
+async function getSlots(req: Request, res: Response): Promise<void> {
+  res.set('Cache-Control', 'no-store');
+  const slug = String(req.params.slug || '');
+  if (!/^[a-z0-9][a-z0-9-]{0,158}$/i.test(slug)) { res.status(404).json({ error: 'Not found' }); return; }
+  try {
+    const out = await talentSlots(slug, req.query);
+    if (out.status === 'invalid') { res.status(400).json({ error: 'Invalid query', detail: out.error }); return; }
+    if (out.status === 'not_found') { res.status(404).json({ error: 'Not found' }); return; }
+    res.json({ ok: true, ...out.body });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'public_hire_slots_failed', outcome: 'failure', error_class: err?.name || 'Error',
+      context: { slug, message: String(err?.message || '').slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Unable to load times' });
+  }
+}
+
+/** The schedule page's own address. FIXED base, slug re-validated: never an open redirect. */
+function scheduleReturnUrl(rawSlug: unknown, params: Record<string, string>): string {
+  const base = getCaseStudySurfaceProfile('hire').publicBaseUrl || 'https://hire.refactored.ai';
+  const slug = typeof rawSlug === 'string' && /^[a-z0-9-]{1,159}$/i.test(rawSlug) ? rawSlug.toLowerCase() : '';
+  return slug ? `${base}/talent/${slug}/schedule/?${new URLSearchParams(params).toString()}` : `${base}/`;
+}
+
+/** POST /api/public/hire/interviews - JSON gets JSON; a plain form post gets a 303 (kit §4.2). */
+async function postInterview(req: Request, res: Response): Promise<void> {
+  const redirect = wantsRedirect(req);
+  try {
+    const out = await requestInterview(req.body);
+    if (redirect) {
+      const ok = out.status === 'created' || out.status === 'duplicate';
+      res.redirect(303, scheduleReturnUrl(req.body?.talentSlug, ok ? { sent: '1' } : { error: out.status }));
+      return;
+    }
+    if (out.status === 'invalid') { res.status(400).json({ error: 'Invalid request', detail: out.error }); return; }
+    if (out.status === 'not_found') { res.status(404).json({ error: 'Not found' }); return; }
+    if (out.status === 'unavailable') { res.status(409).json({ error: 'That time is no longer open' }); return; }
+    res.status(out.http).json({ ok: true, status: out.status, startsAt: out.startsAt, minutes: out.minutes, format: out.format });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'public_hire_interview_failed', outcome: 'failure', error_class: err?.name || 'Error',
+      context: { message: String(err?.message || '').slice(0, 200) },
+    }));
+    if (redirect) { res.redirect(303, scheduleReturnUrl(req.body?.talentSlug, { error: 'failed' })); return; }
+    res.status(500).json({ error: 'Unable to send this request just now' });
+  }
+}
+
 /**
  * A factory, so each mounted router owns its own rate-limit store (tests mount several).
  * Production mounts exactly one: the default export.
@@ -100,6 +155,18 @@ export function createHireRouter(): Router {
   });
   router.get('/api/public/hire/talent', getTalent);
   router.post('/api/public/hire/intro', introLimiter, express.urlencoded({ extended: false, limit: '10kb' }), postIntro);
+  // Same cap and shape as the intro form: these are the two ways an employer reaches a person.
+  const interviewLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests. Please try again in a few minutes.' },
+  });
+  // Slots are read on every week change of the picker: generous, but still bounded per IP.
+  const slotsLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+  router.get('/api/public/hire/talent/:slug/slots', slotsLimiter, getSlots);
+  router.post('/api/public/hire/interviews', interviewLimiter, express.urlencoded({ extended: false, limit: '10kb' }), postInterview);
   return router;
 }
 

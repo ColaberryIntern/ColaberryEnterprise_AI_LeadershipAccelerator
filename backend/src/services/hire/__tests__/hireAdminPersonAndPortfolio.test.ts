@@ -7,6 +7,9 @@ jest.mock('../../career/careerEvidenceAdapters', () => ({ identityAdapter: jest.
 jest.mock('../../career/careerPortfolioPageService', () => ({ getPortfolioPreview: jest.fn(), getPublicPortfolioBySlug: jest.fn() }));
 jest.mock('../hireTalentIndex', () => ({ loadHireIndex: jest.fn() }));
 jest.mock('../hireListingSettings', () => ({ readHireListingSettings: jest.fn() }));
+// Phase 2 extras: off for these tests (their own suite is hirePortfolioExtras.test.ts).
+jest.mock('../hireStudioSettings', () => ({ readPublicIntro: jest.fn().mockResolvedValue(null), readCaseStudyOrder: jest.fn().mockResolvedValue([]) }));
+jest.mock('../hireInterviews', () => ({ bookingSummary: jest.fn().mockResolvedValue({ enabled: false, nextSlots: [], formats: [] }) }));
 jest.mock('../../../models/CaseStudy', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 
 import { linkedPeopleForCaseStudy } from '../../career/caseStudyLinkedPerson';

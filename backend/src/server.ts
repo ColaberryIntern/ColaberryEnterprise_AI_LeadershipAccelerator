@@ -179,6 +179,7 @@ import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
 import { ensureRoutingAuditSchema } from './db/ensureRoutingAuditSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
+import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureMarketingTrackingSchema } from './db/ensureMarketingTrackingSchema';
 import { ensureMarketingCampaignSchema } from './db/ensureMarketingCampaignSchema';
@@ -2721,6 +2722,8 @@ async function start(): Promise<void> {
   // organization_type on rows that predate the column.
   await ensureRefactoredDeliverySchema();
   await ensureCareerPublicationSchema();
+  // hire.refactored.ai profile upgrade (Phase 2): intro, interview times, carousel order, interviews. Additive.
+  await ensureHireInterviewSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.

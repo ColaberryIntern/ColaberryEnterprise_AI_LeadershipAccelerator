@@ -11,6 +11,10 @@ import {
 } from '../controllers/careerPortfolioPageController';
 import { handleListPostConsent, handleSetPostConsent } from '../controllers/postConsentController';
 import { handleGetMyHireSettings, handleSetMyAvailability } from '../controllers/hireListingController';
+import {
+  handleActOnHireInterview, handleGetCaseStudyOrder, handleGetHireIntro, handleGetInterviewAvailability,
+  handleListHireInterviews, handlePutCaseStudyOrder, handlePutHireIntro, handlePutInterviewAvailability,
+} from '../controllers/hireStudioController';
 import myWorkRoutes from './myWorkRoutes';
 import cohortShowcaseRoutes from './cohortShowcaseRoutes';
 
@@ -133,6 +137,18 @@ router.put(
   requireContentEntitlement('portfolio'),
   handleSetPostConsent,
 );
+
+// hire.refactored.ai profile upgrade (Phase 2): the candidate studio's Hire settings and their
+// interview inbox. Same two gates; the enrollment is always the caller's own.
+const gates = [requireParticipant, requireContentEntitlement('portfolio')] as const;
+router.get('/api/portal/career/portfolio-page/hire-intro', ...gates, handleGetHireIntro);
+router.put('/api/portal/career/portfolio-page/hire-intro', ...gates, handlePutHireIntro);
+router.get('/api/portal/career/portfolio-page/interview-availability', ...gates, handleGetInterviewAvailability);
+router.put('/api/portal/career/portfolio-page/interview-availability', ...gates, handlePutInterviewAvailability);
+router.get('/api/portal/career/portfolio-page/case-study-order', ...gates, handleGetCaseStudyOrder);
+router.put('/api/portal/career/portfolio-page/case-study-order', ...gates, handlePutCaseStudyOrder);
+router.get('/api/portal/career/hire-interviews', ...gates, handleListHireInterviews);
+router.post('/api/portal/career/hire-interviews/:id/:action', ...gates, handleActOnHireInterview);
 
 // My work (C128): the learner's own pieces and each piece's viewer, under /api/portal/career/work. Its own router
 // file; the same two gates are applied per route inside it.
