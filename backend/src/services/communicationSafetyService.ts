@@ -23,7 +23,10 @@ import { isRegisteredJourneyCampaignKey } from './growthJourney/execution/campai
 // ---------------------------------------------------------------------------
 
 export type SendChannel = 'email' | 'sms' | 'voice';
-export type SendSource = 'scheduler' | 'simulator' | 'webhook_reply' | 'manual';
+// 'agent' added for sends an AI agent initiates in a live conversation, so the audit line
+// does not have to call Maya's document send 'manual'. The field is logged and never
+// branched on, so adding a member changes no decision.
+export type SendSource = 'scheduler' | 'simulator' | 'webhook_reply' | 'manual' | 'agent';
 
 export interface SendRequest {
   leadId: number;
