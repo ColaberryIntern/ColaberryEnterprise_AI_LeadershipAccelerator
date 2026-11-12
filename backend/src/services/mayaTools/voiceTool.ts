@@ -11,6 +11,7 @@ import { pricingPitchRule } from '../admissionsPricing';
 import type { MayaActionResult } from '../mayaActionService';
 import { resolveLeadForVisitor, logAction, logOutboundOutcome } from './toolContext';
 import { voiceSkipSummary, VOICE_SKIP_SUMMARY_FALLBACK } from './voiceSummaries';
+import { checkPhoneConsent, CONSENT_REFUSED_SUMMARY } from './outboundConsent';
 
 /**
  * `initiate_voice_call` - place an AI voice call to the visitor.
@@ -83,6 +84,51 @@ export async function initiateVoiceCall(
   // Prefer the name passed by Maya (from conversation) over the lead record
   const leadName = argName || lead?.getDataValue('name') || 'Visitor';
 
+  // ── CONSENT, BEFORE ANYTHING IS DIALLED (MR1 defect 4) ─────────────────────
+  //
+  // This tool had no consent check at all, and the number it dials is `args.phone` - whatever
+  // the visitor typed, never checked against the lead record. So Maya could robo-dial an
+  // arbitrary number on an arbitrary person's behalf.
+  //
+  // NO LEAD MEANS NO CALL, and that is a deliberate behavior change. Consent lives on the lead;
+  // with no lead there is no record to check, and `consentService` is explicit that voice to
+  // somebody without an express basis is a block rather than a warning. Dialling a stranger we
+  // hold no record for is exactly what that rule exists to stop. In practice the prompt runs
+  // `capture_lead_details` first, so a lead is normally present by this point.
+  if (!lead?.id) {
+    logOutboundOutcome({
+      event: 'maya_voice_no_consent_record',
+      outcome: 'failure',
+      errorClass: 'NoConsentRecord',
+      context: { visitor_id: visitorId, conversation_id: conversationId },
+    });
+    await logAction(visitorId, conversationId, 'voice_call_initiated', 'denied', {
+      error_class: 'NoConsentRecord',
+    });
+    return {
+      success: false,
+      summary: 'There is no contact record for this visitor yet, so no call was placed. Capture '
+        + 'their details first, then offer the booking calendar.',
+    };
+  }
+
+  const consent = await checkPhoneConsent(lead.id, 'voice', String(phone), {
+    visitor_id: visitorId, conversation_id: conversationId,
+  });
+  if (!consent.allowed) {
+    await logAction(visitorId, conversationId, 'voice_call_initiated', 'denied', {
+      lead_id: lead.id,
+      error_class: 'SendNotAllowed',
+      reason: consent.reason,
+    });
+    return { success: false, summary: CONSENT_REFUSED_SUMMARY.voice };
+  }
+
+  // Unlike the SMS path, voice CAN honour a redirect: `triggerVoiceCall` takes a destination, so
+  // test mode points the dial at the test number instead of a real person. Everything downstream
+  // uses this value, so nothing claims a call to a number that was not dialled.
+  const dialPhone = consent.redirectPhone || phone;
+
   // Build conversation context from recent messages
   let conversationContext = context_summary || '';
   if (!conversationContext) {
@@ -144,7 +190,7 @@ Your goal: Continue the conversation naturally, answer their questions about the
   try {
     const result = await triggerVoiceCall({
       name: leadName,
-      phone,
+      phone: dialPhone,
       callType: 'interest',
       prompt: callPrompt,
       context: {
@@ -245,7 +291,7 @@ Your goal: Continue the conversation naturally, answer their questions about the
       direction: 'outbound',
       delivery_mode: 'live',
       status: 'pending',
-      to_address: phone,
+      to_address: dialPhone,
       provider: 'synthflow',
       provider_message_id: callId,
       metadata: { visitor_id: visitorId, conversation_id: conversationId, source: 'maya_chat' },
@@ -265,7 +311,7 @@ Your goal: Continue the conversation naturally, answer their questions about the
     });
     await logAction(visitorId, conversationId, 'voice_call_initiated', 'completed', {
       lead_id: lead?.id,
-      phone,
+      phone: dialPhone,
       synthflow_response: true,
     });
 
@@ -284,8 +330,8 @@ Your goal: Continue the conversation naturally, answer their questions about the
 
     return {
       success: true,
-      summary: `Voice call initiated to ${phone}. ${leadName} should receive a call shortly.`,
-      details: { phone, lead_name: leadName },
+      summary: `Voice call initiated to ${dialPhone}. ${leadName} should receive a call shortly.`,
+      details: { phone: dialPhone, lead_name: leadName },
     };
   } catch (err: any) {
     // A throw here means the request did not complete, so no call was placed. The provider's own

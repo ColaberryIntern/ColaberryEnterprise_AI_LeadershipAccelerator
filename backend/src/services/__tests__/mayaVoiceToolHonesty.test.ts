@@ -31,6 +31,7 @@ const mockTriggerVoiceCall = jest.fn();
 const mockCallLogCreate = jest.fn(async () => ({ id: 'ccl-1' }));
 const mockCallLogFindOne = jest.fn(async () => null);
 const mockActionLogCreate = jest.fn(async () => ({ id: 'aal-1' }));
+const mockEvaluateSend = jest.fn();
 const mockLogCommunication = jest.fn(async () => undefined);
 const mockAddTag = jest.fn(async () => undefined);
 const mockRouteCampaign = jest.fn(async () => undefined);
@@ -84,6 +85,11 @@ jest.mock('../mayaCampaignRouter', () => ({
 jest.mock('../communicationLogService', () => ({
   logCommunication: (...a: unknown[]) => mockLogCommunication(...(a as [])),
 }));
+// The consent chokepoint. `outboundConsent` imports it dynamically, so mocking the module
+// path is what intercepts it - there is no injected dep to pass.
+jest.mock('../communicationSafetyService', () => ({
+  evaluateSend: (...a: unknown[]) => mockEvaluateSend(...(a as [])),
+}));
 jest.mock('../settingsService', () => ({
   getTestOverrides: jest.fn(async () => ({ enabled: false, phone: null, email: null })),
 }));
@@ -121,6 +127,9 @@ let logSpy: jest.SpyInstance;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockEvaluateSend.mockResolvedValue({
+    allowed: true, redirect: null, testMode: false, deliveryMode: 'live',
+  });
   mockCallLogFindOne.mockResolvedValue(null);
   mockCallLogCreate.mockResolvedValue({ id: 'ccl-1' } as never);
   mockLogCommunication.mockResolvedValue(undefined as never);

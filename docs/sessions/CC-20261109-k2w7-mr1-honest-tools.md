@@ -166,3 +166,116 @@ point at all, so emitting the field would mean emitting null. Both are recorded 
   would break if the re-export shim were wrong.
 - `tsc --noEmit`: 0 errors.
 
+
+## T002 — SMS stops reporting a text it never sent
+
+`sendSmsViaGhl`'s return value was **discarded**: the line was a bare
+`await sendSmsViaGhl(contactId, smsContent);` with nothing bound. `ghlFetch` returns
+`{ success: false, error }` **without throwing** on any GoHighLevel failure, so the surrounding
+`catch` never fired, the action was logged `completed`, and the tool returned
+`"SMS summary sent to <phone>"`.
+
+Unlike voice, this had not fired yet — production held **zero** `sms_summary_sent` rows. But the
+blast radius was already large: the silent branch is reachable for any lead that already carries a
+`ghl_contact_id`, because such a lead skips the sync guard above it. **8,123 leads carry one, and
+2,458 of those also have a phone number.** And the trigger is not a missing key: `ghl_enabled` is
+`true` and `ghl_api_key` is present, so it is any GoHighLevel 4xx, 5xx or timeout.
+
+Now the result is bound and checked. A rejection logs a structured failure carrying the provider's
+error, writes `status: 'failed'`, and returns a summary that states the failure without carrying
+the provider's text — which can hold a URL, a contact id or an upstream payload.
+
+**A test bug worth recording.** The first assertion was a bare "must not contain the word sent",
+which failed the *correct* refusal, because "The text could not be sent" contains the word. An
+assertion has to test the claim, not the vocabulary, so it now checks the exact old success shape
+and separately requires the refusal to state the failure out loud.
+
+**Verification:** 11 tests pass. Mutation — restoring the discarded call — fails **5**.
+
+## T003 — both tools route through the consent chokepoint
+
+MR1's metric: every outbound-capable site tool either calls `evaluateSend` or no longer exists.
+These two had **no consent check of any kind**: not `evaluateSend`, not `checkLeadSendable`, not
+`assertConsentForSend`, not `isSuppressedForChannel`, and for SMS not even the platform kill
+switch, which `evaluateSend` reads first.
+
+Nothing had to be built. `SendChannel` has always been email, sms or voice, `SendRequest` has
+always carried `toPhone`, and `consentService.ts:193-198` has always held the TCPA rule that voice
+or SMS without an express basis is a **block**. The gate has real data behind it: **297 phone
+consent rows across 150 subjects**, with `consent_enforcement` set to `enforce`.
+
+New `services/mayaTools/outboundConsent.ts` asks the gate and returns a verdict. Three decisions
+in it are worth naming:
+
+- **The blocked reason never reaches the visitor.** It is a fact about somebody's record, and the
+  number on a voice call is whatever the visitor typed — not necessarily their own. It goes to the
+  structured log and the audit row; the model is told only that the channel is unavailable.
+- **A gate that throws is not permission.** It returns `consent_unreadable` and refuses.
+- **Voice refuses when there is no lead at all.** A deliberate behavior change: consent lives on
+  the lead, and dialling a stranger we hold no record for is what the TCPA rule exists to stop.
+
+**The two channels diverge on one point, and both are honest about it.** Voice honours a test-mode
+redirect, because `triggerVoiceCall` takes a destination, and `dialPhone` is threaded through the
+provider call, the `CommunicationLog` row, the audit row and the summary, so nothing claims a call
+to a number that was not dialled. **SMS cannot**: `sendSmsViaGhl` writes a `cory_sms_composed`
+field on a GoHighLevel *contact*, and a workflow we do not own texts whatever number that contact
+holds — so there is nowhere to apply a redirect. Proceeding would text the real person while the
+platform believed it was in test mode, which is the worst outcome available, so that path refuses
+instead.
+
+**Verification:** 13 tests in `mayaPhoneConsentGate.test.ts`. Mutation — ignoring the verdict in
+both tools — fails **5**.
+
+**Known gap, stated rather than implied:** the SMS tool still has no idempotency key, so N tool
+calls produce N field writes and N workflow fires. The email path has `sendOnce` and
+`email_send_ledger`; there is no SMS equivalent, and inventing one is a schema change outside
+MR1's scope. It is recorded as a rung in the release-gate runbook.
+
+## T004 — the prompt stops scripting the claim, and the posture test pins it
+
+The handlers were wrong, but **it was the script that put the sentence in her mouth**. Three
+pre-claims, all stated before the tool had answered:
+
+| Flow | Said |
+|---|---|
+| VOICE CALL FLOW step 4 | Tell the visitor: "I'm placing a call to you now" |
+| SMS SUMMARY FLOW step 3 | Call send_sms_summary. Confirm: "Done - I just texted you a recap." |
+| DOCUMENT DELIVERY step 4 | Confirm delivery: "I just sent the [document type] to your email." |
+
+The document one was found while fixing the other two. It is the same defect class as MR1's
+defect 3, already fixed in code — so the prompt was still scripting a claim the code had by then
+learned to refuse.
+
+All three now branch on the result. The claims themselves survive, because they are the right
+thing to say when the send worked; what changed is that each sits behind `success: true`. A new
+top-level rule states the principle and attaches its cost: never announce the outcome of a tool
+before it has returned, because on 2026-10-24 and 2026-11-06 two real visitors were told a call
+was on its way by a script that spoke before the tool answered.
+
+Two further prompt defects fixed while there:
+
+- `schedule_callback` was described as "ONLY use as a last resort when initiate_voice_call is
+  unavailable", and the voice flow said "Do NOT use schedule_callback". With
+  `ENABLE_VOICE_CALLS=false` the callback queue is the **only** working route for "call me", so
+  the prompt was steering her away from the one thing that works.
+- `initiate_voice_call` was described as placing a call "RIGHT NOW", as though it could not
+  refuse. It now says it can, and why.
+
+### What "posture match" had to mean
+
+The ticket framed defect 4 as the two Mayas contradicting each other, and offered two remedies:
+govern the site tools, or remove them. Removing a capability from a live agent is a product
+decision and was out of scope, so this took the first. That means the surfaces still differ in
+what they *offer*, and always will — the portal serves a signed-in learner and hands "call me" to
+a person, while the site chat is the public front door. **Asserting the two tool lists were
+identical would have been asserting a decision nobody made.**
+
+What must match is the posture, and it reduces to one property: *neither Maya may tell somebody an
+outbound action happened when it did not.* The portal gets there by holding no such tool — it
+cannot misreport what it cannot do. The site chat now gets there by reporting the provider's real
+answer and never scripting the claim ahead of it. Different mechanisms, same guarantee, and that
+is what `mayaSmsVoicePosture.test.ts` pins — including that the belt still declares **exactly 12
+tools**, so the honesty fix did not quietly withdraw a capability.
+
+**Verification:** 15 tests, driving the real `buildMayaSystemPrompt` output rather than matching
+source text. **302 tests pass across all 17 affected suites**; `tsc --noEmit` 0 errors.
