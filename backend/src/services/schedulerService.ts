@@ -24,7 +24,9 @@ import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
-import { renewClaim, recoverStaleActions as recoverStaleActionsLeased } from './scheduling/claimLease';
+import {
+  renewClaim, recoverStaleActions as recoverStaleActionsLeased, recoveryLogLines,
+} from './scheduling/claimLease';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -902,12 +904,27 @@ async function processScheduledActions(): Promise<void> {
 async function recoverStaleActions(): Promise<number> {
   const outcome = await recoverStaleActionsLeased();
   if (outcome.requeued > 0 || outcome.exhausted > 0) {
-    // Log the ids, not just a count: without them there is no way to tell afterwards which rows
-    // were recycled, which is the first question asked when a lead reports a duplicate.
-    console.log(
-      `[Scheduler] Recovered ${outcome.requeued} stale actions, failed ${outcome.exhausted} with no attempts left`,
-      JSON.stringify({ ids: outcome.ids }),
-    );
+    // L7.3. NAME THE REASON, AND KEEP THE TWO OUTCOMES APART.
+    //
+    // The previous line logged counts plus one merged id list. Its own comment said the ids were
+    // there because "the first question asked when a lead reports a duplicate" is which rows were
+    // recycled - and a merged list cannot answer that, because a recycled row and a killed row
+    // looked identical in it.
+    //
+    // It also never said WHY. "Recovered 3 stale actions" describes what happened to the rows and
+    // leaves the cause to be guessed. The cause is specific and worth recording: nothing renewed
+    // the lease on these rows for longer than STALE_AFTER_MS, so their owner is presumed dead.
+    // `error_class` is `LeaseExpired` rather than a bare Error, because a recovery nobody can
+    // classify afterwards cannot be counted, and this repo's own rule is that a generic Error is
+    // not an acceptable classification.
+    //
+    // Two lines rather than one, because requeue and exhaustion are different events: a requeue
+    // will be tried again, an exhaustion is terminal and someone has to look at it.
+    // The lines themselves are built by `recoveryLogLines`, a pure function next to the recovery
+    // it describes, so what gets logged is testable without standing up a scheduler.
+    for (const line of recoveryLogLines(outcome)) {
+      console.log('[Scheduler] recovery', JSON.stringify(line));
+    }
   }
   return outcome.requeued + outcome.exhausted;
 }

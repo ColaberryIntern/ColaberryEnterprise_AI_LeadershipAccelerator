@@ -25,7 +25,9 @@ jest.mock('../../../config/database', () => ({
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { renewClaim, recoverStaleActions, STALE_AFTER_MS } = require('../claimLease');
+const {
+  renewClaim, recoverStaleActions, STALE_AFTER_MS, recoveryLogLines,
+} = require('../claimLease');
 
 /** The SQL text of the nth call, whitespace collapsed so assertions survive reformatting. */
 const sqlOf = (n: number) => String(query.mock.calls[n][0]).replace(/\s+/g, ' ').trim();
@@ -118,7 +120,11 @@ describe('recoverStaleActions', () => {
 
     expect(sqlOf(0)).toContain('>= max_attempts');
     expect(sqlOf(1)).toContain('< max_attempts');
-    expect(out.ids).toEqual(['x', 'y']);
+    // The first statement is the exhausting one, the second the requeueing one, and the two ids
+    // land in different fields. Asserting them separately is what makes the predicates' disjointness
+    // visible: a row cannot appear in both lists.
+    expect(out.exhaustedIds).toEqual(['x']);
+    expect(out.requeuedIds).toEqual(['y']);
   });
 
   it('clears the owner so the dead processor cannot renew its lease', async () => {
@@ -132,13 +138,22 @@ describe('recoverStaleActions', () => {
     expect(sqlOf(1)).toContain('processing_started_at = NULL');
   });
 
-  it('returns the ids it touched, not only a count', async () => {
+  it('returns the ids it touched SEPARATELY, so recycled and killed rows are distinguishable', async () => {
     query.mockResolvedValueOnce([{ id: 'dead' }]).mockResolvedValueOnce([{ id: 'back' }]);
 
     const out = await recoverStaleActions();
 
     // A count alone cannot answer "which row was recycled" when a lead reports a duplicate.
-    expect(out.ids).toEqual(['dead', 'back']);
+    //
+    // Neither could the merged `ids` array this replaced, which is why it changed in L7.3. It
+    // returned ['dead', 'back'] with nothing marking where the exhausted ids stopped and the
+    // requeued ids began, so the caller logged a list that could not be read back. The original
+    // intent of this test is preserved and now actually achievable: 'back' will be tried again,
+    // 'dead' never will, and the two must not be confusable.
+    expect(out.exhaustedIds).toEqual(['dead']);
+    expect(out.requeuedIds).toEqual(['back']);
+    expect(out.exhausted).toBe(1);
+    expect(out.requeued).toBe(1);
   });
 
   it('runs both statements inside one transaction', async () => {
@@ -178,5 +193,77 @@ describe('recoverStaleActions', () => {
     expect(optsOf(0).type).toBe(QueryTypes.SELECT);
     expect(sqlOf(0)).toContain('RETURNING id');
     expect(sqlOf(1)).toContain('RETURNING id');
+  });
+});
+
+/**
+ * L7.3. The ticket's success metric, verbatim: "Every recovery path leaves a log line naming why
+ * it retried. A silent recovery is an unmeasurable one."
+ *
+ * Recovery here is the crash path: a processor died holding rows, and this is what picks them up.
+ * It already logged counts. It did not log a REASON, and its single merged id array could not say
+ * which rows were recycled and which were killed, so the one question the log existed to answer
+ * could not be answered from it.
+ *
+ * These assertions are on a pure function rather than on the scheduler, which is why they can be
+ * specific. What they do NOT prove is that the scheduler calls it; that is one line in
+ * `recoverStaleActions`, and the typecheck is what keeps it honest.
+ */
+describe('recoveryLogLines names why, and keeps the two outcomes apart', () => {
+  const outcome = (over = {}) => ({
+    requeued: 0, exhausted: 0, requeuedIds: [], exhaustedIds: [], ...over,
+  });
+
+  it('CONTROL emits nothing when nothing was recovered', () => {
+    // A recovery line for a cycle that recovered nothing is noise, and noise is how a real one
+    // gets missed. This also stops the rest of the suite passing by emitting lines unconditionally.
+    expect(recoveryLogLines(outcome())).toEqual([]);
+  });
+
+  it('names a reason and a stable error class when a row is requeued', () => {
+    const [line] = recoveryLogLines(outcome({ requeued: 1, requeuedIds: ['a'] }));
+    expect(line.event).toBe('stale_action_requeued');
+    expect(line.reason).toBe('lease_expired');
+    expect(line.error_class).toBe('LeaseExpired');
+    expect(line.outcome).toBe('partial');
+    expect(line.ids).toEqual(['a']);
+  });
+
+  it('marks an exhausted row as a failure, because nothing will retry it', () => {
+    const [line] = recoveryLogLines(outcome({ exhausted: 1, exhaustedIds: ['b'] }));
+    expect(line.event).toBe('stale_action_exhausted');
+    expect(line.outcome).toBe('failure');
+    expect(line.ids).toEqual(['b']);
+  });
+
+  it('emits TWO lines when both happened, without mixing the ids', () => {
+    // The defect this replaced: ['b', 'a'] in one array, with nothing marking the boundary.
+    // Annotated because the module arrives through `require`, so `lines` would otherwise be
+    // `any` and the callbacks below would be implicitly-any parameters that tsconfig.test.json
+    // rejects.
+    const lines: Array<{ event: string; ids: string[] }> = recoveryLogLines(outcome({
+      requeued: 1, requeuedIds: ['a'], exhausted: 1, exhaustedIds: ['b'],
+    }));
+    expect(lines).toHaveLength(2);
+    const requeue = lines.find((l) => l.event === 'stale_action_requeued')!;
+    const exhaust = lines.find((l) => l.event === 'stale_action_exhausted')!;
+    expect(requeue.ids).toEqual(['a']);
+    expect(exhaust.ids).toEqual(['b']);
+    expect(requeue.ids).not.toContain('b');
+  });
+
+  it('states the staleness bound in words a person can read, not only a code', () => {
+    // "lease_expired" is for counting. The detail is for whoever is reading at 3am asking why a
+    // row they did not touch changed status.
+    const [line] = recoveryLogLines(outcome({ requeued: 1, requeuedIds: ['a'] }));
+    expect(line.stale_after_ms).toBe(STALE_AFTER_MS);
+    expect(line.detail).toContain(String(STALE_AFTER_MS));
+    expect(line.detail).toMatch(/presumed dead/);
+  });
+
+  it('says of an exhausted row that it was NOT recycled, which is the consequence', () => {
+    const [line] = recoveryLogLines(outcome({ exhausted: 1, exhaustedIds: ['b'] }));
+    expect(line.detail).toMatch(/no attempts left/);
+    expect(line.detail).toMatch(/failed rather than recycled/);
   });
 });
