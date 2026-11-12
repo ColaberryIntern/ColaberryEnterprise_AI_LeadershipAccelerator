@@ -9,7 +9,7 @@ import {
   assignGovBuildStory, unassignGovBuildStory,
   saveGovProposalResponse, reviewGovProposalResponse, addGovProposalFigure, removeGovProposalFigure, saveGovProposalDraft, resolveGovProposalGap, draftGovProposalWithAI, recordGovProposalAmendment,
   exportGovSubmission, downloadGovSubmissionPackage, recordGovSubmissionReceipt, acknowledgeGovSubmission, reopenGovSubmission, recordGovOutcome,
-  type GovQualificationWorkspace, type QualRequirementEval, type GovCandidatesResult, type EstablishedRequirement, type ExtractedFileOutcome,
+  type GovQualificationWorkspace, type GovCandidatesResult, type EstablishedRequirement, type ExtractedFileOutcome,
   type ServiceMatch, type ExtractedRequirementCandidate, type RequirementItem, type ReqItemCategory, type GovExtractionMeta, type GovOpportunity, type GovDossier, type GovComplianceRule, type GovAwardBasis, type GovRelationship,
   type GovResponseSlot, type GovBuildPlan, type GovBuildStory, type GovAssignableBuilder,
   type GovResponseFigure, type GovResponseGap, type GovProposalAmendment, type GovSubmission, type GovSubmissionReadiness,
@@ -36,6 +36,7 @@ import { StepFooter } from './govWorkspace/StepFooter';
 import { PursuitBrief, type BriefSection } from './govWorkspace/PursuitBrief';
 import { RightRail } from './govWorkspace/RightRail';
 import { SolicitationItemsView, tracksForCategory, dueStageForCategory, type SolView } from './govWorkspace/SolicitationItemsView';
+import { BLOCK_REASON, RequirementsByDueStageList } from './govWorkspace/RequirementsByDueStage';
 import { KeyDatesTimeline } from './govWorkspace/KeyDatesTimeline';
 import { ManualRequirementForm } from './govWorkspace/ManualRequirementForm';
 import { FitCapabilitiesPanel } from './govWorkspace/FitCapabilitiesPanel';
@@ -91,13 +92,9 @@ const AUTHORITATIVE_ROLES = ['solicitation', 'final_pws_sow', 'amendment'];
  * Design: Bootstrap 5 + admin-shell + RemixIcon; no hardcoded hex.
  */
 
-const STAGE_ORDER = ['submission', 'award', 'delivery', 'unknown'];
-const STAGE_LABEL: Record<string, string> = { submission: 'Due at submission', award: 'Due at award', delivery: 'Due at delivery', unknown: 'Stage unknown' };
-const BLOCK_REASON: Record<string, string> = {
-  applicability_unknown: 'Applicability unknown — must be resolved before a bid pursuit',
-  not_applicable_unevidenced: 'Marked not applicable with no supporting evidence',
-  submission_prerequisite_no_evidence: 'Binding submission requirement with no evidence on file',
-};
+// STAGE_ORDER / STAGE_LABEL / BLOCK_REASON and the RequirementRow / RequirementStageList renderers now live in
+// ./govWorkspace/RequirementsByDueStage, shared verbatim with the intern Proposal Studio's Fit step so the two
+// screens render the identical component and cannot drift. BLOCK_REASON is imported above (still used below).
 const COVERAGE_REASON: Record<string, string> = {
   no_requirements_established: 'Confirm the detected requirements to establish them — on Solicitation, click "Establish selected" (nothing is established until you confirm)',
   no_zip_attested: 'Attest the solicitation ZIP as the evidence of record — upload it on the Solicitation step (one upload opens the qualification and attests it)',
@@ -117,45 +114,6 @@ function errToAction(err: any): ActionError {
   const body = err?.response?.data ?? {};
   const reasons: string[] = body.reasons || (Array.isArray(body.blocking) ? body.blocking : undefined);
   return { status, message: body.error ?? 'Request failed.', reasons, changedSource: !!body.changedSource };
-}
-
-function RequirementRow({ r }: { r: QualRequirementEval }): React.ReactElement {
-  return (
-    <li className="d-flex align-items-start gap-2 py-2 border-bottom">
-      <i className={`ri-${r.blocking ? 'error-warning-line text-danger' : 'checkbox-circle-line text-success'} mt-1`} aria-hidden="true" />
-      <div className="flex-grow-1">
-        <div className="d-flex flex-wrap align-items-center gap-2">
-          <span className="fw-semibold">{r.id}</span>
-          <StatusBadge label={r.applicability} tone={r.applicability === 'unknown' ? 'warning' : 'neutral'} />
-          {r.blocking && <StatusBadge label="blocking" tone="danger" />}
-        </div>
-        {r.blocking && r.reason && <div className="small text-danger mt-1">{BLOCK_REASON[r.reason] ?? r.reason}</div>}
-      </div>
-    </li>
-  );
-}
-
-/** One due-stage group of requirement rows, capped to a few with a "Show all" toggle so a long
- *  solicitation (dozens of binding requirements) doesn't force a long scroll. Nothing is dropped —
- *  the hidden rows are one click away, and the count is always shown next to the stage. */
-function RequirementStageList({ stage, rows }: { stage: string; rows: QualRequirementEval[] }): React.ReactElement {
-  const LIMIT = 6;
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? rows : rows.slice(0, LIMIT);
-  const hiddenCount = rows.length - visible.length;
-  return (
-    <div className="mb-3">
-      <h3 className="h6 text-secondary text-uppercase small mb-2">
-        {STAGE_LABEL[stage]} <span className="fw-normal">({rows.length})</span>
-      </h3>
-      <ul className="list-unstyled mb-0">{visible.map((r) => <RequirementRow key={r.id + r.dueStage} r={r} />)}</ul>
-      {rows.length > LIMIT && (
-        <button type="button" className="btn btn-link btn-sm px-0 mt-1" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
-          {showAll ? 'Show fewer' : `Show all ${rows.length} (${hiddenCount} more)`}
-        </button>
-      )}
-    </div>
-  );
 }
 
 /**
@@ -1675,9 +1633,7 @@ export default function AdminGovQualificationPage(): React.ReactElement {
           {ws.evaluation && (ws.source || isDecoupled) && (
             <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
               {ws.evaluation.evals.length === 0 && <div className="text-secondary small">No requirements established yet. Opportunity Pulse supplies none — establish the applicable, cited requirements below before a pursuit can be approved.</div>}
-              {STAGE_ORDER.filter((s) => (ws.evaluation!.byDueStage[s]?.length ?? 0) > 0).map((stage) => (
-                <RequirementStageList key={stage} stage={stage} rows={ws.evaluation!.byDueStage[stage]} />
-              ))}
+              <RequirementsByDueStageList evals={ws.evaluation.evals} />
               {ws.coverage && !ws.coverage.sufficient && (
                 <div className="small text-warning-emphasis mt-2"><i className="ri-guide-line me-1" aria-hidden="true" /><strong>Before this pursuit can be approved, do this next:</strong> {ws.coverage.reasons.map((r) => COVERAGE_REASON[r] ?? r).join('; ')}.</div>
               )}

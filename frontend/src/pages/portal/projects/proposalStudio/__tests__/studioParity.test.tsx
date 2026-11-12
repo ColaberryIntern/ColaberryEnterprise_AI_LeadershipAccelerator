@@ -342,6 +342,25 @@ describe('StageDetail — FULL workspace depth on the intern side (admin-parity 
     expect(present('fit-req-group')).toBe(false);
   });
 
+  it('Fit renders the ADMIN "Requirements by due stage" panel (same component + data) when requirementEvals are present', async () => {
+    // The whole point of this change: the intern Fit step renders the EXACT admin component fed by the SAME
+    // evaluateRequirements() output — REQ id, applicability + blocking badges, block reason — grouped under the
+    // admin stage label ("Due at submission"), not the prose "Requirements & coverage" look-alike. The admin-only
+    // label and block-reason copy, and the absence of the prose `fit-req` row, discriminate the two renders.
+    const withEvals = { ...VIEW, requirementEvals: [
+      { id: 'R-1', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' },
+      { id: 'R-2', dueStage: 'delivery', applicability: 'conditional', blocking: false, reason: null },
+    ] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={withEvals} />);
+    const body = text('fit-requirements');
+    expect(body).toContain('R-1');
+    expect(body).toContain('R-2');
+    expect(body).toContain('blocking');
+    expect(body).toContain('Binding submission requirement with no evidence on file'); // admin BLOCK_REASON copy
+    expect(body).toContain('Due at submission'); // admin STAGE_LABEL, not the prose 'Due with the submission'
+    expect(present('fit-req')).toBe(false); // the prose coverage row is NOT used — the admin panel replaced it
+  });
+
   it('stays student-safe — renders no dollars, no buyer contacts, no builder identities', async () => {
     // The blueprint carries evaluation POINTS (public), never pricing. The projection itself drops contacts/$,
     // so this asserts the enriched view introduces none by accident.

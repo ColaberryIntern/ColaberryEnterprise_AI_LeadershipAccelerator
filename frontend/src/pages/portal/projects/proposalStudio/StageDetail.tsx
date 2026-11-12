@@ -2,6 +2,8 @@ import React from 'react';
 import type { StudentGovProjectView, StudentGovMeeting, StudentGovVetting, StudentGovOpportunitySummary, StudentGovRequirementView } from '../../../../services/govProjectPortalApi';
 import { pursuitStageLabel } from './buildHelpers';
 import StageBlueprint from './StageBlueprint';
+import { SectionCard } from '../../../../components/admin/shell';
+import { RequirementsByDueStageList } from '../../../admin/govWorkspace/RequirementsByDueStage';
 
 /**
  * StageDetail — read-only panels behind the pursuit-stage chips (Snapshot / Solicitation / Fit / Decide / Outcome),
@@ -218,7 +220,18 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
           {rollup && <div className="gps-r"><span>Build stories verified</span><b className="gps-num">{rollup.verified} / {rollup.total}</b></div>}
           {!vetting && <div className="gps-r"><span>Fit decision</span><b>Approved — the bid was pursued</b></div>}
         </div>
-        <RequirementsEvidence requirements={view.requirements ?? []} />
+        {(view.requirementEvals?.length ?? 0) > 0 ? (
+          /* The EXACT admin "Requirements by due stage" card + component + data (evaluateRequirements). Same screen as
+             the admin Qualification Workspace, read-only, not a parallel look-alike. Falls back to the prose coverage
+             list only on a projection with no established requirement evals. */
+          <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
+            <div data-testid="fit-requirements">
+              <RequirementsByDueStageList evals={view.requirementEvals!} />
+            </div>
+          </SectionCard>
+        ) : (
+          <RequirementsEvidence requirements={view.requirements ?? []} />
+        )}
         {vetting && <VettingCard vetting={vetting} />}
         {!vetting && <div className="gps-muted gps-small" data-testid="stage-coming">{COMING}</div>}
       </div>

@@ -24,6 +24,7 @@ import type { ReviewRunView } from './proposal/govProposalReviewRunStore';
 import type { ProposalDocumentView } from './proposal/govProposalDocumentStore';
 import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress, type BuildStage, type ProposalStage, type CommitFeedItem, type GovOverallProgress } from './govCockpit';
 import type { GovBuildSummary } from './govBuildSummary';
+import { evaluateRequirements, type RequirementEval } from './govQualification';
 
 /** v2 Proposal view: one named document a bid must submit, projected student-safe (no comment-author identities). */
 export interface StudentProposalDocumentComment { body: string; at: string; }
@@ -120,6 +121,12 @@ export interface StudentGovProjectView {
   tracks: StudentGovTrackView[];
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
+  /** Fit parity: the requirement evaluations the admin Qualification Workspace renders in "Requirements by due
+   *  stage" — { id, dueStage, applicability, blocking, reason }, produced by the SAME evaluateRequirements() the
+   *  admin pipeline uses, so the intern Fit step renders the identical component and data. Student-safe (the
+   *  solicitation's own requirements + evidence-coverage status; no dollars, contacts, or identities). Absent on a
+   *  projection built before established requirements exist. */
+  requirementEvals?: RequirementEval[];
   /** The Build-track plan for this project — releases → stories → the prompt the student works from. */
   build: StudentGovBuildPlan;
   /** P6: the proposal projected to THIS viewer's share level ('none' ⇒ empty, hidden). Pricing + identities are
@@ -511,6 +518,10 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
           if (stageByReq.size && Array.isArray(view.requirements)) {
             view.requirements = view.requirements.map((r) => ({ ...r, dueStage: stageByReq.get(r.canonicalReqId) ?? 'unknown' }));
           }
+          // The admin "Requirements by due stage" data, produced by the SAME pure evaluateRequirements() the admin
+          // workspace uses — so the intern Fit step renders the identical component (REQ id, applicability, blocking,
+          // reason), not a parallel look-alike. Student-safe: evals carry no dollars, contacts, or identities.
+          view.requirementEvals = evaluateRequirements(established).evals;
         }
       } catch { /* additive; the flat requirements list stays unchanged on any failure */ }
       // Admin-only: the canonical opportunity id, so the admin contract view can deep-link steps 1-4 to the real
