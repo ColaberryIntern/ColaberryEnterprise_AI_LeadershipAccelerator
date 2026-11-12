@@ -241,7 +241,7 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       // make every reader silently acquire values it has never seen, and would conflate "was
       // this allowed" with "did somebody do it". Different questions, different authors.
       //
-      // Its CHECK constraints pin a two-value event vocabulary, because a free-text milestone
+      // Its CHECK constraints pin a two-value event vocabulary, because an open-ended milestone
       // column is one nothing can read reliably, and the sentence the dashboard derives depends
       // on knowing exactly which values exist.
     ]);

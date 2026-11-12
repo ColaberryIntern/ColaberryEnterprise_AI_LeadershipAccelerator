@@ -70,7 +70,7 @@ const STATEMENTS: ReadonlyArray<string> = [
      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      note TEXT,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-     -- Two milestones, not a free-text field. A vocabulary that anything may add to is one that
+     -- Two milestones, not an open-ended string. A vocabulary that anything may add to is one that
      -- nothing can read reliably, and the sentence the dashboard derives depends on knowing
      -- exactly which values exist.
      CONSTRAINT chk_adtrbe_event_is_known CHECK (
