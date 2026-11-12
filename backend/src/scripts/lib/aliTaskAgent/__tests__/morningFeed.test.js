@@ -2,7 +2,7 @@
  * morningFeed (one feed of lists and tasks, ranked by impact) and tourLinks (the copy and tour links).
  */
 const { buildFeed, listCopyText } = require('../morningFeed');
-const { copyLink, tourLink, decode, pack, DEFAULT_BASE } = require('../tourLinks');
+const { copyLink, tourLink, decode, pack, payloadOf, DEFAULT_BASE, MAX_URL } = require('../tourLinks');
 
 const task = (id, score, over = {}) => ({ id: `p1/${id}`, title: `Task ${id}`, url: `https://app.basecamp.com/3945211/buckets/p1/todos/${id}`,
   path: 'Cat / Proj / List', dueOn: '2026-11-10', late: 2, score, isDecision: false, category: null, disposition: 'act',
@@ -64,24 +64,47 @@ describe('tourLinks', () => {
 
   it('round-trips an item through the fragment, losslessly', () => {
     const href = copyLink(feed[0]);
-    expect(href.startsWith(`${DEFAULT_BASE}#c=`)).toBe(true);
-    expect(decode(href.split('#c=')[1])).toEqual(pack(feed[0]));
+    expect(href.startsWith(`${DEFAULT_BASE}?c=`)).toBe(true);
+    expect(decode(payloadOf(href))).toEqual(pack(feed[0]));
   });
 
   it('puts every tour stop in one link, in rank order', () => {
-    const d = decode(tourLink(feed, 'Thursday, November 12').split('#t=')[1]);
+    const d = decode(payloadOf(tourLink(feed, 'Thursday, November 12')));
     expect(d.d).toBe('Thursday, November 12');
     expect(d.i.map((x) => [x.n, x.k, x.g])).toEqual([[1, 'list', 1], [2, 'task', 0]]);
   });
 
   /** The tracker and some clients choke on "(", "&", spaces; base64url has none of them. */
-  it('uses only URL-safe characters after the #', () => {
-    expect(tourLink(feed, 'd (x) & y').split('#t=')[1]).toMatch(/^[A-Za-z0-9_-]+$/);
+  it('uses only URL-safe characters in the payload', () => {
+    expect(tourLink(feed, 'd (x) & y')).toMatch(/\?t=[A-Za-z0-9_-]+$/);
   });
 
   it('keeps a realistic ten well under common URL limits', () => {
     const ten = buildFeed({ tasks: Array.from({ length: 5 }, (_, i) => task(`t${i}`, 70 - i, { title: 'A'.repeat(120) })),
       lists: Array.from({ length: 5 }, (_, i) => list(`l${i}`, 90 - i)), workOrderTextFor: () => 'W'.repeat(1500) });
     expect(tourLink(ten, 'day').length).toBeLessThan(16000);
+  });
+
+  /** Ali, 2026-11-12: the button opened the bare page. Gmail's redirect had dropped the "#" part. */
+  it('carries the data in the query string, not a fragment a redirect can drop', () => {
+    expect(tourLink(feed, 'd')).not.toContain('#');
+    expect(copyLink(feed[0])).not.toContain('#');
+  });
+
+  /** Production nginx refuses a request line over ~8K with 414 (probed 2026-11-12). */
+  it('holds every link under the server limit by clipping prompts, keeping the command line', () => {
+    const noisy = (n) => Array.from({ length: n }, (_, i) => `${i}-${((i * 2654435761) % 4294967296).toString(36)}`).join(' ');
+    const big = buildFeed({ tasks: Array.from({ length: 5 }, (_, i) => task(`t${i}`, 70 - i)),
+      lists: Array.from({ length: 5 }, (_, i) => list(`l${i}`, 90 - i)), workOrderTextFor: () => noisy(1500) });
+    const t = tourLink(big, 'day');
+    expect(t.length).toBeLessThanOrEqual(MAX_URL);
+    const stops = decode(payloadOf(t)).i;
+    stops.forEach((s, i) => expect(s.c.split('\n')[0]).toBe(big[i].copyText.split('\n')[0]));
+    expect(stops.some((s) => /Shortened to fit the link/.test(s.c))).toBe(true);
+    expect(copyLink(big[5]).length).toBeLessThanOrEqual(MAX_URL);
+  });
+
+  it('leaves a link that already fits untouched', () => {
+    expect(decode(payloadOf(copyLink(feed[0])))).toEqual(pack(feed[0]));
   });
 });

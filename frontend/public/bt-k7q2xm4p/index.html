@@ -8,8 +8,9 @@
 <title>Backlog Tour</title>
 <!--
   Morning Five companion page (Ali, 2026-11-12). Two modes, both driven by the URL FRAGMENT:
-    #c=<data>  one item: copies its Claude Code prompt to the clipboard on open
-    #t=<data>  the guided tour: the day's ten items, one stop at a time
+    ?c=<data>  one item: copies its Claude Code prompt to the clipboard on open
+    ?t=<data>  the guided tour: the day's ten items, one stop at a time
+    (the old #c= / #t= fragment form still opens; Gmail's redirect drops fragments, so links now use the query)
   <data> is raw-deflated JSON in base64url, written by
   backend/src/scripts/lib/aliTaskAgent/tourLinks.js. The fragment never reaches the server, so
   this page is static and holds nothing; the backlog content lives only in the email's links.
@@ -200,7 +201,8 @@ pre{white-space:pre-wrap;word-wrap:break-word;background:#0f172a;color:#e2e8f0;b
   }
 
   (async function () {
-    var m = /^#([ct])=([A-Za-z0-9_-]+)$/.exec(location.hash || '');
+    // Query first (survives Gmail's click redirect); fragment for links sent before 2026-11-12 PM.
+    var m = /^\?([ct])=([A-Za-z0-9_-]+)$/.exec(location.search || '') || /^#([ct])=([A-Za-z0-9_-]+)$/.exec(location.hash || '');
     if (!m) return fail('This page opens from the buttons in the Morning Five email. The link looks incomplete; open it again from the email.');
     if (typeof DecompressionStream === 'undefined') return fail('This browser is too old to open the link. Use a current Chrome, Edge, Safari or Firefox.');
     var data;
