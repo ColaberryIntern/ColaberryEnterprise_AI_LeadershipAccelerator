@@ -118,7 +118,7 @@ function topTen(w, email, targets) {
     text: `${pct(mobile.visitors, w.visitors)}% of visitors are on a phone.`, why: 'Every fix is judged on a phone first.', score: 2 * Math.sqrt(w.visitors) * (mobile.visitors / w.visitors) });
   const noCredit = w.journey.finished - (w.journey.credited ?? w.journey.finished);
   if (noCredit > 0) facts.push({ id: 'nocredit', icon: '🎖️', tone: 'bad', anchor: 'sec-forks',
-    text: `${noCredit} watched 75%+ of the video and never collected the credit.`, why: 'They did the work and the platform did not count it.', score: 3 * Math.sqrt(noCredit) * 2.4 });
+    text: `${noCredit} watched 75%+ of the video and never collected the credit.`, why: '75% unlocks the credit and the click awards it; the credit waits for them if they come back.', score: 3 * Math.sqrt(noCredit) * 2.4 });
   if (w.median_visit_s) facts.push({ id: 'visit', icon: '⏱️', tone: w.median_visit_s < 30 ? 'warn' : 'info', anchor: 'sec-page',
     text: `The median landing page visit lasts ${w.median_visit_s} seconds.`, why: 'The first screen has to do the whole job.', score: (w.median_visit_s < 30 ? 2 : 1) * Math.sqrt(w.visitors) * 0.8 });
   if (w.signups.training_site) facts.push({ id: 'door', icon: '🚪', tone: 'info', anchor: 'sec-howto',
