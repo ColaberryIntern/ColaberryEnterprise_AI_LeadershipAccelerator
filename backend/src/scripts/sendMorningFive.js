@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Send the Morning Five email to Ali: the report as the body, plus two attachments,
- *   1. backlog-navigator-<date>.html  the interactive board, to slice the whole backlog
- *   2. morning-five-<date>.pdf        the report itself, for reading offline or on a phone
+ * Send the Morning Five email to Ali: the report as the body, plus one attachment,
+ *   backlog-navigator-<date>.html  the interactive board, to slice the whole backlog
+ * (the PDF of the report was dropped at Ali's request, 2026-11-12),
  * and record the send as a comment on its Basecamp ticket (sendWithBcAttach, house doctrine).
  *
  *   node backend/src/scripts/sendMorningFive.js --test        to Ali only, "[TEST]" subject, no lock
@@ -17,7 +17,6 @@
  *
  * FAILURE MODES, all before anything is sent, so a failure never produces a partial email:
  *   - either report fails or times out (120s / 300s)  -> exit 1, nothing sent
- *   - the PDF render fails or times out (60s)          -> exit 1, nothing sent
  *   - the Basecamp preflight fails                     -> sendWithBcAttach throws before Mandrill
  * Not handled: Mandrill accepting the message and then bouncing it; that surfaces in Mandrill.
  * No retry: a failed morning send is re-run by hand, and the lock makes that safe.
@@ -50,21 +49,6 @@ function run(script, args, timeoutMs) {
   });
 }
 
-async function toPdf(html) {
-  const { chromium } = require('playwright');
-  let browser;
-  const timer = setTimeout(() => { if (browser) browser.close().catch(() => {}); }, 60000);
-  try {
-    browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'], timeout: 30000 });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'load', timeout: 30000 });
-    return await page.pdf({ format: 'Letter', printBackground: true, margin: { top: '0.4in', bottom: '0.4in', left: '0.4in', right: '0.4in' } });
-  } finally {
-    clearTimeout(timer);
-    if (browser) await browser.close().catch(() => {});
-  }
-}
-
 (async () => {
   const t0 = Date.now();
   const now = new Date();
@@ -84,12 +68,11 @@ async function toPdf(html) {
   const html = fs.readFileSync(f('mf.html'), 'utf8');
   const board = fs.readFileSync(f('board.html'));
   const summary = JSON.parse(fs.readFileSync(f('mf.json'), 'utf8'));
-  const pdf = await toPdf(html);
   const subject = subjectFor(summary, { test: TEST, now });
 
   if (DRY) {
     log({ level: 'info', event: 'dry_run', outcome: 'success', subject, bodyBytes: html.length,
-      boardBytes: board.length, pdfBytes: pdf.length, work, duration_ms: Date.now() - t0 });
+      boardBytes: board.length, work, duration_ms: Date.now() - t0 });
     return;
   }
 
@@ -104,14 +87,13 @@ async function toPdf(html) {
     text: textFor(summary, names),
     attachments: [
       { filename: names.board, content: board, contentType: 'text/html' },
-      { filename: names.pdf, content: pdf, contentType: 'application/pdf' },
     ],
-    bcSummary: `<p>${TEST ? '[TEST] ' : ''}Morning Five sent to Ali only. One move: ${String(summary.move.title || 'none').replace(/[<>&]/g, '')}. `
-      + `Attached: ${names.board}, ${names.pdf}.</p>`,
+    bcSummary: `<p>${TEST ? '[TEST] ' : ''}Morning Five sent to Ali only. One move: ${String(((summary.items || []).find((i) => i.golden) || {}).title || 'none').replace(/[<>&]/g, '')}. `
+      + `Attached: ${names.board}.</p>`,
   });
   if (!TEST) fs.writeFileSync(lock, `${new Date().toISOString()}\n${r.mandrillId}\n`);
   log({ level: 'info', event: 'sent', outcome: 'success', test: TEST, subject, mandrillId: r.mandrillId,
-    commentUrl: r.commentUrl, boardBytes: board.length, pdfBytes: pdf.length, duration_ms: Date.now() - t0 });
+    commentUrl: r.commentUrl, boardBytes: board.length, duration_ms: Date.now() - t0 });
 })().catch((e) => {
   log({ level: 'error', event: 'failed', outcome: 'failure', error_class: (e && e.name) || 'Error',
     message: e && e.message, stderr: e && e.stderr });

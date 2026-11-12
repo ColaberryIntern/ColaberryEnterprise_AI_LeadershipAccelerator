@@ -5,9 +5,13 @@ const { centralDate, attachmentNames, subjectFor, textFor } = require('../mornin
 
 const summary = {
   counts: { tasks: 515, live: 379, dormant: 136, qualified: 295, claimed: 0 },
-  move: { kind: 'task', title: 'Internal debrief of the Nov 5 MAPLOCA call', why: 'most pressing' },
-  movePrompt: '/ata-work-task 49506070/10481592064\n\nPROMPT BODY',
-  picks: [{ id: '49506070/10481592064', title: 'Internal debrief', url: 'https://app.basecamp.com/x', path: 'Client delivery / MAPLOCA / 1. RFP', late: 5, score: 75 }],
+  tourHref: 'https://enterprise.colaberry.ai/bt-k7q2xm4p/#t=TTT',
+  items: [
+    { rank: 1, kind: 'list', golden: true, title: '06 - Owner Decisions and Blockers', url: 'https://app.basecamp.com/l', path: 'Decisions / Ali Personal',
+      when: '3d overdue', score: 90, copyHref: 'https://enterprise.colaberry.ai/bt-k7q2xm4p/#c=AAA' },
+    { rank: 2, kind: 'task', golden: false, title: 'Internal debrief', url: 'https://app.basecamp.com/t', path: 'Client delivery / MAPLOCA',
+      when: '5d overdue', score: 75, copyHref: 'https://enterprise.colaberry.ai/bt-k7q2xm4p/#c=BBB' },
+  ],
 };
 
 describe('centralDate', () => {
@@ -19,46 +23,40 @@ describe('centralDate', () => {
 });
 
 describe('subjectFor', () => {
-  const now = new Date('2026-11-11T18:00:00Z');
-  it('names the day and the one move', () => {
-    expect(subjectFor(summary, { now })).toBe('Your five for Wed, Nov 11: Internal debrief of the Nov 5 MAPLOCA call');
+  const now = new Date('2026-11-12T18:00:00Z');
+  it('names the day and the golden move, saying when it is a list', () => {
+    expect(subjectFor(summary, { now })).toBe('Your ten for Thu, Nov 12: List: 06 - Owner Decisions and Blockers');
   });
   it('marks a test send', () => {
-    expect(subjectFor(summary, { test: true, now })).toMatch(/^\[TEST\] Your five/);
+    expect(subjectFor(summary, { test: true, now })).toMatch(/^\[TEST\] Your ten/);
   });
   it('shortens a long move and copes with none', () => {
-    expect(subjectFor({ move: { title: 'x'.repeat(200) } }, { now }).length).toBeLessThan(110);
-    expect(subjectFor({ move: { title: null } }, { now })).toBe('Your five for Wed, Nov 11');
+    expect(subjectFor({ items: [{ golden: true, kind: 'task', title: 'x'.repeat(200) }] }, { now }).length).toBeLessThan(110);
+    expect(subjectFor({ items: [] }, { now })).toBe('Your ten for Thu, Nov 12');
   });
 });
 
 describe('textFor', () => {
-  const names = attachmentNames('2026-11-11');
-  it('carries the same move, prompt and five as the HTML', () => {
+  const names = attachmentNames('2026-11-12');
+  it('carries the one move, the tour, and every item with both links', () => {
     const t = textFor(summary, names);
-    expect(t).toContain('THE ONE MOVE: Internal debrief of the Nov 5 MAPLOCA call');
-    expect(t).toContain('PROMPT BODY');
-    expect(t).toContain('1. Internal debrief (5d overdue, score 75)');
-    expect(t).toContain('/ata-work-task 49506070/10481592064');
+    expect(t).toContain('THE ONE MOVE: 06 - Owner Decisions and Blockers (list)');
+    expect(t).toContain('https://enterprise.colaberry.ai/bt-k7q2xm4p/#t=TTT');
+    expect(t).toContain('1. [LIST] [ONE MOVE] 06 - Owner Decisions and Blockers (3d overdue, impact 90)');
+    expect(t).toContain('Copy for Claude Code: https://enterprise.colaberry.ai/bt-k7q2xm4p/#c=BBB');
   });
-  it('names both attachments', () => {
+  it('names the board attachment and no PDF', () => {
     const t = textFor(summary, names);
-    expect(t).toContain('backlog-navigator-2026-11-11.html');
-    expect(t).toContain('morning-five-2026-11-11.pdf');
+    expect(t).toContain('backlog-navigator-2026-11-12.html');
+    expect(t).not.toMatch(/\.pdf/);
+    expect(names).toEqual({ board: 'backlog-navigator-2026-11-12.html' });
   });
-  it('contains no em-dash, which the Mandrill preflight rejects', () => {
-    expect(textFor(summary, names)).not.toMatch(/—/);
+  it('contains no em-dash, which the Mandrill preflight rejects, even from a ticket title', () => {
+    const withDash = { ...summary, items: [{ ...summary.items[0], title: 'Ali — claim your systems' }] };
+    expect(textFor(withDash, names)).not.toMatch(/—/);
+    expect(textFor(withDash, names)).toContain('Ali - claim your systems');
   });
   it('says so when nothing qualified', () => {
-    expect(textFor({ counts: {}, picks: [], move: {} }, names)).toMatch(/^Nothing qualified/);
-  });
-  it('carries the five lists when there are any, and omits the section when not', () => {
-    const lists = [{ key: '1. RFP Response', path: 'Client delivery / MAPLOCA', score: 85, total: 12, dormant: 3, pressing: 3,
-      lead: { title: 'Internal debrief' }, proposal: 'Work the 9 live', url: 'https://app.basecamp.com/l' }];
-    const t = textFor({ ...summary, lists }, names);
-    expect(t).toContain('THE FIVE LISTS');
-    expect(t).toContain('1. 1. RFP Response (3 pressing, 12 open, 3 dormant, score 85)');
-    expect(t).toContain('/ata-list "1. RFP Response"');
-    expect(textFor(summary, names)).not.toContain('THE FIVE LISTS');
+    expect(textFor({ counts: {}, items: [] }, names)).toMatch(/^Nothing qualified/);
   });
 });

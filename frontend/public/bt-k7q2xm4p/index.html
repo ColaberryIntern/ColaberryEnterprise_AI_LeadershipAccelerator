@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Backlog Tour</title>
+<!--
+  Morning Five companion page (Ali, 2026-11-12). Two modes, both driven by the URL FRAGMENT:
+    #c=<data>  one item: copies its Claude Code prompt to the clipboard on open
+    #t=<data>  the guided tour: the day's ten items, one stop at a time
+  <data> is raw-deflated JSON in base64url, written by
+  backend/src/scripts/lib/aliTaskAgent/tourLinks.js. The fragment never reaches the server, so
+  this page is static and holds nothing; the backlog content lives only in the email's links.
+  Every string is inserted with textContent (never innerHTML): it is Basecamp text, untrusted.
+-->
+<style>
+:root{--bg:#f8fafc;--card:#fff;--ink:#1f2937;--ink2:#4b5563;--ink3:#6b7280;--line:#e5e7eb;--cherry:#FB2832;
+--gold:#C9971C;--goldBg:#FFF8E1;--goldInk:#7A5A00;--dark:#0f172a;--leaf:#3f7d20;--red:#C20E1E;
+--task:#2563EB;--taskInk:#1D4ED8;--taskTint:#EFF6FF;--list:#7C3AED;--listInk:#6D28D9;--listTint:#F5F3FF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1120;--card:#111827;--ink:#e5e7eb;--ink2:#cbd5e1;
+--ink3:#94a3b8;--line:#1f2937;--goldBg:#2a2108;--goldInk:#F5C542;--taskInk:#93C5FD;--taskTint:#172554;--listInk:#C4B5FD;--listTint:#2e1065;--leaf:#86efac;--red:#fca5a5}}
+*{box-sizing:border-box}
+button{font-family:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 'Segoe UI',system-ui,-apple-system,Helvetica,Arial,sans-serif}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:20px;color:var(--cherry);margin:0 0 4px}
+.sub{color:var(--ink2);margin:0 0 14px;font-size:14px}
+.status{border-radius:10px;padding:12px 14px;margin:0 0 14px;font-weight:600}
+.status.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.status.wait{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+@media (prefers-color-scheme:dark){.status.ok{background:#052e1b;color:#a7f3d0;border-color:#065f46}.status.wait{background:#2a1406;color:#fed7aa;border-color:#9a3412}}
+.progress{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.dot{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:var(--card);color:var(--ink2);font-weight:700;font-size:12px;line-height:26px;text-align:center;cursor:pointer;padding:0}
+.dot.list{border-color:var(--list)}.dot.task{border-color:var(--task)}
+.dot.gold{box-shadow:0 0 0 2px var(--gold)}
+.dot[aria-current="step"]{background:var(--ink);color:var(--card)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card.gold{border:3px solid var(--gold)}
+.banner{background:var(--goldBg);color:var(--goldInk);font-weight:700;font-size:12px;line-height:1.4;letter-spacing:.6px;text-transform:uppercase;padding:9px 16px;border-bottom:1px solid #F1D68A}
+.body{border-left:6px solid var(--task);padding:14px 16px 16px}
+.card.list .body{border-left-color:var(--list)}
+.kind{display:inline-block;font-weight:700;font-size:11px;line-height:1.6;letter-spacing:.5px;text-transform:uppercase;border-radius:4px;padding:1px 8px}
+.card.task .kind{color:var(--taskInk);background:var(--taskTint)}.card.list .kind{color:var(--listInk);background:var(--listTint)}
+.rank{font-weight:700;font-size:11px;line-height:1.6;color:var(--ink3);letter-spacing:.5px;text-transform:uppercase;margin-left:6px}
+h2{font-size:19px;line-height:1.35;margin:6px 0 4px}
+.path{color:var(--ink3);font-size:12px;margin:0 0 8px}
+.chip{display:inline-block;font-weight:600;font-size:11px;line-height:1.6;border-radius:999px;padding:1px 9px;margin:0 4px 4px 0;background:#f1f5f9;color:#334155}
+.chip.late{background:var(--cherry);color:#fff}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:3px 12px;margin:8px 0}
+dt{font-weight:600;font-size:11px;line-height:1.6;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px}
+dd{margin:0;font-size:14px}
+.why{font-weight:700;font-size:11px;line-height:1.4;color:var(--ink3);letter-spacing:.5px;text-transform:uppercase;margin:10px 0 4px}
+.reasons{margin:0;padding:0;list-style:none;font-size:14px;color:var(--ink2)}
+.reasons b{display:inline-block;min-width:38px;text-align:right;margin-right:8px;font-family:Consolas,Menlo,monospace}
+.pos{color:var(--leaf)}.neg{color:var(--red)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.btn{display:inline-block;border:0;border-radius:8px;padding:11px 16px;font-weight:600;font-size:14px;line-height:1;color:#fff;text-decoration:none;cursor:pointer}
+.btn.bc{background:var(--task)}.card.list .btn.bc{background:var(--list)}
+.btn.copy{background:var(--dark)}
+@media (prefers-color-scheme:dark){.btn.copy{background:#334155}}
+.btn:focus-visible,.dot:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+details{margin-top:12px;font-size:13px;color:var(--ink3)}
+pre{white-space:pre-wrap;word-wrap:break-word;background:#0f172a;color:#e2e8f0;border-radius:8px;padding:10px 12px;font:12px/1.5 Consolas,Menlo,monospace;max-height:320px;overflow:auto}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:8px}
+.nav .btn{background:var(--ink2)}.nav .btn.next{background:var(--cherry)}
+.nav .btn[disabled]{opacity:.35;cursor:default}
+.hint{color:var(--ink3);font-size:12px;text-align:center;margin-top:10px}
+.err{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite"><p class="sub">Loading…</p></main>
+<script>
+(function () {
+  'use strict';
+  var app = document.getElementById('app');
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; }
+  function fail(msg) {
+    app.textContent = '';
+    var box = el('div', 'err');
+    box.appendChild(el('h1', null, 'This link could not be opened'));
+    box.appendChild(el('p', 'sub', msg));
+    app.appendChild(box);
+  }
+
+  async function decode(s) {
+    var b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return JSON.parse(await new Response(stream).text());
+  }
+
+  /** Clipboard API first; the textarea fallback covers browsers without it (or without focus). */
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* fall through */ }
+    try {
+      var ta = el('textarea'); ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta);
+      ta.select(); var ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+    } catch (e) { return false; }
+  }
+
+  function status(box, ok) {
+    box.hidden = false;
+    box.className = 'status ' + (ok ? 'ok' : 'wait');
+    box.textContent = ok ? '✔ Copied. Open a fresh Claude Code tab and paste (Ctrl+V).'
+      : 'Click "Copy for Claude Code" below to put the prompt on your clipboard.';
+  }
+
+  function card(it, statusBox) {
+    var c = el('section', 'card ' + (it.k === 'list' ? 'list' : 'task') + (it.g ? ' gold' : ''));
+    c.setAttribute('aria-label', (it.k === 'list' ? 'List' : 'Task') + ' #' + it.n + ': ' + it.t);
+    if (it.g) c.appendChild(el('div', 'banner', '⭐ The one move today · most impactful'));
+    var b = el('div', 'body');
+    var head = el('div');
+    head.appendChild(el('span', 'kind', it.k === 'list' ? '📋 List' : '📌 Task'));
+    head.appendChild(el('span', 'rank', '#' + it.n + ' · impact ' + it.s));
+    b.appendChild(head);
+    b.appendChild(el('h2', null, it.t));
+    b.appendChild(el('p', 'path', it.p));
+    var chips = el('div');
+    chips.appendChild(el('span', 'chip' + (/overdue|today/.test(it.w) ? ' late' : ''), it.w));
+    chips.appendChild(el('span', 'chip', it.x));
+    b.appendChild(chips);
+    var dl = el('dl');
+    (it.f || []).forEach(function (kv) { dl.appendChild(el('dt', null, kv[0])); dl.appendChild(el('dd', null, kv[1])); });
+    b.appendChild(dl);
+    b.appendChild(el('div', 'why', 'Why it is here'));
+    var ul = el('ul', 'reasons');
+    (it.r || []).forEach(function (r) {
+      var li = el('li'); var pts = el('b', r[0] > 0 ? 'pos' : 'neg', (r[0] > 0 ? '+' : '') + r[0]);
+      li.appendChild(pts); li.appendChild(document.createTextNode(r[1])); ul.appendChild(li);
+    });
+    b.appendChild(ul);
+    var actions = el('div', 'actions');
+    if (it.u && /^https:\/\/app\.basecamp\.com\//.test(it.u)) {
+      var a = el('a', 'btn bc', 'Open in Basecamp'); a.href = it.u; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      actions.appendChild(a);
+    }
+    var cp = el('button', 'btn copy', '📋 Copy for Claude Code'); cp.type = 'button';
+    cp.addEventListener('click', async function () { status(statusBox, await copy(it.c)); });
+    actions.appendChild(cp);
+    b.appendChild(actions);
+    var det = el('details'); det.appendChild(el('summary', null, 'What gets pasted'));
+    det.appendChild(el('pre', null, it.c)); b.appendChild(det);
+    c.appendChild(b);
+    return c;
+  }
+
+  async function copyMode(it) {
+    document.title = 'Copy: ' + it.t;
+    app.textContent = '';
+    app.appendChild(el('h1', null, 'Copy for Claude Code'));
+    var st = el('div', 'status wait', 'Copying…'); app.appendChild(st);
+    app.appendChild(card(it, st));
+    status(st, await copy(it.c));
+  }
+
+  function tourMode(data) {
+    var items = data.i || [], idx = 0;
+    if (!items.length) return fail('The tour has no stops today.');
+    function show(i) {
+      idx = Math.max(0, Math.min(items.length - 1, i));
+      var it = items[idx];
+      document.title = 'Tour ' + (idx + 1) + '/' + items.length + ': ' + it.t;
+      app.textContent = '';
+      app.appendChild(el('h1', null, 'Guided tour · ' + (data.d || '')));
+      app.appendChild(el('p', 'sub', 'Stop ' + (idx + 1) + ' of ' + items.length + ', most impactful first. Open it in Basecamp, or copy its prompt for Claude Code.'));
+      var prog = el('nav', 'progress'); prog.setAttribute('aria-label', 'Tour stops');
+      items.forEach(function (x, j) {
+        var d = el('button', 'dot ' + (x.k === 'list' ? 'list' : 'task') + (x.g ? ' gold' : ''), j + 1);
+        d.type = 'button'; d.title = (x.k === 'list' ? 'List: ' : 'Task: ') + x.t;
+        if (j === idx) d.setAttribute('aria-current', 'step');
+        d.addEventListener('click', function () { show(j); });
+        prog.appendChild(d);
+      });
+      app.appendChild(prog);
+      var st = el('div', 'status wait'); st.hidden = true;
+      app.appendChild(st);
+      app.appendChild(card(it, st)); // the status box stays hidden until something is copied
+      var nav = el('div', 'nav');
+      var back = el('button', 'btn', '← Back'); back.type = 'button'; back.disabled = idx === 0;
+      back.addEventListener('click', function () { show(idx - 1); });
+      var next = el('button', 'btn next', idx === items.length - 1 ? 'Done' : 'Next →'); next.type = 'button';
+      next.disabled = idx === items.length - 1;
+      next.addEventListener('click', function () { show(idx + 1); });
+      nav.appendChild(back); nav.appendChild(next); app.appendChild(nav);
+      app.appendChild(el('p', 'hint', 'Tip: the ← and → keys move between stops.'));
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+      if (e.key === 'ArrowRight') show(idx + 1);
+      if (e.key === 'ArrowLeft') show(idx - 1);
+    });
+    show(0);
+  }
+
+  (async function () {
+    var m = /^#([ct])=([A-Za-z0-9_-]+)$/.exec(location.hash || '');
+    if (!m) return fail('This page opens from the buttons in the Morning Five email. The link looks incomplete; open it again from the email.');
+    if (typeof DecompressionStream === 'undefined') return fail('This browser is too old to open the link. Use a current Chrome, Edge, Safari or Firefox.');
+    var data;
+    try { data = await decode(m[2]); } catch (e) { return fail('The link is damaged (it may have been cut short when it was forwarded). Open it again from the original email.'); }
+    if (m[1] === 'c') return copyMode(data);
+    return tourMode(data);
+  })();
+})();
+</script>
+</body>
+</html>
