@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
+// C8.6 — hypothesis health. It came across with the Commercialization tiles in R13.
+import HypothesisHealthPanel from '../../components/admin/commercialization/HypothesisHealthPanel';
 import {
   ORDER,
   STATUS,
@@ -35,7 +37,17 @@ import type { TrustSignal } from '../../components/admin/shell';
  * be worse than one that says where it is going.
  */
 
-export type InitiativeKind = 'hypothesis' | 'gov_pipeline' | 'membership';
+/**
+ * `commercial_proof` is R13: the ten tiles that used to live on their own page at
+ * /admin/commercialization. Ali, 11 Nov 2026: "I do not understand the difference between
+ * the two. I only need one, and it goes to drill downs into how that revenue flows."
+ *
+ * They are a kind rather than a separate board because the two pages were already the same
+ * page twice. Both read the same `statusVocabulary`, both enforce the same rule that a card
+ * shows a number only if a number was measured, and both order by status. What differed was
+ * the rows and the reader, which is a difference in content rather than in kind.
+ */
+export type InitiativeKind = 'hypothesis' | 'gov_pipeline' | 'membership' | 'commercial_proof';
 
 export type HypothesisVerdict =
   | 'confirmed' | 'in_flight' | 'no_evidence' | 'past_deadline' | 'uncountable';
@@ -48,14 +60,31 @@ export interface InitiativeCard {
   value: string | null;
   sourceTable: string | null;
   provenance: string;
-  owner: string;
+  /**
+   * Required of a revenue initiative, because R1's rule is that no initiative is unowned.
+   * Absent on a commercial-proof card: the Commercialization board never recorded owners,
+   * and inventing one here would be a claim about a person rather than a gap in the data.
+   * That gap is stated once on the page rather than ten times on the cards.
+   */
+  owner?: string;
   unlockedBy?: string;
   caveat?: string;
   verdict?: HypothesisVerdict;
   nextDeadline: string | null;
   nextDeadlineMeans: string | null;
   lastActivity: string | null;
-  drillDownKey: string;
+  /**
+   * Absent on a commercial-proof card. Those came from the Commercialization board, which
+   * never had a drill-down, and a link that looked clickable and went nowhere would be
+   * worse than no link — the same reasoning R1 used before R4 built the timeline.
+   */
+  drillDownKey?: string;
+  /**
+   * "Not this" — the table or metric a reader is most likely to mistake for this one.
+   * Carried over from the Commercialization tiles, where it exists so a rejected source is
+   * not rediscovered and quietly adopted by the next person who looks.
+   */
+  falseFriend?: string;
 }
 
 interface Board {
@@ -82,6 +111,7 @@ const KIND_LABEL: Record<InitiativeKind, string> = {
   membership: 'Recurring revenue',
   gov_pipeline: 'Government pipeline',
   hypothesis: 'Revenue bet',
+  commercial_proof: 'Business proof',
 };
 
 /** A date, or an explicit statement that nothing records one. Never a bare dash. */
@@ -144,7 +174,14 @@ export function InitiativeCardView({ card }: { card: InitiativeCard }) {
         </div>
       ) : (
         <div className="small fst-italic" style={{ color: 'var(--text-muted)' }}>
-          No number is shown because none can be measured.
+          {/*
+            An undefined rate gets its own sentence. "None can be measured" would be wrong
+            here: the measurement ran and the denominator was empty, which is a different
+            fact from an unrecorded metric and leads to a different decision.
+          */}
+          {card.status === 'undefined_rate'
+            ? 'No closed deals either way, so there is no rate to report.'
+            : 'No number is shown because none can be measured.'}
         </div>
       )}
 
@@ -166,50 +203,122 @@ export function InitiativeCardView({ card }: { card: InitiativeCard }) {
         </p>
       )}
 
-      <DeadlineLine card={card} />
+      {card.falseFriend && (
+        <p className="small mb-0" style={{ color: 'var(--text-muted)' }}>
+          <strong>Not this:</strong> {card.falseFriend}
+        </p>
+      )}
+
+      {/*
+        A deadline is only a meaningful property of a revenue initiative. Printing "no
+        deadline is recorded" on a business-proof card would imply one ought to exist and
+        is missing, when in truth a metric like pipeline value simply has no deadline.
+        Stating an absence is honest; implying a gap that is not there is not.
+      */}
+      {card.kind !== 'commercial_proof' && <DeadlineLine card={card} />}
 
       <div className="mt-auto pt-1 d-flex flex-column gap-1">
         {card.sourceTable && (
           <code className="small" style={{ color: 'var(--text-muted)' }}>{card.sourceTable}</code>
         )}
-        <span className="small" style={{ color: 'var(--text-muted)' }}>
-          <i className="ri-user-line" aria-hidden="true" /> {card.owner}
-        </span>
+        {card.owner && (
+          <span className="small" style={{ color: 'var(--text-muted)' }}>
+            <i className="ri-user-line" aria-hidden="true" /> {card.owner}
+          </span>
+        )}
         {card.unlockedBy && (
           <span className="small" style={{ color: 'var(--text-muted)' }}>
             <i className="ri-key-2-line" aria-hidden="true" /> {card.unlockedBy}
           </span>
         )}
-        <Link
-          to={`/admin/revenue-room/${card.drillDownKey}`}
-          className="small text-decoration-none"
-          data-testid={`drill-${card.key}`}
-        >
-          Open the full history <i className="ri-arrow-right-line" aria-hidden="true" />
-        </Link>
+        {card.drillDownKey && (
+          <Link
+            to={`/admin/revenue-room/${card.drillDownKey}`}
+            className="small text-decoration-none"
+            data-testid={`drill-${card.key}`}
+          >
+            Open the full history <i className="ri-arrow-right-line" aria-hidden="true" />
+          </Link>
+        )}
       </div>
     </div>
   );
 }
 
+/** One tile of the former Commercialization board, as that endpoint still returns it. */
+export interface CommercialTile {
+  key: string;
+  label: string;
+  status: TileStatus;
+  value: string | null;
+  sourceTable: string | null;
+  provenance: string;
+  falseFriend?: string;
+  unlockedBy?: string;
+  caveat?: string;
+}
+
+/**
+ * A commercialization tile, as a card on this board. R13.
+ *
+ * Exported so the round trip is testable: everything the tile carried has to survive, and
+ * the easiest way to break this merge is to drop `falseFriend` and quietly re-admit a
+ * source someone already rejected.
+ *
+ * The key is namespaced. Tile keys and initiative keys are two vocabularies that have never
+ * had to be unique against each other, and React would silently render only one of a
+ * duplicate pair.
+ */
+export function tileAsCard(tile: CommercialTile): InitiativeCard {
+  return {
+    key: `proof_${tile.key}`,
+    label: tile.label,
+    kind: 'commercial_proof',
+    status: tile.status,
+    value: tile.value,
+    sourceTable: tile.sourceTable,
+    provenance: tile.provenance,
+    caveat: tile.caveat,
+    falseFriend: tile.falseFriend,
+    unlockedBy: tile.unlockedBy,
+    // Not invented: the Commercialization board recorded none of these.
+    nextDeadline: null,
+    nextDeadlineMeans: null,
+    lastActivity: null,
+  };
+}
+
 export default function AdminRevenueRoomPage() {
   const [board, setBoard] = useState<Board | null>(null);
+  const [tiles, setTiles] = useState<CommercialTile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tileError, setTileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    api.get('/api/admin/commercialization/revenue-room')
-      .then((res) => {
-        if (!alive) return;
-        setBoard(res.data?.data ?? null);
-        setLoading(false);
-      })
-      .catch((e) => {
-        if (!alive) return;
+    // Two reads, settled independently and deliberately. Before R13 these were two pages,
+    // so one being down took only itself out. Chaining them now would mean a failure in
+    // either board blanked the other, which would be a regression dressed up as a merge.
+    Promise.allSettled([
+      api.get('/api/admin/commercialization/revenue-room'),
+      api.get('/api/admin/commercialization/board'),
+    ]).then(([room, proof]) => {
+      if (!alive) return;
+      if (room.status === 'fulfilled') {
+        setBoard(room.value.data?.data ?? null);
+      } else {
+        const e = room.reason as { response?: { data?: { error?: string } } };
         setError(e?.response?.data?.error || 'Could not load the Revenue Room.');
-        setLoading(false);
-      });
+      }
+      if (proof.status === 'fulfilled') {
+        setTiles(proof.value.data?.data?.tiles ?? []);
+      } else {
+        setTileError('The business-proof cards could not be loaded, so they are missing '
+          + 'from this board rather than showing as zero.');
+      }
+      setLoading(false);
+    });
     return () => { alive = false; };
   }, []);
 
@@ -222,15 +331,27 @@ export default function AdminRevenueRoomPage() {
     href: '/admin/trust',
   };
 
-  const counts = board?.summary ?? {};
+  // One board now, so the cards are one list. The server's `summary` counts only the
+  // Revenue Room's own rows, so the totals are recounted here over everything rendered
+  // rather than reported from a figure that no longer describes the page.
+  const allCards: InitiativeCard[] = [
+    ...(board?.cards ?? []),
+    ...(tiles ?? []).map(tileAsCard),
+  ];
+  const counts = allCards.reduce<Partial<Record<TileStatus, number>>>((acc, c) => {
+    acc[c.status] = (acc[c.status] ?? 0) + 1;
+    return acc;
+  }, {});
   const measured = counts.live ?? 0;
-  const total = board?.cards.length ?? 0;
+  const total = allCards.length;
+  const proofCount = (tiles ?? []).length;
+  const anything = board !== null || (tiles !== null && tiles.length > 0);
 
   return (
     <div data-testid="revenue-room">
       <PageHeader
         title="The Revenue Room"
-        subtitle="Every source of revenue we have or are chasing, and how much of each we can actually prove"
+        subtitle="Every source of revenue we have or are chasing, what the business can prove about itself, and how much of each we can actually measure"
         icon="money-dollar-circle-line"
         breadcrumb={[{ label: 'Admin', to: '/admin' }, { label: 'Revenue Room' }]}
         trust={trust}
@@ -242,7 +363,11 @@ export default function AdminRevenueRoomPage() {
         <div className="alert alert-danger" role="alert" data-testid="room-error">{error}</div>
       )}
 
-      {board && (
+      {tileError && (
+        <div className="alert alert-warning" role="alert" data-testid="proof-error">{tileError}</div>
+      )}
+
+      {anything && (
         <>
           <SectionCard title="How to read this page">
             <p className="mb-2">
@@ -264,9 +389,18 @@ export default function AdminRevenueRoomPage() {
               the status chip says whether the number can be trusted, and the verdict says
               whether the bet is still alive. A bet can be measured and dying at once.
             </p>
+            {proofCount > 0 && (
+              <p className="small text-muted mb-0 mt-2" data-testid="proof-note">
+                <strong>{proofCount} of these are business-proof cards</strong>, which until
+                today were a separate Commercialization page. They answer whether there is a
+                business at all rather than where a particular pound came from, they have no
+                drill-down because that board never had one, and <strong>none of them records
+                an owner</strong> — which is a gap worth closing rather than one worth hiding.
+              </p>
+            )}
           </SectionCard>
 
-          {board.caveats.length > 0 && (
+          {board && board.caveats.length > 0 && (
             <SectionCard title="What this page could not see">
               <ul className="mb-0 small" data-testid="room-caveats">
                 {board.caveats.map((c) => <li key={c}>{c}</li>)}
@@ -275,12 +409,16 @@ export default function AdminRevenueRoomPage() {
           )}
 
           <div className="row g-3 mt-1">
-            {ORDER.flatMap((s) => board.cards.filter((c) => c.status === s)).map((c) => (
+            {ORDER.flatMap((s) => allCards.filter((c) => c.status === s)).map((c) => (
               <div className="col-12 col-md-6 col-xl-4" key={c.key}>
                 <InitiativeCardView card={c} />
               </div>
             ))}
           </div>
+
+          {/* Moved here with the tiles it belongs to, rather than left on a page that no
+              longer exists. R13. */}
+          <HypothesisHealthPanel />
         </>
       )}
     </div>

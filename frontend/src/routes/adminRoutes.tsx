@@ -15,7 +15,6 @@ const AdminPipelinePage = lazy(() => import('../pages/admin/AdminPipelinePage'))
 
 const AdminImportPage = lazy(() => import('../pages/admin/AdminImportPage'));
 const AdminRevenueDashboardPage = lazy(() => import('../pages/admin/AdminRevenueDashboardPage'));
-const AdminCommercializationPage = lazy(() => import('../pages/admin/AdminCommercializationPage'));
 // R1 - the Revenue Room. Its API lives under the already-classified
 // /api/admin/commercialization prefix; only the page path is its own.
 const AdminRevenueRoomPage = lazy(() => import('../pages/admin/AdminRevenueRoomPage'));
@@ -234,7 +233,16 @@ const adminRoutes = (
         <Route path="/admin/sequences" element={<Navigate to="/admin/campaigns" replace />} />
         <Route path="/admin/import" element={<AdminImportPage />} />
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
-        <Route path="/admin/commercialization" element={<AdminCommercializationPage />} />
+        {/*
+          R13 — one revenue surface. The Commercialization board's tiles are cards on the
+          Revenue Room now. This redirects rather than 404s because the old path is in
+          bookmarks, in Basecamp comments and in a year of session logs, and a dead link
+          teaches a reader the page was deleted when it was merged.
+        */}
+        <Route
+          path="/admin/commercialization"
+          element={<Navigate to="/admin/revenue-room" replace />}
+        />
         <Route path="/admin/revenue-room" element={<AdminRevenueRoomPage />} />
         <Route path="/admin/revenue-room/:cardKey" element={<AdminRevenueRoomDrilldownPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
