@@ -123,6 +123,25 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     enabled: false,
   },
   {
+    // Keeps the landing-page snack bar alive (GEO-1, 2026-11-11). Writes only visitors.city/country.
+    agent_name: 'VisitorGeoEnrichment',
+    agent_type: 'scheduled_processor',
+    module: 'enrichVisitorGeo',
+    source_file: 'backend/src/scripts/enrichVisitorGeo.ts',
+    trigger_type: 'cron',
+    schedule: '35 9 * * *',
+    category: 'behavioral',
+    description:
+      'Fills visitors.city and visitors.country from the IP already stored on each row, using the ' +
+      'GeoLite2 City database baked into the backend image. Feeds the landing-page snack bar, whose ' +
+      'feed only considers leads from the last 72 hours - so a one-off backfill goes dark in about ' +
+      'three days and this is what keeps it current. Selects on city IS NULL and is idempotent, so a ' +
+      'missed run is repaired by the next one and a double run is a no-op. Runs as a SHORT-LIVED ' +
+      'CHILD PROCESS, never in the backend: the reader holds ~50MB open and this host OOM-kills. ' +
+      'Rows whose IP is not public are re-selected every run by design, not stuck. 09:35 UTC ' +
+      '(about 3:35 AM Central). Ships enabled - it needs no token and no configuration.',
+  },
+  {
     // Closes idle chat conversations (R4, 2026-11-11). The job that makes closing happen at all.
     agent_name: 'ChatCloseIdleConversations',
     agent_type: 'scheduled_processor',
