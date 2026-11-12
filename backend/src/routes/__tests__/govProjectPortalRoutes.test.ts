@@ -46,6 +46,9 @@ const getDecoupledWorkspace = jest.fn();
 jest.mock('../../services/factory/govQualification', () => ({ getDecoupledWorkspace: (...a: any[]) => getDecoupledWorkspace(...a) }));
 const fetchBestFitOpportunities = jest.fn();
 jest.mock('../../services/factory/opportunities/oppPulseClient', () => ({ fetchBestFitOpportunities: (...a: any[]) => fetchBestFitOpportunities(...a) }));
+// Read-only package-signatures mirror: the participant route LISTS signatures (never seeds/writes).
+const listSignatures = jest.fn();
+jest.mock('../../services/factory/proposal/govProposalSignatures', () => ({ listSignatures: (...a: any[]) => listSignatures(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -61,6 +64,49 @@ app.use(router);
 const SAFE_VIEW = { projectId: 'dp-A', name: 'TxDOT Claims Search', status: 'discovery', tracks: [], requirements: [], requirementCounts: { total: 0, proposal: 0, build: 0 } };
 
 beforeEach(() => { jest.clearAllMocks(); guardAllows = true; ctxIdentity = null; actorResult = { platformIdentityId: 'id-1', email: 'student@test' }; getStudentGovProjectView.mockResolvedValue(SAFE_VIEW); });
+
+describe('GET /api/portal/gov-projects/:projectId/cockpit-full (the SAME admin cockpit, read-only parity, member-gated)', () => {
+  it('a MEMBER gets the cockpit built with viewerCanVerify=true AND redactAdminOnly=true, with the award stripped', async () => {
+    getStudentGovProjectView.mockResolvedValue({ ...SAFE_VIEW, estimatedValue: 482000, source: { estimatedValue: 482000 } });
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/cockpit-full');
+    expect(res.status).toBe(200);
+    // the SAME builder: reviewer/pricing PANELS on (viewerCanVerify=true), admin-only SUBSTANCE redacted (redactAdminOnly=true)
+    expect(getStudentGovProjectView).toHaveBeenCalledWith('dp-A', true, null, true);
+    expect(res.body.project).toBeTruthy();
+    expect(res.body.project.estimatedValue).toBeNull();        // award stripped at the boundary
+    expect(res.body.project.source.estimatedValue).toBeNull();
+  });
+
+  it('a NON-MEMBER is 404 — the builder is never called (guard denies first)', async () => {
+    guardAllows = false;
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/cockpit-full');
+    expect(res.status).toBe(404);
+    expect(getStudentGovProjectView).not.toHaveBeenCalled();
+  });
+
+  it('a null projection (the id is not a non-archived gov project) is 404', async () => {
+    getStudentGovProjectView.mockResolvedValue(null);
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/cockpit-full');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/portal/gov-projects/:projectId/package/signatures (read-only signature status, member-gated)', () => {
+  it('a MEMBER gets the signature status list, read-only (lists, never seeds/writes)', async () => {
+    listSignatures.mockResolvedValue([{ formKey: 'hsp', signerRole: 'Authorized signatory', status: 'unsigned', required: true, hasFile: false }]);
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/package/signatures');
+    expect(res.status).toBe(200);
+    expect(res.body.signatures[0].formKey).toBe('hsp');
+    expect(listSignatures).toHaveBeenCalledWith('dp-A');
+  });
+
+  it('a NON-MEMBER is 404 — listSignatures is never called (guard denies first)', async () => {
+    guardAllows = false;
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/package/signatures');
+    expect(res.status).toBe(404);
+    expect(listSignatures).not.toHaveBeenCalled();
+  });
+});
 
 describe('GET /api/portal/gov-projects/:projectId/qualification (the REAL admin workspace, read-only, member-gated)', () => {
   beforeEach(() => {

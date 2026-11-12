@@ -353,12 +353,20 @@ const GATE_SEQUENCE: GovProposalGate[] = ['pink', 'red', 'gold', 'white_glove'];
  * over ALL sources via the pure proposalReadiness (which drops pricing/superseded/form), so it is the same honest
  * number for admin and intern alike. Total: garbage ⇒ empty documents + zero readiness.
  */
-export function assembleProposalDocuments(sources: ProposalDocSummarySource[], viewerCanVerify: boolean): { documents: StudentProposalDocument[]; readiness: ProposalReadiness } {
+export function assembleProposalDocuments(
+  sources: ProposalDocSummarySource[],
+  viewerCanVerify: boolean,
+  opts: { redactAdminOnlyContent?: boolean } = {},
+): { documents: StudentProposalDocument[]; readiness: ProposalReadiness } {
   const list = (Array.isArray(sources) ? sources : []).filter((s) => s && s.view);
   const documents: StudentProposalDocument[] = list
     .filter((s) => viewerCanVerify || !s.view.adminOnly)
     .map((s) => {
       const d = s.view;
+      // READ-ONLY INTERN PARITY: an admin-only (pricing) document's CARD stays visible so the panel renders, but its
+      // substance — the drafted body and the reviewer comment thread — is withheld. The admin path (opts default) is
+      // unchanged. This is the explicit redaction the plan audit required: panel visibility without admin-only content.
+      const sealAdminOnly = !!opts.redactAdminOnlyContent && !!d.adminOnly;
       const gates: Record<GovProposalGate, GateStatus> = { ...EMPTY_GATES };
       for (const g of Array.isArray(s.gates) ? s.gates : []) gates[g.gate] = (g.status as GateStatus) ?? 'pending';
       const currentGate = GATE_SEQUENCE.find((g) => gates[g] !== 'approved') ?? null;
@@ -367,10 +375,10 @@ export function assembleProposalDocuments(sources: ProposalDocSummarySource[], v
         ? { versionId: s.latest.id, version: s.latest.version, scores: s.latest.scores ?? {}, passes: !!s.latest.passes, pageCount: s.latest.pageCount ?? null, createdAt: s.latest.createdAt ?? null }
         : null;
       return {
-        key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
+        key: d.key, title: d.title, status: d.status, contentHtml: sealAdminOnly ? null : d.contentHtml, version: d.version,
         gate: d.gate, order: d.order, requirementIds: d.requirementIds, sections: d.sections,
         docType: d.docType, pageLimit: d.pageLimit, fileName: d.fileName, blueprintVersion: d.blueprintVersion,
-        comments: (Array.isArray(d.comments) ? d.comments : []).map((c) => ({ body: c.body, at: c.at })),
+        comments: sealAdminOnly ? [] : (Array.isArray(d.comments) ? d.comments : []).map((c) => ({ body: c.body, at: c.at })),
         draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
         superseded: !!d.superseded,
         latest, gates, currentGate,
@@ -416,7 +424,14 @@ export function summarizeNeeds(
  * Load + project. Serves ONLY a non-archived `government_public_sector` project (else null -> 404). Access must
  * already be authorized by the caller's guard; this never performs an access check of its own.
  */
-export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false, viewerIdentityId: string | null = null): Promise<StudentGovProjectView | null> {
+/**
+ * `redactAdminOnly` (read-only intern parity): serve the `viewerCanVerify=true` PANEL set to a non-reviewer intern
+ * (so the reviewer/pricing panels render) while explicitly WITHHOLDING every admin-only SUBSTANCE field that
+ * `viewerCanVerify=true` would otherwise add beyond the student view — the canonical opportunity id, the admin-only
+ * (pricing) document bodies + comments, and the pricing/Gold-approval needs. Defaults OFF, so the admin cockpit and
+ * the ordinary student view are unchanged. Paired with the read-only cockpit UI (every control disabled).
+ */
+export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false, viewerIdentityId: string | null = null, redactAdminOnly = false): Promise<StudentGovProjectView | null> {
   const { default: DeliveryProject } = await import('../../models/DeliveryProject');
   const { default: ContractTrack } = await import('../../models/ContractTrack');
   const { default: ContractRequirement } = await import('../../models/ContractRequirement');
@@ -526,7 +541,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       } catch { /* additive; the flat requirements list stays unchanged on any failure */ }
       // Admin-only: the canonical opportunity id, so the admin contract view can deep-link steps 1-4 to the real
       // Qualification Workspace. Withheld from an intern (viewerCanVerify=false) — they keep the student-safe panels.
-      if (viewerCanVerify) view.canonicalOpportunityId = qual.canonical_opportunity_id != null ? String(qual.canonical_opportunity_id) : null;
+      if (viewerCanVerify && !redactAdminOnly) view.canonicalOpportunityId = qual.canonical_opportunity_id != null ? String(qual.canonical_opportunity_id) : null;
     }
   } catch { /* additive; agency/keyDates/closeDate/priorityScore/meetings stay at their safe defaults */ }
 
@@ -602,7 +617,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
         latestRun: runsByDocId.get(id) ?? null,
       };
     });
-    const assembled = assembleProposalDocuments(sources, viewerCanVerify);
+    const assembled = assembleProposalDocuments(sources, viewerCanVerify, { redactAdminOnlyContent: redactAdminOnly });
     view.proposalDocuments = assembled.documents;
     view.proposalReadiness = assembled.readiness;
     // v3 (T05): the needs counts, viewer-filtered — an intern never sees a pricing or Gold-approval need counted.
@@ -610,7 +625,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     try {
       const { collectProjectNeeds } = await import('./proposal/collectProjectNeeds');
       const { needsForViewer } = await import('./proposal/aggregateNeeds');
-      const projNeeds = needsForViewer(await collectProjectNeeds(deliveryProjectId), { includePricing: viewerCanVerify, canApprove: viewerCanVerify });
+      const projNeeds = needsForViewer(await collectProjectNeeds(deliveryProjectId), { includePricing: viewerCanVerify && !redactAdminOnly, canApprove: viewerCanVerify && !redactAdminOnly });
       const sum = summarizeNeeds(projNeeds);
       view.needsCount = sum.total;
       view.fatalNeedsCount = sum.fatal;

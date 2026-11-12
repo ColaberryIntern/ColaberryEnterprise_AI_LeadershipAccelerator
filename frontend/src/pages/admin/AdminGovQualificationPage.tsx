@@ -983,18 +983,25 @@ export interface AdminGovQualificationPageProps {
   opportunityKey?: string;
   /** Injected read-only data source (participant endpoints). When omitted, the admin factoryApi is used. */
   api?: QualPageApi;
+  /** EMBEDDED inside the intern's Proposal Studio cockpit: suppress this page's own chrome (the PageHeader + the
+   *  numbered StepBar — the cockpit already provides them) and take the active step from `step` instead of `?tab=`,
+   *  so the real qualification content renders in the cockpit's center column rather than as a standalone page. */
+  embedded?: boolean;
+  /** The active qualification step when embedded (the cockpit's selected view: snapshot/solicitation/fit/decide). */
+  step?: string;
 }
 
-export default function AdminGovQualificationPage({ readOnly = false, opportunityKey, api }: AdminGovQualificationPageProps = {}): React.ReactElement {
+export default function AdminGovQualificationPage({ readOnly = false, opportunityKey, api, embedded = false, step }: AdminGovQualificationPageProps = {}): React.ReactElement {
   const [params, setParams] = useSearchParams();
   // The active pursuit step is URL-backed (?tab=<step>) so a reload restores it and the view is
-  // shareable; legacy tab values resolve to the new steps so old links keep working.
+  // shareable; legacy tab values resolve to the new steps so old links keep working. When EMBEDDED in the cockpit the
+  // active step comes from the `step` prop (the cockpit's selected view), not the URL.
   const tabParam = params.get('tab') ?? '';
   // In read-only (intern) mode only the four qualification steps exist (snapshot/solicitation/fit/decide, n<=4);
   // steps 5-8 (build/proposal/submit/outcome) are the intern's OWN Proposal Studio, so they are not shown here.
   // Clamp any stale or forward `?tab=` back to a qualification step so a shared/old URL never lands the intern on
   // a step this page intentionally omits (which would render an empty body).
-  const resolvedStep = resolveStep(tabParam);
+  const resolvedStep = resolveStep(embedded && step ? step : tabParam);
   const activeStep: WorkspaceStep = (readOnly && !WORKSPACE_STEPS.some((s) => s.key === resolvedStep && s.n <= 4))
     ? 'snapshot'
     : resolvedStep;
@@ -1281,8 +1288,8 @@ export default function AdminGovQualificationPage({ readOnly = false, opportunit
   }, [ws, tabParam, frontier, activeStep, setStep]);
 
   return (
-    <div className="admin-page">
-      {header}
+    <div className={embedded ? 'gps-embedded-qual' : 'admin-page'}>
+      {!embedded && header}
 
       {loading && <SectionCard><div className="text-secondary">Loading source evidence…</div></SectionCard>}
       {error && <SectionCard><div className="text-danger" role="alert">{error}</div></SectionCard>}
@@ -1302,10 +1309,11 @@ export default function AdminGovQualificationPage({ readOnly = false, opportunit
             </div>
           )}
 
-          {/* The stepper shows for BOTH mounts. In read-only (intern) mode it is filtered to the four
-              qualification steps (n<=4); steps 5-8 are the intern's own Proposal Studio, so showing them here would
-              only produce empty tabs. `goStep` already refuses admin navigation when readOnly, so it is safe here. */}
-          {stepModel && (
+          {/* The stepper shows for the standalone mounts. In read-only (intern) mode it is filtered to the four
+              qualification steps (n<=4); steps 5-8 are the intern's own Proposal Studio. When EMBEDDED in the cockpit
+              the cockpit's own StepBar is the nav, so this one is suppressed. `goStep` refuses admin navigation when
+              readOnly, so it is safe here. */}
+          {!embedded && stepModel && (
             <StepBar
               steps={readOnly ? WORKSPACE_STEPS.filter((s) => s.n <= 4) : WORKSPACE_STEPS}
               onStep={goStep}

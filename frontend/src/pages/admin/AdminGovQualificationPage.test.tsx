@@ -1101,6 +1101,23 @@ describe('AdminGovQualificationPage — READ-ONLY intern mount (same page, injec
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
   }
 
+  // EMBEDDED inside the cockpit: the active step comes from the `step` prop (not ?tab=), and the page's own chrome
+  // (PageHeader + StepBar) is suppressed because the cockpit provides them.
+  async function renderEmbedded(step = 'fit') {
+    container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => { root.render(<MemoryRouter initialEntries={['/portal/gov-projects/dp-A?view=' + step]}><AdminGovQualificationPage readOnly embedded step={step} opportunityKey={CANON} api={roApi as any} /></MemoryRouter>); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+  }
+
+  it('EMBEDDED: suppresses its own PageHeader + StepBar, takes the step from the prop, and still renders the real Fit content', async () => {
+    await renderEmbedded('fit');
+    expect(roApi.getWorkspace).toHaveBeenCalledWith(CANON, 'colaberry'); // same participant read
+    expect(container.textContent).not.toContain('Qualification Workspace'); // the standalone PageHeader title is gone
+    expect(container.querySelector('[role="tablist"]')).toBeNull();          // the cockpit owns the stepper, not this page
+    expect(container.textContent).toContain('Requirements by due stage');    // the REAL fit content renders inline
+    act(() => { root.unmount(); }); container.remove();
+  });
+
   it('uses the INJECTED api (not the admin factoryApi) and renders the real requirements-by-due-stage', async () => {
     await renderReadOnly('fit');
     expect(roApi.getWorkspace).toHaveBeenCalledWith(CANON, 'colaberry');

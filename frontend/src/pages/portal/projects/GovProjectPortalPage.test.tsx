@@ -8,11 +8,12 @@ import * as api from '../../../services/govProjectPortalApi';
 jest.mock('../../../services/govProjectPortalApi');
 
 /**
- * GovProjectPortalPage is the STUDENT entry to a gov project. It owns the load state machine
- * (loading / ready / not_found / error) and hands the one student-safe projection to the Proposal Studio shell.
- * These tests cover that contract: the shell renders from the projection, the process rail navigates between the
- * studio views, and the student projection never carries pricing or reviewer-only gate controls (the portal passes
- * no review API). The studio's own component behaviors are tested beside those components.
+ * GovProjectPortalPage is the intern entry to a gov project. It owns the load state machine
+ * (loading / ready / not_found / error) and mounts the SAME Proposal Studio cockpit the admin sees, READ-ONLY, fed by
+ * the parity projection (getPortalGovCockpitFull) + the read-only reviewApi. These tests cover that contract: the
+ * shell renders from the projection, the process rail navigates between the studio views, every panel the admin sees
+ * renders but inside a disabled fieldset (read-only), and no dollar amount appears (stripped server-side). The
+ * studio's own component behaviors are tested beside those components.
  */
 const techDoc = {
   key: 'technical', title: 'Technical Proposal', status: 'drafted', docType: 'derived', contentHtml: '<p>Our approach.</p>',
@@ -46,6 +47,10 @@ beforeEach(() => {
   (api.portalGovStudioApi.listNeeds as jest.Mock).mockResolvedValue({ needs: [] });
   (api.portalGovStudioApi.listQuestions as jest.Mock).mockResolvedValue([]);
   (api.portalGovStudioApi.listActivity as jest.Mock).mockResolvedValue([]);
+  // The page now mounts the cockpit read-only with the read-only reviewApi, so the reviewer/package panels read these.
+  (api.portalGovReviewApiReadOnly.listReview as jest.Mock).mockResolvedValue({ versions: [], gates: [] });
+  (api.portalGovReviewApiReadOnly.listSignatures as jest.Mock).mockResolvedValue({ signatures: [] });
+  (api.portalGovReviewApiReadOnly.diffVersions as jest.Mock).mockResolvedValue({ segments: [] });
   // The studio offers its guided tour once per browser; pre-seed "seen" so it doesn't auto-open during these tests.
   try { window.localStorage.setItem('gps-tour-seen', '1'); } catch { /* jsdom always has storage */ }
 });
@@ -56,7 +61,7 @@ const click = async (el: Element) => { await act(async () => { el.dispatchEvent(
 
 describe('GovProjectPortalPage — Proposal Studio shell', () => {
   it('renders the contract bar and the process rail from the student projection, Overview by default', async () => {
-    (api.getStudentGovProject as jest.Mock).mockResolvedValue(baseView());
+    (api.getPortalGovCockpitFull as jest.Mock).mockResolvedValue(baseView());
     await render();
     const text = container.textContent ?? '';
     expect(text).toContain('TxDOT Claims Search');
@@ -72,7 +77,7 @@ describe('GovProjectPortalPage — Proposal Studio shell', () => {
   });
 
   it('navigates the rail: Document set shows the deliverables table, Review gates shows the check matrix', async () => {
-    (api.getStudentGovProject as jest.Mock).mockResolvedValue(baseView());
+    (api.getPortalGovCockpitFull as jest.Mock).mockResolvedValue(baseView());
     await render();
     await click(step('documents'));
     let center = container.querySelector('#gps-main')?.textContent ?? '';
@@ -85,28 +90,29 @@ describe('GovProjectPortalPage — Proposal Studio shell', () => {
     expect(center).toContain('Technical Proposal'); // the matrix row
   });
 
-  it('the student projection leaks no pricing and no reviewer gate controls', async () => {
-    (api.getStudentGovProject as jest.Mock).mockResolvedValue(baseView());
+  it('read-only parity: the intern mounts the cockpit READ-ONLY (center wrapped in a disabled fieldset) with NO dollar amount anywhere', async () => {
+    (api.getPortalGovCockpitFull as jest.Mock).mockResolvedValue(baseView({ viewerCanVerify: true }));
     await render();
-    // Review gates: no reviewApi → no reviewer gate-control panel
+    // the whole center is wrapped in a disabled <fieldset> — the one-point disable for every panel's controls
+    expect((container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null)?.disabled).toBe(true);
+    // the reviewer gate panel renders now that a (read-only) reviewApi is injected — same panel the admin sees
     await click(step('gates'));
-    expect(container.querySelector('#gps-main')?.textContent ?? '').not.toContain('Reviewer gate controls');
-    // Package: portal has no review API → the reviewer-assembles button, no sealed-price envelope
+    let center = container.querySelector('#gps-main')?.textContent ?? '';
+    expect(center).toContain('Review gates');
+    expect((container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null)?.disabled).toBe(true);
+    // the package panel renders too; still no dollar amount on the cockpit body (the $ carrier is stripped server-side)
     await click(step('package'));
-    const pkg = container.querySelector('#gps-main')?.textContent ?? '';
-    expect(pkg).toContain('Package');
-    expect(pkg).not.toContain('Sealed');
-    expect(pkg).not.toContain('admin only');
-    const exportBtn = Array.from(container.querySelectorAll('#gps-main button')).find((b) => /assemble|export/i.test(b.textContent ?? '')) as HTMLButtonElement;
-    expect(exportBtn?.disabled).toBe(true);
+    center = container.querySelector('#gps-main')?.textContent ?? '';
+    expect(center).toContain('Package');
+    expect(center).not.toMatch(/\$\s?\d/);
   });
 
   it('shows "not found" on a 404 and an error state on a non-404', async () => {
-    (api.getStudentGovProject as jest.Mock).mockRejectedValue({ response: { status: 404 } });
+    (api.getPortalGovCockpitFull as jest.Mock).mockRejectedValue({ response: { status: 404 } });
     await render('dp-OTHER');
     expect(container.querySelector('[data-testid="gov-project-not-found"]')).toBeTruthy();
     act(() => root.unmount()); container.remove();
-    (api.getStudentGovProject as jest.Mock).mockRejectedValue({ response: { status: 500 } });
+    (api.getPortalGovCockpitFull as jest.Mock).mockRejectedValue({ response: { status: 500 } });
     await render();
     expect(container.querySelector('[data-testid="gov-project-error"]')).toBeTruthy();
   });

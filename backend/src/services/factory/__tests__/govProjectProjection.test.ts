@@ -387,6 +387,35 @@ describe('assembleProposalDocuments (pure) — B.1 per-doc summary + readiness',
     expect(assembleProposalDocuments(src, true).documents.map((x) => x.key).sort()).toEqual(['pricing', 'technical']);
   });
 
+  it('READ-ONLY PARITY redaction: the admin-only pricing CARD stays (panel visible) but its body + comments are sealed, across all three modes', () => {
+    const src: ProposalDocSummarySource[] = [
+      { view: mkView({ key: 'pricing', adminOnly: true, contentHtml: '<p>Total bid price: $482,000</p>', comments: [{ body: 'approved by finance', at: '2026-11-01T00:00:00.000Z' }] }), latest: null, gates: [], openGapCount: 0, latestRun: null },
+    ];
+    // false: non-reviewer never receives the pricing doc at all.
+    expect(assembleProposalDocuments(src, false).documents.map((x) => x.key)).toEqual([]);
+    // true (admin): the pricing doc is present WITH its body + comments.
+    const admin = assembleProposalDocuments(src, true).documents[0];
+    expect(admin.key).toBe('pricing');
+    expect(admin.contentHtml).toContain('482,000');
+    expect(admin.comments.length).toBe(1);
+    // true + redactAdminOnlyContent (intern parity): the CARD is present (panel renders) but the body is null and the
+    // comments are empty — no dollar amount, no admin comment thread reaches the intern.
+    const parity = assembleProposalDocuments(src, true, { redactAdminOnlyContent: true }).documents[0];
+    expect(parity.key).toBe('pricing');          // panel visibility preserved
+    expect(parity.contentHtml).toBeNull();        // body sealed
+    expect(parity.comments).toEqual([]);          // comment thread sealed
+    expect(JSON.stringify(parity)).not.toMatch(/\$\s?\d|482,000|finance/); // no money / admin substance leak
+  });
+
+  it('READ-ONLY PARITY redaction does NOT touch a non-adminOnly doc (intern sees its real body)', () => {
+    const src: ProposalDocSummarySource[] = [
+      { view: mkView({ key: 'technical', contentHtml: '<p>Our approach</p>', comments: [{ body: 'looks good', at: '2026-11-01T00:00:00.000Z' }] }), latest: null, gates: [], openGapCount: 0, latestRun: null },
+    ];
+    const parity = assembleProposalDocuments(src, true, { redactAdminOnlyContent: true }).documents[0];
+    expect(parity.contentHtml).toBe('<p>Our approach</p>'); // unchanged — redaction is scoped to adminOnly docs only
+    expect(parity.comments.length).toBe(1);
+  });
+
   it('readiness counts scored (non-pricing, non-superseded, non-form) passing docs — same number for everyone', () => {
     const src: ProposalDocSummarySource[] = [
       { view: mkView({ key: 'technical', docType: 'derived' }), latest: mkVersion({ id: 'v1', passes: true }), gates: [], openGapCount: 0, latestRun: null },
