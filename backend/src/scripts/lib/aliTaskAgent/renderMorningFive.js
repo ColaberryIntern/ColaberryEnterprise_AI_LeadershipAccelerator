@@ -143,7 +143,7 @@ ${picks.map(itemCard).join('')}
   <strong style="color:${C.ink2}">How these were picked.</strong> A task qualifies only on time: due within 14 days, or up to 60 days overdue
   (older is dormant, a keep-or-dismiss question the board handles). Then: +${w.decision} if the ticket frames a decision only you can make,
   or else +${w.person} if it needs you rather than a session; +${w.gate} if it sits in an approval-gate list; +${w.outside} for a commitment
-  to someone outside; ${w.generated} for machine-generated scaffolding. A ticket's own "Decide by" beats its due date. At most two from one list.
+  to someone outside; ${w.generated} for machine-generated scaffolding. A ticket's own "Decide by" beats its due date. At most two from one list and three from one project.
   The urgency score in the mirror is not used: it adds a flat +40 to anything overdue, so it measures neglect.<br><br>
   Today: ${c.tasks} active tasks, ${c.live} live, ${c.dormant} dormant${c.claimed ? `, ${c.claimed} held by another session and left out` : ''}.
   ${input.boardNote ? esc(input.boardNote) : ''}<br>
