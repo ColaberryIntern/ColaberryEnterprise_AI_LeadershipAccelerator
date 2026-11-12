@@ -122,3 +122,98 @@ The checklist reports these; it does not touch them. In the corrected order:
 4. activating one programme (execution only)
 5. `GROWTH_JOURNEY_EXECUTION_ENABLED` — the one flag the code itself calls the only thing that can
    cause a person to be contacted
+
+## T008B — a decision reads as a sentence
+
+MR3's success metric asks that decisions be *"readable as a sentence saying who would be
+contacted, on what channel, and why"*. The only reader today is `growthJourneyDecideDryRun.ts`,
+which prints `JSON.stringify(...)` of a row carrying thirty-odd fields including `candidates`,
+`suppressed`, `scores` and `eligibility`. That is the right output for a machine and the wrong one
+for the decision a person has to make after a shadow run.
+
+New `growthJourney/readiness/describeDecision.ts`, pure, plus a `--sentence` flag on the dry-run
+script. **The JSON stays the default** so nothing parsing that script's stdout breaks, and the
+sentence replaces it rather than sitting beside it — a prose line emitted next to a JSON document
+would break exactly those parsers.
+
+**The grammar is load-bearing.** A decision is stamped `shadow` or `live` at write time and never
+re-stamped, so a shadow row is a record of what the engine *would* have done. Rendering it in the
+past tense would turn a dry run into an apparent log of sent messages. Only a row that is both
+`live` and `executed` reads as past tense; a live row that has not executed is still conditional,
+because the executor may yet refuse it. `hold`, `none` and `no_action` render as **"would NOT be
+contacted"**, because they are real decisions and the commonest ones in a first shadow run.
+
+### `scrubField` was extracted to a leaf
+
+The renderer needs the same redaction rule as the readiness reader, but `scrubField` lived in
+`buildReadiness.ts`, which value-imports the model barrel and `sequelize`. Importing it from there
+would have dragged the whole model graph into a function that touches no database — making the
+renderer untestable without mocks and its "pure" claim untrue. Duplicating the rule was the worse
+option: two copies of a redaction rule drift, and the one that drifts is the one that leaks. So
+`readiness/scrubField.ts` is now a leaf with no imports at all, and `buildReadiness` re-exports
+both symbols so every existing importer is unchanged. A test asserts the renderer's entire import
+list is `['./scrubField']`.
+
+### A defect my own test found
+
+The first version scrubbed only `subject_ref`, on the reasoning that it is the one field that can
+carry an address. That is true and it misses the point: **`reason` is a `TEXT` column of
+engine-generated free text**, so it is both unbounded and the field most likely to quote something
+about a person. A test asking for a 500-character reason showed it running away unchecked. Both
+`subject_ref` and `reason` are scrubbed now, and there is a test for an address in each.
+
+## T008C — the first rollout row, composed and never written
+
+**This is the lock MR3 missed, and it is decisive.** `resolveExecutionMode.ts:143` is literally
+`if (!rollout) return result('shadow', 'no_rollout')`. The two control defaults are asymmetric:
+
+- a **pause ALLOWS by default** — no pause row means nothing is stopped;
+- a **rollout DENIES by default** — no rollout row means nothing is permitted live.
+
+`growth_journey_execution_controls` holds **zero rows**. So every scope resolves to `shadow` even
+with all five of the ticket's locks flipped: master on, execution on, every agent row enabled, a
+programme activated. Somebody could do all five of those things, see nothing happen, and have no
+way to find out why.
+
+New `growthJourney/execution/planFirstRollout.ts` composes the exact row the write route needs and
+returns it. **It does not insert it.** Writing that row is the act that permits a scope to leave
+shadow, which makes it a decision with an owner rather than an implementation detail — the same
+reasoning MR3's own escalation note gives for the execution flag.
+
+Three decisions in it:
+
+- **The key comes from the real `rolloutScopeKey`**, never from string concatenation. The real
+  parser **throws** on an under-specified scope, because a rollout with a missing dimension would
+  silently widen to something nobody chose. A local copy of the grammar would drift from the
+  parser that both the write route and `findActiveRollout` use, and the drift would show up as a
+  row that matches nothing.
+- **The defaults are the smallest first rollout**, not the widest: `review` rather than `limited`,
+  and a daily cap rather than none. `review` files a proposal and claims nothing, so the first
+  live scope still cannot send without a human looking at it. A first rollout should produce
+  something to read, not something to undo.
+- **It is exposed as `--plan-rollout <brand>|<programme>|<channel>`** on the existing read-only
+  probe, in the scope key's own grammar so there is no second grammar to learn. That path runs
+  **before** the probe's database read, so it answers even when the master flag is off and every
+  journey route is 404ing.
+
+The same leak was present here too: `reason` is the one field an operator types, and the first
+version rendered it raw. Scrubbed, with a test.
+
+## Verification
+
+- **78 tests** in the readiness folder (43 readiness + 35 renderer), **21** for the rollout
+  planner, **20** for the probe.
+- **2,596 tests pass across 117 suites** — the whole `growthJourney` tree plus the four script
+  suites and both flag text-scan guards.
+- **Mutation tested:**
+  - building the scope key by concatenation instead of the real parser → **4 fail**
+  - removing the `classifications_present` item → **6 fail** (from T008)
+- **It writes nothing, and that is asserted rather than argued:** the planner's suite spies on
+  `create`, `update`, `destroy`, `findOrCreate`, `bulkCreate` and `upsert` across every journey
+  model and requires zero calls.
+- `tsc --noEmit`: 0 errors.
+
+## Still not done, deliberately
+
+No classification pass was run. No rollout row was written. No programme was activated. No flag
+was flipped. The planner prints the row; writing it is Ali's.

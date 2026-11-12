@@ -1,4 +1,5 @@
 import { Op, QueryTypes } from 'sequelize';
+import { scrubField } from './scrubField';
 import { sequelize } from '../../../config/database';
 import {
   AiAgent,
@@ -157,36 +158,11 @@ export interface Readiness {
   as_of: string;
 }
 
-/**
- * The cap on a reason or a next_move.
- *
- * The longest AUTHORED reason renders at about 171 characters, so the headroom is real but
- * thin - an earlier version of this comment said "nothing authored here comes close", which
- * overstated 29 characters of slack. `buildReadiness.test.ts` pins it: if a future reason
- * grows past the cap, the cell fails rather than the reason being silently truncated.
- */
-export const FIELD_CAP = 200;
-
-/**
- * One field, scrubbed to the bar this phase actually sets.
- *
- * It lives HERE rather than in the CLI because there are two serving surfaces - the CLI
- * and `GET /status/readiness` - and the contract's bar is specifically "`@` anywhere in a
- * JSON response of a NEW ROUTE fails the phase". The first version scrubbed only in the
- * CLI, so the route met the bar transitively, through the reader never producing an `@`.
- * That is true today (every reason here is authored text, a code constant or a `.length`)
- * but it is an argument, not a guard, and the route is the surface the contract names.
- *
- * `redactForLogs` is the WRONG tool and the CLI's first version used it: its email pattern
- * captures the `@` as part of the domain group, so `someone@example.com` becomes
- * `s***@example.com` - masked local part, `@` intact. This follows `safeField`'s rule
- * instead (an `@` replaces the whole value) plus a cap, because the `@` rule alone would
- * not catch a long row value with no address in it.
- */
-export function scrubField(t: string): string {
-  if (t.includes('@')) return 'redacted - the value carried an address';
-  return t.length > FIELD_CAP ? `${t.slice(0, FIELD_CAP)}...` : t;
-}
+// `FIELD_CAP` and `scrubField` moved to ./scrubField (MR3), so the pure decision renderer can
+// share one redaction rule without importing the model barrel through this file. Two copies of
+// a redaction rule drift, and the one that drifts is the one that leaks. Re-exported here
+// because the CLI, the status route and the suite all import them from this module.
+export { FIELD_CAP, scrubField } from './scrubField';
 
 /** Applied per field, never to a serialised document. */
 export function scrubItem(i: ReadinessItem): ReadinessItem {

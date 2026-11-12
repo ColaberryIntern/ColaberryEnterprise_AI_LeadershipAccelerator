@@ -148,20 +148,49 @@ describe('controlCovers', () => {
 });
 
 describe('the command', () => {
-  it('parseArgs: nothing, or --json; anything else is refused', () => {
-    expect(parseArgs([])).toEqual({ json: false });
-    expect(parseArgs(['--json'])).toEqual({ json: true });
+  it('parseArgs: nothing, --json, or --plan-rollout; anything else is refused', () => {
+    expect(parseArgs([])).toEqual({ json: false, planRollout: null });
+    expect(parseArgs(['--json'])).toEqual({ json: true, planRollout: null });
     expect(() => parseArgs(['--write'])).toThrow(/unknown argument/);
+  });
+
+  it('--plan-rollout takes a scope in the scope key grammar, and refuses a bare flag', () => {
+    // MR3. One flag, one value, in the same brand|programme|channel shape the scope key uses,
+    // so there is no second grammar to learn or to drift.
+    expect(parseArgs(['--plan-rollout', 'b-1|p-1|in_app']).planRollout).toBe('b-1|p-1|in_app');
+    expect(() => parseArgs(['--plan-rollout'])).toThrow(/needs a scope/);
+    expect(() => parseArgs(['--plan-rollout', '--json'])).toThrow(/needs a scope/);
+  });
+
+  it('--plan-rollout prints the planned row, touches no database, and writes nothing', async () => {
+    // Deliberately runs with NO control fixture configured: this path answers even when the
+    // master flag is off and every journey route is 404ing, because it reads nothing.
+    const lines: string[] = [];
+    expect(await run(
+      { json: false, planRollout: 'b-1|p-1|in_app' }, (l) => lines.push(l),
+    )).toBe(0);
+
+    expect(lines[0]).toMatch(/PLANNED, NOT WRITTEN/);
+    expect(lines.some((x) => x.includes('rollout|b-1|p-1|in_app'))).toBe(true);
+    expect(lines.some((x) => /mode {7}: review/.test(x))).toBe(true);
+    expect(writes.create).not.toHaveBeenCalled();
+    expect(writes.update).not.toHaveBeenCalled();
+    expect(writes.destroy).not.toHaveBeenCalled();
+  });
+
+  it('--plan-rollout refuses an under-specified scope through the real parser', async () => {
+    await expect(run({ json: false, planRollout: 'b-1|p-1' }, () => {}))
+      .rejects.toThrow(/needs a channel/);
   });
 
   it('run prints the lines (or one JSON document) through the given sink and exits 0 - nothing written', async () => {
     control({});
     const lines: string[] = [];
-    expect(await run({ json: false }, (l) => lines.push(l))).toBe(0);
+    expect(await run({ json: false, planRollout: null }, (l) => lines.push(l))).toBe(0);
     expect(lines[0]).toMatch(/^growth journey execution status at .* master=false/);
     expect(lines.some((l) => l.startsWith('    pause pause|b-ent|*|*|* mode=off'))).toBe(true);
     const json: string[] = [];
-    expect(await run({ json: true }, (l) => json.push(l))).toBe(0);
+    expect(await run({ json: true, planRollout: null }, (l) => json.push(l))).toBe(0);
     expect(JSON.parse(json.join('\n')).scopes).toHaveLength(6);
   });
 
