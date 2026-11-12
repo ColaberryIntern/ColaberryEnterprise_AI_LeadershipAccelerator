@@ -35,6 +35,10 @@ const arg = (k, d) => {
   return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : d;
 };
 const OUT = arg('out', '/tmp/morning-five.html');
+// --json writes a machine summary beside the HTML (the sender builds the subject and plain-text
+// part from it); --board-note says where the interactive board is, which differs by delivery.
+const JSON_OUT = arg('json', null);
+const BOARD_NOTE = arg('board-note', 'The full interactive board is Downloads\\backlog-navigator.html.');
 const DAYS = Number(arg('days', '60'));
 const HOLDER = arg('holder', 'morning-five');
 const ALI_BC_ID = 17454835;
@@ -51,7 +55,11 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
      LIMIT 5000`,
   { type: QueryTypes.SELECT, bind: [`%${ALI_BC_ID}%`] });
 
-  const now = new Date();
+  // Every day count is taken from the CENTRAL date Ali reads it on, pinned to noon UTC so that the
+  // UTC-based helpers below land on that same calendar day. Using the raw clock made an evening
+  // build count everything one day too late (found on the first test send, 2026-11-11 ~6pm CT).
+  const { centralDate } = lib('morningFiveEmail');
+  const now = new Date(`${centralDate(new Date())}T12:00:00Z`);
   const items = rows.map((r) => ({ todo: { id: r.bc_id, title: r.title, due_on: r.due_on }, __row: r }));
   const { live, dormant } = partition(items, now, { dormantAfterDays: DAYS });
 
@@ -94,9 +102,20 @@ const log = (o) => console.log(JSON.stringify({ service: 'morning-five', ...o })
   const html = renderMorningFive({
     today: now, runId: `MORNING-FIVE-${now.toISOString().slice(0, 10)}`, picks, move, movePrompt,
     counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length },
-    boardNote: 'The full interactive board is Downloads\\backlog-navigator.html.',
+    boardNote: BOARD_NOTE,
   });
   fs.writeFileSync(OUT, html, 'utf8');
+  if (JSON_OUT) {
+    fs.writeFileSync(JSON_OUT, JSON.stringify({
+      generatedAt: new Date().toISOString(), // the real clock; `now` is the Central reading day
+      counts: { tasks: rows.length, live: live.length, dormant: dormant.length, qualified, claimed: claimed.length },
+      move: { kind: move.kind, rule: move.rule, why: move.why,
+        title: move.kind === 'task' ? move.item.title : move.kind === 'list' ? `Decide the list "${move.list.key}"` : null },
+      movePrompt,
+      picks: picks.map((p) => ({ id: p.id, title: p.title, url: p.url, path: p.path, dueOn: p.dueOn,
+        late: p.late, score: p.score, isDecision: p.isDecision })),
+    }, null, 2), 'utf8');
+  }
 
   log({ level: 'info', event: 'rendered', outcome: 'success', duration_ms: Date.now() - t0,
     tasks: rows.length, live: live.length, qualified, picks: picks.map((p) => `${p.id}:${p.score}`),
