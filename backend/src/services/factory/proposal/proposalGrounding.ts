@@ -20,6 +20,9 @@ export interface GroundingInput {
   artifacts?: Array<{ caption: string | null; requirementIds: string[] }>;
   /** Approved company-library facts as "key: value" strings. */
   approvedFacts?: string[];
+  /** Retrieved excerpts from APPROVED uploaded source documents (P-SRC). Reference material the agent may paraphrase;
+   *  hard specifics (figures, dates, named metrics) still require an approved fact or a [PLACEHOLDER]. */
+  sourceExcerpts?: Array<{ documentName: string; text: string }>;
 }
 
 export interface Grounding {
@@ -31,6 +34,8 @@ export interface Grounding {
   sections: Array<{ heading: string; plan: string | null }>;
   artifacts: string[];
   facts: string[];
+  /** Optional so existing Grounding fixtures (built as literals) stay valid; buildGrounding always sets it to []. */
+  sourceExcerpts?: Array<{ documentName: string; text: string }>;
 }
 
 /** Build the grounding from only the allowed inputs. Pure + total. */
@@ -47,6 +52,7 @@ export function buildGrounding(input: GroundingInput): Grounding {
     sections: (Array.isArray(input?.document?.sections) ? input.document.sections : []).map((s) => ({ heading: s.heading, plan: s.plan ?? null })),
     artifacts: (Array.isArray(input?.artifacts) ? input.artifacts : []).map((a) => `${a.caption ?? 'Build screenshot'} (proves ${(a.requirementIds || []).join(', ') || 'requirements'})`),
     facts: Array.isArray(input?.approvedFacts) ? input.approvedFacts : [],
+    sourceExcerpts: Array.isArray(input?.sourceExcerpts) ? input.sourceExcerpts : [],
   };
 }
 
@@ -61,5 +67,10 @@ export function groundingToPromptText(g: Grounding): string {
   if (g.artifacts.length) { lines.push('Build evidence you may cite:'); for (const a of g.artifacts) lines.push(`- ${a}`); }
   if (g.facts.length) { lines.push('Approved company facts (the ONLY specific facts you may assert):'); for (const f of g.facts) lines.push(`- ${f}`); }
   else lines.push('No approved company facts are available — insert a [PLACEHOLDER: …] for any specific fact rather than inventing one.');
+  const excerpts = g.sourceExcerpts ?? [];
+  if (excerpts.length) {
+    lines.push('Source excerpts (reference material from uploaded project documents. You MAY paraphrase these, naming the document, but any specific figure, date, dollar, or named metric still requires an approved company fact above or a [PLACEHOLDER]. Never assert a hard specific from an excerpt alone):');
+    for (const e of excerpts) lines.push(`- [${e.documentName}] ${e.text}`);
+  }
   return lines.join('\n');
 }

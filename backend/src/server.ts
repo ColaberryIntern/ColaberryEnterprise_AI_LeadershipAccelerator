@@ -107,6 +107,7 @@ import { ensureGovProposalReviewSchema } from './db/ensureGovProposalReviewSchem
 import { ensureGovProposalReviewRunsSchema } from './db/ensureGovProposalReviewRunsSchema';
 import { ensureGovBuildArtifactSchema } from './db/ensureGovBuildArtifactSchema';
 import { ensureGovCompanyLibrarySchema } from './db/ensureGovCompanyLibrarySchema';
+import { ensureGovProposalSourcesSchema } from './db/ensureGovProposalSourcesSchema';
 import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
@@ -2952,6 +2953,7 @@ async function start(): Promise<void> {
   // Gov company library (gov_company_facts/_references/_personnel): the tenant's reusable, human-approved facts that
   // ground the agent so a question is asked once (Proposal Studio P5).
   await ensureGovCompanyLibrarySchema();
+  await ensureGovProposalSourcesSchema();
   // Gov proposal package (gov_proposal_form_signatures + gov_proposal_redaction_spans): the signature tracking and
   // redaction spans the final package assembly needs (Proposal Studio P6).
   await ensureGovProposalPackageSchema();

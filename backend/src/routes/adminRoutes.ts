@@ -156,6 +156,7 @@ import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import govContractsRoutes from './admin/govContractsRoutes';
+import govProposalSourceRoutes from './admin/govProposalSourceRoutes';
 import agentFactoryRoutes from './admin/agentFactoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
@@ -422,6 +423,7 @@ router.use(govQualificationRoutes);
 // Gov Contracts tab (M1): its own router gated 'gov_contracts' (NOT the factory→program prefix),
 // so the Interns-hub tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(govContractsRoutes);
+router.use(govProposalSourceRoutes);
 // Agent Factory tab (M2): its own 'agents'-gated router (NOT the '-provisioned' program prefix),
 // so the Interns-hub Agents tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(agentFactoryRoutes);

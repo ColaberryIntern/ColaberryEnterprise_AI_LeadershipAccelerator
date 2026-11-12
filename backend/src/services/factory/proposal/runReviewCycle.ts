@@ -118,7 +118,16 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
       const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
       if (q?.tenant_id) { const { approvedGroundingFacts } = await import('./govCompanyLibrary'); facts = await approvedGroundingFacts(q.tenant_id); }
     } catch { /* best-effort; grounding without facts still instructs a [PLACEHOLDER], never an invention */ }
-    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts });
+    // P-SRC: retrieve the most relevant excerpts from this project's APPROVED uploaded source documents and ground them
+    // as cited reference material. Best-effort: no source library, or the embedding proxy down, yields no excerpts.
+    let sourceExcerpts: Array<{ documentName: string; text: string }> = [];
+    try {
+      const { retrieveRelevantChunks } = await import('./govProposalSources');
+      const query = [d?.title ?? docKey, ...(d?.requirementIds ?? []), ...((d?.sections ?? []).map((s: any) => `${s.heading ?? ''} ${s.plan ?? ''}`.trim()))].filter(Boolean).join('\n').slice(0, 4000);
+      const hits = await retrieveRelevantChunks(deliveryProjectId, query, 8);
+      sourceExcerpts = hits.map((h) => ({ documentName: h.documentName, text: h.text }));
+    } catch { /* best-effort; grounding without excerpts is still valid */ }
+    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts, sourceExcerpts });
   }
 
   const deps: ReviewCycleDeps = {
