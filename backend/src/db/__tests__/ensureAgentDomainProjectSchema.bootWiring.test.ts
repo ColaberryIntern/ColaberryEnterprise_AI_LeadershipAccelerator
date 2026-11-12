@@ -226,6 +226,29 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureAgentToolGrantSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
+      // The eleventh member, 2026-11-12, and the first one that is NOT a schema module.
+      //
+      // `ensurePageEventVisitorIndex.ts` adds an index to `page_events`, a table it does not own
+      // and did not create. Every other member creates its own net-new table and may do what it
+      // likes with it; this one indexes the largest table in the schema while the tracker writes
+      // to it. That is why its own suite asserts what it must NOT do — no `CREATE TABLE`, no
+      // `DROP TABLE` in the rollback — since those are the lines a later edit adds "for symmetry"
+      // with the siblings, and the damage would not surface until a production boot.
+      //
+      // It is on this roster because its post-condition throws, and it throws for the reason the
+      // roster exists: `CREATE INDEX IF NOT EXISTS` is a no-op on an existing index and every
+      // statement error is warned rather than raised, so `ensure` alone resolves identically
+      // whether the DDL worked or did nothing at all. `assert` is the part that decides.
+      //
+      // It is wrapped: `ensurePageEventVisitorIndexGuarded` cannot reject, and
+      // `__tests__/ensurePageEventVisitorIndex.test.ts` drives that failure path and asserts it
+      // RESOLVES `{ ok: false }` with the derived error_class. A missing index is a performance
+      // problem, not a correctness one, and must never stop the port binding.
+      //
+      // THIS PIN IS WHAT CAUGHT IT. The module sat untracked in the working tree during an
+      // unrelated full-suite run and this roster failed with Received +1 — an unwired `ensure*`
+      // with a throwing post-condition, found by the check rather than by review.
+      'ensurePageEventVisitorIndex.ts',
       // Sorts here, not at the end: the assertion compares a `.sort()`ed list, and
       // "BuildEvent" precedes "Decision" alphabetically.
       'ensureToolRequestBuildEventSchema.ts',
