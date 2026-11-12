@@ -22,8 +22,81 @@ export const WINDOW_DAYS = 21;
 export const STUCK_GAP_DAYS = 4;
 export const SLOW_REPLY_DAYS = 2;
 
-export const STUCK_RE = /\b(issues?|errors?|unable|can'?t|cannot|not (working|reaching|loading|refresh\w*|showing|able)|did not|didn'?t (work|refresh|load)|blocked|blocker|stuck|login loop|problems?|fail(ed|ing|s|ure)?|broken|no access|needs? access|access request)\b/i;
-export const QUESTION_RE = /\?|\b(questions?|confirm|clarif\w*|request|guidance|review|sign-?off|approv\w*|advise|decisions?|how (do|should|to)|could you|can you|would you)\b/i;
+/**
+ * ## These were bare nouns, and over 4000 characters bare nouns match everything
+ *
+ * The old pair was a list of topic words: `issues`, `errors`, `problems`, `review`, `decisions`,
+ * `request`, `guidance`. That was survivable while `classifyEmail` read 250 characters, because a
+ * short window gave them few chances to fire. Widening the window to a cleaned 4000 characters
+ * (PR #3900) removed that accidental protection and the looseness surfaced immediately.
+ *
+ * Measured by running the real code over the live roster, 2026-11-11, 13 interns:
+ *
+ *   Omolola    0 question marks; labelled `question` on `review` and `decisions`, both from the
+ *              sentence "staff review and decisions" inside a status report
+ *   Ruth       0 question marks; `issues` plus `request` out of the SUBJECT "Schedule Request"
+ *   Harpreet   0 question marks; `problems`, `guidance`, `review`
+ *   Aki        0 question marks; `blocked`, describing someone else's slide
+ *   Tashima    0 question marks; `errors`
+ *
+ * Seven of thirteen newest messages contained no question mark at all, and several were still
+ * filed as a question or a blocker on the strength of an ordinary noun in prose. 34 "open
+ * questions" were produced across the roster, of which a visible share were not questions.
+ *
+ * ## What replaced them: a signal has to be ADDRESSED or FIRST PERSON
+ *
+ * A question is asked OF someone, so it carries a question mark or a second-person ask. A blocker
+ * is something happening to THEM, so it carries a first-person construction. Topic nouns describe
+ * subject matter and are no longer evidence of either.
+ *
+ * `review` was the single worst offender and is gone: every intern writes the word while
+ * describing work. "Please review" survives through PLEASE_ASK, which is the addressed form.
+ */
+
+/**
+ * Something is in THEIR way: first person, or a failure named against a specific thing.
+ *
+ * Note the shape of the last entry. Bare `issues`, `problems` and `errors` are gone, because every
+ * intern writes those words while describing work ("the issues we closed"). `issue accessing`,
+ * `trouble with`, `error loading` keep the real complaints, because a failure that is happening to
+ * someone is always attached to the thing that failed.
+ */
+export const STUCK_RE = new RegExp([
+  "\\bi (?:am|'m) (?:unable|blocked|stuck|locked out)\\b",
+  "\\bi (?:can'?t|cannot|could not|couldn'?t)\\b",
+  '\\bunable to (?:access|reach|open|log ?in|sign ?in|see|view|load|run|find)\\b',
+  '\\b(?:blocked|stuck) (?:on|by)\\b',
+  '\\b(?:is|are|was|were|am) not (?:working|reaching|loading|showing|refreshing|able)\\b',
+  "\\b(?:does|do|did) ?n'?t (?:work|load|open|refresh|reach|show)\\b",
+  '\\b(?:no access|login loop|access denied|permission denied)\\b',
+  '\\bi (?:get|got|am getting) (?:an? )?(?:error|403|404|500)\\b',
+  '\\b(?:issues?|problems?|trouble|errors?) (?:accessing|reaching|opening|loading|logging|signing|running|with|on)\\b',
+].join('|'), 'i');
+
+/**
+ * A literal question, or an ask directed at the reader.
+ *
+ * `question` survives only in its announcing forms - "quick question", "question about" - never as
+ * a bare noun, which also matches "thanks for answering my questions". `review` is gone entirely
+ * except inside "please review" and "awaiting your review": it was the worst of the old terms,
+ * because describing a review is the most ordinary thing an intern writes.
+ */
+export const QUESTION_RE = new RegExp([
+  '\\?',
+  '\\b(?:could|can|would|will|should|shall) (?:you|we|i)\\b',
+  '\\b(?:do|did|does) (?:you|we|i)\\b',
+  '\\bplease (?:confirm|review|advise|clarify|approve|check|let me know|take a look)\\b',
+  '\\blet me know\\b',
+  // `could` and `would` are deliberately absent from this alternation. They read as description
+  // far more often than as a question: Quincy's "They are listed with what could not be seen" was
+  // reported as his open question on 2026-11-11. "what should I" and "how do I" are the real asks.
+  '\\b(?:what|which|who|when|where|why|how) (?:should|do|does|did|is|are)\\b',
+  '\\bany (?:guidance|advice|thoughts|preference)\\b',
+  '\\bawaiting your (?:approval|sign-?off|review)\\b',
+  '\\b(?:sign-?off|approval) (?:needed|required)\\b',
+  '\\bquestions?\\s+(?:about|on|for|regarding|re)\\b',
+  '\\b(?:quick|one|two|few|some|several|another) questions?\\b',
+].join('|'), 'i');
 
 /** Calendar day in Central time: the day Ali would say it happened. */
 export function dayKey(iso: string | number | Date): string {
@@ -68,7 +141,10 @@ export function classifyEmail(subject: string | null, snippet: string | null): '
  */
 export function keySentence(snippet: string | null): string | null {
   const parts = sentences(classifiableText(snippet));
-  for (const re of [STUCK_RE, QUESTION_RE]) {
+  // Blocker first, matching classifyEmail. Then a literal question mark ahead of the phrase
+  // forms, because when a message contains both, the sentence ending in "?" is the one they
+  // actually want answered.
+  for (const re of [STUCK_RE, /\?/, QUESTION_RE]) {
     const hit = parts.find((s) => re.test(s));
     if (hit) return hit;
   }
