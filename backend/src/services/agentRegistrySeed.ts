@@ -37,6 +37,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute, so also before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
   },
   {
+    // Intern nudge cadence (2026-11-11). Seeded rather than added to cronRegistryBaseline.ts,
+    // for the reason BatchRollover gives below: an instrumentCronJob() name with no ai_agents row
+    // tracks its run_count and error_count against nothing, and the baseline is a ratchet that is
+    // only allowed to shrink. `schedule` must stay equal to the cron expression in
+    // schedulerService.ts or the reconciliation guard reports the disagreement.
+    agent_name: 'InternNudgeCadence',
+    agent_type: 'scheduled_processor',
+    module: 'runCadence',
+    source_file: 'backend/src/services/internship/nudgeBrief/cadenceRun.ts',
+    trigger_type: 'cron',
+    schedule: '0 14 * * *',
+    category: 'behavioral',
+    description:
+      'The unattended intern outreach pass. Builds every intern brief, decides who should hear from us and why, and sends. Ali, 2026-11-11: if he detaches, communication continues at least every 48 hours, once across a weekend, and nobody slides through the cracks. A TIMER IS THE BACKSTOP, NEVER THE REASON: the triggers run hardest truth first - answer_owed, promise_open, deadline_near, build_stalled - and contact_floor only catches whoever none of them found, so a message always has a reason behind it rather than an elapsed clock. DRY UNLESS EXPLICITLY TOLD OTHERWISE: runCadence defaults to dryRun true and INTERN_NUDGE_CADENCE_SEND must be exactly "on" to send, because the failure mode of a loose check is mail reaching real interns nobody approved. An unattended send uses the DETERMINISTIC body; a model-written one is for the console where a person approves it. Three independent guards stop a double message: holdFor carries messaged_today, engagementState collapses Saturday and Sunday into one slot, and sendBrief is idempotent on intern-brief-(enrollment)-(central date). A hold is reported rather than swallowed, because "nobody slides through the cracks" is only true if the reason somebody got nothing is visible.',
+  },
+  {
     // Monthly batch rollover (2026-11-08, C10.13). Seeded rather than baselined: an
     // instrumentCronJob() name with no ai_agents row tracks its run_count and error_count
     // against nothing, so it is invisible to every health and staleness surface — and
