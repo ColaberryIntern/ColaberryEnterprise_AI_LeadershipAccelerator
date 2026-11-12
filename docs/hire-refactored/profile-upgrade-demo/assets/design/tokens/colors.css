@@ -1,0 +1,93 @@
+/* Refactored.ai colour tokens — "Terminal" direction.
+ *
+ * DARK IS THE DEFAULT, deliberately. This is the palette of the product itself, and the
+ * site's job is to look like the thing it is selling rather than like a brochure about it.
+ * The bare `:root` therefore carries the DARK values, and light is the override — the
+ * mirror image of how the sibling brand apps are built, applied consistently through
+ * every block below so a token is never defined in only one of the three states.
+ *
+ * Three states, not two. An explicit choice stamps `data-theme` on <html>; the default
+ * "system" setting stamps nothing, and only `prefers-color-scheme` separates the two.
+ * Every token is defined on bare `:root` so the un-stamped document is never half-themed.
+ */
+:root {
+  --system-id: "refactored-terminal"; /* @kind other */
+
+  --bg: #0C141B;
+  --bg-elevated: #14202A;
+  --bg-sunk: #0A1016;
+  --fg: #E8F0F6;
+  --fg-muted: #9FB3C2;
+  --fg-faint: #6E8496;
+  --accent: #5CA7DA;
+  --accent-contrast: #06202F;
+  --accent-soft: #123246;
+  --line: #263743;
+  --line-strong: #354B5C;
+
+  --success: #5FD59B;
+  --success-soft: #10331F;
+  --warning: #E0AE55;
+  --warning-soft: #362708;
+  --danger: #F08B8B;
+  --danger-soft: #3A1717;
+
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, #fff);
+  --accent-press: color-mix(in srgb, var(--accent) 78%, #fff);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* System preference: light, with no explicit choice made. Guarded so an explicit dark
+   choice still wins on a light OS. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F7FAFC;
+    --bg-elevated: #FFFFFF;
+    --bg-sunk: #EDF3F8;
+    --fg: #16222C;
+    --fg-muted: #4E6172;
+    --fg-faint: #7B8D9C;
+    --accent: #1F76B4;
+    --accent-contrast: #FFFFFF;
+    --accent-soft: #DDEEF9;
+    --line: #D5E0E8;
+    --line-strong: #B9CAD8;
+
+    --success: #1B7A4B;
+    --success-soft: #DCF2E6;
+    --warning: #9A6407;
+    --warning-soft: #FBEED2;
+    --danger: #A82C2C;
+    --danger-soft: #F8E0E0;
+
+    --accent-hover: color-mix(in srgb, var(--accent) 88%, #000);
+    --accent-press: color-mix(in srgb, var(--accent) 78%, #000);
+  }
+}
+
+/* Explicit light choice, which must beat a dark OS. Same values as the media block —
+   duplicated rather than shared, because a selector list combining them would be dropped
+   whole by any engine that fails to parse one half. */
+:root[data-theme="light"] {
+  --bg: #F7FAFC;
+  --bg-elevated: #FFFFFF;
+  --bg-sunk: #EDF3F8;
+  --fg: #16222C;
+  --fg-muted: #4E6172;
+  --fg-faint: #7B8D9C;
+  --accent: #1F76B4;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: #DDEEF9;
+  --line: #D5E0E8;
+  --line-strong: #B9CAD8;
+
+  --success: #1B7A4B;
+  --success-soft: #DCF2E6;
+  --warning: #9A6407;
+  --warning-soft: #FBEED2;
+  --danger: #A82C2C;
+  --danger-soft: #F8E0E0;
+
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  --accent-press: color-mix(in srgb, var(--accent) 78%, #000);
+}

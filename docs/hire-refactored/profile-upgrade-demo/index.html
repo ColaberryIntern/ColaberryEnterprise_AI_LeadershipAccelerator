@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kesetebirhan Delele · Hire · Refactored.ai (demo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/demo.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+</head>
+<body>
+<div class="demo-note">Demo · static data · <a href="schedule.html"><u>Schedule flow</u></a> · <a href="candidate.html"><u>Candidate studio</u></a></div>
+<header class="masthead">
+  <div class="wrap bar">
+    <a class="logo" href="#" aria-label="Hire · Refactored.ai home">
+      <svg class="mark" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Refactored<span class="faint">.ai</span><span class="sub">hire</span>
+    </a>
+    <span class="spacer"></span>
+    <nav class="nav" aria-label="Main">
+      <a href="#" class="hide-sm">Talent</a>
+      <a href="#" class="hide-sm">How listing works</a>
+      <a href="candidate.html" class="hide-sm">For candidates</a>
+      <button type="button" class="link" id="themeBtn" aria-label="Toggle light or dark theme">◐</button>
+      <button type="button" class="btn btn-star" id="navStar">★ <span class="lbl">Shortlist</span> <span class="shortcount" id="shortCount">0</span></button>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="p-banner" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="p-head">
+      <div class="avatar" aria-hidden="true">KD<span class="st">★</span></div>
+      <div>
+        <span class="verified-pill" id="vpill"></span>
+        <h1 id="name"></h1>
+        <div class="role" id="headline"></div>
+        <div class="meta"><span>[Location]</span><span>Cohort · [Cohort name]</span><span class="avail" id="avail"></span></div>
+      </div>
+      <div class="p-actions">
+        <a class="btn btn-primary" href="schedule.html">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          Schedule interview</a>
+        <button type="button" class="btn btn-star" id="star" aria-pressed="false">★ Shortlist</button>
+        <button type="button" class="btn btn-ghost btn-icon" id="copy" aria-label="Copy profile link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="p-ledger" id="ledger"></div>
+
+    <div class="p-cols">
+      <div>
+        <!-- Carousel: the signature first, then every published case study. -->
+        <section class="car" id="car" aria-roledescription="carousel" aria-label="Published case studies">
+          <div class="car-top">
+            <div class="car-kicker" id="kicker"></div>
+            <div class="car-ctrls">
+              <span class="car-count" id="count" aria-live="polite"></span>
+              <button type="button" class="btn btn-ghost btn-icon" id="play" aria-label="Pause carousel">
+                <svg id="icoPause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                <svg id="icoPlay" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden><path d="M7 5l12 7-12 7z"/></svg>
+              </button>
+              <button type="button" class="btn btn-ghost btn-icon" id="prev" aria-label="Previous case study"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+              <button type="button" class="btn btn-ghost btn-icon" id="next" aria-label="Next case study"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+            </div>
+          </div>
+          <div class="car-progress" aria-hidden="true"><i id="bar"></i></div>
+          <div id="slide"></div>
+        </section>
+        <div class="thumbs" id="thumbs" role="group" aria-label="Jump to a case study"></div>
+
+        <section class="card">
+          <div class="label">In their words <span class="src">written by the candidate</span></div>
+          <div class="words">
+            <div class="video-box">
+              <button type="button" class="playbtn" aria-label="Play intro video"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5l11 7-11 7z"/></svg></button>
+              <span class="len">Intro · 1:30</span>
+            </div>
+            <div class="qa" id="qa"></div>
+          </div>
+        </section>
+
+        <section class="card about">
+          <div class="label">About <span class="src">from their record and resume</span></div>
+          <div id="about"></div>
+        </section>
+
+        <section class="card">
+          <div class="label">Experience <span class="src">parsed from their resume</span></div>
+          <div id="xp"></div>
+        </section>
+      </div>
+
+      <aside class="side">
+        <div class="card">
+          <div class="label">Book an interview</div>
+          <p class="muted" style="font-size:.88rem;margin:8px 0 6px">Next open times in your time zone (CT). Held in Refactored, with the Colaberry team copied.</p>
+          <div id="nextSlots"></div>
+          <a class="btn btn-primary btn-block" href="schedule.html" style="margin-top:12px">See all times</a>
+        </div>
+        <div class="card">
+          <div class="label">Industries shipped into</div>
+          <div class="tags" id="industries"></div>
+        </div>
+        <div class="card">
+          <div class="label">Contact</div>
+          <p style="margin:10px 0 4px">in <a href="#" style="color:var(--accent)">LinkedIn</a></p>
+          <p class="muted" style="font-size:.84rem;margin:0">Contact details stay private. Interviews and intros run through Refactored.</p>
+        </div>
+        <a class="btn btn-ghost btn-block" href="#">← Back to all talent</a>
+      </aside>
+    </div>
+  </div>
+</main>
+<footer><div class="wrap">Refactored.ai · Hire: talent is listed only after a shipped project is published as a case study.</div></footer>
+
+<script src="assets/demo-data.js"></script>
+<script>
+(function () {
+  var D = window.DEMO, esc = window.esc;
+  var cs = D.caseStudies, n = cs.length, i = 0, t = 0, stopped = false, hover = false;
+  var DURATION = 6000, TICK = 100;
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) stopped = true; // never auto-advance for reduced-motion users
+
+  document.getElementById('name').textContent = D.identity.full_name;
+  document.getElementById('headline').textContent = D.identity.headline;
+  document.getElementById('vpill').textContent = '★ Case-study verified · ' + n + ' published';
+  document.getElementById('avail').textContent = D.availability.label;
+  var lifts = cs.filter(function (c) { return c.heroMetric; });
+  document.getElementById('ledger').innerHTML =
+    '<div class="gold"><b>' + n + '</b><span>published case studies</span></div>'
+    + '<div><b>26,773</b><span>messages triaged in one build</span></div>'
+    + '<div><b>97%</b><span>of lost call events recovered</span></div>'
+    + '<div><b>' + n + '</b><span>video walkthroughs</span></div>';
+
+  function proof(L) {
+    return '<div class="proof">' + (L.verified ? '<span class="ok">✓ Verified</span>' : '')
+      + (L.workflowDiagram ? '<span>Workflow diagram</span>' : '')
+      + (L.decisions ? '<span>' + L.decisions + ' decisions</span>' : '')
+      + (L.repositories ? '<span>' + L.repositories + (L.repositories === 1 ? ' repo' : ' repos') + '</span>' : '') + '</div>';
+  }
+  function slideHtml(c) {
+    var kicker = c.slug === D.signatureSlug ? '★ Signature case study' : (c.project ? 'Project · published case study' : 'Published case study');
+    document.getElementById('kicker').textContent = kicker;
+    return '<div class="car-slide enter">'
+      + '<a class="car-art" href="#" aria-label="Open the case study: ' + esc(c.title) + '"><img src="' + esc(c.look.coverImageUrl) + '" alt=""><span class="play" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l11 7-11 7z"/></svg></span></a>'
+      + '<div class="car-body"><span class="cap-line">' + esc(c.look.capability) + '</span>'
+      + '<h2>' + esc(c.title) + '</h2>'
+      + (c.heroMetric ? '<div class="fig"><b>' + esc(c.heroMetric.value) + '</b><span>' + esc(c.heroMetric.label) + '</span></div>' : '')
+      + '<p>' + esc(c.summary) + '</p>' + proof(c.look)
+      + '<a class="open-cue" href="#">Open the case study →</a></div></div>';
+  }
+  var thumbs = document.getElementById('thumbs');
+  thumbs.innerHTML = cs.map(function (c, k) {
+    return '<button type="button" data-k="' + k + '" aria-label="Case study ' + (k + 1) + ': ' + esc(c.title) + '"><img src="' + esc(c.look.coverImageUrl) + '" alt=""></button>';
+  }).join('');
+  thumbs.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) go(+b.dataset.k); });
+
+  function render() {
+    document.getElementById('slide').innerHTML = slideHtml(cs[i]);
+    document.getElementById('count').textContent = String(i + 1).padStart(2, '0') + ' / ' + String(n).padStart(2, '0');
+    [].forEach.call(thumbs.children, function (b, k) { b.setAttribute('aria-current', k === i ? 'true' : 'false'); });
+  }
+  function go(k) { i = (k + n) % n; t = 0; render(); paintBar(); }
+  function paintBar() { document.getElementById('bar').style.width = (stopped ? 0 : t / DURATION * 100) + '%'; }
+  function setStopped(v) {
+    stopped = v; var p = document.getElementById('play');
+    p.setAttribute('aria-label', v ? 'Play carousel' : 'Pause carousel');
+    document.getElementById('icoPause').hidden = v; document.getElementById('icoPlay').hidden = !v; paintBar();
+  }
+  setInterval(function () {
+    if (stopped || hover || document.hidden) return;
+    t += TICK; if (t >= DURATION) go(i + 1); else paintBar();
+  }, TICK);
+  var car = document.getElementById('car');
+  car.addEventListener('mouseenter', function () { hover = true; });
+  car.addEventListener('mouseleave', function () { hover = false; });
+  car.addEventListener('focusin', function () { hover = true; });
+  car.addEventListener('focusout', function () { hover = false; });
+  car.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight') go(i + 1); if (e.key === 'ArrowLeft') go(i - 1); });
+  document.getElementById('prev').onclick = function () { go(i - 1); };
+  document.getElementById('next').onclick = function () { go(i + 1); };
+  document.getElementById('play').onclick = function () { setStopped(!stopped); };
+  setStopped(stopped); render();
+
+  document.getElementById('qa').innerHTML = D.intro.answers.map(function (x) { return '<div><b>' + esc(x.q) + '</b><p>' + esc(x.a) + '</p></div>'; }).join('')
+    + '<div><b>Looking for</b><div class="tags">' + D.intro.roles.concat(D.intro.setups, ['Start ' + D.intro.start]).map(function (s) { return '<span class="chip">' + esc(s) + '</span>'; }).join('') + '</div></div>';
+  document.getElementById('about').innerHTML = D.about.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('');
+  document.getElementById('xp').innerHTML = D.experience.map(function (x) { return '<div class="xp"><div class="when">' + esc(x.when) + '</div><div><b>' + esc(x.title) + '</b><span>' + esc(x.company) + '</span></div></div>'; }).join('');
+  var inds = cs.map(function (c) { return c.industry; }).filter(function (v, k, a) { return v && a.indexOf(v) === k; });
+  document.getElementById('industries').innerHTML = inds.map(function (s) { return '<span class="tag">' + esc(s) + '</span>'; }).join('');
+  var next = [];
+  D.weeks.forEach(function (w) { w.days.forEach(function (d) { if (d.slots.length && next.length < 3) next.push({ d: d, s: d.slots[0] }); }); });
+  document.getElementById('nextSlots').innerHTML = next.map(function (x) { return '<a class="slot-link" href="schedule.html"><span>' + x.d.dow + ', ' + x.d.date + '</span><b>' + x.s + '</b></a>'; }).join('');
+
+  var on = false;
+  function star() {
+    on = !on; var b = document.getElementById('star');
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.textContent = on ? '★ Shortlisted' : '★ Shortlist';
+    document.getElementById('shortCount').textContent = on ? 1 : 0;
+  }
+  document.getElementById('star').onclick = star;
+  document.getElementById('copy').onclick = function () { try { navigator.clipboard.writeText(location.href); } catch (e) {} };
+})();
+</script>
+</body>
+</html>
