@@ -1,3 +1,4 @@
+import { withToolRecording } from '../agents/tools/toolInvocationRecorder';
 import OpenAI from 'openai';
 import { getStudentSuccessSnapshot } from '../studentSuccessSnapshot';
 import { assembleEvidence } from '../studentHealthAssessment/evidenceAssembly';
@@ -94,7 +95,25 @@ async function assessStudentHealthTool(enrollmentId: string): Promise<unknown> {
  * work around, matching this codebase's own fail-safe posture for anything
  * feeding a live conversation.
  */
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ *
+ * Before this, Reese's tools ran silently - no `tool.call` event, no log line - so "which tool
+ * did this" was unanswerable for this surface. The wrapper returns the inner result unchanged
+ * and rethrows the inner error, so it cannot alter what this function does.
+ *
+ * Record-only unless `TOOL_ENFORCEMENT_AGENTS` names Reese. The held-tool list is deliberately
+ * not read here: a database lookup in the path of a DM reply is a cost this phase does not need
+ * to pay, so the call is recorded without a governance judgement rather than judged on a guess.
+ */
 export async function executeReeseTool(toolName: string, enrollmentId: string): Promise<string> {
+  return withToolRecording(
+    { agentName: 'Reese', toolName, surface: 'reese_dm' },
+    () => executeReeseToolInner(toolName, enrollmentId),
+  );
+}
+
+async function executeReeseToolInner(toolName: string, enrollmentId: string): Promise<string> {
   try {
     if (toolName === 'read_student_success_snapshot') {
       return JSON.stringify(await readStudentSuccessSnapshotTool(enrollmentId));
