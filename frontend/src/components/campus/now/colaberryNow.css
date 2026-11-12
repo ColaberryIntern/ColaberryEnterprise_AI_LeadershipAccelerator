@@ -15,6 +15,12 @@
 .cn-tv-vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .cn-tv-tap{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);border:0;border-radius:999px;padding:10px 16px;font-weight:800;
   background:var(--cm-art-white);color:var(--cm-art-cn-tv);box-shadow:var(--cm-art-cn-pill-shadow);cursor:pointer}
+/* C137: full screen (the player box itself, so the TV keeps advancing); YouTube centers the 9:16 short in the frame */
+.cn-tv-vid:fullscreen,.cn-tv-vid.is-full{max-height:none;aspect-ratio:auto;width:100%;height:100%;border-radius:0;background:var(--cm-art-cn-tv)}
+.cn-tv-fsbar{position:absolute;top:16px;right:16px;z-index:2;display:flex;gap:8px;opacity:.85}
+.cn-tv-fsbar:hover,.cn-tv-fsbar:focus-within{opacity:1}
+.cn-tv-fsbar button{height:40px;min-width:40px;border:0;border-radius:999px;padding:0 12px;font-weight:800;cursor:pointer;
+  background:var(--cm-art-cn-tv-btn);color:var(--cm-art-white)}
 .cn-tv-cap{text-align:center;max-width:100%}
 .cn-tv-cap b{display:block;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cn-tv-cap small{color:var(--cm-art-cn-tv-sub)}
