@@ -58,9 +58,16 @@ identically there: `3 failed, 14 passed, 17 total`. The detached checkout was us
 stash, because a `git stash push` with a clean tree stashes nothing and the paired `pop` then
 steals another session's stash.
 
-Two of them are byte-identical-render assertions on committed inventory markdown, and the third is
-a source-text assertion on a route-mounting module. All three look like another session's
-generated file drifting from its generator.
+**And the cause is CRLF, not drift.** `main`'s own CI is green at all three of its recent commits,
+so the failures are a Windows-worktree artifact rather than a real regression. The committed
+`docs/reese-agentic-employee/BEHAVIOUR_INVENTORY.md` is **CRLF on disk** here, because git's
+autocrlf converts it on checkout, while the generator renders LF - so a byte-identical assertion
+cannot pass on Windows. `.gitattributes` pins `eol=lf` for `.githooks/**`, `.claude/hooks/**` and
+`*.sh`, but **not for `*.md`**.
+
+That is worth recording for any future Windows session: **the full local suite will show these
+three red and they are not yours.** The honest fix is an `*.md text eol=lf` rule in
+`.gitattributes`, which is a repo-wide change outside this branch's scope and is not made here.
 
 ### The test-file typecheck gate needed the explicit heap
 
