@@ -333,7 +333,8 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
       count: comped.rows,
       value: noMoney(
         'Zero by definition',
-        'Comp plans are free. Shown so a member count can never be mistaken for revenue.',
+        'A comp plan carries no charge. Shown so a member count can never be mistaken '
+        + 'for revenue.',
       ),
       classification: 'comped',
       definition: 'An active comp plan at zero cents.',
