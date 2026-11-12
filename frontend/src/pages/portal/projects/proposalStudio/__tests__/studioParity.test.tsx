@@ -500,6 +500,32 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
     await render(<BuildEvidence view={VIEW} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
     expect(present('ev-artifacts-empty')).toBe(true);
   });
+
+  // Connected-repo display (Phase A): the intern (readOnly) sees the connected repo read-only and NEVER a demo-URL
+  // input — even though the read-only reviewApi still defines setDemoUrl. The admin (readOnly=false) keeps its input.
+  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records' } } as unknown as StudentGovProjectView;
+  const noRepo = { ...VIEW, connectedRepo: null } as unknown as StudentGovProjectView;
+
+  it('admin (not readOnly) keeps the demo-URL input and shows no connected-repo line', async () => {
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
+    expect(present('ev-demo-url')).toBe(true);
+    expect(present('ev-connected-repo')).toBe(false);
+  });
+
+  it('intern (readOnly) shows the connected repo linked, and NO demo-URL input', async () => {
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    const repo = container.querySelector('[data-testid="ev-connected-repo"]');
+    expect(repo?.textContent).toBe('ColaberryIntern/crash-records');
+    expect(repo?.getAttribute('href')).toBe('https://github.com/ColaberryIntern/crash-records');
+    expect(present('ev-demo-url')).toBe(false);
+  });
+
+  it('intern (readOnly) with no connected repo shows the blank state and NO demo-URL input', async () => {
+    await render(<BuildEvidence view={noRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    expect(present('ev-no-repo')).toBe(true);
+    expect(present('ev-connected-repo')).toBe(false);
+    expect(present('ev-demo-url')).toBe(false);
+  });
 });
 
 // ── READ-ONLY intern parity: the intern mounts the SAME StudioShell cockpit, but every mutation control is disabled.

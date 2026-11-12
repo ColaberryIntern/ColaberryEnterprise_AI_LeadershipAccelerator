@@ -140,6 +140,10 @@ export interface StudentGovProjectView {
   commitFeed?: GovCommitFeedItem[];
   /** v2 Build view: releases → stories + progress + the linked project id for the deep-link. Optional (older backends). */
   buildSummary?: GovBuildSummary | null;
+  /** The connected build repo (owner/name/url), READ-ONLY — resolved server-side from the build track's GitHub
+   *  connection. Shown so the cockpit can confirm it is in sync; carries no token/secret/identity. Null when no repo
+   *  is linked. Optional (older backends). */
+  connectedRepo?: { owner: string; name: string; url: string } | null;
   /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
   proposalDocuments?: GovProposalDocument[];
   /** P2: the blueprint derived from the stored solicitation (scoring, Section L rules, required forms). Null until a

@@ -26,6 +26,8 @@ jest.mock('../../../models/GovProposalBlueprint', () => ({ __esModule: true, def
 const gpdFindOrCreate = jest.fn();
 const gpdFindAll = jest.fn();
 jest.mock('../../../models/GovProposalDocument', () => ({ __esModule: true, default: { findOrCreate: (...a: any[]) => gpdFindOrCreate(...a), findAll: (...a: any[]) => gpdFindAll(...a), findOne: jest.fn() } }));
+const ghcFindOne = jest.fn();
+jest.mock('../../../models/GitHubConnection', () => ({ __esModule: true, default: { findOne: (...a: any[]) => ghcFindOne(...a) } }));
 // B.1: the loader's per-doc summary batch-loads open-gap counts via a raw query and versions/gates/runs via their
 // stores; keep this unit test DB-free AND fast (loading the real stores' Sequelize models is slow enough to flake the
 // 5s timeout under full-suite load). The batch loaders would no-op here anyway (fixture rows carry no id).
@@ -156,13 +158,41 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); ghcFindOne.mockResolvedValue(null); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
     const v = await getStudentGovProjectView('dp-1');
     expect(v).not.toBeNull();
     expect(v!.projectId).toBe('dp-1');
+  });
+
+  it('connectedRepo: projects the solution_build track\'s GitHub connection (owner/name/url) and NOTHING secret', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    ghcFindOne.mockResolvedValue({ repo_owner: 'ColaberryIntern', repo_name: 'crash-records', repo_url: 'https://github.com/ColaberryIntern/crash-records', access_token_encrypted: 'TOKEN-SECRET', webhook_secret: 'HOOK-SECRET' });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.connectedRepo).toEqual({ owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records' });
+    // looked up by the build track's student project id, never a leak of it or any secret into the payload
+    expect(ghcFindOne).toHaveBeenCalledWith({ where: { project_id: 'sp-SECRET' } });
+    const json = JSON.stringify(v);
+    expect(json).not.toContain('TOKEN-SECRET');
+    expect(json).not.toContain('HOOK-SECRET');
+    expect(json).not.toContain('sp-SECRET'); // the raw linked student-project id never reaches the student
+  });
+
+  it('connectedRepo: null when the build track has a connection row but no repo set', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    ghcFindOne.mockResolvedValue({ repo_owner: null, repo_name: null, repo_url: null });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.connectedRepo).toBeNull();
+  });
+
+  it('connectedRepo: null (and no GitHub lookup) when there is no solution_build track', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    ctFindAll.mockResolvedValue([{ id: 't1', track_type: 'proposal', status: 'unassessed', solution_student_project_id: null }]);
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.connectedRepo).toBeNull();
+    expect(ghcFindOne).not.toHaveBeenCalled();
   });
 
   it('P3-T2/T4: overlays assignment STATUS to the student but NEVER leaks the assignee identity, and surfaces orphaned work', async () => {

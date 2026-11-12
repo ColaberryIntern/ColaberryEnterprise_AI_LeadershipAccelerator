@@ -166,6 +166,10 @@ export interface StudentGovProjectView {
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
    *  deep-link to the build workspace. Null when no build is linked yet. */
   buildSummary: GovBuildSummary | null;
+  /** The connected build repo for this project (owner/name/url), read-only — resolved from the `solution_build`
+   *  track's student project's GitHub connection. Lets the cockpit confirm "we are in sync" without offering to add
+   *  a URL. Null when no repo is linked yet. Carries NO token, secret, or identity. Optional on older backends. */
+  connectedRepo?: { owner: string; name: string; url: string } | null;
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
    *  (pricing) are dropped for non-reviewers. Each carries the B.1 per-doc summary (latest/gates/currentGate/
    *  openGapCount/fatalCount/cycle), batch-loaded. */
@@ -571,6 +575,25 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     const { getGovBuildSummary } = await import('./govBuildSummary');
     view.buildSummary = await getGovBuildSummary(deliveryProjectId);
   } catch { /* additive; buildSummary stays null */ }
+
+  // The connected build repo (read-only): the `solution_build` track's student project's GitHub connection. Surfaced
+  // so the cockpit can confirm "we are in sync" instead of asking for a URL. Best-effort; carries no token/secret/
+  // identity (only owner/name/url). Stays null when no repo is linked. Rides the same membership-guarded projection.
+  try {
+    const buildTrack = (Array.isArray(tracks) ? tracks : []).find(
+      (t) => String(t?.track_type ?? '') === 'solution_build' && t?.solution_student_project_id,
+    );
+    const studentProjectId = buildTrack ? String(buildTrack.solution_student_project_id) : null;
+    if (studentProjectId) {
+      const { default: GitHubConnection } = await import('../../models/GitHubConnection');
+      const conn: any = await GitHubConnection.findOne({ where: { project_id: studentProjectId } });
+      view.connectedRepo = conn && conn.repo_owner && conn.repo_name
+        ? { owner: String(conn.repo_owner), name: String(conn.repo_name), url: String(conn.repo_url ?? '') }
+        : null;
+    } else {
+      view.connectedRepo = null;
+    }
+  } catch { /* additive; connectedRepo stays undefined/null */ }
 
   // v2 Proposal view: derive the named documents from the established requirements, SYNC them into the store
   // (preserving authored state), and project student-safe — admin-only (pricing) documents are dropped for a
