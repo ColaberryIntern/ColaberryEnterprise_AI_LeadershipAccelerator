@@ -94,6 +94,9 @@ import { runAutonomousCycle } from '../intelligence/autonomy/autonomousEngine';
 import { runStrategicCycle } from '../intelligence/strategy/aiCOO';
 import { runCoryStrategicCycle, runSelfEvolution } from './cory/coryBrain';
 import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
+// R11 — the revenue opportunity scan, scheduled from here because its own module-load
+// self-registration was never reachable. See the SCHEDULE_REGISTRY entry for the detail.
+import { scanForOpportunities } from './reporting/revenueOpportunityService';
 import { resolveAllCronSchedules, ResolvedCronSchedule } from './governanceResolutionService';
 import { expireStaleProposals } from './proposalCleanupService';
 import { trackAgentRun } from './agentRunTracker';
@@ -115,6 +118,10 @@ import { instrumentCronJob } from './cronInstrumentation';
 const UNINSTRUMENTED_AGENTS = new Set([
   'AutonomousRequirementExpansion',
   'ProposalCleanupService',
+  // R11 — its runner calls revenueOpportunityService directly and never touches its own
+  // AiAgent row, so without this wrapper run_count would stay 0 while the job ran, which is
+  // the same lie the agent told for months in the other direction.
+  'RevenueOpportunityAgent',
   // AI Employee Consolidation Program, Employee #1 (Curriculum/Dara), Phase 4,
   // Risk R6 fix — confirmed via BASELINE_2026-09-15.md and a direct read of
   // workforce/directorActions.ts's runDomainFlag(): neither Director's runner
@@ -188,6 +195,23 @@ export const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   // jobs already on '0 */6 * * *'.
   { agentName: 'DeptCampaignPerformanceAgent', hardcodedSchedule: '25 */6 * * *', runner: runCampaignPerformance, label: 'Marketing campaign performance analysis' },
 
+  // R11 — the revenue opportunity scan. It had an AiAgent row claiming
+  // `trigger_type: 'cron', schedule: '0 */8 * * *'` since the registry was seeded, and it
+  // had never run once: `revenueOpportunityAgent.ts` registers itself as a module-load side
+  // effect and nothing imports it, so `registerAgent()` never fired and the executor was
+  // unreachable. run_count 0 with error_count 0 reads as healthy on every surface, because
+  // zero errors is what zero runs looks like.
+  //
+  // So it is scheduled from here, the path that demonstrably runs, rather than by making the
+  // old self-registration work. Its runner calls the service directly and does not touch its
+  // own AiAgent row, which is exactly the gap UNINSTRUMENTED_AGENTS exists to close — it is
+  // listed there so run_count and error_count become real.
+  {
+    agentName: 'RevenueOpportunityAgent',
+    hardcodedSchedule: '0 */8 * * *',
+    runner: scanForOpportunities,
+    label: 'Revenue opportunity scan',
+  },
   // Platform agents
   { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth, label: 'Orchestration health' },
   // RETIRED 2026-08-15 (Ali's decision, session CC-20260814-k4m9): StudentProgressMonitor.

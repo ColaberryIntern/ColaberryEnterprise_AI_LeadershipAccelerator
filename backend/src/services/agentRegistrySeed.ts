@@ -1898,11 +1898,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     agent_name: 'RevenueOpportunityAgent',
     agent_type: 'revenue_opportunity_detection',
     module: 'reporting',
-    source_file: 'backend/src/services/agents/reporting/revenueOpportunityAgent.ts',
+    // R11: the executor now lives in aiOpsScheduler's SCHEDULE_REGISTRY, not in the file
+    // below. That file registers itself as a module-load side effect and nothing imports
+    // it, so it never ran. The source_file points at where the work is, which is the
+    // service, so a reader following this row arrives somewhere that executes.
+    source_file: 'backend/src/services/reporting/revenueOpportunityService.ts',
     trigger_type: 'cron',
     schedule: '0 */8 * * *',
+    // R11: true because it now actually runs. It sat false while also claiming a cron, and
+    // the pair read as "configured, idle, healthy" on every surface — run_count 0 with
+    // error_count 0, because zero errors is what zero runs looks like.
+    enabled: true,
     category: 'reporting',
-    description: 'Detects potential revenue opportunities from alumni at large companies, high-intent leads, and enterprise training signals. Estimates deal value and recommends outreach strategy.',
+    description: 'Every eight hours, lists leads scoring 70 or above as high-intent opportunities, '
+      + 'highest score first and capped. This is a WORKLIST of inbound signals, not a sales '
+      + 'pipeline: scored leads and late-stage leads are disjoint populations in this data. '
+      + 'Estimated value is modelled from the score, not measured from anything agreed.',
   },
   {
     agent_name: 'AgentPerformanceAnalyticsAgent',

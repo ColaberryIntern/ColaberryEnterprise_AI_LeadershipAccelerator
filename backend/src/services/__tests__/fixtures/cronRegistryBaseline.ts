@@ -89,7 +89,6 @@ export const KNOWN_CRON_SEED_ROWS_WITH_NO_REGISTRATION: ReadonlyArray<string> = 
   'ProblemDiscoveryAgent', // audit: internal_pipeline_step of AutonomousEngine
   'PromptOptimizationAgent', // audit: internal_pipeline_step of MetaAgentLoop
   'ReportingIntelligenceAgent', // audit: confirmed_dead, referenced only by the seed file
-  'RevenueOpportunityAgent', // audit: confirmed_dead, referenced only by the seed file
   'RevenueOptimizationAgent', // audit: internal_pipeline_step of AICOOStrategicCycle
   'Risk_Agent', // audit: confirmed_dead, no source file was ever written
   'StrategicIntelligenceAgent', // audit: internal_pipeline_step of AICOOStrategicCycle
