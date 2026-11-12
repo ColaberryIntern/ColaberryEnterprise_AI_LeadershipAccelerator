@@ -1,3 +1,4 @@
+import { withToolRecording } from '../agents/tools/toolInvocationRecorder';
 import OpenAI from 'openai';
 import { sequelize } from '../../config/database';
 import { getCurriculumCompletion, WEEK_DONE_THRESHOLD } from '../curriculumCompletionService';
@@ -159,7 +160,18 @@ async function studentPacing(requested?: string): Promise<unknown> {
  * Executes one staff tool by name. Never throws: a failure becomes an honest error payload the model can see, so Dara
  * says she could not read the data instead of inventing an answer.
  */
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ * The wrapper returns the inner result unchanged and rethrows, so it cannot alter behaviour.
+ */
 export async function executeDaraStaffTool(toolName: string, args: { cohort?: unknown }): Promise<string> {
+  return withToolRecording(
+    { agentName: 'Dara', toolName, surface: 'dara_staff' },
+    () => executeDaraStaffToolInner(toolName, args),
+  );
+}
+
+async function executeDaraStaffToolInner(toolName: string, args: { cohort?: unknown }): Promise<string> {
   const cohort = typeof args?.cohort === 'string' ? args.cohort : undefined;
   try {
     if (toolName === 'curriculum_health') return JSON.stringify(await curriculumHealth(cohort));

@@ -2,6 +2,7 @@
 // Bridges Maya's OpenAI function calls to actual backend actions:
 // send documents, schedule callbacks, send emails, send SMS.
 
+import { withToolRecording } from './agents/tools/toolInvocationRecorder';
 import { Lead } from '../models';
 import AdmissionsMemory from '../models/AdmissionsMemory';
 import AdmissionsActionLog from '../models/AdmissionsActionLog';
@@ -263,7 +264,28 @@ export interface MayaActionResult {
   details?: Record<string, any>;
 }
 
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ *
+ * `chatService` already emits a `tool.call` event around this call, so this wrapper is NOT about
+ * adding the only telemetry - it is about making the record uniform across all six dispatchers,
+ * and about putting the governance judgement in one place rather than six. The wrapper returns
+ * the inner result unchanged and rethrows, so it cannot alter behaviour on Maya's live
+ * visitor-facing surface.
+ */
 export async function executeMayaAction(
+  functionName: string,
+  args: Record<string, any>,
+  visitorId: string,
+  conversationId: string,
+): Promise<MayaActionResult> {
+  return withToolRecording(
+    { agentName: 'Maya', toolName: functionName, surface: 'maya_site_chat', args },
+    () => executeMayaActionInner(functionName, args, visitorId, conversationId),
+  );
+}
+
+async function executeMayaActionInner(
   functionName: string,
   args: Record<string, any>,
   visitorId: string,
