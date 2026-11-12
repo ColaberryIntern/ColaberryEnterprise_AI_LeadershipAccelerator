@@ -78,12 +78,22 @@
       + chip + '</div></section>';
   }
 
+  /* A tile's figure. The unit is appended ONLY to a bare number ("448" + "tests"). A display
+     value that is already a phrase carries its own noun, so appending printed "6m14s, failure
+     to healthy seconds" and "1 of 6 sources live sources" (Quincy, 2026-11-11). The enterprise
+     page made the same call in CaseStudyMeasurement.unitAlreadyInValue. */
+  function figure(x) {
+    var v = String(x.valueDisplay == null ? '' : x.valueDisplay).trim();
+    var bare = /^[-+]?[\d.,]+%?$/.test(v);
+    return v + (bare && x.unit ? ' ' + x.unit : '');
+  }
+
   /* Outcome tiles: the record's own published hero metrics, at most four, gold. */
   function outcomes(body) {
     var m = arr(body.caseStudy.heroMetrics).slice(0, 4);
     if (!m.length) return '';
     return '<div class="outcomes">' + m.map(function (x) {
-      return '<div><b>' + esc(x.valueDisplay) + (x.unit ? ' ' + esc(x.unit) : '') + '</b><span>' + esc(x.label) + '</span></div>';
+      return '<div><b>' + esc(figure(x)) + '</b><span>' + esc(x.label) + '</span></div>';
     }).join('') + '</div>';
   }
 

@@ -87,6 +87,22 @@ describe('outcomes and the hire card', () => {
     assert.equal(S.outcomes(b), '', 'no metric, no tile - nothing is invented');
   });
 
+  // Quincy, 2026-11-11: his headline tile read "6m14s, failure to healthy seconds".
+  test('appends the unit to a bare number only, never to a phrase that already says it', () => {
+    const b = body();
+    b.caseStudy.heroMetrics = [
+      { label: 'a', valueDisplay: '6m14s, failure to healthy', unit: 'seconds' },
+      { label: 'b', valueDisplay: '1 of 6 sources live', unit: 'sources' },
+      { label: 'c', valueDisplay: '448', unit: 'tests' },
+      { label: 'd', valueDisplay: '41%', unit: 'percentage points' },
+    ];
+    const html = S.outcomes(b);
+    assert.match(html, /<b>6m14s, failure to healthy<\/b>/);
+    assert.match(html, /<b>1 of 6 sources live<\/b>/);
+    assert.match(html, /<b>448 tests<\/b>/);
+    assert.match(html, /<b>41% percentage points<\/b>/);
+  });
+
   test('links repositories only over https', () => {
     const b = body(); b.caseStudy.repositories = [{ label: 'x', url: 'javascript:alert(1)' }];
     assert.doesNotMatch(S.hireCard(b), /javascript:/);
