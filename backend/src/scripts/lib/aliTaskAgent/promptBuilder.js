@@ -235,4 +235,50 @@ signal in this data - they average 648 characters and carry the author's own fra
   ].join('\n');
 }
 
-module.exports = { listArg, buildListPrompt, factsBlock, accessBlock, optionsBlock, deliverableBlock, BRAND };
+/**
+ * The prompt for ONE task: the morning report's "single best thing to do" when that thing is a
+ * ticket rather than a list. It leads with the claim command, so two tabs cannot take the same
+ * ticket, then carries the work order (renderWorkOrderText) so the session starts on the work
+ * instead of rediscovering it.
+ *
+ * A decision is handled differently on purpose: the session prepares it (options, evidence, a
+ * recommendation) and Ali makes it. A session deciding on Ali's behalf is the one failure a later
+ * commit cannot undo.
+ *
+ * @param {object} item a work order with { reasons:[{why}] }
+ * @param {string} workOrderText renderWorkOrderText(item)
+ */
+function buildTaskPrompt(item, workOrderText) {
+  // Decided from the ticket's own words (pressingFive.isDecision), NOT from the work order's "ask":
+  // that folds in human_required, and a build task is not a decision.
+  const isDecision = Boolean(item.isDecision);
+  const needsAli = !isDecision && (item.humanOnly || item.category === 'human_required');
+  const reasons = (item.reasons || []).filter((r) => r.pts).map((r) => `  - ${r.why}`).join('\n');
+  // Prose is one line per paragraph: hard-wrapped text double-wraps in a narrow box or terminal.
+  let todo;
+  if (isDecision) {
+    todo = 'WHAT TO DO: this is a DECISION, and it is Ali\'s. Do not make it. Produce a one-page decision memo as HTML and open it: the question in one sentence, two or three real options with what each costs and what it unblocks, the evidence for each from the ticket and the repo, and one recommendation. End with the exact reply Ali can paste into the ticket for each option.';
+  } else if (needsAli) {
+    todo = 'WHAT TO DO: this is marked as needing Ali, so prepare it rather than finish it. Do every part a session can do (drafts, data, the artifact, the checklist), then hand Ali the smallest possible remaining step with exactly what to click or send. Say plainly which part only he can do and why.';
+  } else {
+    todo = 'WHAT TO DO: do the work the ticket describes until its "Done when" is true. If "Done when" is not stated, establish it from the ticket and say what you assumed. Ship it the normal way for this repo (tests, PR, session log), then post the outcome on the ticket with the PR link.';
+  }
+  return [
+    `/ata-work-task ${item.id}`,
+    '',
+    'This is the single most valuable move on Ali\'s backlog today. Claim it first (the skill does), then read the full ticket and its comment thread in Basecamp before doing anything.',
+    '',
+    workOrderText,
+    '',
+    'WHY THIS ONE, TODAY',
+    reasons || '  - (no reasons recorded)',
+    '',
+    todo,
+    '',
+    'Report back with: what changed, what is still open, and the Basecamp link.',
+  ].join('\n');
+}
+
+module.exports = {
+  listArg, buildListPrompt, buildTaskPrompt, factsBlock, accessBlock, optionsBlock, deliverableBlock, BRAND,
+};
