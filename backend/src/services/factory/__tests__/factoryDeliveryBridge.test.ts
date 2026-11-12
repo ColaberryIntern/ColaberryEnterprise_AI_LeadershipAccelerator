@@ -96,9 +96,18 @@ describe('every story carries the five fields the ticket names', () => {
   });
 
   it('takes an AI story\'s policies from its OWNING TEAM, not from a default', () => {
+    // The ALLOCATION is overridden to ai_autonomous here, which it was not before 12 Nov.
+    // L7.2 added a clamp: a team may not declare `agent_autonomous` for a task the allocation
+    // classes `ai_with_approval`, because every field in that comparison is model output from an
+    // uploaded document and the invariant was previously held by a prompt instruction alone. The
+    // base fixture classes t-ai as ai_with_approval, so this case USED to assert the escalation
+    // it was meant to be neutral about. Making the allocation agree keeps the point of the test -
+    // both policies come from the team rather than from a default - without asserting a claim the
+    // bridge now refuses. The refusal itself is covered in factoryPolicyEscalation.test.ts.
     const { stories } = buildDeliveryStories(baseInput({
       project: {
         ...baseInput().project,
+        allocation: [alloc('t-ai', 'ai_autonomous'), alloc('t-human', 'human')],
         agent_teams: [team({ execution_policy: 'agent_autonomous', approval_policy: 'client_approval' })],
       },
     }));
