@@ -11,6 +11,7 @@ import * as H from '../../../../admin/__fixtures__/domHarness';
 const mockSet = jest.fn();
 jest.mock('../../../../../services/myWorkApi', () => ({
   setMyWorkFeatured: (...a: unknown[]) => mockSet(...a),
+  setMyWorkShared: jest.fn(),
   myWorkSource: { file: jest.fn(), preview: jest.fn(), xlsx: jest.fn() },
 }));
 const mockGet = jest.fn();
@@ -32,7 +33,7 @@ describe('FeatureCard', () => {
     mockSet.mockResolvedValue({ featured: true, count: 1, onPublicPage: false });
     H.mount(<FeatureCard id={ID} initial={{ featured: false, onPublicPage: false }} />, '/portal/portfolio/work/x');
     expect(text()).toContain('Only you.');
-    const btn = document.querySelector('[data-testid="mw-feature"] button') as HTMLButtonElement;
+    const btn = document.querySelector('[data-testid="mw-feature-toggle"]') as HTMLButtonElement;
     expect(btn.getAttribute('aria-pressed')).toBe('false');
     act(() => { btn.click(); });
     await H.settle();
@@ -45,7 +46,7 @@ describe('FeatureCard', () => {
     mockSet.mockResolvedValue({ featured: false, count: 0, onPublicPage: false });
     H.mount(<FeatureCard id={ID} initial={{ featured: true, onPublicPage: true }} />, '/portal/portfolio/work/x');
     expect(text()).toContain("anyone with your page's link can open it");
-    act(() => { (document.querySelector('[data-testid="mw-feature"] button') as HTMLButtonElement).click(); });
+    act(() => { (document.querySelector('[data-testid="mw-feature-toggle"]') as HTMLButtonElement).click(); });
     await H.settle();
     expect(mockSet).toHaveBeenCalledWith(ID, false);
     expect(text()).toContain('Only you.');
@@ -54,7 +55,7 @@ describe('FeatureCard', () => {
   it('the cap and a failure are said plainly, and the state does not change', async () => {
     mockSet.mockRejectedValue({ response: { status: 409, data: { error: 'You can feature up to 12 pieces. Unfeature one first.' } } });
     H.mount(<FeatureCard id={ID} initial={{ featured: false, onPublicPage: false }} />, '/portal/portfolio/work/x');
-    act(() => { (document.querySelector('[data-testid="mw-feature"] button') as HTMLButtonElement).click(); });
+    act(() => { (document.querySelector('[data-testid="mw-feature-toggle"]') as HTMLButtonElement).click(); });
     await H.settle();
     expect(text()).toContain('You can feature up to 12 pieces');
     expect(text()).toContain('Only you.');

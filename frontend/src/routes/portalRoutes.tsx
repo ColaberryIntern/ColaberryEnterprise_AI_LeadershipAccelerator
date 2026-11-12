@@ -19,6 +19,7 @@ const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage')
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
 const ShowcaseGalleryPage = lazy(() => import('../pages/portal/showcase/ShowcaseGalleryPage'));
+const ShowcasePiecePage = lazy(() => import('../pages/portal/showcase/ShowcasePiecePage'));
 import PageGate from '../components/paywall/PageGate';
 const RuntimeWorkspace = lazy(() => import('../pages/portal/runtime/RuntimeWorkspace'));
 const ProjectWorkspacePage = lazy(() => import('../pages/portal/projects/ProjectWorkspacePage'));
@@ -138,6 +139,8 @@ const portalRoutes = (
           so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
       <Route path="/portal/showcase" element={<ShowcaseGalleryPage />} />
+      {/* C138: a classmate's shared piece, read-only. Own cohort only; the server answers 404 for anything else. */}
+      <Route path="/portal/showcase/work/:id" element={<ShowcasePiecePage />} />
       {/* Employee → management portal: mints a scoped admin token, redirects to /admin. */}
       <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />

@@ -29,8 +29,8 @@ export const GROUP_BY: Array<{ key: GroupBy; label: string }> = [
 
 export interface Chip { key: WorkGroup | 'all'; label: string; count: number }
 
-/** "All" first, then every kind the learner actually has, in display order. */
-export function chipsFor(items: WorkItem[]): Chip[] {
+/** "All" first, then every kind the learner actually has, in display order. Any list of pieces with a group (My work, Showcase). */
+export function chipsFor(items: ReadonlyArray<Pick<WorkItem, 'group'>>): Chip[] {
   const n = new Map<WorkGroup, number>();
   for (const it of items) n.set(it.group, (n.get(it.group) ?? 0) + 1);
   return [{ key: 'all', label: 'All', count: items.length },
@@ -54,7 +54,7 @@ export function weekKey(iso: string): string {
 const weekLabel = (key: string): string =>
   `Week of ${new Date(`${key}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}`;
 
-export function matches(it: WorkItem, q: string): boolean {
+export function matches(it: Pick<WorkItem, 'title' | 'from' | 'project' | 'skills'>, q: string): boolean {
   const s = q.trim().toLowerCase();
   if (!s) return true;
   return [it.title, it.from, it.project ?? '', ...it.skills, ...it.skills.map(skillLabel)].some((v) => v.toLowerCase().includes(s));

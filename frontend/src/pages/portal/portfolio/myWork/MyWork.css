@@ -117,3 +117,5 @@
 
 /* C130: a featured piece, and the featured-only filter note */
 .mw-feat { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--cherry-text); }
+/* C138: shared with the learner's cohort in the Showcase */
+.mw-shared { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--leaf-text); }
