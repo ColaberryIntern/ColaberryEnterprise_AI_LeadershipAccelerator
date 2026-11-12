@@ -40,6 +40,7 @@ import AIPilotVerticalPage from './pages/AIPilotVerticalPage';
 import PublicPortfolioPage from './pages/PublicPortfolioPage';
 import ManagementPreviewPage from './pages/ManagementPreviewPage';
 import OpenHouseSignupPage from './pages/OpenHouseSignupPage';
+import OpenHouseLeadPage from './pages/OpenHouseLeadPage';
 
 function App() {
   return (
@@ -71,6 +72,10 @@ function App() {
               apart.
           */}
           <Route path="/open-house" element={<OpenHouseSignupPage />} />
+          {/* The confirmation, on a URL of its own so Meta can count a registration
+              rather than counting everyone who opened the form. Reached by navigation
+              from the sign-up; a direct visit shows a note and fires no Lead. */}
+          <Route path="/open-house/lead" element={<OpenHouseLeadPage />} />
           {adminRoutes}
           {portalRoutes}
           {referralRoutes}
