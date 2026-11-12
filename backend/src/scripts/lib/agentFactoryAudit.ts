@@ -43,10 +43,28 @@ export interface BuildRow {
   readonly verified: number;
 }
 
+/**
+ * One domain's manager access, as COMPUTED by `agentManagerReach`, carrying the stored flag
+ * alongside only so the report can say where the two now disagree.
+ *
+ * The first version of this audit read `agent_domain_projects.manager_can_reach` and reported
+ * it as fact. That field was wrong on three of ten rows, and this audit repeated the error
+ * confidently — so the stored value is no longer an input to any judgement here, just a thing
+ * to contradict. See `agentManagerReach.ts` for what replaced it and why.
+ *
+ * Deliberately a structural type rather than an import of `ManagerReachVerdict`: this module is
+ * the pure judgement layer and has no dependencies at all, while the reach computation has to
+ * import the section gate to avoid drifting from it. The runner maps one to the other.
+ */
 export interface ManagerRow {
   readonly domain_key: string;
-  readonly manager_can_reach: boolean;
-  readonly manager_blocker: string | null;
+  /** The stored `manager_can_reach`. Reported only as a disagreement, never believed. */
+  readonly recorded_can_reach: boolean;
+  /** The computed answer: does the access chain actually admit them? */
+  readonly can_reach: boolean;
+  readonly blocker: string | null;
+  /** Which login carries them, when one does. 'legacy' is a finding in itself. */
+  readonly via: 'bridge' | 'legacy' | null;
 }
 
 /** One governance step, and how many times it has ever happened. */
@@ -78,6 +96,10 @@ export interface AuditVerdict {
   /** Whole percent, floored. Reported only for domains that HAVE a builder. */
   readonly percentComplete: number;
   readonly managersBlocked: readonly string[];
+  /** Domains where the stored `manager_can_reach` contradicts the computed answer. */
+  readonly managerFlagWrong: readonly string[];
+  /** Domains whose manager gets in ONLY through a legacy full-admin login. */
+  readonly managersOnLegacyOnly: readonly string[];
   readonly gates: readonly Gate[];
   readonly gatesNeverUsed: readonly Gate[];
   /** The one-line statements a reader acts on, most severe first. */
@@ -105,7 +127,16 @@ export function assess(input: AuditInput): AuditVerdict {
   const percentComplete = totalTasks > 0 ? Math.floor((completeTasks / totalTasks) * 100) : 0;
 
   const managersBlocked = input.managers
-    .filter((m) => !m.manager_can_reach)
+    .filter((m) => !m.can_reach)
+    .map((m) => m.domain_key);
+  const managerFlagWrong = input.managers
+    .filter((m) => m.can_reach !== m.recorded_can_reach)
+    .map((m) => m.domain_key);
+  // Reaching the page only through a legacy admin_users row means the scoped path is broken
+  // and a near-full grant is what is holding the surface up. That reads as healthy in any
+  // boolean, so it has to be its own line.
+  const managersOnLegacyOnly = input.managers
+    .filter((m) => m.can_reach && m.via === 'legacy')
     .map((m) => m.domain_key);
 
   const gates: Gate[] = input.spine.map((s) => ({
@@ -139,6 +170,25 @@ export function assess(input: AuditInput): AuditVerdict {
     );
   }
 
+  // Above the staffing and progress lines, because a wrong stored flag is worse than a known
+  // gap: a gap is acted on, and a wrong flag is believed. This audit's own first version read
+  // that field as fact and reported three managers as locked out who were not.
+  if (managerFlagWrong.length > 0) {
+    headlines.push(
+      `The stored manager_can_reach flag is WRONG on ${managerFlagWrong.length} of `
+      + `${input.managers.length} domains: ${managerFlagWrong.join(', ')}. Trust this `
+      + 'computation, not the column.',
+    );
+  }
+
+  if (managersOnLegacyOnly.length > 0) {
+    headlines.push(
+      `${managersOnLegacyOnly.length} managers reach their agent ONLY through a legacy `
+      + `full-admin login: ${managersOnLegacyOnly.join(', ')}. The scoped path is broken for `
+      + 'them and a near-full grant is holding it up.',
+    );
+  }
+
   if (unassignedDomains.length > 0) {
     headlines.push(
       `${unassignedDomains.length} domains have no builder: ${unassignedDomains.join(', ')}.`,
@@ -157,14 +207,26 @@ export function assess(input: AuditInput): AuditVerdict {
     completeTasks,
     percentComplete,
     managersBlocked,
+    managerFlagWrong,
+    managersOnLegacyOnly,
     gates,
     gatesNeverUsed,
     headlines,
   };
 }
 
-/** Fixed-width plain text. No colour and no unicode: this is read in a terminal and in email. */
-export function render(v: AuditVerdict, builds: readonly BuildRow[]): string {
+/**
+ * Fixed-width plain text. No colour and no unicode: this is read in a terminal and in email.
+ *
+ * `managers` is optional so the headline-only callers and the existing tests keep working, but
+ * the runner always passes it: a blocked manager is only actionable next to the MECHANISM that
+ * refuses them, and the stored prose that used to supply that was wrong.
+ */
+export function render(
+  v: AuditVerdict,
+  builds: readonly BuildRow[],
+  managers: readonly ManagerRow[] = [],
+): string {
   const out: string[] = [];
   out.push('AGENT FACTORY AUDIT');
   out.push('');
@@ -193,5 +255,25 @@ export function render(v: AuditVerdict, builds: readonly BuildRow[]): string {
       + g.step.padEnd(28) + g.table_name,
     );
   }
+
+  if (managers.length > 0) {
+    out.push('');
+    out.push('MANAGER ACCESS (computed from the access chain, not from manager_can_reach)');
+    out.push('  domain                reach  via      mechanism');
+    for (const m of [...managers].sort((a, b) => Number(a.can_reach) - Number(b.can_reach))) {
+      const flag = m.can_reach ? 'YES  ' : 'NO   ';
+      const via = (m.via ?? '-').padEnd(9);
+      // The blocker CODE, not prose: it is the thing to act on, and a paragraph in this column
+      // is how the stored field became unreadable enough to go stale unnoticed.
+      const why = m.can_reach
+        ? (m.via === 'legacy' ? 'legacy full-admin login (scoped path broken)' : 'scoped staff login')
+        : String(m.blocker ?? 'unknown');
+      out.push('  ' + m.domain_key.padEnd(21) + flag + ' ' + via + why);
+      if (m.can_reach !== m.recorded_can_reach) {
+        out.push('  ' + ''.padEnd(21) + `       <- stored flag says ${m.recorded_can_reach}, which is wrong`);
+      }
+    }
+  }
+
   return out.join('\n');
 }
