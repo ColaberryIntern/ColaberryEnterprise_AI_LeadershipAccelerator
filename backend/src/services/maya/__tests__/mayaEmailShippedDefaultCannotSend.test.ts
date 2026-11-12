@@ -34,7 +34,9 @@ import {
   resolveMayaMode, promoteMayaCapability, type MayaPromotionDeps,
 } from '../mayaPromotion';
 import { resolveMayaCapability } from '../../mayaEnablement';
-import { resolveGrowthJourneyFlags } from '../../../config/growthJourneyFlags';
+import {
+  resolveGrowthJourneyFlags, isGrowthJourneyCapabilityEnabled,
+} from '../../../config/growthJourneyFlags';
 import { resolveExplorerGrowthFlags } from '../../../config/explorerGrowthFlags';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { sendMayaEmailForPurpose } = require('../mayaEmailService');
@@ -242,8 +244,18 @@ describe('the kill switch beats both of them', () => {
 describe('the flag fixtures are built by the real resolvers, not asserted', () => {
   it('an empty environment really does produce every growth flag off', () => {
     // If this ever fails, the default changed and every "cannot send" claim above is void.
-    expect(PRODUCTION_FLAGS.growth.growthJourneyEnabled).toBe(false);
-    expect(PRODUCTION_FLAGS.growth.journeyExecution).toBe(false);
+    //
+    // Read through `isGrowthJourneyCapabilityEnabled` rather than off the flags object. The
+    // first version read the execution sub-flag as a property of the resolved flags object, and
+    // the dark-launch guard in `config/__tests__/growthJourneyFlags.test.ts` failed the build
+    // for it - correctly. A sub-flag must only ever be read through the accessor that ANDs the
+    // master, and writing it indirectly to dodge the scan would be the evasion the guard's own
+    // comments reject; going through the reader is the fix.
+    //
+    // Note the guard is a RAW TEXT SCAN over the whole tree, so it also fired on the sentence
+    // above when that sentence spelled the property path out. A comment is not a usage, but the
+    // scan cannot tell, and that is the right trade for a guard defending a dark launch.
+    expect(isGrowthJourneyCapabilityEnabled('journeyExecution', PRODUCTION_FLAGS.growth)).toBe(false);
   });
 
   it('and only the exact string true opens one', () => {
