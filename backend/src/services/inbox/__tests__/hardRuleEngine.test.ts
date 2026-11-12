@@ -768,3 +768,23 @@ describe('the self-sent Internship Report stays in the INBOX (10 Nov 2026)', () 
     expect(r.state === 'INBOX' && r.matched).toBe(false);
   });
 });
+
+describe('the self-sent Morning Five stays in the INBOX (12 Nov 2026)', () => {
+  // Sent from and to ali@colaberry.com. The first send of the redesign matched no keep rule, fell to
+  // the LLM classifier, and landed in Trash. Pins the subject the sender ACTUALLY builds to rule 0a.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { subjectFor } = require('../../../scripts/lib/aliTaskAgent/morningFiveEmail');
+  const selfSent = (subject: string) => baseCoraEmail({ from_address: 'ali@colaberry.com', from_name: 'Ali Muwwakkil', to_addresses: ['ali@colaberry.com'], subject, body_text: 'Morning Five' });
+  const summary = { items: [{ golden: true, kind: 'list', title: '06 - Owner Decisions and Blockers' }] };
+  const now = new Date('2026-11-12T18:00:00Z');
+
+  it.each([false, true])('keeps the real subject in the INBOX (test send: %s)', async (test) => {
+    const r = await evaluateHardRules(selfSent(subjectFor(summary, { test, now })) as any);
+    expect(r).toEqual(expect.objectContaining({ matched: true, state: 'INBOX' }));
+  });
+
+  it('control: a stranger using the same subject is not let through by this rule', async () => {
+    const r = await evaluateHardRules({ ...selfSent(subjectFor(summary, { now })), from_address: 'x@example.com' } as any);
+    expect(r.reason || '').not.toMatch(/Cory briefing/);
+  });
+});
