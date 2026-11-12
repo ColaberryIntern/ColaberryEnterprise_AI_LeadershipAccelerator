@@ -23,6 +23,7 @@ import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
 import AgentDomainToolRequestDecision from '../../models/AgentDomainToolRequestDecision';
 import AgentDomainToolRequestMessage from '../../models/AgentDomainToolRequestMessage';
+import { listBuildEvents, describeDelivery, type BuildEventView } from './toolRequestBuildProgressService';
 
 /** Mirrors the database's own limit intent. Long enough for a real answer, short enough to read. */
 export const MESSAGE_BODY_MAX = 4000;
@@ -58,6 +59,8 @@ export interface AgentToolRequestView {
   writes: boolean | null;
   decisions: ToolRequestDecisionView[];
   messages: ToolRequestMessageView[];
+  /** Phase 3 delivery milestones. Always empty unless the request is approved. */
+  build_events: BuildEventView[];
   /**
    * Plain-English state for a reader who does not know the schema. Derived from status and the
    * decision log together, because "approved" alone does not say whether it was built.
@@ -87,14 +90,22 @@ const iso = (d: Date | string | null | undefined): string | null =>
  * Note what it refuses to claim: an approved request is "approved to build", NOT "done". Phase 3
  * adds the states past approval, and until it exists this sentence must not imply them.
  */
-export function describeWhereItStands(status: string, decisions: ToolRequestDecisionView[]): string {
+export function describeWhereItStands(
+  status: string,
+  decisions: ToolRequestDecisionView[],
+  // Phase 3. Empty for an unapproved request, which cannot have build events at all.
+  buildEvents: BuildEventView[] = [],
+): string {
   const last = decisions.length > 0 ? decisions[decisions.length - 1] : null;
 
   if (status === 'approved') {
     if (last?.verb === 'assign_existing_tool') {
       return `Resolved by assigning the existing tool ${last.assigned_tool_name}. Nothing new to build.`;
     }
-    return 'Approved to build. Not yet tracked through to handover, which Phase 3 adds.';
+    // Phase 3 replaced the placeholder that used to sit here, which read "Not yet tracked
+    // through to handover, which Phase 3 adds." Delivery is now tracked, so the sentence says
+    // what actually happened instead of naming a phase that had not been built.
+    return describeDelivery(buildEvents);
   }
   if (status === 'declined') {
     return last?.reason ? `Declined: ${last.reason}` : 'Declined.';
@@ -164,6 +175,11 @@ export async function listToolRequestsForAgent(agentId: string): Promise<AgentTo
 
     const messages = await listMessages(detail.change_request_id);
     const status = p.status ?? 'submitted';
+    // Phase 3. Only an approved request can carry build events, so an unapproved one is not
+    // queried for them: an empty array there would be indistinguishable from "approved and
+    // nobody started", which is a different and meaningful state.
+    const buildEvents: BuildEventView[] =
+      status === 'approved' ? await listBuildEvents(detail.change_request_id) : [];
 
     requests.push({
       change_request_id: detail.change_request_id,
@@ -178,7 +194,8 @@ export async function listToolRequestsForAgent(agentId: string): Promise<AgentTo
       writes: typeof detail.writes === 'boolean' ? detail.writes : null,
       decisions,
       messages,
-      where_it_stands: describeWhereItStands(status, decisions),
+      build_events: buildEvents,
+      where_it_stands: describeWhereItStands(status, decisions, buildEvents),
     });
   }
 

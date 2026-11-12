@@ -208,6 +208,7 @@ import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAge
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
 import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
+import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
 
 // Import models to register associations before sync
@@ -3260,6 +3261,9 @@ async function start(): Promise<void> {
   // above: a question and its answer are neither an approval nor a denial, and had nowhere to
   // live. Same parent, same FK, so it sits with its siblings after the parent is ensured.
   await ensureToolRequestMessageSchemaGuarded();
+  // Agent Tools Phase 3. What happened AFTER approval: started building, handed over. Kept out
+  // of the parent's status column, which governs approval and has existing readers.
+  await ensureToolRequestBuildEventSchemaGuarded();
   // AF3.5. The ledger behind `ai_agents.tools_granted`.
   //
   // ORDERING MATTERS AND IS SATISFIED HERE, but not by the name you would expect:

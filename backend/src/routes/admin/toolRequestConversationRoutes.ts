@@ -16,6 +16,8 @@ import {
   handleListAgentToolRequests,
   handleListToolRequestMessages,
   handlePostToolRequestMessage,
+  handleListBuildEvents,
+  handleRecordBuildEvent,
 } from '../../controllers/toolRequestConversationController';
 
 const router = Router();
@@ -35,6 +37,26 @@ router.post(
   '/api/admin/agent-domain-tool-requests/:id/messages',
   requireAdmin,
   handlePostToolRequestMessage,
+);
+
+/** GET — the delivery milestones on one request (Phase 3), oldest first. */
+router.get(
+  '/api/admin/agent-domain-tool-requests/:id/build-events',
+  requireAdmin,
+  handleListBuildEvents,
+);
+
+/**
+ * POST — record that building started, or that it was handed over.
+ *
+ * This records DELIVERY, never approval: the service refuses any request whose governance status
+ * is not already `approved`, so this route cannot be used to mark something delivered that
+ * nobody allowed.
+ */
+router.post(
+  '/api/admin/agent-domain-tool-requests/:id/build-events',
+  requireAdmin,
+  handleRecordBuildEvent,
 );
 
 export default router;
