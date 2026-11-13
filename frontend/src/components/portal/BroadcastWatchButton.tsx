@@ -42,7 +42,7 @@ export interface BroadcastWatchButtonProps {
 }
 
 export default function BroadcastWatchButton({
-  roomId, className = 'te-btn cherry sm', label = '▶ Watch here',
+  roomId, className = 'te-btn cherry sm', label = 'Watch here',
 }: BroadcastWatchButtonProps): React.ReactElement | null {
   const airing = useRoomBroadcast(roomId);
   const { open, session } = useBroadcastPlayer();

@@ -55,7 +55,7 @@ export default function LiveWorkspace({
     <section className="lwork" data-testid="live-workspace">
       <style>{LWORK_CSS}</style>
 
-      <BroadcastWatchButton roomId={roomId} className="lwork-watch" label="&#9654; Watch here" />
+      <BroadcastWatchButton roomId={roomId} className="lwork-watch" label="Watch here" />
 
       {isAuthenticated ? (
         <div className="lwork-cols">
