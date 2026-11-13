@@ -578,6 +578,9 @@ export async function getReplayBroadcasts(req: Request, res: Response): Promise<
     // some earlier class. Omission is this ticket's headline requirement, so the case that
     // corrupted the dates was the case the feature exists to handle.
     const endedAtById = new Map(occurrences.map((o) => [o.id, o.ended_at?.getTime() ?? null]));
+    // D13, keyed the same way and for the same reason: the projection omits rows, so position
+    // cannot be trusted to line the two arrays up.
+    const playableById = new Map(occurrences.map((o) => [o.id, o.playable]));
 
     res.json({
       states: REPLAY_DISCOVERY_STATES,
@@ -592,6 +595,15 @@ export async function getReplayBroadcasts(req: Request, res: Response): Promise<
         // The only field a past class needs that a live one does not. Epoch ms, matching the
         // other two instants in the item, so no surface does timezone arithmetic of its own.
         ended_at: endedAtById.get(item.id) ?? null,
+        /**
+         * D13: whether there is anything to play.
+         *
+         * Separate from `can_watch`, which is about ENTITLEMENT. A viewer can be fully
+         * entitled to a class whose recording was never bound, and before this the row was
+         * simply dropped - so the class vanished and nobody could tell a missing recording
+         * from a permission they did not have.
+         */
+        playable: playableById.get(item.id) ?? false,
       })),
     });
   } catch (err) {

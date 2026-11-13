@@ -217,3 +217,63 @@ describe('when it aired', () => {
     expect(titles).toEqual(['Newest', 'Older']);
   });
 });
+
+/**
+ * D13 — A CLASS WITH NO RECORDING IS LISTED, NOT HIDDEN.
+ *
+ * The replay query used to require a bound recording, so a class whose recording was never
+ * bound simply vanished. Measured on production: every airing that had ever finished was in
+ * that state, so the list had always been empty and the design hid the reason. A student who
+ * attended could not tell a missing recording from a permission they did not have.
+ *
+ * The two assertions that carry this: it does not offer a button that would fail, and it does
+ * not read as LOCKED - because "Not available to you" blames the viewer for a recording that
+ * was never made.
+ */
+describe('an entry with no recording bound', () => {
+  const q = (sel: string) => container.querySelector(sel);
+
+  it('is LISTED rather than dropped', () => {
+    mount({ replays: [replay({ playable: false })] });
+    expect(q('[data-testid="replay-occ-week-9"]')).not.toBeNull();
+  });
+
+  it('says it is not playable yet, and offers no button that would fail', () => {
+    mount({ replays: [replay({ playable: false, can_watch: true })] });
+
+    expect(q('[data-testid="replay-unplayable-occ-week-9"]')!.textContent).toBe('Not playable yet');
+    expect(q('[data-testid="replay-watch-occ-week-9"]')).toBeNull();
+  });
+
+  it('does NOT blame the viewer by calling it locked', () => {
+    // `lockLabel` would say "Not available to you", which is about permission. This viewer has
+    // permission; there is simply nothing to play.
+    mount({ replays: [replay({ playable: false, can_watch: true })] });
+
+    expect(q('[data-testid="replay-locked-occ-week-9"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/not available to you/i);
+  });
+
+  it('takes precedence over a lock, because the viewer can do nothing about either', () => {
+    // Unentitled AND unbound. Saying "upgrade to watch" would invite somebody to pay for a
+    // recording that does not exist.
+    mount({ replays: [replay({ playable: false, can_watch: false, offer_upgrade: true })] });
+
+    expect(q('[data-testid="replay-unplayable-occ-week-9"]')).not.toBeNull();
+    expect(container.textContent).not.toMatch(/upgrade to watch/i);
+  });
+
+  it('CONTROL: a bound recording still gets its button', () => {
+    // Without this, the assertions above could pass against a card that never draws one.
+    mount({ replays: [replay({ playable: true, can_watch: true })] });
+    expect(q('[data-testid="replay-watch-occ-week-9"]')).not.toBeNull();
+    expect(q('[data-testid="replay-unplayable-occ-week-9"]')).toBeNull();
+  });
+
+  it('treats an ABSENT playable field as playable, so a deploy skew does not blank the list', () => {
+    // An older backend does not send it. Reading undefined as "broken" would make every class
+    // read as unplayable for the minutes between the two deploys.
+    mount({ replays: [replay({ can_watch: true })] });
+    expect(q('[data-testid="replay-watch-occ-week-9"]')).not.toBeNull();
+  });
+});

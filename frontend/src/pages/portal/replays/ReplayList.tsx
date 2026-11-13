@@ -41,7 +41,24 @@ export function ReplayCard({ replay }: { replay: ReplayBroadcast }): React.React
             : `Ended ${fmtCentralDateTime(new Date(replay.ended_at))}`}
         </p>
       </div>
-      {replay.can_watch ? (
+      {/*
+        * D13: ENTITLED BUT UNPLAYABLE IS ITS OWN STATE, and it is checked before entitlement
+        * because it is the one the viewer can do nothing about.
+        *
+        * A class whose recording was never bound used to be dropped from the list entirely.
+        * Measured on production: every airing that has ever finished is in that state, so the
+        * replay list has always been empty and the design hid the reason. A student who
+        * attended could not tell a missing recording from a permission they did not have, and
+        * nobody on staff saw a gap at all.
+        *
+        * It is NOT shown as locked. `lockLabel` says "Not available to you", which would blame
+        * the viewer for a recording that was never made.
+        */}
+      {replay.playable === false ? (
+        <span className="rp-locked" data-testid={`replay-unplayable-${replay.id}`}>
+          Not playable yet
+        </span>
+      ) : replay.can_watch ? (
         <button
           type="button"
           className="te-btn cherry sm"
