@@ -186,6 +186,7 @@ import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsS
 import { ensureMarketingTrackingSchema } from './db/ensureMarketingTrackingSchema';
 import { ensureMarketingCampaignSchema } from './db/ensureMarketingCampaignSchema';
 import { ensureContentOsSchema } from './db/ensureContentOsSchema';
+import { ensureMediaLibrarySchema } from './db/ensureMediaLibrarySchema';
 import { ensurePublishingSchema } from './db/ensurePublishingSchema';
 import { ensureMarketingAttributionSchema } from './db/ensureMarketingAttributionSchema';
 import { ensureBrandGovernanceSchema } from './db/ensureBrandGovernanceSchema';
@@ -2758,6 +2759,18 @@ async function start(): Promise<void> {
   // constraint - but a preview stack or CI database built in the other order would create
   // content rows referring to campaigns and tenants that do not exist yet.
   await ensureContentOsSchema();
+  // Marketing Operations - the media LIBRARY: media_assets gains kind/source_url/tags, a CHECK
+  // that makes a half-populated asset impossible, and the link-uniqueness index.
+  //
+  // Runs immediately AFTER ensureContentOsSchema because that is where media_assets is CREATED
+  // and this module only ALTERs it. In the other order every statement here fails - and because
+  // ensureContentOsSchema swallows its own statement failures with a warn, the symptom would be
+  // a booted service with an unprotected table rather than a loud error.
+  //
+  // Unlike its neighbours this one THROWS when its post-condition fails. The CHECK constraint is
+  // the deliverable, and a boot that only warns about a missing constraint is how a 'link' row
+  // carrying a storage_key reaches the publishing worker.
+  await ensureMediaLibrarySchema();
   // Marketing Operations - publishing queue: 3 new tables (jobs with a REAL publish_at,
   // external publication receipts, and an append-only redacted provider event stream).
   //
