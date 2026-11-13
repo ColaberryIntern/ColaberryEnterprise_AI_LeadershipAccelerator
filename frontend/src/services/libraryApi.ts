@@ -1,4 +1,5 @@
 import api from '../utils/api';
+import { providerLabel, type VideoProvider } from '../utils/videoEmbed';
 
 /**
  * The media library's API client.
@@ -160,9 +161,13 @@ export function rightsLabel(status: RightsStatus): { text: string; className: st
  * 'file' to the word "source". Appending it unconditionally put "Link post · source" on every
  * plain URL anyone saved, which says nothing and looks like a bug.
  */
-export function linkBadge(sourceUrl: string | null, provider: string | null): string {
-  const named = provider && provider !== 'unknown' && provider !== 'file';
-  return named ? `Link post · ${provider}` : 'Link post';
+export function linkBadge(provider: VideoProvider | null): string {
+  // Takes the provider KEY, not a label, and labels it here. The first version took the label and
+  // compared it against 'unknown' / 'file' - but providerLabel has already mapped both of those to
+  // the word "source" by then, so the guard never fired and EVERY link read "Link post · source",
+  // YouTube included. Its own test caught that within a minute of being written.
+  if (!provider || provider === 'unknown' || provider === 'file') return 'Link post';
+  return `Link post · ${providerLabel(provider)}`;
 }
 
 /** 12.3 MB, or nothing at all for a link. */

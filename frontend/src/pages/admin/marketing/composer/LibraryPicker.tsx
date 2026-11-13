@@ -7,7 +7,7 @@ import {
   rightsLabel,
   type LibraryAsset,
 } from '../../../../services/libraryApi';
-import { parseVideoUrl, providerLabel, videoThumbnail } from '../../../../utils/videoEmbed';
+import { parseVideoUrl, videoThumbnail } from '../../../../utils/videoEmbed';
 import { applyDestination } from './landingPageChoices';
 import type { SetupValues } from './ComposerSetup';
 
@@ -269,7 +269,7 @@ export default function LibraryPicker(props: LibraryPickerProps): JSX.Element {
                   <span className="d-block small fw-semibold text-truncate">{asset.altText || 'No description'}</span>
                   <span className="d-block small text-muted text-truncate">
                     {asset.kind === 'link'
-                      ? linkBadge(asset.sourceUrl, video ? providerLabel(video.provider) : null)
+                      ? linkBadge(video ? video.provider : null)
                       : [asset.mimeType.split('/')[1], readableSize(asset.byteSize)].filter(Boolean).join(' · ')}
                   </span>
                   {/*
