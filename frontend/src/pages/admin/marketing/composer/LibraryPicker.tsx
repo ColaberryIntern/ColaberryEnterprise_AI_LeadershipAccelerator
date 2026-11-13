@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   attachExistingAsset,
+  linkBadge,
   listLibrary,
   readableSize,
   rightsLabel,
@@ -61,6 +62,9 @@ export default function LibraryPicker(props: LibraryPickerProps): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [kindFilter, setKindFilter] = useState<'' | 'file' | 'link'>('');
+  // Cleared whenever the visible set changes, so the button can never read "Attach 3 files" while
+  // none of the three is on screen.
+  const clearSelection = () => setChosenFiles([]);
   const [chosenFiles, setChosenFiles] = useState<string[]>([]);
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -169,8 +173,20 @@ export default function LibraryPicker(props: LibraryPickerProps): JSX.Element {
         {notice && <div className="alert alert-success py-2 small" role="status">{notice}</div>}
 
         {/* The landing-page collision: named, and asked once, before anything is applied. */}
+        {/*
+          role="alert" AND focus moved into it. The first version used an alertdialog role, which
+          carries no implicit live semantics - a screen-reader user who activated a link tile heard
+          nothing and saw nothing applied, which is the "never dead-ends" clause failing for
+          exactly the people it matters most for.
+        */}
         {pendingLink && (
-          <div className="alert alert-warning py-2 small" role="alertdialog" aria-labelledby="lib-collide">
+          <div
+            className="alert alert-warning py-2 small"
+            role="alert"
+            aria-labelledby="lib-collide"
+            tabIndex={-1}
+            ref={(el) => el?.focus()}
+          >
             <p className="fw-semibold mb-1" id="lib-collide">This post currently points at {pageAtRisk}.</p>
             <p className="mb-2">
               A post has one destination, so using this link will stop it pointing at that page.
@@ -194,14 +210,14 @@ export default function LibraryPicker(props: LibraryPickerProps): JSX.Element {
             placeholder="Search the library"
             aria-label="Search the library"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => { clearSelection(); setQ(e.target.value); }}
           />
           <select
             className="form-select form-select-sm"
             style={{ maxWidth: 160 }}
             aria-label="Filter by kind"
             value={kindFilter}
-            onChange={(e) => setKindFilter(e.target.value as '' | 'file' | 'link')}
+            onChange={(e) => { clearSelection(); setKindFilter(e.target.value as '' | 'file' | 'link'); }}
           >
             <option value="">Files and links</option>
             <option value="file">Files only</option>
@@ -253,7 +269,7 @@ export default function LibraryPicker(props: LibraryPickerProps): JSX.Element {
                   <span className="d-block small fw-semibold text-truncate">{asset.altText || 'No description'}</span>
                   <span className="d-block small text-muted text-truncate">
                     {asset.kind === 'link'
-                      ? `Link post${video ? ` · ${providerLabel(video.provider)}` : ''}`
+                      ? linkBadge(asset.sourceUrl, video ? providerLabel(video.provider) : null)
                       : [asset.mimeType.split('/')[1], readableSize(asset.byteSize)].filter(Boolean).join(' · ')}
                   </span>
                   {/*
