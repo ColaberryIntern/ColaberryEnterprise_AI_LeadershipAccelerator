@@ -38,6 +38,16 @@ jest.mock('../../../modules/delivery/deliveryAuthorization', () => {
   const actual = jest.requireActual('../../../modules/delivery/deliveryAuthorization');
   return { __esModule: true, ...actual, buildDeliveryContext: (...a: any[]) => buildCtx(...a) };
 });
+// Phase B: provision-on-assign also raises the builder's proposal share to 'edit' (the authoring axis). Mock the
+// share service so the test can assert the grant without a DB; PROPOSAL_SHARE_LEVELS stays the real ladder.
+const shareGetLevel = jest.fn();
+const shareSetGrant = jest.fn();
+jest.mock('../govProposalShare', () => ({
+  __esModule: true,
+  PROPOSAL_SHARE_LEVELS: ['none', 'view', 'comment', 'edit'],
+  getProposalShareLevel: (...a: any[]) => shareGetLevel(...a),
+  setProposalShareGrant: (...a: any[]) => shareSetGrant(...a),
+}));
 
 import { assignBuildStory, unassignBuildStory, listBuildStoryAssignments, listAssignableBuilders, listActiveInternsForAssignment, ensureAssigneeCanBuild, AssignmentError } from '../govBuildAssignment';
 
@@ -54,6 +64,8 @@ beforeEach(() => {
   // Tests that exercise provisioning (a brand-new builder) override memFindOne to resolve null.
   memFindOne.mockResolvedValue({ id: 'm-existing', delivery_role: 'associate_builder' });
   memCreate.mockImplementation(async (v: any) => ({ id: 'm-new', ...v }));
+  shareGetLevel.mockResolvedValue('none');
+  shareSetGrant.mockResolvedValue({ level: 'edit' });
 });
 
 describe('assignBuildStory — the assignee MUST be a builder (story.execute)', () => {
@@ -113,6 +125,37 @@ describe('assignBuildStory — the assignee MUST be a builder (story.execute)', 
     const r = await assignBuildStory(input({ assignedByIdentityId: null }));
     expect(asCreate.mock.calls[0][0].assigned_by_identity_id).toBeNull();
     expect(r.assigneeIdentityId).toBe('builder-7');
+  });
+
+  // Phase B: the assigned builder authors the proposal — raise their share to 'edit', never downgrade, never block.
+  it('raises the assignee to an EDIT proposal share when they hold a lower level', async () => {
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder']));
+    asFindOne.mockResolvedValue(null); asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    shareGetLevel.mockResolvedValue('none');
+    await assignBuildStory(input());
+    expect(shareSetGrant).toHaveBeenCalledWith('dp-1', 'builder-7', 'edit');
+  });
+
+  it('does NOT downgrade an existing EDIT share (idempotent, no-op when already edit)', async () => {
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder']));
+    asFindOne.mockResolvedValue(null); asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    shareGetLevel.mockResolvedValue('edit');
+    await assignBuildStory(input());
+    expect(shareSetGrant).not.toHaveBeenCalled();
+  });
+
+  it('a share-grant failure NEVER blocks the assignment (best-effort)', async () => {
+    buildCtx.mockResolvedValue(ctxWithRoles(['associate_builder']));
+    asFindOne.mockResolvedValue(null); asCreate.mockImplementation(async (v: any) => rowFrom(v));
+    shareGetLevel.mockRejectedValue(new Error('db down'));
+    const r = await assignBuildStory(input());
+    expect(r.assigneeIdentityId).toBe('builder-7'); // assignment still succeeds
+  });
+
+  it('a non-builder is refused BEFORE any share grant (gate first)', async () => {
+    buildCtx.mockResolvedValue(ctxWithRoles(['qa_reviewer']));
+    await expect(assignBuildStory(input())).rejects.toMatchObject({ reason: 'assignee_not_builder' });
+    expect(shareSetGrant).not.toHaveBeenCalled();
   });
 });
 

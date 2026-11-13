@@ -49,6 +49,19 @@ jest.mock('../../services/factory/opportunities/oppPulseClient', () => ({ fetchB
 // Read-only package-signatures mirror: the participant route LISTS signatures (never seeds/writes).
 const listSignatures = jest.fn();
 jest.mock('../../services/factory/proposal/govProposalSignatures', () => ({ listSignatures: (...a: any[]) => listSignatures(...a) }));
+// Phase B intern-authoring services (dynamically imported inside the new author routes).
+const applyHumanEdit = jest.fn();
+jest.mock('../../services/factory/proposal/humanEdit', () => ({ applyHumanEdit: (...a: any[]) => applyHumanEdit(...a) }));
+const saveSectionPlan = jest.fn();
+jest.mock('../../services/factory/proposal/govProposalDocumentStore', () => ({ saveSectionPlan: (...a: any[]) => saveSectionPlan(...a) }));
+const runProposalDocumentChecks = jest.fn();
+jest.mock('../../services/factory/proposal/runProposalDocumentChecks', () => ({ runProposalDocumentChecks: (...a: any[]) => runProposalDocumentChecks(...a) }));
+const recaptureStory = jest.fn();
+jest.mock('../../services/factory/proposal/captureStoryArtifact', () => ({ recaptureStory: (...a: any[]) => recaptureStory(...a) }));
+const insertArtifactFigure = jest.fn();
+jest.mock('../../services/factory/proposal/insertArtifactFigure', () => ({ insertArtifactFigure: (...a: any[]) => insertArtifactFigure(...a) }));
+const reanalyzeProposalBlueprint = jest.fn();
+jest.mock('../../services/factory/proposal/reanalyzeProposalBlueprint', () => ({ reanalyzeProposalBlueprint: (...a: any[]) => reanalyzeProposalBlueprint(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -363,5 +376,85 @@ describe('GET /api/portal/gov-projects/:projectId/artifacts/:artifactId/image (m
     const res = await request(app).get('/api/portal/gov-projects/dp-OTHER/artifacts/a1/image');
     expect(res.status).toBe(404);
     expect(gbaFindByPk).not.toHaveBeenCalled();
+  });
+});
+
+// ── Phase B: intern authoring routes — EDIT-share gated, author-safe only; approvals/export stay management ───────
+describe('intern authoring routes (B.9) — EDIT share lets the intern author + run checks, never approve/export', () => {
+  const EDIT_VIEW = { ...SAFE_VIEW, proposal: { level: 'edit', canComment: true, canEdit: true, responses: [] }, proposalDocuments: [{ key: 'technical' }] };
+  const NOEDIT_VIEW = { ...SAFE_VIEW, proposal: { level: 'view', canComment: false, canEdit: false, responses: [] }, proposalDocuments: [{ key: 'technical' }] };
+  beforeEach(() => { ctxIdentity = 'id-1'; getStudentGovProjectView.mockResolvedValue(EDIT_VIEW); });
+
+  it('edit: an EDIT-shared intern saves a human version via applyHumanEdit (author, canVerify:false)', async () => {
+    applyHumanEdit.mockResolvedValue({ ok: true });
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/documents/technical/edit').send({ contentHtml: '<p>x</p>' });
+    expect(res.status).toBe(200);
+    expect(applyHumanEdit).toHaveBeenCalledWith('dp-A', 'technical', '<p>x</p>', { identityId: 'id-1', canVerify: false });
+  });
+
+  it('edit: a member WITHOUT an edit share is 403 and the service is never called', async () => {
+    getStudentGovProjectView.mockResolvedValue(NOEDIT_VIEW);
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/documents/technical/edit').send({ contentHtml: '<p>x</p>' });
+    expect(res.status).toBe(403);
+    expect(applyHumanEdit).not.toHaveBeenCalled();
+  });
+
+  it('edit: a NON-member is 404 (guard denies first)', async () => {
+    guardAllows = false;
+    const res = await request(app).post('/api/portal/gov-projects/dp-OTHER/documents/technical/edit').send({ contentHtml: '<p>x</p>' });
+    expect(res.status).toBe(404);
+    expect(applyHumanEdit).not.toHaveBeenCalled();
+  });
+
+  it('edit: a doc NOT in the caller projection (e.g. pricing) is 404', async () => {
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/documents/pricing/edit').send({ contentHtml: '<p>x</p>' });
+    expect(res.status).toBe(404);
+    expect(applyHumanEdit).not.toHaveBeenCalled();
+  });
+
+  it('run-checks: an EDIT-shared intern scores the version (200), and 409 when none is drafted', async () => {
+    runProposalDocumentChecks.mockResolvedValueOnce({ scores: {} });
+    let res = await request(app).post('/api/portal/gov-projects/dp-A/documents/technical/run-checks').send({});
+    expect(res.status).toBe(200);
+    runProposalDocumentChecks.mockResolvedValueOnce(null);
+    res = await request(app).post('/api/portal/gov-projects/dp-A/documents/technical/run-checks').send({});
+    expect(res.status).toBe(409);
+  });
+
+  it('section plan: an EDIT-shared intern saves it via saveSectionPlan', async () => {
+    saveSectionPlan.mockResolvedValue({ key: 'technical' });
+    const res = await request(app).put('/api/portal/gov-projects/dp-A/documents/technical/sections/s1/plan').send({ hotButton: 'h' });
+    expect(res.status).toBe(200);
+    expect(saveSectionPlan).toHaveBeenCalledWith('dp-A', 'technical', 's1', expect.objectContaining({ hotButton: 'h' }), 'id-1');
+  });
+
+  it('recapture: an EDIT-shared intern recaptures a story', async () => {
+    recaptureStory.mockResolvedValue({ captured: true });
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/stories/STORY-1/recapture').send({});
+    expect(res.status).toBe(200);
+    expect(recaptureStory).toHaveBeenCalledWith('dp-A', 'STORY-1');
+  });
+
+  it('insert-figure: an EDIT-shared intern inserts a captured artifact', async () => {
+    insertArtifactFigure.mockResolvedValue({ key: 'technical' });
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/documents/technical/insert-figure').send({ artifactId: 'a1' });
+    expect(res.status).toBe(200);
+    expect(insertArtifactFigure).toHaveBeenCalledWith('dp-A', 'technical', 'a1', 'id-1');
+  });
+
+  it('blueprint reanalyze: an EDIT-shared intern re-reads the stored ZIP', async () => {
+    reanalyzeProposalBlueprint.mockResolvedValue({ ok: true });
+    const res = await request(app).post('/api/portal/gov-projects/dp-A/blueprint/reanalyze').send({});
+    expect(res.status).toBe(200);
+    expect(reanalyzeProposalBlueprint).toHaveBeenCalledWith('dp-A', 'id-1');
+  });
+
+  it('THE BOUNDARY: no participant path to gate decisions, Gold, Export/assemble, signature upload or due-date', async () => {
+    const gate = await request(app).post('/api/portal/gov-projects/dp-A/documents/technical/gates/gold').send({ decision: 'approve' });
+    const gold = await request(app).post('/api/portal/gov-projects/dp-A/gold').send({});
+    const assemble = await request(app).post('/api/portal/gov-projects/dp-A/package/assemble').send({});
+    const sign = await request(app).post('/api/portal/gov-projects/dp-A/package/signatures/execution').send({});
+    const due = await request(app).post('/api/portal/gov-projects/dp-A/due-date').send({});
+    for (const r of [gate, gold, assemble, sign, due]) expect(r.status).toBe(404); // no such participant route exists
   });
 });

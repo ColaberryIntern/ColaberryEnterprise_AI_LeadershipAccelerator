@@ -39,7 +39,7 @@ const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', '
  * reuses the shipped govCockpit panel.
  */
 export default function StudioShell(
-  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification, readOnly = false }:
+  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification, readOnly = false, proposalAuthoring = false }:
   { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean; bugReportEndpoint?: string;
     /** ADMIN mount only: open the real Gov Qualification Workspace for a pre-award assessment stage (Snapshot/
      *  Solicitation/Fit/Decide). Absent on the intern mount, so the intern keeps the student-safe StageDetail. */
@@ -48,11 +48,30 @@ export default function StudioShell(
      *  disabled. The center panels are wrapped in a disabled <fieldset> (greys out every button/input/select/textarea
      *  inside); the agent panel, the due-date setter and the document drawer take `readOnly` directly. Navigation
      *  (the step bar + stage rail) stays enabled. Defaults OFF, so the admin cockpit is unchanged. */
-    readOnly?: boolean },
+    readOnly?: boolean,
+    /** PHASE B intern authoring: on top of readOnly, let the intern AUTHOR the proposal lane — the proposal-production
+     *  steps become writable (the per-step fieldset is NOT disabled) and the agent panel + document drawer are enabled,
+     *  while qualification steps and Package/Export stay read-only, and the REVIEWER/MANAGEMENT controls (gate
+     *  decisions, Gold, accept/request-changes, due-date, export) stay off (canVerify/canManage remain false and the
+     *  injected reviewApi throw-stubs them / omits decideGold). Defaults OFF — a plain readOnly mount is unchanged. */
+    proposalAuthoring?: boolean },
 ): React.ReactElement {
   const [sp, setSp] = useSearchParams();
   const raw = sp.get('view');
   const current: StudioView = (raw && (VIEWS as string[]).includes(raw) ? raw : 'overview') as StudioView;
+  // PHASE B: the steps that stay LOCKED for an authoring intern — pre-award qualification + Package/Export. Every
+  // other step (overview/blueprint/documents/evidence/editor/gates/needs) becomes authorable. Gate DECISIONS and Gold
+  // are NOT in this view's controls (they are reviewer/exec acts gated by the reviewApi), so enabling these steps
+  // never hands the intern an approval.
+  const AUTHOR_LOCKED_STEPS = new Set<StudioView>(['snapshot', 'solicitation', 'fit', 'decide', 'outcome', 'package']);
+  const stepAuthorable = proposalAuthoring && !AUTHOR_LOCKED_STEPS.has(current);
+  // The center fieldset is disabled when read-only AND this step is not authorable. A plain read-only mount
+  // (proposalAuthoring=false) disables every step, exactly as before.
+  const centerDisabled = readOnly && !stepAuthorable;
+  // Controls gated by their own `readOnly` prop (the agent panel, the document drawer) follow the authoring capability
+  // rather than the per-step fieldset: enabled whenever the intern may author at all. Reviewer/management affordances
+  // (accept/request-changes via canVerify, due-date via canManage) stay off regardless — they key off !readOnly.
+  const uiReadOnly = readOnly && !proposalAuthoring;
   const [openDocKey, setOpenDocKey] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [tourStep, setTourStep] = useState<number | null>(null);
@@ -197,17 +216,17 @@ export default function StudioShell(
             (buttons, inputs, selects, textareas) — the one-point disable. Reset to no box so layout is unchanged.
             Navigation lives outside it (the step bar + stage rail stay live). */}
         <main id="gps-main" style={{ minWidth: 0 }}>
-          <fieldset disabled={readOnly} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>{center}</fieldset>
+          <fieldset disabled={centerDisabled} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>{center}</fieldset>
         </main>
         {/* On the pre-award assessment steps (1-5), the right column mirrors the admin Qualification Workspace's
             persistent rail (AI vetting + deadline + key dates), read-only and student-safe, instead of the
             Proposal-agent panel. Every other view keeps the agent panel. */}
         {(current === 'snapshot' || current === 'solicitation' || current === 'fit' || current === 'decide' || current === 'outcome')
           ? <QualRail view={view} />
-          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={readOnly} />}
+          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={uiReadOnly} />}
       </div>
       {drawerDoc && (
-        gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify && !readOnly} readOnly={readOnly} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
+        gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify && !readOnly} readOnly={uiReadOnly} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
       )}
       {toastMsg && <div className="gps-toast" role="status">{toastMsg}</div>}
       {tourPrompt && tourStep === null && (

@@ -658,6 +658,143 @@ router.post(
   },
 );
 
+// ── B.9 INTERN AUTHORING (Phase B) — an EDIT-shared intern AUTHORS the proposal + RUNS the checks ────────────────
+// Each route mirrors ONLY an author-safe admin write (edit / section plan / run-checks / recapture / insert-figure /
+// blueprint-reanalyze), guarded by membership (project.read) + an in-handler EDIT-share gate (proposalAccess.canEdit
+// + docKeys.has so pricing/unseen ⇒ 404), delegating to the SAME service the admin route calls with the guard-
+// resolved identity. The REVIEWER acts stay management-only: NO participant path to gates/:gate (gate decisions),
+// gold, package/assemble, package/signatures or due-date. Accept/request-changes stay on evidence.verify (above).
+
+/** POST .../documents/:docKey/edit — an EDIT-shared intern saves a sanitized human version. Author, not reviewer:
+ *  canVerify stays false, so pricing is never editable here (and pricing is not in their projection anyway). */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/edit',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    const html = typeof (req.body ?? {}).contentHtml === 'string' ? (req.body as any).contentHtml : '';
+    if (!html.trim()) { res.status(422).json({ error: 'Edit content is required.' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access || !access.me) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      if (!access.docKeys.has(docKey)) { res.status(404).json({ error: 'Not found' }); return; }
+      const { applyHumanEdit } = await import('../services/factory/proposal/humanEdit');
+      res.json(await applyHumanEdit(projectId, docKey, html, { identityId: access.me, canVerify: false }));
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not save the edit.' });
+    }
+  },
+);
+
+/** PUT .../documents/:docKey/sections/:sectionKey/plan — an EDIT-shared intern saves a section plan (writes a new
+ *  human version so it is auditable). */
+router.put(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/sections/:sectionKey/plan',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey; const sectionKey = String(req.params.sectionKey ?? '');
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey || !sectionKey) { res.status(400).json({ error: 'Project, document and section ids are required' }); return; }
+    const b = (req.body ?? {}) as any;
+    const plan = { hotButton: String(b.hotButton ?? ''), feature: String(b.feature ?? ''), benefit: String(b.benefit ?? ''), proof: String(b.proof ?? ''), discriminator: String(b.discriminator ?? '') };
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access || !access.me) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      if (!access.docKeys.has(docKey)) { res.status(404).json({ error: 'Not found' }); return; }
+      const { saveSectionPlan } = await import('../services/factory/proposal/govProposalDocumentStore');
+      res.json({ document: await saveSectionPlan(projectId, docKey, sectionKey, plan, access.me) });
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not save the section plan.' });
+    }
+  },
+);
+
+/** POST .../documents/:docKey/run-checks — an EDIT-shared intern scores the current version (pure scoring, no
+ *  decision). 409 when there is no drafted version yet. The gate DECISION this feeds stays management-only. */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/run-checks',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      if (!access.docKeys.has(docKey)) { res.status(404).json({ error: 'Not found' }); return; }
+      const { runProposalDocumentChecks } = await import('../services/factory/proposal/runProposalDocumentChecks');
+      const result = await runProposalDocumentChecks(projectId, docKey);
+      if (!result) { res.status(409).json({ error: 'There is no drafted version to check yet.' }); return; }
+      res.json({ result });
+    } catch { res.status(500).json({ error: 'Could not run the checks.' }); }
+  },
+);
+
+/** POST .../stories/:storyId/recapture — an EDIT-shared intern re-captures a build story's screenshot. */
+router.post(
+  '/api/portal/gov-projects/:projectId/stories/:storyId/recapture',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const storyId = String(req.params.storyId ?? '');
+    if (typeof projectId !== 'string' || !projectId || !storyId) { res.status(400).json({ error: 'Project and story ids are required' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      const { recaptureStory } = await import('../services/factory/proposal/captureStoryArtifact');
+      res.json({ result: await recaptureStory(projectId, storyId) });
+    } catch { res.status(500).json({ error: 'Could not re-capture the screenshot.' }); }
+  },
+);
+
+/** POST .../documents/:docKey/insert-figure — an EDIT-shared intern inserts a captured artifact as the next figure. */
+router.post(
+  '/api/portal/gov-projects/:projectId/documents/:docKey/insert-figure',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId; const docKey = req.params.docKey;
+    const artifactId = String((req.body ?? {}).artifactId ?? '');
+    if (typeof projectId !== 'string' || !projectId || typeof docKey !== 'string' || !docKey) { res.status(400).json({ error: 'Project and document ids are required' }); return; }
+    if (!artifactId) { res.status(400).json({ error: 'artifactId is required' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access || !access.me) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      if (!access.docKeys.has(docKey)) { res.status(404).json({ error: 'Not found' }); return; }
+      const { insertArtifactFigure } = await import('../services/factory/proposal/insertArtifactFigure');
+      res.json({ document: await insertArtifactFigure(projectId, docKey, artifactId, access.me) });
+    } catch (err: any) {
+      if (err?.name === 'ProposalDocumentError') { res.status(DOC_ERR_STATUS[err.reason] ?? 400).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not insert the figure.' });
+    }
+  },
+);
+
+/** POST .../blueprint/reanalyze — an EDIT-shared intern re-reads the STORED solicitation ZIP into the next blueprint
+ *  version. 409 when no stored package exists. */
+router.post(
+  '/api/portal/gov-projects/:projectId/blueprint/reanalyze',
+  requireParticipant, requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const access = await proposalAccess(req, projectId);
+      if (!access || !access.me) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!access.canEdit) { res.status(403).json({ error: 'Forbidden' }); return; }
+      const { reanalyzeProposalBlueprint } = await import('../services/factory/proposal/reanalyzeProposalBlueprint');
+      res.json(await reanalyzeProposalBlueprint(projectId, access.me));
+    } catch (err: any) {
+      if (err?.name === 'BlueprintReanalysisError') { res.status(err.reason === 'bundle_missing' ? 409 : 500).json({ error: err.message, reason: err.reason }); return; }
+      res.status(500).json({ error: 'Could not re-analyze the solicitation.' });
+    }
+  },
+);
+
 /** GET .../review-cycle/:runId — poll a review run (B.5 mirror). project.read. */
 router.get(
   '/api/portal/gov-projects/:projectId/review-cycle/:runId',
