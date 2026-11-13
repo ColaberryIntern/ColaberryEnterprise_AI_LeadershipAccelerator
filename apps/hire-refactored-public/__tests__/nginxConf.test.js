@@ -30,7 +30,9 @@ describe('hire-refactored.conf', () => {
   });
 
   test('falls every unknown portfolio and case-study path through to its shell', () => {
-    assert.match(block(/location \^~ \/talent\//), /try_files \$uri \/talent\/record\/index\.html;/);
+    // The /talent/ block holds a nested location, so read it up to the next top-level one.
+    const talent = code.slice(code.search(/location \^~ \/talent\//), code.search(/location \^~ \/case-studies\//));
+    assert.match(talent, /try_files \$uri \/talent\/record\/index\.html;/);
     assert.match(block(/location \^~ \/case-studies\//), /try_files \$uri \/case-studies\/record\/index\.html;/);
   });
 
@@ -44,6 +46,22 @@ describe('hire-refactored.conf', () => {
     assert.match(conf, /location = \/talent\/ \{\s*return 302 "\/#talent";/);
     assert.match(conf, /location = \/case-studies\/ \{\s*return 302 "\/#published";/);
     assert.ok(fs.existsSync(path.join(__dirname, '..', 'src', '404.html')), 'the branded page ships with the app');
+  });
+
+  test('routes /talent/<slug>/schedule/ to its own shell, always noindex (profile upgrade, kit Part 2)', () => {
+    // Nested inside `^~ /talent/`: a top-level regex location would never be consulted, because
+    // `^~` on the matching prefix stops nginx's regex search.
+    const talent = code.slice(code.search(/location \^~ \/talent\/ \{/));
+    const nested = talent.slice(0, talent.search(/try_files \$uri \/talent\/record\/index\.html;/));
+    assert.match(nested, /location ~ \^\/talent\/\[\^\/\]\+\/schedule\/\?\$ \{/);
+    assert.match(nested, /try_files \/schedule\/index\.html =404;/);
+    assert.match(nested, /add_header X-Robots-Tag "noindex, nofollow" always;/);
+    assert.match(nested, /include \/etc\/nginx\/security-headers\.conf;/);
+    const re = /^\/talent\/[^/]+\/schedule\/?$/;
+    for (const ok of ['/talent/kesetebirhan-delele/schedule/', '/talent/ann/schedule']) assert.ok(re.test(ok), ok);
+    for (const no of ['/talent/ann/', '/talent/ann/schedule/x', '/talent//schedule/']) assert.ok(!re.test(no), no);
+    const shell = fs.readFileSync(path.join(__dirname, '..', 'src', 'schedule', 'index.html'), 'utf8');
+    assert.match(shell, /<meta name="robots" content="noindex, nofollow"/);
   });
 
   test('redirects are relative, so they never send a visitor to http:// (production verification, 2026-11-10)', () => {

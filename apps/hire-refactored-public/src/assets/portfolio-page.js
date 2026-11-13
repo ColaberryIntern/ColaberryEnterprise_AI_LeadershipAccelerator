@@ -36,6 +36,7 @@
       } catch (err) { done(); }
     }
     if (e.target.closest('[data-intro]')) C.track(window, 'intro_start', { talentSlug: slug });
+    if (e.target.closest('[data-book]')) C.track(window, 'schedule_start', { talentSlug: slug });
   });
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', load);

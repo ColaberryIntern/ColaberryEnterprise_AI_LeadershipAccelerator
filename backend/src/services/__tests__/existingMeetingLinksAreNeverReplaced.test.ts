@@ -13,15 +13,15 @@ import path from 'path';
  * refactor can plausibly decide to "re-home" an existing meeting onto a better
  * host. Nothing may do that automatically.
  *
- * Four code paths create Zoom meetings. Each one must return early when a link is
+ * Five code paths create Zoom meetings (the fifth: a confirmed Hire interview). Each one must return early when a link is
  * already present. This test reads their source and checks that guard is still
- * there, and — just as importantly — fails when a FIFTH path appears, so a new
+ * there, and — just as importantly — fails when a SIXTH path appears, so a new
  * creator cannot be added without someone deciding how it behaves on re-run.
  */
 
 const SRC = path.join(__dirname, '..', '..');
 
-/** The four known creators, with the guard each must keep. */
+/** The five known creators, with the guard each must keep. */
 const KNOWN_CREATORS: Array<{ file: string; guard: RegExp; why: string }> = [
   {
     file: 'services/communityRooms/roomOutboxHandlers.ts',
@@ -42,6 +42,11 @@ const KNOWN_CREATORS: Array<{ file: string; guard: RegExp; why: string }> = [
     file: 'services/internship/internshipMeetingRooms.ts',
     guard: /if \(room\.meeting_link\) return room\.meeting_link;/,
     why: 'the standing internship rooms keep their year-long links',
+  },
+  {
+    file: 'services/hire/hireInterviewNotify.ts',
+    guard: /if \(f\.roomUrl\) return f\.roomUrl;/,
+    why: 'a confirmed Hire interview keeps the room link already sent in its invite',
   },
 ];
 
@@ -67,7 +72,7 @@ describe('an existing Zoom link is never replaced', () => {
     expect(src).toMatch(guard);
   });
 
-  it('no FIFTH path creates meetings without this test knowing about it', () => {
+  it('no SIXTH path creates meetings without this test knowing about it', () => {
     // The guard above protects the paths we know. This protects against a new one
     // appearing unreviewed — the way the practice flow itself was added.
     const creators = allSourceFiles(SRC)

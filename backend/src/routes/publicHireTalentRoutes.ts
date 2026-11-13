@@ -20,6 +20,8 @@ import { parseHireTalentQuery } from '../services/hire/hireTalentQuery';
 import { getHireTalentDirectory } from '../services/hire/hireTalentDirectory';
 import { requestHireIntro } from '../services/hire/hireIntro';
 import { requestInterview, talentSlots } from '../services/hire/hireInterviews';
+import { acceptProposedTime, readProposal } from '../services/hire/hireInterviewAccept';
+import { inBackground, notifyInterviewConfirmed, notifyInterviewRequested } from '../services/hire/hireInterviewNotify';
 import { getCaseStudySurfaceProfile } from '../services/caseStudy/caseStudySurfaceProfiles';
 
 /**
@@ -119,6 +121,11 @@ async function postInterview(req: Request, res: Response): Promise<void> {
   const redirect = wantsRedirect(req);
   try {
     const out = await requestInterview(req.body);
+    // Only a NEW booking notifies; a duplicate already did. After the response, never before it.
+    if (out.status === 'created' && out.id) {
+      const ctx = { headers: req.headers as Record<string, unknown>, remoteIp: req.ip };
+      inBackground('requested', out.id, () => notifyInterviewRequested(out.id, ctx));
+    }
     if (redirect) {
       const ok = out.status === 'created' || out.status === 'duplicate';
       res.redirect(303, scheduleReturnUrl(req.body?.talentSlug, ok ? { sent: '1' } : { error: out.status }));
@@ -127,7 +134,7 @@ async function postInterview(req: Request, res: Response): Promise<void> {
     if (out.status === 'invalid') { res.status(400).json({ error: 'Invalid request', detail: out.error }); return; }
     if (out.status === 'not_found') { res.status(404).json({ error: 'Not found' }); return; }
     if (out.status === 'unavailable') { res.status(409).json({ error: 'That time is no longer open' }); return; }
-    res.status(out.http).json({ ok: true, status: out.status, startsAt: out.startsAt, minutes: out.minutes, format: out.format });
+    res.status(out.http).json({ ok: true, status: out.status, confirmed: out.confirmed, startsAt: out.startsAt, minutes: out.minutes, format: out.format });
   } catch (err: any) {
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'error', service: 'backend',
@@ -136,6 +143,31 @@ async function postInterview(req: Request, res: Response): Promise<void> {
     }));
     if (redirect) { res.redirect(303, scheduleReturnUrl(req.body?.talentSlug, { error: 'failed' })); return; }
     res.status(500).json({ error: 'Unable to send this request just now' });
+  }
+}
+
+/**
+ * GET  /api/public/hire/interviews/:id/proposal?t=  what a suggested time is (no addresses)
+ * POST /api/public/hire/interviews/:id/accept {t}   take it: confirmed, then both get the invite
+ * The token is the capability (hireInterviewAccept); a bad one is a plain 404.
+ */
+async function proposal(req: Request, res: Response, commit: boolean): Promise<void> {
+  const id = String(req.params.id || '');
+  const token = String((commit ? req.body?.t : req.query.t) ?? '');
+  res.set('Cache-Control', 'no-store');
+  try {
+    const out = commit ? await acceptProposedTime(id, token) : await readProposal(id, token);
+    if (out.status === 'invalid') { res.status(404).json({ error: 'Not found' }); return; }
+    if (out.status === 'gone') { res.status(409).json({ error: 'That time is no longer on offer' }); return; }
+    if (out.status === 'confirmed' && commit) inBackground('confirmed', id, () => notifyInterviewConfirmed(id));
+    res.json({ ok: true, status: out.status, talentSlug: out.talentSlug, startsAt: out.startsAt, minutes: out.minutes, format: out.format });
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'public_hire_proposal_failed', outcome: 'failure', error_class: err?.name || 'Error',
+      context: { commit, message: String(err?.message || '').slice(0, 200) },
+    }));
+    res.status(500).json({ error: 'Unable to load this just now' });
   }
 }
 
@@ -167,6 +199,8 @@ export function createHireRouter(): Router {
   const slotsLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
   router.get('/api/public/hire/talent/:slug/slots', slotsLimiter, getSlots);
   router.post('/api/public/hire/interviews', interviewLimiter, express.urlencoded({ extended: false, limit: '10kb' }), postInterview);
+  router.get('/api/public/hire/interviews/:id/proposal', slotsLimiter, (req, res) => proposal(req, res, false));
+  router.post('/api/public/hire/interviews/:id/accept', interviewLimiter, (req, res) => proposal(req, res, true));
   return router;
 }
 

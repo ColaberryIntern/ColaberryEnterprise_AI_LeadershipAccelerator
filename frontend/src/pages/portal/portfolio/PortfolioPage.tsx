@@ -42,12 +42,20 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'publishing', label: 'Publishing' },
 ];
 
+/** The tab a `?tab=` query names, when it names a real one; otherwise Overview. */
+export function initialTab(search: string): Tab {
+  const want = new URLSearchParams(search).get('tab');
+  return TABS.some((t) => t.key === want) ? (want as Tab) : 'overview';
+}
+
 type UiState = 'loading' | 'error' | 'gated' | 'loaded';
 
 const PortfolioPage: React.FC = () => {
   const [ui, setUi] = useState<UiState>('loading');
   const [profile, setProfile] = useState<CareerProfile | null>(null);
-  const [tab, setTab] = useState<Tab>('overview');
+  // `?tab=hire` opens a tab directly: the interview emails link to the Hire profile tab.
+  // A query, not a hash, because Gmail drops `#` fragments from links.
+  const [tab, setTab] = useState<Tab>(() => initialTab(window.location.search));
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const load = useCallback(() => {

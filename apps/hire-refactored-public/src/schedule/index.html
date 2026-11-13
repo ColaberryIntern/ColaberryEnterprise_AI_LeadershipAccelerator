@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Schedule an interview · Hire · Refactored.ai</title>
+  <!-- ALWAYS noindex (kit non-negotiable): a booking page is never a search result. nginx
+       also sends X-Robots-Tag for this route, so the rule holds even before this parses. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="/assets/tokens.css" />
+  <link rel="stylesheet" href="/assets/hire.css" />
+  <link rel="stylesheet" href="/assets/portfolio.css" />
+  <link rel="stylesheet" href="/assets/schedule.css" />
+  <link rel="stylesheet" href="/assets/motion.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <!-- Without JavaScript nothing loads, so the loading line must not claim otherwise. -->
+  <noscript><style>#booting{display:none}</style></noscript>
+</head>
+<body data-api="{{brand.platformApiBase}}" data-site="hire-refactored" data-view="schedule">
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="masthead">
+    <div class="wrap bar">
+      <a class="logo" href="/" aria-label="Hire · Refactored.ai home">
+        <svg class="mark" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Refactored<span class="faint">.ai</span><span class="sub">hire</span>
+      </a>
+      <span class="spacer"></span>
+      <nav class="nav" aria-label="Main">
+        <button type="button" class="link" id="themeBtn" aria-label="Toggle light or dark theme">◐</button>
+        <a href="/" id="back" class="back" aria-label="Back to profile">← Back<span class="hide-sm"> to profile</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1" class="wrap sched">
+    <div class="label">Schedule an interview</div>
+    <h1 class="mono">Talk to the person who shipped it.</h1>
+    <ol class="steps" id="steps" aria-label="Progress" hidden></ol>
+    <div class="p-cols">
+      <section class="card panel" id="panel" aria-label="Booking">
+        <p class="lede" id="booting">Loading open times…</p>
+        <noscript>
+          <p class="lede">Picking a time needs JavaScript. You can still <a href="/intro/">request an intro</a>, and the Colaberry team will set it up.</p>
+        </noscript>
+      </section>
+      <aside class="side">
+        <div class="card summary">
+          <div class="who" id="who"></div>
+          <dl id="sum"></dl>
+        </div>
+        <div class="card note">
+          <b>How interviews work here</b>
+          Booking, the call and follow-up all happen on Refactored. No emails or phone numbers are exchanged until both sides want to continue.
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>Refactored.ai · Hire: interviews are held in Refactored, with the Colaberry team copied.</span>
+    </div>
+  </footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/assets/common.js" defer></script>
+  <script src="/assets/page.js" defer></script>
+  <script src="/assets/profile-extras.js" defer></script>
+  <script src="/assets/schedule-model.js" defer></script>
+  <script src="/assets/schedule.js" defer></script>
+  <script src="/assets/track-v2.js" data-site="{{brand.sourceSlug}}" data-api="{{brand.platformApiBase}}" defer></script>
+</body>
+</html>

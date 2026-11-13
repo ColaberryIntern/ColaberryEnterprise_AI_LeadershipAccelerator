@@ -5,6 +5,10 @@
 jest.mock('../../services/hire/hireTalentDirectory', () => ({ getHireTalentDirectory: jest.fn() }));
 jest.mock('../../services/hire/hireIntro', () => ({ requestHireIntro: jest.fn() }));
 jest.mock('../../services/hire/hireInterviews', () => ({ talentSlots: jest.fn(), requestInterview: jest.fn() }));
+jest.mock('../../services/hire/hireInterviewAccept', () => ({ readProposal: jest.fn(), acceptProposedTime: jest.fn() }));
+jest.mock('../../services/hire/hireInterviewNotify', () => ({
+  inBackground: jest.fn(), notifyInterviewRequested: jest.fn(), notifyInterviewConfirmed: jest.fn(),
+}));
 
 import express from 'express';
 import request from 'supertest';

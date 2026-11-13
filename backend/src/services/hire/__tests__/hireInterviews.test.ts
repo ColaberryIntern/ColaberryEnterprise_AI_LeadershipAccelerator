@@ -26,9 +26,9 @@ const MON_9 = '2026-11-16T15:00:00.000Z'; // Mon 16 Nov, 9:00 CST
 function db({ held = [] as unknown[], dupe = false } = {}) {
   q.mockImplementation(async (sql: string) => {
     if (/pg_advisory_xact_lock/.test(sql)) return [[]];
-    if (/SELECT id FROM hire_interviews/.test(sql)) return [dupe ? [{ id: 'x' }] : []];
+    if (/SELECT id, status FROM hire_interviews/.test(sql)) return [dupe ? [{ id: 'x', status: 'requested' }] : []];
     if (/SELECT starts_at, minutes/.test(sql)) return [held];
-    if (/INSERT INTO hire_interviews/.test(sql)) return [[]];
+    if (/INSERT INTO hire_interviews/.test(sql)) return [[{ id: 'new-id' }]];
     throw new Error('unexpected SQL: ' + sql);
   });
 }
@@ -95,7 +95,7 @@ describe('bookingSummary - the profile card', () => {
 describe('requestInterview - POST /interviews', () => {
   it('records an open slot as requested, under a per-candidate lock, and returns no contact detail', async () => {
     const out = await requestInterview(body(), NOW);
-    expect(out).toEqual({ status: 'created', http: 201, startsAt: MON_9, minutes: 20, format: 'intro' });
+    expect(out).toEqual({ status: 'created', http: 201, id: 'new-id', confirmed: false, startsAt: MON_9, minutes: 20, format: 'intro' });
     expect(q.mock.calls[0][0]).toMatch(/pg_advisory_xact_lock/);
     expect(q.mock.calls[0][1].bind).toEqual([`hire_interviews:${E1}`]);
     const [, opts] = inserts()[0];
@@ -116,8 +116,18 @@ describe('requestInterview - POST /interviews', () => {
 
   it('answers duplicate, and writes nothing, when the same employer asks for the same slot again', async () => {
     db({ dupe: true });
-    expect((await requestInterview(body(), NOW)).status).toBe('duplicate');
+    expect(await requestInterview(body(), NOW)).toMatchObject({ status: 'duplicate', id: 'x', confirmed: false });
     expect(inserts()).toHaveLength(0);
+  });
+
+  it('books straight in as confirmed when the candidate set auto-confirm, and as requested otherwise', async () => {
+    expect(inserts()).toHaveLength(0);
+    await requestInterview(body(), NOW);
+    expect(inserts()[0][1].bind[13]).toBe('requested');
+    avail.mockResolvedValueOnce({ ...OPEN, autoConfirm: true });
+    const out = await requestInterview(body(), NOW);
+    expect(out).toMatchObject({ status: 'created', confirmed: true });
+    expect(inserts()[1][1].bind[13]).toBe('confirmed');
   });
 
   it('refuses a time that is not open: off-grid, inside the notice, or already held', async () => {

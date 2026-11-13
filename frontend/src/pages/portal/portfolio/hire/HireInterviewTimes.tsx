@@ -114,8 +114,12 @@ const HireInterviewTimes: React.FC<Props> = ({ loaded, onSaved, onRetry }) => {
         </label>
       </div>
 
-      {/* "Confirm automatically" (kit §3.4) is stored by the API but has no effect until the
-          confirmation emails ship with the schedule page, so it is not offered yet. */}
+      {/* Kit §3.4. On: a booking is confirmed the moment it is made, and both sides get the
+          calendar invite with the room link straight away. Off: it waits for Accept. */}
+      <label className="hs-check-row">
+        <input type="checkbox" checked={a.autoConfirm} onChange={(e) => setA({ ...a, autoConfirm: e.target.checked })} data-testid="hs-auto" />
+        <span>Confirm bookings automatically (otherwise each one waits for you to accept it)</span>
+      </label>
 
       <div className="hs-actions">
         <button type="button" className="cp-btn cp-btn-primary" disabled={busy} onClick={save} data-testid="hs-times-save">Save</button>

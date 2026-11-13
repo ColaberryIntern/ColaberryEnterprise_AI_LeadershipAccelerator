@@ -8,6 +8,12 @@ jest.mock('../../services/hire/hireStudioSettings', () => {
   const actual = jest.requireActual('../../services/hire/hireStudioSettings');
   return { ...actual, readHireIntro: jest.fn(), writeHireIntro: jest.fn(), readAvailability: jest.fn(), writeAvailability: jest.fn(), readCaseStudyOrder: jest.fn(), writeCaseStudyOrder: jest.fn() };
 });
+jest.mock('../../services/hire/hireInterviewNotify', () => ({
+  inBackground: jest.fn((_what: string, _id: string, run: () => Promise<void>) => { void run(); }),
+  notifyInterviewConfirmed: jest.fn().mockResolvedValue(undefined),
+  notifyInterviewDeclined: jest.fn().mockResolvedValue(undefined),
+  notifyInterviewProposed: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../../services/hire/hireInterviewInbox', () => {
   const actual = jest.requireActual('../../services/hire/hireInterviewInbox');
   return { ...actual, listMyInterviews: jest.fn(), actOnInterview: jest.fn() };
@@ -18,6 +24,7 @@ import { sequelize } from '../../config/database';
 import { loadHireIndex } from '../../services/hire/hireTalentIndex';
 import * as settings from '../../services/hire/hireStudioSettings';
 import * as inbox from '../../services/hire/hireInterviewInbox';
+import * as notify from '../../services/hire/hireInterviewNotify';
 import {
   handleActOnHireInterview, handleGetCaseStudyOrder, handleListHireInterviews, handlePutCaseStudyOrder, handlePutHireIntro, handlePutInterviewAvailability,
 } from '../hireStudioController';
@@ -80,6 +87,18 @@ it('lists and acts on interviews as the session enrollment, and 404s an unknown 
   await call(handleActOnHireInterview, {}, { id: 'abc', action: 'confirm' });
   expect(inbox.actOnInterview).toHaveBeenCalledWith(ME, 'abc', 'confirm', {});
   expect((await call(handleActOnHireInterview, {}, { id: 'abc', action: 'delete' })).res.statusCode).toBe(404);
+});
+
+it('tells the other side after each decision is stored, and nobody when it failed', async () => {
+  for (const [status, fn] of [['confirmed', notify.notifyInterviewConfirmed], ['declined', notify.notifyInterviewDeclined], ['rescheduled', notify.notifyInterviewProposed]] as const) {
+    m(inbox.actOnInterview).mockResolvedValueOnce({ id: 'abc', status });
+    await call(handleActOnHireInterview, {}, { id: 'abc', action: 'confirm' });
+    expect(fn).toHaveBeenCalledWith('abc');
+  }
+  jest.clearAllMocks();
+  m(inbox.actOnInterview).mockRejectedValueOnce(new settings.StudioError('Cannot confirm', 409, 'InvalidTransition'));
+  await call(handleActOnHireInterview, {}, { id: 'abc', action: 'confirm' });
+  expect(notify.inBackground).not.toHaveBeenCalled();
 });
 
 it('passes a service status straight through (409 stays 409)', async () => {

@@ -18,6 +18,15 @@ import {
   readHireIntro, writeAvailability, writeCaseStudyOrder, writeHireIntro,
 } from '../services/hire/hireStudioSettings';
 import { actOnInterview, INBOX_ACTIONS, listMyInterviews, type InboxAction } from '../services/hire/hireInterviewInbox';
+import {
+  inBackground, notifyInterviewConfirmed, notifyInterviewDeclined, notifyInterviewProposed,
+} from '../services/hire/hireInterviewNotify';
+
+const NOTIFY_ON: Record<string, ((id: string) => Promise<void>) | undefined> = {
+  confirmed: (id) => notifyInterviewConfirmed(id),
+  declined: notifyInterviewDeclined,
+  rescheduled: notifyInterviewProposed,
+};
 
 const eid = (req: Request) => req.participant!.sub;
 
@@ -105,6 +114,11 @@ export async function handleActOnHireInterview(req: Request, res: Response, next
   const action = String(req.params.action || '') as InboxAction;
   if (!INBOX_ACTIONS.includes(action)) { res.status(404).json({ error: 'Not found' }); return; }
   try {
-    res.json({ ok: true, interview: await actOnInterview(eid(req), String(req.params.id || ''), action, req.body) });
+    const interview = await actOnInterview(eid(req), String(req.params.id || ''), action, req.body);
+    // Tell the other side once the decision is stored. A repeat of the same decision reaches
+    // here too, and the send ledger makes it a no-op, so no "did it change" bookkeeping is needed.
+    const notify = NOTIFY_ON[interview.status];
+    if (notify) inBackground(interview.status, interview.id, () => notify(interview.id));
+    res.json({ ok: true, interview });
   } catch (e) { fail(res, e, next); }
 }
