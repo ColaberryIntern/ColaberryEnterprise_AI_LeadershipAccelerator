@@ -1,4 +1,19 @@
-import { openTabForJoin } from '../openTabForJoin';
+import { joinFailureMessage, openTabForJoin } from '../openTabForJoin';
+
+describe('joinFailureMessage says why, when the server said why', () => {
+  it('surfaces the server error (the read-only view-as 403 from 2026-11-13)', () => {
+    const err = { response: { status: 403, data: { error: 'Read-only view - actions are disabled while viewing as this member.' } } };
+    expect(joinFailureMessage(err)).toBe('Read-only view - actions are disabled while viewing as this member.');
+  });
+  it.each([
+    ['a network error with no response', new Error('Network Error')],
+    ['an empty server message', { response: { data: { error: '   ' } } }],
+    ['a non-string error field', { response: { data: { error: { code: 1 } } } }],
+    ['null', null],
+  ])('falls back to the generic line for %s', (_label, err) => {
+    expect(joinFailureMessage(err)).toBe('Could not join the video room. Please try again.');
+  });
+});
 
 /**
  * AF12.x — a blocked meeting tab must be DETECTED, and the tab must be reserved inside the tap.

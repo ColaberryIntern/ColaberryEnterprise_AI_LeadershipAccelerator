@@ -99,9 +99,31 @@ export function wallDoors(h: Hallway, max = MAX_DOORS): WallDoor[] {
 /** Rooms with a meeting actually running. */
 export const liveRooms = (h: Hallway): Omit<Door, 'n'>[] => orderedDoors(h).filter((d) => d.state === 'live');
 
-/** Rooms worth a row on the board: a meeting is running, one is scheduled, or people are present. */
-export const boardRooms = (h: Hallway): Omit<Door, 'n'>[] =>
-  orderedDoors(h).filter((d) => d.state === 'live' || d.state === 'in_session' || d.state === 'occupied');
+/** A meeting is running or the timetable has one due: the room people were told to be in. */
+const isEventDoor = (d: Pick<Door, 'state'>): boolean => d.state === 'live' || d.state === 'in_session';
+
+/**
+ * Rooms worth a row on the board: a meeting is running, one is scheduled, or people are present.
+ *
+ * ONE EVENT, ONE JOIN (2026-11-13, AI Friday). While a session is live or due, the
+ * board lists only those rooms. Listing an occupied side room ("Help Session") with
+ * its own red Join next to the event made people ask which one was the class.
+ */
+export function boardRooms(h: Hallway): Omit<Door, 'n'>[] {
+  const rows = orderedDoors(h).filter((d) => isEventDoor(d) || d.state === 'occupied');
+  return rows.some(isEventDoor) ? rows.filter(isEventDoor) : rows;
+}
+
+/** True while any room has a meeting running or a session due. */
+export const eventInProgress = (h: Hallway): boolean => orderedDoors(h).some(isEventDoor);
+
+/**
+ * Should THIS row carry a Join button, given everything else in the hallway? While an
+ * event is on, only its room does; an occupied side room keeps its row but loses
+ * the competing button (its door still opens it). See boardRooms.
+ */
+export const showJoin = (d: Pick<Door, 'state'>, eventOn: boolean): boolean =>
+  canJoin(d) && (!eventOn || isEventDoor(d));
 
 /** Rooms the timetable has claimed, soonest first. */
 export const sessionRooms = (h: Hallway): Omit<Door, 'n'>[] =>

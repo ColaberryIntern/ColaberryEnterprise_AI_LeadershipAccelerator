@@ -49,6 +49,17 @@ export type JoinOutcome =
   | { status: 'failed'; error: unknown };
 
 /**
+ * What to tell the person when a join request failed. The server's own explanation wins
+ * when it sent one (a read-only "view as" session, not entitled, room gone); otherwise
+ * a generic line. Found 2026-11-13: an admin in view-as mode saw "Could not join the
+ * video room." for a 403 that said exactly why, and took it for a broken room mid-class.
+ */
+export function joinFailureMessage(error: unknown, fallback = 'Could not join the video room. Please try again.'): string {
+  const apiMsg = (error as { response?: { data?: { error?: unknown } } } | null)?.response?.data?.error;
+  return typeof apiMsg === 'string' && apiMsg.trim() ? apiMsg.trim() : fallback;
+}
+
+/**
  * Reserve a tab NOW, resolve the link, then point the tab at it.
  *
  * @param resolveUrl runs after the tab is reserved. Returns the join link, or null/'' when there
