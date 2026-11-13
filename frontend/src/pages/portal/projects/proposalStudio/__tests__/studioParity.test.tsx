@@ -503,7 +503,7 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
 
   // Connected-repo display (Phase A): the intern (readOnly) sees the connected repo read-only and NEVER a demo-URL
   // input — even though the read-only reviewApi still defines setDemoUrl. The admin (readOnly=false) keeps its input.
-  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records', files: ['src/App.tsx', 'README.md', 'docs/plan.pdf'], fileCount: 3, syncedAt: '2026-11-13T00:00:00.000Z', deliverables: [{ path: 'docs/plan.pdf', name: 'plan.pdf', kind: 'pdf' }, { path: 'README.md', name: 'README.md', kind: 'text' }] } } as unknown as StudentGovProjectView;
+  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records', files: ['src/App.tsx', 'media/demo.mp4', 'docs/plan.pdf'], fileCount: 3, syncedAt: '2026-11-13T00:00:00.000Z', deliverables: [{ path: 'docs/plan.pdf', name: 'plan.pdf', kind: 'pdf' }, { path: 'media/demo.mp4', name: 'demo.mp4', kind: 'video' }] } } as unknown as StudentGovProjectView;
   const noRepo = { ...VIEW, connectedRepo: null } as unknown as StudentGovProjectView;
 
   it('admin (not readOnly) keeps the demo-URL input and shows no connected-repo line', async () => {
@@ -534,24 +534,34 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
     const cards = container.querySelectorAll('[data-testid="ev-repo-card"]');
     expect(cards.length).toBe(2);
     // typed by kind, so a per-type viewer can open; source files are not carded (only the 2 deliverables)
-    expect(Array.from(cards).map((c) => c.getAttribute('data-kind')).sort()).toEqual(['pdf', 'text']);
+    expect(Array.from(cards).map((c) => c.getAttribute('data-kind')).sort()).toEqual(['pdf', 'video']);
   });
 
-  it('opening a card opens the per-type viewer and fetches that file via the studio api', async () => {
-    const fetchRepoFile = jest.fn().mockResolvedValue(new Blob(['# Readme'], { type: 'text/markdown' }));
-    const studioApi = { fetchRepoFile } as unknown as GovStudioApi;
-    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} studioApi={studioApi} onReload={noop} onToast={noop} readOnly />);
-    const textCard = container.querySelector('[data-testid="ev-repo-card"][data-kind="text"]') as HTMLElement;
-    await act(async () => { textCard.click(); });
-    expect(present('ev-repo-viewer')).toBe(true);
-    expect(fetchRepoFile).toHaveBeenCalledWith('p1', 'README.md', undefined);
+  it('opening a video card opens the inline player and fetches that file via the studio api', async () => {
+    // jsdom has no URL.createObjectURL, so assign (not spyOn) and restore after.
+    const u = URL as unknown as { createObjectURL?: unknown; revokeObjectURL?: unknown };
+    const origCreate = u.createObjectURL; const origRevoke = u.revokeObjectURL;
+    u.createObjectURL = jest.fn(() => 'blob:mock'); u.revokeObjectURL = jest.fn();
+    try {
+      const fetchRepoFile = jest.fn().mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' }));
+      const studioApi = { fetchRepoFile } as unknown as GovStudioApi;
+      await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} studioApi={studioApi} onReload={noop} onToast={noop} readOnly />);
+      const videoCard = container.querySelector('[data-testid="ev-repo-card"][data-kind="video"]') as HTMLElement;
+      await act(async () => { videoCard.click(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(present('ev-repo-viewer')).toBe(true);
+      expect(fetchRepoFile).toHaveBeenCalledWith('p1', 'media/demo.mp4', undefined);
+      expect(container.querySelector('[data-testid="ev-repo-viewer"] video')).not.toBeNull();
+    } finally {
+      u.createObjectURL = origCreate; u.revokeObjectURL = origRevoke;
+    }
   });
 
   it('a card whose fetch fails shows an error in the viewer (not a blank frame)', async () => {
     const fetchRepoFile = jest.fn().mockRejectedValue(new Error('network'));
     const studioApi = { fetchRepoFile } as unknown as GovStudioApi;
     await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} studioApi={studioApi} onReload={noop} onToast={noop} readOnly />);
-    await act(async () => { (container.querySelector('[data-testid="ev-repo-card"][data-kind="text"]') as HTMLElement).click(); });
+    await act(async () => { (container.querySelector('[data-testid="ev-repo-card"][data-kind="video"]') as HTMLElement).click(); });
     await act(async () => { await Promise.resolve(); });
     expect(present('ev-repo-viewer')).toBe(true);
     expect(container.querySelector('[data-testid="ev-repo-viewer"]')?.textContent).toMatch(/could not load/i);

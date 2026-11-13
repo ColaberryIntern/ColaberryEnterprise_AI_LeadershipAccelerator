@@ -2,12 +2,12 @@ import portalApi from '../utils/portalApi';
 import type { QualRequirementEval, GovQualificationWorkspace, GovOpportunity, SnapshotReason } from './factoryApi';
 import type { ArtifactFileKind } from './artifactViewerTypes';
 
-/** One deliverable DOCUMENT in the connected repo, classified for the card + per-type viewer.
- *  Mirrors backend RepoDeliverable (factory/repoDeliverables.ts). `html` renders in a sandboxed iframe. */
+/** One deliverable DOCUMENT or video in the connected repo, classified for the card + per-type viewer.
+ *  Mirrors backend RepoDeliverable (factory/repoDeliverables.ts). `video` renders in an inline player. */
 export interface GovRepoDeliverable {
   path: string;
   name: string;
-  kind: ArtifactFileKind | 'html';
+  kind: ArtifactFileKind | 'video';
 }
 
 /** The opportunity-detail shape the admin page reads — reused verbatim so the intern renders the identical component.

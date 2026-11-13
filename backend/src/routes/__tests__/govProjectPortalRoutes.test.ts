@@ -468,11 +468,12 @@ describe('intern authoring routes (B.9) — EDIT share lets the intern author + 
 describe('GET /api/portal/gov-projects/:projectId/repo-file (live deliverable content, allowlist-gated)', () => {
   const REPO = {
     owner: 'ColaberryIntern', name: 'crash', url: 'u',
-    files: ['docs/plan.pdf', 'server/auth.js', 'README.md'],
-    fileCount: 3, syncedAt: null,
+    files: ['docs/plan.pdf', 'server/auth.js', 'proposal.docx', 'media/demo.mp4'],
+    fileCount: 4, syncedAt: null,
     deliverables: [
       { path: 'docs/plan.pdf', name: 'plan.pdf', kind: 'pdf' },
-      { path: 'README.md', name: 'README.md', kind: 'text' },
+      { path: 'proposal.docx', name: 'proposal.docx', kind: 'word' },
+      { path: 'media/demo.mp4', name: 'demo.mp4', kind: 'video' },
     ],
   };
   beforeEach(() => {
@@ -489,11 +490,21 @@ describe('GET /api/portal/gov-projects/:projectId/repo-file (live deliverable co
     expect(fetchRepoFileRaw).toHaveBeenCalledWith('ColaberryIntern', 'crash', 'docs/plan.pdf');
   });
 
-  it('a text deliverable is served as an attachment (never renders on our origin)', async () => {
-    fetchRepoFileRaw.mockResolvedValue(Buffer.from('# Readme'));
-    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'README.md' });
+  it('a Word deliverable is served as an attachment (download), never inline', async () => {
+    fetchRepoFileRaw.mockResolvedValue(Buffer.from('PK word bytes'));
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'proposal.docx' });
     expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('wordprocessingml.document');
     expect(res.headers['content-disposition']).toContain('attachment');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('a video deliverable is served inline with a video mime (for the player)', async () => {
+    fetchRepoFileRaw.mockResolvedValue(Buffer.from('\x00\x00\x00\x18ftypmp4'));
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'media/demo.mp4' });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('video/mp4');
+    expect(res.headers['content-disposition']).toContain('inline');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
   });
 
