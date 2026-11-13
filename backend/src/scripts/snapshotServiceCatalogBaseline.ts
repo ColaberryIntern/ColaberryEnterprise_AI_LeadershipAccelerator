@@ -95,7 +95,9 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({ event: 'svc_baseline_written', outcome: 'success', files: written }));
     console.log(`catalog_rows=${all.length} active=${active.length} pursuits=${pursuitCount}`);
   } finally {
-    await sequelize.close();
+    // Flush the fire-and-forget ai_event rows from the fit calls BEFORE closing the pool (see flushThenClose).
+    const { flushThenClose } = await import('./lib/flushThenClose');
+    await flushThenClose(() => sequelize.close());
   }
 }
 
