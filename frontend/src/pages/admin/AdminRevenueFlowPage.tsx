@@ -7,6 +7,7 @@ import FlowTimeline, {
   TimelineEvent,
 } from '../../components/admin/revenueFlow/FlowTimeline';
 import FlowTableView from '../../components/admin/revenueFlow/FlowTableView';
+import BidPricingPanel, { FlaggedBid } from '../../components/admin/revenueFlow/BidPricingPanel';
 import { TONE, paintFor, streamPaint } from '../../components/admin/revenueFlow/flowTokens';
 
 /**
@@ -52,6 +53,8 @@ interface Stream {
   provenance: string;
   caveat: string | null;
   drillDownKey: string | null;
+  /** Populated only for the government stream; see FlaggedBid on the backend. */
+  bids?: FlaggedBid[];
 }
 
 interface Board {
@@ -104,6 +107,10 @@ export default function AdminRevenueFlowPage() {
   const [error, setError] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('');
   const [showTable, setShowTable] = useState(false);
+  // Bumped after a price lands. The headline, the funnel and the unpriced count are all
+  // derived server-side, so a local mutation would have to re-derive four numbers; a refetch
+  // keeps one source of truth.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -111,7 +118,7 @@ export default function AdminRevenueFlowPage() {
       .then((r) => { if (alive) setBoard(r.data?.data ?? null); })
       .catch((e) => { if (alive) setError(e?.message || 'Could not load the Revenue Flow board.'); });
     return () => { alive = false; };
-  }, []);
+  }, [reload]);
 
   const classMap = useMemo(() => {
     const m: Record<string, TimelineClassification> = {};
@@ -136,6 +143,7 @@ export default function AdminRevenueFlowPage() {
   }
 
   const h = board.headline;
+  const govBids = board.streams.find((s) => s.key === 'gov_pipeline')?.bids ?? [];
 
   return (
     <div className="container py-4" data-testid="revenue-flow">
@@ -333,6 +341,11 @@ export default function AdminRevenueFlowPage() {
             </div>
           </div>
         ))}
+
+      {/* ── THE CONTROL THAT MAKES THE PIPELINE REAL ─────────────────────────────────── */}
+      {govBids.length > 0 && (
+        <BidPricingPanel bids={govBids} onPriced={() => setReload((v) => v + 1)} />
+      )}
 
       {/* ── EVERY DATED EVENT ────────────────────────────────────────────────────────── */}
       <div className="card border-0 shadow-sm mb-4">

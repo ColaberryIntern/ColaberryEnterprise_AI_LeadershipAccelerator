@@ -87,6 +87,53 @@ export interface RevenueStream {
   caveat: string | null;
   /** The existing Revenue Room drill-down this stream opens into. */
   drillDownKey: string | null;
+  /**
+   * The individual bids behind the government stream, so the page can offer a price control
+   * next to the count of unpriced ones.
+   *
+   * Populated ONLY for `gov_pipeline`; undefined elsewhere. A stream-shaped union would have
+   * been tidier in the abstract and worse here: membership has no equivalent list (a
+   * subscription roster already exists on its own page), so a mandatory field would have
+   * forced an empty array that reads as "no members".
+   */
+  bids?: FlaggedBid[];
+}
+
+/**
+ * One bid carrying the pursuit flag, as the pricing control needs it.
+ *
+ * ── WHY BOTH IDS TRAVEL ──────────────────────────────────────────────────────────────────
+ *
+ * `deliveryProjectId` is what `gov_bid_values` is keyed on, so it is what a price is written
+ * against. `canonicalOpportunityId` is what the EXISTING, tested outcome route is keyed on
+ * (`POST /api/admin/factory/qualification/:canonicalOpportunityId/outcome`).
+ *
+ * The page needs both because it does two different things with them, and it does not
+ * duplicate the second: recording a win or a loss stays on the route that already owns it,
+ * behind its own `requireSection('program')` gate, and this surface links there. Pricing is
+ * revenue work and is written here; outcome is program work and is not. Re-implementing a
+ * tested write path to save a click is how two code paths start disagreeing about whether
+ * something was submitted.
+ */
+export interface FlaggedBid {
+  deliveryProjectId: string;
+  /** Null when the qualification row has no canonical id, which makes the outcome link unavailable. */
+  canonicalOpportunityId: string | null;
+  name: string;
+  /** Derived from the row itself: a test row, a duplicate title, no delivery project. */
+  flags: string[];
+  /** The live price, or null when nobody has set one. */
+  priced: {
+    cents: number;
+    display: string;
+    periodMonths: number | null;
+    basisSource: string;
+    valueBasis: string;
+    confirmedBy: string;
+    confirmedAt: string;
+  } | null;
+  /** The recorded outcome, straight from gov_submission. 'pending' when no row exists. */
+  outcome: string;
 }
 
 /**

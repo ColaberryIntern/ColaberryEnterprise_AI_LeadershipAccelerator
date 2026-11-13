@@ -43,7 +43,7 @@ import { sequelize } from '../../config/database';
 import { TileStatus } from '../commercialization/commercializationTiles';
 import { getLiveBidValues, annualizedCents, BidValue } from './govBidValueService';
 import {
-  FlowEvent, FunnelStage, Money, RevenueStream, money, noMoney, formatCents,
+  FlaggedBid, FlowEvent, FunnelStage, Money, RevenueStream, money, noMoney, formatCents,
 } from './revenueFlowTypes';
 
 /** True when the table exists. A missing table is not an empty one. */
@@ -58,6 +58,7 @@ async function tableExists(name: string): Promise<boolean> {
 
 interface FlaggedRow {
   delivery_project_id: string | null;
+  canonical_opportunity_id: string | null;
   project_name: string | null;
   flagged_at: string;
 }
@@ -155,6 +156,7 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
 
   const flagged = await sequelize.query<FlaggedRow>(
     `SELECT q.delivery_project_id,
+            q.canonical_opportunity_id,
             p.name AS project_name,
             q.created_at::text AS flagged_at
        FROM gov_qualifications q
@@ -357,6 +359,45 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
   const unpricedBids = flaggedWithProject
     .filter((r) => !pricedProjects.has(r.delivery_project_id as string)).length;
 
+  // ── THE BIDS THEMSELVES, so the page can offer a price control next to the gap ────────
+  //
+  // Unpriced first, then by flag count. A reader who opens this is here to fix the gap, so
+  // the rows that need fixing are the rows at the top. Secondary ordering by flag count puts
+  // the test row and the duplicate near the unpriced ones, which is where someone deciding
+  // what to price wants them: those are the rows to NOT price.
+  const bids: FlaggedBid[] = flagged
+    .filter((r) => r.delivery_project_id)
+    .map((r) => {
+      const pid = r.delivery_project_id as string;
+      const v = valueByProject.get(pid) ?? null;
+      const sub = subByProject.get(pid);
+      return {
+        deliveryProjectId: pid,
+        canonicalOpportunityId: r.canonical_opportunity_id,
+        name: (r.project_name ?? '').trim() || '(unnamed project)',
+        flags: suspectReasons(r, titleCounts),
+        priced: v
+          ? {
+            cents: v.proposalValueCents,
+            display: formatCents(v.proposalValueCents, v.currency),
+            periodMonths: v.periodMonths,
+            basisSource: v.basisSource,
+            valueBasis: v.valueBasis,
+            confirmedBy: v.confirmedBy,
+            confirmedAt: v.confirmedAt,
+          }
+          : null,
+        // 'pending' is the column's own default and the honest answer when no submission row
+        // exists at all: nothing has been decided, which is different from a decision of
+        // "unknown".
+        outcome: sub?.outcome ?? 'pending',
+      };
+    })
+    .sort((a, b) => {
+      if ((a.priced === null) !== (b.priced === null)) return a.priced === null ? -1 : 1;
+      return b.flags.length - a.flags.length;
+    });
+
   const docProjects = new Set(docs.map((d) => d.delivery_project_id));
   const exportedCount = submissions.filter((s) => s.exported_at).length;
   const submittedCount = submissions.filter((s) => s.externally_submitted_at).length;
@@ -493,6 +534,7 @@ export async function buildGovFlow(windowStart: Date): Promise<GovFlow> {
         + 'Every stage is a column that exists; none is inferred.',
       caveat: caveatParts.length ? caveatParts.join(' ') : null,
       drillDownKey: 'gov_bid_pursuit',
+      bids,
     },
     events,
     openPricedCents,
