@@ -15,7 +15,7 @@ const MAX_ARRAY = 50;
 const MAX_ITEM = 60;
 
 /** Coerce arbitrary input into a clean, bounded string[] (trimmed, non-empty, de-duped, capped). null when empty. */
-function toStrArray(v: unknown): string[] | null {
+export function toStrArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
   const out: string[] = [];
   for (const x of v) {

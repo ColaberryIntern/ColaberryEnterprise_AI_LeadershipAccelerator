@@ -55,6 +55,8 @@ export const strategyPrepUpload = multer({
 });
 
 export { UPLOAD_DIR };
+/** The 50 MB per-document cap, reused by the outside case-study intake (config/caseStudyExternalUpload.ts). */
+export { MAX_FILE_SIZE as DOCUMENT_UPLOAD_MAX_BYTES };
 
 // ── Build Artifact(s) Lab — documents PLUS the recordings the labs now ask for ─
 //

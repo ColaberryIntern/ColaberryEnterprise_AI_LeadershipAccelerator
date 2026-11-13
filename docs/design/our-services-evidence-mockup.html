@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Our Services — Evidence-Backed Catalog (Concept)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<style>
+:root{
+  --red:#e3262f; --red-50:#fdecec; --red-100:#f9d0d2;
+  --ink:#16181d; --ink-2:#4a4f5a; --ink-3:#8a8f99;
+  --line:#e7e8ec; --bg:#f6f7f9; --card:#fff;
+  --green:#1f9d55; --green-50:#e6f6ec; --amber:#d98a00; --amber-50:#fff4dc;
+  --blue:#2563eb; --blue-50:#e8f0fe; --violet:#7c3aed; --violet-50:#f1eafe;
+  --teal:#0f9488; --teal-50:#e2f5f3;
+  --side:#1c1d21;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.45}
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+aside{background:var(--side);color:#cfd1d6;padding:18px 0;position:sticky;top:0;height:100vh;overflow:auto}
+aside .sec{font-size:11px;letter-spacing:.08em;font-weight:700;color:var(--red);padding:14px 20px 6px}
+aside .sec.grey{color:#7b7f88}
+aside a{display:flex;gap:10px;align-items:center;padding:9px 20px;color:#cfd1d6;text-decoration:none;font-weight:600;font-size:13.5px}
+aside a.on{background:#3a1416;color:#fff;border-left:3px solid var(--red);padding-left:17px}
+aside .new{margin-left:auto;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:9px}
+main{padding:26px 30px 60px;max-width:1500px}
+h1{font-size:26px;margin:0;display:flex;align-items:center;gap:10px}
+h2{font-size:17px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+.sub{color:var(--ink-2);margin:4px 0 0}
+.muted{color:var(--ink-3);font-size:12.5px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 12px;font:600 13px Inter;cursor:pointer;color:var(--ink);display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:#c9ccd3}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn.ghost-red{color:var(--red);border-color:var(--red-100)}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(6,1fr);margin:20px 0}
+.kpi{position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c,var(--red))}
+.kpi .l{font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--ink-2);text-transform:uppercase;display:flex;justify-content:space-between}
+.kpi .v{font-size:30px;font-weight:800;margin:6px 0 2px}
+.kpi .d{font-size:12px;color:var(--ink-3)}
+.kpi .spark{height:28px;margin-top:6px}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.p-in{background:var(--blue-50);color:var(--blue)}
+.p-out{background:var(--violet-50);color:var(--violet)}
+.p-green{background:var(--green-50);color:var(--green)}
+.p-amber{background:var(--amber-50);color:var(--amber)}
+.p-red{background:var(--red-50);color:var(--red)}
+.p-grey{background:#eef0f3;color:var(--ink-2)}
+.p-teal{background:var(--teal-50);color:var(--teal)}
+/* decision strip */
+.decide{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.dcard{border-radius:12px;padding:14px 16px;border:1px solid;display:flex;gap:12px;align-items:flex-start;cursor:pointer;transition:transform .12s}
+.dcard:hover{transform:translateY(-2px)}
+.dcard .e{font-size:26px;line-height:1}
+.dcard b{display:block;font-size:14px;margin-bottom:2px}
+.dcard span{font-size:12.5px;color:var(--ink-2)}
+.d-red{background:#fff5f5;border-color:var(--red-100)}
+.d-amber{background:#fffaf0;border-color:#f6dfaa}
+.d-blue{background:#f4f8ff;border-color:#cfdcfb}
+.d-green{background:#f3fbf6;border-color:#bfe7cd}
+.when{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-top:6px;display:block}
+/* tabs */
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.tabs button{border:0;background:none;padding:7px 13px;font:600 13px Inter;color:var(--ink-2);cursor:pointer;border-right:1px solid var(--line)}
+.tabs button:last-child{border-right:0}
+.tabs button.on{background:var(--ink);color:#fff}
+/* table */
+table{width:100%;border-collapse:collapse}
+th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);text-align:left;padding:10px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.svc{cursor:pointer}
+tr.svc:hover td{background:#fafbfc}
+tr.svc.open td{background:#fbf7f7}
+.sname{font-weight:700;font-size:14.5px;display:flex;gap:8px;align-items:center}
+.sdesc{color:var(--ink-2);font-size:12.5px;margin-top:2px;max-width:360px}
+.meter{width:120px;height:9px;background:#eef0f3;border-radius:6px;overflow:hidden;margin-top:5px}
+.meter i{display:block;height:100%;border-radius:6px}
+.ev{font-weight:800;font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:11px;background:#f1f2f5;border-radius:5px;padding:2px 6px;color:var(--ink-2)}
+.fresh{font-weight:700;font-size:12.5px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.detail td{background:#fbf7f7;padding:4px 18px 18px}
+.cs-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:8px}
+.cs{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.cs .thumb{height:78px;display:flex;align-items:center;justify-content:center;font-size:34px;position:relative}
+.cs .thumb .src{position:absolute;top:8px;left:8px}
+.cs .thumb .yr{position:absolute;top:8px;right:8px;background:rgba(255,255,255,.85);border-radius:5px;padding:1px 6px;font-size:11px;font-weight:700}
+.cs .b{padding:10px 12px}
+.cs .t{font-weight:700;font-size:13px;line-height:1.3}
+.cs .m{font-size:12px;color:var(--green);font-weight:700;margin-top:5px}
+.empty-ev{border:2px dashed var(--red-100);border-radius:10px;padding:16px;color:var(--red);font-weight:600;background:#fff}
+/* intake */
+.intake{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px;margin-top:12px}
+.ic{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.ic.locked{border-color:var(--red-100);box-shadow:0 0 0 3px #fdecec}
+.ic .h{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+.ic .h .e{font-size:30px;width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none}
+.ic .tt{font-weight:700}
+.ic .kw{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.ic .body{padding:12px 16px}
+.match{display:grid;grid-template-columns:20px 1fr 110px 44px;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.match:last-child{border-bottom:0}
+.match .bar{height:7px;background:#eef0f3;border-radius:4px;overflow:hidden}
+.match .bar i{display:block;height:100%}
+.match .pct{font-weight:700;font-size:12.5px;text-align:right}
+.ic .f{display:flex;gap:8px;padding:12px 16px;background:#fafbfc;border-top:1px solid var(--line);flex-wrap:wrap;align-items:center}
+.gate{font-size:12px;font-weight:700;color:var(--red);display:flex;align-items:center;gap:5px;margin-right:auto}
+.gate.ok{color:var(--green)}
+.newsvc{display:none;padding:12px 16px;border-top:1px solid var(--line);background:#fffaf0}
+.newsvc input{width:100%;padding:8px 10px;border:1px solid #e3d3a8;border-radius:7px;font:500 13px Inter;margin:6px 0}
+/* heatmap */
+.heat{border-collapse:separate;border-spacing:3px;font-size:12px}
+.heat th{border:0;font-size:11px;text-transform:none;letter-spacing:0;padding:4px;white-space:normal;text-align:center;vertical-align:bottom}
+.heat td{border:0;text-align:center;font-weight:700;border-radius:5px;padding:7px 4px;min-width:54px}
+.heat td.rl{text-align:left;font-weight:600;color:var(--ink);min-width:220px;background:none}
+.two{grid-template-columns:1.25fr 1fr}
+.three{grid-template-columns:1fr 1fr 1fr}
+.chartbox{position:relative;height:300px}
+.legend-row{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:8px}
+.legend-row span{display:flex;gap:5px;align-items:center}
+.gap{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.gap:last-child{border-bottom:0}
+.gap .e{font-size:24px}
+.banner{background:linear-gradient(90deg,#1c1d21,#3a1416);color:#fff;border-radius:12px;padding:16px 20px;display:flex;gap:16px;align-items:center;margin-top:18px}
+.banner .big{font-size:28px}
+.banner b{font-size:15px}
+.mermaid{background:#fff;text-align:center}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--ink);color:#fff;padding:12px 16px;border-radius:10px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25);transform:translateY(120px);transition:transform .25s;z-index:20;max-width:380px}
+.toast.show{transform:none}
+.concept{background:var(--amber-50);color:#8a5a00;border:1px solid #f1d79a;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600}
+section{margin-top:18px}
+.sechead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.stepper{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px}
+.step{background:#fafbfc;border:1px solid var(--line);border-radius:10px;padding:12px}
+.step .n{font-size:22px}
+.step b{display:block;margin:4px 0 2px;font-size:13.5px}
+.step span{font-size:12px;color:var(--ink-2)}
+@media (max-width:1200px){.kpis{grid-template-columns:repeat(3,1fr)}.decide{grid-template-columns:1fr 1fr}.two,.three{grid-template-columns:1fr}.stepper{grid-template-columns:1fr 1fr}}
+@media (max-width:800px){.app{grid-template-columns:1fr}aside{display:none}.intake{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="sec">PROGRAM</div>
+  <a href="#">🎓 Accelerator</a>
+  <a href="#">📡 Live Studio setup</a>
+  <a href="#">🧩 Curriculum</a>
+  <a href="#">🏢 AI Organization</a>
+  <a href="#">🗂️ My Domain</a>
+  <a href="#">🔀 Change Requests</a>
+  <a href="#">🛠️ Tool Requests</a>
+  <a href="#">🏭 Project Factory</a>
+  <a href="#">🏛️ Gov Opportunities</a>
+  <a href="#" class="on">❤️ Our Services</a>
+  <a href="#">📚 Case Studies <span class="new" id="sideOrphans">4</span></a>
+  <div class="sec grey">INTELLIGENCE</div>
+  <div class="sec grey">SYSTEM</div>
+</aside>
+
+<main>
+  <div class="top">
+    <div>
+      <h1>❤️ Our Services <span class="concept">CONCEPT · sample data</span></h1>
+      <p class="sub">Every service is backed by real work. Case studies, from projects we built (<span class="pill p-in">🏗️ Inside</span>) or from the Drive library (<span class="pill p-out">📁 Outside</span>), are the evidence the Gov matcher uses.</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn" onclick="jump('intake')">📥 Add outside case study</button>
+      <button class="btn red">＋ Add service</button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid kpis" id="kpis"></div>
+
+  <!-- Decide now -->
+  <h2>⚡ Decide now</h2>
+  <p class="muted" style="margin:0 0 10px">Sorted by urgency. Click a card to jump to it.</p>
+  <div class="decide">
+    <div class="dcard d-red" onclick="jump('intake')"><div class="e">🚫</div><div><b><span id="dOrph">4</span> case studies are blocked</b><span>They can't publish or count as evidence until each one is linked to a service.</span><span class="when" style="color:var(--red)">Today · gate is blocking</span></div></div>
+    <div class="dcard d-amber" onclick="jump('gaps')"><div class="e">⏱️</div><div><b>Harris County RFP: 2 gaps, 9 days left</b><span>MFA and Performance Monitoring are marked as new capabilities. Do we have case studies we never linked?</span><span class="when" style="color:var(--amber)">Before Nov 23</span></div></div>
+    <div class="dcard d-blue" onclick="jump('quad')"><div class="e">🎯</div><div><b><span id="dDem">2</span> services in demand without proof</b><span>Lots of open opportunities, little evidence. These are the next case studies to write.</span><span class="when" style="color:var(--blue)">This quarter</span></div></div>
+    <div class="dcard d-green" onclick="jump('catalog')"><div class="e">🌱</div><div><b><span id="dFresh">3</span> services need fresh proof</b><span>Their newest case study is more than a year old. Add a recent one so the match stays strong.</span><span class="when" style="color:var(--green)">Next 60 days</span></div></div>
+  </div>
+
+  <!-- How it works -->
+  <section class="card">
+    <div class="sechead">
+      <div><h2>🔁 How Our Services grows</h2><p class="muted" style="margin:0">Every case study has to land on a service, and every service has to earn its case studies. Gaps found in proposals feed back into the catalog.</p></div>
+      <div class="legend-row"><span><i class="dot" style="background:var(--blue)"></i>Inside</span><span><i class="dot" style="background:var(--violet)"></i>Outside</span><span><i class="dot" style="background:var(--red)"></i>Required gate</span></div>
+    </div>
+    <div class="stepper">
+      <div class="step"><div class="n">1️⃣</div><b>Capture</b><span>A Project Factory build finishes, or someone uploads a PDF from the Drive library.</span></div>
+      <div class="step"><div class="n">2️⃣</div><b>AI suggests services</b><span>Keywords, NAICS and tech stack are pulled out and scored against the catalog.</span></div>
+      <div class="step" style="border-color:var(--red-100);background:#fff8f8"><div class="n">🔒</div><b>Required: link it</b><span>Attach to one or more existing services, or propose a new one. Nothing publishes otherwise.</span></div>
+      <div class="step"><div class="n">📈</div><b>Evidence recalculated</b><span>Service score, freshness, industries and NAICS update automatically.</span></div>
+      <div class="step"><div class="n">🏛️</div><b>Better Gov fit</b><span>"Can we deliver it?" cites real case studies. Gaps become Growth services.</span></div>
+    </div>
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+<pre class="mermaid">
+flowchart LR
+  A["🏗️ Inside case study<br/>Project Factory"]:::inside --> G
+  B["📁 Outside case study<br/>Google Drive"]:::outside --> G
+  G{"🔒 Linked to<br/>a service?"}:::gate
+  G -- "Existing service" --> S["❤️ Our Services<br/>evidence updated"]:::svc
+  G -- "No fit" --> N["🌱 New Growth service<br/>admin review"]:::grow
+  N --> S
+  S --> M["🏛️ Can we deliver it?"]:::gov
+  M -- "We have it" --> P["📝 Proposal cites<br/>case studies"]:::svc
+  M -- "Partly / New" --> X["⚠️ Check for<br/>unlinked proof"]:::gap
+  X -. "Found it" .-> G
+  X -. "Real gap" .-> N
+  P --> W["🏆 Win and build"]:::svc
+  W -. "New case study" .-> A
+  classDef inside fill:#e8f0fe,stroke:#2563eb,color:#16181d
+  classDef outside fill:#f1eafe,stroke:#7c3aed,color:#16181d
+  classDef gate fill:#fdecec,stroke:#e3262f,color:#16181d,stroke-width:2px
+  classDef svc fill:#ffffff,stroke:#16181d,color:#16181d
+  classDef grow fill:#e6f6ec,stroke:#1f9d55,color:#16181d
+  classDef gov fill:#fff4dc,stroke:#d98a00,color:#16181d
+  classDef gap fill:#fff4dc,stroke:#e3262f,color:#16181d,stroke-dasharray:4 3
+</pre>
+    </div>
+  </section>
+
+  <!-- Charts row -->
+  <section class="grid two">
+    <div class="card">
+      <h2>📊 Evidence by service</h2>
+      <p class="muted" style="margin:0 0 8px">Case studies linked to each service, split by source. Sorted from weakest to strongest so the gaps sit at the top.</p>
+      <div class="chartbox" style="height:420px"><canvas id="cEvidence"></canvas></div>
+    </div>
+    <div class="card" id="quad">
+      <h2>🎯 Where to invest next</h2>
+      <p class="muted" style="margin:0 0 8px">Evidence strength vs. open Gov opportunities that match. Bubble size is the number of case studies.</p>
+      <div class="chartbox" style="height:420px"><canvas id="cQuad"></canvas></div>
+    </div>
+  </section>
+
+  <section class="grid three">
+    <div class="card">
+      <h2>🧮 Evidence health</h2>
+      <p class="muted" style="margin:0 0 8px">Services grouped by evidence tier.</p>
+      <div class="chartbox" style="height:240px"><canvas id="cTier"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>📈 Catalog growth</h2>
+      <p class="muted" style="margin:0 0 8px">Services and linked case studies by quarter.</p>
+      <div class="chartbox" style="height:240px"><canvas id="cGrowth"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>🗺️ Proof by service family</h2>
+      <p class="muted" style="margin:0 0 8px">Linked case studies per family. A short wedge is a thin part of the catalog.</p>
+      <div class="chartbox" style="height:240px"><canvas id="cFam"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Catalog -->
+  <section class="card" id="catalog">
+    <div class="sechead">
+      <div><h2>🗂️ Service catalog</h2><p class="muted" style="margin:0">Click a row to see its case studies. Colors show evidence strength and freshness, so weak spots stand out.</p></div>
+      <div class="tabs" id="filterTabs">
+        <button class="on" data-f="active">Active</button>
+        <button data-f="growth">Growth 🌱</button>
+        <button data-f="weak">Needs evidence ⚠️</button>
+        <button data-f="all">All</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Service</th><th>Status</th><th>Evidence</th><th>Case studies</th><th>Freshest proof</th><th>Industries</th><th>NAICS</th><th>Gov matches</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+
+  <!-- Heatmap -->
+  <section class="card">
+    <h2>🔥 Service × industry coverage</h2>
+    <p class="muted" style="margin:0 0 10px">Case studies per cell. Darker means more proof; ⚪ means no case study in that industry yet.</p>
+    <div style="overflow:auto"><table class="heat" id="heat"></table></div>
+  </section>
+
+  <!-- Intake -->
+  <section class="card" id="intake">
+    <div class="sechead">
+      <div><h2>📥 Case study intake <span class="pill p-red" id="orphCount">4 blocked</span></h2>
+      <p class="muted" style="margin:0">New case studies wait here until they're linked. The AI pre-selects the best matches; pick one or more services, or propose a new one.</p></div>
+      <div class="legend-row"><span>Match confidence:</span><span><i class="dot" style="background:var(--green)"></i>≥ 75%</span><span><i class="dot" style="background:var(--amber)"></i>50–74%</span><span><i class="dot" style="background:#c4c7ce"></i>&lt; 50%</span></div>
+    </div>
+    <div class="intake" id="intakeList"></div>
+  </section>
+
+  <!-- Gaps from proposals -->
+  <section class="card" id="gaps">
+    <h2>🏛️ Gaps from live proposals</h2>
+    <p class="muted" style="margin:0 0 6px">Capabilities that "Can we deliver it?" flagged as Partly or New. Before treating one as a true gap, check whether we have unlinked proof.</p>
+    <div id="gapList"></div>
+    <div class="banner"><div class="big">💡</div><div><b>Rule: a service needs at least one case study before it counts as "We have it."</b><div style="opacity:.8;font-size:13px">Services added during a proposal start as 🌱 Growth. They count as Partly until a case study (inside or outside) is linked.</div></div></div>
+  </section>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- sample data ---------------- */
+const IND = ["Government","AgTech","Financial Svcs","Healthcare","Education","Retail","Energy"];
+const services = [
+ {id:"gov",  name:"Government Proposal Development & Capture Support", fam:"🏛️", cat:"Consulting", desc:"Hunting solicitations and writing proposals/RFP responses, optionally paired with a working pilot demo.", status:"active", naics:"541611, 541990, 541618", gov:14},
+ {id:"bi",   name:"Managed Data Services & BI Modernization", fam:"🗄️", cat:"Data", desc:"Modern BI stacks, Power BI / Tableau migration, managed reporting.", status:"active", naics:"518210, 541511", gov:22},
+ {id:"pred", name:"AI / ML Predictive Analytics", fam:"🧠", cat:"AI", desc:"Forecasting, propensity and risk models in production.", status:"active", naics:"541511, 541715", gov:17},
+ {id:"de",   name:"Data Engineering & Cloud Migration", fam:"🗄️", cat:"Data", desc:"Pipelines, lakehouse builds, AWS/GCP/Azure migration.", status:"active", naics:"518210, 541512", gov:19},
+ {id:"app",  name:"Custom Web & Application Development", fam:"💻", cat:"Build", desc:"Cloud-native web and mobile apps, APIs and portals.", status:"active", naics:"541511", gov:25},
+ {id:"sup",  name:"Ongoing Support and Maintenance", fam:"💻", cat:"Build", desc:"Continuous support and maintenance after launch, SLA-backed.", status:"active", naics:"541513", gov:16},
+ {id:"train",name:"Training and Documentation", fam:"🎓", cat:"People", desc:"Training and documentation so users can run the new system.", status:"active", naics:"611430", gov:11},
+ {id:"acc",  name:"Enterprise AI Leadership Accelerator", fam:"🎓", cat:"People", desc:"Executive and team AI upskilling with live build projects.", status:"active", naics:"611430, 541612", gov:6},
+ {id:"agent",name:"Agentic AI Process Automation", fam:"🧠", cat:"AI", desc:"Multi-agent workflows that automate back-office processes.", status:"active", naics:"541511, 541519", gov:13},
+ {id:"gov2", name:"Data Governance & Compliance", fam:"🗄️", cat:"Data", desc:"Data quality, lineage, access control and regulatory reporting.", status:"active", naics:"541519, 541611", gov:12},
+ {id:"cx",   name:"Customer & Member Analytics", fam:"🧠", cat:"AI", desc:"Segmentation, churn and lifetime value analytics.", status:"active", naics:"541910", gov:4},
+ {id:"onb",  name:"Digital Onboarding & Self-Service Portals", fam:"💻", cat:"Build", desc:"Digital intake, onboarding flows and self-service.", status:"active", naics:"541511", gov:9},
+ {id:"mfa",  name:"Identity, Access & MFA Integration", fam:"💻", cat:"Build", desc:"Added during the Harris County RFP. Needs a case study.", status:"growth", naics:"541512", gov:15, from:"Harris County Sheriff RFP"},
+ {id:"perf", name:"Performance Monitoring & Observability", fam:"💻", cat:"Build", desc:"Added during the Harris County RFP. Needs a case study.", status:"growth", naics:"541513", gov:18, from:"Harris County Sheriff RFP"},
+];
+const cases = [
+ // outside (Drive library: filenames from the shared folder)
+ {id:"o1", t:"AgTech: Advanced Econometric Pricing Model", src:"out", ind:"AgTech", yr:2024, e:"🌾", m:"Hybrid XGBoost + econometric elasticity; automated price search", svc:[]},
+ {id:"o2", t:"Financial client: Digital Onboarding", src:"out", ind:"Financial Svcs", yr:2024, e:"🪪", m:"Digital onboarding journey", svc:["onb","app"]},
+ {id:"o3", t:"Financial client: Empowering Staff with AI", src:"out", ind:"Financial Svcs", yr:2024, e:"🤝", m:"AI enablement for staff", svc:["acc","train"]},
+ {id:"o4", t:"Financial client: Enhancing Financial Reporting", src:"out", ind:"Financial Svcs", yr:2024, e:"💹", m:"Automated reporting", svc:["bi"]},
+ {id:"o5", t:"Financial client: Predictive Analytics", src:"out", ind:"Financial Svcs", yr:2024, e:"🔮", m:"Risk and propensity models", svc:["pred"]},
+ {id:"o6", t:"AgTech: Data Capability Development", src:"out", ind:"AgTech", yr:2022, e:"🧱", m:"Data platform foundation", svc:["de","gov2"]},
+ {id:"o7", t:"AgTech: Enhancing Agricultural Research", src:"out", ind:"AgTech", yr:2024, e:"🔬", m:"Research data pipeline", svc:[]},
+ {id:"o8", t:"AgTech: Enhancing Crop Nitrogen Modeling", src:"out", ind:"AgTech", yr:2024, e:"🌱", m:"ML yield/nitrogen model", svc:["pred"]},
+ {id:"o9", t:"AgTech: Enhancing Customer Insights", src:"out", ind:"AgTech", yr:2024, e:"👥", m:"Grower segmentation", svc:["cx","bi"]},
+ {id:"o10",t:"AgTech: Enhancing Research Throughput", src:"out", ind:"AgTech", yr:2024, e:"⚗️", m:"Lab workflow automation", svc:["agent","de"]},
+ {id:"o11",t:"Utility: Grid Asset Analytics", src:"out", ind:"Energy", yr:2023, e:"⚡", m:"Asset failure prediction", svc:["pred","bi"]},
+ {id:"o12",t:"Utility: Executive Deck & Dashboard", src:"out", ind:"Energy", yr:2023, e:"📊", m:"Ops KPIs in Power BI", svc:["bi"]},
+ // inside (Project Factory / repo case study system)
+ {id:"i1", t:"Enterprise AI Leadership Accelerator: Cohort Platform", src:"in", ind:"Education", yr:2026, e:"🎓", m:"Live cohort + build studio", svc:["acc","app","train"]},
+ {id:"i2", t:"Gov Contract Builder (this platform)", src:"in", ind:"Government", yr:2026, e:"🏛️", m:"RFP intake → fit → proposal", svc:["gov","agent","app"]},
+ {id:"i3", t:"Project Factory: Autonomous Build Pipeline", src:"in", ind:"Education", yr:2026, e:"🏭", m:"Agent-built projects end to end", svc:["agent","app","sup"]},
+ {id:"i4", t:"County Pilot: Permit Intake Demo", src:"in", ind:"Government", yr:2026, e:"🗂️", m:"Pilot shipped with proposal", svc:["gov","onb"]},
+ {id:"i5", t:"Healthcare Claims Data Mart", src:"in", ind:"Healthcare", yr:2025, e:"🏥", m:"Claims BI modernization", svc:["bi","de","gov2"]},
+ {id:"i6", t:"Retail Demand Forecasting", src:"in", ind:"Retail", yr:2025, e:"🛒", m:"SKU-level demand model", svc:["pred"]},
+ {id:"i7", t:"Lead Intelligence & Enrollment Agent", src:"in", ind:"Education", yr:2026, e:"🎯", m:"Agentic outreach & scoring", svc:["agent","cx"]},
+ {id:"i8", t:"Student Support Desk & Runbooks", src:"in", ind:"Education", yr:2025, e:"🛟", m:"SLA-tracked support", svc:["sup","train"]},
+ {id:"i9", t:"Gov Opportunities Bonfire Sync", src:"in", ind:"Government", yr:2026, e:"🔄", m:"Daily solicitation sync", svc:["de","gov"]},
+ {id:"i10",t:"SSO & Role-Based Access for Admin Portal", src:"in", ind:"Education", yr:2026, e:"🔐", m:"Auth hardening (unlinked)", svc:[]},
+ {id:"i11",t:"Platform Uptime & Alerting Stack", src:"in", ind:"Education", yr:2026, e:"📟", m:"Monitoring + alerting (unlinked)", svc:[]},
+];
+// orphan intake suggestions
+const suggest = {
+ o1: {kw:["XGBoost","econometrics","price elasticity","optimization","AWS","GCP","BigQuery","Spotfire"], m:[["pred",82],["bi",58],["de",51]], propose:"Pricing & Revenue Optimization"},
+ o7: {kw:["research data","pipeline","lab","Python","Spark"], m:[["de",77],["pred",55],["agent",41]], propose:"Research Data Platforms"},
+ i10:{kw:["SSO","RBAC","MFA","auth","security"], m:[["mfa",91],["app",62],["gov2",48]], propose:"Identity & Access Management"},
+ i11:{kw:["uptime","alerting","metrics","SLA","on-call"], m:[["perf",88],["sup",74],["de",30]], propose:"Observability & SRE"},
+};
+const gaps = [
+ {cap:"Multi-factor Authentication", st:"New capability", svc:"mfa", hint:"i10", e:"🔐"},
+ {cap:"Performance Monitoring", st:"New capability", svc:"perf", hint:"i11", e:"📟"},
+ {cap:"Service Level Agreement (SLA) Management", st:"Partly", svc:"sup", hint:"i8", e:"📃"},
+];
+const NOW = 2026;
+
+/* ---------------- derived ---------------- */
+const byId = id => services.find(s=>s.id===id);
+const caseById = id => cases.find(c=>c.id===id);
+function svcCases(sid){return cases.filter(c=>c.svc.includes(sid))}
+function score(s){
+  const cs=svcCases(s.id); if(!cs.length) return 0;
+  const inN=cs.filter(c=>c.src==="in").length, outN=cs.length-inN;
+  const newest=Math.max(...cs.map(c=>c.yr)); const fresh=newest>=NOW-1?20:newest>=NOW-2?8:0;
+  const inds=new Set(cs.map(c=>c.ind)).size;
+  return Math.min(100, inN*18 + outN*11 + fresh + inds*4);
+}
+function tier(v){return v>=70?["Proven","var(--green)","p-green"]:v>=40?["Emerging","var(--amber)","p-amber"]:v>0?["Thin","#e57373","p-red"]:["No proof","var(--red)","p-red"]}
+function newest(s){const cs=svcCases(s.id);return cs.length?Math.max(...cs.map(c=>c.yr)):null}
+const orphans = ()=>cases.filter(c=>!c.svc.length);
+
+/* ---------------- KPIs ---------------- */
+function renderKPIs(){
+  const act=services.filter(s=>s.status==="active").length, gr=services.filter(s=>s.status==="growth").length;
+  const linked=cases.filter(c=>c.svc.length), inN=linked.filter(c=>c.src==="in").length;
+  const proven=services.filter(s=>score(s)>=70).length;
+  const noProof=services.filter(s=>score(s)===0).length;
+  const avg=Math.round(services.reduce((a,s)=>a+score(s),0)/services.length);
+  const o=orphans().length;
+  const k=[
+   ["Active services","❤️",act,`+${gr} 🌱 growth`, "var(--red)"],
+   ["Linked case studies","📚",linked.length,`<span class="pill p-in">🏗️ ${inN}</span> <span class="pill p-out">📁 ${linked.length-inN}</span>`,"var(--blue)"],
+   ["Proven services","✅",proven,`${Math.round(proven/services.length*100)}% of catalog`,"var(--green)"],
+   ["Avg evidence score","📏",avg,`${avg>=60?"🟢 healthy":avg>=40?"🟡 building":"🔴 weak"}`,"var(--amber)"],
+   ["Services with no proof","⚠️",noProof,"can't claim “We have it”","#e57373"],
+   ["Blocked case studies","🚫",o,"need a service link","var(--red)"],
+  ];
+  document.getElementById("kpis").innerHTML=k.map(x=>`<div class="card kpi" style="--c:${x[4]}"><div class="l">${x[0]}<span>${x[1]}</span></div><div class="v">${x[2]}</div><div class="d">${x[3]}</div></div>`).join("");
+  document.getElementById("sideOrphans").textContent=o;
+  document.getElementById("dOrph").textContent=o;
+  document.getElementById("orphCount").textContent=o?`${o} blocked`:"all linked ✓";
+  document.getElementById("orphCount").className="pill "+(o?"p-red":"p-green");
+}
+
+/* ---------------- catalog table ---------------- */
+let filter="active", openRow=null;
+function renderTable(){
+  let list=services.slice();
+  if(filter==="active") list=list.filter(s=>s.status==="active");
+  if(filter==="growth") list=list.filter(s=>s.status==="growth");
+  if(filter==="weak") list=list.filter(s=>score(s)<40);
+  list.sort((a,b)=>score(b)-score(a));
+  const rows=list.map(s=>{
+    const v=score(s), [tl,tc,tp]=tier(v), cs=svcCases(s.id), inN=cs.filter(c=>c.src==="in").length, n=newest(s);
+    const age=n?NOW-n:null;
+    const fresh=n==null?`<span class="fresh" style="color:var(--red)">🔴 none</span>`:age===0?`<span class="fresh" style="color:var(--green)">🟢 ${n}</span>`:age===1?`<span class="fresh" style="color:var(--amber)">🟡 ${n}</span>`:`<span class="fresh" style="color:var(--red)">🔴 ${n}</span>`;
+    const inds=[...new Set(cs.map(c=>c.ind))];
+    const st=s.status==="growth"?`<span class="pill p-teal">🌱 Growth</span><div class="muted" style="margin-top:4px">from ${s.from}</div>`:`<span class="pill ${tp}">${tl}</span>`;
+    const demandColor=s.gov>=18?"var(--red)":s.gov>=10?"var(--amber)":"var(--ink-3)";
+    let html=`<tr class="svc ${openRow===s.id?"open":""}" data-id="${s.id}">
+      <td><div class="sname">${s.fam} ${s.name} <span class="muted">${openRow===s.id?"▾":"▸"}</span></div><div class="sdesc">${s.desc}</div></td>
+      <td>${st}</td>
+      <td><span class="ev" style="color:${tc}">${v}</span><div class="meter"><i style="width:${v}%;background:${tc}"></i></div></td>
+      <td><span class="pill p-in">🏗️ ${inN}</span> <span class="pill p-out">📁 ${cs.length-inN}</span></td>
+      <td>${fresh}</td>
+      <td><div class="chips">${inds.map(i=>`<span class="chip">${i}</span>`).join("")||'<span class="muted">—</span>'}</div></td>
+      <td class="muted">${s.naics}</td>
+      <td><b style="color:${demandColor}">${s.gov}</b> <span class="muted">open</span></td></tr>`;
+    if(openRow===s.id){
+      html+=`<tr class="detail"><td colspan="8">${cs.length?`<div class="cs-row">${cs.map(csCard).join("")}</div>`:`<div class="empty-ev">⚠️ No case study linked yet. In proposals this service shows as <b>Partly</b>. Link an existing case study from intake, or upload one from Drive.</div>`}</td></tr>`;
+    }
+    return html;
+  }).join("");
+  const tb=document.getElementById("tbody"); tb.innerHTML=rows;
+  tb.querySelectorAll("tr.svc").forEach(r=>r.onclick=()=>{openRow=openRow===r.dataset.id?null:r.dataset.id;renderTable()});
+}
+const grad={AgTech:["#e6f6ec","#bfe7cd"],"Financial Svcs":["#e8f0fe","#c9d8fb"],Government:["#fff4dc","#f6dfaa"],Healthcare:["#fdecec","#f9d0d2"],Education:["#f1eafe","#ddd0fb"],Retail:["#e2f5f3","#b9e6e1"],Energy:["#fff8d6","#f3e39a"]};
+function csCard(c){
+  const g=grad[c.ind]||["#f1f2f5","#e1e3e8"];
+  return `<div class="cs"><div class="thumb" style="background:linear-gradient(135deg,${g[0]},${g[1]})"><span class="src pill ${c.src==="in"?"p-in":"p-out"}">${c.src==="in"?"🏗️ Inside":"📁 Drive"}</span><span class="yr">${c.yr}</span>${c.e}</div>
+  <div class="b"><div class="t">${c.t}</div><div class="muted">${c.ind}</div><div class="m">✔ ${c.m}</div>
+  <div class="chips" style="margin-top:6px">${c.svc.map(id=>`<span class="chip">${byId(id).fam} ${byId(id).name.split(" ").slice(0,3).join(" ")}</span>`).join("")}</div></div></div>`;
+}
+document.querySelectorAll("#filterTabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#filterTabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");filter=b.dataset.f;renderTable()});
+
+/* ---------------- heatmap ---------------- */
+function renderHeat(){
+  const max=4;
+  let h=`<tr><th></th>${IND.map(i=>`<th>${i}</th>`).join("")}<th>Total</th></tr>`;
+  services.slice().sort((a,b)=>score(b)-score(a)).forEach(s=>{
+    const cs=svcCases(s.id);
+    h+=`<tr><td class="rl">${s.fam} ${s.name}</td>`;
+    IND.forEach(i=>{const n=cs.filter(c=>c.ind===i).length;
+      const a=n?Math.min(1,0.18+n/max*0.82):0;
+      h+= n?`<td style="background:rgba(227,38,47,${a});color:${a>.55?"#fff":"#16181d"}">${n}</td>`:`<td style="background:#f6f7f9;color:#c4c7ce">⚪</td>`;});
+    h+=`<td style="background:#16181d;color:#fff">${cs.length}</td></tr>`;
+  });
+  document.getElementById("heat").innerHTML=h;
+}
+
+/* ---------------- intake ---------------- */
+const picks={};
+function renderIntake(){
+  const o=orphans();
+  const el=document.getElementById("intakeList");
+  if(!o.length){el.innerHTML=`<div class="empty-ev" style="border-color:#bfe7cd;color:var(--green)">✅ Every case study is linked to a service. Nothing is blocked.</div>`;return}
+  el.innerHTML=o.map(c=>{
+    const sg=suggest[c.id]; picks[c.id]=picks[c.id]||new Set(sg.m.filter(x=>x[1]>=75).map(x=>x[0]));
+    const g=grad[c.ind]||["#f1f2f5","#e1e3e8"];
+    const sel=picks[c.id];
+    return `<div class="ic ${sel.size?"":"locked"}" id="ic-${c.id}">
+      <div class="h"><div class="e" style="background:linear-gradient(135deg,${g[0]},${g[1]})">${c.e}</div>
+        <div style="flex:1"><div class="tt">${c.t}</div>
+        <div style="margin-top:3px"><span class="pill ${c.src==="in"?"p-in":"p-out"}">${c.src==="in"?"🏗️ Inside · Project Factory":"📁 Outside · Google Drive"}</span> <span class="muted">${c.ind} · ${c.yr}</span></div>
+        <div class="kw">${sg.kw.map(k=>`<span class="chip">#${k}</span>`).join("")}</div></div></div>
+      <div class="body"><div class="muted" style="font-weight:700;margin-bottom:4px">🤖 Suggested services</div>
+        ${sg.m.map(([sid,p])=>{const s=byId(sid);const col=p>=75?"var(--green)":p>=50?"var(--amber)":"#c4c7ce";
+          return `<label class="match"><input type="checkbox" data-c="${c.id}" data-s="${sid}" ${sel.has(sid)?"checked":""}><span>${s.fam} ${s.name} ${s.status==="growth"?'<span class="pill p-teal">🌱</span>':""}</span><span class="bar"><i style="width:${p}%;background:${col}"></i></span><span class="pct" style="color:${col}">${p}%</span></label>`}).join("")}
+      </div>
+      <div class="newsvc" id="ns-${c.id}"><b>🌱 Propose a new service</b><div class="muted">It enters the catalog as Growth with this case study as its first proof.</div>
+        <input id="nsn-${c.id}" value="${sg.propose}"><button class="btn green" onclick="proposeSvc('${c.id}')">Create service & link</button></div>
+      <div class="f"><span class="gate ${sel.size?"ok":""}">${sel.size?`🔓 Ready: ${sel.size} service${sel.size>1?"s":""} selected`:"🔒 Pick at least one service"}</span>
+        <button class="btn ghost-red" onclick="toggleNew('${c.id}')">🌱 New service</button>
+        <button class="btn red" ${sel.size?"":"disabled"} onclick="attach('${c.id}')">Link & publish</button></div>
+    </div>`}).join("");
+  el.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{const s=picks[cb.dataset.c];cb.checked?s.add(cb.dataset.s):s.delete(cb.dataset.s);renderIntake()});
+}
+function toggleNew(id){const n=document.getElementById("ns-"+id);n.style.display=n.style.display==="block"?"none":"block"}
+function attach(id){
+  const c=caseById(id); c.svc=[...picks[id]];
+  const names=c.svc.map(s=>byId(s).name).join(", ");
+  // growth services graduate once they have proof
+  c.svc.forEach(sid=>{const s=byId(sid); if(s.status==="growth"){s.status="active"; s.desc=s.desc.replace("Needs a case study.","Proven by "+c.t+".")}});
+  toast(`✅ “${c.t}” linked to ${names}. Evidence scores updated.`);
+  refresh();
+}
+function proposeSvc(id){
+  const c=caseById(id); const name=document.getElementById("nsn-"+id).value.trim()||"New service";
+  const sid="n"+Date.now();
+  services.push({id:sid,name,fam:"🌱",cat:"New",desc:`Proposed from “${c.t}”. Waiting for admin review.`,status:"growth",naics:"TBD",gov:Math.floor(Math.random()*8)+3,from:"case study intake"});
+  c.svc=[sid,...picks[id]];
+  toast(`🌱 New service “${name}” created as Growth and linked to “${c.t}”.`);
+  refresh();
+}
+
+/* ---------------- gaps ---------------- */
+function renderGaps(){
+  document.getElementById("gapList").innerHTML=gaps.map(g=>{
+    const s=byId(g.svc), hint=caseById(g.hint), linked=hint.svc.includes(g.svc), v=score(s);
+    const now=linked||v>=40?"We have it":g.st;
+    const pill=now==="We have it"?"p-green":now==="Partly"?"p-amber":"p-red";
+    return `<div class="gap"><div class="e">${g.e}</div>
+      <div><b>${g.cap}</b> <span class="pill ${pill}">${now}</span> <span class="muted">· Harris County Sheriff's Office · closes Nov 23</span>
+      <div class="muted" style="margin-top:3px">Maps to ${s.fam} <b>${s.name}</b> (evidence ${v}). ${linked?`✅ Backed by “${hint.t}”.`:`💡 Possible unlinked proof: <b>${hint.e} ${hint.t}</b> (${hint.src==="in"?"Inside":"Drive"}${hint.svc.length?", linked elsewhere":", waiting in intake"})`}</div></div>
+      <div>${linked?'<span class="pill p-green">✓ Re-assess fit</span>':hint.svc.length?`<button class="btn" onclick="linkHint('${g.hint}','${g.svc}')">🔗 Also link</button>`:`<button class="btn red" onclick="jump('intake')">Review in intake →</button>`}</div></div>`}).join("");
+}
+function linkHint(cid,sid){const c=caseById(cid); if(!c.svc.includes(sid)) c.svc.push(sid); toast(`🔗 “${c.t}” now also proves ${byId(sid).name}.`); refresh();}
+
+/* ---------------- charts ---------------- */
+Chart.defaults.font.family="Inter"; Chart.defaults.color="#4a4f5a";
+let chE,chQ,chT,chG,chF;
+function renderCharts(){
+  const sorted=services.slice().sort((a,b)=>score(a)-score(b));
+  const lab=sorted.map(s=>s.name.length>32?s.name.slice(0,30)+"…":s.name);
+  const inD=sorted.map(s=>svcCases(s.id).filter(c=>c.src==="in").length);
+  const outD=sorted.map(s=>svcCases(s.id).filter(c=>c.src==="out").length);
+  chE&&chE.destroy();
+  chE=new Chart(cEvidence,{type:"bar",data:{labels:lab,datasets:[
+    {label:"🏗️ Inside",data:inD,backgroundColor:"#2563eb",borderRadius:4},
+    {label:"📁 Outside (Drive)",data:outD,backgroundColor:"#a78bfa",borderRadius:4}]},
+    options:{indexAxis:"y",maintainAspectRatio:false,scales:{x:{stacked:true,grid:{color:"#eef0f3"},ticks:{precision:0}},y:{stacked:true,grid:{display:false},ticks:{font:{size:11},color:(ctx)=>{const s=sorted[ctx.index];return score(s)===0?"#e3262f":"#4a4f5a"}}}},plugins:{legend:{position:"top",align:"end"}}}});
+
+  const pts=services.map(s=>({x:score(s),y:s.gov,r:7+svcCases(s.id).length*3,s}));
+  chQ&&chQ.destroy();
+  const quadBg={id:"quadBg",beforeDraw(c){const {ctx,chartArea:a,scales:{x,y}}=c;const mx=x.getPixelForValue(50),my=y.getPixelForValue(13);
+    ctx.save();[["#fff5f5",a.left,a.top,mx-a.left,my-a.top,"🎯 Build evidence now"],["#f3fbf6",mx,a.top,a.right-mx,my-a.top,"🏆 Bid with confidence"],["#fafbfc",a.left,my,mx-a.left,a.bottom-my,"💤 Low priority"],["#f4f8ff",mx,my,a.right-mx,a.bottom-my,"📣 Proven: find more bids"]]
+    .forEach(q=>{ctx.fillStyle=q[0];ctx.fillRect(q[1],q[2],q[3],q[4]);ctx.fillStyle="#8a8f99";ctx.font="600 11.5px Inter";ctx.fillText(q[5],q[1]+8,q[2]+16)});ctx.restore();}};
+  chQ=new Chart(cQuad,{type:"bubble",data:{datasets:[{data:pts,backgroundColor:pts.map(p=>p.x<50&&p.y>=13?"rgba(227,38,47,.75)":p.x>=50&&p.y>=13?"rgba(31,157,85,.75)":p.x>=50?"rgba(37,99,235,.6)":"rgba(138,143,153,.5)"),borderColor:"#fff",borderWidth:1.5}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw.s.name}: evidence ${c.raw.x}, ${c.raw.y} open opps, ${svcCases(c.raw.s.id).length} case studies`}}},
+    scales:{x:{min:-5,max:105,title:{display:true,text:"Evidence score →"},grid:{color:"#eef0f3"}},y:{min:0,max:28,title:{display:true,text:"Matching open Gov opportunities →"},grid:{color:"#eef0f3"}}}},plugins:[quadBg]});
+
+  const tiers=[0,0,0,0];services.forEach(s=>{const v=score(s);tiers[v>=70?0:v>=40?1:v>0?2:3]++});
+  chT&&chT.destroy();
+  chT=new Chart(cTier,{type:"doughnut",data:{labels:["✅ Proven (70+)","🟡 Emerging (40–69)","🟠 Thin (1–39)","🔴 No proof"],datasets:[{data:tiers,backgroundColor:["#1f9d55","#f2b233","#f08a8a","#e3262f"],borderWidth:2,borderColor:"#fff"}]},
+    options:{maintainAspectRatio:false,cutout:"62%",plugins:{legend:{position:"right",labels:{boxWidth:12,font:{size:11.5}}}}}});
+
+  chG&&chG.destroy();
+  const linkedNow=cases.filter(c=>c.svc.length).length;
+  chG=new Chart(cGrowth,{data:{labels:["Q1 '25","Q2 '25","Q3 '25","Q4 '25","Q1 '26","Q2 '26","Q3 '26","Q4 '26"],
+    datasets:[{type:"bar",label:"Linked case studies",data:[3,4,6,7,10,13,15,linkedNow],backgroundColor:"#f9d0d2",borderRadius:4,yAxisID:"y"},
+      {type:"line",label:"Services",data:[7,7,8,9,10,11,12,services.length],borderColor:"#e3262f",backgroundColor:"#e3262f",tension:.35,yAxisID:"y"}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{position:"bottom",labels:{boxWidth:12}}},scales:{y:{beginAtZero:true,grid:{color:"#eef0f3"}},x:{grid:{display:false}}}}});
+}
+
+/* ---------------- util ---------------- */
+function renderFam(){
+  const fams={"🧠 AI & Analytics":"🧠","🗄️ Data":"🗄️","💻 Build":"💻","🎓 People":"🎓","🏛️ Gov":"🏛️","🌱 New":"🌱"};
+  const lab=Object.keys(fams).filter(k=>services.some(s=>s.fam===fams[k]));
+  const data=lab.map(k=>new Set(cases.filter(c=>c.svc.some(id=>byId(id).fam===fams[k])).map(c=>c.id)).size);
+  chF&&chF.destroy();
+  chF=new Chart(cFam,{type:"polarArea",data:{labels:lab,datasets:[{data,backgroundColor:["rgba(124,58,237,.6)","rgba(37,99,235,.6)","rgba(15,148,136,.6)","rgba(217,138,0,.6)","rgba(227,38,47,.6)","rgba(31,157,85,.6)"]}]},
+   options:{maintainAspectRatio:false,scales:{r:{ticks:{display:false},grid:{color:"#eef0f3"}}},plugins:{legend:{position:"right",labels:{boxWidth:12,font:{size:11.5}}}}}});
+}
+function renderDecide(){
+  document.getElementById("dDem").textContent=services.filter(s=>score(s)<50&&s.gov>=13).length;
+  document.getElementById("dFresh").textContent=services.filter(s=>{const n=newest(s);return n&&n<NOW}).length;
+}
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),3800)}
+function jump(id){document.getElementById(id).scrollIntoView({behavior:"smooth",block:"start"})}
+function refresh(){renderKPIs();renderTable();renderHeat();renderIntake();renderGaps();renderCharts();renderFam();renderDecide()}
+mermaid.initialize({startOnLoad:true,theme:"base",themeVariables:{fontFamily:"Inter",fontSize:"13px",primaryColor:"#fdecec",primaryBorderColor:"#e3262f",lineColor:"#8a8f99"}});
+refresh();
+</script>
+</body>
+</html>

@@ -123,6 +123,7 @@ import {
 } from './caseStudyPublishClaimScan';
 import { ruleVisualStory } from './caseStudyVisualStoryValidate';
 import { ruleHireLinkedPerson } from './caseStudyPublishHireRule';
+import { ruleConfirmedServiceLink, ruleOutsideInternalOnly } from './caseStudyPublishServiceLinkRule';
 import type {
   CaseStudyPublishBlocker,
   CaseStudyPublishBlockerCode,
@@ -170,6 +171,10 @@ export function evaluateCaseStudyPublishGate(
   ruleSurface(input, b);
   // Hire lists people: a record that resolves to nobody is refused on `hire` only.
   ruleHireLinkedPerson(input, b);
+  // Services Upgrade SV1: every surface. A record proves a service or it does not publish, and an outside
+  // (document-derived) record never publishes at all.
+  ruleOutsideInternalOnly(input, b);
+  ruleConfirmedServiceLink(input, b);
   ruleStatus(input.caseStudy, b);
   ruleSnapshot(input.snapshot, b);
 

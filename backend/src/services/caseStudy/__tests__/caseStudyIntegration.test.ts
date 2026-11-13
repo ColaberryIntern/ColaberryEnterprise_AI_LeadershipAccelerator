@@ -53,6 +53,9 @@ jest.mock('../../../config/database', () => ({
   __esModule: true,
   sequelize: { transaction: (fn: (t: unknown) => unknown) => fn({ id: 'integration-tx' }) },
 }));
+// Services Upgrade SV1: the must-link publish rule needs a confirmed service link in the gov tenant. This suite
+// exercises sync -> snapshot -> publish, not linking, so every record is given one confirmed link.
+jest.mock('../caseStudyServiceLinkGateFacts', () => ({ serviceLinkGateFacts: async () => ({ confirmedCount: 1 }) }));
 jest.mock('../../../models/CaseStudy', () => ({ __esModule: true, default: db.studies.asModel() }));
 jest.mock('../../../models/CaseStudySnapshot', () => ({ __esModule: true, default: db.snapshots.asModel() }));
 jest.mock('../../../models/CaseStudySyncRun', () => ({ __esModule: true, default: db.syncRuns.asModel() }));

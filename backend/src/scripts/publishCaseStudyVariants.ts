@@ -50,6 +50,7 @@ import type { CaseStudyPublishRecord } from '../services/caseStudy/caseStudyPubl
 import { projectPublicDetail } from '../services/caseStudy/caseStudyPublicProjection';
 import { formatStoryReview, reviewCaseStudyStory } from '../services/caseStudy/caseStudyStoryReview';
 import { hashCanonical } from '../utils/canonicalHash';
+import { serviceLinkGateFacts } from '../services/caseStudy/caseStudyServiceLinkGateFacts';
 
 const ACTOR = process.env.CASE_STUDY_ACTOR || 'ali@colaberry.com';
 
@@ -83,13 +84,13 @@ function parseArgs(argv: readonly string[]): Args {
 }
 
 interface SnapshotRow { id: string; version: number; content: CaseStudySnapshotContent; provenance: Record<string, unknown> | null; source_commit_map: Record<string, unknown> | null }
-interface RecordRow { id: string; slug: string; status: string; builder_identity_mode: string; builder_naming_consent: boolean; organization_identity_mode: string; organization_naming_consent: boolean; organization_display_name: string | null }
+interface RecordRow { id: string; slug: string; status: string; builder_identity_mode: string; builder_naming_consent: boolean; organization_identity_mode: string; organization_naming_consent: boolean; organization_display_name: string | null; source_type: string | null }
 interface PublicationRow { surface_key: string; status: string; published_snapshot_id: string | null }
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const [recs] = await sequelize.query(
-    'select id, slug, status, builder_identity_mode, builder_naming_consent, organization_identity_mode, organization_naming_consent, organization_display_name from case_studies where slug = :t or id::text = :t',
+    'select id, slug, status, builder_identity_mode, builder_naming_consent, organization_identity_mode, organization_naming_consent, organization_display_name, source_type from case_studies where slug = :t or id::text = :t',
     { replacements: { t: args.target } },
   );
   const rec = (recs as RecordRow[])[0];
@@ -146,12 +147,14 @@ async function main(): Promise<void> {
     id: rec.id, status: rec.status,
     builderIdentityMode: rec.builder_identity_mode, builderNamingConsent: rec.builder_naming_consent,
     organizationIdentityMode: rec.organization_identity_mode, organizationNamingConsent: rec.organization_naming_consent,
-    organizationDisplayName: rec.organization_display_name,
+    organizationDisplayName: rec.organization_display_name, sourceType: rec.source_type,
   } as unknown as CaseStudyPublishRecord;
+  // The same service-link fact the real publish resolves, so this dry-run gate cannot pass a record the real one refuses.
+  const serviceLinks = await serviceLinkGateFacts(rec.id);
   const snapshotForGate = { id: 'composed', version: snap.version + 1, status: 'approved', approvedBy: ACTOR, approvedAt: recordedAt, content: composed, provenance: { ...(snap.provenance ?? {}), ...application.entries } };
   let clean = true;
   for (const surfaceKey of PUBLISHABLE_SURFACE_KEYS) {
-    const d = evaluateCaseStudyPublishGate({ surfaceKey, caseStudy: record, snapshot: snapshotForGate as never });
+    const d = evaluateCaseStudyPublishGate({ surfaceKey, caseStudy: record, snapshot: snapshotForGate as never, serviceLinks });
     const named = args.surfaces.includes(surfaceKey);
     if (!d.allowed && named) clean = false;
     console.log(`gate ${surfaceKey}${named ? ' (named)' : ''}: ${d.allowed ? 'CLEAN' : 'BLOCKED ' + JSON.stringify(d.blockers.map((b) => [b.code, b.field]))}`);

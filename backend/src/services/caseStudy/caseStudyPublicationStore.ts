@@ -101,6 +101,7 @@ export function toPublishRecord(row: CaseStudy): CaseStudyPublishRecord {
     builderIdentityMode: row.builder_identity_mode as CaseStudyBuilderIdentityMode,
     builderNamingConsent: row.builder_naming_consent === true,
     archivedAt: row.archived_at ? new Date(row.archived_at).toISOString() : null,
+    sourceType: row.source_type ?? null,
   };
 }
 
