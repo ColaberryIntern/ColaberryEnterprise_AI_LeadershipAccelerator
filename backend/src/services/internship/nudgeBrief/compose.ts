@@ -200,7 +200,10 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   }
 
   if (!escalation.hasAssignedProject) {
-    warnings.push('No project is assigned to them. Nothing in this message may hold them to account for build work, because none was ever given to them.');
+    const why = (intern.stories_total ?? 0) > 0
+      ? 'the project on their name has no real title'
+      : 'the project on their name carries no stories to build';
+    warnings.push(`No work has actually been assigned to them: ${why}. Nothing in this message may hold them to account for build work, because none was ever given to them.`);
   }
 
   return {

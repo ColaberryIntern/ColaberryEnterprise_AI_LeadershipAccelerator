@@ -36,7 +36,25 @@
  * Everything below is that sentence with the edges nailed down. An unassigned project caps the
  * message at `none`; owing them an answer caps it at `none`, because a manager who has not replied
  * has no standing to complain about silence; and the two harder levels additionally require that
- * the silence is real and repeated rather than a single unanswered note.
+ * the silence is real, provable and repeated rather than a single unanswered note.
+ *
+ * ## What running it against the live roster changed
+ *
+ * On 2026-11-13 the deployed composer was run against that morning's sidecar, all thirteen
+ * interns, and the output compared with this gate's verdict. It would have sent the same exit
+ * offer to three people. All three are refused here, but checking why exposed two holes:
+ *
+ *   the name     the sidecar reports the 12 November intern as `project: { name: "Project" }`
+ *                while production holds `projects.name IS NULL`. `hasAssignedProject` passed on
+ *                her, and she was spared only by the silence threshold. The condition the whole
+ *                gate exists for did not fire on the person it was written for;
+ *   the silence  `communications` is capped at ten and ranked by interest, so a missing recent
+ *                message makes somebody look MORE silent than they are. Every other bound here
+ *                was chosen to err toward refusing; that one erred toward permitting.
+ *
+ * Both are closed below. The lesson is the general one: this gate reads a report, and a report
+ * is a rendering, not the record. Where a field could have been filled in by a fallback, the
+ * gate assumes it was.
  *
  * ## Fails closed, and the cost of that is small
  *
@@ -70,16 +88,49 @@ export const PRESSURE_UNANSWERED = 2;
 export const ULTIMATUM_UNANSWERED = 3;
 
 /**
+ * The size at which `communications` is known to have been truncated.
+ *
+ * `portfolioReport/sidecar/communications.ts` keeps at most ten messages per intern and ranks
+ * them by how interesting they are, not by when they arrived. A list of exactly ten is therefore
+ * a list that may be hiding their most recent mail.
+ */
+export const COMMUNICATIONS_CAP = 10;
+
+/**
+ * The name `portfolioReport/compose.ts` gives a project when every real source of a title came
+ * back null, including a `projects` row whose `name` column is NULL.
+ *
+ * Measured 2026-11-13: the intern of the 12 November message still appears in the sidecar as
+ * `project: { name: "Project" }`, while production holds `projects.name IS NULL` and
+ * `enrollments.active_project_id IS NULL` for her. Reading the sidecar's name alone would make
+ * the one condition this whole gate was built for pass straight through.
+ */
+const PLACEHOLDER_PROJECT_NAMES: ReadonlySet<string> = new Set(['project', 'untitled', 'untitled project']);
+
+/**
  * What the evidence about ONE intern supports, and why.
  *
  * Every field is drawn from the sidecar the brief was already composed from, so the warrant and
  * the message can never disagree about the same person. Nothing here is fetched.
  */
 export interface EscalationWarrant {
-  /** A project with a real name on their enrollment. A nameless shell row is not one. */
+  /**
+   * Real work was actually put on their name: a project whose title is not the report's
+   * placeholder, carrying at least one story to build. A nameless shell row is not one, and
+   * neither is a project whose plan was never materialised into tasks.
+   */
   readonly hasAssignedProject: boolean;
   /** Days since THEY last wrote. Null means we have never heard from them at all. */
   readonly daysSinceTheirLastWord: number | null;
+  /**
+   * Whether `daysSinceTheirLastWord` can be trusted as a FLOOR on their silence.
+   *
+   * False when the message list came back at its cap, because the list is ranked by interest
+   * rather than by time: a saturated list may be missing their newest mail, and a missing newest
+   * mail makes somebody look more silent than they are. Silence that cannot be proved may not be
+   * punished, so an unprovable one caps the message at `none`.
+   */
+  readonly silenceIsProvable: boolean;
   /**
    * Messages we sent after their last word, as a LOWER bound.
    *
@@ -169,10 +220,21 @@ function lastWordMs(i: SidecarIntern): number | null {
 export function escalationWarrant(i: SidecarIntern, now: Date = new Date()): EscalationWarrant {
   // A project row with no name is a shell, not an assignment. This is the exact shape of the row
   // that existed on 12 November for an intern we then held accountable for her build.
-  const hasAssignedProject = Boolean(i.project && String(i.project.name ?? '').trim().length > 0);
+  //
+  // Two ways that shape reaches us looking respectable, both measured against production on
+  // 2026-11-13 and both of which defeated the first version of this check:
+  //
+  //   the name     a NULL `projects.name` is rendered as the literal string "Project" by the
+  //                report's own fallback chain, so "has a name" is not the same as "was named";
+  //   the tasks    a project whose plan never materialised carries zero stories. Nothing was put
+  //                on their name to do, whatever the row is called.
+  const title = String(i.project?.name ?? '').trim();
+  const namedProject = title.length > 0 && !PLACEHOLDER_PROJECT_NAMES.has(title.toLowerCase());
+  const hasAssignedProject = Boolean(i.project) && namedProject && (i.stories_total ?? 0) > 0;
 
   const theirs = lastWordMs(i);
   const daysSinceTheirLastWord = theirs === null ? null : Math.floor((now.getTime() - theirs) / DAY);
+  const silenceIsProvable = (i.communications ?? []).length < COMMUNICATIONS_CAP;
 
   let unansweredOutbound = 0;
   for (const c of i.communications ?? []) {
@@ -184,7 +246,7 @@ export function escalationWarrant(i: SidecarIntern, now: Date = new Date()): Esc
 
   const weOweThemAnAnswer = i.triage.tier === 'blocked_waiting_on_ali' || (i.open_questions ?? []).length > 0;
 
-  const base = { hasAssignedProject, daysSinceTheirLastWord, unansweredOutbound, weOweThemAnAnswer };
+  const base = { hasAssignedProject, daysSinceTheirLastWord, silenceIsProvable, unansweredOutbound, weOweThemAnAnswer };
 
   if (!hasAssignedProject) {
     return {
@@ -198,6 +260,13 @@ export function escalationWarrant(i: SidecarIntern, now: Date = new Date()): Esc
       ...base,
       level: 'none',
       reason: 'Their mail is waiting on a reply from us, and we have no standing to raise their silence until it is answered.',
+    };
+  }
+  if (!silenceIsProvable) {
+    return {
+      ...base,
+      level: 'none',
+      reason: 'Their message list came back at its cap and is ranked by interest, so we cannot show how long they have actually been silent.',
     };
   }
 

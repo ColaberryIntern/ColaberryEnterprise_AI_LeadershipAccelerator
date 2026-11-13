@@ -42,6 +42,7 @@ function intern(over: Partial<SidecarIntern> = {}): SidecarIntern {
     enrollment_id: 'e1',
     triage: { tier: 'quiet', reason: 'quiet' },
     project: { name: 'ToolSmithAI', id: 'p1', kind: 'build', repo_url: null, command_center_url: null, stage: null },
+    stories_total: 16,
     open_questions: [],
     communications: [],
     ...over,
@@ -188,5 +189,123 @@ describe('the counted outbound is a lower bound', () => {
     const w = escalationWarrant(intern({ communications: comms as never }), NOW);
     expect(w.unansweredOutbound).toBe(1);
     expect(w.level).toBe('none');
+  });
+});
+
+/**
+ * On 2026-11-13 the DEPLOYED composer was run against that morning's real sidecar, all thirteen
+ * interns, with nothing sent. It produced the `never_started` exit offer for three of them. The
+ * three are reproduced here from their actual sidecar fields, because two of the holes they
+ * exposed were in this gate rather than in the composer.
+ */
+describe('the live roster of 13 November 2026', () => {
+  /** Project row name IS NULL in production; the report renders that as the string "Project". */
+  const harpreet = intern({
+    name: 'Harpreet Kaur',
+    triage: { tier: 'never_started_building', reason: 'Has the project "Project" but no commit and no verified story, ever.' },
+    project: { name: 'Project', id: '50a24430', kind: 'build', repo_url: null, command_center_url: null, stage: null } as never,
+    stories_total: 0,
+    open_questions: [],
+    communications: [{ direction: 'from_intern', received_at: ago(3), subject: 'ToolSmithAI Repository and Project Storyline', excerpt: 'e' }] as never,
+  });
+
+  /** A real project with fifteen stories, and an unanswered "I am unable to access my portal". */
+  const samrawit = intern({
+    name: 'SAmrawit mekonen',
+    triage: { tier: 'never_started_building', reason: 'Has the project but no commit and no verified story, ever.' },
+    project: { name: 'RFP - Harris County Constable Precinct 4', id: 'ee486ef2', kind: 'build', repo_url: null, command_center_url: null, stage: null } as never,
+    stories_total: 15,
+    open_questions: [{ received_at: ago(3), subject: 'Re: Can you sign in?', text: 'Hello Ali, I am unable to access my portal.', kind: 'stuck' }] as never,
+    communications: [{ direction: 'from_intern', received_at: ago(3), subject: 'Re: Can you sign in?', excerpt: 'e' }] as never,
+  });
+
+  /** A properly named project whose plan was never materialised: zero stories to build. */
+  const megan = intern({
+    name: 'Megan Dimiyo-Mbenoun',
+    triage: { tier: 'never_started_building', reason: 'Has the project "TalentSignal" but no commit and no verified story, ever.' },
+    project: { name: 'TalentSignal', id: '7594f3fb', kind: 'build', repo_url: null, command_center_url: null, stage: null } as never,
+    stories_total: 0,
+    open_questions: [{ received_at: ago(1), subject: 'Background check instructions', text: 'Could Juliet please confirm in writing', kind: 'question' }] as never,
+    communications: [{ direction: 'from_intern', received_at: ago(1), subject: 'Background check instructions', excerpt: 'e' }] as never,
+  });
+
+  it.each([
+    ['Harpreet', harpreet],
+    ['Samrawit', samrawit],
+    ['Megan', megan],
+  ])('refuses the exit offer the composer would have sent to %s', (_name, who) => {
+    const warrant = escalationWarrant(who, NOW);
+    expect(warrant.level).toBe('none');
+    expect(checkEscalation(HARSH_MESSAGE, warrant).ok).toBe(false);
+  });
+
+  it('refuses Harpreet on the project test and not merely on the clock', () => {
+    // The first version of this gate passed her: the sidecar's "Project" read as a real name, and
+    // she was spared only because she had written three days earlier. Had she gone quiet for a
+    // fortnight, the condition the gate was built for would still not have fired.
+    expect(escalationWarrant(harpreet, NOW).hasAssignedProject).toBe(false);
+
+    const quietForAMonth = intern({
+      ...harpreet,
+      communications: [
+        { direction: 'from_intern', received_at: ago(40), subject: 's', excerpt: 'e' },
+        { direction: 'from_ali', received_at: ago(9), subject: 's', excerpt: 'e' },
+        { direction: 'from_ali', received_at: ago(6), subject: 's', excerpt: 'e' },
+        { direction: 'from_ali', received_at: ago(1), subject: 's', excerpt: 'e' },
+      ] as never,
+    });
+    const w = escalationWarrant(quietForAMonth, NOW);
+    expect(w.unansweredOutbound).toBe(3);
+    expect(w.daysSinceTheirLastWord).toBe(40);
+    expect(w.level).toBe('none');
+    expect(w.reason).toMatch(/No project has been assigned/);
+  });
+
+  it('refuses Megan although her project has a real name', () => {
+    const w = escalationWarrant(megan, NOW);
+    expect(w.hasAssignedProject).toBe(false);
+    expect(w.weOweThemAnAnswer).toBe(true);
+  });
+});
+
+describe('a report is a rendering, not the record', () => {
+  it.each(['Project', 'project', '  Project  ', 'Untitled', 'Untitled Project'])(
+    'does not accept %p as a project title, because that is what a NULL name renders as',
+    (title) => {
+      const w = escalationWarrant(silentFor(30, 5, { project: { name: title } as never }), NOW);
+      expect(w.hasAssignedProject).toBe(false);
+      expect(w.level).toBe('none');
+    },
+  );
+
+  it('does not accept a named project that carries no stories to build', () => {
+    expect(escalationWarrant(silentFor(30, 5, { stories_total: 0 }), NOW).hasAssignedProject).toBe(false);
+  });
+
+  it('treats a missing story count as nothing assigned rather than as unknown', () => {
+    expect(escalationWarrant(silentFor(30, 5, { stories_total: null }), NOW).hasAssignedProject).toBe(false);
+  });
+});
+
+describe('silence that cannot be proved is not punished', () => {
+  /** Ten entries is the cap in communications.ts, and the list is ranked by interest, not time. */
+  const saturated = (silentDays: number) => {
+    const comms = [{ direction: 'from_intern', received_at: ago(silentDays), subject: 's', excerpt: 'e' }];
+    for (let k = 0; k < 9; k += 1) comms.push({ direction: 'from_ali', received_at: ago(k + 1), subject: 's', excerpt: 'e' });
+    return intern({ communications: comms as never });
+  };
+
+  it('refuses an escalation when the message list came back at its cap', () => {
+    const w = escalationWarrant(saturated(40), NOW);
+    expect(w.silenceIsProvable).toBe(false);
+    expect(w.unansweredOutbound).toBe(9);
+    expect(w.level).toBe('none');
+    expect(w.reason).toMatch(/cap/);
+  });
+
+  it('still allows it one message below the cap, so a full list is not an outage', () => {
+    const w = escalationWarrant(silentFor(ULTIMATUM_SILENT_DAYS, 8), NOW);
+    expect(w.silenceIsProvable).toBe(true);
+    expect(w.level).toBe('ultimatum');
   });
 });

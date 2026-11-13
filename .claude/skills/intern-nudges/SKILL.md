@@ -131,8 +131,14 @@ assigned a project."*
 **Before any message that names a pattern of silence, counts unanswered messages back at
 somebody, or raises them leaving, all four must be true:**
 
-1. `enrollments.active_project_id` is set, and the project has a real name. A nameless row is a
-   shell, not an assignment.
+1. `enrollments.active_project_id` is set, the project has a real name, and it carries at least
+   one story. A nameless row is a shell; a plan that was never materialised into tasks is not an
+   assignment either, whatever the row is called.
+
+   **Do not read the name off the report.** `portfolioReport/compose.ts` falls back to the
+   literal string `'Project'` when every real title is null, so a `projects.name IS NULL` row
+   arrives in the sidecar as `project: { name: "Project" }` and reads as assigned. Measured
+   2026-11-13: that is still exactly how the 12 November recipient appears. Query the database.
 2. We do not owe them a reply. A manager who has not answered has no standing to raise silence.
 3. At least **two** messages from us with nothing back, and **seven days** since they last
    wrote, before the silence may be named as a pattern.
@@ -140,8 +146,12 @@ somebody, or raises them leaving, all four must be true:**
 
 ```sql
 SELECT e.full_name, e.status,
-       coalesce(e.active_project_id::text, 'NO ACTIVE PROJECT') AS project
-  FROM enrollments e WHERE e.email = :email;
+       coalesce(e.active_project_id::text, 'NO ACTIVE PROJECT') AS active_project,
+       coalesce(nullif(btrim(p.name), ''), 'NO NAME ON THE ROW')  AS project_name,
+       (SELECT count(*) FROM student_tasks t WHERE t.project_id = p.id) AS stories
+  FROM enrollments e
+  LEFT JOIN projects p ON p.enrollment_id = e.id
+ WHERE e.email = :email;
 ```
 
 The generated path enforces this in `backend/src/services/internship/nudgeBrief/escalationGate.ts`:

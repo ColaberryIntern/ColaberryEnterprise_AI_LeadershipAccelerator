@@ -85,9 +85,47 @@ became "we have not put a project on your name".
   body that no longer offers the exit by default. It was split into two — the unwarranted case
   asserts the replan wording and the absence of the exit, the warranted case asserts the original.
 
+## The live test, 2026-11-13, and what it changed
+
+Ali asked for the morning's Internship Report to be assessed against what the nudge system would
+have sent. The sidecar was regenerated on production (`--dry`, 13 interns, nothing sent) and the
+**deployed** composer was run against it for every intern, with the real `due_baseline_on`
+deadlines. Output in the scratchpad; nothing left on the server but two read-only scripts.
+
+**The headline: the composer would have sent the same exit offer to three people today** -
+Harpreet, Samrawit and Megan - in the same `never_started` wording as the 12 November message,
+because the gate is built but not merged. This gate refuses all three. But checking *why* each
+one was refused exposed two holes in it:
+
+| Hole | What it was | Now |
+|---|---|---|
+| The name | `portfolioReport/compose.ts:291` falls back to the literal `'Project'` when every real title is null, so a `projects.name IS NULL` row arrives as `project: { name: "Project" }`. `hasAssignedProject` **passed on Harpreet** - the exact person the gate was written for. She was spared only by the 14-day clock | A placeholder title is rejected, and a project must carry at least one story. Verified against production: `active_project 'NO ACTIVE PROJECT'`, `project_name 'NO NAME ON THE ROW'`, `stories 0` |
+| The silence | `communications` is capped at 10 and ranked by interest, so a missing recent message makes somebody look **more** silent than they are. Every other bound errs toward refusing; this one erred toward permitting | A list at its cap sets `silenceIsProvable: false` and caps the message at `none` |
+
+Two further findings belong to the report rather than to this gate, and are **not fixed here**:
+
+- **The report and the composer disagree about which email is owed**, for 4 of 13 interns
+  (Quincy, Tashima, Anamelechi, Harpreet), because `triage`/`most_urgent` read `last_ask` while
+  `shapes.theirLastWord` reads the interest-ranked `communications`. Anamelechi's brief opens on
+  a 7 November mail when the report names a 10 November one.
+- **`your_move`, the report's "today's 10 most impactful things", is 9 items and every one of
+  them is "Reply to X".** Samrawit (day 53, never started, locked out of her portal), Tashima
+  (15 days quiet, a task 20 days late) and Harpreet appear nowhere in it. The prioritiser sorts
+  on replies owed alone, so the worst human situations are invisible on the action list.
+- `last_ask` is always `from: ali@colaberry.com`. It is the last thing **we** asked, not their
+  last word, and must never be read as theirs.
+
+Verification of the change: `tsc --noEmit` (TS 5.9.3) 0 errors in changed files, control error
+planted and caught first; `jest --config jest.ci.config.ts --ci --testPathPattern
+"nudgeBrief|internship"`: **70 suites, 1062 tests, all passing** (14 more than before), including
+the three live interns as named regression fixtures.
+
 ## Not done
 
 - **Not merged, not deployed.** Claude cannot approve or merge.
+- The `'Project'` fallback in `portfolioReport/compose.ts` is untouched. The gate now defends
+  itself against it; the report still renders a nameless project as named.
+- The two report-side findings above are unowned.
 - The prod `send.sh` path is still ungated by code. Rule 7 is the only control on it.
 - Still open from earlier in this session: whether `send.sh` mail registers as "answered" in the
   engagement model. Ali chose option B on 2026-11-13 — the cadence stays paused until it does.
