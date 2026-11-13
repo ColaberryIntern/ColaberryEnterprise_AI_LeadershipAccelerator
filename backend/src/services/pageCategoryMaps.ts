@@ -203,6 +203,9 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       '/case-studies/record': 'case_studies',
       // Asking for an introduction to a builder: "a person will reply", like `/contact`.
       '/intro': 'contact',
+      // Booking an interview with a builder (/talent/<slug>/schedule/, one shell): the
+      // strongest "talk to a person" intent on the site, the same meaning as `/intro`.
+      '/schedule': 'contact',
 
       // --- Retired portal, kept for historical events ---------------------
       // The three audience pages: what Refactored offered, and to whom.

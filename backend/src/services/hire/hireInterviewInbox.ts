@@ -13,8 +13,9 @@
  *   decline   requested|rescheduled -> declined
  *   propose   requested            -> rescheduled, at the new time (the employer accepts in Phase 4)
  *
- * Phase 4 attaches the room link and the .ics and tells the other side; this phase records the
- * decision only.
+ * This module records the decision only. The controller then tells the other side
+ * (hireInterviewNotify): confirm sends the room link and .ics, decline and propose email the
+ * employer, and a proposed time is taken by the employer through hireInterviewAccept.
  */
 import { z } from 'zod';
 import { sequelize } from '../../config/database';

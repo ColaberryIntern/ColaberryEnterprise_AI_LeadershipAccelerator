@@ -103,4 +103,24 @@ describeIfDb('hire interviews against Postgres', () => {
     expect((await inbox.actOnInterview(E1, mine.id, 'confirm', {}, NOW)).status).toBe('confirmed');
     await expect(inbox.actOnInterview('74444444-4444-4444-8444-444444444444', mine.id, 'decline', {}, NOW)).rejects.toMatchObject({ status: 404 });
   });
+
+  it('phase 4: returns the real row id, books straight in under auto-confirm, and the employer takes a suggested time by link', async () => {
+    const accept = await import('../hireInterviewAccept');
+    await settings.writeAvailability(E1, { ...settings.DEFAULT_AVAILABILITY, enabled: true, blocks: ['Tue-morning'], formats: ['intro'], autoConfirm: true });
+    const auto = await interviews.requestInterview(body('auto@acme.com', { startsAt: '2026-11-17T15:00:00.000Z' }), NOW);
+    expect(auto).toMatchObject({ status: 'created', confirmed: true });
+    const [rows] = await sequelize.query('SELECT status FROM hire_interviews WHERE id = $1', { bind: [(auto as { id: string }).id] });
+    expect((rows as { status: string }[])[0].status).toBe('confirmed');
+
+    await settings.writeAvailability(E1, { ...settings.DEFAULT_AVAILABILITY, enabled: true, blocks: ['Tue-morning'], formats: ['intro'], autoConfirm: false });
+    const asked = await interviews.requestInterview(body('ask@acme.com', { startsAt: '2026-11-17T16:00:00.000Z' }), NOW);
+    const id = (asked as { id: string }).id;
+    const later = '2026-11-18T17:00:00.000Z';
+    await inbox.actOnInterview(E1, id, 'propose', { startsAt: later }, NOW);
+    const t = accept.acceptToken(id, later);
+    expect((await accept.readProposal(id, t, NOW)).status).toBe('open');
+    expect((await accept.acceptProposedTime(id, 'f'.repeat(64), NOW)).status).toBe('invalid');
+    expect((await accept.acceptProposedTime(id, t, NOW)).status).toBe('confirmed');
+    expect((await accept.acceptProposedTime(id, t, NOW)).status).toBe('already');
+  });
 });

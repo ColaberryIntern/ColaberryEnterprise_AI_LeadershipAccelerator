@@ -34,6 +34,16 @@ describe('Interview times', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
+  it('offers Confirm automatically, off by default, and saves it', async () => {
+    m.saveAvailability.mockImplementation(async (a) => a);
+    H.mount(<HireInterviewTimes loaded={{ value: { ...OFF, enabled: true, blocks: ['Mon-morning'] }, failed: false }} onSaved={jest.fn()} onRetry={jest.fn()} />, '/');
+    expect((H.el('hs-auto') as HTMLInputElement).checked).toBe(false);
+    H.toggle('hs-auto');
+    H.click('hs-times-save');
+    await H.settle();
+    expect(m.saveAvailability).toHaveBeenCalledWith(expect.objectContaining({ autoConfirm: true }));
+  });
+
   it('will not turn booking on with no blocks, or save with no format', async () => {
     H.mount(<HireInterviewTimes loaded={{ value: { ...OFF, enabled: true }, failed: false }} onSaved={jest.fn()} onRetry={jest.fn()} />, '/');
     H.click('hs-times-save');

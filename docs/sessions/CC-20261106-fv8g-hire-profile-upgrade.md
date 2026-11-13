@@ -99,3 +99,42 @@ with these.
     (the API has no field for one). The headline is stored as a draft only: no admin surface
     reviews `headline_draft` yet, and the copy says the live headline does not change. Photo,
     resume and LinkedIn link to /portal/settings. Gold is the portal's --amber.
+  - Shipped: merged 2026-11-13 (#3976). Live via main 16862cce6 (backend started 09:49 UTC, after
+    the merge; nginx redeployed). Production-verified: the studio's text is in the served chunk
+    824.804c6985; the studio API answers 401 without a session; Kes's public payload unchanged
+    (order [], booking off, no "@"); all 6 listed profiles at 1320/390, light/dark: 0 errors, no
+    sideways scroll, carousel advanced 01 -> 02 on its own.
+
+- [x] Phase 4: the schedule page, the booking card, "In their words", and the notifications
+  - Date: 2026-11-13
+  - Session: CC-20261106-fv8g
+  - What changed: hire site: `/talent/<slug>/schedule/` (new `src/schedule/index.html`,
+    `schedule.js` + pure `schedule-model.js`, `schedule.css`): Format, Time (week grid in the
+    viewer's zone, zone picker), Your details (the /intro/ fields + up to 5 interviewers + record
+    consent, inline errors, focus to the first), Done (timeline, a tentative .ics hold); and the
+    employer's side of a suggested time (`?accept=&t=`). nginx routes it (nested in `^~ /talent/`)
+    with `X-Robots-Tag: noindex, nofollow`. Profile: new `profile-extras.js` renders "In their
+    words" and the "Book an interview" card; when bookable the head says Schedule interview and
+    Contact drops Request intro, otherwise nothing changes. Backend: `hireInterviewNotify` (request
+    -> candidate email + an `interview_request` lead on `hire-refactored`, whose notify rule tells
+    the team; confirm -> Zoom room via the meeting provider, then one .ics message per person;
+    decline / propose -> the employer), `hireInterviewEmails` (all copy), `hireInterviewIcs` (no
+    ORGANIZER/ATTENDEE, folded, CRLF), `hireInterviewAccept` (HMAC link over id + time, preview GET,
+    confirming POST). Auto-confirm books straight in and the studio now offers it. `?tab=hire`
+    opens the studio tab from the emails. 44px fixes on the masthead theme toggle and Shortlist.
+  - Verification: backend tsc clean against a control error; test-file typecheck clean (only the
+    local maxmind file); jest 474 pass across hire, routes, controller and seeds (new
+    hireInterviewNotify, hireInterviewAccept; extended routes, controller, hireInterviews,
+    integration). Token-check mutation caught. Hire site node --test 129/129 (new schedule,
+    profileExtras, nginx route). Frontend tsc clean against a control error, CI=true build
+    compiles, portfolio jest 76/76. Real nginx (the production image, throwaway container on the
+    host): `nginx -t` ok; the schedule path serves its shell with X-Robots-Tag noindex and the
+    security headers; the profile path unchanged. Chrome on the real hire origin with the new
+    assets and a stubbed API: profile + all four steps + accept, 1320/390, light/dark: 0 errors, no
+    sideways scroll, no control under 44px, no unlabeled input. Screenshots:
+    `docs/screenshots/2026-11-13-hire-profile-p4/`.
+  - Notes: emails go only through `sendOnce` (one recipient per message, ledger-deduped) and fire
+    after the response; failures are logged by class and never undo the decision. The team alert
+    and the intro form both need the `hire-refactored` lead source, which production does NOT
+    have yet (read-only SELECT 2026-11-13: 0 rows), so the seed must run once at deploy. Video
+    stays Phase 5. Employer reply-to is not promised in copy: the emails point at the intro form.

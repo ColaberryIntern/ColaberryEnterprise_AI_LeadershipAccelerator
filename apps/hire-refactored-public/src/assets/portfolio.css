@@ -126,3 +126,24 @@ a.sha:hover{text-decoration:underline}
 .thumbs button{min-width:0;min-height:44px;aspect-ratio:16/9;padding:0;border:2px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg-sunk);opacity:.6;cursor:pointer}
 .thumbs button[aria-current="true"]{border-color:var(--star);opacity:1}
 .thumbs img,.thumbs svg{display:block;width:100%;height:100%;object-fit:cover}
+
+/* ---------- profile upgrade phase 4: In their words + Book an interview (kit §1.4, §1.5) ---------- */
+.words{display:grid;grid-template-columns:1fr 1.4fr;gap:24px;margin-top:16px}
+.words.one{grid-template-columns:1fr}
+@media(max-width:760px){.words{grid-template-columns:1fr}}
+.video-box{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--bg-sunk);border:1px solid var(--line)}
+.video-box video{display:block;width:100%;height:100%;object-fit:cover;background:var(--bg-sunk)}
+.video-box .len{position:absolute;left:12px;top:10px;font-family:var(--font-mono);font-size:.75rem;color:#fff;background:rgba(12,20,27,.8);padding:2px 8px;border-radius:4px;pointer-events:none}
+.qa{display:flex;flex-direction:column;gap:16px}
+.qa b{display:block;font-size:.95rem}
+.qa p{margin:4px 0 0;color:var(--fg-muted);font-size:.95rem;overflow-wrap:anywhere}
+.looking{margin-top:18px}
+.legend{font-size:.88rem;font-weight:600}
+.look-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.look-chip{font-size:.82rem;padding:4px 10px;border-radius:20px;background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 70%,var(--fg))}
+.slot-link{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:44px;padding:0 14px;border:1px solid var(--line-strong);border-radius:10px;font-size:.9rem;margin-top:8px}
+.slot-link b{font-family:var(--font-mono);color:var(--accent);white-space:nowrap}
+.slot-link:hover,.slot-link:focus-visible{box-shadow:inset 0 0 0 1px var(--accent)}
+.btn-text{background:transparent;border-color:transparent;color:var(--accent);min-height:44px}
+.btn-text:hover,.btn-text:focus-visible{text-decoration:underline}
+.book .btn-text{margin-top:4px}

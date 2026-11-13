@@ -3,9 +3,11 @@
  * GET /api/public/portfolios/:slug?surface=hire.
  *
  * Section order (profile upgrade, docs/hire-refactored/profile-upgrade-demo/PROMPT.md §1.1):
- * banner art, head, proof ledger, case-study carousel + thumbnails, about, verified commits,
- * experience; sidebar: proven in their repo, industries, contact, back to all talent. Pure
- * render functions are exported for node's test runner; carousel.js runs the carousel.
+ * banner art, head, proof ledger, case-study carousel + thumbnails, in their words, about,
+ * verified commits, experience; sidebar: book an interview, proven in their repo, industries,
+ * contact, back to all talent. The two candidate-written pieces live in profile-extras.js and
+ * collapse when absent (no open time keeps Request intro). Pure render functions are exported
+ * for node's test runner; carousel.js runs the carousel.
  *
  * TWO RULES THIS FILE EXISTS TO KEEP. (1) Hire shows a person's work ONLY as approved,
  * Hire-published case studies (Ali, 2026-11-11: "No projects they are working on or that
@@ -16,11 +18,13 @@
  * "26 years" beside a ten-year history, and a hiring manager reads that as a lie.
  */
 (function (root, factory) {
-  var common = typeof module === 'object' && module.exports ? require('./common.js') : root.HireCommon;
-  var api = factory(common);
+  var node = typeof module === 'object' && module.exports;
+  var common = node ? require('./common.js') : root.HireCommon;
+  var extras = node ? require('./profile-extras.js') : root.HireProfileExtras;
+  var api = factory(common, extras);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.HirePortfolio = api;
-}(typeof self !== 'undefined' ? self : this, function (C) {
+}(typeof self !== 'undefined' ? self : this, function (C, X) {
   'use strict';
   var esc = C.esc;
   var arr = function (v) { return Array.isArray(v) ? v : []; };
@@ -265,7 +269,8 @@
     }).join('');
   }
 
-  function sidebar(p, hire, slug) {
+  function sidebar(p, hire, slug, tz) {
+    var book = X.bookCard(hire.booking, slug, tz);
     var caps = arr(p.capabilities);
     var max = caps.reduce(function (m, c) { return Math.max(m, num(c.count) || 0); }, 0) || 1;
     var id = p.identity;
@@ -275,22 +280,34 @@
       id.linkedin_url && /^https:\/\//.test(id.linkedin_url) ? '<div class="row">in <a href="' + esc(id.linkedin_url) + '" target="_blank" rel="noopener">LinkedIn</a></div>' : '',
       id.github_url && /^https:\/\//.test(id.github_url) ? '<div class="row">⌥ <a href="' + esc(id.github_url) + '" target="_blank" rel="noopener">' + esc(id.github_url.replace(/^https:\/\//, '')) + '</a></div>' : '',
     ].join('');
-    return '<aside class="side">'
+    return '<aside class="side">' + book
       + (caps.length ? '<div class="card"><div class="label">Proven in their repo</div><div style="margin-top:10px">' + caps.map(function (c) {
         var pct = Math.max(8, Math.round(((num(c.count) || 0) / max) * 100));
         return '<div class="cap"><b>' + esc(c.name) + '</b><span class="ev">' + (c.proven ? 'proven' : esc(num(c.count) || 0) + ' evidence') + '</span><div class="barw"><div class="bar" style="width:' + pct + '%"></div></div></div>';
       }).join('') + '</div></div>' : '')
       + (industries.length ? '<div class="card"><div class="label">Industries shipped into</div><div class="tags">' + industries.map(function (s) { return '<span class="tag">' + esc(s) + '</span>'; }).join('') + '</div></div>' : '')
-      + '<div class="card"><div class="label">Contact</div>' + contact
-      + '<p class="muted" style="font-size:.86rem;margin:8px 0 12px">Introductions are made by the Colaberry team.</p>'
-      + '<a class="btn btn-primary btn-block" href="/intro/?talent=' + encodeURIComponent(slug) + '" data-intro="' + esc(slug) + '">Request intro</a></div>'
+      // Bookable: the booking card above is the way in, so Contact keeps only the links (kit §1.1).
+      + (book ? (contact ? '<div class="card"><div class="label">Contact</div>' + contact + '</div>' : '')
+        : '<div class="card"><div class="label">Contact</div>' + contact
+          + '<p class="muted" style="font-size:.86rem;margin:8px 0 12px">Introductions are made by the Colaberry team.</p>'
+          + '<a class="btn btn-primary btn-block" href="/intro/?talent=' + encodeURIComponent(slug) + '" data-intro="' + esc(slug) + '">Request intro</a></div>')
       + '<a class="btn btn-ghost btn-block" href="/">← Back to all talent</a></aside>';
   }
 
   var LINK_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg>';
 
-  function renderPortfolio(body, slug, shortlist, now, api) {
+  var CAL_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+
+  /* The head's primary action: Schedule interview when bookable, else today's Request intro. */
+  function primaryAction(hire, slug) {
+    return X.bookable(hire.booking)
+      ? '<a class="btn btn-primary" href="' + esc(X.scheduleHref(slug)) + '" data-book="' + esc(slug) + '">' + CAL_ICON + 'Schedule interview</a>'
+      : '<a class="btn btn-primary" href="/intro/?talent=' + encodeURIComponent(slug) + '" data-intro="' + esc(slug) + '">Request intro</a>';
+  }
+
+  function renderPortfolio(body, slug, shortlist, now, api, tz) {
     var p = body.portfolio; var hire = body.hire; var id = p.identity;
+    var zone = tz || X.viewerZone();
     var person = { slug: slug, name: id.full_name, avatarUrl: id.avatar_data_url };
     var slides = carouselSlides(hire, p.projects);
     var csCount = slides.length;
@@ -306,15 +323,15 @@
       + '<span class="verified-pill">★ Case-study verified · ' + csCount + ' published</span>'
       + '<h1>' + esc(id.full_name) + '</h1>' + (id.headline ? '<div class="role">' + esc(id.headline) + '</div>' : '')
       + (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>'
-      + '<div class="p-actions"><a class="btn btn-primary" href="/intro/?talent=' + encodeURIComponent(slug) + '" data-intro="' + esc(slug) + '">Request intro</a>'
+      + '<div class="p-actions">' + primaryAction(hire, slug)
       + '<button type="button" class="btn btn-star' + (on ? ' on' : '') + '" data-star="' + esc(slug) + '" data-name="' + esc(id.full_name) + '" aria-pressed="' + on + '">★ ' + (on ? 'Shortlisted' : 'Shortlist') + '</button>'
       + '<button type="button" class="btn btn-ghost btn-icon" data-copy aria-label="Copy profile link">' + LINK_ICON + '</button></div></div>'
       + ledger(p, hire, now)
-      + '<div class="p-cols"><div>' + carousel(slides, slug, api)
+      + '<div class="p-cols"><div>' + carousel(slides, slug, api) + X.inTheirWords(hire.intro, api)
       + (about.length ? '<div class="card about"><div class="label">About <span class="src">from their record and resume</span></div>' + about.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>' : '')
       + (vc.length ? '<div class="card"><div class="label">Verified commits</div><h3 class="t">The work, commit by commit</h3>' + commits(vc) + '</div>' : '')
       + (xp.length ? '<div class="card"><div class="label">Experience <span class="src">parsed from their resume</span></div>' + experience(xp) + '</div>' : '')
-      + '</div>' + sidebar(p, hire, slug) + '</div></div>';
+      + '</div>' + sidebar(p, hire, slug, zone) + '</div></div>';
   }
 
   /* The slug comes from the PATH (/talent/<slug>/); anything that is not one is refused. */

@@ -46,7 +46,9 @@ main:focus{outline:none}
 .btn{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:.92rem;padding:10px 16px;border-radius:10px;border:1px solid transparent}
 .btn-primary{background:var(--accent);color:var(--accent-contrast)}
 .btn-ghost{border-color:var(--line-strong);background:transparent}
-.btn-star{border-color:color-mix(in srgb,var(--star) 50%,transparent);color:var(--star-text);background:var(--star-soft)}
+.btn-star{border-color:color-mix(in srgb,var(--star) 50%,transparent);color:var(--star-text);background:var(--star-soft);min-height:44px}
+/* 44px tap targets (kit non-negotiable): measured 40px on the theme toggle, 42px on Shortlist at 390. */
+.nav button.link{min-height:44px;min-width:44px}
 .btn-star.on{background:var(--star);color:var(--star-ink)}
 .shortcount{font-family:var(--font-mono);font-size:.75rem;background:var(--star);color:var(--star-ink);border-radius:20px;padding:0 7px;margin-left:2px}
 

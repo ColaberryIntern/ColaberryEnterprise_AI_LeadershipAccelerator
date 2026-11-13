@@ -389,7 +389,13 @@ async function run() {
   let created = 0;
   let updated = 0;
 
-  for (const seed of SEEDS) {
+  // `--only <slug>` seeds one source and leaves every other row as it is (narrowest prod write).
+  const at = process.argv.indexOf('--only');
+  const only = at >= 0 ? process.argv[at + 1] : null;
+  const seeds = only ? SEEDS.filter((s) => s.slug === only) : SEEDS;
+  if (only && !seeds.length) throw new Error(`--only ${only}: no such source in the seed`);
+
+  for (const seed of seeds) {
     let source = await LeadSource.findOne({ where: { slug: seed.slug } });
     if (!source) {
       source = await LeadSource.create({

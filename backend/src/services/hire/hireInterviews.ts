@@ -17,9 +17,9 @@
  * IDEMPOTENT. The same employer asking for the same slot again gets `duplicate` and no second
  * row (also enforced by `uq_hire_interviews_repeat`).
  *
- * NO NOTIFICATION YET. This phase records the request; Phase 4 emails the candidate and the
- * Colaberry team and links it to the `hire-refactored` lead source. No email, phone or work
- * authorization is ever returned: the response carries a status and the slot.
+ * NOTIFICATIONS are the caller's next step (hireInterviewNotify, fired by the route after the
+ * transaction commits), so a slow mailer never holds the candidate's lock. No email, phone or
+ * work authorization is ever returned: the response carries a status, the id and the slot.
  */
 import { z } from 'zod';
 import type { Transaction } from 'sequelize';
@@ -140,7 +140,7 @@ export const interviewRequestSchema = z.object({
 export type InterviewRequestInput = z.infer<typeof interviewRequestSchema>;
 
 export type InterviewRequestOutcome =
-  | { status: 'created' | 'duplicate'; http: 201 | 200; startsAt: string; minutes: number; format: InterviewFormat }
+  | { status: 'created' | 'duplicate'; http: 201 | 200; id: string; confirmed: boolean; startsAt: string; minutes: number; format: InterviewFormat }
   | { status: 'invalid'; http: 400; error: string }
   | { status: 'not_found'; http: 404 }
   | { status: 'unavailable'; http: 409 };
@@ -168,11 +168,14 @@ export async function requestInterview(raw: unknown, now: Date = new Date()): Pr
     await sequelize.query('SELECT pg_advisory_xact_lock(hashtext($1))', opts([`hire_interviews:${eid}`]));
 
     const [dupes] = await sequelize.query(
-      `SELECT id FROM hire_interviews WHERE enrollment_id = $1 AND starts_at = $2 AND LOWER(employer_email) = LOWER($3)
+      `SELECT id, status FROM hire_interviews WHERE enrollment_id = $1 AND starts_at = $2 AND LOWER(employer_email) = LOWER($3)
          AND status = ANY($4::text[]) LIMIT 1`,
       opts([eid, start, input.email, HOLDING_STATUSES]),
     );
-    if (Array.isArray(dupes) && dupes.length) return { status: 'duplicate' as const, http: 200 as const, ...base };
+    if (Array.isArray(dupes) && dupes.length) {
+      const d = dupes[0] as { id: string; status: string };
+      return { status: 'duplicate' as const, http: 200 as const, id: String(d.id), confirmed: d.status === 'confirmed', ...base };
+    }
 
     const a = await readAvailability(eid);
     if (!a.enabled || !a.formats.includes(input.format)) return { status: 'unavailable' as const, http: 409 as const };
@@ -180,18 +183,21 @@ export async function requestInterview(raw: unknown, now: Date = new Date()): Pr
     const open = openSlots(rulesOf(a), { minutes, fromDate: localDate(start, a.tz), now, held, days: 1 });
     if (!open.some((s) => s.getTime() === start.getTime())) return { status: 'unavailable' as const, http: 409 as const };
 
-    await sequelize.query(
+    // Auto-confirm (the candidate's own setting) books it straight in; the notifier then sends the invite.
+    const status = a.autoConfirm ? 'confirmed' : 'requested';
+    const [inserted] = await sequelize.query(
       `INSERT INTO hire_interviews (enrollment_id, talent_slug, format, case_study_slug, starts_at, minutes, status,
          employer_name, employer_email, employer_company, employer_role, message, extra_interviewers, record_requested)
-       VALUES ($1, $2, $3, $4, $5, $6, 'requested', $7, $8, $9, $10, $11, $12::text[], $13)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $14, $7, $8, $9, $10, $11, $12::text[], $13) RETURNING id`,
       opts([eid, entry.page.slug, input.format, input.format === 'walkthrough' ? input.caseStudySlug : null, start, minutes,
         input.name, input.email.toLowerCase(), input.company, input.role, input.message,
-        input.interviewers.map((e) => e.toLowerCase()), input.record]),
+        input.interviewers.map((e) => e.toLowerCase()), input.record, status]),
     );
     console.log(JSON.stringify({
       timestamp: now.toISOString(), level: 'info', service: 'backend', event: 'hire_interview_requested',
-      outcome: 'success', context: { talent_slug: entry.page.slug, format: input.format, starts_at: base.startsAt },
+      outcome: 'success', context: { talent_slug: entry.page.slug, format: input.format, starts_at: base.startsAt, auto_confirmed: a.autoConfirm },
     }));
-    return { status: 'created' as const, http: 201 as const, ...base };
+    const id = String((Array.isArray(inserted) && inserted[0] ? (inserted[0] as { id: string }).id : ''));
+    return { status: 'created' as const, http: 201 as const, id, confirmed: a.autoConfirm, ...base };
   });
 }
