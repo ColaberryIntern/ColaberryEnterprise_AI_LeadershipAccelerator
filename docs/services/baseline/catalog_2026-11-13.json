@@ -1,0 +1,566 @@
+{
+  "kind": "service_catalog_snapshot",
+  "takenOn": "2026-11-13",
+  "tenantId": "a1ccf4d3-74a3-4b98-b4dd-ba0087efd924",
+  "rowCount": 28,
+  "rows": [
+    {
+      "id": "ec987121-7935-415f-9467-7298edd26343",
+      "name": "Ongoing Support and Maintenance",
+      "description": "Providing continuous support and maintenance for the application post-launch.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-11-12T13:39:55.606Z"
+    },
+    {
+      "id": "d39e1f7b-5ecf-4e44-903a-75a7fad6f1d0",
+      "name": "Training and Documentation",
+      "description": "Providing training and documentation for users to effectively use the new system.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-11-12T13:39:49.785Z"
+    },
+    {
+      "id": "dde4dcf7-9bb3-4bf2-9cd4-2792830025b9",
+      "name": "Stakeholder Communication",
+      "description": "Facilitating effective communication among all project stakeholders.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:04.078Z"
+    },
+    {
+      "id": "570f8754-d7ff-4105-b2de-e660bd551463",
+      "name": "Ongoing Support and Maintenance",
+      "description": "Providing continuous support and maintenance for the application post-launch.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:04.055Z"
+    },
+    {
+      "id": "f1573167-bf80-43d8-81ce-78ab9a0a1a0d",
+      "name": "Training and Documentation",
+      "description": "Providing training and documentation for users to effectively use the new system.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:04.039Z"
+    },
+    {
+      "id": "c98db51d-49de-4dc1-9397-4a5bbc763e96",
+      "name": "Business Continuity and Disaster Recovery Planning",
+      "description": "A plan detailing how to maintain operations during disruptions.",
+      "category": "growth capability",
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "growth",
+      "updatedAt": "2026-11-05T16:07:48.976Z"
+    },
+    {
+      "id": "b274a5fe-3a8f-42d4-8270-d2241f543e82",
+      "name": "Financial Reporting and Compliance",
+      "description": "A service to manage and report financial statements accurately.",
+      "category": "growth capability",
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "growth",
+      "updatedAt": "2026-11-05T16:07:44.527Z"
+    },
+    {
+      "id": "85efa3ea-999d-466e-af1f-2c918359d1ce",
+      "name": "Assumption and Exception Management",
+      "description": "Managing and documenting assumptions and exceptions in proposals.",
+      "category": "growth capability",
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "growth",
+      "updatedAt": "2026-11-05T16:07:41.709Z"
+    },
+    {
+      "id": "6744147e-4c8a-4564-869b-cb18dbe1fbc7",
+      "name": "Stakeholder Communication",
+      "description": "Facilitating effective communication among all project stakeholders.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:04.021Z"
+    },
+    {
+      "id": "0b7ee6a2-9bb1-4f5c-a82e-4a4fbee80b2f",
+      "name": "Data Integrity and Preservation",
+      "description": "Ensuring that all data relationships and integrity are maintained throughout the migration process.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.995Z"
+    },
+    {
+      "id": "765d07e1-671d-4be6-bebb-f4fa70a0f206",
+      "name": "Training and Documentation",
+      "description": "Providing training and documentation for users to effectively use the new system.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.962Z"
+    },
+    {
+      "id": "0b983736-022d-4a3a-b3bb-de52653babef",
+      "name": "Ongoing Support and Maintenance",
+      "description": "Providing continuous support and maintenance for the application post-launch.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.902Z"
+    },
+    {
+      "id": "a6d38eba-4a74-4b82-93fd-110004d784f8",
+      "name": "Consulting and Staff Augmentation",
+      "description": "A service that embeds experienced professionals in the client team to lead implementation and provide expertise.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.864Z"
+    },
+    {
+      "id": "b1b83887-8247-4807-af92-237aa37060e7",
+      "name": "Data Analytics and Reporting",
+      "description": "A service that offers comprehensive data analytics and reporting tailored to asset management.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.678Z"
+    },
+    {
+      "id": "04cf76df-9c24-4a83-b602-2ed487f67283",
+      "name": "Data Migration Services",
+      "description": "Transferring existing data and documents into the new work order management system.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.649Z"
+    },
+    {
+      "id": "9244e17b-874f-4c9c-a488-0ba0e5f940a8",
+      "name": "User Role Management",
+      "description": "Managing different access levels and functionalities for various users within the system.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.617Z"
+    },
+    {
+      "id": "586fb1a1-3996-4cfe-9306-bd52ec088eb0",
+      "name": "Stakeholder Communication",
+      "description": "Managing communication between stakeholders during the proposal process.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.570Z"
+    },
+    {
+      "id": "b0a78b39-40f6-46a9-a6d0-a470bf526758",
+      "name": "Project Management",
+      "description": "Managing timelines, resources, and communications for proposal development.",
+      "category": null,
+      "keywords": [],
+      "naicsCodes": [],
+      "pscCodes": [],
+      "pastPerformance": null,
+      "status": "retired",
+      "updatedAt": "2026-11-12T03:00:03.232Z"
+    },
+    {
+      "id": "fd23c4c3-680e-47bc-8bdf-c174e174c1a1",
+      "name": "Government Proposal Development & Capture Support",
+      "description": "Hunting government solicitations and writing proposals and RFP responses, optionally paired with a working pilot demo referenced in the narrative, delivered for Colaberry bids and as a hunt-and-write partner service.",
+      "category": "Consulting",
+      "keywords": [
+        "proposal development",
+        "rfp response",
+        "bid writing",
+        "capture management",
+        "grant writing",
+        "government contracting",
+        "solicitation response",
+        "technical writing",
+        "past performance",
+        "demo pilot"
+      ],
+      "naicsCodes": [
+        "541611",
+        "541990",
+        "541618",
+        "541511"
+      ],
+      "pscCodes": [
+        "R408",
+        "R499",
+        "D302"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.319Z"
+    },
+    {
+      "id": "9ae206c8-cd6a-45ae-8174-34d45555e470",
+      "name": "Managed Data Services & BI Modernization",
+      "description": "Managed data services and reporting and BI modernization, including data pipelines, dashboards and AI-powered reporting aligned to modern platforms such as Microsoft Fabric and Databricks.",
+      "category": "Data",
+      "keywords": [
+        "data engineering",
+        "data pipeline",
+        "etl",
+        "dashboards",
+        "business intelligence",
+        "reporting",
+        "data warehouse",
+        "bi modernization",
+        "databricks",
+        "microsoft fabric",
+        "data visualization",
+        "managed data services"
+      ],
+      "naicsCodes": [
+        "518210",
+        "541512",
+        "541511",
+        "541519"
+      ],
+      "pscCodes": [
+        "D302",
+        "D399",
+        "7030"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.326Z"
+    },
+    {
+      "id": "f97e910d-d08e-44e4-b9a3-a0b8c7e58bb5",
+      "name": "Data Talent Pipeline (Hire-Train-Deploy)",
+      "description": "Sourcing, training and placing data and AI talent, including internship-to-hire pipelines, to build out client teams.",
+      "category": "Staffing",
+      "keywords": [
+        "talent pipeline",
+        "apprenticeship",
+        "internship",
+        "hire train deploy",
+        "recruiting",
+        "talent acquisition",
+        "workforce pipeline",
+        "data talent",
+        "reskilling",
+        "direct placement"
+      ],
+      "naicsCodes": [
+        "561311",
+        "561320",
+        "611420",
+        "611430"
+      ],
+      "pscCodes": [
+        "R499",
+        "U008"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.330Z"
+    },
+    {
+      "id": "a42cf254-136a-4de4-8f0d-ff265cffd73e",
+      "name": "Consulting & Staff Augmentation (Embedded Architects / Data Talent)",
+      "description": "Senior architects and data professionals embed in the client team to lead implementation, set reliability and governance standards and transfer capability, plus contingent staffing for data analytics, data science and data engineering.",
+      "category": "Staffing",
+      "keywords": [
+        "staff augmentation",
+        "contingent staffing",
+        "embedded team",
+        "technical leadership",
+        "it staffing",
+        "consulting",
+        "managed services",
+        "subject matter expert",
+        "architecture review",
+        "data engineering staffing"
+      ],
+      "naicsCodes": [
+        "541512",
+        "541511",
+        "561320",
+        "541690"
+      ],
+      "pscCodes": [
+        "D302",
+        "D307",
+        "R499"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.334Z"
+    },
+    {
+      "id": "99c25fd6-d60e-4dea-af49-40540c1f66d6",
+      "name": "Data Analytics & BI Training with Job Placement",
+      "description": "Career-oriented data analytics, data science and BI training via the Colaberry School of Data Analytics and the Refactored.ai platform, with portfolio building and job-placement and career support.",
+      "category": "Training",
+      "keywords": [
+        "data analytics training",
+        "data science",
+        "business intelligence",
+        "sql",
+        "python",
+        "machine learning",
+        "bootcamp",
+        "workforce development",
+        "job placement",
+        "career training",
+        "power bi",
+        "tableau"
+      ],
+      "naicsCodes": [
+        "611420",
+        "611430",
+        "561311"
+      ],
+      "pscCodes": [
+        "U008",
+        "U099"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.339Z"
+    },
+    {
+      "id": "ed6e369b-3a38-452d-88ad-0777e147d7d0",
+      "name": "Workforce AI Upskilling & Architect Accelerator",
+      "description": "Assessment-based, project-anchored upskilling that turns existing employees into AI builders and architects on a real company project, with evaluations, certification preparation and a management readiness dashboard.",
+      "category": "Training",
+      "keywords": [
+        "training",
+        "upskilling",
+        "reskilling",
+        "workforce development",
+        "professional development",
+        "ai training",
+        "instructor-led training",
+        "e-learning",
+        "certification preparation",
+        "curriculum development",
+        "corporate training"
+      ],
+      "naicsCodes": [
+        "611430",
+        "611420",
+        "541690"
+      ],
+      "pscCodes": [
+        "U008",
+        "U099"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.345Z"
+    },
+    {
+      "id": "116262b9-d496-45f2-93e1-d4fdcde94ba6",
+      "name": "AI Agents & Managed AI Workforce",
+      "description": "Design and operation of governed AI agents with defined jobs, bounded tools, human approval and escalation paths, plus embedded AI-operations leadership and AI-powered reporting agents.",
+      "category": "AI",
+      "keywords": [
+        "ai agents",
+        "intelligent automation",
+        "autonomous agents",
+        "agentic ai",
+        "virtual assistant",
+        "ai operations",
+        "process automation",
+        "llm agents",
+        "reporting automation",
+        "orchestration",
+        "conversational ai",
+        "chatbot",
+        "contact center",
+        "ivr",
+        "voice ai",
+        "customer service automation"
+      ],
+      "naicsCodes": [
+        "541511",
+        "541512",
+        "518210",
+        "541519"
+      ],
+      "pscCodes": [
+        "D302",
+        "D399",
+        "7030"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.351Z"
+    },
+    {
+      "id": "d5ffd2d2-e5eb-4623-aa4e-a55922bbb06b",
+      "name": "Enterprise AI Build & System Modernization",
+      "description": "Production architecture, custom web and application development, API and MCP integration, and legacy system modernization with access controls, audit logging, observability and documentation the client team can operate, including full-stack builds for government agencies.",
+      "category": "IT",
+      "keywords": [
+        "custom software development",
+        "application development",
+        "web application",
+        "legacy modernization",
+        "system integration",
+        "api development",
+        "cloud migration",
+        "case management system",
+        "records management",
+        "software engineering",
+        "workflow automation",
+        "ivr",
+        "interactive voice response",
+        "contact center",
+        "telephony integration",
+        "voice recognition",
+        "conversational ai"
+      ],
+      "naicsCodes": [
+        "541511",
+        "541512",
+        "541519",
+        "518210"
+      ],
+      "pscCodes": [
+        "D302",
+        "D308",
+        "7030"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.357Z"
+    },
+    {
+      "id": "bc4ff96e-f365-4805-91ad-4f07714c4ef6",
+      "name": "AI Production Pilot / Proof of Concept",
+      "description": "End-to-end design and build of one workflow with Claude and LLMs against real client data and systems, with success criteria, evaluations, human-approval points and an auditable production recommendation.",
+      "category": "AI",
+      "keywords": [
+        "proof of concept",
+        "pilot",
+        "prototype",
+        "generative ai",
+        "large language model",
+        "workflow automation",
+        "process automation",
+        "ai integration",
+        "evaluation",
+        "poc",
+        "voice recognition",
+        "ivr",
+        "interactive voice response",
+        "conversational ai",
+        "chatbot",
+        "virtual assistant",
+        "natural language processing",
+        "nlp",
+        "speech-to-text",
+        "voice ai"
+      ],
+      "naicsCodes": [
+        "541511",
+        "541512",
+        "541690"
+      ],
+      "pscCodes": [
+        "D302",
+        "D307",
+        "R425"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.363Z"
+    },
+    {
+      "id": "69c867ab-e50c-4643-b2fc-b03f95f4152a",
+      "name": "AI Opportunity & Readiness Assessment",
+      "description": "Structured discovery and workflow inventory that scores AI opportunities on value, feasibility, data readiness and risk, producing a prioritized opportunity map and a 90-day roadmap.",
+      "category": "Consulting",
+      "keywords": [
+        "ai readiness assessment",
+        "ai strategy",
+        "feasibility study",
+        "roadmap",
+        "workflow assessment",
+        "opportunity analysis",
+        "digital transformation",
+        "ai governance",
+        "roi analysis",
+        "advisory"
+      ],
+      "naicsCodes": [
+        "541611",
+        "541618",
+        "541690",
+        "541512"
+      ],
+      "pscCodes": [
+        "D307",
+        "R408",
+        "B505"
+      ],
+      "pastPerformance": null,
+      "status": "active",
+      "updatedAt": "2026-10-02T15:59:03.369Z"
+    }
+  ]
+}
