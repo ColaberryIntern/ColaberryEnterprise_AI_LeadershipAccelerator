@@ -18,7 +18,7 @@ const RITUAL_LANE: Record<string, PostLane> = {
 export const laneForType = (type: ComposeType, ritualKey?: string | null): PostLane =>
   type === 'q' ? 'q' : type === 'ritual' && ritualKey ? RITUAL_LANE[ritualKey] ?? 'general' : 'general';
 
-const serverWords = (e: unknown): string => {
+export const serverWords = (e: unknown): string => {
   const d = (e as { response?: { data?: { details?: { fieldErrors?: { body?: string[] } }; error?: string } } }).response?.data;
   return d?.details?.fieldErrors?.body?.[0] ?? d?.error ?? 'Could not post it right now. Please try again.';
 };
@@ -88,7 +88,7 @@ export default function BoardComposer({ initial, weekRitual, onPosted, onCancel 
       )}
       {message && <p className="cb-msg" role="alert">{message}</p>}
       <div className="ft">
-        <small data-testid="cb-compose-where">It goes to the top of Fresh and into {laneMeta(lane).label}. You&rsquo;ll get a notification when someone replies.
+        <small data-testid="cb-compose-where">It goes to the top of the stream and into {laneMeta(lane).label}. You&rsquo;ll get a notification when someone replies.
           {type !== 'ritual' && <> · <span data-testid="cb-words">{words} {words === 1 ? 'word' : 'words'} · posts need at least {MIN_WORDS}</span></>}</small>
         <button type="button" className="cb-btn" onClick={onCancel}>Cancel</button>
         <button type="button" className="cb-btn pri" onClick={post} disabled={busy || !ready} data-testid="cb-compose-post">{busy ? 'Pinning…' : 'Pin it to the board'}</button>

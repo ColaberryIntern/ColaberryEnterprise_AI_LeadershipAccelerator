@@ -61,6 +61,12 @@ export const CPS_CSS = `
  * is NOT set for the unmeasurable states: an instrumentation gap must not render as an alarm.
  */
 .cps-aud[data-raised="yes"]{ color:#8a4b00; font-weight:600; }
+/*
+ * D10 - the mark control and what it says back. The message sits beside the button rather than
+ * under the strip, because it answers a press and has to be found by the eye that just pressed.
+ */
+.cps-mark{ display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cps-mark-said{ font-size:12px; color:var(--text-muted,#55606f); max-width:38ch; line-height:1.4; }
 .cps-note,.cps-blocked,.cps-notice{ margin:10px 0 0; font-size:13px; }
 .cps-note{ color:var(--text-muted,#55606f); }
 .cps-blocked{ color:var(--text-muted,#55606f); }

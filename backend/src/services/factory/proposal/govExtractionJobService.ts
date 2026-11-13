@@ -23,6 +23,14 @@ export interface ExtractionResultPayload {
   fileCount: number;
   files: any;
   extraction: any;
+  /** Distinct obligations the extractor found and did NOT keep, because the requirement ceiling was
+   *  reached. 0 means the set is complete. Carried to the UI for the same reason `files` is: a
+   *  reviewer has to be able to see that a compliance matrix was built from a sample. */
+  requirementsSuppressed: number;
+  /** The reviewer-facing sentence when the ceiling fired; null when it did not. */
+  requirementsWarning: string | null;
+  /** The ceiling itself, so the UI never has to hardcode it to phrase the warning. */
+  requirementsCap: number | null;
 }
 
 /**
@@ -33,7 +41,16 @@ export interface ExtractionResultPayload {
 export function toExtractionResult(
   requirements: any[],
   items: any,
-  result: { fileCount: number; files: any },
+  // The three requirement-ceiling fields are OPTIONAL on the way in and defaulted on the way out, so
+  // an existing caller that passes only `{ fileCount, files }` still compiles and still reports the
+  // honest "nothing was suppressed" rather than `undefined`.
+  result: {
+    fileCount: number;
+    files: any;
+    requirementsCap?: number;
+    requirementsSuppressed?: number;
+    requirementsWarning?: string | null;
+  },
   aiMeta: any,
 ): ExtractionResultPayload {
   const candidates = (requirements || []).map((r: any) => ({
@@ -45,7 +62,16 @@ export function toExtractionResult(
     kind: r.kind,
     priority: r.priority,
   }));
-  return { candidates, items, fileCount: result.fileCount, files: result.files, extraction: aiMeta };
+  return {
+    candidates,
+    items,
+    fileCount: result.fileCount,
+    files: result.files,
+    extraction: aiMeta,
+    requirementsSuppressed: result.requirementsSuppressed ?? 0,
+    requirementsWarning: result.requirementsWarning ?? null,
+    requirementsCap: result.requirementsCap ?? null,
+  };
 }
 
 export interface StartExtractionInput {

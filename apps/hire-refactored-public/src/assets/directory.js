@@ -164,7 +164,7 @@
       var s = t.signature;
       return '<a class="mini" href="' + caseLink(s.slug) + '" target="_blank" rel="noopener" data-launch data-from="strip" data-case="' + esc(s.slug) + '" data-talent-slug="' + esc(t.slug) + '">'
         + '<div class="art">' + C.cover(s, api, 7) + '</div>'
-        + '<div class="t"><b>' + esc(s.title) + '</b><span>' + esc(t.name) + (s.industry ? ' · ' + esc(s.industry) : '') + '</span></div></a>';
+        + '<div class="t"><b>' + esc(s.title) + '</b><span>' + esc(t.name) + (s.industry ? ' · ' + esc(C.industryLabel(s.industry)) : '') + '</span></div></a>';
     });
     if (!cards.length) return '';
     return '<section class="block" id="published" style="padding-top:10px"><div class="wrap">'
@@ -201,7 +201,15 @@
       + renderHow();
   }
 
+  /* The first load failed. True, and different from "nobody is listed", which only the API may say. */
+  function renderUnavailable() {
+    return '<section class="block" id="directory-unavailable"><div class="wrap"><div class="empty">'
+      + '<h1 class="mono">The directory could not be reached just now</h1>'
+      + '<p>Refresh the page in a moment to see the listed engineers.</p></div></div></section>';
+  }
+
   return {
+    renderUnavailable: renderUnavailable,
     TRACKS: TRACKS, SORTS: SORTS, parseFilters: parseFilters, filtersToQuery: filtersToQuery,
     isPayload: isPayload, renderHero: renderHero, renderSpotlight: renderSpotlight,
     talentCard: talentCard, renderGrid: renderGrid, renderStrip: renderStrip,

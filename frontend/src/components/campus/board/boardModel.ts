@@ -5,12 +5,14 @@
 export const BOARD_AT = { x: 560, y: 470 } as const; // the prototype's translate(560,470): just south-east of the fountain
 export const BOARD_SPOT = { x: 560, y: 498 } as const; // where you stand to read it
 export const BOARD_WALK_MS = 900;
-/** Where-to words that find the board. */
-export const BOARD_WORDS = ['community', 'post', 'question', 'ask', 'board', 'forum'];
+/** Where-to words that find Colaberry Now (v20 N1, C131: community, board, post, question, tv, now; v7 also ask and forum). */
+export const BOARD_WORDS = ['community', 'board', 'post', 'question', 'tv', 'now', 'ask', 'forum'];
 
+/** A typed prefix of 3+ letters, or any whole word (so the two-letter "tv" counts when typed in full). */
 export const means = (q: string): boolean => {
   const t = q.trim().toLowerCase();
-  return t.length >= 3 && BOARD_WORDS.some((w) => w.startsWith(t) || t.split(/\s+/).includes(w));
+  const words = t.split(/\s+/);
+  return BOARD_WORDS.some((w) => (t.length >= 3 && w.startsWith(t)) || words.includes(w));
 };
 
 /**

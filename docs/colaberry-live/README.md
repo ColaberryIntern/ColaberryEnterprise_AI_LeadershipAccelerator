@@ -5,7 +5,7 @@ Generated from `scripts/artifacts/tickets/l118Data.js`. **Do not hand-edit** —
 before it writes anything.
 
 Bootstrap §3.1 and §17 require **18 documents**, DOC 00 through DOC 17.
-**16 are written**, 9 of them under L11.8 on 2026-11-03.
+**17 are written**, 9 of them under L11.8 on 2026-11-03.
 
 **Start at [DOC 00](DOC_00_READ_FIRST_AI_OPERATING_BRIEF.md).** Every AI-executable todo links to it, and it carries
 the source-of-truth hierarchy, the ticket-selection rule and the current blockers.
@@ -24,7 +24,7 @@ the source-of-truth hierarchy, the ticket-selection rule and the current blocker
 | 07 | YouTube, Media Production & Weekly Content Engine | L11.8 | In the repo | `docs/colaberry-live/DOC_07_YOUTUBE_MEDIA_PRODUCTION_ENGINE.md` | This pass, 2026-11-03. |
 | 08 | Test Plan, Failure Drills & Launch Runbook | L11.8 | In the repo | `docs/colaberry-live/DOC_08_TEST_PLAN_FAILURE_DRILLS_LAUNCH_RUNBOOK.md` | This pass, 2026-11-03. |
 | 09 | Traceability Matrix | L0.4 | In the repo | `docs/COLABERRY_LIVE_TRACEABILITY_MATRIX.md` | Generated from l04DodData.js with a self-check — do not hand-edit. |
-| 10 | Current State Migration Ledger | **none** | Not written | — | Required by bootstrap §17 as COLABERRY LIVE — CURRENT BUILD MIGRATION REPORT, with six named sections A-F. NO TICKET ON THE BOARD COVERS IT. Found 2026-11-03 while scoping L11.8, by counting §3.1 and §17 against all 61 todos. |
+| 10 | Current State Migration Ledger | L0.5 | In the repo | `docs/colaberry-live/DOC_10_CURRENT_BUILD_MIGRATION_REPORT.md` | Required by bootstrap §17 as COLABERRY LIVE — CURRENT BUILD MIGRATION REPORT, with six named sections A-F. HAD NO TICKET ON THE BOARD until 2026-11-10; found 2026-11-03 while scoping L11.8, by counting §3.1 and §17 against all 61 todos. Ticket L0.5 was created and the document written 2026-11-10. Generated from l05Data.js + l05Phases.js: section A is a frozen git snapshot, section B stats 40 reference paths on every build, and sections C and D are an 87-row Basecamp census committed beside the data so the counts can be re-run rather than trusted. |
 | 11 | System Architecture Handbook | L11.1 | In the repo | `docs/colaberry-live/DOC_11_SYSTEM_ARCHITECTURE_HANDBOOK.md` | Written 2026-11-03. Its capability proof register is generated from l111Data.js and spliced into the document, so the handbook cannot claim a capability is proven when the data says otherwise: 4 of 28 claims have run in a real airing, 10 have never run. |
 | 12 | Architecture Diagrams | L11.2 | In the repo | `docs/colaberry-live/DOC_12_ARCHITECTURE_DIAGRAMS.md` | Written 2026-11-03. 10 diagrams, Mermaid source generated from l112Data.js, 78 required elements checked against the source. 14 nodes across 7 diagrams are drawn dashed and red because they are not built, and the build fails if an unbuilt path is drawn like a working one. |
 | 13 | Ali + Piyush Studio Operator Manual | L11.3 | Blocked | — | Needs the studio installed (L6.2, L6.3). A manual for equipment nobody has yet is untested prose. Owner is Piyush, not Claude Code. |
@@ -60,12 +60,16 @@ direction only: a checker built by reading the documents would pass by construct
 129 requirements in all, 69 of them required to be navigable
 sections rather than mentions in prose.
 
-## The gap this pass found
+## The gap this pass found, and how it was closed
 
-**DOC 10 has no ticket.** Bootstrap §17 requires a report named *COLABERRY LIVE — CURRENT BUILD
+**DOC 10 had no ticket.** Bootstrap §17 requires a report named *COLABERRY LIVE — CURRENT BUILD
 MIGRATION REPORT* with six named sections, and names `docs/colaberry-live/` as its repository
-home. No todo on board 49210714 covers it. It was found by counting §3.1 and §17 against all
-61 todos, done and open — a board cannot show this about itself.
+home. No todo on board 49210714 covered it. It was found on 2026-11-03 by counting §3.1 and §17 against all 61 todos then on the board, done and open - a board cannot show this about itself.
+
+**Closed 2026-11-10 by L0.5**, which created the ticket and
+wrote the document at [`docs/colaberry-live/DOC_10_CURRENT_BUILD_MIGRATION_REPORT.md`](DOC_10_CURRENT_BUILD_MIGRATION_REPORT.md).
+The finding is kept in this ledger rather than erased: a ledger that quietly reports a clean state
+cannot be used to tell a gap that never existed from one that was fixed.
 
 That is the fifth such gap on this program. The other four are definition-of-done conditions 17, 18,
 19 and 40, recorded in [DOC 00](DOC_00_READ_FIRST_AI_OPERATING_BRIEF.md) and in

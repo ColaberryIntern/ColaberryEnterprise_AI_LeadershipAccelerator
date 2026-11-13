@@ -1,0 +1,22 @@
+{
+ "session": "CC-20261015-t6q2",
+ "branch": "workstream/l05-doc10-migration-report",
+ "head": "e3ba19283",
+ "mainSha": "e3ba19283",
+ "mergeBase": "e3ba19283",
+ "worktree": "C:/Users/ali_m/Downloads/acc-doc10-wt",
+ "capturedAt": "2026-11-11T01:33:34.147Z",
+ "commits": [],
+ "uncommitted": [
+  "?? docs/colaberry-live/DOC_10_CURRENT_BUILD_MIGRATION_REPORT.md",
+  "?? scripts/artifacts/buildL05Artifacts.js",
+  "?? scripts/artifacts/tickets/l05BoardCensus.json",
+  "?? scripts/artifacts/tickets/l05Data.js",
+  "?? scripts/artifacts/tickets/l05Document.js",
+  "?? scripts/artifacts/tickets/l05Phases.js",
+  "?? scripts/artifacts/tickets/l05Visual.js"
+ ],
+ "plan": "Close the one coverage gap the L11.8 pass found: write DOC 10 to bootstrap §17, generated from a data module with a mutation-tested self-check, and give it the ticket it never had.",
+ "task": "L0.5 - DOC 10, this document",
+ "pr": "Held deliberately. PR #3828 (L11.2 and L11.4) is open with all eleven checks green and edits the same documents ledger this work edits. Opening a second PR against that file while the first awaits review is how an approval gets lost to a conflict, so this branch is pushed and its PR opens once #3828 merges."
+}

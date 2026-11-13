@@ -208,10 +208,14 @@ export function BuildCard({ p, onOpen, onRemove, repoSync }: {
               do. A quiet outlined control that only reddens on hover, sitting
               apart from the primary action, and it opens a confirmation rather
               than doing anything itself. */}
+          {/* "Delete", not "Remove". Swati asked Ali to delete a project on 2026-11-11 because she
+              could not find a delete option; the control was right here, called Remove. The word a
+              person searches for is the word the button has to use, and the dialog is where
+              "nothing is actually erased" gets explained. */}
           {onRemove && (
             <button type="button" className="pjb-remove" onClick={onRemove}
-              aria-label={`Remove ${p.name}`}>
-              Remove
+              aria-label={`Delete ${p.name}`}>
+              Delete
             </button>
           )}
         </div>
@@ -892,7 +896,7 @@ const ProjectsPage: React.FC = () => {
               promise. Rendered only when there is something to restore. */}
           {archived.length > 0 && (
             <div className="pjb-archived">
-              <div className="pjb-archived-h">Removed builds</div>
+              <div className="pjb-archived-h">Deleted builds</div>
               {archived.map((a) => (
                 <div className="pjb-archived-row" key={a.id}>
                   <span className="pjb-archived-nm">{a.name || 'Unnamed build'}</span>

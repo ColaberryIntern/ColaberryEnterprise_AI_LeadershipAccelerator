@@ -15,6 +15,7 @@
  */
 
 const { esc } = require('./triageCharts');
+const { categoryOf } = require('./listCategories');
 
 const pctOf = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 
@@ -90,9 +91,10 @@ function taskRows(s, limit = 6) {
 function listCard(s) {
   const dormantPct = pctOf(s.dormant, s.total);
   const tone = s.dormant === s.total ? 'card-dead' : (s.dormant ? 'card-mixed' : 'card-live');
-  return `<article class="card ${tone}">
+  const cat = categoryOf(s.key, s.projectId);
+  return `<article class="card ${tone}" data-cat="${esc(cat.key)}">
     <header class="card-head">
-      <h3 class="card-title">${esc(s.name)}</h3>
+      <h3 class="card-title"><span class="card-cat" title="${esc(cat.label)}">${cat.icon}</span> ${esc(s.name)}</h3>
       <span class="card-count">${s.total}</span>
     </header>
     ${phaseBlock(s)}

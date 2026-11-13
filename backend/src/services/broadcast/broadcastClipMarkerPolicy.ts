@@ -149,6 +149,86 @@ export function decideClipMarker(input: MarkerInput): MarkerDecision {
   };
 }
 
+/**
+ * What a press is called when nothing better can be said about it (D10).
+ *
+ * Also the label the clip review shows, so an editor scanning the list can tell a moment a human
+ * chose from a moment the deck produced.
+ */
+export const LIVE_MARK_LABEL = 'Marked live';
+
+export type LiveMarkDecision =
+  | { record: true; marker: ClipMarker; labelled: boolean }
+  | {
+    record: false;
+    reason:
+      | 'no_occurrence'
+      | 'not_on_air'
+      /** Content has not been marked as started, so "how far in" has no answer. */
+      | 'no_content_anchor'
+      | 'before_content_start'
+      /** The deck has never said which slide is up, so there is nowhere to hang the mark. */
+      | 'no_slide_context';
+  };
+
+/**
+ * A DELIBERATE PRESS, as against an advance (D10).
+ *
+ * Separate from `decideClipMarker` rather than a flag on it, because the two differ on the one
+ * question that matters and a flag would hide that: WHAT MAKES THE MOMENT WORTH RECORDING.
+ *
+ * An advance IS its slide. If the slide cannot be resolved there is nothing to record - the
+ * advance was the event, and an advance to an unknown place is not a moment.
+ *
+ * A press is a timecode. Somebody watching the class decided that what just happened is worth
+ * cutting, and that is true whether or not the server can name the slide it happened on. So an
+ * unresolvable slide DOWNGRADES THE LABEL here instead of discarding the mark, and `labelled`
+ * says which happened so the caller can log it honestly.
+ *
+ * DRIFT IS HANDLED THE SAME WAY, and this is the subtler half. The press itself claims nothing,
+ * but the slide it gets attached to comes from the index the DECK last broadcast - so a deck on
+ * a different slide list than the server would hand this function a confidently wrong label. It
+ * reuses `deckHasDrifted`, the same predicate the advance path and the producer rundown use, and
+ * on drift keeps the timecode while dropping the label. A clip with no label costs an editor a
+ * few seconds; a clip labelled as the wrong segment sends them to the wrong part of the video.
+ */
+export function decideLiveClipMark(input: MarkerInput): LiveMarkDecision {
+  const {
+    occurrenceId, editorialState, contentStartedAtMs, nowMs, slideIndex, deckTitle, slide,
+  } = input;
+
+  if (!occurrenceId) return { record: false, reason: 'no_occurrence' };
+  if (!editorialState || !ON_AIR.includes(editorialState)) {
+    return { record: false, reason: 'not_on_air' };
+  }
+  if (contentStartedAtMs === null) return { record: false, reason: 'no_content_anchor' };
+  if (typeof slideIndex !== 'number' || !Number.isFinite(slideIndex) || slideIndex < 0) {
+    return { record: false, reason: 'no_slide_context' };
+  }
+
+  const elapsedMs = nowMs - contentStartedAtMs;
+  if (elapsedMs < 0) return { record: false, reason: 'before_content_start' };
+
+  const trusted = slide !== null && !deckHasDrifted(deckTitle, slide.title);
+  const authored = trusted
+    ? (slide!.publicValue || slide!.segmentLabel || slide!.title || '').trim()
+    : '';
+
+  return {
+    record: true,
+    labelled: authored !== '',
+    marker: {
+      slideIndex,
+      // Floor for the same reason as an advance: a marker must land on or before its moment.
+      timecodeSeconds: Math.floor(elapsedMs / 1000),
+      label: authored || LIVE_MARK_LABEL,
+      segmentId: trusted ? slide!.segmentId : '',
+      segmentLabel: trusted ? slide!.segmentLabel : '',
+      slideTitle: trusted ? slide!.title : '',
+    },
+  };
+}
+
 /** `02:47`, or `1:02:47` past an hour. For the clip list a human reads. */
 export function formatTimecode(totalSeconds: number): string {
   const s = Math.max(0, Math.floor(totalSeconds));

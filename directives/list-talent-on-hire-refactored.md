@@ -74,7 +74,7 @@ not-found page.
 |---|---|---|
 | Publish refused with `hire_no_linked_person` | No route links the case study to a project with a portfolio page | Step 2 |
 | Published, but the person is not in the directory | Portfolio page is unlisted, private or unapproved | Step 3 |
-| Project card on the portfolio says "Case study in review" | That project's case study is not published on Hire | Publish it (steps 1-5) or leave it; the draft title is never shown |
+| A project the person built does not appear on their Hire page | Hire shows work ONLY as approved, Hire-published case studies (Ali, 2026-11-11). A project with no published case study, its records, and commits from its repository are stripped at the API (`backend/src/services/hire/hireCaseStudyOnly.ts`) | Convert it to a case study and publish it on Hire (steps 1-5); it then appears with no other change |
 | Availability line missing | The learner has not set it (self-reported, never inferred) | Nothing to do; it is optional |
 | Directory shows "Nobody is listed yet" | No one passes the gate, or the API was unreachable | Check `curl` above; a failed API call keeps the honest empty state, never sample data |
 | Intro request says "Too many requests" | Per-IP limit (5 per 15 min) | Wait; this is the abuse guard |

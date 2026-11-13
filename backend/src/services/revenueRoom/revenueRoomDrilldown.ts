@@ -26,7 +26,7 @@
  * It would be quicker to query Basecamp, email and the proposal tables directly from here
  * and merge the results. That is the design R3 exists to replace: five bespoke queries that
  * each decide for themselves what counts as an event, with no way to unlink a wrong one and
- * no record of who linked it. Everything here reads `evidence_links`, and anything that
+ * no record of who linked it. Everything here reads `revenue_evidence_links`, and anything that
  * wants to appear in a timeline earns its place by being linked.
  *
  * The consequence is visible and deliberate: until something populates the spine, these

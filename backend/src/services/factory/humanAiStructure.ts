@@ -187,6 +187,32 @@ function checkSurfaces(surfaces: readonly Surface[], out: StructureFinding[]): n
     out.push(finding('NO_CONSOLE', 'warning', null,
       'Human tasks land only on external surfaces. Nothing here is a surface this system builds.'));
   }
+
+  // TASK_ONE_SURFACE — the half of "exactly one surface" that nothing was checking.
+  //
+  // `HUMAN_TASK_WITHOUT_SURFACE` covers "at least one": it flattens every surface's task_ids into
+  // one Set and reports the tasks missing from it. A Set cannot see a task that lands TWICE, so
+  // the "at most one" half was unenforceable. The decomposition prompt already states the rule to
+  // the model ("Every task allocated human MUST appear in exactly one surface's task_ids"), which
+  // means a violation was a contract breach the evaluator had no way to name.
+  //
+  // It matters for the same reason `TASK_ONE_TEAM` does, which teams have carried from the start.
+  // One human task with two destinations is the per-role screen this contract exists to prevent,
+  // arriving by a different route: whoever builds the UI now has two places to put the same work
+  // and a handoff between them.
+  const surfaceOwner = new Map<string, string>();
+  for (const surface of surfaces) {
+    for (const taskId of surface.task_ids) {
+      const prior = surfaceOwner.get(taskId);
+      if (prior) {
+        out.push(finding('TASK_ONE_SURFACE', 'blocking', taskId,
+          `Task ${taskId} lands on both ${prior} and ${surface.id}. A human task has exactly one destination.`));
+      } else {
+        surfaceOwner.set(taskId, surface.id);
+      }
+    }
+  }
+
   return consoles.length;
 }
 

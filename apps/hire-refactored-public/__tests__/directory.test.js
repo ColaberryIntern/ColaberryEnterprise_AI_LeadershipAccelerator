@@ -84,6 +84,12 @@ describe('the page', () => {
     assert.doesNotMatch(html, /class="tcard/);
   });
 
+  test('a failed first load says the directory could not be reached, never that nobody is listed', () => {
+    const html = D.renderUnavailable();
+    assert.match(html, /could not be reached/);
+    assert.doesNotMatch(html, /Nobody is listed/);
+  });
+
   test('says "no match" rather than "nobody listed" when a filter excludes everyone', () => {
     const html = D.renderDirectory(payload({ talent: [] }), D.parseFilters('?q=zzz'), []);
     assert.match(html, /No listed engineers match that yet/);

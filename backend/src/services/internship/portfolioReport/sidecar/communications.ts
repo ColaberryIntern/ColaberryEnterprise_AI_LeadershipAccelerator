@@ -19,6 +19,7 @@
  * thread it quotes. One message per subject per intern (the best one). The report-wide top 10 takes
  * at most MAX_PER_INTERN from any one intern, so one prolific writer cannot fill the list.
  */
+import { isSentenceComplete, ownText, trimToSentence } from '../emailText';
 import { classifyEmail } from '../timeline';
 import type { Conversation } from '../types';
 
@@ -52,14 +53,10 @@ const EVIDENCE = [
 ] as const;
 const AUTOMATED_FROM = /(noreply|no-reply|notifications?@|info@colaberry|support@colaberry|mailer)/i;
 const AUTOMATED_SUBJECT = /^(re:\s*)?(\[?(internship report|daily|weekly|reminder|notification|digest|alert)\b|ali, here's)/i;
-const QUOTED = /\s(On (Mon|Tue|Wed|Thu|Fri|Sat|Sun)[^]{0,120}?wrote:|-{3,}\s*Original Message|From:\s.{3,80}Sent:)/i;
-
-/** The new text of a message: quoted history cut, whitespace collapsed. */
-export function ownText(body: string | null): string {
-  const t = String(body ?? '').replace(/\s+/g, ' ').trim();
-  const m = QUOTED.exec(t);
-  return (m ? t.slice(0, m.index) : t).trim();
-}
+// `ownText` moved to ../emailText so `timeline.classifyEmail` can clean the same way without
+// importing this module, which would have been circular (this file imports classifyEmail).
+// Re-exported because this is where its callers and its tests already look for it.
+export { ownText };
 
 /**
  * `content` = the message SAYS something (a blocker, a question, a finding, evidence, or 80+ words).
@@ -92,44 +89,10 @@ export function scoreMessage(m: { direction: Communication['direction']; from: s
 
 const EXCERPT = 600;
 
-/**
- * Cut an excerpt so it ends where a sentence ends, never in the middle of a word.
- *
- * ## Why this is not a cosmetic change
- *
- * `shapes.ts` refuses to reference an intern's own words, and the reason is written into a test
- * called "never quotes the excerpt": a 600-character hard slice ended Quincy's message at
- * `"the live expor"`. That was the correct call about a broken snippet, and it left the composer
- * with only a subject line and a date to write from. The measured consequence on 2026-11-11 was
- * that 13 of 13 messages opened with the identical sentence.
- *
- * So fix the snippet rather than overriding the objection. A sentence-complete excerpt can be
- * referenced safely; a mid-word one cannot, and should not be.
- *
- * Falls back to a word boundary with an ellipsis when there is no sentence end late enough to use
- * - better a clean "..." than a sentence fragment presented as a whole thought. The 40% floor
- * stops a single early period (an initial, "e.g.", a version number) from cutting a long message
- * down to one clause.
- */
-export function trimToSentence(text: string, max: number = EXCERPT): string {
-  if (text.length <= max) return text;
-  const window = text.slice(0, max);
-  const end = Math.max(window.lastIndexOf('. '), window.lastIndexOf('? '), window.lastIndexOf('! '));
-  if (end >= Math.floor(max * 0.4)) return window.slice(0, end + 1).trimEnd();
-  const space = window.lastIndexOf(' ');
-  return `${window.slice(0, space > 0 ? space : max - 3).trimEnd()}...`;
-}
-
-/**
- * True when an excerpt ends on a sentence, so a composer may reference it as a whole thought.
- *
- * A trailing ellipsis is explicitly NOT complete, even though it ends in a period. That is the
- * whole case this predicate exists to catch, and a naive `/[.?!]$/` passes it.
- */
-export function isSentenceComplete(excerpt: string): boolean {
-  const t = excerpt.trim();
-  return /[.?!]$/.test(t) && !/\.\.\.$/.test(t);
-}
+// `trimToSentence` and `isSentenceComplete` moved to ../emailText, so the report's own thread
+// snippets can use them without the report depending on the sidecar. Re-exported because this is
+// where their callers and their tests already look for them.
+export { trimToSentence, isSentenceComplete };
 
 const subjectKey = (s: string): string => s.replace(/^((re|fw|fwd):\s*)+/i, '').trim().toLowerCase();
 

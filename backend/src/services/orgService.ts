@@ -746,7 +746,7 @@ export async function getMemberDetail(orgId: string, enrollmentId: string): Prom
   // Projects.
   try {
     const rows = await selectRows<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM projects WHERE enrollment_id = :id`,
+      `SELECT COUNT(*)::int AS count FROM projects WHERE enrollment_id = :id AND archived_at IS NULL`,
       { id: enrollmentId },
     );
     detail.project_count = Number(rows[0]?.count ?? 0);

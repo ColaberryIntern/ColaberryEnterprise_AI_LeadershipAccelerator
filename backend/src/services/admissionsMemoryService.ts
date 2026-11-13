@@ -79,10 +79,6 @@ export async function saveConversationToMemory(conversationId: string): Promise<
   const conversation = await ChatConversation.findByPk(conversationId);
   if (!conversation) return;
 
-  // The conversation row carries the person. Passing it means a conversation closed on a
-  // second device folds into the SAME memory instead of starting a parallel history.
-  const memory = await loadMemory(conversation.visitor_id, conversation.lead_id);
-
   const messages = await ChatMessage.findAll({
     where: { conversation_id: conversationId },
     order: [['timestamp', 'ASC']],
@@ -90,6 +86,59 @@ export async function saveConversationToMemory(conversationId: string): Promise<
 
   // Extract questions from visitor messages
   const visitorMessages = messages.filter((m) => m.role === 'visitor');
+
+  // THE SUBSTANCE GUARD. There has to be something to remember.
+  //
+  // Everything this function stores is derived from the transcript: the questions, the
+  // interests, the summary. With no visitor messages to read, it stored a row anyway:
+  // `conversation_count` incremented and a summary entry reading "0 messages exchanged"
+  // appended, which `buildMemoryContext()` then injects verbatim into Maya's system prompt.
+  // She was told about conversations she has no record of, and the count that is supposed to
+  // mean "how well do we know this person" was inflated by rows carrying nothing.
+  //
+  // THIS IS NOT HYPOTHETICAL. Measured in production on 2026-11-11, after the idle sweep first
+  // ran: 8 such entries existed across 7 memory rows, and 5 of those rows held NOTHING ELSE.
+  //
+  // WHY THE TRANSCRIPT IS MISSING, which is the part worth understanding. It is not that the
+  // visitor stayed silent. `ChatMessageCleanup` in schedulerService deletes chat_messages
+  // older than 180 days, every night at 3:30. Nothing closed conversations for eight months,
+  // so by the time the idle sweep finally closed them, 113 of 145 conversations had no message
+  // rows left at all, and the oldest surviving message was exactly 180 days old. Retention did
+  // its job; closing never did its job until now. The junk is the wreckage where the two met.
+  //
+  // That also means this stops being a stream and becomes history: new conversations close
+  // within about 40 minutes, so their transcripts are read long before retention can reach
+  // them.
+  //
+  // THE TEST IS THE MESSAGE ROWS, NOT `visitor_message_count`. Of the 17 conversations closed
+  // that day, 5 carried a non-zero counter while having zero `role='visitor'` rows, and every
+  // one of those 5 wrote junk, so a guard on the counter would have caught only 3 of the 8.
+  // The counter is an honest record of what once happened; the rows are what we can actually
+  // use. Memory is built from the rows, so the rows decide.
+  //
+  // A generated summary still counts as substance, so a conversation the model already
+  // summarized is kept even when its transcript has since been deleted. That is the one case
+  // where something survives retention worth remembering.
+  if (visitorMessages.length === 0 && !(conversation as { summary?: string | null }).summary) {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        service: 'admissions-memory',
+        event: 'memory_write_skipped_no_substance',
+        outcome: 'success',
+        context: {
+          conversation_id: conversationId,
+          visitor_message_rows: 0,
+          visitor_message_count_column: conversation.visitor_message_count ?? null,
+        },
+      })
+    );
+    return;
+  }
+
+  // The conversation row carries the person. Passing it means a conversation closed on a
+  // second device folds into the SAME memory instead of starting a parallel history.
+  const memory = await loadMemory(conversation.visitor_id, conversation.lead_id);
   const newQuestions = visitorMessages
     .filter((m) => m.content.includes('?'))
     .map((m) => m.content.trim())

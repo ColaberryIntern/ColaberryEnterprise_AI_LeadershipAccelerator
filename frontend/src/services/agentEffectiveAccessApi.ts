@@ -80,3 +80,145 @@ export async function getAgentEffectiveAccess(agentId: string): Promise<AgentEff
   const res = await api.get<AgentEffectiveAccessReport>(`/api/admin/agents/${agentId}/effective-access`);
   return res.data;
 }
+
+// Agent Tools section, Phase 1 (2026-11-11). Mirrors
+// backend/src/services/workforce/agentToolGovernanceService.ts field for field, same deliberate
+// mirror convention as the types above.
+//
+// Kept separate from AgentEffectiveAccessReport on purpose: that report says what the RUNTIME
+// would do, this one says what the GOVERNANCE records. They disagree for every agent in
+// production today, and one blended type would hide the disagreement the section exists to show.
+
+export interface ToolGovernanceRow {
+  toolName: string;
+  held: boolean;
+  granted: boolean;
+  capabilityId: string | null;
+  capabilityName: string | null;
+  capabilityDomain: string | null;
+  /** null means there was no capability to check, which is not the same as false. */
+  capabilityRequiresThisTool: boolean | null;
+  approvedByIdentity: string | null;
+  approvedAt: string | null;
+  findings: string[];
+}
+
+export interface ToolGovernanceSummary {
+  held: number;
+  granted: number;
+  heldWithoutGrant: number;
+  grantedWithoutHolding: number;
+  capabilityMismatch: number;
+  capabilityUnknown: number;
+  clean: number;
+}
+
+export interface AgentToolGovernanceReport {
+  agentId: string;
+  agentName: string;
+  generatedAt: string;
+  rows: ToolGovernanceRow[];
+  summary: ToolGovernanceSummary;
+  posture: string;
+}
+
+export async function getAgentToolGovernance(agentId: string): Promise<AgentToolGovernanceReport> {
+  const res = await api.get<AgentToolGovernanceReport>(`/api/admin/agents/${agentId}/tool-governance`);
+  return res.data;
+}
+
+// Agent Tools Phase 2 (2026-11-11) — the request pipeline for one agent, and the conversation on
+// a request. Mirrors backend/src/services/agentDomain/toolRequestConversationService.ts.
+
+export interface ToolRequestMessageView {
+  id: string;
+  author_identity: string;
+  posted_at: string;
+  body: string;
+}
+
+export interface ToolRequestDecisionView {
+  verb: string;
+  decided_by_identity: string;
+  decided_at: string;
+  reason: string | null;
+  missing_field: string | null;
+  assigned_tool_name: string | null;
+}
+
+export interface AgentToolRequestView {
+  change_request_id: string;
+  title: string;
+  status: string;
+  requested_by_identity: string | null;
+  requested_at: string | null;
+  tool_name: string | null;
+  purpose: string | null;
+  capability_id: string | null;
+  needed_by: string | null;
+  writes: boolean | null;
+  decisions: ToolRequestDecisionView[];
+  messages: ToolRequestMessageView[];
+  /** Phase 3 delivery milestones. Always empty unless the request is approved. */
+  build_events: BuildEventView[];
+  /**
+   * Derived server-side from status, the decision log and the build events together, so it
+   * cannot drift from any of them.
+   */
+  where_it_stands: string;
+}
+
+export interface AgentToolRequestsReport {
+  agentId: string;
+  generatedAt: string;
+  requests: AgentToolRequestView[];
+  summary: { total: number; open: number; approved: number; declined: number };
+}
+
+export async function getAgentToolRequests(agentId: string): Promise<AgentToolRequestsReport> {
+  const res = await api.get<AgentToolRequestsReport>(`/api/admin/agents/${agentId}/tool-requests`);
+  return res.data;
+}
+
+/**
+ * Posts one message. `author_identity` is deliberately NOT a parameter: the server reads the
+ * author off the verified session, and its body schema is strict, so sending one would be
+ * refused by name rather than quietly ignored.
+ */
+export interface BuildEventView {
+  id: string;
+  event: 'started_build' | 'handed_over';
+  actor_identity: string;
+  occurred_at: string;
+  note: string | null;
+}
+
+/**
+ * Records a delivery milestone. `actor_identity` is deliberately not a parameter: the server
+ * reads it from the verified session, and its body schema is strict.
+ *
+ * The server refuses any request whose governance status is not already `approved`, so this
+ * cannot mark something delivered that nobody allowed.
+ */
+export async function recordToolRequestBuildEvent(
+  changeRequestId: string,
+  event: 'started_build' | 'handed_over',
+  note?: string,
+): Promise<BuildEventView> {
+  const res = await api.post<BuildEventView>(
+    `/api/admin/agent-domain-tool-requests//build-events`,
+    note ? { event, note } : { event },
+  );
+  return res.data;
+}
+
+export async function postToolRequestMessage(
+  changeRequestId: string,
+  body: string,
+): Promise<ToolRequestMessageView> {
+  const res = await api.post<ToolRequestMessageView>(
+    `/api/admin/agent-domain-tool-requests/${changeRequestId}/messages`,
+    { body },
+  );
+  return res.data;
+}

@@ -127,6 +127,12 @@ select.sel{background:var(--bg-elevated);border:1px solid var(--line-strong);col
 
 /* talent grid */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+/* Loading placeholders: shape only, no words, so nothing false is ever on screen while the API answers. */
+.loading-grid{padding:40px 0}
+.tcard.skel{min-height:260px;background:linear-gradient(100deg,var(--bg-elevated) 30%,var(--bg-sunk) 50%,var(--bg-elevated) 70%);background-size:300% 100%;animation:skel 1.4s ease-in-out infinite}
+@keyframes skel{from{background-position:100% 0}to{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.tcard.skel{animation:none}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .tcard{position:relative;background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:flex;flex-direction:column}
 /* the whole card is ONE real link (a stretched anchor); the shortlist button sits above it */
 .tcard-link{position:absolute;inset:0;z-index:1;border-radius:inherit}

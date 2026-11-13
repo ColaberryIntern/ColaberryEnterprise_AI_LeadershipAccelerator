@@ -19,6 +19,31 @@ import { getStudentGovProjectView } from '../services/factory/govProjectProjecti
 const router = Router();
 
 /**
+ * Resolve the latest active qualification record for a delivery project — the (tenant, canonical key, bidding entity)
+ * the admin workspace builder keys on. Returns null if the project has no qualification yet. Used ONLY after the
+ * project.read guard has already confirmed the caller is a member of this project.
+ */
+async function resolveProjectQualification(projectId: string): Promise<any | null> {
+  const { default: GovQualification } = await import('../models/GovQualification');
+  const q: any = await GovQualification.findOne({
+    where: { delivery_project_id: projectId, status: 'active' },
+    order: [['version', 'DESC']],
+  });
+  return q ? q.get() : null;
+}
+
+/** Defense in depth: a participant NEVER sees the contract award / estimated value. Null it wherever it could ride
+ *  along in the workspace payload (the amount originates in the opportunity-detail feed, but strip here too). */
+function stripAwardAmount<T>(ws: T): T {
+  const w = ws as any;
+  if (w && typeof w === 'object') {
+    if (w.source && typeof w.source === 'object' && 'estimatedValue' in w.source) w.source.estimatedValue = null;
+    if ('estimatedValue' in w) w.estimatedValue = null;
+  }
+  return ws;
+}
+
+/**
  * GET /api/portal/gov-projects — the gov projects THIS intern is an active member of (for the "on your profile"
  * card). Membership-scoped: it lists ONLY the caller's own active DeliveryProjectMember rows, joined to
  * non-archived government_public_sector projects, so it can never enumerate a project they are not on. Minimal
@@ -76,6 +101,113 @@ router.get(
       res.json({ project: view });
     } catch {
       res.status(500).json({ error: 'Could not load the project.' });
+    }
+  },
+);
+
+/**
+ * GET /api/portal/gov-projects/:projectId/cockpit-full — the SAME Gov Contract cockpit the admin management portal
+ * renders. It calls the SAME builder with viewerCanVerify=true (so the reviewer/pricing PANELS appear), plus
+ * redactAdminOnly=true, which WITHHOLDS every admin-only SUBSTANCE field viewerCanVerify would otherwise add — the
+ * canonical opportunity id, the admin-only (pricing) document bodies + comments, and the pricing/Gold-approval needs —
+ * and the award amount is stripped too. The intern sees every panel (the read-only UI disables every control); all
+ * mutations stay on the admin routes. The guard chain 404s a non-member (they can't learn the project exists).
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/cockpit-full',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      // Pass the guard-resolved identity so the projection resolves THIS viewer's proposal share level (P6).
+      const viewerIdentityId = req.deliveryContext?.platformIdentityId ?? null;
+      // viewerCanVerify=true lights up the reviewer/pricing PANELS; redactAdminOnly=true withholds their admin-only
+      // SUBSTANCE. The pairing is exactly "show every panel, read-only, no admin-only leak".
+      const view = await getStudentGovProjectView(projectId, true, viewerIdentityId, true);
+      if (!view) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      res.json({ project: stripAwardAmount(view) });
+    } catch {
+      res.status(500).json({ error: 'Could not load the project.' });
+    }
+  },
+);
+
+/**
+ * GET /api/portal/gov-projects/:projectId/qualification — the SAME Qualification Workspace payload the admin studio
+ * renders (getDecoupledWorkspace — identical by construction, not a reimplementation), for a MEMBER of this project,
+ * READ-ONLY. The guard chain 404s a non-member (they can't learn the project exists). The award / estimated value is
+ * stripped (never reaches a participant). Mutations stay on the admin routes; this serves data only.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/qualification',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const qual = await resolveProjectQualification(projectId);
+      if (!qual) { res.status(404).json({ error: 'No qualification workspace for this project yet.' }); return; }
+      const { getDecoupledWorkspace } = await import('../services/factory/govQualification');
+      const ws = await getDecoupledWorkspace(qual.tenant_id, qual.canonical_opportunity_id, qual.bidding_entity || undefined);
+      res.json(stripAwardAmount(ws));
+    } catch {
+      res.status(500).json({ error: 'Could not load the qualification workspace.' });
+    }
+  },
+);
+
+/**
+ * GET /api/portal/gov-projects/:projectId/opportunity-detail — the SAME opportunity-detail shape the admin page reads
+ * (from the best-fit feed), for a MEMBER of this project, with estimatedValue FORCED null. A decoupled (gws) pursuit
+ * usually has no feed row, so opportunity is null and the page falls back to the workspace's own facts — exactly as
+ * the admin page already handles. Never exposes the award amount.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/opportunity-detail',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const qual = await resolveProjectQualification(projectId);
+      if (!qual) { res.json({ opportunity: null, source: 'snapshot', snapshotDate: null, snapshotReason: null }); return; }
+      const { fetchBestFitOpportunities } = await import('../services/factory/opportunities/oppPulseClient');
+      const feed: any = await fetchBestFitOpportunities(); // never throws (degrades dark)
+      const found = (feed.opportunities || []).find((o: any) => o && o.uuid === qual.canonical_opportunity_id) ?? null;
+      const opportunity = found ? { ...found, estimatedValue: null } : null; // award amount NEVER to a participant
+      res.json({ opportunity, source: feed.source, snapshotDate: feed.snapshotDate, snapshotReason: feed.snapshotReason ?? null });
+    } catch {
+      res.json({ opportunity: null, source: 'snapshot', snapshotDate: null, snapshotReason: null });
+    }
+  },
+);
+
+/**
+ * GET /api/portal/gov-projects/:projectId/package/signatures — the required-form signature STATUS (form key, role,
+ * signed/unsigned) the admin Package view shows, for a MEMBER of this project, READ-ONLY. It ONLY lists; it never
+ * seeds/writes (the admin route owns syncRequiredSignatures). The listSignatures shape is already student-safe — a
+ * form key, a role string, status/required/hasFile booleans; no signer name, no file path, no money. The read-only
+ * cockpit's Package panel shows these rows while the Export control is disabled.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/package/signatures',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const projectId = req.params.projectId;
+    if (typeof projectId !== 'string' || !projectId) { res.status(400).json({ error: 'Project id is required' }); return; }
+    try {
+      const sig = await import('../services/factory/proposal/govProposalSignatures');
+      res.json({ signatures: await sig.listSignatures(projectId) });
+    } catch {
+      res.status(500).json({ error: 'Could not load the signatures.' });
     }
   },
 );

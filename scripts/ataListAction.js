@@ -30,7 +30,7 @@ const { QueryTypes } = require('/app/node_modules/sequelize');
 const libDir = fs.existsSync(path.join(__dirname, 'listActions.js'))
   ? __dirname
   : path.join(__dirname, '../backend/src/scripts/lib/aliTaskAgent');
-const { planDismiss, planRedate, planAssign, renderPlan } = require(path.join(libDir, 'listActions'));
+const { planDismiss, dismissQuery, planRedate, planAssign, renderPlan } = require(path.join(libDir, 'listActions'));
 
 const arg = (k, d = null) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -38,21 +38,40 @@ const arg = (k, d = null) => {
 };
 const has = (k) => process.argv.includes(`--${k}`);
 
-const LIST = arg('list');
+const LIST_ID = arg('list-id');
+const LIST = arg('list') || (LIST_ID ? `list ${LIST_ID}` : null);
 const APPLY = has('apply');
 const ALI = 17454835;
 
-if (!LIST) { console.error('--list "<exact list name>" is required'); process.exit(1); }
+if (!arg('list') && !LIST_ID) {
+  console.error('--list-id <todolist id> (preferred) or --list "<exact list name>" is required');
+  process.exit(1);
+}
 
 (async () => {
+  // --list-id is exact. A NAME is not: measured 2026-11-11, 7 names on the board each cover 2-3
+  // separate lists or groups ("MILESTONE APPROVALS - Ali" is three groups in two projects), so a
+  // name that matches more than one list is refused below rather than acted on as one.
   const rows = await sequelize.query(`
-    SELECT bc_id, project_id, title, due_on, todolist_name, is_dismissed
+    SELECT bc_id, project_id, todolist_id, title, due_on, todolist_name, is_dismissed
       FROM ops_bc_todos
      WHERE status = 'active' AND is_dismissed IS NOT TRUE
-       AND todolist_name = $1
+       AND ${LIST_ID ? 'todolist_id = $1' : 'todolist_name = $1'}
        AND assignee_ids::text LIKE $2
      ORDER BY due_on ASC NULLS LAST`,
-  { type: QueryTypes.SELECT, bind: [LIST, `%${ALI}%`] });
+  { type: QueryTypes.SELECT, bind: [LIST_ID || LIST, `%${ALI}%`] });
+
+  const distinct = [...new Set(rows.map((r) => `${r.project_id}/${r.todolist_id}`))];
+  if (!LIST_ID && distinct.length > 1) {
+    console.error(`REFUSED: "${LIST}" names ${distinct.length} separate lists. Pick one with --list-id:`);
+    distinct.forEach((d) => {
+      const [p, l] = d.split('/');
+      const n = rows.filter((r) => r.todolist_id === l).length;
+      console.error(`  --list-id ${l}   (project ${p}, ${n} task(s))`);
+    });
+    await sequelize.close();
+    process.exit(1);
+  }
 
   if (!rows.length) {
     console.log(`No active, undismissed tasks assigned to Ali in list "${LIST}".`);
@@ -95,18 +114,18 @@ if (!LIST) { console.error('--list "<exact list name>" is required'); process.ex
   }
 
   // The one action this script performs: a local, reversible dismissal.
-  const ids = plan.changes.map((c) => Number(String(c.id).split('/')[1])).filter(Boolean);
-  const [, affected] = await sequelize.query(
-    `UPDATE ops_bc_todos
-        SET is_dismissed = true, dismissed_at = now(), dismissed_by = $1, dismissed_reason = $2
-      WHERE bc_id = ANY($3::bigint[]) AND is_dismissed IS NOT TRUE`,
-    { type: QueryTypes.UPDATE, bind: ['ata-list', plan.changes[0].reason, ids] },
-  );
+  // One UPDATE statement, so it is all-or-nothing; a re-run matches nothing (is_dismissed guard).
+  const q = dismissQuery(plan, 'ata-list');
+  if (q.pairs !== plan.changes.length) {
+    console.error(`REFUSED: ${plan.changes.length - q.pairs} task id(s) are not "<project>/<todo>" digits; nothing changed.`);
+    await sequelize.close();
+    process.exit(1);
+  }
+  const [, affected] = await sequelize.query(q.sql, { type: QueryTypes.UPDATE, bind: q.bind });
 
   console.log(`APPLIED. ${affected} row(s) dismissed from the queue.`);
-  console.log('The tickets remain OPEN in Basecamp. To undo:');
-  console.log(`  UPDATE ops_bc_todos SET is_dismissed = false, dismissed_at = NULL,`);
-  console.log(`    dismissed_by = NULL, dismissed_reason = NULL WHERE bc_id = ANY('{${ids.slice(0, 5).join(',')}${ids.length > 5 ? ',...' : ''}}'::bigint[]);`);
+  console.log('The tickets remain OPEN in Basecamp. To undo, paste:');
+  console.log(`  ${q.undo}`);
 
   await sequelize.close();
   process.exit(0);

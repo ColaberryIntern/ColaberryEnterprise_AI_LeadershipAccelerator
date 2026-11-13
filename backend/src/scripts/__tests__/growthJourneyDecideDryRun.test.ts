@@ -70,8 +70,15 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--brand', 'b-ent', '--no-persist'])).toThrow(/--lead <id> or --enrollment <id>/);
     expect(() => parseArgs(['--lead', '501', '--no-persist'])).toThrow(/--brand <brand uuid> is required/);
     expect(() => parseArgs(['--lead', '0', '--brand', 'b', '--no-persist'])).toThrow(/positive integer/);
-    expect(parseArgs(['--lead', '501', '--brand', 'b-ent', '--no-persist'])).toEqual({ leadId: 501, enrollmentId: null, brandId: 'b-ent', noPersist: true });
-    expect(parseArgs(['--enrollment', 'enr-1', '--brand', 'b-trn', '--no-persist'])).toEqual({ leadId: null, enrollmentId: 'enr-1', brandId: 'b-trn', noPersist: true });
+    expect(parseArgs(['--lead', '501', '--brand', 'b-ent', '--no-persist'])).toEqual({ leadId: 501, enrollmentId: null, brandId: 'b-ent', noPersist: true, sentence: false });
+    expect(parseArgs(['--enrollment', 'enr-1', '--brand', 'b-trn', '--no-persist'])).toEqual({ leadId: null, enrollmentId: 'enr-1', brandId: 'b-trn', noPersist: true, sentence: false });
+  });
+
+  it('--sentence is opt-in, so the JSON stays the default for anything that parses stdout', () => {
+    // MR3. The sentence replaces the JSON rather than sitting beside it, because a prose line
+    // emitted next to a JSON document breaks exactly the parsers this default protects.
+    expect(parseArgs(['--lead', '501', '--brand', 'b-ent', '--no-persist']).sentence).toBe(false);
+    expect(parseArgs(['--lead', '501', '--brand', 'b-ent', '--no-persist', '--sentence']).sentence).toBe(true);
   });
 
   it('the flags it runs under can decide and can NEVER execute', () => {

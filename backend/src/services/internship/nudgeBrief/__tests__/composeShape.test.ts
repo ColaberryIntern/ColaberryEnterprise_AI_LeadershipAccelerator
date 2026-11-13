@@ -26,7 +26,7 @@ function intern(over: Partial<SidecarIntern> = {}): SidecarIntern {
     most_urgent: { kind: 'stuck', label: 'Stuck', detail: 'no commit or verified story since 11-05' },
     most_urgent_overflow: [], timeline: [], asking_you: [], asking_you_from_model: false,
     open_questions: [], nudge: '', artifacts: [], artifacts_raw_count: 0, artifacts_real_count: 24,
-    asks: [{ key: 'capability_map', name: 'Capability Map', why: 'Build the one page per capability.', prompt: 'PROMPT', nudge: 'NUDGE' }],
+    asks: [{ key: 'capability_map', name: 'Capability Map', theme: 'evidence', why: 'Build the one page per capability.', prompt: 'PROMPT', nudge: 'NUDGE' }],
     triage: { tier: 'on_track', reason: 'fine' },
     pacing: { day: 41, program_day_total: 84, program_day_total_basis: null, expected_training_week: 6, expected_basis: 'day_count', actual_training_week: 12, weeks_behind: 0 },
     last_ask: null,
@@ -207,7 +207,7 @@ describe('the artifact ask reads like a sentence', () => {
   /** `asks[].name` arrives as a command for presentations: "Record your Project introduction". */
   it('turns a command-shaped ask name into a noun', () => {
     const b = composeBrief({
-      intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', why: 'It is the next presentation in their project plan.', prompt: 'P', nudge: 'N' }] }),
+      intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', theme: 'evidence', why: 'It is the next presentation in their project plan.', prompt: 'P', nudge: 'N' }] }),
       deadline: null, now: NOW,
     });
     expect(b.body).toContain('your Project introduction recording');
@@ -217,7 +217,7 @@ describe('the artifact ask reads like a sentence', () => {
   /** `ask.why` and `ask.nudge` are dashboard copy: `why` says "THEIR project plan". */
   it('never pastes the dashboard-voiced why or nudge into the message', () => {
     const b = composeBrief({
-      intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', why: 'It is the next presentation in their project plan.', prompt: 'P', nudge: 'Hi Quincy, paste the prompt below into Claude Code.' }] }),
+      intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', theme: 'evidence', why: 'It is the next presentation in their project plan.', prompt: 'P', nudge: 'Hi Quincy, paste the prompt below into Claude Code.' }] }),
       deadline: null, now: NOW,
     });
     expect(b.body).not.toContain('their project plan');
@@ -226,7 +226,7 @@ describe('the artifact ask reads like a sentence', () => {
   });
 
   it('says where to do it, differently for a recording and for a build', () => {
-    const rec = composeBrief({ intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', why: 'w', prompt: 'P', nudge: 'N' }] }), deadline: null, now: NOW });
+    const rec = composeBrief({ intern: intern({ asks: [{ key: 'presentation_prep_1', name: 'Record your Project introduction', theme: 'evidence', why: 'w', prompt: 'P', nudge: 'N' }] }), deadline: null, now: NOW });
     const build = composeBrief({ intern: intern(), deadline: null, now: NOW });
     expect(rec.body).toContain('Presentation Studio');
     expect(build.body).toContain('send me the link when it is live');

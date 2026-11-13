@@ -176,7 +176,8 @@ export async function internshipProfileSection(enrollmentId: string): Promise<In
     InternshipStatusEvent.findAll({ where: { application_id: application.id }, order: [['created_at', 'ASC']] }),
     progress(application.id),
     buildSummary(application.id),
-    Project.count({ where: { enrollment_id: enrollmentId } }),
+    // archived_at: null - an archived project must not count as a build the intern still has.
+    Project.count({ where: { enrollment_id: enrollmentId, archived_at: null } as any }),
     AttendanceRecord.findAll({ where: { enrollment_id: enrollmentId }, attributes: ['status', 'created_at'] }),
     CertReadinessSnapshot.findOne({
       where: { enrollment_id: enrollmentId },
@@ -395,7 +396,8 @@ export async function internshipKpis(): Promise<InternshipKpi[]> {
     });
     let withoutProject = 0;
     for (const app of activeApps) {
-      const n = await Project.count({ where: { enrollment_id: app.enrollment_id } });
+      // Live only: otherwise an archived project makes an intern WITH no project look covered.
+      const n = await Project.count({ where: { enrollment_id: app.enrollment_id, archived_at: null } as any });
       if (n === 0) withoutProject += 1;
     }
     kpis.push({

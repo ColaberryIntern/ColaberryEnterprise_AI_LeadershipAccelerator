@@ -168,7 +168,17 @@ async function gatherFacts(sequelize: Sequelize, args: GrantToolArgs) {
     ? effectiveValidationState(capability, confirmedIds)
     : null;
 
-  return { recordedHumans, capabilityState };
+  // Agent Tools Phase 4: the tools the capability itself asks for, so the contract can refuse a
+  // grant for a tool the capability never named.
+  //
+  // `null` ONLY when the record could not be found, which the contract fails closed on. A found
+  // capability with no `required_tools` yields an empty array, which is a different refusal
+  // (`tool_not_required_by_capability`) and must not be collapsed into "unreadable".
+  const capabilityRequiredTools: readonly string[] | null = capability
+    ? [...(capability.required_tools ?? [])]
+    : null;
+
+  return { recordedHumans, capabilityState, capabilityRequiredTools };
 }
 
 /**
@@ -182,7 +192,7 @@ export async function grantToolToAgent(
   sequelize: Sequelize,
   args: GrantToolArgs,
 ): Promise<GrantToolResult> {
-  const { recordedHumans, capabilityState } = await gatherFacts(sequelize, args);
+  const { recordedHumans, capabilityState, capabilityRequiredTools } = await gatherFacts(sequelize, args);
   const registered = registeredToolNames();
 
   return sequelize.transaction(async (transaction) => {
@@ -203,6 +213,7 @@ export async function grantToolToAgent(
       approvers: configuredApprovers(),
       proposedBy: args.proposedBy ?? null,
       registeredToolNames: registered,
+      capabilityRequiredTools,
     });
     if (!verdict.ok) throw new ToolGrantRefusedError(verdict.issues);
 

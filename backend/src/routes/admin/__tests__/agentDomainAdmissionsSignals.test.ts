@@ -39,6 +39,10 @@ const VISITOR_B = '22222222-2222-4222-8222-222222222222';
 
 const identityRows: Array<{ id: string }> = [];
 let domainRows: Array<Record<string, unknown>> = [];
+/** Every SQL string the reader used to fetch events, for the cap assertions. */
+const sqlSeenForEvents: string[] = [];
+/** The bind array for each of those, so the cap can be checked as a parameter. */
+const eventBinds: unknown[][] = [];
 
 const mockQuery = jest.fn(async (sql: string, opts?: { bind?: unknown[] }) => {
   if (/FROM\s+org_members/i.test(sql)) return identityRows;
@@ -55,6 +59,27 @@ const mockQuery = jest.fn(async (sql: string, opts?: { bind?: unknown[] }) => {
       return domainRows.filter((r) => String(r.intended_builder ?? '') === bind);
     }
     return domainRows;
+  }
+  /**
+   * The capped event read. This emulates what Postgres does rather than just
+   * returning the fixture, because the cap and the true total now BOTH come
+   * from the window functions in that SQL: ROW_NUMBER to take the newest `cap`
+   * per visitor, COUNT(*) OVER to carry the untruncated total. A mock that
+   * ignored them would let a reader that silently dropped either one pass.
+   */
+  if (/FROM\s+page_events/i.test(sql)) {
+    const [ids, cap] = (opts?.bind ?? []) as [string[], number];
+    sqlSeenForEvents.push(sql);
+    eventBinds.push([ids, cap]);
+    const mine = pageEventRows.filter((r) => ids.includes(String(r.visitor_id)));
+    const out: Array<Record<string, unknown>> = [];
+    for (const id of new Set(mine.map((r) => String(r.visitor_id)))) {
+      const forVisitor = mine
+        .filter((r) => String(r.visitor_id) === id)
+        .sort((x, y) => Number(new Date(String(y.timestamp))) - Number(new Date(String(x.timestamp))));
+      for (const r of forVisitor.slice(0, cap)) out.push({ ...r, total: forVisitor.length });
+    }
+    return out;
   }
   return [];
 });
@@ -106,6 +131,8 @@ beforeEach(() => {
   identityRows.length = 0;
   memoryRows.length = 0;
   pageEventRows.length = 0;
+  sqlSeenForEvents.length = 0;
+  eventBinds.length = 0;
   findAllMemory.mockClear();
   findAllEvents.mockClear();
 
@@ -171,12 +198,17 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
     expect(res.body.visitors[1].interests).toEqual([]);
   });
 
-  it('attaches each visitor\'s own page events, and never another visitor\'s', async () => {
+  it('attaches each visitor\'s own page events, newest first, and never another visitor\'s', async () => {
     const res = await request(app()).get(URL)
       .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
     const [a, b] = res.body.visitors;
     expect(a.page_events).toHaveLength(2);
-    expect(a.page_events[0]).toEqual({
+    // Newest first, which is what `ORDER BY timestamp DESC` has always done and
+    // what the `eventsPerVisitor` cap means: keep the most recent N. The older
+    // version of this test asserted the opposite order and passed only because
+    // the mock returned the fixture in insertion order and ignored the ORDER BY.
+    expect(a.page_events[0].timestamp).toBe('2026-11-08T10:02:00.000Z');
+    expect(a.page_events[1]).toEqual({
       event_type: 'page_view',
       page_path: '/programs/ai-leadership',
       page_title: 'AI Leadership Accelerator',
@@ -190,9 +222,49 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
     // the grouping happens in Node afterwards. What it would not survive is
     // production: page_events is the largest table in this schema.
     await request(app()).get(URL).set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
-    const opts = findAllEvents.mock.calls[0][0] as Record<string, unknown>;
-    const where = opts.where as Record<string, unknown>;
-    expect(Object.keys(where)).toEqual(['visitor_id']);
+    expect(sqlSeenForEvents).toHaveLength(1);
+    expect(sqlSeenForEvents[0]).toMatch(/WHERE\s+visitor_id\s*=\s*ANY/i);
+  });
+
+  /**
+   * The regression guard. This is the defect Kalkidan Bezabeh found on 11 Nov
+   * 2026: the cap bounded what was KEPT, never what was FETCHED, so a call at
+   * limit=100 pulled 683,444 rows out of production to keep 20,000.
+   *
+   * The previous version of the test above asserted only that the query was
+   * SCOPED, and scoping was never the problem. A scoped query that returns
+   * every event a hundred visitors ever generated is still the whole table.
+   * So this asserts the CAP reaches the database, in both the places it has to:
+   * the per-visitor window in the SQL, and the cap value in the bind.
+   */
+  it('caps events per visitor in the database, not in memory afterwards', async () => {
+    await request(app()).get(`${URL}?limit=2&events_per_visitor=1`)
+      .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
+
+    const sql = sqlSeenForEvents[0];
+    // per-visitor, not a flat LIMIT: a flat limit would let one heavy visitor
+    // consume the whole budget and leave later visitors with zero events.
+    expect(sql).toMatch(/ROW_NUMBER\(\)\s+OVER\s*\(\s*PARTITION BY visitor_id/i);
+    expect(sql).toMatch(/COUNT\(\*\)\s+OVER\s*\(\s*PARTITION BY visitor_id/i);
+    expect(sql).toMatch(/rn\s*<=/i);
+
+    const bind = eventBinds[0] as [string[], number];
+    expect(bind[1]).toBe(1); // the cap is a bound parameter, not interpolated
+    expect(bind[0]).toEqual([VISITOR_A, VISITOR_B]);
+
+    // and the unbounded model fetch is gone entirely
+    expect(findAllEvents).not.toHaveBeenCalled();
+  });
+
+  it('keeps page_event_count the visitor\'s TRUE total when the cap truncates', async () => {
+    // Capping the rows must not quietly redefine this field as "the cap". That
+    // would be a worse defect than the one being fixed: a wrong number that
+    // reads as a right one. It is why COUNT(*) OVER rides along in the SQL.
+    const res = await request(app()).get(`${URL}?limit=2&events_per_visitor=1`)
+      .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
+    const a = res.body.visitors[0];
+    expect(a.page_events).toHaveLength(1);
+    expect(a.page_event_count).toBe(2);
   });
 
   it('reports a missing page title as null, never as an empty string', async () => {
@@ -200,7 +272,8 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
     // a fabricated title that reads as a real one.
     const res = await request(app()).get(URL)
       .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
-    expect(res.body.visitors[0].page_events[1].page_title).toBeNull();
+    // index 0: the newest event is the untitled one, per newest-first ordering
+    expect(res.body.visitors[0].page_events[0].page_title).toBeNull();
   });
 
   it('leaks none of the fields the admin visitor surface returns', async () => {

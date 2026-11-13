@@ -43,6 +43,16 @@ const IC_WARN = (
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
+ * The word an unnamed build must be confirmed with.
+ *
+ * Shared by the logic and the rendered copy so the dialog can never ask for one word and accept
+ * another. Renaming the control from "Remove" to "Delete" changed the instruction and left the
+ * comparison behind, which made the confirm box impossible to satisfy; one constant removes that
+ * failure mode rather than relying on someone noticing both places.
+ */
+export const CONFIRM_WORD = 'DELETE';
+
+/**
  * The list of things this archive actually takes with it, built from the counts.
  *
  * Only true statements appear: a project with no published plan does not get a
@@ -71,9 +81,9 @@ export function buildActiveLine(p: ArchivePreview): string | null {
   if (!p.is_active) return null;
   if (p.next_active_project_id) {
     const name = p.next_active_project_name || 'your other build';
-    return `This is your current build. Removing it moves you to ${name}.`;
+    return `This is your current build. Deleting it moves you to ${name}.`;
   }
-  return 'This is your current build, and your only one. Removing it leaves you with no active build until you start a new one.';
+  return 'This is your current build, and your only one. Deleting it leaves you with no active build until you start a new one.';
 }
 
 /**
@@ -130,10 +140,16 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
 
   const serverName = (preview?.name ?? '').trim();
   // An unnamed project cannot be confirmed by typing its name, so the gate
-  // becomes the explicit word REMOVE. Every project is meant to have a real
-  // name; this is the honest handling of the ones that slipped through rather
-  // than a dead end the student cannot get past.
-  const requiredPhrase = serverName || 'REMOVE';
+  // becomes an explicit word. Every project is meant to have a real name; this
+  // is the honest handling of the ones that slipped through rather than a dead
+  // end the student cannot get past.
+  //
+  // It MUST match the word the dialog asks for. When the control was renamed from
+  // Remove to Delete, the rendered instruction changed and this did not, which left
+  // the box asking for DELETE while only accepting REMOVE - a confirm step that can
+  // never be satisfied. The constant is shared with the copy below so they cannot
+  // drift apart again.
+  const requiredPhrase = serverName || CONFIRM_WORD;
   const matches = typed.trim().toLowerCase() === requiredPhrase.toLowerCase();
 
   const submit = useCallback(async () => {
@@ -156,7 +172,7 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
       >
         <div className="pja-head">
           <span className="pja-ic">{IC_WARN}</span>
-          <h3 id="pja-title">Remove {heading ? `“${heading}”` : 'this build'}?</h3>
+          <h3 id="pja-title">Delete {heading ? `“${heading}”` : 'this build'}?</h3>
         </div>
 
         {loadError && (
@@ -176,13 +192,16 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
 
         {!loadError && preview && (
           <div className="pja-body">
+            {/* The button says Delete because that is the word people search for. This sentence
+                is where the honesty lives, so it has to be specific: not "nothing is deleted",
+                which now contradicts the button, but WHERE it goes and HOW it comes back. */}
             <p className="pja-lead">
-              This takes it off your Projects page. <strong>Nothing is deleted</strong> — we keep it,
-              and you can put it back.
+              This takes it off your Projects page. <strong>It is recoverable</strong> — nothing is
+              erased, and you can put it back from <em>Deleted builds</em> at the bottom of this page.
             </p>
 
             <div className="pja-loss">
-              <div className="pja-loss-h">Removing it takes with it</div>
+              <div className="pja-loss-h">Deleting it takes with it</div>
               <ul>
                 {buildLossLines(preview).map((line) => <li key={line}>{line}</li>)}
               </ul>
@@ -199,7 +218,7 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
             <label className="pja-confirm" htmlFor="pja-confirm-input">
               {serverName
                 ? <>Type <strong>{serverName}</strong> to confirm.</>
-                : <>This build has no name yet. Type <strong>REMOVE</strong> to confirm.</>}
+                : <>This build has no name yet. Type <strong>{CONFIRM_WORD}</strong> to confirm.</>}
             </label>
             <input
               id="pja-confirm-input" ref={inputRef} className="pja-input" type="text"
@@ -209,7 +228,7 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
               aria-describedby="pja-confirm-hint"
             />
             <div id="pja-confirm-hint" className="pja-hint">
-              You can restore it from “Removed builds” at the bottom of this page.
+              You can restore it from “Deleted builds” at the bottom of this page.
             </div>
 
             {submitError && <p className="pja-err" role="alert">{submitError}</p>}
@@ -222,7 +241,7 @@ const ArchiveProjectDialog: React.FC<Props> = ({ projectId, fallbackName, onCanc
                 type="button" className="pja-danger" onClick={() => void submit()}
                 disabled={!matches || submitting}
               >
-                {submitting ? 'Removing…' : 'Remove this build'}
+                {submitting ? 'Deleting…' : 'Delete this build'}
               </button>
             </div>
           </div>

@@ -13,9 +13,10 @@ import { readRoomPulse as readRoomPulseRequest, type RoomPulseResult } from '../
 import { clockTicks, producerClock } from './producerClock';
 import ProducerHeader from './ProducerHeader';
 import ProducerRehearsalNotice from './ProducerRehearsalNotice';
+import ClipMarkButton from './ClipMarkButton';
 import ProducerRundown from './ProducerRundown';
 import {
-  CONFIRM_Q, LABELS, needsConfirm, noActionsNote, blockedReasonCopy,
+  CONFIRM_Q, LABELS, needsConfirm, noActionsNote, blockedReasonCopy, markNotReady,
   audienceChip, roomChip, stuckChip, endReasonCopy,
 } from './producerStripCopy';
 import { CPS_CSS } from './producerStripStyles';
@@ -72,6 +73,8 @@ export interface ProducerStripProps {
    * test — the thing `broadcastRoutes.test.ts` had to go back and fix on the backend.
    */
   loadRundown?: (sessionId: string) => Promise<RundownResult>;
+  /** Injected in tests. The clip mark POST (D10), passed through for the same reason as the rest. */
+  sendClipMark?: (sessionId: string) => Promise<import('../../services/broadcastProducer').ClipMarkResult>;
   /** Injected in tests. A THIRD request, keyed on the session rather than the occurrence (D8). */
   loadRoomPulse?: (sessionId: string) => Promise<RoomPulseResult>;
   /**
@@ -150,7 +153,7 @@ function useProducerTick(on: boolean): number {
 
 export default function ProducerStrip(
   {
-    sessionId, loadState, sendCommand, loadAudience, loadRundown, loadRoomPulse,
+    sessionId, loadState, sendCommand, loadAudience, loadRundown, loadRoomPulse, sendClipMark,
     onProducerConfirmed,
   }: ProducerStripProps,
 ): React.ReactElement | null {
@@ -411,6 +414,15 @@ export default function ProducerStrip(
       )}
 
       <div className="cps-actions">
+        {/* D10 - stamp a moment that no slide advance will catch. Disabled, with the reason,
+            rather than hidden: a control that vanishes is indistinguishable from one that was
+            never there. */}
+        <ClipMarkButton
+          sessionId={sessionId}
+          ready={onAir && !!occurrence.content_started_at}
+          notReadyReason={markNotReady(occurrence)}
+          sendMark={sendClipMark}
+        />
         {available.map((c) => (
           <React.Fragment key={c.command}>
             {confirming === c.command ? (

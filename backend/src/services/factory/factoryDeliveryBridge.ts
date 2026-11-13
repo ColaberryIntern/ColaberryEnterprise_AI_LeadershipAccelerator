@@ -59,7 +59,8 @@ import type { DeliveryEvidenceType } from '../../modules/delivery/deliveryEviden
 
 /** A gap the bridge could not fill from the decomposition. Reported, never guessed. */
 export interface BridgeGap {
-  rule: 'AI_TASK_WITHOUT_TEAM' | 'HUMAN_TASK_WITHOUT_SURFACE' | 'REQUIREMENT_LINK_UNAVAILABLE';
+  rule: 'AI_TASK_WITHOUT_TEAM' | 'HUMAN_TASK_WITHOUT_SURFACE' | 'REQUIREMENT_LINK_UNAVAILABLE'
+  | 'POLICY_ESCALATION_REFUSED';
   ref: string;
   detail: string;
 }
@@ -134,11 +135,47 @@ function policiesFor(
    * decomposition CAN state an approver, as it already does for agent work.
    */
   approvers: readonly Assignment[],
-): { executionPolicy: ExecutionPolicy | null; approvalPolicy: ApprovalPolicy | null } {
+): {
+  executionPolicy: ExecutionPolicy | null;
+  approvalPolicy: ApprovalPolicy | null;
+  /** Set only when a declared policy was REFUSED and replaced with the restrictive one. */
+  escalation?: { from: ExecutionPolicy; to: ExecutionPolicy; teamId: string };
+} {
   // An AI task's policies are the OWNING TEAM's policies. That is the point of a team: the
   // governance is declared once, for a subject, rather than per task.
   if (cls && AI_CLASSES.includes(cls)) {
     if (!team) return { executionPolicy: null, approvalPolicy: null };
+
+    // L7.2. A TASK THE ALLOCATION SAYS NEEDS APPROVAL MAY NOT RUN AUTONOMOUSLY, and that is
+    // enforced here rather than requested.
+    //
+    // `factoryDecomposePrompt.ts` already states this invariant to the model in those words:
+    // "the team of ai_with_approval tasks is agent_with_review, not agent_autonomous". Until
+    // now that was the ONLY thing holding it. Every field this decision reads - the team's
+    // `execution_policy`, the task's `data_sensitivity` and `decision_authority` that set its
+    // risk - is model output derived from an uploaded source document, so "the prompt asks for
+    // it" is not a control. On 11 Nov a regeneration of the Herriman bid was measured ignoring
+    // the sibling instruction in the same prompt that demands a named approver on high-risk
+    // work: 0 of 6 high-risk tasks named one, before and after. An instruction the model is
+    // free to drop cannot be the thing standing between a document and an autonomous agent.
+    //
+    // The restrictive policy wins. This is deliberately NOT a refusal of the whole
+    // decomposition: the story is still built, and the refused escalation is reported as a gap
+    // so a reviewer sees the claim that was made and rejected.
+    //
+    // KNOWN LIMIT, stated because it would otherwise look like coverage. This compares two
+    // model-supplied fields, so it only catches an INCONSISTENT claim. A decomposition that
+    // sets the allocation to `ai_autonomous` AND the team to `agent_autonomous` is
+    // self-consistent and passes here untouched. Cross-field agreement is not a security
+    // property when one actor writes every field; what stops that case is the trust and
+    // approval evidence required downstream, not this clamp.
+    if (cls === 'ai_with_approval' && team.execution_policy === 'agent_autonomous') {
+      return {
+        executionPolicy: 'agent_with_review',
+        approvalPolicy: team.approval_policy,
+        escalation: { from: 'agent_autonomous', to: 'agent_with_review', teamId: team.id },
+      };
+    }
     return { executionPolicy: team.execution_policy, approvalPolicy: team.approval_policy };
   }
   if (cls === 'human') {
@@ -232,7 +269,15 @@ export function buildDeliveryStories(input: BridgeInput): {
       (a) => a.task_id === task.id
         && (a.responsibility === 'APPROVER' || a.responsibility === 'ACCOUNTABLE'),
     );
-    const { executionPolicy, approvalPolicy } = policiesFor(cls, team, taskApprovers);
+    const { executionPolicy, approvalPolicy, escalation } = policiesFor(cls, team, taskApprovers);
+    if (escalation) {
+      gaps.push({
+        rule: 'POLICY_ESCALATION_REFUSED',
+        ref: task.id,
+        detail: `Team "${escalation.teamId}" declared ${escalation.from} for a task the allocation `
+          + `classes as ai_with_approval. Refused and recorded as ${escalation.to}.`,
+      });
+    }
 
     stories.push({
       storyId: `story-${task.id}`,

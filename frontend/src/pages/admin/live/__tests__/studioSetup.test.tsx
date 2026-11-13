@@ -22,12 +22,28 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const mockGet = jest.fn();
 const mockPatch = jest.fn();
+/**
+ * `searchStudioStaff` is stubbed for the reason the rest of this repo states about any child
+ * that fetches: there is no global axios mock, so leaving it live would put a real request
+ * inside every test here the moment the People card renders.
+ */
+const mockStaff = jest.fn();
+/**
+ * The admin api client, because Run this class posts through it. Unmocked it would be a real
+ * request, and  would try to leave the test page.
+ */
+const mockApiPost = jest.fn();
+jest.mock('../../../../utils/api', () => ({
+  __esModule: true,
+  default: { post: (...a: unknown[]) => mockApiPost(...a) },
+}));
 jest.mock('../../../../services/studioSetupApi', () => {
   const actual = jest.requireActual('../../../../services/studioSetupApi');
   return {
     ...actual,
     getStudioConfig: (...a: unknown[]) => mockGet(...a),
     patchStudioConfig: (...a: unknown[]) => mockPatch(...a),
+    searchStudioStaff: (...a: unknown[]) => mockStaff(...a),
   };
 });
 
@@ -91,6 +107,23 @@ async function type(sel: string, value: string): Promise<void> {
   });
 }
 
+/**
+ * Choose a person through the picker, the way an operator does: type, wait, click a name.
+ *
+ * Both fields used to be text boxes you pasted an enrollment id into, which is what these tests
+ * did. They are a search now, so the test drives the search - otherwise it would be asserting
+ * against a control the product no longer has.
+ *
+ * The wait is real: the picker debounces by 200ms so that typing a name does not open one
+ * request per character.
+ */
+async function pick(which: string, id: string, name: string): Promise<void> {
+  mockStaff.mockResolvedValue([{ enrollment_id: id, name, email: `${id}@colaberry.com` }]);
+  await type(`[data-testid="search-${which}"]`, name.slice(0, 3));
+  await act(async () => { await new Promise((r) => { setTimeout(r, 250); }); });
+  await click(q(`[data-testid="option-${id}"]`)!);
+}
+
 async function check(sel: string): Promise<void> {
   const el = q<HTMLInputElement>(sel)!;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')!.set!;
@@ -139,8 +172,8 @@ describe('Create is locked until four decisions are made', () => {
   it('unlocks only once all four read Done', async () => {
     await renderCold();
 
-    await type('#cls-presenter', 'person-a');
-    await type('#cls-producer', 'person-b');
+    await pick('presenter', 'person-a', 'Ada Lovelace');
+    await pick('producer', 'person-b', 'Grace Hopper');
     expect(create().disabled).toBe(true);
 
     await click(q('[data-testid="cls-aud-guests"]'));
@@ -156,8 +189,8 @@ describe('Create is locked until four decisions are made', () => {
 
   it('blocks Create when the producer is the presenter, and says why', async () => {
     await renderCold();
-    await type('#cls-presenter', 'same-person');
-    await type('#cls-producer', 'same-person');
+    await pick('presenter', 'same-person', 'Ada Lovelace');
+    await pick('producer', 'same-person', 'Ada Lovelace');
     await click(q('[data-testid="cls-aud-guests"]'));
     await click(q('[data-testid="cls-mode-free"]'));
     await check('#cls-ack');
@@ -233,11 +266,81 @@ describe('refusals reach the operator as sentences', () => {
     mockPatch.mockRejectedValue(new Error('network down'));
     await renderCold();
 
-    await type('#cls-presenter', 'person-a');
+    await pick('presenter', 'person-a', 'Ada Lovelace');
     await click(q('[data-testid="cls-save"]'));
 
     expect(alertText()).toMatch(/did not save/i);
-    // It never reports a success it did not get, and nothing typed is thrown away.
-    expect(q<HTMLInputElement>('#cls-presenter')!.value).toBe('person-a');
+    /**
+     * It never reports a success it did not get, and the operator's choice is not thrown away.
+     *
+     * Asserted on the PICKED row rather than on an input value, because the control changed:
+     * once somebody is chosen the field shows their name, which is the whole point of the
+     * picker. The property under test is unchanged - a failed save keeps the answer - and
+     * checking the name is a stronger version of it, since a uuid surviving in a box would not
+     * prove the screen still showed the right person.
+     */
+    expect(q('[data-testid="picked-presenter"]')).not.toBeNull();
+    expect(q('[data-testid="picked-presenter"]')!.textContent).toContain('Ada Lovelace');
+  });
+});
+
+/**
+ * RUN THIS CLASS — the step that was missing between setting a class up and running it.
+ *
+ * The producer controls live on `/portal/live/:id`, a PARTICIPANT surface. Setting the class up
+ * happens in admin. Those are two different sessions, so an operator who created a broadcast
+ * and opened its page got the public viewer card - "This class has not started yet" - with no
+ * hint that they were merely in the wrong session. That is what happened on production, and the
+ * backend log confirmed the producer endpoint was never called at all.
+ *
+ * The assertions here are about the two halves of that: the button only exists once there is
+ * something to run, and a failure says so rather than looking like a dead control.
+ */
+describe('crossing from setup into the producer view', () => {
+  /** The page with a broadcast already created, which is when the button exists. */
+  const withBroadcast = () => config({
+    canSetAccessMode: false,
+    occurrence: {
+      id: 'occ-1', access_mode: 'free', editorial_state: 'scheduled', version: 2,
+      provider_session_id: 'input-1',
+    },
+  });
+
+  it('is NOT offered before the broadcast exists', async () => {
+    // Nothing to run yet. A button that navigated to a producer page for a class with no
+    // occurrence would land on the same viewer card it exists to avoid.
+    await renderCold();
+    expect(q('[data-testid="cls-run"]')).toBeNull();
+  });
+
+  it('appears once the class has a broadcast', async () => {
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+    expect(q('[data-testid="cls-run"]')).not.toBeNull();
+  });
+
+  it('says so when the exchange fails, rather than doing nothing visible', async () => {
+    // The reason this screen needed a button at all was a path that silently did not work.
+    // A button that silently does not work would be the same failure with extra steps.
+    mockApiPost.mockRejectedValue(new Error('no bridge'));
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+
+    await click(q('[data-testid="cls-run"]')!);
+
+    expect(q('[data-testid="cls-run-failed"]')).not.toBeNull();
+    expect(alertText()).toMatch(/could not open the producer view/i);
+  });
+
+  it('keeps the setup reachable after a failed exchange', async () => {
+    // The operator's work is saved; the only thing that failed is the hop. Losing the screen
+    // would make a recoverable problem look like a lost configuration.
+    mockApiPost.mockRejectedValue(new Error('no bridge'));
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+    await click(q('[data-testid="cls-run"]')!);
+
+    expect(q('[data-testid="cls-run"]')).not.toBeNull();
+    expect(q('[data-testid="cls-create"]')).not.toBeNull();
   });
 });

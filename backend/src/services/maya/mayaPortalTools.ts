@@ -1,3 +1,4 @@
+import { withToolRecording } from '../agents/tools/toolInvocationRecorder';
 import OpenAI from 'openai';
 import { requestPortalCallback, type CallbackOutcome } from './mayaCallbackService';
 
@@ -133,7 +134,21 @@ export function callbackResultText(r: CallbackOutcome): string {
   }
 }
 
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ *
+ * Before this, Maya's PORTAL tools ran silently while her site-chat tools emitted `tool.call`,
+ * so the same agent was observable on one surface and invisible on another. The wrapper returns
+ * the inner result unchanged and rethrows, so it cannot alter behaviour.
+ */
 export async function executeMayaPortalTool(name: string, args: Record<string, unknown>, ctx: MayaPortalToolContext): Promise<string> {
+  return withToolRecording(
+    { agentName: 'Maya', toolName: name, surface: 'maya_portal', args },
+    () => executeMayaPortalToolInner(name, args, ctx),
+  );
+}
+
+async function executeMayaPortalToolInner(name: string, args: Record<string, unknown>, ctx: MayaPortalToolContext): Promise<string> {
   try {
     if (name === 'retrieve_knowledge') {
       const query = typeof args.query === 'string' ? args.query.slice(0, 300) : '';

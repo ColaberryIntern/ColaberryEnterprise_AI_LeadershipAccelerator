@@ -2,6 +2,8 @@ import React from 'react';
 import type { StudentGovProjectView, StudentGovMeeting, StudentGovVetting, StudentGovOpportunitySummary, StudentGovRequirementView } from '../../../../services/govProjectPortalApi';
 import { pursuitStageLabel } from './buildHelpers';
 import StageBlueprint from './StageBlueprint';
+import { SectionCard } from '../../../../components/admin/shell';
+import { RequirementsByDueStageList } from '../../../admin/govWorkspace/RequirementsByDueStage';
 
 /**
  * StageDetail — read-only panels behind the pursuit-stage chips (Snapshot / Solicitation / Fit / Decide / Outcome),
@@ -106,23 +108,45 @@ function evidenceLabel(state: string): string {
   return state || 'Unknown';
 }
 
-/** The requirements-coverage read behind the Fit step: each established requirement with its priority, tracks and the
- *  evidence state of our coverage. Student-safe — statements + priorities already on the projection, no eval internals. */
+/** Due-stage order + labels, matching the admin Qualification Workspace's "Requirements by due stage" grouping. */
+const DUE_STAGE_ORDER = ['submission', 'award', 'delivery', 'unknown'] as const;
+const DUE_STAGE_LABEL: Record<string, string> = {
+  submission: 'Due with the submission', award: 'Due at award', delivery: 'Due during delivery', unknown: 'Stage not classified',
+};
+
+/** The requirements-coverage read behind the Fit step: each established requirement with its priority and the evidence
+ *  state of our coverage, GROUPED BY DUE STAGE (submission / award / delivery) like the admin workspace. A projection
+ *  without due-stage data falls back to the single flat list. Student-safe — no eval internals, no service matches. */
 function RequirementsEvidence({ requirements }: { requirements: StudentGovRequirementView[] }): React.ReactElement | null {
   const rows = requirements ?? [];
   if (rows.length === 0) return null;
+
+  const row = (r: StudentGovRequirementView): React.ReactElement => (
+    <div className="gps-r" key={r.canonicalReqId} data-testid="fit-req">
+      <span>{r.statement}</span>
+      <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+        <span className="gps-tag gps-small">{r.priority}</span>
+        <span className="gps-tag gps-small" style={{ marginLeft: 4 }} data-testid="fit-req-evidence">{evidenceLabel(r.evidenceState)}</span>
+      </span>
+    </div>
+  );
+
+  const groups = DUE_STAGE_ORDER
+    .map((stage) => ({ stage, items: rows.filter((r) => (r.dueStage || 'unknown') === stage) }))
+    .filter((g) => g.items.length > 0);
+  const grouped = rows.some((r) => r.dueStage) && groups.length > 1;
+
   return (
     <div className="gps-panel" data-testid="fit-requirements">
       <h3>Requirements &amp; coverage <span className="gps-tag gps-small">{rows.length}</span></h3>
-      {rows.map((r) => (
-        <div className="gps-r" key={r.canonicalReqId} data-testid="fit-req">
-          <span>{r.statement}</span>
-          <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
-            <span className="gps-tag gps-small">{r.priority}</span>
-            <span className="gps-tag gps-small" style={{ marginLeft: 4 }} data-testid="fit-req-evidence">{evidenceLabel(r.evidenceState)}</span>
-          </span>
-        </div>
-      ))}
+      {grouped
+        ? groups.map((g) => (
+          <div key={g.stage} data-testid="fit-req-group">
+            <div className="gps-eyebrow" style={{ marginTop: 10 }}>{DUE_STAGE_LABEL[g.stage] ?? g.stage} <span className="gps-tag gps-small">{g.items.length}</span></div>
+            {g.items.map(row)}
+          </div>
+        ))
+        : rows.map(row)}
     </div>
   );
 }
@@ -147,6 +171,10 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
           {keyDates.map((k, i) => (<div className="gps-r" key={i}><span>{k.text ?? 'Date'}</span><b className="gps-num">{k.date ?? ''}</b></div>))}
         </div>
         <MeetingsPanel meetings={view.meetings ?? []} />
+        {/* Blueprint (how they score it, submission rules, required forms, elimination risks) leads here,
+            above the full requirements list, to match the admin Qualification Workspace's prominence: the
+            "under what rules" read is the point of this step and must not sit below a 200-row requirement dump. */}
+        {bp && <StageBlueprint bp={bp} />}
         <div className="gps-panel">
           <h3>Requirements <span className="gps-tag gps-small" data-testid="stage-reqcount">{view.requirementCounts.total}</span></h3>
           <div className="gps-muted gps-small" style={{ marginBottom: 8 }}>{view.requirementCounts.proposal} for the proposal &middot; {view.requirementCounts.build} for the build</div>
@@ -158,7 +186,6 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
             </div>
           ))}
         </div>
-        {bp && <StageBlueprint bp={bp} />}
       </div>
     );
   }
@@ -193,7 +220,18 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
           {rollup && <div className="gps-r"><span>Build stories verified</span><b className="gps-num">{rollup.verified} / {rollup.total}</b></div>}
           {!vetting && <div className="gps-r"><span>Fit decision</span><b>Approved — the bid was pursued</b></div>}
         </div>
-        <RequirementsEvidence requirements={view.requirements ?? []} />
+        {(view.requirementEvals?.length ?? 0) > 0 ? (
+          /* The EXACT admin "Requirements by due stage" card + component + data (evaluateRequirements). Same screen as
+             the admin Qualification Workspace, read-only, not a parallel look-alike. Falls back to the prose coverage
+             list only on a projection with no established requirement evals. */
+          <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
+            <div data-testid="fit-requirements">
+              <RequirementsByDueStageList evals={view.requirementEvals!} />
+            </div>
+          </SectionCard>
+        ) : (
+          <RequirementsEvidence requirements={view.requirements ?? []} />
+        )}
         {vetting && <VettingCard vetting={vetting} />}
         {!vetting && <div className="gps-muted gps-small" data-testid="stage-coming">{COMING}</div>}
       </div>

@@ -37,11 +37,6 @@
 /* the noticeboard on the map (SVG) */
 .cm-cboard-sign{cursor:pointer}
 .cm-cboard-sign .hit{fill:transparent;pointer-events:all}
-.cm-cboard-sign:focus-visible .face{stroke:var(--cm-art-red);stroke-width:3}
-.cm-cboard-sign .post{fill:var(--cm-art-cork-frame)}
-.cm-cboard-sign .roof{fill:var(--cm-art-cork-roof)}
-.cm-cboard-sign .face{fill:var(--cm-art-cork);stroke:var(--cm-art-cork-frame);stroke-width:2}
-.cm-cboard-sign .n1{fill:var(--cm-art-note-q)} .cm-cboard-sign .n2{fill:var(--cm-art-note-post)} .cm-cboard-sign .n3{fill:var(--cm-art-note-ann)}
 .cm-cboard-sign .pill{fill:var(--cm-art-card)} .cm-cboard-sign .pill-t{fill:var(--cm-art-ink);font:800 11px 'DM Sans',system-ui,sans-serif}
 .cm-cboard-sign .badge{fill:var(--cm-art-red)} .cm-cboard-sign .badge-t{fill:var(--cm-art-white);font:800 10px 'DM Sans',system-ui,sans-serif}
 /* ---------- v14 (C67-C71): Community Board 2.0, from docs/design/campus/colaberry-campus-v14.html (.cb-*). Art tokens only. ---------- */

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../utils/videoEmbed';
+import { ytHandshake } from '../../utils/youtubeChannel';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 
 /**
@@ -137,7 +138,7 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
         const win = iframeRef.current?.contentWindow;
         if (!win) return;
         try {
-          if (yt) win.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+          if (yt) win.postMessage(ytHandshake(), '*');
           else win.postMessage(JSON.stringify({ method: 'addEventListener', value: 'timeupdate' }), '*');
         } catch { /* frame not ready yet */ }
       };

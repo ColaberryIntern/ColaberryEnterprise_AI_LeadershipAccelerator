@@ -16,7 +16,10 @@ import CaseStudy from '../../models/CaseStudy';
 import { getPublicPortfolioBySlug, type PublicPortfolioResult } from '../career/careerPortfolioPageService';
 import { linkedPeopleForCaseStudy } from '../career/caseStudyLinkedPerson';
 import { loadHireIndex } from './hireTalentIndex';
+import { restrictToHireCaseStudies } from './hireCaseStudyOnly';
 import { availabilityOf, pickSignature, type HireCaseStudyCard } from './hireTalentProjection';
+import { readCaseStudyOrder, readPublicIntro, type PublicIntro } from './hireStudioSettings';
+import { bookingSummary, type BookingSummary } from './hireInterviews';
 
 export interface HirePortfolioBlock {
   readonly signature: HireCaseStudyCard | null;
@@ -26,6 +29,32 @@ export interface HirePortfolioBlock {
   readonly spotlight: boolean;
   /** True only for an explicit `public` opt-in. Unlisted pages stay noindex. */
   readonly indexable: boolean;
+  /** The candidate's own words (kit §1.4). Null when they filled in nothing public. */
+  readonly intro: PublicIntro | null;
+  /** Their chosen carousel order, limited to slugs in `caseStudies`. */
+  readonly caseStudyOrder: readonly string[];
+  /** Interview booking (kit §1.5). `enabled: false` keeps today's Request intro. */
+  readonly booking: BookingSummary;
+}
+
+const NO_BOOKING: BookingSummary = { enabled: false, nextSlots: [], formats: [] };
+
+/**
+ * The studio extras are OPTIONAL to the page: a failure to read any of them is logged and the
+ * profile renders exactly as it did before Phase 2 (no card, Request intro). Never a 500.
+ */
+async function optional<T>(what: string, slug: string, fallback: T, read: () => Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (err: unknown) {
+    const e = err instanceof Error ? err : new Error(String(err));
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'hire_portfolio_extra_unavailable', outcome: 'partial', error_class: e.name || 'Error',
+      context: { what, slug, message: e.message.slice(0, 200) },
+    }));
+    return fallback;
+  }
 }
 
 export interface HirePortfolioResult {
@@ -38,20 +67,37 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
   if (!entry) return null;
   const result = await getPublicPortfolioBySlug(entry.page.slug, now, 'hire');
   if (!result) return null;
+  const eid = entry.page.enrollment_id;
+  const published = new Set(entry.cases.map((c) => c.slug));
+  const [intro, order, booking] = await Promise.all([
+    optional('intro', entry.page.slug, null, () => readPublicIntro(eid)),
+    optional('case_study_order', entry.page.slug, [] as string[], () => readCaseStudyOrder(eid)),
+    optional('booking', entry.page.slug, NO_BOOKING, () => bookingSummary(eid, now)),
+  ]);
   return {
     // NO EMAIL ON HIRE (Ali, 2026-11-10). The enterprise portfolio keeps `identity.email`
     // (his 2026-09-03 decision: there the learner is the one being contacted). On Hire the
     // employer's route to a person is Request intro, and /intro/ promises "contact details
     // are never shown here", so the address is nulled before it leaves this surface.
-    portfolio: { ...result.portfolio, identity: { ...result.portfolio.identity, email: null } },
+    // CASE STUDIES ONLY (Ali, 2026-11-11). Projects, records, commits and repositories that are
+    // not an approved, Hire-published case study never leave this surface. See hireCaseStudyOnly.
+    portfolio: restrictToHireCaseStudies(
+      { ...result.portfolio, identity: { ...result.portfolio.identity, email: null } },
+      new Set(entry.cases.map((c) => c.slug)),
+    ),
     hire: {
-      signature: pickSignature(entry.cases),
+      // The candidate's ★ (the first case study in their saved order) leads their own profile;
+      // with no saved order it is the admin-featured pick, exactly as before.
+      signature: entry.cases.find((c) => c.slug === order.find((s) => published.has(s))) ?? pickSignature(entry.cases),
       caseStudies: entry.cases.map(({ slug: s, title, summary, industry, featured, publishedAt, heroMetric, look }) => ({
         slug: s, title, summary, industry, featured, publishedAt, heroMetric, look,
       })),
       availability: availabilityOf(entry.facts),
       spotlight: entry.facts.hireSpotlight,
       indexable: entry.page.visibility === 'public' && result.indexable,
+      intro,
+      caseStudyOrder: order.filter((s) => published.has(s)),
+      booking,
     },
   };
 }

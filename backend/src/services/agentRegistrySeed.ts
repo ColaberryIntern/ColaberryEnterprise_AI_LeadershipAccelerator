@@ -37,6 +37,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Explorer Growth OS content registry sync. Projects published timeline cards into explorer_content_assets as POINTERS - title, summary and a portal URL - never as message copy, because the registry has no body column and the existing campaign engine renders at send time. PROJECTS ONLY: decides nothing, enqueues nothing, cannot send, and the no-send guard sweeps its directory. Idempotent by upsert against the partial unique index on (source_system, source_id), so two runs yield identical rows. Runs 30 minutes BEFORE ExplorerProfileRecompute, so also before ExplorerGovernorDecide, which resolves content at decision time - a registry refreshed after the Governor ran would serve yesterday catalogue for a day. Dark unless both EXPLORER_GROWTH_OS_ENABLED and EXPLORER_JOURNEY_INTELLIGENCE_ENABLED are on.',
   },
   {
+    // Intern nudge cadence (2026-11-11). Seeded rather than added to cronRegistryBaseline.ts,
+    // for the reason BatchRollover gives below: an instrumentCronJob() name with no ai_agents row
+    // tracks its run_count and error_count against nothing, and the baseline is a ratchet that is
+    // only allowed to shrink. `schedule` must stay equal to the cron expression in
+    // schedulerService.ts or the reconciliation guard reports the disagreement.
+    agent_name: 'InternNudgeCadence',
+    agent_type: 'scheduled_processor',
+    module: 'runCadence',
+    source_file: 'backend/src/services/internship/nudgeBrief/cadenceRun.ts',
+    trigger_type: 'cron',
+    schedule: '0 14 * * *',
+    category: 'behavioral',
+    description:
+      'The unattended intern outreach pass. Builds every intern brief, decides who should hear from us and why, and sends. Ali, 2026-11-11: if he detaches, communication continues at least every 48 hours, once across a weekend, and nobody slides through the cracks. A TIMER IS THE BACKSTOP, NEVER THE REASON: the triggers run hardest truth first - answer_owed, promise_open, deadline_near, build_stalled - and contact_floor only catches whoever none of them found, so a message always has a reason behind it rather than an elapsed clock. DRY UNLESS EXPLICITLY TOLD OTHERWISE: runCadence defaults to dryRun true and INTERN_NUDGE_CADENCE_SEND must be exactly "on" to send, because the failure mode of a loose check is mail reaching real interns nobody approved. An unattended send uses the DETERMINISTIC body; a model-written one is for the console where a person approves it. Three independent guards stop a double message: holdFor carries messaged_today, engagementState collapses Saturday and Sunday into one slot, and sendBrief is idempotent on intern-brief-(enrollment)-(central date). A hold is reported rather than swallowed, because "nobody slides through the cracks" is only true if the reason somebody got nothing is visible.',
+  },
+  {
     // Monthly batch rollover (2026-11-08, C10.13). Seeded rather than baselined: an
     // instrumentCronJob() name with no ai_agents row tracks its run_count and error_count
     // against nothing, so it is invisible to every health and staleness surface — and
@@ -121,6 +137,25 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'token exists. The Ad spend page has a Sync now button that works regardless.',
     // Honoured on first creation only, like the Growth Journey rows.
     enabled: false,
+  },
+  {
+    // Keeps the landing-page snack bar alive (GEO-1, 2026-11-11). Writes only visitors.city/country.
+    agent_name: 'VisitorGeoEnrichment',
+    agent_type: 'scheduled_processor',
+    module: 'enrichVisitorGeo',
+    source_file: 'backend/src/scripts/enrichVisitorGeo.ts',
+    trigger_type: 'cron',
+    schedule: '35 9 * * *',
+    category: 'behavioral',
+    description:
+      'Fills visitors.city and visitors.country from the IP already stored on each row, using the ' +
+      'GeoLite2 City database baked into the backend image. Feeds the landing-page snack bar, whose ' +
+      'feed only considers leads from the last 72 hours - so a one-off backfill goes dark in about ' +
+      'three days and this is what keeps it current. Selects on city IS NULL and is idempotent, so a ' +
+      'missed run is repaired by the next one and a double run is a no-op. Runs as a SHORT-LIVED ' +
+      'CHILD PROCESS, never in the backend: the reader holds ~50MB open and this host OOM-kills. ' +
+      'Rows whose IP is not public are re-selected every run by design, not stuck. 09:35 UTC ' +
+      '(about 3:35 AM Central). Ships enabled - it needs no token and no configuration.',
   },
   {
     // Closes idle chat conversations (R4, 2026-11-11). The job that makes closing happen at all.
@@ -1898,11 +1933,22 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     agent_name: 'RevenueOpportunityAgent',
     agent_type: 'revenue_opportunity_detection',
     module: 'reporting',
-    source_file: 'backend/src/services/agents/reporting/revenueOpportunityAgent.ts',
+    // R11: the executor now lives in aiOpsScheduler's SCHEDULE_REGISTRY, not in the file
+    // below. That file registers itself as a module-load side effect and nothing imports
+    // it, so it never ran. The source_file points at where the work is, which is the
+    // service, so a reader following this row arrives somewhere that executes.
+    source_file: 'backend/src/services/reporting/revenueOpportunityService.ts',
     trigger_type: 'cron',
     schedule: '0 */8 * * *',
+    // R11: true because it now actually runs. It sat false while also claiming a cron, and
+    // the pair read as "configured, idle, healthy" on every surface — run_count 0 with
+    // error_count 0, because zero errors is what zero runs looks like.
+    enabled: true,
     category: 'reporting',
-    description: 'Detects potential revenue opportunities from alumni at large companies, high-intent leads, and enterprise training signals. Estimates deal value and recommends outreach strategy.',
+    description: 'Every eight hours, lists leads scoring 70 or above as high-intent opportunities, '
+      + 'highest score first and capped. This is a WORKLIST of inbound signals, not a sales '
+      + 'pipeline: scored leads and late-stage leads are disjoint populations in this data. '
+      + 'Estimated value is modelled from the score, not measured from anything agreed.',
   },
   {
     agent_name: 'AgentPerformanceAnalyticsAgent',

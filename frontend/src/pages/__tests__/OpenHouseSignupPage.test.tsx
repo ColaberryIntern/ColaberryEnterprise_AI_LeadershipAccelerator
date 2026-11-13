@@ -32,8 +32,21 @@ jest.mock('../../services/openHouseApi', () => ({
 jest.mock('../../utils/tracker', () => ({ identifyVisitor: jest.fn() }));
 // C121: the real helper navigates the window; here it only records the call.
 jest.mock('../../utils/startPortalSession', () => ({ startPortalSession: jest.fn(() => true) }));
-jest.mock('react-router-dom', () => ({
-  Link: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+// The factory CREATES the navigate spy rather than closing over an outer const:
+// babel hoists `jest.mock` above the declarations, so a factory referring to one
+// would run in its temporal dead zone (see the note above). Tests read it back off
+// the mocked module as `__nav`.
+jest.mock('react-router-dom', () => {
+  const nav = jest.fn();
+  return {
+    Link: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    useNavigate: () => nav,
+    __nav: nav,
+  };
+});
+jest.mock('../../services/metaPixel', () => ({
+  loadMetaPixel: jest.fn().mockResolvedValue('2250748725203240'),
+  trackLeadOnce: jest.fn().mockResolvedValue(true),
 }));
 
 import {
@@ -100,6 +113,23 @@ function type(el: HTMLElement, value: string): void {
 const field = (id: string) => container.querySelector(`#${id}`) as HTMLInputElement;
 const submitButton = () => container.querySelector('button[type="submit"]') as HTMLButtonElement;
 const text = () => container.textContent ?? '';
+
+/**
+ * A completed signup is now a NAVIGATION, not a panel rendered in place.
+ *
+ * These assertions used to read "Your seat is saved" off this page. The confirmation
+ * moved to /open-house/lead so that Meta has a URL meaning "registered" rather than
+ * one shared with the empty form, and its own rendering is covered in
+ * OpenHouseLeadPage.test.tsx. What this page is still responsible for is handing the
+ * result over correctly, which is what this checks.
+ */
+function expectSignedUp(): void {
+  const { __nav } = jest.requireMock('react-router-dom') as { __nav: jest.Mock };
+  expect(__nav).toHaveBeenCalledWith('/open-house/lead', expect.objectContaining({
+    replace: true,
+    state: { signup: expect.objectContaining({ message: expect.any(String) }) },
+  }));
+}
 
 async function mount() {
   await act(async () => { root.render(<OpenHouseSignupPage />); });
@@ -220,7 +250,7 @@ describe('what it sends', () => {
     expect(mockSignUp).toHaveBeenNthCalledWith(2, {
       name: 'Dana Okoro', email: 'dana@example.com', phone: '(512) 555-0142', marketing_opt_in: false,
     });
-    expect(text()).toContain('Your seat is saved');
+    expectSignedUp();
   });
 
   it('does not retry a 400 that was really about the person', async () => {
@@ -248,7 +278,7 @@ describe('what it sends', () => {
     mockIdentify.mockImplementation(() => { throw new Error('blocked'); });
     await mount();
     await fillAndSubmit();
-    expect(text()).toContain('Your seat is saved');
+    expectSignedUp();
   });
 });
 
@@ -288,33 +318,6 @@ describe('validation and failure', () => {
   });
 });
 
-describe('after signing up', () => {
-  it('confirms with the server’s own message and the event it echoed back', async () => {
-    await mount();
-    await fillAndSubmit();
-    // The echo, not the date the page rendered a moment ago - those can differ if the event
-    // rolled over between the page load and the click.
-    expect(text()).toContain('Your seat is saved');
-    expect(text()).toContain('Check your email for your login link');
-    expect(text()).toContain('Thu, Nov 19, 2026 · 6:30 PM CT');
-    expect(container.querySelector('form')).toBeNull();
-  });
-
-  it('still confirms the account when no seat could be taken', async () => {
-    // `registered: false` means the account and the email happened and the seat did not. The
-    // backend says so in its message; the page must not overwrite that with a claim of a seat.
-    mockSignUp.mockResolvedValue({
-      ...OK,
-      registered: false,
-      event: null,
-      message: 'Your account is ready - check your email for your login link. We will confirm the Open House date separately.',
-    });
-    await mount();
-    await fillAndSubmit();
-    expect(text()).toContain('Your account is ready');
-    expect(text()).not.toContain('Nov');
-  });
-});
 
 describe('the pure labels', () => {
   it('seatsLabel claims a number only when there is one', () => {
@@ -349,53 +352,6 @@ describe('the advertising rule', () => {
 });
 
 // C121 (Ali, 11 Nov): a brand-new account opens with one click instead of a trip to the inbox.
-describe("C121: Access your account", () => {
-  const { startPortalSession } = jest.requireMock("../../utils/startPortalSession");
-  const ACCESS = { jwt: "jwt-new", next: "/portal/runtime/b0c844c0-01b0-439e-bc28-6a1b76b09afb" };
-
-  it("shows Access your account for a new account and opens the welcome video with its session", async () => {
-    mockSignUp.mockResolvedValue({ ...OK, access: ACCESS });
-    await mount();
-    await fillAndSubmit();
-    expect(text()).toContain("Your account is ready");
-    expect(text()).toContain("come back any time");
-    expect(text()).not.toContain("Check your email for your login link");
-    const btn = container.querySelector("[data-testid=\"cboh-access\"]") as HTMLButtonElement;
-    expect(btn.textContent).toBe("Access your account");
-    await act(async () => { btn.click(); });
-    expect(startPortalSession).toHaveBeenCalledWith("jwt-new", ACCESS.next, undefined);
-  });
-
-  it("sends an existing account to sign in, with no Access button", async () => {
-    mockSignUp.mockResolvedValue({ ...OK, created: false, access: null,
-      message: "You are signed up. You already have an account with this email, so sign in to pick up where you left off." });
-    await mount();
-    await fillAndSubmit();
-    expect(text()).toContain("Your seat is saved");
-    expect(container.querySelector("[data-testid=\"cboh-access\"]")).toBeNull();
-    // This file's router mock renders Link as a bare <span> (props dropped), so assert on what the person reads.
-    expect(text()).toContain("already have an account with this email, so sign in");
-    expect(text()).toContain("Sign in");
-    expect(text()).not.toContain("Check your email for your login link");
-  });
-
-  it("falls back to the email when the browser will not keep the session", async () => {
-    (startPortalSession as jest.Mock).mockReturnValueOnce(false);
-    mockSignUp.mockResolvedValue({ ...OK, access: ACCESS });
-    await mount();
-    await fillAndSubmit();
-    await act(async () => { (container.querySelector("[data-testid=\"cboh-access\"]") as HTMLButtonElement).click(); });
-    expect(text()).toContain("sign-in link we just emailed you");
-    expect(container.querySelector("[data-testid=\"cboh-access\"]")).toBeNull();
-  });
-
-  it("never says the barred word on the new-account screen", async () => {
-    mockSignUp.mockResolvedValue({ ...OK, access: ACCESS });
-    await mount();
-    await fillAndSubmit();
-    expect(text().toLowerCase()).not.toMatch(/\bfree\b/);
-  });
-});
 
 /**
  * THE FIELD THAT WENT MISSING.
@@ -441,7 +397,7 @@ describe('the phone number is mandatory (Ali, 2026-11-11)', () => {
     await mount();
     await fillAndSubmit();
     expect(mockSignUp).toHaveBeenCalledTimes(1);
-    expect(text()).toContain('Your seat is saved');
+    expectSignedUp();
   });
 
   describe('phoneProblem', () => {

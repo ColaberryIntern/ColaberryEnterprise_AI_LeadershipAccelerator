@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import {
-  readStudioConfig, writeStudioConfig, listStudioSessions, StudioWriteRefusal,
+  readStudioConfig, writeStudioConfig, listStudioSessions, listStudioStaff, StudioWriteRefusal,
 } from '../services/broadcast/studioSetupService';
 import { studioSetupBodySchema } from '../schemas/studioSetupSchema';
 
@@ -85,5 +85,19 @@ export async function handleUpdateStudioConfig(req: Request, res: Response, next
 export async function handleListStudioSessions(_req: Request, res: Response, next: NextFunction) {
   try {
     res.json({ sessions: await listStudioSessions() });
+  } catch (err) { next(err); }
+}
+
+/**
+ * GET /api/admin/accelerator/live/staff?q= — who can be named presenter or producer.
+ *
+ * A search rather than a dump, because the list is 62 people and a plain select would make an
+ * operator scroll past several dozen agent accounts to find a colleague. An empty `q` still
+ * returns the first page, so the control has something to show before anybody types.
+ */
+export async function handleListStudioStaff(req: Request, res: Response, next: NextFunction) {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.slice(0, 80) : '';
+    res.json({ staff: await listStudioStaff(q) });
   } catch (err) { next(err); }
 }

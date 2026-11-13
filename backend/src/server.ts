@@ -84,6 +84,7 @@ import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // their own post-conditions.
 import { ensureSbpSchema } from './db/ensureSbpSchema';
 import { ensureCertPrepSchema } from './db/ensureCertPrepSchema';
+import { ensureProjectArchiveAuditSchema } from './db/ensureProjectArchiveAuditSchema';
 import { ensureProjectArchiveSchema } from './db/ensureProjectArchiveSchema';
 import { ensureProjectApprovalSchema } from './db/ensureProjectApprovalSchema';
 import { ensureContractTrackSchema } from './db/ensureContractTrackSchema';
@@ -106,8 +107,10 @@ import { ensureGovProposalReviewSchema } from './db/ensureGovProposalReviewSchem
 import { ensureGovProposalReviewRunsSchema } from './db/ensureGovProposalReviewRunsSchema';
 import { ensureGovBuildArtifactSchema } from './db/ensureGovBuildArtifactSchema';
 import { ensureGovCompanyLibrarySchema } from './db/ensureGovCompanyLibrarySchema';
+import { ensureGovProposalSourcesSchema } from './db/ensureGovProposalSourcesSchema';
 import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
+import { ensureGovBidValueSchema } from './db/ensureGovBidValueSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
@@ -115,6 +118,8 @@ import { ensureTaskClaimSchema } from './db/ensureTaskClaimSchema';
 import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
 import { ensureBroadcastEndReasonSchema } from './db/ensureBroadcastEndReasonSchema';
 import { ensureBroadcastClipMarkerSchema } from './db/ensureBroadcastClipMarkerSchema';
+import { ensureBroadcastClipMarkSchema } from './db/ensureBroadcastClipMarkSchema';
+import { ensureBroadcastClipDecisionSchema } from './db/ensureBroadcastClipDecisionSchema';
 import { ensureStudioSetupSchema } from './db/ensureStudioSetupSchema';
 import { ensureBroadcastReplayIndexSchema } from './db/ensureBroadcastReplayIndexSchema';
 import { ensureFactoryTaskSchema } from './db/ensureFactoryTaskSchema';
@@ -175,6 +180,7 @@ import { ensureGrowthJourneySchema } from './db/ensureGrowthJourneySchema';
 import { ensureRoutingAuditSchema } from './db/ensureRoutingAuditSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
+import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureMarketingTrackingSchema } from './db/ensureMarketingTrackingSchema';
 import { ensureMarketingCampaignSchema } from './db/ensureMarketingCampaignSchema';
@@ -204,7 +210,10 @@ import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomai
 import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAgentDomainToolDuplicateCheckSchema';
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
+import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
+import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
+import { ensurePageEventVisitorIndexGuarded } from './db/ensurePageEventVisitorIndex';
 
 // Import models to register associations before sync
 import './models';
@@ -2714,6 +2723,8 @@ async function start(): Promise<void> {
   // organization_type on rows that predate the column.
   await ensureRefactoredDeliverySchema();
   await ensureCareerPublicationSchema();
+  // hire.refactored.ai profile upgrade (Phase 2): intro, interview times, carousel order, interviews. Additive.
+  await ensureHireInterviewSchema();
   // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
@@ -2871,6 +2882,9 @@ async function start(): Promise<void> {
   // student-project listing query now filters on this column and a missing
   // column would 500 the whole Projects surface rather than degrade it.
   await ensureProjectArchiveSchema();
+  // Immediately after the schema it extends: archived_by and archived_reason are ALTERs on the
+  // same table, and ordering them together keeps the pair readable as one thing.
+  await ensureProjectArchiveAuditSchema();
   // projects.approval_state and friends — "review your project, then approve it".
   // Additive and default-free: NULL means never gated, so this changes nothing
   // for existing projects. Runs next to the archive schema for the same reason —
@@ -2945,6 +2959,7 @@ async function start(): Promise<void> {
   // Gov company library (gov_company_facts/_references/_personnel): the tenant's reusable, human-approved facts that
   // ground the agent so a question is asked once (Proposal Studio P5).
   await ensureGovCompanyLibrarySchema();
+  await ensureGovProposalSourcesSchema();
   // Gov proposal package (gov_proposal_form_signatures + gov_proposal_redaction_spans): the signature tracking and
   // redaction spans the final package assembly needs (Proposal Studio P6).
   await ensureGovProposalPackageSchema();
@@ -2953,6 +2968,18 @@ async function start(): Promise<void> {
   // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per
   // project); it never writes to the published case_studies / live service_offerings systems. See ensureGovSubmissionSchema.
   await ensureGovSubmissionSchema();
+  // R16 - what a government bid is WORTH (gov_bid_values). The one piece of Ali's requested
+  // funnel (flagged → priced → ready → exported → submitted → acknowledged → won/lost) that
+  // did not already exist: measured 2026-11-12, gov_qualifications has no value, budget,
+  // ceiling or close-date column, source_snapshot is NULL on all 14 flagged rows, and
+  // gov_company_references (which holds OUR past contract values) is empty. A single additive
+  // NEW table; the name was checked against information_schema on production before it was
+  // taken, because R14 is the retrospective for the day a CREATE TABLE IF NOT EXISTS collided
+  // with a table another feature already owned and turned the collision into silence.
+  // MUST run after delivery_projects exists: its REFERENCES names that parent, exactly like
+  // ensureGovSubmissionSchema above, and a foreign key to a missing table is a boot error
+  // rather than a no-op.
+  await ensureGovBidValueSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).
@@ -3088,6 +3115,11 @@ async function start(): Promise<void> {
   // L7.3 - clip markers, recorded while the show runs. After the end_reason ensure because
   // both alter or hang off broadcast_occurrences, which must exist first.
   await ensureBroadcastClipMarkerSchema();
+  // D10 - a moment somebody chose, in its own table. After the markers ensure for the same
+  // reason: both hang off broadcast_occurrences, which must exist first.
+  await ensureBroadcastClipMarkSchema();
+  // D11 - the keep-or-cut decisions an editor makes about an airing.
+  await ensureBroadcastClipDecisionSchema();
   await ensureStudioSetupSchema();
   // L8.3 - the partial index the replay list reads through. The live ticker's index covers
   // backstage/live/reconnecting only, so replay_ready would otherwise scan the whole table.
@@ -3244,6 +3276,13 @@ async function start(): Promise<void> {
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
   await ensureCapabilityConfirmationSchemaGuarded();
   await ensureToolRequestDecisionSchemaGuarded();
+  // Agent Tools Phase 2. The CONVERSATION on a tool request, as distinct from the decision log
+  // above: a question and its answer are neither an approval nor a denial, and had nowhere to
+  // live. Same parent, same FK, so it sits with its siblings after the parent is ensured.
+  await ensureToolRequestMessageSchemaGuarded();
+  // Agent Tools Phase 3. What happened AFTER approval: started building, handed over. Kept out
+  // of the parent's status column, which governs approval and has existing readers.
+  await ensureToolRequestBuildEventSchemaGuarded();
   // AF3.5. The ledger behind `ai_agents.tools_granted`.
   //
   // ORDERING MATTERS AND IS SATISFIED HERE, but not by the name you would expect:
@@ -3255,6 +3294,26 @@ async function start(): Promise<void> {
   // table is absent and the seed then leaves `tools_granted` untouched for that boot, which is
   // the safe direction: a boot of staleness rather than a reverted grant.
   await ensureAgentToolGrantSchemaGuarded();
+  // The `page_events (visitor_id, timestamp DESC)` index.
+  //
+  // NOT a schema module like the nine above, and the difference is the point: it owns no table.
+  // `page_events` already exists, is the largest table in this schema (~1.15M rows), and the
+  // tracker writes to it constantly. This adds one index to it and nothing else.
+  //
+  // Found by Kalkidan Bezabeh on 11 Nov 2026: every read keyed on the VISITOR rather than the
+  // lead planned as a sequential scan over the whole table, because none of the four existing
+  // indexes covered `visitor_id`. The companion fix in `admissionsSignalsReader.ts` capped the
+  // rows that query RETURNS; only an index can cap what it EXAMINES.
+  //
+  // The cost, stated rather than buried: `CREATE INDEX` takes a SHARE lock and blocks writes for
+  // a few seconds on the first boot after this merges. That lands during a deploy, when the
+  // backend is restarting and not serving tracker writes anyway, which is the argument for
+  // accepting it here rather than running the DDL by hand.
+  //
+  // `ensurePageEventVisitorIndexGuarded` cannot reject, so this await is safe bare — and a
+  // missing index must never be the reason the port fails to bind, because it is a performance
+  // problem and not a correctness one.
+  await ensurePageEventVisitorIndexGuarded();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

@@ -18,6 +18,14 @@ const { htmlDoc } = require('../renderArtifactPdf');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
 
+/**
+ * DOC 10's row, looked up rather than hardcoded. It is the one row with a history worth telling:
+ * it was the program's only document with no ticket, and the prose below reports both the finding
+ * and its closure out of the row itself, so neither can drift from the ledger.
+ */
+const DOC10 = D.LEDGER.find((d) => d.id === 10);
+if (!DOC10) throw new Error('l118Document: DOC 10 is missing from the ledger');
+
 /** Read one of the nine, from disk, every time. A cached read could not catch an edit. */
 function readDoc(d) {
   const rel = `${D.META.dir}/${d.slug}.md`;
@@ -113,6 +121,29 @@ function selfCheck() {
     if (!d.ticket && !d.gapSource) {
       throw new Error(`DOC ${d.id} has no ticket and no gapSource naming what requires it`);
     }
+    // DOC 10 WAS this program's coverage gap, and that is history rather than a current state.
+    // The guard below only fires on a row that still HAS a `wasGap` record, so deleting the
+    // record outright would pass silently and erase the finding. Pinning the one row that is
+    // known to have been a gap is what makes the history undeletable.
+    if (d.id === 10 && !d.wasGap) {
+      throw new Error('DOC 10 was this program\'s only document with no ticket, found 2026-11-03 '
+        + 'and closed by L0.5. Its wasGap record is the evidence that happened and must not be '
+        + 'removed just because the row now looks clean.');
+    }
+    // A gap that was closed must say WHEN it was found, when it was closed and by what. Without
+    // this, `wasGap` can be deleted in one edit and the ledger silently reports a program that
+    // never had a coverage gap - the exact revision this row exists to prevent.
+    if (d.wasGap) {
+      ['foundOn', 'closedOn', 'closedBy', 'source', 'howFound'].forEach((k) => {
+        if (!d.wasGap[k]) throw new Error(`DOC ${d.id} was a gap but its record has no ${k}`);
+      });
+      if (!d.ticket) {
+        throw new Error(`DOC ${d.id} carries a closed-gap record but still has no ticket`);
+      }
+      if (!new RegExp(`\\b${d.wasGap.closedBy}\\b`).test(d.note)) {
+        throw new Error(`DOC ${d.id} was closed by ${d.wasGap.closedBy}, which its note does not name`);
+      }
+    }
     if (d.ticket && d.gapSource) {
       throw new Error(`DOC ${d.id} has ticket ${d.ticket} and a gapSource; gapSource is only `
         + 'meaningful on a document nothing is tracking');
@@ -184,7 +215,9 @@ function build() {
 <code>scripts/artifacts/tickets/l118Data.js</code></p>
 
 <p><strong>${D.TOTALS.written} of ${D.TOTALS.required} written</strong>, ${D.TOTALS.thisPass} of
-them in this pass. ${D.TOTALS.noTicket} required document has no Basecamp ticket at all.</p>
+them in this pass. ${D.TOTALS.noTicket === 0
+    ? `${D.TOTALS.gapsClosed} required document had no Basecamp ticket at all, and now has one.`
+    : `${D.TOTALS.noTicket} required document has no Basecamp ticket at all.`}</p>
 
 <table>
   <thead><tr><th>DOC</th><th>Title</th><th>Ticket</th><th>State</th><th>File</th><th>Note</th></tr></thead>
@@ -259,12 +292,16 @@ ${contract}
 ${D.TOTALS.requirements} requirements in all, ${D.TOTALS.headings} of them required to be navigable
 sections rather than mentions in prose.
 
-## The gap this pass found
+## The gap this pass found, and how it was closed
 
-**DOC 10 has no ticket.** Bootstrap §17 requires a report named *COLABERRY LIVE — CURRENT BUILD
+**DOC 10 had no ticket.** Bootstrap §17 requires a report named *COLABERRY LIVE — CURRENT BUILD
 MIGRATION REPORT* with six named sections, and names \`docs/colaberry-live/\` as its repository
-home. No todo on board ${D.META.board} covers it. It was found by counting §3.1 and §17 against all
-61 todos, done and open — a board cannot show this about itself.
+home. No todo on board ${D.META.board} covered it. It was found on ${DOC10.wasGap.foundOn} ${DOC10.wasGap.howFound}.
+
+**Closed ${DOC10.wasGap.closedOn} by ${DOC10.wasGap.closedBy}**, which created the ticket and
+wrote the document at [\`${DOC10.file}\`](${DOC10.file.replace('docs/colaberry-live/', '')}).
+The finding is kept in this ledger rather than erased: a ledger that quietly reports a clean state
+cannot be used to tell a gap that never existed from one that was fixed.
 
 That is the fifth such gap on this program. The other four are definition-of-done conditions 17, 18,
 19 and 40, recorded in [DOC 00](${D.WRITTEN[0].slug}.md) and in

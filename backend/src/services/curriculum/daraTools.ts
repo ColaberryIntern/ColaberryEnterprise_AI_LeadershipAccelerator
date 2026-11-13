@@ -1,3 +1,4 @@
+import { withToolRecording } from '../agents/tools/toolInvocationRecorder';
 import crypto from 'crypto';
 import OpenAI from 'openai';
 import { addTicketComment } from '../ticketService';
@@ -120,7 +121,22 @@ async function escalateToHumanTool(
  * header's security note) — this function has no path that accepts any of
  * them from the model.
  */
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ * The wrapper returns the inner result unchanged and rethrows, so it cannot alter behaviour.
+ */
 export async function executeDaraTool(
+  toolName: string,
+  args: { reason?: string },
+  context: { ticketId: string | null; daraAdminUserId: string | null; studentEnrollmentId: string; triggeringMessageId: string | null },
+): Promise<string> {
+  return withToolRecording(
+    { agentName: 'Dara', toolName, surface: 'dara_student' },
+    () => executeDaraToolInner(toolName, args, context),
+  );
+}
+
+async function executeDaraToolInner(
   toolName: string,
   args: { reason?: string },
   context: { ticketId: string | null; daraAdminUserId: string | null; studentEnrollmentId: string; triggeringMessageId: string | null },

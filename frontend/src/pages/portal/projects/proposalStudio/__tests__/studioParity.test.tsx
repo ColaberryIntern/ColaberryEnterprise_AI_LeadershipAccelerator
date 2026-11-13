@@ -12,12 +12,13 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 import { MemoryRouter } from 'react-router-dom';
-import type { StudentGovProjectView, GovProposalDocument, GovStudioApi, GovReviewApi } from '../../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovProposalDocument, GovStudioApi, GovReviewApi, GovCockpitApi } from '../../../../../services/govProjectPortalApi';
 
 import ContractBar from '../ContractBar';
 import StageDetail from '../StageDetail';
 import StageRail from '../StageRail';
 import AgentPanel from '../AgentPanel';
+import QualRail from '../QualRail';
 import WhereWeAre from '../WhereWeAre';
 import NeedsInbox from '../NeedsInbox';
 import DocumentSet from '../DocumentSet';
@@ -322,6 +323,44 @@ describe('StageDetail — FULL workspace depth on the intern side (admin-parity 
     expect(text('fit-req-evidence')).toContain('Not yet covered'); // 'open' → humanized, no jargon
   });
 
+  it('Fit GROUPS requirements by due stage (admin-parity) when the projection carries it', async () => {
+    const withStages = { ...VIEW, requirements: [
+      { canonicalReqId: 'R-1', statement: 'Submit the cover letter', priority: 'must', tracks: [], evidenceState: 'open', dueStage: 'submission' },
+      { canonicalReqId: 'R-2', statement: 'Provide the asset register', priority: 'must', tracks: ['build'], evidenceState: 'covered', dueStage: 'delivery' },
+    ] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={withStages} />);
+    expect(present('fit-req-group')).toBe(true);
+    const body = text('fit-requirements');
+    expect(body).toContain('Due with the submission');
+    expect(body).toContain('Due during delivery');
+  });
+
+  it('Fit falls back to the flat list when no due stage is present (older projections)', async () => {
+    const flat = { ...VIEW, requirements: [{ canonicalReqId: 'R-1', statement: 'Asset register', priority: 'must', tracks: [], evidenceState: 'open' }] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={flat} />);
+    expect(present('fit-req')).toBe(true);
+    expect(present('fit-req-group')).toBe(false);
+  });
+
+  it('Fit renders the ADMIN "Requirements by due stage" panel (same component + data) when requirementEvals are present', async () => {
+    // The whole point of this change: the intern Fit step renders the EXACT admin component fed by the SAME
+    // evaluateRequirements() output — REQ id, applicability + blocking badges, block reason — grouped under the
+    // admin stage label ("Due at submission"), not the prose "Requirements & coverage" look-alike. The admin-only
+    // label and block-reason copy, and the absence of the prose `fit-req` row, discriminate the two renders.
+    const withEvals = { ...VIEW, requirementEvals: [
+      { id: 'R-1', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' },
+      { id: 'R-2', dueStage: 'delivery', applicability: 'conditional', blocking: false, reason: null },
+    ] } as unknown as StudentGovProjectView;
+    await render(<StageDetail stage="fit" view={withEvals} />);
+    const body = text('fit-requirements');
+    expect(body).toContain('R-1');
+    expect(body).toContain('R-2');
+    expect(body).toContain('blocking');
+    expect(body).toContain('Binding submission requirement with no evidence on file'); // admin BLOCK_REASON copy
+    expect(body).toContain('Due at submission'); // admin STAGE_LABEL, not the prose 'Due with the submission'
+    expect(present('fit-req')).toBe(false); // the prose coverage row is NOT used — the admin panel replaced it
+  });
+
   it('stays student-safe — renders no dollars, no buyer contacts, no builder identities', async () => {
     // The blueprint carries evaluation POINTS (public), never pricing. The projection itself drops contacts/$,
     // so this asserts the enriched view introduces none by accident.
@@ -329,6 +368,16 @@ describe('StageDetail — FULL workspace depth on the intern side (admin-parity 
     const body = container.textContent ?? '';
     expect(body).not.toMatch(/\$[0-9]/);           // no dollar amounts
     expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i); // no email contacts
+  });
+
+  it('leads with the blueprint ABOVE the requirements list (admin prominence, not buried under a 200-row dump)', async () => {
+    await render(<StageDetail stage="solicitation" view={VIEW} />);
+    const bp = container.querySelector('[data-testid="stage-blueprint"]');
+    const reqs = container.querySelector('[data-testid="stage-reqcount"]');
+    expect(bp).toBeTruthy();
+    expect(reqs).toBeTruthy();
+    // DOCUMENT_POSITION_FOLLOWING: the requirements panel comes AFTER the blueprint in document order.
+    expect(bp!.compareDocumentPosition(reqs!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -381,6 +430,51 @@ describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualificat
     expect(txt).toContain('2030-01-15'); // the auto-populated due date drives step 6 (no manual entry)
     expect(txt).toContain('left');       // ...with a days-left countdown
   });
+
+  it('INTERN mount: steps 1-5 show the student-safe Qualification rail in place of the agent panel', async () => {
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    // A proposal-production view (overview) keeps the Proposal-agent panel.
+    expect(present('agent-panel')).toBe(true);
+    expect(present('qual-rail')).toBe(false);
+    // Stepping to a pre-award stage (Fit) swaps in the admin-mirror rail and drops the agent panel.
+    await act(async () => { (container.querySelector('[data-testid="step-fit"]') as HTMLButtonElement).click(); });
+    expect(present('qual-rail')).toBe(true);
+    expect(present('agent-panel')).toBe(false);
+  });
+});
+
+describe('QualRail — the student-safe mirror of the admin workspace right rail (steps 1-5)', () => {
+  const vetted = {
+    ...VIEW,
+    closeDate: '2030-02-01',
+    vetting: { status: 'completed', verdict: 'pursue', coveragePct: 50, reason: 'Core work is software delivery.', quote: 'The Vendor shall provide all professional services.' },
+    meetings: [{ date: '2030-01-10', text: 'Pre-proposal conference' }],
+    keyDates: [{ date: '2030-01-20', text: 'Questions due' }],
+  } as unknown as StudentGovProjectView;
+  const textOf = (id: string) => container.querySelector(`[data-testid="${id}"]`)?.textContent ?? '';
+
+  it('shows the AI vetting verdict, capability coverage, deadline and key dates from the projection', async () => {
+    await render(<QualRail view={vetted} />);
+    expect(present('qual-rail')).toBe(true);
+    expect(textOf('qual-vetting-verdict')).toContain('recommends pursuing');
+    expect(textOf('qual-vetting-card')).toContain('50%');
+    expect(textOf('qual-deadline-card')).toContain('2030-02-01');
+    expect(present('qual-keydates')).toBe(true);
+  });
+
+  it('shows an in-progress note while the AI vetting is still running (no verdict)', async () => {
+    const running = { ...vetted, vetting: { status: 'running', verdict: null, coveragePct: null, reason: null, quote: null } } as unknown as StudentGovProjectView;
+    await render(<QualRail view={running} />);
+    expect(present('qual-vetting-pending')).toBe(true);
+    expect(present('qual-vetting-verdict')).toBe(false);
+  });
+
+  it('stays student-safe — no dollars and no buyer contact emails in the rail', async () => {
+    await render(<QualRail view={vetted} />);
+    const body = container.textContent ?? '';
+    expect(body).not.toMatch(/\$[0-9]/);
+    expect(body).not.toMatch(/@[a-z0-9.-]+\.[a-z]{2,}/i);
+  });
 });
 
 describe('BuildEvidence — the build-artifacts repository the proposal writer draws from', () => {
@@ -405,5 +499,70 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
   it('shows the empty state (ready for repo artifacts + demo videos) when nothing is submitted yet', async () => {
     await render(<BuildEvidence view={VIEW} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
     expect(present('ev-artifacts-empty')).toBe(true);
+  });
+
+  // Connected-repo display (Phase A): the intern (readOnly) sees the connected repo read-only and NEVER a demo-URL
+  // input — even though the read-only reviewApi still defines setDemoUrl. The admin (readOnly=false) keeps its input.
+  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records' } } as unknown as StudentGovProjectView;
+  const noRepo = { ...VIEW, connectedRepo: null } as unknown as StudentGovProjectView;
+
+  it('admin (not readOnly) keeps the demo-URL input and shows no connected-repo line', async () => {
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
+    expect(present('ev-demo-url')).toBe(true);
+    expect(present('ev-connected-repo')).toBe(false);
+  });
+
+  it('intern (readOnly) shows the connected repo linked, and NO demo-URL input', async () => {
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    const repo = container.querySelector('[data-testid="ev-connected-repo"]');
+    expect(repo?.textContent).toBe('ColaberryIntern/crash-records');
+    expect(repo?.getAttribute('href')).toBe('https://github.com/ColaberryIntern/crash-records');
+    expect(present('ev-demo-url')).toBe(false);
+  });
+
+  it('intern (readOnly) with no connected repo shows the blank state and NO demo-URL input', async () => {
+    await render(<BuildEvidence view={noRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    expect(present('ev-no-repo')).toBe(true);
+    expect(present('ev-connected-repo')).toBe(false);
+    expect(present('ev-demo-url')).toBe(false);
+  });
+});
+
+// ── READ-ONLY intern parity: the intern mounts the SAME StudioShell cockpit, but every mutation control is disabled.
+// The center panels are wrapped in a disabled <fieldset> (the one-point disable); the agent panel is threaded readOnly
+// directly (it is the right rail, a sibling of the center, so the fieldset does not reach it). The admin mount
+// (readOnly=false) is unchanged. jsdom does not propagate fieldset[disabled] to descendants' .disabled, so we assert
+// the fieldset itself carries disabled (the browser does the propagation) plus a directly-threaded control.
+describe('StudioShell read-only (intern parity) — same cockpit, mutation controls disabled', () => {
+  const cockpitApi = {
+    askCopilot: async () => ({ answer: 'ok' }),
+    draftDocument: async () => ({}),
+    acceptDocument: async () => ({}),
+    requestChanges: async () => ({}),
+    commentDocument: async () => ({}),
+  } as unknown as GovCockpitApi;
+  const mount = (readOnly: boolean) => (
+    <StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} readOnly={readOnly} />
+  );
+
+  it('readOnly: the center fieldset is disabled AND the agent Ask input is disabled', async () => {
+    await render(mount(true));
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs).not.toBeNull();
+    expect(fs!.disabled).toBe(true);
+    const ask = container.querySelector('[data-testid="agent-ask"]') as HTMLInputElement | null;
+    expect(ask).not.toBeNull();
+    expect(ask!.disabled).toBe(true); // AgentPanel is outside the fieldset; proves the direct readOnly threading
+    act(() => root.unmount()); container.remove();
+  });
+
+  it('admin mount (readOnly=false) is UNCHANGED — the center fieldset is not disabled and the agent Ask input is enabled', async () => {
+    await render(mount(false));
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs).not.toBeNull();
+    expect(fs!.disabled).toBe(false);
+    const ask = container.querySelector('[data-testid="agent-ask"]') as HTMLInputElement | null;
+    expect(ask!.disabled).toBe(false);
+    act(() => root.unmount()); container.remove();
   });
 });

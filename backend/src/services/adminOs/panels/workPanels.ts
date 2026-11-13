@@ -123,7 +123,9 @@ export async function loadWork(enrollmentIds: string[]): Promise<WorkPanel | nul
                 WHERE stl.project_id = p.id AND stl.status <> 'done')::text AS open_tasks,
               (SELECT COUNT(*) FROM student_task_lists stl
                 WHERE stl.project_id = p.id AND stl.status = 'done')::text AS done_tasks
-       FROM projects p WHERE p.enrollment_id IN (:ids)
+       -- archived_at IS NULL: this panel already SELECTed archivedAt and never filtered on it,
+       -- so an archived project stayed on a person's profile looking like current work.
+       FROM projects p WHERE p.enrollment_id IN (:ids) AND p.archived_at IS NULL
        ORDER BY p.created_at DESC`,
       { type: QueryTypes.SELECT, replacements },
     ),
@@ -139,7 +141,7 @@ export async function loadWork(enrollmentIds: string[]): Promise<WorkPanel | nul
                 WHERE css.case_study_id = cs.id)::text AS snapshot_count
        FROM case_studies cs
        JOIN projects p ON p.id = cs.project_id
-       WHERE p.enrollment_id IN (:ids)
+       WHERE p.enrollment_id IN (:ids) AND p.archived_at IS NULL
        ORDER BY cs.created_at DESC`,
       { type: QueryTypes.SELECT, replacements },
     ),

@@ -285,29 +285,45 @@ async function runAudience(browser, audience, jwt) {
         must(await page.locator('.sch-root .tg-dayhead').count() === 7, 'the week view is not seven days');
       });
 
-      await step(audience, 'C30 + v14 (C67-C71): the Community Board: Tab to it on the map, Enter opens the sections; a note posts through the composer, shows in Fresh after a reload, and the Community page is one click away (local DB)', async () => {
+      await step(audience, 'v20 (C131-C135): Colaberry Now: Tab to the phone on the Quad, Enter opens the TV and the stream; the TV plays youtube-nocookie and ▼ changes the short; a question posts first and Questions counts it open; the thread opens; Esc closes the thread, then Colaberry Now, and the TV stops (local DB)', async () => {
         await page.goto(`${urls.base}/portal/campus`, { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('[data-testid="cm-cboard-sign"]', { timeout: 30_000 });
+        must((await page.textContent('[data-testid="cm-cboard-sign"]') || '').includes('Colaberry Now'), 'the phone is not labelled Colaberry Now');
+        must(await page.locator('[data-testid="cm-world"] iframe, [data-testid="cm-world"] video').count() === 0, 'something plays on the map');
         await page.focus('[data-testid="cm-cboard-sign"]');
         await page.keyboard.press('Enter');
-        await page.waitForSelector('[data-testid="cm-cboard"] [data-testid="cb-status"]', { timeout: 15_000 });
-        must(await page.locator('[data-testid="cb-lanes"] [data-testid^="cb-lane-"]').count() === 9, 'the board does not have nine sections');
+        await page.waitForSelector('[data-testid="cm-cnow"] [data-testid="cn-stream"]', { timeout: 15_000 });
+        must(await page.locator('[data-testid="cn-lanes"] [data-testid^="cn-lane-"]').count() === 9, 'the stream does not have nine sections');
+        const frame = page.locator('[data-testid="cn-tv-frame"]');
+        if (await frame.count()) {
+          const first = await frame.getAttribute('src');
+          must(/youtube-nocookie\.com\/embed\/[\w-]{11}/.test(first || ''), `the TV is not a youtube-nocookie embed: ${first}`);
+          if (await page.locator('[data-testid="cn-tv-reel-item"]').count() > 1) {
+            await page.click('[data-testid="cn-tv-next"]');
+            must((await frame.getAttribute('src')) !== first, 'the next short did not change the player');
+          }
+        }
         // the feed's own rule: a post needs at least 15 words
         const token = `E2E-${Date.now().toString(36)}`;
-        const body = `${token} board note: a short note posted by the campus check to prove posting from the board reaches the feed and comes back.`;
-        await page.click('[data-testid="cb-add"]');
-        await page.click('[data-testid="cb-type-post"]');
-        await page.fill('[data-testid="cb-compose-body"]', body);
-        await page.click('[data-testid="cb-compose-post"]');
-        await page.waitForSelector('[data-testid="cb-toast"]', { timeout: 15_000 });
-        await page.reload({ waitUntil: 'domcontentloaded' });
-        await page.waitForSelector('[data-testid="cm-cboard-sign"]', { timeout: 30_000 });
-        await page.click('[data-testid="cm-cboard-sign"]');
-        await page.waitForSelector('[data-testid="cb-fresh"]', { timeout: 15_000 });
-        const fresh = await page.textContent('[data-testid="cb-fresh"]');
-        must((fresh || '').includes(token), `the new note is not in Fresh: "${(fresh || '').slice(0, 200)}"`);
-        await page.click('[data-testid="cm-cb-feed"]');
-        await page.waitForURL((u) => u.pathname === '/portal/community', { timeout: 15_000 });
+        const body = `${token} question: how do I connect Claude Code to my GitHub repository when the workstation still says no repo linked?`;
+        await page.selectOption('[data-testid="cn-compose-kind"]', 'q');
+        await page.fill('[data-testid="cn-compose-input"]', body);
+        await page.click('[data-testid="cn-compose-post"]');
+        await page.waitForSelector('[data-testid="cn-toast"]', { timeout: 15_000 });
+        const top = await page.locator('[data-testid="cn-post"]:not(.pinned)').first().textContent();
+        must((top || '').includes(token), `the new question is not first: "${(top || '').slice(0, 160)}"`);
+        must(/\bopen\b/.test(await page.textContent('[data-testid="cn-lane-q"]') || ''), 'Questions does not count an open question');
+        await page.locator('[data-testid="cn-post"]:not(.pinned)').first().click();
+        await page.waitForSelector('[data-testid="cb-drawer"]', { timeout: 10_000 });
+        await page.keyboard.press('Escape');
+        must(await page.locator('[data-testid="cb-drawer"]').count() === 0 && await page.locator('[data-testid="cm-cnow"]').count() === 1, 'Esc did not close the thread first');
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('[data-testid="cm-cnow"]', { state: 'detached', timeout: 5_000 });
+        must(await page.locator('[data-testid="cn-tv-frame"]').count() === 0, 'the TV is still mounted after closing');
+        if (audience === 'explorer') {
+          const r = await page.evaluate(async () => (await fetch('/api/portal/colaberry-tv/manage', { headers: { Authorization: `Bearer ${localStorage.getItem('participant_token')}` } })).status);
+          must(r === 403, `an Explorer reached the TV manager: ${r}`);
+        }
       });
 
       await step(audience, 'C41/C42: with the real reveal animation, the back-wall screen sits inside the back wall at 1440x900, 1900x1000 and 390x844, and nothing on it overflows', async () => {

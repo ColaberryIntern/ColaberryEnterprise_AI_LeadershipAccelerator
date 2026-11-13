@@ -35,6 +35,14 @@ jest.mock('../../services/career/featuredWork', () => ({
   featureStatus: (...a: unknown[]) => mockStatus(...a),
   liveFeaturedIds: (...a: unknown[]) => mockLive(...a),
 }));
+const mockShare = jest.fn();
+const mockShareStatus = jest.fn();
+const mockSharedIds = jest.fn();
+jest.mock('../../services/career/sharedWork', () => ({
+  setShared: (...a: unknown[]) => mockShare(...a),
+  shareStatus: (...a: unknown[]) => mockShareStatus(...a),
+  sharedIds: (...a: unknown[]) => mockSharedIds(...a),
+}));
 jest.mock('../../services/internship/internArtifactXlsx', () => ({ csvRowsToXlsx: async () => Buffer.from('xlsx') }));
 
 import fs from 'fs';
@@ -55,9 +63,11 @@ const get = (url: string, t: string | null = token()) => (t ? request(app()).get
 let errSpy: jest.SpyInstance;
 beforeEach(() => {
   mockEntitled = true;
-  [mockList, mockPiece, mockFile, mockRender, mockSet, mockStatus, mockLive].forEach((m) => m.mockReset());
+  [mockList, mockPiece, mockFile, mockRender, mockSet, mockStatus, mockLive, mockShare, mockShareStatus, mockSharedIds].forEach((m) => m.mockReset());
   mockLive.mockResolvedValue([]);
   mockStatus.mockResolvedValue({ featured: false, onPublicPage: false });
+  mockSharedIds.mockResolvedValue([]);
+  mockShareStatus.mockResolvedValue({ shared: false });
   errSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 afterEach(() => errSpy.mockRestore());
@@ -72,7 +82,7 @@ describe('GET /api/portal/career/work', () => {
     mockList.mockResolvedValue([{ id: ID, title: 'Guide' }]);
     const res = await get(P);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ items: [{ id: ID, title: 'Guide', featured: false }] });
+    expect(res.body).toEqual({ items: [{ id: ID, title: 'Guide', featured: false, shared: false }] });
     expect(mockList).toHaveBeenCalledWith('enr-9');
     expect(res.headers['cache-control']).toContain('no-store');
   });
@@ -113,14 +123,24 @@ describe('GET /api/portal/career/work/:id', () => {
     expect(res.status).toBe(200);
     expect(mockPiece).toHaveBeenCalledWith('enr-9', ID);
     expect(res.body.feature).toEqual({ featured: false, onPublicPage: false });
+    expect(res.body.share).toEqual({ shared: false });
+    expect(mockShareStatus).toHaveBeenCalledWith('enr-9', ID);
   });
 
   it("marks the caller's live featured pieces in the list", async () => {
     mockList.mockResolvedValue([{ id: ID }, { id: 'other' }]);
     mockLive.mockResolvedValue([ID]);
     const res = await get(P);
-    expect(res.body.items).toEqual([{ id: ID, featured: true }, { id: 'other', featured: false }]);
+    expect(res.body.items).toEqual([{ id: ID, featured: true, shared: false }, { id: 'other', featured: false, shared: false }]);
     expect(mockLive).toHaveBeenCalledWith('enr-9');
+  });
+
+  it("marks the caller's shared pieces in the list, independently of featured (C138)", async () => {
+    mockList.mockResolvedValue([{ id: ID }, { id: 'other' }]);
+    mockSharedIds.mockResolvedValue(['other']);
+    const res = await get(P);
+    expect(res.body.items).toEqual([{ id: ID, featured: false, shared: false }, { id: 'other', featured: false, shared: true }]);
+    expect(mockSharedIds).toHaveBeenCalledWith('enr-9');
   });
 
   it('404 for a piece that is not the caller\'s (the service answers null), with no detail', async () => {
@@ -239,5 +259,59 @@ describe('PUT /api/portal/career/work/:id/feature (C130)', () => {
     const res = await put(URL_F, { featured: false });
     expect(res.status).toBe(500);
     expect(JSON.stringify(res.body)).not.toContain('10.0.0.5');
+  });
+});
+
+describe('PUT /api/portal/career/work/:id/share (C138)', () => {
+  const URL_S = `${P}/${ID}/share`;
+  const put = (url: string, body: unknown, t: string | null = token()) => {
+    const r = request(app()).put(url);
+    return (t ? r.set('Authorization', `Bearer ${t}`) : r).send(body as object);
+  };
+
+  it("shares the caller's own piece by the token enrollment, twice is the same answer, and never touches featuring", async () => {
+    mockShare.mockResolvedValue({ shared: true, count: 1 });
+    for (let n = 0; n < 2; n++) {
+      const res = await put(URL_S, { shared: true });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ shared: true, count: 1 });
+    }
+    expect(mockShare).toHaveBeenCalledWith('enr-9', ID, true);
+    expect(mockSet).not.toHaveBeenCalled();
+    mockShare.mockResolvedValue({ shared: false, count: 0 });
+    expect((await put(URL_S, { shared: false })).body).toEqual({ shared: false, count: 0 });
+  });
+
+  it('featuring never shares', async () => {
+    mockSet.mockResolvedValue({ featured: true, count: 1 });
+    await put(`${P}/${ID}/feature`, { featured: true });
+    expect(mockShare).not.toHaveBeenCalled();
+  });
+
+  it('404 for a piece that is not theirs', async () => {
+    mockShare.mockResolvedValue('not_found');
+    const res = await put(URL_S, { shared: true });
+    expect(res.status).toBe(404);
+  });
+
+  it('400 for a malformed body or id; refuses no token, staff, read-only view-as and the unentitled, never writing', async () => {
+    expect((await put(URL_S, { shared: 'yes' })).status).toBe(400);
+    expect((await put(URL_S, { shared: true, featured: true })).status).toBe(400);
+    expect((await put(`${P}/nope/share`, { shared: true })).status).toBe(400);
+    expect((await put(URL_S, { shared: true }, null)).status).toBe(401);
+    expect((await put(URL_S, { shared: true }, token({ role: 'admin' }))).status).toBe(403);
+    expect((await put(URL_S, { shared: true }, token({ read_only: true }))).status).toBe(403);
+    mockEntitled = false;
+    expect((await put(URL_S, { shared: true })).status).toBe(402);
+    expect(mockShare).not.toHaveBeenCalled();
+  });
+
+  it('500 without leaking the error, logged with its class', async () => {
+    mockShare.mockRejectedValue(new TypeError('deadlock at 10.0.0.5'));
+    const res = await put(URL_S, { shared: true });
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('10.0.0.5');
+    const logged = JSON.parse(String(errSpy.mock.calls.at(-1)?.[0]));
+    expect(logged).toMatchObject({ event: 'my_work_share_failed', error_class: 'TypeError' });
   });
 });

@@ -4,6 +4,8 @@ import {
   handleGetSessionClipList,
   handleGetSessionClipListCsv,
 } from '../../controllers/broadcastClipListController';
+import { putClipDecision } from '../../controllers/broadcastClipDecisionController';
+import { handleGetSessionHandoff } from '../../controllers/broadcastHandoffController';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
@@ -44,6 +46,7 @@ import { strategyPrepUpload } from '../../config/upload';
 import {
   handleGetStudioConfig,
   handleListStudioSessions,
+  handleListStudioStaff,
   handleUpdateStudioConfig,
 } from '../../controllers/studioSetupController';
 
@@ -136,6 +139,8 @@ router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession
  * in.
  */
 router.get('/api/admin/accelerator/live/sessions', requireAdmin, handleListStudioSessions);
+// Who can be named presenter or producer: community role 'staff', searchable by name or email.
+router.get('/api/admin/accelerator/live/staff', requireAdmin, handleListStudioStaff);
 router.get('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleGetStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id/studio', requireAdmin, handleUpdateStudioConfig);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
@@ -158,6 +163,12 @@ router.get('/api/admin/accelerator/sessions/:id/clip-list', requireAdmin, handle
 // R7's first brick (§9 item 6): the same list as a file an editor can open. Same auth as the
 // JSON, because it is the same editorial material — the format is the only difference.
 router.get('/api/admin/accelerator/sessions/:id/clip-list.csv', requireAdmin, handleGetSessionClipListCsv);
+// D11 - keep it or cut it, one segment at a time. Same auth as the list it edits: this is the
+// editing pass after the class, done in the admin tool by whoever is cutting the video.
+router.put('/api/admin/accelerator/sessions/:id/clip-decisions/:segmentId', requireAdmin, putClipDecision);
+// D12 - what the videographer is owed for this airing, and what is actually there. Same auth
+// and same material as the clip list it sits beside.
+router.get('/api/admin/accelerator/sessions/:id/handoff', requireAdmin, handleGetSessionHandoff);
 // Plain-language class outline (teaching plan) — review / prepare / print.
 router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
 // Instructor readiness report (prep + source/evidence ledger).

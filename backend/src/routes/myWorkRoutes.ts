@@ -4,6 +4,7 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { getMyWorkFile, getMyWorkPiece, listMyWork } from '../services/myWork/myWorkService';
 import { featureStatus, liveFeaturedIds, MAX_FEATURED, setFeatured } from '../services/career/featuredWork';
+import { setShared, sharedIds, shareStatus } from '../services/career/sharedWork';
 import { logFailure, sendArtifactFile, sendCsvXlsx, sendOfficePreview } from './artifactFileResponses';
 
 /**
@@ -21,6 +22,7 @@ import { logFailure, sendArtifactFile, sendCsvXlsx, sendOfficePreview } from './
  *
  * Nothing here publishes. The one write (PUT /:id/feature, C130) changes the learner's LIVE featured set only, which shows on
  * their own Preview; a stranger sees a featured piece only after a reviewer approves the page (Ali, 11 Nov 2026: "After review").
+ * The other write (PUT /:id/share, C138) shares a piece with the learner's own cohort in the Showcase; it is a separate switch.
  * Every other route is a GET. Deliberately NOT gated on the
  * resume prerequisite the profile uses: that gate decides what CAREER evidence is assembled for a
  * page others may see, and this is the learner looking at their own submissions.
@@ -41,9 +43,10 @@ const NOT_FOUND = { error: 'No piece of yours with that id.' };
 
 router.get(P, ...gates, async (req: Request, res: Response) => {
   try {
-    const [list, featured] = await Promise.all([listMyWork(eid(req)), liveFeaturedIds(eid(req))]);
+    const [list, featured, shared] = await Promise.all([listMyWork(eid(req)), liveFeaturedIds(eid(req)), sharedIds(eid(req))]);
     const on = new Set(featured);
-    const items = list.map((it) => ({ ...it, featured: on.has(it.id) }));
+    const sh = new Set(shared);
+    const items = list.map((it) => ({ ...it, featured: on.has(it.id), shared: sh.has(it.id) }));
     res.setHeader('Cache-Control', 'private, no-store');
     res.json({ items });
   } catch (err) {
@@ -59,7 +62,8 @@ router.get(`${P}/:id`, ...gates, async (req: Request, res: Response) => {
     const piece = await getMyWorkPiece(eid(req), id);
     if (!piece) { res.status(404).json(NOT_FOUND); return; }
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json({ ...piece, feature: await featureStatus(eid(req), id) });
+    const [feature, share] = await Promise.all([featureStatus(eid(req), id), shareStatus(eid(req), id)]);
+    res.json({ ...piece, feature, share });
   } catch (err) {
     logFailure('my_work_piece_failed', err, { id });
     res.status(500).json({ error: 'Could not load this piece.' });
@@ -123,6 +127,27 @@ router.put(`${P}/:id/feature`, ...gates, async (req: Request, res: Response) => 
     res.json({ ...r, ...(await featureStatus(eid(req), id)) });
   } catch (err) {
     logFailure('my_work_feature_failed', err, { id });
+    res.status(500).json({ error: 'Could not change this piece.' });
+  }
+});
+
+const ShareBody = z.object({ shared: z.boolean() }).strict();
+
+/**
+ * Share or unshare one of the caller's own pieces with their cohort in the Showcase (C138). Its own switch: it never touches the
+ * featured set (C127 decision Q1 A). Idempotent; 404 for a piece that is not theirs; refused in read-only view-as (requireParticipant).
+ */
+router.put(`${P}/:id/share`, ...gates, async (req: Request, res: Response) => {
+  const id = pieceId(req, res);
+  if (!id) return;
+  const body = ShareBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: 'Send { shared: true } or { shared: false }.' }); return; }
+  try {
+    const r = await setShared(eid(req), id, body.data.shared);
+    if (r === 'not_found') { res.status(404).json(NOT_FOUND); return; }
+    res.json(r);
+  } catch (err) {
+    logFailure('my_work_share_failed', err, { id });
     res.status(500).json({ error: 'Could not change this piece.' });
   }
 });

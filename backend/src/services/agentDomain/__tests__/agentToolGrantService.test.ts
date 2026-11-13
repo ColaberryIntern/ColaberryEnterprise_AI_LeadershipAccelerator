@@ -103,7 +103,11 @@ beforeEach(() => {
   mockResolveHumans.mockResolvedValue([ALI]);
   mockConfirmedIds.mockResolvedValue([CAP]);
   mockAllCapabilities.mockReturnValue([
-    { capability_id: CAP, requirement_validation_state: 'draft' },
+    // Agent Tools Phase 4: `required_tools` must name the tool being granted, because
+    // `tool_not_required_by_capability` refuses a grant the capability never asked for. Without
+    // it the permitted-grant cases below would refuse, and every write assertion would be
+    // passing for the wrong reason.
+    { capability_id: CAP, requirement_validation_state: 'draft', required_tools: ['send_email'] },
   ]);
   mockRegistered.mockReturnValue(['send_email', 'draft_marketing_email']);
   mockGrantFindOrCreate.mockResolvedValue([{ id: 'grant-1' }, true]);

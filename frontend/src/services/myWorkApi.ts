@@ -24,6 +24,8 @@ export interface WorkItem {
   state: string;
   /** C130: in the learner's LIVE featured set (shows on Preview; public only after review). */
   featured?: boolean;
+  /** C138: shared with the learner's own cohort in the Showcase. Independent of `featured`. */
+  shared?: boolean;
 }
 
 export type WrittenBody =
@@ -43,6 +45,8 @@ export interface MyWorkPiece extends WorkItem {
   recording: RecordingBody | null;
   /** C130: featured now, and on the public page right now (approved, content unchanged). */
   feature?: { featured: boolean; onPublicPage: boolean };
+  /** C138: shared with the learner's cohort in the Showcase right now. */
+  share?: { shared: boolean };
 }
 
 const P = '/api/portal/career/work';
@@ -61,6 +65,12 @@ export async function fetchMyWorkPiece(id: string): Promise<MyWorkPiece> {
 /** Feature or unfeature one of the learner's own pieces (C130). Idempotent. 409 past the cap. */
 export async function setMyWorkFeatured(id: string, featured: boolean): Promise<{ featured: boolean; count: number; onPublicPage: boolean }> {
   const { data } = await portalApi.put<{ featured: boolean; count: number; onPublicPage: boolean }>(`${one(id)}/feature`, { featured });
+  return data;
+}
+
+/** Share or unshare one of the learner's own pieces with their cohort in the Showcase (C138). Idempotent. Never features it. */
+export async function setMyWorkShared(id: string, shared: boolean): Promise<{ shared: boolean; count: number }> {
+  const { data } = await portalApi.put<{ shared: boolean; count: number }>(`${one(id)}/share`, { shared });
   return data;
 }
 

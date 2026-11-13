@@ -12,6 +12,10 @@ const D = require('./l118Data');
 const { TOKENS, esc, baseCss, barChart, stackBar } = require('../artifactTheme');
 const { htmlDoc } = require('../renderArtifactPdf');
 
+/** DOC 10's row — the one document that was found with no ticket. Read, never hardcoded. */
+const DOC10 = D.LEDGER.find((d) => d.id === 10);
+if (!DOC10) throw new Error('l118Visual: DOC 10 is missing from the ledger');
+
 const COLOR = {
   WRITTEN: TOKENS.SEV.ok,
   NOT_WRITTEN: TOKENS.SEV.watch,
@@ -51,7 +55,11 @@ function build() {
     { n: `${D.TOTALS.written} of ${D.TOTALS.required}`, l: 'required documents written' },
     { n: D.TOTALS.thisPass, l: 'written in this pass (DOC 00–08)' },
     { n: D.TOTALS.requirements, l: 'bootstrap requirements checked against disk' },
-    { n: D.TOTALS.noTicket, l: 'required document with NO ticket', bad: true },
+    // Red only while the gap is OPEN. A closed gap is still worth a tile - erasing it would make
+    // "found and fixed" look identical to "never happened" - but it is not an alarm any more.
+    D.TOTALS.noTicket > 0
+      ? { n: D.TOTALS.noTicket, l: 'required document with NO ticket', bad: true }
+      : { n: D.TOTALS.gapsClosed, l: 'document found with no ticket, since closed' },
     { n: D.TOTALS.by.BLOCKED, l: 'blocked on something no document supplies' },
   ].map((t) => `<div class="tile${t.bad ? ' bad' : ''}">
       <div class="n">${esc(String(t.n))}</div><div class="l">${esc(t.l)}</div>
@@ -82,10 +90,12 @@ function build() {
     <h2>What is still missing</h2>
     <ul class="rem">${remaining}</ul>
     <h2>The gap a board cannot show itself</h2>
-    <p class="gapbox"><strong>DOC 10 has no ticket.</strong> Bootstrap §17 requires
+    <p class="gapbox"><strong>DOC 10 had no ticket.</strong> Bootstrap §17 requires
     <em>COLABERRY LIVE — CURRENT BUILD MIGRATION REPORT</em>, six sections A–F, and names
-    <code>docs/colaberry-live/</code> as its home. Nothing on board ${D.META.board} covers it.
-    Found by counting §3.1 and §17 against all 61 todos, done and open.</p>
+    <code>docs/colaberry-live/</code> as its home. Nothing on board ${D.META.board} covered it.
+    Found ${esc(DOC10.wasGap.foundOn)} ${esc(DOC10.wasGap.howFound)}.
+    <strong>Closed ${esc(DOC10.wasGap.closedOn)} by ${esc(DOC10.wasGap.closedBy)}</strong>, which
+    created the ticket and wrote the document. The finding is kept rather than erased.</p>
     <p class="sub">The fifth such gap on this program. The other four are definition-of-done
     conditions 17, 18, 19 and 40.</p>
   </div>

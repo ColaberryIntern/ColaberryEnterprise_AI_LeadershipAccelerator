@@ -291,3 +291,73 @@ export function blockedReasonCopy(command: ProducerCommand, reason: string): str
   return `${name} is not available yet. The system did not give a reason this screen can `
     + 'explain - the detail is in the broadcast log.';
 }
+
+/** `02:47`, or `1:02:47` past an hour. The same shape the clip list uses. */
+export function formatMarkTimecode(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+}
+
+/**
+ * WHAT HAPPENED WHEN THE PRODUCER PRESSED MARK (D10), in a sentence.
+ *
+ * The four outcomes are kept apart rather than collapsed into worked/did-not, because three of
+ * them lead to different next actions:
+ *
+ *   - `marked` names the timecode, so it can be checked against what was on screen;
+ *   - `duplicate` is a CORRECT press that created nothing, because that second was already
+ *     marked. Calling it success would tell a producer who pressed twice they have two clips;
+ *   - `refused` is the world not being ready, and the reason decides what to do about it;
+ *   - `failed` must never be quiet. A producer who believes a moment was captured stops
+ *     watching for it, and finds out after the class that it is not in the list.
+ */
+export function markOutcomeCopy(r: {
+  outcome: string; timecodeSeconds?: number; labelled?: boolean; reason?: string;
+}): string {
+  if (r.outcome === 'marked') {
+    const at = formatMarkTimecode(r.timecodeSeconds ?? 0);
+    return r.labelled
+      ? `Marked at ${at}.`
+      : `Marked at ${at}. No segment note to label it with, so it is in the list as a timecode.`;
+  }
+  if (r.outcome === 'duplicate') {
+    return `Already marked at ${formatMarkTimecode(r.timecodeSeconds ?? 0)}. Nothing added.`;
+  }
+  if (r.outcome === 'refused') return MARK_REFUSALS[r.reason ?? ''] ?? MARK_REFUSALS.not_available;
+  return 'That did not save. The moment is NOT in the clip list. Try again.';
+}
+
+/**
+ * The server's reasons, as sentences. Same rule as `blockedReasonCopy`: a producer under time
+ * pressure never reads a wire value, and a reason nobody wrote copy for points at the log
+ * rather than printing the identifier.
+ */
+const MARK_REFUSALS: Record<string, string> = {
+  no_occurrence: 'This class is not set up on Colaberry Live, so there is no recording to mark.',
+  not_on_air: 'Nothing is airing yet. Marking starts once the class is live.',
+  no_content_anchor: 'Press Mark content started first, so there is something to measure from.',
+  before_content_start: 'The clock says this is before the class started. Nothing was marked.',
+  no_slide_context: 'The deck has not said which slide is up yet, so there is nowhere to hang it.',
+  not_a_producer: 'The server does not list you as a producer for this class.',
+  not_available: 'The system gave no reason it can explain. The log has it.',
+};
+
+/**
+ * Why Mark this moment is not pressable yet (D10).
+ *
+ * Returns undefined when it IS pressable, so the button has nothing to explain. The two
+ * conditions are the server's own, mirrored here only to say why - the server refuses either
+ * way, and this exists so the producer does not have to press to find out.
+ */
+export function markNotReady(
+  occurrence: { editorial_state: string; content_started_at: string | null },
+): string | undefined {
+  const onAir = occurrence.editorial_state === 'live' || occurrence.editorial_state === 'reconnecting';
+  if (!onAir) return 'Marking starts once the class is on air.';
+  if (!occurrence.content_started_at) return 'Press Mark content started first.';
+  return undefined;
+}

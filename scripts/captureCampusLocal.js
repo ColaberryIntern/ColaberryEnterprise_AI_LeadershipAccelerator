@@ -29,6 +29,8 @@ const SIZES = [{ name: 'desktop', width: 1440, height: 900 }, { name: 'phone', w
 const WIDE = { name: 'wide', width: 1920, height: 1080 };
 // C40: half a laptop screen (a Claude Code terminal on the other half), only for the views that name it in `sizes`
 const HALF = { name: 'half', width: 1100, height: 1000 };
+// v20 (C135): 900x900, the width where Colaberry Now stacks the TV over the stream; only for the views that name it
+const MID = { name: 'mid', width: 900, height: 900 };
 
 /**
  * --fidelity (C11b): drive the build into the 12 fidelity views for every account and size, assert each view's required
@@ -58,7 +60,7 @@ async function runFidelity(browser) {
   const results = [];
   // Campus HQ: a view may name extra seeded accounts (staff-mentor, staff-marketing, ...); views without `accounts` run for the four.
   const ALL_ACCOUNTS = Array.from(new Set([...ACCOUNTS, ...VIEWS.flatMap((v) => v.accounts ?? [])]));
-  for (const size of [...SIZES, WIDE, HALF]) {
+  for (const size of [...SIZES, WIDE, HALF, MID]) {
     for (const account of ALL_ACCOUNTS) {
       for (const view of VIEWS) {
         if (ONLY && view.name !== ONLY) continue;

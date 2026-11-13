@@ -121,7 +121,7 @@ export async function listStudioSessions(): Promise<StudioSessionRow[]> {
        FROM live_sessions s
        LEFT JOIN cohorts c ON c.id = s.cohort_id
        LEFT JOIN broadcast_source_refs r
-              ON r.source_type = 'live_session' AND r.source_id = s.id
+              ON r.source_type = 'live_session' AND r.source_id = s.id::text
        LEFT JOIN broadcast_occurrences o ON o.id = r.occurrence_id
       WHERE s.session_date >= (CURRENT_DATE - INTERVAL '30 days')
         AND s.session_date <= (CURRENT_DATE + INTERVAL '120 days')
@@ -269,4 +269,46 @@ export async function writeStudioConfig(
   }
 
   return { ok: true, config: await readStudioConfig(sessionId) ?? undefined };
+}
+
+export interface StudioStaffRow {
+  enrollment_id: string;
+  name: string;
+  email: string;
+}
+
+/**
+ * The people who can be named presenter or producer.
+ *
+ * STAFF, AND ONLY STAFF, which is Ali's rule stated on 2026-11-11: "anyone labeled staff can be
+ * added as a presenter or producer". `community_members.role = 'staff'` is the single place that
+ * role lives (see `staffAccess.isStaffEnrollment`), so this reads the same source the producer
+ * authorization check reads. Two different definitions of staff in one feature is how a person
+ * gets named producer and then refused by the control they were named for.
+ *
+ * WHAT THIS DOES NOT DO IS FILTER OUT THE AGENT ACCOUNTS, and that is deliberate rather than an
+ * oversight. Of the 62 staff rows in production, a good number are AI agents - Cory Engine,
+ * BPOS Orchestrator, Admissions Agent - which plainly cannot stand in a room and teach. Hiding
+ * them would be me overruling the stated rule with a guess about intent, and the guess has no
+ * reliable signal to run on: there is no `is_human` column, and matching on name or address
+ * would quietly drop a real person whose account happens to read like a service.
+ *
+ * The search box is the answer instead: typing two letters of a colleague's name finds them,
+ * and the agent accounts simply never match.
+ */
+export async function listStudioStaff(query: string): Promise<StudioStaffRow[]> {
+  const q = (query || '').trim();
+  const [rows] = await sequelize.query(
+    `SELECT e.id AS enrollment_id,
+            COALESCE(NULLIF(TRIM(e.full_name), ''), e.email) AS name,
+            COALESCE(e.email, '') AS email
+       FROM community_members cm
+       JOIN enrollments e ON e.id = cm.enrollment_id
+      WHERE cm.role = 'staff'
+        AND (:q = '' OR e.full_name ILIKE :like OR e.email ILIKE :like)
+      ORDER BY COALESCE(NULLIF(TRIM(e.full_name), ''), e.email) ASC
+      LIMIT 25`,
+    { replacements: { q, like: `%${q}%` } },
+  );
+  return rows as StudioStaffRow[];
 }

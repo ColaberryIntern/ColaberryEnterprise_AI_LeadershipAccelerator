@@ -155,6 +155,20 @@ Every call returns one JSON line: `{ok, status, cmd, body}` or `{ok:false, error
 BLOCKED, not empty - render BLOCKED with the reason and do not advance the cursor. See
 `references/bridge.md` for the exact ssh/docker invocation and the command → endpoint table.
 
+## The Wednesday "Open House funnel" email: make the one move
+
+Every Wednesday at 8 AM CT, Ali, Taiwo and Sohail receive "Open House funnel, week of ...". It carries
+`OPEN_HOUSE_WEEKLY_REPORT.html` and `ONE_MOVE_PROMPT.md`. When Ali says "make the Open House move" (or "do the starred move"),
+run that week's `ONE_MOVE_PROMPT.md` exactly. Do not re-derive the move from the email body.
+
+- **Where to read it:** the copy the host wrote, `/var/lib/colaberry/open-house-weekly/out/<YYYY-MM-DD>/ONE_MOVE_PROMPT.md`.
+  It is byte-identical to the attachment, and reading it avoids an attachment download.
+- **Step 0 of the prompt is mandatory.** It proves the move is still current against `story/decisions.json` on main.
+- **The move is not done until the decision ledger has the new entries in the same PR.** That ledger is how next week's report tells the story.
+  - Never edit or delete an older entry.
+  - To change direction, append a `retraction` or `pivot` entry.
+- **Code:** `scripts/reports/open-house-weekly/` (README there).
+
 ## What "zero" means here
 
 - **Actionable Zero**: every case is answered, delegated, snoozed with a reason and date, or

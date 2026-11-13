@@ -38,7 +38,8 @@
  * keyed and not a plain hash because a bare SHA-256 of a UUID is reversible by
  * anyone who can enumerate UUIDs.
  */
-import { Op } from 'sequelize';
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
 import { env } from '../../config/env';
 import { pseudonymousId } from '../../utils/hmac';
 
@@ -108,6 +109,82 @@ function toIso(value: unknown): string | null {
   return null;
 }
 
+/** One capped event row, plus the visitor's true event total. Typed at the call site. */
+interface CappedEventRow {
+  readonly visitor_id: unknown;
+  readonly event_type: unknown;
+  readonly page_path: unknown;
+  readonly page_title: unknown;
+  readonly timestamp: unknown;
+  readonly total: unknown;
+}
+
+/**
+ * The newest `cap` events per visitor, capped IN POSTGRES, with each visitor's
+ * true event total carried alongside.
+ *
+ * ## Why this is not a `findAll`
+ *
+ * It was one, and the cap was applied in a loop after the rows arrived:
+ *
+ *   PageEvent.findAll({ where: { visitor_id: { [Op.in]: visitorIds } } })
+ *
+ * with no `limit`. So the row cap bounded what was KEPT and nothing bounded what
+ * was FETCHED. Reported by Kalkidan Bezabeh on 11 Nov 2026 after a single pull
+ * at `limit=100` failed, and measured against production the same evening:
+ *
+ *   limit=10   20,281 rows
+ *   limit=20   20,699 rows      <- the route default
+ *   limit=50  280,893 rows
+ *   limit=100 683,444 rows      <- 58% of the whole page_events table
+ *
+ * to keep at most 20,000 of them. The cause is not one unusual visitor, which is
+ * the part that makes it a design fault rather than bad luck: the visitor slice
+ * is ordered by `last_updated`, and the most recently active visitors are also
+ * the heaviest, so the ordering selects precisely the rows you least want. The
+ * average inside that top 100 is 8,136 events per visitor and the heaviest
+ * single visitor holds 99,284 — and that visitor is in `admissions_memory`, so
+ * it is reachable through this endpoint rather than hypothetical.
+ *
+ * ## Why a window function rather than a `limit` on the findAll
+ *
+ * Because a plain `limit` is the bug the two-query split already exists to
+ * avoid: it would bound total rows, so one heavy visitor would consume the
+ * whole budget and the visitors after it would silently return zero events. The
+ * cap has to be PER VISITOR, which is `ROW_NUMBER() OVER (PARTITION BY ...)`,
+ * and that cannot be expressed through `findAll` because a window function
+ * cannot appear in `WHERE` without a subquery. Raw SQL is the honest option
+ * here; the result is typed at the call site as `CappedEventRow`.
+ *
+ * `COUNT(*) OVER (PARTITION BY visitor_id)` rides along so `page_event_count`
+ * stays the visitor's real total. Without it, capping the rows would quietly
+ * turn that field into "the cap", which is a worse defect than the one being
+ * fixed: a wrong number that looks right.
+ *
+ * ## What this does NOT fix
+ *
+ * `page_events.visitor_id` has no index, so this still plans as a sequential
+ * scan over ~1.15M rows. This change bounds what crosses into Node, which is
+ * the memory and transfer risk; the scan needs an index and that is a schema
+ * change, proposed separately rather than smuggled in here.
+ */
+async function cappedEvents(visitorIds: string[], cap: number): Promise<CappedEventRow[]> {
+  const rows = await sequelize.query<CappedEventRow>(
+    `SELECT visitor_id, event_type, page_path, page_title, timestamp, total
+       FROM (
+         SELECT visitor_id, event_type, page_path, page_title, timestamp,
+                ROW_NUMBER() OVER (PARTITION BY visitor_id ORDER BY timestamp DESC) AS rn,
+                COUNT(*)     OVER (PARTITION BY visitor_id)                        AS total
+           FROM page_events
+          WHERE visitor_id = ANY($1::uuid[])
+       ) ranked
+      WHERE rn <= $2
+      ORDER BY visitor_id, timestamp DESC`,
+    { bind: [visitorIds, cap], type: QueryTypes.SELECT },
+  );
+  return rows ?? [];
+}
+
 /**
  * Visitors that admissions has a memory row for, newest first, with their
  * recent page events attached.
@@ -116,11 +193,16 @@ function toIso(value: unknown): string | null {
  * apply to the joined product rather than to visitors, which is how a "20
  * visitors" sample silently becomes "however many visitors fit in 20 event
  * rows".
+ *
+ * Both queries are bounded. The visitor query is bounded by `limit`; the event
+ * query is bounded per visitor by `cappedEvents`, which is where the row cap
+ * lives now that it is no longer applied in a loop after the fact. See that
+ * function for the measurements that forced the change.
  */
 export async function readAdmissionsSignals(
   opts: AdmissionsSignalsOptions,
 ): Promise<AdmissionsSignalsPage> {
-  const { AdmissionsMemory, PageEvent } = await models();
+  const { AdmissionsMemory } = await models();
 
   const matching = await AdmissionsMemory.count();
 
@@ -140,30 +222,26 @@ export async function readAdmissionsSignals(
     .filter((id) => id && id !== 'null');
 
   const events = visitorIds.length
-    ? await PageEvent.findAll({
-      attributes: ['visitor_id', 'event_type', 'page_path', 'page_title', 'timestamp'],
-      where: { visitor_id: { [Op.in]: visitorIds } },
-      order: [['timestamp', 'DESC']],
-      raw: true,
-    })
+    ? await cappedEvents(visitorIds, opts.eventsPerVisitor)
     : [];
 
   const byVisitor = new Map<string, AdmissionsSignalEvent[]>();
   const totals = new Map<string, number>();
-  for (const row of events as unknown as Array<Record<string, unknown>>) {
+  for (const row of events) {
     const vid = String(row.visitor_id);
-    totals.set(vid, (totals.get(vid) ?? 0) + 1);
+    // The TRUE total, carried on every row by COUNT(*) OVER. It is read rather
+    // than accumulated precisely because the rows are now capped: counting them
+    // here would report the cap back as the visitor's event count.
+    totals.set(vid, Number(row.total ?? 0));
     const bucket = byVisitor.get(vid) ?? [];
-    if (bucket.length < opts.eventsPerVisitor) {
-      bucket.push({
-        event_type: String(row.event_type ?? ''),
-        page_path: String(row.page_path ?? ''),
-        // Kept null rather than coerced to '': the capability's own criterion is
-        // "zero fabricated page titles", and '' would be a fabricated one.
-        page_title: typeof row.page_title === 'string' ? row.page_title : null,
-        timestamp: toIso(row.timestamp),
-      });
-    }
+    bucket.push({
+      event_type: String(row.event_type ?? ''),
+      page_path: String(row.page_path ?? ''),
+      // Kept null rather than coerced to '': the capability's own criterion is
+      // "zero fabricated page titles", and '' would be a fabricated one.
+      page_title: typeof row.page_title === 'string' ? row.page_title : null,
+      timestamp: toIso(row.timestamp),
+    });
     byVisitor.set(vid, bucket);
   }
 

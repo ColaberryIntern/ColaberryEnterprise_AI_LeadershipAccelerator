@@ -373,7 +373,11 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
     subjectLower.includes('inbox cos') ||
     subjectLower.includes("here's what happened today") ||
     subjectLower.includes("here's your week in review") ||
-    /^ali,\s+here'?s\s+/i.test(email.subject || '');
+    /^ali,\s+here'?s\s+/i.test(email.subject || '') ||
+    // Morning Five (sendMorningFive.js -> morningFiveEmail.subjectFor): "Your ten for Thu, Nov 12: ...".
+    // Self-sent, so without this it fell to the LLM as AUTOMATION and the first send went to
+    // Trash before Ali saw it (12 Nov 2026).
+    /^(\[test\]\s*)?your ten for /i.test(email.subject || '');
   if (isColaberrySystemSender && isCorySubject) {
     const reason = 'Cory briefing / Inbox COS digest - keep in INBOX';
     console.log(`${LOG_PREFIX} Cory/InboxCOS report: ${reason}`);

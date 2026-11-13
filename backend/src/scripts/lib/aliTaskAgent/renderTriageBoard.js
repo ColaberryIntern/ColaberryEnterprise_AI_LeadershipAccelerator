@@ -1,328 +1,344 @@
 /**
- * renderTriageBoard - the visual triage board, as a standalone HTML page.
+ * renderTriageBoard - the backlog as something you look at and click, not something you read.
  *
- * SEPARATE FROM renderRunReport ON PURPOSE. That file is email-safe by constraint: tables, inline
- * hex, no CSS variables, no flex, because Gmail and Outlook strip the rest. This one is opened in
- * a browser, so it can carry real charts, a hover layer, dark mode and a Mermaid decision diagram.
- * Trying to serve both audiences from one renderer is how the email ends up broken and the board
- * ends up timid.
+ * REWRITTEN rather than patched. The previous version rendered its charts once, on the server, so
+ * filtering could only hide rows - which made the charts lie: choose one category and the age
+ * histogram still described the whole backlog while everything under it described a seventh of it.
+ * A chart that does not answer the question currently on screen is worse than no chart.
  *
- * What it is FOR: deciding. The existing digest lists tasks. This one answers, in order:
- *   1. how much of the backlog is actually alive
- *   2. whether the urgency number can be trusted at all
- *   3. which specific items are the decision today
+ * Now the page carries its data and draws every chart from the current selection (boardRuntime).
+ * Picking a category re-counts, re-scales and re-labels everything above and below it.
  *
- * Pure: (summary) -> string. No I/O, no clock of its own.
+ * NO PROMPT TEXT IS RENDERED. Ali asked for a picture he can click rather than a wall of
+ * instructions, so the prompts live in a JSON lookup and reach the clipboard on click. The
+ * trade-off is real and is handled rather than hidden: if the clipboard is unavailable the prompt
+ * is unreachable, so the click says "copy blocked by the browser" instead of failing silently.
+ *
+ * Still email-UNSAFE by design. renderRunReport.js remains the email renderer; this one is opened
+ * in a browser and uses CSS variables, grid and script.
  */
 
-const { BANDS, bandFor, partition, summarize, urgencyVsAge } = require('./ageBands');
-const { RAMP_LIGHT, RAMP_DARK, histogramSvg, scatterSvg, tile, bandPill, esc } = require('./triageCharts');
-const { renderWorkOrderText, runCommand, DISPOSITION_LABEL } = require('./workOrder');
- const { renderListLens, LIST_LENS_CSS } = require('./renderListLens');
+const { BANDS, summarize } = require('./ageBands');
+const { RAMP_LIGHT, RAMP_DARK, esc } = require('./triageCharts');
+const { groupByCategory, categoryOf, CATEGORY_COLORS } = require('./listCategories');
+const { buildListPrompt } = require('./promptBuilder');
+const { RUNTIME_JS, RUNTIME_CSS } = require('./boardRuntime');
+const { buildFacts } = require('./boardFacts');
+const { heatVars } = require('./boardCharts');
 
-const pct = (n) => `${Math.round(n * 100)}%`;
+/** The unique id a list is addressed by on the page (its Basecamp id, else its name). */
+const idOf = (l) => l.id || l.key;
 
 /**
- * The handoff. This is the section that makes the report worth more paired with a session than
- * read alone.
- *
- * A session's first ten minutes on any ticket are rediscovery: which ticket, which project, who
- * owns the decision, where the artifact goes, what done means, is anyone else on it. Every one of
- * those is already knowable at render time, so the report carries the answers and the session
- * starts on the work instead of the archaeology.
- *
- * Grouped by DISPOSITION rather than by urgency, because the disposition decides who has to be
- * involved. `act` and `draft` need no human at all; `ask` needs one sentence from Ali and nothing
- * else. Sorting by urgency would interleave them and put a human in the loop every third item.
+ * The second control every list carries: straight to Basecamp. A list Basecamp no longer has gets
+ * a visible "gone" marker instead of a link that would 404, because a dead link reads as a bug.
  */
-function handoffSection(orders, runId) {
-  if (!orders.length) return '';
-  const groups = ['act', 'draft', 'prep', 'ask', 'close']
-    .map((k) => [k, orders.filter((o) => o.disposition === k)])
-    .filter(([, v]) => v.length);
-
-  const blocks = groups.map(([key, list]) => {
-    const items = list.slice(0, 8).map((wo) => {
-      const text = renderWorkOrderText(wo);
-      return `<div class="wo">
-        <div class="wo-head">
-          <span class="disp disp-${key}">${esc(DISPOSITION_LABEL[key])}</span>
-          <span class="wo-title">${esc(wo.title)}</span>
-          <button class="copy" data-copy="${esc(text)}" type="button">copy</button>
-        </div>
-        <pre class="wo-body">${esc(text)}</pre>
-      </div>`;
-    }).join('');
-    const more = list.length > 8 ? `<p class="more">and ${list.length - 8} more in the bundle</p>` : '';
-    return `<h3 class="grp">${esc(DISPOSITION_LABEL[key])} <span class="sub">(${list.length})</span></h3>${items}${more}`;
-  }).join('');
-
-  const noHuman = orders.filter((o) => o.disposition === 'act' || o.disposition === 'draft').length;
-
-  return `<section id="handoff">
-    <h2>Hand to Claude Code</h2>
-    <p class="lede">Paste this one line into a session. Everything below is already in the bundle,
-      so it starts on the work rather than on the archaeology.</p>
-    <div class="cmd"><code>${esc(runCommand(runId, { top: 5 }))}</code>
-      <button class="copy" data-copy="${esc(runCommand(runId, { top: 5 }))}" type="button">copy</button></div>
-    <p class="callout"><strong>${noHuman} of ${orders.length}</strong> of these need no decision from
-      you at all. They were dropped rather than blocked, which is the cheapest work in the backlog
-      to put back in motion.</p>
-    ${blocks}
-  </section>`;
+function bcLink(l, cls) {
+  if (l.found === false) {
+    return `<span class="${cls} is-missing" title="Basecamp says this list is trashed, archived or deleted, though the mirror still marks its tasks active">gone</span>`;
+  }
+  if (!l.url) return '';
+  return `<a class="${cls}" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"
+    title="Open this ${l.isGroup ? 'group' : 'list'} in Basecamp">Basecamp &#8599;</a>`;
 }
 
-function rowsTable(items, today, opts = {}) {
-  if (!items.length) return `<p class="empty">${esc(opts.emptyMsg || 'Nothing here.')}</p>`;
-  const body = items.slice(0, opts.limit || 40).map((it) => {
-    const t = it.todo || {};
-    const band = bandFor(t.due_on, today);
-    const title = t.title || t.content || 'untitled';
-    const link = it.url || t.url || (t.bc_app_url || '');
-    const titleCell = link
-      ? `<a href="${esc(link)}">${esc(title)}</a>`
-      : esc(title);
-    return `<tr class="band-${band.key}">
-      <td class="c-band">${bandPill(band)}</td>
-      <td class="c-title">${titleCell}<div class="proj">${esc(it.projectName || '')}</div></td>
-      <td class="c-due">${esc(t.due_on || 'no date')}</td>
-      <td class="c-score"><span class="score">${esc(String(it.score == null ? '' : it.score))}</span></td>
-    </tr>`;
-  }).join('');
-  const more = items.length > (opts.limit || 40)
-    ? `<p class="more">and ${items.length - (opts.limit || 40)} more</p>` : '';
-  return `<table class="grid">
-    <thead><tr><th>Band</th><th>Task</th><th>Due</th><th>Urgency</th></tr></thead>
-    <tbody>${body}</tbody></table>${more}`;
+/** "group in <parent>" for a group inside a list, so it is never mistaken for a list. */
+const groupNote = (l) => (l.isGroup ? `group in ${l.parentTitle || 'a list'}` : '');
+
+/** Chip size from task count. Five steps; more reads as noise. */
+function sizeStep(n, max) {
+  if (max <= 1) return 1;
+  const r = n / max;
+  return r > 0.75 ? 5 : r > 0.5 ? 4 : r > 0.3 ? 3 : r > 0.12 ? 2 : 1;
 }
 
-/**
- * The decision diagram. Mermaid rather than prose because the rule has branches, and a branch
- * drawn is a branch you can argue with. It loads from a pinned CDN version and degrades to the
- * written rule underneath if the script does not load, so the page is never a blank box.
- */
-function decisionDiagram() {
-  return `<div class="mermaid">
-flowchart TD
-  A["Task is overdue"] --> B{"More than 60 days?"}
-  B -- "No" --> C["Live queue: what dies today"]
-  B -- "Yes" --> D{"Has anyone touched it since it was due?"}
-  D -- "Yes" --> E["Re-date it. It is real, the date was wrong"]
-  D -- "No" --> F{"Would anything break if it never happened?"}
-  F -- "Yes" --> G["Re-date and name an owner"]
-  F -- "No" --> H["Dismiss it. is_dismissed with a reason"]
-  C --> I["Act, or queue for approval"]
-</div>
-<noscript><p class="fallback">Overdue by 60 days or less goes to the live queue. Beyond that: if someone has touched it, re-date it; if not, ask whether anything breaks if it never happens, and dismiss it when the answer is no.</p></noscript>`;
+function categoryTiles(groups, total) {
+  return `<div class="cats">
+    <button class="cat is-on" data-cat="all" type="button">
+      <span class="cat-icon">\u{1F5C2}\u{FE0F}</span><span class="cat-label">Everything</span>
+      <span class="cat-n">${total}</span>
+    </button>
+    ${groups.map((g) => `<button class="cat" data-cat="${esc(g.key)}" type="button"
+      title="${esc(g.blurb)}" style="--c:var(--cat-${esc(g.key)})">
+      <span class="cat-swatch"></span>
+      <span class="cat-icon">${g.icon}</span><span class="cat-label">${esc(g.label)}</span>
+      <span class="cat-n">${g.total}</span>
+      ${g.dormant ? `<span class="cat-dormant">${g.dormant} old</span>` : ''}
+    </button>`).join('')}
+  </div>`;
+}
+
+function wordChart(groups) {
+  const all = groups.flatMap((g) => g.lists.map((l) => ({ ...l, cat: g.key, catLabel: g.label, icon: g.icon })));
+  if (!all.length) return '<p class="empty">No lists.</p>';
+  const max = Math.max(...all.map((l) => l.total));
+  return `<div class="chips">${all
+    .slice()
+    .sort((a, b) => b.total - a.total)
+    .map((l) => {
+      const deadness = l.total ? l.dormant / l.total : 0;
+      const tone = deadness > 0.8 ? 'chip-dead' : deadness > 0.3 ? 'chip-mixed' : 'chip-live';
+      const g = groupNote(l);
+      return `<span class="chipwrap s${sizeStep(l.total, max)} ${tone}" data-cat="${esc(l.cat)}"
+        data-sub="${esc(l.sub.key)}" data-list="${esc(idOf(l))}" style="--c:var(--cat-${esc(l.cat)})">
+        <button class="chip" data-prompt="${esc(idOf(l))}" type="button"
+          title="${esc(l.catLabel)} / ${esc(l.sub.label)} - ${esc(l.key)}${g ? ` (${esc(g)})` : ''} - ${l.total} task(s), ${l.dormant} dormant. Click to copy the full prompt.">
+          <span class="chip-icon">${l.icon}</span><span class="chip-label">${esc(l.name)}</span><span class="chip-n">${l.total}</span>
+        </button>${bcLink(l, 'chip-bc')}</span>`;
+    }).join('')}</div>`;
+}
+
+/** A list card. Carries no command text: the button is the way out of the page. */
+function listCard(s) {
+  const cat = categoryOf(s.key, s.projectId);
+  const dormantPct = s.total ? Math.round((s.dormant / s.total) * 100) : 0;
+  const tone = s.dormant === s.total ? 'card-dead' : (s.dormant ? 'card-mixed' : 'card-live');
+  const top = (s.suggestions || [])[0];
+  const bar = BANDS.map((b) => {
+    const found = (s.bands || []).find((x) => x.band === b.key);
+    const n = found ? found.n : 0;
+    return n ? `<span class="seg seg-${b.key}" style="flex:${n}" title="${n} ${esc(b.label)}"></span>` : '';
+  }).join('');
+
+  return `<article class="card ${tone}" data-cat="${esc(cat.key)}" data-sub="${esc(cat.sub.key)}" data-list="${esc(idOf(s))}" style="--c:var(--cat-${esc(cat.key)})">
+    <header class="card-head">
+      <span class="card-cat" title="${esc(cat.label)}">${cat.icon}</span>
+      <h3 class="card-title">${esc(s.name)}</h3>
+      <span class="card-count">${s.total}</span>
+    </header>
+    <div class="path-line">${esc(cat.label)} / ${esc(cat.sub.label)}${s.isGroup ? ` &middot; ${esc(groupNote(s))}` : ''}</div>
+    ${s.phaseOf ? `<div class="phase-line">Phase ${s.phaseOf.position} of ${s.phaseOf.of}</div>` : ''}
+    <div class="bar">${bar}</div>
+    <div class="card-stats">
+      <span>${s.live} live</span><span>${s.dormant} dormant (${dormantPct}%)</span>
+      ${s.oldestDue ? `<span>oldest ${esc(s.oldestDue)}</span>` : ''}
+    </div>
+    ${s.lead ? `<div class="lead"><div class="lead-cap">Spearhead</div>
+      <div class="lead-title">${esc(s.lead.title)}</div></div>` : ''}
+    ${top ? `<div class="rec"><span class="rec-cap">Proposed</span>${esc(top.label)}</div>` : ''}
+    <div class="card-actions">
+      <button class="getp" data-prompt="${esc(idOf(s))}" type="button">
+        <span class="chip-label">Copy prompt</span></button>
+      ${bcLink(s, 'getbc')}
+    </div>
+  </article>`;
 }
 
 function renderTriageBoard(input) {
   const today = input.today ? new Date(input.today) : new Date();
   const items = Array.isArray(input.items) ? input.items : [];
+  const lists = Array.isArray(input.lists) ? input.lists : [];
   const s = summarize(items, today, { dormantAfterDays: input.dormantAfterDays });
-  const { live, dormant } = partition(items, today, { dormantAfterDays: input.dormantAfterDays });
-  const scatter = urgencyVsAge(items, today);
+  const groups = groupByCategory(lists);
+  const total = groups.reduce((a, g) => a + g.total, 0);
+  const unsorted = groups.find((g) => g.key === 'unsorted');
 
-  const liveSorted = live.slice().sort((a, b) => (b.score || 0) - (a.score || 0));
-  const dormantSorted = dormant.slice().sort((a, b) => {
-    const da = a.todo && a.todo.due_on ? a.todo.due_on : '9999';
-    const db = b.todo && b.todo.due_on ? b.todo.due_on : '9999';
-    return da.localeCompare(db);
+  // What the page draws itself from, plus the prompt lookup. Prompts are never rendered.
+  const prompts = {};
+  lists.forEach((l) => {
+    const c = categoryOf(l.key, l.projectId);
+    prompts[idOf(l)] = buildListPrompt(l, {
+      category: { label: `${c.label} / ${c.sub.label}` },
+      totals: { tasks: total || items.length, lists: lists.length, dormant: s.dormantCount },
+    });
   });
+  // One row per task, so any combination of filters is exact. See boardFacts / boardRuntime.
+  const table = buildFacts(lists, (l) => {
+    const c = categoryOf(l.key, l.projectId);
+    return { id: idOf(l), name: l.name, cat: c.key, sub: c.sub.key };
+  });
+  const payload = {
+    lists: table.lists,
+    facts: table.facts,
+    // Level-2 labels, keyed by project id. The project row is built from these in the browser.
+    subs: Object.fromEntries(lists.map((l) => {
+      const sub = categoryOf(l.key, l.projectId).sub;
+      return [sub.key, sub.label];
+    })),
+    cats: Object.fromEntries(groups.map((g) => [g.key, {
+      label: g.label, color: CATEGORY_COLORS.light[g.key],
+    }])),
+    prompts,
+  };
 
-  const cssVars = (ramp) => BANDS.map((b) => `--band-${b.key}:${ramp[b.key]};`).join('');
+  const catVars = (mode) => Object.entries(CATEGORY_COLORS[mode])
+    .map(([k, v]) => `--cat-${k}:${v};`).join('');
+  const bandVars = (ramp) => BANDS.map((b) => `--band-${b.key}:${ramp[b.key]};`).join('');
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Backlog Triage</title>
+<title>Backlog Navigator</title>
 <style>
-  :root{
-    ${cssVars(RAMP_LIGHT)}
+  :root{ ${bandVars(RAMP_LIGHT)} ${catVars('light')} ${heatVars('light')}
     --bg:#fcfcfb; --surface:#ffffff; --ink:#0f172a; --ink-2:#475569; --ink-3:#94a3b8;
-    --line:#e2e8f0; --accent:#1a365d;
-  }
-  :root:not([data-theme="light"]) { }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      ${cssVars(RAMP_DARK)}
-      --bg:#1a1a19; --surface:#232322; --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8;
-      --line:#334155; --accent:#93c5fd;
-    }
-  }
-  :root[data-theme="dark"]{
-    ${cssVars(RAMP_DARK)}
+    --line:#e2e8f0; --brand:#FB2832; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    ${bandVars(RAMP_DARK)} ${catVars('dark')} ${heatVars('dark')}
     --bg:#1a1a19; --surface:#232322; --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8;
-    --line:#334155; --accent:#93c5fd;
-  }
+    --line:#334155; --brand:#FB2832; } }
+  :root[data-theme="dark"]{ ${bandVars(RAMP_DARK)} ${catVars('dark')} ${heatVars('dark')}
+    --bg:#1a1a19; --surface:#232322; --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8;
+    --line:#334155; --brand:#FB2832; }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.6 'Segoe UI',system-ui,-apple-system,sans-serif;}
-  .wrap{max-width:880px;margin:0 auto;padding:28px 16px 64px}
-  h1{font-size:26px;line-height:1.25;margin:0 0 4px;color:var(--ink)}
-  .sub{color:var(--ink-3);font-size:13px;margin:0 0 24px}
-  h2{font-size:17px;margin:34px 0 4px}
-  .lede{color:var(--ink-2);margin:0 0 14px;font-size:14px}
+    font:15px/1.6 'Segoe UI',system-ui,-apple-system,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:22px 16px 72px}
+  h1{font-size:25px;margin:0 0 2px;color:var(--brand)}
+  .sub{color:var(--ink-3);font-size:12.5px;margin:0 0 16px}
+  h2{font-size:17px;margin:4px 0 4px}
+  h3.sub-h{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);
+    margin:20px 0 8px;font-weight:700}
+  .lede{color:var(--ink-2);margin:0 0 12px;font-size:13.5px}
   section{background:var(--surface);border:1px solid var(--line);border-radius:12px;
-    padding:18px 18px 20px;margin-bottom:18px}
-  .tiles{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 6px}
-  .tile{flex:1 1 150px;background:var(--surface);border:1px solid var(--line);
-    border-radius:10px;padding:14px 16px}
-  .tile-value{font-size:30px;font-weight:700;line-height:1.1;color:var(--ink)}
-  .tile-cap{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-3);margin-top:3px}
-  .tile-sub{font-size:12px;color:var(--ink-2);margin-top:6px}
-  .tone-alarm .tile-value{color:var(--band-aging)}
-  .tone-quiet .tile-value{color:var(--band-dormant)}
-  svg{display:block;max-width:100%}
-  .cat{font-size:12px;fill:var(--ink-2)}
-  .val{font-size:12px;fill:var(--ink);font-weight:600}
-  .axis{font-size:11px;fill:var(--ink-3)}
-  .grid{stroke:var(--line);stroke-width:1}
-  .note{font-size:12px;fill:var(--ink-3)}
-  .dot{stroke:var(--surface);stroke-width:2;opacity:.85}
-  .dot:hover{opacity:1;stroke-width:3}
-  .bar-row:hover rect{opacity:.82}
-  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
-    padding:2px 9px;border-radius:999px;white-space:nowrap;color:#fff}
-  .pill-icon{font-size:9px}
-  .pill-fresh{background:var(--band-fresh)}
-  .pill-overdue{background:var(--band-overdue)}
-  .pill-aging{background:var(--band-aging)}
-  .pill-dormant{background:var(--band-dormant)}
-  table.grid{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
-  table.grid th{text-align:left;font-size:10px;letter-spacing:.5px;text-transform:uppercase;
-    color:var(--ink-3);border-bottom:1px solid var(--line);padding:6px 8px 6px 0;font-weight:600}
-  table.grid td{padding:9px 8px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
-  table.grid tbody tr:hover{background:color-mix(in srgb, var(--ink) 4%, transparent)}
-  .c-band{width:108px}
-  .c-due{width:92px;color:var(--ink-2);white-space:nowrap}
-  .c-score{width:64px;text-align:right}
-  .score{font-weight:700;color:var(--ink-2)}
-  .c-title a{color:var(--accent);text-decoration:none}
-  .c-title a:hover{text-decoration:underline}
-  .proj{font-size:11px;color:var(--ink-3);margin-top:2px}
-  .empty,.more,.fallback{color:var(--ink-3);font-size:13px;margin:10px 0 0}
-  .callout{border-left:3px solid var(--band-aging);padding:10px 0 10px 14px;margin:14px 0 0;
-    color:var(--ink-2);font-size:14px}
-  /* Handoff */
-  .cmd{display:flex;align-items:center;gap:10px;background:color-mix(in srgb,var(--ink) 6%,transparent);
-    border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0 0}
-  .cmd code{font:13px/1.4 ui-monospace,Consolas,monospace;color:var(--ink)}
-  .copy{margin-left:auto;font:11px/1 'Segoe UI',system-ui,sans-serif;cursor:pointer;
-    background:var(--surface);color:var(--ink-2);border:1px solid var(--line);
-    border-radius:6px;padding:5px 10px}
-  .copy:hover{color:var(--ink);border-color:var(--ink-3)}
-  .copy.done{color:#fff;background:var(--band-overdue);border-color:var(--band-overdue)}
-  h3.grp{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);
-    margin:22px 0 8px;font-weight:700}
-  .wo{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
-  .wo-head{display:flex;align-items:center;gap:9px;padding:9px 12px;
-    background:color-mix(in srgb,var(--ink) 3%,transparent);border-bottom:1px solid var(--line)}
-  .wo-title{font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
-  .wo-body{margin:0;padding:11px 12px;font:12px/1.65 ui-monospace,Consolas,monospace;
-    color:var(--ink-2);white-space:pre-wrap;word-break:break-word}
-  .disp{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
-    padding:3px 8px;border-radius:5px;white-space:nowrap;color:#fff}
-  .disp-act{background:var(--band-overdue)}
-  .disp-draft{background:var(--band-aging)}
-  .disp-ask{background:var(--band-fresh);color:#1f1300}
-  .disp-close{background:var(--band-dormant)}
-  .disp-prep{background:var(--band-dormant)}
-  .mermaid{margin-top:12px;background:transparent}
-  footer{color:var(--ink-3);font-size:12px;margin-top:28px;text-align:center}
-  ${LIST_LENS_CSS}
+    padding:16px 16px 18px;margin-bottom:16px}
+  nav.jump{position:sticky;top:0;z-index:20;display:flex;gap:14px;flex-wrap:wrap;
+    background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);padding:9px 0;margin-bottom:12px;font-size:12.5px}
+  nav.jump a{color:var(--ink-2);text-decoration:none}
+  nav.jump a:hover{color:var(--brand)}
+  .cats{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+  .cat{display:flex;align-items:center;gap:7px;cursor:pointer;border:1px solid var(--line);
+    background:var(--surface);border-radius:10px;padding:8px 12px;color:var(--ink);
+    font:13px/1 'Segoe UI',system-ui,sans-serif}
+  .cat:hover{border-color:var(--c,var(--ink-3))}
+  .cat.is-on{border-color:var(--c,var(--brand));box-shadow:inset 0 0 0 1px var(--c,var(--brand))}
+  .cat-swatch{width:9px;height:9px;border-radius:3px;background:var(--c)}
+  .cat-label{font-weight:600} .cat-n{font-weight:700;color:var(--ink-2)}
+  .cat-dormant{font-size:10px;color:var(--ink-3);border:1px solid var(--line);
+    border-radius:999px;padding:1px 6px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .chipwrap{display:inline-flex;align-items:stretch;border:1px solid var(--line);
+    border-left:4px solid var(--c,var(--ink-3));border-radius:999px;background:var(--surface);
+    max-width:100%;overflow:hidden}
+  .chipwrap:hover{border-color:var(--c)}
+  .chip{cursor:pointer;border:0;background:transparent;padding:5px 9px 5px 11px;color:var(--ink);
+    font-family:'Segoe UI',system-ui,sans-serif;display:inline-flex;align-items:center;gap:6px;
+    min-width:0}
+  .chip-bc{display:inline-flex;align-items:center;padding:0 10px;font-size:11px;font-weight:600;
+    color:var(--ink-2);text-decoration:none;border-left:1px solid var(--line);white-space:nowrap}
+  .chip-bc:hover{color:var(--brand);background:color-mix(in srgb,var(--brand) 6%,transparent)}
+  .is-missing{color:var(--band-dormant);font-style:italic;cursor:help}
+  .chip-icon{font-size:12px;opacity:.85}
+  .chip-n{font-weight:700;opacity:.6;font-size:11px}
+  .s1 .chip{font-size:11.5px} .s2 .chip{font-size:13px} .s3 .chip{font-size:14.5px}
+  .s4 .chip{font-size:16.5px;font-weight:600} .s5 .chip{font-size:19px;font-weight:700}
+  .chip-dead{opacity:.62} .chip-dead:hover{opacity:1}
+  .tiles{display:flex;gap:10px;flex-wrap:wrap}
+  .tile{flex:1 1 110px;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .tile-value{font-size:27px;font-weight:700;line-height:1.1}
+  .tile-cap{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-3);margin-top:2px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:13px;margin-top:12px}
+  .card{border:1px solid var(--line);border-left:4px solid var(--c,var(--ink-3));
+    border-radius:12px;padding:13px;background:var(--surface)}
+  .card-head{display:flex;align-items:baseline;gap:8px}
+  .card-title{font-size:14.5px;margin:0;flex:1}
+  .card-count{font-size:19px;font-weight:700;color:var(--ink-2)}
+  .path-line{font-size:11px;color:var(--ink-3);margin-top:3px}
+  .phase-line{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-3);margin-top:4px}
+  .bar{display:flex;gap:2px;height:7px;margin:9px 0 7px}
+  .seg{border-radius:2px}
+  .seg-fresh{background:var(--band-fresh)} .seg-overdue{background:var(--band-overdue)}
+  .seg-aging{background:var(--band-aging)} .seg-dormant{background:var(--band-dormant)}
+  .card-stats{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-3)}
+  .lead{margin-top:10px;padding:8px 10px;border-radius:8px;
+    background:color-mix(in srgb,var(--ink) 4%,transparent)}
+  .lead-cap{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3)}
+  .lead-title{font-size:12.5px;font-weight:600;margin-top:2px}
+  .rec{margin-top:9px;font-size:12px;color:var(--ink-2)}
+  .rec-cap{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-3);
+    margin-right:5px}
+  .card-actions{display:flex;gap:8px;margin-top:11px}
+  .card-actions .getp{margin-top:0;flex:1}
+  .getbc{flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);
+    border-radius:8px;padding:8px;font:600 12px/1.2 'Segoe UI',system-ui,sans-serif;
+    color:var(--ink-2);text-decoration:none}
+  .getbc:hover{border-color:var(--brand);color:var(--brand)}
+  .getp{margin-top:11px;width:100%;cursor:pointer;border:1px dashed var(--c,var(--ink-3));
+    background:transparent;color:var(--c,var(--ink-2));border-radius:8px;padding:8px;
+    font:12px/1.2 'Segoe UI',system-ui,sans-serif;font-weight:600}
+  .getp:hover{background:color-mix(in srgb,var(--c) 10%,transparent)}
+  .legend{font-size:11.5px;color:var(--ink-3);margin-top:11px;display:flex;gap:6px;
+    align-items:center;flex-wrap:wrap}
+  .key{display:inline-block;width:10px;height:10px;border-radius:3px}
+  .empty{color:var(--ink-3);font-size:13px}
+  .is-hidden{display:none !important}
+  footer{color:var(--ink-3);font-size:11.5px;margin-top:26px;text-align:center}
+  ${RUNTIME_CSS}
 </style></head>
-<body data-palette="${esc([RAMP_LIGHT.fresh, RAMP_LIGHT.overdue, RAMP_LIGHT.aging].join(','))}">
+<body>
 <div class="wrap">
+  <h1>Backlog Navigator</h1>
+  <p class="sub">${esc(input.runId || 'run')} &middot;
+    ${esc(today.toISOString().slice(0, 16).replace('T', ' '))} UTC &middot;
+    read-only &middot; click anything to copy its prompt</p>
 
-  <h1>Backlog triage</h1>
-  <p class="sub">${esc(input.runId || 'run')} &middot; ${esc(today.toISOString().slice(0, 16).replace('T', ' '))} UTC &middot; read-only</p>
+  <nav class="jump"><a href="#filters">Filters</a><a href="#now">Dashboard</a>
+    <a href="#pick">Every list</a><a href="#lists">List cards</a></nav>
 
-  <section>
-    <div class="tiles">
-      ${tile(s.total, 'Assigned and active')}
-      ${tile(s.liveCount, 'Live queue', { sub: 'overdue by 60 days or less, or not yet due' })}
-      ${tile(s.dormantCount, 'Dormant', { tone: 'quiet', sub: `${pct(s.dormantShare)} of everything active` })}
-      ${tile(s.worst ? `${s.worst.days}d` : '-', 'Oldest overdue', { tone: 'alarm', sub: s.worst ? s.worst.title.slice(0, 44) : '' })}
+  <section id="filters">
+    <h2>Filter</h2>
+    <p class="lede">Pick a category, then a project, or click any bar in the dashboard. Every
+      filter narrows the whole page, and every chart redraws for what is selected.</p>
+    ${categoryTiles(groups, total)}
+    <div class="subs" id="subs" aria-label="Filter by project"></div>
+    <div class="pills" id="f-pills" aria-live="polite"></div>
+  </section>
+
+  <section id="now">
+    <h2>Dashboard</h2>
+    <p class="lede">Click any bar, column, heatmap cell, or the dormant and need-a-person tiles to
+      filter everything by it; click it again to clear. Filters stack. The chart you clicked keeps
+      its other marks, dimmed, so you can see what you filtered out.</p>
+    <div class="tiles" id="f-tiles"></div>
+    <div class="fgrid">
+      <div class="fpane"><h4>How much is alive</h4><div id="f-gauge"></div></div>
+      <div class="fpane"><h4>By age band</h4><div id="f-bands"></div></div>
+      <div class="fpane"><h4 id="f-cats-h">By part of the business</h4><div id="f-cats"></div></div>
+      <div class="fpane"><h4>Who does the work</h4>
+        <p class="hint">Marked as needing a person, machine-generated scaffolding, or hand-written.</p>
+        <div id="f-kind"></div></div>
+      <div class="fpane"><h4>Where the tasks sit in Basecamp</h4>
+        <p class="hint">Tasks, by the container Basecamp says they are in, checked when this page was
+          built. Every chart counts tasks; the Lists tile counts lists.</p>
+        <div id="f-shape"></div></div>
+      <div class="fpane"><h4>Biggest lists</h4><div id="f-lists"></div></div>
+      <div class="fpane wide"><h4>When it is due, by quarter</h4>
+        <p class="hint">Every quarter in the span is shown, so a gap in the plan is visible. Click a quarter to filter.</p>
+        <div id="f-period"></div></div>
+      <div class="fpane wide"><h4 id="f-heat-h">Category &times; age: where the old work sits</h4>
+        <p class="hint">Darker means more tasks. Click a cell to filter by both at once.</p>
+        <div id="f-heat"></div></div>
     </div>
-    <p class="callout"><strong>${s.dormantCount} of ${s.total}</strong> active tasks have been overdue
-      for more than sixty days. They are not a queue, they are a decision. Until they are dismissed or
-      re-dated they will keep crowding out the work that is genuinely due, because the scoring treats
-      "late" as a single flat state.</p>
+    <p id="f-note"></p>
   </section>
 
-  <section>
-    <h2>Where the backlog actually sits</h2>
-    <p class="lede">Buckets widen as they age: the resolution that matters is at the recent end,
-      where a decision is still live.</p>
-    ${histogramSvg(s.histogram, { total: s.total })}
+  <section id="pick">
+    <h2>Every list</h2>
+    <p class="lede">Sized by how much work is in it. The name copies a full prompt for that list;
+      <em>Basecamp &#8599;</em> opens it. A <em>group</em> is a section inside a Basecamp list,
+      and says so.</p>
+    ${wordChart(groups)}
+    <p class="legend">
+      <span class="key" style="background:var(--band-overdue)"></span> mostly live
+      <span class="key" style="background:var(--band-aging)"></span> part dormant
+      <span class="key" style="background:var(--band-dormant)"></span> mostly dormant
+      &middot; ${total} tasks in ${lists.length} lists
+      ${unsorted ? `&middot; <strong>${unsorted.total} matched no category rule</strong>` : ''}
+    </p>
   </section>
 
-  <section>
-    <h2>Can the urgency number be trusted?</h2>
-    <p class="lede">Urgency plotted against how late each task is. If the score measured urgency,
-      this would slope. It does not, because being overdue contributes a flat amount no matter how
-      overdue: one day late and one hundred days late score the same.</p>
-    ${scatterSvg(scatter, { note: 'flat band = age is not being measured' })}
+  <section id="lists">
+    <h2>The lists</h2>
+    <p class="lede">One card per list, biggest first. Copy the prompt, or open it in Basecamp.</p>
+    <div class="cards">${lists.slice(0, input.listLimit || 24).map(listCard).join('')}</div>
   </section>
 
-  <section>
-    <h2>The rule</h2>
-    <p class="lede">What to do with an item, decided once rather than re-argued per ticket.</p>
-    ${decisionDiagram()}
-  </section>
-
-  ${handoffSection(Array.isArray(input.workOrders) ? input.workOrders : [], input.runId || 'run')}
-
-  ${renderListLens(Array.isArray(input.lists) ? input.lists : [], { limit: input.listLimit || 12 })}
-
-  <section>
-    <h2>Live queue <span class="sub">(${liveSorted.length})</span></h2>
-    <p class="lede">What dies today. Sorted by urgency, which is meaningful inside this set because
-      every item here is recent enough for the score to mean something.</p>
-    ${rowsTable(liveSorted, today, { limit: 25, emptyMsg: 'Nothing live. That is a good day.' })}
-  </section>
-
-  <section>
-    <h2>Dormant <span class="sub">(${dormantSorted.length})</span></h2>
-    <p class="lede">Oldest first. For each: re-date it, or dismiss it with a reason. Leaving it is
-      the one option that costs something, because it keeps the number above meaningless.</p>
-    ${rowsTable(dormantSorted, today, { limit: 25, emptyMsg: 'Nothing dormant.' })}
-  </section>
-
-  <footer>Read-only. Nothing in this report was posted to a ticket.</footer>
+  <footer>Read-only. Nothing here was posted to a ticket or changed in Basecamp.</footer>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
-<script>
-  try {
-    const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (window.mermaid) window.mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'neutral' });
-  } catch (e) { /* the written rule sits under the diagram, so a failure here loses nothing */ }
-
-  /*
-   * Copy buttons. The work order is already visible in the block below each one, so if the
-   * clipboard API is unavailable (an http origin, a locked-down browser) the reader loses a
-   * convenience and not the content - which is why the text is rendered rather than hidden
-   * behind the button.
-   */
-  document.addEventListener('click', function (ev) {
-    var b = ev.target.closest && ev.target.closest('.copy');
-    if (!b) return;
-    var text = b.getAttribute('data-copy') || '';
-    var done = function () {
-      b.classList.add('done');
-      var was = b.textContent; b.textContent = 'copied';
-      setTimeout(function () { b.classList.remove('done'); b.textContent = was; }, 1400);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { b.textContent = 'select it below'; });
-    } else {
-      b.textContent = 'select it below';
-    }
-  });
-</script>
+<script>window.__BOARD__ = ${JSON.stringify(payload).replace(/</g, '\\u003c')};</script>
+<script>${RUNTIME_JS}</script>
 </body></html>`;
 }
 
-module.exports = { renderTriageBoard };
+module.exports = { renderTriageBoard, listCard, sizeStep };

@@ -220,6 +220,20 @@ const FEATURED_WORK: string[] = [
    )`,
 ];
 
+/**
+ * Shared work (C138, phase 4 of the approved C127 design). ADDITIVE ONLY: one new table, nothing altered. One row per piece the
+ * learner chose to share with their own cohort in the Showcase (Ali, 11 Nov 2026: own cohort only). Separate from
+ * career_featured_work on purpose (C127 decision Q1 A: Showcase has its own opt-in). Rollback needs no down step.
+ */
+const SHARED_WORK: string[] = [
+  `CREATE TABLE IF NOT EXISTS career_shared_work (
+     enrollment_id UUID NOT NULL,
+     artifact_id UUID NOT NULL,
+     shared_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     PRIMARY KEY (enrollment_id, artifact_id)
+   )`,
+];
+
 const STATEMENTS: string[] = [
   ...DROP_SUPERSEDED,
   ...CAPSTONE_REVIEWS,
@@ -227,8 +241,10 @@ const STATEMENTS: string[] = [
   ...PORTFOLIO_PAGES,
   ...HIRE_LISTING,
   ...FEATURED_WORK,
+  ...SHARED_WORK,
 ];
 export const FEATURED_WORK_STATEMENTS: readonly string[] = FEATURED_WORK;
+export const SHARED_WORK_STATEMENTS: readonly string[] = SHARED_WORK;
 
 /** Exported for the additive/idempotent test. */
 export const HIRE_LISTING_STATEMENTS: readonly string[] = HIRE_LISTING;

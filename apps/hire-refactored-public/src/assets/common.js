@@ -117,6 +117,16 @@
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
   }
 
+  /* An industry for display. The API sends a facet KEY ("data-infrastructure-operations",
+     "public-sector"), and every page printed it raw (Quincy, 2026-11-11). A key becomes
+     "Data infrastructure operations"; a value that is already prose is left exactly as is. */
+  function industryLabel(v) {
+    var s = String(v || '').trim();
+    if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(s)) return s;
+    s = s.replace(/[-_]+/g, ' ');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
   /* A case study's cover for any card: its picked thumbnail with the walkthrough length on it,
      or the generated art when the record has no cover (never a blank box). `c` is a Hire case
      card or signature: { slug, look: { coverImageUrl, walkthroughSeconds } }. */
@@ -183,7 +193,7 @@
 
   return {
     esc: esc, rnd: rnd, hueOf: hueOf, art: art, initials: initials, safeImageUrl: safeImageUrl,
-    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, cover: cover, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
+    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, industryLabel: industryLabel, cover: cover, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
     readShortlist: readShortlist, writeShortlist: writeShortlist, toggleShortlist: toggleShortlist,
     track: track, SHORT_KEY: SHORT_KEY,
   };

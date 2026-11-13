@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { listStudioSessions, type StudioSessionRow } from '../../../services/studioSetupApi';
 import './studioSetup.css';
+import StudioRail from './StudioRail';
+import StudioTour from './StudioTour';
+import { indexTourSteps } from './studioTourSteps';
 
 /**
  * The Studio setup index (D4, P4-01) — pick the class to configure.
@@ -33,6 +36,8 @@ function BroadcastState({ row }: { row: StudioSessionRow }): React.ReactElement 
 export default function StudioIndexPage(): React.ReactElement {
   const [rows, setRows] = useState<StudioSessionRow[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +54,13 @@ export default function StudioIndexPage(): React.ReactElement {
 
   return (
     <div className="cls-root">
+      <StudioRail onTour={() => setTourOpen(true)} />
+      <StudioTour
+        open={tourOpen}
+        steps={indexTourSteps(() => (rows && rows.length ? `/admin/live/studio/${rows[0].id}` : null))}
+        onClose={() => setTourOpen(false)}
+        onNavigate={(p) => navigate(p)}
+      />
       <div className="cls-shell">
         <header className="cls-head">
           <h1 className="cls-title">Studio setup</h1>
@@ -58,7 +70,7 @@ export default function StudioIndexPage(): React.ReactElement {
           </p>
         </header>
 
-        <section className="cls-card">
+        <section className="cls-card" data-tour="class-list">
           {failed && (
             <p className="cls-note cls-note-error" role="alert">
               The class list could not be loaded. Reload the page to try again.

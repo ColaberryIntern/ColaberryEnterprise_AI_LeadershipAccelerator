@@ -94,8 +94,36 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // in the code explains. It covers `/status` too (the matcher is '/'-delimited), which is
   // deliberate - an always-readable registry is still campaigns data.
   ['/api/admin/growth-journey', 'campaigns'],
+  // Campus v20 (C134): the Colaberry TV playlist on Colaberry Now. Marketing content, so campaigns.
+  ['/api/admin/colaberry-tv', 'campaigns'],
   ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
   ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
+  // The admissions operating surface: stats, conversations, the knowledge base, operations,
+  // callbacks, the call log and documents. NINE routes, and every one of them was unmapped
+  // until 2026-11-12 — so for any scoped token this whole surface was the latent 403 the rows
+  // above keep warning about.
+  //
+  // It was invisible to BOTH standing guards, and that is the part worth recording.
+  // `guardedPathsAreClassified.test.ts` walks back from each `requireSection` call to its
+  // router, and these nine carry only `requireAdmin`, so there was no `requireSection` to walk
+  // back from. `unlistedPaths.test.ts` checks a fixed list of surfaces someone had already
+  // noticed. A route guarded by `requireAdmin` alone looks deliberate and complete in its own
+  // file, and the asymmetry that makes it a bug lives here instead: an unmapped path PASSES for
+  // a legacy admin (who skips this gate entirely) and for `mgmt_role === 'admin'` (whose branch
+  // denies only mapped-and-forbidden paths), and is REFUSED for every scoped role. So it works
+  // for everyone wide enough to miss it.
+  //
+  // Found while unblocking the admissions domain's own manager, whose `manager_blocker` named
+  // exactly this: "no /api/admin/admissions prefix is mapped in mgmtSectionGate PATH_SECTION,
+  // which is deny-by-default for scoped roles -- so granting a scoped login alone would still
+  // 403 him on all nine of his own routes." That half of the note was correct.
+  //
+  // `lead_ingestion`, because that is what this surface IS: the intake funnel the `admissions`
+  // and `lead_intake` roles already own, alongside sources, ingest logs and routing rules above.
+  // Purely additive — before this row these paths were deny-by-default for EVERY scoped role,
+  // so no role loses anything, which is the condition `brandPaths.test.ts` names for adding a
+  // classification safely.
+  ['/api/admin/admissions', 'lead_ingestion'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],
   ['/api/admin/accelerator', 'program'], ['/api/admin/community', 'program'], ['/api/admin/orchestration', 'program'],
   ['/api/admin/workforce', 'program'], ['/api/admin/brain', 'program'], ['/api/admin/projects', 'program'],

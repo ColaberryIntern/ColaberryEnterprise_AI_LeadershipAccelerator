@@ -324,6 +324,10 @@ describe('PaySimple Service', () => {
         company: 'TestCo',
         phone: '5550000000',
         cohortName: 'Cohort Beta',
+        // Required since 11 Nov 2026. It used to be optional and fell back to
+        // $4,500, a retired price, which is what the public /api/create-invoice
+        // route was charging because it passed no amount.
+        amount: 199,
       });
 
       expect(result.customerId).toBe(100);

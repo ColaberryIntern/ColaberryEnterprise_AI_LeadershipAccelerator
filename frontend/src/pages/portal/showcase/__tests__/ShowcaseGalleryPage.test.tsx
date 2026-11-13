@@ -1,174 +1,165 @@
+/**
+ * C138 Showcase room. The page renders what the SERVER decided (own cohort only); it narrows only by kind, skill and search.
+ * Four states for shared work, a New this week card only when the server names one, the presentation demos kept with their
+ * WIP / external labels, and a read-only piece page that says the same neutral thing for every 404.
+ */
 import React from 'react';
-import { createRoot, Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
-import ShowcaseGalleryPage, { type ShowcaseCard } from '../ShowcaseGalleryPage';
-import portalApi from '../../../../utils/portalApi';
+import { Route, Routes } from 'react-router-dom';
+import * as H from '../../../admin/__fixtures__/domHarness';
 
-jest.mock('../../../../utils/portalApi', () => ({ __esModule: true, default: { get: jest.fn() } }));
-const api = portalApi as unknown as { get: jest.Mock };
+const mockGet = jest.fn();
+jest.mock('../../../../utils/portalApi', () => ({ __esModule: true, default: { get: (...a: unknown[]) => mockGet(...a) } }));
+jest.mock('../../today/PortalShell', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
-(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+/* eslint-disable import/first */
+import ShowcaseGalleryPage from '../ShowcaseGalleryPage';
+import ShowcasePiecePage from '../ShowcasePiecePage';
 
-let container: HTMLDivElement;
-let root: Root | null = null;
+const A = '11111111-2222-4333-8444-000000000001';
+const B = '11111111-2222-4333-8444-000000000002';
+const card = (over: Record<string, unknown> = {}) => ({ id: A, group: 'written', title: 'Evaluation case study', from: 'Week 2', createdAt: '2026-08-25T15:00:00Z',
+  week: 2, project: null, skills: ['critical_thinking'], author: 'Dana Learner', sharedAt: '2026-11-10T15:00:00Z', mine: false, ...over });
+const demo = (over: Record<string, unknown> = {}) => ({ id: 'd1', title: 'Courier routing', summary: 'Routes couriers.', authorName: 'Sam', audience: 'cohort', ...over });
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  container = document.createElement('div');
-  document.body.appendChild(container);
-});
-afterEach(() => { act(() => root?.unmount()); root = null; container.remove(); });
-
-const card = (over: Partial<ShowcaseCard> = {}): ShowcaseCard => ({
-  id: 'a', title: 'Courier routing', summary: 'Routes couriers automatically.',
-  authorName: 'Dana', audience: 'community', ...over,
-});
-
-async function mount() {
-  await act(async () => {
-    const r = createRoot(container);
-    root = r;
-    r.render(<ShowcaseGalleryPage />);
+type Reply = { data?: unknown; status?: number };
+function routes(map: Record<string, Reply>) {
+  mockGet.mockImplementation((url: string) => {
+    const r = map[url];
+    if (!r) return Promise.reject({ response: { status: 404 } });
+    return r.status ? Promise.reject({ response: { status: r.status } }) : Promise.resolve({ data: r.data });
   });
 }
+const SC = '/api/portal/career/showcase';
+const DEMOS = '/api/portal/showcases';
+const text = () => H.text();
+const open = async (path = '/portal/showcase') => {
+  H.mount(<Routes><Route path="/portal/showcase" element={<ShowcaseGalleryPage />} /><Route path="/portal/showcase/work/:id" element={<ShowcasePiecePage />} /></Routes>, path);
+  await H.settle();
+};
 
-const text = () => container.textContent || '';
+beforeEach(() => mockGet.mockReset());
+afterEach(() => H.unmount());
 
-describe('the gallery renders what the SERVER decided it may show', () => {
-  /**
-   * The page does no audience filtering, deliberately. A gallery that fetched
-   * everything and hid the private ones in the browser would be one view-source away
-   * from leaking them — and the search index would still contain them.
-   */
-  it('asks the server for the list and renders exactly that', async () => {
-    api.get.mockResolvedValue({ data: { items: [card(), card({ id: 'b', title: 'Invoice triage' })] } });
-    await mount();
-    expect(api.get).toHaveBeenCalledWith('/api/portal/showcases');
-    expect(container.querySelectorAll('[data-testid^="sc-card-"]')).toHaveLength(2);
+describe('shared work: what the server returned, in work cards', () => {
+  it('lists the cohort\'s shared pieces with who shared them, each linking to the read-only page', async () => {
+    routes({ [SC]: { data: { items: [card(), card({ id: B, title: 'My guide', group: 'guide', mine: true })], newThisWeek: null } }, [DEMOS]: { data: { items: [] } } });
+    await open();
+    expect(mockGet).toHaveBeenCalledWith(SC);
+    expect(text()).toContain('Work your classmates chose to share with your cohort.');
+    expect(document.querySelectorAll('[data-testid="sc-grid"] li')).toHaveLength(2);
+    expect(text()).toContain('Shared by Dana Learner');
+    expect(text()).toContain('Shared by You');
+    expect(document.querySelector(`a[href="/portal/showcase/work/${A}"]`)).not.toBeNull();
+    expect(document.querySelector('a[href^="/portal/portfolio/work/"]')).toBeNull();
+    expect(document.querySelector('[data-testid="sc-new-week"]')).toBeNull();
+    expect(document.querySelector('[data-testid="sc-demos"]')).toBeNull();
   });
 
-  it('never requests a private item or filters one client-side', async () => {
-    // Whatever the server returns is what is shown; there is no audience logic here
-    // to get wrong.
-    api.get.mockResolvedValue({ data: { items: [card({ audience: 'cohort' })] } });
-    await mount();
-    expect(container.querySelectorAll('[data-testid^="sc-card-"]')).toHaveLength(1);
-    expect(JSON.stringify(api.get.mock.calls)).not.toMatch(/private/i);
-  });
-});
-
-/**
- * Seeing a half-finished thing is how people learn what building looks like. But a
- * visitor must never mistake it for finished, and the author must never feel their
- * unfinished work was passed off as done.
- */
-describe('work in progress is labelled on the card', () => {
-  it('says so in the card itself, not a tooltip', async () => {
-    api.get.mockResolvedValue({ data: { items: [card({ workInProgress: true })] } });
-    await mount();
-    expect(container.querySelector('[data-testid="sc-wip-a"]')).not.toBeNull();
-    expect(text()).toContain('Work in progress');
+  it('shows New this week only when the server names one', async () => {
+    routes({ [SC]: { data: { items: [card()], newThisWeek: card() } }, [DEMOS]: { data: { items: [] } } });
+    await open();
+    const hero = document.querySelector('[data-testid="sc-new-week"]');
+    expect(hero?.textContent).toContain('New this week');
+    expect(hero?.getAttribute('href')).toBe(`/portal/showcase/work/${A}`);
   });
 
-  it('does not label a finished piece', async () => {
-    api.get.mockResolvedValue({ data: { items: [card({ workInProgress: false })] } });
-    await mount();
-    expect(container.querySelector('[data-testid="sc-wip-a"]')).toBeNull();
+  it('narrows by kind chip, by skill and by search, and says when nothing matches', async () => {
+    routes({ [SC]: { data: { items: [card(), card({ id: B, title: 'Pipeline sheet', group: 'sheet', skills: ['data_analysis'], author: 'Lee' })], newThisWeek: null } }, [DEMOS]: { data: { items: [] } } });
+    await open();
+    const chips = Array.from(document.querySelectorAll('.mw-chips button')).map((b) => b.textContent);
+    expect(chips).toEqual(['All2', 'Written work1', 'Spreadsheets1']);
+    act(() => { (Array.from(document.querySelectorAll('.mw-chips button')).find((b) => b.textContent?.startsWith('Spreadsheets')) as HTMLButtonElement).click(); });
+    await H.settle();
+    expect(document.querySelectorAll('[data-testid="sc-grid"] li')).toHaveLength(1);
+    expect(text()).toContain('Pipeline sheet');
+    act(() => { (Array.from(document.querySelectorAll('.mw-chips button'))[0] as HTMLButtonElement).click(); });
+    await H.settle();
+    const sel = document.querySelector('[data-testid="sc-skill"]') as HTMLSelectElement;
+    expect(Array.from(sel.options).map((o) => o.textContent)).toEqual(['Every skill', 'Critical thinking', 'Data analysis']);
+    H.setValue('sc-skill', 'critical thinking');
+    await H.settle();
+    expect(document.querySelectorAll('[data-testid="sc-grid"] li')).toHaveLength(1);
+    expect(text()).toContain('Evaluation case study');
+    H.setValue('sc-search', 'zzz');
+    await H.settle();
+    expect(text()).toContain('No shared pieces match.');
   });
 
-  it('can be filtered out without hiding anything else', async () => {
-    api.get.mockResolvedValue({ data: { items: [card({ workInProgress: true }), card({ id: 'b', title: 'Done thing' })] } });
-    await mount();
-    expect(container.querySelectorAll('[data-testid^="sc-card-"]')).toHaveLength(2);
-    const toggle = container.querySelector('[data-testid="sc-wip-toggle"]') as HTMLInputElement;
-    // React tracks the value internally; assigning `.checked` directly is not seen.
-    const setChecked = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked')!.set!;
-    act(() => {
-      setChecked.call(toggle, false);
-      toggle.dispatchEvent(new Event('click', { bubbles: true }));
-    });
-    expect(container.querySelectorAll('[data-testid^="sc-card-"]')).toHaveLength(1);
-    expect(text()).toContain('Done thing');
-  });
-});
-
-/**
- * A gallery that presents work built elsewhere identically to work we watched being
- * built is quietly lending it our credibility.
- */
-describe('external work carries its badge where it is read', () => {
-  it('shows the unverified badge on the card', async () => {
-    api.get.mockResolvedValue({
-      data: { items: [card({ external: { url: 'https://x.test', badge: 'Not verified by Colaberry', note: 'We have not reviewed it.' } })] },
-    });
-    await mount();
-    expect(container.querySelector('[data-testid="sc-external-a"]')).not.toBeNull();
-    expect(text()).toContain('Not verified by Colaberry');
-    expect(text()).toContain('have not reviewed it');
+  it('empty: says how to share, and links to My work', async () => {
+    routes({ [SC]: { data: { items: [], newThisWeek: null } }, [DEMOS]: { data: { items: [] } } });
+    await open();
+    expect(document.querySelector('[data-testid="sc-empty"]')?.textContent).toContain('Share with my cohort');
+    expect(document.querySelector('a[href="/portal/portfolio/work"]')).not.toBeNull();
   });
 
-  it('shows no badge on work built in the programme', async () => {
-    api.get.mockResolvedValue({ data: { items: [card({ external: null })] } });
-    await mount();
-    expect(container.querySelector('[data-testid="sc-external-a"]')).toBeNull();
-  });
-});
-
-describe('search narrows without hiding the reason', () => {
-  it('matches title, author and tags', async () => {
-    api.get.mockResolvedValue({
-      data: { items: [card({ id: 'a', title: 'Courier routing', authorName: 'Dana', tags: ['logistics'] }),
-        card({ id: 'b', title: 'Invoice triage', authorName: 'Sam', tags: ['finance'] })] },
-    });
-    await mount();
-    const input = container.querySelector('#sc-q') as HTMLInputElement;
-    const set = (v: string) => act(() => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-      setter.call(input, v);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    set('logistics');
-    expect(container.querySelectorAll('[data-testid^="sc-card-"]')).toHaveLength(1);
-    set('Sam');
-    expect(text()).toContain('Invoice triage');
+  it('error: never shown as empty, with Try again that reads again', async () => {
+    routes({ [SC]: { status: 500 }, [DEMOS]: { data: { items: [] } } });
+    await open();
+    expect(document.querySelector('[data-testid="sc-error"]')?.textContent).toContain('does not mean it is empty');
+    expect(document.querySelector('[data-testid="sc-empty"]')).toBeNull();
+    routes({ [SC]: { data: { items: [card()], newThisWeek: null } }, [DEMOS]: { data: { items: [] } } });
+    act(() => { (document.querySelector('[data-testid="sc-error"] button') as HTMLButtonElement).click(); });
+    await H.settle();
+    expect(document.querySelectorAll('[data-testid="sc-grid"] li')).toHaveLength(1);
   });
 
-  it('says a search matched nothing, differently from an empty gallery', async () => {
-    api.get.mockResolvedValue({ data: { items: [card()] } });
-    await mount();
-    const input = container.querySelector('#sc-q') as HTMLInputElement;
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-      setter.call(input, 'zzzz');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(text()).toContain('Nothing matches that search');
+  it('loading: says so before the answer arrives', async () => {
+    mockGet.mockImplementation(() => new Promise(() => undefined));
+    H.mount(<ShowcaseGalleryPage />, '/portal/showcase');
+    expect(document.querySelector('[data-testid="sc-loading"]')).not.toBeNull();
+  });
+
+  it('a learner without the portfolio entitlement gets the paywall, and the demos still load', async () => {
+    routes({ [SC]: { status: 402 }, [DEMOS]: { data: { items: [demo()] } } });
+    await open();
+    expect(document.querySelector('[data-testid="sc-grid"]')).toBeNull();
+    expect(document.querySelector('[data-testid="sc-demos"]')).not.toBeNull();
   });
 });
 
-describe('the four states say different things', () => {
-  it('an empty gallery invites you to be the first', async () => {
-    api.get.mockResolvedValue({ data: { items: [] } });
-    await mount();
-    expect(text()).toContain('Nothing has been shared with you yet');
+describe('presentation demos, kept', () => {
+  it('render what the server returned, with work in progress and external work labeled on the card', async () => {
+    routes({ [SC]: { data: { items: [], newThisWeek: null } }, [DEMOS]: { data: { items: [demo({ workInProgress: true }), demo({ id: 'd2', external: { url: 'https://x', badge: 'Built elsewhere', note: 'not built here' } })] } } });
+    await open();
+    expect(mockGet).toHaveBeenCalledWith(DEMOS);
+    expect(document.querySelectorAll('[data-testid^="sc-card-"]')).toHaveLength(2);
+    expect(document.querySelector('[data-testid="sc-wip-d1"]')?.textContent).toBe('Work in progress');
+    expect(document.querySelector('[data-testid="sc-external-d2"]')?.textContent).toContain('Built elsewhere');
   });
 
-  // A failed fetch must never read as "the gallery is empty".
-  it('a failed load says so and offers a retry', async () => {
-    api.get.mockRejectedValue(new Error('network'));
-    await mount();
-    expect(container.querySelector('[data-testid="sc-error"]')).not.toBeNull();
-    expect(text()).toContain('does not mean it is empty');
-    expect(text()).not.toContain('Nothing has been shared');
+  it('a failed read says so, never that there are none', async () => {
+    routes({ [SC]: { data: { items: [], newThisWeek: null } }, [DEMOS]: { status: 500 } });
+    await open();
+    expect(document.querySelector('[data-testid="sc-demos-error"]')?.textContent).toContain('This does not mean there are none.');
+  });
+});
+
+describe('the read-only piece page', () => {
+  const piece = (over: Record<string, unknown> = {}) => ({ ...card(), html: null, externalUrl: 'https://claude.ai/a', file: null, written: null, recording: null,
+    link: { url: 'https://claude.ai/a', reflection: 'Built it twice.', stages: [], aiDisclosure: null, projectProofUrl: null }, group: 'link', ...over });
+
+  it('shows who shared it and words the piece about them, with no link into their My work', async () => {
+    routes({ [`${SC}/${A}`]: { data: { piece: piece() } } });
+    await open(`/portal/showcase/work/${A}`);
+    expect(mockGet).toHaveBeenCalledWith(`${SC}/${A}`);
+    expect(document.querySelector('[data-testid="sc-piece-author"]')?.textContent).toBe('Dana Learner');
+    expect(text()).toContain('What they said about it');
+    expect(text()).not.toContain('What you said');
+    expect(document.querySelector('a[href^="/portal/portfolio/work/"]')).toBeNull();
+    expect(text()).toContain('Only your cohort can see it.');
   });
 
-  it('the retry refetches and recovers', async () => {
-    api.get.mockRejectedValueOnce(new Error('network'));
-    await mount();
-    api.get.mockResolvedValue({ data: { items: [card()] } });
-    const retry = Array.from(container.querySelectorAll('button')).find((b) => (b.textContent || '').includes('Try again'))!;
-    await act(async () => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
-    expect(api.get).toHaveBeenCalledTimes(2);
-    expect(text()).toContain('Courier routing');
+  it('the owner gets a way back to their own copy', async () => {
+    routes({ [`${SC}/${A}`]: { data: { piece: piece({ mine: true }) } } });
+    await open(`/portal/showcase/work/${A}`);
+    expect(document.querySelector('[data-testid="sc-piece-author"]')?.textContent).toBe('You');
+    expect(document.querySelector(`a[href="/portal/portfolio/work/${A}"]`)).not.toBeNull();
+  });
+
+  it('every 404 says the same neutral thing', async () => {
+    routes({});
+    await open(`/portal/showcase/work/${A}`);
+    expect(document.querySelector('[data-testid="sc-piece-missing"]')?.textContent).toContain('This piece is not shared with you');
   });
 });

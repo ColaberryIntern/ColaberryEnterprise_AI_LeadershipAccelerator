@@ -25,8 +25,8 @@ function Thumb({ projectId, artifactId, reviewApi, studioApi, miss }: { projectI
  * approved design.
  */
 export default function BuildEvidence(
-  { view, projectId, reviewApi, studioApi, onReload, onToast }:
-  { view: StudentGovProjectView; projectId: string; reviewApi?: GovReviewApi; studioApi?: GovStudioApi; onReload: () => void; onToast?: (m: string) => void },
+  { view, projectId, reviewApi, studioApi, onReload, onToast, readOnly = false }:
+  { view: StudentGovProjectView; projectId: string; reviewApi?: GovReviewApi; studioApi?: GovStudioApi; onReload: () => void; onToast?: (m: string) => void; readOnly?: boolean },
 ): React.ReactElement {
   const artifacts: GovBuildArtifactView[] = view.buildArtifacts ?? [];
   const rollup = view.buildSummary?.rollup;
@@ -71,8 +71,15 @@ export default function BuildEvidence(
         <div className="gps-act"><button className="gps-btn" onClick={recapture}>Re-capture all</button></div></div>
       <div className="gps-grid3">
         <div className="gps-panel"><div className="gps-eyebrow">Build completion</div><div className="gps-big gps-num">{rollup ? `${rollup.verified} / ${rollup.total}` : '—'}</div><div className="gps-small gps-muted">stories verified from commits</div><Bar v={pct} /></div>
-        <div className="gps-panel"><div className="gps-eyebrow">Demo URL</div>
-          {reviewApi?.setDemoUrl ? (
+        <div className="gps-panel"><div className="gps-eyebrow">{readOnly ? 'Connected repo' : 'Demo URL'}</div>
+          {readOnly ? (
+            view.connectedRepo ? (
+              <div style={{ marginTop: 6 }}>
+                <a className="gps-mono" data-testid="ev-connected-repo" href={view.connectedRepo.url || undefined} target="_blank" rel="noreferrer" style={{ wordBreak: 'break-all' }}>{view.connectedRepo.owner}/{view.connectedRepo.name}</a>
+                <div className="gps-small gps-muted" style={{ marginTop: 4 }}>Synced from the build repo.</div>
+              </div>
+            ) : <div className="gps-small gps-muted" data-testid="ev-no-repo" style={{ marginTop: 6 }}>No repo connected yet.</div>
+          ) : reviewApi?.setDemoUrl ? (
             <div style={{ marginTop: 6 }}>
               <div className="gps-inline-field"><input className="gps-input gps-mono" data-testid="ev-demo-url" placeholder="https://…-demo.colaberry.dev" value={demoUrl} onChange={(e) => setDemoUrl(e.target.value)} /><button className="gps-btn sm primary" disabled={savingUrl} onClick={saveDemoUrl}>Save</button></div>
               <div className="gps-small gps-muted" style={{ marginTop: 4 }}>Seeded with sample data, no real PII.</div>

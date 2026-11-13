@@ -1,7 +1,7 @@
 /**
  * R3 — the one service that writes and reads the evidence spine.
  *
- * Every Revenue Room surface above this reads `evidence_links` through here rather than
+ * Every Revenue Room surface above this reads `revenue_evidence_links` through here rather than
  * querying it directly, for one reason: the rules below are the spine's value, and a
  * caller that goes around them gets a timeline that looks right and is not.
  *
@@ -102,7 +102,7 @@ export class EvidenceLinkRejected extends Error {
 async function tableExists(): Promise<boolean> {
   const rows = await sequelize.query<{ n: number }>(
     `SELECT COUNT(*)::int AS n FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_name = 'evidence_links'`,
+     WHERE table_schema = 'public' AND table_name = 'revenue_evidence_links'`,
     { type: QueryTypes.SELECT },
   );
   return (rows[0]?.n ?? 0) > 0;
@@ -232,7 +232,7 @@ export async function linkEvidence(input: EvidenceLinkInput): Promise<LinkResult
   validateLink(input);
 
   const inserted = await sequelize.query<{ id: string }>(
-    `INSERT INTO evidence_links (
+    `INSERT INTO revenue_evidence_links (
        source_system, source_id, source_url, title,
        initiative_type, initiative_key, relation,
        observed_at, linked_by, link_method, confidence, notes
@@ -266,7 +266,7 @@ export async function linkEvidence(input: EvidenceLinkInput): Promise<LinkResult
 
   // The conflict case. Which of the two is it?
   const existing = await sequelize.query<{ id: string; unlinked_at: Date | null }>(
-    `SELECT id, unlinked_at FROM evidence_links
+    `SELECT id, unlinked_at FROM revenue_evidence_links
       WHERE source_system = :sourceSystem AND source_id = :sourceId
         AND initiative_type = :initiativeType AND initiative_key = :initiativeKey`,
     {
@@ -301,7 +301,7 @@ export async function unlinkEvidence(
     throw new EvidenceLinkRejected('unlinked_by is required: an unexplained unlink gets argued about later');
   }
   const rows = await sequelize.query<{ id: string }>(
-    `UPDATE evidence_links
+    `UPDATE revenue_evidence_links
         SET unlinked_at = NOW(), unlinked_by = :unlinkedBy, unlink_reason = :reason,
             updated_at = NOW()
       WHERE id = :id AND unlinked_at IS NULL
@@ -323,7 +323,7 @@ export async function relinkEvidence(id: string, relinkedBy: string): Promise<bo
     throw new EvidenceLinkRejected('relinked_by is required');
   }
   const rows = await sequelize.query<{ id: string }>(
-    `UPDATE evidence_links
+    `UPDATE revenue_evidence_links
         SET unlinked_at = NULL, unlinked_by = NULL,
             unlink_reason = CONCAT('re-linked by ', :relinkedBy, '; previous reason: ',
                                    COALESCE(unlink_reason, '(none)')),
@@ -383,7 +383,7 @@ export async function getEvidenceTimeline(
     return {
       ...base,
       state: 'absent',
-      note: 'evidence_links is not present in this database, so no timeline can be shown. '
+      note: 'revenue_evidence_links is not present in this database, so no timeline can be shown. '
         + 'This is NOT an empty timeline: a missing source is not an empty one.',
     };
   }
@@ -392,7 +392,7 @@ export async function getEvidenceTimeline(
     `SELECT id, source_system, source_id, source_url, title,
             initiative_type, initiative_key, relation, observed_at,
             linked_by, link_method, confidence, notes
-       FROM evidence_links
+       FROM revenue_evidence_links
       WHERE initiative_type = :initiativeType AND initiative_key = :initiativeKey
         AND unlinked_at IS NULL
       ORDER BY observed_at DESC
@@ -417,7 +417,7 @@ export async function getEvidenceCounts(): Promise<
   if (!(await tableExists())) return { state: 'absent', counts: {} };
   const rows = await sequelize.query<{ initiative_type: string; initiative_key: string; n: number }>(
     `SELECT initiative_type, initiative_key, COUNT(*)::int AS n
-       FROM evidence_links
+       FROM revenue_evidence_links
       WHERE unlinked_at IS NULL
       GROUP BY 1, 2`,
     { type: QueryTypes.SELECT },
