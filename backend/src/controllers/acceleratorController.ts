@@ -96,7 +96,14 @@ export async function handleCreateSession(req: Request, res: Response, next: Nex
       { cohort_id: req.params.cohortId as string, ...rest },
       { liveEnabled },
     );
-    res.status(201).json({ session });
+    /**
+     * D18: the live warning travels WITH the 201, not instead of it.
+     *
+     * The session really was created, so this is not an error status - but an admin who ticked
+     * "live" and got a bare success had no way to learn that the broadcast was refused until
+     * somebody opened the class on the night. A sibling field says both things at once.
+     */
+    res.status(201).json({ session, live_warning: (session as any).liveWarning ?? null });
   } catch (err) { next(err); }
 }
 
@@ -105,7 +112,9 @@ export async function handleUpdateSession(req: Request, res: Response, next: Nex
     const { rest, liveEnabled } = splitLiveFlag(req.body);
     const session = await updateSession(req.params.id as string, rest, { liveEnabled });
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({ session });
+    // D18, same reasoning as create: an edit that reschedules a live class re-times its
+    // occurrence, and a refusal there is exactly as invisible as one on creation.
+    res.json({ session, live_warning: (session as any).liveWarning ?? null });
   } catch (err) { next(err); }
 }
 

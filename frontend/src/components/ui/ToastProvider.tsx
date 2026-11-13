@@ -10,10 +10,18 @@ interface Toast {
 }
 
 interface ToastContextValue {
-  showToast: (message: string, type?: ToastType) => void;
+  /**
+   * `durationMs` is optional and defaults to the usual 4 seconds. It exists because some
+   * notices are not acknowledgements: a save that half-succeeded (the row was written, a
+   * secondary feature was refused) carries a sentence the reader has to actually finish, and
+   * four seconds is not enough to read one and decide what to do about it.
+   */
+  showToast: (message: string, type?: ToastType, durationMs?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextValue>({ showToast: () => {} });
+
+const DEFAULT_TOAST_MS = 4000;
 
 export function useToast() {
   return useContext(ToastContext);
@@ -41,10 +49,12 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
-  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+  const showToast = useCallback((
+    message: string, type: ToastType = 'info', durationMs: number = DEFAULT_TOAST_MS,
+  ) => {
     const id = ++nextId;
     setToasts((prev) => [...prev, { id, message, type }]);
-    const timer = setTimeout(() => removeToast(id), 4000);
+    const timer = setTimeout(() => removeToast(id), durationMs);
     timersRef.current.set(id, timer);
   }, [removeToast]);
 

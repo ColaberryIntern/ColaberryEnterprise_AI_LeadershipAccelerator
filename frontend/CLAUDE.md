@@ -17,7 +17,7 @@
 | `/fixing-motion-performance` | Animation jank, slow renders, bundle bloat |
 | `/ui-ux-design` | Strategic UX: research, wireframes, design review |
 
-The skills encode the full design system (Bootstrap 5 utility-first, navy/blue palette, card patterns, accessibility rules). Do not reinvent them in CLAUDE.md.
+The skills encode the full design system (Bootstrap 5 utility-first, cherry/leaf/berry palette, card patterns, accessibility rules). Do not reinvent them in CLAUDE.md.
 
 ## Directory map
 | Path | Purpose |
