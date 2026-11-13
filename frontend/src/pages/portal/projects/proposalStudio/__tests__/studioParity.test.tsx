@@ -566,3 +566,44 @@ describe('StudioShell read-only (intern parity) — same cockpit, mutation contr
     act(() => root.unmount()); container.remove();
   });
 });
+
+// ── PHASE B intern authoring: an EDIT-shared intern (view.proposal.canEdit) AUTHORS the proposal lane. On an
+// authorable step the center fieldset is ENABLED and the agent panel works; on a LOCKED step (Package/Export, the
+// qualification steps) it stays disabled. With authoring OFF it is fully read-only, as before.
+describe('StudioShell intern authoring (Phase B) — proposal lane writable, approvals/export/qualification locked', () => {
+  const cockpitApi = {
+    askCopilot: async () => ({ answer: 'ok' }), draftDocument: async () => ({}), acceptDocument: async () => ({}),
+    requestChanges: async () => ({}), commentDocument: async () => ({}),
+  } as unknown as GovCockpitApi;
+  const EDIT = { ...VIEW, proposal: { level: 'edit', canComment: true, canEdit: true, responses: [] } } as unknown as StudentGovProjectView;
+  const mountAuthor = (proposalAuthoring: boolean) => (
+    <StudioShell view={EDIT} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} readOnly proposalAuthoring={proposalAuthoring} />
+  );
+  const renderAt = async (el: React.ReactElement, view: string) => {
+    container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => { root.render(<MemoryRouter initialEntries={[`/?view=${view}`]}>{el}</MemoryRouter>); });
+    await flush();
+  };
+
+  it('authoring ON, authorable step (overview): the center fieldset is ENABLED and the agent Ask input is enabled', async () => {
+    await renderAt(mountAuthor(true), 'overview');
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs!.disabled).toBe(false); // proposal lane is writable for an edit-shared intern
+    const ask = container.querySelector('[data-testid="agent-ask"]') as HTMLInputElement | null;
+    expect(ask!.disabled).toBe(false);
+  });
+
+  it('authoring ON, LOCKED step (package/export): the center fieldset stays DISABLED — export is management-only', async () => {
+    await renderAt(mountAuthor(true), 'package');
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs!.disabled).toBe(true);
+  });
+
+  it('authoring OFF (no edit share): fully read-only — the center fieldset is disabled even on an authorable step', async () => {
+    await renderAt(mountAuthor(false), 'overview');
+    const fs = container.querySelector('#gps-main fieldset') as HTMLFieldSetElement | null;
+    expect(fs!.disabled).toBe(true);
+    const ask = container.querySelector('[data-testid="agent-ask"]') as HTMLInputElement | null;
+    expect(ask!.disabled).toBe(true);
+  });
+});

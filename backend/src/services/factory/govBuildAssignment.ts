@@ -144,6 +144,31 @@ export async function ensureAssigneeCanBuild(
 }
 
 /**
+ * Ensure the assigned builder can AUTHOR the proposal: raise their per-member proposal share to 'edit' if it is
+ * currently lower. The share is the designed authoring axis (proposal.canEdit); it is a row, not a role change, so
+ * it never widens anyone else's access and never touches evidence.verify / the reviewer axis. Idempotent, never
+ * downgrades a higher grant, and best-effort — a failure here is logged and swallowed so it can never block an
+ * assignment (the admin can still grant the share manually via the Team & access panel).
+ */
+async function ensureProposalEditShare(deliveryProjectId: string, assigneeIdentityId: string): Promise<void> {
+  try {
+    const { getProposalShareLevel, setProposalShareGrant, PROPOSAL_SHARE_LEVELS } = await import('./govProposalShare');
+    const current = await getProposalShareLevel(deliveryProjectId, assigneeIdentityId);
+    // Only raise, never lower: compare positions in the monotonic level ladder.
+    if (PROPOSAL_SHARE_LEVELS.indexOf(current) < PROPOSAL_SHARE_LEVELS.indexOf('edit')) {
+      await setProposalShareGrant(deliveryProjectId, assigneeIdentityId, 'edit');
+    }
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'gov_proposal_edit_share_grant_failed', outcome: 'partial',
+      error_class: err?.name ?? err?.constructor?.name ?? 'Error',
+      context: { deliveryProjectId, assigneeIdentityId, message: err?.message ?? null },
+    }));
+  }
+}
+
+/**
  * Assign a story to a builder. The assignee MUST be an active delivery member of this project holding
  * `story.execute` (the engine check — the real gate), else `assignee_not_builder` (422). Idempotent upsert on
  * (delivery_project_id, story_id): a re-assign updates the existing row in place rather than stacking duplicates.
@@ -169,6 +194,12 @@ export async function assignBuildStory(input: AssignBuildStoryInput): Promise<As
   if (!hasDeliveryPermission(ctx, 'story.execute')) {
     throw new AssignmentError('The assignee is not a builder on this project.', 'assignee_not_builder');
   }
+
+  // The assigned builder authors the proposal too (Phase B): ensure they hold at least an EDIT proposal share on this
+  // project, the per-member authoring grant surfaced as proposal.canEdit. This runs for a new AND a re-assigned
+  // builder (past ensureAssigneeCanBuild's existing-member early return), only after the story.execute gate confirms
+  // a real builder. NEVER downgrades a higher grant; best-effort so a share failure can never block the assignment.
+  await ensureProposalEditShare(deliveryProjectId, assigneeIdentityId);
 
   const existing: any = await GovBuildStoryAssignment.findOne({ where: { delivery_project_id: deliveryProjectId, story_id: storyId } });
   if (existing) {

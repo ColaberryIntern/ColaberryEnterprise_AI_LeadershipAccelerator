@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getPortalGovCockpitFull, portalGovCockpitApi, portalGovStudioApi, portalGovReviewApiReadOnly, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
+import { getPortalGovCockpitFull, portalGovCockpitApi, portalGovStudioApi, portalGovReviewApiReadOnly, portalGovReviewApiAuthor, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
 import StudioShell from './proposalStudio/StudioShell';
 
 /**
@@ -48,8 +48,10 @@ export default function GovProjectPortalPage(): React.ReactElement {
 
   return (
     <div className="container-fluid py-4" data-testid="gov-project-view">
+      {/* Phase B: an EDIT-shared intern (view.proposal.canEdit, auto-granted when assigned the build) AUTHORS the
+          proposal lane — author reviewApi + proposalAuthoring. Without the share, both fall back to read-only. */}
       <StudioShell view={view} projectId={view.projectId} onReload={() => void load()} cockpitApi={portalGovCockpitApi} studioApi={portalGovStudioApi}
-        reviewApi={portalGovReviewApiReadOnly} readOnly
+        reviewApi={view.proposal?.canEdit ? portalGovReviewApiAuthor : portalGovReviewApiReadOnly} readOnly proposalAuthoring={view.proposal?.canEdit === true}
         bugReportEndpoint={`/api/portal/gov-projects/${encodeURIComponent(view.projectId)}/bug-report`} />
     </div>
   );

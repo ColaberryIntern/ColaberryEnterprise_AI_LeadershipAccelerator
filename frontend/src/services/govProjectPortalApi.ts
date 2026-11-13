@@ -560,3 +560,63 @@ export const portalGovReviewApiReadOnly: GovReviewApi = {
   uploadSignedForm: async () => readOnlyReviewWrite(),
   assemblePackage: async () => readOnlyReviewWrite(),
 };
+
+// ── Phase B: AUTHOR writes — an EDIT-shared intern AUTHORS the proposal via the B.9 participant routes ──────────
+async function authorEditGovDocument(projectId: string, docKey: string, contentHtml: string): Promise<{ saved: boolean; passes: boolean; resumed: boolean }> {
+  const { data } = await portalApi.post<{ saved?: boolean; passes?: boolean; resumed?: boolean }>(`${portalBase(projectId)}/documents/${encodeURIComponent(docKey)}/edit`, { contentHtml });
+  return { saved: !!data?.saved, passes: !!data?.passes, resumed: !!data?.resumed };
+}
+async function authorSaveGovSectionPlan(projectId: string, docKey: string, sectionKey: string, plan: GovSectionPlanFields): Promise<{ document: GovProposalDocument }> {
+  const { data } = await portalApi.put<{ document: GovProposalDocument }>(`${portalBase(projectId)}/documents/${encodeURIComponent(docKey)}/sections/${encodeURIComponent(sectionKey)}/plan`, plan);
+  return data;
+}
+async function authorRunGovChecks(projectId: string, docKey: string): Promise<GovCheckRunResult> {
+  const { data } = await portalApi.post<{ result: GovCheckRunResult }>(`${portalBase(projectId)}/documents/${encodeURIComponent(docKey)}/run-checks`, {});
+  return data.result;
+}
+async function authorInsertGovFigure(projectId: string, docKey: string, artifactId: string): Promise<{ document: GovProposalDocument }> {
+  const { data } = await portalApi.post<{ document: GovProposalDocument }>(`${portalBase(projectId)}/documents/${encodeURIComponent(docKey)}/insert-figure`, { artifactId });
+  return data;
+}
+async function authorRecaptureGovStory(projectId: string, storyId: string): Promise<unknown> {
+  const { data } = await portalApi.post(`${portalBase(projectId)}/stories/${encodeURIComponent(storyId)}/recapture`, {});
+  return data;
+}
+/** Phase B: an EDIT-shared intern re-reads the stored solicitation ZIP (the StudioShell onReanalyze for the intern). */
+export async function authorReanalyzeGovBlueprint(projectId: string): Promise<unknown> {
+  const { data } = await portalApi.post(`${portalBase(projectId)}/blueprint/reanalyze`, {});
+  return data;
+}
+
+/**
+ * AUTHOR reviewApi for the intern cockpit (Phase B): the author-safe writes (edit, section plan, run-checks,
+ * recapture, insert-figure) are REAL and hit the B.9 participant routes; the REVIEWER/EXPORT writes (decideGate,
+ * setDemoUrl, uploadSignedForm, assemblePackage, runReviewCycle, answerQuestion) are throw-stubbed to satisfy the
+ * required GovReviewApi type while the authoring UI never offers them to the intern; `decideGold` is OMITTED so the
+ * Gold decision renders nothing. Deep reviewer reads (version list/diff) stay empty — there is no participant route
+ * for them — so the intern authors against the live document without the reviewer drill-downs.
+ */
+export const portalGovReviewApiAuthor: GovReviewApi = {
+  // ── reads ──
+  listReview: async () => ({ versions: [], gates: [] }),
+  diffVersions: async () => ({ segments: [] }),
+  fetchArtifactImage: fetchGovArtifactImage,
+  listSignatures: async (projectId: string) => {
+    const { data } = await portalApi.get<{ signatures: GovSignatureView[] }>(`${portalBase(projectId)}/package/signatures`);
+    return data;
+  },
+  // ── author-safe writes (REAL, B.9 participant routes) ──
+  runChecks: authorRunGovChecks,
+  insertFigure: authorInsertGovFigure,
+  recapture: authorRecaptureGovStory,
+  editDocument: authorEditGovDocument,
+  saveSectionPlan: authorSaveGovSectionPlan,
+  // ── forbidden writes: throw-stubbed (required by the type, never offered to the intern) ──
+  decideGate: async () => readOnlyReviewWrite(),
+  setDemoUrl: async () => readOnlyReviewWrite(),
+  uploadSignedForm: async () => readOnlyReviewWrite(),
+  assemblePackage: async () => readOnlyReviewWrite(),
+  runReviewCycle: async () => readOnlyReviewWrite(),
+  answerQuestion: async () => readOnlyReviewWrite(),
+  // decideGold OMITTED (optional) ⇒ the Gold decision renders nothing for the intern
+};
