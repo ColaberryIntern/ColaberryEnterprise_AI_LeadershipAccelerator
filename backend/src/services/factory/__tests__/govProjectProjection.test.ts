@@ -179,6 +179,8 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.connectedRepo).toEqual({
       owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records',
       files: ['src/index.ts', 'README.md'], fileCount: 2, syncedAt: '2026-11-13T00:00:00.000Z', // trees excluded, blobs only
+      // README.md is a deliverable document (text); src/index.ts is source, excluded from the cards
+      deliverables: [{ path: 'README.md', name: 'README.md', kind: 'text' }],
     });
     // looked up by the build track's student project id, never a leak of it or any secret into the payload
     expect(ghcFindOne).toHaveBeenCalledWith({ where: { project_id: 'sp-SECRET' } });
@@ -192,7 +194,40 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     dpFindByPk.mockResolvedValue(projectRow);
     ghcFindOne.mockResolvedValue({ repo_owner: 'o', repo_name: 'r', repo_url: 'u', file_tree_json: { tree: 'not-an-array' } });
     const v = await getStudentGovProjectView('dp-1', false, 'id-1');
-    expect(v!.connectedRepo).toMatchObject({ owner: 'o', name: 'r', files: [], fileCount: 0, syncedAt: null });
+    expect(v!.connectedRepo).toMatchObject({ owner: 'o', name: 'r', files: [], fileCount: 0, syncedAt: null, deliverables: [] });
+  });
+
+  it('connectedRepo.deliverables: cards only deliverable DOCUMENTS (pdf/word/excel/ppt/html/md/csv), classified; source files excluded', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    ghcFindOne.mockResolvedValue({
+      repo_owner: 'o', repo_name: 'r', repo_url: 'u',
+      file_tree_json: { tree: [
+        { path: 'docs/data-flow-diagram.docx', type: 'blob' },
+        { path: 'docs/budget.xlsx', type: 'blob' },
+        { path: 'docs/cover.pdf', type: 'blob' },
+        { path: 'docs/deck.pptx', type: 'blob' },
+        { path: 'public/index.html', type: 'blob' },
+        { path: 'README.md', type: 'blob' },
+        { path: 'data/records.csv', type: 'blob' },
+        { path: 'server/auth.js', type: 'blob' },   // source — excluded
+        { path: '.env', type: 'blob' },              // secret — excluded
+        { path: 'src', type: 'tree' },               // tree — excluded
+      ] },
+      file_count: 10,
+    });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.connectedRepo!.deliverables).toEqual([
+      { path: 'docs/data-flow-diagram.docx', name: 'data-flow-diagram.docx', kind: 'word' },
+      { path: 'docs/budget.xlsx', name: 'budget.xlsx', kind: 'spreadsheet' },
+      { path: 'docs/cover.pdf', name: 'cover.pdf', kind: 'pdf' },
+      { path: 'docs/deck.pptx', name: 'deck.pptx', kind: 'slides' },
+      { path: 'public/index.html', name: 'index.html', kind: 'html' },
+      { path: 'README.md', name: 'README.md', kind: 'text' },
+      { path: 'data/records.csv', name: 'records.csv', kind: 'csv' },
+    ]);
+    const paths = v!.connectedRepo!.deliverables.map((d) => d.path);
+    expect(paths).not.toContain('server/auth.js');
+    expect(paths).not.toContain('.env');
   });
 
   it('connectedRepo: null when the build track has a connection row but no repo set', async () => {

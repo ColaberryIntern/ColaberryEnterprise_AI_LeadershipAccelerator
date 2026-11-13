@@ -19,6 +19,7 @@ import type { ProposalDocumentSection, ProposalDocType } from './proposal/govPro
 import type { ProposalBlueprint } from './proposal/proposalBlueprintTypes';
 import type { CheckScores, GovProposalGate, GateStatus } from './proposal/proposalReviewTypes';
 import { proposalReadiness, type ProposalReadiness } from './proposal/proposalReadiness';
+import type { RepoDeliverable } from './repoDeliverables';
 import type { VersionView, GateView } from './proposal/govProposalReviewStore';
 import type { ReviewRunView } from './proposal/govProposalReviewRunStore';
 import type { ProposalDocumentView } from './proposal/govProposalDocumentStore';
@@ -170,8 +171,10 @@ export interface StudentGovProjectView {
    *  the `solution_build` track's student project's GitHub connection. `files` are the repo's blob paths (capped),
    *  `fileCount` the true total, `syncedAt` when the tree was last synced. Lets the cockpit confirm "we are in sync"
    *  and show what was built, without offering to add a URL. Null when no repo is linked. Carries NO token, secret,
-   *  or identity (paths only). Optional on older backends. */
-  connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null } | null;
+   *  or identity (paths only). `deliverables` are the subset that are deliverable DOCUMENTS (pdf/word/excel/
+   *  ppt/html/md/csv/text), classified for the card + per-type viewer treatment (source files excluded).
+   *  Optional on older backends. */
+  connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null; deliverables: RepoDeliverable[] } | null;
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
    *  (pricing) are dropped for non-reviewers. Each carries the B.1 per-doc summary (latest/gates/currentGate/
    *  openGapCount/fatalCount/cycle), batch-loaded. */
@@ -582,32 +585,11 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
   // so the cockpit can confirm "we are in sync" instead of asking for a URL. Best-effort; carries no token/secret/
   // identity (only owner/name/url). Stays null when no repo is linked. Rides the same membership-guarded projection.
   try {
-    const buildTrack = (Array.isArray(tracks) ? tracks : []).find(
-      (t) => String(t?.track_type ?? '') === 'solution_build' && t?.solution_student_project_id,
-    );
-    const studentProjectId = buildTrack ? String(buildTrack.solution_student_project_id) : null;
-    if (studentProjectId) {
-      const { default: GitHubConnection } = await import('../../models/GitHubConnection');
-      const conn: any = await GitHubConnection.findOne({ where: { project_id: studentProjectId } });
-      if (conn && conn.repo_owner && conn.repo_name) {
-        // Deliverable files = the synced tree's blob paths (never a live GitHub call), capped to protect the payload.
-        // A malformed/absent tree yields an empty list rather than throwing.
-        let files: string[] = [];
-        try {
-          const tree = conn.file_tree_json?.tree;
-          if (Array.isArray(tree)) {
-            files = tree.filter((t: any) => t?.type === 'blob' && t?.path).map((t: any) => String(t.path)).slice(0, 300);
-          }
-        } catch { files = []; }
-        const fileCount = typeof conn.file_count === 'number' ? conn.file_count : files.length;
-        const syncedAt = conn.last_sync_at ? new Date(conn.last_sync_at).toISOString() : null;
-        view.connectedRepo = { owner: String(conn.repo_owner), name: String(conn.repo_name), url: String(conn.repo_url ?? ''), files, fileCount, syncedAt };
-      } else {
-        view.connectedRepo = null;
-      }
-    } else {
-      view.connectedRepo = null;
-    }
+    // One resolver, shared with the per-file content endpoint, so the cards shown here and the files that
+    // endpoint will serve can never drift. Reuses the already-loaded tracks. deliverables = the classified
+    // deliverable DOCUMENTS (source files excluded); carries no token/secret/identity.
+    const { resolveConnectedRepo } = await import('./govConnectedRepo');
+    view.connectedRepo = await resolveConnectedRepo(deliveryProjectId, tracks);
   } catch { /* additive; connectedRepo stays undefined/null */ }
 
   // v2 Proposal view: derive the named documents from the established requirements, SYNC them into the store
