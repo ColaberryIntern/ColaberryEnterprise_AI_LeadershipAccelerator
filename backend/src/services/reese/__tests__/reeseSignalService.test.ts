@@ -33,6 +33,7 @@ const ENROLLMENT_ID = 'student-1';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockNavEventFindAll.mockResolvedValue([]); // no portal visits unless a test says so
   jest.useFakeTimers().setSystemTime(NOW);
 });
 afterEach(() => {
@@ -90,16 +91,61 @@ describe('evaluateInactivitySignal — boundary values', () => {
     expect(result).toBeNull();
   });
 
-  it('completion just under the 20% threshold (1/6 ≈ 17%) -> fires', async () => {
+  it('low completion on an ACTIVE student does not fire (13 Nov 2026: active learners were told they had done nothing)', async () => {
     const rows = [
       { status: 'completed', updated_at: NOW },
       ...Array.from({ length: 5 }, () => ({ status: 'in_progress', updated_at: NOW })), // 1/6 ≈ 16.7% < 20
     ];
     mockProgressFindAll.mockResolvedValue(rows);
     const result = await evaluateInactivitySignal(ENROLLMENT_ID);
+    expect(result).toBeNull();
+  });
+
+  it('low completion on an INACTIVE student is reported alongside the inactivity reason', async () => {
+    const old = new Date(NOW.getTime() - 9 * DAY_MS);
+    const rows = [
+      { status: 'completed', updated_at: old },
+      ...Array.from({ length: 5 }, () => ({ status: 'in_progress', updated_at: old })),
+    ];
+    mockProgressFindAll.mockResolvedValue(rows);
+    const result = await evaluateInactivitySignal(ENROLLMENT_ID);
     expect(result).not.toBeNull();
     expect(result!.completionPct).toBeLessThan(20);
+    expect(result!.reasons.some((r) => r.includes('No activity'))).toBe(true);
     expect(result!.reasons.some((r) => r.includes('Low progress'))).toBe(true);
+  });
+
+  it('`available` rows (cards the platform unlocked) count neither toward completion nor as activity', async () => {
+    const old = new Date(NOW.getTime() - 9 * DAY_MS);
+    mockProgressFindAll.mockResolvedValue([
+      { status: 'completed', updated_at: old },
+      // 1,590 unlocked-but-untouched rows, freshly stamped by the platform today: the shape that read as 0.6%
+      ...Array.from({ length: 1590 }, () => ({ status: 'available', updated_at: NOW })),
+    ]);
+    const result = await evaluateInactivitySignal(ENROLLMENT_ID);
+    expect(result).not.toBeNull();
+    expect(result!.totalCards).toBe(1);
+    expect(result!.completionPct).toBe(100);
+    expect(Math.floor(result!.daysSinceActive!)).toBe(9); // the platform's stamp is not the student's activity
+  });
+
+  it('a recent portal visit is activity: no signal even with no card movement', async () => {
+    mockProgressFindAll.mockResolvedValue([{ status: 'completed', updated_at: new Date(NOW.getTime() - 20 * DAY_MS) }]);
+    mockNavEventFindAll.mockResolvedValue([{ created_at: new Date(NOW.getTime() - 60 * 60 * 1000) }]);
+    const result = await evaluateInactivitySignal(ENROLLMENT_ID);
+    expect(result).toBeNull();
+    expect(mockNavEventFindAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { enrollment_id: ENROLLMENT_ID }, order: [['created_at', 'DESC']], limit: 1,
+    }));
+  });
+
+  it('an old portal visit does not mask inactivity', async () => {
+    mockProgressFindAll.mockResolvedValue([]);
+    mockNavEventFindAll.mockResolvedValue([{ created_at: new Date(NOW.getTime() - 8 * DAY_MS) }]);
+    const result = await evaluateInactivitySignal(ENROLLMENT_ID);
+    expect(result).not.toBeNull();
+    expect(Math.floor(result!.daysSinceActive!)).toBe(8);
+    expect(mockEnrollmentFindByPk).not.toHaveBeenCalled(); // the visit is the baseline, not enrolled_at
   });
 
   it('zero progress rows -> falls back to Enrollment.enrolled_at, never throws', async () => {

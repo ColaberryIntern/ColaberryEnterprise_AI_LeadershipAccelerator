@@ -2,6 +2,8 @@
  * todayFeedServeFilters — the serve-time lookups that decide which materialised Today items are still shown:
  * completed cards, cards no longer published, and ambient items whose points were already collected.
  *
+ * Also: community posts the student can no longer open (another cohort, or removed).
+ *
  * Moved verbatim out of todayFeedComposer.ts (C107, Nov 2026): that file was over the 500-line ceiling and C107 adds
  * to it. Every function here is fail-soft in the direction that keeps content on the page.
  */
@@ -85,6 +87,43 @@ export async function unservableCardIds(cardIds: string[]): Promise<Set<string>>
     );
   } catch (err: any) {
     console.warn('[todayFeedComposer] servable lookup failed:', err?.message?.split('\n')[0]);
+    return new Set();
+  }
+}
+
+const COMMUNITY_PREFIX = 'community:';
+
+/**
+ * Community refs the student can no longer open: the post sits in ANOTHER cohort, or staff removed it.
+ *
+ * Same root cause as unservableCardIds above: the feed replays a frozen snapshot, and nothing re-asked whether the
+ * post was still the student's. A learner who moved cohort (an Explorer who paid, a learner moved to a later batch)
+ * kept every post placed under the old cohort, and opening one answered 403 "This post belongs to a different
+ * cohort" (communityService.requireVisiblePostInCohort). Measured on production 12 Nov 2026: 391 such impressions
+ * across 75 learners, plus 11 removed posts across 9.
+ *
+ * The rule is the one the post route enforces, so the feed never offers what the route refuses. POSITIVE
+ * IDENTIFICATION ONLY, as above: a ref is dropped when its post row came back AND that row says other-cohort or
+ * removed. A missing row, a missing enrollment, or a failed lookup keeps the item.
+ */
+export async function unreachableCommunityRefs(enrollmentId: string, refs: string[]): Promise<Set<string>> {
+  const ids = Array.from(new Set(refs.filter((r) => r.startsWith(COMMUNITY_PREFIX)).map((r) => r.slice(COMMUNITY_PREFIX.length))));
+  if (!ids.length) return new Set();
+  try {
+    const rows = await sequelize.query<{ id: string; cohort_id: string | null; status: string | null; viewer_cohort: string | null }>(
+      `SELECT p.id, p.cohort_id, p.status, e.cohort_id AS viewer_cohort
+         FROM community_posts p
+         CROSS JOIN (SELECT cohort_id FROM enrollments WHERE id = :eid) e
+        WHERE p.id IN (:ids)`,
+      { replacements: { eid: enrollmentId, ids }, type: QueryTypes.SELECT },
+    );
+    return new Set(
+      rows
+        .filter((r) => r.status === 'removed' || (r.viewer_cohort != null && r.cohort_id !== r.viewer_cohort))
+        .map((r) => `${COMMUNITY_PREFIX}${r.id}`),
+    );
+  } catch (err: any) {
+    console.warn('[todayFeedComposer] community reachability lookup failed:', err?.message?.split('\n')[0]);
     return new Set();
   }
 }

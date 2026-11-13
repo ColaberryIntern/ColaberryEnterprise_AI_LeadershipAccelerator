@@ -33,7 +33,7 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import { completedCardIds, unservableCardIds, collectedAmbientRefs } from './todayFeedServeFilters';
+import { completedCardIds, unservableCardIds, collectedAmbientRefs, unreachableCommunityRefs } from './todayFeedServeFilters';
 import { isStarterFeedLearner, pickStarterItems } from './todayStarterFeed';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
@@ -303,15 +303,17 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
  */
 async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed?: number): Promise<TodayFeedItem[]> {
   const cardIds = existing.map((r) => r.card_id).filter((x): x is string => !!x);
-  const [completed, collectedAmbient, unservable] = await Promise.all([
+  const [completed, collectedAmbient, unservable, unreachable] = await Promise.all([
     completedCardIds(enrollmentId, cardIds),
     collectedAmbientRefs(enrollmentId, existing.map((r) => r.ref)),
     unservableCardIds(cardIds),
+    unreachableCommunityRefs(enrollmentId, existing.map((r) => r.ref)),
   ]);
   const items = existing
     .filter((r) => !(r.card_id && completed.has(r.card_id)))                        // completed via progress
     .filter((r) => !(r.card_id && unservable.has(r.card_id)))                       // no longer published — every action would 404
     .filter((r) => !collectedAmbient.has(r.ref))                                   // blog/podcast/testimonial points already collected
+    .filter((r) => !unreachable.has(r.ref))                                        // community post in another cohort, or removed — opening it would 403/404
     .filter((r) => (r.item as TodayFeedItem | null)?.status !== 'completed')        // snapshot already completed (project/etc.)
     .map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
   return seed != null ? orderForVisit(items, seed) : items;
