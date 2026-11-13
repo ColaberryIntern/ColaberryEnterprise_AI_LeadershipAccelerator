@@ -55,6 +55,16 @@ export interface BackendTaskNode {
    * `verified_at`: an older server simply has no price tags.
    */
   points?: number | null;
+  /**
+   * The story's brief: the prose meant to be read before the prompt.
+   *
+   * Optional for the same reason as the two above — an older server does not send it,
+   * and the page falls back to `description`. On agent-domain boards `description` is a
+   * copy of `title` (the provisioner binds `s.title` into both columns), so until this
+   * field existed a builder opened a story, saw its title twice, and then read a prompt
+   * telling her to "read the brief above this prompt". There was no brief to read.
+   */
+  narrative?: string | null;
 }
 export interface BackendListNode {
   id: string;
@@ -272,7 +282,9 @@ export function adoptServerTasks(p: StudentProject, tree: BackendProjectTree): S
 function serverContentOf(t: BackendTaskNode): Partial<ProjectTask> {
   const out: Partial<ProjectTask> = {};
   if (t.title) out.title = t.title;
-  if (t.description) out.what = t.description;
+  // The brief first, the legacy column second. On agent-domain boards `description` is
+  // the title, so preferring it would keep showing the title where the brief belongs.
+  if (t.narrative || t.description) out.what = t.narrative || t.description || undefined;
   if (t.build) out.prompt = t.build;
   if (t.requirement_key) out.req = t.requirement_key;
   if (t.owner_agent) out.owner = t.owner_agent;
@@ -621,7 +633,8 @@ function taskFromServer(t: BackendTaskNode, due: TaskDue): ProjectTask {
   return {
     id: t.id,
     title: t.title || 'Task',
-    what: t.description || undefined,
+    // Brief first, legacy `description` as the fallback. See BackendTaskNode.narrative.
+    what: t.narrative || t.description || undefined,
     prompt: t.build || undefined,
     req: t.requirement_key || undefined,
     acceptance: asAcceptance(t.acceptance),

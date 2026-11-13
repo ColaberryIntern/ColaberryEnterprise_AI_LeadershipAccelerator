@@ -29,6 +29,23 @@ export interface ProjectTaskDto {
   requirement_map_id: string | null;
   title: string;
   description: string | null;
+  /**
+   * The story's brief: the prose a builder is meant to read BEFORE the prompt.
+   *
+   * Added 2026-11-13 because it was missing, and its absence silently broke every
+   * agent-domain builder. `agentDomainProvisioner.ts` binds `s.title` into both `title`
+   * and `description`, so on those boards `description` is a ~40-character title and the
+   * real 800-1,250 character brief sits in `narrative` alone. This DTO did not carry
+   * `narrative`, so the brief never crossed the wire, and the workspace page rendered the
+   * title twice -- then showed a prompt whose first instruction is "read the brief above
+   * this prompt on the story page". The prompt deliberately omits the domain's counts,
+   * accountable human and employee so there is exactly one copy of each figure, and that
+   * one copy was unreachable. A builder reported it as "there is no brief".
+   *
+   * Nullable because SBP projects put the same text in both columns and non-agent-domain
+   * rows may have neither; the page falls back rather than rendering an empty slot.
+   */
+  narrative: string | null;
   status: string;
   position: number;
   owner_agent: string | null;
@@ -456,6 +473,7 @@ export function toTaskDto(t: Plain, pointsByStory?: ReadonlyMap<string, number>)
     requirement_map_id: t.requirement_map_id ?? null,
     title: t.title ?? '',
     description: t.description ?? null,
+    narrative: t.narrative ?? null,
     status: t.status ?? 'not_started',
     position: Number(t.position ?? 0),
     owner_agent: t.owner_agent ?? null,

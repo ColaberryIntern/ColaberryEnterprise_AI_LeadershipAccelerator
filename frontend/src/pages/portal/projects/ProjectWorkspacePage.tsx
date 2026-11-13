@@ -12,6 +12,9 @@ import {
 import { foldConnect } from './foldConnect';
 import { repoConnectionState } from './WorkspaceRepoPanel';
 import HowToBuild from './HowToBuild';
+// The story brief is generated Markdown. RecordProse already renders exactly this kind of
+// content (and was written for the same bug on the capstone page), so it is reused here.
+import RecordProse from '../../../components/capstone/RecordProse';
 import { refreshProjectsFromBackend } from './projectSync';
 import StaleCopyBanner from './StaleCopyBanner';
 import { useStoryVerification } from './useStoryVerification';
@@ -322,8 +325,17 @@ const ProjectWorkspacePage: React.FC = () => {
               the page should read like a sentence someone wrote you. This used
               to be a card identical to the two below it, which left all three
               competing for the same attention and none of them winning. */}
+          {/* THE BRIEF IS MARKDOWN, so it is rendered as Markdown.
+              It used to be a bare `<p>`, which was adequate while `what` was a one-line
+              `description`. It is not adequate now that `what` prefers `narrative`: the
+              brief is generated Markdown with bold, backticks and hard line breaks, and a
+              `<p>` shows every `**` literally and collapses the paragraphs into one wall.
+              RecordProse exists for exactly this fault (found the same way, on the public
+              capstone page) and carries the generated-line-break plugin, so it is reused
+              rather than reinvented. It renders no raw HTML, which is the right default
+              for text this page did not author. */}
           <section className="rt-lead">
-            <p>{task.what || task.title}</p>
+            {task.what ? <RecordProse>{task.what}</RecordProse> : <p>{task.title}</p>}
             {task.req && <span className="rt-req">Fulfils {task.req}</span>}
           </section>
 
