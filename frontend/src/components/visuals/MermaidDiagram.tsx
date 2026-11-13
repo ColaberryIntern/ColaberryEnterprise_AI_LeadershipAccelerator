@@ -37,6 +37,9 @@ const MERMAID_CDN =
 
 type RenderState = 'loading' | 'ready' | 'error';
 
+/** Serializes mermaid.render() calls across every diagram on the page (see the effect below). */
+let renderQueue: Promise<void> = Promise.resolve();
+
 function MermaidDiagram({ chart, caption, id }: MermaidDiagramProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const reactId = useId();
@@ -67,14 +70,24 @@ function MermaidDiagram({ chart, caption, id }: MermaidDiagramProps): React.Reac
           throw new Error('Mermaid module did not expose a render() function');
         }
 
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'base',
-          themeVariables: THEME_VARIABLES,
+        // ONE RENDER AT A TIME. mermaid.render() lays the diagram out in a temporary
+        // element keyed by id. Two overlapping renders (React StrictMode runs this
+        // effect twice in development; two diagrams can mount together) measured
+        // each other's labels and produced overlapping, truncated nodes. Renders are
+        // chained, and a render whose effect was already cleaned up is skipped.
+        const run = renderQueue.then(async () => {
+          if (cancelled) return null;
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: THEME_VARIABLES,
+          });
+          return (await mermaid.render(`${diagramId}-svg`, chart)) as { svg: string };
         });
-
-        const { svg } = await mermaid.render(`${diagramId}-svg`, chart);
-        if (cancelled) return;
+        renderQueue = run.then(() => undefined, () => undefined);
+        const out = await run;
+        if (cancelled || !out) return;
+        const { svg } = out;
 
         if (containerRef.current) {
           containerRef.current.innerHTML = svg;

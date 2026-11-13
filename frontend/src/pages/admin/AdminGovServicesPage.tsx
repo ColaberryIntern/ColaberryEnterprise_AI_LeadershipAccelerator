@@ -1,240 +1,206 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageHeader, SectionCard, StatCard } from '../../components/admin/shell';
-import {
-  listServiceOfferings, createServiceOffering, updateServiceOffering, retireServiceOffering,
-  type ServiceOffering, type ServiceOfferingInput,
-} from '../../services/factoryApi';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { PageHeader, SectionCard } from '../../components/admin/shell';
+import type { ServiceOffering } from '../../services/factoryApi';
+import type { EvidenceService } from '../../services/ourServicesApi';
 import ServiceEvidencePanel from '../../components/admin/ServiceEvidencePanel';
+import OurServicesKpiRow from '../../components/admin/ourServices/OurServicesKpiRow';
+import DecideNowStrip, { type DecideTarget } from '../../components/admin/ourServices/DecideNowStrip';
+import ServicesLifecycleDiagram from '../../components/admin/ourServices/ServicesLifecycleDiagram';
+import ServiceEvidenceBarChart from '../../components/admin/ourServices/ServiceEvidenceBarChart';
+import ServiceInvestQuadrant from '../../components/admin/ourServices/ServiceInvestQuadrant';
+import EvidenceTierDonut from '../../components/admin/ourServices/EvidenceTierDonut';
+import CatalogGrowthChart from '../../components/admin/ourServices/CatalogGrowthChart';
+import ServiceFamilyChart from '../../components/admin/ourServices/ServiceFamilyChart';
+import ServiceCatalogTable, { CatalogFilterTabs, type CatalogFilter } from '../../components/admin/ourServices/ServiceCatalogTable';
+import ServiceIndustryHeatmap from '../../components/admin/ourServices/ServiceIndustryHeatmap';
+import CaseStudyIntakeQueue, { IntakeLegend } from '../../components/admin/ourServices/CaseStudyIntakeQueue';
+import OutsideCaseStudyImportModal from '../../components/admin/ourServices/OutsideCaseStudyImportModal';
+import ProposalGapsPanel from '../../components/admin/ourServices/ProposalGapsPanel';
+import ServiceFormModal, { emptyForm, formFrom, inputFrom, type FormState } from '../../components/admin/ourServices/ServiceFormModal';
+import { useOurServicesData } from '../../components/admin/ourServices/useOurServicesData';
+import { buildKpis, centralYear, nonRetired } from '../../components/admin/ourServices/ourServicesModel';
 
 /**
- * AdminGovServicesPage — "Our Services": the catalog of what Colaberry offers, so a government opportunity can be
- * matched against it (the deterministic matcher is a separate, advisory feature). View / add / edit / retire.
- * A service is RETIRED (hidden from the active list), never deleted. Tenant-scoped on the server.
- * Design: Bootstrap 5 + admin-shell + RemixIcon; colors via tokens / Bootstrap utilities, no hardcoded hex.
+ * AdminGovServicesPage - "Our Services", the evidence-backed catalog (Services Upgrade SV3). A thin composer: the
+ * data and every write live in `useOurServicesData`, each section is its own component under
+ * components/admin/ourServices/. Section order follows the design mockup: KPIs, Decide now, How it grows,
+ * evidence charts, catalog, industry heatmap, Intake, proposal gaps.
+ *
+ * Every number comes from GET /api/admin/factory/services/evidence-summary; nothing here is sample data. A service
+ * is RETIRED, never deleted. Tenant-scoped on the server.
  */
-
-type StatusFilter = 'active' | 'growth' | 'all';
 type Editing = ServiceOffering | 'new' | null;
 
-const parseList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter(Boolean);
-const joinList = (xs: string[] | null | undefined): string => (xs && xs.length ? xs.join(', ') : '');
+const SECTION_IDS: Record<DecideTarget, string> = { intake: 'intake', gaps: 'gaps', quad: 'quad', catalog: 'catalog' };
 
-interface FormState { name: string; category: string; description: string; keywords: string; naicsCodes: string; pscCodes: string; pastPerformance: string; owner: string; }
-const emptyForm: FormState = { name: '', category: '', description: '', keywords: '', naicsCodes: '', pscCodes: '', pastPerformance: '', owner: '' };
-const formFrom = (s: ServiceOffering): FormState => ({
-  name: s.name ?? '', category: s.category ?? '', description: s.description ?? '',
-  keywords: joinList(s.keywords), naicsCodes: joinList(s.naicsCodes), pscCodes: joinList(s.pscCodes),
-  pastPerformance: s.pastPerformance ?? '', owner: s.owner ?? '',
-});
-const inputFrom = (f: FormState): ServiceOfferingInput => ({
-  name: f.name.trim(), category: f.category.trim() || undefined, description: f.description.trim() || undefined,
-  keywords: parseList(f.keywords), naicsCodes: parseList(f.naicsCodes), pscCodes: parseList(f.pscCodes),
-  pastPerformance: f.pastPerformance.trim() || undefined, owner: f.owner.trim() || undefined,
-});
-
-/** The add/edit modal (React-controlled; no bootstrap JS). */
-function ServiceForm({ initial, title, onCancel, onSave, saving }: {
-  initial: FormState; title: string; onCancel: () => void; onSave: (f: FormState) => void; saving: boolean;
-}): React.ReactElement {
-  const [f, setF] = useState<FormState>(initial);
-  const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onCancel]);
-  return (
-    <div className="modal fade show d-block" tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
-      style={{ background: 'rgba(0,0,0,.5)' }} onClick={onCancel}>
-      <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable" role="document" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">{title}</h5>
-            <button type="button" className="btn-close" aria-label="Close" onClick={onCancel} />
-          </div>
-          <form onSubmit={(e) => { e.preventDefault(); if (f.name.trim()) onSave(f); }}>
-            <div className="modal-body">
-              <div className="row g-3">
-                <div className="col-md-8">
-                  <label className="form-label" htmlFor="svc-name">Service name <span className="text-danger">*</span></label>
-                  <input id="svc-name" className="form-control" value={f.name} onChange={set('name')} required maxLength={200} autoFocus />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label" htmlFor="svc-category">Category</label>
-                  <input id="svc-category" className="form-control" value={f.category} onChange={set('category')} maxLength={80} placeholder="IT / Consulting / Data / AI" />
-                </div>
-                <div className="col-12">
-                  <label className="form-label" htmlFor="svc-desc">Description</label>
-                  <textarea id="svc-desc" className="form-control" rows={2} value={f.description} onChange={set('description')} maxLength={4000} />
-                </div>
-                <div className="col-12">
-                  <label className="form-label" htmlFor="svc-keywords">Keywords <span className="text-secondary small">(comma-separated — used for matching)</span></label>
-                  <input id="svc-keywords" className="form-control" value={f.keywords} onChange={set('keywords')} placeholder="data analytics, dashboards, ETL, case management" />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label" htmlFor="svc-naics">NAICS codes <span className="text-secondary small">(comma-separated)</span></label>
-                  <input id="svc-naics" className="form-control" value={f.naicsCodes} onChange={set('naicsCodes')} placeholder="541512, 541511" />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label" htmlFor="svc-psc">PSC codes <span className="text-secondary small">(optional)</span></label>
-                  <input id="svc-psc" className="form-control" value={f.pscCodes} onChange={set('pscCodes')} placeholder="D302, R425" />
-                </div>
-                <div className="col-md-8">
-                  <label className="form-label" htmlFor="svc-pastperf">Past performance <span className="text-secondary small">(references / notes)</span></label>
-                  <textarea id="svc-pastperf" className="form-control" rows={2} value={f.pastPerformance} onChange={set('pastPerformance')} maxLength={4000} />
-                </div>
-                <div className="col-md-4">
-                  <label className="form-label" htmlFor="svc-owner">Owner / POC</label>
-                  <input id="svc-owner" className="form-control" value={f.owner} onChange={set('owner')} maxLength={120} placeholder="name or email" />
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-outline-secondary" onClick={onCancel} disabled={saving}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={saving || !f.name.trim()}>
-                {saving ? 'Saving…' : 'Save service'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
+const toOffering = (s: EvidenceService, offerings: ServiceOffering[]): ServiceOffering =>
+  offerings.find((o) => o.id === s.id) ?? { id: s.id, name: s.name, category: s.category, keywords: s.keywords, naicsCodes: s.naicsCodes, status: s.status };
 
 export default function AdminGovServicesPage(): React.ReactElement {
-  const [services, setServices] = useState<ServiceOffering[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<StatusFilter>('active');
+  const data = useOurServicesData();
+  const { summary, offerings } = data;
+  const location = useLocation();
+  const [filter, setFilter] = useState<CatalogFilter>('active');
   const [editing, setEditing] = useState<Editing>(null);
   const [saving, setSaving] = useState(false);
-  /** The service whose case-study evidence is open, if any. */
-  const [evidenceFor, setEvidenceFor] = useState<ServiceOffering | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [evidenceFor, setEvidenceFor] = useState<EvidenceService | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const jumped = useRef(false);
+  // "Now" is the summary's own generation time, so deadlines and "this year" agree with the numbers on screen.
+  const now = useMemo(() => {
+    const t = summary ? new Date(summary.generatedAt) : new Date();
+    return Number.isFinite(t.getTime()) ? t : new Date();
+  }, [summary]);
 
-  const load = useCallback(async (status: StatusFilter) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setServices(await listServiceOfferings(status));
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not load the service catalog.');
-    } finally {
-      setLoading(false);
-    }
+  const jump = useCallback((target: DecideTarget) => {
+    const el = document.getElementById(SECTION_IDS[target]);
+    if (!el) return;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.focus({ preventScroll: true });
   }, []);
 
-  useEffect(() => { void load(filter); }, [load, filter]);
+  // A link into this page with #intake (from the Gov Fit step) lands on the queue once it has loaded.
+  useEffect(() => {
+    if (jumped.current || !summary) return;
+    const hash = location.hash.replace('#', '') as DecideTarget;
+    if (hash in SECTION_IDS) { jumped.current = true; jump(hash); }
+  }, [summary, location.hash, jump]);
 
-  const activeCount = useMemo(() => services.filter((s) => s.status === 'active').length, [services]);
+  const live = useMemo(() => (summary ? nonRetired(summary.services) : []), [summary]);
+  const descriptions = useMemo(() => Object.fromEntries(offerings.map((o) => [o.id, o.description])), [offerings]);
+  const growthIds = useMemo(() => new Set(live.filter((s) => s.status === 'growth').map((s) => s.id)), [live]);
 
   const handleSave = useCallback(async (f: FormState) => {
+    if (!editing) return;
     setSaving(true);
-    setError(null);
-    try {
-      if (editing && editing !== 'new') await updateServiceOffering(editing.id, inputFrom(f));
-      else await createServiceOffering(inputFrom(f));
-      setEditing(null);
-      await load(filter);
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not save the service.');
-    } finally {
-      setSaving(false);
-    }
-  }, [editing, filter, load]);
+    const ok = await data.saveService(editing, inputFrom(f));
+    setSaving(false);
+    if (ok) setEditing(null);
+  }, [editing, data]);
 
-  const handleRetire = useCallback(async (s: ServiceOffering) => {
-    setError(null);
-    try {
-      await retireServiceOffering(s.id);
-      await load(filter);
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Could not retire the service.');
-    }
-  }, [filter, load]);
+  const withBusy = (id: string, fn: () => Promise<void>) => async () => { setBusyId(id); await fn(); setBusyId(null); };
+
+  const blocked = summary?.decideNow.blockedCaseStudies.count ?? 0;
 
   return (
     <div>
       <PageHeader
         title="Our Services"
-        subtitle="The services Colaberry offers · used to match against government opportunities"
-        icon="service-line"
-        actions={<button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><i className="ri-add-line me-1" aria-hidden="true" />Add service</button>}
-      />
-
-      <div className="row g-3 mb-3">
-        <div className="col-6 col-lg-3"><StatCard label="Active services" value={String(activeCount)} icon="service-line" tone="primary" hint="offerings available to match" /></div>
-      </div>
-
-      {error && <div className="alert alert-danger d-flex justify-content-between align-items-center" role="alert"><span>{error}</span><button type="button" className="btn-close" aria-label="Dismiss error" onClick={() => setError(null)} /></div>}
-
-      <SectionCard
-        title="Service catalog"
-        subtitle="Keywords, NAICS and PSC codes drive the (advisory) opportunity match. Retire a service to hide it; it is never deleted."
-        icon="archive-line"
+        subtitle="Every service is backed by real work. Case studies are the evidence the Gov matcher uses."
+        icon="heart-3-line"
         actions={
-          <div className="btn-group btn-group-sm" role="group" aria-label="Status filter">
-            <button type="button" className={`btn ${filter === 'active' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setFilter('active')}>Active</button>
-            <button type="button" className={`btn ${filter === 'growth' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setFilter('growth')}>Growth</button>
-            <button type="button" className={`btn ${filter === 'all' ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => setFilter('all')}>All</button>
+          <div className="d-flex gap-2">
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setImportOpen(true)}><span aria-hidden="true">📥 </span>Add outside case study</button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><i className="ri-add-line me-1" aria-hidden="true" />Add service</button>
           </div>
         }
       >
-        {loading ? (
-          <p className="text-secondary mb-0">Loading services…</p>
-        ) : services.length === 0 ? (
-          <div className="text-center py-4">
-            <i className="ri-service-line fs-2 text-secondary" aria-hidden="true" />
-            <p className="text-secondary mt-2 mb-3">No services yet — add your first offering so opportunities can be matched against it.</p>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><i className="ri-add-line me-1" aria-hidden="true" />Add your first service</button>
+        <p className="small text-secondary mb-0">
+          Case studies come from projects we built (<span className="badge rounded-pill bg-info-subtle text-info-emphasis">🏗️ Inside</span>) or from the Drive library (<span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">📁 Outside</span>).
+        </p>
+      </PageHeader>
+
+      {data.error && (
+        <div className="alert alert-danger d-flex justify-content-between align-items-center gap-2" role="alert">
+          <span>{data.error}</span>
+          <span className="d-flex gap-2">
+            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => { data.dismissError(); void data.reload(); }}>Retry</button>
+            <button type="button" className="btn-close" aria-label="Dismiss error" onClick={data.dismissError} />
+          </span>
+        </div>
+      )}
+      {data.notice && (
+        <div className="alert alert-success d-flex justify-content-between align-items-center" role="status">
+          <span>{data.notice}</span>
+          <button type="button" className="btn-close" aria-label="Dismiss message" onClick={data.dismissNotice} />
+        </div>
+      )}
+
+      {data.loading ? (
+        <p className="text-secondary" role="status">Loading Our Services…</p>
+      ) : !summary ? (
+        <p className="text-secondary">The evidence summary is not available, so no evidence numbers are shown. Retry above.</p>
+      ) : (
+        <>
+          <OurServicesKpiRow kpis={buildKpis(summary)} />
+          <DecideNowStrip summary={summary} now={now} onJump={jump} />
+          <ServicesLifecycleDiagram />
+
+          <div className="row g-3 mb-4">
+            <div className="col-12 col-xl-7">
+              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">📊 </span>Evidence by service</>}
+                subtitle="Confirmed case studies linked to each service, split by source. Sorted weakest first so the gaps sit at the top.">
+                <ServiceEvidenceBarChart services={live} />
+              </SectionCard>
+            </div>
+            <div className="col-12 col-xl-5" id="quad" tabIndex={-1}>
+              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">🎯 </span>Where to invest next</>}
+                subtitle="Evidence strength vs. open Gov opportunities that match. Bubble size is the number of case studies.">
+                <ServiceInvestQuadrant services={live} feed={summary.opportunityFeed} />
+              </SectionCard>
+            </div>
           </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead>
-                <tr className="text-uppercase small text-secondary">
-                  <th>Service</th>
-                  <th style={{ width: 120 }}>Category</th>
-                  <th>Keywords</th>
-                  <th style={{ width: 140 }}>NAICS</th>
-                  <th style={{ width: 140 }}>Owner</th>
-                  <th style={{ width: 250 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.map((s) => (
-                  <tr key={s.id} className={s.status === 'retired' ? 'opacity-50' : undefined}>
-                    <td>
-                      <div className="fw-semibold">{s.name}{s.status === 'retired' && <span className="badge bg-secondary-subtle text-secondary-emphasis ms-2">Retired</span>}{s.status === 'growth' && <span className="badge bg-primary-subtle text-primary-emphasis ms-2">Growth</span>}</div>
-                      {s.description && <div className="small text-secondary">{s.description}</div>}
-                    </td>
-                    <td>{s.category ? <span className="badge bg-secondary-subtle text-secondary-emphasis">{s.category}</span> : <span className="text-secondary">—</span>}</td>
-                    <td className="small text-secondary">{joinList(s.keywords) || '—'}</td>
-                    <td className="small text-secondary">{joinList(s.naicsCodes) || '—'}</td>
-                    <td className="small text-secondary">{s.owner || '—'}</td>
-                    <td>
-                      <div className="d-flex gap-1">
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setEvidenceFor(s)} title="Case studies offered as evidence for this service">
-                          <i className="ri-links-line me-1" aria-hidden="true" />Evidence
-                        </button>
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setEditing(s)}><i className="ri-edit-line me-1" aria-hidden="true" />Edit</button>
-                        {s.status === 'active' && (
-                          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleRetire(s)} title="Hide this service (reversible: edit keeps its data)">
-                            <i className="ri-archive-line me-1" aria-hidden="true" />Retire
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          <div className="row g-3 mb-4">
+            <div className="col-12 col-lg-4">
+              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">🧮 </span>Evidence health</>} subtitle="Services grouped by evidence tier.">
+                <EvidenceTierDonut services={live} />
+              </SectionCard>
+            </div>
+            <div className="col-12 col-lg-4">
+              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">📈 </span>Catalog growth</>} subtitle="Services and linked case studies by quarter.">
+                <CatalogGrowthChart series={summary.growthSeries} />
+              </SectionCard>
+            </div>
+            <div className="col-12 col-lg-4">
+              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">🗺️ </span>Proof by service family</>} subtitle="Linked case studies per family. A short wedge is a thin part of the catalog.">
+                <ServiceFamilyChart services={live} />
+              </SectionCard>
+            </div>
           </div>
-        )}
-      </SectionCard>
+
+          <div id="catalog" tabIndex={-1} className="mb-4">
+            <SectionCard className="mb-0" title={<><span aria-hidden="true">🗂️ </span>Service catalog</>}
+              subtitle="Open a row to see its case studies. Colors show evidence strength and freshness, so weak spots stand out."
+              actions={<CatalogFilterTabs filter={filter} onFilter={setFilter} />}>
+              <ServiceCatalogTable
+                services={summary.services} descriptions={descriptions} currentYear={centralYear(now)} filter={filter} onFilter={setFilter} busyId={busyId}
+                onEvidence={setEvidenceFor}
+                onEdit={(s) => setEditing(toOffering(s, offerings))}
+                onRetire={(s) => void withBusy(s.id, () => data.retire(s.id))()}
+                onPromote={(s) => void withBusy(s.id, () => data.promote(s.id, s.name))()}
+                onAddService={() => setEditing('new')}
+              />
+            </SectionCard>
+          </div>
+
+          <SectionCard className="mb-4" title={<><span aria-hidden="true">🔥 </span>Service × industry coverage</>}
+            subtitle="Confirmed case studies per cell. Darker means more proof; ⚪ means no case study in that industry yet.">
+            <ServiceIndustryHeatmap services={live} matrix={summary.industryMatrix} />
+          </SectionCard>
+
+          <div id="intake" tabIndex={-1} className="mb-4">
+            <SectionCard className="mb-0"
+              title={<><span aria-hidden="true">📥 </span>Case study intake <span className={`badge rounded-pill ms-1 ${blocked ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`}>{blocked ? `${blocked} blocked` : 'all linked ✓'}</span></>}
+              subtitle="New case studies wait here until they are linked. Strong matches start selected; pick one or more services, or propose a new one."
+              actions={<IntakeLegend />}>
+              <CaseStudyIntakeQueue intake={summary.intake} growthServiceIds={growthIds} onLink={data.link} onPropose={data.propose} />
+            </SectionCard>
+          </div>
+
+          <div id="gaps" tabIndex={-1} className="mb-4">
+            <SectionCard className="mb-0" title={<><span aria-hidden="true">🏛️ </span>Gaps from live proposals</>}
+              subtitle={'Capabilities that "Can we deliver it?" flagged as Partly or New. Before treating one as a true gap, check whether we have unlinked proof.'}>
+              <ProposalGapsPanel openFitGaps={summary.decideNow.openFitGaps} services={summary.services} intake={summary.intake} now={now} onReviewIntake={() => jump('intake')} />
+            </SectionCard>
+          </div>
+        </>
+      )}
 
       {editing && (
-        <ServiceForm
+        <ServiceFormModal
           title={editing === 'new' ? 'Add a service' : 'Edit service'}
           initial={editing === 'new' ? emptyForm : formFrom(editing)}
           saving={saving}
@@ -247,8 +213,15 @@ export default function AdminGovServicesPage(): React.ReactElement {
         <ServiceEvidencePanel
           serviceId={evidenceFor.id}
           serviceName={evidenceFor.name}
-          onClose={() => setEvidenceFor(null)}
+          onClose={() => { setEvidenceFor(null); void data.reload(); }}
         />
+      )}
+
+      {importOpen && (
+        <OutsideCaseStudyImportModal onClose={(imported) => {
+          setImportOpen(false);
+          if (imported) void data.reload().then(() => jump('intake'));
+        }} />
       )}
     </div>
   );
