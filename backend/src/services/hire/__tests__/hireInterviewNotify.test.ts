@@ -148,6 +148,16 @@ describe('decline and propose', () => {
     expect(sent()[0].text).toContain('https://hire.refactored.ai/talent/ann-lee/schedule/');
     expect(sent()[0].text).toContain('https://hire.refactored.ai/intro/?talent=ann-lee');
     expect(sent()[0].text).not.toMatch(/student\.test|reply here/);
+    expect(sent()[0].text).not.toMatch(/added a note/);
+  });
+
+  it('a decline note reaches the employer, HTML-escaped in the html body', async () => {
+    row.status = 'declined';
+    row.decline_reason = 'Away until the 30th <b>sorry</b>';
+    await notifyInterviewDeclined(ID);
+    expect(sent()[0].text).toContain('added a note: "Away until the 30th <b>sorry</b>"');
+    expect(sent()[0].html).toContain('Away until the 30th &lt;b&gt;sorry&lt;/b&gt;');
+    expect(sent()[0].html).not.toContain('<b>sorry');
   });
 
   it('a suggested time sends the employer a link that carries a valid accept token', async () => {

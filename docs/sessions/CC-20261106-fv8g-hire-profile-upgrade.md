@@ -205,3 +205,46 @@ with these.
     the portfolio page by design and untouched by this phase). Nothing uploaded or booked as Kes.
   - Notes: captions and coaching stay off until the analysis transport lands (IAM key + AWS SDK,
     Ali's call).
+
+- [x] Phase 6: the five follow-ups (holidays, small thumbnails, headline review, decline note, directory ★)
+  - Date: 2026-11-13
+  - Session: CC-20261106-fv8g
+  - What changed:
+    - Holidays: `openSlots` skips every observed US federal holiday on the candidate's own
+      calendar date, from `govWorkingDays.usFederalHolidays` (the gov build calendar), so the
+      profile's next times, the public slots and the booking re-check all agree.
+    - Small thumbnails: `scripts/case-study-thumbnails/make-small.js` writes a 320x180 copy of every
+      cover to `frontend/public/site-v2/sm/` (39 files, all under 18.3 KB; the originals run to
+      344 KB). The Hire profile's strip loads it (`common.thumbUrl`, lazy, fixed size); the slide
+      keeps the full cover. A hire-site test fails if any cover lacks its small copy (mutation:
+      removing one fails it). README step 5 says to run it.
+    - Headline review: `hireHeadlineReview` + `hireHeadlineController`, admin-only
+      `GET/POST /api/admin/career/hire-headline-drafts[/:enrollmentId]`, and a "Hire headline
+      changes" section on /admin/career-review (hidden for mentors). Approve writes the REVIEWED
+      text to `approved_identity.title` (live on Hire now) and `enrollments.title` (so the next
+      portfolio approval keeps it) in one transaction, and only while the draft still matches
+      (else 409); Decline clears the draft.
+    - Decline note: optional, up to 500 characters (`declineSchema`, strict), stored in the new
+      additive `hire_interviews.decline_reason`, and quoted to the employer in the decline email
+      (HTML-escaped). The studio's Decline now opens a note box and needs a second click.
+    - Directory ★: `signatureFor(cases, order)` is the one rule for the profile and the directory
+      card; the directory reads every listed person's order in ONE query, adds it to the card
+      cache key, and falls back to the featured pick (logged) if that read fails.
+  - Verification: backend tsc clean against a planted control error (only the local maxmind
+    file); test-file typecheck gate (8 GB) clean apart from the same local file; backend jest over
+    hire, routes, controllers, seeds and guards: 6734 pass, 1 failure = the CRLF-only
+    mountLearnerPortalRoutes. New tests: holidays (Thanksgiving, Christmas/New Year across the year,
+    an observed 3 July, a Kolkata-zone date), directory ★ (one read, cache miss on a new ★, withdrawn
+    slug, failed read), decline note (stored, blank = none, 400s, confirm never writes one, email
+    escaped), headline review service + routes (auth through the real router, 400s, 409). Frontend
+    tsc clean against a control error, CI=true build compiles, portfolio jest 91/91, new
+    HireHeadlineReview 3/3. Hire site 132/132. The new SQL ran READ ONLY against production
+    (list query, batched order read, jsonb_set on a literal): all parse; 0 drafts pending today.
+    Real Chrome on a local production build with stubbed APIs: studio decline and admin headline
+    review at 1320/390, light/dark: 0 page errors, no sideways scroll, nothing under 44px; the note
+    reaches the POST body and Approve sends the exact draft. Screenshots:
+    `docs/screenshots/2026-11-13-hire-profile-p6/`.
+  - Notes: assumptions logged: US federal holidays apply to every candidate (the programme is US);
+    headline approval is admin-only like the spotlight; a declined headline is not announced to the
+    candidate (the box simply clears); the note is shared with the employer and the studio says so.
+    Not in scope: live-path visitor categorization of `/talent/<slug>/`.

@@ -181,6 +181,18 @@ export async function readCaseStudyOrder(enrollmentId: string): Promise<string[]
   return arr((await one('SELECT slugs FROM hire_case_study_order WHERE enrollment_id = $1', [enrollmentId]))?.slugs);
 }
 
+/** Many saved orders in ONE read (the directory), keyed by enrollment id; absent = no order. */
+export async function readCaseStudyOrders(enrollmentIds: readonly string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  if (!enrollmentIds.length) return out;
+  const [rows] = await sequelize.query(
+    'SELECT enrollment_id, slugs FROM hire_case_study_order WHERE enrollment_id = ANY($1::uuid[])',
+    { bind: [[...new Set(enrollmentIds)]] },
+  );
+  for (const r of (Array.isArray(rows) ? rows : []) as Row[]) out.set(String(r.enrollment_id), arr(r.slugs));
+  return out;
+}
+
 /** `published` is the learner's published Hire case-study slugs; anything else is a 400. */
 export async function writeCaseStudyOrder(enrollmentId: string, slugs: readonly string[], published: readonly string[]): Promise<string[]> {
   const unique = [...new Set(slugs)];

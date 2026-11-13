@@ -97,3 +97,9 @@
   margin: 14px 0 4px; border: 1px solid var(--border-subtle); border-radius: 12px;
   background: var(--surface, rgba(255,255,255,.02)); overflow: hidden;
 }
+
+/* Hire headline changes: today's headline beside the proposed one. */
+.cr-headline { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 14px; }
+.cr-headline dt { color: var(--muted); font-size: 13px; font-weight: 600; }
+.cr-headline dd { margin: 0; color: var(--body); overflow-wrap: anywhere; }
+.cr-headline-acts .cr-btn { min-height: 44px; }

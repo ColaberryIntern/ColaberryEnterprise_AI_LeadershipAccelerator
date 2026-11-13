@@ -122,6 +122,36 @@ describe('carousel markup', () => {
     assert.doesNotMatch(html, /overflow/);
   });
 
+  test('thumbnails load the small cover, lazily, at a fixed size; the slide keeps the full one', () => {
+    const strip = html.slice(html.indexOf('data-car-thumbs'));
+    assert.match(strip, /<img src="https:\/\/enterprise\.colaberry\.ai\/site-v2\/sm\/thumb-cora-recovery\.jpg\?v=8d" alt="" width="320" height="180" loading="lazy" decoding="async">/);
+    assert.doesNotMatch(strip, /site-v2\/thumb-/, 'no full-size cover in the strip');
+    assert.match(html.slice(0, html.indexOf('data-car-thumbs')), /site-v2\/thumb-cora-recovery\.jpg\?v=8d/, 'the slide itself still shows the full cover');
+  });
+
+  test('thumbUrl: only a pipeline cover on the platform origin is swapped for its small copy', () => {
+    assert.equal(C.thumbUrl(API, '/site-v2/thumb-a.jpg?v=1234abcd'), API + '/site-v2/sm/thumb-a.jpg?v=1234abcd');
+    assert.equal(C.thumbUrl(API, API + '/site-v2/thumb-a.jpg'), API + '/site-v2/sm/thumb-a.jpg');
+    assert.equal(C.thumbUrl(API, '/site-v2/hero.png'), API + '/site-v2/hero.png', 'not a pipeline cover');
+    assert.equal(C.thumbUrl(API, 'https://cdn.x/site-v2/thumb-a.jpg'), 'https://cdn.x/site-v2/thumb-a.jpg', 'another origin is left alone');
+    assert.equal(C.thumbUrl(API, '/uploads/thumb-a.jpg'), API + '/uploads/thumb-a.jpg');
+    assert.equal(C.thumbUrl(API, 'javascript:alert(1)'), '');
+    assert.equal(C.thumbUrl(API, null), '');
+  });
+
+  test('every cover the pipeline made has its small copy in the repo, and it is small', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '..', '..', '..', 'frontend', 'public', 'site-v2');
+    const covers = fs.readdirSync(dir).filter((f) => /^thumb-.+\.jpg$/.test(f));
+    assert.ok(covers.length > 0);
+    for (const f of covers) {
+      const small = path.join(dir, 'sm', f);
+      assert.ok(fs.existsSync(small), f + ' has no small copy: run node scripts/case-study-thumbnails/make-small.js');
+      assert.ok(fs.statSync(small).size < 40 * 1024, f + ' small copy is over 40 KB');
+    }
+  });
+
   test('thumbnail CSS wraps and never scrolls sideways (390px rule)', () => {
     const css = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'assets', 'portfolio.css'), 'utf8');
     const rule = /\.thumbs\{([^}]*)\}/.exec(css);

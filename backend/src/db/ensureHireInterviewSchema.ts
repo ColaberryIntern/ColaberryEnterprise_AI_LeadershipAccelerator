@@ -14,8 +14,8 @@ import { sequelize } from '../config/database';
  *                                booking: false (the default) means the profile keeps "Request
  *                                intro". `max_per_week` NULL means no limit.
  *   hire_case_study_order        one row per enrollment; slugs are validated against the person's
- *                                published Hire case studies on write. The signature still comes
- *                                from the existing field.
+ *                                published Hire case studies on write. The first still-published
+ *                                slug is the signature on the profile AND the directory card.
  *   hire_interviews              one row per request. `starts_at` is UTC. The employer's email
  *                                is stored for Phase 4's notifications and is never returned by
  *                                any public route nor to the candidate.
@@ -99,6 +99,9 @@ export const HIRE_INTERVIEW_STATEMENTS: readonly string[] = [
   // nullable, so dropping them returns the table to its Phase 4 shape.
   `ALTER TABLE hire_profile_intro ADD COLUMN IF NOT EXISTS video_coaching JSONB`,
   `ALTER TABLE hire_profile_intro ADD COLUMN IF NOT EXISTS video_captions_wanted BOOLEAN NOT NULL DEFAULT true`,
+  // Phase 6: the candidate's optional note when they decline, passed to the employer in the
+  // decline email. Additive and nullable.
+  `ALTER TABLE hire_interviews ADD COLUMN IF NOT EXISTS decline_reason TEXT`,
 ];
 
 /** Run by hand to roll Phase 2 back. Never run at boot. */

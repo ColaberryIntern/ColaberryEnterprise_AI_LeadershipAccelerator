@@ -224,9 +224,9 @@
   function thumbs(slides, api) {
     return '<div class="thumbs" data-car-thumbs role="group" aria-label="Jump to a case study">'
       + slides.map(function (s, i) {
-        var url = C.mediaUrl(api, look(s.cs).coverImageUrl);
+        var url = C.thumbUrl(api, look(s.cs).coverImageUrl);
         return '<button type="button" data-car-go="' + i + '" aria-current="' + (i === 0) + '" aria-label="Case study ' + (i + 1) + ': ' + esc(s.cs.title) + '">'
-          + (url ? '<img src="' + esc(url) + '" alt="" decoding="async">' : C.art(s.cs.slug, { n: 6 })) + '</button>';
+          + (url ? '<img src="' + esc(url) + '" alt="" width="320" height="180" loading="lazy" decoding="async">' : C.art(s.cs.slug, { n: 6 })) + '</button>';
       }).join('') + '</div>';
   }
 

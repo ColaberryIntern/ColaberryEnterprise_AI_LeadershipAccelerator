@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { actOnHireInterview, type HireInterview, type InterviewAvailability } from '../../../../services/hireStudioApi';
+import { actOnHireInterview, DECLINE_REASON_MAX, type HireInterview, type InterviewAvailability } from '../../../../services/hireStudioApi';
 import HireAvailabilityPanel from '../HireAvailabilityPanel';
 import { FORMAT_NAME, formatWhen, wallTimeToIso, type ChecklistItem, type Loaded, type StudioSection } from './hireStudioModel';
 import { sectionState } from './HireSectionState';
@@ -31,7 +31,9 @@ interface RowProps { iv: HireInterview; tz: string; caseTitles: Record<string, s
 const RequestRow: React.FC<RowProps> = ({ iv, tz, caseTitles, onDone }) => {
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [when, setWhen] = useState('');
+  const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const act = async (action: 'confirm' | 'decline' | 'propose') => {
@@ -43,8 +45,11 @@ const RequestRow: React.FC<RowProps> = ({ iv, tz, caseTitles, onDone }) => {
     }
     setBusy(true);
     try {
-      onDone(await actOnHireInterview(iv.id, action, startsAt));
+      onDone(await (action === 'decline'
+        ? actOnHireInterview(iv.id, action, undefined, reason)
+        : actOnHireInterview(iv.id, action, startsAt)));
       setSuggesting(false);
+      setDeclining(false);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'That did not go through. Please try again.');
     } finally {
@@ -72,8 +77,8 @@ const RequestRow: React.FC<RowProps> = ({ iv, tz, caseTitles, onDone }) => {
       {iv.status === 'requested' && (
         <div className="hs-req-acts">
           <button type="button" className="cp-btn cp-btn-primary" disabled={busy} onClick={() => act('confirm')} data-testid="hs-accept">Accept</button>
-          <button type="button" className="cp-btn" disabled={busy} onClick={() => setSuggesting((s) => !s)} aria-expanded={suggesting} data-testid="hs-suggest">Suggest a time</button>
-          <button type="button" className="cp-btn" disabled={busy} onClick={() => act('decline')} data-testid="hs-decline">Decline</button>
+          <button type="button" className="cp-btn" disabled={busy} onClick={() => { setDeclining(false); setSuggesting((s) => !s); }} aria-expanded={suggesting} data-testid="hs-suggest">Suggest a time</button>
+          <button type="button" className="cp-btn" disabled={busy} onClick={() => { setSuggesting(false); setDeclining((d) => !d); }} aria-expanded={declining} data-testid="hs-decline">Decline</button>
         </div>
       )}
       {suggesting && (
@@ -83,6 +88,19 @@ const RequestRow: React.FC<RowProps> = ({ iv, tz, caseTitles, onDone }) => {
             <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} data-testid="hs-suggest-when" />
           </label>
           <button type="button" className="cp-btn cp-btn-primary" disabled={busy} onClick={() => act('propose')} data-testid="hs-suggest-send">Send this time</button>
+        </div>
+      )}
+      {declining && (
+        <div className="hs-decline">
+          <label className="hs-field">
+            <span>A note for {iv.employer.name} (optional)</span>
+            <textarea
+              rows={2} maxLength={DECLINE_REASON_MAX} value={reason} onChange={(e) => setReason(e.target.value)}
+              placeholder="For example: I'm away that week. Any time after the 30th works." data-testid="hs-decline-reason"
+            />
+            <small className="cp-muted">{iv.employer.company} reads this in the email that tells them you can't make it.</small>
+          </label>
+          <button type="button" className="cp-btn cp-btn-primary" disabled={busy} onClick={() => act('decline')} data-testid="hs-decline-send">Decline request</button>
         </div>
       )}
       {error && <p className="hs-error" role="alert">{error}</p>}

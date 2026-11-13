@@ -86,3 +86,29 @@ describe('openSlots', () => {
     expect(iso(openSlots(rules({ blocks: ['Wed-afternoon'] }), q))).toEqual(iso(openSlots(rules({ blocks: ['Wed-afternoon'] }), q)));
   });
 });
+
+describe('openSlots - observed US federal holidays', () => {
+  const days = (ds: Date[]) => [...new Set(ds.map((d) => localDate(d, CT)))];
+
+  it('skips Thanksgiving and keeps the Thursdays either side', () => {
+    const q = { minutes: 60, fromDate: '2026-11-16', now: NOW, held: [], days: 21 };
+    expect(days(openSlots(rules({ blocks: ['Thu-morning'] }), q))).toEqual(['2026-11-19', '2026-12-03']);
+  });
+
+  it('skips Christmas and New Year across the year boundary', () => {
+    // Fri 25 Dec 2026 and Fri 1 Jan 2027 are holidays; the Fridays around them stay open.
+    const q = { minutes: 60, fromDate: '2026-12-14', now: NOW, held: [], days: 28 };
+    expect(days(openSlots(rules({ blocks: ['Fri-morning'] }), q))).toEqual(['2026-12-18', '2027-01-08']);
+  });
+
+  it('skips an OBSERVED date: 4 July 2026 is a Saturday, so Friday 3 July is closed', () => {
+    const q = { minutes: 60, fromDate: '2026-06-29', now: new Date('2026-06-01T00:00:00Z'), held: [], days: 7 };
+    expect(days(openSlots(rules({ blocks: ['Thu-morning', 'Fri-morning'] }), q))).toEqual(['2026-07-02']);
+  });
+
+  it('uses the candidate-zone date: Veterans Day evening in Kolkata is still closed there, not shifted', () => {
+    const q = { minutes: 60, fromDate: '2026-11-09', now: new Date('2026-11-01T00:00:00Z'), held: [], days: 5 };
+    const got = openSlots(rules({ tz: 'Asia/Kolkata', blocks: ['Wed-evening', 'Thu-evening'] }), q);
+    expect([...new Set(got.map((d) => localDate(d, 'Asia/Kolkata')))]).toEqual(['2026-11-12']);
+  });
+});

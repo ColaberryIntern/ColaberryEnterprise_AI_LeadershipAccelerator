@@ -28,6 +28,8 @@ export interface InterviewFacts {
   readonly extraInterviewers: number;
   readonly recordRequested: boolean;
   readonly roomUrl: string | null;
+  /** Set only on a decline where the candidate left a note. */
+  readonly declineReason?: string | null;
 }
 
 export interface Email { readonly subject: string; readonly text: string; readonly html: string }
@@ -116,6 +118,7 @@ export function employerDeclinedEmail(f: InterviewFacts, scheduleUrl: string, in
   return compose(`About your interview request with ${f.candidateName}`, [
     `Hi ${firstName(f.employer.name)},`,
     `${firstName(f.candidateName)} can't make ${whenIn(f.start, CENTRAL)} work. You're welcome to pick another open time:`,
+    !!f.declineReason && `${firstName(f.candidateName)} added a note: "${f.declineReason}"`,
     scheduleUrl,
     'Or ask the Colaberry team to set one up for you:',
     introUrl,

@@ -39,7 +39,7 @@ it('confirms a request, scoped to the caller and guarded on the status it read',
   expect(q.mock.calls[0][1]).toEqual({ bind: [ID, E1] });
   const [sql, opts] = q.mock.calls[1];
   expect(sql).toMatch(/WHERE id = \$1 AND enrollment_id = \$2 AND status = ANY/);
-  expect(opts.bind).toEqual([ID, E1, 'confirmed', null, ['requested']]);
+  expect(opts.bind).toEqual([ID, E1, 'confirmed', null, ['requested'], null]);
 });
 
 it('is a no-op 200 to confirm twice, and a 409 to confirm a declined one', async () => {
@@ -67,4 +67,36 @@ it('is the same 404 for somebody else\'s interview and a made-up id', async () =
 it('loses cleanly (409) when the row changed between the read and the write', async () => {
   q.mockResolvedValueOnce([[row('requested')]]).mockResolvedValueOnce([[]]);
   await expect(actOnInterview(E1, ID, 'decline', {}, NOW)).rejects.toMatchObject({ status: 409 });
+});
+
+describe('decline with an optional note', () => {
+  it('stores the note, whitespace collapsed, and returns it', async () => {
+    q.mockResolvedValueOnce([[row('requested')]]).mockResolvedValueOnce([[row('declined', { decline_reason: 'On leave that week, try the 30th' })]]);
+    const out = await actOnInterview(E1, ID, 'decline', { reason: '  On leave\n that   week, try the 30th ' }, NOW);
+    expect(q.mock.calls[1][1].bind[5]).toBe('On leave that week, try the 30th');
+    expect(q.mock.calls[1][0]).toMatch(/decline_reason = COALESCE\(\$6, decline_reason\)/);
+    expect(out).toMatchObject({ status: 'declined', declineReason: 'On leave that week, try the 30th' });
+  });
+
+  it('takes no body, an empty body or a blank note as no note', async () => {
+    for (const body of [undefined, {}, { reason: '   ' }]) {
+      q.mockReset();
+      q.mockResolvedValueOnce([[row('requested')]]).mockResolvedValueOnce([[row('declined')]]);
+      await actOnInterview(E1, ID, 'decline', body, NOW);
+      expect(q.mock.calls[1][1].bind[5]).toBeNull();
+    }
+  });
+
+  it('refuses an unknown field or a note over 500 characters with a 400, before reading anything', async () => {
+    await expect(actOnInterview(E1, ID, 'decline', { reason: 'x', cc: 'a@b.c' }, NOW)).rejects.toMatchObject({ status: 400 });
+    await expect(actOnInterview(E1, ID, 'decline', { reason: 'x'.repeat(501) }, NOW)).rejects.toMatchObject({ status: 400 });
+    await expect(actOnInterview(E1, ID, 'decline', { reason: 42 }, NOW)).rejects.toMatchObject({ status: 400 });
+    expect(q).not.toHaveBeenCalled();
+  });
+
+  it('a confirm never writes a note, whatever its body says', async () => {
+    q.mockResolvedValueOnce([[row('requested')]]).mockResolvedValueOnce([[row('confirmed')]]);
+    await actOnInterview(E1, ID, 'confirm', { reason: 'ignored' }, NOW);
+    expect(q.mock.calls[1][1].bind[5]).toBeNull();
+  });
 });

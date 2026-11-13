@@ -102,6 +102,17 @@
     return /^https?:\/\//i.test(s) ? s : '';
   }
 
+  /* The 320x180 rendition of a platform cover, for a thumbnail. Covers made by the thumbnail
+     pipeline live at /site-v2/thumb-<name>.jpg on the API origin, and each has a small copy at
+     /site-v2/sm/thumb-<name>.jpg (scripts/case-study-thumbnails/make-small.js; a repo test
+     fails if one is missing). The `?v=` cache key is kept. Any other URL is returned as is. */
+  function thumbUrl(api, url) {
+    var s = mediaUrl(api, url);
+    var base = String(api || '').replace(/\/+$/, '');
+    if (!s || !base || s.indexOf(base + '/site-v2/') !== 0) return s;
+    return s.replace(/^(.*\/site-v2\/)(thumb-[A-Za-z0-9._-]+\.jpg)(\?[^#\/]*)?$/, '$1sm/$2$3');
+  }
+
   /* 105 -> "1:45". Nothing for a missing or non-positive length. */
   function duration(secs) {
     var n = typeof secs === 'number' && isFinite(secs) ? Math.round(secs) : 0;
@@ -193,7 +204,7 @@
 
   return {
     esc: esc, rnd: rnd, hueOf: hueOf, art: art, initials: initials, safeImageUrl: safeImageUrl,
-    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, industryLabel: industryLabel, cover: cover, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
+    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, thumbUrl: thumbUrl, duration: duration, capabilityLabel: capabilityLabel, industryLabel: industryLabel, cover: cover, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
     readShortlist: readShortlist, writeShortlist: writeShortlist, toggleShortlist: toggleShortlist,
     track: track, SHORT_KEY: SHORT_KEY,
   };

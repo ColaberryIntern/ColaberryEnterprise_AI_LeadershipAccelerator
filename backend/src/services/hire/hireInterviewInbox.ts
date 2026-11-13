@@ -32,12 +32,14 @@ export interface InboxInterview {
   readonly extraInterviewers: number;
   readonly recordRequested: boolean;
   readonly roomUrl: string | null;
+  /** The candidate's own note when they declined; the employer reads it in the decline email. */
+  readonly declineReason: string | null;
   readonly createdAt: string;
 }
 
 const COLUMNS = `id, format, case_study_slug, starts_at, minutes, status, employer_name, employer_company,
   employer_role, message, COALESCE(array_length(extra_interviewers, 1), 0) AS extra_count, record_requested,
-  room_url, created_at`;
+  room_url, decline_reason, created_at`;
 
 type Row = Record<string, unknown>;
 const iso = (v: unknown) => new Date(v as string).toISOString();
@@ -48,7 +50,8 @@ export function toInboxInterview(r: Row): InboxInterview {
     startsAt: iso(r.starts_at), minutes: Number(r.minutes), status: String(r.status),
     employer: { name: String(r.employer_name), company: String(r.employer_company), role: String(r.employer_role), message: String(r.message ?? '') },
     extraInterviewers: Number(r.extra_count ?? 0), recordRequested: r.record_requested === true,
-    roomUrl: (r.room_url as string | null) ?? null, createdAt: iso(r.created_at),
+    roomUrl: (r.room_url as string | null) ?? null, declineReason: (r.decline_reason as string | null) ?? null,
+    createdAt: iso(r.created_at),
   };
 }
 
@@ -73,6 +76,18 @@ export const proposeSchema = z.object({
   startsAt: z.string().max(40).refine((s) => !Number.isNaN(Date.parse(s)), 'startsAt must be an ISO date-time'),
 }).strict();
 
+/** Decline takes an OPTIONAL note (or no body at all); whitespace is collapsed, empty means none. */
+export const DECLINE_REASON_MAX = 500;
+export const declineSchema = z.object({ reason: z.string().max(DECLINE_REASON_MAX * 2).optional() }).strict();
+
+function declineReasonOf(body: unknown): string | null {
+  const p = declineSchema.safeParse(body ?? {});
+  if (!p.success) throw new StudioError(`body must be {} or { reason: text up to ${DECLINE_REASON_MAX} characters }`, 400, 'ValidationError');
+  const reason = (p.data.reason ?? '').replace(/\s+/g, ' ').trim();
+  if (reason.length > DECLINE_REASON_MAX) throw new StudioError(`The note can be up to ${DECLINE_REASON_MAX} characters`, 400, 'ValidationError');
+  return reason || null;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function actOnInterview(
@@ -80,6 +95,7 @@ export async function actOnInterview(
 ): Promise<InboxInterview> {
   if (!UUID.test(id)) throw new StudioError('Interview not found', 404, 'NotFound');
   let proposed: Date | null = null;
+  const reason = action === 'decline' ? declineReasonOf(body) : null;
   if (action === 'propose') {
     const p = proposeSchema.safeParse(body);
     if (!p.success) throw new StudioError('body must be exactly { startsAt: ISO date-time }', 400, 'ValidationError');
@@ -102,10 +118,11 @@ export async function actOnInterview(
   }
   // The status guard in the WHERE makes a concurrent second action lose cleanly instead of overwriting.
   const [updated] = await sequelize.query(
-    `UPDATE hire_interviews SET status = $3, starts_at = COALESCE($4, starts_at), updated_at = NOW()
+    `UPDATE hire_interviews SET status = $3, starts_at = COALESCE($4, starts_at),
+        decline_reason = COALESCE($6, decline_reason), updated_at = NOW()
       WHERE id = $1 AND enrollment_id = $2 AND status = ANY($5::text[])
       RETURNING ${COLUMNS}`,
-    { bind: [id, enrollmentId, t.to, proposed, t.from] },
+    { bind: [id, enrollmentId, t.to, proposed, t.from, reason] },
   );
   const row = Array.isArray(updated) && updated[0] ? (updated[0] as Row) : null;
   if (!row) throw new StudioError('This interview changed while you were deciding; reload it', 409, 'InvalidTransition');

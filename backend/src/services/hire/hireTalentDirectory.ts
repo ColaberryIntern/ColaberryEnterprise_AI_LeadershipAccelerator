@@ -15,6 +15,7 @@
  */
 import { getPublicPortfolioBySlug } from '../career/careerPortfolioPageService';
 import { loadHireIndex, type HireIndexEntry } from './hireTalentIndex';
+import { readCaseStudyOrders } from './hireStudioSettings';
 import { matchesQuery, toTalentCard, type HireTalentCard } from './hireTalentProjection';
 import { HIRE_MAX_LIMIT, type HireTalentQuery } from './hireTalentQuery';
 
@@ -41,9 +42,10 @@ const cardCache = new Map<string, { at: number; key: string; card: HireTalentCar
 /** Exposed for tests only: the cache must be resettable between cases. */
 export function resetHireCardCache(): void { cardCache.clear(); }
 
-async function cardFor(entry: HireIndexEntry, now: Date): Promise<HireTalentCard | null> {
-  // Keyed on the inputs that change the card, so a re-publish or availability edit misses.
-  const key = JSON.stringify([entry.facts, entry.cases.map((c) => [c.slug, c.publishedAt, c.featured])]);
+async function cardFor(entry: HireIndexEntry, order: readonly string[], now: Date): Promise<HireTalentCard | null> {
+  // Keyed on the inputs that change the card, so a re-publish, an availability edit or a new ★
+  // misses.
+  const key = JSON.stringify([entry.facts, entry.cases.map((c) => [c.slug, c.publishedAt, c.featured]), order]);
   const hit = cardCache.get(entry.page.slug);
   if (hit && hit.key === key && now.getTime() - hit.at < CARD_TTL_MS) return hit.card;
   // `null`: resolve NO case-study links. The card never shows them, and resolving them
@@ -51,7 +53,7 @@ async function cardFor(entry: HireIndexEntry, now: Date): Promise<HireTalentCard
   // the index above has already decided, in one batch, which case studies count.
   const result = await getPublicPortfolioBySlug(entry.page.slug, now, null);
   if (!result) return null; // unpublished between the index read and this one
-  const card = toTalentCard(result.portfolio, entry.facts, entry.cases);
+  const card = toTalentCard(result.portfolio, entry.facts, entry.cases, order);
   if (cardCache.size >= CARD_CACHE_MAX) cardCache.delete(cardCache.keys().next().value as string);
   cardCache.set(entry.page.slug, { at: now.getTime(), key, card });
   return card;
@@ -120,14 +122,33 @@ export function assembleDirectory(listed: readonly Listed[], query: HireTalentQu
   };
 }
 
+/**
+ * Every listed person's saved ★ order, in one read. If that read fails the directory still
+ * answers, with the featured pick as each signature (what it showed before the order existed),
+ * and the failure is logged: a missing ★ is not worth a 500 on the public directory.
+ */
+async function ordersFor(index: readonly HireIndexEntry[], now: Date): Promise<Map<string, string[]>> {
+  try {
+    return await readCaseStudyOrders(index.map((e) => e.page.enrollment_id));
+  } catch (err: any) { // any thrown value: only name and message are read, both optional-chained
+    console.warn(JSON.stringify({
+      timestamp: now.toISOString(), level: 'warn', service: 'backend',
+      event: 'hire_talent_order_unread', outcome: 'partial', error_class: err?.name || 'Error',
+      context: { listed: index.length, message: String(err?.message || '').slice(0, 200) },
+    }));
+    return new Map();
+  }
+}
+
 /** The route's entry point. A database failure propagates (the route answers 500). */
 export async function getHireTalentDirectory(query: HireTalentQuery, now: Date = new Date()): Promise<HireTalentDirectory> {
   const index = await loadHireIndex(['public']);
+  const orders = await ordersFor(index, now);
   const listed: Listed[] = [];
   for (const entry of index) {
     try {
       // eslint-disable-next-line no-await-in-loop -- bounded by the listed set, and cached
-      const card = await cardFor(entry, now);
+      const card = await cardFor(entry, orders.get(entry.page.enrollment_id) ?? [], now);
       if (card) listed.push({ card, entry });
     } catch (err: any) { // any thrown value: only name and message are read, both optional-chained
       console.warn(JSON.stringify({
