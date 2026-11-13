@@ -132,7 +132,30 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
     await sequelize.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY, slug TEXT UNIQUE)`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS delivery_projects (id UUID PRIMARY KEY)`);
-    await sequelize.query(`CREATE TABLE IF NOT EXISTS ai_agents (id UUID PRIMARY KEY)`);
+    // `reports_to_org_member_id` is read by `managerReachResolver`'s FACTS_SQL, which counts the
+    // agents reporting to a domain's manager. A bare `(id UUID PRIMARY KEY)` made that query throw
+    // `column a.reports_to_org_member_id does not exist`, and the three reconcile tests below
+    // failed on main for it -- see the `org_members` note immediately after this.
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS ai_agents (
+      id UUID PRIMARY KEY, reports_to_org_member_id UUID)`);
+    /**
+     * The two rosters `managerReachResolver` joins that nothing else in this fixture needed.
+     *
+     * Added 2026-11-13. `reconcileAnchorMetadata` started resolving reachability from the live
+     * access chain rather than from a hardcoded registry constant, and FACTS_SQL reads five
+     * rosters. Two of them had no stand-in here, so the query threw and took the whole reconcile
+     * down with it -- three tests red on `main`, not just on a branch.
+     *
+     * The resolver now degrades to `unknownReach` instead of throwing, so these tables are not
+     * what makes the tests pass. They are what makes the tests MEAN anything: without them the
+     * suite would exercise the degraded path and quietly stop covering the query it is here to
+     * cover.
+     */
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS org_members (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), email TEXT)`);
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS community_members (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(), enrollment_id UUID, role TEXT,
+      mgmt_role TEXT, mgmt_extra_sections JSONB)`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS program_blueprints (
       id UUID PRIMARY KEY, name TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
     await sequelize.query(`CREATE TABLE IF NOT EXISTS enrollments (

@@ -20,10 +20,21 @@
  *                legacy migration plan, and every capability story -- because R0 is literally
  *                "Define the workflow, requirements, risks and human decisions", and all 443
  *                capabilities record `starting_autonomy: autonomy:R0`.
- *   autonomy:R1  .. R9   one story per `release_behaviour[]` entry, placed on that entry's own
- *                rung. 964 entries across the 443 records, each already carrying its behaviour
- *                and its acceptance criteria. This is the additive half of Phase 2.
+ *   autonomy:R1  .. R9   **nothing, as of 2026-11-13.** These rungs carried one story per
+ *                `release_behaviour[]` entry -- 964 of them across the ten boards, of which not
+ *                one had ever been completed by anybody while all 100 completions in the
+ *                programme sat at R0. A rung is a level of authority a capability earns on
+ *                evidence; enumerating all ten up front turned the ladder into a to-do list and
+ *                put R5 stories in front of builders who had never once performed the task. The
+ *                work now lives in the four-step capability ladder on the capability's own
+ *                starting rung. See `agentDomainCapabilityLadder.ts`.
  *   r0, r1, r2   kept, empty. One UPDATE per story restores the previous shape.
+ *
+ * A capability's four ladder stories -- do it by hand, do it in the app, request the tool, let the
+ * agent do it watched -- are emitted only for the ONE capability a domain currently has in flight.
+ * The other 433 stay on the board as `implementation` candidates: one line each, explicitly not
+ * started and not assigned, because 443 rows that each read like an assignment is how a backlog
+ * becomes something a builder cannot see the end of.
  *
  * Nothing here enables an agent, grants a tool or changes an autonomy level, and **finishing a
  * release promotes nobody** -- it makes a rung eligible for a named human to promote on evidence.
@@ -56,20 +67,18 @@ import {
   loadDomainMatrix,
   type CapabilityRecord,
   type DomainCapabilityMatrix,
-  type ReleaseBehaviour,
 } from './capabilityRecord';
-import { AUTONOMY_MEANINGS, type AutonomyStage } from './autonomyLadder';
+import { type AutonomyStage } from './autonomyLadder';
 import {
   AUTONOMY_RELEASES,
   FOUNDATION_STAGE,
   LEGACY_RELEASES,
   RELEASES,
-  RUNG_PLATFORM_GAP,
-  bareLevel,
   releaseName,
   rungOf,
   type GeneratedRelease,
 } from './agentDomainReleaseLadder';
+import { capabilityLadderStories } from './agentDomainCapabilityLadder';
 import { bullets, promptFor } from './agentDomainCapabilityPrompt';
 import { researchPromptFor } from './agentDomainResearchPrompts';
 import {
@@ -82,7 +91,16 @@ import {
 } from './agentDomainCommandCenterStory';
 
 export type StoryKind =
-  | 'command_center' | 'research' | 'legacy_migration' | 'implementation' | 'release_behaviour';
+  | 'command_center' | 'research' | 'legacy_migration' | 'implementation' | 'release_behaviour'
+  /**
+   * One of the four steps of `agentDomainCapabilityLadder` -- by hand, in the app, tool request,
+   * agent watched. Emitted only for the capabilities a domain currently has IN FLIGHT.
+   *
+   * `release_behaviour` is retained in this union because ten domains' worth of rows in production
+   * still carry it and a reader of that data needs the type to exist. Nothing generates it any
+   * more; see `capabilityLadderStories` for why.
+   */
+  | 'capability_ladder';
 export type StoryStatus = 'draft' | 'ready';
 
 export interface GeneratedStory {
@@ -362,7 +380,18 @@ const shortCapabilityId = (capabilityId: string): string =>
 const capabilityStoryId = (domainKey: string, capabilityId: string): string =>
   `${domainKey}.CAP.${shortCapabilityId(capabilityId)}`;
 
-function implementationStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory[] {
+/**
+ * One row per capability -- **the candidate list, not the work.**
+ *
+ * These were already one story per capability and they still are. What changed is what they SAY.
+ * A capability that is not in flight is now explicitly labelled a candidate that nobody has
+ * started and nobody is assigned to, because 443 rows that each read like an assignment is how a
+ * backlog becomes something a builder cannot see the end of. The capability currently in flight
+ * says so, and points at its four ladder stories.
+ */
+function implementationStories(
+  d: AgentDomain, m: DomainCapabilityMatrix, live: ReadonlySet<string>,
+): GeneratedStory[] {
   return m.capabilities.map((c) => ({
     story_id: capabilityStoryId(d.domain_key, c.capability_id),
     // The capability's OWN recorded starting rung, refused rather than defaulted if it is not a
@@ -379,7 +408,17 @@ function implementationStories(d: AgentDomain, m: DomainCapabilityMatrix): Gener
     // Nothing is validated, so nothing is ready.
     status: 'draft' as StoryStatus,
     body:
-      `${c.business_outcome}\n\n`
+      (live.has(c.capability_id)
+        ? `**IN FLIGHT.** This capability is the one this domain is building right now. The work `
+          + `itself is its four ladder stories -- do it by hand, do it in the app, request the `
+          + `tool, then let the agent do it watched -- and they run in that order. This row is `
+          + `the capability they belong to, not a fifth piece of work.\n\n`
+        : `**CANDIDATE -- not started, not assigned.** This is one line on this domain's list of `
+          + `everything its agent could eventually do. It becomes real work only when the builder `
+          + `picks it and their manager agrees, at which point it opens as four stories. Until `
+          + `then it is deliberately inert, and the honest status of it is "not started" rather `
+          + `than "behind".\n\n`)
+      + `${c.business_outcome}\n\n`
       + `**Built today:** ${c.implementation_state}. **Requirement validated:** `
       + `${c.requirement_validation_state} -- ${c.validation_dependency}\n\n`
       + (c.blocked_by.length
@@ -394,69 +433,93 @@ function implementationStories(d: AgentDomain, m: DomainCapabilityMatrix): Gener
 }
 
 /**
- * One story per `release_behaviour[]` entry -- **the additive half of Phase 2, and the half that
- * makes the ladder real.**
+ * The four ladder stories, for the capabilities this domain currently has IN FLIGHT.
  *
- * Nothing here is invented. Every capability record already carries an array of
- * `{autonomy, behaviour, acceptance_criteria}`, written during the research pass: 964 entries
- * across the 443 records, spread over all ten rungs. Until now the generator read
- * `release_behaviour[0]`, interpolated three of its fields into one prompt string, and never
- * looked at the rest -- so roughly 520 entries with their own acceptance criteria were invisible
- * to the provisioner. This projects them into rows.
+ * **This replaced one story per `release_behaviour[]` entry**, which projected each capability's
+ * behaviour once per rung of the autonomy ladder. Measured against production on 2026-11-13, that
+ * shape had produced 964 behaviour stories across ten domains with **zero completions by anybody**,
+ * while all 100 completions in the programme sat at R0. The full evidence, and why a rung is not a
+ * unit of work, is in the header of `agentDomainCapabilityLadder.ts`.
  *
- * The story id EXTENDS the capability story's id with the rung, so the relationship is visible in
- * the id itself and greppable from a board. That is also why `story_id` had to be widened: these
- * reach 81 characters, and at the old 60-char limit 221 pairs of them collided after truncation.
- *
- * A capability's starting rung is deliberately NOT skipped when it also appears in
- * `release_behaviour` (111 entries do). The capability story says "build this capability"; the
- * rung story says "reach this behaviour at this authority level, and here is how it is judged".
- * Those are different pieces of work with different acceptance, and their ids differ, so both
- * stand.
+ * Nothing in the capability data was thrown away. The `release_behaviour[]` entries are still the
+ * source of the step 4 acceptance criteria and of the rung-focused prompt; they are simply no
+ * longer each a row on somebody's board.
  */
-function releaseBehaviourStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory[] {
+function capabilityLadderStoriesFor(
+  d: AgentDomain, m: DomainCapabilityMatrix, live: ReadonlySet<string>,
+): GeneratedStory[] {
   const stories: GeneratedStory[] = [];
   for (const c of m.capabilities) {
-    for (const rb of c.release_behaviour) {
-      const stage = rungOf(c.capability_id, 'release_behaviour.autonomy', rb.autonomy);
-      const level = bareLevel(stage);
+    if (!live.has(c.capability_id)) continue;
+    for (const s of capabilityLadderStories(d, m, c)) {
       stories.push({
-        story_id: `${capabilityStoryId(d.domain_key, c.capability_id)}.${stage}`,
-        release_key: stage,
-        autonomy_stage: stage,
-        kind: 'release_behaviour',
-        title: `${c.name} · ${level}`,
+        story_id: s.story_id,
+        release_key: s.autonomy_stage,
+        autonomy_stage: s.autonomy_stage,
+        kind: 'capability_ladder',
+        title: s.title,
+        // Draft for the same reason every other capability story is: no manager has validated the
+        // requirement. The ladder changes the shape of the work, not who may approve it.
         status: 'draft',
-        body:
-          `**${level} · ${AUTONOMY_MEANINGS[level]}**\n\n${rb.behaviour}\n\n`
-          + (RUNG_PLATFORM_GAP[level] ? `${RUNG_PLATFORM_GAP[level]}\n\n` : '')
-          + `**How this is judged:** ${rb.acceptance_criteria}\n\n`
-          + `Capability: \`${c.capability_id}\`. Its ceiling is **${c.max_permitted_autonomy}**`
-          + `${c.max_autonomy_rationale ? ` -- ${c.max_autonomy_rationale}` : ''}.\n\n`
-          + (c.human_decision
-            ? `**This capability is a human decision.** It stays human-required at every rung, `
-              + `forever. Reaching this rung lets the agent prepare, summarise and propose. It `
-              + `never lets it decide.\n\n`
-            : '')
-          + `Reaching a rung makes it eligible for promotion by a named human, on evidence. `
-          + `Finishing this story promotes nothing by itself.`,
+        body: s.body,
         capability_id: c.capability_id,
         shared_foundation_reason: null,
-        // The criteria are real, written per rung, and go on the row rather than being left for a
-        // later backfill the way the first 503 stories were.
-        acceptance: [rb.acceptance_criteria],
+        acceptance: s.acceptance,
         validation_dependency: c.validation_dependency,
-        claude_code_prompt: promptFor(d, m, c, rb),
+        claude_code_prompt: s.claude_code_prompt,
       });
     }
   }
   return stories;
 }
 
-export function planForDomain(domainKey: string): DomainPlan {
+/**
+ * Which capabilities a domain has in flight.
+ *
+ * **The default is exactly one**, and that is the whole point of the change: a builder holds four
+ * stories, not 136. The other capabilities remain on the board as `implementation` candidates --
+ * one line each, not started, not assigned -- and a capability becomes live when the builder picks
+ * it and their domain manager agrees.
+ *
+ * The default pick is the FIRST capability in the domain's own matrix, which is the order the
+ * research pass wrote them in. That is a defensible seed rather than a considered choice, and it
+ * is logged as an assumption precisely so nobody mistakes it for one: the builder is expected to
+ * swap it in their first conversation with their manager, and swapping it costs one argument to
+ * this function.
+ *
+ * Passing an explicit list overrides it. Passing an empty list is legal and means the domain has
+ * nothing in flight -- an unstaffed domain, or one between capabilities.
+ */
+export function liveCapabilityIds(
+  m: DomainCapabilityMatrix, selected?: ReadonlyArray<string>,
+): ReadonlySet<string> {
+  if (selected) {
+    const known = new Set(m.capabilities.map((c) => c.capability_id));
+    const unknown = selected.filter((id) => !known.has(id));
+    if (unknown.length) {
+      throw new Error(
+        `Domain '${m.domain_key}' has no capability ${unknown.map((u) => `'${u}'`).join(', ')}`,
+      );
+    }
+    return new Set(selected);
+  }
+  const first = m.capabilities[0];
+  return new Set(first ? [first.capability_id] : []);
+}
+
+export interface PlanOptions {
+  /**
+   * The capability ids this domain is currently building, overriding the one-capability default.
+   * An empty array means nothing is in flight.
+   */
+  readonly liveCapabilityIds?: ReadonlyArray<string>;
+}
+
+export function planForDomain(domainKey: string, options: PlanOptions = {}): DomainPlan {
   const d = AGENT_DOMAINS.find((x) => x.domain_key === domainKey);
   if (!d) throw new Error(`Unknown domain '${domainKey}'`);
   const m = loadDomainMatrix(domainKey);
+  const live = liveCapabilityIds(m, options.liveCapabilityIds);
   return {
     domain_key: domainKey,
     releases: RELEASES,
@@ -464,14 +527,16 @@ export function planForDomain(domainKey: string): DomainPlan {
       commandCenterStory(d, m),
       ...researchStories(d, m),
       legacyMigrationStory(d, m),
-      ...implementationStories(d, m),
-      ...releaseBehaviourStories(d, m),
+      ...implementationStories(d, m, live),
+      ...capabilityLadderStoriesFor(d, m, live),
     ],
   };
 }
 
-export function planForAllDomains(): DomainPlan[] {
-  return AGENT_DOMAINS.map((d) => planForDomain(d.domain_key));
+export function planForAllDomains(
+  options: Readonly<Record<string, PlanOptions>> = {},
+): DomainPlan[] {
+  return AGENT_DOMAINS.map((d) => planForDomain(d.domain_key, options[d.domain_key] ?? {}));
 }
 
 export {

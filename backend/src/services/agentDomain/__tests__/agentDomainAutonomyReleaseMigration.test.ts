@@ -212,9 +212,16 @@ describe('the stories land on the rung the data names', () => {
     for (const s of plan.stories_to_reparent) expect(s.autonomy_stage).toBe('autonomy:R0');
   });
 
-  it('the NEW stories spread across the rungs above R0', () => {
+  it('the NEW stories all sit on the capability\'s own starting rung', () => {
+    // This asserted the opposite until 2026-11-13: that the inserted stories spread across more
+    // than three rungs, because Phase 2 inserted one per `release_behaviour[]` entry. The
+    // four-step ladder replaced that, and all four of its steps sit on the capability's recorded
+    // starting rung ON PURPOSE -- doing a task by hand and filing a tool request are not
+    // performed at a level of agent authority at all, and the one step that IS about the agent
+    // acting is explicitly about its starting rung. Spreading them would rebuild the
+    // behaviours-times-rungs cross-product this change removed.
     const rungs = new Set(plan.stories_to_insert.map((s) => s.autonomy_stage));
-    expect(rungs.size).toBeGreaterThan(3);
+    expect(rungs.size).toBe(1);
     expect([...rungs].every((r) => /^autonomy:R[0-9]$/.test(r as string))).toBe(true);
   });
 
@@ -231,7 +238,7 @@ describe('the stories land on the rung the data names', () => {
   it('every inserted story traces to a capability', () => {
     for (const s of plan.stories_to_insert) {
       expect(s.capability_id).toBeTruthy();
-      expect(s.story_kind).toBe('release_behaviour');
+      expect(s.story_kind).toBe('capability_ladder');
     }
   });
 
@@ -431,10 +438,10 @@ describe('rows written while story_id was varchar(60)', () => {
     const state = legacyTruncatedState();
     const plan = planDomainMigration(DOMAIN_WITH_LONG_IDS, state.lists, state.stories);
     for (const s of plan.stories_to_reparent) {
-      expect(s.story_kind).not.toBe('release_behaviour');
+      expect(s.story_kind).not.toBe('capability_ladder');
     }
     for (const s of plan.stories_to_insert) {
-      expect(s.story_kind).toBe('release_behaviour');
+      expect(s.story_kind).toBe('capability_ladder');
     }
   });
 
@@ -488,9 +495,18 @@ describe('every domain migrates, not just the one under test', () => {
     }
   });
 
-  it('projects 964 new stories and re-parents 513 across the ten', () => {
-    // The two totals Phase 2 is accountable for, measured through the migration rather than
-    // through the generator, so a plan that silently dropped a domain would show up here.
+  it('projects 40 new stories and re-parents 513 across the ten', () => {
+    // The two totals this migration is accountable for, measured through the migration rather
+    // than through the generator, so a plan that silently dropped a domain would show up here.
+    //
+    // 964 -> 40 on 2026-11-13. Those 964 were one story per `release_behaviour[]` entry, and
+    // measured against production none of them had ever been completed by anybody. They are
+    // replaced by the four-step capability ladder for the one capability each domain has in
+    // flight: ten domains times four steps.
+    //
+    // **This migration inserts and re-parents; it does not delete.** Removing the 964 rows that
+    // the earlier shape already wrote to the ten live boards is a separate, explicitly destructive
+    // migration against real builders' work, and it is deliberately not smuggled in here.
     let inserted = 0;
     let reparented = 0;
     for (const domainKey of AGENT_DOMAIN_KEYS) {
@@ -499,7 +515,7 @@ describe('every domain migrates, not just the one under test', () => {
       inserted += plan.stories_to_insert.length;
       reparented += plan.stories_to_reparent.length;
     }
-    expect(inserted).toBe(964);
+    expect(inserted).toBe(40);
     expect(reparented).toBe(513);
   });
 });

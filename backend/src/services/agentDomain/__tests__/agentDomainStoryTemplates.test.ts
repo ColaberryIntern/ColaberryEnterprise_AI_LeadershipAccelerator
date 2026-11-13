@@ -242,7 +242,7 @@ describe('every implementation story traces to a capability, or justifies not do
   // like the capability story it hangs off. This used to read `kind !== 'implementation'`, which
   // meant "the shared-foundation stories" only for as long as there were no other traced kinds --
   // it is spelled out now so adding a kind cannot quietly change what the test asserts.
-  const TRACED_KINDS = ['implementation', 'release_behaviour'];
+  const TRACED_KINDS = ['implementation', 'release_behaviour', 'capability_ladder'];
 
   it('no untraced story of a traced kind exists', () => {
     const untraced = everyStory.filter(

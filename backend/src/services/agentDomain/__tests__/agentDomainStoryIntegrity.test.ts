@@ -221,7 +221,7 @@ describe('no control character survives in this directory', () => {
 describe('the story set, counted correctly', () => {
   const all = planForAllDomains().flatMap((p) => p.stories);
 
-  it('is 1,477 stories, not 448: the composition is asserted so it cannot drift', () => {
+  it('is 553 stories, not 1,477: the composition is asserted so it cannot drift', () => {
     // 448 was 443 + 5: the five research stories counted ONCE rather than per domain, and the
     // ten legacy-migration plans dropped. A bare total hid both mistakes, so the parts are pinned.
     //
@@ -229,18 +229,27 @@ describe('the story set, counted correctly', () => {
     // rather than a tenth of something that already existed. Pinning the parts is what makes that
     // readable as "ten were added" instead of "a number changed".
     //
-    // 513 -> 1,477 at Phase 2, and the 964 are the whole point: one story per
-    // `release_behaviour[]` entry across the 443 capability records. Those entries were always in
-    // the data, each with its own behaviour and acceptance criteria, and the generator read only
-    // `release_behaviour[0]` -- so about 520 of them had never been looked at by anything. The
-    // count is pinned per KIND for the same reason as above: if this number moves, the test says
-    // which kind moved.
+    // 513 -> 1,477 at Phase 2, which projected every `release_behaviour[]` entry into its own
+    // per-rung story: 964 of them.
+    //
+    // 1,477 -> 553 on 2026-11-13, and this is the one of these revisions that REMOVED work. The
+    // 964 per-rung stories had been live across ten boards for a fortnight and **not one of them
+    // had ever been completed, by anybody**; all 100 completions in the programme sat at R0. A
+    // rung is a level of authority a capability earns on evidence, so enumerating all ten up
+    // front put R5 stories in front of builders who had never once performed the task. They are
+    // replaced by 40: the four-step ladder -- by hand, in the app, tool request, agent watched --
+    // for the ONE capability each of the ten domains currently has in flight. The other 433
+    // capabilities stay on the board as `implementation` candidates, which is why that number
+    // does not move. See `agentDomainCapabilityLadder.ts` for the measurements.
     expect(all.filter((s) => s.kind === 'implementation')).toHaveLength(443);
-    expect(all.filter((s) => s.kind === 'release_behaviour')).toHaveLength(964);
+    expect(all.filter((s) => s.kind === 'capability_ladder')).toHaveLength(40);
+    // Nothing generates the old kind any more. Production rows still carry it until migrated, so
+    // the kind still exists in the union -- this asserts the GENERATOR has stopped emitting it.
+    expect(all.filter((s) => s.kind === 'release_behaviour')).toHaveLength(0);
     expect(all.filter((s) => s.kind === 'research')).toHaveLength(50);
     expect(all.filter((s) => s.kind === 'legacy_migration')).toHaveLength(10);
     expect(all.filter((s) => s.kind === 'command_center')).toHaveLength(10);
-    expect(all).toHaveLength(1477);
+    expect(all).toHaveLength(553);
     // 13 releases per domain: ten rungs plus the three originals, kept empty as the rollback path.
     expect(planForAllDomains().reduce((n, p) => n + p.releases.length, 0)).toBe(130);
   });

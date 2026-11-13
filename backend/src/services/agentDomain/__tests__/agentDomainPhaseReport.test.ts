@@ -64,15 +64,20 @@ describe('the report covers every domain, with figures read from the data', () =
     expect(r.totals.legacy_rows_total).toBe(246);
   });
 
-  it('reports 1,477 stories and 130 releases, which is the corrected composition', () => {
+  it('reports 553 stories and 130 releases, which is the corrected composition', () => {
     // 503 + the ten Command Centers, one per domain = 513. Then Phase 2 projected the 964
     // `release_behaviour[]` entries into per-rung stories = 1,477, and gave each project the ten
     // rungs on top of its three kept originals = 130 releases.
     //
+    // 1,477 -> 553 on 2026-11-13: the 964 per-rung stories, none of which had ever been completed
+    // by anybody, gave way to the 40-story four-step capability ladder -- ten domains, one
+    // capability in flight each, four stories apiece. The release count does NOT move: the ten
+    // rungs still exist as rungs, they are simply no longer each a row of somebody's work.
+    //
     // The implementation total is pinned alongside both so a story count that moves for the wrong
     // reason cannot hide behind the right one: 443 is the number of CAPABILITIES, and it must not
-    // move when per-rung stories are added, because a rung story is not a new capability.
-    expect(r.totals.stories).toBe(1477);
+    // move when the ladder shape changes, because a ladder step is not a new capability.
+    expect(r.totals.stories).toBe(553);
     expect(r.totals.releases).toBe(130);
     expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(443);
   });

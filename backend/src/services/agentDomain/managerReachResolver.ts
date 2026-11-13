@@ -125,7 +125,42 @@ export function factsFromRow(r: ManagerFactRow): ManagerAccessFacts {
 export async function resolveManagerReach(
   sequelize: Sequelize,
 ): Promise<Map<string, ManagerReachVerdict>> {
-  const rows = await sequelize.query<ManagerFactRow>(FACTS_SQL, { type: QueryTypes.SELECT });
+  let rows: ManagerFactRow[];
+  try {
+    rows = await sequelize.query<ManagerFactRow>(FACTS_SQL, { type: QueryTypes.SELECT });
+  } catch (err) {
+    /**
+     * **The reachability cache must never be able to abort provisioning.**
+     *
+     * `FACTS_SQL` reads five rosters -- `agent_domain_projects`, `org_members`, `ai_agents`,
+     * `enrollments` + `community_members`, and `admin_users`. Until this catch, any one of them
+     * being unreadable threw straight out of `reconcileAnchorMetadata`, so a transient database
+     * error while refreshing a DERIVED CACHE would take down the thing it was annotating. That is
+     * backwards: the cache is the least important output of a provision.
+     *
+     * Found on 2026-11-13 by the integration tier, where the fixture database legitimately does
+     * not hold every roster -- but the production failure mode is the same and worse, because
+     * there it would be intermittent.
+     *
+     * Returning an empty map is safe precisely because `reachFor` resolves a miss through
+     * `unknownReach`, which reports `canReach: false` with a named blocker. **A roster we could
+     * not read can never become a silent all-clear** -- that is the exact failure the hardcoded
+     * registry constant this module replaced had been committing for a month.
+     */
+    // eslint-disable-next-line no-console
+    console.warn(JSON.stringify({
+      level: 'warn',
+      service: 'agent-domain',
+      event: 'manager_reach_facts_unreadable',
+      outcome: 'partial',
+      error_class: (err as { name?: string })?.name || 'UnknownError',
+      context: {
+        detail: (err as { message?: string })?.message,
+        consequence: 'every domain resolves to unknownReach (canReach=false) until the next run',
+      },
+    }));
+    return new Map<string, ManagerReachVerdict>();
+  }
   const out = new Map<string, ManagerReachVerdict>();
   for (const row of rows ?? []) {
     const verdict = assessManagerReach(factsFromRow(row));

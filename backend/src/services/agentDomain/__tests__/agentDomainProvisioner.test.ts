@@ -373,15 +373,24 @@ describe('the plan covers all ten domains completely', () => {
     }
   });
 
-  it('POSITIVE CONTROL: truncating to the OLD width would have collided', () => {
+  it('POSITIVE CONTROL: ids still overflow the OLD width, so the widening is load-bearing', () => {
     // Proves the test above is measuring something real rather than passing because every id is
     // short. If this control ever goes quiet, the ids changed and the guard above stopped
     // guarding anything.
-    const collisions = plans.flatMap((p) => {
-      const at60 = p.stories.map((s) => s.story_id.slice(0, 60));
-      return at60.length - new Set(at60).size;
-    }).reduce((a, b) => a + b, 0);
-    expect(collisions).toBeGreaterThan(0);
+    //
+    // This used to count COLLISIONS at 60 characters, and there were plenty: appending a rung to
+    // the 24 ids production had already truncated produced 221 colliding pairs. The four-step
+    // ladder replaced those per-rung ids with shorter ones -- `.L1-BY-HAND` against
+    // `.autonomy:R4` -- and measured 2026-11-13 the longest id is now 72 characters with no pair
+    // colliding at 60. Asserting collisions would therefore have gone quiet for a reason that has
+    // nothing to do with safety, so the control now asserts the thing that is actually still
+    // true and still dangerous: 33 ids do not fit in the old column, and truncating them would
+    // silently write rows whose `story_id` is not the id they were generated with.
+    const overflowing = plans.flatMap((p) => p.stories.map((s) => s.story_id))
+      .filter((id) => id.length > 60);
+    expect(overflowing.length).toBeGreaterThan(0);
+    expect(Math.max(...plans.flatMap((p) => p.stories.map((s) => s.story_id.length))))
+      .toBeLessThanOrEqual(STORY_ID_MIN_WIDTH);
   });
 
   it('every planned builder state is one the CHECK constraint admits', () => {
