@@ -117,6 +117,22 @@ export default function BuildEvidence(
 
       {/* Build artifacts REPOSITORY — what the intern has built + submitted from their repo, for the proposal writer. */}
       <div className="gps-vh" style={{ marginTop: 24 }}><div><h3>Build artifacts</h3><p>What the intern has built and submitted from their repo &mdash; the deliverables behind the verified stories, for the proposal to draw from. Demo videos join here as interns record their demos.</p></div></div>
+      {/* The connected repo's deliverable files, pulled from the synced tree (read-only) — so the panel reflects the
+          real product and confirms sync, instead of waiting for a manual submission. */}
+      {view.connectedRepo && view.connectedRepo.files.length > 0 && (
+        <div className="gps-panel" data-testid="ev-repo-files" style={{ marginBottom: 12 }}>
+          <div className="gps-row" style={{ marginBottom: 6 }}>
+            <b>Files in the connected repo</b>
+            <span className="gps-small gps-muted">{view.connectedRepo.fileCount} file{view.connectedRepo.fileCount === 1 ? '' : 's'}{view.connectedRepo.syncedAt ? ` · synced ${new Date(view.connectedRepo.syncedAt).toLocaleDateString()}` : ''}</span>
+          </div>
+          <ul className="gps-small gps-mono" style={{ margin: 0, paddingLeft: 18, maxHeight: 280, overflowY: 'auto' }}>
+            {view.connectedRepo.files.map((f) => <li key={f} data-testid="ev-repo-file">{f}</li>)}
+          </ul>
+          {view.connectedRepo.fileCount > view.connectedRepo.files.length && (
+            <div className="gps-small gps-muted" style={{ marginTop: 4 }}>+{view.connectedRepo.fileCount - view.connectedRepo.files.length} more</div>
+          )}
+        </div>
+      )}
       {builtArtifacts.length === 0 ? (
         <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo &mdash; and their demo videos once recorded.</div>
       ) : (

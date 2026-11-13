@@ -166,10 +166,12 @@ export interface StudentGovProjectView {
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
    *  deep-link to the build workspace. Null when no build is linked yet. */
   buildSummary: GovBuildSummary | null;
-  /** The connected build repo for this project (owner/name/url), read-only — resolved from the `solution_build`
-   *  track's student project's GitHub connection. Lets the cockpit confirm "we are in sync" without offering to add
-   *  a URL. Null when no repo is linked yet. Carries NO token, secret, or identity. Optional on older backends. */
-  connectedRepo?: { owner: string; name: string; url: string } | null;
+  /** The connected build repo for this project (owner/name/url) PLUS its deliverable files, read-only — resolved from
+   *  the `solution_build` track's student project's GitHub connection. `files` are the repo's blob paths (capped),
+   *  `fileCount` the true total, `syncedAt` when the tree was last synced. Lets the cockpit confirm "we are in sync"
+   *  and show what was built, without offering to add a URL. Null when no repo is linked. Carries NO token, secret,
+   *  or identity (paths only). Optional on older backends. */
+  connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null } | null;
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
    *  (pricing) are dropped for non-reviewers. Each carries the B.1 per-doc summary (latest/gates/currentGate/
    *  openGapCount/fatalCount/cycle), batch-loaded. */
@@ -587,9 +589,22 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     if (studentProjectId) {
       const { default: GitHubConnection } = await import('../../models/GitHubConnection');
       const conn: any = await GitHubConnection.findOne({ where: { project_id: studentProjectId } });
-      view.connectedRepo = conn && conn.repo_owner && conn.repo_name
-        ? { owner: String(conn.repo_owner), name: String(conn.repo_name), url: String(conn.repo_url ?? '') }
-        : null;
+      if (conn && conn.repo_owner && conn.repo_name) {
+        // Deliverable files = the synced tree's blob paths (never a live GitHub call), capped to protect the payload.
+        // A malformed/absent tree yields an empty list rather than throwing.
+        let files: string[] = [];
+        try {
+          const tree = conn.file_tree_json?.tree;
+          if (Array.isArray(tree)) {
+            files = tree.filter((t: any) => t?.type === 'blob' && t?.path).map((t: any) => String(t.path)).slice(0, 300);
+          }
+        } catch { files = []; }
+        const fileCount = typeof conn.file_count === 'number' ? conn.file_count : files.length;
+        const syncedAt = conn.last_sync_at ? new Date(conn.last_sync_at).toISOString() : null;
+        view.connectedRepo = { owner: String(conn.repo_owner), name: String(conn.repo_name), url: String(conn.repo_url ?? ''), files, fileCount, syncedAt };
+      } else {
+        view.connectedRepo = null;
+      }
     } else {
       view.connectedRepo = null;
     }
