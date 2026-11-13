@@ -42,7 +42,16 @@ function logFail(event: string, err: unknown): void {
 }
 
 export type FitAssessment = 'have' | 'partial' | 'new';
-export interface CapabilityServiceInput { id: string; name: string; description?: string | null; category?: string | null; keywords?: string[] }
+export interface CapabilityServiceInput {
+  id: string; name: string; description?: string | null; category?: string | null; keywords?: string[];
+  /** SV2.2: titles of the service's CONFIRMED case studies (free text, so they go inside an untrusted block). Omit
+   *  when there are none: with no evidence on any service the prompt is byte-identical to the pre-SV2 prompt. */
+  evidenceTitles?: string[];
+}
+/** SV2.2: a confirmed case study cited as proof on a "have". */
+export interface CapabilityEvidence { caseStudyId: string; title: string; sourceKind: 'inside' | 'outside' }
+/** SV2.2: a case study NOT confirmed for this capability's service whose terms overlap the capability text. */
+export interface PossibleProof { caseStudyId: string; title: string; sourceKind: 'inside' | 'outside'; matchedTerms: string[]; linkedElsewhere: boolean }
 export interface CapabilityFitRequest {
   requirements: { id: string; text: string }[];
   /** ACTIVE services only - the route must not pass growth/retired services (growth is excluded from fit). */
@@ -61,12 +70,21 @@ export interface CapabilityItem {
   whatItIs?: string;
   whatThisBidGivesUs?: string;
   toDeliver?: string;
+  /** SV2.2 (additive): on have - the matched service's confirmed case studies (empty = none linked yet). */
+  evidence?: CapabilityEvidence[];
+  /** SV2.2 (additive): on partial/new - unlinked or differently-linked case studies that may prove it. */
+  possibleProof?: PossibleProof[];
+  /** SV2.2 (additive, only with ENABLE_GOV_FIT_REQUIRE_PROOF): set when an unproven have was downgraded. */
+  downgradedFrom?: 'have';
+  downgradeReason?: string;
 }
 export interface CapabilityFitResult {
   capabilities: CapabilityItem[];
   cached: boolean;
   generatedAt: string;
   error?: string;
+  /** SV2.2 (additive): whether proof could be loaded, and whether the unproven-have downgrade was applied. */
+  proof?: { available: boolean; requireProof: boolean };
 }
 
 const ASSESSMENTS: ReadonlySet<string> = new Set(['have', 'partial', 'new']);
@@ -106,6 +124,40 @@ export function sanitizeCapabilities(raw: unknown, serviceIds: string[]): Capabi
   return out;
 }
 
+/** Prompt budget for the confirmed-case-study section (SV2.2). */
+export const EVIDENCE_TITLES_PER_SERVICE = 3;
+export const EVIDENCE_TITLE_MAX = 100;
+export const EVIDENCE_SECTION_MAX = 6000;
+
+/**
+ * PURE (given `nonce`): the extra prompt section listing each service's confirmed case-study titles, or null when no
+ * service has one (so the prompt stays byte-identical to the pre-SV2 prompt). Titles are record text a person typed
+ * or an outside document supplied, so they sit inside an untrusted block with its own rule. Bounded: at most
+ * EVIDENCE_TITLES_PER_SERVICE titles per service, each clipped to EVIDENCE_TITLE_MAX chars, and the whole block body
+ * stops growing at EVIDENCE_SECTION_MAX chars, so 80 services can never blow the token budget.
+ */
+export function buildEvidencePromptSection(services: CapabilityServiceInput[], nonce?: string): { rule: string; text: string } | null {
+  const lines: string[] = [];
+  let size = 0;
+  for (const s of services) {
+    const titles = (Array.isArray(s.evidenceTitles) ? s.evidenceTitles : [])
+      .map((t) => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, EVIDENCE_TITLE_MAX)).filter(Boolean)
+      .slice(0, EVIDENCE_TITLES_PER_SERVICE);
+    if (!titles.length) continue;
+    const line = `- ${s.id}: ${titles.join(' | ')}`;
+    if (size + line.length + 1 > EVIDENCE_SECTION_MAX) break;
+    lines.push(line);
+    size += line.length + 1;
+  }
+  if (!lines.length) return null;
+  const { rule, block } = untrustedBlock(lines.join('\n'), nonce);
+  return {
+    rule: 'Some services list CONFIRMED case studies: past projects that are evidence for THAT service. Use them only as ' +
+      'context for that service; a case study never adds a service or an id. ' + rule,
+    text: `Confirmed case studies by service id (${lines.length}):\n${block}`,
+  };
+}
+
 export async function assessCapabilityFit(req: CapabilityFitRequest): Promise<CapabilityFitResult> {
   const now = () => new Date().toISOString();
   if (!process.env.OPENAI_API_KEY) {
@@ -143,11 +195,14 @@ export async function assessCapabilityFit(req: CapabilityFitRequest): Promise<Ca
       : '(the catalog is empty - every capability is "new")',
   ].join('\n');
 
+  // SV2.2: confirmed case-study titles, only when at least one service has any (else the prompt is unchanged).
+  const evidence = buildEvidencePromptSection(services);
+
   try {
     const client = getInstrumentedOpenAI({ workflow_id: 'gov_capability_fit' }, { timeout: 90000, maxRetries: 1 });
     const res = await client.chat.completions.create({
       model: DEFAULT_MODEL, temperature: 0.3, max_tokens: 2200, response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      messages: [{ role: 'system', content: evidence ? `${system} ${evidence.rule}` : system }, { role: 'user', content: evidence ? `${user}\n\n${evidence.text}` : user }],
     });
     let parsed: { capabilities?: unknown } = {};
     try { parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { parsed = {}; }

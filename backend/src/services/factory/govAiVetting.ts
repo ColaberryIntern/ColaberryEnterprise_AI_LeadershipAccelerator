@@ -154,14 +154,10 @@ async function runChecks(k: VettingKey): Promise<Partial<GovAiVetting>> {
 
   const title = (opportunity.title as string | null) ?? null;
   const buyer = (opportunity.agency as string | null) ?? null;
-  const { listServiceOfferings } = await import('./serviceCatalog');
-  const services = await listServiceOfferings({ tenantId: k.tenantId, status: 'active' });
-  const { assessCapabilityFit } = await import('./govCapabilityFit');
-  const fit = await assessCapabilityFit({
-    requirements,
-    services: services.map((s: any) => ({ id: s.id, name: s.name, description: s.description, category: s.category, keywords: s.keywords })),
-    title, buyer,
-  });
+  // SV2.2: same wrapper as the Fit route, so the saved fit_json, go/no-go and coverage all see identical capabilities
+  // (evidence on have, possibleProof on gaps, the flagged unproven-have downgrade).
+  const { assessCapabilityFitWithProof } = await import('./govCapabilityFitWithProof');
+  const { fit, services } = await assessCapabilityFitWithProof({ tenantId: k.tenantId, requirements, title, buyer });
   if (fit.error) throw new Error(fit.error); // a failed fit is a failure to retry, never 0% coverage
 
   const { generateGoNoGo } = await import('./govAiGoNoGo');

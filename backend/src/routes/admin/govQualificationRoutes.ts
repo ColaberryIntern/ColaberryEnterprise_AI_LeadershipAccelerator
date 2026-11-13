@@ -37,8 +37,7 @@ import { inspectZipSafety } from '../../services/factory/proposal/zipSafety';
 import { generateRiskNarrative, generateProposalSummary, generateClarificationQuestions } from '../../services/factory/govBidNarrative';
 import { generateBuildSpec } from '../../services/factory/govBuildSpec';
 import { generateGovBuildPlanAI } from '../../services/factory/govBuildPlanAI';
-import { assessCapabilityFit } from '../../services/factory/govCapabilityFit';
-import { listServiceOfferings } from '../../services/factory/serviceCatalog';
+import { assessCapabilityFitWithProof } from '../../services/factory/govCapabilityFitWithProof';
 import { materializeGovBuildProject, GovMaterializeError, type GovMaterializeReason } from '../../services/factory/govProjectMaterialization';
 
 /**
@@ -723,12 +722,10 @@ router.post('/api/admin/factory/qualification/:canonicalOpportunityId/capability
   const scope = await scopeOrFail(res, 'gov_capability_fit_scope', { canonicalOpportunityId });
   if (!scope) return;
   try {
-    const services = await listServiceOfferings({ tenantId: scope.tenantId, status: 'active' });
-    const result = await assessCapabilityFit({
-      requirements: body.data.requirements,
-      services: services.map((s: any) => ({ id: s.id, name: s.name, description: s.description, category: s.category, keywords: s.keywords })),
-      title: body.data.title ?? null,
-      buyer: body.data.buyer ?? null,
+    // SV2.2: the same wrapper the ZIP vetting uses - cites confirmed case studies on have, possibleProof on gaps, and
+    // downgrades an unproven have only when ENABLE_GOV_FIT_REQUIRE_PROOF is on.
+    const { fit: result } = await assessCapabilityFitWithProof({
+      tenantId: scope.tenantId, requirements: body.data.requirements, title: body.data.title ?? null, buyer: body.data.buyer ?? null,
     });
     if (result.error) { res.status(result.error.includes('No established') ? 400 : 503).json({ error: result.error }); return; }
     res.json(result);
