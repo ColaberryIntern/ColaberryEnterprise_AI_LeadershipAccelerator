@@ -1,20 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../../utils/api';
-import FlowSparkline from '../../components/admin/revenueFlow/FlowSparkline';
+import api from '../../../utils/api';
+import FlowSparkline from './FlowSparkline';
 import FlowTimeline, {
   TimelineClassification,
   TimelineEvent,
-} from '../../components/admin/revenueFlow/FlowTimeline';
-import FlowTableView from '../../components/admin/revenueFlow/FlowTableView';
-import BidPricingPanel, { FlaggedBid } from '../../components/admin/revenueFlow/BidPricingPanel';
-import { TONE, paintFor, streamPaint } from '../../components/admin/revenueFlow/flowTokens';
+} from './FlowTimeline';
+import FlowTableView from './FlowTableView';
+import BidPricingPanel, { FlaggedBid } from './BidPricingPanel';
+import { TONE, paintFor, streamPaint } from './flowTokens';
 
 /**
- * R16 Phase 2 — the Revenue Flow dashboard.
+ * R16 — the Revenue Flow dashboard, rendered at the TOP of the Revenue Room.
  *
  * Ali: "a dashboard at the top so we can see the big picture and all the pieces that went
  * into it. Like a tracking system."
+ *
+ * ── WHY THIS IS A COMPONENT AND NOT A PAGE ───────────────────────────────────────────────
+ *
+ * It shipped as its own page at `/admin/revenue-flow`, beside the Revenue Room. Ali, on
+ * seeing it: "looks good - just not connected to Revenue Room."
+ *
+ * He was right, and the fix was not a link. Two sidebar entries covering overlapping
+ * initiatives is the same duplication he had already told me to collapse once, when
+ * Commercialization and the Revenue Room each showed the same annualized figure under a
+ * different name. Adding a link would have left both doors open.
+ *
+ * His original ask said it plainly and I read past it: "THE REVENUE ROOM, I want to be able
+ * to create some type of Visual…" and "dashboard AT THE TOP". So this is a component the
+ * Room renders above its initiative cards, `/admin/revenue-flow` redirects there so any
+ * saved link still resolves, and there is one door into revenue again.
  *
  * ── THE TOP ROW HAS NO TOTAL, AND THAT IS THE DESIGN ─────────────────────────────────────
  *
@@ -102,7 +117,7 @@ function HeroTile({
   );
 }
 
-export default function AdminRevenueFlowPage() {
+export default function RevenueFlowDashboard() {
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('');
@@ -133,32 +148,23 @@ export default function AdminRevenueFlowPage() {
 
   if (error) {
     return (
-      <div className="container py-4">
-        <div className="alert alert-danger" data-testid="revenue-flow-error">{error}</div>
-      </div>
+      <div className="alert alert-danger" data-testid="revenue-flow-error">{error}</div>
     );
   }
   if (!board) {
-    return <div className="container py-4 text-muted" data-testid="revenue-flow-loading">Loading the Revenue Flow board…</div>;
+    return <div className="text-muted" data-testid="revenue-flow-loading">Loading the Revenue Flow board…</div>;
   }
 
   const h = board.headline;
   const govBids = board.streams.find((s) => s.key === 'gov_pipeline')?.bids ?? [];
 
   return (
-    <div className="container py-4" data-testid="revenue-flow">
-      <div className="d-flex align-items-start justify-content-between flex-wrap mb-3">
-        <div>
-          <h1 className="h4 mb-1">Revenue Flow</h1>
-          <div className="text-muted small">
-            Where revenue comes from, what stage each piece is at, and every dated event
-            behind the numbers. As of {new Date(board.asOf).toLocaleString()}.
-          </div>
-        </div>
-        <Link className="btn btn-outline-secondary btn-sm" to="/admin/revenue-room">
-          Revenue Room cards
-        </Link>
+    <div data-testid="revenue-flow">
+      <div className="text-muted small mb-3" data-testid="revenue-flow-asof">
+        Where revenue comes from, what stage each piece is at, and every dated event behind
+        the numbers. As of {new Date(board.asOf).toLocaleString()}.
       </div>
+
 
       {/* ── THE BIG PICTURE ───────────────────────────────────────────────────────────── */}
       <div className="row" data-testid="revenue-flow-headline">
