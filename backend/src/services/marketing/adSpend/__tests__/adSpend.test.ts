@@ -1,7 +1,7 @@
 import { allocateSpend, daysBetween, SpendFact } from '../spendAllocation';
 import { buildProfitability, CohortRow } from '../profitability';
 import { parseSpendCsv } from '../spendCsv';
-import { parseDay, parseMoneyToCents, SpendInputSchema } from '../spendInput';
+import { parseApiMoneyToCents, parseDay, parseMoneyToCents, SpendInputSchema } from '../spendInput';
 import { insightToInput, readMetaAdsConfig, runMetaSpendSync, SyncDeps } from '../metaSpendSync';
 import { canonicalUtmSource, mergeSourceShapes, PLACEMENT_FOR_SOURCE, SourceCampaignGroup } from '../utmSource';
 
@@ -466,5 +466,103 @@ describe('mergeSourceShapes (the spend entry form suggestions)', () => {
     mergeSourceShapes(rows, 100);
     expect(JSON.stringify(rows)).toBe(snapshot);
     expect(mergeSourceShapes([], 100)).toEqual([]);
+  });
+});
+
+/**
+ * Regression for the production incident of 2026-11-13: the Meta spend sync silently dropped
+ * 7 of 55 rows, $397.17 of $3,407.56, because Meta reports sub-cent precision and the money
+ * parser refused it. Measured against the live ad account, not imagined.
+ */
+describe('sub-cent API spend (2026-11-13 incident)', () => {
+  it('parses the exact values Meta returned, which the strict parser refused', () => {
+    // These five strings are verbatim from act_661181097279671 on 2026-11-13.
+    expect(parseMoneyToCents('134.693522')).toBeNull();       // the bug: refused
+    expect(parseApiMoneyToCents('134.693522')).toBe(13469);   // the fix: kept
+    expect(parseApiMoneyToCents('73.216479')).toBe(7322);
+    expect(parseApiMoneyToCents('62.858263')).toBe(6286);
+    expect(parseApiMoneyToCents('33.521737')).toBe(3352);
+    expect(parseApiMoneyToCents('0.189939')).toBe(19);
+  });
+
+  it('rounds half-up at the cent, using integers so there is no floating point drift', () => {
+    expect(parseApiMoneyToCents('1.005')).toBe(101);
+    expect(parseApiMoneyToCents('1.004')).toBe(100);
+    expect(parseApiMoneyToCents('9.999')).toBe(1000);
+    expect(parseApiMoneyToCents('0.1')).toBe(10);
+    expect(parseApiMoneyToCents('19.99')).toBe(1999);
+    expect(parseApiMoneyToCents('$1,234.56')).toBe(123456);
+    // The sibling function's own case, so the two cannot drift apart on ordinary money.
+    expect(parseApiMoneyToCents('0.3')).toBe(parseMoneyToCents('0.3'));
+  });
+
+  it('still refuses what is genuinely not money, so bad rows are dropped not zeroed', () => {
+    expect(parseApiMoneyToCents('n/a')).toBeNull();
+    expect(parseApiMoneyToCents('-5')).toBeNull();
+    expect(parseApiMoneyToCents('')).toBeNull();
+    expect(parseApiMoneyToCents(null)).toBeNull();
+    expect(parseApiMoneyToCents('12.3.4')).toBeNull();
+  });
+
+  it('keeps human input strict: three decimals typed by a person is still a typo', () => {
+    // Deliberately NOT relaxed. parseSpendCsv reports such a line by number rather than
+    // importing a guess, and that is the right behaviour for a hand-made sheet.
+    expect(parseMoneyToCents('12.345')).toBeNull();
+  });
+
+  it('the dropped row now survives insightToInput', () => {
+    const dropped = {
+      campaign_id: '52708443249234', campaign_name: 'Oct- Start with $0 today Lead Camapign',
+      spend: '134.693522', impressions: '2013', clicks: '126',
+      date_start: '2026-10-30', date_stop: '2026-10-30', publisher_platform: 'facebook',
+    };
+    expect(insightToInput(dropped, '661181097279671')).toMatchObject({
+      amountCents: 13469, placement: 'facebook', campaignRef: '52708443249234',
+    });
+  });
+});
+
+describe('skipped rows are reported, never swallowed', () => {
+  const env = { META_ADS_ACCESS_TOKEN: 'EAAsecretXYZ', META_AD_ACCOUNT_ID: 'act_123456789' } as NodeJS.ProcessEnv;
+  const deps = (responses: Array<{ status: number; body: unknown }>): SyncDeps => ({
+    env,
+    sleep: jest.fn(async () => undefined),
+    write: jest.fn(async (rows: unknown[]) => rows.length),
+    http: jest.fn(async () => { const r = responses.shift(); if (!r) throw new Error('no more'); return r; }),
+  } as unknown as SyncDeps);
+
+  const good = {
+    campaign_id: '527', campaign_name: 'AI', spend: '125.50', impressions: '1000', clicks: '20',
+    date_start: '2026-10-01', date_stop: '2026-10-01', publisher_platform: 'instagram',
+  };
+  const unusable = { ...good, spend: 'n/a' };
+
+  it('counts rows the parser refused instead of discarding them in silence', async () => {
+    const r = await runMetaSpendSync({ since: '2026-10-01', until: '2026-10-01' }, deps([
+      { status: 200, body: { currency: 'USD', name: 'acct' } },
+      { status: 200, body: { data: [good, unusable, unusable] } },
+    ]));
+    expect(r.outcome).toBe('success');
+    expect(r.rowsWritten).toBe(1);
+    expect(r.rowsSkipped).toBe(2);
+  });
+
+  it('reports zero explicitly on a clean run, so the field is always meaningful', async () => {
+    const r = await runMetaSpendSync({ since: '2026-10-01', until: '2026-10-01' }, deps([
+      { status: 200, body: { currency: 'USD', name: 'acct' } },
+      { status: 200, body: { data: [good] } },
+    ]));
+    expect(r.rowsSkipped).toBe(0);
+    expect(r.rowsWritten).toBe(1);
+  });
+
+  it('a sub-cent row is no longer one of the skipped: the whole point of the fix', async () => {
+    const subCent = { ...good, spend: '134.693522' };
+    const r = await runMetaSpendSync({ since: '2026-10-01', until: '2026-10-01' }, deps([
+      { status: 200, body: { currency: 'USD', name: 'acct' } },
+      { status: 200, body: { data: [subCent] } },
+    ]));
+    expect(r.rowsSkipped).toBe(0);
+    expect(r.rowsWritten).toBe(1);
   });
 });

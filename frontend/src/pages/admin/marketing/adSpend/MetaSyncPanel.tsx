@@ -25,7 +25,13 @@ export default function MetaSyncPanel({ status, onSynced }: Props) {
     try {
       const r = await syncMetaSpend(30);
       if (r.outcome === 'success') {
-        setMessage({ kind: 'ok', text: `Pulled ${r.rowsWritten} day-and-placement rows for ${r.rangeStart} to ${r.rangeEnd}.` });
+        // A success that silently discarded rows is not a success worth a green message.
+        // On 2026-11-13 a run of exactly this shape dropped 7 rows and $397.17, and the
+        // panel said "Pulled 48 rows" with no hint anything was missing.
+        const base = `Pulled ${r.rowsWritten} day-and-placement rows for ${r.rangeStart} to ${r.rangeEnd}.`;
+        setMessage(r.rowsSkipped
+          ? { kind: 'error', text: `${base} ${r.rowsSkipped} row(s) could not be read and are MISSING from the ledger for this range, so the totals understate spend.` }
+          : { kind: 'ok', text: base });
         onSynced();
       } else {
         setMessage({ kind: 'error', text: `${r.outcome === 'skipped' ? 'Skipped' : 'Failed'}${r.errorClass ? ` (${r.errorClass})` : ''}: ${r.error ?? 'no detail'}` });

@@ -130,6 +130,12 @@ export interface ImportResult {
 export interface SyncResult {
   outcome: 'success' | 'failure' | 'skipped';
   rowsWritten: number;
+  /**
+   * API rows the backend could not parse, and therefore did NOT store. Optional only
+   * because a browser may be talking to a backend deployed before 2026-11-13; treat
+   * undefined as "this build cannot tell you", not as zero.
+   */
+  rowsSkipped?: number;
   rangeStart: string;
   rangeEnd: string;
   errorClass: string | null;
