@@ -47,6 +47,17 @@ describe('buildKpis', () => {
     const k = buildKpis(summary({ services: [svc(), svc({ id: 'svc-r', status: 'retired', caseStudies: [{ ...svc().caseStudies[0], id: 'cs-retired' }] })] }));
     expect(k).toMatchObject({ active: 1, growth: 0, linkedCaseStudies: 2, linkedInside: 1, linkedOutside: 1, proven: 1, provenPct: 100, avgScore: 75, blocked: 1 });
   });
+  it('splits no-proof services into active vs growth, so the tile never reads as "more gaps than services"', () => {
+    const k = buildKpis(summary({ services: [
+      svc(),
+      svc({ id: 'svc-b', evidenceTier: 'none', caseStudies: [] }),
+      svc({ id: 'svc-c', status: 'growth', evidenceTier: 'none', caseStudies: [] }),
+      svc({ id: 'svc-d', status: 'growth', evidenceTier: 'none', caseStudies: [] }),
+      svc({ id: 'svc-r', status: 'retired', evidenceTier: 'none', caseStudies: [] }),
+    ] }));
+    expect(k).toMatchObject({ active: 2, growth: 2, noProof: 3, noProofActive: 1, noProofGrowth: 2 });
+    expect(k.noProofActive + k.noProofGrowth).toBe(k.noProof);
+  });
   it('an empty catalog has no percentage and no average (null, not 0)', () => {
     const k = buildKpis(emptySummary());
     expect(k.provenPct).toBeNull();

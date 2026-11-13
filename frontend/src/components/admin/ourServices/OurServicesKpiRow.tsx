@@ -36,7 +36,7 @@ export default function OurServicesKpiRow({ kpis }: Props): React.ReactElement {
         <StatCard label="Avg evidence score" value={kpis.avgScore == null ? notAvailable('no services to average') : String(kpis.avgScore)} icon="ruler-line" tone="warning" hint={healthHint(kpis.avgScore)} />
       </div>
       <div className="col-6 col-lg-4 col-xxl-2">
-        <StatCard label="Services with no proof" value={String(kpis.noProof)} icon="error-warning-line" tone="danger" hint={'can\'t claim "We have it"'} />
+        <StatCard label="Services with no proof" value={String(kpis.noProof)} icon="error-warning-line" tone="danger" hint={`${kpis.noProofActive} active · ${kpis.noProofGrowth} growth`} />
       </div>
       <div className="col-6 col-lg-4 col-xxl-2">
         <StatCard label="Blocked case studies" value={String(kpis.blocked)} icon="forbid-line" tone="danger" hint="need a service link" />
