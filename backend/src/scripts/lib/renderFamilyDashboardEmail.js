@@ -30,8 +30,16 @@ const C = {
 
 const FONT = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
 
+// Em-dashes are banned by mandrillPreflight in any spelling (literal U+2014 or an entity), and a
+// single one blocks the whole send. Basecamp todo titles and source details are free text that
+// often carry one, so every interpolated string is normalised to a spaced hyphen here rather than
+// trusting the data. Without this, one todo title silently stopped the dashboard for every reader.
+function noDash(s) {
+  return String(s == null ? '' : s).replace(/\s*—\s*/g, ' - ');
+}
+
 function esc(s) {
-  return String(s == null ? '' : s)
+  return noDash(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -132,7 +140,7 @@ function dayCell({ dow, dnum, count, today }) {
   const border = today ? `border:2px solid ${C.navy}` : `border:1px solid ${C.line}`;
   const countHtml = count > 0
     ? `<div style="font-size:15px;font-weight:700;padding:4px 6px;background:${C.warnSoft};color:${C.warn};margin-top:4px;line-height:1.25;font-family:${FONT};text-align:center">${count}</div>`
-    : `<div style="font-size:10.5px;color:${C.muted};margin-top:6px;font-style:italic;font-family:${FONT}">&mdash;</div>`;
+    : `<div style="font-size:10.5px;color:${C.muted};margin-top:6px;font-style:italic;font-family:${FONT}">-</div>`;
   return `<td valign="top" width="14.28%" style="${border};background:#ffffff;padding:8px;vertical-align:top">
     <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:${C.ink2};font-weight:700;font-family:${FONT}">${esc(dow)}</div>
     <div style="font-size:16px;font-weight:700;color:${today ? C.navy : C.ink};line-height:1.1;font-family:${FONT}">${esc(String(dnum))}</div>
@@ -351,7 +359,7 @@ Overdue: ${data.kpis.overdue}
 New since yesterday: ${data.kpis.newSinceYesterday}
 Money pending: $${data.kpis.moneyPendingTotal.toFixed(2)}
 Data sources live: ${data.kpis.sourcesConnected} / ${data.kpis.sourcesTotal}
-${data.risks.length ? `\nFlags: ${data.risks.map((r) => r.title).join('; ')}` : ''}
+${data.risks.length ? `\nFlags: ${data.risks.map((r) => noDash(r.title)).join('; ')}` : ''}
 
 This is the HTML-only format. Open in a modern email client to see the full layout.
 
