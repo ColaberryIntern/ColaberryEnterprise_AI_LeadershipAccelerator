@@ -1,0 +1,941 @@
+{
+  "kind": "services_taxonomy_v2",
+  "proposedOn": "2026-11-13",
+  "status": "proposed",
+  "basedOnSnapshot": "docs/services/baseline/catalog_2026-11-13.json",
+  "basedOnManifest": "docs/services/whitepaper_manifest.json",
+  "services": [
+    {
+      "key": "ai-agents-managed-ai-workforce",
+      "action": "UPDATE",
+      "existingIds": [
+        "116262b9-d496-45f2-93e1-d4fdcde94ba6"
+      ],
+      "name": "AI Agents & Managed AI Workforce",
+      "category": "AI",
+      "description": "Governed AI agents, including multilingual voice agents and customer-service bot flows, with defined jobs, bounded tools, human approval and escalation paths. Delivered for a utility's program-eligibility bot flows and an agentic voice solution that automates inbound customer calls.",
+      "keywords": [
+        "ai agents",
+        "agentic ai",
+        "voice ai",
+        "conversational ai",
+        "chatbot",
+        "contact center",
+        "ivr",
+        "customer service automation",
+        "llm agents",
+        "process automation",
+        "virtual assistant",
+        "ai operations"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        },
+        {
+          "code": "518210",
+          "title": "Computing Infrastructure Providers, Data Processing, Web Hosting, and Related Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "D399",
+          "title": "IT and Telecom - Other IT and Telecommunications"
+        }
+      ],
+      "industries": [
+        "Utilities",
+        "Conversational AI"
+      ],
+      "capabilities": [
+        "Agentic AI & LLM Applications",
+        "Conversational AI & Chatbots",
+        "Natural Language Processing",
+        "Customer Engagement & Notifications"
+      ],
+      "caseStudies": [
+        "ConvoAI-Agentic AI Voice Solution.pdf",
+        "Utilities - Bot Flows for Customer Program Eligibility.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Existing active service already claims conversational and voice AI; two delivered case studies now back the claim. Keywords trimmed from 16 to 12 to meet the prompt limit."
+    },
+    {
+      "key": "enterprise-ai-build-system-modernization",
+      "action": "UPDATE",
+      "existingIds": [
+        "d5ffd2d2-e5eb-4623-aa4e-a55922bbb06b"
+      ],
+      "name": "Enterprise AI Build & System Modernization",
+      "category": "IT",
+      "description": "Production architecture, custom application development, cloud re-platforming and edge-security migration with access controls, audit logging and documentation the client can operate. Delivered AWS and Akamai re-platforming and an in-house short-URL service for a major utility.",
+      "keywords": [
+        "custom software development",
+        "legacy modernization",
+        "cloud migration",
+        "aws",
+        "re-platforming",
+        "application security",
+        "akamai",
+        "terraform",
+        "system integration",
+        "api development",
+        "web application",
+        "devops"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        },
+        {
+          "code": "541519",
+          "title": "Other Computer Related Services"
+        },
+        {
+          "code": "518210",
+          "title": "Computing Infrastructure Providers, Data Processing, Web Hosting, and Related Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "D308",
+          "title": "IT and Telecom - Programming"
+        },
+        {
+          "code": "D310",
+          "title": "IT and Telecom - Cyber Security and Data Backup"
+        }
+      ],
+      "industries": [
+        "Utilities"
+      ],
+      "capabilities": [
+        "Cloud Migration & Replatforming",
+        "Cloud Infrastructure & DevOps",
+        "Application Security & CDN",
+        "Web & Mobile Application Development"
+      ],
+      "caseStudies": [
+        "Utilities -  AWS Replatforming for Enhanced Application Hosting.pdf",
+        "Utilities -  Akamai Replatforming for Enhanced Security.pdf",
+        "Utilities - Short URL Management.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "The modernization claim gains three delivered utility projects. Voice/IVR keywords move to AI Agents so the two services stop competing for the same capability."
+    },
+    {
+      "key": "managed-data-services-bi-modernization",
+      "action": "UPDATE",
+      "existingIds": [
+        "9ae206c8-cd6a-45ae-8174-34d45555e470"
+      ],
+      "name": "Managed Data Services & BI Modernization",
+      "category": "Data",
+      "description": "Managed data engineering, data-quality improvement and BI modernization: pipelines, data lakes, dashboards and AI-powered reporting on Databricks, Microsoft Fabric and AWS. Delivered power-consumption analytics and forecast-grade data-quality pipelines for utilities.",
+      "keywords": [
+        "data engineering",
+        "data pipeline",
+        "etl",
+        "data quality",
+        "data lake",
+        "business intelligence",
+        "dashboards",
+        "bi modernization",
+        "databricks",
+        "microsoft fabric",
+        "aws glue",
+        "managed data services"
+      ],
+      "naics": [
+        {
+          "code": "518210",
+          "title": "Computing Infrastructure Providers, Data Processing, Web Hosting, and Related Services"
+        },
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        },
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541519",
+          "title": "Other Computer Related Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "D399",
+          "title": "IT and Telecom - Other IT and Telecommunications"
+        },
+        {
+          "code": "7030",
+          "title": "Information Technology Software"
+        }
+      ],
+      "industries": [
+        "Utilities",
+        "AgTech"
+      ],
+      "capabilities": [
+        "Data Engineering & ETL Pipelines",
+        "Data Quality & Governance",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "caseStudies": [
+        "Utilities - DataEngineeringForPowerConsumptionAnalytics.pdf",
+        "Utilities - Enhancing Energy Forecast Accuracy through Data Quality Improvement.pdf",
+        "AgTech - Streamlining Agriculture with Advanced Data Science.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Adds data-quality as an explicit capability (bids ask for it by name) and three delivered pipelines as evidence."
+    },
+    {
+      "key": "data-talent-pipeline",
+      "action": "UPDATE",
+      "existingIds": [
+        "f97e910d-d08e-44e4-b9a3-a0b8c7e58bb5"
+      ],
+      "name": "Data Talent Pipeline (Hire-Train-Deploy)",
+      "category": "Staffing",
+      "description": "Sourcing, training and placing data and AI talent, including internship-to-hire pipelines, to build client teams. For an agricultural market leader we reduced time-to-fill from 9 months to about 2 months per position.",
+      "keywords": [
+        "talent pipeline",
+        "hire train deploy",
+        "apprenticeship",
+        "internship",
+        "recruiting",
+        "talent acquisition",
+        "data talent",
+        "reskilling",
+        "direct placement",
+        "workforce pipeline"
+      ],
+      "naics": [
+        {
+          "code": "561311",
+          "title": "Employment Placement Agencies"
+        },
+        {
+          "code": "561320",
+          "title": "Temporary Help Services"
+        },
+        {
+          "code": "611430",
+          "title": "Professional and Management Development Training"
+        }
+      ],
+      "psc": [
+        {
+          "code": "R499",
+          "title": "Support- Professional: Other"
+        },
+        {
+          "code": "U008",
+          "title": "Education/Training- Training/Curriculum Development"
+        }
+      ],
+      "industries": [
+        "AgTech"
+      ],
+      "capabilities": [
+        "Data Engineering & ETL Pipelines",
+        "Machine Learning Modeling"
+      ],
+      "caseStudies": [
+        "AgTech - Data Capability Development.pdf"
+      ],
+      "thinEvidence": true,
+      "rationale": "One strong case study with verified numbers (time-to-fill 9 months to about 2; over 90% interview-to-hire). Thin by count, strong by quality."
+    },
+    {
+      "key": "consulting-staff-augmentation",
+      "action": "UPDATE",
+      "existingIds": [
+        "a42cf254-136a-4de4-8f0d-ff265cffd73e"
+      ],
+      "name": "Consulting & Staff Augmentation (Embedded Architects / Data Talent)",
+      "category": "Staffing",
+      "description": "Senior architects, data scientists and engineers embedded in the client team to lead implementation and transfer capability. Delivered embedded load-forecasting consultants for an energy company and a trained data team for an agricultural leader.",
+      "keywords": [
+        "staff augmentation",
+        "contingent staffing",
+        "embedded team",
+        "technical leadership",
+        "it staffing",
+        "consulting",
+        "subject matter expert",
+        "data science staffing",
+        "data engineering staffing",
+        "architecture review"
+      ],
+      "naics": [
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        },
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "561320",
+          "title": "Temporary Help Services"
+        },
+        {
+          "code": "541690",
+          "title": "Other Scientific and Technical Consulting Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "D307",
+          "title": "IT and Telecom - IT Strategy and Architecture"
+        },
+        {
+          "code": "R499",
+          "title": "Support- Professional: Other"
+        }
+      ],
+      "industries": [
+        "Utilities",
+        "AgTech"
+      ],
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Demand & Load Forecasting",
+        "Data Engineering & ETL Pipelines"
+      ],
+      "caseStudies": [
+        "Utilities - ML for Accuracy of Load Forecasting .pdf",
+        "AgTech - Data Capability Development.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Both papers are explicitly consultant-placement engagements, which is exactly this service."
+    },
+    {
+      "key": "ongoing-support-maintenance",
+      "action": "UPDATE",
+      "existingIds": [
+        "ec987121-7935-415f-9467-7298edd26343"
+      ],
+      "name": "Ongoing Support and Maintenance",
+      "category": "IT",
+      "description": "Post-launch support and maintenance for the systems we build or inherit: monitoring, fixes, patching and enhancements. Includes service-level reporting, as on the customer-facing utility applications we keep improving after launch.",
+      "keywords": [
+        "application support",
+        "maintenance",
+        "operations and maintenance",
+        "help desk",
+        "sla",
+        "monitoring",
+        "enhancements",
+        "security patching",
+        "sustainment",
+        "tier 2 support"
+      ],
+      "naics": [
+        {
+          "code": "541519",
+          "title": "Other Computer Related Services"
+        },
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D399",
+          "title": "IT and Telecom - Other IT and Telecommunications"
+        },
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        }
+      ],
+      "industries": [
+        "Utilities"
+      ],
+      "capabilities": [
+        "Web & Mobile Application Development",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "caseStudies": [
+        "Utilities - Scam Reporting Tool.pdf"
+      ],
+      "thinEvidence": true,
+      "rationale": "Bids ask for O&M constantly (this name was matched 18 times). Today the row has no category, keywords or NAICS; this fills them. Evidence is thin: one paper describes post-launch improvements."
+    },
+    {
+      "key": "training-documentation",
+      "action": "UPDATE",
+      "existingIds": [
+        "d39e1f7b-5ecf-4e44-903a-75a7fad6f1d0"
+      ],
+      "name": "Training and Documentation",
+      "category": "Training",
+      "description": "End-user and administrator training plus system documentation for delivered solutions. Train-the-trainer sessions, user guides, runbooks and recorded walkthroughs, backed by Colaberry's training platform and instructors.",
+      "keywords": [
+        "end user training",
+        "user documentation",
+        "train the trainer",
+        "user guides",
+        "runbooks",
+        "knowledge transfer",
+        "technical writing",
+        "system documentation",
+        "onboarding"
+      ],
+      "naics": [
+        {
+          "code": "611430",
+          "title": "Professional and Management Development Training"
+        },
+        {
+          "code": "541519",
+          "title": "Other Computer Related Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "U008",
+          "title": "Education/Training- Training/Curriculum Development"
+        },
+        {
+          "code": "U099",
+          "title": "Education/Training- Other"
+        }
+      ],
+      "industries": [
+        "AgTech"
+      ],
+      "capabilities": [
+        "Data Engineering & ETL Pipelines"
+      ],
+      "caseStudies": [
+        "AgTech - Data Capability Development.pdf"
+      ],
+      "thinEvidence": true,
+      "rationale": "Bids ask for training and documentation as a deliverable (matched 17 times). Fills empty fields; evidence is one training-heavy engagement."
+    },
+    {
+      "key": "predictive-maintenance-asset-health",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Predictive Maintenance & Asset Health Analytics",
+      "category": "AI",
+      "description": "Machine-learning and digital-twin models that predict equipment failure and asset aging from sensor, voltage and thermal data, so maintenance moves from reactive to planned. Delivered for manufacturers and a global utility-equipment maker.",
+      "keywords": [
+        "predictive maintenance",
+        "asset health",
+        "condition monitoring",
+        "digital twin",
+        "time to failure",
+        "iot sensors",
+        "reliability",
+        "transformer aging",
+        "machine learning",
+        "edge analytics"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541690",
+          "title": "Other Scientific and Technical Consulting Services"
+        },
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "R425",
+          "title": "Support- Professional: Engineering/Technical"
+        }
+      ],
+      "industries": [
+        "Manufacturing",
+        "Utilities"
+      ],
+      "capabilities": [
+        "Predictive Maintenance",
+        "Digital Twin & Simulation",
+        "IoT & Real-Time Streaming",
+        "Machine Learning Modeling"
+      ],
+      "caseStudies": [
+        "Manf-PredictiveMaintenance.pdf",
+        "Manufacturing - Predictive Maintenance for Power Line Devices Using Real-Time Voltage Data and AI.pdf",
+        "Manf-Digital Twins Age Prediction.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Three delivered papers, two with quantified outcomes; a common public-works and utility requirement."
+    },
+    {
+      "key": "computer-vision-anomaly-detection",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Computer Vision & Anomaly Detection",
+      "category": "AI",
+      "description": "Deep-learning image analysis and anomaly detection that catch defects, process deviations and quality failures early. Delivered surface and corrosion inspection, process-stream monitoring, automated lab QC and medical-image assessment.",
+      "keywords": [
+        "computer vision",
+        "anomaly detection",
+        "defect detection",
+        "quality control",
+        "image analysis",
+        "deep learning",
+        "inspection",
+        "process monitoring",
+        "medical imaging",
+        "automated qc"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541715",
+          "title": "Research and Development in the Physical, Engineering, and Life Sciences (except Nanotechnology and Biotechnology)"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "R425",
+          "title": "Support- Professional: Engineering/Technical"
+        }
+      ],
+      "industries": [
+        "Manufacturing",
+        "Healthcare",
+        "AgTech"
+      ],
+      "capabilities": [
+        "Computer Vision",
+        "Anomaly Detection",
+        "Deep Learning",
+        "Medical Imaging AI"
+      ],
+      "caseStudies": [
+        "Manf-Anamoly Detection in Process Streams.pdf",
+        "Manf-Corrosion and Surface Defect Detection in Pipelines and Metal Coils.pdf",
+        "Healthcare - Quicker Bone Age Assessments Using Deep Learning.pdf",
+        "AgTech - Revolutionizing DNA Genotyping with Automated Quality Control.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Four papers across three industries; folds the single medical-imaging study in here instead of a one-paper service."
+    },
+    {
+      "key": "energy-demand-load-forecasting",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Energy Demand & Load Forecasting",
+      "category": "AI",
+      "description": "Machine-learning forecasts of electrical load and energy demand, from circuit-level models to system-wide demand. Includes the data-quality work that makes forecasts accurate enough for regulators and grid planning.",
+      "keywords": [
+        "load forecasting",
+        "demand forecasting",
+        "energy forecasting",
+        "time series",
+        "utility analytics",
+        "grid planning",
+        "propensity models",
+        "machine learning",
+        "smart meter data",
+        "energy analytics"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541690",
+          "title": "Other Scientific and Technical Consulting Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "R499",
+          "title": "Support- Professional: Other"
+        }
+      ],
+      "industries": [
+        "Utilities"
+      ],
+      "capabilities": [
+        "Demand & Load Forecasting",
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Data Quality & Governance"
+      ],
+      "caseStudies": [
+        "Utilities - Advanced Load Forecasting with Machine Learning.pdf",
+        "Utilities - ML for Accuracy of Load Forecasting .pdf",
+        "Utility_Energy Demand Forecasting.pdf",
+        "Utilities - Enhancing Energy Forecast Accuracy through Data Quality Improvement.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Our deepest utility track record (four papers, several with cited accuracy figures)."
+    },
+    {
+      "key": "geospatial-environmental-risk",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Geospatial, Remote Sensing & Environmental Risk Analytics",
+      "category": "AI",
+      "description": "GIS, satellite and hyperspectral analytics with machine learning for environmental risk. Delivered wildfire prediction for a utility, coastal monitoring for an environmental agency and crop-stress analysis from hyperspectral imagery.",
+      "keywords": [
+        "geospatial",
+        "gis",
+        "remote sensing",
+        "satellite imagery",
+        "hyperspectral",
+        "wildfire risk",
+        "environmental monitoring",
+        "climate analytics",
+        "coastal monitoring",
+        "spatial analysis"
+      ],
+      "naics": [
+        {
+          "code": "541370",
+          "title": "Surveying and Mapping (except Geophysical) Services"
+        },
+        {
+          "code": "541620",
+          "title": "Environmental Consulting Services"
+        },
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "R499",
+          "title": "Support- Professional: Other"
+        }
+      ],
+      "industries": [
+        "Utilities",
+        "ClimateTech",
+        "AgTech"
+      ],
+      "capabilities": [
+        "Geospatial & Remote Sensing Analytics",
+        "Hyperspectral & Imaging Analytics",
+        "Environmental & Climate Analytics",
+        "Machine Learning Modeling"
+      ],
+      "caseStudies": [
+        "Utilities -  Predicting Wildfires with Geospatial Data and AI.pdf",
+        "ClimateTech - Environmental Monitoring and Analysis in Coastal Regions.pdf",
+        "AgTech - Enhancing Agricultural Sustainability through Advanced Hyperspectral Analysis and AI.pdf",
+        "AgTech - Enhancing Crop Nitrogen Use Efficiency and Drought Resilience.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Four papers including one for a public environmental agency, the closest match to government environmental work."
+    },
+    {
+      "key": "pricing-demand-econometrics",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Pricing, Demand & Econometric Analytics",
+      "category": "Data",
+      "description": "Econometric and machine-learning models for pricing, demand forecasting and product recommendations. Delivered hybrid price-optimization models, consumption-trend forecasts and real-time substitution recommendations.",
+      "keywords": [
+        "econometrics",
+        "pricing optimization",
+        "price elasticity",
+        "demand forecasting",
+        "consumption forecasting",
+        "recommendation engine",
+        "xgboost",
+        "statistical modeling",
+        "market analysis",
+        "revenue analytics"
+      ],
+      "naics": [
+        {
+          "code": "541690",
+          "title": "Other Scientific and Technical Consulting Services"
+        },
+        {
+          "code": "541618",
+          "title": "Other Management Consulting Services"
+        },
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "B505",
+          "title": "Special Studies/Analysis- Cost Benefit"
+        },
+        {
+          "code": "R499",
+          "title": "Support- Professional: Other"
+        }
+      ],
+      "industries": [
+        "AgTech"
+      ],
+      "capabilities": [
+        "Econometrics & Pricing Optimization",
+        "Time-Series Forecasting",
+        "Recommendation Systems",
+        "Machine Learning Modeling"
+      ],
+      "caseStudies": [
+        "AgTech - Advanced Econometric Pricing Model for the Agriculture Science Industry.pdf",
+        "AgTech - Optimizing Pricing Strategy in Agriculture with Advanced Econometrics.pdf",
+        "AgTech - Leveraging Machine Learning to Forecast China_s Food Consumption Trends.pdf",
+        "AgTech - Enhancing Customer Experience with AI-Driven Product Substitution Recommendations.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Four papers; translates to public-sector rate studies, fee analysis and demand forecasting."
+    },
+    {
+      "key": "ag-life-science-rd-analytics",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Agricultural & Life-Science R&D Analytics",
+      "category": "AI",
+      "description": "Data science for research and field operations in agriculture and life sciences. Delivered spatial-biology pipelines, genotyping QC automation, crop and nursery optimization, spray-timing models and AI molecular generation.",
+      "keywords": [
+        "agricultural analytics",
+        "life sciences",
+        "research analytics",
+        "genomics",
+        "spatial biology",
+        "crop modeling",
+        "precision agriculture",
+        "molecular generation",
+        "r&d data science",
+        "lab automation"
+      ],
+      "naics": [
+        {
+          "code": "541715",
+          "title": "Research and Development in the Physical, Engineering, and Life Sciences (except Nanotechnology and Biotechnology)"
+        },
+        {
+          "code": "541690",
+          "title": "Other Scientific and Technical Consulting Services"
+        },
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "R425",
+          "title": "Support- Professional: Engineering/Technical"
+        },
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        }
+      ],
+      "industries": [
+        "AgTech",
+        "Energy"
+      ],
+      "capabilities": [
+        "Agricultural Analytics",
+        "Genomics & Lab Automation",
+        "Generative & Molecular AI",
+        "Machine Learning Modeling"
+      ],
+      "caseStudies": [
+        "AgTech - Enhancing Research Through Spatial Biology Platforms.pdf",
+        "AgTech - Optimizing Fungicide Application Timing in Vineyards Using AI.pdf",
+        "AgTech - Enhancing Agricultural Productivity Through Data-Driven Decision Making.pdf",
+        "AgTech - Streamlining Agriculture with Advanced Data Science.pdf",
+        "AgTech - Revolutionizing DNA Genotyping with Automated Quality Control.pdf",
+        "Energy - Advancing Catalyst Formulation with AI-Driven Molecular Generation.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Our largest cluster (six papers); relevant to USDA, land-grant university and research-agency solicitations."
+    },
+    {
+      "key": "digital-financial-inclusion-risk",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Digital Financial Inclusion & Credit Risk Scoring",
+      "category": "AI",
+      "description": "Digital onboarding, alternative-data credit scoring and predictive crop analytics that open finance and markets to underserved producers, delivered with ALLIN for smallholder farmers.",
+      "keywords": [
+        "financial inclusion",
+        "credit scoring",
+        "risk assessment",
+        "digital onboarding",
+        "alternative data",
+        "smallholder farmers",
+        "agricultural finance",
+        "market access",
+        "predictive analytics",
+        "fintech"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541690",
+          "title": "Other Scientific and Technical Consulting Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "R499",
+          "title": "Support- Professional: Other"
+        }
+      ],
+      "industries": [
+        "AgTech"
+      ],
+      "capabilities": [
+        "Credit Risk & Financial Scoring",
+        "Agricultural Analytics",
+        "Machine Learning Modeling",
+        "Web & Mobile Application Development"
+      ],
+      "caseStudies": [
+        "AgTech - ALLIN-Digital Onboarding and Risk Assessment for Smallholder Farmers.pdf",
+        "AgTech - ALLIN-Empowering Smallholder Farmers with Digital Ecosystem.pdf",
+        "AgTech - ALLIN-Enhancing Financial Access and Market Integration.pdf",
+        "AgTech - ALLIN-Predictive Analytics and Crop Management.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Four papers from one partner program; fits USAID, USDA and development-finance work. Names ALLIN (partner named in our own published titles) - confirm at M1."
+    },
+    {
+      "key": "customer-digital-engagement-apps",
+      "action": "NEW",
+      "existingIds": [],
+      "name": "Customer Digital Engagement Applications",
+      "category": "IT",
+      "description": "Customer-facing web and mobile features for public-service providers, built on AWS with Angular and Terraform. Delivered scam reporting, push notifications, time-of-use alerts, appointment scheduling and eligibility bots.",
+      "keywords": [
+        "customer portal",
+        "mobile app",
+        "push notifications",
+        "appointment scheduling",
+        "customer communications",
+        "web application",
+        "angular",
+        "aws",
+        "citizen engagement",
+        "self service"
+      ],
+      "naics": [
+        {
+          "code": "541511",
+          "title": "Custom Computer Programming Services"
+        },
+        {
+          "code": "541512",
+          "title": "Computer Systems Design Services"
+        }
+      ],
+      "psc": [
+        {
+          "code": "D302",
+          "title": "IT and Telecom - Systems Development"
+        },
+        {
+          "code": "D308",
+          "title": "IT and Telecom - Programming"
+        }
+      ],
+      "industries": [
+        "Utilities"
+      ],
+      "capabilities": [
+        "Web & Mobile Application Development",
+        "Customer Engagement & Notifications",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "caseStudies": [
+        "Utilities - Scam Reporting Tool.pdf",
+        "Utilities - Push Notifications Integration.pdf",
+        "Utilities - Event Scheduling Platform for Time of Use (TOU) Events.pdf",
+        "Utilities - Demand Response Switch Replacements.pdf",
+        "Utilities - Bot Flows for Customer Program Eligibility.pdf"
+      ],
+      "thinEvidence": false,
+      "rationale": "Five delivered utility features; maps directly to city and county citizen-portal and 311-style solicitations."
+    }
+  ],
+  "untouchedExistingIds": [
+    "fd23c4c3-680e-47bc-8bdf-c174e174c1a1",
+    "99c25fd6-d60e-4dea-af49-40540c1f66d6",
+    "ed6e369b-3a38-452d-88ad-0777e147d7d0",
+    "bc4ff96e-f365-4805-91ad-4f07714c4ef6",
+    "69c867ab-e50c-4643-b2fc-b03f95f4152a",
+    "c98db51d-49de-4dc1-9397-4a5bbc763e96",
+    "b274a5fe-3a8f-42d4-8270-d2241f543e82",
+    "85efa3ea-999d-466e-af1f-2c918359d1ce"
+  ],
+  "noHome": []
+}

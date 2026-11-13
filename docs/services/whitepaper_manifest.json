@@ -1,0 +1,1428 @@
+{
+  "kind": "whitepaper_manifest",
+  "version": 1,
+  "recordCount": 39,
+  "records": [
+    {
+      "sourceFile": "AgTech - ALLIN-Digital Onboarding and Risk Assessment for Smallholder Farmers.pdf",
+      "sha256": "e5017c0509501e14eefeb5571ae584a335e37091edc96a510949e1065fedeadf",
+      "basecampUploadId": 10506774075,
+      "title": "Digital Onboarding and Risk Assessment for Smallholder Farmers",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "To support smallholder farmers by providing access to essential resources and financial services through a unified digital platform. This approach addresses critical challenges such as limited access to quality seeds, financing, and market opportunities, which are vital for enhancing agricultural productivity and economic stability among smallholder farmers.",
+      "solution": "The project employs advanced data science techniques and AI to transform agricultural finance and management: ● Digital Onboarding and Risk Assessment: Utilizing machine learning algorithms to perform individualized risk assessments based on farmers' data. ● Predictive Analytics: Employing historical yield data and weather patterns to create predictive models for insurance products. ● Dynamic Risk Scoring: Developing an AI-based engine to dynamically assess and update farmers' financial risk profiles. ● Real-Time Crop Intelligence: Providing real-time insights and recommendations to farmers via SMS, enhancing decision-making and crop management. ● Adaptive Learning: Continuously updating AI ",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Credit Risk & Financial Scoring",
+        "Cloud Infrastructure & DevOps",
+        "Customer Engagement & Notifications",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization"
+      ],
+      "outcomes": [],
+      "pageCount": 8,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - ALLIN-Empowering Smallholder Farmers with Digital Ecosystem.pdf",
+      "sha256": "0ffcf5b7005a38fe7f450b3d7b5d157f37e8746281bba707e8f4cfb81c51ff5c",
+      "basecampUploadId": 10506774102,
+      "title": "Empowering Smallholder Farmers with ALLIN's Digital Ecosystem",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "The primary goal of this initiative is to support smallholder farmers by providing access to essential resources and financial services through a unified digital platform. This approach addresses critical challenges such as limited access to quality seeds, financing, and market opportunities, which are vital for enhancing agricultural productivity and economic stability among smallholder farmers.",
+      "solution": "The project employs advanced data science techniques and AI to transform agricultural finance and management: ● Digital Onboarding and Risk Assessment: Utilizing machine learning algorithms to perform individualized risk assessments based on farmers' data. ● Predictive Analytics: Employing historical yield data and weather patterns to create predictive models for insurance products. ● Dynamic Risk Scoring: Developing an AI-based engine to dynamically assess and update farmers' financial risk profiles. ● Real-Time Crop Intelligence: Providing real-time insights and recommendations to farmers via SMS, enhancing decision-making and crop management. ● Adaptive Learning: Continuously updating AI ",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Credit Risk & Financial Scoring",
+        "Cloud Infrastructure & DevOps",
+        "Customer Engagement & Notifications",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization"
+      ],
+      "outcomes": [
+        {
+          "text": "● Successfully onboarded 4,391 farmers and trained 116 agents within the FtMA Network to use the ALLIN platform. ● Enabled a subset of farmers to purchase certified potato seeds through the platform. ● Developed the Potato Area Yield-Index Insurance Product with a leading insurer, leveraging ten years of historic yield data from Nakuru County. ● Extended real-time crop intelligence via SMS to all ",
+          "numbers": [
+            "40%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 11,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - ALLIN-Enhancing Financial Access and Market Integration.pdf",
+      "sha256": "570f7a333ef7a1565531929ab91ef4890db59649e5dec81beafcbe004014283f",
+      "basecampUploadId": 10506774113,
+      "title": "Enhancing Financial Access and Market Integration",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "To support smallholder farmers by providing access to finance, micro-loans, and market opportunities through a unified digital platform. This approach addresses critical challenges such as limited access to financing and markets, which are vital for enhancing agricultural productivity and economic stability.",
+      "solution": "The project employs advanced data science techniques and AI to transform agricultural finance and management: ● Dynamic Risk Scoring: Developing an AI-based engine to dynamically assess and update farmers' financial risk profiles. ● Automated Financial Services: Automating processes from origination to disbursement and collection, reducing operational costs. ● Real-Time Crop Intelligence: Providing real-time insights and recommendations to farmers via SMS, enhancing decision-making and crop management. ● Adaptive Learning: Continuously updating AI models with new data to improve risk assessments and recommendations. ● Machine Learning Deployment: Deploying models as RESTful APIs using Azure ",
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Credit Risk & Financial Scoring",
+        "Cloud Infrastructure & DevOps",
+        "Customer Engagement & Notifications",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization"
+      ],
+      "outcomes": [],
+      "pageCount": 8,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - ALLIN-Predictive Analytics and Crop Management.pdf",
+      "sha256": "a696e7761dd85768a03fa00b9076523ec1f1c1f4eb4938bcadcfb69a23be82f1",
+      "basecampUploadId": 10506774132,
+      "title": "Predictive Analytics and Crop Management",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "To support smallholder farmers by providing access to agronomic intelligence and extension services, optimizing resource use, and improving crop yields. This approach addresses critical challenges such as inefficient resource allocation and the need for precise agricultural practices, which are vital for enhancing agricultural productivity and economic stability.",
+      "solution": "The project employs advanced data science techniques and AI to transform agricultural finance and management: ● Predictive Analytics: Employing historical yield data and weather patterns to create predictive models for insurance products. ● Real-Time Crop Intelligence: Providing real-time insights and recommendations to farmers via SMS, enhancing decision-making and crop management. ● Real-Time Crop Intelligence: Providing real-time insights and recommendations to farmers via SMS, enhancing decision-making and crop management. ● Adaptive Learning: Continuously updating AI models with new data to improve crop management. ● Machine Learning Deployment: Deploying models as RESTful APIs using Az",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Customer Engagement & Notifications",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization"
+      ],
+      "outcomes": [
+        {
+          "text": "● Developed the Potato Area Yield-Index Insurance Product with a leading insurer, leveraging ten years of historic yield data from Nakuru County. ● Extended real-time crop intelligence via SMS to all farmers, reaching approximately 40% of women farmers. ● Enhanced Yield Predictions: Accurate yield forecasts have enabled optimized planting strategies, leading to increased crop yields. ● Improved Cr",
+          "numbers": [
+            "40%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 8,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Advanced Econometric Pricing Model for the Agriculture Science Industry.pdf",
+      "sha256": "2a8f0424ef38e5b69469c0531f0fe3ea2d3bfafbaaf9a987b3087658da083fd9",
+      "basecampUploadId": 10506774058,
+      "title": "Advanced Econometric Pricing Model for the Agriculture Science Industry",
+      "industry": "AgTech",
+      "clientDescriptor": "a major agriculture science company",
+      "problem": "Colaberry Inc. partnered with a major agriculture science company to develop an innovative econometric pricing model.",
+      "solution": "Colaberry's data scientists chose a sophisticated approach that combines the robust predictive power of XGBoost and Gradient Boosting with classical econometric models to enhance elasticity and accuracy in pricing predictions. The integration of AI tools, such as text analyzers, allows for the effective extraction of key insights from varied data formats, including complex PDF documents. Gradient-free optimization algorithms streamline the development of an automated price searching engine, eliminating the need for extensive manual parameter adjustments and enhancing the efficiency of finding optimal price points.",
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Econometrics & Pricing Optimization",
+        "Hyperspectral & Imaging Analytics",
+        "Digital Twin & Simulation",
+        "Data Engineering & ETL Pipelines",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Environmental & Climate Analytics",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Cloud Services",
+        "Analytics and Development Platforms",
+        "Visualization and Interactive Tools",
+        "Cloud and Platforms",
+        "Programming and Tools",
+        "AI Techniques",
+        "Data Flow and Storage",
+        "Model Development and Deployment",
+        "Integration and Operations"
+      ],
+      "outcomes": [],
+      "pageCount": 6,
+      "gaps": [
+        "problem: no problem heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Data Capability Development.pdf",
+      "sha256": "14d5eea86322a3b40901002e453f2ebf19875c2c55c28474088c3531a52edf41",
+      "basecampUploadId": 10506774158,
+      "title": "Data Skills Transformation at an Industry-Leading Agricultural Company",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "The client was transitioning from a genetic and biotech engineering background into building a highly skilled Data Science and Data Engineering team with expertise in multiple technologies. Data Engineers were critical in building information pipelines that would enable Data Scientists, Geospatial Analysts and Research Scientists to pull and analyze petabytes of data collected by various devices on and off the field. ● Data Engineers were expected to be skilled in various tools, including Scala, Kafka, Elasticsearch and Amazon Web Services (AWS). ● Data Scientists were expected to know how to program in Python, as well as to run and deploy key prediction models on AWS cloud environment.",
+      "solution": "At Colaberry, we follow the Mine-Refine-Deliver approach to solve critical challenges our clients face. Using this approach for our client, we: ● Mine: identify client’s expectations and requirements. Through our internal sourcing efforts, we onboard talented scientists who are fast learners. ● Refine: identify and bridge the skill gap using our Refactored platform to provide comprehensive and effective training in Python, Scala, Kafka, Elasticsearch, AWS, image processing, and predictive modeling. ● Deliver: build a skilled team of consultants and specialists to continue the innovation process for our client.",
+      "capabilities": [
+        "Geospatial & Remote Sensing Analytics",
+        "IoT & Real-Time Streaming",
+        "Data Engineering & ETL Pipelines",
+        "Cloud Infrastructure & DevOps",
+        "Agricultural Analytics"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "Refactored enabled the creation of a highly skilled pool of talent that was hard to find and hire. ● We reduced time-to-fill from 9 months to about 2 months for each of these positions. ● Refactored enabled Colaberry to achieve over 90% interview-to-hire ratio with the client. ● These resources helped build the Data Science and Data Engineering teams at the client organization and have contributed",
+          "numbers": [
+            "90%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 2,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Enhancing Agricultural Productivity Through Data-Driven Decision Making.pdf",
+      "sha256": "61bf77fb096092d760bd361b26e836063343db00d118d631afb1fd9609d18f71",
+      "basecampUploadId": 10506774195,
+      "title": "Enhancing Agricultural Productivity Through Data-Driven Decision Making",
+      "industry": "AgTech",
+      "clientDescriptor": "a leading global agricultural company",
+      "problem": "The agricultural sector faces significant challenges in optimizing farming practices to increase productivity and sustainability. The primary goals are to enhance resource allocation, improve crop management, and boost yields while mitigating environmental and market risks.",
+      "solution": "Data Science Techniques The use of machine learning models enables the prediction of various agricultural outcomes, such as crop yield, pest outbreaks, and soil conditions. These models are developed using historical data collected from sensors and satellites, applying algorithms that can detect patterns and predict future conditions effectively. AI Integration AI techniques are employed to analyze real-time data from satellite imagery and on-site sensors.",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Geospatial & Remote Sensing Analytics",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Agricultural Analytics"
+      ],
+      "techStack": [],
+      "outcomes": [],
+      "pageCount": 7,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Enhancing Agricultural Sustainability through Advanced Hyperspectral Analysis and AI.pdf",
+      "sha256": "2f15e5bded6cc6f2ff49de530b8a72799018dd6aec87a3fe1edb16d342f21e8d",
+      "basecampUploadId": 10506774217,
+      "title": "Enhancing Agricultural Sustainability Through Advanced Hyperspectral Analysis and AI",
+      "industry": "AgTech",
+      "clientDescriptor": "a leading agricultural science company",
+      "problem": "Colaberry Inc. has developed an advanced project that significantly improves nitrogen use efficiency and drought resilience in corn and soybeans.",
+      "solution": "Colaberry Inc. applied a comprehensive suite of data science and AI strategies to address agricultural challenges pertaining to nitrogen use efficiency and drought resilience in corn and soybeans. The approach integrated several advanced machine-learning techniques: ● Tree-Based Algorithms: Used for their robustness in modeling non-linear relationships within large datasets. ● Elastic Net Regression: Implemented to enhance feature selection, ensuring the identification of the most relevant hyperspectral wavelengths. ● Neural Networks: Applied for their capacity to learn and model complex patterns and relationships within data, pivotal for predicting crop responses. ● Variational Autoencoders",
+      "capabilities": [
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "Hyperspectral & Imaging Analytics",
+        "Environmental & Climate Analytics",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Software and Platforms",
+        "AI Techniques",
+        "Data Management",
+        "Visualization",
+        "Scalable Infrastructure",
+        "Integration Capabilities",
+        "Security and Data Privacy",
+        "Performance Monitoring"
+      ],
+      "outcomes": [],
+      "pageCount": 6,
+      "gaps": [
+        "problem: no problem heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Enhancing Crop Nitrogen Use Efficiency and Drought Resilience.pdf",
+      "sha256": "1dae6736922371b54177a09c1afbbd8aec9cc3a8d4eb55ec7c32f53ff0443102",
+      "basecampUploadId": 10506774242,
+      "title": "Enhancing Crop Nitrogen Use Efficiency and Drought Resilience",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "To enhance nitrogen use efficiency and drought resilience in corn and soybeans by utilizing hyperspectral analysis and advanced machine learning techniques. This approach addresses critical challenges in optimizing crop productivity while minimizing resource inputs in variable environmental conditions.",
+      "solution": "● Machine Learning Techniques: Utilized tree-based algorithms, elastic net regression, and neural networks for feature engineering to identify significant wavelength bands. ● Advanced Algorithms: Employed variational autoencoders and manifold learning to cluster and assess the drought tolerance of corn hybrids. ● Data Utilization: Analyzed hyperspectral data to extract meaningful insights, focusing on nitrogen use efficiency and drought resilience. ● Real-Time Crop Monitoring: Developed insights that support real-time monitoring of crop status through advanced field devices. ● Adaptive Learning: Continuously updated models with new data to improve accuracy in assessing crop properties and re",
+      "capabilities": [
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "Hyperspectral & Imaging Analytics",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Environmental & Climate Analytics",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization",
+        "Machine Learning Techniques",
+        "Advanced Algorithms",
+        "Data Utilization",
+        "Integration and Scalability"
+      ],
+      "outcomes": [],
+      "pageCount": 7,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Enhancing Customer Experience with AI-Driven Product Substitution Recommendations.pdf",
+      "sha256": "09ace52101c1737dbcd8034d7ad1710c989db42942cae85ac049a5b22bb8c16f",
+      "basecampUploadId": 10506774263,
+      "title": "Enhancing Customer Experience with AI-Driven Product Substitution Recommendations",
+      "industry": "AgTech",
+      "clientDescriptor": "a large agriculture science company",
+      "problem": "Frequently, customers encounter out-of-stock notifications, which previously required sales representatives to manually consult with experts to identify suitable substitutions. This process was not only time-consuming but also inefficient, leading to a potential loss in sales and customer dissatisfaction.",
+      "solution": "Colaberry Inc. tackled the challenge of not having labeled data by employing an unsupervised machine learning model that uses cosine similarity to measure the likeness between product attributes. By treating product features as vectors, the model quantifies the differences and ranks potential substitutes based on their similarity scores, effectively mimicking expert human judgment in recommending substitutions. This solution simplifies the complex task of multi-dimensional data comparison by converting it into a one-dimensional score, facilitating easy comprehension for all stakeholders.",
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Recommendation Systems",
+        "Data Engineering & ETL Pipelines",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [],
+      "pageCount": 7,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Enhancing Research Through Spatial Biology Platforms.pdf",
+      "sha256": "8b313f3a3899fe9852daece2dbf6464a78f26840c9d31d8fe0ed2ca241eb6e5c",
+      "basecampUploadId": 10506774284,
+      "title": "Enhancing Research Through Spatial Biology Platforms",
+      "industry": "AgTech",
+      "clientDescriptor": "a large agriculture science company",
+      "problem": "This use case is critical as it addresses the need for sophisticated data analysis capabilities in the emerging field of spatial biology. By providing researchers with detailed contextual insights into biological processes, these capabilities enable the exploration of new research avenues and support significant scientific contributions in various fields, including drug discovery and ecosystem management.",
+      "solution": "The project employed a suite of computational tools and machine learning techniques to process and analyze spatial biological data: ● Multistep Analysis Pipeline: The data pipeline consisted of initial quantification using software specific to each platform (e.g., Cellranger for single-cell RNA sequencing), followed by a secondary analysis that includes clustering and statistical modeling to answer specific experimental questions. ● Machine Learning Techniques: Leveraged clustering algorithms to group similar data points, revealing underlying patterns and insights that are not immediately apparent in raw data. ● Customized Data Analysis Tools: Developed bespoke tools and scripts tailored to ",
+      "capabilities": [
+        "Computer Vision",
+        "Machine Learning Modeling",
+        "Digital Twin & Simulation",
+        "Data Engineering & ETL Pipelines",
+        "Business Intelligence & Dashboards",
+        "Genomics & Lab Automation",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Core Tools",
+        "Visualization and Reporting",
+        "Advanced Image Processing",
+        "Machine Learning Integration",
+        "Deployment",
+        "Cloud-Based Data Infrastructure",
+        "Analytical Software Stack",
+        "High-Performance Computing (HPC) Integration"
+      ],
+      "outcomes": [
+        {
+          "text": "The deployment of the spatial biology analytical pipelines has streamlined research processes, resulting in notable operational efficiencies: ● Reduced Time to Insight: The time required to process data and generate actionable insights has been reduced by over 50%, significantly accelerating research cycles and experimental throughput. ● Cost Efficiency: By automating and optimizing data analysis ",
+          "numbers": [
+            "50%"
+          ],
+          "page": 6
+        }
+      ],
+      "pageCount": 7,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Leveraging Machine Learning to Forecast China_s Food Consumption Trends.pdf",
+      "sha256": "3bed32051f1da32fff47d030e265e55192bf83deeba61ed2aa417075b8d873ae",
+      "basecampUploadId": 10506774309,
+      "title": "Leveraging Machine Learning to Forecast China's Food Consumption Trends",
+      "industry": "AgTech",
+      "clientDescriptor": "a leading global agricultural company",
+      "problem": "The project aimed to provide actionable insights into China’s declining food consumption trends, enabling the client to strategically plan and adjust their production and marketing strategies. The model's predictions were crucial for anticipating changes in the demand for agricultural products such as corn and soybean seeds, as well as related crop protection products.",
+      "solution": "Utilizing a combination of economic structural models and robust regression techniques, the project applied advanced statistical methods to forecast food consumption trends effectively. The methodology was specifically tailored to address the complex interdependencies and multicollinearity among economic factors influencing food consumption in China. The project introduced innovative approaches by integrating economic forecasting with machine learning to enhance both the accuracy and granularity of consumption predictions.",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Digital Twin & Simulation",
+        "Data Engineering & ETL Pipelines",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "R and RShiny",
+        "Python",
+        "Google Cloud Platform (GCP)",
+        "Cloud-Based Infrastructure",
+        "Application Architecture",
+        "Data Flow and Storage"
+      ],
+      "outcomes": [
+        {
+          "text": "The model successfully benchmarked against government forecasts, demonstrating a remarkable error margin of only 2%.",
+          "numbers": [
+            "2%"
+          ],
+          "page": 2
+        },
+        {
+          "text": "Conducted scenario simulations to assess potential future consumption patterns and impacts. ● Precision in Forecasting: The model developed successfully predicted a decline in China's food consumption with an error margin of only 1.7%, showcasing its high precision and reliability. ● Rapid Development and Deployment: The entire model was built and operational within less than two months, demonstra",
+          "numbers": [
+            "1.7%",
+            "2%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 7,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Optimizing Fungicide Application Timing in Vineyards Using AI.pdf",
+      "sha256": "1a92b9010b8ec5c8ac465c8e524de799533cbe719a81ea7fa94d6932193b2a4d",
+      "basecampUploadId": 10506774328,
+      "title": "Optimizing Fungicide Application Timing in Vineyards Using AI",
+      "industry": "AgTech",
+      "clientDescriptor": "a large agricultural science company",
+      "problem": "This initiative is crucial for enhancing sustainable farming practices and economic outcomes for grape growers. By accurately predicting the optimal timing for fungicide application, the project helps reduce excessive chemical use, lower costs, and improve the environmental footprint of vineyard operations, making it highly relevant for clients seeking to modernize agricultural practices with smart technology.",
+      "solution": "The SYMS project utilizes a sophisticated mix of econometric and machine-learning techniques to handle complex pricing strategy challenges: Colaberry Inc.'s approach integrates advanced data science and AI techniques to address complex agricultural challenges. Utilizing a combination of mechanistic models and machine learning, the project leverages statistical methods to distill actionable insights from environmental and experimental data. Key methodologies include: ● Non-linear Modeling: Used in the chemical residue forecasting application, this involves deriving key parameters from field data that predict fungicide behavior under various conditions. ● Random Forest and XG-Boost Algorithms:",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Econometrics & Pricing Optimization",
+        "IoT & Real-Time Streaming",
+        "Business Intelligence & Dashboards",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "RStudio",
+        "Proprietary and Open APIs",
+        "Machine Learning Tools",
+        "Data Collection Layer",
+        "Data Processing Engine",
+        "Application Interface",
+        "Integration with Client Systems"
+      ],
+      "outcomes": [],
+      "pageCount": 7,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Optimizing Pricing Strategy in Agriculture with Advanced Econometrics.pdf",
+      "sha256": "1cab09b330f874417e2ece55f3ec8a30909b4fe8451ca767c0a04206773adcf5",
+      "basecampUploadId": 10506774347,
+      "title": "Optimizing Pricing Strategy in Agriculture with Advanced Econometrics",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "The purpose of this use case is to address the challenges agricultural companies face in pricing their products effectively. By developing a model that provides precise pricing recommendations, SYMS empowers stakeholders to make data-driven decisions that optimize revenue while maintaining competitive market positioning.",
+      "solution": "The SYMS project utilizes a sophisticated mix of econometric and machine-learning techniques to handle complex pricing strategy challenges: ● Econometric Models: The primary approach involves logistic regression and the BLP (Berry, Levinsohn, and Pakes) model, which is particularly adept at estimating differentiated product demand and price elasticity, crucial for understanding how price changes affect market share and revenue. ● Machine Learning Exploration: To validate and enhance the robustness of the econometric models, various machine learning algorithms, such as gradient boosting and random forests, were explored to compare performance and ensure the most effective model was deployed. ",
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Econometrics & Pricing Optimization",
+        "Cloud Infrastructure & DevOps",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Python & R",
+        "Domino Data Lab",
+        "Docker & Kubernetes",
+        "Data Storage and Management",
+        "Computational Resources",
+        "Model Development and Deployment"
+      ],
+      "outcomes": [
+        {
+          "text": "This project employs advanced econometric models to help business partners determine optimal pricing strategies that balance profitability with market share, enhancing decision-making in a market worth over $10 billion.",
+          "numbers": [
+            "$10 billion"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 6,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Revolutionizing DNA Genotyping with Automated Quality Control.pdf",
+      "sha256": "ea9c7cb2e5d30156fe1101236af9b49b2dbaba1126be0474af43877dd924fdfd",
+      "basecampUploadId": 10506774376,
+      "title": "Revolutionizing DNA Genotyping with Automated Quality Control",
+      "industry": "AgTech",
+      "clientDescriptor": "a major genotyping laboratory",
+      "problem": "This use case demonstrates the pivotal role of automation in genotyping laboratories. By automating the DNA genotyping process, the solution significantly enhances the speed and accuracy of DNA sample analysis, which is critical for timely and reliable genetic research and testing. ● Business Challenges: The client operates high-throughput genotyping laboratories analyzing over 2 million DNA samples annually, with daily peaks reaching several thousand samples.",
+      "solution": "The project utilizes a sophisticated suite of AWS services, orchestrated to ensure optimal execution of automated quality control for genotyping. This approach is designed to handle high-throughput DNA sample processing with precision and minimal error. One of the innovative aspects of this solution is its ability to automate the entire workflow, reducing the potential for human error while increasing throughput.",
+      "capabilities": [
+        "IoT & Real-Time Streaming",
+        "Genomics & Lab Automation",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [
+        "AWS Services",
+        "GCP BigQuery",
+        "Kafka",
+        "GitHub CI/CD",
+        "Python",
+        "Cloud-Based Infrastructure",
+        "Containerization and Microservices",
+        "Event-Driven Architecture",
+        "Data Flow and Storage"
+      ],
+      "outcomes": [
+        {
+          "text": "● Automation of Quality Control: The automated system now handles over 2.3 million DNA records annually, ensuring that each sample is processed with high accuracy and consistency.",
+          "numbers": [
+            "2.3 million"
+          ],
+          "page": 6
+        }
+      ],
+      "pageCount": 9,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "AgTech - Streamlining Agriculture with Advanced Data Science.pdf",
+      "sha256": "e2be8926d2cf47507a0a14f8b9ecd8cd7805b1598556ffb9fba0beb170ff8c24",
+      "basecampUploadId": 10506774411,
+      "title": "Streamlining Agriculture with Advanced Data Science",
+      "industry": "AgTech",
+      "clientDescriptor": "",
+      "problem": "The primary goal of SYMS is to address crucial challenges in agriculture, such as unpredictable environmental impacts on crop yield. By delivering accurate yield predictions and personalized seed recommendations, SYMS helps maximize agricultural productivity and profitability, essential for thriving in a competitive and volatile market.",
+      "solution": "The SYMS project employs a multi-layered machine learning approach that integrates several advanced algorithms to handle the complex variability of agricultural environments: ● Modeling Techniques: The project utilizes Gradient Boosting and Random Forest algorithms for their robustness in handling non-linear relationships and feature interactions within large datasets. Deep Neural Networks are also deployed to capture complex patterns that simpler models might miss, especially in high-dimensional data like genetic information. ● Predictive Analytics: These models predict crop yields based on a variety of inputs, including environmental conditions, soil health metrics, and genetic data of the",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Environmental & Climate Analytics",
+        "Agricultural Analytics"
+      ],
+      "techStack": [
+        "Development Tools",
+        "Web Framework",
+        "Data Visualization and Interface",
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation"
+      ],
+      "outcomes": [
+        {
+          "text": "This optimization has led to an average yield increase of 15-20% across various crops. ● Resource Efficiency: The precise recommendations for seed selection and resource allocation have reduced the wastage of water, fertilizers, and other inputs by approximately 30%, contributing to both cost savings and environmental sustainability.",
+          "numbers": [
+            "15-20%",
+            "30%"
+          ],
+          "page": 6
+        }
+      ],
+      "pageCount": 7,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "ClimateTech - Environmental Monitoring and Analysis in Coastal Regions.pdf",
+      "sha256": "788ea887074c00793edcb7784027845f7c829a683cd66420e7bbba8eef284132",
+      "basecampUploadId": 10506774436,
+      "title": "Environmental Monitoring and Analysis in Coastal Regions",
+      "industry": "ClimateTech",
+      "clientDescriptor": "a leading environmental agency",
+      "problem": "To monitor and analyze environmental changes in coastal regions through a unified digital platform, addressing critical challenges such as erosion, sedimentation, urbanization, and industrialization. This approach provides essential data for conservation, disaster management, and sustainable development.",
+      "solution": "The project employs advanced data science techniques and AI to transform coastal environmental monitoring: 1. Data Acquisition: a. Utilize satellite imagery and aerial photography for initial data collection.",
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Geospatial & Remote Sensing Analytics",
+        "Hyperspectral & Imaging Analytics",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Environmental & Climate Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization"
+      ],
+      "outcomes": [],
+      "pageCount": 9,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "ConvoAI-Agentic AI Voice Solution.pdf",
+      "sha256": "1a6e4b1af5856dfc5e4442d5ba7b6611023a8318966d2a78f9a05075a2bfbe45",
+      "basecampUploadId": 10506774466,
+      "title": "ConvoAI Colaberry Agentic AI Voice Solution",
+      "industry": "Conversational AI",
+      "clientDescriptor": "",
+      "problem": "For many organizations, customer communication remains one of the most resource-intensive and inconsistent operations. Traditional call centers require extensive staffing, training, and infrastructure to handle inquiries that are often routine and repetitive.",
+      "solution": "At the heart of the solution is an agentic system design that fuses real-time voice processing with conversational AI and enterprise integration. Colaberry adopted a multi-layered approach combining supervised machine learning, unsupervised clustering, and rule-based decision frameworks to construct a voice agent capable of dynamic, human-level interaction. Fine-tuned large language models (LLMs), trained on industry-specific data, enable the system to understand user intent and respond contextually.",
+      "capabilities": [
+        "Machine Learning Modeling",
+        "Conversational AI & Chatbots",
+        "Agentic AI & LLM Applications",
+        "Natural Language Processing",
+        "Cloud Infrastructure & DevOps",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "Most organizations report a 60–80% reduction in call handling costs as the system handles the majority of routine inquiries automatically.",
+          "numbers": [
+            "60–80%"
+          ],
+          "page": 8
+        },
+        {
+          "text": "The system’s first-call resolution rate exceeds 85% for standardized workflows such as appointment scheduling, order tracking, billing inquiries, and account updates.",
+          "numbers": [
+            "85%"
+          ],
+          "page": 8
+        },
+        {
+          "text": "Businesses have also reported a 25–40% improvement in customer satisfaction scores, attributable to consistent, responsive, and multilingual support.",
+          "numbers": [
+            "25–40%"
+          ],
+          "page": 8
+        },
+        {
+          "text": "Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com With scalable architecture and continuous learning, the system can manage 3–5 times the call volume of a traditional setup without additional headcount or infrastructure.",
+          "numbers": [
+            "3–5"
+          ],
+          "page": 1
+        },
+        {
+          "text": "Designed for scalability, the platform handles 85%+ of routine inquiries with sub-second response times and 24/7 availability eliminating wait times, reducing operational costs by 60–80%, and enhancing customer satisfaction by up to 40%.",
+          "numbers": [
+            "85%",
+            "60–80%",
+            "40%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 10,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Energy - Advancing Catalyst Formulation with AI-Driven Molecular Generation.pdf",
+      "sha256": "70d049cf9d9a31627f8ad638da05801e0322685e5f3b332928804fab47560cc6",
+      "basecampUploadId": 10506774494,
+      "title": "Advancing Catalyst Formulation with AI-Driven Molecular Generation",
+      "industry": "Energy",
+      "clientDescriptor": "a major energy company",
+      "problem": "This project is pivotal as it introduces a cutting-edge approach to material innovation, specifically in catalyst development, which is critical across various industries such as pharmaceuticals, polymers, and coatings. By automating the molecule discovery process, the utility aims to accelerate innovation and achieve significant breakthroughs in material science.",
+      "solution": "The project employed advanced machine-learning techniques to tackle the complex problem of catalyst formulation: ● Multilayer Perceptrons (MLPs): Used for initial predictive modeling of catalyst performance based on standard additives and process conditions. ● Graph Neural Networks (GNNs): Employed to predict molecular properties critical for evaluating the potential of new catalyst additives. GNNs are particularly well-suited for this task due to their ability to capture the complex structures of molecular data. ● Generative AI for Molecular Design: A novel aspect of this project was the use of generative AI models to propose new molecular structures. This approach not only accelerated the ",
+      "capabilities": [
+        "Deep Learning",
+        "Business Intelligence & Dashboards",
+        "Agentic AI & LLM Applications",
+        "Generative & Molecular AI",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Model Deployment",
+        "Web Application Interface",
+        "Python",
+        "PyTorch & Scikit-Learn",
+        "Pandas & NumPy",
+        "Plotly Dash"
+      ],
+      "outcomes": [],
+      "pageCount": 5,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Healthcare - Quicker Bone Age Assessments Using Deep Learning.pdf",
+      "sha256": "3bfd31f1d1b61a579205c719e4b7f67b96b3bd23cff7de2b66fb80b74c3380f2",
+      "basecampUploadId": 10506774506,
+      "title": "Quicker Bone Age Assessments Using Deep Learning",
+      "industry": "Healthcare",
+      "clientDescriptor": "a medical diagnostics organization operating multiple laboratory",
+      "problem": "Bone age assessments are useful in clinical settings to diagnose endocrine disorders, and age determination for sporting events, forensic identification, immigration purposes etc. For decades, doctors have relied on visual evaluation of the skeletal development of the hand and wrist using the Greulich and Pyle atlas for determination of bone maturity.",
+      "solution": "The client enlisted Colaberry to help find and bring expert consultants who would fill the open positions with the client and support the client develop new tools. 12000+ radiological images of hands were taken with labels of bone age in a month and gender of the patient (Gender is a predictor for bone age assessment as females mature faster). Underfitting can cause poor prediction of bone age data and data augmentation techniques were utilized for synthetically creating new images by zooming, flipping, rotating, and shifting the original images.",
+      "capabilities": [
+        "Computer Vision",
+        "Deep Learning",
+        "Genomics & Lab Automation",
+        "Medical Imaging AI"
+      ],
+      "techStack": [],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "outcomes: no outcome heading",
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Manf-Anamoly Detection in Process Streams.pdf",
+      "sha256": "d4a2eb456342200201ea35116fe82f93983acf8184b630eeb6960b7201808128",
+      "basecampUploadId": 10506774523,
+      "title": "Anomaly Detection in Process Streams Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com",
+      "industry": "Manufacturing",
+      "clientDescriptor": "",
+      "problem": "Undetected process anomalies in utilities and manufacturing cause quality escapes, safety incidents, regulatory fines, and unplanned downtime. Static threshold-based alarms generate excessive false positives, leading to alarm fatigue and delayed responses.",
+      "solution": "Colaberry implemented AI-based anomaly detection using autoencoders, isolation forests, and KNN models. Real-time sensor data is processed to learn normal operational behavior, flag deviations, and deliver context-rich alerts integrated with SCADA and MES systems for proactive intervention. Colaberry Inc. employed unsupervised learning techniques—including autoencoders, isolation forests, and k-nearest neighbors—to model normal operational behavior.",
+      "capabilities": [
+        "Anomaly Detection",
+        "Deep Learning",
+        "IoT & Real-Time Streaming",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "●​ 50% reduction in incident response time ●​ 35% decrease in quality escapes ●​ 20% increase in production uptime ●​ 40% reduction in false positives ●​ Improved safety, compliance, and operational efficiency ●​ Cost Savings: 25% reduction in scrap and rework costs; avoidance of regulatory fines in utilities, saving hundreds of thousands annually​ Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com ",
+          "numbers": [
+            "50%",
+            "35%",
+            "20%",
+            "40%",
+            "25%",
+            "30%"
+          ],
+          "page": 6
+        }
+      ],
+      "pageCount": 7,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Manf-Corrosion and Surface Defect Detection in Pipelines and Metal Coils.pdf",
+      "sha256": "fcc0788c115b7df56b31085c85dca416d900738dbbac500538ed0a631f9b6cb3",
+      "basecampUploadId": 10506774538,
+      "title": "Computer Vision–Driven Corrosion and Surface Defect Detection in Pipelines and Metal Coils Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com",
+      "industry": "Manufacturing",
+      "clientDescriptor": "",
+      "problem": "Manual inspection of utility pipelines for corrosion and metal coils for surface defects is labor-intensive, subjective, and prone to errors. Missed defects lead to leaks, ruptures, product rejections, environmental fines, and high rework costs.",
+      "solution": "Deployed high-resolution cameras with Mask R-CNN deep learning models on edge GPUs for real-time detection of corrosion and defects. Integrated automated heatmaps, severity scoring, and reporting directly into maintenance and ERP systems. ●​ Deployed high-resolution line-scan and area-scan cameras integrated with robotic crawlers (for pipelines) and finishing line setups (for metal coils). Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com ●​ Trained a customized Mask R-CNN deep convolutional neural network on labeled datasets to perform pixel-level segmentation and severity scoring for corrosion patches, micro-pits, grooves, and inclusions. ●​ Optimized models for real-time edge inference on ",
+      "capabilities": [
+        "Computer Vision",
+        "Deep Learning",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "●​ >90% accuracy in defect detection and classification. ●​ 3× increase in inspection throughput, enabling scalable operational coverage. ●​ Up to 40% reduction in unplanned pipeline interventions due to early corrosion detection. ●​ 20% reduction in metal coil scrap rates, improving yield and reducing waste. ●​ Enhanced safety, product quality, and operational efficiency ●​ Cost Savings: Reduced ",
+          "numbers": [
+            "90%",
+            "3×",
+            "40%",
+            "20%"
+          ],
+          "page": 5
+        }
+      ],
+      "pageCount": 6,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Manf-Digital Twins Age Prediction.pdf",
+      "sha256": "665ec3f87b64024d06e763d2a3460c63117bb0a6c92348e990e6a04c34a6f706",
+      "basecampUploadId": 10506774565,
+      "title": "Digital Twin–Based Thermal Aging Prediction for Transformers and Industrial Motors Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com",
+      "industry": "Manufacturing",
+      "clientDescriptor": "",
+      "problem": "Unexpected transformer and motor failures cause costly outages, safety hazards, and premature replacements. Traditional age-based maintenance fails to account for variable loading and ambient conditions, leading to inefficient maintenance spend.",
+      "solution": "Developed a digital twin solution combining physics-based thermal models with Physics-Informed Neural Networks (PINNs). Integrated real-time SCADA/IoT data to predict insulation degradation, estimate remaining useful life (RUL), and trigger proactive maintenance via EAM system integration. ●​ Digital Twin Construction: Integrated nameplate specifications, IEEE C57.91 thermal models for transformers, and real-time load and ambient sensor data Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com streams to create accurate virtual models of each asset.​ ●​ Machine Learning Models: Developed Physics-Informed Neural Networks (PINNs) combining thermal physics equations with historical failure data to ",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Predictive Maintenance",
+        "Anomaly Detection",
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "Digital Twin & Simulation",
+        "IoT & Real-Time Streaming",
+        "Business Intelligence & Dashboards",
+        "Credit Risk & Financial Scoring",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "●​ 30% extension in transformer and motor service life​ ●​ 25% reduction in unplanned failures​ ●​ Optimized maintenance budgets, enhanced safety, and reduced capital expenditures Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com ●​ Capital Expenditure Savings: Multi-million-dollar savings from extended asset life and deferred replacements​ ●​ Reduced Downtime Costs: Fewer unplanned outages led to ",
+          "numbers": [
+            "30%",
+            "25%"
+          ],
+          "page": 6
+        }
+      ],
+      "pageCount": 8,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Manf-PredictiveMaintenance.pdf",
+      "sha256": "0ecfb66a3c2ff488f47411b865cf3d7e249abb6c94f4807b0c55d0aa470d0e1c",
+      "basecampUploadId": 10506774589,
+      "title": "Predictive Maintenance Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com",
+      "industry": "Manufacturing",
+      "clientDescriptor": "",
+      "problem": "Unplanned equipment failures caused costly downtime and maintenance inefficiencies for utilities and manufacturers. The project aimed to develop and deploy an AI-powered predictive maintenance solution to: ●​ Accurately predict time-to-failure for critical equipment.​ ●​ Optimize maintenance schedules to reduce unnecessary interventions.​ ●​ Minimize unplanned downtime and associated costs.​ ●​ Extend equipment lifecycles and improve resource allocation.​ ●​ Enhance safety, compliance, and customer trust through operational reliability.",
+      "solution": "Colaberry leveraged AWS (S3, Glue, SageMaker, Kinesis, IoT Greengrass) to build Random Forest and XGBoost models predicting time-to-failure. Real-time streaming and edge deployment enabled continuous monitoring, with QuickSight dashboards for actionable insights. Colaberry’s data science team ingested historical and real-time sensor data—including vibration, temperature, acoustic signals, and pressure readings—into AWS S3 data lakes.",
+      "capabilities": [
+        "Predictive Maintenance",
+        "Machine Learning Modeling",
+        "IoT & Real-Time Streaming",
+        "Data Engineering & ETL Pipelines",
+        "Data Quality & Governance",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "●​ Downtime reduced by 20–40%​ ●​ Maintenance costs cut by 15–25% ●​ Productivity increased by 25–35%​ ●​ Asset lifecycles extended by 10–15% The solution transformed maintenance operations by enhancing operational efficiency, reducing emergency repairs, and increasing asset utilization.",
+          "numbers": [
+            "20–40%",
+            "15–25%",
+            "25–35%",
+            "10–15%"
+          ],
+          "page": 6
+        },
+        {
+          "text": "This results in a 20–40% reduction in unplanned downtime, 15–25% drop in maintenance costs, and extended asset lifecycles, ultimately enhancing operational efficiency, safety compliance, and customer satisfaction.",
+          "numbers": [
+            "20–40%",
+            "15–25%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 6,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Manufacturing - Predictive Maintenance for Power Line Devices Using Real-Time Voltage Data and AI.pdf",
+      "sha256": "daac9bab87cf0e672741e6aa2a9c9a4992e0bb9bd0decec5e00d65d74f52e035",
+      "basecampUploadId": 10506774608,
+      "title": "MANUFACTURING Predictive Maintenance for Power Line Devices Using Real-Time Voltage Data and AI",
+      "industry": "Manufacturing",
+      "clientDescriptor": "a global utility industry equipment manufacturing company",
+      "problem": "Predictive maintenance for power line devices is crucial for minimizing downtime and avoiding high costs associated with reactive maintenance. Unexpected device failures lead to resource optimization challenges, long wait times for replacements, and high costs.",
+      "solution": "● Anomaly detection using SVM. ● Computer Vision with CNN using TensorFlow in Python. ● Real-time device health tracking and repair decisions based on AI predictions. ● Automated crack detection with drones, replacing manual inspections and enhancing safety.",
+      "capabilities": [
+        "Predictive Maintenance",
+        "Anomaly Detection",
+        "Computer Vision",
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "Achieved a True Positive Rate of 70% in predicting device failures, demonstrating a high accuracy in identifying potential failures.",
+          "numbers": [
+            "70%"
+          ],
+          "page": 2
+        },
+        {
+          "text": "Successfully detected cracks in power plants with over 80% accuracy using live drone feeds, enhancing safety and operational efficiency.",
+          "numbers": [
+            "80%"
+          ],
+          "page": 3
+        },
+        {
+          "text": "Predictive maintenance model achieved a 70% True Positive Rate, significantly reducing the frequency of unexpected device failures and improving overall system reliability.",
+          "numbers": [
+            "70%"
+          ],
+          "page": 4
+        },
+        {
+          "text": "The computer vision model detected cracks with over 80% accuracy, allowing for timely repairs and reducing the risk of catastrophic failures.",
+          "numbers": [
+            "80%"
+          ],
+          "page": 4
+        },
+        {
+          "text": "For example, the company observed a 25% reduction in maintenance costs within the first year of implementation.",
+          "numbers": [
+            "25%"
+          ],
+          "page": 5
+        },
+        {
+          "text": "The company reported a 30% increase in maintenance team productivity due to the automation.",
+          "numbers": [
+            "30%"
+          ],
+          "page": 5
+        },
+        {
+          "text": "As a result, the frequency of safety incidents decreased by 40%, and compliance with safety regulations improved by 50%.",
+          "numbers": [
+            "40%",
+            "50%"
+          ],
+          "page": 5
+        }
+      ],
+      "pageCount": 5,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities -  AWS Replatforming for Enhanced Application Hosting.pdf",
+      "sha256": "70d6d239d53a40b0dc38cef7b518b81d4edd709297281b3554969804f378128c",
+      "basecampUploadId": 10506774689,
+      "title": "AWS Replatforming for Enhanced Application Hosting",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "The motivation behind the AWS re-platforming was primarily driven by the need for cost efficiency and enhanced scalability. Transitioning to a cloud-first architecture allows the utility to leverage the flexibility and advanced capabilities of cloud computing, reducing operational costs and improving service delivery.",
+      "solution": "Colaberry Inc. managed a comprehensive AWS re-platforming initiative for a major utility company, transitioning their applications from traditional hosting environments to the AWS cloud. This project involved both 'lift and shift' migrations and re-architecting applications to be cloud-first, aligning with modern best practices for scalability and performance.",
+      "capabilities": [
+        "Cloud Migration & Replatforming",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Cloud Migration Strategy",
+        "Infrastructure as Code (IaC)"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities -  Akamai Replatforming for Enhanced Security.pdf",
+      "sha256": "f5d434a5270c6ce8cacfe7227d61ae3587a6933e446e772e0b473136728c4566",
+      "basecampUploadId": 10506774646,
+      "title": "Akamai Replatforming for Enhanced Security",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "With cyber threats becoming increasingly sophisticated, enhancing security infrastructure is paramount to protecting sensitive customer and operational data. Transitioning to Akamai's firewall solutions offers advanced security features that help mitigate risks and ensure compliance with stringent regulatory standards.",
+      "solution": "Colaberry Inc. embarked on a critical security enhancement project for a major utility company, involving the transition of all existing AWS applications to utilize Akamai as the new firewall solution. This initiative aims to bolster cybersecurity measures by updating and refactoring the applications to align with the latest security protocols.",
+      "capabilities": [
+        "Cloud Infrastructure & DevOps",
+        "Application Security & CDN"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Akamai",
+        "Security Integration",
+        "Automated Deployment",
+        "Continuous Monitoring and Updates"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities -  Predicting Wildfires with Geospatial Data and AI.pdf",
+      "sha256": "51b2a2b0bf36e8981a6ba538517afbdb986707e624e04ef4f2ad4fca11ef4f04",
+      "basecampUploadId": 10506774706,
+      "title": "Predicting Wildfires with Geospatial Data and AI",
+      "industry": "Utilities",
+      "clientDescriptor": "a large California-based utility company",
+      "problem": "To support wildfire management by providing accurate predictions and proactive mitigation strategies through a unified digital platform. This approach addresses critical challenges such as timely identification of high-risk areas, efficient resource allocation, and minimizing the economic and ecological impact of wildfires.",
+      "solution": "The project employs advanced data science techniques and AI to transform wildfire management: ● Predictive Analytics: Utilizing historical wildfire data and weather patterns to create predictive models. ● Geospatial Intelligence: Integrating geospatial data to provide situational awareness and enhance model accuracy. ● Dynamic Risk Scoring: Developing AI-based engines to assess and update wildfire risk profiles dynamically. ● Real-Time Insights: Providing real-time risk assessments and recommendations to the utility company through geospatial mapping and AI models. ● Adaptive Learning: Continuously updating AI models with new data to improve predictive accuracy and response strategies. ● Mac",
+      "capabilities": [
+        "Time-Series Forecasting",
+        "Machine Learning Modeling",
+        "Geospatial & Remote Sensing Analytics",
+        "Business Intelligence & Dashboards",
+        "Credit Risk & Financial Scoring",
+        "Cloud Infrastructure & DevOps",
+        "Environmental & Climate Analytics"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Containerization and Orchestration",
+        "Workflow Automation",
+        "Development Tools",
+        "Database Management",
+        "Web Framework",
+        "Data Visualization"
+      ],
+      "outcomes": [],
+      "pageCount": 10,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Advanced Load Forecasting with Machine Learning.pdf",
+      "sha256": "f4c2552c9f6a57845e96ee9a9dc4f4e50ae4f7731d7c6aaaa67f1f05f54571ce",
+      "basecampUploadId": 10506774742,
+      "title": "Advanced Load Forecasting with Machine Learning",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "The utility faced significant challenges with manual load forecasting methods, which were labor-intensive and prone to errors. The rapid adoption of machine learning and the availability of clean, structured data provided an opportunity to shift toward automated, more accurate forecasting models.",
+      "solution": "Colaberry Inc. utilized Ordinary Least Squares (OLS) regression, a robust and transparent method, to forecast load at the circuit level and predict customer enrollments in PV, EV, and UEE programs. This approach was selected for its ability to provide insights that are easily interpretable by stakeholders, including regulatory bodies.",
+      "capabilities": [
+        "Demand & Load Forecasting",
+        "Time-Series Forecasting",
+        "Predictive Maintenance",
+        "Machine Learning Modeling",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Data Storage and Management",
+        "Computational Resources",
+        "Monitoring and Maintenance",
+        "User Interface and Reporting",
+        "Data Encryption",
+        "Access Controls"
+      ],
+      "outcomes": [
+        {
+          "text": "The implementation of advanced machine learning models facilitated by Colaberry Inc. has significantly transformed the utility company's load forecasting capabilities: ● Forecast Accuracy: The project achieved an average Mean Absolute Percentage Error (MAPE) of around 15% across over 8000 circuits.",
+          "numbers": [
+            "15%"
+          ],
+          "page": 5
+        },
+        {
+          "text": "This marked a substantial improvement over previous methods, which were more prone to error due to their reliance on manual processes. ● Customer Program Participation Prediction: The models successfully predicted customer enrollment in PV, EV, and UEE programs with a True Positive Rate (TPR) of approximately 75%.",
+          "numbers": [
+            "75%"
+          ],
+          "page": 5
+        }
+      ],
+      "pageCount": 7,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Bot Flows for Customer Program Eligibility.pdf",
+      "sha256": "bb27115e8b1c198de3701d634e15b477d26dae1d0891cdbd816e74e235a7f123",
+      "basecampUploadId": 10506774773,
+      "title": "Bot Flows for Customer Program Eligibility",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "In regulated industries, clear and effective communication with customers is crucial, particularly when it involves their eligibility and participation in programs that can affect their service and billing. Automated bot flows help to ensure that information is delivered consistently and accurately, aiding compliance with regulatory standards and improving customer satisfaction.",
+      "solution": "Colaberry Inc. developed a solution using the Xenioo platform to create automated bot flows that assist customers of a major utility company in determining their eligibility for various programs. This technology improves customer interactions by providing immediate responses to eligibility inquiries, streamlining the process of engaging with utility programs.",
+      "capabilities": [
+        "Conversational AI & Chatbots",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [
+        "Xenioo Bot Platform",
+        "Bot Flow Design",
+        "Integration",
+        "Deployment"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - DataEngineeringForPowerConsumptionAnalytics.pdf",
+      "sha256": "e2821b38306adcc8c5bfabc813878de8a1e05e6b0a7f13ffc36aafa717052550",
+      "basecampUploadId": 10506774803,
+      "title": "Data Engineering for Power Consumption Analytics “Efficient power consumption driven by responsible customer behavior”",
+      "industry": "Utilities",
+      "clientDescriptor": "",
+      "problem": "Unscrupulous & irresponsible energy consumption leads to high costs to both consumers as well as energy providers. The client looked to their Data Engineering team for rapid data sourcing and modeling to deliver low latency energy consumption dashboards.",
+      "solution": "Client partnered with Colaberry to enhance their data engineering team and support them on mission critical projects. Colaberry’s specialized consultants under supervision of the Client, built data pipelines using Spark, to source billions of data points (meter readings, sensor activity etc.), which are then migrated to the latest version of Hive. The upgrade enables the Data Science team to mine historic data from the past 2 years more accurately.",
+      "capabilities": [
+        "Data Engineering & ETL Pipelines",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "The consultants are further focussed on refining the AWS-based POC to drive down the benchmark expenses by an additional 40%.",
+          "numbers": [
+            "40%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 2,
+      "gaps": [
+        "outcomes: no outcome heading",
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Demand Response Switch Replacements.pdf",
+      "sha256": "ab6557d74cc0e81f5cda49442204b59dd28297f991c77d6b5d961a1277078ea0",
+      "basecampUploadId": 10506774817,
+      "title": "Demand Response Switch Replacements",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "The primary goal of this project is to assist customers in replacing or updating obsolete equipment that may no longer comply with current efficiency standards or technological capabilities. By proactively managing these updates, the utility ensures better service reliability and adherence to energy regulations.",
+      "solution": "Colaberry Inc. is spearheading the development of an application for a major utility company that facilitates the scheduling of appointments for customers to update or remove outdated demand response switches. This initiative is crucial for maintaining the efficiency and reliability of the utility's energy management systems.",
+      "capabilities": [
+        "IoT & Real-Time Streaming",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Angular",
+        "Kafka",
+        "Cloud-Based Platform",
+        "Real-Time Scheduling System",
+        "Front-End Development",
+        "Infrastructure Management"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Enhancing Energy Forecast Accuracy through Data Quality Improvement.pdf",
+      "sha256": "c48c482c56de0b00e9c28511b81b9c2248d5c56f29943300baae1c21036951d9",
+      "basecampUploadId": 10506774854,
+      "title": "Enhancing Energy Forecast Accuracy through Data Quality Improvement",
+      "industry": "Utilities",
+      "clientDescriptor": "",
+      "problem": "The project was initiated to significantly improve the reliability of energy forecasts, which are crucial for utility companies to manage assets efficiently and avoid the high costs associated with over or under-planning. By enhancing data quality, the forecasts become a more reliable foundation for strategic decision-making.",
+      "solution": "Utilizing advanced statistical tools and data modeling techniques, Colaberry Inc. has developed a robust system to enhance data quality and improve forecast accuracy. The methodology centers on: ● Anomaly Detection: Implementing statistical techniques such as interquartile range analysis and rate of change calculations to identify and filter out anomalous data points. ● Model Residuals Investigation: Utilizing regression models, seasonal decomposition, and neural networks to study residual values, helping to further pinpoint inaccuracies and improve the model's predictive capabilities. The project introduced several innovative aspects, including: ● Hybrid Modeling Approach: Combining traditi",
+      "capabilities": [
+        "Demand & Load Forecasting",
+        "Time-Series Forecasting",
+        "Anomaly Detection",
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "IoT & Real-Time Streaming",
+        "Data Quality & Governance",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [
+        "Cloud Infrastructure",
+        "Big Data Technologies",
+        "Machine Learning Platforms"
+      ],
+      "outcomes": [
+        {
+          "text": "● Achieved a major milestone by detecting 99% of suspicious data annually in the energy datasets. ● Identified and reported issues with sensor data transmission, leading to improvements in data accuracy. ● Enabled planners to optimize resources effectively, adjusting their strategies based on more reliable data.",
+          "numbers": [
+            "99%"
+          ],
+          "page": 2
+        },
+        {
+          "text": "The implementation of enhanced data quality and forecasting methods led to significant improvements in forecast accuracy and operational efficiency: ● Detection of Anomalies: Successfully identified and corrected 99% of suspicious data points in the yearly energy data, significantly improving the reliability of the data set. ● Sensor Issue Identification: The system pinpointed problems related to ",
+          "numbers": [
+            "99%"
+          ],
+          "page": 6
+        },
+        {
+          "text": "Client Testimonial \"The improvements in data quality and forecasting accuracy have transformed how we manage our energy resources, leading to better service for our customers and more efficient operations.\" Case Study A detailed case study documented how the project led to a 20% reduction in operational costs and a 15% increase in forecasting accuracy, serving as a powerful example of the project'",
+          "numbers": [
+            "20%",
+            "15%"
+          ],
+          "page": 8
+        }
+      ],
+      "pageCount": 8,
+      "gaps": [],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Event Scheduling Platform for Time of Use (TOU) Events.pdf",
+      "sha256": "bf4fe2d1c7ae30701ca94b60c05103b64e90c54f6dc62a35b6ce2b571bafa099",
+      "basecampUploadId": 10506774902,
+      "title": "Event Scheduling Platform for Time of Use (TOU) Events",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "The utility sector is required by regulations to actively manage and communicate energy consumption patterns, particularly during peak load times. This platform not only meets these regulatory requirements but also empowers customers by giving them control over their energy usage, enhancing customer satisfaction and engagement.",
+      "solution": "Colaberry Inc. developed an event scheduling platform using advanced cloud technologies to help a major utility company communicate Time of Use (TOU) events to their customers. This platform is essential for managing energy load effectively and allows customers to participate by reducing energy usage during peak hours, leading to cost savings on their energy bills.",
+      "capabilities": [
+        "IoT & Real-Time Streaming",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Angular",
+        "Kafka",
+        "Cloud-Based Deployment",
+        "Real-Time Communication",
+        "Frontend Development",
+        "Infrastructure Automation"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - ML for Accuracy of Load Forecasting .pdf",
+      "sha256": "6e0a456e810fa222497e3e034bdfaa8bdee17689c9ea4ea83967d22177b913ad",
+      "basecampUploadId": 10506774937,
+      "title": "Utilizing Machine Learning to increase accuracy of load forecasting “Applying segmentation and propensity models on electrical meter data”",
+      "industry": "Utilities",
+      "clientDescriptor": "",
+      "problem": "Client’s inability to find and retain expert data scientists would impede a key project - Forecasting demand from the electrical grid accurately. Inaccuracies in forecasts could lead to hefty fines by the regulators.",
+      "solution": "Client engaged with Colaberry to help find and bring expert consultants into their team who could support crucial data science projects. Our expert consultants under supervision of Client, collect hourly electrical load information from about 3500 circuits and feed this into a dynamic propensity model. The model has been able to predict load, for covered zip codes, with an accuracy (adjusted r square value) of around 90% established through cross-validation.",
+      "capabilities": [
+        "Demand & Load Forecasting",
+        "Time-Series Forecasting",
+        "Machine Learning Modeling"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "The model has been able to predict load, for covered zip codes, with an accuracy (adjusted r square value) of around 90% established through cross-validation.",
+          "numbers": [
+            "90%"
+          ],
+          "page": 2
+        }
+      ],
+      "pageCount": 2,
+      "gaps": [
+        "outcomes: no outcome heading",
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Push Notifications Integration.pdf",
+      "sha256": "cbb64cf00d1ba2f5a13c59ff9635fc009d43ca174540a74f705c5a6505b2c6db",
+      "basecampUploadId": 10506774973,
+      "title": "Push Notifications Integration",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "Modernizing communication channels is critical for keeping pace with customer expectations and technology trends. By enabling push notifications, the utility can provide timely updates and reminders, increasing transparency and customer satisfaction while reducing the overhead associated with traditional communication methods.",
+      "solution": "Colaberry Inc. developed a comprehensive solution to enable a major utility company to utilize push notifications through its Customer Mobile App (CMA). This project facilitates modern, direct communication channels between the utility and its customers, enhancing engagement and operational efficiency.",
+      "capabilities": [
+        "IoT & Real-Time Streaming",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development",
+        "Customer Engagement & Notifications"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Angular",
+        "Kafka",
+        "Cloud Hosting and Services",
+        "Data Management and Streaming",
+        "Application Development",
+        "Infrastructure Management"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Scam Reporting Tool.pdf",
+      "sha256": "459de15be265ffafeab337f6c079c80abd1693013352f13a9b45815b7879d152",
+      "basecampUploadId": 10506775007,
+      "title": "Scam Reporting Tool",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "The development of the scam reporting tool responds to increasing concerns about scams targeting utility customers. By providing a dedicated platform for reporting such incidents, the utility company can quickly address and mitigate these issues, enhancing customer trust and safeguarding the company's integrity.",
+      "solution": "Colaberry Inc. developed a web-based scam reporting tool for a major utility company, enabling customers to report scams related to utility services. This initiative enhances customer protection and helps maintain the utility's reputation by addressing fraudulent activities effectively.",
+      "capabilities": [
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Angular",
+        "Secure Web Platform",
+        "Dynamic Reporting Interface",
+        "Data Handling and Storage",
+        "Automation and Integration"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utilities - Short URL Management.pdf",
+      "sha256": "56881c339cf364d74e7428075958b521bff9e25165a22fbb22e234cc50c79613",
+      "basecampUploadId": 10506775061,
+      "title": "Short URL Management",
+      "industry": "Utilities",
+      "clientDescriptor": "a major utility company",
+      "problem": "The shift to an in-house short URL management system was driven by the need to reduce costs and increase control over the utility's digital assets. Bringing this service in-house eliminates dependencies on third-party vendors, enhances security, and allows for customized features that align with specific business needs.",
+      "solution": "Colaberry Inc. developed a custom short URL management system for a major utility company, transitioning from a third-party service to an in-house solution hosted on AWS. This initiative provides a cost-effective, scalable, and resilient solution for managing and redirecting shortened links, essential for marketing and communication efforts.",
+      "capabilities": [
+        "Cloud Infrastructure & DevOps",
+        "Web & Mobile Application Development"
+      ],
+      "techStack": [
+        "AWS",
+        "Terraform",
+        "Git",
+        "Angular",
+        "Scalable Cloud Infrastructure",
+        "Real-Time Data Handling",
+        "Frontend Management Interface",
+        "Database and Storage Solutions",
+        "Infrastructure Automation"
+      ],
+      "outcomes": [],
+      "pageCount": 3,
+      "gaps": [
+        "solution: no solution heading, used executive summary"
+      ],
+      "extractedBy": "deterministic"
+    },
+    {
+      "sourceFile": "Utility_Energy Demand Forecasting.pdf",
+      "sha256": "04f8c42dd7c342bf2b08439e694b6ec7b64b77d7684d02c0d8dace587f9720a6",
+      "basecampUploadId": 10506775098,
+      "title": "Energy Demand Forecasting Colaberry Inc. ​ ​ ​ ​ ​ ​ ​ ​ www.colaberry.com",
+      "industry": "Utilities",
+      "clientDescriptor": "",
+      "problem": "Utilities incurred high operational costs from inaccurate demand forecasts (overestimating led to expensive peaker plants; underestimating caused shortages and penalties). Manufacturers faced peak energy charges and production interruptions.",
+      "solution": "Developed AI-driven forecasting integrating ARIMA, LSTM, and ensemble models with feature engineering (weather data, PV masking, calendar events), delivering rolling real-time forecasts for proactive procurement and production planning. Colaberry deployed a hybrid modeling approach combining: ●​ Time-Series Modeling: ARIMA and LSTM models to capture temporal patterns in load data.​ ●​ Feature Engineering: Inclusion of weather impacts, temperature spike effects, PV masking, and calendar event variables for improved accuracy.​ ●​ Ensemble Learning: Fusion of statistical forecasts with neural network outputs for robust predictions.​ ●​ Rolling Forecast System: Delivering hourly to weekly demand",
+      "capabilities": [
+        "Demand & Load Forecasting",
+        "Time-Series Forecasting",
+        "Deep Learning",
+        "Machine Learning Modeling",
+        "IoT & Real-Time Streaming",
+        "Data Engineering & ETL Pipelines",
+        "Business Intelligence & Dashboards",
+        "Cloud Infrastructure & DevOps"
+      ],
+      "techStack": [],
+      "outcomes": [
+        {
+          "text": "●​ 10–15% improved forecast accuracy ●​ 15–20% utility peak procurement cost savings ●​ 8–12% operational savings for manufacturers ●​ Reduced CO₂ emissions, enhanced sustainability, and compliance ●​ Operational Efficiency: Improved grid reliability, reduced unplanned peaker plant dispatches, and decreased reserve deployments.​ ●​ Strategic Energy Procurement: Manufacturers negotiated better ener",
+          "numbers": [
+            "10–15%",
+            "15–20%",
+            "8–12%"
+          ],
+          "page": 6
+        }
+      ],
+      "pageCount": 7,
+      "gaps": [
+        "techStack: no labelled technology bullets"
+      ],
+      "extractedBy": "deterministic"
+    }
+  ]
+}
