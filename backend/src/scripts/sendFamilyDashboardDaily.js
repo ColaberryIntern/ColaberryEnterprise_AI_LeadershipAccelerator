@@ -28,6 +28,8 @@ const { getBasecampToken } = require(path.resolve(__dirname, './lib/basecampToke
 const { compileFamilyDashboardData } = require(path.resolve(__dirname, './lib/familyDashboardData'));
 const { renderFamilyDashboardHtml } = require(path.resolve(__dirname, './lib/renderFamilyDashboardHtml'));
 const { renderFamilyDashboardEmail, renderFamilyDashboardEmailText } = require(path.resolve(__dirname, './lib/renderFamilyDashboardEmail'));
+const { compileFamilyPhotos, commitPicks } = require(path.resolve(__dirname, './lib/familyPhotoFeed'));
+const { compileSchoolNews } = require(path.resolve(__dirname, './lib/familySchoolNews'));
 
 const BUCKET_ID = 33392153;
 const BC_BASE = 'https://3.basecampapi.com/3945211';
@@ -88,6 +90,7 @@ async function run() {
   console.log(`[Family Dashboard] Mode: ${TEST ? 'TEST (Ali only, no lock)' : 'PROD (Ali+Addie, lock)'}`);
   console.log('[Family Dashboard] Compiling live Basecamp data...');
   const data = await compileFamilyDashboardData();
+  const feeds = await compileNewsletterFeeds(data);
   console.log(`[Family Dashboard] KPIs: ${JSON.stringify(data.kpis)}`);
 
   const emailHtml = renderFamilyDashboardEmail(data);
@@ -129,7 +132,10 @@ async function run() {
     subject,
     html: emailHtml,
     text: renderFamilyDashboardEmailText(data),
-    attachments: [{ filename: 'family-dashboard-interactive.html', content: attachmentBuf, contentType: 'text/html' }],
+    attachments: [
+      { filename: 'family-dashboard-interactive.html', content: attachmentBuf, contentType: 'text/html' },
+      ...data.photos.map((p, i) => ({ filename: `family-photo-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
+    ],
     vaultAttachments: [{
       filename: `family-dashboard-${TODAY}.html`,
       content: attachmentBuf,
@@ -142,7 +148,43 @@ async function run() {
 
   if (!TEST) {
     fs.writeFileSync(LOCK_FILE, `${new Date().toISOString()}\n${r.mandrillId}\n`);
+    // Photos count as posted only once the real email is accepted; a TEST send never uses them up.
+    commitPicks(feeds.photoFeed);
   }
+}
+
+/** Central-time calendar date: the family's "today", whatever the host clock zone. */
+function centralYmd() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
+}
+
+/**
+ * Adds the newsletter feeds (school news, family photos) to `data`. Each feed is independent and
+ * non-fatal: a failure is logged with its class, shown as a broken source, and the email still goes.
+ */
+async function compileNewsletterFeeds(data) {
+  const today = centralYmd();
+  const feeds = { photoFeed: null };
+  data.photos = [];
+  data.school = null;
+  try {
+    data.school = await compileSchoolNews({ today });
+    data.sources.push({ name: 'School mail (ParentSquare)', status: 'live', detail: `${data.school.items.length} item(s) from Harrison, Watkins and Wylie ISD mail` });
+  } catch (e) {
+    console.error(`[Family Dashboard] school feed failed (${e.name}): ${e.message}`);
+    data.sources.push({ name: 'School mail (ParentSquare)', status: 'broken', detail: e.message.slice(0, 120) });
+  }
+  try {
+    feeds.photoFeed = await compileFamilyPhotos({ today });
+    data.photos = feeds.photoFeed.photos;
+    data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'live', detail: `${data.photos.length} new family photo(s) today` });
+  } catch (e) {
+    console.error(`[Family Dashboard] photo feed failed (${e.name}): ${e.message}`);
+    data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'broken', detail: e.message.slice(0, 120) });
+  }
+  data.kpis.sourcesConnected = data.sources.filter((s) => s.status === 'live').length;
+  data.kpis.sourcesTotal = data.sources.length;
+  return feeds;
 }
 
 run().catch((e) => {
