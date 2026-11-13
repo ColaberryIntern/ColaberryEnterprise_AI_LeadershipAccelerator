@@ -151,6 +151,8 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 // Which case study evidences which service. Its own router rather than more handlers in factoryRoutes, which is
 // already past the 500-line ceiling; the route prefixes still live under /api/admin/factory/.
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
+import caseStudyOutsideIntakeRoutes from './admin/caseStudyOutsideIntakeRoutes';
+import serviceProposalRoutes from './admin/serviceProposalRoutes';
 // The flow diagram and the delivery stories: the two stages built on a settled decomposition that
 // nothing called until L10.9. Its own router for the same reason as the line above.
 import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
@@ -414,6 +416,11 @@ router.use(factoryAdminRoutes);
 router.use(projectLifecycleRoutes);
 router.use(projectLifecycleReviewRoutes);
 router.use(caseStudyServiceLinkRoutes);
+// Outside case-study intake + the Intake queue (Services Upgrade SV1). Under /api/admin/factory, so mgmtSectionGate's
+// '/api/admin/factory' -> 'program' prefix row covers it; every route also carries requireSection('program').
+router.use(caseStudyOutsideIntakeRoutes);
+// Propose a growth service from a case study; promote growth -> active with proof (Services Upgrade SV1).
+router.use(serviceProposalRoutes);
 // Nested under /api/admin/factory/contract/:id/, so mgmtSectionGate's existing
 // '/api/admin/factory' -> 'program' PREFIX row already covers these too.
 router.use(factoryDownstreamRoutes);

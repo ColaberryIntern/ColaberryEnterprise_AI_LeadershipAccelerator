@@ -59,7 +59,12 @@ export type CaseStudyPublishBlockerCode =
   | 'visual_story_missing'
   // hire.refactored.ai lists PEOPLE; a hire record that resolves to nobody lists nobody
   // (2026-11-06). Raised only for surface `hire`.
-  | 'hire_no_linked_person';
+  | 'hire_no_linked_person'
+  // Services Upgrade SV1 (Ali, 2026-11-13): no case study may sit unlinked - zero CONFIRMED links into the gov
+  // tenant's Our Services catalog refuses every surface. See caseStudyPublishServiceLinkRule.
+  | 'no_confirmed_service_link'
+  // Outside case studies (from a PDF/deck, not our own build) are INTERNAL ONLY - Gov proposals, never a site.
+  | 'outside_case_study_internal_only';
 
 export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'surface_not_publishable',
@@ -84,6 +89,8 @@ export const CASE_STUDY_PUBLISH_BLOCKER_CODES = [
   'visual_story_invalid',
   'visual_story_missing',
   'hire_no_linked_person',
+  'no_confirmed_service_link',
+  'outside_case_study_internal_only',
 ] as const;
 
 /** One reason a publish was refused. `message` names the FIELD and its VALUE. */
@@ -105,6 +112,8 @@ export interface CaseStudyPublishRecord {
   readonly builderIdentityMode: CaseStudyBuilderIdentityMode;
   readonly builderNamingConsent: boolean;
   readonly archivedAt?: string | null;
+  /** `case_studies.source_type`; classified inside/outside by caseStudySourceKind. Absent reads as inside. */
+  readonly sourceType?: string | null;
 }
 
 /** The `case_study_snapshots` row under consideration. `null` means none exists. */
@@ -142,6 +151,14 @@ export interface CaseStudyPublishGateInput {
    */
   readonly hire?: {
     readonly linkedPeople: number;
+  } | null;
+  /**
+   * How many CONFIRMED links this record has into the gov tenant's services, resolved by the publication service
+   * (caseStudyServiceLinkGateFacts). ABSENT, NULL OR ZERO REFUSES on every surface: a lookup that failed is not a
+   * link found. Pending suggestions are not counted.
+   */
+  readonly serviceLinks?: {
+    readonly confirmedCount: number;
   } | null;
 }
 

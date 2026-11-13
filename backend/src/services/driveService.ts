@@ -21,6 +21,15 @@ function getAuthClient() {
   });
 }
 
+/**
+ * An authenticated read-only Drive client (same impersonation as every other read here). Exported for the outside
+ * case-study import (services/caseStudy/caseStudyOutsideDrive.ts), so credentials stay built in this one file.
+ * Throws 'Google Drive not configured' when the service-account env vars are absent.
+ */
+export function getDriveClient(): drive_v3.Drive {
+  return google.drive({ version: 'v3', auth: getAuthClient() });
+}
+
 export interface DriveRecordingMatch {
   fileId: string;
   name: string;

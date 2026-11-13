@@ -231,6 +231,13 @@ const mockResolveProjects = jest.fn(async () => [] as string[]);
 jest.mock('../caseStudyProjectResolution', () => ({
   resolveProjectsThroughRepositories: (...a: any[]) => mockResolveProjects(...a),
 }));
+// Services Upgrade SV1: the must-link rule reads how many CONFIRMED service links the record has in the gov
+// tenant. Mocked to one confirmed link here, so the reference record stays publishable; the rule itself is
+// exercised through the gate input below and in caseStudyPublishServiceLinkRule.test.ts.
+const mockServiceLinkFacts = jest.fn(async (_id: string) => ({ confirmedCount: 1 }));
+jest.mock('../caseStudyServiceLinkGateFacts', () => ({
+  serviceLinkGateFacts: (id: string) => mockServiceLinkFacts(id),
+}));
 
 import EvidenceRecord from '../../../models/EvidenceRecord';
 import PortfolioArtifact from '../../../models/PortfolioArtifact';
@@ -401,9 +408,12 @@ const gateInput = (
     snapshot?: Partial<{ status: string; approvedBy: string | null; approvedAt: string | null }>;
     noSnapshot?: boolean;
     foundation?: { maturity: string; openQuestions: number } | null;
+    serviceLinks?: { confirmedCount: number } | null;
   } = {},
 ): CaseStudyPublishGateInput => ({
   surfaceKey: patch.surfaceKey ?? 'enterprise',
+  // One confirmed service link unless a test says otherwise: the must-link rule (SV1) would refuse every record.
+  serviceLinks: patch.serviceLinks !== undefined ? patch.serviceLinks : { confirmedCount: 1 },
   caseStudy: { ...publishableRecord(), ...(patch.record ?? {}) },
   ...(patch.foundation !== undefined ? { foundation: patch.foundation } : {}),
   snapshot: patch.noSnapshot ? null : {
@@ -1239,6 +1249,10 @@ describe('the refusal is actionable and complete', () => {
       { foundation: { maturity: 'operational_result', openQuestions: 2 } },
       // hire_no_linked_person — published to Hire, resolves to nobody (no `hire` fact).
       { surfaceKey: 'hire' },
+      // no_confirmed_service_link — the record proves no service in Our Services.
+      { serviceLinks: { confirmedCount: 0 } },
+      // outside_case_study_internal_only — made from an outside document; internal evidence only.
+      { record: { sourceType: 'external_document' } },
       // metric_collected_sha_mismatch — computed at a commit nobody is reading
       // about, under a command that therefore does not reproduce the number.
       {
@@ -1593,6 +1607,25 @@ describe('nothing sensitive reaches a log line', () => {
 });
 
 /* ══════════════════════════════════════════ the service boundary itself ═══ */
+
+describe('Services Upgrade SV1 - the publication service feeds the must-link and outside rules', () => {
+  it('refuses an otherwise publishable record whose gov tenant has no confirmed service link, and writes nothing', async () => {
+    const cs = caseStudies.seed({ id: randomUUID(), status: 'approved' });
+    snapshots.seed({ case_study_id: cs.id, version: 1, status: 'approved', content: publishableContent() });
+    mockServiceLinkFacts.mockResolvedValueOnce({ confirmedCount: 0 });
+    await expect(publishCaseStudy({ caseStudyId: cs.id, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' }))
+      .rejects.toMatchObject({ error_class: 'PublishBlocked', details: { codes: ['no_confirmed_service_link'] } });
+    expect(mockServiceLinkFacts).toHaveBeenCalledWith(cs.id);
+    expect(publications.writes).toBe(0);
+  });
+
+  it('refuses an outside (document-derived) record even with a confirmed link, reading source_type from the row', async () => {
+    const cs = caseStudies.seed({ id: randomUUID(), status: 'approved', source_type: 'external_drive' });
+    snapshots.seed({ case_study_id: cs.id, version: 1, status: 'approved', content: publishableContent() });
+    const decision = await evaluateCaseStudyPublication({ caseStudyId: cs.id, surfaceKey: 'enterprise', actor: 'ali@colaberry.com' });
+    expect(decision.codes).toEqual(['outside_case_study_internal_only']);
+  });
+});
 
 describe('the service boundary', () => {
   it('rejects a malformed input with a tagged validation error before any read', async () => {

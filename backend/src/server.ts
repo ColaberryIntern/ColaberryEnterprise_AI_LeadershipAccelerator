@@ -113,6 +113,7 @@ import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
 import { ensureGovBidValueSchema } from './db/ensureGovBidValueSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
+import { ensureCaseStudyExternalImportSchema } from './db/ensureCaseStudyExternalImportSchema';
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
 import { ensureTaskClaimSchema } from './db/ensureTaskClaimSchema';
 import { ensureBroadcastTelemetrySchema } from './db/ensureBroadcastTelemetrySchema';
@@ -3007,6 +3008,10 @@ async function start(): Promise<void> {
   // MUST run after ensureCaseStudySchema and ensureServiceOfferingSchema: its REFERENCES name both parents, and a
   // foreign key to a table that does not exist yet is a boot error, not a no-op.
   await ensureCaseStudyServiceLinkSchema();
+  // Outside case-study intake (case_study_external_imports): the content-hash idempotency key for imported PDFs/decks.
+  // Additive; FKs case_studies, so it MUST run after ensureCaseStudySchema. Throws rather than skips: without the
+  // unique index a re-import would duplicate a record.
+  await ensureCaseStudyExternalImportSchema();
   // AI Project Factory: the executor/accountable/skills/judgment/confidence/source-evidence
   // attributes, added to student_tasks as new nullable columns (the archived_at/approval_state
   // pattern). Existing rows are untouched and unset until the factory populates them.
