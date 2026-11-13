@@ -95,8 +95,42 @@ async function buildPayload(job: PublishingJob, item: ContentItem, variant: Cont
   const media: PublishPayload['media'] = [];
   for (const m of links) {
     const asset = await MediaAsset.findByPk(m.media_asset_id);
-    // An attachment whose asset row is gone still gets a ref, so the adapter fails on it loudly
-    // ("cannot read media/…") instead of the post quietly publishing without its image.
+    // A LINK ASSET HAS NO BYTES TO PUBLISH, and must not be dressed up as a file.
+    //
+    // `ref` below falls back to the asset id when the asset row is missing, which is deliberate
+    // for THAT case: the adapter then fails loudly instead of the post publishing without its
+    // image. A link asset is different - the row is present, `storage_key` is legitimately null,
+    // and the same fallback would put a UUID into `ref`. A UUID cannot match KEY_PATTERN
+    // (`mediaStore.ts:80`), so the consequences are real and provider-specific: LinkedIn turns it
+    // into a permanent MediaUnreadable and dead-letters the job on the first attempt, while Meta
+    // does not wrap MediaStoreError at all, so it is classified transient and burns all three
+    // retries before dead-lettering. `adapter.validate` passes in both cases, so the external
+    // call is attempted first. The operator is left reading "could not be read (Not a media
+    // key.)" about a row that was never supposed to carry a key.
+    //
+    // Skipped with a loud structured log rather than silently: a post publishing without an
+    // attachment someone chose is a content defect, and it has to be traceable to this line.
+    if (asset && asset.kind === 'link') {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        // 'publishing-worker', matching this module's log() helper one screen above. Two
+        // service names for one module splits a log query later, and the whole point of this
+        // line is that somebody can find it afterwards.
+        service: 'publishing-worker',
+        event: 'publish_media_skipped_link',
+        outcome: 'partial',
+        correlation_id: job.id,
+        context: {
+          content_item_id: item.id,
+          media_asset_id: m.media_asset_id,
+          provider: job.provider,
+          reason: 'A link asset has no stored bytes and cannot be uploaded to a provider. '
+            + 'Put the URL in the post body or the variant link_url instead of attaching it.',
+        },
+      }));
+      continue;
+    }
     media.push({
       ref: asset?.storage_key ?? m.media_asset_id,
       mimeType: asset?.mime_type ?? 'application/octet-stream',

@@ -148,6 +148,11 @@ async function loadMediaFacts(itemId: string): Promise<MediaFacts[]> {
   for (const l of links) {
     const a = await MediaAsset.findByPk(l.media_asset_id);
     if (!a) continue;
+    // A link asset is not an attachment as far as any network is concerned. Counted as one it
+    // arrives with mimeType 'text/uri-list', which matches no provider's image, video or
+    // document rule, so the composer would report a media verdict about a file that does not
+    // exist. Excluded here rather than special-cased in each rule.
+    if (a.kind === 'link') continue;
     const video = (a.metadata as { video?: { codec_family?: string } } | null)?.video;
     facts.push({
       mimeType: a.mime_type,

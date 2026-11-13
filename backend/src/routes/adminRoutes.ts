@@ -17,6 +17,7 @@ import marketingBugReportRoutes from './admin/marketingBugReportRoutes';
 import publishingRoutes from './admin/publishingRoutes';
 import channelAccountRoutes from './admin/channelAccountRoutes';
 import contentMediaRoutes from './admin/contentMediaRoutes';
+import contentLibraryRoutes from './admin/contentLibraryRoutes';
 import linkedInConnectRoutes from './admin/linkedInConnectRoutes';
 import marketingConnectRoutes from './admin/marketingConnectRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
@@ -188,6 +189,10 @@ router.use(marketingBugReportRoutes);
 router.use(publishingRoutes);
 router.use(channelAccountRoutes);
 router.use(contentMediaRoutes);
+// The media LIBRARY (LIB-2): list/search, save a link, upload a file that belongs to no post
+// yet, edit, archive, and attach something already saved. After contentMediaRoutes because it
+// shares that file's conventions and reuses its service.
+router.use(contentLibraryRoutes);
 router.use(linkedInConnectRoutes);
 router.use(marketingConnectRoutes);
 // Case Study OS admin surface. Every path is fully qualified

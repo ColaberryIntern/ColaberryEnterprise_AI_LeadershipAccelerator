@@ -25,7 +25,7 @@ function input(overrides: Partial<ConfirmationInput> = {}): ConfirmationInput {
     links: [
       { provider: 'linkedin_organization', short_url: 'https://enterprise.colaberry.ai/r/ABCD2345', final_url: 'https://learn.colaberry.com/free?utm_source=linkedin&utm_medium=organic_social&utm_campaign=colaberry-awareness-2026-11', utm: { utm_source: 'linkedin', utm_medium: 'organic_social', utm_campaign: 'colaberry-awareness-2026-11' } },
     ],
-    assets: [{ id: 'm-1', filename: 'class.jpg', mime_type: 'image/jpeg', alt_text: 'Students at a whiteboard', position: 0 }],
+    assets: [{ id: 'm-1', filename: 'class.jpg', mime_type: 'image/jpeg', alt_text: 'Students at a whiteboard', position: 0, kind: 'file' as const, will_publish: true }],
     approval: { status: 'approved', requested_by: 'sohail@colaberry.com', requested_at: '2026-10-30T12:00:00.000Z', decided_by: 'ali@colaberry.com', decided_at: '2026-10-30T14:00:00.000Z', decision_note: null },
     validation: { ok: true, blockers: [] },
     ...overrides,
@@ -58,7 +58,10 @@ describe('the confirmation carries every field the spec names, by value', () => 
   });
 
   it('assets, with alt text so a missing one is visible', () => {
-    expect(c.assets).toEqual([{ id: 'm-1', filename: 'class.jpg', mimeType: 'image/jpeg', altText: 'Students at a whiteboard', position: 0 }]);
+    expect(c.assets).toEqual([{
+      id: 'm-1', filename: 'class.jpg', mimeType: 'image/jpeg', altText: 'Students at a whiteboard',
+      position: 0, kind: 'file', willPublish: true,
+    }]);
   });
 
   it('links, and the providers that have none', () => {
@@ -173,5 +176,47 @@ describe('readiness tells the buttons what they may do, with reasons', () => {
     expect(c.readiness.canSchedule).toBe(false);
     expect(c.readiness.canPublishNow).toBe(true);
     expect(c.readiness.reasons).toContain('Set a time to schedule, or publish now.');
+  });
+});
+
+/**
+ * A link attached to an item is NOT an attachment any provider receives: publishingWorker skips
+ * it. This sheet's one job is to say what is about to happen, so it has to carry that.
+ *
+ * These exist because the first attempt at this computed `kind` and `will_publish` in the
+ * service and then DROPPED them here - `buildConfirmation` re-maps each asset field by field, so
+ * the two new ones never reached the response. tsc could not see it (excess properties on a
+ * variable's element type are not checked at the call site) and CI stayed green while the
+ * operator's sheet was byte-identical to before. Only an assertion on the OUTPUT catches that.
+ */
+describe('an attached link is reported as not publishing', () => {
+  const withLink = () => buildConfirmation(input({
+    assets: [
+      { id: 'm-1', filename: 'class.jpg', mime_type: 'image/jpeg', alt_text: 'A photo', position: 0, kind: 'file' as const, will_publish: true },
+      { id: 'm-2', filename: null, mime_type: 'text/uri-list', alt_text: 'A YouTube link', position: 1, kind: 'link' as const, will_publish: false },
+    ],
+  }));
+
+  it('carries kind and willPublish all the way to the summary', () => {
+    const assets = withLink().assets;
+    expect(assets).toHaveLength(2);
+    expect(assets[0]).toMatchObject({ id: 'm-1', kind: 'file', willPublish: true });
+    expect(assets[1]).toMatchObject({ id: 'm-2', kind: 'link', willPublish: false });
+  });
+
+  it('still LISTS the link rather than hiding it', () => {
+    // Omitting it would be a lie by subtraction: the operator can see it attached to the item,
+    // and "attached, will not publish" is the thing they actually need to know.
+    expect(withLink().assets.map((a) => a.id)).toEqual(['m-1', 'm-2']);
+  });
+
+  it('CONTROL: willPublish is read from the input, not hardcoded', () => {
+    // If the mapping ignored the field and always returned true, the link case above would be
+    // the only failing test and a `willPublish: true` constant would pass everything else.
+    const allLinks = buildConfirmation(input({
+      assets: [{ id: 'm-9', filename: null, mime_type: 'text/uri-list', alt_text: 'Only a link', position: 0, kind: 'link' as const, will_publish: false }],
+    }));
+    expect(allLinks.assets.every((a) => a.willPublish === false)).toBe(true);
+    expect(allLinks.assets.every((a) => a.kind === 'link')).toBe(true);
   });
 });

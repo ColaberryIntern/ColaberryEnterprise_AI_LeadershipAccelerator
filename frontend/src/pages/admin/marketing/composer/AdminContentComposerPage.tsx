@@ -7,6 +7,7 @@ import * as composer from '../../../../services/contentComposerApi';
 import type { ComposerAction, ConfirmationSummary, ContentItem, ContentVariant, ExternalPublication, ItemLink, ItemMedia, ProviderKey, ProviderSummary, PublishingJob, VariantProblem } from '../../../../services/contentComposerApi';
 import ComposerSetup, { type CampaignOption, type SetupValues } from './ComposerSetup';
 import ComposerMedia, { type UploadState } from './ComposerMedia';
+import LibraryPicker from './LibraryPicker';
 import ComposerVariants from './ComposerVariants';
 import ComposerPreview from './ComposerPreview';
 import ComposerConfirmation from './ComposerConfirmation';
@@ -573,6 +574,22 @@ export default function AdminContentComposerPage() {
               // to where the video is. It seems weird towards the bottom."
               <div className="mt-2" data-testid="setup-media">
                 <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
+                {/*
+                  "Choose from library" sits BESIDE the upload rather than replacing it, because
+                  the two answer different questions: upload is for something new, the picker is
+                  for something we already have. It lives here, not inside ComposerMedia, because
+                  a LINK sets the post's destination - it needs `setup` and `onSetupChange`, which
+                  ComposerMedia has no business holding.
+                */}
+                <LibraryPicker
+                  contentItemId={item?.id ?? null}
+                  brandId={setup.brand_id || null}
+                  values={setup}
+                  onChange={onSetupChange}
+                  landingPages={landingPages}
+                  onAttached={() => { if (item) void reload(item.id); }}
+                  busy={busy}
+                />
               </div>
             ) : null}
           />

@@ -71,6 +71,7 @@ const MarketingShell = lazy(() => import('../pages/admin/marketing/MarketingShel
 const AdminMarketingOverviewPage = lazy(() => import('../pages/admin/marketing/AdminMarketingOverviewPage'));
 const AdminMarketingPerformancePage = lazy(() => import('../pages/admin/marketing/AdminMarketingPerformancePage'));
 const AdminBrandsPage = lazy(() => import('../pages/admin/marketing/AdminBrandsPage'));
+const AdminMediaLibraryPage = lazy(() => import('../pages/admin/marketing/library/AdminMediaLibraryPage'));
 const AdminMarketingCalendarPage = lazy(() => import('../pages/admin/marketing/AdminMarketingCalendarPage'));
 const AdminContentComposerPage = lazy(() => import('../pages/admin/marketing/composer/AdminContentComposerPage'));
 const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminContentQueuePage'));
@@ -335,6 +336,10 @@ const adminRoutes = (
               2026-11-11 that was 7 and 6 with zero overlap - thirteen people, and no screen
               showed more than seven. Section `campaigns` by prefix, matching
               /api/admin/marketing/open-house/attendees. */}
+          {/* The media library (LIB-2/LIB-3): every file and link this brand can post. Inside the
+              same brand-scoped group as the rest of Marketing, because an asset belongs to one
+              brand and the switcher above is what selects it. */}
+          <Route path="/admin/marketing/library" element={<AdminMediaLibraryPage />} />
           <Route path="/admin/marketing/open-house-attendees" element={<AdminOpenHouseAttendeesPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />

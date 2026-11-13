@@ -186,6 +186,7 @@ describe('the sidebar advertises only what exists', () => {
     expect(byPath['/admin/marketing/content']).toBe('All posts');
     expect(byPath['/admin/marketing/publishing']).toBe('Publishing queue');
     expect(byPath['/admin/marketing/brands']).toBe('Brands & channels');
+    expect(byPath['/admin/marketing/library']).toBe('Library');
     // The internal names must not come back as labels.
     const labels = MARKETING_DESTINATIONS.map((d) => d.label);
     expect(labels).not.toContain('Composer');
@@ -202,6 +203,10 @@ describe('the sidebar advertises only what exists', () => {
       // Open House signups follows it: the ads buy registrations, and this is where you read who
       // actually registered - across BOTH rosters, which is the whole reason the page exists.
       'Publishing queue', 'Performance', 'Ad spend', 'Open House signups', 'Brands & channels',
+      // Library is LAST, under the same Set up heading and after Brands & channels, because the
+      // order of that pair is the order of the work: first say who a brand posts as, then stock
+      // what it has to post. A library with no connected channel is a cupboard with no door.
+      'Library',
     ]);
   });
 

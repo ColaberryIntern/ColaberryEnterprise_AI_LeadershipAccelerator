@@ -117,6 +117,14 @@ export interface ConfirmationAsset {
   mime_type: string;
   alt_text: string | null;
   position: number;
+  /** 'file' (bytes we stored) or 'link' (a URL somebody saved). */
+  kind: 'file' | 'link';
+  /**
+   * False for a link: it is attached to the item, but no provider will receive it as media -
+   * publishingWorker skips it. This sheet exists to say what is about to happen, so an
+   * attachment that will not arrive has to be shown as one.
+   */
+  will_publish: boolean;
 }
 
 export interface ConfirmationApprovalRequest {
@@ -201,7 +209,10 @@ export interface ConfirmationSummary {
   /** Null when no time is set - "publish now" and "save draft" have no schedule. */
   schedule: ConfirmationSchedule | null;
   copy: Array<{ provider: ProviderKey; text: string; source: 'generated' | 'edited'; stale: boolean; chars: number }>;
-  assets: Array<{ id: string; filename: string | null; mimeType: string; altText: string | null; position: number }>;
+  assets: Array<{
+    id: string; filename: string | null; mimeType: string; altText: string | null; position: number;
+    kind: 'file' | 'link'; willPublish: boolean;
+  }>;
   links: Array<{ provider: ProviderKey; shortUrl: string; finalUrl: string; utm: Record<string, string> }>;
   /** Providers whose variant has no tracked link yet. Shown, because an untracked post is unattributable. */
   linkGaps: ProviderKey[];
@@ -330,7 +341,12 @@ export function buildConfirmation(input: ConfirmationInput): ConfirmationSummary
       stale: v.stale,
       chars: v.body.length,
     })),
-    assets: assets.map((a) => ({ id: a.id, filename: a.filename, mimeType: a.mime_type, altText: a.alt_text, position: a.position })),
+    // Re-mapped field by field rather than spread, which is the house style here - and is also
+    // exactly how kind/willPublish got silently dropped the first time they were added.
+    assets: assets.map((a) => ({
+      id: a.id, filename: a.filename, mimeType: a.mime_type, altText: a.alt_text, position: a.position,
+      kind: a.kind, willPublish: a.will_publish,
+    })),
     links: links.map((l) => ({ provider: l.provider, shortUrl: l.short_url, finalUrl: l.final_url, utm: l.utm })),
     linkGaps,
     approval: { label: approvalLabel(item, approval), itemStatus: item.status, humanApproved: item.human_approved, request: approval },

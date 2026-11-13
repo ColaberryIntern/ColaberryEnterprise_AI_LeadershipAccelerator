@@ -32,14 +32,29 @@ export async function buildItemConfirmation(itemId: string): Promise<Confirmatio
     ContentApprovalRequest.findOne({ where: { content_item_id: itemId }, order: [['requested_at', 'DESC']] }),
   ]);
 
+  // THIS SHEET'S ONE JOB IS TO SAY WHAT IS ABOUT TO HAPPEN, so it must not list an attachment
+  // that publishingWorker will skip. A link asset has no bytes to upload (see the kind column on
+  // media_assets), and the worker drops it with a warn rather than handing a provider a UUID.
+  // Listing it unqualified would tell the operator an image is going out when it is not.
+  //
+  // Reported rather than hidden: the attachment really is on the item, and silently omitting it
+  // would be its own lie - the operator would wonder where the thing they attached went.
   const assets = await Promise.all(mediaRows.map(async (m) => {
     const a = await MediaAsset.findByPk(m.media_asset_id);
+    // ANNOTATED, not inferred. Without the annotation TypeScript widens this to `string` the
+    // moment it becomes a mutable object-literal property with no contextual type, and the
+    // literal union ConfirmationAsset.kind requires is lost - which is exactly what failed
+    // Backend typecheck at 055e44fc.
+    const kind: 'file' | 'link' = a?.kind === 'link' ? 'link' : 'file';
     return {
       id: m.media_asset_id,
       filename: a?.original_filename ?? null,
       mime_type: a?.mime_type ?? 'unknown',
       alt_text: a?.alt_text ?? null,
       position: m.position,
+      kind,
+      /** False for a link: it is attached, but no provider will receive it as media. */
+      will_publish: kind === 'file',
     };
   }));
 
