@@ -13,7 +13,7 @@ interns", "who needs a message today", or when the daily Internship Report arriv
 
 ---
 
-## The six that cost something
+## The seven that cost something
 
 ### 1. NEVER judge the report from a screenshot. Read the whole thing.
 
@@ -112,6 +112,54 @@ answer, say that plainly and give a new date rather than omitting it.
 The report put a productive builder quiet for 5 days in the same bucket as someone at day 50
 with no project. They need completely different messages.
 
+### 7. NEVER hold somebody to account for work you never assigned them.
+
+On 2026-11-12 an intern received this, in Ali's name:
+
+> Over the last three weeks I have written to you five times and heard back once... Tell me
+> which one of these is closest to true: ... **4. You have decided you are done with the
+> internship and have not wanted to say so.** What I cannot do is keep writing into silence and
+> call that a program.
+
+Every sentence was true about the mail. It was still the wrong message. The recipient had
+**no project assigned**: `enrollments.active_project_id` was null, and the only `projects` row
+on her name was a nameless shell created the day before. She was being asked to account for
+screenshots of an app nobody had given her, and offered an exit from a program she had never
+been let into. Ali, 2026-11-13: *"the message to Harpreet was pretty harsh - she's not even
+assigned a project."*
+
+**Before any message that names a pattern of silence, counts unanswered messages back at
+somebody, or raises them leaving, all four must be true:**
+
+1. `enrollments.active_project_id` is set, the project has a real name, and it carries at least
+   one story. A nameless row is a shell; a plan that was never materialised into tasks is not an
+   assignment either, whatever the row is called.
+
+   **Do not read the name off the report.** `portfolioReport/compose.ts` falls back to the
+   literal string `'Project'` when every real title is null, so a `projects.name IS NULL` row
+   arrives in the sidecar as `project: { name: "Project" }` and reads as assigned. Measured
+   2026-11-13: that is still exactly how the 12 November recipient appears. Query the database.
+2. We do not owe them a reply. A manager who has not answered has no standing to raise silence.
+3. At least **two** messages from us with nothing back, and **seven days** since they last
+   wrote, before the silence may be named as a pattern.
+4. At least **three** messages and **fourteen days** before an exit is offered.
+
+```sql
+SELECT e.full_name, e.status,
+       coalesce(e.active_project_id::text, 'NO ACTIVE PROJECT') AS active_project,
+       coalesce(nullif(btrim(p.name), ''), 'NO NAME ON THE ROW')  AS project_name,
+       (SELECT count(*) FROM student_tasks t WHERE t.project_id = p.id) AS stories
+  FROM enrollments e
+  LEFT JOIN projects p ON p.enrollment_id = e.id
+ WHERE e.email = :email;
+```
+
+The generated path enforces this in `backend/src/services/internship/nudgeBrief/escalationGate.ts`:
+the composer will not choose the escalating shape without a warrant, and `sendBrief` refuses a
+body that exceeds one, whoever wrote it. **`send.sh` does not go through any of that.** A
+hand-written message is gated only by the person writing it, which is exactly how this one got
+out, so run the query above before writing one.
+
 ---
 
 ## Triage tiers
@@ -121,8 +169,8 @@ Assign exactly one. The tier decides the shape of the message.
 | Tier | Test | The message is |
 |---|---|---|
 | `blocked_waiting_on_ali` | An unanswered inbound email from them | **An answer.** Not a nudge. Answer the actual question first, in the first paragraph |
-| `no_project_at_day_N` | Day N with no project | **A conversation.** Either pick a project, or an honest answer about whether this is working |
-| `never_started_building` | Has a project, zero commits and zero verified stories, ever | **An escalation.** Offer four honest outs and require a reply by a named day |
+| `no_project_at_day_N` | Day N with no project | **An apology and a decision.** The gap is OURS. Never ask them to account for build work; ask for one paragraph, or offer to pick for them |
+| `never_started_building` | Has a project, zero commits and zero verified stories, ever | **An honest conversation.** What is in the way, and what we will replan. Only an escalation with four outs once rule 7's warrant is met |
 | `overdue_backlog` | Tasks past `due_baseline_on` | **An ordered plan** with dates, and an explicit "tell me now what you will not have" |
 | `quiet` | No commit or verified story in N days, but history of work | **A specific next step**, naming the actual next story |
 | `on_track` | Recent build work, nothing owed, no overdue | **An artifact ask.** Capability Map, Project One-Pager, Command Center |
@@ -235,6 +283,8 @@ stays in his inbox.
 - Every gov message leads with days remaining to the case study, computed from
   `due_baseline_on`.
 - No message claims something does not exist without the four existence checks in rule 3.
+- No message names a pattern of silence or raises somebody leaving without the warrant in rule 7,
+  and the `active_project_id` query has been run for anyone being asked about build work.
 - Every message dry-ran clean, then sent, and the `250` line was recorded.
 - Nothing contains a placeholder. A message that needs an answer Ali has not given is
   rewritten to say so honestly, not sent with a blank.

@@ -20,6 +20,7 @@
  * is reported in `warnings` so a manager can see what the message is NOT saying.
  */
 import type { SidecarIntern, TriageTier } from '../portfolioReport/sidecar/types';
+import { checkEscalation, escalationWarrant } from './escalationGate';
 import { briefProblems, type BriefDeadline, type BriefInputs, type BriefPromise, type NudgeBrief } from './types';
 import {
   chooseFocus, close, lead, longDate, nextAction, subjectFor, theOneThing, wayThrough,
@@ -101,10 +102,20 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   const { tier } = intern.triage;
   const leads = deadline !== null && deadline.daysLeft <= DEADLINE_LEADS_WITHIN_DAYS;
 
+  /**
+   * How hard this message is ALLOWED to be, computed before a word of it is written.
+   *
+   * Pure, from the same sidecar everything else here reads, so the warrant and the message can
+   * never disagree about the same person. It gates the one shape that puts the relationship on the
+   * table, and `sendBrief` checks the finished body against it again as a backstop for text a
+   * manager edited or the model wrote. See escalationGate.ts.
+   */
+  const escalation = escalationWarrant(intern, now);
+
   // ONE focus, chosen hardest truth first, and it decides every line below. The old code let a
   // near deadline silently override the tier, which is how somebody with nothing built at all got
   // a cheerful countdown instead of the conversation he needed.
-  const focus = chooseFocus(intern, deadline);
+  const focus = chooseFocus(intern, deadline, escalation);
   const awaitingAli = focus === 'answer_owed';
 
   const para = (xs: string[]): void => { if (xs.length) { if (lines.length) lines.push(''); lines.push(...xs); } };
@@ -175,6 +186,26 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
 
   warnings.push(...briefProblems(body));
 
+  /**
+   * The composer grading its own output against the warrant.
+   *
+   * It should never fire, because `chooseFocus` already refused the escalating shape without an
+   * `ultimatum` warrant. It is here because "should never fire" is exactly the claim that needs a
+   * check behind it: a new sentence added to any shape could escalate it without anybody noticing,
+   * and this turns that into a visible warning on the row rather than a message in Ali's name.
+   */
+  const gate = checkEscalation(body, escalation);
+  if (!gate.ok) {
+    warnings.push(`This message is harder than the evidence supports: it ${gate.reason} The send path will refuse it.`);
+  }
+
+  if (!escalation.hasAssignedProject) {
+    const why = (intern.stories_total ?? 0) > 0
+      ? 'the project on their name has no real title'
+      : 'the project on their name carries no stories to build';
+    warnings.push(`No work has actually been assigned to them: ${why}. Nothing in this message may hold them to account for build work, because none was ever given to them.`);
+  }
+
   return {
     enrollmentId: intern.enrollment_id,
     name: intern.name,
@@ -193,6 +224,7 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
       ? { sentAt: intern.last_ask.sent_at, subject: intern.last_ask.subject ?? null }
       : null,
     inboundSince: inboundSince(intern),
+    escalation,
     deadline,
     promises,
     subject,

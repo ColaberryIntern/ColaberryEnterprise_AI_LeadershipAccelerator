@@ -20,6 +20,7 @@
 import { guardedSendMail } from '../../emailService';
 import { sendOnce, type SendOnceResult } from '../../email/idempotentSend';
 import { isKillSwitchActive } from '../../launchSafety';
+import { checkEscalation } from './escalationGate';
 import { briefProblems } from './types';
 import type { NudgeBrief } from './types';
 
@@ -42,7 +43,9 @@ export function briefEventId(enrollmentId: string, now: Date): string {
 function log(event: string, outcome: string, context: Record<string, unknown>): void {
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),
-    level: outcome === 'failure' ? 'error' : 'info',
+    // `partial` is warn rather than info: a message the gate refused is not routine traffic, and
+    // it is the line somebody should see when an intern unexpectedly hears nothing.
+    level: outcome === 'failure' ? 'error' : outcome === 'partial' ? 'warn' : 'info',
     service: 'intern-nudge-brief',
     event,
     outcome,
@@ -78,6 +81,30 @@ export async function sendBrief({ brief, body, subject, dryRun, now = new Date()
   // because the manager may have introduced a dash or a bracket the generated text did not have.
   const problems = briefProblems(body);
   if (problems.length) return { ...base, outcome: 'skipped', reason: `body_rejected: ${problems.join('; ')}` };
+
+  /**
+   * Is this message harder on them than the evidence supports.
+   *
+   * Checked HERE, on the body that is actually about to be transmitted, because this is the one
+   * place every path converges: the cadence worker, the console, a manager who edited the text in
+   * the box, and a body the model rewrote. Checking it only in the composer would gate the
+   * generated wording and leave the three ways a harder sentence can arrive afterwards wide open.
+   *
+   * The refusal is deliberately a `skipped`, not a throw. A message we are not entitled to send is
+   * not an error in the run; it is the gate doing its job, and the cadence must carry on to the
+   * rest of the roster.
+   */
+  const gate = checkEscalation(body, brief.escalation);
+  if (!gate.ok) {
+    log('intern_brief_escalation_blocked', 'partial', {
+      enrollment_id: brief.enrollmentId,
+      error_class: 'ContractViolation',
+      found: gate.found,
+      allowed: gate.allowed,
+      phrase: gate.phrase,
+    });
+    return { ...base, outcome: 'skipped', reason: `escalation_unwarranted: ${gate.reason}` };
+  }
 
   if (Date.now() - Date.parse(brief.generatedAt) > MAX_BRIEF_AGE_MS) {
     return { ...base, outcome: 'skipped', reason: 'brief_too_old: regenerate it so it still describes them' };

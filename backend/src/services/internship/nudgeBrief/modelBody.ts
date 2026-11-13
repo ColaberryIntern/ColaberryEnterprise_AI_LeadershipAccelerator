@@ -40,6 +40,7 @@
  */
 import type { ChatClient } from '../portfolioReport/narrate';
 import type { SidecarIntern } from '../portfolioReport/sidecar/types';
+import { checkEscalation, type EscalationLevel } from './escalationGate';
 import { chooseFocus, nextRealTask, theirLastWord } from './shapes';
 import { briefProblems, type BriefDeadline, type NudgeBrief } from './types';
 
@@ -74,6 +75,13 @@ export interface BodyFacts {
   signals: Record<string, number | string | boolean | null>;
   deadline: { dueOn: string; daysLeft: number; outstanding: string[] } | null;
   nextTask: { title: string; dueOn: string | null } | null;
+  /**
+   * The hardest this message may be. Only the LEVEL is carried, never the warrant's reason text:
+   * `validateMiddle` checks every number in a draft against `JSON.stringify(facts)`, so a
+   * sentence like "3 messages with nothing back" would quietly widen the set of numbers the model
+   * is allowed to state.
+   */
+  escalationCeiling: EscalationLevel;
   /** Today's deterministic middle. The model is rewriting this, not inventing from nothing. */
   draft: string;
 }
@@ -89,6 +97,10 @@ export const SYSTEM = [
   '- No em dashes or en dashes. No angle brackets.',
   '- Do not greet them and do not sign off. Someone else writes the first line and the last line.',
   '- Two to six sentences. Plain, direct, warm, no filler, no praise they did not earn.',
+  '- Unless escalationCeiling is "ultimatum", never raise them leaving, never suggest the program',
+  '  may be wrong for them, and never state a limit on what we will keep doing.',
+  '- Unless escalationCeiling is at least "pressure", do not make their silence the subject: no',
+  '  counting messages back at them, no naming a pattern, no "I am going to be straight with you".',
   '- Lead with the single thing that matters most to them today, and say why it matters.',
   '',
   'Return JSON: {"middle": "..."}',
@@ -104,7 +116,10 @@ export function factsForBrief(intern: SidecarIntern, brief: NudgeBrief, deadline
   const word = theirLastWord(intern);
   return bodyFacts({
     firstName: brief.firstName,
-    focus: chooseFocus(intern, deadline),
+    // The SAME warrant the brief was composed under, so the model is told about the message it is
+    // rewriting rather than about a freshly computed one that may have moved.
+    escalationCeiling: brief.escalation.level,
+    focus: chooseFocus(intern, deadline, brief.escalation),
     tier: brief.tier,
     theirWords: word ? { subject: word.subject, receivedAt: word.received_at, text: word.excerpt } : null,
     openQuestions: brief.openQuestions.map((q) => ({ subject: q.subject, text: q.text })),
@@ -130,8 +145,11 @@ export function bodyFacts(input: {
   promises: BodyFacts['promises']; project: BodyFacts['project'];
   signals: BodyFacts['signals']; deadline: BodyFacts['deadline'];
   nextTask: BodyFacts['nextTask']; draft: string;
+  /** Omitted means `none`: a caller that cannot say what is warranted gets the gentlest ceiling. */
+  escalationCeiling?: EscalationLevel;
 }): BodyFacts {
-  return { ...input };
+  // Spread first, then the default, so an explicit `undefined` cannot overwrite it back out.
+  return { ...input, escalationCeiling: input.escalationCeiling ?? 'none' };
 }
 
 /** Returns the cleaned middle, or the reason it was refused. */
@@ -142,6 +160,19 @@ export function validateMiddle(text: unknown, facts: BodyFacts): { ok: true; mid
   if (s.length < 60) return { ok: false, reason: `too short (${s.length})` };
 
   if (/\b(he|she|his|her|hers|him)\b/i.test(s)) return { ok: false, reason: 'gendered pronoun' };
+
+  /**
+   * Harder on them than the evidence supports.
+   *
+   * The model is handed a deterministic draft that already respects the ceiling, so this catches
+   * it reaching for severity the facts did not give it: a rewrite of "tell me what is in the way"
+   * that arrives as "tell me whether this is still working for you" is a different message about a
+   * different subject, and it is the one that costs a person.
+   */
+  const tone = checkEscalation(s, facts.escalationCeiling);
+  if (!tone.ok) {
+    return { ok: false, reason: `escalates beyond the evidence: wrote "${tone.phrase}" at ${tone.found} when ${tone.allowed} is the ceiling` };
+  }
 
   const problems = briefProblems(s);
   if (problems.length) return { ok: false, reason: `sender would refuse it: ${problems.join('; ')}` };

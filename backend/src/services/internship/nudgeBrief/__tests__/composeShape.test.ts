@@ -54,10 +54,49 @@ describe('what the message is about', () => {
       counts: { ...intern().counts, commits: 0, verified: 0 },
       triage: { tier: 'never_started_building', reason: 'nothing built' },
     });
-    expect(chooseFocus(i, DEADLINE)).toBe('never_started');
+    expect(chooseFocus(i, DEADLINE)).toBe('not_started_yet');
     const b = composeBrief({ intern: i, deadline: DEADLINE, now: NOW });
-    expect(b.body).toContain('the date is not the real problem');
+    expect(b.body).toContain('Nothing has been built');
     expect(b.body).not.toContain('2 days to your');
+  });
+
+  /**
+   * The same facts, said two ways, and the warrant is what picks between them.
+   *
+   * `never_started` offers four outs, one of which is leaving. Until 2026-11-13 it was reached on
+   * build telemetry alone, so somebody we had written to once got the same message as somebody who
+   * had ignored us for a month. See escalationGate.ts.
+   */
+  it('will not offer the exit to someone who has not earned the hard conversation', () => {
+    const i = intern({
+      stories_verified: 0, percent_built: 0,
+      counts: { ...intern().counts, commits: 0, verified: 0 },
+      triage: { tier: 'never_started_building', reason: 'nothing built' },
+    });
+    const b = composeBrief({ intern: i, deadline: DEADLINE, now: NOW });
+    expect(b.escalation.level).toBe('none');
+    expect(b.body).not.toContain('ends your internship');
+    expect(b.body).not.toContain('straight with you');
+    expect(b.body).toContain('what is in the way');
+  });
+
+  it('offers it when the silence is long enough to warrant one', () => {
+    const i = intern({
+      stories_verified: 0, percent_built: 0,
+      counts: { ...intern().counts, commits: 0, verified: 0 },
+      triage: { tier: 'never_started_building', reason: 'nothing built' },
+      open_questions: [],
+      communications: [
+        { direction: 'from_intern', received_at: '2026-10-01T12:00:00Z', subject: 's', excerpt: 'e' },
+        { direction: 'from_ali', received_at: '2026-10-20T12:00:00Z', subject: 's', excerpt: 'e' },
+        { direction: 'from_ali', received_at: '2026-10-25T12:00:00Z', subject: 's', excerpt: 'e' },
+        { direction: 'from_ali', received_at: '2026-11-01T12:00:00Z', subject: 's', excerpt: 'e' },
+      ] as never,
+    });
+    expect(chooseFocus(i, DEADLINE, { level: 'ultimatum' } as never)).toBe('never_started');
+    const b = composeBrief({ intern: i, deadline: DEADLINE, now: NOW });
+    expect(b.escalation.level).toBe('ultimatum');
+    expect(b.body).toContain('the date is not the real problem');
   });
 
   it('leads a close deadline with what is at risk, for someone who IS building', () => {
@@ -265,11 +304,38 @@ describe('it offers a way through, not only a way out', () => {
     expect(b.body).toContain('cut scope with you now');
   });
 
-  it('tells someone who has not started that none of the answers ends their internship', () => {
+  /**
+   * The way out is only offered once the hard conversation has been earned; the way THROUGH is
+   * offered either way. Before 2026-11-13 the two were the same sentence, so the only version of
+   * "I will help you" this shape had also raised ending the internship.
+   */
+  it('offers to replan rather than only naming the deadline, when no escalation is warranted', () => {
     const b = composeBrief({
       intern: intern({ stories_verified: 0, percent_built: 0, counts: { ...intern().counts, commits: 0 } }),
       deadline: null, now: NOW,
     });
+    expect(b.escalation.level).toBe('none');
+    expect(b.body).toContain('I would rather replan around it');
+    expect(b.body).not.toContain('ends your internship');
+  });
+
+  it('tells someone who HAS earned it that none of the answers ends their internship', () => {
+    const b = composeBrief({
+      intern: intern({
+        stories_verified: 0,
+        percent_built: 0,
+        counts: { ...intern().counts, commits: 0 },
+        open_questions: [],
+        communications: [
+          { direction: 'from_intern', received_at: '2026-10-01T12:00:00Z', subject: 's', excerpt: 'e' },
+          { direction: 'from_ali', received_at: '2026-10-20T12:00:00Z', subject: 's', excerpt: 'e' },
+          { direction: 'from_ali', received_at: '2026-10-25T12:00:00Z', subject: 's', excerpt: 'e' },
+          { direction: 'from_ali', received_at: '2026-11-01T12:00:00Z', subject: 's', excerpt: 'e' },
+        ] as never,
+      }),
+      deadline: null, now: NOW,
+    });
+    expect(b.escalation.level).toBe('ultimatum');
     expect(b.body).toContain('none of them ends your internship');
   });
 
