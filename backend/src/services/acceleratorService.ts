@@ -44,8 +44,9 @@ export async function createSession(data: {
 }, opts: { liveEnabled?: boolean } = {}) {
   const session = await LiveSession.create(data as any);
   const roomId = await resolveRoomId(session);
-  if (opts.liveEnabled) await enableLiveForSession(session, roomId);
-  return session;
+  // D18: carried back beside the saved session rather than left in a log nobody reads.
+  const liveWarning = opts.liveEnabled ? await enableLiveForSession(session, roomId) : null;
+  return Object.assign(session, { liveWarning });
 }
 
 /**
@@ -82,19 +83,45 @@ export async function resolveRoomId(session: { id: string }): Promise<string | n
  * while that flag is off: discovery only surfaces active states, and private occurrences are
  * hidden from anyone not room-eligible. Gating creation on it would force the feature to be
  * switched on globally before a class could even be set up, which inverts the workflow.
+ *
+ * D18: IT RETURNS THE FAILURE NOW, INSTEAD OF ONLY WRITING IT TO A LOG.
+ *
+ * Both paths here used to end in `console.warn`. An admin ticking "live" on a class whose
+ * occurrence was then refused got a 201 and a session that looked set up, and found out when
+ * somebody opened the class on the night and there was nothing to broadcast. The only record
+ * was a line in a container log nobody reads.
+ *
+ * Still non-fatal, deliberately. The session is a real thing that was really saved, and
+ * throwing would roll back a legitimate edit because a secondary feature could not be set up.
+ * The warning travels beside the saved session instead, so the surface can say both.
+ *
+ * Returns null when there is nothing to report.
  */
-async function enableLiveForSession(session: { id: string }, roomId: string | null): Promise<void> {
+async function enableLiveForSession(
+  session: { id: string }, roomId: string | null,
+): Promise<string | null> {
   try {
     const { ensureOccurrenceForSession } = await import('./broadcast/broadcastSessionOccurrence');
     const result = await ensureOccurrenceForSession(session as any, roomId);
     if (result.outcome === 'refused') {
-      console.warn(
-        `[ColaberryLive] no occurrence for session ${session.id}: ${result.reason}`
-        + (result.detail ? ` (${result.detail})` : ''),
-      );
+      const detail = result.detail ? ` (${result.detail})` : '';
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+        event: 'live_occurrence_refused', outcome: 'failure', error_class: 'OccurrenceRefused',
+        context: { sessionId: session.id, reason: result.reason, detail: result.detail ?? null },
+      }));
+      return `This class was saved, but Colaberry Live was not set up for it: ${result.reason}${detail}.`;
     }
+    return null;
   } catch (err: any) {
-    console.warn('[ColaberryLive] ensureOccurrenceForSession failed (non-fatal):', err?.message);
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'live_occurrence_failed', outcome: 'failure',
+      error_class: err?.name ?? 'UnexpectedError',
+      context: { sessionId: session.id, error: err?.message ?? 'unknown' },
+    }));
+    return 'This class was saved, but setting up Colaberry Live for it did not complete. '
+      + 'Open Studio setup for this class to check.';
   }
 }
 
@@ -124,10 +151,11 @@ export async function updateSession(sessionId: string, data: Partial<{
   // embeds the start time, and the preview window and access decision are measured from it.
   // Requiring the admin to re-tick a checkbox to keep the two in sync is a bug waiting to
   // happen on the one edit nobody thinks of as a broadcast change.
+  let liveWarning: string | null = null;
   if (opts.liveEnabled || await liveAlreadyEnabled(session.id)) {
-    await enableLiveForSession(session, await resolveRoomId(session));
+    liveWarning = await enableLiveForSession(session, await resolveRoomId(session));
   }
-  return session;
+  return Object.assign(session, { liveWarning });
 }
 
 /** Non-fatal lookup: an error here must not turn a session edit into a failure. */

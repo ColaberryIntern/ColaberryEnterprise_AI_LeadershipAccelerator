@@ -10,6 +10,7 @@ import { emitPointsEarned } from '../../services/pointsFx';
 import { LinkState, linkStateAfterFailure } from './classroomLinkState';
 import { LIVE_PULSES } from '../../components/portal/livePulse';
 import { CBCK_CSS } from './classCheckinStyles';
+import ColaberryLockup from '../../components/brand/ColaberryLockup';
 
 // Public live-class check-in landing (`/portal/class-checkin/:sessionId`).
 //
@@ -253,10 +254,9 @@ const ClassCheckinPage: React.FC = () => {
 
       <main className="cbck-card">
         <div className="cbck-brand">
-          <img src="/colaberry-icon.png" alt="" width={34} height={34} />
-          <span className="cbck-wordmark" aria-hidden="true">
-            <span className="cbck-wordmark-c">C</span>olaberry
-          </span>
+          {/* D14: artwork, not a third hand-set copy of the logotype. As on the live page,
+              this is the only thing identifying whose page this is, so it carries an alt. */}
+          <ColaberryLockup height={32} alt="Colaberry" />
         </div>
 
         {phase === 'loading' && (

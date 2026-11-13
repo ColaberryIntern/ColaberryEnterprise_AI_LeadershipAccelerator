@@ -37,7 +37,7 @@ function AnthropicCourseWrapper({ title, url, description, estimatedMinutes, cou
           )}
         </div>
 
-        {/* Title — h6 inherits navy #FB2832 from the global heading rule */}
+        {/* Title — h6 inherits cherry #FB2832 from the global heading rule */}
         <h6 className="fw-bold mb-1" style={{ fontSize: 14, lineHeight: 1.4 }}>
           {title}
         </h6>

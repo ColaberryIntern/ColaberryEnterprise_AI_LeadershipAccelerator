@@ -15,6 +15,8 @@ import CurriculumCompletionTab from './components/CurriculumCompletionTab';
 import CurrentClassesDashboard from './components/CurrentClassesDashboard';
 import AdminCommunityRolesPage from './AdminCommunityRolesPage';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
+import { liveSaveNotice } from './live/liveSaveNotice';
+import type { LiveSaveResponse } from './live/liveSaveNotice';
 import { matchesPaymentFilter, paymentBadgeFor, PAYMENT_FILTER_OPTIONS } from './enrollmentPaymentFilter';
 import type { PaymentFilter } from './enrollmentPaymentFilter';
 import PersonLink from '../../components/admin/person/PersonLink';
@@ -396,8 +398,12 @@ function AdminAcceleratorPage() {
 
   const handleCreateSession = async () => {
     try {
-      await api.post(`/api/admin/accelerator/cohorts/${selectedCohortId}/sessions`, sessionForm);
-      showToast('Session created', 'success');
+      const res = await api.post<LiveSaveResponse>(
+        `/api/admin/accelerator/cohorts/${selectedCohortId}/sessions`, sessionForm,
+      );
+      // D18: the save can succeed while Colaberry Live is refused. Say both, not just the save.
+      const notice = liveSaveNotice(res.data, 'Session created');
+      showToast(notice.message, notice.tone, notice.durationMs);
       setShowSessionModal(false);
       resetSessionForm();
       loadDashboard();
@@ -407,8 +413,13 @@ function AdminAcceleratorPage() {
   const handleUpdateSessionSubmit = async () => {
     if (!editingSession) return;
     try {
-      await api.patch(`/api/admin/accelerator/sessions/${editingSession.id}`, sessionForm);
-      showToast('Session updated', 'success');
+      const res = await api.patch<LiveSaveResponse>(
+        `/api/admin/accelerator/sessions/${editingSession.id}`, sessionForm,
+      );
+      // Same on an edit: rescheduling a live class re-times its occurrence, and that can be
+      // refused too. See liveSaveNotice.
+      const notice = liveSaveNotice(res.data, 'Session updated');
+      showToast(notice.message, notice.tone, notice.durationMs);
       setShowSessionModal(false);
       setEditingSession(null);
       resetSessionForm();

@@ -15,6 +15,7 @@ import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../config/consentText';
 // Bootstrap, and this page has its own `cboh-*` sheet - so it calls the rule and renders
 // with its own primitives, which is the path that component's own docs prescribe.
 import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
+import ColaberryLockup from '../components/brand/ColaberryLockup';
 
 /**
  * The Open House front door (OH-3) — where the ads actually land people.
@@ -224,8 +225,9 @@ function OpenHouseSignupPage(): React.ReactElement {
       <style>{CBOH_CSS}</style>
       <main className="cboh-card">
         <div className="cboh-brand">
-          <img src="/colaberry-icon.png" alt="" width={38} height={38} className="cboh-mark" />
-          <span className="cboh-wordmark" aria-hidden="true"><span className="cboh-c">C</span>olaberry</span>
+          {/* D14: artwork, not a hand-set logotype. The old markup also hardcoded the
+              cherry and ink hex values rather than using tokens. */}
+          <ColaberryLockup height={34} alt="Colaberry" />
         </div>
 
         {/* The confirmation used to render in place here, which left the URL on

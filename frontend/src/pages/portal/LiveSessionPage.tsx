@@ -4,6 +4,7 @@ import portalApi from '../../utils/portalApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { useBroadcastPlayer } from '../../contexts/BroadcastPlayerContext';
 import BroadcastWatchButton from '../../components/portal/BroadcastWatchButton';
+import ColaberryLockup from '../../components/brand/ColaberryLockup';
 import CompanionDeck from '../../components/portal/CompanionDeck';
 import LiveWorkspace from '../../components/portal/LiveWorkspace';
 import ProducerStrip from '../../components/portal/ProducerStrip';
@@ -239,10 +240,9 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
         data-testid="live-session-page"
       >
         <div className="clv-brand">
-          <img src="/colaberry-icon.png" alt="" width={34} height={34} />
-          <span className="clv-wordmark" aria-hidden="true">
-            <span className="clv-wordmark-c">C</span>olaberry
-          </span>
+          {/* D14: artwork, not a hand-set logotype. This is the only thing on the page that
+              says whose it is, so unlike the navbar it carries a real alt. */}
+          <ColaberryLockup height={32} alt="Colaberry" />
         </div>
 
         {!copy && (
@@ -363,8 +363,6 @@ const CLV_CSS = `
 @media (max-width:520px){ .clv-card{ padding:28px 20px 22px; } }
 
 .clv-brand{ display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:22px; }
-.clv-wordmark{ font-family:var(--font-logo); font-weight:700; font-size:23px; letter-spacing:-.01em; color:var(--text-strong); line-height:1; }
-.clv-wordmark-c{ color:var(--brand-accent); }
 
 .clv-state{ display:flex; flex-direction:column; align-items:center; }
 

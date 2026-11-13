@@ -237,10 +237,13 @@ describe('it looks like Colaberry', () => {
     wire('not_started');
     await render();
 
-    expect(container.querySelector('.clv-wordmark')).not.toBeNull();
+    // D14: the brand is the artwork now, not a hand-set Quicksand logotype.
     const logo = container.querySelector('.clv-brand img') as HTMLImageElement | null;
     expect(logo).not.toBeNull();
-    expect(logo!.getAttribute('src')).toBe('/colaberry-icon.png');
+    expect(logo!.getAttribute('src')).toBe('/colaberry-horizontal.png');
+    // It is the only thing naming the site on this page, so it must not be decorative.
+    expect(logo!.getAttribute('alt')).toBe('Colaberry');
+    expect(container.querySelector('.clv-wordmark')).toBeNull();
   });
 
   it('uses semantic tokens rather than hardcoded colors, so dark mode holds', async () => {

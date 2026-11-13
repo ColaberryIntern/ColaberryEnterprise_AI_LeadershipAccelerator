@@ -17,9 +17,6 @@ export const CBOH_CSS = `
 .cboh-card{width:100%;max-width:440px;background:#fff;border:1px solid #E4E4E3;border-radius:24px;
   box-shadow:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);padding:34px 32px;box-sizing:border-box}
 .cboh-brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
-.cboh-mark{border-radius:9px;display:block}
-.cboh-wordmark{font-family:'Quicksand',system-ui,sans-serif;font-weight:700;font-size:22px;color:#1A1A1A}
-.cboh-c{color:#FB2832}
 .cboh-head{margin-bottom:18px}
 .cboh-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   color:#C20E1E;background:rgba(251,40,50,.12);border-radius:999px;padding:4px 11px;margin-bottom:10px}

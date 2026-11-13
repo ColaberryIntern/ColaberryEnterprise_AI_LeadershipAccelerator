@@ -6,6 +6,7 @@ import { identifyVisitor } from '../../utils/tracker';
 import { getSignupAcquisitionFields } from '../../services/utmService';
 import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../../config/consentText';
 import { hasLiveParticipantSession } from '../../utils/participantToken';
+import ColaberryLockup from '../../components/brand/ColaberryLockup';
 
 // Public "Start for $0" front door. Creates a $0 guest account (0 points), logs
 // the visitor straight in, and drops them on the Today shell — the top of the
@@ -119,8 +120,8 @@ function PortalFreeSignupPage() {
       <style>{CBFS_CSS}</style>
       <main className="cbfs-card">
         <div className="cbfs-brand">
-          <img src="/colaberry-icon.png" alt="" width={38} height={38} className="cbfs-mark" />
-          <span className="cbfs-wordmark" aria-hidden="true"><span className="cbfs-c">C</span>olaberry</span>
+          {/* D14: artwork, not a hand-set logotype. See OpenHouseSignupPage, same change. */}
+          <ColaberryLockup height={34} alt="Colaberry" />
         </div>
 
         {welcomeBack ? (
@@ -226,9 +227,6 @@ const CBFS_CSS = `
 .cbfs-card{width:100%;max-width:440px;background:#fff;border:1px solid #E4E4E3;border-radius:24px;
   box-shadow:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);padding:34px 32px}
 .cbfs-brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
-.cbfs-mark{border-radius:9px;display:block}
-.cbfs-wordmark{font-family:'Quicksand',system-ui,sans-serif;font-weight:700;font-size:22px;color:#1A1A1A}
-.cbfs-c{color:#FB2832}
 .cbfs-head{margin-bottom:20px}
 .cbfs-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
   color:#B5710A;background:rgba(232,146,12,.16);border-radius:999px;padding:4px 11px;margin-bottom:10px}

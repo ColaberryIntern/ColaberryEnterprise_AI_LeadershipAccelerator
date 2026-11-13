@@ -31,8 +31,6 @@ export const CBCK_CSS = `
 @media (max-width:520px){ .cbck-card{ padding:28px 20px 22px; } }
 
 .cbck-brand{ display:flex; align-items:center; justify-content:center; gap:9px; margin-bottom:22px; }
-.cbck-wordmark{ font-family:var(--font-logo); font-weight:700; font-size:23px; letter-spacing:-.01em; color:var(--text-strong); line-height:1; }
-.cbck-wordmark-c{ color:var(--brand-accent); }
 
 .cbck-state{ display:flex; flex-direction:column; align-items:center; }
 

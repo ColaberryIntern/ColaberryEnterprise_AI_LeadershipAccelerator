@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { NAV_LINKS, NavItem, PRIMARY_CTA, SECONDARY_CTA } from '../../constants';
 import { Button } from '../../colaberry/components/core/Button';
+import ColaberryLockup from '../brand/ColaberryLockup';
 
 /**
  * Router-aware CTA styled with the Colaberry design-system button.
@@ -31,15 +32,6 @@ function CtaLink({
     <Link to={to} className={classes.join(' ')} onClick={onClick} {...rest}>
       <span>{children}</span>
     </Link>
-  );
-}
-
-/** The Colaberry wordmark — Quicksand logotype with a cherry-red "C". */
-function Wordmark() {
-  return (
-    <span className="pubnav__wordmark" aria-hidden="true">
-      <span className="pubnav__wordmark-c">C</span>olaberry
-    </span>
   );
 }
 
@@ -119,14 +111,9 @@ function PublicNavbar() {
         <div className="pubnav__inner">
           {/* Brand */}
           <Link to="/" className="pubnav__brand" onClick={closeAll} aria-label="Colaberry home">
-            <img
-              src="/colaberry-icon.png"
-              alt=""
-              width={32}
-              height={32}
-              className="pubnav__brand-mark"
-            />
-            <Wordmark />
+            {/* D14: the lockup carries the cherry mark, so it replaces icon + wordmark both.
+                alt is empty because the Link above already announces "Colaberry home". */}
+            <ColaberryLockup height={32} className="pubnav__brand-mark" />
           </Link>
 
           {/* Desktop nav */}
@@ -353,15 +340,6 @@ function PublicNavbar() {
         }
         .pubnav__brand:hover { text-decoration: none; }
         .pubnav__brand-mark { display: block; }
-        .pubnav__wordmark {
-          font-family: var(--font-logo);
-          font-weight: 700;
-          font-size: 26px;
-          line-height: 1;
-          letter-spacing: -0.01em;
-          color: var(--text-strong);
-        }
-        .pubnav__wordmark-c { color: var(--brand-accent); }
 
         /* ---- Desktop links ---- */
         .pubnav__links {

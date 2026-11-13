@@ -3,7 +3,14 @@
    so its generic class names never collide with Bootstrap / globals.
    ============================================================ */
 .te-shell{
-  --cherry:#FB2832; --cherry-deep:#C20E1E; --cherry-text:#E5121D;
+  /* D15: the cherry trio resolves through the design system instead of restating its hex.
+     The ramp lives in colaberry/tokens/colors.css, which reaches every page via
+     colaberry/styles.css in index.tsx. (src/styles/tokens.css also defines --cherry, but
+     nothing imports it, so pointing at that file would have looked right and rendered
+     nothing.) The three values are unchanged: red-500 #FB2832, red-700 #C20E1E,
+     red-600 #E5121D. Per DOC 18 section 6 the existing portal's button contrast is a
+     stated decision and is deliberately NOT altered here. */
+  --cherry:var(--red-500); --cherry-deep:var(--red-700); --cherry-text:var(--red-600);
   --leaf:#5BA63C; --leaf-deep:#3C7A26; --leaf-text:#468A2E;
   --berry:#367895; --berry-hover:#2E6A86; --amber:#E8920C; --amber-deep:#B5710A;
   --page:#F8F8F7; --surface:#FFFFFF; --sunken:#F1F1F0;
