@@ -93,6 +93,11 @@ MediaAsset.init(
     source_url: { type: DataTypes.TEXT, allowNull: true },
     // ARRAY(TEXT) maps to text[]. defaultValue [] matches the column default so a create()
     // that omits tags behaves the same as an INSERT that omits the column.
+    //
+    // CAUTION, AND IT IS NOT THEORETICAL: Sequelize v6 hands every instance built without tags
+    // THE SAME ARRAY REFERENCE. `asset.tags.push('x')` therefore mutates the default for every
+    // later instance in the process, and the bug presents as a tag appearing on assets nobody
+    // tagged. Always ASSIGN a new array - `asset.tags = [...asset.tags, 'x']` - never push.
     tags: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: false, defaultValue: [] },
     original_filename: { type: DataTypes.STRING(400), allowNull: true },
     mime_type: { type: DataTypes.STRING(120), allowNull: false },

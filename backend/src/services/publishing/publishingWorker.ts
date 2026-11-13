@@ -114,7 +114,10 @@ async function buildPayload(job: PublishingJob, item: ContentItem, variant: Cont
       console.warn(JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'warn',
-        service: 'publishing',
+        // 'publishing-worker', matching this module's log() helper one screen above. Two
+        // service names for one module splits a log query later, and the whole point of this
+        // line is that somebody can find it afterwards.
+        service: 'publishing-worker',
         event: 'publish_media_skipped_link',
         outcome: 'partial',
         correlation_id: job.id,
