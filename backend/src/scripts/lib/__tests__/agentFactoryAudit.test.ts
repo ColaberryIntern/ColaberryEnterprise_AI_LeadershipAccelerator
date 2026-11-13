@@ -106,17 +106,113 @@ describe('unassigned domains are not 0% progress', () => {
 });
 
 describe('managers', () => {
+  const MGR = (over: Partial<AuditInput['managers'][number]> = {}) => ({
+    domain_key: 'platform',
+    recorded_can_reach: true,
+    can_reach: true,
+    blocker: null,
+    via: 'bridge' as const,
+    ...over,
+  });
+
   it('counts and names the ones who cannot reach their agent', () => {
     const v = assess({
       builds: [BUILD()],
       managers: [
-        { domain_key: 'platform', manager_can_reach: false, manager_blocker: 'no admin row' },
-        { domain_key: 'curriculum', manager_can_reach: true, manager_blocker: null },
+        MGR({ domain_key: 'platform', recorded_can_reach: false, can_reach: false, blocker: 'org_member_email_mismatch', via: null }),
+        MGR({ domain_key: 'curriculum' }),
       ],
       spine: [],
     });
     expect(v.managersBlocked).toEqual(['platform']);
     expect(v.headlines.some((h) => /1 of 2 managers cannot reach/.test(h))).toBe(true);
+  });
+
+  /**
+   * The regression test for this audit's own first mistake. It read the stored flag as fact and
+   * reported three managers as locked out who were not, which produced a recommendation to
+   * create four admin_users rows — a near-full access grant that would have unblocked nobody.
+   */
+  it('says loudly where the STORED flag contradicts the computed answer', () => {
+    const v = assess({
+      builds: [BUILD()],
+      managers: [
+        MGR({ domain_key: 'platform', recorded_can_reach: false, can_reach: true }),
+        MGR({ domain_key: 'sales', recorded_can_reach: false, can_reach: true }),
+        MGR({ domain_key: 'curriculum' }),
+      ],
+      spine: [],
+    });
+    expect(v.managerFlagWrong).toEqual(['platform', 'sales']);
+    expect(v.managersBlocked).toEqual([]);
+    const line = v.headlines.find((h) => /stored manager_can_reach flag is WRONG/.test(h));
+    expect(line).toContain('2 of 3 domains');
+    expect(line).toContain('platform, sales');
+  });
+
+  it('says nothing about disagreement when the flag is right', () => {
+    const v = assess({ builds: [BUILD()], managers: [MGR()], spine: [] });
+    expect(v.managerFlagWrong).toEqual([]);
+    expect(v.headlines.some((h) => /flag is WRONG/.test(h))).toBe(false);
+  });
+
+  /**
+   * Reaching the page only through a legacy full-admin row is not the same as reaching it. The
+   * scoped path is broken and a wide grant is load-bearing, which any boolean reports as fine.
+   */
+  it('separates a manager who gets in only through a legacy full-admin login', () => {
+    const v = assess({
+      builds: [BUILD()],
+      managers: [MGR({ domain_key: 'website', via: 'legacy' }), MGR({ domain_key: 'curriculum' })],
+      spine: [],
+    });
+    expect(v.managersOnLegacyOnly).toEqual(['website']);
+    expect(v.managersBlocked).toEqual([]);
+    expect(v.headlines.some((h) => /ONLY through a legacy full-admin login: website/.test(h))).toBe(true);
+  });
+
+  it('does not count a BLOCKED manager as legacy-only even if via somehow says legacy', () => {
+    const v = assess({
+      builds: [BUILD()],
+      managers: [MGR({ domain_key: 'website', can_reach: false, recorded_can_reach: false, via: 'legacy' })],
+      spine: [],
+    });
+    expect(v.managersOnLegacyOnly).toEqual([]);
+    expect(v.managersBlocked).toEqual(['website']);
+  });
+
+  it('puts the wrong-flag line ABOVE the progress percentage', () => {
+    // Same ordering argument as the gates: a believed-but-false number outranks a slow one.
+    const v = assess({
+      builds: [BUILD()],
+      managers: [MGR({ recorded_can_reach: false, can_reach: true })],
+      spine: [],
+    });
+    const flagAt = v.headlines.findIndex((h) => /flag is WRONG/.test(h));
+    const pctAt = v.headlines.findIndex((h) => /tasks complete/.test(h));
+    expect(flagAt).toBeGreaterThan(-1);
+    expect(pctAt).toBeGreaterThan(flagAt);
+  });
+
+  it('names the refusing MECHANISM beside each domain in the rendered table', () => {
+    const managers = [
+      MGR({ domain_key: 'admissions', recorded_can_reach: false, can_reach: false, blocker: 'org_member_email_mismatch', via: null }),
+      MGR({ domain_key: 'website', via: 'legacy' }),
+    ];
+    const out = render(assess({ builds: [BUILD()], managers, spine: [] }), [BUILD()], managers);
+    expect(out).toMatch(/admissions\s+NO\s+-\s+org_member_email_mismatch/);
+    expect(out).toMatch(/website\s+YES\s+legacy\s+legacy full-admin login/);
+  });
+
+  it('marks a stored flag that disagrees, in the table as well as the headline', () => {
+    const managers = [MGR({ domain_key: 'platform', recorded_can_reach: false, can_reach: true })];
+    const out = render(assess({ builds: [BUILD()], managers, spine: [] }), [BUILD()], managers);
+    expect(out).toMatch(/stored flag says false, which is wrong/);
+  });
+
+  it('omits the manager table entirely when no managers are passed', () => {
+    const out = render(assess({ builds: [BUILD()], managers: [], spine: [] }), [BUILD()]);
+    expect(out).not.toMatch(/MANAGER ACCESS/);
   });
 });
 
