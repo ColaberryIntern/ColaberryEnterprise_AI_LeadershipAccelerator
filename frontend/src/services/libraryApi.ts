@@ -32,6 +32,8 @@ export interface LibraryAsset {
   rightsStatus: RightsStatus;
   archivedAt: string | null;
   createdAt: string | null;
+  /** Signed and time-limited, for a FILE. Null for a link - use `sourceUrl` there. */
+  url: string | null;
 }
 
 export interface LibraryPage {
