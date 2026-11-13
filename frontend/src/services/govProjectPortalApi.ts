@@ -1,5 +1,14 @@
 import portalApi from '../utils/portalApi';
 import type { QualRequirementEval, GovQualificationWorkspace, GovOpportunity, SnapshotReason } from './factoryApi';
+import type { ArtifactFileKind } from './artifactViewerTypes';
+
+/** One deliverable DOCUMENT in the connected repo, classified for the card + per-type viewer.
+ *  Mirrors backend RepoDeliverable (factory/repoDeliverables.ts). `html` renders in a sandboxed iframe. */
+export interface GovRepoDeliverable {
+  path: string;
+  name: string;
+  kind: ArtifactFileKind | 'html';
+}
 
 /** The opportunity-detail shape the admin page reads — reused verbatim so the intern renders the identical component.
  *  estimatedValue is always null from the participant endpoint (the award amount never reaches a participant). */
@@ -144,7 +153,7 @@ export interface StudentGovProjectView {
    *  build track's GitHub connection. `files` are the repo's blob paths (capped), `fileCount` the true total,
    *  `syncedAt` when the tree was last synced. Shown so the cockpit confirms sync and reflects what was built; carries
    *  no token/secret/identity (paths only). Null when no repo is linked. Optional (older backends). */
-  connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null } | null;
+  connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null; deliverables: GovRepoDeliverable[] } | null;
   /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
   proposalDocuments?: GovProposalDocument[];
   /** P2: the blueprint derived from the stored solicitation (scoring, Section L rules, required forms). Null until a
@@ -492,6 +501,16 @@ export async function fetchGovArtifactImage(projectId: string, artifactId: strin
   return URL.createObjectURL(data as Blob);
 }
 
+/** Fetch ONE connected-repo deliverable file (by repo path) through the participant-guarded portal route, as a Blob.
+ *  The viewer decides what to do with it (pdf -> object URL iframe, html/csv/text -> read the text, else download).
+ *  `download` forces an attachment for PDFs too. A bare <iframe src>/<a href> can't carry the bearer token. */
+export async function fetchGovRepoFile(projectId: string, path: string, opts: { download?: boolean } = {}): Promise<Blob> {
+  const { data } = await portalApi.get(`${portalBase(projectId)}/repo-file`, {
+    params: { path, ...(opts.download ? { download: '1' } : {}) }, responseType: 'blob',
+  });
+  return data as Blob;
+}
+
 /**
  * GovStudioApi — the Studio shell + agent panel's read-model adapter. The SAME Studio components drive either the
  * portal routes (the default below, participant token) or the admin routes (injected by the admin cockpit page).
@@ -510,6 +529,9 @@ export interface GovStudioApi {
   /** P4 (v4): fetch a build-evidence PNG as an object URL. A member-level read (any project member), so it lives on
    *  the studio API, not the reviewer-only review API — this is how an intern (no reviewApi) sees a real thumbnail. */
   fetchArtifactImage?(projectId: string, artifactId: string): Promise<string>;
+  /** Fetch one connected-repo deliverable file (by repo path) as a Blob, for the Build Evidence per-type viewer.
+   *  Member-level read (portal) / section-gated (admin); each api impl points at its own route base. */
+  fetchRepoFile?(projectId: string, path: string, opts?: { download?: boolean }): Promise<Blob>;
   /** Management-only: set the solicitation close date (+ optional 0-100 urgency) when the pursuit carried none into the
    *  Studio. Admin route only — the portal (intern) client omits it, and the bar offers it only to a viewer who can
    *  verify. Writes requirements_json.manualDeadline; the projection then surfaces closeDate/priorityScore. */
@@ -527,6 +549,7 @@ export const portalGovStudioApi: GovStudioApi = {
   resolveNeed: resolveGovNeed,
   buildAll: buildAllGovDocuments,
   fetchArtifactImage: fetchGovArtifactImage,
+  fetchRepoFile: fetchGovRepoFile,
 };
 
 /** A read-only reviewApi WRITE member: it issues NO request and rejects. The read-only UI disables every control that

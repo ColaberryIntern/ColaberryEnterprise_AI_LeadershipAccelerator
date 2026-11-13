@@ -503,7 +503,7 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
 
   // Connected-repo display (Phase A): the intern (readOnly) sees the connected repo read-only and NEVER a demo-URL
   // input — even though the read-only reviewApi still defines setDemoUrl. The admin (readOnly=false) keeps its input.
-  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records', files: ['src/App.tsx', 'README.md'], fileCount: 2, syncedAt: '2026-11-13T00:00:00.000Z' } } as unknown as StudentGovProjectView;
+  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records', files: ['src/App.tsx', 'README.md', 'docs/plan.pdf'], fileCount: 3, syncedAt: '2026-11-13T00:00:00.000Z', deliverables: [{ path: 'docs/plan.pdf', name: 'plan.pdf', kind: 'pdf' }, { path: 'README.md', name: 'README.md', kind: 'text' }] } } as unknown as StudentGovProjectView;
   const noRepo = { ...VIEW, connectedRepo: null } as unknown as StudentGovProjectView;
 
   it('admin (not readOnly) keeps the demo-URL input and shows no connected-repo line', async () => {
@@ -527,11 +527,45 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
     expect(present('ev-demo-url')).toBe(false);
   });
 
-  // Phase C: the connected repo's deliverable files (from the synced tree) show in the Build artifacts region.
-  it('shows the connected repo files list with the count when the tree is synced', async () => {
+  // Phase C + cards: the connected repo's deliverable DOCUMENTS show as typed cards (not a flat path list).
+  it('shows the connected repo deliverables as typed cards (one per deliverable)', async () => {
     await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
     expect(present('ev-repo-files')).toBe(true);
-    expect(container.querySelectorAll('[data-testid="ev-repo-file"]').length).toBe(2);
+    const cards = container.querySelectorAll('[data-testid="ev-repo-card"]');
+    expect(cards.length).toBe(2);
+    // typed by kind, so a per-type viewer can open; source files are not carded (only the 2 deliverables)
+    expect(Array.from(cards).map((c) => c.getAttribute('data-kind')).sort()).toEqual(['pdf', 'text']);
+  });
+
+  it('opening a card opens the per-type viewer and fetches that file via the studio api', async () => {
+    const fetchRepoFile = jest.fn().mockResolvedValue(new Blob(['# Readme'], { type: 'text/markdown' }));
+    const studioApi = { fetchRepoFile } as unknown as GovStudioApi;
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} studioApi={studioApi} onReload={noop} onToast={noop} readOnly />);
+    const textCard = container.querySelector('[data-testid="ev-repo-card"][data-kind="text"]') as HTMLElement;
+    await act(async () => { textCard.click(); });
+    expect(present('ev-repo-viewer')).toBe(true);
+    expect(fetchRepoFile).toHaveBeenCalledWith('p1', 'README.md', undefined);
+  });
+
+  it('a card whose fetch fails shows an error in the viewer (not a blank frame)', async () => {
+    const fetchRepoFile = jest.fn().mockRejectedValue(new Error('network'));
+    const studioApi = { fetchRepoFile } as unknown as GovStudioApi;
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} studioApi={studioApi} onReload={noop} onToast={noop} readOnly />);
+    await act(async () => { (container.querySelector('[data-testid="ev-repo-card"][data-kind="text"]') as HTMLElement).click(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(present('ev-repo-viewer')).toBe(true);
+    expect(container.querySelector('[data-testid="ev-repo-viewer"]')?.textContent).toMatch(/could not load/i);
+  });
+
+  it('a Word card opens to a Download (no inline office preview in v1, no fetch on open)', async () => {
+    const fetchRepoFile = jest.fn().mockResolvedValue(new Blob(['x']));
+    const studioApi = { fetchRepoFile } as unknown as GovStudioApi;
+    const wordRepo = { ...VIEW, connectedRepo: { owner: 'o', name: 'r', url: 'u', files: ['d/a.docx'], fileCount: 1, syncedAt: null, deliverables: [{ path: 'd/a.docx', name: 'a.docx', kind: 'word' }] } } as unknown as StudentGovProjectView;
+    await render(<BuildEvidence view={wordRepo} projectId="p1" reviewApi={reviewApi} studioApi={studioApi} onReload={noop} onToast={noop} readOnly />);
+    await act(async () => { (container.querySelector('[data-testid="ev-repo-card"][data-kind="word"]') as HTMLElement).click(); });
+    expect(present('ev-repo-viewer')).toBe(true);
+    expect(present('ev-repo-download')).toBe(true);
+    expect(fetchRepoFile).not.toHaveBeenCalled(); // office downloads on demand, not on open
   });
 
   it('no repo-files panel when no repo is connected (keeps the existing empty state)', async () => {

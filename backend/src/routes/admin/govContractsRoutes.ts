@@ -96,6 +96,17 @@ router.get('/api/admin/gov-contracts/:projectId/cockpit', requireSection('gov_co
   }
 });
 
+/**
+ * GET /api/admin/gov-contracts/:projectId/repo-file?path=<repo path> — the SAME connected-repo deliverable
+ * file the intern opens in Build Evidence, for the admin cockpit. Section-gated (owner/admin hold
+ * gov_contracts); the serving half (allowlist against the synced tree, nosniff, pdf-inline) is shared with
+ * the portal route so the two can't drift. Live fetch, nothing stored.
+ */
+router.get('/api/admin/gov-contracts/:projectId/repo-file', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const { serveGovRepoFile } = await import('../govRepoFileResponse');
+  await serveGovRepoFile(req.params.projectId, req.query.path, res, { download: req.query.download === '1' });
+});
+
 // ── Management-drivable proposal + copilot (Ali, 2026-11-02) ──────────────────────────────────────────────────
 // Management does not just READ a gov contract — from the admin Interns-hub cockpit it can DRIVE the proposal
 // workflow (draft / accept / request-changes / comment) and ask the project copilot. These MIRROR the student

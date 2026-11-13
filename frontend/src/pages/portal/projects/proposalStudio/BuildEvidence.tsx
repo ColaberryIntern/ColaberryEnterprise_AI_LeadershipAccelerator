@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi, GovStudioApi } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi, GovStudioApi, GovRepoDeliverable } from '../../../../services/govProjectPortalApi';
 import { Bar } from './studioHelpers';
+import { RepoFileCards, RepoFileViewer } from './RepoFileCards';
 
 /** A captured screenshot thumbnail — fetched as an object URL. The reviewer (admin) uses the review API; an intern
  *  (no reviewApi) uses the member-level studio image route; a hatched placeholder otherwise or while loading. */
@@ -44,6 +45,19 @@ export default function BuildEvidence(
   const isHttp = (u: string | null | undefined): boolean => !!u && /^https?:\/\//i.test(u);
   const [demoUrl, setDemoUrl] = useState('');
   const [savingUrl, setSavingUrl] = useState(false);
+
+  // The connected repo's deliverable DOCUMENTS as portfolio-style cards; opening one fetches it live for a per-type
+  // viewer. The fetcher is on the studio API, pointed at the portal or admin route base per surface.
+  const deliverables: GovRepoDeliverable[] = view.connectedRepo?.deliverables ?? [];
+  const [openFile, setOpenFile] = useState<GovRepoDeliverable | null>(null);
+  const fetchRepoFile = studioApi?.fetchRepoFile;
+  const repoFetch = useCallback(
+    (p: string, opts?: { download?: boolean }) => {
+      if (!fetchRepoFile) return Promise.reject(new Error('unavailable'));
+      return fetchRepoFile(projectId, p, opts);
+    },
+    [fetchRepoFile, projectId],
+  );
 
   const saveDemoUrl = useCallback(async () => {
     if (!reviewApi?.setDemoUrl) { onToast?.('The demo URL is set from the admin studio.'); return; }
@@ -117,22 +131,21 @@ export default function BuildEvidence(
 
       {/* Build artifacts REPOSITORY — what the intern has built + submitted from their repo, for the proposal writer. */}
       <div className="gps-vh" style={{ marginTop: 24 }}><div><h3>Build artifacts</h3><p>What the intern has built and submitted from their repo &mdash; the deliverables behind the verified stories, for the proposal to draw from. Demo videos join here as interns record their demos.</p></div></div>
-      {/* The connected repo's deliverable files, pulled from the synced tree (read-only) — so the panel reflects the
-          real product and confirms sync, instead of waiting for a manual submission. */}
-      {view.connectedRepo && view.connectedRepo.files.length > 0 && (
+      {/* The connected repo's deliverable DOCUMENTS as typed cards, pulled from the synced tree (read-only) — each
+          opens a per-type viewer that fetches the file live. Reflects the real product and confirms sync. */}
+      {view.connectedRepo && deliverables.length > 0 && (
         <div className="gps-panel" data-testid="ev-repo-files" style={{ marginBottom: 12 }}>
-          <div className="gps-row" style={{ marginBottom: 6 }}>
+          <div className="gps-row" style={{ marginBottom: 8 }}>
             <b>Files in the connected repo</b>
-            <span className="gps-small gps-muted">{view.connectedRepo.fileCount} file{view.connectedRepo.fileCount === 1 ? '' : 's'}{view.connectedRepo.syncedAt ? ` · synced ${new Date(view.connectedRepo.syncedAt).toLocaleDateString()}` : ''}</span>
+            <span className="gps-small gps-muted">{deliverables.length} deliverable{deliverables.length === 1 ? '' : 's'}{view.connectedRepo.syncedAt ? ` · synced ${new Date(view.connectedRepo.syncedAt).toLocaleDateString()}` : ''}</span>
           </div>
-          <ul className="gps-small gps-mono" style={{ margin: 0, paddingLeft: 18, maxHeight: 280, overflowY: 'auto' }}>
-            {view.connectedRepo.files.map((f) => <li key={f} data-testid="ev-repo-file">{f}</li>)}
-          </ul>
-          {view.connectedRepo.fileCount > view.connectedRepo.files.length && (
-            <div className="gps-small gps-muted" style={{ marginTop: 4 }}>+{view.connectedRepo.fileCount - view.connectedRepo.files.length} more</div>
+          <RepoFileCards deliverables={deliverables} onOpen={setOpenFile} />
+          {view.connectedRepo.fileCount > deliverables.length && (
+            <div className="gps-small gps-muted" style={{ marginTop: 6 }}>Showing deliverable documents · {view.connectedRepo.fileCount} files in the repo</div>
           )}
         </div>
       )}
+      {openFile && <RepoFileViewer deliverable={openFile} fetchFile={repoFetch} onClose={() => setOpenFile(null)} />}
       {builtArtifacts.length === 0 ? (
         <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo &mdash; and their demo videos once recorded.</div>
       ) : (

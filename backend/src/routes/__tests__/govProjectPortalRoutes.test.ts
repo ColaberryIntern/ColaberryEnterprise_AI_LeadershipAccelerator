@@ -62,6 +62,12 @@ const insertArtifactFigure = jest.fn();
 jest.mock('../../services/factory/proposal/insertArtifactFigure', () => ({ insertArtifactFigure: (...a: any[]) => insertArtifactFigure(...a) }));
 const reanalyzeProposalBlueprint = jest.fn();
 jest.mock('../../services/factory/proposal/reanalyzeProposalBlueprint', () => ({ reanalyzeProposalBlueprint: (...a: any[]) => reanalyzeProposalBlueprint(...a) }));
+// Repo-file content endpoint: the lightweight connected-repo resolver (the deliverable allowlist) and the live
+// raw-byte GitHub fetch are both mocked so the ROUTE's allowlist gating + headers are what gets proven.
+const resolveConnectedRepo = jest.fn();
+jest.mock('../../services/factory/govConnectedRepo', () => ({ resolveConnectedRepo: (...a: any[]) => resolveConnectedRepo(...a) }));
+const fetchRepoFileRaw = jest.fn();
+jest.mock('../../services/sbp/repoConnect/githubRepoClient', () => ({ fetchRepoFileRaw: (...a: any[]) => fetchRepoFileRaw(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -456,5 +462,88 @@ describe('intern authoring routes (B.9) — EDIT share lets the intern author + 
     const sign = await request(app).post('/api/portal/gov-projects/dp-A/package/signatures/execution').send({});
     const due = await request(app).post('/api/portal/gov-projects/dp-A/due-date').send({});
     for (const r of [gate, gold, assemble, sign, due]) expect(r.status).toBe(404); // no such participant route exists
+  });
+});
+
+describe('GET /api/portal/gov-projects/:projectId/repo-file (live deliverable content, allowlist-gated)', () => {
+  const REPO = {
+    owner: 'ColaberryIntern', name: 'crash', url: 'u',
+    files: ['docs/plan.pdf', 'server/auth.js', 'README.md'],
+    fileCount: 3, syncedAt: null,
+    deliverables: [
+      { path: 'docs/plan.pdf', name: 'plan.pdf', kind: 'pdf' },
+      { path: 'README.md', name: 'README.md', kind: 'text' },
+    ],
+  };
+  beforeEach(() => {
+    resolveConnectedRepo.mockResolvedValue(REPO);
+    fetchRepoFileRaw.mockResolvedValue(Buffer.from('%PDF-1.4 bytes'));
+  });
+
+  it('serves a deliverable: 200, pdf inline, nosniff, fetched by owner/name/path', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'docs/plan.pdf' });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.headers['content-disposition']).toContain('inline');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(fetchRepoFileRaw).toHaveBeenCalledWith('ColaberryIntern', 'crash', 'docs/plan.pdf');
+  });
+
+  it('a text deliverable is served as an attachment (never renders on our origin)', async () => {
+    fetchRepoFileRaw.mockResolvedValue(Buffer.from('# Readme'));
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'README.md' });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toContain('attachment');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('?download=1 forces a pdf to attachment', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'docs/plan.pdf', download: '1' });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toContain('attachment');
+  });
+
+  it('a source/secret path that exists but is NOT a deliverable -> 403, never fetched', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'server/auth.js' });
+    expect(res.status).toBe(403);
+    expect(fetchRepoFileRaw).not.toHaveBeenCalled();
+  });
+
+  it('a path NOT in the synced tree (traversal/guess) -> 404, never fetched', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: '../../etc/passwd' });
+    expect(res.status).toBe(404);
+    expect(fetchRepoFileRaw).not.toHaveBeenCalled();
+  });
+
+  it('no connected repo -> 404', async () => {
+    resolveConnectedRepo.mockResolvedValue(null);
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'docs/plan.pdf' });
+    expect(res.status).toBe(404);
+  });
+
+  it('a non-member is 404 by the guard; the repo is never resolved', async () => {
+    guardAllows = false;
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'docs/plan.pdf' });
+    expect(res.status).toBe(404);
+    expect(resolveConnectedRepo).not.toHaveBeenCalled();
+  });
+
+  it('missing path param -> 400', async () => {
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file');
+    expect(res.status).toBe(400);
+  });
+
+  it('the file is gone from the repo (fetch returns null) -> 404', async () => {
+    fetchRepoFileRaw.mockResolvedValue(null);
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'docs/plan.pdf' });
+    expect(res.status).toBe(404);
+  });
+
+  it('an upstream GitHub failure -> 502, generic, no token/secret in the body', async () => {
+    fetchRepoFileRaw.mockRejectedValue(new Error('UpstreamTimeout: GitHub did not answer'));
+    const res = await request(app).get('/api/portal/gov-projects/dp-A/repo-file').query({ path: 'docs/plan.pdf' });
+    expect(res.status).toBe(502);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toMatch(/token|secret|Bearer/i);
   });
 });

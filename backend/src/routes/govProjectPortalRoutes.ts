@@ -246,6 +246,25 @@ router.get(
 );
 
 /**
+ * GET /api/portal/gov-projects/:projectId/repo-file?path=<repo path> — stream ONE deliverable document
+ * from the connected build repo to a MEMBER of this project, so Build Evidence can show the file in a
+ * per-type viewer (pdf inline, csv/html/text rendered in-app, Word/Excel downloaded). Fetched LIVE from
+ * the repo (nothing stored). Security is the guard chain PLUS the allowlist: requireParticipant +
+ * project.read already 404 a non-member; then serveGovRepoFile only serves a path that is a classified
+ * DELIVERABLE in THIS project's synced tree (a source/secret path or a traversal is refused, never
+ * fetched). A bare <iframe src>/<a href> can't carry the bearer token, so the client fetches a blob.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/repo-file',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const { serveGovRepoFile } = await import('./govRepoFileResponse');
+    await serveGovRepoFile(req.params.projectId, req.query.path, res, { download: req.query.download === '1' });
+  },
+);
+
+/**
  * POST /api/portal/gov-projects/:projectId/copilot — the Build Cockpit's project copilot. Guarded by project.read
  * (a member of THIS project), it loads the SAME student-safe projection the page renders and answers
  * DETERMINISTICALLY from it (govCopilot) — so the copilot can only ever repeat what the caller already sees; there

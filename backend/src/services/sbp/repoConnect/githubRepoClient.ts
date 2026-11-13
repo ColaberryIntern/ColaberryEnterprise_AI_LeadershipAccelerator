@@ -276,6 +276,58 @@ export async function fetchRepoFile(
 }
 
 /**
+ * Read one file's RAW BYTES from the default branch — for binary deliverables (pdf / Word / Excel /
+ * PowerPoint / image) where `fetchRepoFile`'s base64->utf8 decode would corrupt the content. Uses the
+ * `raw` media type, which returns the file bytes directly and, unlike the JSON contents API, is not
+ * truncated at 1 MB. `null` means "not there" (404); every other failure throws a classified
+ * RepoConnectError. Bounded (timeout) and capped (MAX_ATTEMPTS, only 429/5xx/network retried). The
+ * token is never returned, never logged. Read-only: a GET for content, nothing is mutated.
+ */
+export async function fetchRepoFileRaw(
+  owner: string, repo: string, path: string, opts: GitHubReadOptions = {},
+): Promise<Buffer | null> {
+  const token = requireToken();
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const url = `${apiBase()}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+  let last: RawResult = { status: 0, ok: false, body: '' };
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetchImpl(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/vnd.github.raw',
+          Authorization: `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+      if (res.status === 404) return null;
+      if (res.ok) return Buffer.from(await res.arrayBuffer());
+      const body = await res.text().catch(() => '');
+      last = { status: res.status, ok: false, body, headers: res.headers };
+      const retryable = res.status === 429 || res.status >= 500 || isRateLimited(res.status, res.headers, body);
+      if (!retryable) break;
+      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 300 * attempt));
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        log('sbp_repo_file_raw_timeout', opts.correlationId, 'failure', { owner, repo, path });
+        throw new RepoConnectError('UpstreamTimeout', 'GitHub did not answer in time. Nothing was changed — try again in a moment.');
+      }
+      if (attempt < MAX_ATTEMPTS) { await new Promise((r) => setTimeout(r, 300 * attempt)); continue; }
+      log('sbp_repo_file_raw_network_error', opts.correlationId, 'failure', { owner, repo, path, error_class: 'UpstreamError' });
+      throw new RepoConnectError('UpstreamError', 'The platform could not reach GitHub. Nothing was changed — try again in a moment.');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const err = classify(last, owner, repo);
+  log('sbp_repo_file_raw_failed', opts.correlationId, 'failure', { owner, repo, path, status: last.status, error_class: err.error_class });
+  throw err;
+}
+
+/**
  * Does this repo have any commits?
  *
  * Load-bearing for the rebind refusal: a project already pointed at a repo with

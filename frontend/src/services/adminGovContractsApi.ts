@@ -139,6 +139,13 @@ export async function adminFetchGovArtifactImage(projectId: string, artifactId: 
   const { data } = await api.get(`${adminBase(projectId)}/artifacts/${encodeURIComponent(artifactId)}/image`, { responseType: 'blob' });
   return URL.createObjectURL(data as Blob);
 }
+/** Admin mirror of fetchGovRepoFile — one connected-repo deliverable file as a Blob, via the admin route base. */
+export async function adminFetchGovRepoFile(projectId: string, path: string, opts: { download?: boolean } = {}): Promise<Blob> {
+  const { data } = await api.get(`${adminBase(projectId)}/repo-file`, {
+    params: { path, ...(opts.download ? { download: '1' } : {}) }, responseType: 'blob',
+  });
+  return data as Blob;
+}
 export async function adminInsertGovFigure(projectId: string, docKey: string, artifactId: string): Promise<{ document: GovProposalDocument }> {
   const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'insert-figure'), { artifactId });
   return data;
@@ -302,4 +309,5 @@ export const adminGovStudioApi: GovStudioApi = {
   resolveNeed: adminResolveGovNeed,
   buildAll: adminBuildAllGovDocuments,
   setProposalDueDate: adminSetGovDueDate,
+  fetchRepoFile: adminFetchGovRepoFile,
 };
