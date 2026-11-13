@@ -95,7 +95,7 @@ function buildDocument() {
   <h2>What this does not establish</h2>
   <ul><li>The stored verdicts were produced against the catalog as it stood when each bid was vetted (${d.dates.first} to ${d.dates.last}); the retired share shows drift, not that those verdicts were wrong at the time.</li>
   <li>No fresh AI call was made yet. Running unmerged code against production was refused by the safety classifier, correctly; the fresh 5-bid run happens after deploy through the documented path and becomes the SV4.3 comparison point.</li>
-  <li>Readiness rules are field checks, not a judgement of how good a description is.</li></ul>`;
+  <li>Readiness rules are field checks, not a judgment of how good a description is.</li></ul>`;
   return htmlDoc({ title: 'SV0.1 document', css: baseCss(), body });
 }
 
