@@ -248,3 +248,22 @@ with these.
     headline approval is admin-only like the spotlight; a declined headline is not announced to the
     candidate (the box simply clears); the note is shared with the employer and the studio says so.
     Not in scope: live-path visitor categorization of `/talent/<slug>/`.
+
+- [x] Phase 6 shipped: merged, deployed, production-verified
+  - Date: 2026-11-13
+  - Session: CC-20261106-fv8g
+  - What changed: #4013 merged as c189d6521; "Build images" succeeded on it; deployed with
+    `./scripts/deploy-prod.sh backend nginx` (exit 0, prod HEAD c189d6521, no other deploy running).
+  - Verification (live, read-only): `hireHeadlineReview` and the holiday rule are in the running
+    dist; the deployed `openSlots` offers Wed 25 and Fri 27 November and not Thanksgiving (26th);
+    `hire_interviews.decline_reason` exists; no profile has booking on today. Through
+    enterprise.colaberry.ai: both headline-review endpoints answer 401 without an admin session;
+    `/site-v2/sm/thumb-cora-recovery.jpg` serves 200 image/jpeg at 18,235 bytes (the full cover is
+    249,839); hire.refactored.ai serves the `thumbUrl` build. `GET /api/public/hire/talent`: 6
+    listed, each with a signature, and Kes's card signature equals their profile's.
+    `GET /api/public/portfolios/kesetebirhan-delele?surface=hire`: hire block present, no video,
+    booking off, 0 "@" in the hire block, identity.email null, order [].
+  - Notes: CORRECTION to the Phase 5 shipped note: its Kes check read
+    `/api/public/portfolios/<slug>` WITHOUT `?surface=hire`, which carries no hire block, so its
+    "no video, no booking" came from an absent block. Re-checked here on the hire surface: the
+    conclusion holds (no video, booking off, no "@").
