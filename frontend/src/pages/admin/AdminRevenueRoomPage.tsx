@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
+import RevenueFlowDashboard from '../../components/admin/revenueFlow/RevenueFlowDashboard';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 // C8.6 — hypothesis health. It came across with the Commercialization tiles in R13.
 import HypothesisHealthPanel from '../../components/admin/commercialization/HypothesisHealthPanel';
@@ -362,6 +363,10 @@ export default function AdminRevenueRoomPage() {
       {error && (
         <div className="alert alert-danger" role="alert" data-testid="room-error">{error}</div>
       )}
+
+      {/* R16 - the dashboard Ali asked for, at the TOP of this page. It fetches its own
+          board, so a failure there costs this section and not the cards below. */}
+      <RevenueFlowDashboard />
 
       {tileError && (
         <div className="alert alert-warning" role="alert" data-testid="proof-error">{tileError}</div>
