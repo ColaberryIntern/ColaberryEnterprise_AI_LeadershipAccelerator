@@ -237,9 +237,49 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
   .pnum{color:#38bdf8;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
   .pbar{height:7px;border-radius:4px;background:#232833;margin-top:4px;overflow:hidden}
   .pfill{height:100%;background:#38bdf8;border-radius:4px;transition:width .4s ease}
+
+  /* THE TALLY (D9). Whether the room can hear you, at the top of the one screen the person
+     teaching actually looks at. Not on the projected deck: OBS captures the teaching monitor
+     into the stream AND the recording master, so a badge there would be burned into a replay
+     reading ON AIR when it is not.
+
+     Read in the dark, mid-sentence, without looking for it. So the two states that mean "they
+     can hear you" are the only ones that are filled and red, and the pulse is reserved for
+     them alone - a glance has to answer the question before any word is read. */
+  .tally{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+    padding:10px 12px;margin:0 0 14px;border-radius:10px;
+    border:1px solid #2b313c;background:#1a1d25}
+  .tally-badge{font-size:clamp(15px,4.4vw,19px);font-weight:900;letter-spacing:1.2px;
+    white-space:nowrap}
+  .tally-detail{font-size:12px;line-height:1.45;color:#9aa2b1}
+  /* LIVE. #ef4444 on #3b0d0d measures 5.9:1; the fill is what carries it, not the hue alone. */
+  .tally[data-live="yes"]{background:#3b0d0d;border-color:#ef4444}
+  .tally[data-live="yes"] .tally-badge{color:#fecaca}
+  .tally[data-live="yes"] .tally-detail{color:#f3b9b9}
+  .tally[data-live="yes"] .tally-badge::before{content:"";display:inline-block;
+    width:9px;height:9px;border-radius:50%;background:#ef4444;margin-right:8px;
+    animation:tally-pulse 1.8s ease-in-out infinite}
+  /* A dropped check reads as live, because that is the safe direction, but it must not be
+     mistaken for a confirmed ON AIR - so it keeps the fill and loses the certainty. */
+  .tally[data-state="unknown"]{background:#2f2410;border-color:#d99a2b}
+  .tally[data-state="unknown"] .tally-badge{color:#fde9b8}
+  .tally[data-state="unknown"] .tally-detail{color:#e0c48a}
+  .tally[data-state="unknown"] .tally-badge::before{animation:none;background:#d99a2b}
+  @keyframes tally-pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  /* Respect a reduced-motion preference: the dot stays, the blinking stops. */
+  @media (prefers-reduced-motion:reduce){
+    .tally[data-live="yes"] .tally-badge::before{animation:none}
+  }
 </style></head>
 <body>
   <div class="stale" id="upd"></div>
+  <!-- Starts as "cannot confirm" rather than as OFF AIR. Before the first poll lands nothing
+       is known, and OFF AIR is the one wrong answer that changes what a person says out loud. -->
+  <div class="tally" id="tally" data-state="unknown" data-live="yes">
+    <span class="tally-badge" id="tally-badge">CANNOT CONFIRM</span>
+    <span class="tally-detail" id="tally-detail">Checking whether you are on air. Until this
+      answers, assume you are.</span>
+  </div>
   <div class="lbl" id="lbl">Set up — read this</div>
   <div class="seg" id="seg">Waiting for the deck to open…</div>
   <div class="pre empty" id="pre">Open the deck — this fills in the moment you land on a slide.</div>
@@ -256,7 +296,10 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
       hintEl = document.getElementById('hint'),
       pollEl = document.getElementById('poll'), prowsEl = document.getElementById('prows'),
       nextEl = document.getElementById('next'), updEl = document.getElementById('upd'),
-      errEl = document.getElementById('err');
+      errEl = document.getElementById('err'),
+      tallyEl = document.getElementById('tally'),
+      tbadgeEl = document.getElementById('tally-badge'),
+      tdetailEl = document.getElementById('tally-detail');
   var lastTip = null, lastPre = null, lastPoll = null;
   // Polls must not overlap or render out of order: a slow response for the
   // previous slide landing after a fast one for the current slide would put
@@ -292,6 +335,23 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
     flush();
     return out.join('');
   }
+  /**
+   * Paint the tally, and NEVER invent one.
+   *
+   * A payload with no tally means an older server, which is reachable the moment this page is
+   * open across a deploy. It resolves to "cannot confirm", not to OFF AIR: saying the room
+   * cannot hear you when it can is the one error here that changes what a person says out
+   * loud, and an absent field is not evidence of silence.
+   */
+  function paintTally(t){
+    var state = (t && t.state) || 'unknown';
+    var live = (t && typeof t.assumeLive === 'boolean') ? t.assumeLive : true;
+    tallyEl.setAttribute('data-state', state);
+    tallyEl.setAttribute('data-live', live ? 'yes' : 'no');
+    tbadgeEl.textContent = (t && t.label) || 'CANNOT CONFIRM';
+    tdetailEl.textContent = (t && t.detail) || 'The check is not answering, so assume you are on air.';
+  }
+
   function tick(){
     if (inFlight) return;
     inFlight = true;
@@ -300,6 +360,12 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
       return r.json();
     }).then(function(d){
       inFlight = false;
+      // THE TALLY (D9), painted BEFORE the ordering guard below, which is the whole point of
+      // its position. That guard keys on the DECK's updated_at and drops an out-of-order
+      // response so the previous slide's notes cannot reappear. The tally does not depend on
+      // which slide is up, so letting it share that fate would mean a class whose deck has not
+      // moved in ten minutes is never told it has gone on air.
+      paintTally(d.tally);
       var seenAt = d.updated_at ? new Date(d.updated_at).getTime() : 0;
       if (seenAt && seenAt < lastSeenAt) return;
       if (seenAt) lastSeenAt = seenAt;
@@ -371,7 +437,23 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
         var secs = Math.max(0, Math.round((Date.now() - new Date(d.updated_at).getTime()) / 1000));
         updEl.textContent = secs < 8 ? 'live' : secs + 's ago';
       }
-    }).catch(function(e){ inFlight = false; errEl.textContent = 'Connection hiccup — retrying… (' + e.message + ')'; });
+    }).catch(function(e){
+      inFlight = false;
+      errEl.textContent = 'Connection hiccup — retrying… (' + e.message + ')';
+      /**
+       * THE TALLY DOES NOT SURVIVE A DROPPED REQUEST, and the notes deliberately do.
+       *
+       * Keeping the last notes on screen is right: stale talking points are better than a
+       * blank page mid-sentence. Keeping the last TALLY is not, in one direction. A page that
+       * last heard OFF AIR and then loses the connection would go on asserting OFF AIR while
+       * the producer takes the class live - and the presenter would be speaking to an audience
+       * they believe is not there.
+       *
+       * So an unreachable check resolves to "cannot confirm, assume you are on air", which is
+       * the same answer the server gives when its own read fails. Both layers, one rule.
+       */
+      paintTally(null);
+    });
   }
   tick();
   setInterval(tick, 2500);
