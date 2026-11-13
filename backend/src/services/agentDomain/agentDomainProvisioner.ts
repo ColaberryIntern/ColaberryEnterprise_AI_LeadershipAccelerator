@@ -57,6 +57,7 @@ import {
   planProvision,
   type ProvisionPlan,
 } from './agentDomainProvisionPlan';
+import { reachFor, resolveManagerReach } from './managerReachResolver';
 import { domainProjectName } from './agentDomainRegistry';
 
 export interface ProvisionContext {
@@ -244,9 +245,16 @@ async function provisionOne(
   } as never);
   inserted.projects = projectCreated ? 1 : 0;
 
-  // `manager_can_reach` and `manager_blocker` were MISSING from this list, so all ten anchors
-  // landed in production with NULL in both. The schema declares them and the plan says the anchor
-  // records them; a column that is always NULL is a column the next person deletes.
+  // `manager_can_reach` and `manager_blocker` are inserted NULL, deliberately.
+  //
+  // They were missing from this list once, so all ten anchors landed with NULL in both, and the
+  // fix was to bind them from the plan. That fix carried a worse problem: the plan read them from
+  // two hardcoded registry fields, so every insert and every reconcile wrote October's
+  // measurement back over the database as if it were current.
+  //
+  // They are now a DERIVED CACHE of `resolveManagerReach`, refreshed by `reconcileAnchorMetadata`
+  // below. NULL here means "not yet computed" rather than "unreachable", which is why no reader
+  // is allowed to treat the column as the answer -- the read surfaces compute it themselves.
   inserted.agent_domain_projects = await insertedCount(sequelize, tx,
     `INSERT INTO agent_domain_projects
        (id, tenant_id, student_project_id, domain_key, agent_id, manager_identity_id,
@@ -256,7 +264,7 @@ async function provisionOne(
      ON CONFLICT DO NOTHING
      RETURNING id`,
     [plan.anchor_id, tenantId, plan.project_id, plan.domain_key, plan.agent_id,
-      plan.manager_identity_id, plan.manager_can_reach, plan.manager_blocker,
+      plan.manager_identity_id, null, null,
       plan.intended_builder, plan.intended_builder_state, ctx.provisionedBy],
   );
 
@@ -404,9 +412,21 @@ export async function reconcileAnchorMetadata(
   // One transaction for the whole reconcile: the tenant is resolved once, and every UPDATE is
   // bound to it. `resolveTenantId` throws unless EXACTLY one tenant carries the slug, so an
   // ambiguous environment fails loudly rather than reconciling into whichever row came back first.
+  // COMPUTED, not planned. This used to reconcile from `plan.manager_can_reach`, which the plan
+  // copied from a hardcoded registry field -- so the job whose purpose is "make the stored row
+  // match reality" was in fact overwriting reality with a constant measured once in October.
+  // Resolved ONCE, outside the loop and before the transaction, because it is one query for every
+  // domain and re-running it per domain would make a reconcile cost ten round trips.
+  const reach = await resolveManagerReach(ctx.sequelize);
+
   await ctx.sequelize.transaction(async (tx) => {
     const tenantId = await resolveTenantId(ctx.sequelize, tx);
     for (const plan of planAllProvisions()) {
+      const verdict = reachFor(reach, plan.domain_key);
+      const canReach = verdict.canReach;
+      // The blocker CODE, not a paragraph. The prose this column used to hold is exactly what
+      // went stale unreadably: a sentence naming a cause nobody re-checked.
+      const blocker = canReach ? null : verdict.blocker;
       // eslint-disable-next-line no-await-in-loop
       const rows = await ctx.sequelize.query<{ id: string }>(
         `UPDATE agent_domain_projects
@@ -416,7 +436,7 @@ export async function reconcileAnchorMetadata(
             AND (manager_can_reach IS DISTINCT FROM $2 OR manager_blocker IS DISTINCT FROM $3)
           RETURNING id`,
         {
-          bind: [plan.domain_key, plan.manager_can_reach, plan.manager_blocker, tenantId],
+          bind: [plan.domain_key, canReach, blocker, tenantId],
           type: QueryTypes.SELECT,
           transaction: tx,
         },
@@ -424,8 +444,8 @@ export async function reconcileAnchorMetadata(
       out.push({
         domain_key: plan.domain_key,
         changed: rows.length > 0,
-        manager_can_reach: plan.manager_can_reach,
-        manager_blocker: plan.manager_blocker,
+        manager_can_reach: canReach,
+        manager_blocker: blocker,
       });
     }
   });

@@ -302,18 +302,30 @@ this is stated rather than assumed.
   unstaffed human role in a draft while requiring a resolvable authorized owner for execution or
   activation. All ten projects rest at `discovery` and are never activated by the provisioning run,
   so an unresolved manager is permissible there and **nowhere else** — and where a manager cannot
-  reach the surface, the project says so as a named blocker rather than reporting ready. Measured
-  2026-10-15: seven of ten domains have a manager who can reach it, across six distinct humans;
-  three carry a named blocker.
+  reach the surface, the project says so as a named blocker rather than reporting ready.
 
-  **Corrected from six of ten / four blocked, measured 2026-10-08.** Admissions was recorded as
-  blocked on the finding that its manager had no `admin_users` row. He has one. The miss came from
-  an **email mismatch**: his `org_members` row carries his personal address while he signs in with
-  his work one, so matching `org_members.email` against `admin_users.email` found nothing and that
-  was read as "no login". The reliable link is `org_members.enrollment_id` to `enrollments.email`,
-  a real foreign key populated on 29 of 29 rows; `platform_identity_id` would be the proper
-  identity column and is NULL on all 29. The three remaining blockers were re-checked against both
-  addresses and are real.
+  **This document no longer states how many of the ten can reach it, and that is the decision, not
+  an omission.** Reachability is computed per request by `resolveManagerReach`
+  (`services/agentDomain/managerReachResolver.ts`) from the access chain a request actually
+  travels. Any figure written here is a measurement taken on one day, and this section has now been
+  wrong twice by writing one down.
+
+  **The record of both corrections, because the second one repeated the first.** On 2026-10-08 this
+  said six of ten, with admissions blocked because its manager had no `admin_users` row. He had
+  one; the miss was an **email mismatch**, his `org_members` row carrying his personal address
+  while he signed in with his work one. Corrected on 2026-10-15 to seven of ten, three blocked —
+  and that figure was wrong too, for the same reason one level up. All three of the remaining
+  "blockers" named a missing `admin_users` row, and **an `admin_users` row was never the
+  requirement**: it is the legacy wide login. The scoped path is a staff `community_members` row
+  carrying a `mgmt_role`, which needs no `admin_users` row at all, and all three held one. Measured
+  2026-11-12: those three could reach their agents, and the real blocker was the *same email
+  mismatch* as 2026-10-08, still unfixed, on the one domain the October correction had declared
+  fixed.
+
+  Three wrong answers came out of writing the figure down and re-deriving the rule from the written
+  figure instead of from the code. The rule that replaces it: **if an answer can change without
+  this document changing, this document does not state it** — it names where the answer is
+  computed.
 
 ### Readiness
 

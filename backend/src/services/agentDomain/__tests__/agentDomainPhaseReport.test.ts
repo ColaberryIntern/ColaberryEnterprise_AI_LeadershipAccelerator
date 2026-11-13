@@ -15,9 +15,37 @@ import {
 } from '../agentDomainPhaseReport';
 import { AGENT_DOMAIN_KEYS } from '../agentDomainRegistry';
 import { allCapabilities, loadUnresolvedBucket } from '../capabilityRecord';
+import type { ManagerReachVerdict } from '../../access/agentManagerReach';
+
+/**
+ * Reachability is an INPUT to the report now, so the tests supply it.
+ *
+ * It used to come from two hardcoded registry fields, and this suite asserted the report echoed
+ * them — which it always did, including while those fields were wrong in production for three
+ * managers. Passing it in means the report is tested for what it is responsible for (reading its
+ * inputs faithfully) and not for an access answer it has no business holding.
+ *
+ * Deliberately a MIX rather than all-reachable: a report that only ever renders `yes` cannot show
+ * that the `NO` column works.
+ */
+const verdict = (domainKey: string, canReach: boolean): ManagerReachVerdict => ({
+  domainKey,
+  canReach,
+  via: canReach ? 'bridge' : null,
+  blocker: canReach ? null : 'org_member_email_mismatch',
+  detail: canReach ? 'reaches it via their bridge login.' : 'their login and their org row differ.',
+  recordedCanReach: canReach,
+  disagreesWithRecord: false,
+});
+
+const BLOCKED_IN_FIXTURE = ['admissions', 'sales'];
+
+const REACH = new Map<string, ManagerReachVerdict>(
+  AGENT_DOMAIN_KEYS.map((k) => [k, verdict(k, !BLOCKED_IN_FIXTURE.includes(k))]),
+);
 
 describe('the report covers every domain, with figures read from the data', () => {
-  const r = buildPhaseReport();
+  const r = buildPhaseReport(REACH);
 
   it('one row per domain, in registry order', () => {
     expect(r.rows.map((x) => x.domain_key)).toEqual([...AGENT_DOMAIN_KEYS]);
@@ -49,34 +77,48 @@ describe('the report covers every domain, with figures read from the data', () =
     expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(443);
   });
 
-  it('reports seven reachable managers and three blocked', () => {
-    // CORRECTED 2026-10-15 from six/four. Taiwo Oludimimu DOES have an admin_users row
-    // (taiwo@colaberry.com, role admin, a legacy full admin). The original 'no login'
-    // finding was a false negative from an EMAIL MISMATCH: his org_members row carries his
-    // personal address, his login is the work one. So admissions is reachable and the split
-    // is SEVEN reachable / THREE blocked (platform, product_experience, sales).
-    expect(r.totals.managers_reachable).toBe(7);
-    expect(r.totals.managers_blocked).toBe(3);
+  /**
+   * These two used to assert production's split directly — "seven reachable, three blocked", with
+   * a comment correcting it from six/four a month earlier. That is the shape of an assertion that
+   * has to be edited every time the world moves, and between edits it is simply false: the three
+   * it called blocked could all reach their agents.
+   *
+   * The report's job is to read its input faithfully and total it correctly. So that is what is
+   * asserted, against the fixture, and the access answer itself is driven in
+   * `agentManagerReach.test.ts` where it belongs.
+   */
+  it('totals reachability from its input rather than from a figure baked in here', () => {
+    expect(r.totals.managers_reachable).toBe(AGENT_DOMAIN_KEYS.length - BLOCKED_IN_FIXTURE.length);
+    expect(r.totals.managers_blocked).toBe(BLOCKED_IN_FIXTURE.length);
+    // The two must account for every domain. A split that does not add up is how a blocked
+    // manager goes uncounted rather than reported.
+    expect(r.totals.managers_reachable + r.totals.managers_blocked).toBe(r.rows.length);
   });
 
-  it('distinguishes 9 accountable humans from the 6 now measured as REACHABLE', () => {
-    // Two different figures that are easy to conflate, and I conflated them: T03's headline "five
-    // distinct humans" counts the humans behind the SIX REACHABLE domains, where Ali holds two.
-    // Across all ten domains there are NINE distinct accountable humans. Both are asserted here so
-    // neither can be quoted as the other.
+  it('marks exactly the domains the input says are blocked', () => {
+    const blocked = r.rows.filter((x) => !x.manager_can_reach_surface).map((x) => x.domain_key);
+    expect(blocked.sort()).toEqual([...BLOCKED_IN_FIXTURE].sort());
+  });
+
+  it('counts distinct accountable humans separately from reachable domains', () => {
+    // Two figures that are easy to conflate: the humans behind all ten domains, and the domains
+    // whose manager can reach them. Ali holds two domains, so these never match. The human count
+    // is a property of the catalog and stays a fixed expectation; the reachable count is not.
     expect(r.totals.distinct_accountable_humans).toBe(9);
     const reachableHumans = new Set(
       r.rows.filter((x) => x.manager_can_reach_surface).map((x) => x.accountable_human),
     );
-    // Moved 5 -> 6 on 2026-10-15: admissions became reachable. The NINE total is unchanged --
-    // Taiwo was always one of the nine accountable humans, just recorded as blocked.
-    expect(reachableHumans.size).toBe(6);
+    expect(reachableHumans.size).toBeLessThanOrEqual(r.totals.distinct_accountable_humans);
+    expect(reachableHumans.size).toBeGreaterThan(0);
   });
 
   it('every blocked domain carries a named reason, never a default', () => {
     for (const row of r.rows.filter((x) => !x.manager_can_reach_surface)) {
       expect(typeof row.blocker).toBe('string');
-      expect(row.blocker as string).toMatch(/^manager_[a-z_]+:/);
+      // A blocker CODE now, not a prose sentence. The old format was a paragraph naming a cause
+      // and a remedy, and a paragraph nobody can diff is a paragraph nobody re-checks: three of
+      // them described a missing login that was not missing. A code is checkable.
+      expect(row.blocker as string).toMatch(/^[a-z][a-z_]+$/);
     }
     // And a reachable domain carries no blocker, so the field is not decorative.
     for (const row of r.rows.filter((x) => x.manager_can_reach_surface)) {
@@ -86,7 +128,7 @@ describe('the report covers every domain, with figures read from the data', () =
 });
 
 describe('unknown is never rendered as zero', () => {
-  const r = buildPhaseReport();
+  const r = buildPhaseReport(REACH);
 
   it('readiness is `unknown` for every domain, because nothing is provisioned', () => {
     expect(r.rows.every((x) => x.production_readiness === UNKNOWN)).toBe(true);
@@ -119,7 +161,7 @@ describe('unknown is never rendered as zero', () => {
 });
 
 describe('the report claims nothing it has not got', () => {
-  const r = buildPhaseReport();
+  const r = buildPhaseReport(REACH);
   const md = renderPhaseReportMarkdown(r);
 
   it('says outright that nothing is activated', () => {
@@ -181,7 +223,7 @@ describe('the report claims nothing it has not got', () => {
   });
 
   it('is PURE: two renders are identical', () => {
-    expect(renderPhaseReportMarkdown(buildPhaseReport()))
-      .toBe(renderPhaseReportMarkdown(buildPhaseReport()));
+    expect(renderPhaseReportMarkdown(buildPhaseReport(REACH)))
+      .toBe(renderPhaseReportMarkdown(buildPhaseReport(REACH)));
   });
 });

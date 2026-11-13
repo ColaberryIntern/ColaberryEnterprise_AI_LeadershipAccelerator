@@ -9,12 +9,27 @@
  *   - the capability matrices, the provisioner, and the admin read surface
  * One list, consumed five ways. A second list is how a taxonomy drifts.
  *
- * EVERY MANAGER FIELD HERE WAS MEASURED IN PRODUCTION, not copied from a document.
- * `HUMAN_OWNERSHIP_MAP.md` is dated 2026-09-15 and had drifted: it recorded Swati Raman as having
- * no admin login, and she now has one. Its working figure of "three of ten managers can reach their
- * employee's surface" measured as **six of ten, across five distinct humans** on 2026-10-08
- * (`.loop-architect/runs/20261007-school-agent-factory/verified-domain-registry.json`). Writing ten
- * projects' blocker lists from the stale figure would have put the wrong gap on four of them.
+ * THIS LIST NO LONGER ANSWERS WHETHER A MANAGER CAN REACH THEIR EMPLOYEE'S SURFACE.
+ *
+ * It used to, via `can_reach_surface` and `blocker`, under a comment that read "MEASURED: does an
+ * `admin_users` row exist on the manager's email?" Both halves were wrong, and the way they were
+ * wrong is worth keeping here.
+ *
+ * The QUESTION was wrong. An `admin_users` row is the legacy wide login. The scoped path is a
+ * staff `community_members` row carrying a `mgmt_role` and needs no `admin_users` row at all, so
+ * three managers were recorded as locked out while holding a working login.
+ *
+ * And "MEASURED" meant measured ONCE, on 2026-10-08, then frozen into source. The paragraph that
+ * used to sit here described catching `HUMAN_OWNERSHIP_MAP.md` in precisely that state — stale,
+ * confident, wrong on four domains — and then this file froze its own answer the same way, one
+ * level down. The literals flowed outward into the database (the provisioner writes them), the
+ * portal, the phase report, the story prose handed to builders, and an audit that reported them
+ * as fact. Four separate surfaces agreed with each other because they all read one stale constant.
+ *
+ * A constant cannot hold the answer to a question about live access. Reachability is computed by
+ * `resolveManagerReach` in `managerReachResolver.ts`, from the access chain a request actually
+ * travels. What remains below is a static CATALOG: identifiers, titles, sequence, planning state.
+ * If a field's honest answer can change without this file changing, it does not belong here.
  *
  * NOTHING HERE IS AN ASSIGNMENT OR A GRANT.
  * `intended_builder` is a plain name. It is deliberately NOT a foreign key to an enrollment,
@@ -65,11 +80,14 @@ export interface AgentDomain {
   readonly title: string;
   /** `org_members.id`. Never a name, never an email — an actor reference, per the trust convention. */
   readonly manager_identity_id: string;
+  /**
+   * NOT the access key, and not authoritative. `requireAgentManagerOrAdmin` matches the token
+   * against the `org_members.email` belonging to `manager_identity_id` above, which is what every
+   * live reader uses. No production code path reads this field; it is retained for display only.
+   * The `platform` entry still carries an address its org row does not, which is the reason
+   * nothing should start trusting it.
+   */
   readonly manager_email: string;
-  /** MEASURED: does an `admin_users` row exist on the manager's email? */
-  readonly can_reach_surface: boolean;
-  /** Named, specific, and never a generic block. Null only when there is genuinely no gap. */
-  readonly blocker: string | null;
   /** `ai_agents.id`, for the two domains that have an AI employee today. Read-only in this build. */
   readonly agent_id: string | null;
   /** PLANNING ONLY. A name. Never an assignment, never a foreign key. */
@@ -79,9 +97,6 @@ export interface AgentDomain {
   readonly requested_capabilities: readonly string[];
 }
 
-const MANAGER_NO_LOGIN = (name: string, extra: string): string =>
-  `manager_has_no_admin_login: ${name} has an org_members row but no admin_users row, so they cannot `
-  + `open their employee's Agent Detail or Talk surface. ${extra}`;
 
 export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
   {
@@ -90,8 +105,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Learner Success (Reese)',
     manager_identity_id: 'f179c222-284e-4180-a335-cca9e4918b2e',
     manager_email: 'ali@colaberry.com',
-    can_reach_surface: true,
-    blocker: null,
     agent_id: '97dfbdf4-0e5b-4d86-b060-f4087b61f311',
     intended_builder: null,
     intended_builder_state: 'unassigned',
@@ -103,8 +116,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Curriculum, Learning & Certification (Dara)',
     manager_identity_id: '5db87b51-4554-4e52-93d7-c61f9887352c',
     manager_email: 'swati@colaberry.com',
-    can_reach_surface: true,
-    blocker: null,
     agent_id: '089e4fd5-0187-46a3-9c56-5db68ef21cca',
     intended_builder: 'Ruth Kumera',
     intended_builder_state: 'onboarding_pending',
@@ -116,8 +127,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Marketing Intelligence & Brand',
     manager_identity_id: '4e255894-ac0b-4367-ae06-27459ea05f66',
     manager_email: 'sohail@colaberry.com',
-    can_reach_surface: true,
-    blocker: null,
     agent_id: null,
     intended_builder: 'Sarbjit Kaur',
     intended_builder_state: 'verified_active',
@@ -129,11 +138,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Product Experience & UI/UX',
     manager_identity_id: 'd2efd70b-4016-4ad6-bd7b-cf0610c93370',
     manager_email: 'aleem@colaberry.com',
-    can_reach_surface: false,
-    blocker: MANAGER_NO_LOGIN(
-      'Mohammed Abdul Aleem',
-      'Needs an admin_users row with a scoped mgmt_role, or an alternative surface.',
-    ),
     agent_id: null,
     intended_builder: 'Mihret Netsereab',
     intended_builder_state: 'verified_active',
@@ -172,8 +176,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     //       section and `mgmtSectionGate.ts:100` attributes it to Dhee -- a role NAME meaning
     //       something other than the domain it is named after. Recorded so nobody later "fixes"
     //       the domain owner to match the role name and undoes the owner's decision.
-    can_reach_surface: true,
-    blocker: null,
     agent_id: null,
     intended_builder: 'Kalkidan Bezabeh',
     intended_builder_state: 'verified_active',
@@ -185,8 +187,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Sales, Enrollment & Subscriptions',
     manager_identity_id: 'b4dddf0b-6750-4398-83cf-b70b64ed6b48',
     manager_email: 'roselen@colaberry.com',
-    can_reach_surface: false,
-    blocker: MANAGER_NO_LOGIN('Roselyn', 'Her team is Customer Support, which the ownership map left blank.'),
     agent_id: null,
     intended_builder: 'Victoria Spencer-Auber',
     intended_builder_state: 'verified_active',
@@ -198,8 +198,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Internship & Career Readiness',
     manager_identity_id: 'bbf01827-c005-5cb2-8a96-903fe8ddadac',
     manager_email: 'dhee@colaberry.com',
-    can_reach_surface: true,
-    blocker: null,
     agent_id: null,
     intended_builder: 'Tashima Diah',
     intended_builder_state: 'verified_active',
@@ -211,8 +209,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Website Portfolio & Conversion',
     manager_identity_id: '5ebf1a6f-874f-4e39-a014-828d744eda15',
     manager_email: 'saitejesh@colaberry.com',
-    can_reach_surface: true,
-    blocker: null,
     agent_id: null,
     intended_builder: null,
     intended_builder_state: 'unassigned',
@@ -224,11 +220,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Platform Automation & Reliability',
     manager_identity_id: '3df017df-affa-49ab-884f-a99a4bd2ef4e',
     manager_email: 'kesetebirhan@gmail.com',
-    can_reach_surface: false,
-    blocker: MANAGER_NO_LOGIN(
-      'Kesetebirhan Delele',
-      'Already the reports_to target for workforce_intelligence_engine.',
-    ),
     agent_id: null,
     intended_builder: 'Quincy Nkwain Ninying',
     intended_builder_state: 'verified_active',
@@ -240,8 +231,6 @@ export const AGENT_DOMAINS: readonly AgentDomain[] = Object.freeze([
     title: 'Executive Intelligence & Governance',
     manager_identity_id: 'f179c222-284e-4180-a335-cca9e4918b2e',
     manager_email: 'ali@colaberry.com',
-    can_reach_surface: true,
-    blocker: null,
     agent_id: null,
     intended_builder: null,
     intended_builder_state: 'unassigned',
@@ -284,10 +273,12 @@ export function domainProjectName(key: string): string {
   return getAgentDomain(key)?.title ?? key;
 }
 
-/** Domains whose manager genuinely cannot reach the surface. Measured, not averaged. */
-export function blockedDomains(): readonly AgentDomain[] {
-  return AGENT_DOMAINS.filter((d) => !d.can_reach_surface);
-}
+/*
+ * `blockedDomains()` used to live here, filtering the catalog by a hardcoded `can_reach_surface`.
+ * It is gone rather than rewritten: a static list cannot answer which managers are blocked, and
+ * the only caller it ever had was its own test. `resolveManagerReach` in
+ * `managerReachResolver.ts` answers that question from live data.
+ */
 
 /**
  * A domain is assignable only when its intended builder is verified active. `onboarding_pending`

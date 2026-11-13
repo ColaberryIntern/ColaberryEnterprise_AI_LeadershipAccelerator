@@ -35,6 +35,13 @@ function fakeSequelize(opts: {
   names?: Array<{ display_name: string }>;
   builderRows?: Array<Record<string, unknown>>;
   ownerRows?: Array<Record<string, unknown>>;
+  /**
+   * Rows for the manager-reach query the readers now overlay onto every result. Left empty by
+   * default: these tests are about SCOPING — which rows come back for whom — and an empty reach
+   * map resolves each domain to a refusal, which is the safe default and changes no row's
+   * identity. `agentManagerReach.test.ts` is where the verdict itself is driven.
+   */
+  reachRows?: Array<Record<string, unknown>>;
 }) {
   const calls: Call[] = [];
   const query = jest.fn(async (sql: string, o: any) => {
@@ -47,6 +54,11 @@ function fakeSequelize(opts: {
     // branch silently returned the builder's rows and one test failed for a reason that had
     // nothing to do with the code under test. A fake that answers the wrong question is worse
     // than no fake: it fails confusingly, and it can just as easily pass confusingly.
+    // BEFORE the display_name branch, deliberately: the manager-reach query also joins
+    // `community_members cm`, so matching on `cm.display_name` first would swallow it and hand
+    // back a name list where facts rows were expected — the same shadowing this comment already
+    // describes once. Matched on a string unique to the reach query.
+    if (sql.includes('recorded_can_reach')) return opts.reachRows ?? [];
     if (sql.includes('cm.display_name')) return opts.names ?? [];
     if (sql.includes('adp.manager_identity_id = ANY')) return opts.ownerRows ?? [];
     if (sql.includes('lower(btrim(adp.intended_builder))')) return opts.builderRows ?? [];

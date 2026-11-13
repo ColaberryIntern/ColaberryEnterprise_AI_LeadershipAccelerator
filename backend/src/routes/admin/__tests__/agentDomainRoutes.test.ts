@@ -279,21 +279,45 @@ describe('malformed input is 400, before anything is loaded', () => {
 // ─────────────────────────── honesty of the rendered state ───────────────────────────
 
 describe('the surface reports the real state, including the bad parts', () => {
-  it('never defaults manager_can_reach to true, and carries the named blocker', async () => {
+  /**
+   * This used to assert "three blocked, seven reachable" straight off the registry constant, with
+   * a comment correcting it from four a month earlier. Every one of those numbers was a frozen
+   * October measurement, and three of the managers it called blocked could reach their agents.
+   *
+   * The endpoint computes reachability per request now, so what is asserted is the property that
+   * actually matters and cannot go stale: nothing is ever defaulted to reachable, and the counts
+   * agree with the rows beside them.
+   */
+  it('never defaults manager_can_reach to true when nothing is known', async () => {
+    // The mock resolves every query to [], so no domain has reach facts. The safe answer is a
+    // refusal with a named reason for all ten -- an optimistic true here is the failure mode.
     const res = await request(app())
       .get('/api/admin/agent-domains')
       .set('Authorization', `Bearer ${tokenFor('owner')}`);
+
     const blocked = res.body.domains.filter((d: { manager_can_reach: boolean }) => !d.manager_can_reach);
-    // THREE domains are genuinely blocked, corrected from four on 2026-10-15: admissions was a
-    // false negative from an email mismatch. A zero here would mean the measurement was dropped.
-    expect(blocked.length).toBe(3);
+    expect(blocked.length).toBe(AGENT_DOMAIN_KEYS.length);
     for (const d of blocked) {
+      // A blocker CODE, not a paragraph. The old assertion required 20+ characters matching
+      // /^manager_[a-z_]+:/ -- the shape of the stored prose that nobody re-checked.
       expect(typeof d.blocker).toBe('string');
-      expect(d.blocker.length).toBeGreaterThan(20);
-      expect(d.blocker).toMatch(/^manager_[a-z_]+:/);
+      expect(d.blocker).toMatch(/^[a-z][a-z_]+$/);
     }
-    expect(res.body.blocked).toBe(3);
-    expect(res.body.reachable).toBe(7);
+    expect(res.body.blocked).toBe(AGENT_DOMAIN_KEYS.length);
+    expect(res.body.reachable).toBe(0);
+  });
+
+  it('keeps the totals consistent with the rows they summarise', async () => {
+    // The counts used to be filtered off the catalog independently of the rows, which is two
+    // chances to disagree. They are now counted off the computed views.
+    const res = await request(app())
+      .get('/api/admin/agent-domains')
+      .set('Authorization', `Bearer ${tokenFor('owner')}`);
+
+    const rows = res.body.domains as Array<{ manager_can_reach: boolean }>;
+    expect(res.body.reachable).toBe(rows.filter((d) => d.manager_can_reach).length);
+    expect(res.body.blocked).toBe(rows.filter((d) => !d.manager_can_reach).length);
+    expect(res.body.reachable + res.body.blocked).toBe(rows.length);
   });
 
   it('no capability or threshold renders as accepted', async () => {

@@ -56,8 +56,20 @@
  * chain itself. Claiming more would be the same mistake as the flag it replaces.
  */
 
+/*
+ * Moved here from `scripts/lib/` once the admin read surfaces started depending on it. It was a
+ * script helper while only the audit used it; it is production access logic now, and leaving it
+ * under `scripts/` would have invited a second copy for the routes.
+ *
+ * The `mgmtSectionGate` import is a service reaching into a middleware, which is the wrong
+ * direction and is deliberate anyway: the alternative is restating which section the Agent Detail
+ * path sits behind, and a restated copy of that table is precisely the class of bug this module
+ * exists to stop. Importing the enforcing table cannot drift from it. Moving `PATH_SECTION` into
+ * this folder would fix the direction properly, but it is the most security-sensitive table in the
+ * repo with eleven suites against it, so that is its own change and not a side effect of this one.
+ */
 import { pathToSection } from '../../middlewares/mgmtSectionGate';
-import { effectiveSections, type SectionKey } from '../../services/access/mgmtRoles';
+import { effectiveSections, type SectionKey } from './mgmtRoles';
 
 /**
  * A representative Agent Detail request path.
@@ -124,6 +136,11 @@ export interface ManagerReachVerdict {
   readonly blocker: ReachBlocker | null;
   /** One sentence naming the mechanism, for a human reading the report. */
   readonly detail: string;
+  /**
+   * The stored `manager_can_reach`, carried through so a reader never has to reconstruct it from
+   * `canReach` and `disagreesWithRecord`. It is reported, never believed.
+   */
+  readonly recordedCanReach: boolean;
   /** True when the computed answer contradicts the stored `manager_can_reach`. */
   readonly disagreesWithRecord: boolean;
 }
@@ -260,6 +277,7 @@ export function assessManagerReach(facts: ManagerAccessFacts): ManagerReachVerdi
     via: passed ? passed.via : null,
     blocker,
     detail,
+    recordedCanReach: facts.recordedCanReach,
     disagreesWithRecord: canReach !== facts.recordedCanReach,
   };
 }

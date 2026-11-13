@@ -222,11 +222,16 @@ function researchStories(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedSt
       + `meeting is scheduled is wrong.\n\n`
       + `Cover: which capabilities they want first, which must stay human forever, what "good" looks `
       + `like in measurable terms, and what they would want switched off immediately if it misbehaved.`
-      + (d.can_reach_surface
-        ? `\n\n${m.accountable_human} can reach the agent surface today, so the check-in can review real state.`
-        : `\n\n**Blocker to raise in the interview:** ${m.accountable_human} cannot reach the agent `
-          + `surface today. ${d.blocker ?? ''} Until that is fixed they cannot see what they are being `
-          + `asked to validate.`),
+      // This paragraph used to branch on a hardcoded `can_reach_surface` and paste a stored
+      // blocker sentence into the story. A story is generated weeks before anyone works it, so
+      // baking a live access state into its text guarantees the text is wrong by the time it is
+      // read -- and three domains carried a confident "cannot reach the agent surface today" for a
+      // manager who could. So the story asks rather than asserts.
+      + `\n\n**Confirm first, do not assume:** check whether ${m.accountable_human} can actually `
+      + `open their agent's page right now, by asking them to open it while you are both there. `
+      + `GET /api/admin/agent-domains reports it per domain and computes it live. If they cannot, `
+      + `that is the first thing to raise in the interview, because until it is fixed they cannot `
+      + `see what they are being asked to validate.`,
     ),
     common(
       RESEARCH_PREFIXES[4],
