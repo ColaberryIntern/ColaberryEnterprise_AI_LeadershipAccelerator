@@ -41,7 +41,11 @@ export async function buildItemConfirmation(itemId: string): Promise<Confirmatio
   // would be its own lie - the operator would wonder where the thing they attached went.
   const assets = await Promise.all(mediaRows.map(async (m) => {
     const a = await MediaAsset.findByPk(m.media_asset_id);
-    const kind = a?.kind === 'link' ? 'link' : 'file';
+    // ANNOTATED, not inferred. Without the annotation TypeScript widens this to `string` the
+    // moment it becomes a mutable object-literal property with no contextual type, and the
+    // literal union ConfirmationAsset.kind requires is lost - which is exactly what failed
+    // Backend typecheck at 055e44fc.
+    const kind: 'file' | 'link' = a?.kind === 'link' ? 'link' : 'file';
     return {
       id: m.media_asset_id,
       filename: a?.original_filename ?? null,
