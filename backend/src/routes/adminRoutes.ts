@@ -17,6 +17,7 @@ import marketingBugReportRoutes from './admin/marketingBugReportRoutes';
 import publishingRoutes from './admin/publishingRoutes';
 import channelAccountRoutes from './admin/channelAccountRoutes';
 import contentMediaRoutes from './admin/contentMediaRoutes';
+import contentLibraryRoutes from './admin/contentLibraryRoutes';
 import linkedInConnectRoutes from './admin/linkedInConnectRoutes';
 import marketingConnectRoutes from './admin/marketingConnectRoutes';
 import caseStudyAdminRoutes from './admin/caseStudyAdminRoutes';
@@ -153,6 +154,7 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import caseStudyOutsideIntakeRoutes from './admin/caseStudyOutsideIntakeRoutes';
 import serviceProposalRoutes from './admin/serviceProposalRoutes';
+import serviceEvidenceSummaryRoutes from './admin/serviceEvidenceSummaryRoutes';
 // The flow diagram and the delivery stories: the two stages built on a settled decomposition that
 // nothing called until L10.9. Its own router for the same reason as the line above.
 import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
@@ -187,6 +189,10 @@ router.use(marketingBugReportRoutes);
 router.use(publishingRoutes);
 router.use(channelAccountRoutes);
 router.use(contentMediaRoutes);
+// The media LIBRARY (LIB-2): list/search, save a link, upload a file that belongs to no post
+// yet, edit, archive, and attach something already saved. After contentMediaRoutes because it
+// shares that file's conventions and reuses its service.
+router.use(contentLibraryRoutes);
 router.use(linkedInConnectRoutes);
 router.use(marketingConnectRoutes);
 // Case Study OS admin surface. Every path is fully qualified
@@ -421,6 +427,9 @@ router.use(caseStudyServiceLinkRoutes);
 router.use(caseStudyOutsideIntakeRoutes);
 // Propose a growth service from a case study; promote growth -> active with proof (Services Upgrade SV1).
 router.use(serviceProposalRoutes);
+// Read-only evidence summary feed for Our Services (Services Upgrade SV2). Under /api/admin/factory -> 'program';
+// the route also carries requireSection('program').
+router.use(serviceEvidenceSummaryRoutes);
 // Nested under /api/admin/factory/contract/:id/, so mgmtSectionGate's existing
 // '/api/admin/factory' -> 'program' PREFIX row already covers these too.
 router.use(factoryDownstreamRoutes);
