@@ -198,11 +198,17 @@ describe('toLibraryView', () => {
     expect(view.sourceUrl).toBe('https://youtu.be/abc');
     // No youTubeId, no thumbnailUrl, no embedUrl: the frontend owns that (videoEmbed.ts), and a
     // second implementation here would drift from it.
+    //
+    // `url` IS in this list, and it is not an exception to that rule. It is a signed, time-limited
+    // grant to read bytes WE hold, for a file - not anything parsed out of a link. The distinction
+    // is asserted on the next line rather than left to the key count: a link must still carry no
+    // url at all, because its playable address is sourceUrl and there is nothing of ours to sign.
     expect(Object.keys(view).sort()).toEqual([
       'altText', 'archivedAt', 'byteSize', 'createdAt', 'durationMs', 'height', 'id', 'kind',
       'mimeType', 'originalFilename', 'rightsExpiresAt', 'rightsHolder', 'rightsStatus',
-      'sourceUrl', 'storageKey', 'tags', 'width',
+      'sourceUrl', 'storageKey', 'tags', 'url', 'width',
     ]);
+    expect(view.url).toBeNull();
   });
 
   it('treats any unexpected kind as a file rather than inventing a third state', () => {

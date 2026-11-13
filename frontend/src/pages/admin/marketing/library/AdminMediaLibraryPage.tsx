@@ -13,6 +13,11 @@ import {
   type LibraryKind,
 } from '../../../../services/libraryApi';
 import { parseVideoUrl, videoThumbnail } from '../../../../utils/videoEmbed';
+import VideoEmbed from '../../../../components/timeline/VideoEmbed';
+// VideoEmbed styles itself with tlv-* classes that live in timeline.css and it does NOT import
+// them, so every host has to. Same pattern as admin/orchestration/studio/StudentPreview.tsx.
+// Without this the player renders unstyled: no poster frame, no play button.
+import '../../../../components/timeline/timeline.css';
 import { useMarketingBrand } from '../MarketingBrandContext';
 import { ALL_BRANDS } from '../brandScope';
 
@@ -371,6 +376,100 @@ export default function AdminMediaLibraryPage(): JSX.Element {
   );
 }
 
+/**
+ * What an asset looks like, and how it plays.
+ *
+ * Ali, 2026-11-13: "I should be able to click on it and play the video directly in the app" and
+ * "also viewers for mp4 also". Four cases, and they are genuinely different:
+ *
+ *   a LINK that parses as a video -> the app's OWN player (components/timeline/VideoEmbed). It
+ *     already draws a poster with a play button and swaps in the provider iframe on click, so
+ *     there is nothing to build. `onWatchBeat` is deliberately NOT passed: that reports student
+ *     watch progress, and an admin previewing the library is not studying.
+ *   an MP4 FILE -> a native <video controls>, pointed at the signed URL the list now returns.
+ *     `preload="metadata"` so a grid of twenty does not pull twenty videos.
+ *   an IMAGE FILE -> the image itself, which is its own preview.
+ *   a PDF or anything else -> an icon and the type, because there is nothing to play. Honest
+ *     beats a broken frame.
+ *
+ * A file with no signed URL falls back to the icon rather than rendering a dead player: signing
+ * can fail, and a control that does nothing is worse than no control.
+ */
+export function AssetViewer({ asset, video, poster }: {
+  asset: LibraryAsset;
+  video: ReturnType<typeof parseVideoUrl>;
+  poster: string | null;
+}): JSX.Element {
+  const isPlayableLink = asset.kind === 'link' && video && video.kind !== 'link';
+  const isVideoFile = asset.kind === 'file' && asset.mimeType.startsWith('video/') && Boolean(asset.url);
+  const isImageFile = asset.kind === 'file' && asset.mimeType.startsWith('image/') && Boolean(asset.url);
+
+  if (isPlayableLink) {
+    return (
+      <div className="rounded-top overflow-hidden" data-testid={`viewer-link-${asset.id}`}>
+        <VideoEmbed source={video} title={asset.altText ?? undefined} poster={poster} />
+      </div>
+    );
+  }
+
+  if (isVideoFile) {
+    return (
+      <video
+        className="w-100 rounded-top bg-dark"
+        style={{ maxHeight: 260 }}
+        controls
+        preload="metadata"
+        src={asset.url ?? undefined}
+        data-testid={`viewer-video-${asset.id}`}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+
+  if (isImageFile) {
+    return (
+      <a
+        href={asset.url ?? undefined}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="d-block bg-light rounded-top overflow-hidden"
+        style={{ maxHeight: 260 }}
+        data-testid={`viewer-image-${asset.id}`}
+      >
+        <img
+          src={asset.url ?? undefined}
+          alt={asset.altText ?? ''}
+          className="w-100"
+          style={{ maxHeight: 260, objectFit: 'contain' }}
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+
+  const icon = asset.kind === 'link'
+    ? 'link'
+    : asset.mimeType.startsWith('image/') ? 'image-line'
+      : asset.mimeType.startsWith('video/') ? 'film-line'
+        : 'file-text-line';
+  return (
+    <div
+      className="d-flex align-items-center justify-content-center bg-light rounded-top"
+      style={{ height: 150, overflow: 'hidden' }}
+      data-testid={`viewer-none-${asset.id}`}
+    >
+      <div className="text-center text-muted">
+        <i className={`ri-${icon} fs-2 d-block`} aria-hidden="true" />
+        <span className="small text-uppercase">{asset.kind === 'link' ? 'link' : asset.mimeType.split('/')[1] ?? 'file'}</span>
+        {asset.kind === 'file' && !asset.url && (
+          <span className="small d-block text-danger">Preview unavailable</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** One asset. Separated so the grid stays readable and the tile can be reused by the picker. */
 export function AssetTile(props: {
   asset: LibraryAsset;
@@ -405,20 +504,7 @@ export function AssetTile(props: {
 
   return (
     <div className={`card h-100 border-0 shadow-sm ${asset.archivedAt ? 'opacity-75' : ''}`} data-testid={`asset-${asset.id}`}>
-      <div
-        className="d-flex align-items-center justify-content-center bg-light rounded-top"
-        style={{ height: 150, overflow: 'hidden' }}
-      >
-        {thumb ? (
-          // The real YouTube/Vimeo thumbnail, from the id parseVideoUrl found in the URL.
-          <img src={thumb} alt="" className="w-100 h-100" style={{ objectFit: 'cover' }} loading="lazy" />
-        ) : (
-          <div className="text-center text-muted">
-            <i className={`ri-${asset.kind === 'link' ? 'link' : asset.mimeType.startsWith('image/') ? 'image-line' : asset.mimeType.startsWith('video/') ? 'film-line' : 'file-text-line'} fs-2 d-block`} aria-hidden="true" />
-            <span className="small text-uppercase">{asset.mimeType.split('/')[1] ?? 'file'}</span>
-          </div>
-        )}
-      </div>
+      <AssetViewer asset={asset} video={video} poster={thumb} />
 
       <div className="card-body p-3">
         <div className="d-flex gap-1 flex-wrap mb-2">

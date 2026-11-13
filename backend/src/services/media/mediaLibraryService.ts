@@ -2,6 +2,8 @@ import { Op, UniqueConstraintError, type WhereOptions } from 'sequelize';
 import { MediaAsset } from '../../models';
 import { WorkflowError } from '../content/contentWorkflowService';
 import { findOrCreateLibraryAsset, ingestFileBytes } from './mediaAssetService';
+import { signedUrl } from './mediaStore';
+import { mediaPublicBaseUrl } from '../publishing/adapterRegistry';
 
 /**
  * The media library: the logic behind the library screen and the composer's picker.
@@ -119,6 +121,25 @@ export interface LibraryAssetView {
   rightsStatus: RightsStatus;
   archivedAt: string | null;
   createdAt: string | null;
+  /**
+   * A signed, time-limited URL for a FILE, so the screen can show and play it. Null for a link
+   * (whose playable address is `sourceUrl`) and null when signing is unavailable.
+   *
+   * `storage_key` is never sent to the browser - it is a path on the uploads volume, and a
+   * client that knew it could ask for any asset. The signature is what makes one row readable
+   * without making all of them readable.
+   */
+  url: string | null;
+}
+
+/** Sign, or null. `signedUrl` throws without JWT_SECRET or on a key it does not recognise, and a
+ *  signing failure must degrade to "no preview" rather than taking the whole grid down. */
+function safeSignedUrl(storageKey: string, base: string): string | null {
+  try {
+    return signedUrl(storageKey, base).url;
+  } catch {
+    return null;
+  }
 }
 
 const MAX_LIMIT = 100;
@@ -168,9 +189,16 @@ export function buildLibraryWhere(query: LibraryQuery): WhereOptions {
   return where as WhereOptions;
 }
 
-export function toLibraryView(asset: MediaAsset, now: Date = new Date()): LibraryAssetView {
+export function toLibraryView(asset: MediaAsset, now: Date = new Date(), base?: string | null): LibraryAssetView {
   const a = asset as unknown as Record<string, any>;
+  // Only a file has bytes to sign. The base is passed in so a caller listing 100 rows resolves it
+  // once rather than per row, and so a test can hand in a fixed one.
+  const signBase = base === undefined ? mediaPublicBaseUrl() : base;
+  const url = a.kind !== 'link' && a.storage_key && signBase
+    ? safeSignedUrl(a.storage_key, signBase)
+    : null;
   return {
+    url,
     id: a.id,
     kind: a.kind === 'link' ? 'link' : 'file',
     sourceUrl: a.source_url ?? null,
@@ -371,8 +399,10 @@ export async function searchLibrary(query: LibraryQuery, now: Date = new Date())
     limit,
     offset,
   });
+  // Resolved once for the whole page rather than per row.
+  const base = mediaPublicBaseUrl();
   return {
-    assets: rows.map((row) => toLibraryView(row, now)),
+    assets: rows.map((row) => toLibraryView(row, now, base)),
     total: count,
     limit,
     offset,

@@ -54,6 +54,8 @@ const LINK_ASSET: LibraryAsset = {
   rightsStatus: 'unknown',
   archivedAt: null,
   createdAt: '2026-11-01T00:00:00.000Z',
+  // A link is never signed: its playable address is sourceUrl.
+  url: null,
 };
 
 const PLAIN_LINK: LibraryAsset = { ...LINK_ASSET, id: 'asset-link-2', sourceUrl: 'https://example.com/a-page' };
