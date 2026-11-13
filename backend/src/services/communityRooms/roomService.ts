@@ -18,6 +18,8 @@ import {
 import { sessionRoomPrivacy } from './cohortRoomService';
 import { getMeetingProvider } from './meetingProvider';
 import { reserveRoomHost } from '../zoom/roomHostAllocator';
+import { extractZoomMeetingId } from '../zoomService';
+import { checkRoomLink } from './roomLinkHealth';
 import { log, slugify, shortToken, truncated, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
 
 // Rooms CRUD + discovery + the official-session linkage. Entitlement decisions
@@ -258,7 +260,14 @@ export async function joinVideoRoom(
   const membership = await getMembership(roomId, ctx.enrollmentId);
   if (!canJoinMeeting(room, ctx, membership)) throw forbiddenError('You are not authorized to join this room');
 
-  if (room.meeting_link) return { join_url: room.meeting_link };
+  // A stored link is kept unless Zoom itself says the meeting no longer exists.
+  // 'unknown' (Zoom slow/down, non-Zoom link) keeps it: an outage must never swap a
+  // working link. A 'dead' link already strands everyone, so replacing it moves
+  // nobody. Found live 2026-11-13: "Invalid meeting ID" on the AI Friday link.
+  const deadLink = room.meeting_link && (await checkRoomLink(room.meeting_link)) === 'dead'
+    ? room.meeting_link
+    : null;
+  if (room.meeting_link && !deadLink) return { join_url: room.meeting_link };
 
   // First join provisions a persistent video-call link (1-year window; the
   // link stays joinable). Best-effort — surface no link rather than error if
@@ -279,11 +288,20 @@ export async function joinVideoRoom(
     startAt: now,
     endAt: end,
     timezone: 'America/Chicago',
-    requestId: `room-${room.id}`,
+    // The idempotency ledger keys on this id. A replacement keys on the dead meeting,
+    // so two people clicking at once mint ONE new meeting, and a heal never gets the
+    // dead meeting handed back from the original `room-<id>` ledger row.
+    requestId: deadLink ? `room-${room.id}-heal-${extractZoomMeetingId(deadLink) ?? 'x'}` : `room-${room.id}`,
     ...(hostEmail ? { hostEmail } : {}),
   });
   if (result.joinUrl) await room.update({ meeting_link: result.joinUrl });
-  log('info', 'video_room_join', { room_id: roomId, has_link: !!result.joinUrl });
+  log(deadLink ? 'warn' : 'info', deadLink ? 'video_room_link_healed' : 'video_room_join', {
+    room_id: roomId,
+    has_link: !!result.joinUrl,
+    ...(deadLink ? { dead_meeting_id: extractZoomMeetingId(deadLink) } : {}),
+  });
+  // If a heal fails to mint, return null rather than the dead link: handing it out
+  // would only reproduce "Invalid meeting ID". The UI shows "try again" on null.
   return { join_url: result.joinUrl };
 }
 

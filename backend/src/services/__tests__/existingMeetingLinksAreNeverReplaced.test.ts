@@ -30,8 +30,11 @@ const KNOWN_CREATORS: Array<{ file: string; guard: RegExp; why: string }> = [
   },
   {
     file: 'services/communityRooms/roomService.ts',
-    guard: /if \(room\.meeting_link\) return \{ join_url: room\.meeting_link \};/,
-    why: 'an always-open video room keeps its permanent link',
+    // One narrow exception (2026-11-13): a link Zoom reports as "Meeting does not
+    // exist" (404/3001) is replaced, because it already strands everyone who has it.
+    // Any other answer, including a Zoom outage, keeps the stored link.
+    guard: /if \(room\.meeting_link && !deadLink\) return \{ join_url: room\.meeting_link \};/,
+    why: 'an always-open video room keeps its permanent link unless Zoom says the meeting is gone',
   },
   {
     file: 'services/meetingService.ts',

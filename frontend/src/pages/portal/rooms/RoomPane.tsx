@@ -7,7 +7,7 @@ import {
 } from '../../../services/roomsApi';
 import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
 import { fetchClassSessionDetail, ClassSessionInfo, joinSession } from '../../../services/onboardingApi';
-import { openTabForJoin } from '../../../utils/openTabForJoin';
+import { joinFailureMessage, openTabForJoin } from '../../../utils/openTabForJoin';
 import { emitPointsEarned } from '../../../services/pointsFx';
 import BroadcastWatchButton from '../../../components/portal/BroadcastWatchButton';
 import { useCountdown } from '../../../hooks/useCountdown';
@@ -340,7 +340,9 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const doJoinVideo = async () => {
     const outcome = await openTabForJoin(async () => (await joinVideoRoom(roomId)).join_url);
     if (outcome.status === 'no_url') window.alert('Spinning up the video room… try again in a second.');
-    else if (outcome.status === 'failed') window.alert('Could not join the video room.');
+    // Say WHY (2026-11-13): a read-only "view as" session got a bare "Could not join"
+    // for a 403 the server had explained, and it read as a broken room mid-class.
+    else if (outcome.status === 'failed') window.alert(joinFailureMessage(outcome.error));
     else if (outcome.status === 'blocked') setBlockedJoinUrl(outcome.url);
   };
   const doDelete = async () => {

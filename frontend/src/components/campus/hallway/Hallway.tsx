@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { fetchHallway, HALLWAY_CHANGED_EVENT, openMeetSheet, type Hallway } from './hallwayApi';
-import { boardRooms, boardSummary, canJoin, doorSign, hallwayDoors, initialsOf, isEmptyDoor, rowLine, type Door, type WallDoor } from './hallwayModel';
+import { boardRooms, boardSummary, eventInProgress, showJoin, doorSign, hallwayDoors, initialsOf, isEmptyDoor, rowLine, type Door, type WallDoor } from './hallwayModel';
 import './hallway.css';
 
 /**
@@ -104,6 +104,7 @@ export function HallwayBoard({ hallway, onOpen }: { hallway: Hallway | null; onO
 /** The arrival card's "Rooms in the hallway". */
 export function HallwayRows({ hallway, error, onOpen }: { hallway: Hallway | null; error: boolean; onOpen: (route: string) => void }): React.ReactElement {
   const doors = hallway ? hallwayDoors(hallway) : [];
+  const eventOn = hallway ? eventInProgress(hallway) : false;
   return (
     <section className="cm-hall" data-testid="cm-hall-rows">
       <div className="cm-sec">Rooms in the hallway</div>
@@ -120,7 +121,7 @@ export function HallwayRows({ hallway, error, onOpen }: { hallway: Hallway | nul
               <span className="n">{d.n}</span>
               {d.state === 'live' && <span className="dot" aria-label="live" />}
               <span className="tx"><b>{d.name}</b><small>{rowLine(d)}</small></span>
-              {canJoin(d) && <button type="button" className="cm-btn-line pri" onClick={() => onOpen(roomPath(d.roomId))}>Join</button>}
+              {showJoin(d, eventOn) && <button type="button" className="cm-btn-line pri" onClick={() => onOpen(roomPath(d.roomId))}>Join</button>}
               {d.state === 'booked' && <button type="button" className="cm-btn-line" onClick={() => openMeetSheet({ mode: 'peek', roomId: d.roomId })}>Details</button>}
               {d.state === 'idle' && <button type="button" className="cm-btn-line" onClick={() => onOpen(roomPath(d.roomId))}>Open</button>}
             </li>
