@@ -118,13 +118,17 @@ describeIfDb('ensureMediaLibrarySchema — the CHECK constraint (requires DATABA
       await insert(row);
       return '';
     } catch (err: any) {
-      return [
+      const text = [
         err?.message,
         err?.parent?.message,
         err?.original?.message,
         err?.parent?.constraint,
         err?.original?.constraint,
       ].filter(Boolean).join(' | ');
+      // '' is this function's signal for "accepted". An error carrying no message, parent or
+      // original would otherwise be reported as an acceptance - unreachable for pg/Sequelize
+      // errors, but "accepted" should mean "did not throw", never "threw silently".
+      return text || 'threw with no message, parent or original';
     }
   }
 
@@ -256,12 +260,30 @@ describeIfDb('ensureMediaLibrarySchema — the CHECK constraint (requires DATABA
     });
 
     it('THROWS when storage_key is put back to NOT NULL, which would make links impossible', async () => {
-      await sequelize.query('DELETE FROM media_assets WHERE storage_key IS NULL');
+      // SET NOT NULL validates the WHOLE table, so any link row (storage_key IS NULL by the
+      // CHECK) must go first or the ALTER fails for an unrelated reason.
+      //
+      // SCOPED TO THIS TENANT DELIBERATELY. This is the only mutation in the file that could
+      // reach another tenant's rows, and because every link row has a NULL storage_key by
+      // construction, an unscoped delete here would wipe every tenant's links if this suite were
+      // ever pointed at a shared database. Scoped, the worst case is that the ALTER fails loudly
+      // on someone else's rows, which is the correct way for that mistake to surface.
+      await sequelize.query('DELETE FROM media_assets WHERE storage_key IS NULL AND tenant_id = :tenant', {
+        replacements: { tenant: TENANT },
+      });
       await sequelize.query('ALTER TABLE media_assets ALTER COLUMN storage_key SET NOT NULL');
       await expect(schema.assertMediaLibrarySchema()).rejects.toThrow(/storage_key is still NOT NULL/);
     });
 
-    it('PASSES on a healthy schema, so the three throws above are not just "it always throws"', async () => {
+    it('discriminates healthy from broken WITHIN ONE TEST, independent of hook order', async () => {
+      // A separate "passes on a healthy schema" test would be near-tautological here: the
+      // preceding afterEach calls the combined ensure, which ends in an assert, so a passing
+      // assert has just been demonstrated by the hook. Doing both halves in one test makes the
+      // discrimination atomic and proves the assert is not simply throwing unconditionally.
+      await expect(schema.assertMediaLibrarySchema()).resolves.toBeUndefined();
+      await sequelize.query('ALTER TABLE media_assets DROP CONSTRAINT media_assets_kind_shape');
+      await expect(schema.assertMediaLibrarySchema()).rejects.toThrow(/media_assets_kind_shape/);
+      await schema.ensureMediaLibrarySchema();
       await expect(schema.assertMediaLibrarySchema()).resolves.toBeUndefined();
     });
 
