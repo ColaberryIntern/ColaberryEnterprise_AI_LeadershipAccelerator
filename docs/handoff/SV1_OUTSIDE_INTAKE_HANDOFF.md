@@ -4,10 +4,11 @@
 
 ## Before the deploy (operator)
 1. Run the migration on production BEFORE deploying the backend:
-   `docker exec -i accelerator-db psql -U accelerator accelerator_prod < backend/src/seeds/migrations/20261113_add_case_study_external_imports.sql`
+   `docker exec -i accelerator-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backend/src/seeds/migrations/20261113_add_case_study_external_imports.sql`
    Expected result: `BEGIN`, `CREATE TABLE`, three `CREATE INDEX`, `COMMIT`. A second run prints "already exists, skipping" notices.
-2. (Escalated, needs Ali) Add the nginx block from the PR body and rebuild nginx. Until that is done, an upload larger than 1 MB returns a 413 HTML page at the edge. Drive imports are not affected.
-3. Deploy with `scripts/deploy-prod.sh backend` (plus `nginx` if step 2 was approved).
+2. The nginx block for the upload path is in this PR (merging approves it). Rebuild nginx with the backend, then confirm `nginx -t` passes inside the container. Until nginx is rebuilt, an upload larger than 1 MB returns a 413 HTML page at the edge. Drive imports are not affected.
+3. Deploy with `scripts/deploy-prod.sh backend nginx`.
+4. Know the must-link impact before deploying. A read-only count on 2026-11-13 found 18 published case studies, none with a confirmed service link (`case_study_service_links` was empty). Once SV1 is live, those 18 stay live, but none can be republished or edited until each has a confirmed link.
 
 ## Test steps after the deploy (production: https://enterprise.colaberry.ai)
 Get `TOKEN` from a logged-in admin browser: DevTools > Application > Local Storage > `admin_token`.
