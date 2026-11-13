@@ -46,7 +46,8 @@ describe('ServiceCatalogTable', () => {
     const row = container.querySelector('[data-testid="catalog-row-svc-a"]')!;
     expect(row.textContent).toContain('75');
     expect(row.textContent).toContain('2026');
-    expect(row.textContent).toContain('—'); // null matches render as a dash, not 0
+    expect(row.textContent).toContain('n/a'); // null matches read as not available, never 0
+    expect(row.textContent).toContain('not available right now'); // the screen-reader explanation
   });
 
   it('a row expands into its case-study cards; an unproven row explains itself', async () => {

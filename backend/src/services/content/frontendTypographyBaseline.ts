@@ -92,6 +92,12 @@ export const FRONTEND_TYPOGRAPHY_BASELINE: Readonly<Record<string, TypographyBas
  * which is how the escaped hole was found in the first place. Both are gone and
  * `BroadcastWatchButton.tsx` is clean, so its entry is DELETED rather than set to zero.
  *
+ * **em/en dash: 2107 -> 2101 (Services Upgrade SV3, 2026-11-13).** The Our Services rebuild
+ * replaced `AdminGovServicesPage.tsx` with a composer that has no dashes (its six were dash
+ * placeholders and form hints), so its entry is DELETED. The new SV3 components carry none:
+ * empty values read "None" or "n/a". Emoji stayed at 659: the mockup's emoji were rendered as
+ * RemixIcon icons rather than added to the baseline.
+ *
  * And the same caveat applies, because it is the one that is easy to get wrong: the invariant
  * is "may only go down AT A FIXED SCOPE", not "may only go down". `BASELINE_SCOPE` is shared
  * with the word lint, so widening it there re-bases these totals too. A re-base is not a
@@ -99,7 +105,7 @@ export const FRONTEND_TYPOGRAPHY_BASELINE: Readonly<Record<string, TypographyBas
  * lint quietly keeps reporting a number better than the truth.
  */
 export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number>> = {
-  [DASH_RULE.id]: 2107,
+  [DASH_RULE.id]: 2101,
   [ESCAPED_DASH_RULE.id]: 74,
   [EMOJI_RULE.id]: 659,
 };

@@ -16,10 +16,11 @@ interface Props { services: EvidenceService[]; feed: EvidenceSummary['opportunit
 
 export type Quadrant = 'build' | 'bid' | 'proven' | 'low';
 export const QUADRANT_META: Record<Quadrant, { label: string; fill: string; dot: string }> = {
-  build: { label: '🎯 Build evidence now', fill: 'var(--status-danger-bg)', dot: 'var(--status-danger)' },
-  bid: { label: '🏆 Bid with confidence', fill: 'var(--status-success-bg)', dot: 'var(--status-success)' },
-  proven: { label: '📣 Proven: find more bids', fill: 'var(--status-info-bg)', dot: 'var(--status-info)' },
-  low: { label: '💤 Low priority', fill: 'var(--surface-subtle)', dot: 'var(--text-subtle)' },
+  // Plain-text labels: they render inside the chart's SVG, and house style forbids emoji in product copy.
+  build: { label: 'Build evidence now', fill: 'var(--status-danger-bg)', dot: 'var(--status-danger)' },
+  bid: { label: 'Bid with confidence', fill: 'var(--status-success-bg)', dot: 'var(--status-success)' },
+  proven: { label: 'Proven: find more bids', fill: 'var(--status-info-bg)', dot: 'var(--status-info)' },
+  low: { label: 'Low priority', fill: 'var(--surface-subtle)', dot: 'var(--text-subtle)' },
 };
 export const SCORE_SPLIT = 50;
 

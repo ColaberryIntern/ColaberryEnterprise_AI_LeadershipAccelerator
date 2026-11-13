@@ -58,7 +58,7 @@ export default function ServiceFormModal({ initial, title, onCancel, onSave, sav
                   <textarea id="svc-desc" className="form-control" rows={2} value={f.description} onChange={set('description')} maxLength={4000} />
                 </div>
                 <div className="col-12">
-                  <label className="form-label" htmlFor="svc-keywords">Keywords <span className="text-secondary small">(comma-separated — used for matching)</span></label>
+                  <label className="form-label" htmlFor="svc-keywords">Keywords <span className="text-secondary small">(comma-separated, used for matching)</span></label>
                   <input id="svc-keywords" className="form-control" value={f.keywords} onChange={set('keywords')} placeholder="data analytics, dashboards, ETL, case management" />
                 </div>
                 <div className="col-md-6">

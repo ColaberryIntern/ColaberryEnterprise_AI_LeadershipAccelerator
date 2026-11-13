@@ -76,7 +76,7 @@ describe('AdminGovServicesPage: the evidence-backed catalog', () => {
   it('the catalog filter is client-side over the one summary', async () => {
     await renderPage();
     expect(container.querySelector('[data-testid="catalog-row-svc-c"]')).toBeNull(); // growth hidden under Active
-    await click(findButton('Growth 🌱'));
+    await click(container.querySelector('[aria-label="Catalog filter"] button:nth-child(2)')!); // Growth
     expect(container.querySelector('[data-testid="catalog-row-svc-c"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="catalog-row-svc-a"]')).toBeNull();
     expect(ourServicesApi.getEvidenceSummary).toHaveBeenCalledTimes(1);

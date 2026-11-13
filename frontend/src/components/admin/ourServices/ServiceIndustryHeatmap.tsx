@@ -5,7 +5,8 @@ import { heatStep } from './ourServicesModel';
 
 /**
  * ServiceIndustryHeatmap - confirmed case studies per service x industry. Cell intensity is one of four token
- * alpha steps of the brand accent, relative to the busiest cell; an empty cell shows the mockup's ⚪ marker.
+ * alpha steps of the brand accent, relative to the busiest cell; an empty cell shows a muted empty-circle icon (the mockup's marker, as an
+ * icon because house style forbids emoji in product copy).
  * Rows follow evidence score, strongest first, and end with a total column.
  */
 interface Props { services: EvidenceService[]; matrix: EvidenceSummary['industryMatrix'] }
@@ -47,7 +48,7 @@ export default function ServiceIndustryHeatmap({ services, matrix }: Props): Rea
                   const step = heatStep(n, max);
                   return (
                     <td key={i} style={{ ...base, background: STEP_BG[step], color: STEP_FG[step] }}>
-                      {n ? n : <><span aria-hidden="true">⚪</span><span className="visually-hidden">none</span></>}
+                      {n ? n : <><i className="ri-checkbox-blank-circle-line" aria-hidden="true" /><span className="visually-hidden">none</span></>}
                     </td>
                   );
                 })}

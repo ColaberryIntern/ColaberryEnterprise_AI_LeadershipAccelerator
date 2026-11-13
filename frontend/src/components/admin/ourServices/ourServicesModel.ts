@@ -143,16 +143,21 @@ export function demandSplit(services: EvidenceService[]): number {
   return Math.max(1, median);
 }
 
-const INDUSTRY_EMOJI: Array<[RegExp, string]> = [
-  [/gov|public|federal|county|city|state/i, '🏛️'], [/agri|agtech|farm|crop/i, '🌾'], [/financ|bank|insur|credit/i, '💹'],
-  [/health|medic|hospital|pharma|claims/i, '🏥'], [/educat|school|universit|learn/i, '🎓'], [/retail|commerce|consumer/i, '🛒'],
-  [/energy|utilit|power|oil|gas/i, '⚡'], [/manufact|industr/i, '🏭'], [/tech|software|saas/i, '💻'],
+/**
+ * Industry thumbnails are RemixIcon class names. House style (frontendTypographyLint) forbids emoji in product
+ * copy; an icon is the supported way to show a glyph.
+ */
+const INDUSTRY_ICON: Array<[RegExp, string]> = [
+  [/gov|public|federal|county|city|state/i, 'ri-government-line'], [/agri|agtech|farm|crop/i, 'ri-plant-line'], [/financ|bank|insur|credit/i, 'ri-line-chart-line'],
+  [/health|medic|hospital|pharma|claims/i, 'ri-hospital-line'], [/educat|school|universit|learn/i, 'ri-graduation-cap-line'], [/retail|commerce|consumer/i, 'ri-shopping-cart-2-line'],
+  [/energy|utilit|power|oil|gas/i, 'ri-flashlight-line'], [/manufact|industr/i, 'ri-building-3-line'], [/tech|software|saas/i, 'ri-computer-line'],
 ];
-/** A decorative thumbnail emoji for an industry. Unknown industries get a plain document. */
-export function industryEmoji(industry: string | null): string {
-  if (!industry) return '📄';
-  for (const [re, e] of INDUSTRY_EMOJI) if (re.test(industry)) return e;
-  return '📄';
+export const DEFAULT_INDUSTRY_ICON = 'ri-file-text-line';
+/** A decorative thumbnail icon class for an industry. Unknown industries get a plain document. */
+export function industryIcon(industry: string | null): string {
+  if (!industry) return DEFAULT_INDUSTRY_ICON;
+  for (const [re, icon] of INDUSTRY_ICON) if (re.test(industry)) return icon;
+  return DEFAULT_INDUSTRY_ICON;
 }
 
 const STOP = new Set(['and', 'the', 'for', 'with', 'from', 'into', 'management', 'services', 'service', 'support', 'system', 'systems']);

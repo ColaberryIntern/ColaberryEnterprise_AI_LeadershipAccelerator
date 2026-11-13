@@ -31,7 +31,7 @@ export default function CaseStudyIntakeQueue({ intake, growthServiceIds, onLink,
   if (!intake.length) {
     return (
       <div className="border border-2 border-success-subtle rounded-3 p-3 text-success-emphasis fw-semibold" style={{ borderStyle: 'dashed' }} data-testid="intake-empty">
-        ✅ Every case study is linked to a service. Nothing is blocked.
+        <i className="ri-checkbox-circle-line me-1" aria-hidden="true" />Every case study is linked to a service. Nothing is blocked.
       </div>
     );
   }

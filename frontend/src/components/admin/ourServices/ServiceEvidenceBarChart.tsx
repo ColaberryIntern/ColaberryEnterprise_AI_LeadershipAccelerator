@@ -49,8 +49,8 @@ export default function ServiceEvidenceBarChart({ services }: Props): React.Reac
             <YAxis type="category" dataKey="label" width={200} tick={<Tick />} interval={0} />
             <Tooltip formatter={(v: unknown, n: unknown) => [String(v), String(n)]} labelFormatter={(_l: unknown, p: ReadonlyArray<{ payload?: { name?: string } }>) => p?.[0]?.payload?.name ?? ''} />
             <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="inside" name="🏗️ Inside" stackId="p" fill={SOURCE_FILL.inside} radius={[3, 0, 0, 3]} />
-            <Bar dataKey="outside" name="📁 Outside (Drive)" stackId="p" fill={SOURCE_FILL.outside} fillOpacity={0.75} radius={[0, 3, 3, 0]} />
+            <Bar dataKey="inside" name="Inside" stackId="p" fill={SOURCE_FILL.inside} radius={[3, 0, 0, 3]} />
+            <Bar dataKey="outside" name="Outside (Drive)" stackId="p" fill={SOURCE_FILL.outside} fillOpacity={0.75} radius={[0, 3, 3, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

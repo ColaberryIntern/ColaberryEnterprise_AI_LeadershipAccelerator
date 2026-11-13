@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EmptyState } from '../shell';
 import type { EvidenceService } from '../../../services/ourServicesApi';
-import CaseStudyCard, { SOURCE_PILL } from './CaseStudyCard';
+import CaseStudyCard, { SourcePill } from './CaseStudyCard';
 import { TIER_META, freshnessOf, matchesTone, nonRetired, confirmedCount, type Freshness } from './ourServicesModel';
 
 /**
@@ -11,8 +11,10 @@ import { TIER_META, freshnessOf, matchesTone, nonRetired, confirmedCount, type F
  * service has at least one confirmed case study (the server enforces the same rule with a 409).
  */
 export type CatalogFilter = 'active' | 'growth' | 'weak' | 'all';
-export const CATALOG_FILTERS: Array<{ key: CatalogFilter; label: string }> = [
-  { key: 'active', label: 'Active' }, { key: 'growth', label: 'Growth 🌱' }, { key: 'weak', label: 'Needs evidence ⚠️' }, { key: 'all', label: 'All' },
+/** Glyphs are RemixIcon classes: house style (frontendTypographyLint) forbids emoji in product copy. */
+export const CATALOG_FILTERS: Array<{ key: CatalogFilter; label: string; icon?: string }> = [
+  { key: 'active', label: 'Active' }, { key: 'growth', label: 'Growth', icon: 'ri-seedling-line' },
+  { key: 'weak', label: 'Needs evidence', icon: 'ri-error-warning-line' }, { key: 'all', label: 'All' },
 ];
 export const WEAK_BELOW = 40;
 
@@ -24,11 +26,12 @@ export function filterCatalog(services: EvidenceService[], filter: CatalogFilter
   return [...rows].sort((a, b) => b.evidenceScore - a.evidenceScore || a.name.localeCompare(b.name));
 }
 
+/** Freshness: a token-colored dot (green this year, amber last year, red older or none) plus the year as text. */
 const FRESH: Record<Freshness, { dot: string; className: string }> = {
-  fresh: { dot: '🟢', className: 'text-success-emphasis' },
-  recent: { dot: '🟡', className: 'text-warning-emphasis' },
-  stale: { dot: '🔴', className: 'text-danger-emphasis' },
-  none: { dot: '🔴', className: 'text-danger-emphasis' },
+  fresh: { dot: 'var(--status-success)', className: 'text-success-emphasis' },
+  recent: { dot: 'var(--status-warning)', className: 'text-warning-emphasis' },
+  stale: { dot: 'var(--status-danger)', className: 'text-danger-emphasis' },
+  none: { dot: 'var(--status-danger)', className: 'text-danger-emphasis' },
 };
 const TONE_TEXT = { danger: 'text-danger-emphasis', warning: 'text-warning-emphasis', muted: 'text-secondary' } as const;
 
@@ -50,7 +53,7 @@ export function CatalogFilterTabs({ filter, onFilter }: Pick<Props, 'filter' | '
   return (
     <div className="btn-group btn-group-sm" role="group" aria-label="Catalog filter">
       {CATALOG_FILTERS.map((f) => (
-        <button key={f.key} type="button" aria-pressed={filter === f.key} className={`btn ${filter === f.key ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => onFilter(f.key)}>{f.label}</button>
+        <button key={f.key} type="button" aria-pressed={filter === f.key} className={`btn ${filter === f.key ? 'btn-dark' : 'btn-outline-secondary'}`} onClick={() => onFilter(f.key)}>{f.label}{f.icon && <i className={`${f.icon} ms-1`} aria-hidden="true" />}</button>
       ))}
     </div>
   );
@@ -97,7 +100,7 @@ export default function ServiceCatalogTable(p: Props): React.ReactElement {
                     {p.descriptions[s.id] && <div className="small text-secondary" style={{ maxWidth: 360 }}>{p.descriptions[s.id]}</div>}
                   </td>
                   <td>
-                    {s.status === 'growth' ? <span className="badge rounded-pill bg-info-subtle text-info-emphasis">🌱 Growth</span>
+                    {s.status === 'growth' ? <span className="badge rounded-pill bg-info-subtle text-info-emphasis"><i className="ri-seedling-line me-1" aria-hidden="true" />Growth</span>
                       : s.status === 'retired' ? <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Retired</span>
                         : <span className={`badge rounded-pill ${tier.pill}`}>{tier.label}</span>}
                   </td>
@@ -108,21 +111,21 @@ export default function ServiceCatalogTable(p: Props): React.ReactElement {
                     </div>
                   </td>
                   <td className="text-nowrap">
-                    <span className={`badge rounded-pill me-1 ${SOURCE_PILL.inside.className}`} title="Inside case studies (confirmed)">🏗️ {s.insideCount}</span>
-                    <span className={`badge rounded-pill ${SOURCE_PILL.outside.className}`} title="Outside case studies (confirmed)">📁 {s.outsideCount}</span>
+                    <SourcePill kind="inside" className="me-1" title="Inside case studies (confirmed)" label={<>{s.insideCount}<span className="visually-hidden"> inside</span></>} />
+                    <SourcePill kind="outside" title="Outside case studies (confirmed)" label={<>{s.outsideCount}<span className="visually-hidden"> outside</span></>} />
                   </td>
                   <td className={`small fw-bold text-nowrap ${FRESH[fresh].className}`}>
-                    <span aria-hidden="true">{FRESH[fresh].dot} </span>{s.newestEvidenceYear ?? 'none'}
+                    <i className="ri-checkbox-blank-circle-fill me-1" style={{ color: FRESH[fresh].dot }} aria-hidden="true" />{s.newestEvidenceYear ?? 'none'}
                   </td>
                   <td>
                     <div className="d-flex flex-wrap gap-1">
-                      {s.industries.length ? s.industries.map((i) => <span key={i.industry} className="badge bg-body-tertiary text-body-secondary fw-normal border">{i.industry}</span>) : <span className="text-secondary">—</span>}
+                      {s.industries.length ? s.industries.map((i) => <span key={i.industry} className="badge bg-body-tertiary text-body-secondary fw-normal border">{i.industry}</span>) : <span className="text-secondary">None</span>}
                     </div>
                   </td>
-                  <td className="small text-secondary">{s.naicsCodes.length ? s.naicsCodes.join(', ') : '—'}</td>
+                  <td className="small text-secondary">{s.naicsCodes.length ? s.naicsCodes.join(', ') : 'None'}</td>
                   <td className="text-nowrap">
                     {s.openOpportunityMatches == null
-                      ? <span className="text-secondary" title="Open opportunity matches are not available right now">—</span>
+                      ? <span className="text-secondary" title="Open opportunity matches are not available right now">n/a<span className="visually-hidden"> (open opportunity matches are not available right now)</span></span>
                       : <><b className={TONE_TEXT[matchesTone(s.openOpportunityMatches, maxMatches)]}>{s.openOpportunityMatches}</b> <span className="small text-secondary">open</span></>}
                   </td>
                   <td>
@@ -156,7 +159,7 @@ export default function ServiceCatalogTable(p: Props): React.ReactElement {
                         </div>
                       ) : (
                         <div className="border border-2 border-danger-subtle rounded-3 p-3 text-danger-emphasis fw-semibold bg-body" style={{ borderStyle: 'dashed' }}>
-                          ⚠️ No case study linked yet. In proposals this service shows as <b>Partly</b>. Link one from Intake, or import one from Drive.
+                          <i className="ri-error-warning-line me-1" aria-hidden="true" />No case study linked yet. In proposals this service shows as <b>Partly</b>. Link one from Intake, or import one from Drive.
                         </div>
                       )}
                     </td>

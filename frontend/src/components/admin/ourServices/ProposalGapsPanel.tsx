@@ -52,7 +52,7 @@ export default function ProposalGapsPanel({ openFitGaps, services, intake, now, 
                         <div className="small text-secondary mt-1">
                           {svc ? <>Maps to <b>{svc.name}</b> (evidence {svc.evidenceScore}). </> : 'No service in the catalog matches it yet. '}
                           {proof.length
-                            ? <>💡 Possible unlinked proof (keyword overlap, check it): {proof.map((p, i) => <React.Fragment key={p.item.id}>{i > 0 && ', '}<b>{p.item.title}</b></React.Fragment>)} (waiting in Intake)</>
+                            ? <><i className="ri-lightbulb-line me-1 text-warning-emphasis" aria-hidden="true" />Possible unlinked proof (keyword overlap, check it): {proof.map((p, i) => <React.Fragment key={p.item.id}>{i > 0 && ', '}<b>{p.item.title}</b></React.Fragment>)} (waiting in Intake)</>
                             : 'No unlinked case study in Intake overlaps it. The pursuit\'s Fit step lists any proof linked elsewhere.'}
                         </div>
                       </div>
@@ -68,10 +68,10 @@ export default function ProposalGapsPanel({ openFitGaps, services, intake, now, 
         </div>
       )}
       <div className="d-flex gap-3 align-items-center rounded-3 p-3 mt-3 bg-dark text-white">
-        <span className="fs-3" aria-hidden="true">💡</span>
+        <i className="ri-lightbulb-flash-line fs-3" aria-hidden="true" />
         <div>
           <b>Rule: a service needs at least one case study before it counts as "We have it."</b>
-          <div className="small opacity-75">Services added during a proposal start as 🌱 Growth. They count as Partly until a case study (inside or outside) is linked and a person promotes them.</div>
+          <div className="small opacity-75">Services added during a proposal start as Growth. They count as Partly until a case study (inside or outside) is linked and a person promotes them.</div>
         </div>
       </div>
     </>

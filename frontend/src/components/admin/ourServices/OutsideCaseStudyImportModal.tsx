@@ -55,7 +55,7 @@ export default function OutsideCaseStudyImportModal({ onClose }: Props): React.R
       <div className="modal-dialog modal-dialog-centered modal-lg" role="document" onClick={(e) => e.stopPropagation()}>
         <div className="modal-content">
           <div className="modal-header">
-            <h2 className="modal-title h5" id="import-title"><span aria-hidden="true">📥 </span>Add outside case study</h2>
+            <h2 className="modal-title h5" id="import-title"><i className="ri-inbox-archive-line me-1" aria-hidden="true" />Add outside case study</h2>
             <button type="button" className="btn-close" aria-label="Close" onClick={() => onClose(imported)} disabled={busy} />
           </div>
           <div className="modal-body">

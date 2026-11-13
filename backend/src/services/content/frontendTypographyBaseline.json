@@ -287,7 +287,6 @@
     "frontend/src/pages/admin/AdminGovContractCockpitPage.tsx": 1,
     "frontend/src/pages/admin/AdminGovOpportunitiesPage.tsx": 8,
     "frontend/src/pages/admin/AdminGovQualificationPage.tsx": 83,
-    "frontend/src/pages/admin/AdminGovServicesPage.tsx": 6,
     "frontend/src/pages/admin/AdminGovernancePage.tsx": 5,
     "frontend/src/pages/admin/AdminGovernancePolicyPage.tsx": 4,
     "frontend/src/pages/admin/AdminICPInsightsPage.tsx": 3,

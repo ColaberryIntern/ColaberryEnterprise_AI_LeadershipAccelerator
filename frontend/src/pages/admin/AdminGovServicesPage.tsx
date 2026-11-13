@@ -17,7 +17,8 @@ import ServiceIndustryHeatmap from '../../components/admin/ourServices/ServiceIn
 import CaseStudyIntakeQueue, { IntakeLegend } from '../../components/admin/ourServices/CaseStudyIntakeQueue';
 import OutsideCaseStudyImportModal from '../../components/admin/ourServices/OutsideCaseStudyImportModal';
 import ProposalGapsPanel from '../../components/admin/ourServices/ProposalGapsPanel';
-import ServiceFormModal, { emptyForm, formFrom, inputFrom, type FormState } from '../../components/admin/ourServices/ServiceFormModal';
+import { SourcePill } from '../../components/admin/ourServices/CaseStudyCard';
+import ServiceFormModal,{ emptyForm, formFrom, inputFrom, type FormState } from '../../components/admin/ourServices/ServiceFormModal';
 import { useOurServicesData } from '../../components/admin/ourServices/useOurServicesData';
 import { buildKpis, centralYear, nonRetired } from '../../components/admin/ourServices/ourServicesModel';
 
@@ -92,13 +93,13 @@ export default function AdminGovServicesPage(): React.ReactElement {
         icon="heart-3-line"
         actions={
           <div className="d-flex gap-2">
-            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setImportOpen(true)}><span aria-hidden="true">📥 </span>Add outside case study</button>
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setImportOpen(true)}><i className="ri-inbox-archive-line me-1" aria-hidden="true" />Add outside case study</button>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><i className="ri-add-line me-1" aria-hidden="true" />Add service</button>
           </div>
         }
       >
         <p className="small text-secondary mb-0">
-          Case studies come from projects we built (<span className="badge rounded-pill bg-info-subtle text-info-emphasis">🏗️ Inside</span>) or from the Drive library (<span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">📁 Outside</span>).
+          Case studies come from projects we built (<SourcePill kind="inside" />) or from the Drive library (<SourcePill kind="outside" label="Outside" />).
         </p>
       </PageHeader>
 
@@ -130,13 +131,13 @@ export default function AdminGovServicesPage(): React.ReactElement {
 
           <div className="row g-3 mb-4">
             <div className="col-12 col-xl-7">
-              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">📊 </span>Evidence by service</>}
+              <SectionCard className="h-100 mb-0" title="Evidence by service" icon="bar-chart-horizontal-line"
                 subtitle="Confirmed case studies linked to each service, split by source. Sorted weakest first so the gaps sit at the top.">
                 <ServiceEvidenceBarChart services={live} />
               </SectionCard>
             </div>
             <div className="col-12 col-xl-5" id="quad" tabIndex={-1}>
-              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">🎯 </span>Where to invest next</>}
+              <SectionCard className="h-100 mb-0" title="Where to invest next" icon="focus-3-line"
                 subtitle="Evidence strength vs. open Gov opportunities that match. Bubble size is the number of case studies.">
                 <ServiceInvestQuadrant services={live} feed={summary.opportunityFeed} />
               </SectionCard>
@@ -145,24 +146,24 @@ export default function AdminGovServicesPage(): React.ReactElement {
 
           <div className="row g-3 mb-4">
             <div className="col-12 col-lg-4">
-              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">🧮 </span>Evidence health</>} subtitle="Services grouped by evidence tier.">
+              <SectionCard className="h-100 mb-0" title="Evidence health" icon="donut-chart-line" subtitle="Services grouped by evidence tier.">
                 <EvidenceTierDonut services={live} />
               </SectionCard>
             </div>
             <div className="col-12 col-lg-4">
-              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">📈 </span>Catalog growth</>} subtitle="Services and linked case studies by quarter.">
+              <SectionCard className="h-100 mb-0" title="Catalog growth" icon="line-chart-line" subtitle="Services and linked case studies by quarter.">
                 <CatalogGrowthChart series={summary.growthSeries} />
               </SectionCard>
             </div>
             <div className="col-12 col-lg-4">
-              <SectionCard className="h-100 mb-0" title={<><span aria-hidden="true">🗺️ </span>Proof by service family</>} subtitle="Linked case studies per family. A short wedge is a thin part of the catalog.">
+              <SectionCard className="h-100 mb-0" title="Proof by service family" icon="pie-chart-line" subtitle="Linked case studies per family. A short wedge is a thin part of the catalog.">
                 <ServiceFamilyChart services={live} />
               </SectionCard>
             </div>
           </div>
 
           <div id="catalog" tabIndex={-1} className="mb-4">
-            <SectionCard className="mb-0" title={<><span aria-hidden="true">🗂️ </span>Service catalog</>}
+            <SectionCard className="mb-0" title="Service catalog" icon="folder-open-line"
               subtitle="Open a row to see its case studies. Colors show evidence strength and freshness, so weak spots stand out."
               actions={<CatalogFilterTabs filter={filter} onFilter={setFilter} />}>
               <ServiceCatalogTable
@@ -176,14 +177,15 @@ export default function AdminGovServicesPage(): React.ReactElement {
             </SectionCard>
           </div>
 
-          <SectionCard className="mb-4" title={<><span aria-hidden="true">🔥 </span>Service × industry coverage</>}
-            subtitle="Confirmed case studies per cell. Darker means more proof; ⚪ means no case study in that industry yet.">
+          <SectionCard className="mb-4" title="Service × industry coverage" icon="grid-line"
+            subtitle="Confirmed case studies per cell. Darker means more proof; an empty circle means no case study in that industry yet.">
             <ServiceIndustryHeatmap services={live} matrix={summary.industryMatrix} />
           </SectionCard>
 
           <div id="intake" tabIndex={-1} className="mb-4">
             <SectionCard className="mb-0"
-              title={<><span aria-hidden="true">📥 </span>Case study intake <span className={`badge rounded-pill ms-1 ${blocked ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`}>{blocked ? `${blocked} blocked` : 'all linked ✓'}</span></>}
+              icon="inbox-archive-line"
+              title={<>Case study intake <span className={`badge rounded-pill ms-1 ${blocked ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`}>{blocked ? `${blocked} blocked` : 'all linked'}</span></>}
               subtitle="New case studies wait here until they are linked. Strong matches start selected; pick one or more services, or propose a new one."
               actions={<IntakeLegend />}>
               <CaseStudyIntakeQueue intake={summary.intake} growthServiceIds={growthIds} onLink={data.link} onPropose={data.propose} />
@@ -191,7 +193,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
           </div>
 
           <div id="gaps" tabIndex={-1} className="mb-4">
-            <SectionCard className="mb-0" title={<><span aria-hidden="true">🏛️ </span>Gaps from live proposals</>}
+            <SectionCard className="mb-0" title="Gaps from live proposals" icon="government-line"
               subtitle={'Capabilities that "Can we deliver it?" flagged as Partly or New. Before treating one as a true gap, check whether we have unlinked proof.'}>
               <ProposalGapsPanel openFitGaps={summary.decideNow.openFitGaps} services={summary.services} intake={summary.intake} now={now} onReviewIntake={() => jump('intake')} />
             </SectionCard>

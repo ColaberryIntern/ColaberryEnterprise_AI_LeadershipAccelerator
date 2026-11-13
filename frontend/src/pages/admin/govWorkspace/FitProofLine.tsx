@@ -14,7 +14,11 @@ import type { CapabilityItem } from '../../../services/factoryApi';
  */
 export const INTAKE_HREF = '/admin/gov-services#intake';
 
-const SRC = { inside: { label: '🏗️ Inside', className: 'bg-info-subtle text-info-emphasis' }, outside: { label: '📁 Drive', className: 'bg-secondary-subtle text-secondary-emphasis' } } as const;
+/** Source glyphs are RemixIcon classes: house style forbids emoji in product copy. */
+const SRC = {
+  inside: { label: 'Inside', icon: 'ri-building-2-line', className: 'bg-info-subtle text-info-emphasis' },
+  outside: { label: 'Drive', icon: 'ri-folder-3-line', className: 'bg-secondary-subtle text-secondary-emphasis' },
+} as const;
 
 export function FitProofLine({ cap }: { cap: CapabilityItem }): React.ReactElement | null {
   if (cap.assessment === 'have') {
@@ -26,7 +30,7 @@ export function FitProofLine({ cap }: { cap: CapabilityItem }): React.ReactEleme
       <div className="d-flex flex-wrap gap-1 align-items-center mt-1" aria-label="Confirmed case studies">
         <span className="small text-secondary me-1">Proof:</span>
         {cap.evidence.map((e) => (
-          <span key={e.caseStudyId} className={`badge rounded-pill fw-normal ${SRC[e.sourceKind].className}`}>{SRC[e.sourceKind].label} · {e.title}</span>
+          <span key={e.caseStudyId} className={`badge rounded-pill fw-normal ${SRC[e.sourceKind].className}`}><i className={`${SRC[e.sourceKind].icon} me-1`} aria-hidden="true" />{SRC[e.sourceKind].label} · {e.title}</span>
         ))}
       </div>
     );
@@ -34,7 +38,7 @@ export function FitProofLine({ cap }: { cap: CapabilityItem }): React.ReactEleme
   if (!cap.possibleProof || !cap.possibleProof.length) return null;
   return (
     <div className="small mt-2 p-2 rounded-2 bg-warning-subtle text-warning-emphasis">
-      <span aria-hidden="true">💡 </span><strong>Possible unlinked proof:</strong>{' '}
+      <i className="ri-lightbulb-line me-1" aria-hidden="true" /><strong>Possible unlinked proof:</strong>{' '}
       {cap.possibleProof.map((p, i) => (
         <span key={p.caseStudyId}>
           {i > 0 && '; '}{p.title} ({p.sourceKind === 'inside' ? 'Inside' : 'Drive'}{p.linkedElsewhere ? ', linked to another service' : ', waiting in Intake'})
