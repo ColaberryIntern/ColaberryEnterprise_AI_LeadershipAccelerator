@@ -3,7 +3,7 @@ import { sequelize } from '../../../config/database';
 import { callGraph, graphUrl, type MetaHttp } from '../../publishing/metaGraph';
 import { makeMetaHttp } from '../../publishing/metaHttp';
 import { ProviderPublishError } from '../../publishing/socialProviderAdapter';
-import { normalisePlacement, parseMoneyToCents, SpendInput, SpendInputSchema } from './spendInput';
+import { normalisePlacement, parseApiMoneyToCents, SpendInput, SpendInputSchema } from './spendInput';
 import { upsertSpend } from './spendLedger';
 
 /**
@@ -56,6 +56,13 @@ export type SyncOutcome = 'success' | 'failure' | 'skipped';
 export interface SyncResult {
   outcome: SyncOutcome;
   rowsWritten: number;
+  /**
+   * API rows this run refused to parse. ALWAYS REPORTED, even when zero, because the
+   * alternative is what happened before 2026-11-13: rows were dropped by an `if` with no
+   * `else`, the run still said "success", and $397.17 went missing where nobody could see it.
+   * A non-zero value here means the ledger is incomplete for the window, whatever the outcome says.
+   */
+  rowsSkipped: number;
   rangeStart: string;
   rangeEnd: string;
   errorClass: string | null;
@@ -136,7 +143,9 @@ interface InsightRow {
 
 /** Map one API row to a spend input, or null when it is not usable (logged by the caller as skipped). */
 export function insightToInput(row: InsightRow, accountId: string): SpendInput | null {
-  const cents = parseMoneyToCents(row.spend ?? null);
+  // parseApiMoneyToCents, not parseMoneyToCents: Meta reports "134.693522" and the strict
+  // parser refused it, silently dropping 11.7% of spend until 2026-11-13.
+  const cents = parseApiMoneyToCents(row.spend ?? null);
   if (!row.campaign_id || !row.date_start || cents === null) return null;
   const parsed = SpendInputSchema.safeParse({
     platform: 'meta',
@@ -162,7 +171,7 @@ export async function runMetaSpendSync(
   const base = { rangeStart: range.since, rangeEnd: range.until };
   const cfg = readMetaAdsConfig(deps.env);
   if (!cfg.configured || !cfg.token || !cfg.accountId) {
-    return { ...base, outcome: 'skipped', rowsWritten: 0, errorClass: 'NotConfigured', error: cfg.reason };
+    return { ...base, outcome: 'skipped', rowsWritten: 0, rowsSkipped: 0, errorClass: 'NotConfigured', error: cfg.reason };
   }
   const token = cfg.token;
   const accountId = cfg.accountId;
@@ -188,6 +197,7 @@ export async function runMetaSpendSync(
     });
     let url: string | null = `${graphUrl(`/act_${accountId}/insights`, deps.env)}?${params}`;
     const inputs: SpendInput[] = [];
+    let rowsSkipped = 0;
     let pages = 0;
     while (url && pages < MAX_PAGES) {
       const pageUrl: string = url;
@@ -196,6 +206,7 @@ export async function runMetaSpendSync(
       for (const row of data) {
         const input = insightToInput(row, accountId);
         if (input) inputs.push(input);
+        else rowsSkipped += 1;
       }
       url = typeof body.paging?.next === 'string' ? body.paging.next : null;
       pages += 1;
@@ -203,11 +214,11 @@ export async function runMetaSpendSync(
     if (url) throw new ContractViolation(`Spend report ran past ${MAX_PAGES} pages; narrow the range.`);
 
     const rowsWritten = await deps.write(inputs);
-    return { ...base, outcome: 'success', rowsWritten, errorClass: null, error: null };
+    return { ...base, outcome: 'success', rowsWritten, rowsSkipped, errorClass: null, error: null };
   } catch (err) {
     // The token is only ever in a URL, and these messages are built from Meta's error body, not the URL.
     const message = err instanceof Error ? err.message : String(err);
-    return { ...base, outcome: 'failure', rowsWritten: 0, errorClass: errorClassOf(err), error: message.slice(0, 500) };
+    return { ...base, outcome: 'failure', rowsWritten: 0, rowsSkipped: 0, errorClass: errorClassOf(err), error: message.slice(0, 500) };
   }
 }
 
@@ -231,11 +242,20 @@ export async function syncMetaSpend(opts: { days?: number; triggeredBy: string; 
             error_class = :errorClass, error = :error WHERE id = :id`,
     { replacements: { id, outcome: result.outcome, rows: result.rowsWritten, errorClass: result.errorClass, error: result.error } },
   );
+  // A run that silently discarded rows is NOT an `info` event. Before 2026-11-13 this line
+  // reported success while 7 rows and $397.17 were dropped, and nothing in it said so.
+  const level = result.outcome === 'failure' ? 'error' : result.rowsSkipped > 0 ? 'warn' : 'info';
   console.log(JSON.stringify({
-    timestamp: new Date().toISOString(), level: result.outcome === 'failure' ? 'error' : 'info', service: 'backend',
+    timestamp: new Date().toISOString(), level, service: 'backend',
     event: 'meta_spend_sync', outcome: result.outcome, duration_ms: Date.now() - started,
     error_class: result.errorClass ?? undefined,
-    context: { since, until, rows: result.rowsWritten, triggered_by: opts.triggeredBy },
+    context: {
+      since, until, rows: result.rowsWritten, rows_skipped: result.rowsSkipped,
+      triggered_by: opts.triggeredBy,
+      ...(result.rowsSkipped > 0
+        ? { warning: `${result.rowsSkipped} API row(s) could not be parsed and are MISSING from the ledger for this window.` }
+        : {}),
+    },
   }));
   return result;
 }

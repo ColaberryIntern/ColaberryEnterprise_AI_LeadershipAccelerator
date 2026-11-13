@@ -38,13 +38,46 @@ export const SpendInputSchema = z.object({
 
 export type SpendInput = z.infer<typeof SpendInputSchema>;
 
-/** "$1,234.56" -> 123456. null when it is not a money amount. */
+/**
+ * "$1,234.56" -> 123456. null when it is not a money amount.
+ *
+ * DELIBERATELY STRICT ABOUT PRECISION. Three decimal places from a human - a typed entry or
+ * a CSV cell - is a typo, and parseSpendCsv reports it by line number rather than importing
+ * a guess. Money an API reports is a different case entirely: see parseApiMoneyToCents.
+ */
 export function parseMoneyToCents(raw: string | number | null | undefined): number | null {
   if (raw == null) return null;
   const s = String(raw).replace(/[$,\s]/g, '');
   if (!/^\d+(\.\d{0,2})?$|^\.\d{1,2}$/.test(s)) return null;
   const [whole, frac = ''] = s.split('.');
   return Number(whole || '0') * 100 + Number((frac + '00').slice(0, 2));
+}
+
+/**
+ * The same thing for money reported by an upstream API, which may carry sub-cent precision.
+ *
+ * WHY THIS EXISTS (measured in production, 2026-11-13). Meta's Insights API returns spend as
+ * "134.693522". parseMoneyToCents refused it, insightToInput returned null, and the row was
+ * dropped: $397.17 of $3,407.56 never reached marketing_spend_facts, 11.7% of the spend in
+ * the reconciliation window, across 7 of 55 rows. The money was not malformed; our parser
+ * was too strict for the source.
+ *
+ * Rounds half-up to the nearest cent, which is what the account total is denominated in
+ * anyway. Still refuses anything that is not a non-negative number, so a genuinely unusable
+ * row ("n/a", "-5") is still dropped rather than written as a zero.
+ *
+ * Integer arithmetic throughout, no floats: 0.1 + 0.2 problems are exactly what the sibling
+ * function's "without floating point drift" test exists to prevent, and this must match it.
+ */
+export function parseApiMoneyToCents(raw: string | number | null | undefined): number | null {
+  if (raw == null) return null;
+  const s = String(raw).replace(/[$,\s]/g, '');
+  if (!/^\d+(\.\d+)?$|^\.\d+$/.test(s)) return null;
+  const [whole, frac = ''] = s.split('.');
+  // The third decimal decides the rounding; pad so a short fraction still has one.
+  const padded = (frac + '000').slice(0, 3);
+  const cents = Number(whole || '0') * 100 + Number(padded.slice(0, 2));
+  return Number(padded[2]) >= 5 ? cents + 1 : cents;
 }
 
 /** 2026-10-31, 10/31/2026 or 10/31/26 -> '2026-10-31'. null for anything else. */
