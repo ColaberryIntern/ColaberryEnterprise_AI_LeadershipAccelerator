@@ -1,0 +1,1220 @@
+[
+ {
+  "id": 10392808152,
+  "title": "L6.1 - Research and approve the studio equipment list, with live pricing",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "05 - Studio, Equipment and OBS",
+  "containerId": 10392808081,
+  "completed": true,
+  "due_on": "2026-10-11",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 5,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808152"
+ },
+ {
+  "id": 10392808167,
+  "title": "L5.1 - Cloudflare Stream Live provider adapter behind the existing grant contract",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": true,
+  "due_on": "2026-10-14",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 3,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808167"
+ },
+ {
+  "id": 10392808184,
+  "title": "L1.3 - Install Cloudflare Stream credentials into the production environment",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "01 - External Prerequisites and Accounts",
+  "containerId": 10392808033,
+  "completed": true,
+  "due_on": "2026-10-14",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808184"
+ },
+ {
+  "id": 10392808194,
+  "title": "L5.2 - Connect Zoom custom RTMP to a Cloudflare live input",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": true,
+  "due_on": "2026-10-16",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 4,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808194"
+ },
+ {
+  "id": 10392808207,
+  "title": "L5.3 - First private technical airing: Zoom to Cloudflare to the Colaberry player",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": false,
+  "due_on": "2026-10-17",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 6,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808207"
+ },
+ {
+  "id": 10392808223,
+  "title": "L6.2 - Install and validate camera, microphone, light and wired network",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "05 - Studio, Equipment and OBS",
+  "containerId": 10392808081,
+  "completed": false,
+  "due_on": "2026-10-18",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808223"
+ },
+ {
+  "id": 10392808230,
+  "title": "L4.6 - Measurement: heartbeat ingestion route and the unavailable-never-zero read",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": false,
+  "due_on": "2026-10-19",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 7,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808230"
+ },
+ {
+  "id": 10392808237,
+  "title": "L9.1 - Verify the CURRENT official HeyGen workflow on the execution date",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "06 - AI Avatar and Voice",
+  "containerId": 10392808096,
+  "completed": false,
+  "due_on": "2026-10-19",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808237"
+ },
+ {
+  "id": 10392808241,
+  "title": "L1.4 - YouTube: verify channel ownership, live eligibility and stream destination",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "01 - External Prerequisites and Accounts",
+  "containerId": 10392808033,
+  "completed": false,
+  "due_on": "2026-10-20",
+  "assignees": [
+   "Sohail Syed"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808241"
+ },
+ {
+  "id": 10392808249,
+  "title": "L7.1 - Create a broadcast occurrence from the Accelerator Session setup flow",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": "2026-10-20",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 4,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808249"
+ },
+ {
+  "id": 10392808253,
+  "title": "L6.3 - OBS scene package and Zoom audio routing with no duplicate audio",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "05 - Studio, Equipment and OBS",
+  "containerId": 10392808081,
+  "completed": false,
+  "due_on": "2026-10-21",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808253"
+ },
+ {
+  "id": 10392808256,
+  "title": "L7.2 - Generate the live workspace URL, companion URL and QR at session readiness",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": "2026-10-22",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808256"
+ },
+ {
+  "id": 10392808258,
+  "title": "L9.2 - Record approved avatar training footage, with consent captured exactly as required",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "06 - AI Avatar and Voice",
+  "containerId": 10392808096,
+  "completed": false,
+  "due_on": "2026-10-22",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808258"
+ },
+ {
+  "id": 10392808262,
+  "title": "L7.3 - Timeline drives presenter moments, Prompt Drops, polls, QR state and clip markers",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": false,
+  "due_on": "2026-10-23",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808262"
+ },
+ {
+  "id": 10392808269,
+  "title": "L1.5 - Consolidate the three Cloudflare accounts, or document why they stay split",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "01 - External Prerequisites and Accounts",
+  "containerId": 10392808033,
+  "completed": false,
+  "due_on": "2026-10-24",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808269"
+ },
+ {
+  "id": 10392808272,
+  "title": "L4.7 - Phone companion: sticky player, one-thumb interaction, Following/Building/Stuck/Finished",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": false,
+  "due_on": "2026-10-24",
+  "assignees": [
+   "Aleem"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808272"
+ },
+ {
+  "id": 10392808276,
+  "title": "L9.3 - Voice clone: select provider, verify current requirements, record, QA",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "06 - AI Avatar and Voice",
+  "containerId": 10392808096,
+  "completed": false,
+  "due_on": "2026-10-24",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808276"
+ },
+ {
+  "id": 10392808279,
+  "title": "L10.2 - Test 3: internal staff pilot with Piyush, Sohail and Aleem",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-24",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808279"
+ },
+ {
+  "id": 10392808282,
+  "title": "L8.1 - Simulcast to YouTube and define the raw-replay retention policy",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "07 - YouTube and Post Production",
+  "containerId": 10392808114,
+  "completed": false,
+  "due_on": "2026-10-25",
+  "assignees": [
+   "Sohail Syed"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808282"
+ },
+ {
+  "id": 10392808285,
+  "title": "L9.4 - Avatar QA and the Real Ali versus AI Ali usage policy",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "06 - AI Avatar and Voice",
+  "containerId": 10392808096,
+  "completed": false,
+  "due_on": "2026-10-26",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808285"
+ },
+ {
+  "id": 10392808287,
+  "title": "L8.3 - Replay discovery and listing in the portal",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "07 - YouTube and Post Production",
+  "containerId": 10392808114,
+  "completed": false,
+  "due_on": "2026-10-26",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 6,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808287"
+ },
+ {
+  "id": 10392808289,
+  "title": "L11.8 - Remaining project documents: Requirements, Orchestration, Viewer Experience, Studio, Avat...",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-26",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 5,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808289"
+ },
+ {
+  "id": 10392808294,
+  "title": "L8.2 - One live session to one long-form edit plus 5-7 Shorts",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "07 - YouTube and Post Production",
+  "containerId": 10392808114,
+  "completed": false,
+  "due_on": "2026-10-27",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808294"
+ },
+ {
+  "id": 10392808299,
+  "title": "L4.8 - Events and Community discovery placements (deferred by decision)",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": false,
+  "due_on": "2026-10-28",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808299"
+ },
+ {
+  "id": 10392808302,
+  "title": "L11.1 - System Architecture Handbook",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-28",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808302"
+ },
+ {
+  "id": 10392808309,
+  "title": "L11.2 - Architecture diagrams, ten of them, Mermaid source plus rendered artifacts",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-28",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 3,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808309"
+ },
+ {
+  "id": 10392808316,
+  "title": "L10.3 - Test 4: full dress rehearsal in the real studio",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-28",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808316"
+ },
+ {
+  "id": 10392808319,
+  "title": "L11.3 - Ali and Piyush Studio Operator Manual",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-29",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808319"
+ },
+ {
+  "id": 10392808324,
+  "title": "L11.4 - Developer and AI Maintenance Runbook",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-29",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808324"
+ },
+ {
+  "id": 10392808328,
+  "title": "L11.5 - Testing Strategy and Evidence Matrix",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-29",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808328"
+ },
+ {
+  "id": 10392808332,
+  "title": "L10.4 - Test 5: failure drills",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-29",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808332"
+ },
+ {
+  "id": 10392808335,
+  "title": "L11.6 - Ram Executive Brief and briefing session",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-30",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808335"
+ },
+ {
+  "id": 10392808339,
+  "title": "L10.5 - Test 6: go/no-go and the first public production airing",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-30",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808339"
+ },
+ {
+  "id": 10392808341,
+  "title": "L11.7 - Case Study Source Pack, maintained during the build",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "08 - Documentation and Enablement",
+  "containerId": 10392808128,
+  "completed": false,
+  "due_on": "2026-10-31",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 7,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808341"
+ },
+ {
+  "id": 10392808348,
+  "title": "L10.6 - Post-launch verification, metrics and retrospective",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-31",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808348"
+ },
+ {
+  "id": 10392808352,
+  "title": "L1.1 - Zoom: verify Live Streaming to a Custom Service is enabled",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "01 - External Prerequisites and Accounts",
+  "containerId": 10392808033,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808352"
+ },
+ {
+  "id": 10392808360,
+  "title": "L1.2 - Cloudflare: enable Stream and mint a scoped API token",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "01 - External Prerequisites and Accounts",
+  "containerId": 10392808033,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808360"
+ },
+ {
+  "id": 10392808371,
+  "title": "L2.1 - Replay playback adapter with mid-playback credential renewal",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808371"
+ },
+ {
+  "id": 10392808383,
+  "title": "L2.2 - Signed inline Range playback transport (/bm/)",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808383"
+ },
+ {
+  "id": 10392808393,
+  "title": "L3.1 - Canonical broadcast occurrence schema and identity",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808393"
+ },
+ {
+  "id": 10392808414,
+  "title": "L3.2 - Lifecycle state machine and producer commands",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808414"
+ },
+ {
+  "id": 10392808421,
+  "title": "L3.3 - Fail-closed entitlement and deadline-bounded playback grant",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808421"
+ },
+ {
+  "id": 10392808429,
+  "title": "L3.4 - Validated routes with RBAC and rate limits",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808429"
+ },
+ {
+  "id": 10392808433,
+  "title": "L3.5 - Event-to-occurrence backfill, dry-run first and batch-reversible",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808433"
+ },
+ {
+  "id": 10392808436,
+  "title": "L4.1 - Persistent mini-player that survives portal navigation",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808436"
+ },
+ {
+  "id": 10392808439,
+  "title": "L4.2 - Accessibility: theater, fullscreen, captions, keyboard order, SR status, reduced motion",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808439"
+ },
+ {
+  "id": 10392808451,
+  "title": "L4.3 - Live-now badge with multi-live rows and persisted dismissal",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808451"
+ },
+ {
+  "id": 10392808459,
+  "title": "L4.4 - Launch cue: synthesised chime, opt-in, once per occurrence",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808459"
+ },
+ {
+  "id": 10392808466,
+  "title": "L4.5 - In-room Watch hand-off keyed on room_id",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": true,
+  "due_on": null,
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10392808466"
+ },
+ {
+  "id": 10393697543,
+  "title": "L0.1 - Reconcile Basecamp against the repository and production, and publish the gap list",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "00 - Control, Source of Truth and Governance",
+  "containerId": 10392808020,
+  "completed": true,
+  "due_on": "2026-10-17",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10393697543"
+ },
+ {
+  "id": 10393697546,
+  "title": "L0.2 - Documentation-as-code upkeep: keep the documents and diagrams true as the system changes",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "00 - Control, Source of Truth and Governance",
+  "containerId": 10392808020,
+  "completed": false,
+  "due_on": "2026-10-24",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10393697546"
+ },
+ {
+  "id": 10393697558,
+  "title": "L0.3 - Weekly launch-risk review: what is late, what is at risk, what would we drop",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "00 - Control, Source of Truth and Governance",
+  "containerId": 10392808020,
+  "completed": false,
+  "due_on": "2026-10-18",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 3,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10393697558"
+ },
+ {
+  "id": 10393697560,
+  "title": "L0.4 - Traceability matrix: every requirement maps to a ticket and to evidence",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "00 - Control, Source of Truth and Governance",
+  "containerId": 10392808020,
+  "completed": false,
+  "due_on": "2026-10-30",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 4,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10393697560"
+ },
+ {
+  "id": 10395987998,
+  "title": "L6.4 - Specify and source Ali's AI workstation laptop",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "05 - Studio, Equipment and OBS",
+  "containerId": 10392808081,
+  "completed": true,
+  "due_on": "2026-10-16",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 2,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10395987998"
+ },
+ {
+  "id": 10416291196,
+  "title": "L10.1 - Test 2: second private airing on the fixed build, three viewers, real bitrate",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-20",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 4,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10416291196"
+ },
+ {
+  "id": 10416533879,
+  "title": "L8.4 - Bind recordings to occurrences so the replay transport can resolve anything",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "07 - YouTube and Post Production",
+  "containerId": 10392808114,
+  "completed": false,
+  "due_on": "2026-10-24",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10416533879"
+ },
+ {
+  "id": 10423504316,
+  "title": "L4.9 - Wire the player to the heartbeat endpoint: measurement currently records nothing",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "04 - Viewer, Companion and Discovery",
+  "containerId": 10392808070,
+  "completed": false,
+  "due_on": "2026-10-22",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10423504316"
+ },
+ {
+  "id": 10423504372,
+  "title": "L5.4 - Bind a new occurrence to a live input: L7.1 creates occurrences that cannot resolve playback",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": false,
+  "due_on": "2026-10-22",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 3,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10423504372"
+ },
+ {
+  "id": 10423504463,
+  "title": "L7.4 - End a broadcast without an engineer: producer control plus an auto-end safety net",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "03 - Session, Occurrence and Timeline",
+  "containerId": 10392808056,
+  "completed": false,
+  "due_on": "2026-10-23",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10423504463"
+ },
+ {
+  "id": 10424494579,
+  "title": "L5.5 - The provider health loop: nothing ever tells an occurrence the stream is alive",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "02 - Live Provider Spine",
+  "containerId": 10392808042,
+  "completed": false,
+  "due_on": "2026-10-23",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10424494579"
+ },
+ {
+  "id": 10425333905,
+  "title": "L10.7 - Prove the paywall: entitlement has never once been exercised",
+  "list": "Colaberry Live - build to 31 Oct 2026",
+  "group": "09 - Rehearsal, Launch and Evidence",
+  "containerId": 10392808140,
+  "completed": false,
+  "due_on": "2026-10-23",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 1,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10425333905"
+ },
+ {
+  "id": 10496600205,
+  "title": "FC0.1 - Pick the topic and the day kind for class 1",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC0 - Decide (nothing else can start until these are answered)",
+  "containerId": 10496600166,
+  "completed": false,
+  "due_on": "2026-11-12",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600205"
+ },
+ {
+  "id": 10496600232,
+  "title": "FC0.2 - Decide the audience: enrolled cohort only, or guests too",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC0 - Decide (nothing else can start until these are answered)",
+  "containerId": 10496600166,
+  "completed": false,
+  "due_on": "2026-11-12",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600232"
+ },
+ {
+  "id": 10496600258,
+  "title": "FC0.3 - Decide whether class 1 streams on Colaberry Live, or is recorded only",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC0 - Decide (nothing else can start until these are answered)",
+  "containerId": 10496600166,
+  "completed": false,
+  "due_on": "2026-11-12",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600258"
+ },
+ {
+  "id": 10496600351,
+  "title": "FC1.1 - Create the session row and confirm Present renders",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC1 - Build the class",
+  "containerId": 10496600306,
+  "completed": false,
+  "due_on": "2026-11-13",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600351"
+ },
+ {
+  "id": 10496600396,
+  "title": "FC1.2 - Author the deck content for the chosen topic",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC1 - Build the class",
+  "containerId": 10496600306,
+  "completed": false,
+  "due_on": "2026-11-14",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600396"
+ },
+ {
+  "id": 10496600442,
+  "title": "FC1.3 - Build, attach and verify the deck",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC1 - Build the class",
+  "containerId": 10496600306,
+  "completed": false,
+  "due_on": "2026-11-17",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600442"
+ },
+ {
+  "id": 10496600466,
+  "title": "FC1.4 - Rehearse the full run of show, and download the teaching guide",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC1 - Build the class",
+  "containerId": 10496600306,
+  "completed": false,
+  "due_on": "2026-11-18",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600466"
+ },
+ {
+  "id": 10496600559,
+  "title": "FC2.1 - Decide and test which QR the room actually scans",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC2 - The follow-along screen the room scans",
+  "containerId": 10496600529,
+  "completed": false,
+  "due_on": "2026-11-13",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600559"
+ },
+ {
+  "id": 10496600593,
+  "title": "FC2.2 - Make guest join work without mis-titling the class \"Open House\"",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC2 - The follow-along screen the room scans",
+  "containerId": 10496600529,
+  "completed": false,
+  "due_on": "2026-11-17",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600593"
+ },
+ {
+  "id": 10496600623,
+  "title": "FC2.3 - Test the QR from a phone on the room network, on a non-staff account",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC2 - The follow-along screen the room scans",
+  "containerId": 10496600529,
+  "completed": false,
+  "due_on": "2026-11-19",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600623"
+ },
+ {
+  "id": 10496600701,
+  "title": "FC3.1 - Install and validate camera, microphone, light and wired network",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC3 - Room, capture and audio",
+  "containerId": 10496600679,
+  "completed": false,
+  "due_on": "2026-11-14",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600701"
+ },
+ {
+  "id": 10496600746,
+  "title": "FC3.2 - OBS scene package and Zoom audio routing with no duplicate audio",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC3 - Room, capture and audio",
+  "containerId": 10496600679,
+  "completed": false,
+  "due_on": "2026-11-17",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600746"
+ },
+ {
+  "id": 10496600768,
+  "title": "FC3.3 - Zoom desktop client custom RTMP dry run, on the machine you will teach from",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC3 - Room, capture and audio",
+  "containerId": 10496600679,
+  "completed": false,
+  "due_on": "2026-11-13",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600768"
+ },
+ {
+  "id": 10496600795,
+  "title": "FC3.4 - Set the local recording baseline that produces the editor master",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC3 - Room, capture and audio",
+  "containerId": 10496600679,
+  "completed": false,
+  "due_on": "2026-11-18",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600795"
+ },
+ {
+  "id": 10496600866,
+  "title": "FC4.1 - Pre-flight, the morning of",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC4 - Air it",
+  "containerId": 10496600835,
+  "completed": false,
+  "due_on": "2026-11-20",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600866"
+ },
+ {
+  "id": 10496600894,
+  "title": "FC4.2 - Name a producer who is not the presenter",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC4 - Air it",
+  "containerId": 10496600835,
+  "completed": false,
+  "due_on": "2026-11-19",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600894"
+ },
+ {
+  "id": 10496600923,
+  "title": "FC4.3 - Run the show",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC4 - Air it",
+  "containerId": 10496600835,
+  "completed": false,
+  "due_on": "2026-11-20",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600923"
+ },
+ {
+  "id": 10496600948,
+  "title": "FC4.4 - Post-show state check, before anyone goes home",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC4 - Air it",
+  "containerId": 10496600835,
+  "completed": false,
+  "due_on": "2026-11-20",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496600948"
+ },
+ {
+  "id": 10496601018,
+  "title": "FC5.1 - Capture and verify the editor master",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC5 - Hand it to the videographer",
+  "containerId": 10496600988,
+  "completed": false,
+  "due_on": "2026-11-21",
+  "assignees": [
+   "Piyush Prajapati"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496601018"
+ },
+ {
+  "id": 10496601045,
+  "title": "FC5.2 - Pull the transcript",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC5 - Hand it to the videographer",
+  "containerId": 10496600988,
+  "completed": false,
+  "due_on": "2026-11-21",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496601045"
+ },
+ {
+  "id": 10496601079,
+  "title": "FC5.3 - Export the clip list and cut it down to candidates",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC5 - Hand it to the videographer",
+  "containerId": 10496600988,
+  "completed": false,
+  "due_on": "2026-11-21",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496601079"
+ },
+ {
+  "id": 10496601106,
+  "title": "FC5.4 - Write the videographer brief",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC5 - Hand it to the videographer",
+  "containerId": 10496600988,
+  "completed": false,
+  "due_on": "2026-11-24",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496601106"
+ },
+ {
+  "id": 10496738838,
+  "title": "FC6.1 - Let any event become a live event, not just an Accelerator class",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC6 - Make any event live, linked and recorded",
+  "containerId": 10496738823,
+  "completed": false,
+  "due_on": "2026-11-24",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496738838"
+ },
+ {
+  "id": 10496738853,
+  "title": "FC6.2 - Give every event a meeting link so it is roomed and recorded automatically",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC6 - Make any event live, linked and recorded",
+  "containerId": 10496738823,
+  "completed": false,
+  "due_on": "2026-11-25",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496738853"
+ },
+ {
+  "id": 10496738880,
+  "title": "FC6.3 - A download route for the streamed copy",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC6 - Make any event live, linked and recorded",
+  "containerId": 10496738823,
+  "completed": false,
+  "due_on": "2026-11-21",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496738880"
+ },
+ {
+  "id": 10496738942,
+  "title": "FC7.1 - Content Picker: blueprints x current events x quotes",
+  "list": "Colaberry Live - First Class: pick it, run it, hand it off",
+  "group": "FC7 - Content Picker",
+  "containerId": 10496738918,
+  "completed": false,
+  "due_on": "2026-11-26",
+  "assignees": [
+   "Ali Muwwakkil"
+  ],
+  "comments": 0,
+  "url": "https://app.basecamp.com/3945211/buckets/49210714/todos/10496738942"
+ }
+]
