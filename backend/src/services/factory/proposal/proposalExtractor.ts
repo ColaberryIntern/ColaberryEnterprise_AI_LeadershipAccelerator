@@ -116,6 +116,15 @@ export interface ProposalExtraction {
   /** The captured per-file text (name + extracted text), for consumers that re-analyze the source (the Proposal
    *  Studio blueprint builder). Additive; existing consumers ignore it. Empty when the ZIP could not be opened. */
   perFileText?: { name: string; text: string }[];
+  /** The ceiling on stored requirements, reported so a consumer never has to hardcode it to interpret
+   *  `requirementsSuppressed`. */
+  requirementsCap: number;
+  /** Distinct obligations found beyond `requirementsCap` and NOT stored. 0 means the cap did not fire
+   *  and the requirement set is complete; any other value is missing obligations, and the extraction
+   *  is a sample rather than a set. The honesty rail that `files[]` gives per file, for requirements. */
+  requirementsSuppressed: number;
+  /** Human-readable note when the cap fired; null when it did not. */
+  requirementsWarning: string | null;
 }
 
 const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
@@ -368,6 +377,8 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   let total = 0;
   let reqN = 0;
   let fileCount = 0;
+  /** Distinct obligations found past MAX_REQUIREMENTS and therefore NOT stored. See `pushReq`. */
+  let suppressed = 0;
 
   let entries: any[] = [];
   let openedZip = false;
@@ -395,7 +406,9 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
     // Record one legible outcome so the operator knows WHY and what to do.
     files.push({ name: 'upload', status: 'unreadable', chars: 0, truncated: false,
       warning: 'The upload did not open as a readable ZIP (it may be password-protected, an encrypted/ZIP64 archive, or not a ZIP at all). Re-export the solicitation ZIP from the source and upload again, or establish the requirements by hand.' });
-    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [], evaluation: null }, fileCount: 0, files, perFileText: [] };
+    // No ZIP was read, so nothing could be suppressed. Stated explicitly rather than left undefined:
+    // a consumer checking `requirementsSuppressed > 0` must not have to distinguish 0 from absent.
+    return { blocks, requirements, dossier: { contacts: [], naics: [], codes: [], meetings: [], keyDates: [], complianceRules: [], evaluation: null }, fileCount: 0, files, perFileText: [], requirementsCap: MAX_REQUIREMENTS, requirementsSuppressed: 0, requirementsWarning: null };
   }
   entries.sort((a: any, b: any) => String(a.entryName).localeCompare(String(b.entryName)));
 
@@ -482,10 +495,18 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   // Emit one requirement, de-duplicated by its VERBATIM text across all files. The honesty rail holds:
   // extractedText is always literal text from the zip (a sentence, or a form's own title line).
   const pushReq = (locator: string, statement: string, extractedText: string, tracks: string[]): void => {
-    if (requirements.length >= MAX_REQUIREMENTS) return;
     const norm = extractedText.toLowerCase().replace(/\s+/g, ' ').trim();
     if (!norm || seen.has(norm)) return;
     seen.add(norm);
+    // THE CAP IS REPORTED, NOT SILENT. This used to `return` before the dedupe check, so obligation
+    // 201 and everything after it vanished with nothing written down anywhere — no counter, no
+    // warning, no flag — in a file whose own contract says "NOTHING is silently dropped". Measured
+    // 2026-11-12 against production: 4 of 15 delivery projects sit at EXACTLY 200 requirements and
+    // none sits between 190 and 199, which is a cap firing, not a distribution.
+    //
+    // Counted AFTER dedupe so the number means "distinct obligations we found and did not keep",
+    // not "sentences we looked at twice". The cap still holds; only the silence is fixed.
+    if (requirements.length >= MAX_REQUIREMENTS) { suppressed += 1; return; }
     reqN += 1;
     const reqId = `REQ-${String(reqN).padStart(3, '0')}`;
     const blkId = `blk-${reqId}`;
@@ -505,8 +526,13 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   };
 
   // PASS 2 — extract per role.
+  //
+  // THE SCAN NO LONGER STOPS AT THE CAP. These three loops used to `break` once 200 requirements
+  // were held, which made the loss unmeasurable as well as unreported: you could not learn whether
+  // a document had 201 obligations or 2,000. `pushReq` still refuses to store past the cap, so the
+  // output is byte-identical; the scan continues only so `suppressed` can carry a real magnitude.
+  // The added cost is regex tests over text already in memory and bounded by CHARS_TOTAL.
   for (const f of readFiles) {
-    if (requirements.length >= MAX_REQUIREMENTS) break;
     const c = byName.get(f.name);
     if (!c || c.duplicateOf) continue;                 // a duplicate is read once, never re-extracted
     // Rejoin soft-wrapped lines for plain text and PDFs (renderer wraps mid-sentence). For .docx/.xlsx the
@@ -524,14 +550,12 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
       // compliance, licensing...) — not every sentence of the boilerplate template.
       pushReq(f.name, `Review ${f.name} and state any exceptions in the proposal`, firstMeaningfulLine(f.text) || f.name, ['proposal']);
       for (const s of sentences(f.text, joinWraps)) {
-        if (requirements.length >= MAX_REQUIREMENTS) break;
         if (OBLIGATION.test(s) && MATERIAL_TERM_RE.test(s) && !isFurniture(s)) pushReq(f.name, s, s, ['proposal']);
       }
       continue;
     }
     // solicitation / addendum / reference — the full obligation scan (unchanged behavior).
     for (const s of sentences(f.text, joinWraps)) {
-      if (requirements.length >= MAX_REQUIREMENTS) break;
       if (OBLIGATION.test(s) && !isFurniture(s)) pushReq(f.name, s, s, ['proposal', 'solution_build']);
     }
   }
@@ -546,5 +570,19 @@ export async function extractProposal(zipBuffer: Buffer): Promise<ProposalExtrac
   const dossier = extractDossier(
     blocks.filter((b) => !(b.kind === 'context' && (dupNames.has(b.locator) || formNames.has(b.locator)))),
   );
-  return { blocks, requirements, dossier, fileCount, files, perFileText: readFiles.map((f) => ({ name: f.name, text: f.text })) };
+  return {
+    blocks,
+    requirements,
+    dossier,
+    fileCount,
+    files,
+    perFileText: readFiles.map((f) => ({ name: f.name, text: f.text })),
+    requirementsCap: MAX_REQUIREMENTS,
+    requirementsSuppressed: suppressed,
+    requirementsWarning: suppressed > 0
+      ? `${suppressed} further obligation(s) were found and NOT extracted: the ceiling of `
+        + `${MAX_REQUIREMENTS} requirements was reached. This requirement set is a sample, not a `
+        + `complete set, and compliance coverage computed from it understates what the solicitation asks.`
+      : null,
+  };
 }
