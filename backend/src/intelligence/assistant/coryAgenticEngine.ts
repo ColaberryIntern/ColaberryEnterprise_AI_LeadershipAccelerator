@@ -4,6 +4,7 @@
 // Cory can autonomously: discover schema, run SQL, verify claims, build charts.
 // Max 8 rounds. All tools are read-only. Output matches AssistantResponse shape.
 
+import { withToolRecording } from '../../services/agents/tools/toolInvocationRecorder';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import DatasetRegistry from '../../models/DatasetRegistry';
@@ -259,7 +260,25 @@ interface TicketRecord {
   assigned_to?: string;
 }
 
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ *
+ * This engine already emits its own `tool.call` event and keeps an in-memory trace. The wrapper
+ * is here so the governance judgement lives in ONE place for all six dispatchers rather than
+ * being reimplemented per surface. It returns the inner result unchanged and rethrows.
+ */
 async function executeToolCall(
+  toolName: string,
+  args: Record<string, any>,
+  state: { sqlResults: SqlResult[]; charts: ChartConfig[]; ticketsCreated: TicketRecord[] }
+): Promise<any> {
+  return withToolRecording(
+    { agentName: 'Cory', toolName, surface: 'cory_agentic', args },
+    () => executeToolCallInner(toolName, args, state),
+  );
+}
+
+async function executeToolCallInner(
   toolName: string,
   args: Record<string, any>,
   state: { sqlResults: SqlResult[]; charts: ChartConfig[]; ticketsCreated: TicketRecord[] }

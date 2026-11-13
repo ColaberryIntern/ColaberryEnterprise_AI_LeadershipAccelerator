@@ -1,7 +1,7 @@
 /**
  * careerPortfolioPageService — resolving /u/:slug, and the one rule about who may see it.
  *
- * THE VIEW DECISION LIVES IN EXACTLY ONE PURE FUNCTION. `publicViewDecision` below is
+ * THE VIEW DECISION LIVES IN EXACTLY ONE PURE FUNCTION. `publicViewDecision` (careerPortfolioPageAccess.ts) is
  * the only place that answers "may a stranger see this page?". It is exported and tested
  * on its own so that a second surface — a reviewer preview, an admin tool, an OG-image
  * renderer — cannot quietly grow a more generous idea of "viewable" than the public
@@ -41,59 +41,11 @@ import {
   readResumeHistory, approvedResumeHistoryOf, EMPTY_RESUME_HISTORY, type ResumeHistory,
 } from './resumeHistoryAdapter';
 
-export type PortfolioPageStatus = 'draft' | 'published';
-export type PortfolioPageVisibility = 'private' | 'unlisted' | 'public';
-
-export interface PortfolioPageRow {
-  enrollment_id: string;
-  slug: string;
-  status: PortfolioPageStatus;
-  visibility: PortfolioPageVisibility;
-  approved_identity: unknown;
-}
-
-export interface ViewDecision {
-  /** May a stranger holding this URL see the page at all? */
-  viewable: boolean;
-  /** May a search engine index it? Only ever true for an explicit `public` opt-in. */
-  indexable: boolean;
-}
-
-/**
- * The whole access rule, in one pure function. No I/O, no clock, no request object.
- *
- * Written as a positive allow-list on both axes: an unrecognised status or visibility
- * (a value added next year, a typo, a hand-edited row) is NOT viewable. The safe default
- * for a page carrying a person's name is invisible.
- */
-export function publicViewDecision(page: Pick<PortfolioPageRow, 'status' | 'visibility'> | null): ViewDecision {
-  if (!page) return { viewable: false, indexable: false };
-  const approved = page.status === 'published';
-  if (!approved) return { viewable: false, indexable: false };
-
-  switch (page.visibility) {
-    case 'public':
-      return { viewable: true, indexable: true };
-    case 'unlisted':
-      return { viewable: true, indexable: false };
-    // 'private', and anything unrecognised, falls through to invisible.
-    default:
-      return { viewable: false, indexable: false };
-  }
-}
-
-/** Slugs are compared case-insensitively; `/u/Ali` and `/u/ali` are the same address. */
-async function findPageBySlug(slug: string): Promise<PortfolioPageRow | null> {
-  const [rows] = await sequelize.query(
-    `SELECT enrollment_id, slug, status, visibility, approved_identity
-       FROM career_portfolio_pages
-      WHERE LOWER(slug) = LOWER($1)
-      LIMIT 1`,
-    { bind: [slug] },
-  );
-  const row = (rows as any[])[0];
-  return row ? (row as PortfolioPageRow) : null;
-}
+export {
+  publicViewDecision, findPageBySlug,
+  type PortfolioPageStatus, type PortfolioPageVisibility, type PortfolioPageRow, type ViewDecision,
+} from './careerPortfolioPageAccess';
+import { publicViewDecision, findPageBySlug } from './careerPortfolioPageAccess';
 
 /**
  * The learner's live project rows, shaped for the projection.
@@ -457,7 +409,7 @@ async function buildPortfolio(
   // The About paragraph names the project the record is about, in the learner's own words.
   const firstRecord: any = Array.isArray(records) ? (records as any[])[0] : null;
 
-  return projectPublicPortfolio({
+  const portfolio: PublicPortfolio = projectPublicPortfolio({
     // On an unapproved page `approvedIdentity` is null, so the reviewer sees the LIVE
     // headline -- which is the text they are being asked to approve.
     profile: withApprovedIdentity(profile, approvedIdentity),
@@ -479,4 +431,9 @@ async function buildPortfolio(
     reachableRepoUrls,
     generatedAt: now.toISOString(),
   });
+  // C130 featured work. The reviewer preview (approvedProjects null) reads the LIVE set; a public read ALWAYS reads the frozen
+  // set, and a page with no approved identity counts as an empty one, so the live set can never reach a stranger.
+  const { featuredSource, featuredWorkSafe } = await import('./featuredWork');
+  portfolio.featured_work = await featuredWorkSafe(enrollmentId, featuredSource(approvedProjects, approvedIdentity));
+  return portfolio;
 }

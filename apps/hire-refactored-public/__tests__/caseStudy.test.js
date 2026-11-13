@@ -87,6 +87,22 @@ describe('outcomes and the hire card', () => {
     assert.equal(S.outcomes(b), '', 'no metric, no tile - nothing is invented');
   });
 
+  // Quincy, 2026-11-11: his headline tile read "6m14s, failure to healthy seconds".
+  test('appends the unit to a bare number only, never to a phrase that already says it', () => {
+    const b = body();
+    b.caseStudy.heroMetrics = [
+      { label: 'a', valueDisplay: '6m14s, failure to healthy', unit: 'seconds' },
+      { label: 'b', valueDisplay: '1 of 6 sources live', unit: 'sources' },
+      { label: 'c', valueDisplay: '448', unit: 'tests' },
+      { label: 'd', valueDisplay: '41%', unit: 'percentage points' },
+    ];
+    const html = S.outcomes(b);
+    assert.match(html, /<b>6m14s, failure to healthy<\/b>/);
+    assert.match(html, /<b>1 of 6 sources live<\/b>/);
+    assert.match(html, /<b>448 tests<\/b>/);
+    assert.match(html, /<b>41% percentage points<\/b>/);
+  });
+
   test('links repositories only over https', () => {
     const b = body(); b.caseStudy.repositories = [{ label: 'x', url: 'javascript:alert(1)' }];
     assert.doesNotMatch(S.hireCard(b), /javascript:/);
@@ -122,6 +138,16 @@ describe('the shell wiring', () => {
     const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'assets', 'case-study.css'), 'utf8');
     assert.doesNotMatch(css, /#cs-record\s*>\s*\.cs-hero\s*\{\s*display:\s*none/, 'hiding the whole hero hid every video on Hire');
     assert.match(css, /#cs-record\s*>\s*\.cs-hero\s*>\s*\.cs-hero-copy\s*\{\s*display:\s*none/);
+  });
+
+  test('the person card stays on screen: its aside is the grid item, not a card-high wrapper', () => {
+    // A sticky box only travels inside its parent. With #hire-card-host as an ordinary block, the
+    // aside was as tall as the card (592px beside a 12,199px record) and scrolled away.
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'assets', 'case-study.css'), 'utf8');
+    assert.match(html, /<div class="cs-body">\s*<article[^>]*id="cs-record"[^>]*><\/article>\s*<div id="hire-card-host"><\/div>/);
+    assert.match(css, /#hire-card-host\s*\{\s*display:\s*contents\s*\}/);
+    assert.match(css, /\.sticky\s*\{\s*position:\s*sticky;\s*top:\s*\d+px\s*\}/);
+    assert.match(S.hireCard({ caseStudy: {} }, null), /^<aside><div class="sticky">/);
   });
 });
 

@@ -37,7 +37,9 @@
  * which is how Kalkidan was told her next task was "no commit or verified story since 11-05". No
  * second date for the same piece of work. The rules are in `.claude/skills/intern-nudges`, rule 0.
  */
+import { classifyEmail } from '../portfolioReport/timeline';
 import type { Communication, SidecarIntern, SidecarNext } from '../portfolioReport/sidecar/types';
+import { sanitizeInherited } from './inherited';
 import type { BriefDeadline } from './types';
 
 /** What this message is about. Exactly one is chosen, and it decides every line. */
@@ -108,8 +110,33 @@ export function lead(i: SidecarIntern, focus: Focus, nowMs: number): string[] {
   if (word) {
     const age = Math.round((nowMs - Date.parse(word.received_at)) / DAY);
     if (age <= 14) {
+      const when = longDate(word.received_at);
+      // Their subject, repeated back to them, so the dash THEY typed cannot be the reason the
+      // message is unsendable. See inherited.ts: this is what held Omolola's brief on 11 Nov.
+      const subject = sanitizeInherited(word.subject);
       const owed = word.answered === false ? ' I have not answered it yet, and that is on me.' : '';
-      return [`Thank you for your note of ${longDate(word.received_at)} about "${word.subject}".${owed}`];
+      /**
+       * The opening says what KIND of thing they sent, not merely that they sent one.
+       *
+       * Measured on 2026-11-11: all thirteen messages opened with the identical sentence,
+       * "Thank you for your note of <date> about <subject>", whether the person had reported a
+       * blocker, asked a question, or sent a status update. Thanking somebody for a note is the
+       * right thing to say about an update and the wrong thing to say about a blocker they are
+       * stuck behind.
+       *
+       * This is classification, not quotation. The excerpt is still not quoted, and the test that
+       * forbids it still passes: `trimToSentence` now makes excerpts sentence-complete, but
+       * repeating somebody's own words back at them was a separate and correct objection of Ali's
+       * on 10 Nov, and nothing here reintroduces it.
+       */
+      switch (classifyEmail(word.subject, word.excerpt)) {
+        case 'stuck':
+          return [`You flagged something in the way on ${when}, under "${subject}".${owed}`];
+        case 'question':
+          return [`You asked me something on ${when}, under "${subject}".${owed}`];
+        default:
+          return [`Thank you for the update of ${when} about "${subject}".${owed}`];
+      }
     }
   }
 
@@ -277,7 +304,10 @@ export function subjectFor(i: SidecarIntern, focus: Focus, deadline: BriefDeadli
   switch (focus) {
     case 'answer_owed': {
       const word = theirLastWord(i);
-      return word?.subject ? `Re: ${word.subject}` : 'Answering your message';
+      // Sanitised for the same reason as the body: the sender refuses an en dash, and on 11 Nov
+      // the only en dash in Omolola's brief came from her own subject line.
+      const subject = sanitizeInherited(word?.subject);
+      return subject ? `Re: ${subject}` : 'Answering your message';
     }
     case 'deadline_at_risk':
       return `${days(deadline!.daysLeft)} to your ${deadline!.what}`;

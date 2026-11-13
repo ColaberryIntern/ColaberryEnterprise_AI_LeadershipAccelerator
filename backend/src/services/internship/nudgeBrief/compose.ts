@@ -30,6 +30,9 @@ export const DEADLINE_LEADS_WITHIN_DAYS = 14;
 
 const nf = (n: number) => new Intl.NumberFormat('en-US').format(n);
 
+/** The day-word a promise was made with. Keeping the promise means naming this day again. */
+const PROMISE_WHEN = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|this week|next week)\b/i;
+
 export function findPromises(intern: SidecarIntern): BriefPromise[] {
   const last = intern.last_ask;
   if (!last?.body_text || last.from?.toLowerCase().includes('@colaberry.com') === false) return [];
@@ -108,11 +111,18 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
 
   const lines: string[] = [`${intern.first_name},`];
   para(lead(intern, focus, now.getTime()));
+  // Where the HEAD ends. The name line and the opener are structural: the sender and several
+  // tests depend on the first line being their name, and `lead` is the one block that already
+  // references their own words. A model rewriting the middle never touches either.
+  const headLines = lines.length;
+
   para(theOneThing(intern, focus, deadline));
   para(nextAction(intern, focus, deadline));
   const ask = focus === 'artifact_gap' ? askBlock(intern) : { lines: [] as string[], attachment: null };
   if (ask.attachment) para([`A prompt to start it is attached as ${ask.attachment.filename}.`]);
   para(wayThrough(focus, deadline));
+  const middleLines = lines.length;
+
   para(close(focus));
 
 
@@ -127,7 +137,42 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
   }
   const subject = subjectFor(intern, focus, deadline);
 
-  const body = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const tidy = (xs: string[]): string => xs.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const body = tidy(lines);
+  /**
+   * The same body in three pieces, so a model may rewrite the middle without being able to touch
+   * the first line or the last. `assembleBody` in modelBody.ts puts it back together; keeping the
+   * split here means the pieces can never drift from the body this function already returned,
+   * which a second assembly site would allow.
+   */
+  const bodyParts = {
+    head: tidy(lines.slice(0, headLines)),
+    middle: tidy(lines.slice(headLines, middleLines)),
+    tail: tidy(lines.slice(middleLines)),
+  };
+
+  /**
+   * A dated promise WE made that today's message neither keeps nor re-dates.
+   *
+   * `findPromises` reads our own last outbound, so these are commitments Ali made to them. On
+   * 2026-11-11 Quincy's brief carried "On the six: you will have them before Friday." verbatim and
+   * his message did not contain the word Friday, or any content word from that sentence. The data
+   * was present and the composer walked past it.
+   *
+   * This is a warning rather than a generated sentence on purpose: whether a promise is kept or
+   * moved is a decision about what Ali will actually do, and no judgement of that kind is in the
+   * database. The composer's job here is to make sure it cannot lapse in silence.
+   */
+  const promises = findPromises(intern);
+  for (const p of promises) {
+    const when = PROMISE_WHEN.exec(p.quote)?.[0];
+    if (when && !new RegExp(`\\b${when}\\b`, 'i').test(body)) {
+      warnings.push(
+        `We promised them a date and this message does not mention it: "${p.quote}" Decide before sending whether today's message holds that date or gives them a new one.`,
+      );
+    }
+  }
+
   warnings.push(...briefProblems(body));
 
   return {
@@ -149,9 +194,15 @@ export function composeBrief({ intern, deadline, now }: BriefInputs): NudgeBrief
       : null,
     inboundSince: inboundSince(intern),
     deadline,
-    promises: findPromises(intern),
+    promises,
     subject,
     body,
+    // What ships when nobody has read it. Ali, 2026-11-11: an unattended send uses the
+    // deterministic wording, and a model-written body stays in the console for approval. So this
+    // field is never overwritten by the upgrade step, and the 48 hour worker sends THIS.
+    deterministicBody: body,
+    bodyFromModel: false,
+    bodyParts,
     // Gated on the SAME condition as the ask lines. Dropping only the lines left Sarbjit's message
     // carrying `format-correction.md` with nothing in the body mentioning it: an unexplained
     // attachment on a four-line note, which reads as a mistake because it is one.

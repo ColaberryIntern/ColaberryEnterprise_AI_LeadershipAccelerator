@@ -85,7 +85,9 @@ const PAGE_MM = { w: 215.9, h: 279.4 };
  * @param {string} margin    CSS length for all four margins
  */
 async function renderPdf({ html, outPath, landscape = false, maxPages = 0, margin = '14mm' }) {
-  const browser = await chromium.launch();
+  // ARTIFACT_CHROMIUM: an installed Chrome/Edge to use when Playwright's own browser was never downloaded on this
+  // machine (11 Nov 2026). Unset, the behavior is unchanged.
+  const browser = await chromium.launch(process.env.ARTIFACT_CHROMIUM ? { executablePath: process.env.ARTIFACT_CHROMIUM } : {});
   try {
     const page = await browser.newPage();
     // `domcontentloaded` rather than `load`: nothing here depends on external images, and waiting

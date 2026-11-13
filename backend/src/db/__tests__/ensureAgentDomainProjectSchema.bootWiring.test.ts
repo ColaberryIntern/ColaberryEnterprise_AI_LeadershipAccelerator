@@ -203,6 +203,21 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
     // `__tests__/ensureAgentToolGrantSchema.test.ts` drives that failure path with a rejecting
     // driver, asserting it RESOLVES `{ ok: false }` with the derived error_class rather than
     // grepping server.ts for a try/catch.
+    // Agent Tools Phase 2 added the ninth member, 2026-11-11.
+    // `ensureToolRequestMessageSchema.ts` is the CONVERSATION on a tool request, and asserts the
+    // same way for the same reason as the eight above.
+    //
+    // It is a sibling of the decision log, not a replacement: that table holds the four VERBS,
+    // this one holds the question and the answer that are neither an approval nor a denial and
+    // previously had nowhere to live. It carries no verb and no status, so it cannot disagree
+    // with the decision log about what was decided.
+    //
+    // Its post-condition checks two CHECK constraints, `chk_adtrm_body_is_not_blank` and
+    // `chk_adtrm_author_is_not_blank`. A blank message is not a conversation, and an
+    // unattributed one is worse than none, so both are refused at the database rather than only
+    // by the application.
+    //
+    // It is wrapped: `ensureToolRequestMessageSchemaGuarded` cannot reject.
     expect(throwing.sort()).toEqual([
       'ensureAgentDomainChangeRequestSchema.ts',
       'ensureAgentDomainProjectSchema.ts',
@@ -211,7 +226,47 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureAgentToolGrantSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
+      // The eleventh member, 2026-11-12, and the first one that is NOT a schema module.
+      //
+      // `ensurePageEventVisitorIndex.ts` adds an index to `page_events`, a table it does not own
+      // and did not create. Every other member creates its own net-new table and may do what it
+      // likes with it; this one indexes the largest table in the schema while the tracker writes
+      // to it. That is why its own suite asserts what it must NOT do — no `CREATE TABLE`, no
+      // `DROP TABLE` in the rollback — since those are the lines a later edit adds "for symmetry"
+      // with the siblings, and the damage would not surface until a production boot.
+      //
+      // It is on this roster because its post-condition throws, and it throws for the reason the
+      // roster exists: `CREATE INDEX IF NOT EXISTS` is a no-op on an existing index and every
+      // statement error is warned rather than raised, so `ensure` alone resolves identically
+      // whether the DDL worked or did nothing at all. `assert` is the part that decides.
+      //
+      // It is wrapped: `ensurePageEventVisitorIndexGuarded` cannot reject, and
+      // `__tests__/ensurePageEventVisitorIndex.test.ts` drives that failure path and asserts it
+      // RESOLVES `{ ok: false }` with the derived error_class. A missing index is a performance
+      // problem, not a correctness one, and must never stop the port binding.
+      //
+      // THIS PIN IS WHAT CAUGHT IT. The module sat untracked in the working tree during an
+      // unrelated full-suite run and this roster failed with Received +1 — an unwired `ensure*`
+      // with a throwing post-condition, found by the check rather than by review.
+      'ensurePageEventVisitorIndex.ts',
+      // Sorts here, not at the end: the assertion compares a `.sort()`ed list, and
+      // "BuildEvent" precedes "Decision" alphabetically.
+      'ensureToolRequestBuildEventSchema.ts',
       'ensureToolRequestDecisionSchema.ts',
+      'ensureToolRequestMessageSchema.ts',
+      // Agent Tools Phase 3 added the tenth member, 2026-11-11.
+      // `ensureToolRequestBuildEventSchema.ts` records what happened to a request AFTER
+      // approval — started building, handed over — and asserts the same way for the same reason
+      // as the nine above.
+      //
+      // It is deliberately NOT a wider status on the parent request. That column governs
+      // APPROVAL, has a transition machine and existing readers; adding build states to it would
+      // make every reader silently acquire values it has never seen, and would conflate "was
+      // this allowed" with "did somebody do it". Different questions, different authors.
+      //
+      // Its CHECK constraints pin a two-value event vocabulary, because an open-ended milestone
+      // column is one nothing can read reliably, and the sentence the dashboard derives depends
+      // on knowing exactly which values exist.
     ]);
   });
 

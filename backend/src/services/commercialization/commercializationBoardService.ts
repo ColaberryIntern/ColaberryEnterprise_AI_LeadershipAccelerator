@@ -65,6 +65,24 @@ async function tableExists(name: string): Promise<boolean> {
  * of it is a meeting where two screens show different numbers.
  */
 export async function annualizedRevenue(): Promise<{ value: string; caveat?: string }> {
+  const { cents, caveat } = await annualizedRevenueCents();
+  return { value: money(cents), caveat };
+}
+
+/**
+ * The same figure in CENTS, for callers that need to do arithmetic with it.
+ *
+ * Split out for R16's Revenue Flow dashboard, which has to add this to nothing and compare
+ * it to a pipeline total, and therefore cannot work from a pre-formatted "$72,816". The
+ * formatting function above now delegates here, so there is still exactly ONE place that
+ * knows the app-origination rule and the annualization multipliers.
+ *
+ * Re-deriving the SQL in the new caller was the obvious alternative and is the thing this
+ * function's own header warns against: "two surfaces that compute revenue independently
+ * will eventually disagree, and the first anyone will know of it is a meeting where two
+ * screens show different numbers."
+ */
+export async function annualizedRevenueCents(): Promise<{ cents: number; caveat?: string }> {
   const rows = await sequelize.query<{ plan: string; cents: string }>(
     `SELECT plan::text AS plan, COALESCE(SUM(amount_cents), 0)::bigint AS cents
      FROM subscriptions
@@ -82,7 +100,7 @@ export async function annualizedRevenue(): Promise<{ value: string; caveat?: str
   }
 
   return {
-    value: money(total),
+    cents: total,
     // Silently dropping an unrecognized plan would understate revenue with no trace.
     caveat: unknown.length
       ? `Excludes ${unknown.length} plan type(s) with no annualization rule: `

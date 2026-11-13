@@ -17,12 +17,16 @@
 
   function endpoint(f) { return api + '/api/public/hire/talent' + D.filtersToQuery(f); }
 
-  /* First load: replace the shipped empty state with the real page, or leave it alone. */
+  /* First load: replace the shipped loading placeholders with the real page. A failed or
+     malformed answer says the directory could not be reached; it never claims nobody is listed. */
   function load() {
     C.fetchJson(endpoint(filters), 10000).then(function (res) {
-      if (!res.ok || !D.isPayload(res.body)) return; // keep "Nobody is listed yet"
       var main = doc.getElementById('main');
-      main.innerHTML = D.renderDirectory(res.body, filters, window.HirePage.shortlist());
+      if (!res.ok || !D.isPayload(res.body)) {
+        if (main) main.innerHTML = D.renderUnavailable();
+        return;
+      }
+      main.innerHTML = D.renderDirectory(res.body, filters, window.HirePage.shortlist(), api);
       wireFilters();
       doc.dispatchEvent(new CustomEvent('hire:directory-rendered', { detail: res.body }));
     });

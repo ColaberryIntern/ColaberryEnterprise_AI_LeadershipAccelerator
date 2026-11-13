@@ -274,6 +274,51 @@ describe('evaluateHumanAiStructure', () => {
       expect(r.humanTasksWithoutSurface).toEqual(['t-sign']);
       expect(r.passes).toBe(false);
     });
+
+    it('refuses the same human task landing on two surfaces', () => {
+      // The other half of "exactly one surface". `humanTasksWithoutSurface` is built from a
+      // flattened Set, which can only see a task that lands on NO surface; this is the one that
+      // lands on two. The prompt already demands exactly one, so until now a model could break a
+      // stated rule and the evaluator had no finding for it.
+      const i = clean();
+      i.surfaces = [surface(), surface({ id: 'surf-2', name: 'Review queue', kind: 'external' })];
+      const r = evaluateHumanAiStructure(i);
+      const f = r.findings.find((x) => x.rule === 'TASK_ONE_SURFACE');
+      expect(f?.severity).toBe('blocking');
+      expect(f?.ref).toBe('t-human');
+      expect(f?.detail).toContain('surf-console');
+      expect(f?.detail).toContain('surf-2');
+      expect(r.passes).toBe(false);
+    });
+
+    it('stays silent when every human task lands on exactly one surface', () => {
+      // THE CONTROL. The test above proves the rule can fire; this proves it can keep quiet, so a
+      // clean run is evidence the check ran rather than evidence it is inert. The `clean()`
+      // fixture and the external-surface case both have one destination per task.
+      const i = clean();
+      i.tasks.push(task('t-submit'));
+      i.allocation.push(alloc('t-submit', 'human'));
+      i.surfaces = [surface(), surface({
+        id: 'surf-city', name: 'City procurement portal', kind: 'external', task_ids: ['t-submit'],
+      })];
+      const r = evaluateHumanAiStructure(i);
+      expect(r.findings.some((x) => x.rule === 'TASK_ONE_SURFACE')).toBe(false);
+      expect(r.passes).toBe(true);
+    });
+
+    it('counts two destinations even when neither is a second console', () => {
+      // ONE_CONSOLE and TASK_ONE_SURFACE are different failures. Two external surfaces holding the
+      // same task passes the console count and still splits one piece of work across two places.
+      const i = clean();
+      i.surfaces = [
+        surface({ id: 'surf-a', name: 'Portal A', kind: 'external' }),
+        surface({ id: 'surf-b', name: 'Portal B', kind: 'external' }),
+      ];
+      const r = evaluateHumanAiStructure(i);
+      expect(r.consoleCount).toBe(0);
+      expect(r.findings.some((x) => x.rule === 'ONE_CONSOLE')).toBe(false);
+      expect(r.findings.some((x) => x.rule === 'TASK_ONE_SURFACE')).toBe(true);
+    });
   });
 
   it('ignores a task with no allocation rather than guessing a side for it', () => {

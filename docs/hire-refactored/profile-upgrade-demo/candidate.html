@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Hire profile · candidate studio (demo)</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/demo.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap bar">
+    <a class="logo" href="#" aria-label="Refactored.ai candidate studio">
+      <svg class="mark" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Refactored<span class="faint">.ai</span><span class="sub cand">candidate</span>
+    </a>
+    <span class="spacer"></span>
+    <nav class="nav" aria-label="Account">
+      <button type="button" class="link" id="themeBtn" aria-label="Toggle light or dark theme">◐</button>
+      <a class="btn btn-ghost" href="index.html" style="color:var(--fg)">Preview my public profile ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding-top:36px;padding-bottom:40px">
+  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:24px">
+    <div>
+      <div class="label">My Hire profile</div>
+      <h1 class="mono" style="font-size:clamp(1.5rem,3vw,1.9rem);letter-spacing:-.02em;line-height:1.15;margin:6px 0 0">Hi Kesetebirhan. Let employers hear it from you.</h1>
+    </div>
+    <div style="flex:0 1 320px;min-width:240px">
+      <div style="display:flex;justify-content:space-between;font-size:.88rem;margin-bottom:6px"><span class="muted">Profile strength</span><b class="mono" style="color:var(--star-text)" id="strength"></b></div>
+      <div class="meter" role="progressbar" aria-label="Profile strength" aria-valuemin="0" aria-valuemax="7" id="meter"><i></i></div>
+    </div>
+  </div>
+
+  <div class="studio">
+    <nav class="studio-nav" id="tabs" aria-label="Profile sections"></nav>
+    <div>
+
+      <!-- Overview -->
+      <section data-tab="overview">
+        <div class="card" style="border-color:color-mix(in srgb,var(--star) 45%,transparent)">
+          <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div class="label" style="color:var(--star-text)">Interview requests</div><span class="muted" style="font-size:.84rem">Reply within 24 hours to keep the time</span></div>
+          <div class="req">
+            <div class="who"><b>[Company] · Case study walkthrough · 45 min</b><span>Mon, Nov 16 · 10:00 AM CT · wants “Recovering the calls the workflow lost”</span></div>
+            <div id="reqActs" style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn btn-primary" id="accept">Accept</button>
+              <button type="button" class="btn btn-ghost">Suggest a time</button>
+              <button type="button" class="btn btn-text" style="color:var(--fg-muted)">Decline</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">Finish your profile</div>
+          <p class="muted" style="margin:6px 0 12px;font-size:.95rem">Profiles with an intro video and open interview times get booked first.</p>
+          <div id="todos"></div>
+        </div>
+      </section>
+
+      <!-- Intro video -->
+      <section data-tab="video" hidden>
+        <div class="card panel">
+          <h2>Your intro video</h2>
+          <p class="lede">60 to 90 seconds. It plays at the top of “In their words” on your profile.</p>
+          <div class="rec-wrap">
+            <div>
+              <div class="cam" id="cam">
+                <video id="vid" playsinline muted hidden></video>
+                <span id="camHint">Camera preview appears here</span>
+                <span class="rec" id="recTime">REC 0:00</span>
+                <div class="prompt" id="promptNow"></div>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+                <button type="button" class="btn btn-primary" id="recBtn">● Start recording</button>
+                <label class="btn btn-ghost" for="upload" style="cursor:pointer">Upload a video</label>
+                <input id="upload" type="file" accept="video/*" class="sr">
+                <button type="button" class="btn btn-text" id="nextPrompt" hidden>Next prompt →</button>
+              </div>
+              <p id="recMsg" class="muted" role="status" style="font-size:.86rem;margin:8px 0 0"></p>
+              <label class="check"><input type="checkbox" checked> Add captions automatically (you can edit them)</label>
+            </div>
+            <div>
+              <div class="legend" style="margin-bottom:8px">Talk through these, one at a time</div>
+              <ol class="prompts" id="prompts"></ol>
+              <p class="muted" style="font-size:.84rem;margin-top:16px">Face a window or a lamp, camera at eye level, under 90 seconds. Re-record as often as you like. Nothing goes live until you publish it.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- About you -->
+      <section data-tab="about" hidden>
+        <form class="card panel" onsubmit="event.preventDefault()">
+          <h2>About you</h2>
+          <p class="lede">Short, specific answers beat long ones. These appear on your profile under “In their words”.</p>
+          <div class="field"><label for="a-head">Headline</label><input id="a-head" maxlength="90" value="AI Leadership Accelerator — QA"><span class="hint">One line under your name. Changing it sends your profile back for re-approval.</span></div>
+          <div class="field"><label for="a-q1">What problem do you most want to be handed?</label><textarea id="a-q1" rows="3" maxlength="400"></textarea></div>
+          <div class="field"><label for="a-q2">Tell us about a time you caught something before it shipped.</label><textarea id="a-q2" rows="3" maxlength="400"></textarea></div>
+          <div class="field"><label for="a-q3">How do you like to work with a team?</label><textarea id="a-q3" rows="3" maxlength="400"></textarea></div>
+          <fieldset style="border:0;padding:0;margin:0 0 16px"><legend class="legend" style="margin-bottom:8px">Roles you want</legend>
+            <div class="toggles"><button type="button" class="toggle" aria-pressed="true">QA Analyst</button><button type="button" class="toggle" aria-pressed="true">AI Operations</button><button type="button" class="toggle" aria-pressed="false">Workflow Analyst</button><button type="button" class="toggle" aria-pressed="false">Forward Deployed Engineer</button><button type="button" class="toggle" aria-pressed="false">Data Engineer</button></div></fieldset>
+          <fieldset style="border:0;padding:0;margin:0 0 16px"><legend class="legend" style="margin-bottom:8px">Work setup</legend>
+            <div class="toggles"><button type="button" class="toggle" aria-pressed="true">Remote</button><button type="button" class="toggle" aria-pressed="true">Hybrid</button><button type="button" class="toggle" aria-pressed="false">Onsite</button></div></fieldset>
+          <div class="form-grid" style="margin-bottom:16px">
+            <div class="field"><label for="a-loc">City, state</label><input id="a-loc" autocomplete="address-level2"></div>
+            <div class="field"><label for="a-start">Earliest start</label><input id="a-start" type="date"></div>
+            <div class="field"><label for="a-auth">Work authorization</label><select id="a-auth"><option>Choose one</option><option>Authorized, no sponsorship needed</option><option>Will need sponsorship</option></select></div>
+          </div>
+          <div class="acts end" style="margin-top:8px"><button type="submit" class="btn btn-primary">Save answers</button></div>
+        </form>
+      </section>
+
+      <!-- Interview times -->
+      <section data-tab="times" hidden>
+        <form class="card panel" onsubmit="event.preventDefault()">
+          <h2>When can employers book you?</h2>
+          <p class="lede">Employers only see times you turn on here, converted to their time zone.</p>
+          <div class="field" style="max-width:320px"><label for="t-tz">Your time zone</label><select id="t-tz"><option>Central Time (CT)</option><option>Eastern Time (ET)</option><option>Mountain Time (MT)</option><option>Pacific Time (PT)</option></select></div>
+          <div class="avail-grid" id="grid" role="group" aria-label="Weekly availability"></div>
+          <fieldset style="border:0;padding:0;margin:20px 0 16px"><legend class="legend" style="margin-bottom:8px">Interview formats you accept</legend>
+            <div class="toggles"><button type="button" class="toggle" aria-pressed="true">Intro call · 20 min</button><button type="button" class="toggle" aria-pressed="true">Case study walkthrough · 45 min</button><button type="button" class="toggle" aria-pressed="false">Working session · 60 min</button></div></fieldset>
+          <div class="form-grid">
+            <div class="field"><label for="t-max">Most interviews per week</label><select id="t-max"><option>3</option><option selected>5</option><option>8</option><option>No limit</option></select></div>
+            <div class="field"><label for="t-notice">Minimum notice</label><select id="t-notice"><option>12 hours</option><option selected>24 hours</option><option>48 hours</option></select></div>
+          </div>
+          <label class="check"><input type="checkbox"> Confirm requests in these times automatically</label>
+          <div class="acts end"><button type="submit" class="btn btn-primary">Save interview times</button></div>
+        </form>
+      </section>
+
+      <!-- Case studies -->
+      <section data-tab="cases" hidden>
+        <div class="card panel">
+          <h2>Your carousel order</h2>
+          <p class="lede">Your signature case study plays first. Move the rest into the order you want employers to see them.</p>
+          <ol class="order" id="order"></ol>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script src="assets/demo-data.js"></script>
+<script>
+(function () {
+  var D = window.DEMO, esc = window.esc;
+  var S = { tab: 'overview', req: 'pending', avail: { 'Morning-Mon': 1, 'Morning-Wed': 1, 'Afternoon-Tue': 1, 'Afternoon-Fri': 1 }, video: false,
+    order: D.caseStudies.map(function (_, k) { return k; }), sig: 0 };
+  var TABS = [['overview', 'Overview'], ['video', 'Intro video'], ['about', 'About you'], ['times', 'Interview times'], ['cases', 'Case studies']];
+
+  function slots() { return Object.keys(S.avail).filter(function (k) { return S.avail[k]; }).length; }
+  function todos() {
+    return [
+      { l: 'Published case study', d: D.caseStudies.length + ' published. Your profile is listed.', done: true },
+      { l: 'Photo', d: 'Shows on your profile and in the talent directory.', done: false, cta: 'Add photo', tab: 'about' },
+      { l: 'Intro video', d: '60 to 90 seconds in your own words.', done: S.video, cta: 'Record', tab: 'video' },
+      { l: 'About you', d: 'Three short answers, roles and work setup.', done: false, cta: 'Answer', tab: 'about' },
+      { l: 'Interview times', d: slots() + ' time blocks open each week.', done: slots() >= 3, cta: 'Open times', tab: 'times' },
+      { l: 'Resume', d: 'Fills in your Experience section.', done: true },
+      { l: 'LinkedIn', d: 'Linked.', done: true },
+    ];
+  }
+  function render() {
+    var T = todos(), done = T.filter(function (x) { return x.done; }).length;
+    document.getElementById('strength').textContent = done + ' of 7';
+    var m = document.getElementById('meter'); m.setAttribute('aria-valuenow', done); m.firstElementChild.style.width = (done / 7 * 100) + '%';
+    var badge = { overview: S.req === 'pending' ? '1 request' : '', video: S.video ? 'done' : 'to do', about: 'to do', times: slots() + ' open', cases: String(D.caseStudies.length) };
+    document.getElementById('tabs').innerHTML = TABS.map(function (t) {
+      return '<button type="button" data-tab="' + t[0] + '"' + (S.tab === t[0] ? ' aria-current="page"' : '') + '><span>' + t[1] + '</span><small' + (t[0] === 'overview' && badge.overview ? ' class="hot"' : '') + '>' + badge[t[0]] + '</small></button>';
+    }).join('');
+    [].forEach.call(document.querySelectorAll('section[data-tab]'), function (s) { s.hidden = s.dataset.tab !== S.tab; });
+    document.getElementById('todos').innerHTML = T.map(function (x, k) {
+      return '<div class="todo' + (x.done ? ' done' : '') + '"><i>' + (x.done ? '✓' : k + 1) + '</i><div><b>' + x.l + '</b><span>' + esc(x.d) + '</span></div>'
+        + (x.done ? '' : '<button type="button" class="btn btn-ghost" data-tab="' + x.tab + '" style="color:var(--accent)">' + x.cta + '</button>') + '</div>';
+    }).join('');
+    var dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], blocks = [['Morning', '9 AM – 12 PM'], ['Afternoon', '12 – 5 PM'], ['Evening', '5 – 8 PM']];
+    document.getElementById('grid').innerHTML = '<span></span>' + dows.map(function (d) { return '<span class="dow">' + d + '</span>'; }).join('')
+      + blocks.map(function (b) {
+        return '<span class="blk">' + b[0] + '<small>' + b[1] + '</small></span>' + dows.map(function (d) {
+          var k = b[0] + '-' + d, on = !!S.avail[k];
+          return '<button type="button" class="cell" data-cell="' + k + '" aria-pressed="' + on + '" aria-label="' + d + ' ' + b[0].toLowerCase() + '">' + (on ? 'Open' : '—') + '</button>';
+        }).join('');
+      }).join('');
+    document.getElementById('order').innerHTML = S.order.map(function (ci, k) {
+      var c = D.caseStudies[ci], sig = ci === S.sig;
+      return '<li' + (sig ? ' class="sig"' : '') + '><span class="n">' + (k + 1) + '</span><img src="' + esc(c.look.coverImageUrl) + '" alt="">'
+        + '<div class="t">' + (sig ? '<small>★ Signature</small>' : '') + esc(c.title) + '</div>'
+        + '<button type="button" class="btn btn-ghost btn-icon star" data-sig="' + ci + '" aria-pressed="' + sig + '" aria-label="Make signature: ' + esc(c.title) + '">★</button>'
+        + '<button type="button" class="btn btn-ghost btn-icon" data-move="' + k + ',-1" aria-label="Move up"' + (k === 0 ? ' disabled' : '') + '>↑</button>'
+        + '<button type="button" class="btn btn-ghost btn-icon" data-move="' + k + ',1" aria-label="Move down"' + (k === S.order.length - 1 ? ' disabled' : '') + '>↓</button></li>';
+    }).join('');
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.tab) { S.tab = b.dataset.tab; render(); return; }
+    if (b.classList.contains('toggle')) { b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); return; }
+    if (b.dataset.cell) { S.avail[b.dataset.cell] = !S.avail[b.dataset.cell]; render(); return; }
+    if (b.dataset.sig) { var ci = +b.dataset.sig; S.sig = ci; S.order = [ci].concat(S.order.filter(function (x) { return x !== ci; })); render(); return; }
+    if (b.dataset.move) { var p = b.dataset.move.split(','), k = +p[0], j = k + +p[1], o = S.order; var t = o[k]; o[k] = o[j]; o[j] = t; render(); return; }
+  });
+  document.getElementById('accept').onclick = function () {
+    S.req = 'accepted';
+    document.getElementById('reqActs').innerHTML = '<span class="avail">Confirmed</span><a class="btn btn-ghost" href="#">Test my camera</a>';
+    render();
+  };
+
+  /* ---- Intro video: real camera preview + MediaRecorder (works on https or file://) ---- */
+  var PROMPTS = ['Who you are, and the role you want next.', 'One problem you solved, and what changed because of it.', 'What you would do in your first 30 days on a new team.'];
+  var pi = 0, rec = null, chunks = [], stream = null, sec = 0, timer = null;
+  function paintPrompts() {
+    document.getElementById('prompts').innerHTML = PROMPTS.map(function (p, k) { return '<li' + (rec && k === pi ? ' class="on"' : '') + '><b>' + (k + 1) + '</b><span>' + p + '</span></li>'; }).join('');
+    document.getElementById('promptNow').textContent = PROMPTS[pi];
+  }
+  paintPrompts();
+  var cam = document.getElementById('cam'), vid = document.getElementById('vid'), btn = document.getElementById('recBtn'), msg = document.getElementById('recMsg');
+  btn.onclick = async function () {
+    if (rec) { rec.stop(); return; }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (err) { msg.textContent = 'Camera unavailable here. Try Upload a video, or allow camera access.'; return; }
+    vid.srcObject = stream; vid.muted = true; vid.hidden = false; vid.controls = false; vid.play();
+    document.getElementById('camHint').hidden = true;
+    chunks = []; rec = new MediaRecorder(stream);
+    rec.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = function () {
+      clearInterval(timer); stream.getTracks().forEach(function (t) { t.stop(); });
+      var url = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType || 'video/webm' }));
+      vid.srcObject = null; vid.src = url; vid.muted = false; vid.controls = true;
+      cam.classList.remove('live'); rec = null; S.video = true;
+      btn.textContent = '● Record again'; document.getElementById('nextPrompt').hidden = true;
+      msg.textContent = 'Saved as a draft (' + sec + 's). In production this uploads to the video service for captions and review.';
+      paintPrompts(); render();
+    };
+    rec.start(); sec = 0; pi = 0; cam.classList.add('live'); btn.textContent = '■ Stop recording';
+    document.getElementById('nextPrompt').hidden = false; paintPrompts();
+    timer = setInterval(function () { sec++; document.getElementById('recTime').textContent = 'REC ' + Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); if (sec >= 90) rec && rec.stop(); }, 1000);
+  };
+  document.getElementById('nextPrompt').onclick = function () { pi = (pi + 1) % PROMPTS.length; paintPrompts(); };
+  document.getElementById('upload').onchange = function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    vid.srcObject = null; vid.src = URL.createObjectURL(f); vid.hidden = false; vid.controls = true; vid.muted = false;
+    document.getElementById('camHint').hidden = true; S.video = true; msg.textContent = 'Uploaded ' + f.name + ' as a draft.'; render();
+  };
+  render();
+})();
+</script>
+</body>
+</html>

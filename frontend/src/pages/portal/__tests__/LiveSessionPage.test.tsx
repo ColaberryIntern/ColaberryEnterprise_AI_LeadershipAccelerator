@@ -41,9 +41,20 @@ jest.mock('../../../components/portal/BroadcastWatchButton', () => ({
 // Stubbed for the same reason, and for one more: the real strip polls its own endpoint, which
 // `wire()` below deliberately rejects as an unexpected URL. Whether a producer may see it is
 // the strip's own suite; what this file asks is WHERE the page puts it.
+// The stub exposes `onProducerConfirmed` as a button rather than firing it on mount, because
+// the page's behaviour differs BEFORE and AFTER the server answers (D6) and a stub that always
+// confirmed could only ever show one of those two states.
 jest.mock('../../../components/portal/ProducerStrip', () => ({
   __esModule: true,
-  default: ({ sessionId }: { sessionId: string }) => <div data-testid="producer-stub">{sessionId}</div>,
+  default: ({ sessionId, onProducerConfirmed }: {
+    sessionId: string; onProducerConfirmed?: () => void;
+  }) => (
+    <div data-testid="producer-stub" data-session={sessionId}>
+      <button type="button" data-testid="confirm-producer" onClick={onProducerConfirmed}>
+        confirm
+      </button>
+    </div>
+  ),
 }));
 // The desktop rail. Same deal: it polls the companion state and the chat, and its own suite
 // covers what it contains. This file asks when the page mounts it and with what.
@@ -118,6 +129,8 @@ const text = () => container.textContent || '';
 const titleOf = () => container.querySelector('[data-testid="live-session-title"]')?.textContent || '';
 const workspace = () => container.querySelector('[data-testid="workspace-stub"]') as HTMLElement | null;
 const card = () => container.querySelector('[data-testid="live-session-page"]') as HTMLElement;
+/** The stubbed strip's way of saying "the server called this viewer a producer" (D6). */
+const producerConfirm = () => container.querySelector('[data-testid="confirm-producer"]') as HTMLElement | null;
 
 describe('what someone who clicks the link actually sees', () => {
   it('tells an early arrival the class has not started, and does not look like an error', async () => {
@@ -127,7 +140,7 @@ describe('what someone who clicks the link actually sees', () => {
     expect(titleOf()).toContain('has not started yet');
     // The reassurance matters as much as the state: this link is clicked days early by design.
     expect(text()).toContain('It will update on its own');
-    expect(text()).toContain('the link stays the same for this class');
+    expect(text()).toContain('The link stays the same for this class');
     expect(workspace()).toBeNull();
   });
 
@@ -325,6 +338,39 @@ describe('the desktop workspace (DOC 04)', () => {
     expect(card().className).not.toContain('is-wide');
   });
 
+  /**
+   * THE CARD HAS TO GROW FOR A PRODUCER BEFORE ANYTHING IS AIRING (D6).
+   *
+   * The width was keyed to `moment === 'live'`, but the strip renders at every moment on
+   * purpose: `not_started` is exactly when Go Backstage has to be pressed. So a producer
+   * arriving before the class got the controls, the clock, the feed health, the counts and a
+   * row of command buttons inside a 440px column.
+   *
+   * The pair of tests matters more than either alone. Widening on `isAuthenticated` would pass
+   * the first and fail the second, and that is the tempting shortcut: it is the only signal
+   * the page has without asking the strip.
+   */
+  it('widens for a PRODUCER before anything is airing', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: true });
+    wire('not_started');
+    await render();
+    expect(card().className).not.toContain('is-wide');
+
+    await act(async () => { producerConfirm()!.click(); });
+
+    expect(card().className).toContain('is-wide');
+  });
+
+  it('leaves a signed-in STUDENT narrow, because the strip never confirms them', async () => {
+    // The strip self-hides for anyone the server does not call a producer, so it never calls
+    // back. A card widened on sign-in alone would be 980px of empty space for every student.
+    mockAuth.mockReturnValue({ isAuthenticated: true });
+    wire('not_started');
+    await render();
+
+    expect(card().className).not.toContain('is-wide');
+  });
+
   it('is not mounted before the class is on air', async () => {
     // Unlike the producer strip, which is needed precisely while nothing is airing, there is
     // nothing for a VIEWER to do on a class that has not started.
@@ -373,7 +419,9 @@ describe('the producer strip (P4-02)', () => {
     wire('not_started');
     await render();
 
-    expect(strip()!.textContent).toBe('sess-1');
+    // Read off an attribute rather than the stub's text, so the assertion survives the stub
+    // growing a child. It gained one when D6 needed a way to fire `onProducerConfirmed`.
+    expect(strip()!.getAttribute('data-session')).toBe('sess-1');
   });
 });
 
@@ -410,5 +458,113 @@ describe('the body flag that places the player', () => {
 
     // The shared afterEach unmounts again; make that a no-op rather than a double unmount.
     root = { unmount: () => undefined } as unknown as Root;
+  });
+});
+
+/**
+ * THE STATE MATRIX, as tests. P1-07's deliverable, and the hole DOC 18 named:
+ * "no test asserts what a viewer actually sees end to end".
+ *
+ * One row per editorial state the broadcast state machine can be in, asserting what a
+ * NON-STAFF viewer gets. The staff view is deliberately not the subject here - the question
+ * these answer is what the room, and anyone who scanned the code, is told.
+ *
+ * `moment` is what the server resolves each editorial state to
+ * (`backend/src/services/broadcast/broadcastSessionLinks.ts`), so these assert the two halves
+ * together: the mapping is covered by the backend's own suite, and this covers what each
+ * resolved moment renders.
+ */
+describe('the state matrix: what a NON-STAFF viewer sees in every state', () => {
+  beforeEach(() => {
+    // Not staff. The producer strip is already asserted absent elsewhere; this is the audience.
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+  });
+
+  /**
+   * BACKSTAGE MUST BE INDISTINGUISHABLE FROM SCHEDULED.
+   *
+   * This is the one row that is a security property rather than a copy choice. Backstage is the
+   * staff rehearsal state: the producer can see the program feed. If a viewer could tell
+   * backstage from scheduled - by a different word, a badge, anything - they would know when
+   * staff were in the room, which is exactly the leak the state was designed to avoid.
+   *
+   * THE FIRST VERSION OF THIS TEST WAS VACUOUS, and a mutation found it. It rendered
+   * `not_started` twice and asserted the two were byte-identical - which compares the state to
+   * itself and proves nothing. Adding "(staff are in the room)" to the waiting copy passed it.
+   *
+   * The two halves of the property live in different places, so they are asserted separately
+   * rather than faked into one test here:
+   *
+   *  - That backstage and scheduled resolve to the SAME moment is a backend fact, covered by the
+   *    sweep in `broadcastSessionLinks.test.ts` over every editorial state.
+   *  - What is left for this surface is that the waiting copy carries no staff vocabulary. By the
+   *    time the page sees it, backstage and scheduled are the same value, so the only way this
+   *    screen can leak is by saying something it should not.
+   */
+  it('leaks no staff vocabulary while a viewer is waiting', async () => {
+    wire('not_started');
+    await render();
+    const waiting = text();
+    for (const word of ['backstage', 'staff', 'rehearsal', 'producer', 'preview', 'program feed']) {
+      expect(waiting.toLowerCase()).not.toContain(word);
+    }
+  });
+
+  it('SCHEDULED: says it has not started and that the page updates itself', async () => {
+    wire('not_started');
+    await render();
+    expect(text()).toContain('This class has not started yet');
+    expect(text()).toContain('It will update on its own');
+    expect(workspace()).toBeNull();
+  });
+
+  it.each(['live', 'reconnecting'])('%s: resolves to live, and the class is on this page', async () => {
+    wire('live', 'https://portal.example/watch');
+    await render();
+    expect(text()).toContain('This class is live now');
+    expect(text()).toContain('Everything for this class is on this page');
+  });
+
+  it.each(['ended', 'processing', 'replay_ready'])(
+    '%s: says the class ended and does not promise a replay that may not exist',
+    async () => {
+      wire('ended');
+      await render();
+      expect(text()).toContain('This class has ended');
+      // "if one is published" - processing can fail back to ended, so a replay is conditional.
+      expect(text()).toContain('if one is published');
+      expect(workspace()).toBeNull();
+    },
+  );
+
+  /**
+   * CANCELLED was the bug this matrix found.
+   *
+   * It used to resolve to `not_started`, so a cancelled class told everyone who scanned the code
+   * "Leave this page open. It will update on its own when the class goes live." Every clause was
+   * false: `cancelled` is terminal and no second occurrence can be minted for the session, so
+   * the page would never update and the class could never go live.
+   *
+   * Both wrong answers are asserted against, not just the right one. Folding it into `ended`
+   * would be the other easy mistake, and that promises a replay that was never recorded.
+   */
+  it('CANCELED: says so, and promises neither a start nor a replay', async () => {
+    wire('cancelled');
+    await render();
+    expect(text()).toContain('This class was canceled');
+    expect(text()).toContain('no replay');
+    expect(text()).not.toContain('has not started yet');
+    expect(text()).not.toContain('It will update on its own');
+    expect(text()).not.toContain('This class has ended');
+    expect(workspace()).toBeNull();
+  });
+
+  it('UNKNOWN: blames the check rather than the link', async () => {
+    // A viewer who meets an error page concludes the link is broken and does not come back.
+    wire('unknown');
+    await render();
+    expect(text()).toContain('We cannot check this class right now');
+    expect(text()).toContain('usually temporary');
+    expect(text()).not.toMatch(/error|failed|broken/i);
   });
 });

@@ -93,6 +93,53 @@
     return /^https?:\/\//i.test(s) || /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(s) ? s : '';
   }
 
+  /* A record's media URL. The API sends covers origin-relative (`/site-v2/...`), and they live
+     on the platform origin, not this one, so a relative path is resolved against `api`. Only
+     http(s) survives; anything else is ''. */
+  function mediaUrl(api, url) {
+    var s = String(url || '').trim();
+    if (/^\/[^/]/.test(s)) s = String(api || '').replace(/\/+$/, '') + s;
+    return /^https?:\/\//i.test(s) ? s : '';
+  }
+
+  /* 105 -> "1:45". Nothing for a missing or non-positive length. */
+  function duration(secs) {
+    var n = typeof secs === 'number' && isFinite(secs) ? Math.round(secs) : 0;
+    if (n <= 0) return '';
+    var s = n % 60;
+    return Math.floor(n / 60) + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  /* "operational-ai-call-intent-routing" -> "Call intent routing". The taxonomy prefix is the
+     same on every record, so it is dropped: it is the part that does not differentiate. */
+  function capabilityLabel(slug) {
+    var s = String(slug || '').trim().toLowerCase().replace(/^operational-ai-/, '').replace(/[-_]+/g, ' ').trim();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  }
+
+  /* An industry for display. The API sends a facet KEY ("data-infrastructure-operations",
+     "public-sector"), and every page printed it raw (Quincy, 2026-11-11). A key becomes
+     "Data infrastructure operations"; a value that is already prose is left exactly as is. */
+  function industryLabel(v) {
+    var s = String(v || '').trim();
+    if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(s)) return s;
+    s = s.replace(/[-_]+/g, ' ');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  /* A case study's cover for any card: its picked thumbnail with the walkthrough length on it,
+     or the generated art when the record has no cover (never a blank box). `c` is a Hire case
+     card or signature: { slug, look: { coverImageUrl, walkthroughSeconds } }. */
+  function cover(c, api, n) {
+    var L = (c && c.look && typeof c.look === 'object') ? c.look : {};
+    var url = mediaUrl(api, L.coverImageUrl);
+    var len = duration(L.walkthroughSeconds);
+    var media = url
+      ? '<img class="cover" src="' + esc(url) + '" alt="" loading="lazy" decoding="async">'
+      : art((c && c.slug) || '', { n: n });
+    return media + (len ? '<span class="play" aria-label="Walkthrough video, ' + esc(len) + '">▶ ' + esc(len) + '</span>' : '');
+  }
+
   /* The avatar: photo or initials on a slug-derived gradient; gold ring + star when listed. */
   function avatar(person, size, ring) {
     var withRing = ring !== false;
@@ -146,7 +193,7 @@
 
   return {
     esc: esc, rnd: rnd, hueOf: hueOf, art: art, initials: initials, safeImageUrl: safeImageUrl,
-    avatar: avatar, ARROW: ARROW, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
+    avatar: avatar, ARROW: ARROW, mediaUrl: mediaUrl, duration: duration, capabilityLabel: capabilityLabel, industryLabel: industryLabel, cover: cover, plural: plural, fetchJson: fetchJson, reducedMotion: reducedMotion,
     readShortlist: readShortlist, writeShortlist: writeShortlist, toggleShortlist: toggleShortlist,
     track: track, SHORT_KEY: SHORT_KEY,
   };

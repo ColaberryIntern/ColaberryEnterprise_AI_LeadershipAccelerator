@@ -303,3 +303,48 @@ export async function readLiveAudience(occurrenceId: string): Promise<LiveAudien
     return { outcome: 'failed' };
   }
 }
+
+/**
+ * D10 - mark the moment that just happened.
+ *
+ * The request carries NOTHING about the moment, which is the point. Not the timecode, not the
+ * slide, not a label: the server reads which airing this session is bound to and how far into
+ * the recording it is now. A client allowed to name its own timecode could point a clip at any
+ * second of any recording it could name.
+ *
+ * The outcomes are kept distinct rather than collapsed into ok/not-ok, because three of them
+ * mean different things to the person who just pressed the button. `duplicate` is a correct
+ * press that did nothing - it hit a second already marked - and reporting it as success would
+ * tell a producer who pressed twice that they have two clips.
+ */
+export type ClipMarkResult =
+  | { outcome: 'marked'; timecodeSeconds: number; labelled: boolean }
+  | { outcome: 'duplicate'; timecodeSeconds: number }
+  | { outcome: 'refused'; reason: string }
+  | { outcome: 'failed' };
+
+export async function markClipNow(sessionId: string): Promise<ClipMarkResult> {
+  try {
+    const res = await portalApi.post<{
+      outcome?: string; timecode_seconds?: number; labelled?: boolean; reason?: string;
+    }>(`/api/portal/broadcasts/session/${encodeURIComponent(sessionId)}/clip-mark`, {});
+    const d = res.data || {};
+    if (d.outcome === 'duplicate') {
+      return { outcome: 'duplicate', timecodeSeconds: Number(d.timecode_seconds) || 0 };
+    }
+    return {
+      outcome: 'marked',
+      timecodeSeconds: Number(d.timecode_seconds) || 0,
+      labelled: d.labelled === true,
+    };
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number; data?: { reason?: string } } };
+    const status = e?.response?.status;
+    // 409 is the server saying the world is not ready - not on air, content not started. The
+    // reason is a wire value the strip turns into a sentence.
+    if (status === 409 || status === 403) {
+      return { outcome: 'refused', reason: e?.response?.data?.reason || 'not_available' };
+    }
+    return { outcome: 'failed' };
+  }
+}

@@ -2,12 +2,16 @@
 // Bridges Maya's OpenAI function calls to actual backend actions:
 // send documents, schedule callbacks, send emails, send SMS.
 
+import { fn, col, where as sqlWhere } from 'sequelize';
+import { withToolRecording } from './agents/tools/toolInvocationRecorder';
 import { Lead } from '../models';
 import AdmissionsMemory from '../models/AdmissionsMemory';
 import AdmissionsActionLog from '../models/AdmissionsActionLog';
 import DocumentDeliveryLog from '../models/DocumentDeliveryLog';
 import { canDeliverDocument } from './admissionsWorkflowService';
 import { sendAdmissionsDocument } from './emailService';
+import { evaluateSend } from './communicationSafetyService';
+import { sendOnce } from './email/idempotentSend';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
 import {
   captureLeadDetails,
@@ -263,7 +267,28 @@ export interface MayaActionResult {
   details?: Record<string, any>;
 }
 
+/**
+ * Agent Tools Phase 5: every action carries the identity of the tool that performed it.
+ *
+ * `chatService` already emits a `tool.call` event around this call, so this wrapper is NOT about
+ * adding the only telemetry - it is about making the record uniform across all six dispatchers,
+ * and about putting the governance judgement in one place rather than six. The wrapper returns
+ * the inner result unchanged and rethrows, so it cannot alter behaviour on Maya's live
+ * visitor-facing surface.
+ */
 export async function executeMayaAction(
+  functionName: string,
+  args: Record<string, any>,
+  visitorId: string,
+  conversationId: string,
+): Promise<MayaActionResult> {
+  return withToolRecording(
+    { agentName: 'Maya', toolName: functionName, surface: 'maya_site_chat', args },
+    () => executeMayaActionInner(functionName, args, visitorId, conversationId),
+  );
+}
+
+async function executeMayaActionInner(
   functionName: string,
   args: Record<string, any>,
   visitorId: string,
@@ -395,13 +420,86 @@ async function handleSendDocument(
     }
   }
 
-  // Send the email
-  try {
-    await sendAdmissionsDocument({
-      to: recipient_email,
-      name,
-      documentType: document_type,
+  // ── Consent and suppression, which this path previously skipped entirely ──
+  //
+  // Resolve the lead from the RECIPIENT ADDRESS first, and only fall back to the lead
+  // attached to this visitor. That order is the point: the address is supplied by the
+  // model from whatever the visitor typed, so it is not necessarily the visitor's own.
+  // Keying the check on the visitor's lead would check consent for one person and then
+  // mail a different one, which is the exact hole this closes.
+  //
+  // `evaluateSend` is the chokepoint that owns the kill switch, the scheduler pause, the
+  // rate limit, lead status, unsubscribe events and per-channel suppression. Suppression
+  // is recorded against `lead_id`, so a recipient with no lead row has no opt-out to
+  // honour and is a solicited first contact: we proceed and record that we could not
+  // judge, rather than refusing a visitor who just asked us for a document.
+  // Matched case-insensitively, and that is load-bearing rather than tidy. Measured in
+  // production on 2026-11-12: 986 of 25,430 lead rows store a mixed-case address, and 21
+  // of those leads have an unsubscribe event. An exact-match lookup would have found no
+  // lead for those 21, skipped the consent check as "no lead, nothing to honour", and
+  // mailed people who had opted out. `Op.iLike` is NOT used here because `_` is a wildcard
+  // in LIKE and a common character in real addresses, so it would over-match.
+  const leadForRecipient = await Lead.findOne({
+    where: sqlWhere(fn('lower', col('email')), String(recipient_email).trim().toLowerCase()),
+  }).catch(() => null);
+  const consentLeadId = leadForRecipient?.getDataValue('id') ?? memory?.lead_id ?? null;
+
+  let sendTo = recipient_email;
+  if (consentLeadId) {
+    const decision = await evaluateSend({
+      leadId: consentLeadId,
+      channel: 'email',
+      toEmail: recipient_email,
+      source: 'agent',
     });
+    if (!decision.allowed) {
+      await logAction(visitorId, conversationId, 'send_document', 'denied', {
+        document_type,
+        reason: decision.blockedReason || 'send_not_allowed',
+        lead_id: consentLeadId,
+      });
+      // Say that it was not sent. Do not explain the suppression to the visitor.
+      return {
+        success: false,
+        summary: 'I could not email that to this address. A member of the admissions team '
+          + 'will follow up with you directly.',
+      };
+    }
+    // Honour a test-mode redirect rather than mailing the real recipient anyway.
+    if (decision.redirect?.email) sendTo = decision.redirect.email;
+  }
+
+  // ── The send, once ──
+  //
+  // `sendOnce` claims the send through a UNIQUE index before calling the provider, so a
+  // retried tool call, or the model calling the tool twice in one turn, cannot produce a
+  // second email. The business event is scoped to this visitor and document, so each
+  // document goes to a given address at most once.
+  const docNames: Record<string, string> = {
+    executive_briefing: 'Executive Briefing',
+    program_overview: 'Program Overview',
+    enterprise_guide: 'Enterprise Guide',
+    pricing_guide: 'Pricing Guide',
+  };
+  const subject = `Your ${docNames[document_type] || document_type} - Colaberry AI Leadership Accelerator`;
+
+  let result: Awaited<ReturnType<typeof sendOnce>>;
+  try {
+    result = await sendOnce(
+      {
+        recipient: sendTo,
+        subject,
+        businessEventId: `maya-doc-${document_type}-${visitorId}`,
+      },
+      async () => {
+        const sent = await sendAdmissionsDocument({ to: sendTo, name, documentType: document_type });
+        if (sent.outcome !== 'sent') {
+          // A refusal is not a provider failure to retry past; it is a missing document.
+          return { ok: false, error: sent.reason, errorClass: 'AdmissionsDocumentRefused' };
+        }
+        return { ok: true, messageId: sent.messageId };
+      },
+    );
   } catch (err: any) {
     await logAction(visitorId, conversationId, 'send_document', 'failed', {
       document_type,
@@ -410,38 +508,64 @@ async function handleSendDocument(
     return { success: false, summary: `Failed to send email: ${err.message}` };
   }
 
+  if (result.outcome === 'skipped') {
+    await logAction(visitorId, conversationId, 'send_document', 'duplicate_suppressed', {
+      document_type, recipient_email: sendTo, reason: result.reason,
+    });
+    return {
+      success: true,
+      summary: `The ${docNames[document_type]} has already been sent to ${sendTo}. `
+        + 'It can take a few minutes to arrive, and it is worth checking the spam folder.',
+    };
+  }
+
+  if (result.outcome === 'failed') {
+    // Record the request so it is actionable by a person, and tell the visitor the truth.
+    await DocumentDeliveryLog.create({
+      visitor_id: visitorId,
+      lead_id: consentLeadId,
+      document_type,
+      delivery_method: 'email',
+      recipient_email: sendTo,
+      status: 'failed',
+    }).catch(() => {});
+    await logAction(visitorId, conversationId, 'send_document', 'failed', {
+      document_type, recipient_email: sendTo, error_class: result.errorClass, error: result.error,
+    });
+    // NOT "sent". This branch is where the old code claimed success on a send that never
+    // left, because the document itself is not wired up yet.
+    return {
+      success: false,
+      summary: `I was not able to email the ${docNames[document_type]} just now. I have logged `
+        + 'your request and a member of the admissions team will send it to you directly.',
+    };
+  }
+
   // Log delivery
   await DocumentDeliveryLog.create({
     visitor_id: visitorId,
-    lead_id: memory?.lead_id || null,
+    lead_id: consentLeadId,
     document_type,
     delivery_method: 'email',
-    recipient_email,
+    recipient_email: sendTo,
     status: 'sent',
   }).catch(() => {});
 
   await logAction(visitorId, conversationId, 'send_document', 'completed', {
     document_type,
-    recipient_email,
+    recipient_email: sendTo,
     recipient_name: name,
   });
 
   // Tag Maya interaction
-  if (memory?.lead_id) {
-    addMayaInteractionTag(memory.lead_id, 'maya_document_requested').catch(() => {});
+  if (consentLeadId) {
+    addMayaInteractionTag(consentLeadId, 'maya_document_requested').catch(() => {});
   }
-
-  const docNames: Record<string, string> = {
-    executive_briefing: 'Executive Briefing',
-    program_overview: 'Program Overview',
-    enterprise_guide: 'Enterprise Guide',
-    pricing_guide: 'Pricing Guide',
-  };
 
   return {
     success: true,
-    summary: `Successfully sent ${docNames[document_type]} to ${recipient_email}`,
-    details: { document_type, recipient_email, recipient_name: name },
+    summary: `Successfully sent ${docNames[document_type]} to ${sendTo}`,
+    details: { document_type, recipient_email: sendTo, recipient_name: name },
   };
 }
 

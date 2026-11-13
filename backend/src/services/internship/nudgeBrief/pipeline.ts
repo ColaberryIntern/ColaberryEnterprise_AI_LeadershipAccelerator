@@ -52,6 +52,8 @@ export interface PipelineResult {
   /** The roster rows, which are the only place an email address lives. */
   readonly roster: ConsoleRosterRow[];
   readonly reportDate: string;
+  /** The cached model client, or null when OPENAI_API_KEY is absent. */
+  readonly chatClient: ChatClient | null;
   /** Which enrichments actually ran, so a caller can say so rather than assume. */
   readonly enrichment: {
     readonly model: boolean;
@@ -133,6 +135,9 @@ export async function runPortfolioPipeline(
     sidecarJson: serializeSidecar(sidecar),
     dashboardHtml: renderDashboard(report, sidecar),
     roster: data.roster ?? [],
+    // Exposed so the brief builder can offer the model a message body (modelBody.ts). It is the
+    // same CACHED client the report already used, so one run does not pay twice for a call.
+    chatClient: client,
     reportDate,
     enrichment: {
       model: client !== null,

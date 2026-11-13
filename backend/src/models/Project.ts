@@ -69,6 +69,13 @@ export interface ProjectAttributes {
    */
   archived_at?: Date | null;
   /**
+   * Who archived it, and why. NULL for anything archived by its own owner, or archived before
+   * these columns existed. Populated when an admin archives somebody else's project, because
+   * "this project vanished" otherwise has no answer. See db/ensureProjectArchiveAuditSchema.ts.
+   */
+  archived_by?: string | null;
+  archived_reason?: string | null;
+  /**
    * Review-and-approve. NULL = legacy / never gated (treated as approved). See
    * ProjectApprovalState and db/ensureProjectApprovalSchema.ts. No default on the
    * column, deliberately, so existing projects stay NULL and ungated.
@@ -124,6 +131,8 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare share_token: string | null;
   declare share_enabled: boolean;
   declare archived_at: Date | null;
+  declare archived_by: string | null;
+  declare archived_reason: string | null;
   declare approval_state: ProjectApprovalState | null;
   declare approved_at: Date | null;
   declare approved_by: string | null;
@@ -289,6 +298,20 @@ Project.init(
     // db/ensureProjectArchiveSchema.ts).
     archived_at: {
       type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // WHO archived it and WHY. Same rule as archived_at and for the same reason: declared here or
+    // Sequelize strips them from both writes and reads, and the audit trail would appear to be
+    // recorded while staying empty. Added when archiving became an admin action as well as a
+    // student one - a student archiving their own build needs no attribution, an admin removing
+    // somebody else's does. NULL means archived before this existed, or archived by the owner.
+    // See db/ensureProjectArchiveAuditSchema.ts.
+    archived_by: {
+      type: DataTypes.STRING(160),
+      allowNull: true,
+    },
+    archived_reason: {
+      type: DataTypes.STRING(200),
       allowNull: true,
     },
     // Review-and-approve. Same rule as archived_at: declared here so Sequelize

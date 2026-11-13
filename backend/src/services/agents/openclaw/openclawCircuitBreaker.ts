@@ -44,6 +44,50 @@ const circuitStates: Map<string, { state: CircuitState; opened_at: Date | null; 
 
 // ─── Pure Function ───────────────────────────────────────────────────────────
 
+/** One structured line saying a breaker closed, and on what evidence. */
+export interface CircuitRecoveryLine {
+  service: 'openclaw-circuit-breaker';
+  event: 'circuit_closed';
+  outcome: 'success';
+  reason: 'recovered_after_cooldown';
+  platform: string;
+  from: CircuitState;
+  to: 'CLOSED';
+  observed_tasks: number;
+  detail: string;
+}
+
+/**
+ * Build the line logged when a breaker closes.
+ *
+ * L7.3. Pure, so the ticket's metric - that a recovery says why it recovered - can be asserted
+ * without a database behind `getTaskCountsForPlatform`.
+ *
+ * Note what this deliberately does NOT claim: the breaker's state lives in a process-local Map
+ * that resets on restart, so a line saying a platform recovered means this process now believes
+ * the platform is healthy, not that the platform was continuously unhealthy until now. A restart
+ * closes every breaker silently, which is a separate gap recorded on the ticket rather than
+ * papered over here.
+ */
+export function circuitRecoveryLine(
+  platform: string,
+  from: CircuitState,
+  observedTasks: number,
+): CircuitRecoveryLine {
+  return {
+    service: 'openclaw-circuit-breaker',
+    event: 'circuit_closed',
+    outcome: 'success',
+    reason: 'recovered_after_cooldown',
+    platform,
+    from,
+    to: 'CLOSED',
+    observed_tasks: observedTasks,
+    detail: `posting to ${platform} resumed: ${observedTasks} task(s) observed with no errors `
+      + `after the breaker sat ${from}. Distribution was paused and is running again.`,
+  };
+}
+
 /**
  * Evaluate circuit state from error/total counts and timestamps.
  * Pure function for testability.
@@ -178,11 +222,24 @@ export async function checkCircuitBreaker(platform: string): Promise<CircuitStat
       if (errorCount === 0 && totalCount >= (DEFAULT_CONFIG.half_open_max_attempts)) {
         // Enough successes in HALF_OPEN -close circuit
         circuitStates.set(platform, { state: 'CLOSED', opened_at: null, half_open_successes: 0 });
+        // L7.3. THE RECOVERY IS AN EVENT TOO. A trip pages somebody; until now the recovery told
+        // nobody anything, so the only way to learn that posting had resumed was to go and look at
+        // a dashboard. "A silent recovery is an unmeasurable one" is this ticket's phrase for it,
+        // and the asymmetry is the whole defect: the alert says distribution stopped and nothing
+        // ever says it started again.
+        console.log('[OpenClawCircuitBreaker] recovery',
+          JSON.stringify(circuitRecoveryLine(platform, 'HALF_OPEN', totalCount)));
       } else {
         circuitStates.set(platform, { ...prev, state: 'HALF_OPEN' });
       }
     }
   } else if (state === 'CLOSED') {
+    // Only a TRACKED platform closing is a recovery. An untracked one is the ordinary case, which
+    // happens on every check of a healthy platform, and logging that would bury the real thing.
+    if (circuitStates.has(platform)) {
+      console.log('[OpenClawCircuitBreaker] recovery',
+        JSON.stringify(circuitRecoveryLine(platform, circuitStates.get(platform)!.state, totalCount)));
+    }
     circuitStates.delete(platform);
   }
 

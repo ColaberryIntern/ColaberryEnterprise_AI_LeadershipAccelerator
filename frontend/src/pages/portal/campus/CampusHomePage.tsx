@@ -201,7 +201,7 @@ function CampusHome(): React.ReactElement {
       <CampusAlerts />
       <BookCallHost />
       <MeetingSheetHost />
-      <CommunityBoardHost reduceMotion={reduce} />
+      <CommunityBoardHost reduceMotion={reduce} me={facts.fullName ?? ''} />
       <CabinetHost />
       <OrderSheetHost />
       <CampusCheer burst reduceMotion={reduce} />

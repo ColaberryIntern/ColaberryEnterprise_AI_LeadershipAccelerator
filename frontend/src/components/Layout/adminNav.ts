@@ -63,11 +63,11 @@ export const NAV_GROUPS: NavGroup[] = [
   // 'leads', so this changes nothing for owner/admin/revenue identities.
   { label: 'Revenue', section: 'revenue', links: [
     { path: '/admin/revenue', label: 'Revenue', icon: 'money-dollar-circle-line' },
-    // C8.2. Listed here rather than in UNLISTED_PATH_SECTIONS deliberately: a nav entry
-    // maps the frontend half of the section contract through the group's own 'revenue'
-    // key, so the two gates cannot drift the way an unlisted surface can.
-    { path: '/admin/commercialization', label: 'Commercialization', icon: 'line-chart-line' },
-    // R1. Listed here for the same reason as the line above: a nav entry maps the
+    // C8.2's Commercialization board was removed from the sidebar in R13: its ten tiles are
+    // business-proof cards on the Revenue Room, and /admin/commercialization now redirects
+    // there. Ali, 11 Nov 2026: "I do not understand the difference between the two. I only
+    // need one." The path keeps its section classification through the redirect target.
+    // R1. Listed here for the same reason as the line below: a nav entry maps the
     // frontend half of the section contract through this group's own 'revenue' key, so
     // the backend gate and the sidebar cannot drift the way an unlisted surface can.
     // The API sits under /api/admin/commercialization, which is already classified.
@@ -199,6 +199,15 @@ export const NAV_GROUPS: NavGroup[] = [
   // failure is the one the case-studies comment used to warn about here.
   { label: 'Program', section: 'program', links: [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'graduation-cap-line' },
+    /*
+     * D4 (P4-01) Colaberry Live Studio setup. `newTab` because this is show-running tooling:
+     * an operator configuring a class should not lose their place in admin, and the live
+     * surfaces render outside AdminLayout rather than inheriting the operations sidebar.
+     *
+     * Points at the INDEX, not a session. A nav entry is a fixed string and cannot carry a
+     * session id, so the menu lands on the list and the operator picks the class from there.
+     */
+    { path: '/admin/live/studio', label: 'Live Studio setup', icon: 'broadcast-line', newTab: true },
     // Renamed from "Orchestration": this is the curriculum authoring surface
     // (Composer, Experience Studio, Timeline, Feed Control), and "Curriculum"
     // is what it is called everywhere except this label. The PATH is unchanged

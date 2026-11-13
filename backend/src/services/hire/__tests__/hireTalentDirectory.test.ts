@@ -8,7 +8,7 @@ import { availabilityOf, pickSignature, toTalentCard, type HireCaseStudyCard, ty
 
 const cs = (slug: string, over: Partial<HireCaseStudyCard> = {}): HireCaseStudyCard => ({
   slug, title: 'Title ' + slug, summary: null, industry: 'Insurance', featured: false,
-  publishedAt: '2026-11-01T00:00:00.000Z', heroMetric: null, outcomes: [], ...over,
+  publishedAt: '2026-11-01T00:00:00.000Z', heroMetric: null, outcomes: [], look: { coverImageUrl: null, walkthroughSeconds: null, capability: null, verified: false, workflowDiagram: false, decisions: 0, repositories: 0 }, ...over,
 });
 const tcard = (slug: string, over: Partial<HireTalentCard> = {}): HireTalentCard => ({
   slug, name: 'N ' + slug, avatarUrl: null, role: null, track: null, headline: null, location: null,
@@ -80,6 +80,13 @@ describe('cards', () => {
     expect(c.caseStudyCount).toBe(2);
     expect(c.verifiedCommitCount).toBe(3);
     expect(c.spotlight).toBe(true);
+  });
+
+  it('the signature carries its look, so the home page can show the record\'s own cover', () => {
+    const portfolio: any = { identity: { full_name: 'Ann' }, capabilities: [], verified_commits: [] };
+    const look = { coverImageUrl: '/site-v2/thumb-x.jpg', walkthroughSeconds: 90, capability: null, verified: true, workflowDiagram: true, decisions: 3, repositories: 1 };
+    const c = toTalentCard(portfolio, { slug: 'ann', availabilityStatus: null, availabilityLabel: null, hireSpotlight: false }, [cs('x', { look })]);
+    expect(c.signature?.look).toEqual(look);
   });
 });
 

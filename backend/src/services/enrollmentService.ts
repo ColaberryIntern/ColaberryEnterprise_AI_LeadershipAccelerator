@@ -368,6 +368,32 @@ export async function createExplorerEnrollment(input: {
   const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });
   const existing = pickBestEnrollment(existingCandidates);
   if (existing) {
+    // FILL IN A PHONE NUMBER WE DID NOT HAVE, and only that.
+    //
+    // The Open House form now requires a phone number (Ali, 2026-11-11), but this
+    // early return meant a returning visitor typed one and we threw it away - so the
+    // field would be mandatory for them and still leave us with nothing. Every
+    // Explorer account created before today has an empty phone, which is most of
+    // them, so this is the common path rather than an edge case.
+    //
+    // Narrow on purpose: it fills a BLANK only. It never overwrites a number already
+    // on the account, because a stranger who types someone else's email must not be
+    // able to rewrite that person's contact details. Nothing else about the
+    // enrollment is touched, and a failure here is logged rather than thrown - the
+    // signup itself has already succeeded by any measure that matters to the visitor.
+    const incoming = (input.phone || "").trim();
+    if (incoming && !(existing.phone || "").trim()) {
+      try {
+        await existing.update({ phone: incoming });
+      } catch (err: any) {
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: "warn", service: "backend", event: "enrollment.phone_backfill_failed",
+          outcome: "partial", error_class: err?.constructor?.name || "UnknownError",
+          context: { enrollment_id: existing.id },
+        }));
+      }
+    }
     return { enrollment: existing, created: false, cohort_id: existing.cohort_id };
   }
 

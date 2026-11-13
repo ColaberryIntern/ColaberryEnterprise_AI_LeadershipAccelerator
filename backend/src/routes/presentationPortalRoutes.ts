@@ -667,7 +667,8 @@ router.get('/api/portal/showcases', requireParticipant, async (req: Request, res
     if (!gate(res)) return;
     if (!env.presentationStudioEnabled) return res.status(404).json({ error: 'Presentation Studio not enabled' });
     const { listVisibleShowcases } = await import('../services/presentation/showcaseGallery');
-    const items = await listVisibleShowcases({ enrollmentId: eid(req) });
+    // C138: cohort + staff from the same source as the sibling routes; without them cohort-audience demos never reached the cohort.
+    const items = await listVisibleShowcases({ enrollmentId: eid(req), cohortId: req.participant?.cohort_id ?? null, isStaff: req.participant?.isStaff === true });
     res.json({ items });
   } catch (e) { fail(res, e, next); }
 });

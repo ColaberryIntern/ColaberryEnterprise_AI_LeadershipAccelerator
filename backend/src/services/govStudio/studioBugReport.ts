@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { guardedSendMail } from '../emailService';
+import { readSendOutcome } from '../email/sendOutcome';
+import { env } from '../../config/env';
 import { getSetting } from '../settingsService';
 import { decodeScreenshot, parseRecipients } from '../../routes/admin/marketingBugReportRoutes';
 import { buildPlainTextBody, buildHtmlBody, type BugReportInput } from '../marketing/bugReportEmail';
@@ -25,6 +27,8 @@ const CapturedError = z.object({
 });
 const CapturedRequest = z.object({
   at: z.string().max(40), method: z.string().max(10), url: z.string().max(600), status: z.union([z.number(), z.string().max(40)]), ms: z.number(),
+  // Optional, so an older bundle still posts a valid report rather than a 400.
+  count: z.number().optional(),
 });
 
 export const StudioBugReportSchema = z.object({
@@ -120,13 +124,31 @@ export async function handleGovStudioBugReport(
     hasScreenshot: Boolean(shot),
   };
 
-  await guardedSendMail({
+  // Same missing `from` as the Marketing route had, same silent drop. See emailService.
+  const info = await guardedSendMail({
+    from: env.emailFrom,
     to: to.join(','),
     subject: buildGovStudioSubject(parsed.data.summary, parsed.data.contractName, projectId),
     text: buildPlainTextBody(input),
     html: buildHtmlBody(input),
     attachments: shot ? [{ filename: shot.filename, content: shot.buffer }] : undefined,
   });
+
+  const outcome = readSendOutcome(info);
+  if (!outcome.delivered) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'gov-studio-bug-report',
+      event: 'bug_report_not_delivered', outcome: 'failure', error_class: 'BugReportNotDelivered',
+      context: { projectId, route: parsed.data.routePath, reason: outcome.reason, recipients: to.length },
+    }));
+    return {
+      status: 502,
+      body: {
+        error: 'The report was accepted but could not be delivered. Please tell Ali directly - nothing was lost on your side.',
+        error_class: 'BugReportNotDelivered',
+      },
+    };
+  }
 
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(), level: 'info', service: 'gov-studio-bug-report',

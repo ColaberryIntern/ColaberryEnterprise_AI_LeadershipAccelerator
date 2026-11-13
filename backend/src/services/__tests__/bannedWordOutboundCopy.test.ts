@@ -171,6 +171,7 @@ const BASELINE = {
   'controllers/synthflowWebhookController.ts': [1, 'IDIOM: "Feel free to reply here" - politeness, not a price claim'],
   'db/ensureBroadcastSchema.ts': [1, "INTERNAL: enum value 'free' in ACCESS_MODES - a broadcast access mode stored in a column, not an offer. Same pattern as GrowthJourneyContentRule below. Renaming it is a schema change, not a copy fix"],
   'db/ensureLandingPageSchema.ts': [1, 'INTERNAL: "free-text destinations" in a column comment'],
+  'models/BroadcastOccurrence.ts': [1, "INTERNAL: enum value 'free' in BROADCAST_ACCESS_MODES - the four values the access_mode column stores, not an offer. Same pattern as ensureBroadcastSchema above, and deliberately ONE list rather than one per caller: every restatement of these literals would cost another entry here, in a baseline that is meant only to shrink. Renaming it is a schema change, not a copy fix"],
   'models/GrowthJourneyContentRule.ts': [2, "INTERNAL: enum value 'free' and a free-preview note, in a column comment"],
   'routes/admin/acceleratorRoutes.ts': [2, 'INTERNAL: the /free-access admin route path'],
   'routes/admin/communityMemberRoutes.ts': [4, 'INTERNAL: the /free-access admin route path and its log lines'],

@@ -1,8 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import AdminRevenueRoomPage, { InitiativeCardView } from '../AdminRevenueRoomPage';
-import type { InitiativeCard } from '../AdminRevenueRoomPage';
+import AdminRevenueRoomPage, { InitiativeCardView, tileAsCard } from '../AdminRevenueRoomPage';
+import type { InitiativeCard, CommercialTile } from '../AdminRevenueRoomPage';
 
 jest.mock('../../../utils/api', () => ({ __esModule: true, default: { get: jest.fn() } }));
 
@@ -133,5 +133,86 @@ describe('the page shell mounts', () => {
     );
     expect(html).toContain('data-testid="revenue-room"');
     expect(html).toContain('The Revenue Room');
+  });
+});
+
+/**
+ * R13 — the Commercialization board's tiles are cards on this page now. These tests exist
+ * because the merge's failure mode is silent: a tile whose `falseFriend` is dropped looks
+ * perfectly fine and quietly re-admits a source somebody already rejected.
+ *
+ * They replace AdminCommercializationPage.test.tsx, which went with its page.
+ */
+const tile = (over: Partial<CommercialTile> = {}): CommercialTile => ({
+  key: 'demos',
+  label: 'Demos booked',
+  status: 'unmeasurable',
+  value: null,
+  sourceTable: null,
+  provenance: 'No table records a demo booking.',
+  ...over,
+});
+
+describe('a commercialization tile survives becoming a card', () => {
+  it('carries the false friend across, so a rejected source is not rediscovered', () => {
+    const html = render(tileAsCard(tile({
+      falseFriend: 'workforce_meetings is internal leadership meetings',
+    })));
+    expect(html).toContain('Not this:');
+    expect(html).toContain('workforce_meetings is internal leadership meetings');
+  });
+
+  it('keeps the tile text and its own empty-state wording', () => {
+    const html = render(tileAsCard(tile()));
+    expect(html).toContain('Demos booked');
+    expect(html).toContain('No table records a demo booking.');
+    expect(html).toContain('No number is shown because none can be measured.');
+    expect(html).toContain('data-has-number="no"');
+  });
+
+  it('says an undefined rate has no deals rather than that it cannot be measured', () => {
+    const html = render(tileAsCard(tile({ status: 'undefined_rate' })));
+    expect(html).toContain('No closed deals either way');
+    expect(html).not.toContain('No number is shown because none can be measured.');
+  });
+
+  it('still refuses a number on an unmeasurable tile even when one is supplied', () => {
+    const html = render(tileAsCard(tile({ value: '42' })));
+    expect(html).not.toContain('42');
+    expect(html).toContain('data-has-number="no"');
+  });
+
+  it('prints a measured zero, because a zero that was measured is a finding', () => {
+    const html = render(tileAsCard(tile({
+      key: 'pipe', status: 'measured_zero', value: '0', sourceTable: 'revenue_opportunities',
+    })));
+    expect(html).toContain('>0<');
+    expect(html).toContain('data-has-number="yes"');
+  });
+
+  it('offers no drill-down link, rather than one that goes nowhere', () => {
+    const html = render(tileAsCard(tile()));
+    expect(html).not.toContain('Open the full history');
+  });
+
+  it('shows no owner line, because that board never recorded one', () => {
+    const html = render(tileAsCard(tile()));
+    expect(html).not.toContain('ri-user-line');
+  });
+
+  it('states no deadline at all, rather than implying one is missing', () => {
+    const html = render(tileAsCard(tile()));
+    expect(html).not.toContain('No deadline is recorded');
+  });
+
+  it('namespaces the key, so a tile cannot collide with an initiative of the same name', () => {
+    expect(tileAsCard(tile({ key: 'membership_subscriptions' })).key)
+      .toBe('proof_membership_subscriptions');
+  });
+
+  it('is labelled as business proof, not as a revenue bet', () => {
+    const html = render(tileAsCard(tile()));
+    expect(html).toContain('Business proof');
+    expect(html).not.toContain('Revenue bet');
   });
 });

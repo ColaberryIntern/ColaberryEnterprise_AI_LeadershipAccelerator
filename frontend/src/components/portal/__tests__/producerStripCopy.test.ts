@@ -1,4 +1,7 @@
-import { CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel } from '../producerStripCopy';
+import {
+  CONFIRM_Q, LABELS, needsConfirm, noActionsNote, stateLabel,
+  roomChip, stuckChip, audienceChip, endReasonCopy,
+} from '../producerStripCopy';
 import type { ProducerCommand } from '../../../services/broadcastProducer';
 
 /**
@@ -99,5 +102,122 @@ describe('the state badge', () => {
     expect(stateLabel('scheduled')).toBe('SCHEDULED');
     expect(stateLabel('replay_ready')).toBe('REPLAY READY');
     expect(stateLabel('cancelled')).toBe('CANCELLED');
+  });
+});
+
+/**
+ * THE COUNTS, AND THE ONE RULE THEY ALL OBEY (D8).
+ *
+ * A number nobody can stand behind is not shown as a number. The failure this guards is a
+ * fabricated `0`: it reads as an empty room, and a producer who believes the room is empty may
+ * end a class people are sitting in.
+ *
+ * The distinction asserted here is between UNMEASURABLE and ZERO, which is the part that is
+ * easy to get wrong in the generous direction. A genuine zero is a real reading and must render
+ * as a digit; "nobody is measuring" must never render as a digit at all.
+ */
+describe('the room and stuck counts', () => {
+  it('shows a measured count as a number', () => {
+    expect(roomChip({ present: 23 }, false, false)).toEqual({ state: 'ok', text: '23 in the room' });
+  });
+
+  it('shows a genuine ZERO as a number, because it is a real reading', () => {
+    // The opposite error to the one below, and just as wrong: hiding a true zero would leave a
+    // producer unable to tell "nobody has scanned yet" from "the count is broken".
+    expect(roomChip({ present: 0 }, false, false)).toEqual({ state: 'ok', text: '0 in the room' });
+  });
+
+  it('NEVER shows a number when nothing is measuring', () => {
+    const chip = roomChip(null, true, false);
+    expect(chip).toEqual({ state: 'unknown', text: 'room not measured' });
+    expect(chip!.text).not.toMatch(/\d/);
+  });
+
+  it('keeps the last good number and says it is not updating', () => {
+    // A producer mid-show needs the stale figure more than an empty panel, as long as the
+    // screen admits it is stale.
+    expect(roomChip({ present: 23 }, false, true))
+      .toEqual({ state: 'stale', text: '23 in the room · not updating' });
+  });
+
+  it('says "no answer" when a request failed and there was never a good one', () => {
+    expect(roomChip(null, false, true)).toEqual({ state: 'failed', text: 'no answer' });
+  });
+
+  it('renders nothing at all before the first answer arrives', () => {
+    // Not an error state. An empty chip in the first second would flicker for every producer.
+    expect(roomChip(null, false, false)).toBeNull();
+  });
+
+  it('raises the stuck count only when somebody is actually stuck', () => {
+    expect(stuckChip({ stuck: 3 }, false, false)).toEqual({ state: 'ok', text: '3 stuck', raised: true });
+    expect(stuckChip({ stuck: 0 }, false, false)).toEqual({ state: 'ok', text: '0 stuck', raised: false });
+  });
+
+  it('does NOT raise an unmeasurable stuck count, which would invent an alarm', () => {
+    // "stuck not measured" is a gap in instrumentation, not a room full of stuck people.
+    // Coloring it would send a producer looking for a problem that no measurement reported.
+    const chip = stuckChip(null, true, false);
+    expect(chip).toEqual({ state: 'unknown', text: 'stuck not measured', raised: false });
+  });
+
+  it('shows no audience count at all when nothing is on air', () => {
+    // A viewer count on a scheduled occurrence is a count of nothing, and one left up after
+    // the class is a stale claim about a broadcast that is over.
+    expect(audienceChip(false, { outcome: 'ok', watchingNow: 9 }, false)).toBeNull();
+  });
+
+  it('CONTROL: the audience chip does render while on air', () => {
+    expect(audienceChip(true, { outcome: 'ok', watchingNow: 9 }, false))
+      .toEqual({ state: 'ok', text: '9 watching' });
+  });
+});
+
+/**
+ * WHO ENDED IT (D8). The value was on the wire from the first day and nothing rendered it.
+ *
+ * The two reasons call for opposite next actions, which is why showing neither was a real gap:
+ * a producer pressing End is finished, and the watchdog firing means the feed broke and the
+ * recording may stop short of the class.
+ */
+describe('the end reason', () => {
+  it('says a human did it', () => {
+    expect(endReasonCopy('ended', 'producer')).toBe('Ended by a producer.');
+  });
+
+  it('says the safety net did it, and what that means for the recording', () => {
+    const copy = endReasonCopy('ended', 'auto_stream_gone')!;
+    expect(copy).toMatch(/automatically/i);
+    // The consequence is the useful half. Naming the cause without it leaves a producer
+    // publishing a replay that ends where the feed died.
+    expect(copy).toMatch(/recording/i);
+  });
+
+  it('admits when the reason was not recorded rather than guessing a producer', () => {
+    // Reachable, not hypothetical: every occurrence that ended before the column existed
+    // carries null. Guessing `producer` would assert a colleague did something they did not.
+    const copy = endReasonCopy('ended', null)!;
+    expect(copy).toMatch(/no end reason was recorded/i);
+    expect(copy).not.toMatch(/producer/i);
+  });
+
+  it('says nothing at all while the class has not ended', () => {
+    for (const s of ['scheduled', 'backstage', 'live', 'reconnecting']) {
+      expect(endReasonCopy(s, 'producer')).toBeNull();
+    }
+  });
+
+  it('says nothing for a called-off airing, which never ended because it never aired', () => {
+    expect(endReasonCopy('cancelled', null)).toBeNull();
+  });
+
+  it('still shows after processing and once the replay is up', () => {
+    // The question "who ended this" outlives the ending; it is asked afterwards, not during.
+    expect(endReasonCopy('processing', 'producer')).toBe('Ended by a producer.');
+    expect(endReasonCopy('replay_ready', 'producer')).toBe('Ended by a producer.');
+  });
+
+  it('prints an unrecognized reason rather than hiding it', () => {
+    expect(endReasonCopy('ended', 'some_new_reason')).toBe('Ended: some new reason.');
   });
 });

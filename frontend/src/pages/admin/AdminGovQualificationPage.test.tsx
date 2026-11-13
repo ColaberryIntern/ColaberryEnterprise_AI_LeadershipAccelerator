@@ -1078,3 +1078,89 @@ describe('AdminGovQualificationPage — journey', () => {
     expect(factoryApi.recordGovOutcome).toHaveBeenCalledWith(CANON, 'won', null);
   });
 });
+
+describe('AdminGovQualificationPage — READ-ONLY intern mount (same page, injected api, no writes, no award)', () => {
+  // The intern mount feeds the page a participant data source and readOnly. The admin factoryApi reads must NOT be
+  // called (the injected api is used instead); every mutation control must be absent; and no award figure renders.
+  const roWs = () => cleanWs({
+    evaluation: { evals: [{ id: 'REQ-001', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' }], blocking: [], deliveryObligations: [], byDueStage: { submission: [{ id: 'REQ-001', dueStage: 'submission', applicability: 'always', blocking: true, reason: 'submission_prerequisite_no_evidence' }], award: [], delivery: [], unknown: [] }, canApproveBid: false },
+  });
+  const roApi = {
+    getWorkspace: jest.fn(),
+    getOpportunityDetail: jest.fn(),
+  };
+  beforeEach(() => {
+    roApi.getWorkspace.mockResolvedValue(roWs());
+    roApi.getOpportunityDetail.mockResolvedValue({ opportunity: { estimatedValue: null, title: 'Crash Records', agency: 'TxDOT', closeDate: null, priorityScore: 70, fitScore: 80, preliminarySummary: null, sourceUrl: null }, source: 'snapshot', snapshotDate: null });
+  });
+  async function renderReadOnly(tab = 'fit') {
+    container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => { root.render(<MemoryRouter initialEntries={[`/portal/gov-projects/dp-A/qualification?tab=${tab}`]}><AdminGovQualificationPage readOnly opportunityKey={CANON} api={roApi as any} /></MemoryRouter>); });
+    // Fully drain the injected read AND the advisory service-match chain (match -> then -> finally), so no late
+    // setState lands outside act() and trips the teardown unmount.
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+  }
+
+  // EMBEDDED inside the cockpit: the active step comes from the `step` prop (not ?tab=), and the page's own chrome
+  // (PageHeader + StepBar) is suppressed because the cockpit provides them.
+  async function renderEmbedded(step = 'fit') {
+    container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
+    await act(async () => { root.render(<MemoryRouter initialEntries={['/portal/gov-projects/dp-A?view=' + step]}><AdminGovQualificationPage readOnly embedded step={step} opportunityKey={CANON} api={roApi as any} /></MemoryRouter>); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+  }
+
+  it('EMBEDDED: suppresses its own PageHeader + StepBar, takes the step from the prop, and still renders the real Fit content', async () => {
+    await renderEmbedded('fit');
+    expect(roApi.getWorkspace).toHaveBeenCalledWith(CANON, 'colaberry'); // same participant read
+    expect(container.textContent).not.toContain('Qualification Workspace'); // the standalone PageHeader title is gone
+    expect(container.querySelector('[role="tablist"]')).toBeNull();          // the cockpit owns the stepper, not this page
+    expect(container.textContent).toContain('Requirements by due stage');    // the REAL fit content renders inline
+    act(() => { root.unmount(); }); container.remove();
+  });
+
+  it('uses the INJECTED api (not the admin factoryApi) and renders the real requirements-by-due-stage', async () => {
+    await renderReadOnly('fit');
+    expect(roApi.getWorkspace).toHaveBeenCalledWith(CANON, 'colaberry');
+    expect(factoryApi.getGovQualificationWorkspace).not.toHaveBeenCalled(); // the admin read is bypassed
+    expect(container.textContent).toContain('Requirements by due stage');
+    expect(container.textContent).toContain('REQ-001'); // the SAME requirement data the admin renders
+  });
+
+  it('renders NO award / estimated-value field anywhere', async () => {
+    await renderReadOnly('fit');
+    expect(container.textContent).not.toMatch(/Estimated value|Est\. value/);
+  });
+
+  it('renders NONE of the mutation controls (establish/approve/extract/upload/attest/assign/materialize/reanalyze/export/review)', async () => {
+    const labels = ['decide', 'fit', 'solicitation', 'build', 'snapshot'];
+    for (const tab of labels) {
+      await renderReadOnly(tab);
+      const buttonText = Array.from(container.querySelectorAll('button')).map((b) => b.textContent ?? '').join(' | ').toLowerCase();
+      expect(buttonText).not.toMatch(/establish|approve|extract|upload|attest|assign|materialize|re-?analyz|export|request changes|run checks|accept|open qualification|send back/);
+      act(() => { root.unmount(); }); container.remove();
+    }
+  });
+
+  it('SHOWS the stepper (nav is not stripped) with ONLY the four qualification steps — not the studio steps', async () => {
+    await renderReadOnly('fit');
+    // the stepper itself renders in read-only (regression: it used to be hidden, stranding the intern)
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull();
+    // the four qualification steps are present
+    for (const key of ['snapshot', 'solicitation', 'fit', 'decide']) {
+      expect(container.querySelector(`[data-testid="step-${key}"]`)).not.toBeNull();
+    }
+    // the studio-owned steps (5-8) are NOT shown here — they are the intern's own Proposal Studio, and showing
+    // them produced the empty tabs Ali reported
+    for (const key of ['build', 'proposal', 'submit', 'outcome']) {
+      expect(container.querySelector(`[data-testid="step-${key}"]`)).toBeNull();
+    }
+  });
+
+  it('clamps a stale/forward ?tab= (a studio step) back to a qualification step instead of an empty body', async () => {
+    await renderReadOnly('build'); // a studio step the intern qual page does not own
+    // it does not sit on an empty "build" panel; the qualification stepper is shown and a qualification step is active
+    const selected = container.querySelector('[role="tab"][aria-selected="true"]');
+    expect(selected).not.toBeNull();
+    expect(selected?.getAttribute('data-testid')).toMatch(/^step-(snapshot|solicitation|fit|decide)$/);
+  });
+});

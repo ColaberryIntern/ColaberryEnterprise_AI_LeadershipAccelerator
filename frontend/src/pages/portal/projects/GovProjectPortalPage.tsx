@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getStudentGovProject, portalGovCockpitApi, portalGovStudioApi, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
+import { getPortalGovCockpitFull, portalGovCockpitApi, portalGovStudioApi, portalGovReviewApiReadOnly, type StudentGovProjectView } from '../../../services/govProjectPortalApi';
 import StudioShell from './proposalStudio/StudioShell';
 
 /**
@@ -17,7 +17,7 @@ export default function GovProjectPortalPage(): React.ReactElement {
 
   const load = useCallback(async () => {
     try {
-      setView(await getStudentGovProject(projectId));
+      setView(await getPortalGovCockpitFull(projectId));
       setState('ready');
     } catch (err: any) {
       setState(err?.response?.status === 404 ? 'not_found' : 'error');
@@ -48,7 +48,9 @@ export default function GovProjectPortalPage(): React.ReactElement {
 
   return (
     <div className="container-fluid py-4" data-testid="gov-project-view">
-      <StudioShell view={view} projectId={view.projectId} onReload={() => void load()} cockpitApi={portalGovCockpitApi} studioApi={portalGovStudioApi} bugReportEndpoint={`/api/portal/gov-projects/${encodeURIComponent(view.projectId)}/bug-report`} />
+      <StudioShell view={view} projectId={view.projectId} onReload={() => void load()} cockpitApi={portalGovCockpitApi} studioApi={portalGovStudioApi}
+        reviewApi={portalGovReviewApiReadOnly} readOnly
+        bugReportEndpoint={`/api/portal/gov-projects/${encodeURIComponent(view.projectId)}/bug-report`} />
     </div>
   );
 }

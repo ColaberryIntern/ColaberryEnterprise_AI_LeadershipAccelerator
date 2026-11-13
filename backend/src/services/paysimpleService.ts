@@ -393,15 +393,29 @@ export interface CreateInvoiceResult {
   mode: 'test' | 'live';
 }
 
+/**
+ * `amount` is REQUIRED, and that is the point of this signature.
+ *
+ * It used to be optional, falling back to `params.amount || 4500`. The only
+ * caller was the public `/api/create-invoice` route and it passed no amount, so
+ * the fallback was not a default, it was the behavior: a public unauthenticated
+ * route minting real $4,500 payment links at a price retired months earlier.
+ * Found by Victoria Spencer-Auber on 11 Nov 2026; see `handleCreateInvoice` for
+ * the full account and the evidence that nobody was ever charged it.
+ *
+ * Making it required means the retired price is gone from the codebase rather
+ * than merely unreachable, and any future caller has to say what it is charging
+ * or fail to compile. A price that can be omitted is a price nobody checks.
+ */
 export async function createEnrollmentInvoice(params: {
   fullName: string;
   email: string;
   company: string;
   phone?: string;
   cohortName: string;
-  amount?: number;
+  amount: number;
 }): Promise<CreateInvoiceResult> {
-  const amount = params.amount || 4500;
+  const { amount } = params;
 
   // 1. Find or create customer in PaySimple (v4)
   const customer = await findOrCreateCustomer({

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getPublicPortfolioBySlug } from '../services/career/careerPortfolioPageService';
 import { getHirePortfolio } from '../services/hire/hirePortfolio';
+import publicFeaturedWorkRoutes from './publicFeaturedWorkRoutes';
 
 /**
  * GET /api/public/portfolios/:slug — the person-level public portfolio.
@@ -89,5 +90,8 @@ async function sendHirePortfolio(slug: string, res: Response): Promise<void> {
     res.status(500).json({ error: 'Unable to load this portfolio' });
   }
 }
+
+// C130: a featured piece on this page, /api/public/portfolios/:slug/work/:id (+ /file, /preview, /xlsx). Same 404 rule.
+router.use(publicFeaturedWorkRoutes);
 
 export default router;

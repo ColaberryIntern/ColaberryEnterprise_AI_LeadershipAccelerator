@@ -15,7 +15,6 @@ const AdminPipelinePage = lazy(() => import('../pages/admin/AdminPipelinePage'))
 
 const AdminImportPage = lazy(() => import('../pages/admin/AdminImportPage'));
 const AdminRevenueDashboardPage = lazy(() => import('../pages/admin/AdminRevenueDashboardPage'));
-const AdminCommercializationPage = lazy(() => import('../pages/admin/AdminCommercializationPage'));
 // R1 - the Revenue Room. Its API lives under the already-classified
 // /api/admin/commercialization prefix; only the page path is its own.
 const AdminRevenueRoomPage = lazy(() => import('../pages/admin/AdminRevenueRoomPage'));
@@ -74,6 +73,7 @@ const AdminContentQueuePage = lazy(() => import('../pages/admin/marketing/AdminC
 const AdminPublishingQueuePage = lazy(() => import('../pages/admin/marketing/AdminPublishingQueuePage'));
 const AdminLandingPagesPage = lazy(() => import('../pages/admin/marketing/AdminLandingPagesPage'));
 const AdminAdSpendPage = lazy(() => import('../pages/admin/marketing/adSpend/AdminAdSpendPage'));
+const AdminOpenHouseAttendeesPage = lazy(() => import('../pages/admin/marketing/AdminOpenHouseAttendeesPage'));
 const AdminCommunicationsPage = lazy(() => import('../pages/admin/AdminCommunicationsPage'));
 const AdminTicketBoardPage = lazy(() => import('../pages/admin/AdminTicketBoardPage'));
 const AgentDetailPage = lazy(() => import('../pages/admin/AgentDetailPage'));
@@ -108,6 +108,9 @@ const CbSystemCommand = lazy(() => import('../pages/admin/CbSystemCommand'));
 const AdminTrustCenterPage = lazy(() => import('../pages/admin/AdminTrustCenterPage'));
 import lifecycleRoutes from './lifecycleRoutes';
 const AdminPortalEnterPage = lazy(() => import('../pages/admin/AdminPortalEnterPage'));
+// D4 (P4-01) Colaberry Live. Both render outside AdminLayout; see the routes below.
+const StudioIndexPage = lazy(() => import('../pages/admin/live/StudioIndexPage'));
+const StudioSetupPage = lazy(() => import('../pages/admin/live/StudioSetupPage'));
 // Refactored AI Delivery OS (Gates 10-11). Both surfaces sit under /admin for now because
 // no authentication path resolves a PlatformIdentity yet, so a client reviewer cannot log
 // in — see docs/architecture/refactored-delivery-os/CLIENT_IDENTITY_ANSWER.md. Serving the
@@ -156,6 +159,20 @@ const adminRoutes = (
           projection layer would be doing its job while the chrome advertised the lead
           pipeline. Found by deploying to dev and LOOKING; CI cannot see this.
           Staff auth is retained via ProtectedRoute. */}
+      {/* D4 (P4-01) Colaberry Live Studio setup renders OUTSIDE AdminLayout, like
+          /admin/ai-training-enter above, and is reached from a nav entry marked newTab.
+
+          Two reasons, and the second is the one that makes it a requirement rather than a
+          preference. First, this is show-running tooling: an operator setting up a class should
+          not lose their place in the admin app, and the live surfaces should not inherit the
+          portal shell's persistent mini-player and navigation. Second, a new tab is a COLD
+          RENDER - it carries no in-app state at all - so every one of these screens reads
+          everything it shows from the URL and one request. That is enforced by a test rather
+          than left as an intention.
+
+          The index exists because a nav entry is a fixed string and cannot carry a session id. */}
+      <Route path="/admin/live/studio" element={<StudioIndexPage />} />
+      <Route path="/admin/live/studio/:sessionId" element={<StudioSetupPage />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/people" element={<PeoplePage />} />
@@ -216,7 +233,16 @@ const adminRoutes = (
         <Route path="/admin/sequences" element={<Navigate to="/admin/campaigns" replace />} />
         <Route path="/admin/import" element={<AdminImportPage />} />
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
-        <Route path="/admin/commercialization" element={<AdminCommercializationPage />} />
+        {/*
+          R13 — one revenue surface. The Commercialization board's tiles are cards on the
+          Revenue Room now. This redirects rather than 404s because the old path is in
+          bookmarks, in Basecamp comments and in a year of session logs, and a dead link
+          teaches a reader the page was deleted when it was merged.
+        */}
+        <Route
+          path="/admin/commercialization"
+          element={<Navigate to="/admin/revenue-room" replace />}
+        />
         <Route path="/admin/revenue-room" element={<AdminRevenueRoomPage />} />
         <Route path="/admin/revenue-room/:cardKey" element={<AdminRevenueRoomDrilldownPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
@@ -297,6 +323,12 @@ const adminRoutes = (
           {/* Ad spend ledger: typed, imported, or synced from Meta. Feeds the profitability card on
               Performance. Section `campaigns` by prefix, matching /api/admin/marketing/ad-spend. */}
           <Route path="/admin/marketing/ad-spend" element={<AdminAdSpendPage />} />
+          {/* Open House signups: BOTH rosters on one screen. The portal Events page counts
+              Eventbrite's attendees from CCPP; our own landing page writes to Postgres. On
+              2026-11-11 that was 7 and 6 with zero overlap - thirteen people, and no screen
+              showed more than seven. Section `campaigns` by prefix, matching
+              /api/admin/marketing/open-house/attendees. */}
+          <Route path="/admin/marketing/open-house-attendees" element={<AdminOpenHouseAttendeesPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />

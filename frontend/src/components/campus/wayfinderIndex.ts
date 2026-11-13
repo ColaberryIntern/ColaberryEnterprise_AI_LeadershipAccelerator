@@ -55,11 +55,11 @@ function bookItem(c: WfContext): (WfItem & { keys: string }) | null {
   if (c.audience !== 'member' && c.audience !== 'explorer') return null;
   return { key: 'book', kind: 'book', title: 'Book a call with admissions', sub: 'A real person · 30 minutes on Google Meet', buildingId: 'gate', action: 'Book →', group: 'Help', keys: BOOK_KEYS };
 }
-/** C30 (v7 R3): the Community Board on the Quad (not a building; its pick walks there and opens it). */
+/** C30 (v7 R3), renamed in v20 (C131): Colaberry Now on the Quad (not a building; its pick walks there and opens it). */
 /** C39 (v11 C1): the FOOD group: "Order food" walks to Chow Hall and opens the order sheet. */
 const FOOD_ITEM: WfItem & { keys: string } = { key: 'food', kind: 'food', title: 'Order food', sub: 'Chow Hall · pick a craving, then your delivery app', buildingId: 'chow', action: 'Order ↗', group: 'Food',
   keys: WF_KEYS.chow as string };
-const BOARD_ITEM: WfItem & { keys: string } = { key: 'board', kind: 'board', title: 'Community Board', sub: 'on the Quad · posts and questions', buildingId: 'commons', action: 'Walk →', group: 'Places',
+const BOARD_ITEM: WfItem & { keys: string } = { key: 'board', kind: 'board', title: 'Colaberry Now', sub: 'on the Quad · Colaberry TV and what people are posting', buildingId: 'commons', action: 'Walk →', group: 'Places',
   keys: BOARD_WORDS.join(' ') + ' notice noticeboard' };
 const URGENT_WORDS =['late', 'now', 'standup', 'class', 'meeting', 'hurry'];
 export const WF_LIMIT = 9;
@@ -143,7 +143,7 @@ export function wayfinderSearch(query: string, c: WfContext): WfItem[] {
   const places = placeItems(c).filter((x) => matches(x.keys)).sort((a, b) => scoreOf(b, tokens) - scoreOf(a, tokens)).slice(0, WF_LIMIT);
   const people = [...staffItems(c), ...peopleItems(c)].filter((x) => matches(x.keys)).slice(0, PEOPLE_LIMIT);
   const book = bookItem(c);
-  const help = [...(book && matches(book.keys) ? [book] : []), ...(tokens.some((t) => BOARD_ITEM.keys.split(' ').some((k) => k.startsWith(t) && t.length >= 3)) ? [BOARD_ITEM] : [])];
+  const help = [...(book && matches(book.keys) ? [book] : []), ...(tokens.some((t) => BOARD_ITEM.keys.split(' ').some((k) => (k.startsWith(t) && t.length >= 3) || k === t)) ? [BOARD_ITEM] : [])];
   const food = c.buildings.some((b) => b.id === 'chow') && tokens.some((t) => t.length >= 3 && FOOD_ITEM.keys.split(' ').some((k) => k.startsWith(t))) ? [FOOD_ITEM] : [];
   const u = urgentItem(c);
   const urgentFirst = u && tokens.some((t) => URGENT_WORDS.includes(t)) ? [u] : [];

@@ -66,6 +66,12 @@ export interface OpenHouseSignupResult {
   registered: boolean;
   event: SignedUpEvent | null;
   message: string;
+  /**
+   * C121: present only when this sign-up CREATED the account: a portal session and where to open it (the welcome
+   * video). Null or absent for an address that already had an account, which must sign in instead. The form is public,
+   * so the server never signs a visitor into an account that existed before.
+   */
+  access?: { jwt: string; next: string } | null;
 }
 
 /**
@@ -96,6 +102,8 @@ export async function fetchNextOpenHouse(): Promise<NextOpenHouse | null> {
 export interface OpenHouseSignupBody {
   name: string;
   email: string;
+  /** REQUIRED. The route refuses a signup without a reachable number. */
+  phone: string;
   /** Absent or false records NO consent. It is not a revocation and not a default to flip on. */
   marketing_opt_in?: boolean;
   utm_source?: string;

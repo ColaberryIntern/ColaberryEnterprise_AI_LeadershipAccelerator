@@ -1,4 +1,5 @@
 import * as sql from 'mssql';
+import { QueryTypes } from 'sequelize';
 import { env } from '../config/env';
 import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
@@ -240,6 +241,9 @@ async function loadUpcoming(): Promise<OpenHouseView[]> {
       events = [];
     }
   }
+  // Fold our OWN registrations into the counts before caching, so every viewer of
+  // the calendar sees one number for the event rather than Eventbrite's share of it.
+  events = await addOwnRegistrations(events);
   cache = { at: Date.now(), events };
   return events;
 }
@@ -341,9 +345,218 @@ export async function getRegisteredEventIds(email: string, eventIds: string[]): 
  */
 export async function annotateRegistration(events: OpenHouseView[], email: string | null | undefined): Promise<OpenHouseView[]> {
   if (!email || events.length === 0) return events.map((e) => ({ ...e, is_registered: false }));
-  const mine = await getRegisteredEventIds(email, events.map((e) => e.id));
-  return events.map((e) => ({ ...e, is_registered: mine.has(e.id) }));
+  const ids = events.map((e) => e.id);
+  // BOTH ledgers. Someone who signed up on our own landing page is registered, and
+  // before this they were shown a "Sign up" button pointing at Eventbrite - which
+  // invited the very double-registration this pair of tables already suffers from.
+  const [onEventbrite, onOurs] = await Promise.all([
+    getRegisteredEventIds(email, ids),
+    getOwnRegisteredEventIds(email, ids),
+  ]);
+  return events.map((e) => ({ ...e, is_registered: onEventbrite.has(e.id) || onOurs.has(e.id) }));
 }
 
 /** Test-only: clear the in-memory cache between cases. */
 export function __resetPublicEventsCache(): void { cache = null; }
+
+/**
+ * Every attendee address Eventbrite holds for ONE event, de-duplicated and
+ * un-corrupted. Used by the Open House attendee reconciliation (OH-9).
+ *
+ * ── WHY THIS THROWS, WHEN EVERYTHING ELSE HERE FALLS BACK ──
+ *
+ * The rest of this module is viewer-facing: a portal page that cannot reach CCPP
+ * should still render, so those paths swallow the error and degrade. This one is
+ * the opposite. Its caller compares two rosters and reports who is missing from
+ * which, and an empty list from a broken query is indistinguishable from an event
+ * with no attendees — it would render "0 registered on Eventbrite, all 6 of yours
+ * are missing from it" with total confidence, which is a lie that looks like a
+ * finding.
+ *
+ * That is not hypothetical. `getRegisteredEventIds` returns an empty Set on any
+ * failure, and on 2026-11-11 it produced exactly that ambiguity while I was
+ * checking this data by hand. So: this one throws, and the caller is required to
+ * say "unavailable" rather than "zero".
+ *
+ * ── THE ADDRESS SHAPE ──
+ *
+ * CCPP's ingestion bakes the delimiters into the stored value — literally
+ * `'someone@example.com',` — for 100% of 2026 rows. `getRegisteredEventIds`
+ * handles this by matching both exact forms in SQL, which keeps its index usable.
+ * Here the whole roster is being read rather than probed for one address, so the
+ * unwrapping happens in JS, where it can be applied uniformly and tested.
+ *
+ * Addresses are returned lowercased and trimmed so callers can compare them
+ * directly against `open_house_registrations.email_lower` without re-normalising
+ * — two normalisers for one comparison is how a false "no overlap" gets made.
+ */
+export function unwrapCcppEmail(raw: string | null | undefined): string {
+  return String(raw ?? '')
+    .trim()
+    .replace(/^'/, '')
+    .replace(/',?$/, '')
+    .trim()
+    .toLowerCase();
+}
+
+export async function getEventAttendeeEmails(eventId: string): Promise<string[]> {
+  const id = String(eventId || '').trim();
+  if (!id) return [];
+
+  let pool: sql.ConnectionPool | null = null;
+  try {
+    pool = await connectCcpp();
+    const res = await pool
+      .request()
+      .input('eid', sql.VarChar, id)
+      .query<{ Email: string }>(
+        'SELECT Email FROM EventBrite_EventAttendees WHERE EventId = @eid',
+      );
+    const seen = new Set<string>();
+    for (const row of res.recordset) {
+      const email = unwrapCcppEmail(row.Email);
+      if (email) seen.add(email);
+    }
+    return [...seen];
+  } finally {
+    if (pool) { try { await pool.close(); } catch { /* ignore */ } }
+  }
+}
+
+/**
+ * Normalise an address the SAME way on both sides of every comparison. One
+ * normaliser, used everywhere, is what stops a false "no overlap".
+ */
+function normEmail(raw: string | null | undefined): string {
+  return String(raw ?? '').trim().toLowerCase();
+}
+
+/**
+ * Postgres, fetched LAZILY and never at module load.
+ *
+ * `config/database` constructs its Sequelize instance as a side effect of being
+ * imported, from a connection URL that does not exist in the test environment. A
+ * top-level `import { sequelize }` here therefore breaks every suite that imports
+ * this module - not with a failing assertion but with "Test suite failed to run",
+ * which is how the first push of this change took `publicEventsService.test.ts`
+ * and `openHouseEventService.test.ts` down with it.
+ *
+ * This module's reason for existing is CCPP. Postgres is a late addition used by
+ * two functions, so it is pulled in where it is used, the same way
+ * `marketingFunnelRoutes` defers `acquisitionFunnel`.
+ */
+async function pg() {
+  const { sequelize } = await import('../config/database');
+  return sequelize;
+}
+
+/**
+ * Which of `eventIds` this email registered for through OUR OWN pages.
+ *
+ * The Postgres twin of `getRegisteredEventIds`. Fails SOFT for the same reason:
+ * a database blip should degrade to "nothing marked registered" rather than break
+ * the calendar. `lower()` on both sides rather than `iLike`, because an address
+ * containing `_` or `%` is an ordinary address and a LIKE wildcard.
+ */
+export async function getOwnRegisteredEventIds(email: string, eventIds: string[]): Promise<Set<string>> {
+  const e = normEmail(email);
+  if (!e || eventIds.length === 0) return new Set();
+  try {
+    const rows = await (await pg()).query<{ event_id: string }>(
+      `SELECT DISTINCT event_id FROM open_house_registrations
+        WHERE lower(email_lower) = :email AND event_id IN (:ids)`,
+      { replacements: { email: e, ids: eventIds.map(String) }, type: QueryTypes.SELECT },
+    );
+    return new Set(rows.map((r) => String(r.event_id)));
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'own_registration_lookup_failed', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error',
+      context: { message: err?.message, events: eventIds.length },
+    }));
+    return new Set();
+  }
+}
+
+/**
+ * Add the people who registered through OUR pages to each event's `signup_count`.
+ *
+ * ── WHY ──
+ *
+ * The badge on the portal Events page was Eventbrite's roster alone. On 2026-11-11
+ * the Nov 19 Open House read "7 signed up" while eight more people had registered
+ * through our own landing page and the training site, with ZERO overlap between
+ * the two lists. The number was not wrong about Eventbrite; it was answering a
+ * narrower question than the one anyone reading it was asking.
+ *
+ * ── UNION, NOT SUM ──
+ *
+ * Someone can be on both lists. Adding the two counts would double-count them, and
+ * the overlap being zero today is a fact about today, not a property of the system.
+ * So the roster is read and the union taken.
+ *
+ * The union is computed from the UNWRAPPED roster rather than from CCPP's own
+ * `COUNT(DISTINCT Email)`, which counts the raw column: one person stored once as
+ * `a@b.com` and once as `'a@b.com',` is two rows to that COUNT and one person to
+ * this one. Taking the roster's deduplicated size therefore also removes a latent
+ * over-count from the badge.
+ *
+ * ── NEVER INFLATES ON A FAILED READ ──
+ *
+ * If the roster cannot be read, the count is left exactly as CCPP reported it. An
+ * approximate larger number would be indistinguishable from a real one, and a
+ * headcount nobody can trust is worse than a conservative one. Same if the event
+ * has no registrations of ours, or if `signup_count` is already unknown: unknown
+ * stays unknown.
+ */
+export async function addOwnRegistrations(events: OpenHouseView[]): Promise<OpenHouseView[]> {
+  if (events.length === 0) return events;
+
+  let rows: Array<{ event_id: string; email_lower: string }>;
+  try {
+    rows = await (await pg()).query<{ event_id: string; email_lower: string }>(
+      `SELECT event_id, email_lower FROM open_house_registrations WHERE event_id IN (:ids)`,
+      { replacements: { ids: events.map((e) => String(e.id)) }, type: QueryTypes.SELECT },
+    );
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'own_registrations_count_unavailable', outcome: 'partial',
+      error_class: err?.constructor?.name ?? 'Error', context: { message: err?.message },
+    }));
+    return events;
+  }
+  if (rows.length === 0) return events;
+
+  const byEvent = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const id = String(r.event_id);
+    if (!byEvent.has(id)) byEvent.set(id, new Set());
+    byEvent.get(id)!.add(normEmail(r.email_lower));
+  }
+
+  const out: OpenHouseView[] = [];
+  for (const e of events) {
+    const mine = byEvent.get(String(e.id));
+    // No registrations of ours, or Eventbrite's count already unknown: leave it be.
+    if (!mine || mine.size === 0 || typeof e.signup_count !== 'number') {
+      out.push(e);
+      continue;
+    }
+    try {
+      const roster = new Set((await getEventAttendeeEmails(String(e.id))).map(normEmail));
+      const extra = [...mine].filter((m) => !roster.has(m)).length;
+      out.push({ ...e, signup_count: roster.size + extra });
+    } catch (err: any) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+        event: 'signup_union_roster_unavailable', outcome: 'partial',
+        error_class: err?.constructor?.name ?? 'Error',
+        context: { event_id: String(e.id), message: err?.message, kept: 'eventbrite_count_only' },
+      }));
+      out.push(e);
+    }
+  }
+  return out;
+}

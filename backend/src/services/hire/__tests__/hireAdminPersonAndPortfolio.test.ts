@@ -7,6 +7,9 @@ jest.mock('../../career/careerEvidenceAdapters', () => ({ identityAdapter: jest.
 jest.mock('../../career/careerPortfolioPageService', () => ({ getPortfolioPreview: jest.fn(), getPublicPortfolioBySlug: jest.fn() }));
 jest.mock('../hireTalentIndex', () => ({ loadHireIndex: jest.fn() }));
 jest.mock('../hireListingSettings', () => ({ readHireListingSettings: jest.fn() }));
+// Phase 2 extras: off for these tests (their own suite is hirePortfolioExtras.test.ts).
+jest.mock('../hireStudioSettings', () => ({ readPublicIntro: jest.fn().mockResolvedValue(null), readCaseStudyOrder: jest.fn().mockResolvedValue([]) }));
+jest.mock('../hireInterviews', () => ({ bookingSummary: jest.fn().mockResolvedValue({ enabled: false, nextSlots: [], formats: [] }) }));
 jest.mock('../../../models/CaseStudy', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 
 import { linkedPeopleForCaseStudy } from '../../career/caseStudyLinkedPerson';
@@ -21,7 +24,7 @@ import { builderPortfolioSlugForCaseStudySlug, getHirePortfolio } from '../hireP
 const m = (f: unknown) => f as jest.Mock;
 const page = (portfolioSlug: string, status: string, visibility: string) =>
   ({ enrollmentId: 'e-' + portfolioSlug, portfolioSlug, status, visibility });
-const card = (slug: string) => ({ slug, title: 'T', summary: null, industry: null, featured: false, publishedAt: '2026-11-01', heroMetric: { value: '3', label: 'x' }, outcomes: [{ value: '3', label: 'x' }] });
+const card = (slug: string) => ({ slug, title: 'T', summary: null, industry: null, featured: false, publishedAt: '2026-11-01', heroMetric: { value: '3', label: 'x' }, outcomes: [{ value: '3', label: 'x' }], look: { coverImageUrl: null, walkthroughSeconds: null, capability: null, verified: false, workflowDiagram: false, decisions: 0, repositories: 0 } });
 
 beforeEach(() => {
   jest.restoreAllMocks();
@@ -117,6 +120,9 @@ describe('getHirePortfolio - reachable, not only listed', () => {
     m(getPublicPortfolioBySlug).mockResolvedValue({ portfolio: { identity: {} }, indexable: true });
     const out = await getHirePortfolio('ann-lee');
     expect(out?.hire.caseStudies[0]).not.toHaveProperty('outcomes');
+    // Each card carries its headline figure and its look (2026-11-11), so cards can differ.
+    expect(out?.hire.caseStudies[0]).toHaveProperty('heroMetric', { value: '3', label: 'x' });
+    expect(out?.hire.caseStudies[0]).toHaveProperty('look');
     expect(out?.hire.signature?.slug).toBe('a');
   });
 

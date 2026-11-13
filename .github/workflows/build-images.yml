@@ -101,17 +101,76 @@ jobs:
       # refuses loudly at run time on a missing file. An image that cannot enrich is
       # a worse outcome than a broken deploy only if it goes unnoticed, and it
       # cannot - the script exits non-zero and says exactly which path was empty.
-      - name: Fetch GeoLite2 City database
+      # ONE DOWNLOAD PER DAY, NOT ONE PER BUILD.
+      #
+      # On 2026-11-11 MaxMind emailed to say the account had hit its daily download
+      # limit. Every push to main runs this workflow, and that day had a dozen or
+      # more, each fetching a 50 MB database that MaxMind publishes about twice a
+      # week. Their own guidance is "no more than once per day per server", so the
+      # original step was always going to trip it; it just needed a busy day.
+      #
+      # Nothing broke, which is why it went unnoticed: the fetch below is fail-soft,
+      # so rate-limited builds simply shipped without a database and logged a
+      # warning nobody was reading. That is the worse failure mode - quiet.
+      #
+      # The date in the key is what makes it one per day. `restore-keys` falls back
+      # to the most recent earlier cache, so a rate-limited or offline build now
+      # ships YESTERDAY's database instead of none at all, which is strictly better
+      # for a dataset that changes twice a week.
+      #
+      # ON THE EULA. MaxMind requires a GeoLite database to be deleted within 30
+      # days of a new release. The fallback cannot drift that far: GitHub evicts
+      # cache entries not accessed within 7 days, so the oldest entry `restore-keys`
+      # can ever return is about a week old, and any build that reaches MaxMind
+      # replaces it with the current one.
+      - name: GeoLite2 cache key
         if: matrix.service == 'backend'
+        id: geodate
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore today's GeoLite2 database
+        if: matrix.service == 'backend'
+        id: geocache
+        uses: actions/cache@v4
+        with:
+          path: backend/geoip/GeoLite2-City.mmdb
+          key: geolite2-city-${{ steps.geodate.outputs.day }}
+          restore-keys: geolite2-city-
+
+      - name: Fetch GeoLite2 City database
+        # Skipped entirely once today's copy is already in hand. An older restored
+        # copy does NOT count as a hit, so the first build of each day still
+        # refreshes it.
+        if: matrix.service == 'backend' && steps.geocache.outputs.cache-hit != 'true'
         env:
           MM_ACCOUNT: ${{ vars.MAXMIND_ACCOUNT_ID }}
           MM_KEY: ${{ secrets.MAXMIND_LICENSE_KEY }}
         run: |
           set -uo pipefail
           mkdir -p backend/geoip
-          if [ -z "${MM_KEY:-}" ] || [ -z "${MM_ACCOUNT:-}" ]; then
-            echo "::warning::No MaxMind credentials available; building without a GeoIP database."
+          db=backend/geoip/GeoLite2-City.mmdb
+
+          # Did `restore-keys` hand us an older copy? It is the fallback if this
+          # fetch cannot complete, so say which outcome actually happened rather
+          # than claiming "no database" when there is one.
+          if [ -s "$db" ]; then
+            have_fallback=yes
+            echo "A previous GeoLite2 database was restored from cache; refreshing it."
+          else
+            have_fallback=no
+          fi
+
+          give_up() {
+            if [ "$have_fallback" = yes ]; then
+              echo "::warning::$1 Keeping the cached copy, which is at most a few days old."
+            else
+              echo "::warning::$1 Building without a GeoIP database."
+            fi
             exit 0
+          }
+
+          if [ -z "${MM_KEY:-}" ] || [ -z "${MM_ACCOUNT:-}" ]; then
+            give_up "No MaxMind credentials available."
           fi
           # Credentials go in a config file, never on the command line, so they
           # cannot surface in a process list or a trace.
@@ -120,20 +179,38 @@ jobs:
           url='https://download.maxmind.com/geoip/databases/GeoLite2-City/download?suffix=tar.gz'
           if ! curl -sS -f -L -K "$cfg" -o /tmp/geolite2-city.tar.gz "$url"; then
             rm -f "$cfg"
-            echo "::warning::GeoLite2 download failed; building without a GeoIP database."
-            exit 0
+            # The daily download limit lands here as an HTTP error, which is why
+            # the cache above exists rather than this message being the whole plan.
+            give_up "GeoLite2 download failed (rate limit, outage or bad key)."
           fi
           rm -f "$cfg"
-          tar -xzf /tmp/geolite2-city.tar.gz -C backend/geoip --strip-components=1 --wildcards '*/GeoLite2-City.mmdb'
-          rm -f /tmp/geolite2-city.tar.gz
-          ls -l backend/geoip/
-          # A truncated or HTML error body would otherwise be copied in as if it
-          # were a database and fail much later, at a prompt nobody is watching.
-          bytes=$(stat -c%s backend/geoip/GeoLite2-City.mmdb)
-          if [ "$bytes" -lt 10000000 ]; then
-            echo "::error::GeoLite2-City.mmdb is only ${bytes} bytes - that is not a city database."
-            exit 1
+
+          # Extract BESIDE the existing file, not over it: a tar that fails halfway
+          # would otherwise destroy the usable fallback it was meant to replace.
+          tmp="$(mktemp -d)"
+          if ! tar -xzf /tmp/geolite2-city.tar.gz -C "$tmp" --strip-components=1 --wildcards '*/GeoLite2-City.mmdb'; then
+            rm -rf "$tmp" /tmp/geolite2-city.tar.gz
+            give_up "GeoLite2 archive could not be extracted."
           fi
+          rm -f /tmp/geolite2-city.tar.gz
+
+          # A truncated or HTML error body would otherwise be installed as if it
+          # were a database and fail much later, at a prompt nobody is watching.
+          # `stat` on a missing file leaves `bytes` empty, and `[ "" -lt N ]` is a
+          # shell error, not a clean failure - so the file is checked first.
+          if [ ! -s "$tmp/GeoLite2-City.mmdb" ]; then
+            rm -rf "$tmp"
+            give_up "The archive contained no GeoLite2-City.mmdb."
+          fi
+          bytes=$(stat -c%s "$tmp/GeoLite2-City.mmdb")
+          if [ "$bytes" -lt 10000000 ]; then
+            rm -rf "$tmp"
+            give_up "Downloaded GeoLite2-City.mmdb is only ${bytes} bytes, which is not a city database."
+          fi
+
+          mv -f "$tmp/GeoLite2-City.mmdb" "$db"
+          rm -rf "$tmp"
+          ls -l backend/geoip/
           echo "GeoLite2-City.mmdb: ${bytes} bytes"
 
       - name: Build image

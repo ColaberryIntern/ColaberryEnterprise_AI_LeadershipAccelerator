@@ -107,8 +107,9 @@ export const CAMPUS_BUILDINGS: readonly CampusBuilding[] = [
     rooms: [{ label: 'Meeting rooms', route: '/portal/rooms' }, { label: 'Events', route: '/portal/events' }, { label: 'Community', route: '/portal/community' }, { label: 'People', route: '/portal/community/people' }],
     prefixes: ['/portal/rooms', '/portal/events', '/portal/community'], explorer: 'open', audiences: EVERYONE, pos: { x: 310, y: 546, w: 124, h: 62 }, kind: 'gable', zone: 'ave' },
   { id: 'gallery', name: 'Showcase Gallery', workplaceName: 'Portfolio Gallery',
-    primary: { label: 'Open my portfolio', route: '/portal/portfolio' },
-    rooms: [{ label: 'Portfolio', route: '/portal/portfolio' }, { label: 'Preview', route: '/portal/portfolio/preview' }, { label: 'Showcase', route: '/portal/showcase' }],
+    // C129 (approved C127 design, phase 2): the building opens on Dashboard; My work joined in C128.
+    primary: { label: 'Open my dashboard', route: '/portal/portfolio/dashboard' },
+    rooms: [{ label: 'Dashboard', route: '/portal/portfolio/dashboard' }, { label: 'My work', route: '/portal/portfolio/work' }, { label: 'Portfolio', route: '/portal/portfolio' }, { label: 'Preview', route: '/portal/portfolio/preview' }, { label: 'Showcase', route: '/portal/showcase' }],
     prefixes: ['/portal/portfolio', '/portal/showcase'],
     explorer: 'open', gate: 'portfolio', audiences: EVERYONE, pos: { x: 690, y: 546, w: 128, h: 58 }, kind: 'pavilion', zone: 'ave' },
   // One building, three faces: Career Center for members and interns, Partner Office for

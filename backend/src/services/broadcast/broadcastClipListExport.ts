@@ -26,7 +26,9 @@
  * silently corrupts a file if it is wrong, because labels are free text a human wrote.
  */
 import { formatTimecode } from './broadcastClipMarkerPolicy';
+import { resolveDecision } from './broadcastClipDecisionPolicy';
 import type { StoredClipMarker } from './broadcastClipMarkerService';
+import type { StoredClipMark } from './broadcastClipMarkService';
 
 /** The two instants that bound the recording. Either may be absent. */
 export interface ClipListAiring {
@@ -51,6 +53,21 @@ export interface ClipRow {
   label: string;
   segmentLabel: string;
   slideTitle: string;
+  /**
+   * Where this row came from (D10).
+   *
+   * `advance` is a by-product of the instructor moving the show on. `live` is a producer who
+   * watched something happen and pressed a button about it. For an editor deciding what to cut
+   * first, that difference is the single most useful column in the file: one of them is a
+   * person saying "this bit".
+   */
+  source: 'advance' | 'live';
+  /** D11: the segment this moment fell in. The key a keep-or-cut decision is stored against. */
+  segmentId: string;
+  /** D11: keep it or cut it. A person's answer where there is one, the segment's default where there is not. */
+  decision: 'keep' | 'cut';
+  /** D11: true when a person chose, false when this is the default for the kind of segment. */
+  decided: boolean;
 }
 
 function instantMs(value: string | Date | null): number | null {
@@ -92,6 +109,12 @@ export function isCandidate(marker: StoredClipMarker): boolean {
 export function buildClipRows(
   markers: ReadonlyArray<StoredClipMarker>,
   airing: ClipListAiring,
+  marks: ReadonlyArray<StoredClipMark> = [],
+  /**
+   * D11: the decisions a person has made, by segment id. Absent entries are not "keep" - they
+   * are "nobody has looked", which the policy resolves from the kind of segment.
+   */
+  decisions: Readonly<Record<string, 'keep' | 'cut'>> = {},
 ): ClipRow[] {
   const started = instantMs(airing.contentStartedAt);
   const ended = instantMs(airing.endedAt);
@@ -100,8 +123,46 @@ export function buildClipRows(
     ? Math.floor((ended - started) / 1000)
     : null;
 
-  const sorted = [...markers].sort(
-    (a, b) => a.timecode_seconds - b.timecode_seconds || a.slide_index - b.slide_index,
+  /**
+   * ADVANCES AND PRESSES BECOME ONE ORDERED LIST HERE (D10).
+   *
+   * They are stored in two tables because they are deduped differently - an advance is unique
+   * per slide, a press is unique per second - but an editor does not care which table a moment
+   * came from, only when it was. So the merge happens at the read, which is also the only place
+   * that can get the out points right: a press inside a long segment SPLITS it, and the clip
+   * that was running now ends where the press starts. Appending the presses afterwards instead
+   * would leave every advance's out point pointing past a moment somebody flagged.
+   *
+   * A press and an advance can legitimately share a second, so the tie-break puts the advance
+   * first: the segment begins, then something inside it is flagged.
+   */
+  const sorted = [
+    ...markers.map((m) => ({
+      timecode_seconds: m.timecode_seconds,
+      slide_index: m.slide_index,
+      label: m.label,
+      segment_id: m.segment_id,
+      segment_label: m.segment_label,
+      slide_title: m.slide_title,
+      candidate: isCandidate(m),
+      source: 'advance' as const,
+    })),
+    ...marks.map((m) => ({
+      timecode_seconds: m.timecode_seconds,
+      slide_index: m.slide_index,
+      label: m.label,
+      segment_id: m.segment_id,
+      segment_label: m.segment_label,
+      slide_title: m.slide_title,
+      // STORED, not derived. The press path records whether its label was authored, which is
+      // the gap this file's own `isCandidate` comment documents as unfixable after the fact.
+      candidate: m.labelled === true,
+      source: 'live' as const,
+    })),
+  ].sort(
+    (a, b) => a.timecode_seconds - b.timecode_seconds
+      || (a.source === b.source ? 0 : a.source === 'advance' ? -1 : 1)
+      || a.slide_index - b.slide_index,
   );
 
   return sorted.map((m, i) => {
@@ -126,10 +187,18 @@ export function buildClipRows(
       inTimecode: formatTimecode(inSeconds),
       outTimecode: outSeconds === null ? '' : formatTimecode(outSeconds),
       durationTimecode: durationSeconds === null ? '' : formatTimecode(durationSeconds),
-      candidate: isCandidate(m),
+      candidate: m.candidate,
       label: (m.label || '').trim(),
       segmentLabel: (m.segment_label || '').trim(),
       slideTitle: (m.slide_title || '').trim(),
+      source: m.source,
+      segmentId: (m.segment_id || '').trim(),
+      /**
+       * D11. Spread because the policy returns the decision AND whether a person made it, and
+       * the two must not drift apart on the way to the screen: "cut because it is a break" and
+       * "cut because somebody said so" look identical on a row that only carries the verdict.
+       */
+      ...resolveDecision(m.segment_id, decisions[(m.segment_id || '').trim()]),
     };
   });
 }
@@ -148,7 +217,7 @@ export function csvCell(value: string | number | boolean): string {
 }
 
 const COLUMNS = [
-  'clip', 'in', 'out', 'duration', 'candidate', 'label', 'segment', 'slide_title',
+  'clip', 'in', 'out', 'duration', 'source', 'decision', 'decided', 'candidate', 'label', 'segment', 'slide_title',
   'in_seconds', 'out_seconds', 'slide_index',
 ] as const;
 
@@ -168,6 +237,9 @@ export function toCsv(rows: ReadonlyArray<ClipRow>): string {
       csvCell(r.inTimecode),
       csvCell(r.outTimecode),
       csvCell(r.durationTimecode),
+      csvCell(r.source),
+      csvCell(r.decision),
+      csvCell(r.decided),
       csvCell(r.candidate),
       csvCell(r.label),
       csvCell(r.segmentLabel),

@@ -70,6 +70,7 @@ import internVideoRoutes from './admin/internVideoRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
+import toolRequestConversationRoutes from './admin/toolRequestConversationRoutes';
 import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
 import assignExistingToolRoutes from './admin/assignExistingToolRoutes';
 import ticketRoutes from './admin/ticketRoutes';
@@ -94,6 +95,7 @@ import productionActivationRoutes from './admin/productionActivationRoute';
 import campaignDiagnosticsRoutes from './admin/campaignDiagnosticsRoutes';
 import visitorFlowRoutes from './admin/visitorFlowRoutes';
 import marketingFunnelRoutes from './admin/marketingFunnelRoutes';
+import openHouseAttendeeRoutes from './admin/openHouseAttendeeRoutes';
 import adSpendRoutes from './admin/adSpendRoutes';
 import artifactRelationshipRoutes from './admin/artifactRelationshipRoutes';
 import dashboardRoutes from './admin/dashboardRoutes';
@@ -154,10 +156,12 @@ import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import govContractsRoutes from './admin/govContractsRoutes';
+import govProposalSourceRoutes from './admin/govProposalSourceRoutes';
 import agentFactoryRoutes from './admin/agentFactoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
+import colaberryTvAdminRoutes from './admin/colaberryTvAdminRoutes';
 
 const router = Router();
 
@@ -315,6 +319,8 @@ router.use(agentChangeRequestRoutes);
 // these two are `requireAdmin` on both -- settling a tool grant is not something the section
 // every mgmt role carries should reach.
 router.use(toolRequestDecisionRoutes);
+// Agent Tools Phase 2: the per-agent request pipeline and the conversation on a request.
+router.use(toolRequestConversationRoutes);
 router.use(agentToolGrantRoutes);
 router.use(assignExistingToolRoutes);
 router.use(ticketRoutes);
@@ -339,6 +345,7 @@ router.use(productionActivationRoutes);
 router.use(campaignDiagnosticsRoutes);
 router.use(visitorFlowRoutes);
 router.use(marketingFunnelRoutes);
+router.use(openHouseAttendeeRoutes);
 router.use(adSpendRoutes);
 router.use(artifactRelationshipRoutes);
 router.use(dashboardRoutes);
@@ -416,6 +423,7 @@ router.use(govQualificationRoutes);
 // Gov Contracts tab (M1): its own router gated 'gov_contracts' (NOT the factory→program prefix),
 // so the Interns-hub tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(govContractsRoutes);
+router.use(govProposalSourceRoutes);
 // Agent Factory tab (M2): its own 'agents'-gated router (NOT the '-provisioned' program prefix),
 // so the Interns-hub Agents tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(agentFactoryRoutes);
@@ -428,5 +436,7 @@ router.use(certPrepAdminRoutes);
 // own gate row). Every route carries requireAdmin.
 router.use(certificationAdminRoutes);
 router.use(checklistRoutes);
+// Campus v20 (C134): the Colaberry TV playlist; requireSection('campaigns') per route, PATH_SECTION maps it to campaigns.
+router.use(colaberryTvAdminRoutes);
 
 export default router;

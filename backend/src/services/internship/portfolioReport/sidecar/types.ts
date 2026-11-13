@@ -50,7 +50,7 @@ export interface SidecarArtifact {
   classification: ArtifactClassification;
 }
 
-export interface SidecarAsk { key: string; name: string; why: string; prompt: string; nudge: string }
+export interface SidecarAsk { key: string; name: string; theme: 'evidence' | 'diagnose' | 'advance'; why: string; prompt: string; nudge: string }
 
 export interface SidecarTimelineRow {
   date: string;

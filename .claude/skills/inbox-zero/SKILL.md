@@ -155,6 +155,20 @@ Every call returns one JSON line: `{ok, status, cmd, body}` or `{ok:false, error
 BLOCKED, not empty - render BLOCKED with the reason and do not advance the cursor. See
 `references/bridge.md` for the exact ssh/docker invocation and the command → endpoint table.
 
+## The Wednesday "Open House funnel" email: make the one move
+
+Every Wednesday at 8 AM CT, Ali, Taiwo and Sohail receive "Open House funnel, week of ...". It carries
+`OPEN_HOUSE_WEEKLY_REPORT.html` and `ONE_MOVE_PROMPT.md`. When Ali says "make the Open House move" (or "do the starred move"),
+run that week's `ONE_MOVE_PROMPT.md` exactly. Do not re-derive the move from the email body.
+
+- **Where to read it:** the copy the host wrote, `/var/lib/colaberry/open-house-weekly/out/<YYYY-MM-DD>/ONE_MOVE_PROMPT.md`.
+  It is byte-identical to the attachment, and reading it avoids an attachment download.
+- **Step 0 of the prompt is mandatory.** It proves the move is still current against `story/decisions.json` on main.
+- **The move is not done until the decision ledger has the new entries in the same PR.** That ledger is how next week's report tells the story.
+  - Never edit or delete an older entry.
+  - To change direction, append a `retraction` or `pivot` entry.
+- **Code:** `scripts/reports/open-house-weekly/` (README there).
+
 ## What "zero" means here
 
 - **Actionable Zero**: every case is answered, delegated, snoozed with a reason and date, or
@@ -178,7 +192,15 @@ verify, recipients preserved and any add/remove called out.
 https://3.basecamp.com/3945211/buckets/7463955/todos/9982045924). The three non-negotiables are a
 GUARD in the backend, not a reminder here: no em-dashes or en-dashes anywhere, the branded signature
 on every send, no double sign-off (the signature names him, so the body ends on its last real
-sentence, never "Best, Ali"). The planner normalises every draft to that before Ali sees it and the
+sentence, never "Best, Ali").
+
+**The body is PLAIN TEXT. Never write HTML into it.** No `<p>`, `<br>`, `<a href>`, no `&nbsp;`: separate
+paragraphs with a blank line and paste links as bare URLs. `sendAsAli.js` builds the HTML itself and
+refuses any body containing tags or entities, in dry runs too (C122, 11 Nov 2026). That day a body written
+in HTML reached Jackie showing literal `<p>` tags and a garbled link; Ali's words were "can't send out html
+like this. EVER".
+
+The planner normalises every draft to that before Ali sees it and the
 executor refuses to send anything that still breaks it (`StyleViolationError`, shown as a FAILED
 action). The rest of the kit is how the draft should read: subject leads with the action and has no
 exclamation mark; salutation is the first name only; the first line is the point, never "hope

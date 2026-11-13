@@ -26,6 +26,7 @@ import StoriesV2 from './pages/publicV2/StoriesV2';
 import StoryDetailV2 from './pages/publicV2/StoryDetailV2';
 import CapstoneRecordPage from './pages/CapstoneRecordPage';
 import PublicPortfolioProfilePage from './pages/PublicPortfolioProfilePage';
+import PublicWorkPage from './pages/PublicWorkPage';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -39,6 +40,7 @@ import AIPilotVerticalPage from './pages/AIPilotVerticalPage';
 import PublicPortfolioPage from './pages/PublicPortfolioPage';
 import ManagementPreviewPage from './pages/ManagementPreviewPage';
 import OpenHouseSignupPage from './pages/OpenHouseSignupPage';
+import OpenHouseLeadPage from './pages/OpenHouseLeadPage';
 
 function App() {
   return (
@@ -70,6 +72,10 @@ function App() {
               apart.
           */}
           <Route path="/open-house" element={<OpenHouseSignupPage />} />
+          {/* The confirmation, on a URL of its own so Meta can count a registration
+              rather than counting everyone who opened the form. Reached by navigation
+              from the sign-up; a direct visit shows a note and fires no Lead. */}
+          <Route path="/open-house/lead" element={<OpenHouseLeadPage />} />
           {adminRoutes}
           {portalRoutes}
           {referralRoutes}
@@ -241,6 +247,8 @@ function App() {
               already renders standalone is the one that survives that move unchanged.
           */}
           <Route path="/portfolio/:slug" element={<PublicPortfolioProfilePage />} />
+          {/* C130: one featured, reviewer-approved piece of work on a public portfolio. */}
+          <Route path="/portfolio/:slug/work/:id" element={<PublicWorkPage />} />
           {/*
               Client reviewer sign-in. Deliberately OUTSIDE both marketing layouts,
               for the same reasons that moved p/:slug out of the legacy block — and

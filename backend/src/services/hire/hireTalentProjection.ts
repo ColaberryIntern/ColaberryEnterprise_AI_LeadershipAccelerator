@@ -26,6 +26,44 @@ export interface HireCaseStudyCard {
   readonly publishedAt: string;
   readonly heroMetric: { readonly value: string; readonly label: string } | null;
   readonly outcomes: readonly { readonly value: string; readonly label: string }[];
+  readonly look: HireCaseStudyLook;
+}
+
+/**
+ * What makes one case study look like itself on a card (Ali, 2026-11-11: Kes's nine "on the
+ * surface they all look the same - we need to use our differentiators"). Every field is one
+ * the record's public projection already serves on its own page; nothing new is exposed.
+ * `coverImageUrl` may be origin-relative (`/site-v2/...`): the site resolves it against the
+ * platform API origin.
+ */
+export interface HireCaseStudyLook {
+  readonly coverImageUrl: string | null;
+  readonly walkthroughSeconds: number | null;
+  readonly capability: string | null;
+  readonly verified: boolean;
+  readonly workflowDiagram: boolean;
+  readonly decisions: number;
+  readonly repositories: number;
+}
+
+const count = (v: unknown): number => (Array.isArray(v) ? v.length : 0);
+
+/** The card's look, from the public projection only. Exported for its tests. */
+export function lookOf(detail: PublicCaseStudyDetail): HireCaseStudyLook {
+  const video = detail.walkthroughVideo;
+  const secs = video && typeof video.durationSeconds === 'number' && video.durationSeconds > 0
+    ? Math.round(video.durationSeconds) : null;
+  const priv = typeof detail.privateRepositoryCount === 'number' && detail.privateRepositoryCount > 0
+    ? detail.privateRepositoryCount : 0;
+  return {
+    coverImageUrl: text(detail.heroImageUrl) ?? text(video?.posterUrl),
+    walkthroughSeconds: secs,
+    capability: text(detail.primaryCapability),
+    verified: detail.verificationClass === 'verified',
+    workflowDiagram: detail.visualStory != null,
+    decisions: count(detail.decisions),
+    repositories: count(detail.repositories) + priv,
+  };
 }
 
 export interface HireTalentCard {
@@ -41,7 +79,7 @@ export interface HireTalentCard {
   readonly caseStudyCount: number;
   readonly verifiedCommitCount: number;
   readonly capabilities: readonly { readonly name: string; readonly proven: boolean }[];
-  readonly signature: Pick<HireCaseStudyCard, 'slug' | 'title' | 'industry' | 'heroMetric'> | null;
+  readonly signature: Pick<HireCaseStudyCard, 'slug' | 'title' | 'industry' | 'heroMetric' | 'look'> | null;
   readonly spotlight: boolean;
 }
 
@@ -59,7 +97,17 @@ function metricOf(m: PublicCaseStudyDetail['heroMetrics'][number]): { value: str
   const value = text(m?.valueDisplay);
   const label = text(m?.label);
   if (!value || !label) return null;
-  return { value: m.unit ? `${value} ${m.unit}` : value, label };
+  return { value: withUnit(value, text(m.unit)), label };
+}
+
+/**
+ * The unit goes after a BARE number only ("448" + "tests"). A display value that is already
+ * a phrase carries its own noun, so appending printed "Recovered in 1m31s seconds" on
+ * Quincy's profile and "1 of 6 sources live sources" (2026-11-12). Same rule as the Hire
+ * case study page's figure() and the enterprise page's unitAlreadyInValue.
+ */
+export function withUnit(value: string, unit: string | null): string {
+  return unit && /^[-+]?[\d.,]+%?$/.test(value) ? `${value} ${unit}` : value;
 }
 
 /** A Hire case study from its public projection: only what that projection already shows. */
@@ -78,6 +126,7 @@ export function toHireCaseStudyCard(
     publishedAt: facts.publishedAt,
     heroMetric: outcomes[0] ?? null,
     outcomes: outcomes.slice(0, 4),
+    look: lookOf(detail),
   };
 }
 
@@ -124,7 +173,7 @@ export function toTalentCard(
     verifiedCommitCount: Array.isArray(portfolio.verified_commits) ? portfolio.verified_commits.length : 0,
     capabilities: caps,
     signature: signature
-      ? { slug: signature.slug, title: signature.title, industry: signature.industry, heroMetric: signature.heroMetric }
+      ? { slug: signature.slug, title: signature.title, industry: signature.industry, heroMetric: signature.heroMetric, look: signature.look }
       : null,
     spotlight: facts.hireSpotlight,
   };

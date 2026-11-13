@@ -1,0 +1,273 @@
+/*
+ * Studio setup (D4, P4-01) — a standalone admin surface that opens in its own browser tab.
+ *
+ * Every class here is prefixed `cls-` (Colaberry Live Studio). Nothing in this file may reach
+ * `.te-btn`, `.te-card` or any other portal class, because this screen renders OUTSIDE both the
+ * portal shell and AdminLayout and must not inherit, or alter, either.
+ *
+ * ## The button colour, and why it is not the portal's
+ *
+ * `.cls-btn-primary` uses `--red-600` (#E5121D), not `--red-500`/`--cherry` (#FB2832).
+ *
+ * White on #FB2832 is 3.85:1. WCAG AA needs 4.5:1 for 14px bold, which is exactly what portal
+ * buttons are (`TodayShell.css:419,423`) — so the portal's primary button fails AA today. #E5121D
+ * is 4.73:1 and passes.
+ *
+ * Ali's decision on 2026-11-11 was: new Live surfaces use the darker step, the existing portal is
+ * left alone. So this file deliberately does NOT touch `.te-btn.cherry`. The inconsistency between
+ * old and new buttons is accepted and recorded rather than hidden, and D15 carries the question of
+ * what to do about the rest of the portal.
+ *
+ * No hex literals. `--red-600` is a real token in `colaberry/tokens/colors.css:17`.
+ */
+
+.cls-root {
+  min-height: 100dvh;
+  background: var(--surface-subtle);
+  color: var(--text-body);
+  padding: 24px;
+}
+
+.cls-shell { max-width: 1180px; margin: 0 auto; }
+
+.cls-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+.cls-title { font-size: 30px; line-height: 1.12; letter-spacing: -0.01em; font-weight: 700;
+  color: var(--text-strong); margin: 0; }
+.cls-sub { color: var(--text-muted); font-size: 15px; margin: 0; max-width: 70ch; }
+
+/* Two columns, summary on the right. One column below the tablet breakpoint. */
+.cls-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 22px;
+  align-items: start; }
+
+.cls-card { background: var(--surface-card); border: 1px solid var(--border-default);
+  border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; }
+.cls-card-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted); margin: 0 0 10px; }
+
+.cls-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.cls-label { font-size: 13px; color: var(--text-muted); }
+.cls-input, .cls-select {
+  min-height: 44px; /* the 44px touch target applies to a mouse too; it is not a phone-only rule */
+  padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-default);
+  background: var(--surface-subtle); color: var(--text-body); font: inherit;
+}
+.cls-input:disabled, .cls-select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Options rendered as buttons rather than radios, so each can carry its own explanation. */
+.cls-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.cls-option {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left;
+  min-height: 44px; padding: 12px 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border-default); background: var(--surface-subtle); color: var(--text-body);
+  font: inherit;
+}
+.cls-option:hover:not(:disabled) { border-color: var(--status-info); }
+.cls-option[aria-pressed="true"] { border-color: var(--action-bg); background: var(--surface-card); }
+.cls-option:disabled { opacity: 0.55; cursor: not-allowed; }
+.cls-option-name { font-weight: 600; }
+.cls-option-note { font-size: 13px; color: var(--text-muted); }
+
+.cls-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer;
+  min-height: 44px; }
+.cls-check input { margin-top: 4px; width: 18px; height: 18px; }
+
+/* Notices. Each carries a word as well as a colour: colour alone is never the signal. */
+.cls-note { border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 10px 0;
+  border: 1px solid var(--border-default); background: var(--surface-subtle); }
+.cls-note-warn { border-color: var(--status-warning); }
+.cls-note-error { border-color: var(--status-danger); }
+
+.cls-summary { position: sticky; top: 24px; }
+.cls-sum-item { display: flex; gap: 10px; align-items: center; padding: 7px 0; font-size: 14px; }
+.cls-sum-state { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.cls-sum-done { color: var(--status-success); }
+.cls-sum-todo { color: var(--text-muted); }
+
+.cls-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 11px 20px; border-radius: 999px;
+  font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; border: none;
+  transition: filter 0.14s;
+}
+/*
+ * Disabled is a CHANGE OF COLOUR, not only a change of opacity.
+ *
+ * Opacity alone was the first attempt and it fails in dark mode: a cherry button at 0.55 over a
+ * near-black page still reads as a solid, clickable red button, so the primary action looked
+ * available while four decisions were still outstanding. On the light page the same rule looked
+ * obviously disabled, which is exactly why this needed looking at in both themes rather than one.
+ *
+ * Dropping the brand fill entirely is what makes it unambiguous on any background. The cursor and
+ * the summary list carry the same message, so the state is never signalled by colour alone.
+ */
+.cls-btn:disabled {
+  cursor: not-allowed;
+  filter: none;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+}
+.cls-btn:hover:not(:disabled) { filter: brightness(0.96); }
+/* 4.73:1 against white. See the header note. */
+.cls-btn-primary { background: var(--red-600); color: var(--neutral-0); width: 100%; }
+.cls-btn-ghost { background: transparent; color: var(--text-body);
+  border: 1px solid var(--border-default); }
+
+.cls-link { color: var(--status-info); }
+
+/* A list row on the index. */
+.cls-row { display: flex; gap: 14px; align-items: center; justify-content: space-between;
+  padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+.cls-row:last-child { border-bottom: none; }
+.cls-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cls-row-when { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.cls-empty { color: var(--text-muted); padding: 20px 0; }
+
+@media (max-width: 900px) {
+  .cls-grid { grid-template-columns: 1fr; }
+  .cls-summary { position: static; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cls-btn { transition: none; }
+}
+
+/*
+ * ---------------------------------------------------------------------------------------------
+ * THE RAIL, THE PICKER AND THE TOUR (2026-11-11)
+ *
+ * Three additions, all from the same round of feedback on the live surface.
+ */
+
+/*
+ * The rail is 48px against the admin sidebar's 240px: the "about a fifth" that was asked for.
+ * It is fixed rather than in flow so the page content does not reflow when it expands, which
+ * would otherwise move a half-filled form under the operator's cursor.
+ */
+.clv-rail {
+  position: fixed; inset: 0 auto 0 0; z-index: 40;
+  width: 48px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 6px;
+  background: var(--surface-default, #fff);
+  border-right: 1px solid var(--border-subtle, #d8dde5);
+  overflow: hidden;
+  transition: width .14s ease;
+}
+.clv-rail.is-open { width: 200px; }
+
+/* The page sits clear of the collapsed rail. It does NOT shift when the rail expands: the rail
+   overlays, so a form in progress stays exactly where the eye left it. */
+.cls-root { padding-left: 64px; }
+
+.clv-rail-toggle,
+.clv-rail-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 36px; padding: 0 8px;
+  border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-muted, #55606f);
+  font: inherit; font-size: 13px; text-align: left; text-decoration: none;
+  cursor: pointer; white-space: nowrap;
+}
+.clv-rail-toggle:hover,
+.clv-rail-item:hover { background: var(--surface-sunken, #eef1f6); color: var(--text-body, #1d2430); }
+.clv-rail i { font-size: 18px; flex: 0 0 18px; text-align: center; }
+
+/* Hidden by width, not by display: the labels stay in the accessibility tree, so a screen
+   reader reads "Dashboard" rather than announcing an unlabelled icon button. */
+.clv-rail-text { opacity: 0; transition: opacity .1s ease; }
+.clv-rail.is-open .clv-rail-text { opacity: 1; }
+
+.clv-rail-links { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.clv-rail-tour { color: var(--red-600, #E5121D); }
+.clv-rail-home { margin-top: auto; }
+
+/* The picker. The chosen person reads as a name, never as the id the field actually holds. */
+.cls-picker { position: relative; }
+.cls-picked {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--border-subtle, #d8dde5); border-radius: 8px;
+  background: var(--surface-default, #fff);
+}
+.cls-picked-name { font-weight: 600; }
+.cls-picked-email { font-size: 12px; color: var(--text-muted, #55606f); }
+.cls-picked-clear {
+  margin-left: auto; border: 0; background: transparent; padding: 0;
+  color: var(--red-600, #E5121D); font: inherit; font-size: 12px; cursor: pointer;
+  text-decoration: underline;
+}
+
+.cls-pickmenu {
+  position: absolute; left: 0; right: 0; z-index: 20;
+  margin: 4px 0 0; padding: 4px; list-style: none;
+  max-height: 260px; overflow-y: auto;
+  background: var(--surface-default, #fff);
+  border: 1px solid var(--border-subtle, #d8dde5); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
+}
+.cls-pickitem {
+  display: flex; flex-direction: column; gap: 1px;
+  width: 100%; padding: 7px 9px; border: 0; border-radius: 6px;
+  background: transparent; font: inherit; text-align: left; cursor: pointer;
+}
+.cls-pickitem:hover { background: var(--surface-sunken, #eef1f6); }
+.cls-pickitem-name { font-size: 14px; color: var(--text-body, #1d2430); }
+.cls-pickitem-email { font-size: 12px; color: var(--text-muted, #55606f); }
+.cls-pickitem-empty { padding: 9px; font-size: 13px; color: var(--text-muted, #55606f); }
+
+/*
+ * THE WALKTHROUGH. It points at the card it is talking about.
+ *
+ * The dim and the hole are ONE element: a box the size of the target carrying a 9999px spread
+ * shadow. Four separate dimming panels would have to agree with each other on every scroll,
+ * and any disagreement shows as a seam across the page.
+ */
+.clv-tour-layer { position: fixed; inset: 0; z-index: 60; }
+.clv-tour-dim { position: absolute; inset: 0; background: rgba(16, 24, 40, .55); }
+.clv-tour-ring {
+  position: absolute; border-radius: 12px;
+  border: 2px solid var(--red-600, #E5121D);
+  box-shadow: 0 0 0 9999px rgba(16, 24, 40, .55);
+  pointer-events: none;
+  transition: top .18s ease, left .18s ease, width .18s ease, height .18s ease;
+}
+.clv-tour-callout {
+  position: absolute; width: min(380px, calc(100vw - 24px));
+  padding: 18px; border-radius: 14px;
+  background: var(--surface-default, #fff);
+  box-shadow: 0 20px 48px rgba(16, 24, 40, .28);
+}
+.clv-tour-count { font-size: 12px; color: var(--text-muted, #55606f); letter-spacing: .04em; }
+.clv-tour-title { margin: 4px 0 8px; font-size: 17px; }
+.clv-tour-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-body, #1d2430); }
+/* #8a4b00 on #fff8ec measures 6.5:1. The same warning pair the producer strip uses. */
+.clv-tour-warning {
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid #e3b982; border-left-width: 4px;
+  background: #fff8ec; color: #8a4b00;
+  font-size: 13px; line-height: 1.5;
+}
+.clv-tour-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px;
+}
+.clv-tour-move { display: flex; gap: 8px; }
+.clv-tour-skip {
+  border: 0; background: transparent; padding: 0;
+  color: var(--text-muted, #55606f); font: inherit; font-size: 13px; cursor: pointer;
+  text-decoration: underline;
+}
+.clv-tour-btn {
+  min-height: 38px; padding: 0 14px; border-radius: 8px;
+  border: 1px solid var(--border-strong, #aab3c0);
+  background: var(--surface-default, #fff); color: var(--text-body, #1d2430);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.clv-tour-btn:disabled { opacity: .5; cursor: default; }
+/* #E5121D, not #FB2832: white on the latter is 3.85:1 and fails AA at this size. */
+.clv-tour-next { background: var(--red-600, #E5121D); border-color: var(--red-600, #E5121D); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .clv-rail, .clv-rail-text { transition: none; }
+}

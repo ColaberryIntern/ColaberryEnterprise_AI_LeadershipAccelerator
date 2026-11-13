@@ -94,6 +94,8 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // in the code explains. It covers `/status` too (the matcher is '/'-delimited), which is
   // deliberate - an always-readable registry is still campaigns data.
   ['/api/admin/growth-journey', 'campaigns'],
+  // Campus v20 (C134): the Colaberry TV playlist on Colaberry Now. Marketing content, so campaigns.
+  ['/api/admin/colaberry-tv', 'campaigns'],
   ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
   ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
   ['/api/admin/inbox', 'inbox_content'], ['/api/admin/content-queue', 'inbox_content'],

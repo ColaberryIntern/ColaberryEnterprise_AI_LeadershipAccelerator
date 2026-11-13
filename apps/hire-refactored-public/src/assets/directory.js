@@ -91,12 +91,12 @@
   function caseLink(slug) { return '/case-studies/' + encodeURIComponent(slug) + '/'; }
   function talentLink(slug) { return '/talent/' + encodeURIComponent(slug) + '/'; }
 
-  function spotCard(t, flagged) {
+  function spotCard(t, flagged, api) {
     var sig = t.signature || null;
     var metric = sig && sig.heroMetric
       ? '<div><b class="gold">' + esc(sig.heroMetric.value) + '</b><span>' + esc(sig.heroMetric.label) + '</span></div>' : '';
     return '<a class="spot-card" href="' + talentLink(t.slug) + '" data-talent="' + esc(t.slug) + '">'
-      + '<div class="art">' + C.art(sig ? sig.slug : t.slug, { n: 9 }) + '<span class="ribbon">' + (flagged ? '★ Spotlight' : '★ Latest') + '</span></div>'
+      + '<div class="art">' + (sig ? C.cover(sig, api, 9) : C.art(t.slug, { n: 9 })) + '<span class="ribbon">' + (flagged ? '★ Spotlight' : '★ Latest') + '</span></div>'
       + '<div class="body">' + C.avatar(t, 84)
       + '<h3>' + esc(t.name) + '</h3>' + (t.role ? '<div class="role">' + esc(t.role) + '</div>' : '')
       + (sig ? '<div class="lead"><small>Signature case study</small>' + esc(sig.title) + '</div>' : '')
@@ -108,14 +108,14 @@
 
   /* The spotlight band. Its heading follows the API's `spotlightSource`: a FLAGGED
      spotlight is "Spotlight"; the fallback is labelled for what it is, never as a pick. */
-  function renderSpotlight(spot, source) {
+  function renderSpotlight(spot, source, api) {
     if (!Array.isArray(spot) || !spot.length) return '';
     var flagged = source === 'flagged';
     return '<section class="block"><div class="wrap">'
       + '<div class="sec-head"><div><div class="label">' + (flagged ? '★ Spotlight' : '★ Latest') + '</div>'
       + '<h2>' + (flagged ? 'This month\'s standout builders' : 'Latest standout builders') + '</h2></div>'
       + '<span class="muted" style="font-size:.9rem">' + (flagged ? 'Chosen by the strength of their published case studies.' : 'The most recently published case studies.') + '</span></div>'
-      + '<div class="spot">' + spot.slice(0, 3).map(function (t) { return spotCard(t, flagged); }).join('') + '</div></div></section>';
+      + '<div class="spot">' + spot.slice(0, 3).map(function (t) { return spotCard(t, flagged, api); }).join('') + '</div></div></section>';
   }
 
   function availability(a) {
@@ -159,12 +159,12 @@
       + '</select></div>';
   }
 
-  function renderStrip(talent) {
+  function renderStrip(talent, api) {
     var cards = talent.filter(function (t) { return t.signature && t.signature.slug; }).map(function (t) {
       var s = t.signature;
       return '<a class="mini" href="' + caseLink(s.slug) + '" target="_blank" rel="noopener" data-launch data-from="strip" data-case="' + esc(s.slug) + '" data-talent-slug="' + esc(t.slug) + '">'
-        + '<div class="art">' + C.art(s.slug, { n: 7 }) + '</div>'
-        + '<div class="t"><b>' + esc(s.title) + '</b><span>' + esc(t.name) + (s.industry ? ' · ' + esc(s.industry) : '') + '</span></div></a>';
+        + '<div class="art">' + C.cover(s, api, 7) + '</div>'
+        + '<div class="t"><b>' + esc(s.title) + '</b><span>' + esc(t.name) + (s.industry ? ' · ' + esc(C.industryLabel(s.industry)) : '') + '</span></div></a>';
     });
     if (!cards.length) return '';
     return '<section class="block" id="published" style="padding-top:10px"><div class="wrap">'
@@ -187,21 +187,29 @@
 
   /* The whole page body for a payload. The talent section is always present so filters
      stay reachable; an EMPTY directory (nobody listed at all) keeps the honest copy. */
-  function renderDirectory(body, f, shortlist) {
+  function renderDirectory(body, f, shortlist, api) {
     var talent = body.talent;
     var nobody = n(body.totals.listed) === 0 && !talent.length && !f.q && !f.track;
     return renderHero(body.totals)
-      + renderSpotlight(body.spotlight, body.spotlightSource)
+      + renderSpotlight(body.spotlight, body.spotlightSource, api)
       + '<section class="block" id="talent" style="padding-top:20px"><div class="wrap">'
       + '<div class="sec-head"><div><div class="label">All listed talent</div><h2>Proven in production</h2></div></div>'
       + (nobody ? '<div class="empty"><h3 class="mono">Nobody is listed yet</h3>Engineers appear here only after a project they built is verified and published as a case study.</div>'
         : renderFilters(f) + '<div class="grid" id="grid" aria-live="polite">' + renderGrid(talent, shortlist) + '</div>')
       + '</div></section>'
-      + renderStrip(talent)
+      + renderStrip(talent, api)
       + renderHow();
   }
 
+  /* The first load failed. True, and different from "nobody is listed", which only the API may say. */
+  function renderUnavailable() {
+    return '<section class="block" id="directory-unavailable"><div class="wrap"><div class="empty">'
+      + '<h1 class="mono">The directory could not be reached just now</h1>'
+      + '<p>Refresh the page in a moment to see the listed engineers.</p></div></div></section>';
+  }
+
   return {
+    renderUnavailable: renderUnavailable,
     TRACKS: TRACKS, SORTS: SORTS, parseFilters: parseFilters, filtersToQuery: filtersToQuery,
     isPayload: isPayload, renderHero: renderHero, renderSpotlight: renderSpotlight,
     talentCard: talentCard, renderGrid: renderGrid, renderStrip: renderStrip,

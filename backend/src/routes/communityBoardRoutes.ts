@@ -6,6 +6,8 @@ import { getBoard } from '../services/community/boardService';
 import { markSeen } from '../services/community/boardSeen';
 import { LANES } from '../services/community/boardModel';
 import { classifyError } from '../utils/errorClassifier';
+import colaberryTvRoutes from './colaberryTvRoutes';
+import colaberryNowRoutes from './colaberryNowRoutes';
 
 /**
  * The Community Board API (Campus v14 B1, Basecamp C65 / C66). Participant-authed per route and behind the campus pilot, like every
@@ -62,4 +64,8 @@ export async function postSeenRoute(req: Request, res: Response): Promise<void> 
 const router = Router();
 router.get('/api/portal/community/board', requireParticipant, getBoardRoute);
 router.post('/api/portal/community/board/seen', requireParticipant, postSeenRoute);
+// Campus v20 (C134): Colaberry Now is the board plus Colaberry TV, so the TV routes ride on this router (mountLearnerPortalRoutes
+// pins its router list; this keeps that list unchanged). Each TV route carries its own requireParticipant.
+router.use(colaberryTvRoutes);
+router.use(colaberryNowRoutes);
 export default router;

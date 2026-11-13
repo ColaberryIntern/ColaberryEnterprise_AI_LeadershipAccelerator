@@ -55,8 +55,32 @@ export const CPS_CSS = `
 .cps-btn-ghost{ border-color:var(--border-subtle,#d8dde5); font-weight:500; }
 .cps-confirm{ display:inline-flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .cps-confirm-q{ font-size:13px; font-weight:600; color:#b3261e; }
+/*
+ * The stuck count is the one reading a producer acts on, so a non-zero one is colored. It uses
+ * the same #8a4b00 as the overdue clock and the notices rather than introducing a color, and it
+ * is NOT set for the unmeasurable states: an instrumentation gap must not render as an alarm.
+ */
+.cps-aud[data-raised="yes"]{ color:#8a4b00; font-weight:600; }
+/*
+ * D10 - the mark control and what it says back. The message sits beside the button rather than
+ * under the strip, because it answers a press and has to be found by the eye that just pressed.
+ */
+.cps-mark{ display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cps-mark-said{ font-size:12px; color:var(--text-muted,#55606f); max-width:38ch; line-height:1.4; }
 .cps-note,.cps-blocked,.cps-notice{ margin:10px 0 0; font-size:13px; }
 .cps-note{ color:var(--text-muted,#55606f); }
 .cps-blocked{ color:var(--text-muted,#55606f); }
 .cps-notice{ color:#8a4b00; }
+/*
+ * The rehearsal banner. A filled block rather than a line of text like the notices, because it
+ * is the one message here that changes what a person is willing to say out loud in the room,
+ * and it has to survive being skimmed. #8a4b00 on #fff8ec measures 6.5:1, which clears AA for
+ * body text with room to spare; both are the warning pair already used in this file.
+ */
+.cps-rehearsal{
+  margin:0 0 12px; padding:10px 12px;
+  border:1px solid #e3b982; border-left-width:4px; border-radius:8px;
+  background:#fff8ec; color:#8a4b00;
+  font-size:13px; line-height:1.5;
+}
 `;

@@ -246,6 +246,9 @@ export async function decidePortfolioReview(args: {
     projects: await freezableProjects(enrollmentId),
     experience: history.experience,
     education: history.education,
+    // C130 (Ali, 11 Nov 2026: featured work goes public "After review"): the learner's featured pieces, each with the hash of
+    // the content approved now. The public page shows only these, and only while the content still matches.
+    featured_work: await (await import('./featuredWork')).freezeFeaturedSafe(enrollmentId),
   };
 
   await sequelize.query(

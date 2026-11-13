@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import { guardedSendMail } from '../../services/emailService';
+import { readSendOutcome } from '../../services/email/sendOutcome';
+import { env } from '../../config/env';
 import { getSetting } from '../../services/settingsService';
 import { buildHtmlBody, buildPlainTextBody, buildSubject } from '../../services/marketing/bugReportEmail';
 
@@ -39,6 +41,9 @@ const CapturedRequest = z.object({
   url: z.string().max(600),
   status: z.union([z.number(), z.string().max(40)]),
   ms: z.number(),
+  // How many times the same failure repeated. Optional, so a browser running an older
+  // bundle than the backend still posts a valid report rather than a 400.
+  count: z.number().optional(),
 });
 
 const BugReportSchema = z.object({
@@ -155,13 +160,34 @@ router.post('/api/admin/marketing/bug-report', requireAdmin, async (req: Request
       hasScreenshot: Boolean(shot),
     };
 
-    await guardedSendMail({
+    // `from` IS NOT OPTIONAL. Without it the relay accepts the message, answers 250, and
+    // then drops it - which is exactly how three of Sohail's reports were lost on
+    // 2026-11-11 while this endpoint logged all three as a success.
+    const info = await guardedSendMail({
+      from: env.emailFrom,
       to: to.join(','),
       subject: buildSubject(input),
       text: buildPlainTextBody(input),
       html: buildHtmlBody(input),
       attachments: shot ? [{ filename: shot.filename, content: shot.buffer }] : undefined,
     });
+
+    // AND THE RESULT IS READ. A reporter told "thanks, sent" for a report that reached
+    // nobody is the worst of the three outcomes: the problem stays broken AND nobody is
+    // looking for it. If the mail did not leave, say so and let them tell a person.
+    const outcome = readSendOutcome(info);
+    if (!outcome.delivered) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error', service: 'marketing-bug-report', event: 'bug_report_not_delivered',
+        outcome: 'failure', error_class: 'BugReportNotDelivered',
+        context: { route: parsed.data.routePath, reason: outcome.reason, recipients: to.length },
+      }));
+      return void res.status(502).json({
+        error: 'The report was accepted but could not be delivered. Please tell Ali directly - nothing was lost on your side.',
+        error_class: 'BugReportNotDelivered',
+      });
+    }
 
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),

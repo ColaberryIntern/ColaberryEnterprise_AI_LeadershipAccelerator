@@ -13,6 +13,7 @@ import AgentEmailTab from '../../components/admin/agentDetailV2/AgentEmailTab';
 import AgentWorkV2 from '../../components/admin/agentDetailV2/AgentWorkV2';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformanceSettingsTab';
+import AgentToolsTab from '../../components/admin/agentDetailV2/AgentToolsTab';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
 // system prompt, its real tools/capabilities, its live status, and its linked
@@ -374,6 +375,12 @@ export default function AgentDetailPage() {
       )}
       {activeTab === 'decisions' && (
         <AgentWorkDecisionsTab agentId={id} inboxItems={inboxItems} inboxLoading={inboxLoading} inboxError={inboxError} onInboxChanged={fetchInbox} />
+      )}
+      {/* Tools & access (2026-11-11). Fetches its own governance report rather than reading
+          `detail.capabilities`: that field is derived from `tools_granted` alone and so can only
+          say what the agent HOLDS, never who granted it or which capability it serves. */}
+      {activeTab === 'tools' && (
+        <AgentToolsTab detail={detail} />
       )}
       {/* The agent's correspondence. Deliberately NOT given `inboxItems`: that state is the
           DECISION inbox (pending proposals), and this tab fetches its own mail from

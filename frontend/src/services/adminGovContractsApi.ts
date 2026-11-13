@@ -170,6 +170,32 @@ export async function adminUploadGovSignedForm(projectId: string, formKey: strin
   const { data } = await api.post<{ ok: boolean }>(`${adminBase(projectId)}/package/signatures/${encodeURIComponent(formKey)}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
   return data;
 }
+// ── Proposal source library (P-SRC): admin upload/approve of reference documents per delivery project ───────────────
+export interface ProposalSourceDoc {
+  id: string; name: string; status: string; approved: boolean;
+  chunkCount: number; embeddedCount: number; truncated: boolean; createdAt: string | null;
+}
+export interface ProposalSourceUploadResult { ok: boolean; documentId: string; chunkCount: number; embeddedCount: number; truncated: boolean; status: string }
+
+export async function uploadProposalSource(projectId: string, file: File): Promise<ProposalSourceUploadResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post<ProposalSourceUploadResult>(`${adminBase(projectId)}/sources`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+export async function listProposalSources(projectId: string): Promise<{ documents: ProposalSourceDoc[] }> {
+  const { data } = await api.get<{ documents: ProposalSourceDoc[] }>(`${adminBase(projectId)}/sources`);
+  return data;
+}
+export async function approveProposalSource(projectId: string, id: string, approved: boolean): Promise<{ ok: boolean; id: string; approved: boolean }> {
+  const { data } = await api.post<{ ok: boolean; id: string; approved: boolean }>(`${adminBase(projectId)}/sources/${encodeURIComponent(id)}/approve`, { approved });
+  return data;
+}
+export async function deleteProposalSource(projectId: string, id: string): Promise<{ ok: boolean }> {
+  const { data } = await api.delete<{ ok: boolean }>(`${adminBase(projectId)}/sources/${encodeURIComponent(id)}`);
+  return data;
+}
+
 export async function adminAssembleGovPackage(projectId: string): Promise<GovPackageResult> {
   try { const { data } = await api.post<GovPackageResult>(`${adminBase(projectId)}/package/assemble`, {}); return data; }
   catch (e: any) { if (e?.response?.status === 409 && e.response.data) return e.response.data as GovPackageResult; throw e; }

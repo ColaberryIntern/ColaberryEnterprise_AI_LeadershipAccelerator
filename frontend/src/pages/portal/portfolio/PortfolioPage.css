@@ -109,6 +109,7 @@
   background: var(--sunken); border: 1px solid var(--border-sub); border-radius: 10px;
   padding: 12px 14px; font: inherit; display: block;
 }
+a.cp-stat { text-decoration: none; color: inherit; } /* C128: the pieces-of-work tile is a link to My work */
 .cp-stat:hover { border-color: var(--border); }
 .cp-stat:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
 .cp-stat-n { display: block; font-size: 24px; font-weight: 700; color: var(--strong); line-height: 1.1; }

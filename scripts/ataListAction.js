@@ -1,0 +1,132 @@
+#!/usr/bin/env node
+/**
+ * Carry out a strategic move on a whole list. DRY RUN BY DEFAULT.
+ *
+ *   node scripts/ataListAction.js --list "9. Ensuring Data Security" --dismiss --reason "demo scaffolding"
+ *   node scripts/ataListAction.js --list "Understanding Inputs and Outputs" --redate-from 2026-11-17 --per-week 3
+ *   node scripts/ataListAction.js --list "3. Tracking Shipments" --assign Kes
+ *
+ * Add --apply to write. Without it, nothing happens and the plan is printed.
+ *
+ * TWO CLASSES OF ACTION, AND THE DIFFERENCE IS ENFORCED HERE
+ *
+ *   dismiss  touches the local mirror only. The ticket stays OPEN in Basecamp and anyone else
+ *            assigned still sees it. This is "stop showing it to me", not "this is cancelled".
+ *            Safe, reversible, and it is the one action this script will actually perform.
+ *
+ *   redate   reach Basecamp, so other people see the result. The script PLANS them and writes the
+ *   assign   plan to a file, but refuses to apply them itself: bulk Basecamp writes on Ali's
+ *            behalf are gated in this environment, and a script that quietly did them anyway
+ *            would be routing around the gate rather than respecting it.
+ *
+ * Every applied dismissal records who, when and why, because a bulk change nobody can explain six
+ * weeks later is indistinguishable from data loss.
+ */
+const fs = require('fs');
+const path = require('path');
+const { sequelize } = require('/app/dist/config/database');
+const { QueryTypes } = require('/app/node_modules/sequelize');
+
+const libDir = fs.existsSync(path.join(__dirname, 'listActions.js'))
+  ? __dirname
+  : path.join(__dirname, '../backend/src/scripts/lib/aliTaskAgent');
+const { planDismiss, dismissQuery, planRedate, planAssign, renderPlan } = require(path.join(libDir, 'listActions'));
+
+const arg = (k, d = null) => {
+  const i = process.argv.indexOf(`--${k}`);
+  return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : d;
+};
+const has = (k) => process.argv.includes(`--${k}`);
+
+const LIST_ID = arg('list-id');
+const LIST = arg('list') || (LIST_ID ? `list ${LIST_ID}` : null);
+const APPLY = has('apply');
+const ALI = 17454835;
+
+if (!arg('list') && !LIST_ID) {
+  console.error('--list-id <todolist id> (preferred) or --list "<exact list name>" is required');
+  process.exit(1);
+}
+
+(async () => {
+  // --list-id is exact. A NAME is not: measured 2026-11-11, 7 names on the board each cover 2-3
+  // separate lists or groups ("MILESTONE APPROVALS - Ali" is three groups in two projects), so a
+  // name that matches more than one list is refused below rather than acted on as one.
+  const rows = await sequelize.query(`
+    SELECT bc_id, project_id, todolist_id, title, due_on, todolist_name, is_dismissed
+      FROM ops_bc_todos
+     WHERE status = 'active' AND is_dismissed IS NOT TRUE
+       AND ${LIST_ID ? 'todolist_id = $1' : 'todolist_name = $1'}
+       AND assignee_ids::text LIKE $2
+     ORDER BY due_on ASC NULLS LAST`,
+  { type: QueryTypes.SELECT, bind: [LIST_ID || LIST, `%${ALI}%`] });
+
+  const distinct = [...new Set(rows.map((r) => `${r.project_id}/${r.todolist_id}`))];
+  if (!LIST_ID && distinct.length > 1) {
+    console.error(`REFUSED: "${LIST}" names ${distinct.length} separate lists. Pick one with --list-id:`);
+    distinct.forEach((d) => {
+      const [p, l] = d.split('/');
+      const n = rows.filter((r) => r.todolist_id === l).length;
+      console.error(`  --list-id ${l}   (project ${p}, ${n} task(s))`);
+    });
+    await sequelize.close();
+    process.exit(1);
+  }
+
+  if (!rows.length) {
+    console.log(`No active, undismissed tasks assigned to Ali in list "${LIST}".`);
+    await sequelize.close();
+    process.exit(0);
+  }
+
+  const tasks = rows.map((r) => ({ id: `${r.project_id}/${r.bc_id}`, bcId: r.bc_id, title: r.title, dueOn: r.due_on }));
+  console.log(`List "${LIST}": ${tasks.length} task(s) assigned to Ali\n`);
+
+  let plan;
+  if (has('dismiss')) plan = planDismiss(tasks, { reason: arg('reason', '') });
+  else if (arg('redate-from')) plan = planRedate(tasks, { from: arg('redate-from'), perWeek: Number(arg('per-week', '3')) });
+  else if (arg('assign')) plan = planAssign(tasks, { to: arg('assign') });
+  else { console.error('pick one of --dismiss, --redate-from <date>, --assign <person>'); await sequelize.close(); process.exit(1); }
+
+  console.log(renderPlan(plan, { limit: 10 }));
+  console.log('');
+
+  if (plan.problems.length) { await sequelize.close(); process.exit(1); }
+
+  if (!APPLY) {
+    console.log('DRY RUN. Nothing was changed. Add --apply to carry this out.');
+    await sequelize.close();
+    process.exit(0);
+  }
+
+  if (plan.writesToBasecamp) {
+    /**
+     * Refused on purpose, and the plan is written out rather than discarded so the work of
+     * producing it is not lost. Bulk Basecamp writes as Ali are gated in this environment; a
+     * script that performed them anyway would be defeating the gate, not satisfying the request.
+     */
+    const out = `/tmp/ata-plan-${plan.action}-${Date.now()}.json`;
+    fs.writeFileSync(out, JSON.stringify({ list: LIST, ...plan }, null, 2), 'utf8');
+    console.log(`REFUSED to apply: this action writes to Basecamp, and bulk Basecamp writes as Ali`);
+    console.log(`are gated in this environment. The full plan is saved at ${out} for Ali to run.`);
+    await sequelize.close();
+    process.exit(2);
+  }
+
+  // The one action this script performs: a local, reversible dismissal.
+  // One UPDATE statement, so it is all-or-nothing; a re-run matches nothing (is_dismissed guard).
+  const q = dismissQuery(plan, 'ata-list');
+  if (q.pairs !== plan.changes.length) {
+    console.error(`REFUSED: ${plan.changes.length - q.pairs} task id(s) are not "<project>/<todo>" digits; nothing changed.`);
+    await sequelize.close();
+    process.exit(1);
+  }
+  const [, affected] = await sequelize.query(q.sql, { type: QueryTypes.UPDATE, bind: q.bind });
+
+  console.log(`APPLIED. ${affected} row(s) dismissed from the queue.`);
+  console.log('The tickets remain OPEN in Basecamp. To undo, paste:');
+  console.log(`  ${q.undo}`);
+
+  await sequelize.close();
+  process.exit(0);
+})().catch((e) => { console.error('FATAL', e && e.message); process.exit(1); });

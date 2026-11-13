@@ -113,7 +113,20 @@ export interface TrainingView {
 }
 
 export interface EmailView {
-  threads: Array<{ subject: string; date: string; snippet: string }>;
+  /**
+   * One entry per subject, newest first.
+   *
+   * `kind` is decided ONCE here, from the whole body, because everything downstream sees only
+   * `snippet` and `snippet` is bounded. `ask` is the sentence that earned a non-update `kind`, so
+   * a reader is shown what was actually asked rather than the greeting.
+   */
+  threads: Array<{
+    subject: string;
+    date: string;
+    snippet: string;
+    kind: 'stuck' | 'question' | 'update';
+    ask: string | null;
+  }>;
   count: number;
   lastTheyWrote: string | null;
   lastWeWrote: string | null;
@@ -169,6 +182,13 @@ export interface InternCard {
   project: ProjectView | null;
   feed: FeedView;
   emails: EmailView;
+  /**
+   * Everything colaberry.com sent THIS intern in the window, with subjects. Carried on the card so
+   * the sidecar can apply the same thread rule compose.ts applies (threadReply.ts); without it,
+   * `openQuestions` had to fall back to "did we send them anything since", which counts a nudge as
+   * an answer. Optional so a card saved before this existed still renders.
+   */
+  replies?: OurReply[];
   subscriptions: ReportSubscription[];
   status: { key: StatusKey; label: string; reasons: string[] };
   lately: string[];
@@ -261,6 +281,9 @@ export type ArtifactSource = 'repo' | 'upload' | 'link' | 'recording';
 export type ArtifactFileType = 'video' | 'pdf' | 'spreadsheet' | 'word' | 'slides' | 'html' | 'image' | 'claude' | 'link' | 'markdown' | 'text' | 'file';
 
 /** A project artifact worth asking for, with the Claude Code prompt and the nudge that asks for it. */
+/** What a prompt is FOR. Defined here because `types` cannot import from `artifacts`. */
+export type AskTheme = 'evidence' | 'diagnose' | 'advance';
+
 export interface ArtifactAsk {
   key: string;
   name: string;
@@ -268,6 +291,8 @@ export interface ArtifactAsk {
   why: string;
   /** Paste-ready prompt for Claude Code in their repo. */
   prompt: string;
+  /** What this prompt is FOR: evidence, diagnose or advance. Declared where the prompt is written. */
+  theme: AskTheme;
   /** The message to send them, asking for it. */
   nudge: string;
 }

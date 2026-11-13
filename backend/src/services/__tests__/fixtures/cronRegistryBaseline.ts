@@ -89,7 +89,6 @@ export const KNOWN_CRON_SEED_ROWS_WITH_NO_REGISTRATION: ReadonlyArray<string> = 
   'ProblemDiscoveryAgent', // audit: internal_pipeline_step of AutonomousEngine
   'PromptOptimizationAgent', // audit: internal_pipeline_step of MetaAgentLoop
   'ReportingIntelligenceAgent', // audit: confirmed_dead, referenced only by the seed file
-  'RevenueOpportunityAgent', // audit: confirmed_dead, referenced only by the seed file
   'RevenueOptimizationAgent', // audit: internal_pipeline_step of AICOOStrategicCycle
   'Risk_Agent', // audit: confirmed_dead, no source file was ever written
   'StrategicIntelligenceAgent', // audit: internal_pipeline_step of AICOOStrategicCycle
@@ -266,6 +265,8 @@ export const EXPECTED_CRON_IMPORT_FILES: ReadonlyArray<string> = [
   'services/scheduling/growthJourneyCrons.ts', // the three Growth Journey crons
   'services/scheduling/adSpendCrons.ts', // the daily Meta ad spend pull (2026-11-02), seed row MetaAdSpendSync
   'services/scheduling/explorerNightlySequence.ts', // Explorer recompute, then Governor, then draft render (C108)
+  'services/scheduling/chatConversationCrons.ts', // closes idle chat conversations (R4, 2026-11-11), seed row ChatCloseIdleConversations
+  'services/scheduling/visitorGeoCrons.ts', // daily visitor geo-IP enrichment (GEO-1, 2026-11-11), seed row VisitorGeoEnrichment
 ];
 
 /** Files where the identifier is used as a VALUE rather than called — `const run =

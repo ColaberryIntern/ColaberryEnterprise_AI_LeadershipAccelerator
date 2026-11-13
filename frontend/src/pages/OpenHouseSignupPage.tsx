@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   fetchNextOpenHouse,
   openHouseAcquisitionFields,
   signUpForOpenHouse,
   type NextOpenHouse,
-  type SignedUpEvent,
 } from '../services/openHouseApi';
 import { identifyVisitor } from '../utils/tracker';
-import { SIGNUP_CONSENT_TEXT } from '../config/consentText';
+import { loadMetaPixel } from '../services/metaPixel';
+import { CBOH_CSS } from './openHouseStyles';
+import { OPEN_HOUSE_LEAD_PATH } from './OpenHouseLeadPage';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../config/consentText';
+// The GATE and the WORDING are shared; the markup is not. PhoneConsentCheckbox renders
+// Bootstrap, and this page has its own `cboh-*` sheet - so it calls the rule and renders
+// with its own primitives, which is the path that component's own docs prescribe.
+import { shouldAskPhoneConsent } from '../components/PhoneConsentCheckbox';
 
 /**
  * The Open House front door (OH-3) — where the ads actually land people.
@@ -55,6 +61,34 @@ import { SIGNUP_CONSENT_TEXT } from '../config/consentText';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+/**
+ * Why the phone number is mandatory here (Ali, 2026-11-11).
+ *
+ * The landing page's CTAs used to point at /portal/signup, which asks for a phone
+ * number. OH-3 pointed them here instead, and this page asked for a name and an email
+ * only - so from the day it shipped, the funnel stopped collecting phone numbers.
+ * This puts the field back and makes it required.
+ *
+ * Counted in DIGITS, matching `PHONE_MIN_DIGITS` on the route, so the page never
+ * accepts something the backend will refuse.
+ */
+const PHONE_MIN_DIGITS = 10;
+const PHONE_MAX_DIGITS = 15;
+// The route caps the raw string at 50 characters as well as the digit count. Without
+// this line a long entry passed here and came back a 400 - the visitor told the number
+// was fine and then refused. Caught by running both rules against one table of inputs
+// before shipping, which is the only reason it is not a bug report.
+const PHONE_MAX_CHARS = 50;
+
+export function phoneProblem(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '');
+  if (digits === '') return 'Please enter your phone number.';
+  if (raw.trim().length > PHONE_MAX_CHARS) return 'That number is too long. Please enter just the number.';
+  if (digits.length < PHONE_MIN_DIGITS) return 'That number looks too short. Please include the area code.';
+  if (digits.length > PHONE_MAX_DIGITS) return 'That number has too many digits.';
+  return null;
+}
+
 /** "394 seats left", or nothing at all. 0 and null both mean "do not claim a number". */
 export function seatsLabel(seatsRemaining: number | null | undefined): string {
   if (typeof seatsRemaining !== 'number' || !Number.isFinite(seatsRemaining) || seatsRemaining <= 0) return '';
@@ -76,6 +110,11 @@ function OpenHouseSignupPage(): React.ReactElement {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  // Required. See phoneProblem above.
+  const [phone, setPhone] = useState('');
+  // The NUMBER is mandatory; PERMISSION TO RING IT IS NOT. Unticked on arrival, never
+  // a condition of submitting, and no grant is recorded unless it is ticked.
+  const [phoneConsent, setPhoneConsent] = useState(false);
   // UNCHECKED, and NOT required to submit. A pre-ticked box is not an affirmative
   // act, and this becomes the consent of record for every marketing email after.
   // Their seat, their account and their login link are all transactional and need
@@ -85,7 +124,13 @@ function OpenHouseSignupPage(): React.ReactElement {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState<{ message: string; event: SignedUpEvent | null } | null>(null);
+  const navigate = useNavigate();
+
+  // The PageView half of the Meta tracking. Sohail reported the pixel firing on
+  // /lp/colaberry-training/... but not here, and this page loaded no pixel at all,
+  // so there was nothing to detect. Not awaited and never thrown from: an ad script
+  // must not sit between a visitor and the form they came to fill in.
+  useEffect(() => { void loadMetaPixel(); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -102,12 +147,18 @@ function OpenHouseSignupPage(): React.ReactElement {
     setError('');
     if (!fullName.trim()) { setError('Please enter your name.'); return; }
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email.'); return; }
+    const phoneErr = phoneProblem(phone);
+    if (phoneErr) { setError(phoneErr); return; }
     setLoading(true);
     try {
       const person = {
         name: fullName.trim(),
         email: email.trim(),
+        phone: phone.trim(),
         marketing_opt_in: marketingOptIn,
+        // Sent ONLY when ticked. An absent key records nothing, which is not the same
+        // as recording a refusal - and a `false` would be a grant row saying "no".
+        ...(phoneConsent ? { phone_consent: true } : {}),
       };
       const acquisition = openHouseAcquisitionFields();
       let res;
@@ -133,7 +184,26 @@ function OpenHouseSignupPage(): React.ReactElement {
         });
       } catch { /* instrumentation is never load-bearing */ }
 
-      setDone({ message: res.message, event: res.event });
+      // The confirmation now lives on its own URL so Meta can count a registration
+      // without counting everyone who merely looked at the form. The result travels
+      // in router state, which is also the proof a signup happened: that state cannot
+      // be obtained by typing the URL, so the Lead event on the other side cannot be
+      // triggered by a bare visit. `replace` keeps Back going to wherever they came
+      // from rather than re-submitting the form they have just completed.
+      navigate(OPEN_HOUSE_LEAD_PATH, {
+        replace: true,
+        state: {
+          signup: {
+            message: res.message,
+            when: res.event ? whenLabel(res.event) : '',
+            formatLabel: res.event?.format_label ?? null,
+            access: res.access ?? null,
+            // Keys the Lead on the PERSON. Anything per-visit here would report one
+            // human as many leads; see services/metaPixel.ts.
+            leadKey: email.trim().toLowerCase(),
+          },
+        },
+      });
       setLoading(false);
     } catch (err: any) {
       const status = err?.response?.status;
@@ -158,24 +228,11 @@ function OpenHouseSignupPage(): React.ReactElement {
           <span className="cboh-wordmark" aria-hidden="true"><span className="cboh-c">C</span>olaberry</span>
         </div>
 
-        {done ? (
-          <div data-testid="cboh-done">
-            <div className="cboh-head">
-              <span className="cboh-badge">You are in</span>
-              <h1 className="cboh-title">Your seat is saved</h1>
-              <p className="cboh-text" role="status">{done.message}</p>
-            </div>
-            {done.event && whenLabel(done.event) !== '' && (
-              <div className="cboh-when" data-testid="cboh-done-when">
-                <span className="cboh-when-main">{whenLabel(done.event)}</span>
-                {done.event.format_label && <span className="cboh-when-sub">{done.event.format_label}</span>}
-              </div>
-            )}
-            <p className="cboh-foot">
-              Already have an account? <Link className="cboh-link" to="/portal/login">Sign in</Link>
-            </p>
-          </div>
-        ) : (
+        {/* The confirmation used to render in place here, which left the URL on
+            /open-house - the same URL as the empty form. It now lives on
+            /open-house/lead (see OpenHouseLeadPage), reached by navigation on a
+            successful signup, so the URL itself distinguishes "registered" from
+            "looked at the form". C121's one-click account opening moved with it. */}
           <>
             <div className="cboh-head">
               <span className="cboh-badge">Open House</span>
@@ -220,6 +277,34 @@ function OpenHouseSignupPage(): React.ReactElement {
                 onChange={(e) => setEmail(e.target.value)} disabled={loading}
               />
 
+              {/* Required, and said so on the label rather than only in the error after a
+                  failed submit. `type="tel"` brings up the numeric keypad on a phone, which
+                  is where most of this traffic arrives from. */}
+              <label className="cboh-label" htmlFor="cboh-phone">Phone number</label>
+              <input
+                id="cboh-phone" className="cboh-input" type="tel" autoComplete="tel"
+                inputMode="tel" placeholder="(555) 555-5555" value={phone}
+                onChange={(e) => setPhone(e.target.value)} disabled={loading}
+                aria-describedby="cboh-phone-why" required
+              />
+              <p className="cboh-why" id="cboh-phone-why">
+                So we can reach you about your seat and the joining link.
+              </p>
+
+              {/* Asked only once a number is typed: permission to call somebody we have
+                  no number for grants nothing, and a box sitting above an empty field
+                  reads as a condition of submitting, which it is not. */}
+              {shouldAskPhoneConsent(phone) && (
+                <label className="cboh-consent" htmlFor="cboh-phone-consent">
+                  <input
+                    id="cboh-phone-consent" className="cboh-check" type="checkbox"
+                    checked={phoneConsent} onChange={(e) => setPhoneConsent(e.target.checked)}
+                    disabled={loading}
+                  />
+                  <span>{PHONE_CONSENT_TEXT}</span>
+                </label>
+              )}
+
               {/* Beside the field it is about, which is where PortalFreeSignupPage moved
                   its own to after measuring 59 ticks on 347 signups with it sitting last. */}
               <label className="cboh-consent" htmlFor="cboh-consent">
@@ -245,52 +330,10 @@ function OpenHouseSignupPage(): React.ReactElement {
               Already have an account? <Link className="cboh-link" to="/portal/login">Sign in</Link>
             </p>
           </>
-        )}
       </main>
     </div>
   );
 }
 
-const CBOH_CSS = `
-.cboh-root{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
-  background:#F8F8F7;font-family:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;color:#2B2B2B}
-.cboh-card{width:100%;max-width:440px;background:#fff;border:1px solid #E4E4E3;border-radius:24px;
-  box-shadow:0 12px 30px rgba(26,26,26,.10),0 3px 8px rgba(26,26,26,.06);padding:34px 32px;box-sizing:border-box}
-.cboh-brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
-.cboh-mark{border-radius:9px;display:block}
-.cboh-wordmark{font-family:'Quicksand',system-ui,sans-serif;font-weight:700;font-size:22px;color:#1A1A1A}
-.cboh-c{color:#FB2832}
-.cboh-head{margin-bottom:18px}
-.cboh-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
-  color:#C20E1E;background:rgba(251,40,50,.12);border-radius:999px;padding:4px 11px;margin-bottom:10px}
-.cboh-title{font-size:27px;font-weight:700;color:#1A1A1A;margin:0 0 8px;letter-spacing:-.01em}
-.cboh-text{font-size:14.5px;color:#6B6B6B;line-height:1.55;margin:0}
-.cboh-when{display:flex;flex-direction:column;gap:3px;padding:13px 15px;border-radius:14px;
-  background:#F4F7F8;border:1px solid #DCE6EA;margin-bottom:4px}
-.cboh-when--tbd{background:#F8F8F7;border-color:#E4E4E3}
-.cboh-when-main{font-size:15.5px;font-weight:700;color:#1F4E63}
-.cboh-when-sub{font-size:13px;color:#6B6B6B}
-.cboh-form{display:flex;flex-direction:column;margin-top:8px}
-.cboh-label{font-size:13px;font-weight:700;color:#2B2B2B;margin:12px 0 6px}
-.cboh-input{border:1px solid #D8D8D8;border-radius:12px;padding:12px 15px;font-size:15px;font-family:inherit;
-  background:#fff;color:#2B2B2B;outline:none;transition:border-color .15s,box-shadow .15s}
-.cboh-input:focus{border-color:#367895;box-shadow:0 0 0 3px rgba(54,120,149,.22)}
-.cboh-input:disabled{background:#F1F1F0}
-.cboh-consent{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:13px;
-  line-height:1.5;color:#6B6B6B;cursor:pointer}
-.cboh-check{width:16px;height:16px;margin:1px 0 0;flex:0 0 auto;accent-color:#FB2832;cursor:pointer}
-.cboh-check:focus-visible{outline:3px solid #367895;outline-offset:2px}
-.cboh-error{margin-top:12px;font-size:13.5px;color:#C20E1E;background:rgba(251,40,50,.08);
-  border:1px solid rgba(251,40,50,.28);border-radius:10px;padding:9px 12px}
-.cboh-btn{margin-top:18px;background:#FB2832;color:#fff;border:none;border-radius:999px;padding:13px 22px;
-  font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;transition:filter .15s;min-height:48px}
-.cboh-btn:hover:not(:disabled){filter:brightness(.95)}
-.cboh-btn:disabled{opacity:.6;cursor:default}
-.cboh-fine{margin:10px 0 0;font-size:12.5px;color:#8A8A8A;text-align:center;line-height:1.45}
-.cboh-foot{margin:20px 0 0;text-align:center;font-size:14px;color:#6B6B6B}
-.cboh-link{color:#2E6A86;font-weight:700;text-decoration:none}
-.cboh-link:hover{text-decoration:underline}
-@media (max-width:420px){.cboh-card{padding:26px 20px;border-radius:18px}.cboh-title{font-size:24px}}
-`;
 
 export default OpenHouseSignupPage;

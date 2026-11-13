@@ -36,8 +36,77 @@ export interface RecoveryOutcome {
   requeued: number;
   /** Rows that had no attempts left and were failed instead of recycled. */
   exhausted: number;
-  /** Ids of every row touched, so a recovery can be traced rather than only counted. */
+  /**
+   * Ids handed back to 'pending'. SEPARATE from `exhaustedIds` on purpose.
+   *
+   * L7.3. These used to be one merged `ids` array, and the caller's own comment said the ids were
+   * logged "so a recovery can be traced rather than only counted" and that the first question
+   * asked after a duplicate report is which rows were recycled. A merged list cannot answer that
+   * question: recycled and killed rows came back indistinguishable, so the field existed without
+   * delivering the thing it was added for. Two arrays, because the two outcomes are different
+   * events with different consequences.
+   */
+  requeuedIds: string[];
+  /** Ids failed outright because no attempt remained. Terminal: these will not be retried. */
+  exhaustedIds: string[];
+}
+
+/** One structured line describing something recovery did, and why it did it. */
+export interface RecoveryLogLine {
+  service: 'scheduler';
+  event: 'stale_action_requeued' | 'stale_action_exhausted';
+  /** `partial` for a row that will be tried again; `failure` for one that will not. */
+  outcome: 'partial' | 'failure';
+  reason: 'lease_expired';
+  /** A stable class, because a generic Error is not a classification anything can be counted by. */
+  error_class: 'LeaseExpired';
+  stale_after_ms: number;
+  detail: string;
+  count: number;
   ids: string[];
+}
+
+/**
+ * Turn a RecoveryOutcome into the lines that should be logged for it.
+ *
+ * L7.3. THIS IS A PURE FUNCTION ON PURPOSE. The ticket's success metric is that "every recovery
+ * path leaves a log line naming why it retried", and that is only checkable if the line can be
+ * built without a scheduler, a database or a clock. The caller's job is reduced to writing what
+ * this returns, so the test asserts the thing the metric is about rather than asserting that a
+ * string appears somewhere in a 1,700 line service.
+ *
+ * Returns NOTHING when nothing was recovered. A recovery log line for a cycle that recovered no
+ * rows would be noise, and noise is how a real one gets missed.
+ */
+export function recoveryLogLines(outcome: RecoveryOutcome): RecoveryLogLine[] {
+  const base = {
+    service: 'scheduler' as const,
+    reason: 'lease_expired' as const,
+    error_class: 'LeaseExpired' as const,
+    stale_after_ms: STALE_AFTER_MS,
+  };
+  const lines: RecoveryLogLine[] = [];
+  if (outcome.requeued > 0) {
+    lines.push({
+      ...base,
+      event: 'stale_action_requeued',
+      outcome: 'partial',
+      detail: `no lease renewal for over ${STALE_AFTER_MS}ms; owner presumed dead, one attempt consumed`,
+      count: outcome.requeued,
+      ids: outcome.requeuedIds,
+    });
+  }
+  if (outcome.exhausted > 0) {
+    lines.push({
+      ...base,
+      event: 'stale_action_exhausted',
+      outcome: 'failure',
+      detail: `no lease renewal for over ${STALE_AFTER_MS}ms and no attempts left; failed rather than recycled`,
+      count: outcome.exhausted,
+      ids: outcome.exhaustedIds,
+    });
+  }
+  return lines;
 }
 
 /**
@@ -116,7 +185,8 @@ export async function recoverStaleActions(nowMs: number = Date.now()): Promise<R
     return {
       requeued: requeuedIds.length,
       exhausted: exhaustedIds.length,
-      ids: [...exhaustedIds, ...requeuedIds],
+      requeuedIds,
+      exhaustedIds,
     };
   });
 }

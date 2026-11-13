@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schedule an interview · Hire · Refactored.ai (demo)</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/demo.css">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap bar">
+    <a class="logo" href="index.html" aria-label="Hire · Refactored.ai home">
+      <svg class="mark" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M6 9l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Refactored<span class="faint">.ai</span><span class="sub">hire</span>
+    </a>
+    <span class="spacer"></span>
+    <nav class="nav" aria-label="Main">
+      <button type="button" class="link" id="themeBtn" aria-label="Toggle light or dark theme">◐</button>
+      <a href="index.html">← Back to profile</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap" style="padding-top:40px;padding-bottom:40px">
+  <div class="label">Schedule an interview</div>
+  <h1 class="mono" style="font-size:clamp(1.6rem,3vw,2rem);letter-spacing:-.02em;line-height:1.15;margin:6px 0 24px">Talk to the person who shipped it.</h1>
+  <ol class="steps" id="steps" aria-label="Progress"></ol>
+
+  <div class="p-cols">
+    <section class="card panel" id="panel" aria-live="polite"></section>
+    <aside class="side">
+      <div class="card summary">
+        <div style="display:flex;gap:14px;align-items:center">
+          <div class="avatar sm" aria-hidden="true">KD</div>
+          <div><b>Kesetebirhan Delele</b><div style="font-size:.88rem;color:var(--accent)">AI Leadership Accelerator — QA</div></div>
+        </div>
+        <dl id="sum"></dl>
+      </div>
+      <div class="card" style="background:var(--bg-sunk);font-size:.88rem;color:var(--fg-muted)">
+        <b style="color:var(--fg);display:block;margin-bottom:4px">How interviews work here</b>
+        Booking, the call and follow-up all happen on Refactored. No emails or phone numbers are exchanged until both sides want to continue.
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script src="assets/demo-data.js"></script>
+<script>
+(function () {
+  var D = window.DEMO, esc = window.esc;
+  var S = { step: 1, format: 'intro', caseIdx: 0, week: 0, slot: null };
+  var LABELS = ['Format', 'Time', 'Your details', 'Done'];
+  var panel = document.getElementById('panel');
+
+  function fmt() { return D.interviewFormats.filter(function (f) { return f.id === S.format; })[0]; }
+  function slotText() { return S.slot ? S.slot.dow + ', ' + S.slot.date + ' · ' + S.slot.time : 'Not picked yet'; }
+
+  function steps() {
+    document.getElementById('steps').innerHTML = LABELS.map(function (l, k) {
+      var n = k + 1, done = n < S.step, cur = n === S.step;
+      return '<li' + (done ? ' class="done"' : '') + (cur ? ' aria-current="step"' : '') + '><i>' + (done ? '✓' : n) + '</i>' + l + '</li>';
+    }).join('');
+  }
+  function summary() {
+    var f = fmt();
+    document.getElementById('sum').innerHTML = '<dt>Format</dt><dd>' + esc(f.name) + '</dd><dt>Length</dt><dd class="mono">' + f.minutes + ' min</dd>'
+      + (S.format === 'walkthrough' ? '<dt>Case study</dt><dd>' + esc(D.caseStudies[S.caseIdx].title) + '</dd>' : '')
+      + '<dt>When</dt><dd>' + esc(slotText()) + '</dd><dt>Where</dt><dd>Refactored room</dd>';
+  }
+
+  function step1() {
+    return '<h2>What kind of conversation?</h2><p class="lede">Every format runs in a Refactored room in the browser. Nothing to install.</p>'
+      + D.interviewFormats.map(function (f) {
+        return '<button type="button" class="opt" data-format="' + f.id + '" aria-pressed="' + (f.id === S.format) + '"><span class="dot"></span><span><b>' + esc(f.name) + '</b><span class="len">' + f.minutes + ' min</span><span class="d">' + esc(f.desc) + '</span></span></button>';
+      }).join('')
+      + (S.format === 'walkthrough' ? '<div style="margin-top:20px"><div class="legend" style="margin-bottom:10px">Which case study should they walk you through?</div><div class="pick-cases">'
+        + D.caseStudies.map(function (c, k) { return '<button type="button" data-case="' + k + '" aria-pressed="' + (k === S.caseIdx) + '" aria-label="' + esc(c.title) + '"><img src="' + esc(c.look.coverImageUrl) + '" alt=""></button>'; }).join('')
+        + '</div><p style="margin:10px 0 0;font-size:.9rem">★ ' + esc(D.caseStudies[S.caseIdx].title) + '</p></div>' : '')
+      + '<div class="acts end"><button type="button" class="btn btn-primary" data-go="2">Choose a time →</button></div>';
+  }
+  function step2() {
+    var w = D.weeks[S.week];
+    return '<div class="week-head"><h2>Pick a time</h2><div class="week-nav">'
+      + '<button type="button" class="btn btn-ghost btn-icon" data-week="-1" aria-label="Previous week"' + (S.week === 0 ? ' disabled' : '') + '>‹</button>'
+      + '<span>' + esc(w.label) + '</span>'
+      + '<button type="button" class="btn btn-ghost btn-icon" data-week="1" aria-label="Next week"' + (S.week === D.weeks.length - 1 ? ' disabled' : '') + '>›</button></div></div>'
+      + '<p class="lede">Times in your time zone, <b>Central (CT)</b>. Only times the candidate marked open are shown.</p>'
+      + '<div class="days">' + w.days.map(function (d) {
+        return '<div class="day"><h3><small>' + d.dow + '</small>' + d.date + '</h3>'
+          + (d.slots.length ? d.slots.map(function (s) {
+            var on = S.slot && S.slot.date === d.date && S.slot.time === s;
+            return '<button type="button" class="slot" data-day="' + d.date + '" data-dow="' + d.dow + '" data-time="' + s + '" aria-pressed="' + !!on + '">' + s + '</button>';
+          }).join('') : '<div class="none">' + esc(d.note || 'No open times') + '</div>') + '</div>';
+      }).join('') + '</div>'
+      + '<div class="acts"><button type="button" class="btn btn-ghost" data-go="1">← Back</button><button type="button" class="btn btn-primary" data-go="3"' + (S.slot ? '' : ' disabled') + '>Add your details →</button></div>';
+  }
+  function step3() {
+    return '<h2>Your details</h2><p class="lede">Shared with the candidate and the Colaberry team. Their contact details stay private.</p>'
+      + '<form id="f" novalidate><div class="form-grid">'
+      + '<div class="field"><label for="in-name">Your name</label><input id="in-name" name="name" autocomplete="name" required maxlength="120"></div>'
+      + '<div class="field"><label for="in-email">Company email</label><input id="in-email" name="email" type="email" autocomplete="email" required maxlength="254"></div>'
+      + '<div class="field"><label for="in-company">Company</label><input id="in-company" name="company" autocomplete="organization" required maxlength="160"></div>'
+      + '<div class="field"><label for="in-role">Role you\'re hiring for</label><input id="in-role" name="role" required maxlength="120" placeholder="QA Analyst"></div></div>'
+      + '<div class="field" style="margin-top:16px"><label for="in-message">What would they walk into?</label><textarea id="in-message" name="message" rows="4" maxlength="2000" placeholder="The problem, the stack, the timeline"></textarea></div>'
+      + '<div class="field"><label for="in-more">Invite other interviewers <span class="muted" style="font-weight:400">(optional)</span></label><input id="in-more" name="interviewers" placeholder="name@company.com, name@company.com"></div>'
+      + '<label class="check"><input type="checkbox" name="record" checked> Record the session for my team (the candidate is asked to consent)</label>'
+      + '<p id="err" role="alert" style="color:var(--danger);font-size:.88rem;margin:8px 0 0"></p>'
+      + '<div class="acts"><button type="button" class="btn btn-ghost" data-go="2">← Back</button><button type="submit" class="btn btn-primary">Send interview request</button></div></form>';
+  }
+  function step4() {
+    return '<div style="display:flex;gap:16px;align-items:flex-start"><span class="success-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></span>'
+      + '<div><h2>Request sent</h2><p class="lede" style="margin:0">Kesetebirhan gets it now and confirms within 24 hours. The time is held for you until then.</p></div></div>'
+      + '<div class="timeline"><div class="ok"><i>✓</i>Request sent<em>now</em></div><div class="now"><i>2</i>Candidate confirms, the Colaberry team is copied<em>&lt; 24h</em></div>'
+      + '<div><i>3</i>Calendar invite with your room link<em>on confirm</em></div><div><i>4</i>Join the room in the browser<em>' + esc(S.slot ? S.slot.date + ', ' + S.slot.time : '') + '</em></div></div>'
+      + '<div class="acts" style="justify-content:flex-start"><a class="btn btn-primary" href="#">Add to my calendar</a><a class="btn btn-ghost" href="index.html">Back to profile</a><button type="button" class="btn btn-text" data-reset>Book another</button></div>';
+  }
+
+  function render() {
+    steps(); summary();
+    panel.innerHTML = [step1, step2, step3, step4][S.step - 1]();
+    var f = document.getElementById('f');
+    if (f) f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var bad = ['in-name', 'in-email', 'in-company', 'in-role'].filter(function (id) { return !document.getElementById(id).value.trim(); });
+      var email = document.getElementById('in-email').value;
+      if (bad.length) { document.getElementById('err').textContent = 'Fill in your name, company email, company and the role.'; document.getElementById(bad[0]).focus(); return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { document.getElementById('err').textContent = 'That email address doesn’t look right.'; return; }
+      // Production: POST /api/public/hire/interviews (see PROMPT.md). The demo just advances.
+      S.step = 4; render();
+    });
+  }
+  panel.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.format) { S.format = b.dataset.format; render(); }
+    else if (b.dataset.case) { S.caseIdx = +b.dataset.case; render(); }
+    else if (b.dataset.week) { S.week = Math.max(0, Math.min(D.weeks.length - 1, S.week + +b.dataset.week)); render(); }
+    else if (b.dataset.time) { S.slot = { date: b.dataset.day, dow: b.dataset.dow, time: b.dataset.time }; render(); }
+    else if (b.dataset.go) { var g = +b.dataset.go; if (g === 3 && !S.slot) return; S.step = g; render(); panel.focus && window.scrollTo({ top: 0 }); }
+    else if (b.hasAttribute('data-reset')) { S = { step: 1, format: 'intro', caseIdx: 0, week: 0, slot: null }; render(); }
+  });
+  render();
+})();
+</script>
+</body>
+</html>

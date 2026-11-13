@@ -70,7 +70,21 @@ export function buildSessionLinks(sessionId: string, base?: string): SessionLink
  * scanned a week early, and a viewer who meets an error page concludes the link is broken and
  * does not come back.
  */
-export type SessionMoment = 'not_started' | 'live' | 'ended' | 'unknown';
+/**
+ * `cancelled` is its own moment, and was not before.
+ *
+ * It used to fall through to `not_started`, so a cancelled class told every viewer "This class
+ * has not started yet. Leave this page open. It will update on its own when the class goes
+ * live." Every clause of that is false: `cancelled` is terminal (`broadcastStateMachine.ts:49`,
+ * `cancelled: []`) and `uq_broadcast_source_ref` permits no second occurrence for the session, so
+ * the page will never update and the class can never go live. Someone who scanned the QR would
+ * sit and wait for a class that was called off.
+ *
+ * It is a separate value rather than folded into `ended` because the two need different words.
+ * "This class has ended" invites someone to look for a replay that will never exist, since
+ * nothing was recorded.
+ */
+export type SessionMoment = 'not_started' | 'live' | 'ended' | 'cancelled' | 'unknown';
 
 export interface MomentResult {
   moment: SessionMoment;
@@ -82,6 +96,8 @@ export interface MomentResult {
 /** Discovery treats exactly these as on air; the moment resolver must not disagree. */
 const ON_AIR = ['live', 'reconnecting'];
 const FINISHED = ['ended', 'processing', 'replay_ready'];
+/** Terminal and unreachable: no second occurrence can be minted for the session. */
+const CALLED_OFF = ['cancelled'];
 
 /**
  * Resolve the current moment from the occurrence linked to this session.
@@ -109,6 +125,9 @@ export async function resolveSessionMoment(
 
     if (ON_AIR.includes(row.editorial_state)) {
       return { moment: 'live', occurrenceId: row.id, watchUrl: sessionWorkspaceUrl(sessionId, base) };
+    }
+    if (CALLED_OFF.includes(row.editorial_state)) {
+      return { moment: 'cancelled', occurrenceId: row.id, watchUrl: null };
     }
     if (FINISHED.includes(row.editorial_state)) {
       return { moment: 'ended', occurrenceId: row.id, watchUrl: null };

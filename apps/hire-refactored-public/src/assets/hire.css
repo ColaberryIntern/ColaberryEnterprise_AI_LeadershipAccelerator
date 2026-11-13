@@ -100,8 +100,8 @@ section.block{padding:56px 0}
 .spot{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 @media(max-width:960px){.spot{grid-template-columns:1fr}}
 .spot-card{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:var(--bg-elevated);display:flex;flex-direction:column}
-.spot-card .art{height:150px;position:relative}
-.spot-card .art svg{width:100%;height:100%;display:block}
+.spot-card .art{aspect-ratio:16/9;position:relative;background:var(--bg-sunk)}
+.spot-card .art svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .spot-card .ribbon{position:absolute;top:14px;left:14px;font-family:var(--font-mono);font-size:.72rem;background:var(--star);color:var(--star-ink);font-weight:600;padding:4px 10px;border-radius:20px}
 .spot-card .body{padding:0 22px 22px;margin-top:-40px;position:relative;flex:1;display:flex;flex-direction:column}
 .spot-card h3{margin:14px 0 2px;font-size:1.25rem}
@@ -127,6 +127,12 @@ select.sel{background:var(--bg-elevated);border:1px solid var(--line-strong);col
 
 /* talent grid */
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+/* Loading placeholders: shape only, no words, so nothing false is ever on screen while the API answers. */
+.loading-grid{padding:40px 0}
+.tcard.skel{min-height:260px;background:linear-gradient(100deg,var(--bg-elevated) 30%,var(--bg-sunk) 50%,var(--bg-elevated) 70%);background-size:300% 100%;animation:skel 1.4s ease-in-out infinite}
+@keyframes skel{from{background-position:100% 0}to{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.tcard.skel{animation:none}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .tcard{position:relative;background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:flex;flex-direction:column}
 /* the whole card is ONE real link (a stretched anchor); the shortlist button sits above it */
 .tcard-link{position:absolute;inset:0;z-index:1;border-radius:inherit}
@@ -154,7 +160,7 @@ select.sel{background:var(--bg-elevated);border:1px solid var(--line-strong);col
 /* published strip */
 .strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .mini{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg-elevated);display:block}
-.mini .art{height:90px}.mini .art svg{width:100%;height:100%}
+.mini .art{aspect-ratio:16/9;position:relative;background:var(--bg-sunk)}.mini .art svg{position:absolute;inset:0;width:100%;height:100%}
 .mini .t{padding:12px 14px}
 .mini .t b{display:block;font-size:.9rem;line-height:1.35}
 .mini .t span{font-size:.75rem;color:var(--fg-faint)}
@@ -177,3 +183,9 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .intro-form .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .form-status{min-height:1.4em;font-family:var(--font-mono);font-size:.85rem;color:var(--fg-muted)}
 .form-status.ok{color:var(--success)}.form-status.err{color:var(--danger)}
+
+/* Case-study covers on any card (2026-11-11): the record's picked thumbnail, framed 16:9 by the
+   card, with the walkthrough length on it. common.js `cover()` falls back to the art SVG. */
+.art img.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.art .play{position:absolute;left:10px;bottom:10px;font-family:var(--font-mono);font-size:.72rem;font-weight:600;color:#fff;background:rgba(10,10,14,.72);padding:3px 8px;border-radius:6px;letter-spacing:.02em}
+.spot-card .art .play{left:auto;right:10px}

@@ -24,6 +24,7 @@ import type { ReviewRunView } from './proposal/govProposalReviewRunStore';
 import type { ProposalDocumentView } from './proposal/govProposalDocumentStore';
 import { deriveBuildStoryStage, deriveProposalStage, toCommitFeed, readGovProvenanceFacts, computeOverallProgress, type BuildStage, type ProposalStage, type CommitFeedItem, type GovOverallProgress } from './govCockpit';
 import type { GovBuildSummary } from './govBuildSummary';
+import { evaluateRequirements, type RequirementEval } from './govQualification';
 
 /** v2 Proposal view: one named document a bid must submit, projected student-safe (no comment-author identities). */
 export interface StudentProposalDocumentComment { body: string; at: string; }
@@ -64,6 +65,9 @@ export interface StudentProposalDocument {
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
+  /** The stage the requirement is due at (submission/award/delivery/unknown), for the Fit "requirements by due stage"
+   *  grouping that matches the admin workspace. Student-safe classification string; absent on older projections. */
+  dueStage?: string;
 }
 /** A student-facing build story — the derived story, its Claude Code prompt, and the student's submitted evidence. */
 export interface StudentGovBuildStory extends GovBuildStory {
@@ -117,6 +121,12 @@ export interface StudentGovProjectView {
   tracks: StudentGovTrackView[];
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
+  /** Fit parity: the requirement evaluations the admin Qualification Workspace renders in "Requirements by due
+   *  stage" — { id, dueStage, applicability, blocking, reason }, produced by the SAME evaluateRequirements() the
+   *  admin pipeline uses, so the intern Fit step renders the identical component and data. Student-safe (the
+   *  solicitation's own requirements + evidence-coverage status; no dollars, contacts, or identities). Absent on a
+   *  projection built before established requirements exist. */
+  requirementEvals?: RequirementEval[];
   /** The Build-track plan for this project — releases → stories → the prompt the student works from. */
   build: StudentGovBuildPlan;
   /** P6: the proposal projected to THIS viewer's share level ('none' ⇒ empty, hidden). Pricing + identities are
@@ -156,6 +166,10 @@ export interface StudentGovProjectView {
   /** v2 Build view: the SBP build summary (releases -> stories + progress) and the linked project id for the
    *  deep-link to the build workspace. Null when no build is linked yet. */
   buildSummary: GovBuildSummary | null;
+  /** The connected build repo for this project (owner/name/url), read-only — resolved from the `solution_build`
+   *  track's student project's GitHub connection. Lets the cockpit confirm "we are in sync" without offering to add
+   *  a URL. Null when no repo is linked yet. Carries NO token, secret, or identity. Optional on older backends. */
+  connectedRepo?: { owner: string; name: string; url: string } | null;
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
    *  (pricing) are dropped for non-reviewers. Each carries the B.1 per-doc summary (latest/gates/currentGate/
    *  openGapCount/fatalCount/cycle), batch-loaded. */
@@ -343,12 +357,20 @@ const GATE_SEQUENCE: GovProposalGate[] = ['pink', 'red', 'gold', 'white_glove'];
  * over ALL sources via the pure proposalReadiness (which drops pricing/superseded/form), so it is the same honest
  * number for admin and intern alike. Total: garbage ⇒ empty documents + zero readiness.
  */
-export function assembleProposalDocuments(sources: ProposalDocSummarySource[], viewerCanVerify: boolean): { documents: StudentProposalDocument[]; readiness: ProposalReadiness } {
+export function assembleProposalDocuments(
+  sources: ProposalDocSummarySource[],
+  viewerCanVerify: boolean,
+  opts: { redactAdminOnlyContent?: boolean } = {},
+): { documents: StudentProposalDocument[]; readiness: ProposalReadiness } {
   const list = (Array.isArray(sources) ? sources : []).filter((s) => s && s.view);
   const documents: StudentProposalDocument[] = list
     .filter((s) => viewerCanVerify || !s.view.adminOnly)
     .map((s) => {
       const d = s.view;
+      // READ-ONLY INTERN PARITY: an admin-only (pricing) document's CARD stays visible so the panel renders, but its
+      // substance — the drafted body and the reviewer comment thread — is withheld. The admin path (opts default) is
+      // unchanged. This is the explicit redaction the plan audit required: panel visibility without admin-only content.
+      const sealAdminOnly = !!opts.redactAdminOnlyContent && !!d.adminOnly;
       const gates: Record<GovProposalGate, GateStatus> = { ...EMPTY_GATES };
       for (const g of Array.isArray(s.gates) ? s.gates : []) gates[g.gate] = (g.status as GateStatus) ?? 'pending';
       const currentGate = GATE_SEQUENCE.find((g) => gates[g] !== 'approved') ?? null;
@@ -357,10 +379,10 @@ export function assembleProposalDocuments(sources: ProposalDocSummarySource[], v
         ? { versionId: s.latest.id, version: s.latest.version, scores: s.latest.scores ?? {}, passes: !!s.latest.passes, pageCount: s.latest.pageCount ?? null, createdAt: s.latest.createdAt ?? null }
         : null;
       return {
-        key: d.key, title: d.title, status: d.status, contentHtml: d.contentHtml, version: d.version,
+        key: d.key, title: d.title, status: d.status, contentHtml: sealAdminOnly ? null : d.contentHtml, version: d.version,
         gate: d.gate, order: d.order, requirementIds: d.requirementIds, sections: d.sections,
         docType: d.docType, pageLimit: d.pageLimit, fileName: d.fileName, blueprintVersion: d.blueprintVersion,
-        comments: (Array.isArray(d.comments) ? d.comments : []).map((c) => ({ body: c.body, at: c.at })),
+        comments: sealAdminOnly ? [] : (Array.isArray(d.comments) ? d.comments : []).map((c) => ({ body: c.body, at: c.at })),
         draftedAt: d.draftedAt, acceptedAt: d.acceptedAt,
         superseded: !!d.superseded,
         latest, gates, currentGate,
@@ -406,7 +428,14 @@ export function summarizeNeeds(
  * Load + project. Serves ONLY a non-archived `government_public_sector` project (else null -> 404). Access must
  * already be authorized by the caller's guard; this never performs an access check of its own.
  */
-export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false, viewerIdentityId: string | null = null): Promise<StudentGovProjectView | null> {
+/**
+ * `redactAdminOnly` (read-only intern parity): serve the `viewerCanVerify=true` PANEL set to a non-reviewer intern
+ * (so the reviewer/pricing panels render) while explicitly WITHHOLDING every admin-only SUBSTANCE field that
+ * `viewerCanVerify=true` would otherwise add beyond the student view — the canonical opportunity id, the admin-only
+ * (pricing) document bodies + comments, and the pricing/Gold-approval needs. Defaults OFF, so the admin cockpit and
+ * the ordinary student view are unchanged. Paired with the read-only cockpit UI (every control disabled).
+ */
+export async function getStudentGovProjectView(deliveryProjectId: string, viewerCanVerify = false, viewerIdentityId: string | null = null, redactAdminOnly = false): Promise<StudentGovProjectView | null> {
   const { default: DeliveryProject } = await import('../../models/DeliveryProject');
   const { default: ContractTrack } = await import('../../models/ContractTrack');
   const { default: ContractRequirement } = await import('../../models/ContractRequirement');
@@ -492,9 +521,31 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       // The dossier's public MEETING lines (e.g. the pre-proposal conference) — student-safe (date + the solicitation's
       // own sentence, never contacts). The Solicitation stage surfaces these; they lived only in the legacy workspace.
       view.meetings = toStudentMeetings((qual.requirements_json && (qual.requirements_json as any).dossier) || null);
+      // Fit parity: carry each requirement's due-stage classification (submission/award/delivery/unknown) from the
+      // qualification's established[] onto the student requirements, so the Fit step can group "requirements by due
+      // stage" like the admin Qualification Workspace. Student-safe (a plain classification string, no dollars or
+      // identities). established[].id is the canonical req id (govBuildPublish.mapEstablishedToRequirements). Absent
+      // established[] leaves the flat requirements list unchanged.
+      try {
+        const established: any[] = Array.isArray((qual.requirements_json as any)?.established) ? (qual.requirements_json as any).established : [];
+        if (established.length) {
+          const stageByReq = new Map<string, string>();
+          for (const e of established) {
+            const ds = (String(e?.dueStage ?? '').trim() || 'unknown');
+            for (const k of [e?.id, e?.canonicalReqId, e?.canonical_req_id].filter(Boolean)) stageByReq.set(String(k), ds);
+          }
+          if (stageByReq.size && Array.isArray(view.requirements)) {
+            view.requirements = view.requirements.map((r) => ({ ...r, dueStage: stageByReq.get(r.canonicalReqId) ?? 'unknown' }));
+          }
+          // The admin "Requirements by due stage" data, produced by the SAME pure evaluateRequirements() the admin
+          // workspace uses — so the intern Fit step renders the identical component (REQ id, applicability, blocking,
+          // reason), not a parallel look-alike. Student-safe: evals carry no dollars, contacts, or identities.
+          view.requirementEvals = evaluateRequirements(established).evals;
+        }
+      } catch { /* additive; the flat requirements list stays unchanged on any failure */ }
       // Admin-only: the canonical opportunity id, so the admin contract view can deep-link steps 1-4 to the real
       // Qualification Workspace. Withheld from an intern (viewerCanVerify=false) — they keep the student-safe panels.
-      if (viewerCanVerify) view.canonicalOpportunityId = qual.canonical_opportunity_id != null ? String(qual.canonical_opportunity_id) : null;
+      if (viewerCanVerify && !redactAdminOnly) view.canonicalOpportunityId = qual.canonical_opportunity_id != null ? String(qual.canonical_opportunity_id) : null;
     }
   } catch { /* additive; agency/keyDates/closeDate/priorityScore/meetings stay at their safe defaults */ }
 
@@ -524,6 +575,25 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     const { getGovBuildSummary } = await import('./govBuildSummary');
     view.buildSummary = await getGovBuildSummary(deliveryProjectId);
   } catch { /* additive; buildSummary stays null */ }
+
+  // The connected build repo (read-only): the `solution_build` track's student project's GitHub connection. Surfaced
+  // so the cockpit can confirm "we are in sync" instead of asking for a URL. Best-effort; carries no token/secret/
+  // identity (only owner/name/url). Stays null when no repo is linked. Rides the same membership-guarded projection.
+  try {
+    const buildTrack = (Array.isArray(tracks) ? tracks : []).find(
+      (t) => String(t?.track_type ?? '') === 'solution_build' && t?.solution_student_project_id,
+    );
+    const studentProjectId = buildTrack ? String(buildTrack.solution_student_project_id) : null;
+    if (studentProjectId) {
+      const { default: GitHubConnection } = await import('../../models/GitHubConnection');
+      const conn: any = await GitHubConnection.findOne({ where: { project_id: studentProjectId } });
+      view.connectedRepo = conn && conn.repo_owner && conn.repo_name
+        ? { owner: String(conn.repo_owner), name: String(conn.repo_name), url: String(conn.repo_url ?? '') }
+        : null;
+    } else {
+      view.connectedRepo = null;
+    }
+  } catch { /* additive; connectedRepo stays undefined/null */ }
 
   // v2 Proposal view: derive the named documents from the established requirements, SYNC them into the store
   // (preserving authored state), and project student-safe — admin-only (pricing) documents are dropped for a
@@ -570,7 +640,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
         latestRun: runsByDocId.get(id) ?? null,
       };
     });
-    const assembled = assembleProposalDocuments(sources, viewerCanVerify);
+    const assembled = assembleProposalDocuments(sources, viewerCanVerify, { redactAdminOnlyContent: redactAdminOnly });
     view.proposalDocuments = assembled.documents;
     view.proposalReadiness = assembled.readiness;
     // v3 (T05): the needs counts, viewer-filtered — an intern never sees a pricing or Gold-approval need counted.
@@ -578,7 +648,7 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     try {
       const { collectProjectNeeds } = await import('./proposal/collectProjectNeeds');
       const { needsForViewer } = await import('./proposal/aggregateNeeds');
-      const projNeeds = needsForViewer(await collectProjectNeeds(deliveryProjectId), { includePricing: viewerCanVerify, canApprove: viewerCanVerify });
+      const projNeeds = needsForViewer(await collectProjectNeeds(deliveryProjectId), { includePricing: viewerCanVerify && !redactAdminOnly, canApprove: viewerCanVerify && !redactAdminOnly });
       const sum = summarizeNeeds(projNeeds);
       view.needsCount = sum.total;
       view.fatalNeedsCount = sum.fatal;

@@ -44,7 +44,13 @@ import ProducerStrip from '../../components/portal/ProducerStrip';
  * keep sending it.
  */
 
-type Moment = 'not_started' | 'live' | 'ended' | 'unknown';
+/**
+ * Mirrors `SessionMoment` in `backend/src/services/broadcast/broadcastSessionLinks.ts`. The two
+ * are restated rather than shared because nothing crosses the stacks here, so adding a value
+ * means adding it in both places - and the compiler catching the omission is the point, since a
+ * moment with no copy would render an empty card.
+ */
+type Moment = 'not_started' | 'live' | 'ended' | 'cancelled' | 'unknown';
 
 interface MomentResponse {
   moment: Moment;
@@ -84,6 +90,22 @@ const COPY: Record<Moment, { eyebrow: string; title: string; body: string }> = {
     eyebrow: 'Finished',
     title: 'This class has ended',
     body: 'A replay will appear here if one is published.',
+  },
+  /*
+   * Separate from `ended`, and separate from `not_started`, because both would mislead.
+   *
+   * It used to render as `not_started`: "Leave this page open. It will update on its own when
+   * the class goes live." Every clause of that was false for a cancelled class, and someone who
+   * had just scanned the code would wait for a class that was called off.
+   *
+   * `ended` would be the other easy mistake. It promises a replay, and a cancelled airing never
+   * recorded anything to publish.
+   */
+  cancelled: {
+    eyebrow: 'Canceled',
+    title: 'This class was canceled',
+    body: 'It will not be broadcast, and there will be no replay. Check your schedule for the '
+      + 'next class.',
   },
   unknown: {
     // Deliberately not "something went wrong": the link is fine, we just cannot answer yet.
@@ -192,12 +214,28 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
    */
   const showWorkspace = !companion && moment === 'live';
 
+  /**
+   * THE CARD ALSO HAS TO GROW FOR A PRODUCER BEFORE ANYTHING IS AIRING (D6).
+   *
+   * `showWorkspace` keyed the width to `moment === 'live'`, but the producer strip renders at
+   * every moment on purpose - `not_started` is exactly when Go Backstage has to be pressed.
+   * So a producer arriving before the class got the controls, the clock, the feed health, the
+   * audience chip and a row of command buttons inside a 440px column.
+   *
+   * It cannot be keyed to `isAuthenticated` instead, because that is true for every signed-in
+   * STUDENT, and they would get a 980px card with nothing in it. Only the strip knows whether
+   * the server calls this viewer a producer, so it reports it and the width follows.
+   */
+  const [isProducer, setIsProducer] = useState(false);
+  const onProducerConfirmed = useCallback(() => setIsProducer(true), []);
+  const wide = showWorkspace || (!companion && isProducer);
+
   return (
     <div className="clv-root">
       <style>{CLV_CSS}</style>
 
       <main
-        className={`clv-card${showWorkspace ? ' is-wide' : ''}`}
+        className={`clv-card${wide ? ' is-wide' : ''}`}
         data-testid="live-session-page"
       >
         <div className="clv-brand">
@@ -275,7 +313,12 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
                 self-hides for anyone the server does not call a producer, so this condition
                 is about which screen it suits, not about who may use it. Gated on
                 authentication only to avoid a guaranteed 401 poll on a public page. */}
-            {!companion && isAuthenticated && <ProducerStrip sessionId={sessionId} />}
+            {!companion && isAuthenticated && (
+              <ProducerStrip
+                sessionId={sessionId}
+                onProducerConfirmed={onProducerConfirmed}
+              />
+            )}
 
             {moment === 'unknown' && (
               <button type="button" className="clv-btn clv-btn-ghost" onClick={() => { void read(); }}>
@@ -285,7 +328,7 @@ export default function LiveSessionPage({ companion = false }: LiveSessionPagePr
 
             {moment === 'not_started' && (
               <p className="clv-text clv-text-sub">
-                You can close this and come back &mdash; the link stays the same for this class.
+                You can close this and come back. The link stays the same for this class.
               </p>
             )}
           </div>

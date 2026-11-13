@@ -34,8 +34,14 @@ describe('build output', () => {
     }
   });
 
-  test('ships each shell with its honest empty or not-found state already in the HTML', () => {
-    assert.match(read(DIST, 'index.html'), /Nobody is listed yet/);
+  test('the home page ships loading placeholders, never a "Nobody is listed yet" that flashes before the data (Ali, 2026-11-11)', () => {
+    const home = read(DIST, 'index.html');
+    assert.doesNotMatch(home, /Nobody is listed yet<\/h1>/, 'the shipped HTML must not claim nobody is listed');
+    assert.match(home, /id="directory-loading" aria-busy="true"/);
+    assert.match(home, /class="tcard skel"/);
+  });
+
+  test('ships each record shell with its honest not-found state already in the HTML', () => {
     assert.match(read(DIST, 'talent/record/index.html'), /This profile isn't listed/);
     assert.match(read(DIST, 'case-studies/record/index.html'), /isn't published here/);
   });

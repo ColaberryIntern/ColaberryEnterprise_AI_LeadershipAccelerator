@@ -1,0 +1,16 @@
+/* C130 public work page. The shared viewer (PieceViewer, MyWork.css, PortfolioPage.css) is styled on the portal's tokens, which
+   the public page does not load, so they are mapped here onto the public portfolio's own tokens (portfolio.css, light and dark). */
+.pwk {
+  --surface: var(--pf-card); --sunken: var(--pf-bg); --border: var(--pf-bd); --border-sub: var(--pf-bd);
+  --strong: var(--pf-ink); --body: var(--pf-body); --muted: var(--pf-mut);
+  --cherry: var(--pf-a); --cherry-deep: var(--pf-a2); --cherry-text: var(--pf-a); --berry: var(--pf-a);
+  --shadow-md: var(--pf-sh);
+  min-height: 100vh;
+}
+.pwk-in { max-width: 1080px; margin: 0 auto; padding: 28px 16px 48px; }
+.pwk-back { display: inline-block; margin-bottom: 14px; color: var(--pf-a); font-weight: 600; text-decoration: none; }
+.pwk-back:hover { text-decoration: underline; }
+.pwk-h { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+.pwk-h h1 { margin: 0; font-size: 28px; color: var(--pf-ink); overflow-wrap: anywhere; }
+.pwk-muted { color: var(--pf-mut); margin: 4px 0 0; }
+.pwk .mw-reader { max-width: none; }

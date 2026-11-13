@@ -1,10 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { createInvoiceSchema, createInvoiceRequestSchema, createFreeAccountSchema } from '../schemas/enrollmentSchema';
-import { createEnrollmentInvoice } from '../services/paysimpleService';
 import {
-  validateCohortAvailability,
-  createPendingEnrollment,
   createInvoiceEnrollment,
   createExplorerEnrollment,
   getEnrollmentByInvoiceId,
@@ -31,59 +28,64 @@ export async function handleListOpenCohorts(
   }
 }
 
+/**
+ * RETIRED. This route used to mint a real PaySimple payment link for $4,500.
+ *
+ * Reported by Victoria Spencer-Auber on 11 Nov 2026 while building Vick's sales
+ * capabilities: *"The live /api/create-invoice route creates payment links for
+ * $4,500, not the plan price."* She was right, and three facts made it live
+ * rather than theoretical:
+ *
+ *   - the route is PUBLIC. `enrollmentRoutes` is mounted before the auth guard
+ *     and nginx proxies `/api/` straight through, so it took no credentials
+ *   - production runs `PAYMENT_MODE=live`, so the test-mode $0.01 clamp that
+ *     makes this harmless in dev does not apply
+ *   - $4,500 is a RETIRED price. `admissionsKnowledgeGate.ts` carries a check
+ *     specifically for "the retired $4,500 offer", and `marketingMetrics.ts`
+ *     records that revenue used to be derived from that hardcoded figure. This
+ *     route was the last place still quoting it.
+ *
+ * Nobody was ever charged it. Of the 8 enrollments that ever went through the
+ * payment-link path, 0 were at $4,500, the 2 that paid paid $199, and the last
+ * use was 21 July 2026. The exposure was prospective, not historical.
+ *
+ * ## Why 410 and not a deletion
+ *
+ * A deleted route answers 404, which is indistinguishable from a bad deploy or
+ * a typo. This is a deliberate retirement and it should say so, and it should
+ * be VISIBLE if anything still calls it: no frontend code referenced this route
+ * when it was retired, but "no caller in this repo" is not the same as "no
+ * caller", and a silent 404 is how you find out the slow way. So the refusal is
+ * logged with the caller's email, and that log line is the evidence for whether
+ * this can eventually be deleted outright.
+ */
 export async function handleCreateInvoice(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
+    // Parsed only so a malformed body is still a 400 rather than a 410, which
+    // keeps the refusal honest: "this route is gone" and "your request was
+    // wrong" are different answers and a caller needs to be able to tell them
+    // apart while they migrate.
     const data = createInvoiceSchema.parse(req.body);
 
-    // Same capture on the paid enrolment path. Someone buying a course has not
-    // thereby asked for marketing email - that is a separate choice, and this
-    // records it only when they actually make it.
-    await captureSignupConsent({
-      email: data.email,
-      marketingOptIn: (data as any).marketing_opt_in,
-      source: 'enrollment_form',
-      consentText: SIGNUP_CONSENT_TEXT,
-      ipAddress: req.ip ?? null,
-      // `req.get` is an Express helper, not part of the bare request shape.
-      // Calling it unguarded threw on a hand-rolled req in an existing test, and
-      // the controller's catch turned that into a silent failure to respond -
-      // consent capture must never be able to break a signup that way.
-      userAgent: typeof (req as any).get === 'function' ? req.get('user-agent') ?? null : null,
-    });
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'create_invoice_route_retired',
+      outcome: 'failure',
+      error_class: 'RouteRetired',
+      context: { email: data.email, cohort_id: data.cohort_id },
+    }));
 
-    // Validate cohort availability
-    const cohort = await validateCohortAvailability(data.cohort_id);
-
-    // Create PaySimple invoice with customer + payment link
-    const result = await createEnrollmentInvoice({
-      fullName: data.full_name,
-      email: data.email,
-      company: data.company,
-      phone: data.phone,
-      cohortName: cohort.name,
-    });
-
-    // Create enrollment record (pending until webhook confirms payment)
-    await createPendingEnrollment(
-      data,
-      result.paymentLinkId,
-      String(result.customerId),
-      result.externalId,
-      result.mode
-    );
-
-    console.log(
-      `[Enrollment] Payment link ${result.paymentLinkId} created for ${data.email}` +
-        ` (external: ${result.externalId}, $${result.amount}, mode: ${result.mode})`
-    );
-
-    res.json({
-      invoice_id: result.externalId,
-      payment_link: result.paymentLink,
+    res.status(410).json({
+      error: 'This enrollment route has been retired',
+      code: 'create_invoice_retired',
+      detail: 'It issued payment links at a price that is no longer offered. '
+        + 'Enrollment and checkout now run through the application.',
     });
   } catch (error) {
     if (error instanceof ZodError) {

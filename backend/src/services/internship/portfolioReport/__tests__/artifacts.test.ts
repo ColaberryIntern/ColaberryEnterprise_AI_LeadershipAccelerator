@@ -142,14 +142,33 @@ describe('artifacts: links', () => {
 });
 
 describe('artifacts: what to ask for, with prompt and nudge', () => {
-  it('a stuck builder is asked for a Blocker Brief first, and the prompt names their project and next story', () => {
+  /**
+   * Nine quiet days with NOTHING reported as broken is a stall, not a blocker, so the first prompt
+   * is the Stall Audit. It still carries the project context, and it asks for a reply rather than
+   * an artifact: somebody who has not committed in nine days should not have to build a styled
+   * page before they can tell us why.
+   */
+  it('a builder who went quiet with nothing reported broken is asked for a Stall Audit first', () => {
     const data = collected();
     data.projects[0].commits = [{ date: daysAgo(9), author: 'kal', message: 'old work' }];
     const c = composeInternshipPortfolio(data, { now: NOW }).groups[0].interns[0];
+    const first = c.artifacts.asks[0];
+    expect(first.key).toBe('stall_audit');
+    expect(first.theme).toBe('diagnose');
+    expect(first.prompt).toContain('Project: Console project (repo: https://github.com/x/y)');
+    expect(first.prompt).toContain('do not fix anything before you do');
+    expect(first.prompt).not.toContain('Save as PDF');
+    expect(first.nudge).toMatch(/^Hi Kalkidan, could you run this in the next two days\?/);
+  });
+
+  it('a builder who DID report something broken still gets the Blocker Brief, which asks for the error', () => {
+    const data = collected();
+    data.projects[0].commits = [{ date: daysAgo(9), author: 'kal', message: 'old work' }];
+    data.emails = [{ email: 'kal@example.com', subject: 'I cannot reach the admin endpoint', snippet: 'I am blocked on it.', received_at: daysAgo(3) }];
+    const c = composeInternshipPortfolio(data, { now: NOW }).groups[0].interns[0];
     expect(c.artifacts.asks[0].key).toBe('blocker_brief');
-    expect(c.artifacts.asks[0].prompt).toContain('Project: Console project (repo: https://github.com/x/y)');
+    expect(c.artifacts.asks[0].theme).toBe('diagnose');
     expect(c.artifacts.asks[0].prompt).toContain('"Next thing"');
-    expect(c.artifacts.asks[0].nudge).toMatch(/^Hi Kalkidan, could you put together a Blocker Brief for Console project/);
   });
 
   it('a builder who reported an issue and kept committing is NOT asked for a Blocker Brief (prod: Quincy)', () => {
@@ -259,11 +278,18 @@ describe('artifacts: visual PDFs, not Markdown (Ali, 10 Nov 2026)', () => {
     expect(keys([pub()])).not.toContain('format_correction');
   });
 
-  it('a Blocker Brief still comes before the course correction', () => {
+  /**
+   * The diagnosis prompt still comes before the course correction, and it is now a Stall Audit
+   * rather than a Blocker Brief, because this fixture has nine quiet days and NO reported blocker.
+   * `blocker_brief` asks for the command, the file and the error text, which is the right prompt
+   * when something failed and the wrong one when nothing did.
+   */
+  it('the diagnosis prompt still comes before the course correction', () => {
     const data = collected({ artifacts: [pub({ repo_path: 'a/notes.md', created_at: daysAgo(2) })] });
     data.projects[0].commits = [{ date: daysAgo(9), author: 'kal', message: 'old work' }];
-    const keys = composeInternshipPortfolio(data, { now: NOW }).groups[0].interns[0].artifacts.asks.map((a) => a.key);
-    expect(keys.slice(0, 2)).toEqual(['blocker_brief', 'format_correction']);
+    const asks = composeInternshipPortfolio(data, { now: NOW }).groups[0].interns[0].artifacts.asks;
+    expect(asks.slice(0, 2).map((a) => a.key)).toEqual(['stall_audit', 'format_correction']);
+    expect(asks.slice(0, 2).map((a) => a.theme)).toEqual(['diagnose', 'evidence']);
   });
 
   it('groups the chips by type, PDFs first, each group labeled and colored', () => {
@@ -289,6 +315,24 @@ describe('artifacts: visual PDFs, not Markdown (Ali, 10 Nov 2026)', () => {
     for (const a of asks) {
       // Nothing they are told to CREATE is Markdown (the warning "Do not submit a Markdown (.md) file" is fine).
       expect(a.prompt).not.toMatch(/Create [^\n]*\.md\b/);
+      /**
+       * SCOPED TO EVIDENCE PROMPTS, 2026-11-11, and this is a deliberate narrowing of Ali's
+       * 10 Nov rule rather than a lapse of it.
+       *
+       * That rule exists because ARTIFACTS were arriving as Markdown when they should have been
+       * visual PDFs, and it still binds every prompt whose output is an artifact. The `diagnose`
+       * and `advance` prompts do not produce artifacts: they ask why a build stopped, or what the
+       * next three stories are, and the answer comes back as a plain reply in twenty minutes.
+       *
+       * Requiring a self-contained HTML page with conditional formatting and a chart BEFORE
+       * someone will tell us why they have not committed in nine days adds exactly the friction
+       * that kept them stopped. The format rule is about artifacts; these are not artifacts.
+       */
+      if (a.theme !== 'evidence') {
+        expect(a.prompt).toContain('Do not build a page for this');
+        expect(a.prompt).not.toContain('Save as PDF');
+        continue;
+      }
       if (a.key !== 'command_center') {
         expect(a.prompt).toContain('Save as PDF');
         expect(a.nudge).toContain('upload the PDF');

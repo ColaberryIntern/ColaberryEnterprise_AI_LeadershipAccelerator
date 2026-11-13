@@ -587,4 +587,55 @@ describe('Component E - emailService brand preflight', () => {
         .not.toMatch(/validateBeforeSend[\s\S]{0,40}=>\s*\{\s*\}/);
     });
   });
+
+  /* ── MR1: the admissions document never claims an attachment ───────────── */
+
+  describe('sendAdmissionsDocument cannot promise an attachment it does not add', () => {
+    /**
+     * This function adds no attachment, ever: there is no `attachments` key in it. It
+     * nonetheless had a fallback branch whose body read "The <title> is attached to this
+     * email.", and the only caller passed neither a URL nor inline content, so that
+     * sentence rendered on every send. It is now a refusal instead of a sentence.
+     */
+    beforeEach(() => { mockSendMail.mockClear(); mockSendMail.mockResolvedValue({ messageId: 'm1' }); });
+
+    it('refuses, and sends nothing, when there is no document to send', async () => {
+      const out = await emailService.sendAdmissionsDocument({
+        to: 'lead@example.com', name: 'Dana Whitfield', documentType: 'program_overview',
+      } as never);
+      expect(out).toEqual({ outcome: 'refused', reason: 'no_document_to_send' });
+      expect(mockSendMail).not.toHaveBeenCalled();
+    });
+
+    it('sends, and says so, when inline content is supplied', async () => {
+      const out = await emailService.sendAdmissionsDocument({
+        to: 'lead@example.com', name: 'Dana Whitfield', documentType: 'program_overview',
+        documentContent: 'A short overview of the program.',
+      } as never);
+      expect(out).toMatchObject({ outcome: 'sent' });
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+    });
+
+    it('no rendered body claims an attachment, on either content branch', async () => {
+      for (const extra of [
+        { documentContent: 'A short overview of the program.' },
+        { documentUrl: 'https://enterprise.colaberry.ai/docs/overview.pdf' },
+      ]) {
+        mockSendMail.mockClear();
+        await emailService.sendAdmissionsDocument({
+          to: 'lead@example.com', name: 'Dana Whitfield', documentType: 'program_overview', ...extra,
+        } as never);
+        const sent = mockSendMail.mock.calls[0][0];
+        expect(sent.html).not.toMatch(/attached to this email/i);
+        expect(sent.text).not.toMatch(/attached to this email/i);
+      }
+    });
+
+    it('the source carries no attachment-claiming sentence at all', () => {
+      // A render-level check only covers the branches a test drives. This covers the file,
+      // so a reintroduced third branch fails here even if nothing exercises it.
+      expect(readRepoFile('backend/src/services/emailService.ts'))
+        .not.toMatch(/is attached to this email/i);
+    });
+  });
 });

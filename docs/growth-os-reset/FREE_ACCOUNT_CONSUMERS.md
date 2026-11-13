@@ -139,7 +139,7 @@ asserts them from the parsed cells so they cannot drift again:
 | Unchanged, with a stated reason | **14** | `grep -c "\| unchanged \| unchanged \|"` |
 | **Total** | **37** | matches the generator's `BRANCHING` count |
 
-## REPORTING — 18 files
+## REPORTING — 19 files
 
 **`paymentSyncService.ts` WAS listed here although it is a WRITER, and as of C10.17 Phase 2
 it is not listed at all.** The history is worth keeping, because it explains a gap rather
@@ -174,7 +174,18 @@ hand-transcribing this list and dropping a file** — see the note below.
 `services/explorerGrowth/explorerStateMachine.ts` ·
 `services/growthJourney/outcomes/outcomeNormalizer.ts` · `services/icpProfileService.ts` ·
 `services/internship/internshipReviewQueue.ts` ·
+`services/internship/nudgeBrief/cadence.ts` ·
 `services/portalEnrollmentService.ts` · `services/portalSettingsService.ts`
+
+
+`services/internship/nudgeBrief/cadence.ts` is in this list on a WORD, not on a meaning, and the
+distinction is worth stating rather than leaving for the next reader to re-derive. Its `tier` is
+the intern TRIAGE tier (`on_track`, `quiet`, `blocked_waiting_on_ali`), which has nothing to do
+with an enrollment's access tier. It never reads `enrollment_type`, never reads an enrollment's
+`tier`, and cannot change behaviour when the free-account pair starts being written together.
+It is kept here anyway: the scanner matching a word it cannot disambiguate is exactly the kind of
+false positive that must stay visible, because teaching the scanner to skip this file is how a
+real consumer gets skipped later.
 
 Four notes on this list:
 

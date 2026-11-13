@@ -17,8 +17,8 @@ const evClass = (k: GovActivityEvent['kind']): string => (k === 'library_answer'
  * routes via the injected studioApi; Ask goes through the injected copilot.
  */
 export default function AgentPanel(
-  { projectId, studioApi, docs, onReload, onNavigate, onAsk, onToast }:
-  { projectId: string; studioApi: GovStudioApi; docs: GovProposalDocument[]; onReload: () => void; onNavigate: (v: StudioView) => void; onAsk?: (q: string) => Promise<string>; onToast?: (m: string) => void },
+  { projectId, studioApi, docs, onReload, onNavigate, onAsk, onToast, readOnly = false }:
+  { projectId: string; studioApi: GovStudioApi; docs: GovProposalDocument[]; onReload: () => void; onNavigate: (v: StudioView) => void; onAsk?: (q: string) => Promise<string>; onToast?: (m: string) => void; readOnly?: boolean },
 ): React.ReactElement {
   const [needs, setNeeds] = useState<GovProjectNeed[]>([]);
   const [activity, setActivity] = useState<GovActivityEvent[]>([]);
@@ -103,8 +103,8 @@ export default function AgentPanel(
                   {n.why && <span className="gps-why">{n.why}</span>}
                   {inline ? (
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <input className="gps-input" aria-label="Answer" value={drafts[n.key] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [n.key]: e.target.value }))} />
-                      <button className="gps-btn sm primary" disabled={busy === n.key} onClick={() => resolve(n, drafts[n.key] ?? '')}>Save</button>
+                      <input className="gps-input" aria-label="Answer" disabled={readOnly} value={drafts[n.key] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [n.key]: e.target.value }))} />
+                      <button className="gps-btn sm primary" disabled={readOnly || busy === n.key} onClick={() => resolve(n, drafts[n.key] ?? '')}>Save</button>
                     </div>
                   ) : (
                     <button className="gps-btn sm" onClick={() => onNavigate('openitems')}>Answer in Needs you</button>
@@ -120,8 +120,8 @@ export default function AgentPanel(
           <div className="gps-ask" style={{ marginTop: 10 }}>
             <h3><span>Ask the agent</span></h3>
             <div style={{ display: 'flex', gap: 6 }}>
-              <input className="gps-input" data-testid="agent-ask" aria-label="Ask the agent" placeholder="Ask about this proposal…" value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitAsk(); }} />
-              <button className="gps-btn sm" disabled={asking || !ask.trim()} onClick={submitAsk}>Ask</button>
+              <input className="gps-input" data-testid="agent-ask" aria-label="Ask the agent" disabled={readOnly} placeholder="Ask about this proposal…" value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitAsk(); }} />
+              <button className="gps-btn sm" disabled={readOnly || asking || !ask.trim()} onClick={submitAsk}>Ask</button>
             </div>
             {answer && <div className="gps-small" style={{ marginTop: 6 }}>{answer}</div>}
           </div>

@@ -24,7 +24,9 @@ import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
-import { renewClaim, recoverStaleActions as recoverStaleActionsLeased } from './scheduling/claimLease';
+import {
+  renewClaim, recoverStaleActions as recoverStaleActionsLeased, recoveryLogLines,
+} from './scheduling/claimLease';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
@@ -59,6 +61,8 @@ import { recomputeAllMilestonePromotions } from './progression/milestoneSweep';
 import { registerExplorerNightlySequence } from './scheduling/explorerNightlySequence';
 import { registerGrowthJourneyCrons } from './scheduling/growthJourneyCrons';
 import { registerAdSpendCrons } from './scheduling/adSpendCrons';
+import { registerChatConversationCrons } from './scheduling/chatConversationCrons';
+import { registerVisitorGeoCrons } from './scheduling/visitorGeoCrons';
 import { runContentSync } from './explorerGrowth/content/runContentSync';
 import {
   isWithinSendWindow,
@@ -900,12 +904,27 @@ async function processScheduledActions(): Promise<void> {
 async function recoverStaleActions(): Promise<number> {
   const outcome = await recoverStaleActionsLeased();
   if (outcome.requeued > 0 || outcome.exhausted > 0) {
-    // Log the ids, not just a count: without them there is no way to tell afterwards which rows
-    // were recycled, which is the first question asked when a lead reports a duplicate.
-    console.log(
-      `[Scheduler] Recovered ${outcome.requeued} stale actions, failed ${outcome.exhausted} with no attempts left`,
-      JSON.stringify({ ids: outcome.ids }),
-    );
+    // L7.3. NAME THE REASON, AND KEEP THE TWO OUTCOMES APART.
+    //
+    // The previous line logged counts plus one merged id list. Its own comment said the ids were
+    // there because "the first question asked when a lead reports a duplicate" is which rows were
+    // recycled - and a merged list cannot answer that, because a recycled row and a killed row
+    // looked identical in it.
+    //
+    // It also never said WHY. "Recovered 3 stale actions" describes what happened to the rows and
+    // leaves the cause to be guessed. The cause is specific and worth recording: nothing renewed
+    // the lease on these rows for longer than STALE_AFTER_MS, so their owner is presumed dead.
+    // `error_class` is `LeaseExpired` rather than a bare Error, because a recovery nobody can
+    // classify afterwards cannot be counted, and this repo's own rule is that a generic Error is
+    // not an acceptable classification.
+    //
+    // Two lines rather than one, because requeue and exhaustion are different events: a requeue
+    // will be tried again, an exhaustion is terminal and someone has to look at it.
+    // The lines themselves are built by `recoveryLogLines`, a pure function next to the recovery
+    // it describes, so what gets logged is testable without standing up a scheduler.
+    for (const line of recoveryLogLines(outcome)) {
+      console.log('[Scheduler] recovery', JSON.stringify(line));
+    }
   }
   return outcome.requeued + outcome.exhausted;
 }
@@ -1819,6 +1838,34 @@ export function startScheduler(): void {
     });
   });
 
+  /**
+   * The intern nudge cadence: the unattended pass that keeps coverage a process rather than a
+   * person.
+   *
+   * Until this existed, `buildAllBriefs` had exactly one caller — an admin HTTP route — so if Ali
+   * stopped pressing the button, communication stopped with him. Measured 2026-11-11: coverage was
+   * perfect, and it was perfect because he pressed it on the 10th and again on the 11th.
+   *
+   * DAILY, because the floor Ali set is two days and a daily evaluation cannot let anyone exceed
+   * it. The schedule is not what decides who hears from us: `cadence.decide` runs the strategic
+   * triggers first and the two-day floor only catches whoever none of them found.
+   *
+   * DRY UNLESS EXPLICITLY TOLD OTHERWISE. `INTERN_NUDGE_CADENCE_SEND` must be exactly `on`.
+   * Absent, misspelled, `true`, `1` and `yes` all mean dry, because the failure mode of a loose
+   * check here is mail going to real interns that nobody approved. Going live is a deliberate act.
+   *
+   * `instrumentCronJob` gives it the same enabled/paused kill switch every other agent cron has,
+   * so it can be stopped without a deploy.
+   */
+  cron.schedule('0 14 * * *', () => {
+    instrumentCronJob('InternNudgeCadence', async () => {
+      const { runCadence } = await import('./internship/nudgeBrief/cadenceRun');
+      await runCadence({ dryRun: process.env.INTERN_NUDGE_CADENCE_SEND !== 'on' });
+    }).catch((err) => {
+      console.error('[Scheduler] Intern nudge cadence error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {
@@ -1902,6 +1949,15 @@ export function startScheduler(): void {
   registerGrowthJourneyCrons();
   // Daily Meta ad spend pull; dormant until META_ADS_ACCESS_TOKEN is set. See adSpendCrons.ts.
   registerAdSpendCrons();
+  // Close idle chat conversations (R4). Nothing calls POST /api/chat/close, so closeConversation()
+  // had never run in production: 145 conversations all left 'active', and conversation_count 0 on
+  // every admissions_memory row as a result. See chatConversationCrons.ts.
+  registerChatConversationCrons();
+  // Daily visitor geo-IP enrichment (GEO-1). The backfill was run by hand on 2026-11-11 and made
+  // the snack bar render for the first time; the feed only looks back 72 hours, so without this
+  // the bar goes dark again within about three days. Spawns the script as a child process on
+  // purpose - see visitorGeoCrons.ts for why the 50MB reader must not live in this process.
+  registerVisitorGeoCrons();
 
   // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
   // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see

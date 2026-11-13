@@ -1,4 +1,14 @@
 import portalApi from '../utils/portalApi';
+import type { QualRequirementEval, GovQualificationWorkspace, GovOpportunity, SnapshotReason } from './factoryApi';
+
+/** The opportunity-detail shape the admin page reads — reused verbatim so the intern renders the identical component.
+ *  estimatedValue is always null from the participant endpoint (the award amount never reaches a participant). */
+export interface PortalGovOpportunityDetail {
+  opportunity: GovOpportunity | null;
+  source: 'live' | 'snapshot';
+  snapshotDate: string | null;
+  snapshotReason?: SnapshotReason | null;
+}
 
 /**
  * govProjectPortalApi — the student client for an ASSIGNED government project. It calls the participant-guarded
@@ -10,6 +20,9 @@ import portalApi from '../utils/portalApi';
 export interface StudentGovTrackView { trackType: string; status: string; hasBuild: boolean; }
 export interface StudentGovRequirementView {
   canonicalReqId: string; statement: string; priority: string; tracks: string[]; evidenceState: string;
+  /** Stage the requirement is due at (submission/award/delivery/unknown), for the Fit "requirements by due stage"
+   *  grouping that matches the admin workspace. Optional (absent on older projections). */
+  dueStage?: string;
 }
 /** The 4-stage cockpit board column a build story moves through (a commit reaches `matched` at most). */
 export type GovBuildStage = 'todo' | 'build' | 'matched' | 'done';
@@ -93,6 +106,10 @@ export interface StudentGovProjectView {
   tracks: StudentGovTrackView[];
   requirements: StudentGovRequirementView[];
   requirementCounts: { total: number; proposal: number; build: number };
+  /** Fit parity: the requirement evaluations the admin renders in "Requirements by due stage" — same shape, same
+   *  evaluateRequirements() source — so the intern Fit step renders the identical shared component. Absent on a
+   *  projection built before established requirements exist. */
+  requirementEvals?: QualRequirementEval[];
   build: StudentGovBuildPlan;
   /** P6: the proposal projected to this viewer's share level ('none' ⇒ not shared). Optional — absent on older backends. */
   proposal?: SharedProposalView;
@@ -123,6 +140,10 @@ export interface StudentGovProjectView {
   commitFeed?: GovCommitFeedItem[];
   /** v2 Build view: releases → stories + progress + the linked project id for the deep-link. Optional (older backends). */
   buildSummary?: GovBuildSummary | null;
+  /** The connected build repo (owner/name/url), READ-ONLY — resolved server-side from the build track's GitHub
+   *  connection. Shown so the cockpit can confirm it is in sync; carries no token/secret/identity. Null when no repo
+   *  is linked. Optional (older backends). */
+  connectedRepo?: { owner: string; name: string; url: string } | null;
   /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
   proposalDocuments?: GovProposalDocument[];
   /** P2: the blueprint derived from the stored solicitation (scoring, Section L rules, required forms). Null until a
@@ -281,10 +302,44 @@ export async function getStudentGovProject(projectId: string): Promise<StudentGo
   return data.project;
 }
 
+/**
+ * The READ-ONLY intern parity cockpit — the SAME Gov Contract cockpit projection the admin management portal gets
+ * (viewerCanVerify=true, so the reviewer/pricing PANELS appear), with every admin-only SUBSTANCE field redacted and
+ * the award amount stripped server-side. Feeds the StudioShell mounted `readOnly` for the assigned intern, so the
+ * intern sees the same screen the admin does, every control disabled. The server (not the client) is the trust
+ * boundary — this endpoint already withholds the admin-only content before it leaves the backend.
+ */
+export async function getPortalGovCockpitFull(projectId: string): Promise<StudentGovProjectView> {
+  const { data } = await portalApi.get<{ project: StudentGovProjectView }>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/cockpit-full`,
+  );
+  return data.project;
+}
+
 /** P6: the gov projects THIS intern is assigned to (membership-scoped server-side) — for the profile card. */
 export async function listMyGovProjects(): Promise<MyGovProjectCard[]> {
   const { data } = await portalApi.get<{ projects: MyGovProjectCard[] }>('/api/portal/gov-projects');
   return Array.isArray(data?.projects) ? data.projects : [];
+}
+
+/**
+ * The intern's READ-ONLY Qualification Workspace — the SAME `GovQualificationWorkspace` payload the admin studio
+ * renders (built by the same server-side builder), member-gated, award amount stripped server-side. Feeds the REAL
+ * `AdminGovQualificationPage` mounted read-only for the intern.
+ */
+export async function getPortalGovQualification(projectId: string): Promise<GovQualificationWorkspace> {
+  const { data } = await portalApi.get<GovQualificationWorkspace>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/qualification`,
+  );
+  return data;
+}
+
+/** The intern's opportunity detail — same shape the admin reads, with estimatedValue forced null server-side. */
+export async function getPortalGovOpportunityDetail(projectId: string): Promise<PortalGovOpportunityDetail> {
+  const { data } = await portalApi.get<PortalGovOpportunityDetail>(
+    `/api/portal/gov-projects/${encodeURIComponent(projectId)}/opportunity-detail`,
+  );
+  return data;
 }
 
 /** Hand in completion evidence for a build story. The server records it `submitted` — a reviewer verifies later. */
@@ -471,4 +526,37 @@ export const portalGovStudioApi: GovStudioApi = {
   resolveNeed: resolveGovNeed,
   buildAll: buildAllGovDocuments,
   fetchArtifactImage: fetchGovArtifactImage,
+};
+
+/** A read-only reviewApi WRITE member: it issues NO request and rejects. The read-only UI disables every control that
+ *  would call one of these, so this is defense in depth, not a reachable path. */
+const readOnlyReviewWrite = (): never => { throw new Error('This government project is read-only for you.'); };
+
+/**
+ * READ-ONLY reviewApi for the intern parity cockpit. The admin injects the real `adminGovReviewApi`; the intern gets
+ * THIS, so the reviewer/package PANELS render while every mutation is a no-op that never issues a write request. The
+ * deep reviewer drill-downs (per-document version history, version diff) return empty — the read-only UI disables the
+ * controls that would open them — and the one read the Package panel needs, the signature status, is served by the
+ * read-only participant mirror. The optional admin-only members (saveSectionPlan/editDocument/decideGold) are
+ * intentionally omitted, so the intern's DraftVersions shows no edit affordances.
+ */
+export const portalGovReviewApiReadOnly: GovReviewApi = {
+  // ── reads ──
+  listReview: async () => ({ versions: [], gates: [] }),
+  diffVersions: async () => ({ segments: [] }),
+  fetchArtifactImage: fetchGovArtifactImage,
+  listSignatures: async (projectId: string) => {
+    const { data } = await portalApi.get<{ signatures: GovSignatureView[] }>(`${portalBase(projectId)}/package/signatures`);
+    return data;
+  },
+  // ── writes: never reached (controls disabled); if ever called they issue NO request and reject ──
+  runChecks: async () => readOnlyReviewWrite(),
+  decideGate: async () => readOnlyReviewWrite(),
+  insertFigure: async () => readOnlyReviewWrite(),
+  setDemoUrl: async () => readOnlyReviewWrite(),
+  recapture: async () => readOnlyReviewWrite(),
+  runReviewCycle: async () => readOnlyReviewWrite(),
+  answerQuestion: async () => readOnlyReviewWrite(),
+  uploadSignedForm: async () => readOnlyReviewWrite(),
+  assemblePackage: async () => readOnlyReviewWrite(),
 };

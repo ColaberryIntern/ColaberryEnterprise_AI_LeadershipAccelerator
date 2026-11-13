@@ -1,6 +1,9 @@
 import React from 'react';
-import type { StudentGovProjectView, StudentGovMeeting, StudentGovVetting, StudentGovOpportunitySummary } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, StudentGovMeeting, StudentGovVetting, StudentGovOpportunitySummary, StudentGovRequirementView } from '../../../../services/govProjectPortalApi';
 import { pursuitStageLabel } from './buildHelpers';
+import StageBlueprint from './StageBlueprint';
+import { SectionCard } from '../../../../components/admin/shell';
+import { RequirementsByDueStageList } from '../../../admin/govWorkspace/RequirementsByDueStage';
 
 /**
  * StageDetail — read-only panels behind the pursuit-stage chips (Snapshot / Solicitation / Fit / Decide / Outcome),
@@ -21,6 +24,15 @@ const VERDICT: Record<string, { label: string; cls: string }> = {
   pass: { label: 'AI recommends passing', cls: 'bg-danger-subtle text-danger-emphasis' },
   inconclusive: { label: 'AI could not call it: needs your read', cls: 'bg-warning-subtle text-warning-emphasis' },
 };
+
+/** When no verdict has landed yet, say WHY from the vetting status — running/queued (in progress) vs AI turned off,
+ *  so a pending card reads as a state rather than an empty box. Null ⇒ nothing to say (the stage placeholder covers it). */
+function vettingPending(status: string | null | undefined): string | null {
+  const s = (status ?? '').toLowerCase();
+  if (/run|queue|progress|pending|process/.test(s)) return 'AI vetting is still running — the verdict appears here once the automatic checks finish.';
+  if (/disabled|off|skip/.test(s)) return 'Automatic AI vetting is off for this pursuit — the verdict will be a human read.';
+  return null;
+}
 
 function Head({ title, sub }: { title: string; sub: string }): React.ReactElement {
   return <div className="gps-vh"><div><h2>{title}</h2><p>{sub}</p></div></div>;
@@ -51,11 +63,13 @@ function SummaryCard({ summary }: { summary: StudentGovOpportunitySummary }): Re
 /** The full AI vetting card — verdict badge, capability coverage, reason, source quote, advisory footer. */
 function VettingCard({ vetting }: { vetting: StudentGovVetting }): React.ReactElement {
   const v = vetting.verdict ? VERDICT[vetting.verdict] : null;
+  const pending = v ? null : vettingPending(vetting.status);
   return (
     <div className="card shadow-sm mt-3 mb-0" data-testid="ai-vetting-card">
       <div className="card-body">
         <h3 className="h6 fw-semibold mb-2"><i className="ri-robot-2-line me-1" aria-hidden="true" />AI vetting</h3>
         {v && <div><span className={`badge ${v.cls} mb-2`} data-testid="stage-vetting">{v.label}</span></div>}
+        {pending && <p className="small text-secondary mb-2" data-testid="stage-vetting-pending"><i className="ri-time-line me-1" aria-hidden="true" />{pending}</p>}
         {typeof vetting.coveragePct === 'number' && (
           <div className="small mb-2"><span className="fw-semibold" data-testid="stage-coverage">{vetting.coveragePct}%</span> of the capabilities this bid needs match Our Services.</div>
         )}
@@ -85,6 +99,58 @@ function MeetingsPanel({ meetings }: { meetings: StudentGovMeeting[] }): React.R
   );
 }
 
+/** Humanize a requirement's evidence state into a short, non-jargon tag. Unknown strings pass through unchanged. */
+function evidenceLabel(state: string): string {
+  const s = (state ?? '').toLowerCase();
+  if (/covered|complete|done|verified/.test(s)) return 'Covered';
+  if (/partial|progress/.test(s)) return 'In progress';
+  if (/none|missing|open|todo|not/.test(s)) return 'Not yet covered';
+  return state || 'Unknown';
+}
+
+/** Due-stage order + labels, matching the admin Qualification Workspace's "Requirements by due stage" grouping. */
+const DUE_STAGE_ORDER = ['submission', 'award', 'delivery', 'unknown'] as const;
+const DUE_STAGE_LABEL: Record<string, string> = {
+  submission: 'Due with the submission', award: 'Due at award', delivery: 'Due during delivery', unknown: 'Stage not classified',
+};
+
+/** The requirements-coverage read behind the Fit step: each established requirement with its priority and the evidence
+ *  state of our coverage, GROUPED BY DUE STAGE (submission / award / delivery) like the admin workspace. A projection
+ *  without due-stage data falls back to the single flat list. Student-safe — no eval internals, no service matches. */
+function RequirementsEvidence({ requirements }: { requirements: StudentGovRequirementView[] }): React.ReactElement | null {
+  const rows = requirements ?? [];
+  if (rows.length === 0) return null;
+
+  const row = (r: StudentGovRequirementView): React.ReactElement => (
+    <div className="gps-r" key={r.canonicalReqId} data-testid="fit-req">
+      <span>{r.statement}</span>
+      <span style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
+        <span className="gps-tag gps-small">{r.priority}</span>
+        <span className="gps-tag gps-small" style={{ marginLeft: 4 }} data-testid="fit-req-evidence">{evidenceLabel(r.evidenceState)}</span>
+      </span>
+    </div>
+  );
+
+  const groups = DUE_STAGE_ORDER
+    .map((stage) => ({ stage, items: rows.filter((r) => (r.dueStage || 'unknown') === stage) }))
+    .filter((g) => g.items.length > 0);
+  const grouped = rows.some((r) => r.dueStage) && groups.length > 1;
+
+  return (
+    <div className="gps-panel" data-testid="fit-requirements">
+      <h3>Requirements &amp; coverage <span className="gps-tag gps-small">{rows.length}</span></h3>
+      {grouped
+        ? groups.map((g) => (
+          <div key={g.stage} data-testid="fit-req-group">
+            <div className="gps-eyebrow" style={{ marginTop: 10 }}>{DUE_STAGE_LABEL[g.stage] ?? g.stage} <span className="gps-tag gps-small">{g.items.length}</span></div>
+            {g.items.map(row)}
+          </div>
+        ))
+        : rows.map(row)}
+    </div>
+  );
+}
+
 export default function StageDetail({ stage, view }: { stage: VettingStage; view: StudentGovProjectView }): React.ReactElement {
   const agency = view.agency ?? null;
   const readiness = view.proposalReadiness?.pct ?? 0;
@@ -105,6 +171,10 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
           {keyDates.map((k, i) => (<div className="gps-r" key={i}><span>{k.text ?? 'Date'}</span><b className="gps-num">{k.date ?? ''}</b></div>))}
         </div>
         <MeetingsPanel meetings={view.meetings ?? []} />
+        {/* Blueprint (how they score it, submission rules, required forms, elimination risks) leads here,
+            above the full requirements list, to match the admin Qualification Workspace's prominence: the
+            "under what rules" read is the point of this step and must not sit below a 200-row requirement dump. */}
+        {bp && <StageBlueprint bp={bp} />}
         <div className="gps-panel">
           <h3>Requirements <span className="gps-tag gps-small" data-testid="stage-reqcount">{view.requirementCounts.total}</span></h3>
           <div className="gps-muted gps-small" style={{ marginBottom: 8 }}>{view.requirementCounts.proposal} for the proposal &middot; {view.requirementCounts.build} for the build</div>
@@ -116,16 +186,6 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
             </div>
           ))}
         </div>
-        {bp && (
-          <div className="gps-panel" data-testid="stage-blueprint">
-            <h3>Solicitation blueprint</h3>
-            {bp.buyerType && <div className="gps-r"><span>Buyer type</span><b>{bp.buyerType}</b></div>}
-            <div className="gps-r"><span>Evaluation (Section M)</span><b className="gps-num">{bp.scoring?.totalPoints ?? '—'} pts</b></div>
-            <div className="gps-r"><span>Section L rules</span><b className="gps-num">{bp.rules?.length ?? 0}</b></div>
-            <div className="gps-r"><span>Required forms</span><b className="gps-num">{bp.forms?.length ?? 0}</b></div>
-            <div className="gps-r"><span>Elimination risks</span><b className="gps-num">{bp.eliminationRisks?.length ?? 0}</b></div>
-          </div>
-        )}
       </div>
     );
   }
@@ -136,6 +196,8 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
         <Head title="Snapshot" sub="The at-a-glance advisory read: is this worth pursuing?" />
         <div className="gps-panel">
           <div className="gps-r"><span>Soliciting agency</span><b>{agency ?? 'Not captured'}</b></div>
+          {view.closeDate && <div className="gps-r"><span>Closes</span><b className="gps-num" data-testid="snapshot-close">{view.closeDate}</b></div>}
+          {view.priorityScore != null && <div className="gps-r"><span>Priority</span><b className="gps-num" data-testid="snapshot-priority">{view.priorityScore}</b></div>}
           <div className="gps-r"><span>Current stage</span><b>{pursuitStageLabel(view)}</b></div>
           <div className="gps-r"><span>Advisory read</span><b>Complete — this pursuit advanced into build</b></div>
           <div className="gps-r"><span>Proposal readiness</span><b className="gps-num">{readiness}%</b></div>
@@ -158,6 +220,18 @@ export default function StageDetail({ stage, view }: { stage: VettingStage; view
           {rollup && <div className="gps-r"><span>Build stories verified</span><b className="gps-num">{rollup.verified} / {rollup.total}</b></div>}
           {!vetting && <div className="gps-r"><span>Fit decision</span><b>Approved — the bid was pursued</b></div>}
         </div>
+        {(view.requirementEvals?.length ?? 0) > 0 ? (
+          /* The EXACT admin "Requirements by due stage" card + component + data (evaluateRequirements). Same screen as
+             the admin Qualification Workspace, read-only, not a parallel look-alike. Falls back to the prose coverage
+             list only on a projection with no established requirement evals. */
+          <SectionCard title="Requirements by due stage" icon="list-check-2" subtitle="Missing evidence, unknown applicability, and unevidenced dismissals block a bid pursuit.">
+            <div data-testid="fit-requirements">
+              <RequirementsByDueStageList evals={view.requirementEvals!} />
+            </div>
+          </SectionCard>
+        ) : (
+          <RequirementsEvidence requirements={view.requirements ?? []} />
+        )}
         {vetting && <VettingCard vetting={vetting} />}
         {!vetting && <div className="gps-muted gps-small" data-testid="stage-coming">{COMING}</div>}
       </div>

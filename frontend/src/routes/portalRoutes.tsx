@@ -19,6 +19,7 @@ const PortalHandoffPage = lazy(() => import('../pages/portal/PortalHandoffPage')
 const ClassCheckinPage = lazy(() => import('../pages/portal/ClassCheckinPage'));
 const ClassroomPage = lazy(() => import('../pages/portal/ClassroomPage'));
 const ShowcaseGalleryPage = lazy(() => import('../pages/portal/showcase/ShowcaseGalleryPage'));
+const ShowcasePiecePage = lazy(() => import('../pages/portal/showcase/ShowcasePiecePage'));
 import PageGate from '../components/paywall/PageGate';
 const RuntimeWorkspace = lazy(() => import('../pages/portal/runtime/RuntimeWorkspace'));
 const ProjectWorkspacePage = lazy(() => import('../pages/portal/projects/ProjectWorkspacePage'));
@@ -39,6 +40,9 @@ const CampusHomePage = lazy(() => import('../pages/portal/campus/CampusHomePage'
 const ProjectsPage = lazy(() => import('../pages/portal/projects/ProjectsPage'));
 const PortfolioPage = lazy(() => import('../pages/portal/portfolio/PortfolioPage'));
 const PortfolioPreviewPage = lazy(() => import('../pages/portal/portfolio/PortfolioPreviewPage'));
+const MyWorkPage = lazy(() => import('../pages/portal/portfolio/myWork/MyWorkPage'));
+const PortfolioDashboardPage = lazy(() => import('../pages/portal/portfolio/myWork/DashboardPage'));
+const WorkPiecePage = lazy(() => import('../pages/portal/portfolio/myWork/WorkPiecePage'));
 const CertPrepPage = lazy(() => import('../pages/portal/certprep/CertPrepPage'));
 const CommunityPage = lazy(() => import('../pages/portal/community/CommunityPage'));
 const PeopleDirectoryPage = lazy(() => import('../pages/portal/community/PeopleDirectoryPage'));
@@ -135,6 +139,8 @@ const portalRoutes = (
           so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
       <Route path="/portal/showcase" element={<ShowcaseGalleryPage />} />
+      {/* C138: a classmate's shared piece, read-only. Own cohort only; the server answers 404 for anything else. */}
+      <Route path="/portal/showcase/work/:id" element={<ShowcasePiecePage />} />
       {/* Employee → management portal: mints a scoped admin token, redirects to /admin. */}
       <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />
@@ -153,6 +159,12 @@ const portalRoutes = (
       {/* Living Career Portfolio — the private Career Studio. Gated like its
           siblings; the resume prerequisite inside it is enforced server-side. */}
       <Route path="/portal/portfolio" element={<PageGate feature="portfolio"><PortfolioPage /></PageGate>} />
+      {/* C128: My work, every piece the learner made, and each piece's own viewer page. Same gate as the
+          Studio; the server only ever answers for the caller's own pieces. */}
+      {/* C129: the Gallery's landing room, a summary of the learner's own work. */}
+      <Route path="/portal/portfolio/dashboard" element={<PageGate feature="portfolio"><PortfolioDashboardPage /></PageGate>} />
+      <Route path="/portal/portfolio/work" element={<PageGate feature="portfolio"><MyWorkPage /></PageGate>} />
+      <Route path="/portal/portfolio/work/:id" element={<PageGate feature="portfolio"><WorkPiecePage /></PageGate>} />
       {/* The learner's own page as a PAGE, opened in a new tab from Publishing. `preview`
           is a static segment and /portal/portfolio has no dynamic child, so it shadows
           nothing. Same entitlement gate as the Studio it is reached from. */}

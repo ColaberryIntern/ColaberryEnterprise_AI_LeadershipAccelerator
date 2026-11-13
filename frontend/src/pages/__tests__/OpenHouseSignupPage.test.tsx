@@ -30,8 +30,23 @@ jest.mock('../../services/openHouseApi', () => ({
   openHouseAcquisitionFields: jest.fn(),
 }));
 jest.mock('../../utils/tracker', () => ({ identifyVisitor: jest.fn() }));
-jest.mock('react-router-dom', () => ({
-  Link: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+// C121: the real helper navigates the window; here it only records the call.
+jest.mock('../../utils/startPortalSession', () => ({ startPortalSession: jest.fn(() => true) }));
+// The factory CREATES the navigate spy rather than closing over an outer const:
+// babel hoists `jest.mock` above the declarations, so a factory referring to one
+// would run in its temporal dead zone (see the note above). Tests read it back off
+// the mocked module as `__nav`.
+jest.mock('react-router-dom', () => {
+  const nav = jest.fn();
+  return {
+    Link: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    useNavigate: () => nav,
+    __nav: nav,
+  };
+});
+jest.mock('../../services/metaPixel', () => ({
+  loadMetaPixel: jest.fn().mockResolvedValue('2250748725203240'),
+  trackLeadOnce: jest.fn().mockResolvedValue(true),
 }));
 
 import {
@@ -40,8 +55,8 @@ import {
   signUpForOpenHouse,
 } from '../../services/openHouseApi';
 import { identifyVisitor } from '../../utils/tracker';
-import OpenHouseSignupPage, { seatsLabel, whenLabel } from '../OpenHouseSignupPage';
-import { SIGNUP_CONSENT_TEXT } from '../../config/consentText';
+import OpenHouseSignupPage, { seatsLabel, whenLabel, phoneProblem } from '../OpenHouseSignupPage';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../../config/consentText';
 
 const mockFetchEvent = fetchNextOpenHouse as jest.Mock;
 const mockSignUp = signUpForOpenHouse as jest.Mock;
@@ -93,19 +108,43 @@ function type(el: HTMLElement, value: string): void {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-const inputs = () => Array.from(container.querySelectorAll('input'));
+// BY ID, NOT BY POSITION. Adding the phone field shifted every index, and a positional
+// helper would have silently started typing an email address into a phone box.
+const field = (id: string) => container.querySelector(`#${id}`) as HTMLInputElement;
 const submitButton = () => container.querySelector('button[type="submit"]') as HTMLButtonElement;
 const text = () => container.textContent ?? '';
+
+/**
+ * A completed signup is now a NAVIGATION, not a panel rendered in place.
+ *
+ * These assertions used to read "Your seat is saved" off this page. The confirmation
+ * moved to /open-house/lead so that Meta has a URL meaning "registered" rather than
+ * one shared with the empty form, and its own rendering is covered in
+ * OpenHouseLeadPage.test.tsx. What this page is still responsible for is handing the
+ * result over correctly, which is what this checks.
+ */
+function expectSignedUp(): void {
+  const { __nav } = jest.requireMock('react-router-dom') as { __nav: jest.Mock };
+  expect(__nav).toHaveBeenCalledWith('/open-house/lead', expect.objectContaining({
+    replace: true,
+    state: { signup: expect.objectContaining({ message: expect.any(String) }) },
+  }));
+}
 
 async function mount() {
   await act(async () => { root.render(<OpenHouseSignupPage />); });
 }
 
-async function fillAndSubmit(name = 'Dana Okoro', email = 'dana@example.com', consent = false) {
-  const [nameEl, emailEl, consentEl] = inputs();
-  await act(async () => { type(nameEl, name); });
-  await act(async () => { type(emailEl, email); });
-  if (consent) await act(async () => { consentEl.click(); });
+async function fillAndSubmit(
+  name = 'Dana Okoro',
+  email = 'dana@example.com',
+  consent = false,
+  phone = '(512) 555-0142',
+) {
+  await act(async () => { type(field('cboh-name'), name); });
+  await act(async () => { type(field('cboh-email'), email); });
+  await act(async () => { type(field('cboh-phone'), phone); });
+  if (consent) await act(async () => { field('cboh-consent').click(); });
   await act(async () => {
     submitButton().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
@@ -166,6 +205,7 @@ describe('what it sends', () => {
     expect(mockSignUp).toHaveBeenCalledWith({
       name: 'Dana Okoro',
       email: 'dana@example.com',
+      phone: '(512) 555-0142',
       marketing_opt_in: false,
     });
   });
@@ -174,8 +214,7 @@ describe('what it sends', () => {
     await mount();
     // Unchecked on arrival: a pre-ticked box is not an affirmative act, and this value is the
     // consent of record for every marketing email afterwards.
-    const [, , consentEl] = inputs();
-    expect(consentEl.checked).toBe(false);
+    expect(field('cboh-consent').checked).toBe(false);
     expect(text()).toContain(SIGNUP_CONSENT_TEXT);
 
     await fillAndSubmit('Dana Okoro', 'dana@example.com', true);
@@ -209,9 +248,9 @@ describe('what it sends', () => {
     expect(mockSignUp).toHaveBeenCalledTimes(2);
     expect(mockSignUp).toHaveBeenNthCalledWith(1, expect.objectContaining({ utm_source: 'meta|cpc' }));
     expect(mockSignUp).toHaveBeenNthCalledWith(2, {
-      name: 'Dana Okoro', email: 'dana@example.com', marketing_opt_in: false,
+      name: 'Dana Okoro', email: 'dana@example.com', phone: '(512) 555-0142', marketing_opt_in: false,
     });
-    expect(text()).toContain('Your seat is saved');
+    expectSignedUp();
   });
 
   it('does not retry a 400 that was really about the person', async () => {
@@ -239,7 +278,7 @@ describe('what it sends', () => {
     mockIdentify.mockImplementation(() => { throw new Error('blocked'); });
     await mount();
     await fillAndSubmit();
-    expect(text()).toContain('Your seat is saved');
+    expectSignedUp();
   });
 });
 
@@ -252,9 +291,8 @@ describe('validation and failure', () => {
     expect(text()).toContain('Please enter your name.');
     expect(mockSignUp).not.toHaveBeenCalled();
 
-    const [nameEl, emailEl] = inputs();
-    await act(async () => { type(nameEl, 'Dana Okoro'); });
-    await act(async () => { type(emailEl, 'dana@'); });
+    await act(async () => { type(field('cboh-name'), 'Dana Okoro'); });
+    await act(async () => { type(field('cboh-email'), 'dana@'); });
     await act(async () => {
       submitButton().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
@@ -280,33 +318,6 @@ describe('validation and failure', () => {
   });
 });
 
-describe('after signing up', () => {
-  it('confirms with the server’s own message and the event it echoed back', async () => {
-    await mount();
-    await fillAndSubmit();
-    // The echo, not the date the page rendered a moment ago - those can differ if the event
-    // rolled over between the page load and the click.
-    expect(text()).toContain('Your seat is saved');
-    expect(text()).toContain('Check your email for your login link');
-    expect(text()).toContain('Thu, Nov 19, 2026 · 6:30 PM CT');
-    expect(container.querySelector('form')).toBeNull();
-  });
-
-  it('still confirms the account when no seat could be taken', async () => {
-    // `registered: false` means the account and the email happened and the seat did not. The
-    // backend says so in its message; the page must not overwrite that with a claim of a seat.
-    mockSignUp.mockResolvedValue({
-      ...OK,
-      registered: false,
-      event: null,
-      message: 'Your account is ready - check your email for your login link. We will confirm the Open House date separately.',
-    });
-    await mount();
-    await fillAndSubmit();
-    expect(text()).toContain('Your account is ready');
-    expect(text()).not.toContain('Nov');
-  });
-});
 
 describe('the pure labels', () => {
   it('seatsLabel claims a number only when there is one', () => {
@@ -337,5 +348,136 @@ describe('the advertising rule', () => {
     expect(text().toLowerCase()).not.toMatch(/\bfree\b/);
     await fillAndSubmit();
     expect(text().toLowerCase()).not.toMatch(/\bfree\b/);
+  });
+});
+
+// C121 (Ali, 11 Nov): a brand-new account opens with one click instead of a trip to the inbox.
+
+/**
+ * THE FIELD THAT WENT MISSING.
+ *
+ * The landing page's CTAs used to point at /portal/signup, which asks for a phone
+ * number. OH-3 pointed them at this page instead, and this page asked for a name and an
+ * email only - so from the day it shipped the funnel quietly stopped collecting phone
+ * numbers. Ali noticed on 2026-11-11 and asked for it back, mandatory.
+ *
+ * "Mandatory" is pinned as three separate refusals - empty, too short, too long -
+ * because a field a visitor can satisfy with "555" is not really required.
+ */
+describe('the phone number is mandatory (Ali, 2026-11-11)', () => {
+  it('asks for one on the form, before anyone submits', async () => {
+    await mount();
+    expect(field('cboh-phone')).not.toBeNull();
+    expect(text()).toContain('Phone number');
+  });
+
+  it('refuses to submit with it empty, and does not call the route at all', async () => {
+    await mount();
+    await fillAndSubmit('Dana Okoro', 'dana@example.com', false, '');
+    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(text()).toContain('Please enter your phone number.');
+  });
+
+  it('refuses a number too short to dial, naming the area code', async () => {
+    await mount();
+    await fillAndSubmit('Dana Okoro', 'dana@example.com', false, '555-0142');
+    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(text()).toContain('area code');
+  });
+
+  it('sends a formatted number as typed, without normalising it', async () => {
+    // The route counts digits, and reformatting what the visitor typed is a good way
+    // to mangle an international number.
+    await mount();
+    await fillAndSubmit('Dana Okoro', 'dana@example.com', false, '(512) 555-0142');
+    expect(mockSignUp).toHaveBeenCalledWith(expect.objectContaining({ phone: '(512) 555-0142' }));
+  });
+
+  it('CONTROL: a valid number still gets through, so the guard is not refusing everything', async () => {
+    await mount();
+    await fillAndSubmit();
+    expect(mockSignUp).toHaveBeenCalledTimes(1);
+    expectSignedUp();
+  });
+
+  describe('phoneProblem', () => {
+    it.each([
+      ['', 'Please enter your phone number.'],
+      ['   ', 'Please enter your phone number.'],
+      ['555', 'too short'],
+      ['512-555-014', 'too short'],
+      ['1234567890123456', 'too many digits'],
+      // The route caps the raw string at 50 chars as well as the digits. The form used
+      // to accept this and the route then answered 400.
+      ['(512) 555-0142 ' + 'x'.repeat(40), 'too long'],
+    ])('rejects %p', (raw, fragment) => {
+      expect(phoneProblem(raw)).toContain(fragment);
+    });
+
+    it.each(['5125550142', '(512) 555-0142', '512.555.0142', '+1 512 555 0142'])('accepts %p', (raw) => {
+      expect(phoneProblem(raw)).toBeNull();
+    });
+  });
+});
+
+/**
+ * The number is mandatory. PERMISSION TO RING IT IS NOT.
+ *
+ * `everyPhoneFormAsksPermission.test.ts` is a repo-wide invariant: a public form that
+ * collects a telephone number must ask what may be done with it. Making the field
+ * required without this would have been the exact defect that test exists to catch -
+ * fifteen landing pages once collected numbers with no consent row behind any of them.
+ */
+describe('permission to call is asked, separately and never assumed', () => {
+  it('does not ask before a number is typed', async () => {
+    // Permission to call somebody we have no number for grants nothing, and a box above
+    // an empty field reads as a condition of submitting.
+    await mount();
+    expect(field('cboh-phone-consent')).toBeNull();
+    expect(text()).not.toContain(PHONE_CONSENT_TEXT);
+  });
+
+  it('asks once a number is typed, and starts UNTICKED', async () => {
+    await mount();
+    await act(async () => { type(field('cboh-phone'), '(512) 555-0142'); });
+    expect(field('cboh-phone-consent')).not.toBeNull();
+    expect(field('cboh-phone-consent').checked).toBe(false);
+    expect(text()).toContain(PHONE_CONSENT_TEXT);
+  });
+
+  it('sends NO phone_consent key when the box was left alone', async () => {
+    // An absent key records nothing. A `false` would be a grant row that says "no",
+    // which is a different and untrue claim.
+    await mount();
+    await fillAndSubmit();
+    expect(mockSignUp).toHaveBeenCalledWith(expect.not.objectContaining({ phone_consent: expect.anything() }));
+  });
+
+  it('sends phone_consent true only when the box was actually ticked', async () => {
+    await mount();
+    await act(async () => { type(field('cboh-name'), 'Dana Okoro'); });
+    await act(async () => { type(field('cboh-email'), 'dana@example.com'); });
+    await act(async () => { type(field('cboh-phone'), '(512) 555-0142'); });
+    await act(async () => { field('cboh-phone-consent').click(); });
+    await act(async () => {
+      submitButton().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(mockSignUp).toHaveBeenCalledWith(expect.objectContaining({ phone_consent: true }));
+  });
+
+  it('uses the SHARED wording, not a sentence invented on this page', async () => {
+    // The backend records this exact string as the evidence of what was shown.
+    // consentTextParity.test.ts pins the two together; this pins the page to the constant.
+    await mount();
+    await act(async () => { type(field('cboh-phone'), '5125550142'); });
+    expect(text()).toContain(PHONE_CONSENT_TEXT);
+  });
+
+  it('keeps the two grants separate: ticking email consent does not grant the phone', async () => {
+    await mount();
+    await fillAndSubmit('Dana Okoro', 'dana@example.com', true);
+    const body = mockSignUp.mock.calls[0][0];
+    expect(body.marketing_opt_in).toBe(true);
+    expect(body.phone_consent).toBeUndefined();
   });
 });

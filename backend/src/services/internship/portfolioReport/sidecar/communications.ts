@@ -19,6 +19,7 @@
  * thread it quotes. One message per subject per intern (the best one). The report-wide top 10 takes
  * at most MAX_PER_INTERN from any one intern, so one prolific writer cannot fill the list.
  */
+import { isSentenceComplete, ownText, trimToSentence } from '../emailText';
 import { classifyEmail } from '../timeline';
 import type { Conversation } from '../types';
 
@@ -52,14 +53,10 @@ const EVIDENCE = [
 ] as const;
 const AUTOMATED_FROM = /(noreply|no-reply|notifications?@|info@colaberry|support@colaberry|mailer)/i;
 const AUTOMATED_SUBJECT = /^(re:\s*)?(\[?(internship report|daily|weekly|reminder|notification|digest|alert)\b|ali, here's)/i;
-const QUOTED = /\s(On (Mon|Tue|Wed|Thu|Fri|Sat|Sun)[^]{0,120}?wrote:|-{3,}\s*Original Message|From:\s.{3,80}Sent:)/i;
-
-/** The new text of a message: quoted history cut, whitespace collapsed. */
-export function ownText(body: string | null): string {
-  const t = String(body ?? '').replace(/\s+/g, ' ').trim();
-  const m = QUOTED.exec(t);
-  return (m ? t.slice(0, m.index) : t).trim();
-}
+// `ownText` moved to ../emailText so `timeline.classifyEmail` can clean the same way without
+// importing this module, which would have been circular (this file imports classifyEmail).
+// Re-exported because this is where its callers and its tests already look for it.
+export { ownText };
 
 /**
  * `content` = the message SAYS something (a blocker, a question, a finding, evidence, or 80+ words).
@@ -91,6 +88,12 @@ export function scoreMessage(m: { direction: Communication['direction']; from: s
 }
 
 const EXCERPT = 600;
+
+// `trimToSentence` and `isSentenceComplete` moved to ../emailText, so the report's own thread
+// snippets can use them without the report depending on the sidecar. Re-exported because this is
+// where their callers and their tests already look for them.
+export { trimToSentence, isSentenceComplete };
+
 const subjectKey = (s: string): string => s.replace(/^((re|fw|fwd):\s*)+/i, '').trim().toLowerCase();
 
 /** Every scored message, per intern, best first. `interns` = (enrollment id, name, lower-case email). */
@@ -115,7 +118,7 @@ export function rankCommunications(rows: Conversation[], interns: Array<{ enroll
       if (!content) continue;
       const c: Communication = {
         enrollment_id: it.enrollmentId, intern: it.name, direction: x.direction, received_at: new Date(x.atMs).toISOString(),
-        subject, excerpt: text.length > EXCERPT ? `${text.slice(0, EXCERPT - 3)}...` : text, score, signals, answered,
+        subject, excerpt: trimToSentence(text, EXCERPT), score, signals, answered,
       };
       const key = `${x.direction}:${subjectKey(subject)}`;
       const prev = best.get(key);

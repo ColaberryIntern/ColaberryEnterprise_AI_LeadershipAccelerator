@@ -1,5 +1,5 @@
 /**
- * The confirmation a student reads before removing their own build.
+ * The confirmation a student reads before deleting their own build.
  *
  * The property under test is that the copy is SPECIFIC and TRUE. "Are you sure?"
  * would pass no test worth writing; "This removes 21 tasks across 6 lists, your
@@ -98,8 +98,8 @@ async function mount() {
 
 const text = () => (container.textContent || '').replace(/\s+/g, ' ');
 const input = () => container.querySelector('.pja-input') as HTMLInputElement;
-const removeBtn = () => Array.from(container.querySelectorAll('button'))
-  .find((b) => (b.textContent || '').trim().startsWith('Remove this build')) as HTMLButtonElement;
+const deleteBtn = () => Array.from(container.querySelectorAll('button'))
+  .find((b) => (b.textContent || '').trim().startsWith('Delete this build')) as HTMLButtonElement;
 const keepBtn = () => Array.from(container.querySelectorAll('button'))
   .find((b) => (b.textContent || '').trim() === 'Keep it') as HTMLButtonElement;
 
@@ -128,13 +128,18 @@ describe('the confirmation names exactly what the student is giving up', () => {
 
   it('leads with reversibility, because it changes how carefully the rest is read', async () => {
     await mount();
-    expect(text()).toContain('Nothing is deleted');
+    // The wording changed when the control was renamed to Delete: "Nothing is deleted" would now
+    // contradict the button. The PROPERTY is unchanged and is what is asserted - the dialog leads
+    // with recoverability and says where to get it back from.
+    expect(text()).toContain('It is recoverable');
+    expect(text()).toContain('nothing is erased');
+    expect(text()).toContain('Deleted builds');
   });
 
   it('names the project in the heading', async () => {
     await mount();
     const heading = container.querySelector('#pja-title');
-    expect(heading!.textContent).toBe('Remove “Student Early Warning”?');
+    expect(heading!.textContent).toBe('Delete “Student Early Warning”?');
   });
 
   it('does NOT claim a published plan when there is none', async () => {
@@ -174,6 +179,57 @@ describe('the confirmation names exactly what the student is giving up', () => {
   });
 });
 
+// ─── one vocabulary, end to end ──────────────────────────────────────────────
+describe('the dialog speaks one word for the action, everywhere', () => {
+  // THIS IS THE TEST THAT WAS MISSING. The first rename changed the heading, the
+  // lead paragraph and the confirm word, and left the BUTTON saying "Remove this
+  // build" and the hint telling the student to restore from "Removed builds" - a
+  // section that had just been renamed to "Deleted builds". It shipped to
+  // production green, because every test that touched the old wording was
+  // matching the old wording, including the helper that finds the button.
+  //
+  // Asserting the absence of the old vocabulary is what makes a partial rename
+  // fail. Asserting the presence of the new wording never could: both can be
+  // true at once, and for one deploy they were.
+  it('never shows the word Remove anywhere a student can read it', async () => {
+    await mount();
+    const t = text();
+
+    expect(t).not.toMatch(/Remove/);
+    expect(t).not.toMatch(/Removing/);
+    expect(t).not.toMatch(/Removed/);
+  });
+
+  it('names the restore section exactly as the Projects page labels it', async () => {
+    await mount();
+    // ProjectsPage renders <div className="pjb-archived-h">Deleted builds</div>.
+    // An instruction pointing at any other label sends the student looking for
+    // something that is not on the page.
+    expect(text()).toContain('Deleted builds');
+    expect(text()).not.toContain('Removed builds');
+  });
+
+  it('labels the confirm button with the same verb as the heading', async () => {
+    await mount();
+    const heading = container.querySelector('#pja-title')!.textContent || '';
+    const button = deleteBtn().textContent || '';
+
+    expect(heading).toContain('Delete');
+    expect(button).toContain('Delete');
+  });
+
+  it('uses the same verb in the two sentences built outside the markup', () => {
+    // buildActiveLine is pure, so this needs no mounting and no fake timers -
+    // which is the point: the earlier version of this test staged an in-flight
+    // request it never actually inspected.
+    expect(buildActiveLine(preview({
+      next_active_project_id: 'x', next_active_project_name: 'Older Build',
+    }))).toContain('Deleting it');
+    expect(buildActiveLine(preview())).toContain('Deleting it');
+    expect(buildActiveLine(preview())).not.toContain('Removing');
+  });
+});
+
 // ─── the points truth ────────────────────────────────────────────────────────
 describe('it is truthful about points, in both directions', () => {
   it('says the points stay, and that restoring does not re-award them', async () => {
@@ -204,7 +260,7 @@ describe('it says where the student lands afterwards', () => {
       next_active_project_id: '40a5cea6-ace8-4734-8220-7e62df2111e5',
       next_active_project_name: 'Older Build',
     }));
-    expect(line).toBe('This is your current build. Removing it moves you to Older Build.');
+    expect(line).toBe('This is your current build. Deleting it moves you to Older Build.');
   });
 
   it('warns when this is their only build', () => {
@@ -217,52 +273,52 @@ describe('it says where the student lands afterwards', () => {
 });
 
 // ─── the deliberate act ──────────────────────────────────────────────────────
-describe('removal requires typing the project name', () => {
+describe('deletion requires typing the project name', () => {
   it('keeps the remove button disabled until the name matches', async () => {
     await mount();
-    expect(removeBtn().disabled).toBe(true);
+    expect(deleteBtn().disabled).toBe(true);
 
     await type('Student Early');
-    expect(removeBtn().disabled).toBe(true);
+    expect(deleteBtn().disabled).toBe(true);
 
     await type('Student Early Warning');
-    expect(removeBtn().disabled).toBe(false);
+    expect(deleteBtn().disabled).toBe(false);
   });
 
   it('accepts a different case but not a different name', async () => {
     await mount();
     await type('student early warning');
-    expect(removeBtn().disabled).toBe(false);
+    expect(deleteBtn().disabled).toBe(false);
 
     await type('Some Other Build');
-    expect(removeBtn().disabled).toBe(true);
+    expect(deleteBtn().disabled).toBe(true);
   });
 
   it('does not call the API at all while the name does not match', async () => {
     await mount();
     await type('nope');
-    await act(async () => { removeBtn().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { deleteBtn().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
     expect(mockArchiveCalls).toEqual([]);
   });
 
   it('archives once the name matches, and reports back', async () => {
     await mount();
     await type('Student Early Warning');
-    await act(async () => { removeBtn().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { deleteBtn().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     expect(mockArchiveCalls).toHaveLength(1);
     expect(mockArchiveCalls[0].projectId).toBe(PROJECT_ID);
     expect(archivedWith).toEqual([PROJECT_ID]);
   });
 
-  it('asks for the literal word REMOVE when the build has no name', async () => {
+  it('asks for the literal word DELETE when the build has no name', async () => {
     mockPreviewResult = { ok: true, value: preview({ name: null }) };
     await mount();
 
     expect(text()).toContain('This build has no name yet');
-    expect(removeBtn().disabled).toBe(true);
-    await type('REMOVE');
-    expect(removeBtn().disabled).toBe(false);
+    expect(deleteBtn().disabled).toBe(true);
+    await type('DELETE');
+    expect(deleteBtn().disabled).toBe(false);
   });
 
   it('offers a way out that does not remove anything', async () => {
@@ -285,7 +341,7 @@ describe('it surfaces the server’s refusal rather than a spinner', () => {
 
     expect(text()).toContain('This project is part of the platform itself and cannot be archived.');
     // And there is no way to proceed from that state.
-    expect(removeBtn()).toBeUndefined();
+    expect(deleteBtn()).toBeUndefined();
     expect(input()).toBeNull();
   });
 
@@ -293,11 +349,11 @@ describe('it surfaces the server’s refusal rather than a spinner', () => {
     mockArchiveResult = { ok: false, error: { status: 500, message: 'Something went wrong.' } };
     await mount();
     await type('Student Early Warning');
-    await act(async () => { removeBtn().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { deleteBtn().dispatchEvent(new MouseEvent('click', { bubbles: true })); });
 
     expect(archivedWith).toEqual([]);
     expect(container.querySelector('.pja-err')!.textContent).toBe('Something went wrong.');
-    // Re-armed, not stuck on "Removing…".
-    expect(removeBtn().disabled).toBe(false);
+    // Re-armed, not stuck on "Deleting…".
+    expect(deleteBtn().disabled).toBe(false);
   });
 });
