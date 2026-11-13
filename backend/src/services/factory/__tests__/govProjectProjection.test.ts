@@ -167,17 +167,32 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.projectId).toBe('dp-1');
   });
 
-  it('connectedRepo: projects the solution_build track\'s GitHub connection (owner/name/url) and NOTHING secret', async () => {
+  it('connectedRepo: projects owner/name/url + the repo\'s deliverable FILES (blobs only) and NOTHING secret', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
-    ghcFindOne.mockResolvedValue({ repo_owner: 'ColaberryIntern', repo_name: 'crash-records', repo_url: 'https://github.com/ColaberryIntern/crash-records', access_token_encrypted: 'TOKEN-SECRET', webhook_secret: 'HOOK-SECRET' });
+    ghcFindOne.mockResolvedValue({
+      repo_owner: 'ColaberryIntern', repo_name: 'crash-records', repo_url: 'https://github.com/ColaberryIntern/crash-records',
+      access_token_encrypted: 'TOKEN-SECRET', webhook_secret: 'HOOK-SECRET',
+      file_tree_json: { tree: [{ path: 'src/index.ts', type: 'blob' }, { path: 'src', type: 'tree' }, { path: 'README.md', type: 'blob' }] },
+      file_count: 2, last_sync_at: new Date('2026-11-13T00:00:00Z'),
+    });
     const v = await getStudentGovProjectView('dp-1', false, 'id-1');
-    expect(v!.connectedRepo).toEqual({ owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records' });
+    expect(v!.connectedRepo).toEqual({
+      owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records',
+      files: ['src/index.ts', 'README.md'], fileCount: 2, syncedAt: '2026-11-13T00:00:00.000Z', // trees excluded, blobs only
+    });
     // looked up by the build track's student project id, never a leak of it or any secret into the payload
     expect(ghcFindOne).toHaveBeenCalledWith({ where: { project_id: 'sp-SECRET' } });
     const json = JSON.stringify(v);
     expect(json).not.toContain('TOKEN-SECRET');
     expect(json).not.toContain('HOOK-SECRET');
     expect(json).not.toContain('sp-SECRET'); // the raw linked student-project id never reaches the student
+  });
+
+  it('connectedRepo: a malformed/absent file tree yields empty files (never throws); fileCount falls back to the count', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    ghcFindOne.mockResolvedValue({ repo_owner: 'o', repo_name: 'r', repo_url: 'u', file_tree_json: { tree: 'not-an-array' } });
+    const v = await getStudentGovProjectView('dp-1', false, 'id-1');
+    expect(v!.connectedRepo).toMatchObject({ owner: 'o', name: 'r', files: [], fileCount: 0, syncedAt: null });
   });
 
   it('connectedRepo: null when the build track has a connection row but no repo set', async () => {

@@ -503,7 +503,7 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
 
   // Connected-repo display (Phase A): the intern (readOnly) sees the connected repo read-only and NEVER a demo-URL
   // input — even though the read-only reviewApi still defines setDemoUrl. The admin (readOnly=false) keeps its input.
-  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records' } } as unknown as StudentGovProjectView;
+  const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records', files: ['src/App.tsx', 'README.md'], fileCount: 2, syncedAt: '2026-11-13T00:00:00.000Z' } } as unknown as StudentGovProjectView;
   const noRepo = { ...VIEW, connectedRepo: null } as unknown as StudentGovProjectView;
 
   it('admin (not readOnly) keeps the demo-URL input and shows no connected-repo line', async () => {
@@ -525,6 +525,19 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
     expect(present('ev-no-repo')).toBe(true);
     expect(present('ev-connected-repo')).toBe(false);
     expect(present('ev-demo-url')).toBe(false);
+  });
+
+  // Phase C: the connected repo's deliverable files (from the synced tree) show in the Build artifacts region.
+  it('shows the connected repo files list with the count when the tree is synced', async () => {
+    await render(<BuildEvidence view={withRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    expect(present('ev-repo-files')).toBe(true);
+    expect(container.querySelectorAll('[data-testid="ev-repo-file"]').length).toBe(2);
+  });
+
+  it('no repo-files panel when no repo is connected (keeps the existing empty state)', async () => {
+    await render(<BuildEvidence view={noRepo} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    expect(present('ev-repo-files')).toBe(false);
+    expect(present('ev-artifacts-empty')).toBe(true);
   });
 });
 
