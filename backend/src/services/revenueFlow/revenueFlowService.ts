@@ -31,7 +31,11 @@
  * failure this whole surface exists to prevent, and a page that 500s instead of showing Ram
  * the other nine streams is not the better outcome.
  */
-import { classificationFor, assertClassificationKeysAreUnique } from './revenueClassifications';
+import {
+  CLASSIFICATIONS,
+  assertClassificationKeysAreUnique,
+  classificationFor,
+} from './revenueClassifications';
 import { buildGovFlow } from './govBidFlow';
 import { buildMembershipFlow } from './membershipFlow';
 import {
@@ -179,6 +183,18 @@ export async function getRevenueFlowBoard(
     streams,
     events: honest,
     windowDays,
+    // Projected rather than passed through, so an internal field added to the registry is
+    // not automatically a change to the API contract.
+    classifications: CLASSIFICATIONS.map((c) => ({
+      key: c.key,
+      label: c.label,
+      stream: c.stream,
+      tone: c.tone,
+      glyph: c.glyph,
+      direction: c.direction,
+      carriesValue: c.carriesValue,
+      means: c.means,
+    })),
     // De-duplicated: the stream caveats and the headline notes overlap by design, and a
     // reader meeting the same sentence three times stops reading them.
     caveats: Array.from(new Set(caveats)),

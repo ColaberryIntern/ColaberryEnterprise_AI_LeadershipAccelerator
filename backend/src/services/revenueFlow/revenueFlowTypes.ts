@@ -134,8 +134,37 @@ export interface RevenueFlowBoard {
   events: FlowEvent[];
   /** The window `events` covers, in days, so an empty tail reads as out-of-window. */
   windowDays: number;
+  /**
+   * The classification registry itself, shipped with the data.
+   *
+   * WHY THIS TRAVELS IN THE PAYLOAD rather than being duplicated in the frontend. An event
+   * carries only a classification KEY; the label, glyph and tone that make it readable live
+   * in `revenueClassifications.ts`. A frontend copy of that table would be a second source
+   * of truth for what `never_paid` means and what colour it wears, and the first anyone
+   * would know of the drift is a legend that disagrees with a chip on the same screen.
+   *
+   * The split stays exactly where the registry's header puts it: the backend owns the
+   * MEANING (key, label, glyph, tone, direction), the frontend owns the PAINT (which CSS
+   * custom property each tone resolves to). Neither can quietly take over the other's half.
+   */
+  classifications: ClassificationLegendEntry[];
   /** Everything the reader must know about what this page could not see. */
   caveats: string[];
+}
+
+/**
+ * One classification as the page needs it. A projection of the registry rather than the
+ * registry type itself, so adding an internal field there is not automatically an API change.
+ */
+export interface ClassificationLegendEntry {
+  key: ClassificationKey;
+  label: string;
+  stream: FlowStreamKey;
+  tone: string;
+  glyph: string;
+  direction: string;
+  carriesValue: boolean;
+  means: string;
 }
 
 /** Format cents as a figure a reader can quote. Whole dollars: cents are noise at this scale. */
