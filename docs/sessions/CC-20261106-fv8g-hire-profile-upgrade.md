@@ -189,3 +189,19 @@ with these.
     encrypted with a key that sits in dpu.py, which is the same as committing them; they should be
     rotated. An empty recording (a cold camera gave a 201-byte take in the first Chrome run) is now
     caught before upload.
+
+- [x] Phase 5 shipped: merged, deployed, production-verified
+  - Date: 2026-11-13
+  - Session: CC-20261106-fv8g
+  - What changed: #3998 merged as 1dc95c85f; "Build images" succeeded on it; deployed with
+    `./scripts/deploy-prod.sh backend nginx` (exit 0, prod HEAD 1dc95c85f, backend image created
+    18:45 UTC, no other deploy running beforehand).
+  - Verification (live, read-only): the six hireVideo modules and publicHireVideoRoutes are in the
+    running dist; `hire_profile_intro` has `video_coaching` and `video_captions_wanted`; 0 videos
+    stored. Through enterprise.colaberry.ai: an unknown video id 404, a bad kind 404, the studio
+    GET 401 with no session, a 2 MB upload to the video path 401 (body cap raised there), 2 MB
+    anywhere else 413; the nginx rule is in `conf.d/default.conf`. Kes's public payload: no
+    video, no booking, 0 "@" in the Hire block (the one "@" is `portfolio.identity.email`, shown on
+    the portfolio page by design and untouched by this phase). Nothing uploaded or booked as Kes.
+  - Notes: captions and coaching stay off until the analysis transport lands (IAM key + AWS SDK,
+    Ali's call).
