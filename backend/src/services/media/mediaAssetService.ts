@@ -367,7 +367,10 @@ export async function listItemMedia(contentItemId: string): Promise<ItemMediaVie
       pages: pagesOf(a.metadata),
       // A signing failure must not take the whole listing down with it: the media still exists
       // and the operator still needs to see that it is attached.
-      url: base ? safeSignedUrl(a.storage_key, base) : null,
+      // A link asset has no stored bytes, so there is nothing to sign. Null here is the same
+      // "nothing renderable" the wire contract already models (ItemMedia.url is string | null),
+      // so the composer preview falls through to its file tile instead of an empty <img>.
+      url: base && a.storage_key ? safeSignedUrl(a.storage_key, base) : null,
     }];
   });
 }

@@ -1,4 +1,5 @@
 import { CONTENT_OS_SCHEMA_STATEMENTS } from '../ensureContentOsSchema';
+import { MEDIA_LIBRARY_SCHEMA_STATEMENTS } from '../ensureMediaLibrarySchema';
 import { modelsByTable, modelColumnNames, parseCreatedTables } from './schemaParityHelpers';
 import {
   CONTENT_ITEM_STATUSES,
@@ -17,6 +18,19 @@ import '../../models';
  * an approval would never register as stale — and stale approvals are precisely what
  * authorises publishing content nobody approved in its current form.
  */
+
+/**
+ * media_assets is created by ensureContentOsSchema and then EXTENDED by
+ * ensureMediaLibrarySchema, so parity for that table spans two modules. These names are parsed
+ * out of the second module's DDL rather than hardcoded, so a column added to one side and not
+ * the other still fails a test instead of passing quietly.
+ */
+function mediaLibraryAddedColumns(): string[] {
+  return MEDIA_LIBRARY_SCHEMA_STATEMENTS
+    .map((s) => /ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS (\w+)/.exec(s))
+    .filter((hit): hit is RegExpExecArray => hit !== null)
+    .map((hit) => hit[1]);
+}
 
 describe('ensureContentOsSchema — DDL and models agree', () => {
   const created = parseCreatedTables(CONTENT_OS_SCHEMA_STATEMENTS);
@@ -79,11 +93,39 @@ describe('ensureContentOsSchema — DDL and models agree', () => {
       const model = byTable[table];
       if (!model) continue;
       const ddl = new Set(columns);
+      // media_assets alone is extended by a second boot module. Everything it adds is still
+      // required to be declared on the model - see the test below - so this is a wider allow
+      // list, not a weaker invariant.
+      if (table === 'media_assets') for (const column of mediaLibraryAddedColumns()) ddl.add(column);
       for (const field of modelColumnNames(model)) {
         if (!ddl.has(field)) extra.push(`${table}.${field}`);
       }
     }
     expect(extra).toEqual([]);
+  });
+
+  it('every column ensureMediaLibrarySchema adds is declared on the MediaAsset model', () => {
+    // The same bug the rest of this suite guards, for the module that extends the table: a
+    // column in the DDL that the model does not declare is invisible to Sequelize, so reads
+    // come back undefined and writes are silently dropped while every mocked test still passes.
+    const added = mediaLibraryAddedColumns();
+    // Not vacuous: if the parse stopped matching, `added` would be empty and the filter below
+    // would find nothing missing, so the test would pass having checked nothing.
+    expect(added).toEqual(['kind', 'source_url', 'tags']);
+    const model = modelsByTable()['media_assets'];
+    expect(model).toBeTruthy();
+    const declared = modelColumnNames(model);
+    expect(added.filter((column) => !declared.has(column))).toEqual([]);
+  });
+
+  it('keeps storage_key nullable in the model, because a link asset has no bytes', () => {
+    // The relaxation is the contract change this whole task turns on. Pinned here so that
+    // putting allowNull back to false - which would make every link asset unwritable through
+    // Sequelize - fails a test rather than surfacing as a 500 on the library screen.
+    const model = modelsByTable()['media_assets'] as any;
+    expect(model.getAttributes().storage_key.allowNull).toBe(true);
+    // And mime_type deliberately stays NOT NULL; a link carries 'text/uri-list'.
+    expect(model.getAttributes().mime_type.allowNull).toBe(false);
   });
 
   it('is additive only — nothing here alters an existing table', () => {
