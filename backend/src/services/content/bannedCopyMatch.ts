@@ -1,4 +1,4 @@
-import { BANNED_COPY_RULES, FREE_WORD_RULE, type BannedWordRule } from './bannedCopyRule';
+import { BANNED_COPY_RULES, FREE_WORD_RULE, ruleRegex, type BannedWordRule } from './bannedCopyRule';
 
 /**
  * The banned-copy MATCHER: the one place in the product that decides whether a piece of text
@@ -60,21 +60,23 @@ export function assertRules(rules: readonly BannedWordRule[], fn: string): void 
 }
 
 /**
- * Word-boundary, case-insensitive, built fresh per call.
+ * The regex comes from `ruleRegex` in `bannedCopyRule.ts`, and this module no longer builds
+ * its own.
  *
- * Fresh because these are `/g` elsewhere in this repo and a shared `lastIndex` makes results
- * depend on call order - the bug that reads as an intermittently passing guard, already
- * recorded in `explorerFactGuard`.
+ * It used to, and so did `bannedCopyScanner.ts`, in two byte-identical private functions
+ * neither of which could see the other. That is the exact failure this file's header warns
+ * about two paragraphs up - "a second matcher would drift from the first and the two would
+ * disagree about the same file" - already present, having arrived by duplication rather than
+ * by anybody editing one of them.
  *
- * Boundaries are what keep longer words that merely START with a banned word out of the
- * results. They deliberately do NOT keep a hyphenated compound out, because a hyphen is a
- * word boundary: an occurrence inside a hyphenated technical term is reported, and the asset
- * carrying it is excluded from advertising rather than rewritten. Rewriting it would corrupt
- * a source's own title to satisfy a lint, which is worse than the breach.
+ * What the shared builder preserves: word-boundary, case-insensitive, built FRESH per call.
+ * Fresh because these are `/g` and a shared `lastIndex` makes results depend on call order,
+ * the bug that reads as an intermittently passing guard, already recorded in
+ * `explorerFactGuard`. Boundaries are what keep longer words that merely START with a banned
+ * word out of the results; they deliberately do NOT keep a hyphenated compound out, because a
+ * hyphen is a word boundary, so an occurrence inside a hyphenated technical term is reported
+ * and the asset carrying it is excluded from advertising rather than rewritten.
  */
-function wordRegex(word: string): RegExp {
-  return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-}
 
 /**
  * An occurrence that is an idiom rather than an advertisement.
@@ -173,7 +175,7 @@ export function findBannedCopy(
   const out: BannedCopyHit[] = [];
   for (const rule of rules) {
     const seen = new Set<string>();
-    const re = wordRegex(rule.word);
+    const re = ruleRegex(rule);
     let m: RegExpExecArray | null = re.exec(content);
     while (m !== null) {
       const key = m[0].toLowerCase();

@@ -1,5 +1,17 @@
 import * as ts from 'typescript';
-import { FREE_WORD_RULE, BANNED_COPY_RULES, type BannedWordRule } from './bannedCopyRule';
+import {
+  BANNED_COPY_RULES,
+  DASH_RULE,
+  EMOJI_RULE,
+  ESCAPED_DASH_RULE,
+  FREE_WORD_RULE,
+  FRONTEND_TYPOGRAPHY_RULES,
+  isPatternRule,
+  ruleRegex,
+  type BannedCopyRule,
+  type BannedPatternRule,
+  type BannedWordRule,
+} from './bannedCopyRule';
 
 /**
  * bannedCopyScanner — find a banned WORD in user-facing copy inside TypeScript/TSX source,
@@ -43,8 +55,8 @@ import { FREE_WORD_RULE, BANNED_COPY_RULES, type BannedWordRule } from './banned
 // exists because this file opens with `import * as ts from 'typescript'`, which makes it
 // unimportable from the runtime graph - so the canonical rule was unreachable by the pure
 // modules that need it most. See that file's header for the fork this closed.
-export { FREE_WORD_RULE, BANNED_COPY_RULES };
-export type { BannedWordRule };
+export { FREE_WORD_RULE, BANNED_COPY_RULES, DASH_RULE, ESCAPED_DASH_RULE, EMOJI_RULE, FRONTEND_TYPOGRAPHY_RULES };
+export type { BannedWordRule, BannedPatternRule, BannedCopyRule };
 
 /**
  * Why an occurrence is NOT user-facing copy. A CLOSED set: `scanSource` records one of these
@@ -105,11 +117,9 @@ export interface ScanResult {
   unclassified: Occurrence[];
 }
 
-function wordRegex(word: string): RegExp {
-  // Word boundaries are what keep "freedom", "freely", "freelance" and "freeTier" out: in
-  // "freeTier" there is no boundary between "free" and "T", both being word characters.
-  return new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-}
+// The private `wordRegex` that used to sit here was byte-identical to the one in
+// `bannedCopyMatch.ts`. Both now call `ruleRegex` in `bannedCopyRule.ts`, so there is one
+// definition of what a rule matches rather than two that happen to agree today.
 
 /**
  * Every leaf token, in source order, with the half-open range it covers.
@@ -180,7 +190,13 @@ function calleeNameOf(node: ts.Node): string | null {
 }
 
 /** Structural exclusions for a string or template token. Returns null when it is prose. */
-function classifyTextToken(node: ts.Node, source: string, matchStart: number, matchEnd: number): ExclusionReason | null {
+function classifyTextToken(
+  node: ts.Node,
+  source: string,
+  matchStart: number,
+  matchEnd: number,
+  rule: BannedCopyRule,
+): ExclusionReason | null {
   const p = node.parent;
 
   if (p && (ts.isImportDeclaration(p) || ts.isExportDeclaration(p)) && p.moduleSpecifier === node) {
@@ -213,6 +229,16 @@ function classifyTextToken(node: ts.Node, source: string, matchStart: number, ma
   // or a URL: leading `/`, `./`, `../`, or a scheme.
   if (/^(\.{0,2}\/|[A-Za-z][A-Za-z0-9+.-]*:\/\/)/.test(token)) return 'url-or-path';
 
+  // The three tests below reason about the WORD sense and stop here for a pattern rule.
+  // They ask "is this word part of a name rather than a sentence", and the answers do not
+  // transfer: a dash or an emoji is never a name part, while `'Week 1 - Kickoff_v2'` is a
+  // sentence whose neighbouring token happens to carry an underscore. Applying the underscore
+  // test to it would exclude real copy, and an exclusion that is wrong is a silent pass, which
+  // is the one failure this module is built to avoid. A pattern rule therefore keeps the
+  // STRUCTURAL exclusions above - a key, an import path, an attribute nobody reads - and drops
+  // the shape heuristics, erring toward over-flagging exactly as this file's header says to.
+  if (isPatternRule(rule)) return null;
+
   // A dot only means "key" when it JOINS two name parts. The first draft tested
   // `tokenRight.startsWith('.')` and so excluded "The Open House is free." and "...invite
   // your team free. Activate licenses" - two genuine violations lost to a full stop. A
@@ -235,18 +261,61 @@ const TEXT_TOKEN_KINDS: readonly ts.SyntaxKind[] = [
 ];
 
 /**
- * Scan one file. `fileName` decides the parse mode, so a `.tsx` file is parsed as TSX and its
- * JSX text becomes `JsxText` tokens instead of a parse error.
+ * One file, parsed once. `fileName` decides the parse mode, so a `.tsx` file is parsed as TSX
+ * and its JSX text becomes `JsxText` tokens instead of a parse error.
+ *
+ * Separated from the per-rule pass because the parse is the expensive half and the rules are
+ * the cheap half. The lint walks about 1,650 files; with the parse inside the rule loop a
+ * third rule costs a third parse of every file, and the suite's own timeout is what would
+ * eventually fail rather than any assertion about copy.
  */
-export function scanSource(fileName: string, source: string, rule: BannedWordRule = FREE_WORD_RULE): ScanResult {
+interface ParsedSource {
+  sf: ts.SourceFile;
+  leaves: Array<{ start: number; end: number; node: ts.Node }>;
+  trivia: Array<{ pos: number; end: number }>;
+  lines: string[];
+  source: string;
+}
+
+function parseSource(fileName: string, source: string): ParsedSource {
   const kind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, kind);
   const leaves = leafTokens(sf);
-  const trivia = triviaGaps(sf, leaves);
-  const lines = source.split('\n');
+  return { sf, leaves, trivia: triviaGaps(sf, leaves), lines: source.split('\n'), source };
+}
+
+/**
+ * Every rule against one already-parsed file, keyed by rule id.
+ *
+ * Returns a plain object rather than an array so a caller asks for the rule it means by name.
+ * A caller that indexed by position would silently read the wrong rule's result the day the
+ * rule set is reordered, and a count attributed to the wrong rule is a wrong baseline.
+ */
+export function scanSourceRules(
+  fileName: string,
+  source: string,
+  rules: readonly BannedCopyRule[],
+): Record<string, ScanResult> {
+  if (rules.length === 0) {
+    // Zero rules means UNCHECKED, never clean. An empty result object would read as a clean
+    // file to every caller, which is the silent pass this whole subsystem exists to prevent.
+    throw new Error('scanSourceRules called with no rules. Zero rules means UNCHECKED, never clean.');
+  }
+  const parsed = parseSource(fileName, source);
+  const out: Record<string, ScanResult> = {};
+  for (const rule of rules) out[rule.id] = scanParsed(parsed, rule);
+  return out;
+}
+
+export function scanSource(fileName: string, source: string, rule: BannedCopyRule = FREE_WORD_RULE): ScanResult {
+  return scanParsed(parseSource(fileName, source), rule);
+}
+
+function scanParsed(parsed: ParsedSource, rule: BannedCopyRule): ScanResult {
+  const { sf, leaves, trivia, lines, source } = parsed;
 
   const occurrences: Occurrence[] = [];
-  const re = wordRegex(rule.word);
+  const re = ruleRegex(rule);
   let m: RegExpExecArray | null = re.exec(source);
   while (m !== null) {
     const start = m.index;
@@ -262,7 +331,7 @@ export function scanSource(fileName: string, source: string, rule: BannedWordRul
       if (leaf.node.kind === ts.SyntaxKind.JsxText) {
         excluded = null; // JSX text is on the page by definition.
       } else if (TEXT_TOKEN_KINDS.includes(leaf.node.kind)) {
-        excluded = classifyTextToken(leaf.node, source, start, end);
+        excluded = classifyTextToken(leaf.node, source, start, end, rule);
       } else if (leaf.node.kind === ts.SyntaxKind.Identifier || leaf.node.kind === ts.SyntaxKind.PrivateIdentifier) {
         excluded = 'identifier';
       } else if (leaf.node.kind === ts.SyntaxKind.RegularExpressionLiteral) {
@@ -303,6 +372,6 @@ export function scanSource(fileName: string, source: string, rule: BannedWordRul
 }
 
 /** The raw count, computed WITHOUT the parser, so the completeness invariant has a second opinion. */
-export function rawMatchCount(source: string, rule: BannedWordRule = FREE_WORD_RULE): number {
-  return source.match(wordRegex(rule.word))?.length ?? 0;
+export function rawMatchCount(source: string, rule: BannedCopyRule = FREE_WORD_RULE): number {
+  return source.match(ruleRegex(rule))?.length ?? 0;
 }

@@ -68,6 +68,47 @@ The reason they accumulated: **there is no gate.** `scripts/artifacts/checkAmeri
 
 Ticket this as a lint rule plus a sweep, ordered so the rule lands first and the sweep cannot regress.
 
+> **BUILT 2026-11-13, and the section above was still under-reporting.** The rule landed as
+> three rules, not two, because the first two were measured, believed, and then found to have a
+> hole.
+>
+> **Measured over the baseline's own scope** (`pages`, `components`, `config`, `constants`,
+> `.ts`/`.tsx`, 1,659 files, parsed once each by the real scanner):
+>
+> | | raw | copy | in comments | files |
+> |---|---|---|---|---|
+> | em or en dash | 5,585 | **2,107** | 3,476 | 580 |
+> | the same dash as an HTML entity | 74 | **74** | 0 | 42 |
+> | emoji | 764 | **659** | 103 | 173 |
+>
+> **The middle row is the finding.** `&mdash;` appears 74 times in frontend copy, and the dash
+> rule catches none of them, because the source text holds seven ASCII characters and not
+> U+2014. Note the third column: **zero** of the 74 are in a comment. Every one is in something
+> a person reads. A gate that bans a glyph but not its escape bans one spelling of it and
+> reports a number better than the truth - which is the failure this very section was written
+> about, repeated one level up. It was found by accident, in `LiveWorkspace.tsx:58`, which
+> passed `label="&#9654; Watch here"` to the same component whose literal `▶ Watch here` the
+> emoji rule had just caught.
+>
+> So `ESCAPED_DASH_RULE` covers the closed set of spellings a character reference has: named,
+> decimal and hexadecimal, with leading zeros and either case of `x`. There is no fourth
+> spelling, so that rule has no hole.
+>
+> **One hole remains, named rather than closed.** Emoji written as a numeric character
+> reference - `&#9654;` x11 and about a dozen others at one apiece - are NOT caught, because
+> emoji are an open set of code points and the alternatives are an incomplete range list or
+> banning every numeric reference, which would also ban `&#10003;` and `&#8594;`, two glyphs
+> the emoji rule deliberately permits as literals. Deciding it properly means resolving the
+> reference and re-asking the literal rule. That is a mechanism, and it is a separate ticket.
+>
+> **The numbers above are also the first turn of the ratchet.** Emoji went 660 to 659 in the
+> same change: the portal's watch button read "▶ Watch here", where the triangle was decoration
+> in front of a label that already said what the button does, and `LiveWorkspace.tsx` passed
+> the same glyph again as an entity. Both are gone. The other seven emoji this section named -
+> `CompanionDeck.tsx` and `livePulse.ts` - are NOT touched, because theirs carry meaning rather
+> than decoration and replacing them needs an icon component. That is the sweep, and the sweep
+> is still after the rule.
+
 ### 0.4 The placeholder air date is self-contradictory, and it is mine.
 
 Every first-class due date back-solves from **"Thursday 2026-11-20"**. **2026-11-20 is a Friday.** Verified. The nearest Thursdays are **19 November** and **26 November**.
@@ -205,7 +246,7 @@ Not created. Drafted here for approval.
 
 | Draft | Title | Screen | Acceptance criteria (observable) | Files |
 |---|---|---|---|---|
-| **D1** | Copy gate: no emoji, no em dashes, in frontend strings | all | A SECOND RULE in the existing `bannedCopyScanner` (not a second scanner) fails on an emoji or em/en dash inside a user-visible string; a baseline records what exists and may only shrink; a deliberately added violation fails the build (mutation evidence). Needs `BannedWordRule` to grow an optional pattern form, because an em dash is not a word - which touches matcher code the Explorer guard shares, so this is its own phase | `bannedCopyRule.ts`, `bannedCopyScanner.ts`, `frontendCopyBaseline.ts` |
+| **D1** (BUILT 2026-11-13) | Copy gate: no emoji, no em dashes, in frontend strings | all | A SECOND RULE in the existing `bannedCopyScanner` (not a second scanner) fails on an emoji or em/en dash inside a user-visible string; a baseline records what exists and may only shrink; a deliberately added violation fails the build (mutation evidence). Needs `BannedWordRule` to grow an optional pattern form, because an em dash is not a word - which touches matcher code the Explorer guard shares, so this is its own phase | `bannedCopyRule.ts`, `bannedCopyScanner.ts`, `frontendCopyBaseline.ts` |
 | **D2** | Plain-language blocked reasons on the producer strip | `#producer` | Go live blocked by health reads a sentence, not `provider_health is unknown, expected ready`; blocked by content reads a sentence, not `mark_content_started_first`; the raw reason is still logged; no server reason code reaches a person | `ProducerStrip.tsx:420-424`, `producerStripCopy.ts` |
 | **D3** | State matrix document and viewer-visible tests | `#states` | 17 states × 4 surfaces in `docs/colaberry-live/`; one test per row asserting what a **non-staff** viewer sees; backstage is byte-identical to scheduled for a non-staff viewer | new doc; `frontend/src/**/__tests__/` |
 | **D4** | Studio setup screen | `#studio` | Opens in its own tab from admin nav; deep-linkable; Create disabled until all four summary items read Done; producer ≠ presenter blocks Create; access mode requires an explicit acknowledgement; the chosen mode is echoed as a sentence about what remote viewers get; audience is an explicit field that replaces the title match | new route outside `AdminLayout`; `adminNav.ts`; `sessionGuestService.ts` |
