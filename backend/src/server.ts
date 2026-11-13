@@ -2859,7 +2859,22 @@ async function start(): Promise<void> {
     const { recoverStrandedBuilds } = await import('./services/sbp/sbpOrchestrator');
     const swept = await recoverStrandedBuilds();
     if (swept.resumed.length || swept.abandoned.length) {
-      console.log(`[SBP] resumed ${swept.resumed.length} stranded build(s), abandoned ${swept.abandoned.length}`);
+      // NAMES THE CAUSE, not just the counts. L7.3's metric is a log line saying WHY a recovery
+      // ran, and "resumed 3 stranded build(s)" described what happened to the rows and left the
+      // reason to be guessed - the same defect as the scheduler's old "Recovered 3 stale actions".
+      // Resumed and abandoned stay separate: one will be retried, the other is terminal.
+      console.log('[SBP] recovery', JSON.stringify({
+        service: 'sbp',
+        event: 'stranded_builds_swept',
+        outcome: swept.abandoned.length > 0 ? 'partial' : 'success',
+        reason: 'process_exited_mid_generation',
+        error_class: 'StrandedBuild',
+        detail: 'the queue that owned these builds died with the previous process; the rows did not',
+        resumed: swept.resumed.length,
+        abandoned: swept.abandoned.length,
+        resumed_ids: swept.resumed,
+        abandoned_ids: swept.abandoned,
+      }));
     }
   } catch (err: any) {
     console.warn('[SBP] stranded-build sweep failed:', err?.message);
