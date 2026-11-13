@@ -26,6 +26,7 @@ jest.mock('../outreachChecklist', () => ({ createOutreachChecklistInstance: jest
 jest.mock('../reeseWorkLedgerEvents', () => ({ emitReeseLedgerEvent: jest.fn() }));
 jest.mock('../../workGraph/workGraphService', () => ({ createWorkUnit: jest.fn(), updateWorkUnitStatus: jest.fn() }));
 jest.mock('../reeseGovernedActionLog', () => ({ recordHeldAction: jest.fn() }));
+jest.mock('../reeseOutreachHolds', () => ({ hasLiveHeldOutreachWithin: jest.fn(), countLiveHeldOutreachToday: jest.fn() }));
 
 import ReeseOutreach from '../../../models/ReeseOutreach';
 import { createTicket } from '../../ticketService';
@@ -45,7 +46,11 @@ import { resolveStudentDisplayName } from '../resolveStudentDisplayName';
 import { createOutreachChecklistInstance } from '../outreachChecklist';
 import { emitReeseLedgerEvent } from '../reeseWorkLedgerEvents';
 import { createWorkUnit, updateWorkUnitStatus } from '../../workGraph/workGraphService';
-import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP } from '../reeseAutonomousOutreachService';
+import { runReeseAutonomousOutreachSweep, countAutonomousSendsToday, DAILY_SEND_CAP, CADENCE_DAYS } from '../reeseAutonomousOutreachService';
+import { hasLiveHeldOutreachWithin, countLiveHeldOutreachToday } from '../reeseOutreachHolds';
+
+const mockHasLiveHeld = hasLiveHeldOutreachWithin as unknown as jest.Mock;
+const mockCountLiveHeldToday = countLiveHeldOutreachToday as unknown as jest.Mock;
 
 const mockReeseOutreachCount = ReeseOutreach.count as unknown as jest.Mock;
 const mockReeseOutreachFindOne = ReeseOutreach.findOne as unknown as jest.Mock;
@@ -93,6 +98,61 @@ beforeEach(() => {
   mockCreateOutreachChecklistInstance.mockResolvedValue({ id: 'checklist-1' });
   mockCreateWorkUnit.mockResolvedValue({ id: 'wu-1', update: jest.fn().mockResolvedValue(undefined) });
   mockUpdateWorkUnitStatus.mockResolvedValue(undefined);
+  mockHasLiveHeld.mockResolvedValue(false);
+  mockCountLiveHeldToday.mockResolvedValue(0);
+});
+
+describe('runReeseAutonomousOutreachSweep — held sends count (13 Nov 2026: 851 auto-approved DMs to 52 students)', () => {
+  const HELD = { decisionId: 'auth-1', verdict: 'would_require_approval', reason: 'requires_approval:high_risk_tier', allowed: false };
+  const SIGNAL = { daysSinceActive: 9, completionPct: 5, totalCards: 4, reasons: ['No activity in 9 days'] };
+
+  it('a student held within the cadence is skipped: no second hold, no ticket, no message', async () => {
+    mockEvaluateInactivity.mockResolvedValue(SIGNAL);
+    mockHasLiveHeld.mockResolvedValue(true);
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockHasLiveHeld).toHaveBeenCalledWith(STUDENT_ID, CADENCE_DAYS);
+    expect(result.decisions[0]).toEqual(expect.objectContaining({ action: 'skipped', reason: 'cadence_cap_active' }));
+    expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+    expect(mockCreateTicket).not.toHaveBeenCalled();
+    expect(mockGenerateMessage).not.toHaveBeenCalled();
+  });
+
+  it('holds already made today use up the daily cap', async () => {
+    mockEvaluateInactivity.mockResolvedValue(SIGNAL);
+    mockCountLiveHeldToday.mockResolvedValue(DAILY_SEND_CAP);
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.decisions[0]).toEqual(expect.objectContaining({ reason: 'daily_cap_reached' }));
+    expect(mockAuthorizeTicketDispatch).not.toHaveBeenCalled();
+  });
+
+  it('a hold made in this sweep consumes a slot, so one sweep can never hold more than the cap', async () => {
+    const ids = Array.from({ length: DAILY_SEND_CAP + 5 }, (_, i) => `s${i}`);
+    mockGetPilotCohortStudentIds.mockResolvedValue(ids);
+    mockEvaluateInactivity.mockResolvedValue(SIGNAL);
+    mockAuthorizeTicketDispatch.mockResolvedValue(HELD);
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(mockAuthorizeTicketDispatch).toHaveBeenCalledTimes(DAILY_SEND_CAP);
+    expect(result.decisions.filter((d) => d.reason === 'held_for_approval')).toHaveLength(DAILY_SEND_CAP);
+    expect(result.decisions.filter((d) => d.reason === 'daily_cap_reached')).toHaveLength(5);
+  });
+
+  it('sends and holds share one ceiling', async () => {
+    mockReeseOutreachCount.mockResolvedValue(DAILY_SEND_CAP - 2);
+    mockCountLiveHeldToday.mockResolvedValue(1);
+    mockGetPilotCohortStudentIds.mockResolvedValue(['a', 'b', 'c']);
+    mockEvaluateInactivity.mockResolvedValue(SIGNAL);
+
+    const result = await runReeseAutonomousOutreachSweep(false);
+
+    expect(result.sent).toBe(1);
+    expect(result.decisions.filter((d) => d.reason === 'daily_cap_reached')).toHaveLength(2);
+  });
 });
 
 describe('runReeseAutonomousOutreachSweep — happy path', () => {

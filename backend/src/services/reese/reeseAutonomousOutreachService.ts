@@ -19,6 +19,7 @@ import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 import { createOutreachChecklistInstance } from './outreachChecklist';
 import { emitReeseLedgerEvent } from './reeseWorkLedgerEvents';
 import { createWorkUnit, updateWorkUnitStatus } from '../workGraph/workGraphService';
+import { hasLiveHeldOutreachWithin, countLiveHeldOutreachToday } from './reeseOutreachHolds';
 
 // Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
 // Named, non-negotiable constants (see execution-contract.md — logged there as
@@ -351,7 +352,9 @@ export async function runReeseAutonomousOutreachSweep(dryRun = false): Promise<S
   // eligible candidate beyond the real remaining slots would be reported as
   // "would send" even though the real cap would have skipped them. Mirrors
   // reeseOutreachFollowUpService.ts's identical fix for the same reason.
-  let sentCount = await countAutonomousSendsToday();
+  // Holds count too: a held send is auto-approved and replayed hours later, so it
+  // is a send that has not happened YET (see reeseOutreachHolds.ts).
+  let sentCount = (await countAutonomousSendsToday()) + (await countLiveHeldOutreachToday());
 
   const enrollmentIds = await getPilotCohortStudentEnrollmentIds();
 
@@ -388,7 +391,7 @@ export async function runReeseAutonomousOutreachSweep(dryRun = false): Promise<S
       // any second signal for the same student — the cadence cap doubling as
       // an at-most-one-message-per-student-per-run guarantee, with no extra
       // special-case code needed.
-      if (await wasContactedWithinCadence(enrollmentId)) {
+      if (await wasContactedWithinCadence(enrollmentId) || await hasLiveHeldOutreachWithin(enrollmentId, CADENCE_DAYS)) {
         decisions.push({ enrollmentId, signalType: signal.type, action: 'skipped', reason: 'cadence_cap_active' });
         continue;
       }
@@ -402,7 +405,7 @@ export async function runReeseAutonomousOutreachSweep(dryRun = false): Promise<S
       // Incremented in BOTH modes: a dry-run "would send" still consumes a
       // simulated slot so later candidates in the SAME dry-run pass are
       // correctly reported as capped once the real remaining slots run out.
-      if (decision.action === 'sent') sentCount += 1;
+      if (decision.action === 'sent' || decision.reason === 'held_for_approval') sentCount += 1;
     }
   }
 

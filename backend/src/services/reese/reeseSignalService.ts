@@ -61,7 +61,12 @@ export async function getPilotCohortStudentEnrollmentIds(): Promise<string[]> {
  * had any cards assigned).
  */
 export async function evaluateInactivitySignal(enrollmentId: string): Promise<InactivitySignal | null> {
-  const rows = await TimelineCardProgress.findAll({ where: { enrollment_id: enrollmentId } });
+  const allRows = await TimelineCardProgress.findAll({ where: { enrollment_id: enrollmentId } });
+  // An `available` row is a card the PLATFORM unlocked, not one the student touched. Counting those made every
+  // learner look idle: on 12 Nov 2026 an active learner held 10 completed cards and 1,590 `available` rows, so her
+  // completion read 0.6% and Reese told her daily she had done nothing. Only cards the student started count, both
+  // toward completion and as activity.
+  const rows = allRows.filter((r) => r.status !== 'available');
 
   const totalCards = rows.length;
   const completedCards = rows.filter((r) => r.status === 'completed').length;
@@ -72,6 +77,15 @@ export async function evaluateInactivitySignal(enrollmentId: string): Promise<In
     if (!row.updated_at) continue;
     if (!lastActiveAt || row.updated_at > lastActiveAt) lastActiveAt = row.updated_at;
   }
+  // Moving around the portal is activity too (watching a video, opening the classroom), whether or not a card
+  // changed state.
+  const [lastNav] = (await StudentNavigationEvent.findAll({
+    where: { enrollment_id: enrollmentId },
+    order: [['created_at', 'DESC']],
+    limit: 1,
+    attributes: ['created_at'],
+  })) ?? [];
+  if (lastNav?.created_at && (!lastActiveAt || lastNav.created_at > lastActiveAt)) lastActiveAt = lastNav.created_at;
   if (!lastActiveAt) {
     const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'enrolled_at'] });
     lastActiveAt = enrollment?.enrolled_at ?? null;
@@ -81,14 +95,14 @@ export async function evaluateInactivitySignal(enrollmentId: string): Promise<In
     ? (Date.now() - lastActiveAt.getTime()) / (24 * 60 * 60 * 1000)
     : null;
 
-  const reasons: string[] = [];
-  if (daysSinceActive !== null && daysSinceActive >= INACTIVITY_THRESHOLD_DAYS) {
-    reasons.push(`No activity in ${Math.floor(daysSinceActive)} days`);
-  }
+  // This is an INACTIVITY signal: a student active within the threshold is never flagged, whatever their
+  // completion. Low progress only adds context to a student who is also inactive, because the message it produces
+  // ("you haven't engaged") is false for anyone who has been in the portal this week.
+  if (daysSinceActive === null || daysSinceActive < INACTIVITY_THRESHOLD_DAYS) return null;
+  const reasons: string[] = [`No activity in ${Math.floor(daysSinceActive)} days`];
   if (totalCards > 0 && completionPct < LOW_COMPLETION_THRESHOLD_PCT) {
     reasons.push(`Low progress: ${completionPct}%`);
   }
-  if (reasons.length === 0) return null;
 
   return { lastActiveAt, daysSinceActive, completionPct, totalCards, reasons };
 }
