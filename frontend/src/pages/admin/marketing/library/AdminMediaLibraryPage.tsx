@@ -4,6 +4,7 @@ import {
   editAsset,
   listLibrary,
   readableSize,
+  linkBadge,
   rightsLabel,
   saveLink,
   uploadLibraryFile,
@@ -97,7 +98,14 @@ export default function AdminMediaLibraryPage(): JSX.Element {
     }
   }, [filters]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  /**
+   * Debounced. `filters` changes on every keystroke, and without this each letter typed into the
+   * search box fired its own request - the last one to return wins, which is also a race.
+   */
+  useEffect(() => {
+    const t = setTimeout(() => { void reload(); }, 250);
+    return () => clearTimeout(t);
+  }, [reload]);
 
   const describeFailure = (err: unknown, fallback: string): string => {
     const detail = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -239,8 +247,13 @@ export default function AdminMediaLibraryPage(): JSX.Element {
               {/*
                 KEYBOARD-REACHABLE UPLOAD. The drop zone is a real <button>, not a div with a
                 click handler: dragging is the shortcut, and the button is the way that works
-                without a mouse. The file input stays in the DOM and hidden rather than being
-                synthesised, so assistive tech sees a labelled control.
+                without a mouse, and it carries the describedby.
+
+                The <input type="file"> below is aria-hidden and tabIndex -1 ON PURPOSE: it is a
+                mechanism, not a control. The button above is the control, and exposing both
+                would put two upload affordances in the tab order where there is one job. (An
+                earlier version of this comment claimed the input was kept visible to assistive
+                tech, which was simply untrue of code marked aria-hidden.)
               */}
               <button
                 type="button"
@@ -373,6 +386,18 @@ export function AssetTile(props: {
   const [holder, setHolder] = useState(asset.rightsHolder ?? '');
   const [expires, setExpires] = useState(asset.rightsExpiresAt ? asset.rightsExpiresAt.slice(0, 10) : '');
 
+  /**
+   * Re-seed when the row changes. These start from props, and a reload that returns new values -
+   * including the save this component just made - would otherwise leave the form showing what was
+   * typed before, which reads as the save not having worked.
+   */
+  useEffect(() => {
+    setAlt(asset.altText ?? '');
+    setTagText(asset.tags.join(', '));
+    setHolder(asset.rightsHolder ?? '');
+    setExpires(asset.rightsExpiresAt ? asset.rightsExpiresAt.slice(0, 10) : '');
+  }, [asset.id, asset.altText, asset.tags, asset.rightsHolder, asset.rightsExpiresAt]);
+
   const rights = rightsLabel(asset.rightsStatus);
   const video = asset.kind === 'link' ? parseVideoUrl(asset.sourceUrl) : null;
   const thumb = video ? videoThumbnail(video) : null;
@@ -403,7 +428,7 @@ export function AssetTile(props: {
             afterwards would be a surprise rather than a choice.
           */}
           {asset.kind === 'link'
-            ? <span className="badge bg-info text-dark">Link post{video ? ` · ${providerLabel(video.provider)}` : ''}</span>
+            ? <span className="badge bg-info text-dark">{linkBadge(asset.sourceUrl, video ? providerLabel(video.provider) : null)}</span>
             : <span className="badge bg-light text-dark border">{asset.mimeType.replace(/^(image|video|application)\//, '')}</span>}
           <span className={`badge ${rights.className}`}>{rights.text}</span>
           {asset.archivedAt && <span className="badge bg-dark">Archived</span>}

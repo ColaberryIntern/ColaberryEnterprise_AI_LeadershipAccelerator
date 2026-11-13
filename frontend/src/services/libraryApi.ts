@@ -152,6 +152,19 @@ export function rightsLabel(status: RightsStatus): { text: string; className: st
   }
 }
 
+/**
+ * What a link tile's badge says, in one place so the library and the picker cannot disagree.
+ *
+ * ONLY A RECOGNISED VIDEO PROVIDER IS NAMED. parseVideoUrl never returns null for a non-empty
+ * URL - it falls through to `provider: 'unknown'` - and providerLabel maps both 'unknown' and
+ * 'file' to the word "source". Appending it unconditionally put "Link post · source" on every
+ * plain URL anyone saved, which says nothing and looks like a bug.
+ */
+export function linkBadge(sourceUrl: string | null, provider: string | null): string {
+  const named = provider && provider !== 'unknown' && provider !== 'file';
+  return named ? `Link post · ${provider}` : 'Link post';
+}
+
 /** 12.3 MB, or nothing at all for a link. */
 export function readableSize(bytes: number | null): string | null {
   if (bytes === null || Number.isNaN(bytes)) return null;

@@ -574,24 +574,31 @@ export default function AdminContentComposerPage() {
               // to where the video is. It seems weird towards the bottom."
               <div className="mt-2" data-testid="setup-media">
                 <ComposerMedia media={media} busy={busy} enabled={Boolean(item)} upload={upload} onAttach={attachMedia} onDetach={detachMedia} />
-                {/*
-                  "Choose from library" sits BESIDE the upload rather than replacing it, because
-                  the two answer different questions: upload is for something new, the picker is
-                  for something we already have. It lives here, not inside ComposerMedia, because
-                  a LINK sets the post's destination - it needs `setup` and `onSetupChange`, which
-                  ComposerMedia has no business holding.
-                */}
-                <LibraryPicker
-                  contentItemId={item?.id ?? null}
-                  brandId={setup.brand_id || null}
-                  values={setup}
-                  onChange={onSetupChange}
-                  landingPages={landingPages}
-                  onAttached={() => { if (item) void reload(item.id); }}
-                  busy={busy}
-                />
               </div>
             ) : null}
+          />
+          {/*
+            OUTSIDE ComposerSetup, deliberately, and three separate reasons say so.
+            
+            1. REACHABILITY. `mediaSlot` is null whenever setupShape(content_type).mediaRole is
+               'none' - text and poll - and a new post starts as `text` (EMPTY_SETUP). Mounted in
+               there, "Choose from library" did not exist on the default composer state, and a
+               LINK destination is content-type-independent by design. This was caught by review,
+               not by a type: the gate is in the host, not in the component.
+            2. WIDTH. mediaSlot renders inside the content-type column, so a grid of tiles was
+               squeezed into a third of the form.
+            3. IMPLICIT SUBMIT. ComposerSetup is a <form> with a submit button, so pressing Enter
+               in the picker's search box fired "Create draft" instead of searching. Out here
+               there is no form to submit.
+          */}
+          <LibraryPicker
+            contentItemId={item?.id ?? null}
+            brandId={setup.brand_id || null}
+            values={setup}
+            onChange={onSetupChange}
+            landingPages={landingPages}
+            onAttached={() => { if (item) void reload(item.id); }}
+            busy={busy}
           />
         </SectionCard>
         )}

@@ -336,11 +336,12 @@ const adminRoutes = (
               2026-11-11 that was 7 and 6 with zero overlap - thirteen people, and no screen
               showed more than seven. Section `campaigns` by prefix, matching
               /api/admin/marketing/open-house/attendees. */}
+          <Route path="/admin/marketing/open-house-attendees" element={<AdminOpenHouseAttendeesPage />} />
           {/* The media library (LIB-2/LIB-3): every file and link this brand can post. Inside the
               same brand-scoped group as the rest of Marketing, because an asset belongs to one
-              brand and the switcher above is what selects it. */}
+              brand and the switcher above is what selects it. Placed AFTER open-house-attendees
+              so it does not sit between that route and the comment explaining it. */}
           <Route path="/admin/marketing/library" element={<AdminMediaLibraryPage />} />
-          <Route path="/admin/marketing/open-house-attendees" element={<AdminOpenHouseAttendeesPage />} />
         </Route>
         <Route path="/admin/brands" element={<RedirectKeepingQuery to="/admin/marketing/brands" />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
