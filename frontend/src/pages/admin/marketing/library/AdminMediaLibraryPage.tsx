@@ -12,7 +12,7 @@ import {
   type LibraryFilters,
   type LibraryKind,
 } from '../../../../services/libraryApi';
-import { parseVideoUrl, providerLabel, videoThumbnail } from '../../../../utils/videoEmbed';
+import { parseVideoUrl, videoThumbnail } from '../../../../utils/videoEmbed';
 import { useMarketingBrand } from '../MarketingBrandContext';
 import { ALL_BRANDS } from '../brandScope';
 
@@ -428,7 +428,7 @@ export function AssetTile(props: {
             afterwards would be a surprise rather than a choice.
           */}
           {asset.kind === 'link'
-            ? <span className="badge bg-info text-dark">{linkBadge(asset.sourceUrl, video ? providerLabel(video.provider) : null)}</span>
+            ? <span className="badge bg-info text-dark">{linkBadge(video ? video.provider : null)}</span>
             : <span className="badge bg-light text-dark border">{asset.mimeType.replace(/^(image|video|application)\//, '')}</span>}
           <span className={`badge ${rights.className}`}>{rights.text}</span>
           {asset.archivedAt && <span className="badge bg-dark">Archived</span>}

@@ -33,10 +33,13 @@ jest.mock('../../../../services/libraryApi', () => {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const libraryApi = require('../../../../services/libraryApi');
 
+// NOTE: a YouTube id is ELEVEN characters. 'abc123' does not match parseVideoUrl at all, so a
+// fixture using it is an UNKNOWN link wearing a YouTube URL - which is exactly how the first
+// version of this test managed to assert the wrong thing.
 const LINK_ASSET: LibraryAsset = {
   id: 'asset-link-1',
   kind: 'link',
-  sourceUrl: 'https://youtu.be/abc123',
+  sourceUrl: 'https://youtu.be/dQw4w9WgXcQ',
   storageKey: null,
   mimeType: 'text/uri-list',
   originalFilename: null,
@@ -135,7 +138,7 @@ describe('choosing a link when the draft has NO landing page', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0][0]).toMatchObject({
       content_type: 'link',
-      destination_url: 'https://youtu.be/abc123',
+      destination_url: 'https://youtu.be/dQw4w9WgXcQ',
       landing_page_id: null,
     });
   });
@@ -180,7 +183,7 @@ describe('choosing a link when the draft DOES point at a landing page', () => {
     expect(onChange.mock.calls[0][0]).toMatchObject({
       content_type: 'link',
       landing_page_id: null,
-      destination_url: 'https://youtu.be/abc123',
+      destination_url: 'https://youtu.be/dQw4w9WgXcQ',
     });
   });
 
