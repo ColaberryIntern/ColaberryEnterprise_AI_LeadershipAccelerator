@@ -1,6 +1,7 @@
 import { connectDatabase } from '../config/database';
 import '../models';
 import { LeadSource, EntryPoint, FormDefinition } from '../models';
+import { sameJson } from './leadSources/sameJson';
 import { HIRE_REFACTORED_LEAD_SOURCE } from './leadSources/hireRefactoredLeadSource';
 
 interface SeedEntryPoint {
@@ -451,8 +452,6 @@ async function run() {
         order: [['version', 'DESC']],
       });
       const current = existingDefs.find(d => d.is_active);
-      const desiredMap = JSON.stringify(ep.field_map);
-      const desiredRequired = JSON.stringify(ep.required_fields || ['email']);
       if (!current) {
         await FormDefinition.create({
           entry_point_id: entry.id,
@@ -463,8 +462,8 @@ async function run() {
         } as any);
         console.log(`    + form_definition v1`);
       } else if (
-        JSON.stringify(current.field_map) !== desiredMap ||
-        JSON.stringify(current.required_fields) !== desiredRequired
+        !sameJson(current.field_map, ep.field_map) ||
+        !sameJson(current.required_fields, ep.required_fields || ['email'])
       ) {
         await current.update({ is_active: false, updated_at: new Date() } as any);
         const nextVersion = (existingDefs[0]?.version || 0) + 1;

@@ -111,7 +111,9 @@ const HireStudio: React.FC<Props> = ({ profile, onJumpTab }) => {
               caseTitles={Object.fromEntries((order.value?.cases ?? []).map((c) => [c.slug, c.title]))}
               onChanged={(next) => setInterviews({ value: next, failed: false })} onRetry={load} />
           )}
-          {section === 'video' && <HireIntroVideo video={intro.value?.video ?? null} />}
+          {section === 'video' && (
+            <HireIntroVideo onChanged={(video) => intro.value && setIntro({ value: { ...intro.value, video }, failed: false })} />
+          )}
           {section === 'about' && (
             <HireAboutYou loaded={intro} onSaved={(v) => setIntro({ value: v, failed: false })} onRetry={load} />
           )}

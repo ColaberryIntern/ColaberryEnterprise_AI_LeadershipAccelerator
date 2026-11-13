@@ -138,3 +138,54 @@ with these.
     and the intro form both need the `hire-refactored` lead source, which production does NOT
     have yet (read-only SELECT 2026-11-13: 0 rows), so the seed must run once at deploy. Video
     stays Phase 5. Employer reply-to is not promised in copy: the emails point at the intro form.
+  - Shipped: merged 2026-11-13 (#3981). Live via main 310bc0971 (another session's deploy at
+    13:54 UTC; 14d98d2fe is an ancestor). Production-verified: `/talent/kesetebirhan-delele/schedule/`
+    answers 200 with `X-Robots-Tag: noindex, nofollow`; the four new hire services are in the
+    running image; Kes's payload unchanged (booking off, no "@"); 0 interviews booked. Ali approved
+    the one-source seed: `seedLeadSources.js --only hire-refactored` created the source and both
+    forms (intro_request, interview_request), all active. A second run proved the seed was NOT
+    idempotent (each form superseded by an identical v2; JSONB reorders keys), fixed in Phase 5.
+
+- [x] Phase 5: the intro video
+  - Date: 2026-11-13
+  - Session: CC-20261106-fv8g
+  - What changed: colaberry/video-analysis (read with Ali's GitHub account) turned out to be an
+    AWS analysis worker (S3 in, `<id>/res.json` out: Transcribe, filler words, pauses), with no
+    upload, transcode or playback API, and this backend has no AWS identity that can reach its
+    buckets. Ali chose: build now, plug the analysis in later. So: `hireVideoTranscode` (ffmpeg,
+    argument arrays, timeouts; H.264/AAC 720p `+faststart` + JPEG poster; length measured on the
+    output, 3s..180s), `hireVideoFiles` (24-hex asset ids on the `uploads` volume, path asserted
+    under the root), `hireVideoService` (upload = draft, replace removes the old asset, publish /
+    unpublish, captions choice, delete; HMAC preview token for drafts), `hireVideoAnalysis` (pure:
+    the worker's res.json into WebVTT captions + candidate-only coaching sentences),
+    `hireVideoAnalysisClient` (the hand-off; mode stays 'off' until a transport is registered, so
+    nothing ever waits on a result that cannot come). Routes: studio GET/POST/PUT/DELETE
+    `/api/portal/career/portfolio-page/hire-video`; public extensionless
+    `/api/public/hire/video/<id>/(stream|poster|captions)` (published, or a signed draft preview;
+    `Cross-Origin-Resource-Policy: cross-origin`, range requests). nginx raises the body cap to
+    100m for the upload path only. Studio: record in the browser (MediaRecorder, 90s cap, REC pill,
+    prompt overlay, Next prompt), show the take back, upload with progress, Publish / Unpublish,
+    replace, delete (two-step), "Add captions automatically", tips, and a coaching card that says
+    plainly analysis is not switched on yet. Hire profile: `crossorigin="anonymous"` on the video
+    so the cross-origin caption track loads. Schema: two additive columns (`video_coaching`,
+    `video_captions_wanted`). Seed: `sameJson` makes the lead-source seed order-blind.
+  - Verification: backend tsc clean against a control error; test typecheck clean (only the local
+    maxmind file); jest across hire, routes, controllers, seeds and the repo guards: 7365 pass, the
+    1 failure is mountLearnerPortalRoutes, a CRLF artifact of this Windows checkout (green on CI's
+    LF checkout of main). New: hireVideoTranscode (incl. a REAL ffmpeg run: WebM -> faststart MP4 +
+    JPEG), hireVideoFiles, hireVideoAnalysis, hireVideoService, publicHireVideoRoutes (behind real
+    helmet), hireVideoController. Preview-token mutation caught. Frontend tsc clean against a control
+    error, CI=true build compiles, portfolio jest 89/89. Hire site node --test 129/129. Real nginx
+    (production image, throwaway container): `nginx -t` ok; 2 MB to the upload path passes (401, no
+    session), 2 MB elsewhere 413, 101 MB to the upload path 413. Real Chrome with a fake camera:
+    recorded a real WebM, showed it back, uploaded it, the draft played (8s) with 2 caption cues;
+    1320/390 light/dark: 0 errors, no sideways scroll, nothing under 44px. Hire profile with real
+    cross-origin servers: captions load 2 cues, poster loads; negative control without CORS loads 0.
+    Screenshots: `docs/screenshots/2026-11-13-hire-profile-p5/`.
+  - Notes: one asset per candidate (the Phase 2 columns), so a replacement is a draft and hides the
+    old video until it is published. Captions and coaching need the analysis transport: an IAM key
+    (put on colaberry-video-analysis-input-prod, get on -output-prod) and the AWS SDK, a new
+    dependency; both are Ali's call. Security note for Ali: that repo commits its AWS keys
+    encrypted with a key that sits in dpu.py, which is the same as committing them; they should be
+    rotated. An empty recording (a cold camera gave a 201-byte take in the first Chrome run) is now
+    caught before upload.

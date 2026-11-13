@@ -33,6 +33,8 @@ describe('In their words (§1.4)', () => {
     assert.match(html, /<source src="https:\/\/enterprise\.colaberry\.ai\/site-v2\/v\/intro\.mp4">/);
     assert.match(html, /poster="https:\/\/enterprise\.colaberry\.ai\/site-v2\/v\/p\.jpg"/);
     assert.match(html, /<track kind="captions"[^>]*default>/);
+    // Without crossorigin a browser drops the cross-origin caption track (the video is on the platform origin).
+    assert.match(html, /<video [^>]*crossorigin="anonymous"/);
     assert.match(html, /Intro · 1:30/);
     assert.match(html, /Messy &lt;data&gt; pipelines\./);
     for (const chip of ['QA Analyst', 'Remote', 'Hybrid', 'Can start Dec 1, 2026']) assert.match(html, new RegExp('<span class="look-chip">' + chip + '</span>'));

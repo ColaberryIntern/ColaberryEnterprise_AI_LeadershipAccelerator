@@ -44,6 +44,7 @@ import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import publicCareerPortfolioRoutes from './routes/publicCareerPortfolioRoutes';
 import internVideoStreamRoutes from './routes/internVideoStreamRoutes';
 import publicHireTalentRoutes from './routes/publicHireTalentRoutes';
+import publicHireVideoRoutes from './routes/publicHireVideoRoutes';
 import publicRoomJoinRoutes from './routes/publicRoomJoinRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
@@ -347,6 +348,7 @@ app.use(publicCareerPortfolioRoutes);
 // (a <video src> sends no Authorization header), so it MUST stay above adminRoutes or it 401s.
 app.use(internVideoStreamRoutes);
 app.use(publicHireTalentRoutes); // hire.refactored.ai directory + intro (public, unauthenticated)
+app.use(publicHireVideoRoutes); // hire.refactored.ai intro video playback (published, or a signed studio preview)
 app.use(publicCaseStudyRoutes);
 // A room's stable join address (/api/public/rooms/join/:token). Same rule, and it
 // matters more here than almost anywhere: this URL is pasted into recurring

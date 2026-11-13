@@ -15,6 +15,9 @@ import {
   handleActOnHireInterview, handleGetCaseStudyOrder, handleGetHireIntro, handleGetInterviewAvailability,
   handleListHireInterviews, handlePutCaseStudyOrder, handlePutHireIntro, handlePutInterviewAvailability,
 } from '../controllers/hireStudioController';
+import {
+  handleDeleteHireVideo, handleGetHireVideo, handleUpdateHireVideo, handleUploadHireVideo,
+} from '../controllers/hireVideoController';
 import myWorkRoutes from './myWorkRoutes';
 import cohortShowcaseRoutes from './cohortShowcaseRoutes';
 
@@ -149,6 +152,12 @@ router.get('/api/portal/career/portfolio-page/case-study-order', ...gates, handl
 router.put('/api/portal/career/portfolio-page/case-study-order', ...gates, handlePutCaseStudyOrder);
 router.get('/api/portal/career/hire-interviews', ...gates, handleListHireInterviews);
 router.post('/api/portal/career/hire-interviews/:id/:action', ...gates, handleActOnHireInterview);
+// Phase 5: the intro video. Upload is multipart (multer inside the handler); nginx raises its body cap for this path.
+const VIDEO = '/api/portal/career/portfolio-page/hire-video';
+router.get(VIDEO, ...gates, handleGetHireVideo);
+router.post(VIDEO, ...gates, handleUploadHireVideo);
+router.put(VIDEO, ...gates, handleUpdateHireVideo);
+router.delete(VIDEO, ...gates, handleDeleteHireVideo);
 
 // My work (C128): the learner's own pieces and each piece's viewer, under /api/portal/career/work. Its own router
 // file; the same two gates are applied per route inside it.
