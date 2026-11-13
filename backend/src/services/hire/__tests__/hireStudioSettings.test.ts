@@ -97,7 +97,11 @@ describe('the schema', () => {
   it('is additive and re-runnable, and its rollback drops only what it created', () => {
     for (const s of HIRE_INTERVIEW_STATEMENTS) {
       expect(s).toMatch(/IF NOT EXISTS/);
-      expect(s).not.toMatch(/\b(ALTER|DROP)\b/i);
+      // The one ALTER allowed is adding a column to a table that already exists in production
+      // (Phase 5's video columns): additive and re-runnable. Nothing else may alter or drop.
+      const additiveColumn = /^ALTER TABLE hire_\w+ ADD COLUMN IF NOT EXISTS \w+ [^;]*$/.test(s);
+      if (!additiveColumn) expect(s).not.toMatch(/\b(ALTER|DROP)\b/i);
+      expect(s).not.toMatch(/\bDROP\b/i);
     }
     expect(HIRE_INTERVIEW_ROLLBACK.every((s) => /^DROP TABLE IF EXISTS hire_/.test(s))).toBe(true);
   });

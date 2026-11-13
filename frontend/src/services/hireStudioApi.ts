@@ -31,7 +31,7 @@ export interface HireIntro {
   earliestStart: string | null;
   /** Internal only. Never shown on Hire. */
   workAuth: string | null;
-  /** Read-only here; recording arrives with the intro video update. */
+  /** Read-only here; the Intro video section reads and writes it through the video calls below. */
   video?: { status: string; seconds: number | null } | null;
 }
 
@@ -103,4 +103,59 @@ export async function fetchHireInterviews(): Promise<HireInterview[]> {
 export async function actOnHireInterview(id: string, action: 'confirm' | 'decline' | 'propose', startsAt?: string): Promise<HireInterview> {
   const body = action === 'propose' ? { startsAt } : {};
   return (await portalApi.post(`/api/portal/career/hire-interviews/${encodeURIComponent(id)}/${action}`, body)).data.interview;
+}
+
+// ── Intro video (kit §3.2) ───────────────────────────────────────────────────
+
+export interface VideoCoaching {
+  seconds: number;
+  notes: string[];
+}
+
+export interface HireVideo {
+  status: 'draft' | 'published';
+  seconds: number | null;
+  /** Signed, short-lived preview URLs (a draft is not public). Origin-relative. */
+  streamUrl: string;
+  posterUrl: string;
+  captionsUrl: string | null;
+  captionsWanted: boolean;
+  /** 'off' until colaberry/video-analysis is connected; 'done' once its coaching is in. */
+  analysis: 'off' | 'pending' | 'done';
+  /** For the candidate only. Never shown on Hire. */
+  coaching: VideoCoaching | null;
+}
+
+const VIDEO = `${BASE}/hire-video`;
+
+export async function fetchHireVideo(): Promise<HireVideo | null> {
+  return (await portalApi.get(VIDEO)).data.video ?? null;
+}
+
+export async function uploadHireVideo(file: Blob, name: string, onProgress?: (fraction: number) => void): Promise<HireVideo | null> {
+  const form = new FormData();
+  form.append('video', file, name);
+  const res = await portalApi.post(VIDEO, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    // The server transcodes before it answers; a 90-second take is well inside this.
+    timeout: 300_000,
+    onUploadProgress: (e) => { if (onProgress && e.total) onProgress(e.loaded / e.total); },
+  });
+  return res.data.video ?? null;
+}
+
+export async function updateHireVideo(u: { published?: boolean; captionsWanted?: boolean }): Promise<HireVideo | null> {
+  return (await portalApi.put(VIDEO, u)).data.video ?? null;
+}
+
+export async function deleteHireVideo(): Promise<void> {
+  await portalApi.delete(VIDEO);
+}
+
+/** The server's sentence for a refused upload, or a plain fallback. */
+export function videoErrorText(e: unknown): string {
+  const r = (e as { response?: { status?: number; data?: { error?: unknown } } })?.response;
+  if (typeof r?.data?.error === 'string' && r.data.error) return r.data.error;
+  if (r?.status === 413) return 'That file is too large. A 90-second video is usually under 50 MB.';
+  return 'That did not go through. Check your connection and try again.';
 }

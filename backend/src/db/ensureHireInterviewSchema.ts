@@ -94,6 +94,11 @@ export const HIRE_INTERVIEW_STATEMENTS: readonly string[] = [
   // The slot computation reads one person's holding interviews in a window.
   `CREATE INDEX IF NOT EXISTS idx_hire_interviews_enrollment_starts
      ON hire_interviews (enrollment_id, starts_at)`,
+  // Phase 5, the intro video. Coaching is the video-analysis result, shown to the candidate
+  // ONLY (kit §4.3); captions_wanted is the studio's "captions automatically" box. Additive and
+  // nullable, so dropping them returns the table to its Phase 4 shape.
+  `ALTER TABLE hire_profile_intro ADD COLUMN IF NOT EXISTS video_coaching JSONB`,
+  `ALTER TABLE hire_profile_intro ADD COLUMN IF NOT EXISTS video_captions_wanted BOOLEAN NOT NULL DEFAULT true`,
 ];
 
 /** Run by hand to roll Phase 2 back. Never run at boot. */

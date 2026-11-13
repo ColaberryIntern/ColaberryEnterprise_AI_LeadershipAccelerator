@@ -61,7 +61,10 @@
     var poster = C.mediaUrl(api, v.posterUrl);
     var captions = C.mediaUrl(api, v.captionsUrl);
     var len = C.duration(v.seconds);
-    return '<div class="video-box"><video controls playsinline preload="none"' + (poster ? ' poster="' + esc(poster) + '"' : '')
+    // crossorigin: the file lives on the platform origin, and a browser ignores a cross-origin
+    // caption track without it. Every media path sends Access-Control-Allow-Origin (the video
+    // route via cors(), /site-v2 files via nginx), so it is safe on the poster and stream too.
+    return '<div class="video-box"><video controls playsinline preload="none" crossorigin="anonymous"' + (poster ? ' poster="' + esc(poster) + '"' : '')
       + ' aria-label="Intro video' + (len ? ', ' + esc(len) : '') + '"><source src="' + esc(src) + '">'
       + (captions ? '<track kind="captions" src="' + esc(captions) + '" srclang="en" label="English" default>' : '')
       + '</video>' + (len ? '<span class="len">Intro · ' + esc(len) + '</span>' : '') + '</div>';
