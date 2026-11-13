@@ -57,11 +57,46 @@ function when(iso: string | null): string {
   return new Date(iso).toLocaleString('en-US', { timeZone: 'America/Chicago' }) + ' CT';
 }
 
+/**
+ * How long this has been waiting, in whole days.
+ *
+ * The row used to print only the absolute filing time and leave the arithmetic to the reader.
+ * Age is the only thing that distinguishes a queue from a list, and on 2026-11-13 this queue
+ * had taken exactly one request and decided none of them, so it is now stated.
+ *
+ * Null for anything undecidable rather than a guessed 0: a missing or unparseable date must not
+ * render as "today".
+ */
+export function ageDays(iso: string | null, now: Date = new Date()): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const ms = now.getTime() - then;
+  if (ms < 0) return 0;
+  return Math.floor(ms / 86_400_000);
+}
+
+/** Oldest first. The server returns newest-first, which buries the one most needing a decision. */
+export function oldestFirst(a: ChangeRequest, b: ChangeRequest): number {
+  const at = a.requested_at ? new Date(a.requested_at).getTime() : 0;
+  const bt = b.requested_at ? new Date(b.requested_at).getTime() : 0;
+  return at - bt;
+}
+
+function AgeChip({ days }: { days: number | null }) {
+  if (days === null) return null;
+  // Amber past two days, red past five: an unattended governance gate blocks a builder's story.
+  const tone = days >= 5 ? 'bg-danger' : days >= 2 ? 'bg-warning text-dark' : 'bg-light text-dark';
+  const label = days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`;
+  return <span className={`badge ${tone}`} title="How long this has been waiting">{label}</span>;
+}
+
 function RequestRow({ r, children }: { r: ChangeRequest; children?: React.ReactNode }) {
   return (
     <div className="border-bottom py-3">
       <div className="d-flex gap-2 align-items-start flex-wrap">
         <span className={`badge ${STATUS_BADGE[r.status]}`}>{r.status}</span>
+        {r.status === 'submitted' && <AgeChip days={ageDays(r.requested_at)} />}
         <div className="flex-grow-1">
           <div className="fw-semibold">{r.title}</div>
           <div className="text-muted small">
@@ -284,7 +319,9 @@ export default function AdminChangeRequestsPage() {
               {queue.filter((r) => r.status === 'submitted').length === 0 ? (
                 <p className="text-muted small mb-0">Nothing is waiting on a decision.</p>
               ) : (
-                queue.filter((r) => r.status === 'submitted').map((r) => (
+                // Oldest first: the server orders requested_at DESC, which put the request most
+                // needing a decision at the bottom of the page.
+                queue.filter((r) => r.status === 'submitted').slice().sort(oldestFirst).map((r) => (
                   <RequestRow key={r.id} r={r}>
                     <div className="d-flex flex-column gap-2" style={{ minWidth: 220 }}>
                       <div className="d-flex gap-2">
