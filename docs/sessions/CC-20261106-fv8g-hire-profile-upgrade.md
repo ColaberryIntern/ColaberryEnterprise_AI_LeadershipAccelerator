@@ -66,3 +66,36 @@ with these.
     existing profile (Kes included) keeps Request intro and cannot receive a request. Holidays
     are not removed from slots yet. Location is studio-only (the kit's public chips are roles,
     setup and earliest start).
+  - Shipped: merged 2026-11-12 (#3974), deployed a6570baf8 (backend + nginx). Production-verified:
+    boot log "[DB] hire interview schema ensured" with no skipped statement; the 4 tables exist
+    and are empty (read-only SELECT); Kes's hire payload carries intro null, order [], booking
+    off and no "@"; his slots endpoint 200 + no-store + empty; unknown slug 404; learner route 401
+    without a session; all 6 listed profiles render in a real browser at 1320/390, light/dark,
+    0 errors, no sideways scroll.
+
+- [x] Phase 3: the candidate studio ("Hire profile" tab in /portal/portfolio)
+  - Date: 2026-11-12
+  - Session: CC-20261106-fv8g
+  - What changed: new `frontend/src/pages/portal/portfolio/hire/`: `HireStudio` (header with the
+    "N of 7" strength meter as a progressbar, Preview my public profile, a left menu with badges
+    that wraps on phones, each data source loading and failing on its own), `HireOverview`
+    (interview requests in the candidate's zone with Accept / Suggest a time / Decline, the
+    7-item "Finish your profile" checklist with jump CTAs, and the availability panel folded in
+    from Publishing), `HireAboutYou`, `HireInterviewTimes` (Mon-Fri x morning/afternoon/evening
+    44px aria-pressed grid, formats, weekly cap, notice), `HireCaseStudyOrder` (star, up, down,
+    labelled), `HireIntroVideo` (says what is coming, shows the three prompts), pure
+    `hireStudioModel`, `HireStudio.css` (portal tokens only). `services/hireStudioApi.ts`.
+    `PortfolioPage` gains the tab. Backend: the case-study-order read also returns titles,
+    covers and the Hire address; the profile's signature is the candidate's starred (first
+    ordered) case study, falling back to the featured pick.
+  - Verification: frontend tsc clean against a control error; CI=true production build compiles
+    (lint as errors); portfolio jest 73/73 (new hireStudioModel, HireStudio, HireStudioPanels);
+    a reorder mutation fails 2 suites. Backend tsc clean, test-file typecheck clean, hire jest
+    160 pass. The real build rendered in Chrome with the studio API stubbed: every section at
+    1320 and 390, light and dark: 0 page errors, no sideways scroll, no control under 44px.
+    Screenshots: `docs/screenshots/2026-11-12-hire-profile-p3/`.
+  - Notes: Intro video recording is Phase 5, so that section offers no dead control. "Confirm
+    automatically" is not offered until Phase 4 makes it do something. Decline takes no reason
+    (the API has no field for one). The headline is stored as a draft only: no admin surface
+    reviews `headline_draft` yet, and the copy says the live headline does not change. Photo,
+    resume and LinkedIn link to /portal/settings. Gold is the portal's --amber.

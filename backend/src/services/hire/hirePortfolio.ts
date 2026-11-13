@@ -86,7 +86,9 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
       new Set(entry.cases.map((c) => c.slug)),
     ),
     hire: {
-      signature: pickSignature(entry.cases),
+      // The candidate's ★ (the first case study in their saved order) leads their own profile;
+      // with no saved order it is the admin-featured pick, exactly as before.
+      signature: entry.cases.find((c) => c.slug === order.find((s) => published.has(s))) ?? pickSignature(entry.cases),
       caseStudies: entry.cases.map(({ slug: s, title, summary, industry, featured, publishedAt, heroMetric, look }) => ({
         slug: s, title, summary, industry, featured, publishedAt, heroMetric, look,
       })),

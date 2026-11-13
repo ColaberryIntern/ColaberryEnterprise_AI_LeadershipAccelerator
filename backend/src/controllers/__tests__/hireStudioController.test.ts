@@ -19,7 +19,7 @@ import { loadHireIndex } from '../../services/hire/hireTalentIndex';
 import * as settings from '../../services/hire/hireStudioSettings';
 import * as inbox from '../../services/hire/hireInterviewInbox';
 import {
-  handleActOnHireInterview, handleListHireInterviews, handlePutCaseStudyOrder, handlePutHireIntro, handlePutInterviewAvailability,
+  handleActOnHireInterview, handleGetCaseStudyOrder, handleListHireInterviews, handlePutCaseStudyOrder, handlePutHireIntro, handlePutInterviewAvailability,
 } from '../hireStudioController';
 
 const m = (f: unknown) => f as jest.Mock;
@@ -55,13 +55,21 @@ it('writes availability for the session enrollment, and 400s a bad block', async
 
 it('orders against the caller\'s OWN published case studies', async () => {
   m(sequelize.query).mockResolvedValue([[{ slug: 'me-slug' }]]);
-  m(loadHireIndex).mockResolvedValue([{ cases: [{ slug: 'a' }, { slug: 'b' }] }]);
+  m(loadHireIndex).mockResolvedValue([{ page: { slug: 'me-slug' }, cases: [{ slug: 'a', title: 'A' }, { slug: 'b', title: 'B' }] }]);
   m(settings.writeCaseStudyOrder).mockResolvedValue(['b', 'a']);
   const { res } = await call(handlePutCaseStudyOrder, { slugs: ['b', 'a'] });
   expect(m(sequelize.query).mock.calls[0][1]).toEqual({ bind: [ME] });
   expect(loadHireIndex).toHaveBeenCalledWith(['public', 'unlisted'], 'me-slug');
   expect(settings.writeCaseStudyOrder).toHaveBeenCalledWith(ME, ['b', 'a'], ['a', 'b']);
   expect(res.body).toEqual({ ok: true, slugs: ['b', 'a'] });
+});
+
+it('reads the order with the caller\'s own case-study titles, covers and Hire address', async () => {
+  m(sequelize.query).mockResolvedValue([[{ slug: 'me-slug' }]]);
+  m(loadHireIndex).mockResolvedValue([{ page: { slug: 'me-slug' }, cases: [{ slug: 'a', title: 'A', look: { coverImageUrl: '/c.png' } }] }]);
+  m(settings.readCaseStudyOrder).mockResolvedValue(['a', 'gone']);
+  const { res } = await call(handleGetCaseStudyOrder);
+  expect(res.body).toEqual({ ok: true, slugs: ['a'], published: ['a'], cases: [{ slug: 'a', title: 'A', coverImageUrl: '/c.png' }], talentSlug: 'me-slug' });
 });
 
 it('lists and acts on interviews as the session enrollment, and 404s an unknown action', async () => {
