@@ -43,6 +43,8 @@ let domainRows: Array<Record<string, unknown>> = [];
 const sqlSeenForEvents: string[] = [];
 /** The bind array for each of those, so the cap can be checked as a parameter. */
 const eventBinds: unknown[][] = [];
+/** Every SQL string the reader used to fetch TRUE totals, which is a separate query. */
+const sqlSeenForTotals: string[] = [];
 
 const mockQuery = jest.fn(async (sql: string, opts?: { bind?: unknown[] }) => {
   if (/FROM\s+org_members/i.test(sql)) return identityRows;
@@ -61,11 +63,35 @@ const mockQuery = jest.fn(async (sql: string, opts?: { bind?: unknown[] }) => {
     return domainRows;
   }
   /**
-   * The capped event read. This emulates what Postgres does rather than just
-   * returning the fixture, because the cap and the true total now BOTH come
-   * from the window functions in that SQL: ROW_NUMBER to take the newest `cap`
-   * per visitor, COUNT(*) OVER to carry the untruncated total. A mock that
-   * ignored them would let a reader that silently dropped either one pass.
+   * The TRUE per-visitor total. Its own query since the LATERAL rewrite, and it
+   * is matched FIRST because both event queries read `FROM page_events` and the
+   * capped branch below would otherwise swallow it.
+   *
+   * It deliberately counts the WHOLE fixture per visitor, never the capped
+   * slice. That is what makes the truncation test below able to fail: if the
+   * reader ever derives `page_event_count` from the rows it returned, it gets
+   * the cap, and the expected total will not match.
+   */
+  if (/COUNT\(\*\)/i.test(sql) && /FROM\s+page_events/i.test(sql)) {
+    const [ids] = (opts?.bind ?? []) as [string[]];
+    sqlSeenForTotals.push(sql);
+    const mine = pageEventRows.filter((r) => ids.includes(String(r.visitor_id)));
+    // GROUP BY: a visitor with no events is simply absent, exactly as Postgres
+    // returns it, so the caller's default-to-0 path is what the test exercises.
+    return [...new Set(mine.map((r) => String(r.visitor_id)))].map((id) => ({
+      visitor_id: id,
+      total: mine.filter((r) => String(r.visitor_id) === id).length,
+    }));
+  }
+  /**
+   * The capped event read. This emulates what Postgres does with the LATERAL
+   * rather than returning the fixture, because the cap IS the SQL: a correlated
+   * `ORDER BY timestamp DESC LIMIT cap` per visitor. A mock that ignored it
+   * would let a reader that dropped the cap pass.
+   *
+   * CROSS JOIN LATERAL, so a visitor with no events contributes no rows at all
+   * rather than one null row. Emulated here, because that is the behaviour the
+   * caller's grouping depends on.
    */
   if (/FROM\s+page_events/i.test(sql)) {
     const [ids, cap] = (opts?.bind ?? []) as [string[], number];
@@ -77,7 +103,9 @@ const mockQuery = jest.fn(async (sql: string, opts?: { bind?: unknown[] }) => {
       const forVisitor = mine
         .filter((r) => String(r.visitor_id) === id)
         .sort((x, y) => Number(new Date(String(y.timestamp))) - Number(new Date(String(x.timestamp))));
-      for (const r of forVisitor.slice(0, cap)) out.push({ ...r, total: forVisitor.length });
+      // No `total` on these rows any more: it cannot ride along on a query that
+      // stops at `cap`. If the reader still reads one here it gets undefined.
+      for (const r of forVisitor.slice(0, cap)) out.push({ ...r });
     }
     return out;
   }
@@ -132,6 +160,7 @@ beforeEach(() => {
   memoryRows.length = 0;
   pageEventRows.length = 0;
   sqlSeenForEvents.length = 0;
+  sqlSeenForTotals.length = 0;
   eventBinds.length = 0;
   findAllMemory.mockClear();
   findAllEvents.mockClear();
@@ -223,7 +252,15 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
     // production: page_events is the largest table in this schema.
     await request(app()).get(URL).set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
     expect(sqlSeenForEvents).toHaveLength(1);
-    expect(sqlSeenForEvents[0]).toMatch(/WHERE\s+visitor_id\s*=\s*ANY/i);
+    // Scoped through the BOUND visitor list, which since the LATERAL rewrite is
+    // `unnest($1::uuid[])` driving the join rather than `= ANY` in a WHERE. The
+    // spelling changed; the property asserted has not. Written against both so a
+    // future shape change fails loudly here instead of silently widening the read.
+    expect(sqlSeenForEvents[0]).toMatch(/unnest\(\$1::uuid\[\]\)|visitor_id\s*=\s*ANY/i);
+    // the per-visitor correlation is what keeps it scoped inside the LATERAL
+    expect(sqlSeenForEvents[0]).toMatch(/p\.visitor_id\s*=\s*v\.visitor_id/i);
+    // and the totals query is scoped the same way, by the same bound list
+    expect(sqlSeenForTotals[0]).toMatch(/WHERE\s+p\.visitor_id\s*=\s*ANY/i);
   });
 
   /**
@@ -242,11 +279,18 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
       .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
 
     const sql = sqlSeenForEvents[0];
-    // per-visitor, not a flat LIMIT: a flat limit would let one heavy visitor
-    // consume the whole budget and leave later visitors with zero events.
-    expect(sql).toMatch(/ROW_NUMBER\(\)\s+OVER\s*\(\s*PARTITION BY visitor_id/i);
-    expect(sql).toMatch(/COUNT\(\*\)\s+OVER\s*\(\s*PARTITION BY visitor_id/i);
-    expect(sql).toMatch(/rn\s*<=/i);
+    // PER VISITOR, not a flat LIMIT. A flat limit would let one heavy visitor
+    // consume the whole budget and leave later visitors with zero events, which
+    // is why the LIMIT has to sit inside a correlated LATERAL rather than on the
+    // outer query.
+    expect(sql).toMatch(/CROSS\s+JOIN\s+LATERAL/i);
+    expect(sql).toMatch(/WHERE\s+p\.visitor_id\s*=\s*v\.visitor_id/i);
+    // The ordering is load-bearing, not cosmetic: it is what lets the index be
+    // walked and stopped at `cap`. Without it the plan sorts every matching row
+    // first, which is the 2,059ms-versus-18ms difference this rewrite exists for.
+    expect(sql).toMatch(/ORDER BY\s+p\."timestamp"\s+DESC\s*\n?\s*LIMIT/i);
+    // and the shape it replaced must not come back
+    expect(sql).not.toMatch(/ROW_NUMBER\(\)/i);
 
     const bind = eventBinds[0] as [string[], number];
     expect(bind[1]).toBe(1); // the cap is a bound parameter, not interpolated
@@ -259,12 +303,36 @@ describe('GET .../agent-domains-mine/admissions/admissions-signals', () => {
   it('keeps page_event_count the visitor\'s TRUE total when the cap truncates', async () => {
     // Capping the rows must not quietly redefine this field as "the cap". That
     // would be a worse defect than the one being fixed: a wrong number that
-    // reads as a right one. It is why COUNT(*) OVER rides along in the SQL.
+    // reads as a right one.
+    //
+    // This is the assertion the LATERAL rewrite put most at risk. The total used
+    // to ride along on every capped row via COUNT(*) OVER; it cannot ride along
+    // on a query that stops at `cap`, by construction. So it moved to its own
+    // query, and this test is what proves the move did not quietly turn the
+    // field into the cap: with a cap of 1 and two events, it must still say 2.
     const res = await request(app()).get(`${URL}?limit=2&events_per_visitor=1`)
       .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
     const a = res.body.visitors[0];
     expect(a.page_events).toHaveLength(1);
     expect(a.page_event_count).toBe(2);
+  });
+
+  it('asks for the true total in a SEPARATE query, which is the only place it can come from', async () => {
+    // The structural half of the test above. That one would also pass if a
+    // future edit went back to deriving the total from the capped rows AND the
+    // cap happened not to truncate in the fixture. This pins where the number
+    // comes from: an aggregate over the unbounded set, scoped to these visitors.
+    await request(app()).get(`${URL}?limit=2&events_per_visitor=1`)
+      .set('Authorization', `Bearer ${scopedToken(KALKIDAN)}`);
+
+    expect(sqlSeenForTotals).toHaveLength(1);
+    const sql = sqlSeenForTotals[0];
+    expect(sql).toMatch(/COUNT\(\*\)/i);
+    expect(sql).toMatch(/GROUP BY\s+p\.visitor_id/i);
+    // scoped, so it is an aggregate over these visitors and not the whole table
+    expect(sql).toMatch(/WHERE\s+p\.visitor_id\s*=\s*ANY/i);
+    // and it must NOT carry the cap: a capped count is not a total
+    expect(sql).not.toMatch(/LIMIT/i);
   });
 
   it('reports a missing page title as null, never as an empty string', async () => {
