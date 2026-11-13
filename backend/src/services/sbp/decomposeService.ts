@@ -106,11 +106,15 @@ function defaultClient(): Pick<OpenAI['chat']['completions'], 'create'> {
     throw new DecomposeError('ConfigError', 'OPENAI_API_KEY is not configured');
   }
   if (!sharedClient) {
-    sharedClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: REQUEST_TIMEOUT_MS,
-      maxRetries: SDK_RETRIES,
-    });
+    // Instrumented rather than raw, and required lazily: see the note in factoryDecompose for
+    // both reasons. Without the instrument the SBP generation path spends real money and
+    // records no token, cost or duration anywhere.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { getInstrumentedOpenAI } = require('../openaiInstrumented') as typeof import('../openaiInstrumented');
+    sharedClient = getInstrumentedOpenAI(
+      { workflow_id: 'sbp_decompose' },
+      { timeout: REQUEST_TIMEOUT_MS, maxRetries: SDK_RETRIES },
+    );
   }
   return sharedClient.chat.completions;
 }

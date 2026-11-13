@@ -46,10 +46,23 @@ export class ModelCallError extends Error {
 
 export type ChatClient = Pick<OpenAI['chat']['completions'], 'create'>;
 
-export function defaultClient(): ChatClient {
+/**
+ * `workflowId` names the caller in `ai_events`, because this helper is shared and a single
+ * blanket label would merge requirement refinement with every future caller into one
+ * unreadable bucket. It is defaulted rather than required so existing callers keep compiling,
+ * and the default is deliberately generic so an unlabelled caller is visible as unlabelled
+ * instead of being quietly attributed to whichever caller was instrumented first.
+ */
+export function defaultClient(workflowId: string = 'sbp_model_json'): ChatClient {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new ModelCallError('ConfigError', 'OPENAI_API_KEY is not set');
-  return new OpenAI({ apiKey, timeout: REQUEST_TIMEOUT_MS, maxRetries: SDK_RETRIES }).chat.completions;
+  // Instrumented rather than raw, and required lazily: see the note in factoryDecompose.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { getInstrumentedOpenAI } = require('../openaiInstrumented') as typeof import('../openaiInstrumented');
+  return getInstrumentedOpenAI(
+    { workflow_id: workflowId },
+    { apiKey, timeout: REQUEST_TIMEOUT_MS, maxRetries: SDK_RETRIES },
+  ).chat.completions;
 }
 
 export interface ModelJsonCallOptions<T> {

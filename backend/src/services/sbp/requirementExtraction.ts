@@ -211,7 +211,7 @@ export async function extractRequirements(
   opts: ExtractRequirementsOptions,
 ): Promise<ExtractRequirementsResult> {
   const model = opts.model || process.env.SBP_REQUIREMENTS_MODEL || process.env.SBP_DECOMPOSE_MODEL || 'gpt-4o';
-  const client = opts.client ?? defaultClient();
+  const client = opts.client ?? defaultClient('sbp_requirement_extract');
 
   // Source that never reaches the model, said out loud. Same reporting as the plan stage, from
   // the same shared assembly, so the two stages cannot disagree about what was clipped.

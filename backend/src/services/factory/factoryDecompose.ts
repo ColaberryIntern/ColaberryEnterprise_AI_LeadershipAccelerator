@@ -98,11 +98,24 @@ function defaultClient(): Pick<OpenAI['chat']['completions'], 'create'> {
     throw new FactoryDecomposeError('ConfigError', 'OPENAI_API_KEY is not configured');
   }
   if (!sharedClient) {
-    sharedClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: REQUEST_TIMEOUT_MS,
-      maxRetries: SDK_RETRIES,
-    });
+    // Instrumented rather than raw, so this call lands in `ai_events` with its model, tokens,
+    // cost and duration. Twelve gov_* modules already construct their client this way; the two
+    // generation entry points were the ones that did not, which is why no token or cost figure
+    // for decomposition existed anywhere in the system.
+    //
+    // REQUIRED LAZILY, AND THAT IS LOAD-BEARING. `openaiInstrumented` pulls in aiEventService,
+    // which calls Model.init at module load. A static import would put a live Sequelize model
+    // into the module graph of everything that reaches this file, and this file sits under
+    // factoryGenerate -> factoryGenerationEntry -> factoryDecomposeRun, whose test states in
+    // its own header that nothing is mocked because nothing touches a DB or a model. A static
+    // import broke exactly that test. Deferring to first real call keeps the graph clean and
+    // costs nothing, because the client is memoised anyway.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { getInstrumentedOpenAI } = require('../openaiInstrumented') as typeof import('../openaiInstrumented');
+    sharedClient = getInstrumentedOpenAI(
+      { workflow_id: 'factory_decompose' },
+      { timeout: REQUEST_TIMEOUT_MS, maxRetries: SDK_RETRIES },
+    );
   }
   return sharedClient.chat.completions;
 }

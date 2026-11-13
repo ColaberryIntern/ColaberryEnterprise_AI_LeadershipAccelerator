@@ -100,11 +100,16 @@ let sharedClient: OpenAI | null = null;
 function defaultClient(): Pick<OpenAI['chat']['completions'], 'create'> | null {
   if (!process.env.OPENAI_API_KEY) return null;
   if (!sharedClient) {
-    sharedClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      timeout: REQUEST_TIMEOUT_MS,
-      maxRetries: SDK_RETRIES,
-    });
+    // Instrumented rather than raw, and required lazily: see the note in factoryDecompose for
+    // both reasons. Intake is the first model call of an SBP build, so leaving it
+    // uninstrumented would understate the cost of the whole journey while appearing to
+    // measure it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { getInstrumentedOpenAI } = require('../openaiInstrumented') as typeof import('../openaiInstrumented');
+    sharedClient = getInstrumentedOpenAI(
+      { workflow_id: 'sbp_intake_questions' },
+      { timeout: REQUEST_TIMEOUT_MS, maxRetries: SDK_RETRIES },
+    );
   }
   return sharedClient.chat.completions;
 }
