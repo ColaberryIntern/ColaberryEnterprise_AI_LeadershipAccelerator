@@ -22,6 +22,10 @@ const AdminRevenueRoomPage = lazy(() => import('../pages/admin/AdminRevenueRoomP
 // clicking a card, never from the sidebar, and a nav entry for a page that needs a
 // :cardKey would link to nothing.
 const AdminRevenueRoomDrilldownPage = lazy(() => import('../pages/admin/AdminRevenueRoomDrilldownPage'));
+// R16 - the Revenue Flow dashboard. Its own top-level path rather than a child of
+// /admin/revenue-room, because that prefix already owns a ':cardKey' param route which
+// would shadow any literal sibling placed under it.
+const AdminRevenueFlowPage = lazy(() => import('../pages/admin/AdminRevenueFlowPage'));
 const AdminRefundsPage = lazy(() => import('../pages/admin/AdminRefundsPage'));
 const AdminSettingsPage = lazy(() => import('../pages/admin/AdminSettingsPage'));
 const AdminCapeSettingsPage = lazy(() => import('../pages/admin/AdminCapeSettingsPage'));
@@ -244,6 +248,7 @@ const adminRoutes = (
           element={<Navigate to="/admin/revenue-room" replace />}
         />
         <Route path="/admin/revenue-room" element={<AdminRevenueRoomPage />} />
+        <Route path="/admin/revenue-flow" element={<AdminRevenueFlowPage />} />
         <Route path="/admin/revenue-room/:cardKey" element={<AdminRevenueRoomDrilldownPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />

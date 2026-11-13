@@ -72,6 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     // the backend gate and the sidebar cannot drift the way an unlisted surface can.
     // The API sits under /api/admin/commercialization, which is already classified.
     { path: '/admin/revenue-room', label: 'Revenue Room', icon: 'bank-line' },
+    { path: '/admin/revenue-flow', label: 'Revenue Flow', icon: 'line-chart-line' },
     { path: '/admin/refunds', label: 'Refunds', icon: 'refund-2-line' },
     { path: '/admin/leads', label: 'Leads', icon: 'group-line', section: 'leads' },
     { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line', section: 'leads' },
