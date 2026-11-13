@@ -11,6 +11,7 @@
  * Consumed by: backend/src/scripts/sendFamilyDashboardDaily.js
  */
 const { getBasecampToken } = require('./basecampToken');
+const { vaultRefreshToken } = require('./familyPhotoFeed');
 
 const ACCOUNT_ID = process.env.BASECAMP_ACCOUNT_ID || '3945211';
 const API = `https://3.basecampapi.com/${ACCOUNT_ID}`;
@@ -52,7 +53,10 @@ function fmtDay(dueOn) {
 
 /** Real reachability check for the Hotmail/MS Graph connection (no data read, just a token refresh attempt). */
 async function checkGraphLive() {
-  if (!process.env.MS_GRAPH_CLIENT_ID || !process.env.MS_GRAPH_REFRESH_TOKEN) {
+  // The vault holds the token the backend keeps rotating; the env var goes stale after the first
+  // rotation, so checking it reported a dead connection that was actually fine (fixed 2026-11-13).
+  const refreshToken = vaultRefreshToken();
+  if (!process.env.MS_GRAPH_CLIENT_ID || !refreshToken) {
     return { live: false, reason: 'not configured' };
   }
   try {
@@ -62,7 +66,7 @@ async function checkGraphLive() {
       body: new URLSearchParams({
         client_id: process.env.MS_GRAPH_CLIENT_ID,
         grant_type: 'refresh_token',
-        refresh_token: process.env.MS_GRAPH_REFRESH_TOKEN,
+        refresh_token: refreshToken,
         scope: 'Mail.Read Mail.ReadWrite offline_access',
       }).toString(),
     });
