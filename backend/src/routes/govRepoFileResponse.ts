@@ -25,10 +25,10 @@ const MIME_BY_EXT: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   xls: 'application/vnd.ms-excel',
   rtf: 'application/rtf',
-  txt: 'text/plain; charset=utf-8',
-  md: 'text/markdown; charset=utf-8',
-  html: 'text/html; charset=utf-8',
-  htm: 'text/html; charset=utf-8',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  m4v: 'video/x-m4v',
 };
 
 function extOf(name: string): string {
@@ -62,7 +62,8 @@ export async function serveGovRepoFile(
     if (!bytes) { res.status(404).json({ error: 'That file is no longer in the repo.' }); return; }
 
     const mime = MIME_BY_EXT[extOf(deliverable.name)] ?? 'application/octet-stream';
-    const inline = deliverable.kind === 'pdf' && !opts.download;
+    // PDFs preview inline; video streams inline to the <video> player. Everything else downloads.
+    const inline = (deliverable.kind === 'pdf' || deliverable.kind === 'video') && !opts.download;
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', disposition(inline ? 'inline' : 'attachment', deliverable.name));
     res.setHeader('X-Content-Type-Options', 'nosniff');

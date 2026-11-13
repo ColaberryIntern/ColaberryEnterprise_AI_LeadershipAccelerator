@@ -4,19 +4,19 @@ import { saveBlob } from '../../../../services/artifactViewerTypes';
 import type { GovRepoDeliverable } from '../../../../services/govProjectPortalApi';
 
 /**
- * RepoFileCards — the connected repo's deliverable DOCUMENTS as portfolio-style typed cards, each opening a
- * per-type viewer, reusing the portfolio's KIND_STYLE colour/icon language (the same badges the Showcase uses)
- * and its saveBlob helper. Content is fetched LIVE from the repo through the injected `fetchFile` (the portal or
- * admin route), so nothing is stored. Office/Excel degrade to a download in v1 (as the portfolio's own viewer
- * offers); pdf previews inline, csv/html/text render in-app.
+ * RepoFileCards — the connected repo's deliverable DOCUMENTS and videos as portfolio-style typed cards, each
+ * opening a per-type viewer, reusing the portfolio's KIND_STYLE colour/icon language (the same badges the Showcase
+ * uses) and its saveBlob helper. Content is fetched LIVE from the repo through the injected `fetchFile` (the portal
+ * or admin route), so nothing is stored. Scope (Ali, 2026-11-13): structured documents + video only — no html/md/
+ * text. pdf previews inline, csv renders as a table, video plays inline; Word/PowerPoint/Excel/RTF download.
  */
 
 type RepoKind = GovRepoDeliverable['kind'];
 
-/** Badge styling for a deliverable kind: reuse the portfolio colour+icon, with deliverable-appropriate labels
- *  (text is a real deliverable here, not the Showcase's "wrong format"), plus html which the portfolio lacks. */
+/** Badge styling for a deliverable kind: reuse the portfolio colour+icon, with deliverable-appropriate labels,
+ *  plus video which the portfolio's document taxonomy lacks. */
 function badgeFor(kind: RepoKind): { label: string; color: string; icon: string } {
-  if (kind === 'html') return { label: 'HTML', color: '#0e7490', icon: 'file-code-line' };
+  if (kind === 'video') return { label: 'Video', color: '#7c3aed', icon: 'film-line' };
   const s = KIND_STYLE[kind];
   const LABEL: Record<string, string> = { pdf: 'PDF', csv: 'CSV', spreadsheet: 'Excel', word: 'Word', slides: 'PowerPoint', image: 'Image', text: 'Text', other: 'File' };
   return { label: LABEL[kind] ?? s.label, color: s.color, icon: s.icon };
@@ -75,15 +75,16 @@ const DOWNLOAD_LABEL: Record<string, string> = { word: 'Word', slides: 'PowerPoi
 
 /**
  * RepoFileViewer — a modal that fetches ONE deliverable live and renders it by kind: pdf inline, image inline,
- * html in a script-less sandboxed iframe, csv as a table, text/markdown as a <pre>, and Word/PowerPoint/Excel/
- * other as a download. `fetchFile(path, {download})` is the per-surface blob fetcher.
+ * csv as a table, video in an inline player, and Word/PowerPoint/Excel/RTF/other as a download.
+ * `fetchFile(path, {download})` is the per-surface blob fetcher.
  */
 export function RepoFileViewer(
   { deliverable, fetchFile, onClose }:
   { deliverable: GovRepoDeliverable; fetchFile: (path: string, opts?: { download?: boolean }) => Promise<Blob>; onClose: () => void },
 ): React.ReactElement {
   const kind = deliverable.kind;
-  const inlineKind = kind === 'pdf' || kind === 'image' || kind === 'html' || kind === 'csv' || kind === 'text';
+  const blobUrlKind = kind === 'pdf' || kind === 'image' || kind === 'video';
+  const inlineKind = blobUrlKind || kind === 'csv';
   const [objUrl, setObjUrl] = useState<string | null>(null);
   const [textBody, setTextBody] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,12 +97,12 @@ export function RepoFileViewer(
     fetchFile(deliverable.path)
       .then(async (blob) => {
         if (!live) return;
-        if (kind === 'pdf' || kind === 'image') { made = URL.createObjectURL(blob); setObjUrl(made); }
+        if (blobUrlKind) { made = URL.createObjectURL(blob); setObjUrl(made); }
         else { setTextBody(await blob.text()); }
       })
       .catch(() => { if (live) setError('Could not load this file from the repo.'); });
     return () => { live = false; if (made) { try { URL.revokeObjectURL(made); } catch { /* noop */ } } };
-  }, [deliverable.path, kind, inlineKind, fetchFile]);
+  }, [deliverable.path, kind, inlineKind, blobUrlKind, fetchFile]);
 
   const download = useCallback(() => {
     setDownloading(true);
@@ -117,7 +118,7 @@ export function RepoFileViewer(
   if (error) body = <div className="gps-panel gps-muted" role="alert">{error}</div>;
   else if (kind === 'pdf') body = objUrl ? <iframe title={deliverable.name} src={objUrl} style={{ width: '100%', height: '78vh', border: '1px solid var(--gps-line,#e2e8f2)', borderRadius: 6 }} /> : <div className="gps-muted" aria-busy="true">Loading PDF…</div>;
   else if (kind === 'image') body = objUrl ? <img src={objUrl} alt={deliverable.name} style={{ maxWidth: '100%', borderRadius: 6 }} /> : <div className="gps-muted" aria-busy="true">Loading image…</div>;
-  else if (kind === 'html') body = textBody !== null ? <iframe title={deliverable.name} srcDoc={textBody} sandbox="" style={{ width: '100%', height: '78vh', border: '1px solid var(--gps-line,#e2e8f2)', borderRadius: 6, background: '#fff' }} /> : <div className="gps-muted" aria-busy="true">Loading…</div>;
+  else if (kind === 'video') body = objUrl ? <video controls src={objUrl} style={{ width: '100%', maxHeight: '78vh', borderRadius: 6, background: '#000' }}>Your browser cannot play this video. Download it to watch.</video> : <div className="gps-muted" aria-busy="true">Loading video…</div>;
   else if (kind === 'csv') body = table ? (
     <div style={{ maxHeight: '72vh', overflow: 'auto', border: '1px solid var(--gps-line,#e2e8f2)', borderRadius: 6 }}>
       <table className="gps-small" style={{ borderCollapse: 'collapse', width: '100%' }}>
@@ -133,7 +134,6 @@ export function RepoFileViewer(
       </table>
     </div>
   ) : <div className="gps-muted" aria-busy="true">Loading…</div>;
-  else if (kind === 'text') body = textBody !== null ? <pre className="gps-small" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{textBody}</pre> : <div className="gps-muted" aria-busy="true">Loading…</div>;
   else body = (
     <div className="gps-panel" style={{ textAlign: 'center' }}>
       <RepoFileBadge kind={kind} />
