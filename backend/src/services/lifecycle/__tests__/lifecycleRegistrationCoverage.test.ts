@@ -258,7 +258,7 @@ describe('LC-01 — the set of project-creation sites is derived, not listed', (
       // 221 -> 229: a doc comment was added above `resolveTenantId` in that file. The line number
       // moves whenever anything above the call site does, which is the cost of pinning one -- and
       // worth paying, because the SET is what this guards and the set is unchanged.
-      'services/agentDomain/agentDomainProvisioner.ts:229 Project.findOrCreate(',
+      'services/agentDomain/agentDomainProvisioner.ts:230 Project.findOrCreate(',
       'services/businessProcessSeedService.ts:135 Project.findOrCreate(',
       'services/delivery/leadConversion.ts:175 DeliveryProject.create(',
       // Moved 134 -> 147 -> 154 -> 202: helpers added above this call site (selectsSolutionBuild, then the

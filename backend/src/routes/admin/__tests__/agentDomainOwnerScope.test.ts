@@ -35,9 +35,41 @@ let domainRows: Array<Record<string, unknown>> = [];
 const seenSql: string[] = [];
 const seenBinds: unknown[][] = [];
 
+/**
+ * Rows for the manager-reach query the reader overlays onto every result.
+ *
+ * Seeded per test. An empty list resolves every domain to a refusal, which is the safe default
+ * but says nothing — so a test that cares about reachability states it here.
+ */
+let reachRows: Array<Record<string, unknown>> = [];
+
+/** A domain whose manager can reach their agent: staff role, matching emails, an agent reporting. */
+const reaches = (domainKey: string, email = `${domainKey}@example.test`) => ({
+  domain_key: domainKey,
+  recorded_can_reach: true,
+  org_member_email: email,
+  agents_reporting: 1,
+  bridge_mgmt_role: 'curriculum',
+  bridge_extra_sections: [],
+  bridge_token_email: email,
+  legacy_role: null,
+  legacy_token_email: null,
+});
+
+/** The real shape of Taiwo's blocker: a staff login on one address, the org row on another. */
+const emailMismatch = (domainKey: string) => ({
+  ...reaches(domainKey),
+  recorded_can_reach: false,
+  org_member_email: `${domainKey}-personal@example.test`,
+});
+
 const mockQuery = jest.fn(async (sql: string, opts?: { bind?: unknown[] }) => {
   seenSql.push(sql);
   if (opts?.bind) seenBinds.push(opts.bind);
+  // BEFORE both branches below: the reach query selects FROM agent_domain_projects and joins
+  // org_members, so either of them would swallow it and hand back rows of the wrong shape --
+  // which reads as "every manager is blocked" rather than as a broken fake.
+  if (/recorded_can_reach/i.test(sql)) return reachRows;
   if (/FROM\s+org_members/i.test(sql)) return identityRows;
   if (/FROM\s+agent_domain_projects/i.test(sql)) {
     // Mirror the WHERE: when the query is owner-scoped, only matching rows come back.
@@ -324,6 +356,16 @@ describe('AF2.4 /agent-domains-provisioned reads the database', () => {
   });
 
   it('reports a blocked manager rather than defaulting reachability to true', async () => {
+    // Reachability is COMPUTED and overlaid now, so the test states the access facts instead of
+    // relying on a stored column. It used to assert the blocker matched /admin_users/ -- the prose
+    // of the old stored sentence, which claimed a missing login for three managers who had one.
+    reachRows = [
+      reaches('executive'),
+      reaches('learner_success'),
+      reaches('marketing'),
+      emailMismatch('platform'),
+    ];
+
     const res = await request(app())
       .get('/api/admin/agent-domains-provisioned')
       .set('Authorization', `Bearer ${scopedToken('anyone@example.test')}`);
@@ -331,7 +373,22 @@ describe('AF2.4 /agent-domains-provisioned reads the database', () => {
     expect(res.body.summary.managers_blocked).toBe(1);
     const platform = res.body.domains.find((d: { domain_key: string }) => d.domain_key === 'platform');
     expect(platform.manager_can_reach).toBe(false);
-    expect(platform.manager_blocker).toMatch(/admin_users/);
+    expect(platform.manager_blocker).toBe('org_member_email_mismatch');
+  });
+
+  it('does not default an unknown domain to reachable', async () => {
+    // No reach row at all for these domains. The safe answer is a refusal with a named reason,
+    // never an optimistic true -- defaulting it is how an unprovisioned domain reads as ready.
+    reachRows = [];
+
+    const res = await request(app())
+      .get('/api/admin/agent-domains-provisioned')
+      .set('Authorization', `Bearer ${scopedToken('anyone@example.test')}`);
+
+    for (const d of res.body.domains) {
+      expect(d.manager_can_reach).toBe(false);
+      expect(typeof d.manager_blocker).toBe('string');
+    }
   });
 
   it('a missing lifecycle row is counted, not silently dropped', async () => {

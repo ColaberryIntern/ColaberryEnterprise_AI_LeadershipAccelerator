@@ -34,6 +34,17 @@ import {
 } from './capabilityRecord';
 import { coverageForDomain, renderCoverageSummary } from './coverageMatrix';
 import { planProvision, derivedProjectId } from './agentDomainProvisionPlan';
+import { reachFor } from './managerReachResolver';
+import type { ManagerReachVerdict } from '../access/agentManagerReach';
+
+/**
+ * Reachability is an INPUT to this report, not something it looks up.
+ *
+ * Keeping it a parameter keeps the report pure and synchronous, and it is the honest shape: the
+ * report has no business deciding who can reach what. It used to read two hardcoded registry
+ * fields and state them as current, which is how a stale access answer reached a handoff document.
+ */
+export type ManagerReachMap = Map<string, ManagerReachVerdict>;
 
 /** A value that is genuinely not established, kept distinct from zero. */
 export const UNKNOWN = 'unknown' as const;
@@ -69,17 +80,20 @@ export interface DomainReportRow {
   readonly build_authorization: 'no_authorization';
 }
 
-function rowFor(d: AgentDomain): DomainReportRow {
+function rowFor(d: AgentDomain, reach: ManagerReachMap): DomainReportRow {
   const m = loadDomainMatrix(d.domain_key);
   const c = countsForDomain(d.domain_key);
   const plan = planProvision(d.domain_key);
+  const r = reachFor(reach, d.domain_key);
   return {
     seq: d.seq,
     domain_key: d.domain_key,
     title: d.title,
     accountable_human: m.accountable_human,
-    manager_can_reach_surface: d.can_reach_surface,
-    blocker: d.blocker,
+    // Passed in rather than read off the catalog. These two used to come from hardcoded registry
+    // fields measured once in October, so this report stated a stale access answer as current.
+    manager_can_reach_surface: r.canReach,
+    blocker: r.blocker,
     intended_builder: d.intended_builder,
     intended_builder_state: d.intended_builder_state,
     assignable_planning_state: isAssignablePlanningState(d),
@@ -126,8 +140,10 @@ export interface PhaseReport {
   readonly disclosures: ReadonlyArray<string>;
 }
 
-export function buildPhaseReport(): PhaseReport {
-  const rows = AGENT_DOMAIN_KEYS.map((k) => rowFor(AGENT_DOMAINS.find((d) => d.domain_key === k)!));
+export function buildPhaseReport(reach: ManagerReachMap): PhaseReport {
+  const rows = AGENT_DOMAIN_KEYS.map(
+    (k) => rowFor(AGENT_DOMAINS.find((d) => d.domain_key === k)!, reach),
+  );
   const bucket = loadUnresolvedBucket();
 
   const domained = rows.reduce((n, r) => n + r.legacy_rows_with_disposition, 0);
@@ -178,8 +194,14 @@ export function buildPhaseReport(): PhaseReport {
   };
 }
 
-/** The report as Markdown, for the handoff. Every figure comes from `buildPhaseReport`. */
-export function renderPhaseReportMarkdown(report: PhaseReport = buildPhaseReport()): string {
+/**
+ * The report as Markdown, for the handoff. Every figure comes from `buildPhaseReport`.
+ *
+ * The report is now a REQUIRED argument. It used to default to `buildPhaseReport()`, which was
+ * only possible while reachability was a constant; a default that silently builds its own input
+ * is also how a caller ends up rendering a report it never looked at.
+ */
+export function renderPhaseReportMarkdown(report: PhaseReport): string {
   const h = [
     '| # | Domain | Accountable human | Manager reach | Capabilities | Confirmed | Tools | Legacy | Releases | Stories | Readiness | Authorization |',
     '|---|---|---|---|---|---|---|---|---|---|---|---|',

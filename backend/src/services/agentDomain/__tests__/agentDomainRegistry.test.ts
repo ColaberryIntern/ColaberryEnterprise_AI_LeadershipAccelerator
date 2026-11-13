@@ -4,7 +4,6 @@ import {
   AGENT_DOMAIN_ENTRY_POINT,
   AGENT_DOMAIN_ORG_ID,
   FORBIDDEN_AUTHORITY_FIELDS,
-  blockedDomains,
   getAgentDomain,
   isAssignablePlanningState,
   type AgentDomain,
@@ -111,96 +110,47 @@ describe('intended builder states are honest about outstanding human steps', () 
   });
 });
 
-describe('manager fields are measured, and blockers are named rather than generic', () => {
-  it('every domain resolves a manager identity that looks like an org_members id', () => {
+/**
+ * The block that used to live here asserted the registry's own answer to "can this manager reach
+ * their employee's surface" — seven of ten reachable, three blocked, each with a named blocker.
+ *
+ * Every one of those assertions passed while being wrong in production. The fields were measured
+ * once, on 2026-10-15, and then frozen into source, so the test froze the same stale answer and
+ * defended it. Three managers were recorded as locked out while holding a working scoped login.
+ *
+ * A test over a constant can only prove the constant has not changed. It cannot notice that the
+ * world has. So the reachability assertions are gone, and what replaces them is a guard that the
+ * catalog never starts answering the question again.
+ */
+describe('the catalog does not answer questions about live access', () => {
+  it('carries no reachability field on any domain', () => {
+    // Named explicitly rather than checked by shape: these two are the fields that went stale, and
+    // re-adding either one under any name below should fail here and make someone read the comment.
     for (const d of AGENT_DOMAINS) {
-      expect(d.manager_identity_id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-      expect(d.manager_email).toContain('@');
+      const keys = Object.keys(d);
+      expect(keys).not.toContain('can_reach_surface');
+      expect(keys).not.toContain('blocker');
+      expect(keys).not.toContain('manager_can_reach');
+      expect(keys).not.toContain('manager_blocker');
     }
   });
 
-  it('reachability matches production as measured 2026-10-15: seven of ten, three blocked', () => {
-    // CORRECTED 2026-10-15 from six/four. Taiwo Oludimimu DOES have an admin_users row
-    // (taiwo@colaberry.com, role admin, a legacy full admin). The original 'no login'
-    // finding was a false negative from an EMAIL MISMATCH: his org_members row carries his
-    // personal address, his login is the work one. So admissions is reachable and the split
-    // is SEVEN reachable / THREE blocked (platform, product_experience, sales).
-    expect(AGENT_DOMAINS.filter((d) => d.can_reach_surface)).toHaveLength(7);
-    expect(blockedDomains()).toHaveLength(3);
+  it('exports no helper that filters the catalog by reachability', () => {
+    // `blockedDomains()` was exactly that, and its only caller was this file.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const registry = require('../agentDomainRegistry') as Record<string, unknown>;
+    expect(registry.blockedDomains).toBeUndefined();
   });
 
-  it('exactly six distinct humans can reach a surface, because Ali holds two domains', () => {
-    const reachable = new Set(AGENT_DOMAINS.filter((d) => d.can_reach_surface).map((d) => d.manager_email));
-    expect(reachable.size).toBe(6);
-  });
-
-  it('the three blocked domains are the measured three', () => {
-    // Was four, including admissions. Corrected 2026-10-15: Taiwo has taiwo@colaberry.com with
-    // role admin, so admissions was never blocked -- the original finding matched his org_members
-    // (personal) address against admin_users and read the miss as "no login".
-    expect(blockedDomains().map((d) => d.domain_key).sort())
-      .toEqual(['platform', 'product_experience', 'sales']);
-  });
-
-  it('each of the three has no login under EITHER of their addresses', () => {
-    // The correction raises the obvious question about the remaining three, so it is answered
-    // here rather than left implied. Measured 2026-10-15 via org_members.enrollment_id ->
-    // enrollments.email: kes@colaberry.com, aleem@colaberry.com and roselen@colaberry.com each
-    // have NO admin_users row, under the work address or the org_members one. Unlike admissions,
-    // these three are real.
-    for (const d of blockedDomains()) {
-      expect(d.blocker).toMatch(/^manager_has_no_admin_login:/);
-    }
-  });
-
-  it('a blocked domain always carries a NAMED blocker, and a reachable one carries none', () => {
+  it('still carries the static facts a catalog is for', () => {
+    // The point is not that the registry got smaller. It is that what remains cannot go stale
+    // without this file changing: ids, titles, sequence, planning state.
     for (const d of AGENT_DOMAINS) {
-      if (d.can_reach_surface) {
-        expect(d.blocker).toBeNull();
-      } else {
-        expect(d.blocker).toBeTruthy();
-        // Named, not generic: it must open with a snake_case reason CODE and then say what is
-        // missing and who it belongs to. An earlier version asserted the single literal
-        // 'manager_has_no_admin_login', which broke the moment a domain turned out to have a
-        // SECOND, worse blocker -- admissions, where no /api/admin/admissions prefix is mapped in
-        // mgmtSectionGate, so a scoped login would still 403. Asserting one literal would have
-        // pushed the honest finding back out of the data to keep the test green.
-        expect(d.blocker).toMatch(/^manager_[a-z_]+:/);
-        expect(d.blocker!.length).toBeGreaterThan(60);
-      }
+      expect(typeof d.domain_key).toBe('string');
+      expect(typeof d.title).toBe('string');
+      expect(typeof d.manager_identity_id).toBe('string');
+      expect(typeof d.seq).toBe('number');
     }
-  });
-
-  it('each blocker names its own manager, so it is not one copied string', () => {
-    // REWRITTEN 2026-10-15, and the reason matters. This used to require MORE THAN ONE distinct
-    // reason code, because admissions carried a second, worse one. With admissions corrected to
-    // reachable, the remaining three share one genuine reason -- they have no admin login -- so
-    // demanding variety would now push me to INVENT a distinction to keep the test green. That is
-    // the exact dishonesty the original test was written to prevent, inverted.
-    //
-    // The real protection was never "different codes", it was "not one copied string". So assert
-    // that: every blocker is distinct, and each names its own manager.
-    const blockers = blockedDomains().map((d) => d.blocker!);
-    expect(new Set(blockers).size).toBe(blockers.length);
-    for (const d of blockedDomains()) {
-      const surname = d.manager_email.split('@')[0];
-      expect(d.blocker!.toLowerCase()).toContain(surname.slice(0, 4).toLowerCase());
-    }
-  });
-
-  it('admissions is REACHABLE, and the old two-failure blocker is gone', () => {
-    // This test used to assert the blocker contained 'no admin_users row'. That claim was FALSE:
-    // Taiwo has taiwo@colaberry.com, role admin, a legacy full admin. The test was GREEN while
-    // pinning a wrong finding, which is the failure mode worth naming rather than quietly
-    // rewriting. The trap was an email mismatch, recorded in the registry source.
-    const a = getAgentDomain('admissions')!;
-    expect(a.can_reach_surface).toBe(true);
-    expect(a.blocker).toBeNull();
-  });
-
-  it('POSITIVE CONTROL: a blocked domain with a null blocker fails the pairing', () => {
-    const bad = fixture({ can_reach_surface: false, blocker: null });
-    expect(bad.can_reach_surface === false && bad.blocker === null).toBe(true);
   });
 });
 

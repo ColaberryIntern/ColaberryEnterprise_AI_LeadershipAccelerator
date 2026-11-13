@@ -62,6 +62,8 @@ import {
   derivedProjectId,
   planProvision,
 } from '../../services/agentDomain/agentDomainProvisionPlan';
+import { reachFor, resolveManagerReach } from '../../services/agentDomain/managerReachResolver';
+import type { ManagerReachVerdict } from '../../services/access/agentManagerReach';
 import {
   loadAgentDomainBuildAuthorizationsByDomain,
   resolveAgentDomainBuildAuthorization,
@@ -101,11 +103,17 @@ function badRequest(res: Response, err: z.ZodError): void {
 /**
  * The shape every caller sees, with no applicant data in it.
  *
- * `manager_can_reach` and `blocker` are passed through exactly as measured. Neither is defaulted:
- * a false reachability with a named reason is the finding, and defaulting it to `true` would turn
- * four real blockers into silent readiness.
+ * `manager_can_reach` and `blocker` are COMPUTED per request and passed in, never read from the
+ * catalog. They used to come from two hand-typed fields on the registry entry, under a comment
+ * claiming they were measured; they were measured once, in October, and then went stale while
+ * this endpoint kept serving them as current. Three managers were reported as locked out here
+ * while holding a working scoped login.
+ *
+ * Still not defaulted, for the original reason: a false reachability with a named reason is the
+ * finding, and defaulting it to `true` would turn a real blocker into silent readiness. That is
+ * why `reachFor` answers a missing row with a refusal rather than an optimistic `true`.
  */
-function publicDomainView(domainKey: string) {
+function publicDomainView(domainKey: string, reach: ManagerReachVerdict) {
   const d = getAgentDomain(domainKey)!;
   const counts = countsForDomain(domainKey);
   return {
@@ -113,8 +121,11 @@ function publicDomainView(domainKey: string) {
     title: d.title,
     seq: d.seq,
     manager_identity_id: d.manager_identity_id,
-    manager_can_reach: d.can_reach_surface,
-    blocker: d.blocker,
+    manager_can_reach: reach.canReach,
+    blocker: reach.blocker,
+    // The mechanism, which the old boolean could not express: a manager who gets in ONLY via a
+    // legacy full-admin login reads as healthy while their scoped path is broken.
+    manager_reach_via: reach.via,
     agent_id: d.agent_id,
     // The STATE, never the name. See the section split in this file's header.
     intended_builder_state: d.intended_builder_state,
@@ -165,28 +176,38 @@ function guarded(
 router.get(
   '/api/admin/agent-domains',
   requireSection('program'),
-  (_req: Request, res: Response) => {
+  guarded(async (_req: Request, res: Response) => {
+    // ONE resolve for the whole list rather than one per domain: the facts come from a single
+    // query, and ten copies of it would make the endpoint's cost scale with the catalog.
+    const reach = await resolveManagerReach(sequelize);
+    const views = AGENT_DOMAIN_KEYS.map((k) => publicDomainView(k, reachFor(reach, k)));
     res.json({
-      domains: AGENT_DOMAIN_KEYS.map((k) => publicDomainView(k)),
+      domains: views,
       total: AGENT_DOMAINS.length,
-      // Said out loud rather than left to inference from four null blockers.
-      reachable: AGENT_DOMAINS.filter((d) => d.can_reach_surface).length,
-      blocked: AGENT_DOMAINS.filter((d) => !d.can_reach_surface).length,
+      // Said out loud rather than left to inference from the blockers. Counted off the COMPUTED
+      // views, so the totals cannot disagree with the rows directly above them -- they used to be
+      // filtered from the catalog independently, which is two chances to be wrong instead of one.
+      reachable: views.filter((v) => v.manager_can_reach).length,
+      blocked: views.filter((v) => !v.manager_can_reach).length,
+      // A manager who reaches the page only through a legacy full-admin login is not the same as
+      // one whose own scoped role works, and a reachable count cannot say so.
+      reachable_only_via_legacy: views.filter((v) => v.manager_reach_via === 'legacy').length,
     });
-  },
+  }),
 );
 
 router.get(
   '/api/admin/agent-domains/:domainKey',
   requireSection('program'),
-  (req: Request, res: Response) => {
+  guarded(async (req: Request, res: Response) => {
     const parsed = DomainParam.safeParse(req.params);
     if (!parsed.success) return badRequest(res, parsed.error);
     const key = parsed.data.domainKey;
     const m = loadDomainMatrix(key);
     const plan = planProvision(key);
+    const reach = await resolveManagerReach(sequelize);
     res.json({
-      ...publicDomainView(key),
+      ...publicDomainView(key, reachFor(reach, key)),
       accountable_human: m.accountable_human,
       researched_at: m.researched_at,
       releases: plan.releases.map((r) => ({ cluster: r.cluster, title: r.title, position: r.position })),
@@ -204,7 +225,7 @@ router.get(
         + 'stage, release and story counts, verified count, authorization count -- call '
         + 'GET /api/admin/agent-domains-provisioned, which queries it.',
     });
-  },
+  }),
 );
 
 /** The capability -> story coverage matrix for one domain. */
@@ -403,8 +424,9 @@ router.get(
 
     const m = loadDomainMatrix(key);
     const plan = planProvision(key);
+    const reach = await resolveManagerReach(sequelize);
     res.json({
-      ...publicDomainView(key),
+      ...publicDomainView(key, reachFor(reach, key)),
       accountable_human: m.accountable_human,
       researched_at: m.researched_at,
       releases: plan.releases.map((r) => ({ cluster: r.cluster, title: r.title, position: r.position })),

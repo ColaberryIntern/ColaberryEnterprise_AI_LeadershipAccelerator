@@ -67,24 +67,34 @@ describe('the ADR describes the fourth project shape', () => {
     expect(adr).toContain('publishBuild');
   });
 
-  it('it names the measured reachability rather than a remembered figure', () => {
-    expect(adr).toMatch(/seven of ten/i);
-    expect(adr).toMatch(/three carry a named blocker/i);
+  /**
+   * The two tests that used to live here pinned the ADR's reachability figure, once as a literal
+   * and once derived from the registry so the two could not drift. Both passed while the figure
+   * was wrong: the registry and the document agreed with each other and with neither production
+   * nor the code. Parity between two frozen copies is not accuracy.
+   *
+   * So the ADR no longer states a figure, and these assert that it does not — and that it points
+   * at where the answer is computed instead.
+   */
+  it('states NO reachability figure, because any figure it states goes stale', () => {
+    expect(adr.toLowerCase()).not.toMatch(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten) of ten domains have a manager/);
+    expect(adr.toLowerCase()).not.toMatch(/carry a named blocker\./);
   });
 
-  it('THE ADR FIGURE AGREES WITH THE REGISTRY, rather than being a literal of its own', () => {
-    // This test previously asserted the ADR said "six of ten" and PASSED while the registry had
-    // moved to seven, because asserting a literal is not a parity check. Derive both sides.
-    const reachable = AGENT_DOMAINS.filter((d) => d.can_reach_surface).length;
-    const blocked = AGENT_DOMAINS.length - reachable;
-    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
-    expect(adr.toLowerCase()).toContain(`${words[reachable]} of ten`);
-    expect(adr.toLowerCase()).toContain(`${words[blocked]} carry a named blocker`);
+  it('names where reachability IS computed, so the reader has somewhere to go', () => {
+    expect(adr).toContain('resolveManagerReach');
+    expect(adr).toContain('managerReachResolver.ts');
   });
 
-  it('it records the email-mismatch correction rather than silently restating the new figure', () => {
+  it('records BOTH email-mismatch corrections, including that the second repeated the first', () => {
+    // The October correction is kept rather than tidied away: it is the same mistake that recurred,
+    // and a document that only records the latest answer teaches nobody why it was wrong.
     expect(adr).toMatch(/email mismatch/i);
-    expect(adr).toContain('org_members.enrollment_id');
+    expect(adr).toContain('org_members');
+    expect(adr).toMatch(/2026-10-08/);
+    expect(adr).toMatch(/2026-11-12/);
+    // The actual finding: the requirement everyone reasoned from was never the requirement.
+    expect(adr.toLowerCase()).toContain('was never the');
   });
 
   it('it discloses the open gates this shape inherits without claiming to fix them', () => {

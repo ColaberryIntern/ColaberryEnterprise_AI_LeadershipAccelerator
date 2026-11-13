@@ -610,15 +610,26 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
 
     beforeEach(async () => { await wipe(plan().project_id); });
 
-    it('a fresh provision writes both columns, not NULL', async () => {
+    /**
+     * INVERTED on 2026-11-13, and the inversion is the fix rather than a regression.
+     *
+     * This used to assert that a fresh provision wrote both columns rather than NULL, because an
+     * earlier bug left all ten anchors NULL. The repair bound them from the plan — and the plan
+     * copied them from two hardcoded registry fields, so every provision and every reconcile wrote
+     * one October measurement back over the database as though it were current.
+     *
+     * The columns are a derived cache of `resolveManagerReach` now. NULL on insert means "not yet
+     * computed", which is honest, and `reconcileAnchorMetadata` is what fills it.
+     */
+    it('a fresh provision leaves both columns NULL, because the provisioner does not measure access', async () => {
       await provisionDomain({ sequelize, provisionedBy: PROVISIONED_BY }, DOMAIN);
       const rows = await sequelize.query<{ manager_can_reach: boolean | null; manager_blocker: string | null }>(
         `SELECT manager_can_reach, manager_blocker FROM agent_domain_projects WHERE domain_key = $1`,
         { bind: [DOMAIN], type: QueryTypes.SELECT },
       );
       expect(rows).toHaveLength(1);
-      expect(rows[0].manager_can_reach).not.toBeNull();
-      expect(rows[0].manager_can_reach).toBe(plan().manager_can_reach);
+      expect(rows[0].manager_can_reach).toBeNull();
+      expect(rows[0].manager_blocker).toBeNull();
     });
 
     it('RECONCILE repairs a row that already landed NULL', async () => {
@@ -636,7 +647,12 @@ describeIfDb('T14 — provisioning is idempotent and race-safe', () => {
         `SELECT manager_can_reach FROM agent_domain_projects WHERE domain_key = $1`,
         { bind: [DOMAIN], type: QueryTypes.SELECT },
       );
-      expect(rows[0].manager_can_reach).toBe(plan().manager_can_reach);
+      // A BOOLEAN, not a specific value. Reconcile now fills this from the live access chain, so
+      // the expected value depends on what rows this database holds for the manager -- asserting a
+      // particular answer here would re-import the frozen expectation this change removed. What the
+      // reconcile owes is that the cell stops being NULL; which boolean it is belongs to
+      // `agentManagerReach.test.ts`.
+      expect(typeof rows[0].manager_can_reach).toBe('boolean');
     });
 
     it('a SECOND reconcile changes nothing, and says so', async () => {

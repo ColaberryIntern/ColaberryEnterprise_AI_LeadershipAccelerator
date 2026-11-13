@@ -47,6 +47,7 @@
  */
 import { QueryTypes, type Sequelize } from 'sequelize';
 import { AGENT_DOMAIN_ORG_ID } from './agentDomainRegistry';
+import { reachFor, resolveManagerReach } from './managerReachResolver';
 
 export interface ProvisionedDomainRow {
   readonly domain_key: string;
@@ -194,14 +195,38 @@ export async function resolveOwnerIdentityIds(
   return [...new Set(rows.map((r) => r.id))];
 }
 
+/**
+ * Overlay the COMPUTED manager reach onto rows that selected the stored columns.
+ *
+ * `adp.manager_can_reach` and `adp.manager_blocker` are a derived cache now: `reconcileAnchorMetadata`
+ * refreshes them, and between refreshes they are exactly as stale as they were when this whole
+ * problem started. Every read surface therefore computes instead, and the stored columns stay in
+ * the SELECT only so a mismatch is visible to anyone comparing the two.
+ *
+ * Applied in each loader rather than inside `BASE_SQL` because the judgement is not expressible in
+ * SQL: which sections a management role grants lives in `MGMT_ROLE_DEFS`, in TypeScript.
+ */
+async function withComputedReach(
+  sequelize: Sequelize,
+  rows: ProvisionedDomainRow[],
+): Promise<ProvisionedDomainRow[]> {
+  if (!rows.length) return rows;
+  const reach = await resolveManagerReach(sequelize);
+  return rows.map((r) => {
+    const v = reachFor(reach, String(r.domain_key));
+    return { ...r, manager_can_reach: v.canReach, manager_blocker: v.blocker };
+  });
+}
+
 /** Every provisioned domain, unscoped. */
 export async function loadProvisionedDomains(
   sequelize: Sequelize,
 ): Promise<ProvisionedDomainRow[]> {
-  return sequelize.query<ProvisionedDomainRow>(
+  const rows = await sequelize.query<ProvisionedDomainRow>(
     `${BASE_SQL} ORDER BY adp.domain_key`,
     { type: QueryTypes.SELECT },
   );
+  return withComputedReach(sequelize, rows);
 }
 
 /**
@@ -217,12 +242,13 @@ export async function loadProvisionedDomainsForOwner(
   identityIds: readonly string[],
 ): Promise<ProvisionedDomainRow[]> {
   if (!identityIds.length) return [];
-  return sequelize.query<ProvisionedDomainRow>(
+  const rows = await sequelize.query<ProvisionedDomainRow>(
     `${BASE_SQL}
       WHERE adp.manager_identity_id = ANY($1::text[])
       ORDER BY adp.domain_key`,
     { bind: [[...identityIds]], type: QueryTypes.SELECT },
   );
+  return withComputedReach(sequelize, rows);
 }
 
 /**
@@ -271,12 +297,13 @@ export async function loadProvisionedDomainsForBuilder(
   );
   if (names.length !== 1) return [];
 
-  return sequelize.query<ProvisionedDomainRow>(
+  const rows = await sequelize.query<ProvisionedDomainRow>(
     `${BASE_SQL}
       WHERE lower(btrim(adp.intended_builder)) = lower(btrim($1))
       ORDER BY adp.domain_key`,
     { bind: [names[0].display_name], type: QueryTypes.SELECT },
   );
+  return withComputedReach(sequelize, rows);
 }
 
 /**

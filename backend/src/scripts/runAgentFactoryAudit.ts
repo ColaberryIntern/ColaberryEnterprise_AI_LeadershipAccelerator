@@ -17,7 +17,7 @@ import { sequelize } from '../config/database';
 import {
   assess, render, type BuildRow, type ManagerRow, type SpineRow,
 } from './lib/agentFactoryAudit';
-import { assessManagerReach, type ManagerAccessFacts } from './lib/agentManagerReach';
+import { resolveManagerReach } from '../services/agentDomain/managerReachResolver';
 
 /**
  * The governance path, in the order a request actually travels it.
@@ -50,97 +50,25 @@ async function builds(): Promise<BuildRow[]> {
   );
 }
 
-/** One row of raw access facts per domain. Every judgement on them happens in the pure module. */
-interface ManagerFactRow {
-  domain_key: string;
-  recorded_can_reach: boolean | null;
-  org_member_email: string | null;
-  agents_reporting: number | string | null;
-  bridge_mgmt_role: string | null;
-  bridge_extra_sections: unknown;
-  bridge_token_email: string | null;
-  legacy_role: string | null;
-  legacy_token_email: string | null;
-}
-
 /**
- * Fetch what the access chain actually depends on, for every domain's manager.
+ * The manager rows, computed by the shared resolver.
  *
- * This replaces reading `manager_can_reach`. That column was wrong on three of ten rows when
- * checked on 12 November 2026, and this audit's first version reported it as fact — so the
- * answer is now derived from the same inputs the request passes through:
- *
- *   - `org_members.email`, the EXACT string `requireAgentManagerOrAdmin` matches the token
- *     against (`manager_identity_id` is an `org_members.id`, not a platform identity, which a
- *     zero-row join proved the hard way).
- *   - the staff `community_members` row behind the bridge mint, and the enrollment email its
- *     token would carry. `ORDER BY (mgmt_role IS NOT NULL) DESC` because a person may hold
- *     several enrollments and only one of them is the staff one.
- *   - the legacy `admin_users` row, which mints a token with NO `mgmt_role` and therefore skips
- *     the section gate entirely.
- *   - how many agents name them as `reports_to`, the only part of the downstream check an audit
- *     can see without a specific agent id.
+ * The query and the mapping used to live in this file. They moved to
+ * `services/agentDomain/managerReachResolver.ts` once the admin read surfaces needed the same
+ * answer: two copies of "can this manager reach their agent" is how two surfaces come to
+ * contradict each other in front of the same person.
  */
 async function managerFacts(): Promise<ManagerRow[]> {
-  const rows = await sequelize.query<ManagerFactRow>(
-    `SELECT p.domain_key,
-            p.manager_can_reach AS recorded_can_reach,
-            om.email            AS org_member_email,
-            (SELECT COUNT(*) FROM ai_agents a
-              WHERE a.reports_to_org_member_id::text = om.id::text) AS agents_reporting,
-            b.mgmt_role         AS bridge_mgmt_role,
-            b.mgmt_extra_sections AS bridge_extra_sections,
-            b.email             AS bridge_token_email,
-            au.role             AS legacy_role,
-            au.email            AS legacy_token_email
-       FROM agent_domain_projects p
-       LEFT JOIN org_members om ON om.id::text = p.manager_identity_id::text
-       LEFT JOIN LATERAL (
-         SELECT cm.mgmt_role, cm.mgmt_extra_sections, e.email
-           FROM enrollments e
-           JOIN community_members cm ON cm.enrollment_id = e.id
-          WHERE LOWER(e.email) = LOWER(om.email)
-            AND cm.role = 'staff'
-            AND cm.mgmt_role IS NOT NULL
-          ORDER BY (cm.mgmt_role IS NOT NULL) DESC
-          LIMIT 1
-       ) b ON TRUE
-       LEFT JOIN admin_users au ON LOWER(au.email) = LOWER(om.email)
-      ORDER BY p.domain_key`,
-    { type: QueryTypes.SELECT },
-  );
-
-  return (rows ?? []).map((r) => {
-    const facts: ManagerAccessFacts = {
-      domainKey: String(r.domain_key),
-      orgMemberEmail: r.org_member_email ?? null,
-      agentsReporting: Number(r.agents_reporting ?? 0),
-      bridge: r.bridge_mgmt_role && r.bridge_token_email
-        ? {
-          mgmtRole: r.bridge_mgmt_role,
-          // A Postgres text[] that may be null or empty (two managers currently hold
-          // `{agents}`). Guarded rather than cast because the pure module drops anything that
-          // is not a real section key, so an unexpected value narrows access, never widens it.
-          extraSections: Array.isArray(r.bridge_extra_sections)
-            ? r.bridge_extra_sections.map((x) => String(x))
-            : [],
-          tokenEmail: r.bridge_token_email,
-        }
-        : null,
-      legacy: r.legacy_role && r.legacy_token_email
-        ? { role: r.legacy_role, tokenEmail: r.legacy_token_email }
-        : null,
-      recordedCanReach: r.recorded_can_reach === true,
-    };
-    const verdict = assessManagerReach(facts);
-    return {
-      domain_key: verdict.domainKey,
-      recorded_can_reach: facts.recordedCanReach,
-      can_reach: verdict.canReach,
-      blocker: verdict.blocker,
-      via: verdict.via,
-    };
-  });
+  const reach = await resolveManagerReach(sequelize);
+  return [...reach.values()]
+    .sort((a, b) => a.domainKey.localeCompare(b.domainKey))
+    .map((v) => ({
+      domain_key: v.domainKey,
+      recorded_can_reach: v.recordedCanReach,
+      can_reach: v.canReach,
+      blocker: v.blocker,
+      via: v.via,
+    }));
 }
 
 /**
