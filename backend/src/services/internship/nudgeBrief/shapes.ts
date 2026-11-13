@@ -40,6 +40,7 @@
 import { classifyEmail } from '../portfolioReport/timeline';
 import type { Communication, SidecarIntern, SidecarNext } from '../portfolioReport/sidecar/types';
 import { sanitizeInherited } from './inherited';
+import type { EscalationWarrant } from './escalationGate';
 import type { BriefDeadline } from './types';
 
 /** What this message is about. Exactly one is chosen, and it decides every line. */
@@ -47,6 +48,9 @@ export type Focus =
   | 'answer_owed'
   | 'deadline_at_risk'
   | 'no_project'
+  /** Nothing built, and said plainly. No exit offered, because none has been earned. */
+  | 'not_started_yet'
+  /** Nothing built, and the relationship itself raised. Requires an `ultimatum` warrant. */
   | 'never_started'
   | 'stalled'
   | 'artifact_gap';
@@ -68,13 +72,29 @@ export const days = (n: number) => `${nf(Math.abs(n))} ${Math.abs(n) === 1 ? 'da
  * A deadline no longer silently overrides everything: someone who has never started is told that
  * starting is the problem, not given a countdown to a date they cannot reach. That ordering was
  * how Anamelechi got a cheerful "14 days to your case study package" with 0 of 16 stories built.
+ *
+ * ## The warrant decides how hard the hard case is allowed to be
+ *
+ * `never_started` is the one shape here that puts the relationship on the table: it offers four
+ * outs, one of which is leaving, and tells them silence is the answer we cannot work with. That is
+ * sometimes exactly right and it is never right by default, so it is now gated on
+ * `escalationWarrant`. Without an `ultimatum` warrant the same facts produce `not_started_yet`,
+ * which says nothing has been built just as plainly and asks what is in the way instead of asking
+ * whether they are still here.
+ *
+ * A missing warrant means `none`, so every existing caller gets the gentler shape until it says
+ * otherwise. See `escalationGate.ts` for the message this exists because of.
  */
-export function chooseFocus(i: SidecarIntern, deadline: BriefDeadline | null): Focus {
+export function chooseFocus(
+  i: SidecarIntern,
+  deadline: BriefDeadline | null,
+  warrant?: EscalationWarrant | null,
+): Focus {
   if (i.triage.tier === 'blocked_waiting_on_ali') return 'answer_owed';
   if (!i.project) return 'no_project';
 
   const nothingEverBuilt = (i.stories_verified ?? 0) === 0 && (i.counts?.commits ?? 0) === 0;
-  if (nothingEverBuilt) return 'never_started';
+  if (nothingEverBuilt) return warrant?.level === 'ultimatum' ? 'never_started' : 'not_started_yet';
 
   if (deadline && deadline.daysLeft <= 14 && deadline.outstanding.length > 0) return 'deadline_at_risk';
   if ((i.days_since_build_work ?? 0) >= 4) return 'stalled';
@@ -142,14 +162,19 @@ export function lead(i: SidecarIntern, focus: Focus, nowMs: number): string[] {
 
   const built = i.percent_built;
   const verified = i.stories_verified ?? 0;
-  if (focus !== 'no_project' && focus !== 'never_started' && built !== null && verified > 0) {
+  if (focus !== 'no_project' && focus !== 'never_started' && focus !== 'not_started_yet' && built !== null && verified > 0) {
     const recent = (i.days_since_build_work ?? 99) <= 3 ? ', and you were committing this week' : '';
     return [`Your build on ${i.project?.name ?? i.track_label} is ${nf(built)} percent through${recent}.`];
   }
 
   switch (focus) {
     case 'no_project':
-      return ['I want to get your project settled, because everything else waits on it.'];
+      // Owns it. The old opening, "I want to get your project settled", sounds neutral and reads
+      // as a reminder to somebody who has been waiting on us, because the thing that is not
+      // settled is ours to settle.
+      return ['You do not have a project assigned yet, and that is on us rather than on you.'];
+    case 'not_started_yet':
+      return ['A straightforward one about where your build stands.'];
     case 'never_started':
       return ['I am going to be straight with you, because the calendar is not.'];
     default:
@@ -174,10 +199,25 @@ export function theOneThing(i: SidecarIntern, focus: Focus, deadline: BriefDeadl
       ];
     }
 
+    /**
+     * Says the same fact without assigning it to them.
+     *
+     * "there is still no project on your name" is grammatically neutral and lands as an accusation,
+     * because the sentence names the person and omits the agent. On 12 November an intern in
+     * exactly this state was asked to account for screenshots of an app she had never been given,
+     * and the premise came from here.
+     */
     case 'no_project':
       return [
-        `It is day ${i.day ?? 'this far in'} and there is still no project on your name. The build, the stories and the artifacts all hang off it, so none of them can start until it does.`,
+        `It is day ${i.day ?? 'this far in'} and we have not put a project on your name. The build, the stories and the artifacts all hang off it, so none of them can start until we do.`,
       ];
+
+    case 'not_started_yet': {
+      const dl = deadline ? ` Your case study package is dated ${longDate(deadline.dueOn)}.` : '';
+      return [
+        `Nothing has been built on ${i.project?.name ?? 'your project'} yet. No verified story and no commit.${dl} I would rather find out what is in the way than keep sending you reminders about the date.`,
+      ];
+    }
 
     case 'never_started': {
       const dl = deadline ? ` Your case study package is dated ${longDate(deadline.dueOn)}, and that is not enough time to build the system and record six presentations on top of it.` : '';
@@ -230,6 +270,11 @@ export function nextAction(i: SidecarIntern, focus: Focus, deadline: BriefDeadli
     case 'no_project':
       return ['Send me one paragraph on what you want to build and who it is for. One paragraph is enough to pick it; I will do the rest.'];
 
+    case 'not_started_yet':
+      return [
+        'Tell me what is in the way. Whether the setup did not work, the first story is not clear, or you have not known where to begin, any of those is something I can fix this week.',
+      ];
+
     case 'never_started':
       return [
         'Tell me which of these is true, in your own words. You are blocked on something we have not fixed. The project is wrong for you. The hours are not there at the moment. Or you have not known where to begin.',
@@ -272,8 +317,10 @@ export function wayThrough(focus: Focus, deadline: BriefDeadline | null): string
     }
     case 'never_started':
       return ['Any of those is a fine answer and none of them ends your internship. The one I cannot work with is silence.'];
+    case 'not_started_yet':
+      return ['If the honest answer is that the time has not been there, say that too. I would rather replan around it than keep the original dates and watch them pass.'];
     case 'no_project':
-      return ['If the reason is something other than not having an idea, say that instead and we will deal with the real thing.'];
+      return ['If you would rather I picked one for you from what I know of your track, say so and I will.'];
     case 'stalled':
       return ['If something is in the way, name it and I will clear it rather than ask you again.'];
     default:
@@ -290,6 +337,8 @@ export function close(focus: Focus): string[] {
       return ['Reply today with the day you will have the first one recorded.'];
     case 'no_project':
       return ['Send me the paragraph by Thursday.'];
+    case 'not_started_yet':
+      return ['One line back by Thursday telling me which it is.'];
     case 'never_started':
       return ['One line back, by Thursday.'];
     case 'stalled':
@@ -313,6 +362,8 @@ export function subjectFor(i: SidecarIntern, focus: Focus, deadline: BriefDeadli
       return `${days(deadline!.daysLeft)} to your ${deadline!.what}`;
     case 'no_project':
       return 'Your project, and getting it picked this week';
+    case 'not_started_yet':
+      return `Getting ${i.project?.name ?? i.track_label} started`;
     case 'never_started':
       return 'One honest answer, this week';
     case 'stalled':

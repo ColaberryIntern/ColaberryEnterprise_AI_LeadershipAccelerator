@@ -12,6 +12,7 @@
  * `briefProblems()` asserts all three, and the route refuses to return a brief that fails.
  */
 import type { SidecarIntern, TriageTier } from '../portfolioReport/sidecar/types';
+import type { EscalationWarrant } from './escalationGate';
 
 /** A deadline that is close enough to lead the message with. */
 export interface BriefDeadline {
@@ -99,6 +100,14 @@ export interface NudgeBrief {
    * reply gets left sitting while the queue reports the day as done.
    */
   readonly inboundSince: string | null;
+  /**
+   * How hard this message is allowed to be, and the evidence behind that.
+   *
+   * Carried on the brief rather than recomputed at send time for the same reason `body` is: the
+   * screen shows a warrant and the sender must enforce the one that was shown, not a fresher one
+   * that may have moved. `sendBrief` refuses a body that exceeds it. See escalationGate.ts.
+   */
+  readonly escalation: EscalationWarrant;
   readonly deadline: BriefDeadline | null;
   readonly promises: readonly BriefPromise[];
   readonly subject: string;
