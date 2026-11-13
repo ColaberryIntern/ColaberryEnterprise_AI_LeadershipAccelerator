@@ -393,8 +393,23 @@ export interface CapabilityItem {
   whatItIs?: string;
   whatThisBidGivesUs?: string;
   toDeliver?: string;
+  /** SV2 (additive): on `have`, the matched service's CONFIRMED case studies (empty = none linked yet). */
+  evidence?: CapabilityEvidence[];
+  /** SV2 (additive): on `partial`/`new`, unlinked or differently-linked case studies that may prove it. */
+  possibleProof?: CapabilityPossibleProof[];
+  /** SV2 (additive, only with ENABLE_GOV_FIT_REQUIRE_PROOF): set when an unproven `have` was downgraded. */
+  downgradedFrom?: 'have';
+  downgradeReason?: string;
 }
-export interface CapabilityFitResult { capabilities: CapabilityItem[]; cached: boolean; generatedAt: string; error?: string }
+/** Mirrors backend govCapabilityFit.ts CapabilityEvidence. */
+export interface CapabilityEvidence { caseStudyId: string; title: string; sourceKind: 'inside' | 'outside' }
+/** Mirrors backend govCapabilityFit.ts PossibleProof. */
+export interface CapabilityPossibleProof { caseStudyId: string; title: string; sourceKind: 'inside' | 'outside'; matchedTerms: string[]; linkedElsewhere: boolean }
+export interface CapabilityFitResult {
+  capabilities: CapabilityItem[]; cached: boolean; generatedAt: string; error?: string;
+  /** SV2 (additive): whether proof could be loaded, and whether the unproven-have downgrade was applied. */
+  proof?: { available: boolean; requireProof: boolean };
+}
 
 /** ADVISORY: derive the capabilities the scope needs and assess each against the ACTIVE catalog (have/partial/new).
  *  Growth services are excluded. Fails soft server-side (no key / upstream → the service returns an error). */

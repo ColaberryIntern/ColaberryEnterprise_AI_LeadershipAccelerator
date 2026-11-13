@@ -4,6 +4,7 @@ import {
   type CapabilityItem, type FitAssessment, type CapabilityDecision, type CapabilityDecisionsPayload,
 } from '../../../services/factoryApi';
 import type { GapsResult } from '../govGaps';
+import { FitProofLine } from './FitProofLine';
 
 /**
  * FitCapabilitiesPanel (P3) — Step 3 "Fit". Runs the ADVISORY capability assessment (derive 5-8 capabilities the
@@ -149,6 +150,8 @@ export function FitCapabilitiesPanel({
                       </div>
                       {c.why ? <div className="small text-secondary mt-1">{c.why}</div> : null}
                       {c.rationale ? <div className="small mt-1">{c.rationale}</div> : null}
+                      {c.downgradedFrom ? <div className="small text-warning-emphasis mt-1">Downgraded from "We have it": {c.downgradeReason ?? 'the service has no linked case study'}.</div> : null}
+                      <FitProofLine cap={c} />
                       {c.assessment !== 'have' && (
                         <div className="mt-2 small">
                           {c.whatItIs ? <div><strong>What it is:</strong> {c.whatItIs}</div> : null}
