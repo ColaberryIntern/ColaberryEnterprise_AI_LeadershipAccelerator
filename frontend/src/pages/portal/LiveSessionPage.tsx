@@ -44,7 +44,13 @@ import ProducerStrip from '../../components/portal/ProducerStrip';
  * keep sending it.
  */
 
-type Moment = 'not_started' | 'live' | 'ended' | 'unknown';
+/**
+ * Mirrors `SessionMoment` in `backend/src/services/broadcast/broadcastSessionLinks.ts`. The two
+ * are restated rather than shared because nothing crosses the stacks here, so adding a value
+ * means adding it in both places - and the compiler catching the omission is the point, since a
+ * moment with no copy would render an empty card.
+ */
+type Moment = 'not_started' | 'live' | 'ended' | 'cancelled' | 'unknown';
 
 interface MomentResponse {
   moment: Moment;
@@ -84,6 +90,22 @@ const COPY: Record<Moment, { eyebrow: string; title: string; body: string }> = {
     eyebrow: 'Finished',
     title: 'This class has ended',
     body: 'A replay will appear here if one is published.',
+  },
+  /*
+   * Separate from `ended`, and separate from `not_started`, because both would mislead.
+   *
+   * It used to render as `not_started`: "Leave this page open. It will update on its own when
+   * the class goes live." Every clause of that was false for a cancelled class, and someone who
+   * had just scanned the code would wait for a class that was called off.
+   *
+   * `ended` would be the other easy mistake. It promises a replay, and a cancelled airing never
+   * recorded anything to publish.
+   */
+  cancelled: {
+    eyebrow: 'Canceled',
+    title: 'This class was canceled',
+    body: 'It will not be broadcast, and there will be no replay. Check your schedule for the '
+      + 'next class.',
   },
   unknown: {
     // Deliberately not "something went wrong": the link is fine, we just cannot answer yet.

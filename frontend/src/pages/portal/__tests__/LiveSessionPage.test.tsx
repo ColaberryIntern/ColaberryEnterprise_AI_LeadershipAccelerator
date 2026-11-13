@@ -460,3 +460,111 @@ describe('the body flag that places the player', () => {
     root = { unmount: () => undefined } as unknown as Root;
   });
 });
+
+/**
+ * THE STATE MATRIX, as tests. P1-07's deliverable, and the hole DOC 18 named:
+ * "no test asserts what a viewer actually sees end to end".
+ *
+ * One row per editorial state the broadcast state machine can be in, asserting what a
+ * NON-STAFF viewer gets. The staff view is deliberately not the subject here - the question
+ * these answer is what the room, and anyone who scanned the code, is told.
+ *
+ * `moment` is what the server resolves each editorial state to
+ * (`backend/src/services/broadcast/broadcastSessionLinks.ts`), so these assert the two halves
+ * together: the mapping is covered by the backend's own suite, and this covers what each
+ * resolved moment renders.
+ */
+describe('the state matrix: what a NON-STAFF viewer sees in every state', () => {
+  beforeEach(() => {
+    // Not staff. The producer strip is already asserted absent elsewhere; this is the audience.
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+  });
+
+  /**
+   * BACKSTAGE MUST BE INDISTINGUISHABLE FROM SCHEDULED.
+   *
+   * This is the one row that is a security property rather than a copy choice. Backstage is the
+   * staff rehearsal state: the producer can see the program feed. If a viewer could tell
+   * backstage from scheduled - by a different word, a badge, anything - they would know when
+   * staff were in the room, which is exactly the leak the state was designed to avoid.
+   *
+   * THE FIRST VERSION OF THIS TEST WAS VACUOUS, and a mutation found it. It rendered
+   * `not_started` twice and asserted the two were byte-identical - which compares the state to
+   * itself and proves nothing. Adding "(staff are in the room)" to the waiting copy passed it.
+   *
+   * The two halves of the property live in different places, so they are asserted separately
+   * rather than faked into one test here:
+   *
+   *  - That backstage and scheduled resolve to the SAME moment is a backend fact, covered by the
+   *    sweep in `broadcastSessionLinks.test.ts` over every editorial state.
+   *  - What is left for this surface is that the waiting copy carries no staff vocabulary. By the
+   *    time the page sees it, backstage and scheduled are the same value, so the only way this
+   *    screen can leak is by saying something it should not.
+   */
+  it('leaks no staff vocabulary while a viewer is waiting', async () => {
+    wire('not_started');
+    await render();
+    const waiting = text();
+    for (const word of ['backstage', 'staff', 'rehearsal', 'producer', 'preview', 'program feed']) {
+      expect(waiting.toLowerCase()).not.toContain(word);
+    }
+  });
+
+  it('SCHEDULED: says it has not started and that the page updates itself', async () => {
+    wire('not_started');
+    await render();
+    expect(text()).toContain('This class has not started yet');
+    expect(text()).toContain('It will update on its own');
+    expect(workspace()).toBeNull();
+  });
+
+  it.each(['live', 'reconnecting'])('%s: resolves to live, and the class is on this page', async () => {
+    wire('live', 'https://portal.example/watch');
+    await render();
+    expect(text()).toContain('This class is live now');
+    expect(text()).toContain('Everything for this class is on this page');
+  });
+
+  it.each(['ended', 'processing', 'replay_ready'])(
+    '%s: says the class ended and does not promise a replay that may not exist',
+    async () => {
+      wire('ended');
+      await render();
+      expect(text()).toContain('This class has ended');
+      // "if one is published" - processing can fail back to ended, so a replay is conditional.
+      expect(text()).toContain('if one is published');
+      expect(workspace()).toBeNull();
+    },
+  );
+
+  /**
+   * CANCELLED was the bug this matrix found.
+   *
+   * It used to resolve to `not_started`, so a cancelled class told everyone who scanned the code
+   * "Leave this page open. It will update on its own when the class goes live." Every clause was
+   * false: `cancelled` is terminal and no second occurrence can be minted for the session, so
+   * the page would never update and the class could never go live.
+   *
+   * Both wrong answers are asserted against, not just the right one. Folding it into `ended`
+   * would be the other easy mistake, and that promises a replay that was never recorded.
+   */
+  it('CANCELED: says so, and promises neither a start nor a replay', async () => {
+    wire('cancelled');
+    await render();
+    expect(text()).toContain('This class was canceled');
+    expect(text()).toContain('no replay');
+    expect(text()).not.toContain('has not started yet');
+    expect(text()).not.toContain('It will update on its own');
+    expect(text()).not.toContain('This class has ended');
+    expect(workspace()).toBeNull();
+  });
+
+  it('UNKNOWN: blames the check rather than the link', async () => {
+    // A viewer who meets an error page concludes the link is broken and does not come back.
+    wire('unknown');
+    await render();
+    expect(text()).toContain('We cannot check this class right now');
+    expect(text()).toContain('usually temporary');
+    expect(text()).not.toMatch(/error|failed|broken/i);
+  });
+});
