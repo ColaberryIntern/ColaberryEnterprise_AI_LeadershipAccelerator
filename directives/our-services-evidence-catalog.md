@@ -138,5 +138,5 @@ Other edge cases:
   production.
 - **Public repository:** the design package's three context screenshots were NOT committed (they show staff
   names, a staff email address, browser tabs with personal names and a personal file explorer). The mockup's four
-  sample titles naming a probable client ("ALLIN: ...") were replaced with "Financial client: ...". The AgTech
+  sample titles naming a probable client were replaced with "Financial client: ...". The AgTech
   fixture PDF was inspected (text, metadata, rendered pages): it names no client and no person.
