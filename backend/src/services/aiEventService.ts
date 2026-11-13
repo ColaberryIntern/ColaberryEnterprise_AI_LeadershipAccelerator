@@ -128,11 +128,52 @@ export async function emitAgentAlert(params: {
 }
 
 /**
+ * In-flight `emitAiEvent` persists. Callers fire emitAiEvent without awaiting it (openaiInstrumented does), so a
+ * one-shot script that closes the Sequelize pool right after its last LLM call used to lose that call's row with
+ * "ConnectionManager.getConnection was called after the connection manager was closed!". Tracking the promises lets
+ * such a script `flushAiEvents()` before closing. The set only ever holds unsettled persists, so it stays small.
+ */
+const pendingAiEvents = new Set<Promise<void>>();
+
+/**
+ * Wait for every in-flight ai_event persist to settle, bounded by `timeoutMs` so a hung insert can never hang the
+ * caller. Never throws (each persist already swallows its own error). Returns how many were pending and whether the
+ * bound was hit. Safe to call repeatedly: with nothing pending it resolves at once.
+ */
+export async function flushAiEvents(timeoutMs = 5000): Promise<{ pending: number; timedOut: boolean }> {
+  const pending = [...pendingAiEvents];
+  if (pending.length === 0) return { pending: 0, timedOut: false };
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), Math.max(0, timeoutMs)); });
+  const settled = Promise.allSettled(pending).then(() => 'settled' as const);
+  const outcome = await Promise.race([settled, timeout]);
+  if (timer) clearTimeout(timer);
+  if (outcome === 'timeout') {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'ai_event_flush_timeout',
+      outcome: 'partial', error_class: 'TimeoutError', context: { pending: pending.length, timeout_ms: timeoutMs },
+    }));
+  }
+  return { pending: pending.length, timedOut: outcome === 'timeout' };
+}
+
+/**
  * Emit a unified AI event (TBI audit P1-1) into the ai_events table — the read model the
  * Trust Command Center queries for cost/traces/outcomes. Non-blocking and swallow-safe:
- * telemetry must never break the action it observes.
+ * telemetry must never break the action it observes. Each persist is tracked until it settles
+ * so `flushAiEvents()` can wait for it.
  */
-export async function emitAiEvent(params: {
+export function emitAiEvent(params: AiEventParams): Promise<void> {
+  const p = persistAiEvent(params);
+  pendingAiEvents.add(p);
+  // persistAiEvent never rejects (it catches), so this cleanup chain cannot produce an unhandled rejection.
+  void p.finally(() => pendingAiEvents.delete(p));
+  return p;
+}
+
+type AiEventParams = Parameters<typeof persistAiEvent>[0];
+
+async function persistAiEvent(params: {
   event_type: string;
   outcome: AiEventOutcome;
   trace_id?: string | null;

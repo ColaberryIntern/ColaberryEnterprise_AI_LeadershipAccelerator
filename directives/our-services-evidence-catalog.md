@@ -140,3 +140,74 @@ Other edge cases:
   names, a staff email address, browser tabs with personal names and a personal file explorer). The mockup's four
   sample titles naming a probable client were replaced with "Financial client: ...". The AgTech
   fixture PDF was inspected (text, metadata, rendered pages): it names no client and no person.
+
+## 9. SV2: evidence score, the summary feed, Fit cites proof, before/after regression
+
+Built in group SV2 (session CC-20261113-s9v4). Backend only; the page that reads the feed is SV3.
+
+### 9.1 Evidence score
+`backend/src/services/factory/serviceEvidenceScore.ts` implements the formula in section 2 exactly. It is pure, and
+the caller passes the current year. Only CONFIRMED links to case studies that are NOT archived count as proof. A
+case study's year is the outside analysis `year` when it is plausible; otherwise it is the year of `approved_at`,
+or failing that the year of `created_at`.
+
+### 9.2 Summary feed
+`GET /api/admin/factory/services/evidence-summary?status=active|growth|all` (default `active`):
+- The route is read-only and uses `requireSection('program')`.
+- The tenant comes from `lookupGovContractsContainer`. If that cannot be resolved, the route returns 503.
+- A bad `status` returns 400.
+- The response is validated against `EvidenceSummarySchema` before it is sent. In dev and test, a mismatch fails loud with a 500. In production it is logged and the response is still served.
+
+The response contains:
+- `services[]`: counts, `evidenceScore` and tier, industries, case-study cards, and `openOpportunityMatches`.
+- `intake[]`: the Intake set, with each item's top 3 suggestions.
+- `industryMatrix`.
+- `growthSeries`: built from real `created_at` and `decided_at` values only, covering at most the last 12 quarters.
+- `decideNow`, with four parts:
+  - blocked case studies (the same set as Intake);
+  - demand without proof (services that open opportunities match but that have a score of 0);
+  - stale services (services with proof, but none from this year or last);
+  - open Fit gaps (taken from the latest completed `gov_ai_vettings` row for each pursuit whose close date is today or later).
+- `opportunityFeed`.
+
+**Null means unknown, never zero:**
+- `openOpportunityMatches` is null unless the live Opportunity Pulse feed answered. The snapshot fallback also gives null.
+- An opportunity with no close date does not count as open.
+- `openFitGaps.count` is null when the vetting read fails.
+
+### 9.3 Fit cites proof (package 1G)
+The Fit route and the ZIP vetting both call `govCapabilityFitWithProof.ts`. Vetting applies it before go/no-go and coverage, so the route, the saved `fit_json` and the verdict all see the same capabilities.
+- **Every `have`** carries `evidence[]`: the matched service's confirmed case studies, at most 5, inside records first. An empty array means no case study is linked yet.
+- **Every `partial`/`new`** carries `possibleProof[]`. These are found by deterministic keyword overlap, with no LLM call:
+  - at least 2 distinct meaningful shared words;
+  - at most 3 results;
+  - a case study already confirmed for the capability's own service is excluded;
+  - `linkedElsewhere` marks a case study that is confirmed for another of this tenant's services.
+- **The prompt** includes confirmed case-study titles inside their own untrusted block, capped at 3 per service, 100 characters per title and 6,000 characters overall. When no service has a confirmed case study, the prompt is byte-identical to the pre-SV2 prompt. A test pins this against a fixture captured from the base commit.
+- **The downgrade.** An unproven `have` becomes `partial`, with `downgradeReason` "service has no linked case study". This runs ONLY when `ENABLE_GOV_FIT_REQUIRE_PROOF=true` (`FLAGS.govFitRequireProof`), which is **off by default**.
+  - Why it ships off: on 2026-11-13 production had 18 published case studies and 0 confirmed links, so turning it on would flip every `have`.
+  - Turn it on once services have confirmed links: set the env var on the backend and restart it.
+  - It is never applied when proof could not be loaded.
+- **Additive only.** `sanitizeCapabilities`, the 80-service cap, the assessment vocabulary and every existing field are unchanged. The result gains `proof: { available, requireProof }`.
+
+### 9.4 Before/after regression (SV2.3, code half)
+`backend/src/scripts/compareCapabilityFitBaseline.ts` takes the SV0.1 `capability_fit_fresh_*.json` and
+`catalog_*.json` files as input.
+- **What it does:**
+  - re-runs the SV2 Fit `RUNS` times per pursuit (default 3);
+  - applies the proof rules with the flag off and on to the same model output;
+  - writes `capability_fit_regression_<date>.json` and a matching `.summary.txt`.
+- **Where it writes:** only to `OUT_DIR`, which must be outside the working directory (default `/tmp/svc-regression`).
+- **Majority rule:** a service counts as `have` after only when 2 of 3 runs agree.
+- **Explanations:** every `have` that is lost gets exactly one reason: `service-no-longer-active`, `downgraded-no-proof` or `model-reassessed`.
+- **Never in the repo:** the output contains pursuit titles and Gov AI verdicts, and the repository is public.
+
+### 9.5 Failure modes (SV2 boundaries)
+
+| Boundary | What happens if it fails | Retry | Recovery | Handled / not handled |
+|---|---|---|---|---|
+| **Opportunity Pulse feed** (summary) | `openOpportunityMatches` null, `opportunityFeed.source` `unavailable` or `snapshot`; the rest of the page loads. | Client: 8 s timeout, one retry, snapshot fallback. | The page re-requests; nothing to repair. | Handled: throw, snapshot, malformed rows. Not handled: a live feed that is stale upstream. |
+| **Vetting read** (summary decideNow) | `openFitGaps.count` null; the rest of the page loads. | None (GET; re-request). | Re-request. | Handled: query failure. |
+| **Catalog / link / case-study reads** (summary) | 500 with a fixed sentence; logged `service_evidence_summary_failed`. | None. | Re-request after the DB recovers. | Not handled: a partial page; without these there is no honest page. |
+| **Proof loader** (Fit) | Logged `gov_fit_proof_load_failed`; the Fit runs exactly as before SV2 (no titles, no proof fields, no downgrade). | None (next Fit call re-reads). | Re-assess Fit. | Handled: any DB error. |
+| **Regression script** | Bad args or unreadable baseline: exits 1 before any DB access. Wrong tenant or no successful run: exits 1, nothing written. A missing pursuit is recorded as `pursuit_not_found`. | The Fit client's single retry. | Re-run (read-only; overwrites its own output files). | Handled: per-run Fit errors (excluded from the vote, counted). |

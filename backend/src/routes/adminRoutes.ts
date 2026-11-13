@@ -153,6 +153,7 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import caseStudyOutsideIntakeRoutes from './admin/caseStudyOutsideIntakeRoutes';
 import serviceProposalRoutes from './admin/serviceProposalRoutes';
+import serviceEvidenceSummaryRoutes from './admin/serviceEvidenceSummaryRoutes';
 // The flow diagram and the delivery stories: the two stages built on a settled decomposition that
 // nothing called until L10.9. Its own router for the same reason as the line above.
 import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
@@ -421,6 +422,9 @@ router.use(caseStudyServiceLinkRoutes);
 router.use(caseStudyOutsideIntakeRoutes);
 // Propose a growth service from a case study; promote growth -> active with proof (Services Upgrade SV1).
 router.use(serviceProposalRoutes);
+// Read-only evidence summary feed for Our Services (Services Upgrade SV2). Under /api/admin/factory -> 'program';
+// the route also carries requireSection('program').
+router.use(serviceEvidenceSummaryRoutes);
 // Nested under /api/admin/factory/contract/:id/, so mgmtSectionGate's existing
 // '/api/admin/factory' -> 'program' PREFIX row already covers these too.
 router.use(factoryDownstreamRoutes);

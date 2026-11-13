@@ -56,6 +56,13 @@ export const FLAGS = {
   // Gov automatic AI checks: when a solicitation ZIP's extraction completes, run capability fit, summary, buyer questions
   // and a go/no-go, and save them to gov_ai_vettings. Advisory: it sets no gate. Off stops new runs; saved results stay.
   govAiVetting: process.env.ENABLE_GOV_AI_VETTING === 'true',
+  // Gov capability fit: "have" must be PROVEN (Services Upgrade SV2.2, package 1G). With it on, a capability the AI
+  // assessed as "have" on a service with ZERO confirmed case-study links is downgraded to "partial" with the reason
+  // "service has no linked case study". Ships DARK (default off), and the default is the decision: on 2026-11-13
+  // production had 18 published case studies and ZERO confirmed service links, so turning it on would flip every
+  // "have" to "partial" and move live go/no-go coverage. Evidence citation and possibleProof ship ON regardless; only
+  // the downgrade waits for links to be confirmed. Read once at boot: set the env var, then restart the backend.
+  govFitRequireProof: process.env.ENABLE_GOV_FIT_REQUIRE_PROOF === 'true',
   // SBP source-overflow BLOCK (P7-T1.3). Ships DARK (default off). With it off, an over-long
   // brief or document is clipped and labelled exactly as it is today; with it on, `sourceBlocks`
   // refuses rather than silently sending the model half a student's brief.

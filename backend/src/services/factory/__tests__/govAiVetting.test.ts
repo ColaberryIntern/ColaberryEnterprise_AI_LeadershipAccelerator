@@ -1,6 +1,6 @@
 const query = jest.fn();
 jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: any[]) => query(...a), define: jest.fn() } }));
-const FLAGS = { govAiVetting: true };
+const FLAGS: Record<string, boolean> = { govAiVetting: true };
 jest.mock('../../../config/featureFlags', () => ({ FLAGS }));
 const vettingUpdate = jest.fn();
 const vettingFindOne = jest.fn();
@@ -21,6 +21,9 @@ const listServices = jest.fn();
 jest.mock('../serviceCatalog', () => ({ listServiceOfferings: (...a: any[]) => listServices(...a) }));
 const fitCall = jest.fn();
 jest.mock('../govCapabilityFit', () => ({ assessCapabilityFit: (...a: any[]) => fitCall(...a) }));
+// SV2.2: the Fit proof loader reads case-study tables; mocked so each test states the proof it runs with.
+const loadProof = jest.fn();
+jest.mock('../govFitProofLoader', () => ({ loadFitProofContext: (...a: any[]) => loadProof(...a) }));
 const goNoGo = jest.fn();
 jest.mock('../govAiGoNoGo', () => ({ generateGoNoGo: (...a: any[]) => goNoGo(...a) }));
 const summary = jest.fn();
@@ -47,6 +50,8 @@ const saved = () => vettingUpdate.mock.calls.map((c) => c[0]);
 beforeEach(() => {
   jest.resetAllMocks();
   FLAGS.govAiVetting = true;
+  FLAGS.govFitRequireProof = false;
+  loadProof.mockResolvedValue({ available: true, evidenceByService: {}, candidates: [] });
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   jobFindOne.mockResolvedValue({ result_json: { candidates: [CAND] } });
   qualFindOne.mockResolvedValue({ get: () => ({ requirements_json: { provenance: { title: 'Saved title', agency: 'Saved agency' } } }) });
@@ -379,5 +384,52 @@ describe('runGovAiVettingCatchup', () => {
     lookupContainer.mockResolvedValue(null);
     expect(await runGovAiVettingCatchup()).toEqual({ retried: 1, backfilled: 0 });
     expect(query.mock.calls.filter(([s]) => /attempts_exhausted/.test(s))).toHaveLength(2);
+  });
+});
+
+describe('runVetting: Fit cites proof (SV2.2), same path as the Fit route', () => {
+  const caps = [{ id: 'CAP-01', name: 'A', assessment: 'have', matchedServiceId: 's1' }, { id: 'CAP-02', name: 'B', assessment: 'new', matchedServiceId: null }];
+
+  it('flag OFF: saved fit_json carries evidence on have and possibleProof on the gap; assessments and coverage unchanged', async () => {
+    claimOk();
+    fitCall.mockResolvedValue({ capabilities: caps });
+    await runVetting(K);
+    const [row] = saved();
+    expect(row.fit_json.capabilities[0]).toMatchObject({ assessment: 'have', evidence: [] });
+    expect(row.fit_json.capabilities[1]).toMatchObject({ assessment: 'new', possibleProof: [] });
+    expect(row.fit_json.proof).toEqual({ available: true, requireProof: false });
+    expect(row.coverage_pct).toBe(50);
+    expect(goNoGo.mock.calls[0][0].capabilities.map((c: any) => c.assessment)).toEqual(['have', 'new']);
+  });
+
+  it('flag ON: the unproven have is downgraded BEFORE go/no-go and the saved row, so every consumer sees the same thing', async () => {
+    FLAGS.govFitRequireProof = true;
+    claimOk();
+    fitCall.mockResolvedValue({ capabilities: caps });
+    await runVetting(K);
+    const [row] = saved();
+    expect(row.fit_json.capabilities[0]).toMatchObject({ assessment: 'partial', downgradedFrom: 'have', downgradeReason: 'service has no linked case study' });
+    expect(goNoGo.mock.calls[0][0].capabilities[0].assessment).toBe('partial');
+  });
+
+  it('flag ON with confirmed proof: the have stays have and cites it', async () => {
+    FLAGS.govFitRequireProof = true;
+    loadProof.mockResolvedValue({ available: true, evidenceByService: { s1: [{ caseStudyId: 'cs', title: 'Proof', sourceKind: 'inside' }] }, candidates: [] });
+    claimOk();
+    fitCall.mockResolvedValue({ capabilities: caps });
+    await runVetting(K);
+    expect(saved()[0].fit_json.capabilities[0]).toMatchObject({ assessment: 'have', evidence: [{ caseStudyId: 'cs', title: 'Proof', sourceKind: 'inside' }] });
+  });
+
+  it('a proof load failure never blocks or changes the vetting', async () => {
+    FLAGS.govFitRequireProof = true;
+    loadProof.mockRejectedValue(new Error('db'));
+    const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    claimOk();
+    fitCall.mockResolvedValue({ capabilities: caps });
+    await runVetting(K);
+    expect(saved()[0]).toMatchObject({ status: 'completed', coverage_pct: 50 });
+    expect(saved()[0].fit_json.capabilities[0]).toEqual(caps[0]);
+    err.mockRestore();
   });
 });
