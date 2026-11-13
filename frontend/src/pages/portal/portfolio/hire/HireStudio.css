@@ -40,6 +40,8 @@
 .hs-req-msg { font-size: 14px; color: var(--muted); margin: 6px 0 0; font-style: italic; }
 .hs-req-acts, .hs-actions, .hs-inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .hs-suggest { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.hs-decline { display: grid; gap: 8px; justify-items: start; }
+.hs-decline .hs-field { width: 100%; margin-bottom: 0; }
 .hs-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .hs-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--sunken); color: var(--body); margin-left: 8px; }
 .hs-pill.ok { color: var(--leaf-text); }

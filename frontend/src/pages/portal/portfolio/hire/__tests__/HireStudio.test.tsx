@@ -92,6 +92,28 @@ it('declines, and suggests a time read in the candidate\'s zone', async () => {
   expect(H.text()).toContain('New time suggested');
 });
 
+it('declines only on the second click, with an optional note the employer will read', async () => {
+  m.actOnHireInterview.mockResolvedValue({ ...REQ, status: 'declined' });
+  await render();
+  H.click('hs-decline');
+  expect(m.actOnHireInterview).not.toHaveBeenCalled();
+  expect(H.text()).toContain('reads this in the email');
+  H.setValue('hs-decline-reason', 'Away that week, any time after the 30th');
+  H.click('hs-decline-send');
+  await H.settle();
+  expect(m.actOnHireInterview).toHaveBeenCalledWith('iv1', 'decline', undefined, 'Away that week, any time after the 30th');
+  expect(H.query('hs-req-iv1')).toBeNull(); // a declined request leaves the active list
+});
+
+it('Suggest a time and Decline never sit open together', async () => {
+  await render();
+  H.click('hs-decline');
+  expect(H.query('hs-decline-reason')).not.toBeNull();
+  H.click('hs-suggest');
+  expect(H.query('hs-decline-reason')).toBeNull();
+  expect(H.query('hs-suggest-when')).not.toBeNull();
+});
+
 it('says so, with a retry, when requests cannot be read, and the rest still works', async () => {
   m.fetchHireInterviews.mockRejectedValue(new Error('500'));
   await render();

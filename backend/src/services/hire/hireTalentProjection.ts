@@ -140,6 +140,17 @@ export function pickSignature(cards: readonly HireCaseStudyCard[]): HireCaseStud
   return ordered[0] ?? null;
 }
 
+/**
+ * The candidate's signature: their ★, the first case study in their saved order that is still
+ * published; with no saved order (or none of it still published), the featured rule above.
+ * The profile and the directory card both use this, so they always agree.
+ */
+export function signatureFor(cards: readonly HireCaseStudyCard[], order: readonly string[]): HireCaseStudyCard | null {
+  const published = new Set(cards.map((c) => c.slug));
+  const starred = order.find((s) => published.has(s));
+  return cards.find((c) => c.slug === starred) ?? pickSignature(cards);
+}
+
 /** Self-reported availability: rendered only when BOTH a known kind and a label are set. */
 export function availabilityOf(facts: HirePageFacts): HireTalentCard['availability'] {
   const kind = AVAILABILITY_KINDS.find((k) => k === facts.availabilityStatus);
@@ -151,10 +162,11 @@ export function toTalentCard(
   portfolio: PublicPortfolio,
   facts: HirePageFacts,
   cases: readonly HireCaseStudyCard[],
+  order: readonly string[] = [],
 ): HireTalentCard {
   const id = portfolio.identity;
   const role = text(id.headline);
-  const signature = pickSignature(cases);
+  const signature = signatureFor(cases, order);
   const caps = (Array.isArray(portfolio.capabilities) ? portfolio.capabilities : [])
     .map((c) => ({ name: String(c.name), proven: c.proven === true }))
     .sort((a, b) => Number(b.proven) - Number(a.proven))

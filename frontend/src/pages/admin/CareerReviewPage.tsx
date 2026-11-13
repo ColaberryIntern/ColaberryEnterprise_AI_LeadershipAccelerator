@@ -7,6 +7,7 @@ import {
   ReviewQueueItem, ReviewDecision, RecordForReview,
 } from '../../services/careerApi';
 import ReviewRecordPreview from './ReviewRecordPreview';
+import HireHeadlineReview from './HireHeadlineReview';
 import './CareerReviewPage.css';
 
 /**
@@ -110,6 +111,9 @@ const CareerReviewPage: React.FC = () => {
       {err && <div className="cr-banner err" role="alert">{err}</div>}
 
       {pagesError && <div className="cr-banner err" role="alert">{pagesError}</div>}
+
+      {/* The headline a candidate proposed in their Hire studio (admins only; hidden for mentors). */}
+      <HireHeadlineReview />
 
       {/* Portfolio pages: the person-level page at /portfolio/:slug. */}
       {pages !== null && pages.length > 0 && (

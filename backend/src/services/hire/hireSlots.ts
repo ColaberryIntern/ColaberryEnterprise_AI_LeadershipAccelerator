@@ -8,12 +8,16 @@
  *                   working session never runs past the block the candidate opened.
  *   removed         anything sooner than `now + min notice`; anything overlapping an interview
  *                   that already holds a time; every slot in a week (Mon-Sun, candidate's zone)
- *                   that already has `max_per_week` holding interviews.
+ *                   that already has `max_per_week` holding interviews; every observed US federal
+ *                   holiday (the candidate's calendar date), from the same calendar the gov build
+ *                   schedule uses, so nobody is booked on Thanksgiving or the 4th of July.
  *
  * Times are computed as WALL-CLOCK in the candidate's zone and converted to UTC per slot, so
  * "Mon 9:00 AM Central" is 14:00Z under CDT and 15:00Z under CST. The conversion is per date,
  * which is what keeps a week that crosses a DST change correct.
  */
+
+import { dayKey, usFederalHolidays } from '../factory/govWorkingDays';
 
 export const BLOCK_HOURS = { morning: [9, 12], afternoon: [12, 17], evening: [17, 20] } as const;
 export type BlockPart = keyof typeof BLOCK_HOURS;
@@ -32,6 +36,15 @@ export const SLOT_STEP_MINUTES = 30;
 export const WINDOW_DAYS = 14;
 const MIN = 60_000;
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * The observed holidays a window starting in `year` can touch. The public endpoint clamps the
+ * start to 60 days out and the window is 14, so it crosses at most one New Year; next year's set
+ * also carries a Saturday New Year's Day observed on 31 December.
+ */
+function holidaysFrom(year: number): Set<string> {
+  return new Set([...usFederalHolidays(year), ...usFederalHolidays(year + 1)]);
+}
 
 /** True for a zone Intl knows (IANA), so a bad `tz=` is a 400, not a throw deep inside. */
 export function isTimeZone(tz: string): boolean {
@@ -110,11 +123,13 @@ export function openSlots(rules: SlotRules, q: SlotQuery): Date[] {
   });
 
   const [fy, fm, fd] = q.fromDate.split('-').map(Number);
+  const holidays = holidaysFrom(fy);
   const out: Date[] = [];
   for (let i = 0; i < (q.days ?? WINDOW_DAYS); i++) {
     const day = new Date(Date.UTC(fy, fm - 1, fd + i));
     const y = day.getUTCFullYear(); const m = day.getUTCMonth() + 1; const d = day.getUTCDate();
     const dow = DAY_NAMES[day.getUTCDay()];
+    if (holidays.has(dayKey(day))) continue;
     for (const part of Object.keys(BLOCK_HOURS) as BlockPart[]) {
       if (!open.has(`${dow}-${part}`)) continue;
       const [startH, endH] = BLOCK_HOURS[part];

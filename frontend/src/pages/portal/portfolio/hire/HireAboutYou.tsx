@@ -75,7 +75,7 @@ const HireAboutYou: React.FC<Props> = ({ loaded, onSaved, onRetry }) => {
       <label className="hs-field">
         <span>Headline</span>
         <input maxLength={90} value={draft.headlineDraft ?? ''} onChange={(e) => setDraft({ ...draft, headlineDraft: e.target.value })} data-testid="hs-headline" />
-        <small className="cp-muted">One line under your name. Saved as a draft: your live headline stays as it is until the Colaberry team approves a change.</small>
+        <small className="cp-muted">One line under your name. Saved as a draft: your live headline stays as it is until the Colaberry team approves the change, and this box clears once they have.</small>
       </label>
 
       {INTRO_QUESTIONS.map((q) => (

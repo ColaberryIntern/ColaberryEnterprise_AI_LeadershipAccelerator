@@ -13,6 +13,7 @@ import {
   handleGetPortfolioPreview,
 } from '../../controllers/careerPortfolioPageController';
 import { handleSetHireSpotlight } from '../../controllers/hireListingController';
+import { handleDecideHeadline, handleListHeadlineDrafts } from '../../controllers/hireHeadlineController';
 
 const router = Router();
 
@@ -38,6 +39,9 @@ router.post('/api/admin/career/review/:recordId', requireCareerReviewer, handleR
 // hire.refactored.ai spotlight: an endorsement shown to employers, so ADMINS only (Ali, H1.1)
 // - requireAdmin, not the broader reviewer gate a mentor holds.
 router.put('/api/admin/career/portfolio-page/:enrollmentId/spotlight', requireAdmin, handleSetHireSpotlight);
+// The headline a candidate proposed in their Hire studio. Admins only, for the same reason.
+router.get('/api/admin/career/hire-headline-drafts', requireAdmin, handleListHeadlineDrafts);
+router.post('/api/admin/career/hire-headline-drafts/:enrollmentId', requireAdmin, handleDecideHeadline);
 
 // The person-level page. Same reviewer gate, and the per-learner scope check lives in
 // the controller so a mentor cannot act on someone else's learner.

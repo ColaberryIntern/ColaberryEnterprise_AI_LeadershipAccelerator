@@ -65,8 +65,13 @@ export interface HireInterview {
   extraInterviewers: number;
   recordRequested: boolean;
   roomUrl: string | null;
+  /** The candidate's own note when they declined; the employer reads it. */
+  declineReason?: string | null;
   createdAt: string;
 }
+
+/** Matches DECLINE_REASON_MAX on the server. */
+export const DECLINE_REASON_MAX = 500;
 
 const BASE = '/api/portal/career/portfolio-page';
 
@@ -100,8 +105,11 @@ export async function fetchHireInterviews(): Promise<HireInterview[]> {
   return (await portalApi.get('/api/portal/career/hire-interviews')).data.interviews;
 }
 
-export async function actOnHireInterview(id: string, action: 'confirm' | 'decline' | 'propose', startsAt?: string): Promise<HireInterview> {
-  const body = action === 'propose' ? { startsAt } : {};
+export async function actOnHireInterview(
+  id: string, action: 'confirm' | 'decline' | 'propose', startsAt?: string, reason?: string,
+): Promise<HireInterview> {
+  const note = (reason ?? '').trim();
+  const body = action === 'propose' ? { startsAt } : action === 'decline' && note ? { reason: note } : {};
   return (await portalApi.post(`/api/portal/career/hire-interviews/${encodeURIComponent(id)}/${action}`, body)).data.interview;
 }
 

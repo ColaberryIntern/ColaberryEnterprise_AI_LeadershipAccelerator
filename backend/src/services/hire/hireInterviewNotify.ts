@@ -100,6 +100,7 @@ export async function loadInterview(id: string): Promise<Loaded | null> {
       employer: { name: String(r.employer_name), company: String(r.employer_company), role: String(r.employer_role), message: String(r.message ?? '') },
       extraInterviewers: extra.length, recordRequested: r.record_requested === true,
       roomUrl: (r.room_url as string | null) ?? null,
+      declineReason: typeof r.decline_reason === 'string' && r.decline_reason.trim() ? r.decline_reason : null,
     },
   };
 }
