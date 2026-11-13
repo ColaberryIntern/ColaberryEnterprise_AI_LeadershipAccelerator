@@ -375,6 +375,88 @@ export async function listItemMedia(contentItemId: string): Promise<ItemMediaVie
   });
 }
 
+/** What the composer gets back after picking something that was already in the library. */
+export interface AttachedExistingAsset {
+  mediaAssetId: string;
+  position: number;
+  /** True when this asset was already attached to this item; the call changed nothing. */
+  alreadyAttached: boolean;
+}
+
+/**
+ * Attach an asset that is ALREADY in the library to a content item.
+ *
+ * THE WHOLE POINT IS WHAT IT DOES NOT DO. It writes one `content_item_media` row. It does not
+ * create a `media_assets` row, does not re-ingest bytes, does not call `put()`. Re-uploading an
+ * ad that is already in the library - which is the likeliest thing anyone does with a media
+ * library - must not duplicate it, and the surest way to guarantee that is a function with no
+ * code path that could. None of `MediaAsset.create`, `ingestFileBytes` or `put` is reachable from
+ * here, which is also what the test asserts: the `media_assets` count is unchanged across the call.
+ *
+ * A LINK IS REFUSED, 422. A link asset has no bytes, so attaching it as media would produce a
+ * post whose attachment the publishing worker then skips (see publishingWorker's link guard). A
+ * link belongs in the post as a LINK - `content_type: 'link'` with `destination_url` - which is a
+ * different and better thing than an attachment that silently does not arrive. The message says
+ * so, because "422" on its own teaches nobody what to do instead.
+ *
+ * Tenant and brand are checked, not assumed: an asset id is guessable, and without this an
+ * operator on brand A could attach brand B's asset by pasting an id.
+ */
+export async function attachExistingAsset(input: {
+  contentItemId: string;
+  mediaAssetId: string;
+}): Promise<AttachedExistingAsset> {
+  const item = await ContentItem.findByPk(input.contentItemId);
+  if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
+  assertWritable(item);
+
+  const asset = await MediaAsset.findByPk(input.mediaAssetId);
+  if (!asset) throw new WorkflowError('That asset is not in the library.', 404, 'AssetNotFound');
+
+  // Scope first, and deliberately with the same message for "wrong tenant" and "wrong brand":
+  // a different answer for each would turn this into a probe for which ids exist.
+  if (asset.tenant_id !== item.tenant_id || (item.brand_id && asset.brand_id && asset.brand_id !== item.brand_id)) {
+    throw new WorkflowError('That asset is not in this brand\'s library.', 404, 'AssetNotFound');
+  }
+
+  if (asset.kind === 'link') {
+    throw new WorkflowError(
+      'That is a link, not a file. A link publishes as a link post rather than an attachment: '
+      + 'set the post destination to the URL instead of attaching it.',
+      422,
+      'LinkNotAttachable',
+    );
+  }
+
+  if (asset.archived_at) {
+    throw new WorkflowError('That asset is archived. Restore it before attaching it.', 409, 'AssetArchived');
+  }
+
+  // Idempotent by the same rule attachMedia uses, and backed by content_item_media_unique
+  // (ensureContentOsSchema) so a double-click cannot create two rows even if both pass this read.
+  const existing = await ContentItemMedia.findOne({
+    where: { content_item_id: item.id, media_asset_id: asset.id },
+  });
+  if (existing) {
+    return { mediaAssetId: asset.id, position: existing.position, alreadyAttached: true };
+  }
+
+  const attached = await ContentItemMedia.count({ where: { content_item_id: item.id } });
+  if (attached >= MAX_ATTACHMENTS_PER_ITEM) {
+    throw new WorkflowError(`A post can carry at most ${MAX_ATTACHMENTS_PER_ITEM} media items.`, 409, 'TooManyAttachments');
+  }
+
+  await ContentItemMedia.create({ content_item_id: item.id, media_asset_id: asset.id, position: attached } as any);
+
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'info', service: 'media',
+    event: 'library_asset_attached', outcome: 'success',
+    context: { content_item_id: item.id, media_asset_id: asset.id, position: attached },
+  }));
+
+  return { mediaAssetId: asset.id, position: attached, alreadyAttached: false };
+}
+
 /** Detach from the item. The asset row and its bytes stay: another item may use them, and the library is per brand. */
 export async function detachMedia(contentItemId: string, mediaAssetId: string): Promise<void> {
   const item = await ContentItem.findByPk(contentItemId);
