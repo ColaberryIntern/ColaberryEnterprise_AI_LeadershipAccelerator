@@ -104,6 +104,47 @@ Per builder: **4 live stories**, against 136 for Quincy and 248 for marketing.
   — had gone quiet for a reason unrelated to safety (the new ids are shorter), so it was rewritten
   to assert what is still true and still dangerous: 33 ids overflow the old 60-character column.
 
+---
+
+## Second commit: a red `main`, caused by this session's own earlier PR
+
+CI on #3993 failed the Integration tier. It was **not** the ladder — the same three tests were
+already failing on `main`, byte-identical names, from PR #3986 (`registry-computes-reach`) earlier
+in this session. Confirmed by reading two prior `main` runs rather than assuming.
+
+Two real defects, both fixed here rather than stacked behind another PR:
+
+1. **`resolveManagerReach` could abort a provision.** `FACTS_SQL` reads five rosters, and any one
+   of them being unreadable threw straight out of `reconcileAnchorMetadata`. A transient database
+   error while refreshing a **derived cache** would take down the thing it was annotating. It now
+   catches, emits a structured `manager_reach_facts_unreadable` warning with an `error_class`, and
+   returns an empty map — which `reachFor` resolves through `unknownReach`, so **a roster we could
+   not read can never become a silent all-clear.** That is the precise failure the hardcoded
+   registry constant had been committing for a month, and degrading the other way would have
+   reinstated it with a friendlier face.
+2. **The integration fixture was missing two rosters.** `org_members` and `community_members` had
+   no stand-in, and `ai_agents` lacked `reports_to_org_member_id`. Added — not to make the tests
+   pass (the degradation already would) but to make them **mean** something: without the tables the
+   suite would exercise the degraded path and quietly stop covering the query it exists to cover.
+
+New `managerReachResolver.test.ts` — 6 tests, mutation-tested:
+
+| Mutation | Result |
+|---|---|
+| catch returns a silent all-clear instead of an empty map | 2 failed |
+| drop the structured log from the catch | 1 failed |
+| restored | 6 passed |
+
+Its own positive control earned its place immediately: it caught a wrong key in my fixture
+(`mgmt_role` where the row carries `bridge_mgmt_role`), which would otherwise have left the happy
+path silently uncovered.
+
+**Not verified locally:** Docker is unavailable in this session, so the integration tier could not
+be run here. The fixture fix is proved by CI on the PR, not by a local run.
+
+**Known flake, reported not swept:** `watcherRetirement` failed 2 of 27 in the full parallel run
+and passes 27/27 in isolation. This diff touches only `backend/src/services/agentDomain/`.
+
 ## Not done
 
 - **The live boards are unchanged.** 1,477 rows across ten projects still carry the old shape.
