@@ -34,6 +34,26 @@
  *
  * Partial application is impossible by construction: the runner applies one domain in one
  * transaction, and a refusal is raised before the transaction opens.
+ *
+ * ## An update may add content. It may never destroy it.
+ *
+ * The first version of this module assumed a board is purely derived from the generator,
+ * so making it match the plan could only ever be correct. **That assumption was wrong, and
+ * the production dry run on 2026-11-13 is what caught it.** These boards carry content
+ * authored AFTER generation, which exists nowhere else:
+ *
+ *   - 683 acceptance lines across 513 rows. The generator emits acceptance for the 40
+ *     ladder stories only, so a straight overwrite wrote null over every one of them --
+ *     including 100 rows already complete and signed off.
+ *   - Hand-written narrative on three research rows. One admissions story would have lost
+ *     487 characters, among them a finding somebody had investigated ("a role-name
+ *     collision, not an ownership question"), replaced by the generic template body.
+ *
+ * `partitionUpdate` is the guard. It splits the fields that differ into those safe to write
+ * and those that would destroy something, and the second group is reported, never silently
+ * skipped. The unit tests did not catch this because their fixtures were built FROM the
+ * plan, so stored content could not differ from planned content -- see the test file's
+ * `authoredRow` helper, which exists so that gap cannot reopen.
  */
 
 import { planProvision, type PlannedStory } from './agentDomainProvisionPlan';
@@ -59,7 +79,31 @@ export interface StoryUpdate {
   readonly story_id: string;
   /** The fields that actually differ, for the log and for the test. Never a blanket overwrite. */
   readonly changed: ReadonlyArray<string>;
+  /**
+   * The subset of `changed` this reconciler will actually write. A field that differs
+   * but would destroy stored content is reported in `preserved` and left alone, so
+   * `changed` stays an honest record of the drift while `write` is what happens.
+   */
+  readonly write: ReadonlyArray<string>;
+  readonly preserved: ReadonlyArray<PreservedField>;
   readonly next: PlannedStory;
+}
+
+/**
+ * A field the plan would have overwritten, which is being left as it is instead.
+ *
+ * Measured on production 2026-11-13, and the reason this type exists: the plan carries
+ * acceptance for the 40 new ladder stories ONLY, so a straight overwrite would have
+ * written null over 683 authored acceptance lines on 513 rows, 100 of them already
+ * signed off. Three rows would also have lost hand-written narrative -- one admissions
+ * row dropped 487 characters including a specific finding somebody had investigated,
+ * replaced by generic template text.
+ */
+export interface PreservedField {
+  readonly story_id: string;
+  readonly field: string;
+  readonly reason: 'plan_has_nothing' | 'would_discard_edits';
+  readonly detail: string;
 }
 
 /** A deletion the reconciler will not perform, and why. Any refusal fails the domain. */
@@ -75,7 +119,18 @@ export interface BoardReconcilePlan {
   readonly to_insert: ReadonlyArray<PlannedStory>;
   readonly to_update: ReadonlyArray<StoryUpdate>;
   readonly refusals: ReadonlyArray<DeletionRefusal>;
-  /** True when the board already matches the plan. The second run of a successful migration. */
+  /**
+   * Every field left alone across the whole board, including those on rows that
+   * dropped out of `to_update` entirely. Reported rather than silently skipped: a
+   * migration that quietly declines to do part of its job is indistinguishable from
+   * one that did it.
+   */
+  readonly preserved: ReadonlyArray<PreservedField>;
+  /**
+   * True when the board already matches the plan, OR when every remaining difference
+   * is one this reconciler refuses to write. In both cases there is nothing to do, and
+   * on a second run the second case stays stable rather than rewriting forever.
+   */
   readonly noop: boolean;
 }
 
@@ -120,6 +175,91 @@ export function isUntouched(row: ExistingStoryRow): boolean {
   return row.status === UNTOUCHED && !row.verified_at;
 }
 
+/** Empty for this purpose: nothing a reader would lose if it were replaced. */
+function isBlank(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return String(value).trim() === '';
+}
+
+/** The stored and planned value of one comparable field, by name. */
+function valuesFor(
+  field: string, row: ExistingStoryRow, next: PlannedStory,
+): { stored: unknown; planned: unknown } {
+  switch (field) {
+    case 'title': return { stored: row.title, planned: next.title };
+    case 'narrative': return { stored: row.narrative, planned: next.narrative };
+    case 'build': return { stored: row.build, planned: next.build };
+    case 'release_key': return { stored: row.release_key, planned: next.release_key };
+    case 'autonomy_stage': return { stored: row.autonomy_stage, planned: next.autonomy_stage };
+    case 'story_kind': return { stored: row.story_kind, planned: next.kind };
+    case 'acceptance': return { stored: row.acceptance, planned: next.acceptance };
+    default: return { stored: undefined, planned: undefined };
+  }
+}
+
+/** Prose fields, where a human may have added something the generator cannot reproduce. */
+const PROSE_FIELDS: ReadonlySet<string> = new Set(['narrative', 'build']);
+
+/**
+ * Of the fields that differ, which may be written -- and which must be left alone.
+ *
+ * TWO RULES, both of them "an update may add, never destroy":
+ *
+ *   1. **The plan having nothing to say is not a reason to erase.** If the planned
+ *      value is blank and the stored value is not, the stored value stays. The
+ *      generator emits acceptance for ladder stories only; without this rule every
+ *      other row's authored criteria would be nulled.
+ *
+ *   2. **A rewrite that drops what is already there is a conflict, not an update.**
+ *      For prose, an additive change (the stored text still appears inside the planned
+ *      text, which is what the IN FLIGHT / CANDIDATE relabel does) is written. A
+ *      planned body that does NOT contain the stored body is somebody's edit being
+ *      overwritten by a template, so it is preserved instead.
+ *
+ * Rule 2 is deliberately NOT limited to rows somebody has touched. `status` records
+ * whether a task was worked, not whether its text was edited, and the row that proved
+ * this -- an admissions research story carrying a hand-written finding -- would be
+ * equally lost whatever its status said.
+ */
+export function partitionUpdate(
+  row: ExistingStoryRow, next: PlannedStory, changed: ReadonlyArray<string>,
+): { write: string[]; preserved: PreservedField[] } {
+  const write: string[] = [];
+  const preserved: PreservedField[] = [];
+
+  for (const field of changed) {
+    const { stored, planned } = valuesFor(field, row, next);
+
+    if (isBlank(planned) && !isBlank(stored)) {
+      preserved.push({
+        story_id: row.story_id,
+        field,
+        reason: 'plan_has_nothing',
+        detail: `the plan carries no ${field}, and the stored value is not empty; keeping what is there.`,
+      });
+      continue;
+    }
+
+    if (PROSE_FIELDS.has(field) && !isBlank(stored)
+      && !String(planned ?? '').includes(String(stored))) {
+      preserved.push({
+        story_id: row.story_id,
+        field,
+        reason: 'would_discard_edits',
+        detail: `the planned ${field} does not contain the stored one `
+          + `(${String(stored).length} chars stored, ${String(planned ?? '').length} planned), `
+          + 'so this would replace somebody\'s text rather than extend it.',
+      });
+      continue;
+    }
+
+    write.push(field);
+  }
+
+  return { write, preserved };
+}
+
 /**
  * What one domain's board needs in order to match the generator, as data.
  *
@@ -160,11 +300,25 @@ export function planBoardReconcile(
   const to_insert = planned.filter((s) => !existingById.has(s.id));
 
   const to_update: StoryUpdate[] = [];
+  const preserved: PreservedField[] = [];
   for (const s of planned) {
     const row = existingById.get(s.id);
     if (!row) continue;
     const changed = changedFields(row, s);
-    if (changed.length) to_update.push({ id: row.id, story_id: s.story_id, changed, next: s });
+    if (!changed.length) continue;
+    const split = partitionUpdate(row, s, changed);
+    preserved.push(...split.preserved);
+    // A row whose every difference is preserved is not an update. Emitting it anyway
+    // would make the runner issue an UPDATE with no columns and report work it did not do.
+    if (split.write.length === 0) continue;
+    to_update.push({
+      id: row.id,
+      story_id: s.story_id,
+      changed,
+      write: split.write,
+      preserved: split.preserved,
+      next: s,
+    });
   }
 
   return {
@@ -173,6 +327,7 @@ export function planBoardReconcile(
     to_insert,
     to_update,
     refusals,
+    preserved,
     noop: to_delete.length === 0 && to_insert.length === 0 && to_update.length === 0,
   };
 }
@@ -183,7 +338,23 @@ export function describePlan(plan: BoardReconcilePlan): string {
     return `${plan.domain_key}: REFUSED — ${plan.refusals.length} row(s) carry work; `
       + plan.refusals.slice(0, 3).map((r) => `${r.story_id} (${r.reason})`).join(', ');
   }
-  if (plan.noop) return `${plan.domain_key}: already matches the plan, nothing to do`;
+  // Always state what was preserved, including on a no-op: "nothing to do" and "there
+  // were differences I declined to write" are different facts and must not read alike.
+  const kept = plan.preserved.length ? `, =${plan.preserved.length} field(s) preserved` : '';
+  if (plan.noop) return `${plan.domain_key}: already matches the plan, nothing to do${kept}`;
   return `${plan.domain_key}: -${plan.to_delete.length} delete, +${plan.to_insert.length} insert, `
-    + `~${plan.to_update.length} update`;
+    + `~${plan.to_update.length} update${kept}`;
 }
+
+/** Why each field was left alone, grouped so a board's worth of them reads in a few lines. */
+export function describePreserved(plan: BoardReconcilePlan): string[] {
+  const byReasonAndField = new Map<string, number>();
+  for (const p of plan.preserved) {
+    const key = `${p.field} (${p.reason})`;
+    byReasonAndField.set(key, (byReasonAndField.get(key) ?? 0) + 1);
+  }
+  return [...byReasonAndField]
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, n]) => `${n} x ${key}`);
+}
+

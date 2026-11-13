@@ -9,7 +9,9 @@
 import {
   changedFields,
   describePlan,
+  describePreserved,
   isUntouched,
+  partitionUpdate,
   planBoardReconcile,
   type ExistingStoryRow,
 } from '../agentDomainBoardReconciler';
@@ -55,6 +57,36 @@ function strayRow(storyId: string, over: Partial<ExistingStoryRow> = {}): Existi
 
 const matchingBoard = () => planProvision(DOMAIN).stories.map(rowFromPlan);
 
+/**
+ * A row somebody has ADDED CONTENT TO since it was generated.
+ *
+ * This helper is the fix for the gap that let a data-destroying migration pass a full
+ * test suite. Every other fixture here is built from the plan by `rowFromPlan`, so
+ * stored content could never differ from planned content, and the case that actually
+ * existed in production -- a row carrying authored acceptance the generator does not
+ * emit -- was unrepresentable. The first dry run against production found 683 such
+ * acceptance lines on 513 rows, 100 of them already signed off.
+ *
+ * Default values mirror a real curriculum row:
+ *   acceptance ["Swati names the approver and states what happens to the old cards on a re-publish."]
+ *   planned acceptance []
+ */
+function authoredRow(
+  over: Partial<ExistingStoryRow> = {},
+): { row: ExistingStoryRow; planned: ReturnType<typeof planProvision>['stories'][number] } {
+  // Must be a story the plan gives NO acceptance, or the case under test does not arise.
+  const planned = planProvision(DOMAIN).stories.find((s) => s.acceptance.length === 0);
+  if (!planned) throw new Error('fixture needs a planned story with no acceptance; none found');
+  return {
+    planned,
+    row: {
+      ...rowFromPlan(planned),
+      acceptance: ['Swati names the approver and states what happens to the old cards on a re-publish.'],
+      ...over,
+    },
+  };
+}
+
 // ───────────────────────────── 1. the refusals ─────────────────────────────
 
 describe('it will not delete work somebody has done', () => {
@@ -98,6 +130,103 @@ describe('it will not delete work somebody has done', () => {
   });
 });
 
+// ────────── 1b. it will not destroy content somebody authored ──────────
+//
+// These are the tests whose absence let a data-destroying migration pass twelve green
+// CI checks. Each one fails against the pre-fix reconciler.
+
+describe('an update may add content, never destroy it', () => {
+  it('does NOT erase authored acceptance just because the plan carries none', () => {
+    const { row, planned } = authoredRow();
+    const changed = changedFields(row, planned);
+    expect(changed).toContain('acceptance'); // the drift is real...
+
+    const { write, preserved } = partitionUpdate(row, planned, changed);
+    expect(write).not.toContain('acceptance'); // ...but it must not be written
+    expect(preserved.map((p) => p.field)).toEqual(['acceptance']);
+    expect(preserved[0].reason).toBe('plan_has_nothing');
+  });
+
+  it('drops the row from to_update entirely when acceptance was its only difference', () => {
+    // Otherwise the runner issues an UPDATE with no columns and reports work it did not do.
+    const { row } = authoredRow();
+    const board = matchingBoard().map((r) => (r.id === row.id ? row : r));
+    const plan = planBoardReconcile(DOMAIN, board);
+
+    expect(plan.to_update.find((u) => u.id === row.id)).toBeUndefined();
+    expect(plan.preserved).toHaveLength(1);
+    expect(plan.preserved[0].field).toBe('acceptance');
+    expect(plan.noop).toBe(true);
+    // A no-op that preserved something must not read like a no-op that found nothing.
+    expect(describePlan(plan)).toContain('preserved');
+    expect(describePreserved(plan)).toEqual(['1 x acceptance (plan_has_nothing)']);
+  });
+
+  it('still writes the fields that are safe on a row whose acceptance is preserved', () => {
+    // A preserved acceptance must not make the whole row untouchable. The narrative here
+    // is a truncation of the planned one, so extending it loses nothing.
+    const planned = planProvision(DOMAIN).stories.find((s) => s.acceptance.length === 0)!;
+    const { row } = authoredRow({ narrative: planned.narrative.slice(25) });
+    const changed = changedFields(row, planned);
+    const { write, preserved } = partitionUpdate(row, planned, changed);
+
+    expect(write).toEqual(['narrative']);
+    expect(write).not.toContain('acceptance');
+    expect(preserved.map((p) => p.field)).toEqual(['acceptance']);
+  });
+
+  it('writes a prose change that EXTENDS the stored text, which is the relabel', () => {
+    // The IN FLIGHT / CANDIDATE relabel prepends to the existing body. That is additive
+    // and is the entire point of the migration, so it must not be preserved away.
+    const { planned } = authoredRow();
+    const stored = { ...rowFromPlan(planned), narrative: planned.narrative.slice(20) };
+    const changed = changedFields(stored, planned);
+    expect(changed).toContain('narrative');
+    expect(partitionUpdate(stored, planned, changed).write).toContain('narrative');
+  });
+
+  it('REFUSES a prose change that replaces the stored text instead of extending it', () => {
+    // The real case: an admissions research row carrying a hand-written finding, which
+    // the generic template body does not contain. 487 characters would have been lost.
+    const { planned } = authoredRow();
+    const stored = {
+      ...rowFromPlan(planned),
+      narrative: `${planned.narrative}\n\nA role-name collision, not an ownership question.`,
+    };
+    const changed = changedFields(stored, planned);
+    const { write, preserved } = partitionUpdate(stored, planned, changed);
+
+    expect(write).not.toContain('narrative');
+    expect(preserved[0].reason).toBe('would_discard_edits');
+    expect(preserved[0].detail).toContain('chars stored');
+  });
+
+  it('guards edited prose regardless of status, because status does not record an edit', () => {
+    // `status` says whether the task was worked, not whether its text was changed. The
+    // admissions row was `complete`, but a `not_started` row can carry an edit too.
+    const { planned } = authoredRow();
+    for (const status of ['not_started', 'in_progress', 'complete']) {
+      const stored = {
+        ...rowFromPlan(planned), status,
+        narrative: `${planned.narrative}\n\nsomebody's own note`,
+      };
+      const { write } = partitionUpdate(stored, planned, changedFields(stored, planned));
+      expect(write).not.toContain('narrative');
+    }
+  });
+
+  it('POSITIVE CONTROL: a blank stored value IS overwritten', () => {
+    // Proves the guard keys on "would this lose something", not on "did anything differ".
+    // Without this, a reconciler that never writes anything would pass every test above.
+    const { planned } = authoredRow();
+    const empty = { ...rowFromPlan(planned), narrative: '', acceptance: [] };
+    const { write, preserved } = partitionUpdate(empty, planned, changedFields(empty, planned));
+
+    expect(write).toContain('narrative');
+    expect(preserved).toHaveLength(0);
+  });
+});
+
 // ───────────────────────── 2. the three outcomes ─────────────────────────
 
 describe('it makes the board match the plan', () => {
@@ -119,11 +248,17 @@ describe('it makes the board match the plan', () => {
   });
 
   it('updates a row whose body drifted, naming only the fields that differ', () => {
+    // The stored body is a TRUNCATION of the planned one, so the planned body still
+    // contains it. That is the additive shape of the real relabel, and the only shape
+    // this reconciler will write -- a replacement is preserved instead, which the
+    // "an update may add content" block covers.
     const board = matchingBoard();
-    board[0] = { ...board[0], narrative: 'the old title-only body' };
+    board[0] = { ...board[0], narrative: board[0].narrative!.slice(30) };
     const plan = planBoardReconcile(DOMAIN, board);
     expect(plan.to_update).toHaveLength(1);
     expect(plan.to_update[0].changed).toEqual(['narrative']);
+    expect(plan.to_update[0].write).toEqual(['narrative']);
+    expect(plan.preserved).toHaveLength(0);
   });
 
   it('does NOT treat a changed position as drift', () => {
