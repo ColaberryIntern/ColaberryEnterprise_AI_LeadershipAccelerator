@@ -193,6 +193,8 @@ export async function getOrCreateSession(
     campaign_id?: string | null;
     campaign_lead_id?: string | null;
     organization_id?: string | null;
+    /** The resolved brand's slug, so the landing page is categorised by that brand's map. */
+    brand_slug?: string | null;
   }
 ): Promise<string> {
   const timeoutMs = env.visitorSessionTimeoutMinutes * 60 * 1000;
@@ -219,7 +221,9 @@ export async function getOrCreateSession(
     pagePath = (data.page_url || '/').split('?')[0] || '/';
   }
 
-  const landingCategory = categorizePagePath(pagePath);
+  // Same brand as the event itself: without it a brand site's landing page used Colaberry's
+  // map, so every hire.refactored.ai session landed on `other` while its events did not.
+  const landingCategory = categorizePagePath(pagePath, data.brand_slug);
 
   // Create a new session
   const session = await VisitorSession.create({

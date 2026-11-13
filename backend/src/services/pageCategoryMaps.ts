@@ -33,6 +33,12 @@ export interface BrandPageCategoryMap {
   exact: Record<string, string>;
   /** Prefix match, longest first. Applied only when no exact match wins. */
   prefix?: Array<{ startsWith: string; category: string }>;
+  /**
+   * Whole-path patterns, for a route whose slug sits in the MIDDLE
+   * (`/talent/<slug>/schedule`), where a prefix cannot tell it from its parent. Checked
+   * after exact and before prefix, in declaration order. Anchor every pattern at both ends.
+   */
+  pattern?: Array<{ match: RegExp; category: string }>;
 }
 
 export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
@@ -206,6 +212,12 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       // Booking an interview with a builder (/talent/<slug>/schedule/, one shell): the
       // strongest "talk to a person" intent on the site, the same meaning as `/intro`.
       '/schedule': 'contact',
+      // The shells above are what is ON DISK; what the browser REPORTS is the live path
+      // nginx serves them under (nginx/hire-refactored.conf): /talent/<slug>/,
+      // /talent/<slug>/schedule/, /case-studies/<slug>/. The tracker sends
+      // `location.pathname`, so the live paths need the `pattern` and `prefix` rules below
+      // (production, 2026-11-13: 1,708 such views, none categorised). The shell keys stay
+      // for a direct hit.
 
       // --- Retired portal, kept for historical events ---------------------
       // The three audience pages: what Refactored offered, and to whom.
@@ -232,6 +244,15 @@ export const BRAND_PAGE_CATEGORIES: Record<string, BrandPageCategoryMap> = {
       '/privacy': 'legal',
       '/terms': 'legal',
     },
+    pattern: [
+      // Booking an interview with a builder: the same meaning as `/schedule`.
+      { match: /^\/talent\/[^/]+\/schedule$/, category: 'contact' },
+    ],
+    prefix: [
+      // A builder's profile and a case study: verified work is evidence of outcomes.
+      { startsWith: '/talent/', category: 'case_studies' },
+      { startsWith: '/case-studies/', category: 'case_studies' },
+    ],
   },
 };
 
@@ -255,6 +276,10 @@ export function categorizeForBrand(cleanedPath: string, brandSlug: string): stri
 
   const exact = map.exact[cleanedPath];
   if (exact) return exact;
+
+  for (const rule of map.pattern ?? []) {
+    if (rule.match.test(cleanedPath)) return rule.category;
+  }
 
   if (map.prefix) {
     // Longest prefix wins, so a specific rule is never shadowed by a broader one that

@@ -119,6 +119,17 @@ describe('www and apex are declared together', () => {
     // attribute rather than the one the brand is named by.
     expect(row!.is_primary).toBe(false);
   });
+
+  it('hire.refactored.ai and its lead source belong to the refactored brand', () => {
+    // Missing until 2026-11-13: every Hire page view and lead recorded a null brand, so the
+    // brand's page map never ran and 2,316 events were filed as `other`.
+    const row = allDomains.find((d) => d.hostname === 'hire.refactored.ai' && d.purpose === 'web');
+    expect(row).toBeDefined();
+    expect(row!.brand).toBe('refactored');
+    expect(row!.is_primary).toBe(false);
+    const refactored = allBrands.find((b) => b.brand === 'refactored')!;
+    expect(refactored.brandData.lead_source_slugs).toContain('hire-refactored');
+  });
 });
 
 describe('hostnames are hostnames', () => {

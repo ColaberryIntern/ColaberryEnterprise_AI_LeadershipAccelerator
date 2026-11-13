@@ -304,6 +304,11 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
           { hostname: 'enterprise.colaberry.ai', purpose: 'app', is_primary: true },
           { hostname: 'refactored.ai', purpose: 'email', is_primary: true },
           { hostname: 'track.refactored.ai', purpose: 'tracking', is_primary: true },
+          // The talent directory (apps/hire-refactored-public): same brand, its own
+          // subdomain. Without this row and the `hire-refactored` source below, every Hire
+          // page view and intro/interview lead recorded a null brand (production,
+          // 2026-11-13: 2,316 events), so the brand's page map never applied.
+          { hostname: 'hire.refactored.ai', purpose: 'web', is_primary: false },
         ],
         sender_profiles: [
           {
@@ -316,7 +321,7 @@ export const ECOSYSTEM_SEED: SeedTenant[] = [
             is_default: true,
           },
         ],
-        lead_source_slugs: ['refactored'],
+        lead_source_slugs: ['refactored', 'hire-refactored'],
       },
     ],
   },
