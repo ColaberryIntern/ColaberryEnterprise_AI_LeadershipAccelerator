@@ -29,6 +29,8 @@ export const REPLAY_DISCOVERY_STATES = ['replay_ready'] as const;
 const COLUMNS = [
   'id', 'title', 'room_id', 'access_mode', 'editorial_state',
   'scheduled_start_at', 'content_started_at', 'ended_at', 'preview_seconds',
+  // D13: read so the row can say whether there is anything to play, rather than being hidden.
+  'provider_instance_uuid',
 ] as const;
 
 /**
@@ -78,6 +80,11 @@ export type ReplayOccurrence = DiscoverableOccurrence & {
   preview_seconds: number;
   /** When it finished. The only sensible sort key for a list of past classes. */
   ended_at: Date | null;
+  /**
+   * D13: whether a recording is bound, so the list can say "Not playable yet" instead of
+   * dropping the class. The uid itself stays on the server.
+   */
+  playable: boolean;
 };
 
 export async function findReplayOccurrences(
@@ -87,9 +94,25 @@ export async function findReplayOccurrences(
   const rows = await BroadcastOccurrence.findAll({
     where: {
       editorial_state: { [Op.in]: REPLAY_DISCOVERY_STATES as unknown as string[] },
-      // The L8.4 join. Without a bound recording there is nothing to sign, so the row is not a
-      // replay yet however finished the class is.
-      provider_instance_uuid: { [Op.ne]: null },
+      /**
+       * D13: AN UNBOUND RECORDING IS LISTED NOW, AS UNPLAYABLE, RATHER THAN HIDDEN.
+       *
+       * This used to read `provider_instance_uuid: { [Op.ne]: null }` - without a bound
+       * recording there is nothing to sign, so the row was not treated as a replay however
+       * finished the class was. That is true about PLAYING it and wrong about LISTING it.
+       *
+       * Measured on production, 2026-11-12: every airing that has ever finished is in this
+       * state. Two `ended` occurrences, both with no recording uid, and the replay list has
+       * therefore always been empty - silently, because the filter hid exactly the rows that
+       * would have shown something was wrong. A student who attended the class cannot find it
+       * and has no way to tell whether it was never recorded or they are looking in the wrong
+       * place; nobody on staff sees a gap at all.
+       *
+       * The row now comes back with `playable: false` and the surface says "Not playable yet".
+       * Entitlement is untouched: whether a viewer MAY see this class is still decided by the
+       * same `mayKnowAbout` rule, and this only changes whether a class they may see is
+       * mentioned at all.
+       */
       // The retention window, enforced in the QUERY for the same reason the recording binding
       // is: a row filtered out after the fact is a row that was still read, still sorted and
       // still counted against the limit, so an expired class could push a live one off the
@@ -120,6 +143,9 @@ export async function findReplayOccurrences(
     content_started_at: row.content_started_at,
     ended_at: row.ended_at,
     preview_seconds: row.preview_seconds,
+    // D13. The uid itself never leaves the server - only whether there is one. A client has no
+    // use for a provider identifier and every reason not to be handed one.
+    playable: row.provider_instance_uuid !== null,
     session_id: sessions.get(row.id) ?? null,
   }));
 }

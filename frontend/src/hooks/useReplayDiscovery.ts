@@ -32,6 +32,14 @@ import { isTerminalDiscoveryError, type DiscoveryBroadcast } from './useBroadcas
 export interface ReplayBroadcast extends DiscoveryBroadcast {
   /** Epoch ms when the class finished, or null. The list's sort key and its only date. */
   ended_at: number | null;
+  /**
+   * D13: whether a recording is bound and there is therefore something to play.
+   *
+   * Optional because an older backend does not send it, and the surface must not read an
+   * absent field as "broken" - that would turn a deploy skew into every class reading as
+   * unplayable. Only an explicit `false` means not playable.
+   */
+  playable?: boolean;
 }
 
 export interface ReplayResponse {

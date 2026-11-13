@@ -38,6 +38,8 @@ const row = (over: Record<string, unknown> = {}) => ({
   content_started_at: new Date('2026-10-15T18:33:00Z'),
   ended_at: new Date('2026-10-15T19:40:00Z'),
   preview_seconds: 900,
+  // D13: a bound recording by default, so existing tests keep the behaviour they assume.
+  provider_instance_uuid: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
   ...over,
 });
 
@@ -47,17 +49,57 @@ beforeEach(() => {
   mockFindSessionIds.mockResolvedValue(new Map([['occ-1', 'sess-1']]));
 });
 
-describe('only what can actually play', () => {
-  it('requires a bound recording in the QUERY, not at render time', async () => {
-    // The L8.4 join. If this moves out of the where clause, the list fills with entries that
-    // resolve to nothing and the failure lands on the student rather than on a test.
+describe('what is listed, and what is only playable', () => {
+  /**
+   * THIS TEST USED TO ASSERT THE OPPOSITE, and the opposite turned out to be the bug.
+   *
+   * It required `provider_instance_uuid IS NOT NULL` in the where clause, on the reasoning
+   * that an entry resolving to nothing would push the failure onto the student. That is right
+   * about PLAYING and wrong about LISTING, and the difference matters because the filter
+   * silently removed the evidence that anything was wrong.
+   *
+   * Measured on production, 2026-11-12: every airing that had ever finished was unbound. Two
+   * `ended` occurrences, both with no recording uid, so the replay list had always been empty.
+   * A student who attended could not find the class and could not tell a missing recording
+   * from a permission they did not have; nobody on staff saw a gap at all, because the gap was
+   * what got filtered out.
+   *
+   * The row is listed now and carries `playable`, and the surface says "Not playable yet".
+   */
+  it('does NOT filter unbound recordings out of the list', async () => {
     await findReplayOccurrences();
 
     const where = mockFindAll.mock.calls[0][0].where;
-    expect(where).toHaveProperty('provider_instance_uuid');
-    // Same symbol trap as above: assert the OPERATOR, so 'is not null' is what is pinned
-    // rather than the mere presence of a key that could hold anything.
-    expect(where.provider_instance_uuid[Op.ne]).toBeNull();
+    expect(where).not.toHaveProperty('provider_instance_uuid');
+  });
+
+  it('reads the recording uid so the row can say whether there is anything to play', async () => {
+    await findReplayOccurrences();
+
+    expect(mockFindAll.mock.calls[0][0].attributes).toContain('provider_instance_uuid');
+  });
+
+  it('reports a bound recording as playable', async () => {
+    mockFindAll.mockResolvedValue([row({ provider_instance_uuid: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6' })]);
+
+    expect((await findReplayOccurrences())[0].playable).toBe(true);
+  });
+
+  it('reports an unbound recording as NOT playable, rather than dropping it', async () => {
+    mockFindAll.mockResolvedValue([row({ provider_instance_uuid: null })]);
+    const rows = await findReplayOccurrences();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].playable).toBe(false);
+  });
+
+  it('never sends the recording uid itself to a client', async () => {
+    // A provider identifier is of no use to a browser and every reason not to be handed one.
+    // Only the boolean leaves the server.
+    mockFindAll.mockResolvedValue([row({ provider_instance_uuid: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6' })]);
+    const rows = await findReplayOccurrences();
+
+    expect(JSON.stringify(rows)).not.toContain('a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6');
   });
 
   it('asks only for replay_ready', async () => {
