@@ -35,6 +35,7 @@ const NOW = new Date('2026-11-13T12:00:00Z');
 const WARRANT = (level: EscalationWarrant['level']): EscalationWarrant => ({
   hasAssignedProject: level !== 'none',
   daysSinceTheirLastWord: 30,
+  silenceIsProvable: true,
   unansweredOutbound: 5,
   weOweThemAnAnswer: false,
   level,
