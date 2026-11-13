@@ -76,10 +76,16 @@ export const DEFAULT_STATES: Readonly<Record<MayaCapability, PromotionState>> = 
   sendInAppWelcome: 'shadow',
   createJourneyHandoff: 'shadow',
   readPerson360: 'shadow',
+  // MR2. Email is the only capability that leaves the platform, so it starts in shadow like the
+  // rest and additionally needs M29 below. There is no argument for a different default here:
+  // `respondToExplorerDm` is `live` only because she had already been answering portal DMs since
+  // C121 and starting it in shadow would have silenced her on deploy. Nothing has ever sent an
+  // email as Maya, so there is no existing behavior for a shadow default to interrupt.
+  sendEmail: 'shadow',
 });
 
 /** Capabilities that act without being asked. Live additionally needs M29. */
-const NEEDS_M29_FOR_LIVE: ReadonlySet<MayaCapability> = new Set(['sendInAppWelcome', 'createJourneyHandoff', 'readPerson360']);
+const NEEDS_M29_FOR_LIVE: ReadonlySet<MayaCapability> = new Set(['sendInAppWelcome', 'createJourneyHandoff', 'readPerson360', 'sendEmail']);
 
 export interface MayaPromotionDeps {
   killSwitchActive: () => Promise<boolean>;

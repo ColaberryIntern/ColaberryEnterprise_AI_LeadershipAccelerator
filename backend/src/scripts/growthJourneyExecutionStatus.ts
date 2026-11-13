@@ -32,15 +32,42 @@ import { rolloutScopeKey, WILDCARD } from '../services/growthJourney/execution/s
  * what a probe must never do.
  */
 
+import {
+  planFirstRollout, describePlannedRollout,
+} from '../services/growthJourney/execution/planFirstRollout';
+
 export interface ProbeArgs {
   json: boolean;
+  /**
+   * MR3: print the first rollout control row this scope would need, and write nothing.
+   *
+   * Takes the scope in the key's OWN grammar - `brand|programme|channel` - so there is nothing
+   * extra to learn, and a malformed value is rejected by the real parser rather than by a
+   * second copy of the rules.
+   *
+   * It exists because `growth_journey_execution_controls` is empty and a rollout DENIES by
+   * default, so every scope resolves to shadow/no_rollout. Somebody can flip every flag, enable
+   * every agent, activate a programme, and still see nothing happen. This prints the one row
+   * that changes that, without being the thing that writes it.
+   */
+  planRollout: string | null;
 }
 
 export function parseArgs(argv: string[]): ProbeArgs {
-  const out: ProbeArgs = { json: false };
-  for (const a of argv) {
+  const out: ProbeArgs = { json: false, planRollout: null };
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
     if (a === '--json') out.json = true;
-    else throw new Error(`unknown argument: ${a} (usage: growthJourneyExecutionStatus [--json])`);
+    else if (a === '--plan-rollout') {
+      const value = i + 1 < argv.length ? argv[i + 1] : '';
+      if (!value || value.startsWith('--')) {
+        throw new Error('--plan-rollout needs a scope: <brand uuid>|<programme uuid>|<channel>');
+      }
+      out.planRollout = value;
+      i += 1;
+    } else {
+      throw new Error(`unknown argument: ${a} (usage: growthJourneyExecutionStatus [--json] [--plan-rollout <brand>|<programme>|<channel>])`);
+    }
   }
   return out;
 }
@@ -176,6 +203,15 @@ export function renderReport(report: ProbeReport): string[] {
 }
 
 export async function run(args: ProbeArgs, out: (line: string) => void = console.log): Promise<number> {
+  if (args.planRollout !== null) {
+    // Deliberately BEFORE the probe read: this path touches no database at all, so it answers
+    // even when the master flag is off and every journey route is 404ing.
+    const [brandId, programId, channel] = args.planRollout.split('|');
+    for (const line of describePlannedRollout(planFirstRollout({
+      brandId: brandId ?? '', programId: programId ?? '', channel: channel ?? '',
+    }))) out(line);
+    return 0;
+  }
   const report = await buildReport();
   if (args.json) out(JSON.stringify(report, null, 2));
   else for (const line of renderReport(report)) out(line);

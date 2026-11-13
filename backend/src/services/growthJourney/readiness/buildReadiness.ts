@@ -1,9 +1,13 @@
 import { Op, QueryTypes } from 'sequelize';
+import { scrubField } from './scrubField';
 import { sequelize } from '../../../config/database';
 import {
   AiAgent,
   Campaign,
+  GrowthJourneyClassification,
   GrowthJourneyContentRule,
+  GrowthJourneyDecision,
+  GrowthJourneyEnrollment,
   GrowthJourneyExecutionControl,
   GrowthJourneyPolicy,
   JourneyProgram,
@@ -18,6 +22,12 @@ import {
   type GrowthJourneyCapability,
   type GrowthJourneyFlags,
 } from '../../../config/growthJourneyFlags';
+import {
+  isExplorerFeatureEnabled,
+  resolveExplorerGrowthFlags,
+  type ExplorerGrowthFeature,
+  type ExplorerGrowthFlags,
+} from '../../../config/explorerGrowthFlags';
 import { GROWTH_JOURNEY_AGENT_ENTRIES } from '../../agentRegistry/growthJourneyAgents';
 import { ALI_OUTREACH_CAMPAIGN_KEY, EXPLORER_CAMPAIGN_KEYS, FLOW_CAMPAIGN_KEYS } from '../execution/campaignKeys';
 
@@ -77,21 +87,55 @@ import { ALI_OUTREACH_CAMPAIGN_KEY, EXPLORER_CAMPAIGN_KEYS, FLOW_CAMPAIGN_KEYS }
  *     it; this file starts from the fixed version.
  */
 
+/**
+ * ── MR3 ADDED FIVE ITEMS, AND ONE OF THEM IS THE WHOLE ANSWER ───────────────
+ *
+ * The engine had produced zero decisions in production, and this checklist could not say why.
+ * Measured 2026-11-12: `growth_journey_decisions` 0 rows, `growth_journey_executions` 0 rows,
+ * `growth_journey_execution_controls` 0 rows, `growth_journey_enrollments` **220** rows all
+ * enrolled on 2026-09-11, all four `journey_programs` rows `draft`.
+ *
+ * The five gaps, each a real blocker the list was blind to:
+ *
+ *   1. `enrollments_present` and 2. `classifications_present` - and the second is the one that
+ *      matters. **The decider's subject population is `growth_journey_classifications`, grouped
+ *      by `subject_ref` (`decisionService.ts:437-442`) - NOT `growth_journey_enrollments`.** That
+ *      table holds **zero** rows, so the 220 enrolled people are not the queue and never were.
+ *      With it empty, the nightly produces nothing even with every flag on, every programme
+ *      active and a rollout control in place. The two items sit next to each other so the gap
+ *      between 220 and 0 reads on one screen instead of having to be inferred.
+ *   3. `programmes_active` - `runExecutor.ts:129` reads `status: 'active'` only. All four rows
+ *      are `draft`, so the plan stage iterates nothing. Note the asymmetry worth knowing before
+ *      anybody activates one: the nightly decider accepts `['draft','active','paused']`
+ *      (`runShadowDecisionsNightly.ts:127`), so **decisions do not need an active programme** -
+ *      only execution does.
+ *   4. `explorer_channel_flags` - the Explorer family gates two of the three journey channels
+ *      (`resolveExecutionMode.ts:44-47`), and none of them appeared on this list.
+ *   5. `decisions_mode_split` - the executor selects on `mode: 'live'` only
+ *      (`decisionReads.ts:48`), and a decision is stamped once at write time and never
+ *      re-stamped (`executionModeStamp.ts:104`). So flipping flags never makes an existing
+ *      shadow decision live; the engine has to decide again. A count alone would hide that.
+ */
 export type ReadinessKey =
   | 'master_flag'
   | 'decisions_flag'
   | 'nightly_enabled'
+  | 'enrollments_present'
+  | 'classifications_present'
   | 'content_rules'
   | 'queue_policies'
   | 'memberships'
   | 'handoffs_flag'
+  | 'programmes_active'
   | 'execution_flag'
+  | 'explorer_channel_flags'
   | 'executor_enabled'
   | 'kill_switch_row'
   | 'explorer_campaigns'
   | 'ali_campaign'
   | 'flow_drafts'
   | 'review_rollout'
+  | 'decisions_mode_split'
   | 'probe_scopes'
   | 'ledger_indexes'
   | 'tests_green';
@@ -114,36 +158,11 @@ export interface Readiness {
   as_of: string;
 }
 
-/**
- * The cap on a reason or a next_move.
- *
- * The longest AUTHORED reason renders at about 171 characters, so the headroom is real but
- * thin - an earlier version of this comment said "nothing authored here comes close", which
- * overstated 29 characters of slack. `buildReadiness.test.ts` pins it: if a future reason
- * grows past the cap, the cell fails rather than the reason being silently truncated.
- */
-export const FIELD_CAP = 200;
-
-/**
- * One field, scrubbed to the bar this phase actually sets.
- *
- * It lives HERE rather than in the CLI because there are two serving surfaces - the CLI
- * and `GET /status/readiness` - and the contract's bar is specifically "`@` anywhere in a
- * JSON response of a NEW ROUTE fails the phase". The first version scrubbed only in the
- * CLI, so the route met the bar transitively, through the reader never producing an `@`.
- * That is true today (every reason here is authored text, a code constant or a `.length`)
- * but it is an argument, not a guard, and the route is the surface the contract names.
- *
- * `redactForLogs` is the WRONG tool and the CLI's first version used it: its email pattern
- * captures the `@` as part of the domain group, so `someone@example.com` becomes
- * `s***@example.com` - masked local part, `@` intact. This follows `safeField`'s rule
- * instead (an `@` replaces the whole value) plus a cap, because the `@` rule alone would
- * not catch a long row value with no address in it.
- */
-export function scrubField(t: string): string {
-  if (t.includes('@')) return 'redacted - the value carried an address';
-  return t.length > FIELD_CAP ? `${t.slice(0, FIELD_CAP)}...` : t;
-}
+// `FIELD_CAP` and `scrubField` moved to ./scrubField (MR3), so the pure decision renderer can
+// share one redaction rule without importing the model barrel through this file. Two copies of
+// a redaction rule drift, and the one that drifts is the one that leaks. Re-exported here
+// because the CLI, the status route and the suite all import them from this module.
+export { FIELD_CAP, scrubField } from './scrubField';
 
 /** Applied per field, never to a serialised document. */
 export function scrubItem(i: ReadinessItem): ReadinessItem {
@@ -328,9 +347,14 @@ async function flagItems(flags: GrowthJourneyFlags): Promise<ReadinessItem[]> {
 }
 
 /** The ordered checklist. Reads only; every item carries a reason and a next move. */
-export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFlags }): Promise<Readiness> {
+export async function buildReadiness(args: {
+  now: Date;
+  flags?: GrowthJourneyFlags;
+  explorerFlags?: ExplorerGrowthFlags;
+}): Promise<Readiness> {
   const now = args.now;
   const flags = args.flags ?? resolveGrowthJourneyFlags();
+  const explorerFlags = args.explorerFlags ?? resolveExplorerGrowthFlags();
   const items: ReadinessItem[] = [];
 
   items.push(...(await flagItems(flags)));
@@ -339,6 +363,25 @@ export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFla
   items.push(item('nightly_enabled', nightly === true,
     nightly === null ? `${SHADOW_AGENT} has no ai_agents row` : nightly ? 'the nightly shadow-decisions agent is enabled' : 'the nightly shadow-decisions agent is disabled',
     `enable the ${SHADOW_AGENT} agent row`));
+
+  // Reported for CONTEXT, not as a gate. People being enrolled is not the same as people being
+  // decidable, and conflating the two is exactly the mistake the next item exists to correct.
+  const enrollments = await GrowthJourneyEnrollment.count();
+  items.push(item('enrollments_present', enrollments > 0,
+    enrollments > 0
+      ? `${enrollments} journey enrollment(s) exist - note these are NOT the decider's input, see classifications_present`
+      : 'no journey enrollments exist',
+    'enrol subjects into a journey programme'));
+
+  // THE ONE THAT ANSWERS "why has it never decided anything". The decider groups
+  // growth_journey_classifications by subject_ref; a subject with no classification row is
+  // skipped by design. Zero rows means zero decisions, whatever every flag says.
+  const classifications = await GrowthJourneyClassification.count();
+  items.push(item('classifications_present', classifications > 0,
+    classifications > 0
+      ? `${classifications} classification row(s) exist, so the decider has subjects to read`
+      : `no classification rows, so the decider has no subjects: it groups classifications by subject_ref, not enrollments, so ${enrollments} enrolled people are not a queue`,
+    'run the classification pass so enrolled subjects become decidable'));
 
   const learnerBrands = await learnerBrandIds();
   const withRules: string[] = [];
@@ -375,8 +418,34 @@ export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFla
 
   items.push(capabilityItem('handoffs_flag', 'journeyHandoffs', flags, 'handoffs',
     'no decision materialises a ticket', 'GROWTH_JOURNEY_HANDOFFS_ENABLED'));
+  // The executor reads active programmes ONLY. The nightly decider does not, so this gates
+  // execution and not decisions - which is why it sits here rather than higher up the list.
+  const programmes = await JourneyProgram.count();
+  const activeProgrammes = await JourneyProgram.count({ where: { status: 'active' } });
+  items.push(item('programmes_active', activeProgrammes > 0,
+    activeProgrammes > 0
+      ? `${activeProgrammes} of ${programmes} journey programme(s) are active`
+      : `0 of ${programmes} journey programmes are active, so the executor's plan stage iterates nothing - the nightly decider accepts draft, so this blocks execution only`,
+    'activate one programme, which is a human decision rather than a deploy'));
+
   items.push(capabilityItem('execution_flag', 'journeyExecution', flags, 'execution',
     'the executor skips every run', 'GROWTH_JOURNEY_EXECUTION_ENABLED'));
+
+  // Two of the three journey channels are gated by the Explorer family as well. Read through
+  // the sanctioned accessor: a direct sub-flag read fails the dark-launch guard, which is a raw
+  // text scan over this whole tree.
+  const EXPLORER_CHANNEL_GATES: readonly { feature: ExplorerGrowthFeature; channel: string }[] = [
+    { feature: 'inAppNudge', channel: 'in_app' },
+    { feature: 'aliOutreach', channel: 'ali_outreach' },
+  ];
+  const openChannels = EXPLORER_CHANNEL_GATES
+    .filter((g) => isExplorerFeatureEnabled(g.feature, explorerFlags))
+    .map((g) => g.channel);
+  items.push(item('explorer_channel_flags', openChannels.length === EXPLORER_CHANNEL_GATES.length,
+    openChannels.length === 0
+      ? 'no Explorer channel is open, so the in_app and ali_outreach channels both resolve to shadow'
+      : `${openChannels.length} of ${EXPLORER_CHANNEL_GATES.length} Explorer channels open: ${openChannels.join(', ')}`,
+    'set EXPLORER_GROWTH_OS_ENABLED plus the per-channel Explorer flags for the channels you intend to use'));
 
   const executor = await agentEnabled(EXECUTOR_AGENT);
   items.push(item('executor_enabled', executor === true,
@@ -412,6 +481,18 @@ export async function buildReadiness(args: { now: Date; flags?: GrowthJourneyFla
   items.push(item('review_rollout', rollout > 0,
     rollout > 0 ? `${rollout} active review rollout control(s)` : 'no active rollout control in review mode, so every scope resolves to shadow',
     'set a rollout control in review mode for the first scope to go live'));
+
+  // The executor selects on mode 'live' ONLY, and a decision is stamped once at write time and
+  // never re-stamped. So a shelf full of shadow decisions is not a queue waiting for a flag: it
+  // is a record of what the engine WOULD have done, and turning execution on makes none of it
+  // live. A bare count would have hidden that; the split is the fact worth seeing.
+  const decisionsTotal = await GrowthJourneyDecision.count();
+  const decisionsLive = await GrowthJourneyDecision.count({ where: { mode: 'live' } });
+  items.push(item('decisions_mode_split', decisionsLive > 0,
+    decisionsTotal === 0
+      ? 'no decisions exist at all, so there is nothing for the executor to read'
+      : `${decisionsLive} of ${decisionsTotal} decisions are mode=live; the rest are shadow and are never re-stamped, so execution will not pick them up`,
+    'once a rollout control is active, let the decider run again so new decisions are stamped live'));
 
   items.push(item('probe_scopes', flags.growthJourneyEnabled === true,
     flags.growthJourneyEnabled === true

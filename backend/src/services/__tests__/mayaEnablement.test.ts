@@ -254,3 +254,48 @@ describe('one kill-switch read per batch, not one per capability', () => {
     })).resolves.toMatchObject({ enabled: false, reason: 'kill_switch' });
   });
 });
+
+describe('sendEmail (MR2) is gated on journeyExecution alone, and that is on purpose', () => {
+  // The tables above enumerate MAYA_CAPABILITIES, so sendEmail is already driven through every
+  // default-off, kill-switch and flag case. These four pin the things that are true of sendEmail
+  // and of nothing else, because they are the decisions a reviewer would want to challenge.
+
+  it('is a registered capability', () => {
+    expect(MAYA_CAPABILITIES).toContain('sendEmail');
+  });
+
+  it('carries NO explorer gate, because no explorer flag is an email channel', () => {
+    // Borrowing `inAppNudge` would gate email on the in-product surface, and borrowing
+    // `draftRender` would gate SENDING on RENDERING. Either would make the gate read as
+    // something it is not. An absent gate here is honest; a wrong one would be invisible.
+    expect(MAYA_CAPABILITY_GATES.sendEmail.explorer).toBeUndefined();
+  });
+
+  it('is gated on journeyExecution, the one flag that can cause a person to be contacted', () => {
+    expect(MAYA_CAPABILITY_GATES.sendEmail.growth).toBe('journeyExecution');
+  });
+
+  it('stays off when journeyExecution is off even with every other growth flag on', async () => {
+    // The specific regression this catches: someone enabling the journey master plus decisions
+    // plus handoffs, and expecting email to stay put. It must.
+    const allButExecution = resolveGrowthJourneyFlags({
+      GROWTH_JOURNEY_ENABLED: 'true',
+      GROWTH_JOURNEY_DECISIONS_ENABLED: 'true',
+      GROWTH_JOURNEY_HANDOFFS_ENABLED: 'true',
+    } as NodeJS.ProcessEnv);
+
+    await expect(resolveMayaCapability('sendEmail', deps({ growthFlags: allButExecution })))
+      .resolves.toMatchObject({
+        enabled: false,
+        reason: 'growth_flag_off:journeyExecution',
+      });
+  });
+
+  it('reports enabled only when journeyExecution is on and the switch is clear', async () => {
+    // The positive case matters as much as the negative one: a gate that can never open is not a
+    // gate, it is a disabled feature pretending to be one.
+    await expect(resolveMayaCapability('sendEmail', deps()))
+      .resolves.toMatchObject({ enabled: true, reason: 'enabled' });
+    expect(await isMayaCapabilityEnabled('sendEmail', deps())).toBe(true);
+  });
+});

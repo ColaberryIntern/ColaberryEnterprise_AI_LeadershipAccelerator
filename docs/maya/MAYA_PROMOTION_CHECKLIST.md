@@ -2,6 +2,9 @@
 
 **Ticket:** M37 (`Design Explorer Growth - Maya`, todo 10411539768) | **Owner of every promotion:** Ali
 **Code:** `backend/src/services/maya/mayaPromotion.ts` | **Routes:** `backend/src/routes/admin/mayaCapabilityRoutes.ts`
+**The cross-layer ladder** (the journey engine, the agent rows, the env flags, the rollout
+control): [`MAYA_RELEASE_GATE.md`](./MAYA_RELEASE_GATE.md). This document owns the per-capability
+promotion layer only.
 
 NOTHING SENDS is the standing rule of this workstream. Leaving shadow is the moment it stops applying, so leaving
 shadow is a recorded human decision, never a deploy and never a default.
@@ -90,6 +93,48 @@ identity, never a field someone types. Every change is appended to the history w
 - **Revert:** `POST /api/admin/maya/capabilities/readPerson360/revert` with `{"review_note": "<why>"}` (any admin). She answers from the conversation alone.
 
 ---
+
+### sendEmail (MR2): Maya emails a person, unprompted
+
+**The first capability whose action leaves the platform.** The others deliver in-app or file a
+row; this one reaches an inbox and cannot be withdrawn.
+
+- **Before promoting:**
+  - At least a week of shadow rows in `maya_email_ledger` reviewed by Ali. Each row holds the
+    exact subject and body she would have sent, with `delivered_at` empty: the body is right, and
+    nobody received one.
+  - **R1 (todo 10455593417) has decided** whether Maya may contact the ad cohort at all, and on
+    which channels. MR2 was built in shadow regardless, because R1 governs promotion rather than
+    construction — but a promotion before R1 is a decision taken out of order.
+  - Ali decides `GROWTH_JOURNEY_EXECUTION_ENABLED`. Without it, a promotion stays **shadow**.
+  - The release-gate ladder's Maya rungs are done: her `ai_agents` row is enabled, `send_email` is
+    in `tools_granted`, and she has a brand scope. Without the grant `readAgentGate` answers
+    `tool_not_granted`; without the brand scope the send short-circuits to `no_brand_scope` and
+    **drafts instead of sending**, which is correct behaviour and not a bug.
+- **Promote:** `POST /api/admin/maya/capabilities/sendEmail/promote` with
+  `{"review_note": "<what you reviewed>"}` (Ali or a super_admin only).
+- **Verify:** sign up a test Explorer whose address is routable. One `maya_email_ledger` row
+  appears with `mode = live`, `delivered_at` set and a `provider_message_id`, and the matching
+  `email_send_ledger` row reads `sent`. If `delivered_at` is set while the send ledger is not
+  `sent`, **stop** — that is the stop condition in the release gate.
+- **Revert:** `POST /api/admin/maya/capabilities/sendEmail/revert` with `{"review_note": "<why>"}`
+  (any admin). New attempts record a shadow row only.
+- **Four things that are true of this capability and of no other, worth knowing before you
+  promote it:**
+  - **A suppressed recipient leaves no row at all.** Every other refusal records; a consent
+    refusal deliberately does not, so there is never a draft of a message to somebody who
+    unsubscribed sitting in a queue for a reviewer to approve later.
+  - **A recipient with no `leads` row is refused.** Consent lives on the lead, and an unverifiable
+    consent is not a licence to send.
+  - **The copy is a closed set**, not generated per send. One purpose exists today,
+    `explorer_welcome`. Adding another is a deliberate edit to a frozen object in
+    `mayaEmailService.ts`, which is the point.
+  - **It is keyed per person per purpose.** A second identical attempt writes no second row,
+    arbitrated by a unique index rather than a read-then-write, so two concurrent calls cannot
+    both proceed.
+- **Rollback for the capability itself:** `DROP TABLE IF EXISTS maya_email_ledger;`. Nothing else
+  reads that table. It holds a recipient, a subject and a full body, so dropping it is also the
+  retention action once a promotion decision has been made.
 
 ## The cycle every promotion must prove
 

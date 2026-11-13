@@ -2,6 +2,7 @@ import { loadDecisionContext } from '../services/growthJourney/decision/loadDeci
 import { decideForSubject } from '../services/growthJourney/governor/decideForSubject';
 import { decisionInputHash, productionDeps } from '../services/growthJourney/decisionService';
 import type { GrowthJourneyFlags } from '../config/growthJourneyFlags';
+import { describeDecision } from '../services/growthJourney/readiness/describeDecision';
 
 /**
  * growthJourneyDecideDryRun — what would the Governor decide for this subject in this brand?
@@ -30,6 +31,18 @@ export interface DryRunArgs {
   enrollmentId: string | null;
   brandId: string;
   noPersist: boolean;
+  /**
+   * MR3: print the decision as ONE SENTENCE instead of the JSON.
+   *
+   * The JSON stays the default, so anything that parses this script's stdout is unaffected -
+   * and it is INSTEAD of rather than alongside, because a prose line emitted next to a JSON
+   * document would break exactly those parsers.
+   *
+   * It exists because the JSON carries thirty-odd fields including candidates, suppressions,
+   * scores and eligibility: the right output for a machine, and the wrong one for the decision
+   * a person has to make after a shadow run.
+   */
+  sentence: boolean;
 }
 
 export function parseArgs(argv: string[]): DryRunArgs {
@@ -45,7 +58,7 @@ export function parseArgs(argv: string[]): DryRunArgs {
   if (leadId === null && !enrollmentId) throw new Error('usage: one of --lead <id> or --enrollment <id> is required');
   if (!brandId) throw new Error('usage: --brand <brand uuid> is required');
   if (!argv.includes('--no-persist')) throw new Error('--no-persist is required: this script has no persisting mode');
-  return { leadId, enrollmentId, brandId, noPersist: true };
+  return { leadId, enrollmentId, brandId, noPersist: true, sentence: argv.includes('--sentence') };
 }
 
 /** The capability ON for the print, and nothing else. The master must be on too or the pipeline refuses. */
@@ -68,6 +81,23 @@ export async function runDryRun(args: DryRunArgs, out: (line: string) => void = 
   const outcome = await decideForSubject(loaded.ctx, loaded.strategy, productionDeps(), DRY_RUN_FLAGS);
   if (outcome.status === 'disabled') throw new Error('the pipeline reported disabled with the dry-run flags on');
   const d = outcome.decision;
+
+  if (args.sentence) {
+    // Stamped `shadow` deliberately: this is a dry run, so the sentence must be conditional.
+    // Nothing here has been persisted or executed, and the renderer's grammar is what says so.
+    out(describeDecision({
+      subject_ref: loaded.ctx.subject_ref,
+      mode: 'shadow',
+      selected_action: d.selected_action,
+      selected_channel: d.selected_channel,
+      selected_path: d.selected_path,
+      reason: d.reason,
+      executed: false,
+      requires_human_review: d.requires_human_review,
+    }));
+    return 0;
+  }
+
   out(
     JSON.stringify(
       {
