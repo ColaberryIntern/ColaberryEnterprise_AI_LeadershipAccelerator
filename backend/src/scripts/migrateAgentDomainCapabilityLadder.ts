@@ -47,10 +47,12 @@ import { AGENT_DOMAIN_KEYS } from '../services/agentDomain/agentDomainRegistry';
 import { derivedProjectId } from '../services/agentDomain/agentDomainProvisionPlan';
 import {
   describePlan,
+  describePreserved,
   planBoardReconcile,
   type BoardReconcilePlan,
   type ExistingStoryRow,
 } from '../services/agentDomain/agentDomainBoardReconciler';
+import type { PlannedStory } from '../services/agentDomain/agentDomainProvisionPlan';
 
 /** The rows the reconciler judges. Selected by project, so a board is read in one statement. */
 export const STORY_SELECT_SQL = `
@@ -82,15 +84,54 @@ export const STORY_INSERT_SQL = `
   ON CONFLICT (id) DO NOTHING`;
 
 /**
- * Rewrite a row that drifted from the plan. Every column has its own placeholder -- see the
- * header. `$2` and `$3` carry the same value into `title` (varchar) and `description` (text) and
- * are deliberately NOT shared.
+ * Rewrite ONLY the columns the reconciler cleared for writing.
+ *
+ * This used to be a fixed statement setting every column at once. That is what would have
+ * nulled 683 authored acceptance lines: the plan carries acceptance for the 40 ladder
+ * stories only, so "set acceptance to whatever the plan says" meant "set it to nothing"
+ * on every other row. The column list is now built from `update.write`, so a field the
+ * reconciler preserved is not in the statement at all and cannot be written by accident.
+ *
+ * Every column still gets its OWN placeholder -- see the header. `title` (varchar) and
+ * `description` (text) take the same value and are deliberately not shared.
  */
-export const STORY_UPDATE_SQL = `
+export function buildUpdateSql(fields: ReadonlyArray<string>): { sql: string; columns: string[] } {
+  // `title` also drives `description`, which is not independently planned.
+  const columns: string[] = [];
+  for (const f of fields) {
+    if (f === 'title') { columns.push('title', 'description'); continue; }
+    if (f === 'acceptance') { columns.push('acceptance'); continue; }
+    columns.push(f);
+  }
+  if (columns.length === 0) throw new Error('buildUpdateSql called with nothing to write');
+
+  // $1 is the row id; the columns start at $2.
+  const sets = columns.map((c, i) => (c === 'acceptance'
+    ? `acceptance = $${i + 2}::jsonb`
+    : `${c} = $${i + 2}`));
+  return {
+    sql: `
   UPDATE student_tasks
-     SET title = $2, description = $3, narrative = $4, build = $5, release_key = $6,
-         autonomy_stage = $7, story_kind = $8, acceptance = $9::jsonb, updated_at = now()
-   WHERE id = $1`;
+     SET ${sets.join(', ')}, updated_at = now()
+   WHERE id = $1`,
+    columns,
+  };
+}
+
+/** The value each column takes, so the bind order cannot drift from the column order. */
+export function updateBindFor(column: string, s: PlannedStory): unknown {
+  switch (column) {
+    case 'title': return s.title;
+    case 'description': return s.title;
+    case 'narrative': return s.narrative;
+    case 'build': return s.build;
+    case 'release_key': return s.release_key;
+    case 'autonomy_stage': return s.autonomy_stage;
+    case 'story_kind': return s.kind;
+    case 'acceptance': return s.acceptance.length > 0 ? JSON.stringify([...s.acceptance]) : null;
+    default: throw new Error(`no bind defined for column '${column}'`);
+  }
+}
 
 interface DomainOutcome {
   readonly domain_key: string;
@@ -149,10 +190,9 @@ async function applyDomain(plan: BoardReconcilePlan, projectId: string): Promise
         });
       }
       for (const u of plan.to_update) {
-        const s = u.next;
-        await sequelize.query(STORY_UPDATE_SQL, {
-          bind: [u.id, s.title, s.title, s.narrative, s.build, s.release_key, s.autonomy_stage,
-            s.kind, s.acceptance.length > 0 ? JSON.stringify([...s.acceptance]) : null],
+        const { sql, columns } = buildUpdateSql(u.write);
+        await sequelize.query(sql, {
+          bind: [u.id, ...columns.map((c) => updateBindFor(c, u.next))],
           transaction,
         });
       }
@@ -179,6 +219,7 @@ async function main(): Promise<void> {
     const plan = planBoardReconcile(domainKey, await readBoard(projectId));
     console.log(`  ${describePlan(plan)}`);
     for (const r of plan.refusals) console.log(`    REFUSED ${r.story_id}: ${r.detail}`);
+    for (const line of describePreserved(plan)) console.log(`    PRESERVED ${line}`);
 
     let applied = false;
     let error: string | null = null;
@@ -200,10 +241,12 @@ async function main(): Promise<void> {
     del: a.del + o.plan.to_delete.length,
     ins: a.ins + o.plan.to_insert.length,
     upd: a.upd + o.plan.to_update.length,
-  }), { del: 0, ins: 0, upd: 0 });
+    kept: a.kept + o.plan.preserved.length,
+  }), { del: 0, ins: 0, upd: 0, kept: 0 });
 
   console.log(`[ladder] ${apply ? 'applied' : 'planned'}: `
-    + `-${totals.del} delete, +${totals.ins} insert, ~${totals.upd} update `
+    + `-${totals.del} delete, +${totals.ins} insert, ~${totals.upd} update, `
+    + `=${totals.kept} field(s) preserved `
     + `across ${outcomes.length} domain(s); `
     + `${outcomes.filter((o) => o.applied).length} written, `
     + `${refused.length} refused, ${failed.length} failed`);
