@@ -110,6 +110,7 @@ import { ensureGovCompanyLibrarySchema } from './db/ensureGovCompanyLibrarySchem
 import { ensureGovProposalSourcesSchema } from './db/ensureGovProposalSourcesSchema';
 import { ensureGovProposalPackageSchema } from './db/ensureGovProposalPackageSchema';
 import { ensureGovSubmissionSchema } from './db/ensureGovSubmissionSchema';
+import { ensureGovBidValueSchema } from './db/ensureGovBidValueSchema';
 import { ensureServiceOfferingSchema } from './db/ensureServiceOfferingSchema';
 import { ensureCaseStudyServiceLinkSchema } from './db/ensureCaseStudyServiceLinkSchema';
 import { ensureBroadcastSchema } from './db/ensureBroadcastSchema';
@@ -2967,6 +2968,18 @@ async function start(): Promise<void> {
   // win/loss outcome, and the PRIVATE case-study + service-capability candidates. One additive NEW table (UNIQUE per
   // project); it never writes to the published case_studies / live service_offerings systems. See ensureGovSubmissionSchema.
   await ensureGovSubmissionSchema();
+  // R16 - what a government bid is WORTH (gov_bid_values). The one piece of Ali's requested
+  // funnel (flagged → priced → ready → exported → submitted → acknowledged → won/lost) that
+  // did not already exist: measured 2026-11-12, gov_qualifications has no value, budget,
+  // ceiling or close-date column, source_snapshot is NULL on all 14 flagged rows, and
+  // gov_company_references (which holds OUR past contract values) is empty. A single additive
+  // NEW table; the name was checked against information_schema on production before it was
+  // taken, because R14 is the retrospective for the day a CREATE TABLE IF NOT EXISTS collided
+  // with a table another feature already owned and turned the collision into silence.
+  // MUST run after delivery_projects exists: its REFERENCES names that parent, exactly like
+  // ensureGovSubmissionSchema above, and a foreign key to a missing table is a boot error
+  // rather than a no-op.
+  await ensureGovBidValueSchema();
   // Colaberry's own service catalog (service_offerings). A single additive NEW table so the gov desk can store the
   // services the company offers and later match opportunities against them. No existing table is altered; it FKs to
   // nothing (tenant-scoped by tenant_id).

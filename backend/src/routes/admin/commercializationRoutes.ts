@@ -20,6 +20,11 @@ import {
   handleGetRevenueRoomBoard,
   handleGetRevenueRoomDrilldown,
 } from '../../controllers/revenueRoomController';
+import {
+  handleConfirmBidValue,
+  handleGetBidValueHistory,
+  handleGetRevenueFlowBoard,
+} from '../../controllers/revenueFlowController';
 
 const router = Router();
 
@@ -36,6 +41,27 @@ router.get(
   '/api/admin/commercialization/revenue-room/:cardKey',
   requireAdmin,
   handleGetRevenueRoomDrilldown,
+);
+// R16 - the Revenue Flow board: the big-picture dashboard plus the dated, classified events
+// behind each number. `?window=<days>` narrows the timeline; it defaults to 180, which is
+// wider than the oldest real datum production holds.
+router.get('/api/admin/commercialization/revenue-flow', requireAdmin, handleGetRevenueFlowBoard);
+// R16 - the only write on this surface: record what a government bid is worth. `confirmedBy`
+// comes from the session and is NOT accepted from the body; see revenueFlowController's
+// header for why that is the difference between a confirmation and a string. Declared with a
+// literal `bid-value` segment so it can never be shadowed by a parameterized sibling.
+router.post(
+  '/api/admin/commercialization/revenue-flow/bid-value',
+  requireAdmin,
+  handleConfirmBidValue,
+);
+// R16 - the price history of one bid. Separate from the drill-down because a revision is
+// worth reading on its own: the first estimate against the final one is often the most
+// informative line on the page.
+router.get(
+  '/api/admin/commercialization/revenue-flow/bid-value/:deliveryProjectId',
+  requireAdmin,
+  handleGetBidValueHistory,
 );
 // C8.4's funnel snapshot had no route of its own: it was observable only indirectly,
 // through the shape of the hypothesis response. R1 needs it directly for the drill-down,
