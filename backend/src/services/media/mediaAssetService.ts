@@ -113,8 +113,12 @@ function probeDocument(bytes: Buffer): PdfFacts {
   }
 }
 
-export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
-  const altText = input.altText.trim();
+/**
+ * Alt text rules, shared. Extracted so the library upload cannot drift from the composer
+ * upload: a rule enforced in one place and not the other is the same as not enforced.
+ */
+export function assertAltText(raw: string): string {
+  const altText = String(raw ?? '').trim();
   if (altText.length < 3) {
     throw new WorkflowError('Describe the image for people who cannot see it (alt text is required).', 400, 'AltTextRequired');
   }
@@ -122,6 +126,138 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
     // LinkedIn's cap; the smallest among the providers we target, so it is the one to enforce.
     throw new WorkflowError('Alt text is limited to 300 characters.', 400, 'AltTextTooLong');
   }
+  return altText;
+}
+
+export interface IngestedBytes {
+  storageKey: string;
+  sha256: string;
+  byteSize: number;
+  mimeType: string;
+  claimedMime: string;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  video: Mp4Facts | null;
+  document: PdfFacts | null;
+  exifStripped: boolean;
+}
+
+/**
+ * Normalise, probe and store one file's bytes, with no content item in sight.
+ *
+ * WHY THIS IS SEPARATE (LIB-1). The library accepts an upload that belongs to no post yet,
+ * and `attachMedia` cannot serve it - it needs a `contentItemId` only in order to find the
+ * brand. The brand is the one thing the ingest actually wanted, so it is a parameter here.
+ * There is no brand-less form of this: the storage key is `media/<brand>/<sha256>.<ext>`.
+ *
+ * `assertAcceptable` stays FIRST and stays inside, because sharp will otherwise happily
+ * spend seconds decoding a 200 MB file that calls itself a png.
+ */
+export async function ingestFileBytes(
+  brandId: string,
+  inputBytes: Buffer,
+  claimedMimeType: string,
+): Promise<IngestedBytes> {
+  // Size and type gate BEFORE decoding.
+  const entry = assertAcceptable(claimedMimeType, inputBytes.length);
+
+  let bytes = inputBytes;
+  let mimeType = claimedMimeType;
+  let width: number | null = null;
+  let height: number | null = null;
+  let durationMs: number | null = null;
+  let video: Mp4Facts | null = null;
+  let document: PdfFacts | null = null;
+  if (entry.kind === 'image') {
+    const normalised = await normaliseImage(inputBytes, claimedMimeType);
+    bytes = normalised.bytes;
+    mimeType = normalised.mimeType;
+    width = normalised.width;
+    height = normalised.height;
+  } else if (entry.kind === 'video') {
+    video = probeVideo(inputBytes);
+    width = video.width;
+    height = video.height;
+    durationMs = video.durationMs;
+  } else {
+    document = probeDocument(inputBytes);
+  }
+
+  const stored = await put(brandId, mimeType, bytes);
+  return {
+    storageKey: stored.key,
+    sha256: stored.sha256,
+    byteSize: stored.byteSize,
+    mimeType,
+    claimedMime: claimedMimeType,
+    width,
+    height,
+    durationMs,
+    video,
+    document,
+    exifStripped: entry.kind === 'image',
+  };
+}
+
+export interface LibraryAssetInput {
+  tenantId: string;
+  brandId: string;
+  ingest: IngestedBytes;
+  originalFilename: string | null;
+  altText: string;
+  uploadedBy: string | null;
+}
+
+/**
+ * Find-or-create on (brand_id, checksum_sha256), with the alt-text backfill.
+ *
+ * NOT AN OPTIMISATION. `media_assets_brand_checksum_unique` (ensureContentOsSchema) means a
+ * second upload of the same bytes MUST reuse the row rather than race it, and re-uploading
+ * an ad that is already in the library is the likeliest thing anyone does to a media
+ * library - an unconditional insert would 500 on it. The lookup, the create and the
+ * backfill are extracted together on purpose: split them and the backfill is what gets lost.
+ *
+ * `kind` is deliberately not set. The column defaults to 'file' (ensureMediaLibrarySchema),
+ * so this stays correct both before and after that migration lands.
+ */
+export async function findOrCreateLibraryAsset(
+  input: LibraryAssetInput,
+): Promise<{ asset: MediaAsset; reused: boolean }> {
+  const { ingest } = input;
+  let asset = await MediaAsset.findOne({
+    where: { brand_id: input.brandId, checksum_sha256: ingest.sha256 },
+  });
+  const reused = asset !== null;
+  if (!asset) {
+    asset = await MediaAsset.create({
+      tenant_id: input.tenantId,
+      brand_id: input.brandId,
+      storage_key: ingest.storageKey,
+      original_filename: input.originalFilename,
+      mime_type: ingest.mimeType,
+      byte_size: ingest.byteSize,
+      checksum_sha256: ingest.sha256,
+      width: ingest.width,
+      height: ingest.height,
+      duration_ms: ingest.durationMs,
+      alt_text: input.altText,
+      uploaded_by: input.uploadedBy,
+      metadata: {
+        exif_stripped: ingest.exifStripped,
+        claimed_mime: ingest.claimedMime,
+        ...(ingest.video ? { video: { codec: ingest.video.codec, codec_family: ingest.video.codecFamily, has_audio: ingest.video.hasAudio, rotation: ingest.video.rotation, major_brand: ingest.video.majorBrand } } : {}),
+        ...(ingest.document ? { document: { pages: ingest.document.pages, pdf_version: ingest.document.version } } : {}),
+      },
+    } as any);
+  } else if (!asset.alt_text) {
+    await asset.update({ alt_text: input.altText });
+  }
+  return { asset: asset as MediaAsset, reused };
+}
+
+export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
+  const altText = assertAltText(input.altText);
 
   const item = await ContentItem.findByPk(input.contentItemId);
   if (!item) throw new WorkflowError('Content item not found', 404, 'NotFound');
@@ -135,61 +271,20 @@ export async function attachMedia(input: AttachInput): Promise<AttachedMedia> {
     throw new WorkflowError(`A post can carry at most ${MAX_ATTACHMENTS_PER_ITEM} media items.`, 409, 'TooManyAttachments');
   }
 
-  // Size and type gate BEFORE decoding: sharp will happily spend seconds on a 200 MB "png".
-  const entry = assertAcceptable(input.claimedMimeType, input.bytes.length);
+  // The ingest and the library row are shared with the standalone library upload (LIB-1),
+  // which has no content item. Everything below reads exactly as it did before the split.
+  const ingest = await ingestFileBytes(item.brand_id, input.bytes, input.claimedMimeType);
+  const { mimeType, width, height, durationMs, document } = ingest;
+  const stored = { key: ingest.storageKey, byteSize: ingest.byteSize, sha256: ingest.sha256 };
 
-  let bytes = input.bytes;
-  let mimeType = input.claimedMimeType;
-  let width: number | null = null;
-  let height: number | null = null;
-  let durationMs: number | null = null;
-  let video: Mp4Facts | null = null;
-  let document: PdfFacts | null = null;
-  if (entry.kind === 'image') {
-    const normalised = await normaliseImage(input.bytes, input.claimedMimeType);
-    bytes = normalised.bytes;
-    mimeType = normalised.mimeType;
-    width = normalised.width;
-    height = normalised.height;
-  } else if (entry.kind === 'video') {
-    video = probeVideo(input.bytes);
-    width = video.width;
-    height = video.height;
-    durationMs = video.durationMs;
-  } else {
-    document = probeDocument(input.bytes);
-  }
-
-  const stored = await put(item.brand_id, mimeType, bytes);
-
-  // The (brand, checksum) unique index means a second upload of the same bytes must reuse the
-  // row, not race it. Look up first; create only when absent.
-  let asset = await MediaAsset.findOne({ where: { brand_id: item.brand_id, checksum_sha256: stored.sha256 } });
-  const reused = asset !== null;
-  if (!asset) {
-    asset = await MediaAsset.create({
-      tenant_id: item.tenant_id,
-      brand_id: item.brand_id,
-      storage_key: stored.key,
-      original_filename: input.originalFilename,
-      mime_type: mimeType,
-      byte_size: stored.byteSize,
-      checksum_sha256: stored.sha256,
-      width,
-      height,
-      duration_ms: durationMs,
-      alt_text: altText,
-      uploaded_by: input.uploadedBy,
-      metadata: {
-        exif_stripped: entry.kind === 'image',
-        claimed_mime: input.claimedMimeType,
-        ...(video ? { video: { codec: video.codec, codec_family: video.codecFamily, has_audio: video.hasAudio, rotation: video.rotation, major_brand: video.majorBrand } } : {}),
-        ...(document ? { document: { pages: document.pages, pdf_version: document.version } } : {}),
-      },
-    } as any);
-  } else if (!asset.alt_text) {
-    await asset.update({ alt_text: altText });
-  }
+  const { asset, reused } = await findOrCreateLibraryAsset({
+    tenantId: item.tenant_id,
+    brandId: item.brand_id,
+    ingest,
+    originalFilename: input.originalFilename,
+    altText,
+    uploadedBy: input.uploadedBy,
+  });
 
   // Idempotent attach: the same asset on the same item twice is one attachment.
   const existingLink = await ContentItemMedia.findOne({ where: { content_item_id: item.id, media_asset_id: asset.id } });
