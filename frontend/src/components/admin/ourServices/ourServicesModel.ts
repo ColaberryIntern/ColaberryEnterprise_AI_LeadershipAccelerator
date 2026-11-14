@@ -96,6 +96,9 @@ export interface KpiValues {
   provenPct: number | null;
   avgScore: number | null;
   noProof: number;
+  /** noProof split by status, so the tile can say which are live in bids (active) vs not yet (growth). */
+  noProofActive: number;
+  noProofGrowth: number;
   blocked: number;
 }
 
@@ -115,6 +118,8 @@ export function buildKpis(summary: EvidenceSummary): KpiValues {
     provenPct: live.length ? Math.round((proven / live.length) * 100) : null,
     avgScore: live.length ? Math.round(live.reduce((a, s) => a + s.evidenceScore, 0) / live.length) : null,
     noProof: live.filter((s) => s.evidenceTier === 'none').length,
+    noProofActive: live.filter((s) => s.evidenceTier === 'none' && s.status === 'active').length,
+    noProofGrowth: live.filter((s) => s.evidenceTier === 'none' && s.status === 'growth').length,
     blocked: summary.decideNow.blockedCaseStudies.count,
   };
 }
