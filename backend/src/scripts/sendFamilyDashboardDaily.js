@@ -30,6 +30,7 @@ const { renderFamilyDashboardHtml } = require(path.resolve(__dirname, './lib/ren
 const { renderFamilyDashboardEmail, renderFamilyDashboardEmailText } = require(path.resolve(__dirname, './lib/renderFamilyDashboardEmail'));
 const { compileFamilyPhotos, commitPicks } = require(path.resolve(__dirname, './lib/familyPhotoFeed'));
 const { compileSchoolNews } = require(path.resolve(__dirname, './lib/familySchoolNews'));
+const { compileFamilyWeek } = require(path.resolve(__dirname, './lib/familyCalendarFeed'));
 
 const BUCKET_ID = 33392153;
 const BC_BASE = 'https://3.basecampapi.com/3945211';
@@ -173,6 +174,15 @@ async function compileNewsletterFeeds(data) {
   } catch (e) {
     console.error(`[Family Dashboard] school feed failed (${e.name}): ${e.message}`);
     data.sources.push({ name: 'School mail (ParentSquare)', status: 'broken', detail: e.message.slice(0, 120) });
+  }
+  data.week = null;
+  data.sources = data.sources.filter((s) => s.name !== 'Google Calendar'); // replaced by the real check below
+  try {
+    data.week = await compileFamilyWeek({ today, schoolItems: data.school ? data.school.items : [] });
+    data.sources.push({ name: 'Family Google Calendar', status: 'live', detail: `${data.week.eventCount} event(s) in the next 7 days` });
+  } catch (e) {
+    console.error(`[Family Dashboard] calendar feed failed (${e.name}): ${e.message}`);
+    data.sources.push({ name: 'Family Google Calendar', status: 'broken', detail: e.message.slice(0, 120) });
   }
   try {
     feeds.photoFeed = await compileFamilyPhotos({ today });

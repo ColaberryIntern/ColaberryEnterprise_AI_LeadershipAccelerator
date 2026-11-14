@@ -67,7 +67,7 @@ const PROMPT = (today) => `Today is ${today}. Below are school emails for a fami
   + `Creed (Watkins Elementary, kindergarten), Jayce (Naaman Forest High School, senior). "Family" means a district-wide post.\n`
   + `Pull out only what a busy parent must know: events with dates, deadlines, forms to fill, money to send, things to bring, `
   + `schedule changes, grade concerns. Skip fundraising pitches, generic reminders and anything already in the past. `
-  + `Merge duplicates. Reply with JSON only: {"items":[{"child":"Addison|Creed|Jayce|Family","date":"YYYY-MM-DD or null",`
+  + `Merge duplicates. Reply with JSON only: {"items":[{"email":<the number of the email it came from>,"date":"YYYY-MM-DD or null",`
   + `"title":"under 12 words","detail":"one plain sentence","action":"what the parent must do, or null","link":"a form or `
   + `signup URL from the email, or null"}]}. Plain words, no dashes. At most ${MAX_ITEMS} items, soonest first.`;
 
@@ -81,7 +81,19 @@ async function summarise(rows, today) {
   });
   if (!r.ok) throw new Error(`OpenAI ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = JSON.parse((await r.json()).choices[0].message.content);
-  return normaliseItems(j.items, today);
+  return normaliseItems(attributeItems(j.items, rows), today);
+}
+
+/**
+ * The child comes from the school of the email the item was pulled from, never from the model:
+ * on 2026-11-14 the model tagged Harrison's 5th-grade scoliosis screening as Jayce's. Items that
+ * do not name a real email are dropped. Pure.
+ */
+function attributeItems(items, rows) {
+  return (Array.isArray(items) ? items : []).map((it) => {
+    const src = it && Number.isInteger(Number(it.email)) ? rows[Number(it.email) - 1] : null;
+    return src ? { ...it, child: src.child } : null;
+  }).filter(Boolean);
 }
 
 /** Validate model output: known child, sane date, not in the past, dashes removed, capped. Pure. */
@@ -117,4 +129,4 @@ async function compileSchoolNews({ today }) {
   }
 }
 
-module.exports = { compileSchoolNews, schoolOf, cleanBody, normaliseItems };
+module.exports = { compileSchoolNews, schoolOf, cleanBody, normaliseItems, attributeItems };

@@ -1,4 +1,15 @@
-const { schoolOf, cleanBody, normaliseItems } = require('../familySchoolNews');
+const { schoolOf, cleanBody, normaliseItems, attributeItems } = require('../familySchoolNews');
+
+test('the child comes from the source email, not the model (scoliosis screening was mis-tagged Jayce)', () => {
+  const rows = [{ child: 'Addison', school: 'Harrison Intermediate' }, { child: 'Creed', school: 'Watkins Elementary' }];
+  const out = attributeItems([
+    { email: 1, child: 'Jayce', title: 'Scoliosis Screening Day' },
+    { email: '2', title: 'Turkey project' },
+    { email: 9, title: 'Points at no email' },
+    { title: 'No email at all' },
+  ], rows);
+  expect(out.map((i) => [i.title, i.child])).toEqual([['Scoliosis Screening Day', 'Addison'], ['Turkey project', 'Creed']]);
+});
 const { validateBeforeSend } = require('../mandrillPreflight');
 const { renderFamilyDashboardEmail, renderFamilyDashboardEmailText } = require('../renderFamilyDashboardEmail');
 
