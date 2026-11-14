@@ -98,6 +98,11 @@ export const FRONTEND_TYPOGRAPHY_BASELINE: Readonly<Record<string, TypographyBas
  * empty values read "None" or "n/a". Emoji stayed at 659: the mockup's emoji were rendered as
  * RemixIcon icons rather than added to the baseline.
  *
+ * **em/en dash: 2101 -> 2096 (admin project documents panel, 2026-11-14).** The admin project
+ * delivery `ArtifactsPanel.tsx` was rebuilt to show the student's documents as typed cards; its
+ * empty-state copy dropped its one dash (now a colon), so its entry (5) is DELETED. The new
+ * `FileCards.tsx` and `adminProjectDocumentsApi.ts` carry no dashes in copy.
+ *
  * And the same caveat applies, because it is the one that is easy to get wrong: the invariant
  * is "may only go down AT A FIXED SCOPE", not "may only go down". `BASELINE_SCOPE` is shared
  * with the word lint, so widening it there re-bases these totals too. A re-base is not a
@@ -105,7 +110,7 @@ export const FRONTEND_TYPOGRAPHY_BASELINE: Readonly<Record<string, TypographyBas
  * lint quietly keeps reporting a number better than the truth.
  */
 export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number>> = {
-  [DASH_RULE.id]: 2101,
+  [DASH_RULE.id]: 2096,
   [ESCAPED_DASH_RULE.id]: 74,
   [EMOJI_RULE.id]: 659,
 };

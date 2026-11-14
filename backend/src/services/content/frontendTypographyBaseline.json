@@ -354,7 +354,6 @@
     "frontend/src/pages/admin/components/ProjectDeliveryView.tsx": 4,
     "frontend/src/pages/admin/components/StudentPacePanel.tsx": 3,
     "frontend/src/pages/admin/components/projectDelivery/ArchivedProjectsPanel.tsx": 1,
-    "frontend/src/pages/admin/components/projectDelivery/ArtifactsPanel.tsx": 5,
     "frontend/src/pages/admin/components/projectDelivery/BuildEvidencePanel.tsx": 1,
     "frontend/src/pages/admin/components/projectDelivery/CaseStudyKpi.tsx": 2,
     "frontend/src/pages/admin/components/projectDelivery/CaseStudyReadinessModal.tsx": 3,
