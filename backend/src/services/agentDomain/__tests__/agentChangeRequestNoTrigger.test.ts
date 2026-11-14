@@ -142,6 +142,25 @@ describe('nothing outside the change-request module reaches into the service', (
   const ALLOWED = [
     path.join('services', 'agentDomain', 'agentChangeRequestService.ts'),
     path.join('controllers', 'agentChangeRequestController.ts'),
+    // THE THIRD IMPORTER, 2026-11-14, and it is the exact case the note above says to think
+    // about rather than wave through.
+    //
+    // `scripts/fileMayaToolGrantRequests.ts` is the first real use of this spine: it files one
+    // tool request per Maya tool that is ready for one, which is why zero rows existed in
+    // `agent_domain_tool_grants` across all 31 agents. It is allowed here because it is on the
+    // FILING side only.
+    //
+    // The rule this pin protects is "nothing is built as a result of an approval", and the
+    // script cannot violate it: it imports `fileChangeRequest` and nothing else from this
+    // module, reads no approval and acts on none.
+    //
+    // That claim is not left to this comment. `scripts/__tests__/fileMayaToolGrantRequests
+    // .test.ts` reads the script's own source with comments stripped and asserts it imports
+    // nothing named `decideChangeRequest`, `acceptToolGrant`, `recordToolGrant`,
+    // `AgentDomainToolGrant` or `approve`, and that exactly one of its imports can write. So the
+    // hypothetical `agentChangeRequestBuildBridge.ts` the note warns about would still fail -
+    // there, and here, for two independent reasons.
+    path.join('scripts', 'fileMayaToolGrantRequests.ts'),
   ];
 
   function tsFilesUnder(dir: string, acc: string[] = []): string[] {

@@ -170,3 +170,41 @@ describe('T1 the effect classes say what each tool does to the outside world', (
     expect(governanceForTool('book_admissions_call')?.capability).toBe('offerBookingLink');
   });
 });
+
+describe('T10 every tool on both belts is a REGISTERED tool', () => {
+  /**
+   * THE ROOT CAUSE OF ZERO GRANTS, FLEET-WIDE.
+   *
+   * `agent_domain_tool_grants` held zero rows across all 31 agents, and for Maya the reason was
+   * not a policy decision: `registeredToolNames()` had never heard of `MAYA_TOOLS`, so
+   * `agentToolGrantContract` refused every one of her tools with `tool_not_registered`. Ten of
+   * her twelve site tools were `TOOL_CAPABILITIES` keys by coincidence, which is worse than
+   * none, because it made the failure look selective rather than structural.
+   *
+   * This asserts against the BELTS, not against the governance map that `registeredTools.ts`
+   * imports. Asserting against the map would be circular: it would pass even if somebody
+   * removed the Maya import from the registry entirely, as long as the map itself was intact.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const { registeredToolNames } = require('../../agentDomain/registeredTools');
+
+  it('CONTROL - the registry returns a real list, not an empty one', () => {
+    expect(registeredToolNames().length).toBeGreaterThan(20);
+  });
+
+  it.each([...new Set([...SITE_NAMES, ...PORTAL_NAMES])].map((n) => [n]))(
+    '%s is registered, so a grant for it cannot refuse tool_not_registered',
+    (name) => {
+      expect(registeredToolNames()).toContain(name);
+    },
+  );
+
+  it('including the four that were registered NOWHERE before this run', () => {
+    // Two site tools appeared only in `agentRegistrySeed`, and none of the five portal tools
+    // appeared anywhere at all. These four are the canonical cases.
+    for (const name of ['list_quotable_marketing_assets', 'draft_marketing_email',
+      'start_campus_tour', 'book_admissions_call']) {
+      expect(registeredToolNames()).toContain(name);
+    }
+  });
+});

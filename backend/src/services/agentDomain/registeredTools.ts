@@ -35,6 +35,7 @@ import { TOOL_CAPABILITIES } from '../reese/agentToolCapabilities';
 import { REESE_TOOLS } from '../reese/reeseTools';
 import { DARA_TOOLS } from '../curriculum/daraTools';
 import { allGrantTableToolNames } from '../agents/tools/agentToolRegistry';
+import { MAYA_TOOL_GOVERNANCE } from '../maya/mayaToolGovernance';
 
 /**
  * Tools with a compiled handler that appear in none of the dictionaries.
@@ -69,6 +70,19 @@ export function registeredToolNames(): string[] {
     ...functionNames(DARA_TOOLS as ReadonlyArray<unknown>),
     ...allGrantTableToolNames(),
     ...HANDLER_BACKED_TOOLS,
+    // MAYA, BOTH BELTS. Added 2026-11-13, and the omission it fixes was not small: this list
+    // had never heard of `MAYA_TOOLS`, so every attempt to grant Maya a tool refused
+    // `tool_not_registered` and `agent_domain_tool_grants` held zero rows fleet-wide. Ten of
+    // her twelve site tools happened to be `TOOL_CAPABILITIES` keys by coincidence;
+    // `list_quotable_marketing_assets` and `draft_marketing_email` were registered nowhere, and
+    // neither were any of the five portal tools.
+    //
+    // Imported from `maya/mayaToolGovernance.ts`, which is the right source for the reason the
+    // docblock above gives about `send_email`: that module is pure data with a single
+    // type-only import, so at runtime it has no imports at all. Importing `MAYA_TOOLS` from
+    // `mayaActionService` instead would drag the models barrel, the mailer and the consent
+    // service into the boot graph of everything that asks "is this a real tool".
+    ...Object.keys(MAYA_TOOL_GOVERNANCE),
   ]);
   return [...names].filter((n) => n.trim().length > 0).sort();
 }
