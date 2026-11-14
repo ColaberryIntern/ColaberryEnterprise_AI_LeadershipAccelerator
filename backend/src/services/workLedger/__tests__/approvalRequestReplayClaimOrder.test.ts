@@ -21,12 +21,16 @@ import {
   canReplayAction,
   REPLAYABLE_ACTIONS,
 } from '../approvalRequestReplayService';
+import { checkOutreachReplay } from '../../reese/reeseOutreachTripwire';
 
 jest.mock('../../../models', () => ({
   ApprovalRequest: { update: jest.fn() },
 }));
 jest.mock('../../reese/reeseInitiateDmService', () => ({
   initiateDm: jest.fn(),
+}));
+jest.mock('../../reese/reeseOutreachTripwire', () => ({
+  checkOutreachReplay: jest.fn(),
 }));
 
 const mockUpdate = ApprovalRequest.update as unknown as jest.Mock;
@@ -66,6 +70,7 @@ beforeEach(() => {
     order.push('claim');
     return [1];
   });
+  (checkOutreachReplay as unknown as jest.Mock).mockResolvedValue({ allowed: true });
   mockInitiateDm.mockImplementation(async () => {
     order.push('send');
     return { roomId: 'room-1', messageId: 'msg-1' };

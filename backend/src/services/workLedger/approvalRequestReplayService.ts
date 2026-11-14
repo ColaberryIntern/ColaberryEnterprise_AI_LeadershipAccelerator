@@ -1,6 +1,7 @@
 import { ApprovalRequest } from '../../models';
 import { initiateDm } from '../reese/reeseInitiateDmService';
 import { classifyError } from '../../utils/errorClassifier';
+import { checkOutreachReplay, TripwireBlockReason } from '../reese/reeseOutreachTripwire';
 
 // Real-enforcement scoping, Phase 1 (2026-09-20) — the piece that was missing
 // entirely before this: nothing anywhere replayed a held action once approved.
@@ -56,11 +57,14 @@ export type ReplayOutcome =
   | 'replayed'
   | 'already_replayed'
   | 'no_prepared_action'
-  | 'unrecognized_action_type';
+  | 'unrecognized_action_type'
+  | 'blocked_by_tripwire';
 
 export interface ReplayResult {
   replayed: boolean;
   reason: ReplayOutcome;
+  /** Set when reason is 'blocked_by_tripwire': which rule stopped the send. */
+  tripwire?: TripwireBlockReason;
 }
 
 /**
@@ -164,6 +168,19 @@ export async function replayApprovedAction(row: InstanceType<typeof ApprovalRequ
   if (!prepared?.studentEnrollmentId || !prepared?.content) {
     logUnperformableRow(row, 'no_prepared_action');
     return { replayed: false, reason: 'no_prepared_action' };
+  }
+
+  // ── 1b. The tripwire (2026-11-14). Unlike step 1 this reads the database, but it still writes nothing to this
+  // row and claims nothing, so a blocked row keeps replayed_at NULL and stays visible as outstanding work. Two
+  // workers can both pass it; the compare-and-set below still picks exactly one. A throw here propagates before
+  // the claim, so a check that cannot run never sends (fail closed). Rules: reeseOutreachTripwire.ts.
+  const verdict = await checkOutreachReplay(row.id, prepared.studentEnrollmentId);
+  if (!verdict.allowed) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'approvalRequestReplayService', event: 'replay_blocked_by_tripwire', outcome: 'partial',
+      approval_request_id: row.id, tripwire: verdict.reason, tripped: verdict.tripped,
+    }));
+    return { replayed: false, reason: 'blocked_by_tripwire', tripwire: verdict.reason };
   }
 
   // ── 2. The claim. Atomic compare-and-set, still the ONLY arbiter of who
