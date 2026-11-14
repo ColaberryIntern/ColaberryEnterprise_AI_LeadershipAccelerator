@@ -8,6 +8,12 @@ import BuildEvidencePanel, {
 } from '../BuildEvidencePanel';
 import ArtifactsPanel from '../ArtifactsPanel';
 import ReleaseRow from '../ReleaseRow';
+import { fetchProjectDocumentFile } from '../../../../../services/adminProjectDocumentsApi';
+
+jest.mock('../../../../../services/adminProjectDocumentsApi', () => ({
+  fetchProjectDocumentFile: jest.fn(),
+  listProjectDocuments: jest.fn(),
+}));
 
 /**
  * No @testing-library/react in this repo — same react-dom/client + act convention as
@@ -156,31 +162,29 @@ describe('BuildEvidencePanel — repo verification is the real source', () => {
 
 describe('ArtifactsPanel', () => {
   it('shows an empty state rather than an empty list', async () => {
-    await render(<ArtifactsPanel artifacts={[]} />);
+    await render(<ArtifactsPanel documents={[]} projectId="p1" />);
     expect(container.querySelector('[data-testid="artifacts-empty"]')).not.toBeNull();
-    expect(container.textContent).toContain('No artifacts submitted');
+    expect(container.textContent).toContain('No documents');
   });
 
-  it('groups versions under one document and shows the latest', async () => {
-    await render(<ArtifactsPanel artifacts={[{
-      name: 'System Requirements Specification',
-      latest_version: 8,
-      versions: [
-        { version: 8, submission_id: 'a', title: 'SRS', file_name: null, has_content: true, submitted_at: '2026-05-22T12:33:43Z', stage: 'discovery' },
-        { version: 2, submission_id: 'b', title: 'SRS', file_name: null, has_content: true, submitted_at: '2026-04-26T11:38:36Z', stage: 'discovery' },
-      ],
-    }]} />);
-    expect(container.textContent).toContain('System Requirements Specification');
-    expect(container.textContent).toContain('v8');
-    expect(container.textContent).toContain('2 versions');
+  it('renders one typed card per document (pdf/word)', async () => {
+    await render(<ArtifactsPanel projectId="p1" documents={[
+      { id: '1', name: 'plan.pdf', title: 'plan.pdf', from: 'Lesson A', kind: 'pdf' },
+      { id: '2', name: 'brief.docx', title: 'brief.docx', from: 'Lesson B', kind: 'word' },
+    ]} />);
+    const cards = container.querySelectorAll('[data-testid="doc-card"]');
+    expect(cards.length).toBe(2);
+    expect(Array.from(cards).map((c) => c.getAttribute('data-kind')).sort()).toEqual(['pdf', 'word']);
   });
 
-  it('offers no file link when file_name is null — a dead link is worse than none', async () => {
-    await render(<ArtifactsPanel artifacts={[{
-      name: 'Spec', latest_version: 1,
-      versions: [{ version: 1, submission_id: 'a', title: null, file_name: null, has_content: true, submitted_at: null, stage: null }],
-    }]} />);
-    expect(container.querySelector('a[href]')).toBeNull();
+  it('opening a Word card opens the viewer with a Download, and does not fetch on open', async () => {
+    await render(<ArtifactsPanel projectId="p1" documents={[
+      { id: '2', name: 'brief.docx', title: 'brief.docx', from: 'Lesson B', kind: 'word' },
+    ]} />);
+    await act(async () => { (container.querySelector('[data-testid="doc-card"][data-kind="word"]') as HTMLElement).click(); });
+    expect(container.querySelector('[data-testid="doc-viewer"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="doc-download"]')).not.toBeNull();
+    expect(fetchProjectDocumentFile as jest.Mock).not.toHaveBeenCalled();
   });
 });
 

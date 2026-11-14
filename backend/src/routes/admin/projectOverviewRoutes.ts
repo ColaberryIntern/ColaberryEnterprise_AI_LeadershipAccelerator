@@ -7,6 +7,8 @@ import { resolveProjectRepos } from '../../services/projectRepoResolver';
 import {
   getProjectDelivery, getProjectGantt, getProjectEvidence, getProjectArtifacts,
 } from '../../services/projectDeliveryService';
+import { listProjectDocuments, getProjectDocumentFile } from '../../services/projectDocuments';
+import { sendArtifactFile, logFailure } from '../artifactFileResponses';
 import { getEnrollmentsWithoutProjects } from '../../services/enrollmentsWithoutProjects';
 import {
   adminArchiveProject, adminRestoreProject, listArchivedProjects,
@@ -437,6 +439,46 @@ router.get('/api/admin/projects/:projectId/artifacts', requireAdmin, async (req:
   } catch (err: any) {
     console.error('[AdminProjectOverview] GET /artifacts error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/projects/:projectId/documents
+ * The student's DOCUMENT + video pieces (their portfolio, resolved by the project's enrollment),
+ * filtered to structured documents + video and classified for the per-type card viewer. This is the
+ * body of work the student actually produced; the project_artifacts table above is the build-pipeline
+ * join and is empty for most projects.
+ */
+router.get('/api/admin/projects/:projectId/documents', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  try {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json({ documents: await listProjectDocuments(id) });
+  } catch (err: any) {
+    logFailure('admin_project_documents_failed', err, { projectId: id });
+    res.status(500).json({ error: 'Could not load this project\'s documents.' });
+  }
+});
+
+/**
+ * GET /api/admin/projects/:projectId/documents/:artifactId/file
+ * Stream one document/video. The piece is scoped to the project's enrollment and must be a document
+ * kind, so another enrollment's piece or a non-document (source/text/html) piece is a 404 — it is
+ * never fetched or served through this path even if its id is known.
+ */
+router.get('/api/admin/projects/:projectId/documents/:artifactId/file', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  const artifactId = String(req.params.artifactId ?? '');
+  if (!UUID_RE.test(artifactId)) { res.status(400).json({ error: 'artifactId must be a UUID' }); return; }
+  try {
+    const file = await getProjectDocumentFile(id, artifactId);
+    if (!file) { res.status(404).json({ error: 'No document with that id for this project.' }); return; }
+    sendArtifactFile(req, res, file, 'admin_project_document_stream_failed', artifactId);
+  } catch (err: any) {
+    logFailure('admin_project_document_failed', err, { projectId: id, artifactId });
+    if (!res.headersSent) res.status(500).json({ error: 'Could not load this document.' });
   }
 });
 

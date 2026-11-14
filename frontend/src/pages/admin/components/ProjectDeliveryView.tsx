@@ -5,7 +5,8 @@ import { SectionCard, StatCard, StatusBadge } from '../../../components/admin/sh
 import CaseStudyKpi from './projectDelivery/CaseStudyKpi';
 import CaseStudyReadinessModal from './projectDelivery/CaseStudyReadinessModal';
 import BuildEvidencePanel, { ProjectEvidence } from './projectDelivery/BuildEvidencePanel';
-import ArtifactsPanel, { ArtifactGroup } from './projectDelivery/ArtifactsPanel';
+import ArtifactsPanel from './projectDelivery/ArtifactsPanel';
+import { listProjectDocuments, type AdminProjectDocument } from '../../../services/adminProjectDocumentsApi';
 import LinkChip from './projectDelivery/LinkChip';
 import WithoutProjectPanel, { WithoutProjectSummary } from './projectDelivery/WithoutProjectPanel';
 import ArchivedProjectsPanel from './projectDelivery/ArchivedProjectsPanel';
@@ -213,7 +214,7 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
   // detail nobody reads from a collapsed row, and both are empty for every project
   // today, so eager-loading them would cost 60 requests to render two empty states.
   const [evidence, setEvidence] = useState<Record<string, ProjectEvidence>>({});
-  const [artifacts, setArtifacts] = useState<Record<string, ArtifactGroup[]>>({});
+  const [documents, setDocuments] = useState<Record<string, AdminProjectDocument[]>>({});
   const [detailLoading, setDetailLoading] = useState<string | null>(null);
   /** The row whose readiness breakdown is open, or null. Holds the row rather than an id
    *  so the modal keeps rendering the numbers it was opened with even if the list refreshes
@@ -256,16 +257,16 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
     setExpanded(id);
-    if (gantt[id] && evidence[id] && artifacts[id]) return;
+    if (gantt[id] && evidence[id] && documents[id]) return;
 
     setGanttLoading(gantt[id] ? null : id);
     setDetailLoading(id);
     // Fetched together so one expand is one round of requests. Settled rather than
-    // all-or-nothing: a failing artifacts call must not blank the timeline.
-    const [g, ev, ar] = await Promise.allSettled([
+    // all-or-nothing: a failing documents call must not blank the timeline.
+    const [g, ev, dc] = await Promise.allSettled([
       gantt[id] ? Promise.resolve(null) : api.get(`/api/admin/projects/${id}/gantt`),
       evidence[id] ? Promise.resolve(null) : api.get(`/api/admin/projects/${id}/evidence`),
-      artifacts[id] ? Promise.resolve(null) : api.get(`/api/admin/projects/${id}/artifacts`),
+      documents[id] ? Promise.resolve(null) : listProjectDocuments(id),
     ]);
     if (g.status === 'fulfilled' && g.value) {
       setGantt((prev) => ({ ...prev, [id]: g.value!.data }));
@@ -273,8 +274,8 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
     if (ev.status === 'fulfilled' && ev.value) {
       setEvidence((prev) => ({ ...prev, [id]: ev.value!.data }));
     }
-    if (ar.status === 'fulfilled' && ar.value) {
-      setArtifacts((prev) => ({ ...prev, [id]: ar.value!.data.artifacts || [] }));
+    if (dc.status === 'fulfilled' && dc.value) {
+      setDocuments((prev) => ({ ...prev, [id]: dc.value! }));
     }
     // A rejected gantt leaves it absent, so the row says "timeline unavailable"
     // rather than rendering an empty plan, which would read as "no work".
@@ -697,7 +698,7 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
                     behind the disclosure for version history and the outstanding list. */}
                 <EvidenceLine
                   evidence={evidence[r.project_id] ?? null}
-                  artifactCount={(artifacts[r.project_id] || []).length}
+                  artifactCount={(documents[r.project_id] || []).length}
                   loading={detailLoading === r.project_id && !evidence[r.project_id]}
                 />
 
@@ -714,8 +715,9 @@ export default function ProjectDeliveryView({ cohortId, internsOnly, audienceFil
                   </div>
                   <div style={{ marginTop: 8 }}>
                     <ArtifactsPanel
-                      artifacts={artifacts[r.project_id] ?? null}
-                      loading={detailLoading === r.project_id && !artifacts[r.project_id]}
+                      documents={documents[r.project_id] ?? null}
+                      projectId={r.project_id}
+                      loading={detailLoading === r.project_id && !documents[r.project_id]}
                     />
                   </div>
                 </details>
