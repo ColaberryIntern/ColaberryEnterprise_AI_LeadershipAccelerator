@@ -130,12 +130,24 @@ function fakeSequelize(): Sequelize {
  */
 let openRequests: unknown[] = [];
 
+/**
+ * The dataset catalog, answered by SQL for the same reason the duplicate lookup is.
+ *
+ * `loadDatasetCatalog` runs its own `SELECT` against `dataset_registry` at filing time, and the
+ * blanket roster answer below (`[{ email }]`) carries no `table_name`, so the loader would drop
+ * every row and report `catalog_absent` — refusing any request that names a dataset. The suite
+ * would then be testing the mock rather than the spine.
+ */
+let catalogRows: unknown[] = [
+  { table_name: 'cron_registry', schema_name: 'public', column_count: 6, semantic_types: { id: 'identifier' }, status: 'scanned', last_scanned: null },
+];
+
 /** A recorded person: the roster query returns a row. */
-const recorded = () => mockQuery.mockImplementation((sql: string) => (
-  /agent_domain_tool_request_details/.test(sql)
-    ? Promise.resolve(openRequests)
-    : Promise.resolve([{ email: 'whatever-the-stored-casing-is' }])
-));
+const recorded = () => mockQuery.mockImplementation((sql: string) => {
+  if (/dataset_registry/.test(sql)) return Promise.resolve(catalogRows);
+  if (/agent_domain_tool_request_details/.test(sql)) return Promise.resolve(openRequests);
+  return Promise.resolve([{ email: 'whatever-the-stored-casing-is' }]);
+});
 /** Nobody on record: the roster query returns nothing. */
 const unrecorded = () => mockQuery.mockResolvedValue([]);
 
@@ -160,6 +172,8 @@ const toolDetail = (over: Record<string, unknown> = {}) => ({
   needed_by: '2026-11-30',
   run_frequency: 'daily' as const,
   touches: ['The production cron registry (read only)'],
+  environment: 'sandbox' as const,
+  read_datasets: ['cron_registry'],
   inputs: [],
   writes: false,
   ...over,
@@ -188,6 +202,9 @@ beforeEach(() => {
     degraded: false,
   });
   openRequests = [];
+  catalogRows = [
+    { table_name: 'cron_registry', schema_name: 'public', column_count: 6, semantic_types: { id: 'identifier' }, status: 'scanned', last_scanned: null },
+  ];
 });
 
 describe('the actor must be nameable, never a placeholder', () => {
@@ -455,6 +472,71 @@ describe('listing', () => {
     await expect(listMyChangeRequests(fakeSequelize(), 'ghost@example.com'))
       .rejects.toBeInstanceOf(ActorNotResolvedError);
     expect(mockFindAll).not.toHaveBeenCalled();
+  });
+});
+
+describe('the dataset scope is checked against the LIVE catalog, not a literal', () => {
+  it('POSITIVE CONTROL: reads `dataset_registry` while filing a tool request', async () => {
+    // Without this the three cases below would all pass on a service that never looked at the
+    // catalog, because a refusal and an unconsulted roster are indistinguishable from outside.
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    });
+    const sqls = (mockQuery.mock.calls as Array<[string]>).map(([sql]) => sql);
+    expect(sqls.some((sql) => /FROM dataset_registry/.test(sql))).toBe(true);
+  });
+
+  it('reads NO catalog for a change request, because there is no scope to check', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, domainKey: 'platform-automation', title: 'Something',
+    });
+    const sqls = (mockQuery.mock.calls as Array<[string]>).map(([sql]) => sql);
+    expect(sqls.some((sql) => /FROM dataset_registry/.test(sql))).toBe(false);
+  });
+
+  it('REFUSES a dataset the live catalog does not have, before writing anything', async () => {
+    recorded();
+    await expect(fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read something that does not exist',
+      toolRequest: toolDetail({ read_datasets: ['cron_registryy'] }),
+    })).rejects.toBeInstanceOf(ToolRequestRefusedError);
+    // A 400 that happens after a row exists is not a 400 — the same order ownership is checked in.
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockDetailCreate).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES rather than passing when the catalog comes back empty', async () => {
+    // An unreadable catalog waving a request through would mean the first production request filed
+    // during a metadata outage is the one that gets an unchecked scope.
+    catalogRows = [];
+    recorded();
+    await expect(fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail(),
+    })).rejects.toBeInstanceOf(ToolRequestRefusedError);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('persists both scope fields on the detail row', async () => {
+    recorded();
+    await fileChangeRequest({
+      sequelize: fakeSequelize(), email: INTERN, kind: 'tool',
+      domainKey: 'platform-automation', title: 'Read the cron registry',
+      toolRequest: toolDetail({ environment: 'production', read_datasets: ['cron_registry'] }),
+    });
+    expect(mockDetailCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        environment: 'production',
+        read_datasets: ['cron_registry'],
+      }),
+      expect.anything(),
+    );
   });
 });
 

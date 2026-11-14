@@ -43,6 +43,8 @@ import { env } from '../../../config/env';
 const ROUTER_SRC = path.join(__dirname, '..', 'agentChangeRequestRoutes.ts');
 const MINE = '/api/admin/agent-domain-change-requests-mine';
 const QUEUE = '/api/admin/agent-domain-change-requests';
+/** The dataset picker's read surface, added to this router with the dataset-scope change. */
+const DATASETS = '/api/admin/agent-domain-datasets';
 const DECIDE = '/api/admin/agent-domain-change-requests/11111111-2222-4333-8444-555555555555/decide';
 
 function tokenFor(mgmtRole: string | null, role = 'staff'): string {
@@ -86,12 +88,13 @@ beforeEach(() => {
 });
 
 describe('every route carries its own guard', () => {
-  it('POSITIVE CONTROL: the router registers four routes, so the enumeration is not empty', () => {
+  it('POSITIVE CONTROL: the router registers five routes, so the enumeration is not empty', () => {
     const routes = registeredRoutes();
-    expect(routes).toHaveLength(4);
+    expect(routes).toHaveLength(5);
     expect(routes.map((r) => `${r.methods[0]} ${r.path}`).sort()).toEqual([
       `get ${QUEUE}`,
       `get ${MINE}`,
+      `get ${DATASETS}`,
       `post ${QUEUE}/:id/decide`,
       `post ${MINE}`,
     ].sort());
@@ -107,14 +110,27 @@ describe('every route carries its own guard', () => {
    * total count is compared against the number of registered routes, so a route ADDED without a
    * guard also fails here — the thing the per-file lint cannot see.
    */
-  it('exactly two requireSection(dashboard) and exactly two requireAdmin, matching the route count', () => {
+  it('exactly three requireSection(dashboard) and exactly two requireAdmin, matching the route count', () => {
     const src = routerCode();
     const sections = [...src.matchAll(/requireSection\(\s*'([a-z_]+)'\s*\)/g)].map((m) => m[1]);
     const admins = [...src.matchAll(/\brequireAdmin\b/g)].length;
-    expect(sections).toEqual(['dashboard', 'dashboard']);
+    // THREE now: filing, the intern's own list, and the dataset picker they read while filing.
+    // The picker deliberately sits on the FILING grant rather than the deciding one — behind
+    // `requireAdmin` the only people who could see the list would be the ones who never fill in
+    // the form, which would make `read_datasets_not_catalogued` a refusal with no way out.
+    expect(sections).toEqual(['dashboard', 'dashboard', 'dashboard']);
     // One import mention plus two usages.
     expect(admins).toBe(3);
     expect(sections.length + 2).toBe(registeredRoutes().length);
+  });
+
+  it('puts the dataset picker on the FILING grant, never on the deciding one', () => {
+    const src = routerCode();
+    // Anchored on the path rather than on ordering, so a reshuffle of the router does not make
+    // this pass for the wrong reason.
+    const block = src.slice(src.indexOf(`'${DATASETS}'`), src.indexOf(`'${DATASETS}'`) + 160);
+    expect(block).toMatch(/requireSection\(\s*'dashboard'\s*\)/);
+    expect(block).not.toMatch(/requireAdmin/);
   });
 
   /**

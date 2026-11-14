@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin, requireSection } from '../../middlewares/authMiddleware';
+import { handleSearchDatasetCatalog } from '../../controllers/datasetCatalogController';
 import {
   handleDecideChangeRequest,
   handleFileChangeRequest,
@@ -66,6 +67,24 @@ router.get(
   '/api/admin/agent-domain-change-requests',
   requireAdmin,
   handleListAllChangeRequests,
+);
+
+/**
+ * GET — the dataset picker's catalog. `?q=` to search, `?limit=` to page.
+ *
+ * `requireSection('dashboard')`, matching the FILING route rather than the deciding one, because
+ * this is what a builder reads while filling the form that route accepts. Putting it behind
+ * `requireAdmin` would mean the only people who can see the list are the ones who never fill in
+ * the form — and `read_datasets_not_catalogued` would then be a refusal with no way to resolve it,
+ * which is the shape of the problem that produced this change in the first place.
+ *
+ * Read-only, and it returns no row counts and no sampled values, so the widest thing a holder of
+ * `dashboard` gains is the shape of the schema they are already filing requests against.
+ */
+router.get(
+  '/api/admin/agent-domain-datasets',
+  requireSection('dashboard'),
+  handleSearchDatasetCatalog,
 );
 
 /** POST — approve or decline. 200, or 400/403/404/409. No build is started. */

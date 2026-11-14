@@ -86,6 +86,50 @@ describe('the frequency enum is enforced at the boundary too', () => {
   });
 });
 
+describe('the environment enum is enforced at the boundary too', () => {
+  it('accepts both values', () => {
+    expect(ok({ environment: 'sandbox' }).success).toBe(true);
+    expect(ok({ environment: 'production' }).success).toBe(true);
+  });
+
+  it('refuses the plausible third value and says what is allowed', () => {
+    // `staging` is the one somebody will type. The enum exists so a grant rule cannot be keyed off
+    // a value no rule knows what to do with.
+    const result = ok({ environment: 'staging' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(JSON.stringify(result.error.issues)).toContain('production');
+    }
+  });
+
+  it('leaves an ABSENT environment to the contract, which names it', () => {
+    // Presence is not this file's job. The contract returns `environment_missing` with a sentence;
+    // a Zod `.min(1)` here would be a second definition of complete, drifting from the first.
+    expect(ok({}).success).toBe(true);
+  });
+});
+
+describe('the dataset list rides the same shape rules as every other list', () => {
+  it('accepts a list of dataset names', () => {
+    expect(ok({ read_datasets: ['leads', 'enrollments'] }).success).toBe(true);
+  });
+
+  it('accepts an empty list, which is an answer', () => {
+    expect(ok({ read_datasets: [] }).success).toBe(true);
+  });
+
+  it('refuses a bare string where the list belongs', () => {
+    expect(ok({ read_datasets: 'leads' }).success).toBe(false);
+  });
+
+  it('does NOT check that the names exist, because the catalog is I/O', () => {
+    // `read_datasets_not_catalogued` is the contract's refusal, decided against a roster the
+    // service reads from `dataset_registry`. Zod cannot ask a database, and a shape check that
+    // pretended to would be the second definition of complete this file exists to avoid.
+    expect(ok({ read_datasets: ['definitely_not_a_table'] }).success).toBe(true);
+  });
+});
+
 describe('lengths — nothing unbounded is persisted', () => {
   it('refuses an over-long tool name', () => {
     expect(ok({ tool_name: 'x'.repeat(TOOL_NAME_MAX + 1) }).success).toBe(false);

@@ -42,10 +42,49 @@
  *   - **`inputs` is not required to be non-empty either**, for the same reason: "read today's
  *     snapshot" needs no arguments. What IS required is that the field be DECLARED. An empty array
  *     is an answer; an absent key is a question nobody asked.
+ *
+ * ## The dataset scope, added 14 Nov 2026, and why it is a NEW FIELD rather than a stricter `reads`
+ *
+ * Ali: *"there are a lot of agents that will need access to certain data. They will need to get
+ * access to it, see it, understand and build based on that data. How can we add this to our tool
+ * proposal process to make it much easier to request data sets that they need for their tools."*
+ * His rule for the scope itself was that **sandbox-wide read is fine, and only production has to
+ * be narrowed**.
+ *
+ * The obvious implementation is to require every `reads` entry to name a catalogued dataset. That
+ * would be wrong, and the production data says so: of the 118 distinct read verbs declared across
+ * the capability records, **24% are not relational at all** — the repository, a file tree, a
+ * headless browser, a vendor API. Tightening `reads` would refuse correct requests for tools the
+ * catalog already contains, which is exactly the failure the two unwritten rules above avoid.
+ *
+ * So `reads` keeps its meaning — prose, in the catalog's own vocabulary — and `read_datasets`
+ * arrives beside it carrying the picker's output: names that exist in `dataset_registry`. Two
+ * fields, because they answer two questions, and a single field that tried to answer both would
+ * have to be loose enough to accept "the repo" and strict enough to reject `leadz`.
+ *
+ * The rules, in order of how often they will fire:
+ *
+ *   - `read_datasets` must be DECLARED in both environments, empty or not. Same reason as `inputs`.
+ *   - Every entry must be in the catalog, in BOTH environments. `leadz` is a typo on sandbox too,
+ *     and accepting it there would mean the first time anybody finds out is the production request.
+ *   - On PRODUCTION only, a request that reads something must say which datasets. This is the half
+ *     of Ali's rule that has teeth: sandbox grants are wide on purpose, production ones are not.
+ *
+ * ## `environment` had to be invented before any of that could be checked
+ *
+ * A tool request had no environment field. The closest candidate was `touches`, the free-text
+ * blast-radius list, and keying a grant rule off prose would mean the rule's answer depended on
+ * how somebody phrased a line. `TOOL_ENVIRONMENTS` in the schema module is the enum; it is a risk
+ * input, like `run_frequency`, not a note.
+ *
+ * Both tables this change touches were EMPTY in production when it was written — zero tool request
+ * details, zero grants — so a newly required field refuses no request anybody has filed.
  */
 
 import {
+  TOOL_ENVIRONMENTS,
   TOOL_RUN_FREQUENCIES,
+  type ToolEnvironment,
   type ToolRunFrequency,
 } from '../../db/ensureAgentDomainToolRequestSchema';
 
@@ -71,6 +110,11 @@ export type ToolRequestRefusal =
   | 'reads_undeclared'
   | 'produces_undeclared'
   | 'reads_and_produces_both_empty'
+  // WHICH DATA
+  | 'read_datasets_undeclared'
+  | 'dataset_roster_absent'
+  | 'read_datasets_not_catalogued'
+  | 'production_reads_unscoped'
   // WHAT FOR
   | 'capability_missing'
   | 'capability_roster_absent'
@@ -84,6 +128,8 @@ export type ToolRequestRefusal =
   | 'run_frequency_unknown'
   // WHERE
   | 'touches_missing'
+  | 'environment_missing'
+  | 'environment_unknown'
   // HOW
   | 'inputs_undeclared'
   | 'writes_undeclared'
@@ -103,12 +149,14 @@ export interface ToolRequestDetailInput {
   readonly purpose?: string | null;
   readonly reads?: ReadonlyArray<string>;
   readonly produces?: ReadonlyArray<string>;
+  readonly read_datasets?: ReadonlyArray<string>;
   readonly capability_id?: string | null;
   readonly task_unblocked?: string | null;
   readonly manual_today?: string | null;
   readonly needed_by?: string | null;
   readonly run_frequency?: string | null;
   readonly touches?: ReadonlyArray<string>;
+  readonly environment?: string | null;
   readonly inputs?: ReadonlyArray<string>;
   readonly writes?: boolean;
   readonly side_effects?: string | null;
@@ -131,12 +179,14 @@ export interface ToolRequestDetail {
   readonly purpose: string;
   readonly reads: ReadonlyArray<string>;
   readonly produces: ReadonlyArray<string>;
+  readonly read_datasets: ReadonlyArray<string>;
   readonly capability_id: string;
   readonly task_unblocked: string;
   readonly manual_today: string;
   readonly needed_by: string;
   readonly run_frequency: ToolRunFrequency;
   readonly touches: ReadonlyArray<string>;
+  readonly environment: ToolEnvironment;
   readonly inputs: ReadonlyArray<string>;
   readonly writes: boolean;
   readonly side_effects: string | null;
@@ -177,6 +227,19 @@ export interface GateToolRequestArgs {
   readonly knownCapabilityIds: ReadonlyArray<string>;
   /** `agent_id` of every domain the requester owns. Empty is a refusal, not a pass. */
   readonly ownedAgentIds: ReadonlyArray<string>;
+  /**
+   * Table names from `dataset_registry`, via `datasetCatalog.loadDatasetCatalog`. 633 of them in
+   * production on 14 Nov 2026.
+   *
+   * Empty is `dataset_roster_absent` and refuses the request, the same position the other two
+   * rosters take. The reason is sharper here than it looks: if an unreadable catalog waved a
+   * request through, the FIRST production tool request filed during a metadata outage would be
+   * the one that got an unchecked scope — a check that is decorative precisely when it matters.
+   *
+   * The roster is only consulted when the request actually names a dataset, so a builder filing a
+   * request for a tool that reads no database is never blocked by the catalog being unavailable.
+   */
+  readonly knownDatasets: ReadonlyArray<string>;
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -241,6 +304,38 @@ export function gateToolRequest(args: GateToolRequestArgs): ToolRequestIssue[] {
     );
   }
 
+  // WHICH DATA — the picker's output, and the half of the scope a grant can actually be written
+  // from. Judged BEFORE `environment` is validated, so a request with both problems is told about
+  // both in one round trip rather than learning about the datasets only after fixing the enum.
+  const readDatasets = list(d.read_datasets);
+  if (readDatasets === null) {
+    add(
+      'read_datasets_undeclared',
+      'List the datasets this tool would read, even if the list is empty. '
+      + 'Pick them from the catalog rather than typing them, so the names match real tables.',
+    );
+  } else if (readDatasets.length > 0) {
+    // The roster is consulted ONLY here, so an unreadable catalog cannot block a request that
+    // names no dataset at all.
+    if (args.knownDatasets.length === 0) {
+      add(
+        'dataset_roster_absent',
+        'The dataset catalog could not be read, so we could not check those names. '
+        + 'Nothing is wrong with your request; try again shortly.',
+      );
+    } else {
+      const known = new Set(args.knownDatasets);
+      const unknown = readDatasets.filter((name) => !known.has(name));
+      if (unknown.length > 0) {
+        add(
+          'read_datasets_not_catalogued',
+          `These are not datasets we have on record: ${unknown.join(', ')}. `
+          + 'Pick from the catalog, which is what a grant gets written against.',
+        );
+      }
+    }
+  }
+
   // WHAT FOR ----------------------------------------------------------------------------------
   const capabilityId = text(d.capability_id);
   if (!capabilityId) {
@@ -283,6 +378,36 @@ export function gateToolRequest(args: GateToolRequestArgs): ToolRequestIssue[] {
     add(
       'touches_missing',
       'List every system this tool would touch. This is the part being approved, so it cannot be blank.',
+    );
+  }
+
+  const environment = text(d.environment);
+  if (!environment) {
+    add(
+      'environment_missing',
+      'Say whether this tool reads the sandbox or production. '
+      + 'A sandbox tool gets a wide grant; a production one gets a narrow one.',
+    );
+  } else if (!TOOL_ENVIRONMENTS.some((e) => e === environment)) {
+    add(
+      'environment_unknown',
+      `Where this runs has to be one of: ${TOOL_ENVIRONMENTS.join(', ')}.`,
+    );
+  } else if (environment === 'production' && reads !== null && reads.length > 0
+             && readDatasets !== null && readDatasets.length === 0) {
+    // ALI'S RULE, and the only place the two environments are treated differently.
+    //
+    // Sandbox grants are wide on purpose, so an unnamed sandbox read is a pass. A production read
+    // is the one being narrowed, and an unnamed one cannot be: there is nothing to narrow it to.
+    //
+    // The sentence names BOTH ways out, because the common honest case is a tool whose reads are
+    // not database reads at all. A refusal that only says "pick datasets" would push somebody with
+    // no datasets to pick one anyway, which is worse than the blank it replaced.
+    add(
+      'production_reads_unscoped',
+      'A production tool has to name the datasets it reads. '
+      + 'Pick them from the catalog, or, if this tool reads no database, '
+      + 'move those reads to what it touches and leave the dataset list empty.',
     );
   }
 
@@ -332,12 +457,14 @@ export function acceptToolRequest(args: GateToolRequestArgs): AcceptedToolReques
       purpose: text(d.purpose),
       reads: list(d.reads) ?? [],
       produces: list(d.produces) ?? [],
+      read_datasets: list(d.read_datasets) ?? [],
       capability_id: text(d.capability_id),
       task_unblocked: text(d.task_unblocked),
       manual_today: text(d.manual_today),
       needed_by: text(d.needed_by),
       run_frequency: text(d.run_frequency) as ToolRunFrequency,
       touches: list(d.touches) ?? [],
+      environment: text(d.environment) as ToolEnvironment,
       inputs: list(d.inputs) ?? [],
       writes,
       // Kept only when they mean something. A side-effect sentence on a read-only tool is a field

@@ -165,6 +165,11 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // platform change is not something a mentor or a support rep should be able to do.
   ['/api/admin/agent-domain-change-requests-mine', 'dashboard'],
   ['/api/admin/agent-domain-change-requests', 'program'],
+  // The dataset picker read by whoever is FILING a tool request, so it carries the same section as
+  // the `-mine` filing route above and not the `program` one the queue sits on. This gate is
+  // DENY-BY-DEFAULT, so an unmapped prefix would 403 with nothing in the response saying why —
+  // which, on a picker, reads to the builder as "there are no datasets".
+  ['/api/admin/agent-domain-datasets', 'dashboard'],
   // AF11.3 — the tool-request review console. `program`, and a hyphen sibling of neither row
   // above (`-tool-requests` shares no `/` boundary with `-change-requests`), so declaration order
   // is free here. Both routes under it additionally carry `requireAdmin`, and the service requires

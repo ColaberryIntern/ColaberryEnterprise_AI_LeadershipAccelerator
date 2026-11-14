@@ -23,6 +23,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   REQUIRED_COLUMNS,
+  REQUIRED_CHECKS,
   REQUIRED_INDEXES,
   REQUIRED_TABLES,
   ROLLBACK_STATEMENTS,
@@ -63,16 +64,27 @@ function stageAssert(over: {
   columns?: string[];
   indexes?: string[];
   checks?: string[];
+  /** Columns the database reports as STILL NULLABLE. Sound schema: none of them. */
+  nullable?: string[];
 } = {}): void {
   mockQuery.mockImplementation((sql: string) => {
     if (/information_schema\.tables/.test(sql)) {
       return Promise.resolve(over.tables ?? [...REQUIRED_TABLES]);
     }
+    // TWO reads hit `information_schema.columns` — the presence list and the nullability check —
+    // and `is_nullable` is the only thing that tells them apart. Matching on the table alone would
+    // answer the nullability question with the presence list, and because that list is QUALIFIED
+    // (`agent_domain_tool_request_details.environment`) while the check looks for a bare
+    // `environment`, the assertion would pass for a reason that has nothing to do with the
+    // invariant — green whether or not the column is nullable.
+    if (/information_schema\.columns/.test(sql) && /is_nullable/.test(sql)) {
+      return Promise.resolve(over.nullable ?? []);
+    }
     if (/information_schema\.columns/.test(sql)) {
       return Promise.resolve(over.columns ?? [...REQUIRED_COLUMNS]);
     }
     if (/pg_indexes/.test(sql)) return Promise.resolve(over.indexes ?? [...REQUIRED_INDEXES]);
-    if (/table_constraints/.test(sql)) return Promise.resolve(over.checks ?? [CHECK]);
+    if (/table_constraints/.test(sql)) return Promise.resolve(over.checks ?? [...REQUIRED_CHECKS]);
     // Every DDL statement, which `assert` never reads.
     return Promise.resolve([]);
   });
@@ -158,9 +170,25 @@ describe('assert — the part that actually decides', () => {
     // Without it the table accepts a write with no declared side effects — the one thing it
     // exists to refuse — and every behavioral test still passes, because the application-level
     // refusal in `toolRequestContract.ts` is a separate code path.
-    stageAssert({ checks: [] });
+    stageAssert({ checks: REQUIRED_CHECKS.filter((c) => c !== CHECK) });
     await expect(assertAgentDomainToolRequestSchema())
       .rejects.toThrow(`missing constraint ${CHECK}`);
+  });
+
+  it('throws when the ENVIRONMENT check is missing, so a row cannot carry an unknown scope', async () => {
+    stageAssert({ checks: [CHECK] });
+    await expect(assertAgentDomainToolRequestSchema())
+      .rejects.toThrow('missing constraint chk_adtr_environment_known');
+  });
+
+  it('THROWS WHEN `environment` IS PRESENT BUT STILL NULLABLE', async () => {
+    // `ALTER COLUMN ... SET NOT NULL` is a separate statement from the add, and the loop that runs
+    // it warns and continues. Checking only that the column EXISTS would pass on an environment
+    // where the add worked and the SET NOT NULL did not, leaving a column that accepts the blank
+    // the contract refuses — which is the half-applied deploy this assertion exists for.
+    stageAssert({ nullable: ['environment'] });
+    await expect(assertAgentDomainToolRequestSchema())
+      .rejects.toThrow('environment is still nullable');
   });
 
   it('does not list eighteen missing columns when the table itself never arrived', async () => {
@@ -185,7 +213,9 @@ describe('assert — the part that actually decides', () => {
       .mockResolvedValueOnce([{ table_name: TABLE }])
       .mockResolvedValueOnce(REQUIRED_COLUMNS.map((c) => ({ name: c })))
       .mockResolvedValueOnce(REQUIRED_INDEXES.map((i) => ({ indexname: i })))
-      .mockResolvedValueOnce([{ constraint_name: CHECK }]);
+      .mockResolvedValueOnce(REQUIRED_CHECKS.map((c) => ({ constraint_name: c })))
+      // The nullability read, which answers "nothing is nullable" on a sound schema.
+      .mockResolvedValueOnce([]);
     await expect(assertAgentDomainToolRequestSchema()).resolves.toBeUndefined();
   });
 
@@ -225,8 +255,55 @@ describe('idempotency and blast radius, asserted on the SQL itself', () => {
     expect(guarded.length).toBe(creates.length);
   });
 
-  it('RUNS NO `ALTER` AT ALL, which is the reason this is a child table', () => {
-    expect(sourceSql()).not.toMatch(/ALTER TABLE/i);
+  /**
+   * NARROWED on 14 Nov 2026, from "no `ALTER` at all" to "no `ALTER` on the parent".
+   *
+   * The original assertion was the right one while this table was net-new: a child that arrives
+   * entirely through `CREATE TABLE IF NOT EXISTS` reverts whole and cannot touch the governance
+   * row it hangs off. That second half is the part worth protecting, and it is now what the test
+   * says.
+   *
+   * The first half stopped being achievable the moment the table existed in production, because
+   * `CREATE TABLE IF NOT EXISTS` is a NO-OP against an existing table, so a new column cannot
+   * arrive any other way. `ensureAgentToolGrantSchema.ts` hit this before and records it: adding
+   * a column to the CREATE alone "would have shipped green, resolved identically, and left the
+   * column absent on every environment the table already exists in."
+   *
+   * So the rule a reader should take from this file is not "never ALTER" — it is **never ALTER
+   * `agent_domain_change_requests`**, whose own header calls `kind` "THE ONLY ALTER THIS FILE
+   * WILL EVER RUN".
+   */
+  it('runs no `ALTER` on the PARENT governance table, which is the blast radius that matters', () => {
+    const alters = [...sourceSql().matchAll(/ALTER TABLE\s+([a-z_]+)/gi)].map((m) => m[1]);
+    expect(alters.length).toBeGreaterThan(0);
+    for (const target of alters) expect(target).toBe(TABLE);
+    expect(sourceSql()).not.toMatch(/ALTER TABLE\s+agent_domain_change_requests/i);
+  });
+
+  it('adds every column with IF NOT EXISTS, so a second boot is still a no-op', () => {
+    const adds = sourceSql().match(/ADD COLUMN/gi) ?? [];
+    const guarded = sourceSql().match(/ADD COLUMN IF NOT EXISTS/gi) ?? [];
+    expect(adds.length).toBeGreaterThan(0);
+    expect(guarded.length).toBe(adds.length);
+  });
+
+  it('guards the constraint add on its own existence, since Postgres has no IF NOT EXISTS for it', () => {
+    // A plain ADD CONSTRAINT would throw `duplicate_object` on every boot after the first, filling
+    // the logs with a failure that is actually the success case.
+    const sql = sourceSql();
+    expect(sql).toMatch(/ADD CONSTRAINT\s+chk_adtr_environment_known/);
+    expect(sql).toMatch(/SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtr_environment_known'/);
+  });
+
+  it('gives `environment` NO default, so no row can claim a scope nobody chose', () => {
+    // `read_datasets` DOES default, to an empty list, which is the truthful value for a request
+    // that named none. There is no value of `environment` that honestly means "not asked", so a
+    // default here would make a pre-existing row read as answered.
+    const sql = sourceSql();
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS environment TEXT\s*`/);
+    expect(sql).toMatch(/ALTER COLUMN environment SET NOT NULL/);
+    expect(sql).not.toMatch(/environment TEXT NOT NULL DEFAULT/);
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS read_datasets JSONB NOT NULL DEFAULT '\[\]'::jsonb/);
   });
 
   it('runs nothing destructive on any existing table', () => {

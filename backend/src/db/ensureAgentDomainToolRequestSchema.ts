@@ -64,6 +64,8 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   `${T}.purpose`,
   `${T}.reads`,
   `${T}.produces`,
+  // WHICH DATA — the dataset picker's output, checked against `dataset_registry` by the contract
+  `${T}.read_datasets`,
   // WHAT FOR
   `${T}.capability_id`,
   `${T}.task_unblocked`,
@@ -71,8 +73,9 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   // WHEN
   `${T}.needed_by`,
   `${T}.run_frequency`,
-  // WHERE — the blast-radius field
+  // WHERE — the blast-radius fields
   `${T}.touches`,
+  `${T}.environment`,
   // HOW
   `${T}.inputs`,
   `${T}.writes`,
@@ -103,10 +106,38 @@ export const TOOL_RUN_FREQUENCIES = [
 ] as const;
 export type ToolRunFrequency = typeof TOOL_RUN_FREQUENCIES[number];
 
+/**
+ * WHICH ENVIRONMENT the tool would read, as an enum for the same reason frequency is one.
+ *
+ * Added by the dataset-scope change. Until it existed there was nowhere on a tool request to
+ * record whether a read lands on a sandbox copy or on the production database, so the rule Ali
+ * set — *sandbox-wide read is fine, narrow only for production* — had nothing to key off. A gate
+ * cannot enforce a distinction the payload cannot express.
+ *
+ * Two values, not three. `both` was considered and rejected: a request that means "sandbox now,
+ * production later" is two grants with two different scopes, and one row that claimed both would
+ * have to satisfy the stricter rule anyway, which makes it `production` wearing a softer word.
+ */
+export const TOOL_ENVIRONMENTS = ['sandbox', 'production'] as const;
+export type ToolEnvironment = typeof TOOL_ENVIRONMENTS[number];
+
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'idx_adtr_tool_name',
   'idx_adtr_capability_id',
   'idx_adtr_agent_id',
+];
+
+/**
+ * The checks `assert` names one by one, so an absent one fails a boot rather than a review.
+ *
+ * `chk_adtr_environment_known` is the storage half of `environment_unknown`: the application
+ * refuses an unknown value with a sentence, and this makes a row carrying one impossible even if
+ * some future caller skips the contract. Same move, same reason, as the write-declares-effects
+ * pair that was already here.
+ */
+export const REQUIRED_CHECKS: ReadonlyArray<string> = [
+  'chk_adtr_write_declares_effects',
+  'chk_adtr_environment_known',
 ];
 
 /**
@@ -132,12 +163,14 @@ const STATEMENTS: ReadonlyArray<string> = [
      purpose TEXT NOT NULL,
      reads JSONB NOT NULL DEFAULT '[]'::jsonb,
      produces JSONB NOT NULL DEFAULT '[]'::jsonb,
+     read_datasets JSONB NOT NULL DEFAULT '[]'::jsonb,
      capability_id TEXT NOT NULL,
      task_unblocked TEXT NOT NULL,
      manual_today TEXT NOT NULL,
      needed_by DATE NOT NULL,
      run_frequency TEXT NOT NULL,
      touches JSONB NOT NULL DEFAULT '[]'::jsonb,
+     environment TEXT NOT NULL,
      inputs JSONB NOT NULL DEFAULT '[]'::jsonb,
      writes BOOLEAN NOT NULL,
      side_effects TEXT,
@@ -147,8 +180,50 @@ const STATEMENTS: ReadonlyArray<string> = [
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      CONSTRAINT chk_adtr_write_declares_effects CHECK (
        writes = FALSE OR (side_effects IS NOT NULL AND reversible IS NOT NULL)
+     ),
+     CONSTRAINT chk_adtr_environment_known CHECK (
+       environment IN ('sandbox', 'production')
      )
    )`,
+  // THREE STATEMENTS, not a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS` is a
+  // NO-OP against the table this change finds already sitting in production. The column is in the
+  // CREATE as well, for an environment that has never run this file; on every environment that
+  // has, only these three do anything. The sibling `ensureAgentToolGrantSchema.ts` records the
+  // same trap in its own words: adding a column to the CREATE alone "would have shipped green,
+  // resolved identically, and left the column absent on every environment the table already
+  // exists in."
+  //
+  // `SET NOT NULL` is a SEPARATE statement from the add, and deliberately has no `DEFAULT`.
+  //
+  // A default would be the easy way to make this ALTER succeed on a populated table, and it is the
+  // wrong one: every pre-existing row would silently claim an environment nobody chose, and a
+  // future caller that forgot the field would file a request that reads as answered. There are
+  // zero rows in this table in production today (measured, 14 Nov 2026) so the statement applies
+  // cleanly. If that is ever untrue, `SET NOT NULL` fails, the loop logs it, and
+  // `assertAgentDomainToolRequestSchema` below fails the boot by name — which is the loud failure
+  // this file is built around, not an outage: the backend survives a failed assert.
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS environment TEXT`,
+  // `read_datasets` DOES carry a default, where `environment` deliberately does not. An empty list
+  // is the truthful value for a request that named no datasets — it is what the contract itself
+  // stores for one — whereas there is no value of `environment` that honestly means "not asked".
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS read_datasets JSONB NOT NULL DEFAULT '[]'::jsonb`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN environment SET NOT NULL`,
+  // Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, so the existence check is explicit. A plain
+  // ADD would throw `duplicate_object` on every boot after the first and fill the logs with a
+  // failure that is actually the success case.
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtr_environment_known'
+     ) THEN
+       ALTER TABLE agent_domain_tool_request_details
+         ADD CONSTRAINT chk_adtr_environment_known
+         CHECK (environment IN ('sandbox', 'production'));
+     END IF;
+   END $$`,
   `CREATE INDEX IF NOT EXISTS idx_adtr_tool_name
      ON agent_domain_tool_request_details (tool_name)`,
   `CREATE INDEX IF NOT EXISTS idx_adtr_capability_id
@@ -224,16 +299,34 @@ export async function assertAgentDomainToolRequestSchema(): Promise<void> {
     );
     for (const i of REQUIRED_INDEXES) if (!idx.includes(i)) problems.push(`missing index ${i}`);
 
-    // The constraint is the write rule expressed as data. If it is absent the table accepts a
-    // write with no declared side effects, which is the one thing this table exists to refuse.
+    // The constraints are the field rules expressed as data. Without the write one the table
+    // accepts a write with no declared side effects, which is the one thing it exists to refuse;
+    // without the environment one it accepts a scope no grant rule can read.
     const checks = await readNames(
       `SELECT constraint_name FROM information_schema.table_constraints
         WHERE table_schema = 'public' AND table_name = ANY($names)
           AND constraint_type = 'CHECK'`,
       REQUIRED_TABLES,
     );
-    if (!checks.includes('chk_adtr_write_declares_effects')) {
-      problems.push('missing constraint chk_adtr_write_declares_effects');
+    for (const c of REQUIRED_CHECKS) {
+      if (!checks.includes(c)) problems.push(`missing constraint ${c}`);
+    }
+
+    // NULLABILITY, asked separately, because a column can be present and still optional.
+    //
+    // `ALTER COLUMN ... SET NOT NULL` is its own statement in the list above and the loop that
+    // runs it warns and continues. Checking only that `environment` EXISTS would therefore pass on
+    // an environment where the add worked and the SET NOT NULL did not, leaving a column that
+    // accepts the blank the contract refuses — a schema check that resolves identically whether or
+    // not the invariant it names actually holds.
+    const nullable = await readNames(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ANY($names)
+          AND column_name = 'environment' AND is_nullable = 'YES'`,
+      REQUIRED_TABLES,
+    );
+    if (nullable.includes('environment')) {
+      problems.push('column agent_domain_tool_request_details.environment is still nullable');
     }
   }
 

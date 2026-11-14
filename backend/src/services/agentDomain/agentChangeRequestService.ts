@@ -8,6 +8,7 @@ import { loadToolCatalogForMatching } from './toolCatalogForMatching';
 import { loadMyDomains, resolveOwnerIdentityIds } from './agentDomainProvisionedReader';
 import type { ChangeRequestKind } from '../../db/ensureAgentDomainChangeRequestSchema';
 import { allCapabilities } from './capabilityRecord';
+import { datasetNames, loadDatasetCatalog } from './datasetCatalog';
 import {
   DUPLICATE_OPEN_REQUEST,
   TOOL_REQUEST_DETAIL_MISSING,
@@ -163,6 +164,7 @@ function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {
     purpose: d.purpose,
     reads: strings(d.reads),
     produces: strings(d.produces),
+    read_datasets: strings(d.read_datasets),
     capability_id: d.capability_id,
     task_unblocked: d.task_unblocked,
     manual_today: d.manual_today,
@@ -171,6 +173,7 @@ function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {
     needed_by: String(d.needed_by),
     run_frequency: d.run_frequency,
     touches: strings(d.touches),
+    environment: d.environment,
     inputs: strings(d.inputs),
     writes: d.writes,
     side_effects: d.side_effects ?? null,
@@ -351,10 +354,19 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
     // The rosters are read HERE and passed in, so the contract stays pure and an unreadable
     // registry refuses the request rather than waving it through: `allCapabilities()` returning
     // nothing becomes `capability_roster_absent`, not a pass.
+    // The dataset catalog, read HERE for the same reason the other two rosters are: the contract
+    // stays pure, and an unreadable catalog becomes `dataset_roster_absent` rather than a pass.
+    //
+    // `loadDatasetCatalog` cannot reject — it reports `catalog_absent` — so this read cannot turn a
+    // filing into a 500. It is awaited before the gate rather than inside it because the gate is a
+    // function of its inputs, which is what lets every refusal in it be tested without a database.
+    const datasetCatalog = await loadDatasetCatalog(sequelize);
+
     const verdict = acceptToolRequest({
       detail: args.toolRequest,
       domainKey,
       knownCapabilityIds: allCapabilities().map((c) => c.capability_id),
+      knownDatasets: datasetNames(datasetCatalog),
       // Only the agents of domains this person owns. A null `agent_id` means the domain has no
       // employee yet, which is a real state and cannot be the agent a tool is requested for.
       ownedAgentIds: mine.map((d) => d.agent_id).filter((id): id is string => Boolean(id)),
@@ -436,6 +448,7 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
         ...accepted,
         reads: [...accepted.reads],
         produces: [...accepted.produces],
+        read_datasets: [...accepted.read_datasets],
         touches: [...accepted.touches],
         inputs: [...accepted.inputs],
       }, { transaction });

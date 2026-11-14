@@ -1,6 +1,9 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
-import type { ToolRunFrequency } from '../db/ensureAgentDomainToolRequestSchema';
+import type {
+  ToolEnvironment,
+  ToolRunFrequency,
+} from '../db/ensureAgentDomainToolRequestSchema';
 
 /**
  * AgentDomainToolRequestDetail — AF11.1. The six field groups a `kind = 'tool'` change request
@@ -48,6 +51,8 @@ export interface AgentDomainToolRequestDetailAttributes {
   needed_by: string;
   run_frequency: ToolRunFrequency;
   touches: string[];
+  environment: ToolEnvironment;
+  read_datasets: string[];
   inputs: string[];
   writes: boolean;
   side_effects?: string | null;
@@ -72,6 +77,8 @@ class AgentDomainToolRequestDetail extends Model<AgentDomainToolRequestDetailAtt
   declare needed_by: string;
   declare run_frequency: ToolRunFrequency;
   declare touches: string[];
+  declare environment: ToolEnvironment;
+  declare read_datasets: string[];
   declare inputs: string[];
   declare writes: boolean;
   declare side_effects: string | null;
@@ -96,6 +103,8 @@ AgentDomainToolRequestDetail.init(
     needed_by: { type: DataTypes.DATEONLY, allowNull: false },
     run_frequency: { type: DataTypes.TEXT, allowNull: false },
     touches: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+    environment: { type: DataTypes.TEXT, allowNull: false },
+    read_datasets: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     inputs: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     writes: { type: DataTypes.BOOLEAN, allowNull: false },
     side_effects: { type: DataTypes.TEXT, allowNull: true },
