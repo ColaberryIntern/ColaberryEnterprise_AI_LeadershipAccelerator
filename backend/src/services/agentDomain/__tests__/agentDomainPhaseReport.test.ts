@@ -14,7 +14,13 @@ import {
   renderPhaseReportMarkdown,
 } from '../agentDomainPhaseReport';
 import { AGENT_DOMAIN_KEYS } from '../agentDomainRegistry';
-import { allCapabilities, loadUnresolvedBucket } from '../capabilityRecord';
+import {
+  allCapabilities,
+  legacyRunTotal,
+  liveLegacyRows,
+  loadUnresolvedBucket,
+  retirementCandidates,
+} from '../capabilityRecord';
 import type { ManagerReachVerdict } from '../../access/agentManagerReach';
 
 /**
@@ -213,7 +219,85 @@ describe('the report claims nothing it has not got', () => {
 
   it('names the open owner decision rather than burying it', () => {
     expect(r.disclosures.join(' ')).toMatch(/21 legacy agent rows belong to no domain/);
-    expect(r.disclosures.join(' ')).toMatch(/Five of them are live production rows/);
+  });
+
+  /**
+   * The live count is DERIVED, and this suite used to pin the wrong literal.
+   *
+   * It asserted `/Five of them are live production rows/` while `_unresolved.json` had recorded,
+   * since 2026-10-28, that five is the count of rows whose PROPOSED KIND is unresolved and that
+   * thirteen are live. So the test did not merely miss the defect: it held it in place and made
+   * it look deliberate, which is the worst thing a test can do. Found by Tashima Diah on
+   * 2026-11-13 by checking the brief against its own sources.
+   *
+   * These assertions compute the expectation from the same file the report reads, so correcting
+   * the measurement again cannot leave the prose behind a third time.
+   */
+  it('reports the live legacy population from the measurement, not from a literal', () => {
+    const bucket = loadUnresolvedBucket();
+    const live = liveLegacyRows(bucket);
+    const runs = legacyRunTotal(bucket);
+    const text = r.disclosures.join(' ');
+
+    expect(text).toMatch(new RegExp(`${live} of them are live production rows`));
+    expect(text).toContain(runs.toLocaleString('en-US'));
+    expect(text).toMatch(new RegExp(`${retirementCandidates(bucket)} proposed for retirement`));
+
+    // POSITIVE CONTROL. Without this, the assertions above would still pass if the derivation
+    // silently returned the old literal, because 5 is a number like any other.
+    expect(live).toBe(13);
+    expect(live).not.toBe(bucket.rows.filter((x) => x.proposed_kind === 'unresolved').length);
+    expect(text).not.toMatch(/Five of them are live/);
+  });
+
+  /**
+   * Built, not loaded, and that is the whole point.
+   *
+   * In the shipped `_unresolved.json` every enabled row has also run -- 13 and 13, with zero
+   * enabled-but-never-run rows -- so "live means enabled" and "live means has_run" return the
+   * SAME number against the real file. A test written against the file therefore proves nothing
+   * about which rule is implemented: swapping `enabled` for `has_run` in the derivation left the
+   * whole suite green when it was tried. The distinction only shows up on a row this data set
+   * does not yet contain, so the input is constructed here.
+   */
+  describe('liveLegacyRows, on inputs the shipped file does not contain', () => {
+    const row = (
+      agent_name: string,
+      measured: { enabled: boolean; run_count: number; has_run: boolean } | undefined,
+    ) => ({
+      agent_name,
+      proposed_kind: 'behavior',
+      source: 'registry',
+      disposition: 'unresolved' as const,
+      capability_id: null,
+      reason: 'constructed for this test',
+      ...(measured ? { measured: { on: '2026-10-28', ...measured } } : {}),
+    });
+    const bucketOf = (rows: ReturnType<typeof row>[]) => ({
+      bucket: 'unresolved' as const,
+      legacy_row_count: rows.length,
+      needs_owner_decision: true,
+      rows,
+    });
+
+    it('counts an enabled row that has never run', () => {
+      // Calling it dormant would understate what a careless retirement touches.
+      const b = bucketOf([row('NeverFired', { enabled: true, run_count: 0, has_run: false })]);
+      expect(liveLegacyRows(b)).toBe(1);
+    });
+
+    it('does NOT count a disabled row that has run in the past', () => {
+      const b = bucketOf([row('TurnedOff', { enabled: false, run_count: 9000, has_run: true })]);
+      expect(liveLegacyRows(b)).toBe(0);
+      // Its history still counts toward the run total: those runs really happened.
+      expect(legacyRunTotal(b)).toBe(9000);
+    });
+
+    it('treats an unmeasured row as unknown rather than idle', () => {
+      const b = bucketOf([row('NeverMeasured', undefined)]);
+      expect(liveLegacyRows(b)).toBe(0);
+      expect(legacyRunTotal(b)).toBe(0);
+    });
   });
 
   it('renders no intern NAME, because this report is not the internship surface', () => {
