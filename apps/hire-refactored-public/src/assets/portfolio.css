@@ -98,19 +98,23 @@ a.sha:hover{text-decoration:underline}
 .car-ctrls .is-paused .i-pause{display:none}
 .car-progress{height:2px;background:var(--line)}
 .car-progress i{display:block;height:2px;background:var(--star);transform:scaleX(0);transform-origin:left center}
-.car-slide{display:grid;grid-template-columns:1.25fr 1fr;align-items:stretch}
+.car-slide{display:grid;grid-template-columns:1.5fr 1fr;align-items:stretch}
 .car-slide[hidden]{display:none}
-/* The cover is 16:9 and NEVER cropped: a 16:9 frame, vertically centred in the sunk column,
-   with the image contained inside it. The chip and the play disc position against the FRAME,
-   not the column (hire.css pins every `.art img.cover` absolute, which is why the frame exists). */
-.car-art{display:flex;align-items:center;justify-content:center;background:var(--bg-sunk)}
-.car-frame{position:relative;display:block;width:100%;aspect-ratio:16/9}
+/* The cover is 16:9 and NEVER cropped: a 16:9 frame, vertically centred in the column, with the
+   image contained inside it. The chip and the play disc position against the FRAME, not the
+   column (hire.css pins every `.art img.cover` absolute, which is why the frame exists).
+   The column is taller than the frame, so `.car-fill` puts the same picture behind it, blurred
+   and dimmed, edge to edge: no empty bands (Ali, 2026-11-14). Static filter, no motion. */
+.car-art{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--bg-sunk)}
+.car-fill{position:absolute;inset:0;display:block}
+.car-fill img{display:block;width:100%;height:100%;object-fit:cover;transform:scale(1.25);filter:blur(26px) saturate(1.2) brightness(.62)}
+.car-frame{position:relative;display:block;width:100%;aspect-ratio:16/9;box-shadow:0 10px 30px rgba(0,0,0,.35)}
 .car-art .car-frame img.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .car-art .car-frame svg.hire-art{position:absolute;inset:0;width:100%;height:100%;display:block}
 .car-disc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;background:rgba(12,20,27,.72);border:1px solid rgba(255,255,255,.4);display:grid;place-items:center;color:#fff;pointer-events:none}
 .car-body{padding:24px 28px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .car-body h2{font-family:var(--font-mono);font-size:1.35rem;line-height:1.28;letter-spacing:-.015em;margin:0;overflow-wrap:anywhere}
-.car-body p{margin:0;color:var(--fg-muted);font-size:.95rem}
+.car-body p{margin:0;color:var(--fg-muted);font-size:.95rem;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .car-body .cap-line,.car-body .proof{margin:0}
 .car-body .fig{padding:10px 12px;border-left:2px solid var(--star);background:var(--star-soft);border-radius:0 6px 6px 0}
 .car-body .fig b{display:block;font-family:var(--font-mono);font-size:1.1rem;color:var(--star-text);line-height:1.25}

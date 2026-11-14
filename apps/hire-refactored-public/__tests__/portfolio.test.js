@@ -79,6 +79,19 @@ describe('carousel markup', () => {
   const slides = P.carouselSlides(hireOf({ signature: { slug: 'recovering-calls' }, caseStudies: [full].concat(nine) }), []);
   const html = P.carousel(slides, 'kes', API);
 
+  test('fills the cover column with the same picture, blurred, so there are no empty bands', () => {
+    // Ali, 2026-11-14: "I still don't like all this empty space". The fill is the cover's own
+    // URL (fetched once), hidden from assistive tech, and sits behind the uncropped cover.
+    const first = html.slice(0, html.indexOf('<div class="car-body">'));
+    const src = 'https://enterprise.colaberry.ai/site-v2/thumb-cora-recovery.jpg?v=8d';
+    assert.ok(first.includes('<span class="car-fill" aria-hidden="true"><img src="' + src + '" alt=""'));
+    assert.ok(first.indexOf('car-fill') < first.indexOf('car-frame'), 'the fill sits behind the frame');
+    assert.ok(first.includes('<img class="cover" src="' + src + '"'), 'the cover itself is unchanged');
+    // A case study with no cover draws generated art, so it gets no fill.
+    const bare = P.carousel(P.carouselSlides(hireOf({ caseStudies: [cs('x')] }), []), 'kes', API);
+    assert.ok(!bare.includes('car-fill'));
+  });
+
   test('is a labelled carousel with a live counter and 44px icon controls', () => {
     assert.match(html, /<section class="car" data-car aria-roledescription="carousel" aria-label="Published case studies">/);
     assert.match(html, /class="car-count" data-car-count aria-live="polite">01 \/ 10</);
