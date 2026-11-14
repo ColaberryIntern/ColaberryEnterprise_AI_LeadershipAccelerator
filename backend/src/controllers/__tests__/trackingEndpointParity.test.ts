@@ -193,3 +193,25 @@ describe('a mixed batch drops only the bad element', () => {
     expect(getOrCreateSession.mock.calls[0][1].page_url).toBe(VALID_CASE_STUDY_EVENT.page_url);
   });
 });
+
+describe('the resolved brand reaches the session as well as the event', () => {
+  const HIRE_VIEW = {
+    event_type: 'pageview',
+    page_url: 'https://hire.refactored.ai/talent/ann-lee/schedule/',
+    page_path: '/talent/ann-lee/schedule/',
+  };
+
+  it('both endpoints hand the brand to getOrCreateSession and categorise by it', async () => {
+    // Without the brand on the session, its landing_page_category used Colaberry's map
+    // while its events used the brand's: the same visit, two answers.
+    const { resolvePublicContext } = jest.requireMock('../../modules/tenancy/tenantResolver');
+    const resolved = { context: { tenantId: 't-1', brandId: 'b-1', sourceId: 's-1', brandSlug: 'refactored' }, path: 'source' };
+    resolvePublicContext.mockResolvedValueOnce(resolved).mockResolvedValueOnce(resolved);
+
+    await viaEventEndpoint(HIRE_VIEW);
+    await viaBatchEndpoint(HIRE_VIEW);
+
+    expect(getOrCreateSession.mock.calls.map((c) => c[1].brand_slug)).toEqual(['refactored', 'refactored']);
+    expect(recordPageEvent.mock.calls.map((c) => c[0].page_category)).toEqual(['contact', 'contact']);
+  });
+});

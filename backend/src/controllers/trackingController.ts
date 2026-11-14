@@ -289,6 +289,7 @@ export async function handleTrackEvent(req: Request, res: Response, next: NextFu
       tenant_id: ecosystem?.tenantId ?? null,
       brand_id: ecosystem?.brandId ?? null,
       source_id: ecosystem?.sourceId ?? null,
+      brand_slug: ecosystem?.brandSlug ?? null,
       campaign_id: campaign_id ?? null,
     });
 
@@ -452,6 +453,7 @@ export async function handleTrackBatch(req: Request, res: Response, next: NextFu
       tenant_id: ecosystem?.tenantId ?? null,
       brand_id: ecosystem?.brandId ?? null,
       source_id: ecosystem?.sourceId ?? null,
+      brand_slug: ecosystem?.brandSlug ?? null,
       campaign_id: campaign_id ?? null,
     });
 

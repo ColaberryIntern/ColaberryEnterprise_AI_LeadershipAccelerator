@@ -267,3 +267,29 @@ with these.
     `/api/public/portfolios/<slug>` WITHOUT `?surface=hire`, which carries no hire block, so its
     "no video, no booking" came from an absent block. Re-checked here on the hire surface: the
     conclusion holds (no video, booking off, no "@").
+
+- [x] Phase 7: Hire visitor analytics categorise (code; production repair awaits Ali)
+  - Date: 2026-11-13
+  - Session: CC-20261106-fv8g
+  - What changed: root cause found read-only on production: the `hire-refactored` lead source had
+    no tenant/brand and hire.refactored.ai no `brand_domains` row, so all 2,316 Hire events
+    resolved to no brand and used Colaberry's map (every profile, booking, case-study and /intro
+    view `other`; all session landings `other`). And the brand map listed only the on-disk shells
+    (`/talent/record`, `/schedule`), never the live paths the tracker reports. Fixes:
+    `pageCategoryMaps.ts` gains anchored `pattern` rules plus `/talent/` and `/case-studies/`
+    prefixes for the refactored brand (`/talent/<slug>/schedule` is `contact`, profiles and
+    case studies `case_studies`); `getOrCreateSession` categorises the landing page under the
+    resolved brand (`brand_slug` from both tracking endpoints); `ecosystemSeedData` adds
+    hire.refactored.ai (web, non-primary) and `hire-refactored` to the brand's sources; new
+    `scripts/attachHireTrafficToRefactoredBrand.ts` repairs history for Hire rows only
+    (dry run by default, one transaction, guarded so a re-run writes nothing, re-categorises
+    only rows still `other`, via `categorizePagePath` itself, only events on hire.refactored.ai).
+  - Verification: new tests `hireLivePathCategories` (live paths, booking not swallowed, no
+    over-claim, nginx routes still exist), `visitorSessionLandingCategory`, ecosystem seed row,
+    parity test that both endpoints pass the brand, planner tests; mutations (drop the session
+    brand, disable patterns) fail 5 tests. Backend tsc clean against a control error; test-file
+    gate clean (local maxmind only); jest CI config over __tests__/services/controllers/seeds:
+    7,513 pass. Production, read-only: predicted scope 357 sessions, 2,326 events (10 off-host,
+    excluded), 24 distinct `other` paths; all 6 write statements EXPLAIN cleanly (plan only).
+  - Notes: the repair is a production write and is NOT run; it waits for Ali's go-ahead after
+    deploy. Lead scores already computed from the old categories are not recomputed.
