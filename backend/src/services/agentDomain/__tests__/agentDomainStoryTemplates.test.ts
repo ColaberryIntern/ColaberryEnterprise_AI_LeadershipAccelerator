@@ -1,6 +1,7 @@
 import {
   RESEARCH_PREFIXES,
   planForAllDomains,
+  remainingDispositions,
   planForDomain,
   type GeneratedStory,
 } from '../agentDomainStoryTemplates';
@@ -365,6 +366,104 @@ describe('the legacy migration plan is real per domain, not a template', () => {
     // POSITIVE CONTROL: the assertions above are only meaningful if 13 and 5 really differ here.
     expect(live).toBe(13);
     expect(live).not.toBe(bucket.rows.filter((r) => r.proposed_kind === 'unresolved').length);
+  });
+
+  /**
+   * EVERY inherited record is named, whatever its disposition.
+   *
+   * The body used to render superseded, retired and unknown, and drop everything else. Measured
+   * on 2026-11-14: 154 of the 225 records across the ten matrices carry `migrated_to_capability`,
+   * so 68% of the inventory existed in the brief only inside a count line. Internship, whose one
+   * record is migrated, had a brief that was nothing but counts -- which is exactly what Tashima
+   * Diah reported from the one row she could see.
+   *
+   * This asserts over every record in every domain rather than spot-checking a class, because
+   * the defect was the enumeration itself: any test naming the classes it expects would repeat
+   * the bug.
+   */
+  it('names every inherited record in the body, whatever its disposition', () => {
+    const missing: string[] = [];
+    let checked = 0;
+
+    for (const p of plans) {
+      const s = p.stories.find((x) => x.kind === 'legacy_migration')!;
+      const m = loadAllMatrices().get(p.domain_key)!;
+      for (const row of m.legacy_dispositions) {
+        checked += 1;
+        if (!s.body.includes(row.agent_name)) missing.push(`${p.domain_key}: ${row.agent_name}`);
+      }
+    }
+
+    expect({ checked_at_least: checked >= 225, missing }).toEqual({ checked_at_least: true, missing: [] });
+  });
+
+  it('renders migrated records under their own heading, not only as a count', () => {
+    // POSITIVE CONTROL for the test above: it is only meaningful if migrated records exist and
+    // were previously unrendered. internship has exactly one, and it is migrated.
+    const intern = planForDomain('internship').stories.find((s) => s.kind === 'legacy_migration')!;
+    const m = loadAllMatrices().get('internship')!;
+    const migrated = m.legacy_dispositions.filter((r) => r.disposition === 'migrated_to_capability');
+
+    expect(migrated.length).toBeGreaterThan(0);
+    expect(intern.body).toMatch(/### Migrated to a capability \(\d+\)/);
+    expect(intern.body).toContain(migrated[0].agent_name);
+    // The reason is what carries the file:line evidence in this data; no record has an
+    // `evidence` array, so dropping the reason would drop the evidence the prompt promises.
+    expect(intern.body).toContain(migrated[0].reason);
+  });
+
+  /**
+   * Reordering rows in a capability matrix must not change a single byte of the brief.
+   *
+   * The sync writes a repo commit only when content differs, so a render that tracked the order
+   * rows happen to sit in would rewrite seven builders' repositories every time somebody tidied
+   * a JSON file. Two renders in one process cannot show this -- Map iteration is insertion
+   * order, so it is stable by accident there -- which is why this shuffles the INPUT. Removing
+   * the sorts left a same-process test green; it does not leave this one green.
+   */
+  it('ignores the order rows appear in the matrix', () => {
+    const m = loadAllMatrices().get('executive')!;
+    const reversed = { ...m, legacy_dispositions: [...m.legacy_dispositions].reverse() };
+    const rotated = {
+      ...m,
+      legacy_dispositions: [...m.legacy_dispositions.slice(7), ...m.legacy_dispositions.slice(0, 7)],
+    };
+
+    expect(remainingDispositions(reversed)).toBe(remainingDispositions(m));
+    expect(remainingDispositions(rotated)).toBe(remainingDispositions(m));
+
+    // POSITIVE CONTROL: the comparison is worthless if the render is empty or the input is tiny.
+    expect(remainingDispositions(m).length).toBeGreaterThan(500);
+    expect(m.legacy_dispositions.length).toBeGreaterThan(20);
+  });
+
+  /**
+   * Built, because the real matrices cannot exercise it.
+   *
+   * Every domain currently has at most ONE disposition class outside the named three
+   * (`migrated_to_capability`), so there is nothing for the between-class ordering to sort and
+   * removing that sort leaves every data-driven test green. The ordering only starts to matter
+   * on the day a second class appears, which is exactly when nobody will be looking at it.
+   */
+  it('orders disposition classes by name, not by where they appear', () => {
+    const rec = (agent_name: string, disposition: string) => ({
+      agent_name, proposed_kind: 'behavior', disposition, capability_id: null, reason: 'constructed',
+    });
+    const base = loadAllMatrices().get('internship')!;
+    const mk = (rows: ReturnType<typeof rec>[]) =>
+      ({ ...base, legacy_dispositions: rows }) as typeof base;
+
+    const zebra = rec('Zebra', 'zzz_future_class');
+    const alpha = rec('Alpha', 'aaa_future_class');
+
+    const out = remainingDispositions(mk([zebra, alpha]));
+    expect(out).toBe(remainingDispositions(mk([alpha, zebra])));
+    expect(out.indexOf('aaa_future_class')).toBeLessThan(out.indexOf('zzz_future_class'));
+
+    // An unanticipated class is RENDERED under its own name rather than dropped, which is the
+    // whole reason this renders "everything not already named" instead of a fixed list.
+    expect(out).toContain('Zebra');
+    expect(out).toContain('Alpha');
   });
 
   it('a domain with zero inheritance says so, and says an empty bucket is not an empty job', () => {

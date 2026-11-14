@@ -307,6 +307,64 @@ function commandCenterStory(d: AgentDomain, m: DomainCapabilityMatrix): Generate
   };
 }
 
+/** Dispositions the body renders in their own named section, in the order they appear above. */
+const NAMED_DISPOSITIONS: ReadonlySet<string> = new Set(['superseded', 'retired', 'unknown']);
+
+/**
+ * Every inherited record the named sections do not already cover.
+ *
+ * ## The omission this closes
+ *
+ * The body rendered exactly three disposition classes and silently dropped the rest. Measured
+ * across the ten capability matrices on 2026-11-14: **154 of 225 inherited records carry
+ * `migrated_to_capability`**, and not one of them appeared anywhere in the brief except inside a
+ * count line. For a domain whose every record is migrated -- internship has exactly one, and it
+ * is migrated -- the brief genuinely was nothing but counts.
+ *
+ * Tashima Diah reported it from that single record ("the prompt says the page brief holds each
+ * record's disposition, reason and file:line evidence; the brief shown on the story page names
+ * only the counts"). She could see one row. The same omission was hiding 68% of the inventory.
+ *
+ * ## Why this is written as "everything not already named"
+ *
+ * Listing `migrated_to_capability` explicitly would fix today's case and leave the next new
+ * disposition to disappear the same way. The failure was never the missing class, it was that
+ * the renderer enumerated classes at all. This one renders the remainder, so a class nobody
+ * anticipated is rendered under its own name rather than vanishing.
+ *
+ * `reason` is what carries the `file:line` evidence in this data: no record in any matrix has an
+ * `evidence` array (0 of 225), and the refs are written inline in the reason text. So this
+ * prints the reason verbatim rather than inventing a field to read.
+ */
+export function remainingDispositions(m: DomainCapabilityMatrix): string {
+  const rest = m.legacy_dispositions.filter((r) => !NAMED_DISPOSITIONS.has(r.disposition));
+  if (rest.length === 0) return '';
+
+  const byClass = new Map<string, typeof rest>();
+  for (const r of rest) {
+    const k = r.disposition;
+    if (!byClass.has(k)) byClass.set(k, []);
+    byClass.get(k)!.push(r);
+  }
+
+  // Sorted so the same matrix always renders the same bytes: the sync writes a repo commit only
+  // when content differs, and a Map iteration order that tracked input order would churn.
+  return [...byClass.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([kind, rows]) => {
+      const heading = kind === 'migrated_to_capability'
+        ? `### Migrated to a capability (${rows.length}) -- the behaviour is kept, under a new owner`
+        : `### ${kind} (${rows.length})`;
+      const sorted = [...rows].sort((x, y) => x.agent_name.localeCompare(y.agent_name));
+      return `${heading}\n`
+        + bullets(sorted.map((r) => (r.capability_id
+          ? `\`${r.agent_name}\` -> \`${r.capability_id}\`: ${r.reason}`
+          : `\`${r.agent_name}\`: ${r.reason}`)))
+        + '\n\n';
+    })
+    .join('');
+}
+
 function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): GeneratedStory {
   const by = new Map<string, number>();
   for (const row of m.legacy_dispositions) by.set(row.disposition, (by.get(row.disposition) ?? 0) + 1);
@@ -362,6 +420,7 @@ function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): Genera
           + `functionality is silently lost" is the rule, and an unexamined row is exactly where loss `
           + `hides.\n\n`
         : '')
+      + remainingDispositions(m)
       // Every count here is derived. The literals this replaced -- "21 legacy records" and
       // "Five of them are live production rows" -- went into all ten boards, and the second was
       // wrong: five is the count of rows whose PROPOSED KIND is unresolved, while thirteen are
