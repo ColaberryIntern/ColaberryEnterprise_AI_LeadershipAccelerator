@@ -293,3 +293,21 @@ with these.
     excluded), 24 distinct `other` paths; all 6 write statements EXPLAIN cleanly (plan only).
   - Notes: the repair is a production write and is NOT run; it waits for Ali's go-ahead after
     deploy. Lead scores already computed from the old categories are not recomputed.
+
+- [x] Phase 7 shipped: merged, deployed, production-verified, history repaired
+  - Date: 2026-11-14
+  - Session: CC-20261106-fv8g
+  - What changed: #4020 merged as 7b33f3f40; "Build images" succeeded on it; no other deploy
+    running; `./scripts/deploy-prod.sh backend` exit 0, prod HEAD 7b33f3f40; the running dist has
+    the repair script, the `pattern` rules and the session `brand_slug`. Ali: "yes repair". Dry run
+    (real statements, rolled back): source 1, sessions 359, events 2,339, events recategorised
+    1,756, landings 290. Then `--apply` with the same counts; a second dry run: all zeros.
+  - Verification (read-only): brand_domains hire.refactored.ai/web, non-primary, brand refactored;
+    `hire-refactored` source now on brand refactored. Hire-host events: case_studies 1,435,
+    homepage 583, contact 321, 0 `other`, 0 unbranded. Hire sessions: case_studies 270, homepage
+    69, contact 20, 0 unbranded. The 10 off-host events in Hire sessions untouched (0 branded).
+    Deployed resolver + categoriser on a new Hire visit: profile -> refactored/case_studies,
+    booking -> contact, case study -> case_studies, /intro -> contact.
+  - Notes: the script reports `domain_rows: 0` although it inserted the row (Sequelize returns an
+    INSERT's count differently from an UPDATE's); the row was confirmed by a direct read. Cosmetic,
+    left as is. Lead scores computed from the old categories are not recomputed.
