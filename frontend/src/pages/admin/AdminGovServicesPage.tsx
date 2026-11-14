@@ -20,6 +20,10 @@ import ProposalGapsPanel from '../../components/admin/ourServices/ProposalGapsPa
 import { SourcePill } from '../../components/admin/ourServices/CaseStudyCard';
 import ServiceFormModal,{ emptyForm, formFrom, inputFrom, type FormState } from '../../components/admin/ourServices/ServiceFormModal';
 import { useOurServicesData } from '../../components/admin/ourServices/useOurServicesData';
+import CaseStudyDrawer, { type DrawerSeed } from '../../components/admin/ourServices/CaseStudyDrawer';
+import { CaseStudyOpenerContext } from '../../components/admin/ourServices/caseStudyOpener';
+import GuidedTour from '../../components/admin/ourServices/GuidedTour';
+import { OUR_SERVICES_TOUR } from '../../components/admin/ourServices/ourServicesTourSteps';
 import { buildKpis, centralYear, nonRetired } from '../../components/admin/ourServices/ourServicesModel';
 
 /**
@@ -48,6 +52,8 @@ export default function AdminGovServicesPage(): React.ReactElement {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [evidenceFor, setEvidenceFor] = useState<EvidenceService | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [reading, setReading] = useState<DrawerSeed | null>(null);
   const jumped = useRef(false);
   // "Now" is the summary's own generation time, so deadlines and "this year" agree with the numbers on screen.
   const now = useMemo(() => {
@@ -85,14 +91,32 @@ export default function AdminGovServicesPage(): React.ReactElement {
 
   const blocked = summary?.decideNow.blockedCaseStudies.count ?? 0;
 
+  // Every case study the page shows (Intake and each service's linked list), so a title click can open the side
+  // panel at once with the right title and Inside/Outside kind while the full record loads.
+  const seeds = useMemo(() => {
+    const m = new Map<string, DrawerSeed>();
+    if (!summary) return m;
+    for (const it of summary.intake) m.set(it.id, { id: it.id, title: it.title, sourceKind: it.sourceKind });
+    for (const s of summary.services) for (const c of s.caseStudies) m.set(c.id, { id: c.id, title: c.title, sourceKind: c.sourceKind });
+    return m;
+  }, [summary]);
+  const openCaseStudy = useCallback((id: string) => {
+    setReading(seeds.get(id) ?? { id, title: 'Case study', sourceKind: 'inside' });
+  }, [seeds]);
+
   return (
+    <CaseStudyOpenerContext.Provider value={openCaseStudy}>
     <div>
+      <div data-tour="header">
       <PageHeader
         title="Our Services"
         subtitle="Every service is backed by real work. Case studies are the evidence the Gov matcher uses."
         icon="heart-3-line"
         actions={
           <div className="d-flex gap-2">
+            <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setTourOpen(true)} disabled={!summary} data-testid="start-tour">
+              <i className="ri-compass-3-line me-1" aria-hidden="true" />How this page works
+            </button>
             <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setImportOpen(true)}><i className="ri-inbox-archive-line me-1" aria-hidden="true" />Add outside case study</button>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><i className="ri-add-line me-1" aria-hidden="true" />Add service</button>
           </div>
@@ -102,6 +126,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
           Case studies come from projects we built (<SourcePill kind="inside" />) or from the Drive library (<SourcePill kind="outside" label="Outside" />).
         </p>
       </PageHeader>
+      </div>
 
       {data.error && (
         <div className="alert alert-danger d-flex justify-content-between align-items-center gap-2" role="alert">
@@ -125,11 +150,11 @@ export default function AdminGovServicesPage(): React.ReactElement {
         <p className="text-secondary">The evidence summary is not available, so no evidence numbers are shown. Retry above.</p>
       ) : (
         <>
-          <OurServicesKpiRow kpis={buildKpis(summary)} />
-          <DecideNowStrip summary={summary} now={now} onJump={jump} />
-          <ServicesLifecycleDiagram />
+          <div data-tour="kpis"><OurServicesKpiRow kpis={buildKpis(summary)} /></div>
+          <div data-tour="decide"><DecideNowStrip summary={summary} now={now} onJump={jump} /></div>
+          <div data-tour="lifecycle"><ServicesLifecycleDiagram /></div>
 
-          <div className="row g-3 mb-4">
+          <div className="row g-3 mb-4" data-tour="charts">
             <div className="col-12 col-xl-7">
               <SectionCard className="h-100 mb-0" title="Evidence by service" icon="bar-chart-horizontal-line"
                 subtitle="Confirmed case studies linked to each service, split by source. Sorted weakest first so the gaps sit at the top.">
@@ -162,7 +187,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
             </div>
           </div>
 
-          <div id="catalog" tabIndex={-1} className="mb-4">
+          <div id="catalog" tabIndex={-1} className="mb-4" data-tour="catalog">
             <SectionCard className="mb-0" title="Service catalog" icon="folder-open-line"
               subtitle="Open a row to see its case studies. Colors show evidence strength and freshness, so weak spots stand out."
               actions={<CatalogFilterTabs filter={filter} onFilter={setFilter} />}>
@@ -177,12 +202,14 @@ export default function AdminGovServicesPage(): React.ReactElement {
             </SectionCard>
           </div>
 
+          <div data-tour="heatmap">
           <SectionCard className="mb-4" title="Service × industry coverage" icon="grid-line"
             subtitle="Confirmed case studies per cell. Darker means more proof; an empty circle means no case study in that industry yet.">
             <ServiceIndustryHeatmap services={live} matrix={summary.industryMatrix} />
           </SectionCard>
+          </div>
 
-          <div id="intake" tabIndex={-1} className="mb-4">
+          <div id="intake" tabIndex={-1} className="mb-4" data-tour="intake">
             <SectionCard className="mb-0"
               icon="inbox-archive-line"
               title={<>Case study intake <span className={`badge rounded-pill ms-1 ${blocked ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`}>{blocked ? `${blocked} blocked` : 'all linked'}</span></>}
@@ -192,7 +219,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
             </SectionCard>
           </div>
 
-          <div id="gaps" tabIndex={-1} className="mb-4">
+          <div id="gaps" tabIndex={-1} className="mb-4" data-tour="gaps">
             <SectionCard className="mb-0" title="Gaps from live proposals" icon="government-line"
               subtitle={'Capabilities that "Can we deliver it?" flagged as Partly or New. Before treating one as a true gap, check whether we have unlinked proof.'}>
               <ProposalGapsPanel openFitGaps={summary.decideNow.openFitGaps} services={summary.services} intake={summary.intake} now={now} onReviewIntake={() => jump('intake')} />
@@ -225,6 +252,10 @@ export default function AdminGovServicesPage(): React.ReactElement {
           if (imported) void data.reload().then(() => jump('intake'));
         }} />
       )}
+
+      {reading && <CaseStudyDrawer seed={reading} onClose={() => setReading(null)} />}
+      {tourOpen && <GuidedTour steps={OUR_SERVICES_TOUR} onClose={() => setTourOpen(false)} />}
     </div>
+    </CaseStudyOpenerContext.Provider>
   );
 }
