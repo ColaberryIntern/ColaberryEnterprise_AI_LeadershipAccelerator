@@ -9,7 +9,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import PricingV2 from '../PricingV2';
-import { PRICING_TIERS } from '../../../config/v2Pricing';
+import { PRICING_TIERS, SERVICE_SHAPES, COMPARE_ROWS } from '../../../config/v2Pricing';
 import { publicClaim } from '../../../config/claimsRegistry';
 
 const html = (): string =>
@@ -72,5 +72,67 @@ describe('PricingV2 — structure', () => {
   it('sends every tier somewhere real', () => {
     const h = html();
     PRICING_TIERS.forEach((t) => expect(h).toContain(`href="${t.ctaRoute}"`));
+  });
+});
+
+describe('PricingV2 — Build, Guide and Train', () => {
+  it('renders all three services with their verb, promise and commercial shape', () => {
+    const text = textOf(html());
+    expect(SERVICE_SHAPES).toHaveLength(3);
+    SERVICE_SHAPES.forEach((svc) => {
+      expect(text).toContain(svc.verb);
+      expect(text).toContain(svc.promise);
+      expect(text).toContain(svc.terms);
+    });
+  });
+
+  it('recommends exactly one service, and marks it by more than colour', () => {
+    const featured = SERVICE_SHAPES.filter((s) => s.featured);
+    expect(featured).toHaveLength(1);
+    // --featured carries a top rule and a border in CSS, so the recommendation
+    // survives greyscale. Colour alone would not.
+    expect(html()).toContain('cbv2-shape--featured');
+  });
+
+  it('carries NO figure inside a service card: shapes are shapes, prices live in the ladder', () => {
+    // The whole point of the shape cards is that they commit to a structure
+    // without asserting a number the registry has not approved for this route.
+    SERVICE_SHAPES.forEach((svc) => {
+      const copy = [svc.verb, svc.promise, svc.blurb, svc.terms, ...svc.includes].join(' ');
+      expect(copy).not.toMatch(/\$\s?\d/);
+      expect(copy).not.toMatch(/\d[\d,]*\s*(?:dollars|USD)/i);
+    });
+  });
+
+  it('keeps the comparison table in step with the cards', () => {
+    // A row that forgets a column, or a fourth service added without a column,
+    // is the failure this guards. The table is authored by hand beside the
+    // cards, so nothing but a test keeps the two from drifting.
+    expect(COMPARE_ROWS).toHaveLength(8);
+    COMPARE_ROWS.forEach((row) => {
+      expect(row.label.length).toBeGreaterThan(0);
+      [row.build, row.guide, row.train].forEach((cell) => {
+        expect(typeof cell).toBe('string');
+        expect(cell.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  it('renders every comparison row and one column header per service', () => {
+    const text = textOf(html());
+    COMPARE_ROWS.forEach((row) => expect(text).toContain(row.label));
+    const h = html();
+    // scope="col" headers: the leading "Compare" cell plus one per service.
+    expect((h.match(/scope="col"/g) || []).length).toBe(SERVICE_SHAPES.length + 1);
+    expect((h.match(/scope="row"/g) || []).length).toBe(COMPARE_ROWS.length);
+  });
+
+  it('sends every service somewhere real', () => {
+    const h = html();
+    SERVICE_SHAPES.forEach((svc) => expect(h).toContain(`href="${svc.ctaRoute}"`));
+  });
+
+  it('still leads to the demo pilot, which is what every engagement starts with', () => {
+    expect(textOf(html())).toMatch(/demo pilot/i);
   });
 });

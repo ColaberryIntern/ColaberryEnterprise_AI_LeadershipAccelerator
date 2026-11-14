@@ -48,7 +48,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/membership/personaContent.ts': 13,
   'frontend/src/components/portal/lesson/ImplementationTask.tsx': 1,
   'frontend/src/components/publicV2/HeroPlatformV8.tsx': 1,
-  'frontend/src/components/publicV2/HeroPricingV8.tsx': 7,
+  'frontend/src/components/publicV2/HeroPricingV8.tsx': 1, // 2026-11-14: 7 -> 1, hero re-lettered to the demo-pilot arc
   'frontend/src/components/publicV2/HeroServicesV8.tsx': 1,
   'frontend/src/components/publicV2/HeroV8.tsx': 1,
   'frontend/src/components/publicV2/OpenPlatform.tsx': 2,
@@ -68,7 +68,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   //
   // ADVERTISING - these are the ones that have to go.
   'frontend/src/config/primaryCta.ts': 1, // the primary CTA label itself, the most-rendered instance on the site
-  'frontend/src/config/v2Pricing.ts': 9, // tier key + name, two ctaLabels, blurb, an include, and the pricing FAQ
+  'frontend/src/config/v2Pricing.ts': 8, // 2026-11-14: 9 -> 8, the pricing FAQ was replaced with the Build/Guide/Train six
   'frontend/src/config/v2Platform.ts': 5, // "Free company workspace" as a feature label, value and progress row
   'frontend/src/config/v2Content.ts': 1, // next-step prompt pointing at the workspace
   'frontend/src/config/v2Services.ts': 1, // next-step prompt pointing at the workspace
@@ -132,7 +132,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/runtime/runtimeKit.tsx': 1,
   'frontend/src/pages/publicV2/HomeV2.tsx': 4,
   'frontend/src/pages/publicV2/PlatformV2.tsx': 2,
-  'frontend/src/pages/publicV2/PricingV2.tsx': 5,
+  'frontend/src/pages/publicV2/PricingV2.tsx': 1, // 2026-11-14: 5 -> 1, page rebuilt around the three services
   'frontend/src/pages/publicV2/SignupV2.tsx': 3,
   'frontend/src/pages/publicV2/TryV2.tsx': 9,
 };
@@ -168,7 +168,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 274;
+export const FRONTEND_COPY_BASELINE_TOTAL = 263;
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the
