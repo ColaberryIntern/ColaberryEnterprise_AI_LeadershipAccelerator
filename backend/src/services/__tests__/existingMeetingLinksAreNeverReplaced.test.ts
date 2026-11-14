@@ -94,6 +94,12 @@ describe('an existing Zoom link is never replaced', () => {
       'services/zoomService.ts',
       'services/communityRooms/meetingProvider.ts',
       'services/communityRooms/zoomMeetingIdempotency.ts',
+      // Added 2026-11-14 with the mint read-back. Plumbing, not a sixth creator: it
+      // holds no room row and cannot decide whether a link already exists — it is
+      // reached only from internshipMeetingRooms, whose own guard is asserted above.
+      // What it CAN do is move a room onto a different host, so the test below pins
+      // that it may only do so while the room has no link.
+      'services/zoom/enterableRoomMint.ts',
     ];
     const unexpected = creators
       .filter((f) => !PLUMBING.includes(f))
@@ -102,5 +108,20 @@ describe('an existing Zoom link is never replaced', () => {
     // If this fails: a new path creates Zoom meetings. Decide what it does when a
     // link already exists, then add it to KNOWN_CREATORS with its guard.
     expect(unexpected).toEqual([]);
+  });
+
+  /**
+   * The host-failover added on 2026-11-14 is the exact refactor this file was written
+   * to fear: it exists to move a room onto a different Zoom host. It is allowed to,
+   * but ONLY before the room has a link — once a link is out in the world, re-homing
+   * it strands whoever holds it, which is the whole premise of this suite.
+   *
+   * The bound is in the SQL rather than in a branch, so it is read from the SQL.
+   */
+  it('a room that already has a link can never have its host released', () => {
+    const src = fs.readFileSync(path.join(SRC, 'services/zoom/roomHostAllocator.ts'), 'utf8');
+    const release = src.slice(src.indexOf('export async function releaseRoomHost'));
+    expect(release.length).toBeGreaterThan(200);
+    expect(release).toMatch(/WHERE id = :id AND meeting_link IS NULL/);
   });
 });

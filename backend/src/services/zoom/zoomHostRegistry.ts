@@ -234,6 +234,34 @@ async function setVerified(email: string, ok: boolean, error?: string): Promise<
   );
 }
 
+/**
+ * Demotes a host that has been PROVED unusable by real use, not by a prediction.
+ *
+ * `verifyHost` below asks Zoom whether a host exists. That is a weaker question than
+ * the one that matters, and the gap is the whole 2026-11-02 incident: all seven pool
+ * hosts were verified, enabled and healthy by that definition, while three of them
+ * could only produce meetings nobody could enter. Verification proved the host could
+ * mint. It could not prove the meeting could be joined, which is the only property a
+ * persistent room has any use for.
+ *
+ * Rather than guess at mint time — a host's account settings can change between the
+ * check and the call, and a probe that mints a throwaway meeting on every live class
+ * account is a cure worse than the disease — the evidence is taken from the mint
+ * itself. The first room that comes back unenterable demotes the host that produced
+ * it, so the pool corrects itself from what actually happened and the next allocation
+ * routes around it.
+ *
+ * Clearing `verified_at` is what removes it from `allocatableHostEmails`; the reason
+ * lands in `last_error` so an operator sees WHY rather than finding a host that has
+ * quietly stopped being chosen. Re-verifying is deliberately a human act: the fix is
+ * a toggle in the Zoom console, and a host that re-verified itself would oscillate.
+ */
+export async function markHostUnusable(hostEmail: string, reason: string): Promise<void> {
+  const email = String(hostEmail || '').trim();
+  if (!email) return;
+  await setVerified(email, false, reason);
+}
+
 export type VerifyFailureReason = 'missing_scope' | 'not_found' | 'error';
 
 export type VerifyResult =

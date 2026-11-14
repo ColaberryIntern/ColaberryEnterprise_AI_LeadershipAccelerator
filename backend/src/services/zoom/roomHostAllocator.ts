@@ -205,6 +205,34 @@ export async function reserveRoomHost(roomId: string): Promise<string | null> {
   }
 }
 
+/**
+ * Gives a room's reserved host back to the pool.
+ *
+ * `reserveRoomHost` is idempotent and answers with the existing reservation forever —
+ * which is right, because a room's join link must stay stable. But it also means a
+ * room reserved onto a host that turns out to be unusable can never be moved: every
+ * retry is handed the same dead host, and the room is stuck for good.
+ *
+ * So the reservation is released on exactly one condition, by the mint failover: the
+ * host has just PROVED it cannot produce an enterable meeting, and has been demoted
+ * out of the pool. Releasing is safe there because the room has no link yet (the mint
+ * failed) and the demoted host cannot be chosen again on the next pass.
+ *
+ * NOT a general-purpose "move this room". A room that already holds a link keeps its
+ * host, and the only supported way to move that one is a deliberate re-mint that
+ * announces the new URL — see `scripts/remintRoomZoomHosts.ts`.
+ */
+export async function releaseRoomHost(roomId: string): Promise<void> {
+  if (!roomId) return;
+  await (await db()).query(
+    `UPDATE community_rooms
+        SET metadata = COALESCE(metadata, '{}'::jsonb) - '${ROOM_HOST_METADATA_KEY}',
+            updated_at = NOW()
+      WHERE id = :id AND meeting_link IS NULL`,
+    { replacements: { id: roomId } },
+  );
+}
+
 export interface SharedHostReport {
   host_email: string;
   room_count: number;
