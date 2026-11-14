@@ -115,9 +115,29 @@ export async function actOnHireInterview(
 
 // ── Intro video (kit §3.2) ───────────────────────────────────────────────────
 
+export type CoachEventKind = 'filler' | 'hedge' | 'pause';
+export interface CoachEvent { t: number; kind: CoachEventKind; label: string; dur?: number }
+export interface DeliveryScore { key: string; label: string; score: number; value: string; target: string; source: string }
+export interface ContentPoint { key: string; label: string; level: 'strong' | 'ok' | 'work_on'; note: string; quote: string | null }
+
+/** Candidate-only coaching (backend hireVideoAnalysis.ts). Version 2 carries the live-playback data. */
 export interface VideoCoaching {
+  version?: 2;
   seconds: number;
   notes: string[];
+  words?: number;
+  wordsPerMinute?: number | null;
+  /** Pace every 5 s: the live gauge. */
+  pace?: { t: number; wpm: number }[];
+  fillerTotal?: number;
+  hedgeTotal?: number;
+  pauses?: { short: number; medium: number; long: number };
+  /** Every filler, hedge and pause with the second it happened: the live counters and scrubber marks. */
+  events?: CoachEvent[];
+  scores?: DeliveryScore[];
+  /** Loudness every 0.5 s (0..1) and pitch variety in semitones, from the real audio. */
+  voice?: { energy: number[]; pitchVariation: number | null; loudnessRange: number | null } | null;
+  content?: { points: ContentPoint[]; topTip: string } | null;
 }
 
 export interface HireVideo {
@@ -128,8 +148,8 @@ export interface HireVideo {
   posterUrl: string;
   captionsUrl: string | null;
   captionsWanted: boolean;
-  /** 'off' until colaberry/video-analysis is connected; 'done' once its coaching is in. */
-  analysis: 'off' | 'pending' | 'done';
+  /** 'off' when coaching is not configured; 'pending' while it runs; 'failed' offers "Try again". */
+  analysis: 'off' | 'pending' | 'done' | 'failed';
   /** For the candidate only. Never shown on Hire. */
   coaching: VideoCoaching | null;
 }
@@ -152,7 +172,7 @@ export async function uploadHireVideo(file: Blob, name: string, onProgress?: (fr
   return res.data.video ?? null;
 }
 
-export async function updateHireVideo(u: { published?: boolean; captionsWanted?: boolean }): Promise<HireVideo | null> {
+export async function updateHireVideo(u: { published?: boolean; captionsWanted?: boolean; reanalyze?: true }): Promise<HireVideo | null> {
   return (await portalApi.put(VIDEO, u)).data.video ?? null;
 }
 
