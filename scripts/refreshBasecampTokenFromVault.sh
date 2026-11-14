@@ -15,13 +15,31 @@
 #
 #   manual check:  bash scripts/refreshBasecampTokenFromVault.sh
 #   commit:        bash scripts/refreshBasecampTokenFromVault.sh --commit
-#   cron (weekly): 0 6 * * 1 /opt/colaberry-accelerator/scripts/refreshBasecampTokenFromVault.sh --commit
+#
+# CRON, as actually installed on the prod host, read from `crontab -l` on 2026-11-14:
+#   0 8 * * * /opt/colaberry-accelerator/scripts/refreshBasecampTokenFromVault.sh --commit >> /var/log/bc-token-refresh.log 2>&1
+# Daily at 08:00 UTC, which is 02:00 Central. This line said "cron (weekly): 0 6 * * 1"
+# until 2026-11-14 and a sibling branch said "every 3d: 0 8 */3"; neither matched the
+# installed job. A cadence comment nobody checks against `crontab -l` is how a session
+# ends up reasoning about a schedule that does not exist, so it is now dated and sourced.
+#
+# WHAT THIS CADENCE DOES AND DOES NOT BOUND. The legacy CCPP refresher INSERTS a new
+# active row roughly every 14 days (rows 245-249 are 14 days apart, at 15:00, 21:00 and
+# 20:45 UTC, so the hour varies). basecampToken resolves with ORDER BY
+# BasecampAuthInfoID DESC, which prefers whichever row is newest, so between that insert
+# and this job's next run the whole platform acts as whoever the legacy refresher wrote.
+# On 2026-11-13 that was CB System and the window was 17 hours. Running daily bounds the
+# window at roughly 23 hours, not at zero. The identity probe below stops this job from
+# WRITING a wrong token; it cannot stop the other writer from inserting one.
 
 set -uo pipefail
 
 ADVISOR='ai-project-architect-app-1'   # owns the Fernet vault + OAuth mint
 BACKEND='accelerator-backend'          # owns the CCPP (MSSQL) connection
-OPERATOR='usr-cbdd2c8ffc'              # Ali's vault grant -> ali@colaberry.com (bc 16988292)
+OPERATOR='usr-cbdd2c8ffc'              # Ali's vault grant -> ali@colaberry.com, bc person 17454835
+                                       # (was documented as 16988292; /my/profile.json returns
+                                       # 17454835 for a token minted from this grant, checked
+                                       # 2026-11-13. EXPECT_PERSON below asserts it on every run.)
 # NOTE: there is deliberately no hardcoded row id here. The UPDATE below targets
 # MAX(BasecampAuthInfoID) WHERE IsActive=1 and reports the id it actually wrote.
 # A CCPP_ROW='237' constant used to be echoed as "row 237 refreshed" on every
@@ -62,10 +80,46 @@ NEW=$(printf '%s' "$RAW" | sed -n 's/^ACCESS_TOKEN=//p' | tail -1 | tr -d '\r')
 [ -n "$NEW" ] || { echo "MINT FAILED: no ACCESS_TOKEN in advisor output"; exit 1; }
 echo "minted token prefix: ${NEW:0:8}..."
 
-# 2) Probe Basecamp — must be 200 before we touch CCPP (never write a bad token).
-CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NEW" -H "User-Agent: Colaberry" "https://3.basecampapi.com/$ACCOUNT/projects.json")
+# 2) Probe Basecamp: must be 200 AND must be the expected person before we touch
+#    CCPP (never write a bad token, and never write SOMEBODY ELSE'S token).
+#
+#    This probe used to request /projects.json and assert only HTTP 200. That is
+#    not enough, and the gap is not theoretical: on 2026-11-13 the active CCPP row
+#    carried a grant for CB System <ali+999@colaberry.com> id 37708014 instead of
+#    Ali. CB System returns 200 on /projects.json too, since it can see 65 projects,
+#    so a status-only probe is satisfied by the wrong identity. What it could NOT
+#    see was project 49210714 Colaberry Live, and Basecamp answers 404 rather than
+#    403 for a resource the caller cannot see, so every read and write against
+#    that project failed in a way indistinguishable from a deleted ticket.
+#
+#    A 200 is not an identity. /my/profile.json is the only endpoint that answers
+#    "who is this token", so that is what is asked, and the id is compared.
+EXPECT_PERSON='17454835'   # Ali Muwwakkil, ali@colaberry.com. Verified live 2026-11-13
+                           # against /my/profile.json with a token minted from the
+                           # OPERATOR grant above. The old comment on OPERATOR said
+                           # 16988292, which no endpoint returns; do not restore it.
+PROBE=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $NEW" -H "User-Agent: Colaberry" \
+  "https://3.basecampapi.com/$ACCOUNT/my/profile.json")
+CODE=$(printf '%s' "$PROBE" | tail -1)
+BODY=$(printf '%s' "$PROBE" | sed '$d')
 echo "probe HTTP $CODE (expect 200)"
 [ "$CODE" = "200" ] || { echo "token not valid (HTTP $CODE); NOT writing CCPP"; exit 1; }
+
+# Identity, read off the profile. grep -o and head -1 rather than sed, deliberately:
+# the profile is one line and carries nested objects that also have an "id" (the
+# company, for one), and `sed 's/.*"id":\([0-9]*\).*/\1/'` is GREEDY, so .* runs to
+# the LAST "id" in the body and returns the company's. grep -o emits matches in
+# order, so head -1 is the top-level person. Getting this wrong fails closed, which
+# is safe but would silently stop every refresh, so it is worth the two extra words.
+PERSON=$(printf '%s' "$BODY" | grep -o '"id":[0-9][0-9]*' | head -1 | cut -d: -f2)
+PERSON_EMAIL=$(printf '%s' "$BODY" | grep -o '"email_address":"[^"]*"' | head -1 | cut -d'"' -f4)
+echo "probe identity: id=${PERSON:-unknown} email=${PERSON_EMAIL:-unknown} (expect id=$EXPECT_PERSON)"
+if [ "$PERSON" != "$EXPECT_PERSON" ]; then
+  echo "IDENTITY MISMATCH: minted token is id=${PERSON:-unknown} (${PERSON_EMAIL:-unknown}), expected $EXPECT_PERSON."
+  echo "NOT writing CCPP. The vault grant for OPERATOR=$OPERATOR no longer resolves to the expected person."
+  echo "Fix the grant rather than relaxing this check: writing the wrong identity surfaces downstream as a 404."
+  exit 1
+fi
 
 if [ "$COMMIT" != 'yes' ]; then
   echo "DRY-RUN ok: mint + probe succeeded. Re-run with --commit to update the newest active CCPP row."
