@@ -17,6 +17,7 @@ jest.mock('../../../services/projectDocuments', () => ({
 }));
 jest.mock('../../artifactFileResponses', () => ({
   sendArtifactFile: jest.fn((_req: any, res: any) => res.status(200).send('bytes')),
+  sendOfficePreview: jest.fn((res: any) => res.status(200).json({ html: '<p>doc</p>' })),
   logFailure: jest.fn(),
 }));
 
@@ -34,11 +35,12 @@ import express from 'express';
 import request from 'supertest';
 import router from '../projectOverviewRoutes';
 import { listProjectDocuments as _list, getProjectDocumentFile as _get } from '../../../services/projectDocuments';
-import { sendArtifactFile as _send } from '../../artifactFileResponses';
+import { sendArtifactFile as _send, sendOfficePreview as _preview } from '../../artifactFileResponses';
 
 const listProjectDocuments = _list as jest.Mock;
 const getProjectDocumentFile = _get as jest.Mock;
 const sendArtifactFile = _send as jest.Mock;
+const sendOfficePreview = _preview as jest.Mock;
 
 const app = express();
 app.use(express.json());
@@ -47,7 +49,11 @@ app.use(router);
 const PID = '11111111-1111-1111-1111-111111111111';
 const AID = '22222222-2222-2222-2222-222222222222';
 
-beforeEach(() => { jest.clearAllMocks(); adminAllows = true; sendArtifactFile.mockImplementation((_req: any, res: any) => res.status(200).send('bytes')); });
+beforeEach(() => {
+  jest.clearAllMocks(); adminAllows = true;
+  sendArtifactFile.mockImplementation((_req: any, res: any) => res.status(200).send('bytes'));
+  sendOfficePreview.mockImplementation((res: any) => res.status(200).json({ html: '<p>doc</p>' }));
+});
 
 describe('GET /api/admin/projects/:projectId/documents', () => {
   it('200 with the project\'s document list', async () => {
@@ -97,6 +103,37 @@ describe('GET /api/admin/projects/:projectId/documents/:artifactId/file', () => 
   it('403 without admin; nothing fetched', async () => {
     adminAllows = false;
     const res = await request(app).get(`/api/admin/projects/${PID}/documents/${AID}/file`);
+    expect(res.status).toBe(403);
+    expect(getProjectDocumentFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/projects/:projectId/documents/:artifactId/preview', () => {
+  it('renders a Word/PowerPoint document inline through the shared office preview', async () => {
+    getProjectDocumentFile.mockResolvedValue({ absPath: '/u/brief.docx', name: 'brief.docx', kind: 'word', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', title: 'brief.docx' });
+    const res = await request(app).get(`/api/admin/projects/${PID}/documents/${AID}/preview`);
+    expect(res.status).toBe(200);
+    expect(res.body.html).toBe('<p>doc</p>');
+    expect(getProjectDocumentFile).toHaveBeenCalledWith(PID, AID);
+    expect(sendOfficePreview).toHaveBeenCalled();
+  });
+
+  it('404 when the piece is not a document of this project\'s enrollment (never rendered)', async () => {
+    getProjectDocumentFile.mockResolvedValue(null);
+    const res = await request(app).get(`/api/admin/projects/${PID}/documents/${AID}/preview`);
+    expect(res.status).toBe(404);
+    expect(sendOfficePreview).not.toHaveBeenCalled();
+  });
+
+  it('400 on a non-UUID artifactId, nothing fetched', async () => {
+    const res = await request(app).get(`/api/admin/projects/${PID}/documents/not-a-uuid/preview`);
+    expect(res.status).toBe(400);
+    expect(getProjectDocumentFile).not.toHaveBeenCalled();
+  });
+
+  it('403 without admin; nothing fetched', async () => {
+    adminAllows = false;
+    const res = await request(app).get(`/api/admin/projects/${PID}/documents/${AID}/preview`);
     expect(res.status).toBe(403);
     expect(getProjectDocumentFile).not.toHaveBeenCalled();
   });

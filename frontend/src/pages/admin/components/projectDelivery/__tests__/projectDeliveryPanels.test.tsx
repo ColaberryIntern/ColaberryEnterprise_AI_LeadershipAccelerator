@@ -8,10 +8,11 @@ import BuildEvidencePanel, {
 } from '../BuildEvidencePanel';
 import ArtifactsPanel from '../ArtifactsPanel';
 import ReleaseRow from '../ReleaseRow';
-import { fetchProjectDocumentFile } from '../../../../../services/adminProjectDocumentsApi';
+import { fetchProjectDocumentFile, fetchProjectDocumentPreview } from '../../../../../services/adminProjectDocumentsApi';
 
 jest.mock('../../../../../services/adminProjectDocumentsApi', () => ({
   fetchProjectDocumentFile: jest.fn(),
+  fetchProjectDocumentPreview: jest.fn(),
   listProjectDocuments: jest.fn(),
 }));
 
@@ -177,14 +178,31 @@ describe('ArtifactsPanel', () => {
     expect(Array.from(cards).map((c) => c.getAttribute('data-kind')).sort()).toEqual(['pdf', 'word']);
   });
 
-  it('opening a Word card opens the viewer with a Download, and does not fetch on open', async () => {
+  it('opening a Word card opens the viewer with a Download, and never eagerly fetches the file blob', async () => {
+    (fetchProjectDocumentPreview as jest.Mock).mockResolvedValue('<p>doc</p>');
     await render(<ArtifactsPanel projectId="p1" documents={[
       { id: '2', name: 'brief.docx', title: 'brief.docx', from: 'Lesson B', kind: 'word' },
     ]} />);
     await act(async () => { (container.querySelector('[data-testid="doc-card"][data-kind="word"]') as HTMLElement).click(); });
     expect(container.querySelector('[data-testid="doc-viewer"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="doc-download"]')).not.toBeNull();
+    // the inline preview is fetched, but the heavy file blob is only pulled on an explicit download
     expect(fetchProjectDocumentFile as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('opening a Word card renders the document inline via the existing office preview', async () => {
+    (fetchProjectDocumentPreview as jest.Mock).mockResolvedValue('<p>Hello from the docx</p>');
+    await render(<ArtifactsPanel projectId="p1" documents={[
+      { id: '2', name: 'brief.docx', title: 'brief.docx', from: 'Lesson B', kind: 'word' },
+    ]} />);
+    await act(async () => { (container.querySelector('[data-testid="doc-card"][data-kind="word"]') as HTMLElement).click(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    const iframe = container.querySelector('[data-testid="doc-preview"]');
+    expect(iframe).not.toBeNull();
+    expect(iframe!.getAttribute('srcdoc')).toContain('Hello from the docx');
+    expect(fetchProjectDocumentPreview as jest.Mock).toHaveBeenCalledWith('p1', '2');
+    // the download stays available alongside the inline preview
+    expect(container.querySelector('[data-testid="doc-download"]')).not.toBeNull();
   });
 });
 
