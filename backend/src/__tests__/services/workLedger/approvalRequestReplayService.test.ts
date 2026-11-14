@@ -11,6 +11,7 @@
 import { ApprovalRequest } from '../../../models';
 import { initiateDm } from '../../../services/reese/reeseInitiateDmService';
 import { replayApprovedAction } from '../../../services/workLedger/approvalRequestReplayService';
+import { checkOutreachReplay } from '../../../services/reese/reeseOutreachTripwire';
 
 jest.mock('../../../models', () => ({
   ApprovalRequest: { update: jest.fn() },
@@ -18,9 +19,13 @@ jest.mock('../../../models', () => ({
 jest.mock('../../../services/reese/reeseInitiateDmService', () => ({
   initiateDm: jest.fn(),
 }));
+jest.mock('../../../services/reese/reeseOutreachTripwire', () => ({
+  checkOutreachReplay: jest.fn(),
+}));
 
 const mockUpdate = ApprovalRequest.update as unknown as jest.Mock;
 const mockInitiateDm = initiateDm as unknown as jest.Mock;
+const mockTripwire = checkOutreachReplay as unknown as jest.Mock;
 
 function approvedRow(overrides: Partial<Record<string, any>> = {}) {
   return {
@@ -34,6 +39,44 @@ function approvedRow(overrides: Partial<Record<string, any>> = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockInitiateDm.mockResolvedValue({ roomId: 'room-1', messageId: 'msg-1' });
+  mockTripwire.mockResolvedValue({ allowed: true });
+});
+
+describe('replayApprovedAction — the tripwire (2026-11-14)', () => {
+  it.each(['sweep_disabled', 'student_already_messaged', 'daily_ceiling_reached'])(
+    'a %s verdict sends nothing and claims nothing, so the row stays outstanding',
+    async (reason) => {
+      mockTripwire.mockResolvedValue({ allowed: false, reason, tripped: reason !== 'sweep_disabled', detail: {} });
+      mockUpdate.mockResolvedValue([1]);
+
+      const result = await replayApprovedAction(approvedRow() as any);
+
+      expect(mockInitiateDm).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(result).toEqual({ replayed: false, reason: 'blocked_by_tripwire', tripwire: reason });
+    },
+  );
+
+  it('is asked about the exact row and student being sent', async () => {
+    mockUpdate.mockResolvedValue([1]);
+    await replayApprovedAction(approvedRow() as any);
+    expect(mockTripwire).toHaveBeenCalledWith('approval-1', 'enrollment-1');
+  });
+
+  it('fails closed: a check that throws sends nothing and claims nothing', async () => {
+    mockTripwire.mockRejectedValue(new Error('db down'));
+    mockUpdate.mockResolvedValue([1]);
+
+    await expect(replayApprovedAction(approvedRow() as any)).rejects.toThrow('db down');
+    expect(mockInitiateDm).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('is never consulted for a row that cannot be performed anyway', async () => {
+    await replayApprovedAction(approvedRow({ action: 'some_future_action' }) as any);
+    await replayApprovedAction(approvedRow({ prepared_action: null }) as any);
+    expect(mockTripwire).not.toHaveBeenCalled();
+  });
 });
 
 describe('replayApprovedAction — happy path', () => {
