@@ -116,8 +116,8 @@ describe('each prompt is built from its OWN capability record', () => {
     .filter((s): s is GeneratedStory & { capability_id: string } => s.kind === 'implementation' && !!s.capability_id);
 
   it('POSITIVE CONTROL: there are implementation stories and resolvable capabilities', () => {
-    expect(impl.length).toBe(443);
-    expect(caps.size).toBe(443);
+    expect(impl.length).toBe(444);
+    expect(caps.size).toBe(444);
     expect(impl.every((s) => caps.has(s.capability_id))).toBe(true);
   });
 
@@ -221,7 +221,7 @@ describe('no control character survives in this directory', () => {
 describe('the story set, counted correctly', () => {
   const all = planForAllDomains().flatMap((p) => p.stories);
 
-  it('is 553 stories, not 1,477: the composition is asserted so it cannot drift', () => {
+  it('is 554 stories, not 1,477: the composition is asserted so it cannot drift', () => {
     // 448 was 443 + 5: the five research stories counted ONCE rather than per domain, and the
     // ten legacy-migration plans dropped. A bare total hid both mistakes, so the parts are pinned.
     //
@@ -238,10 +238,10 @@ describe('the story set, counted correctly', () => {
     // rung is a level of authority a capability earns on evidence, so enumerating all ten up
     // front put R5 stories in front of builders who had never once performed the task. They are
     // replaced by 40: the four-step ladder -- by hand, in the app, tool request, agent watched --
-    // for the ONE capability each of the ten domains currently has in flight. The other 433
+    // for the ONE capability each of the ten domains currently has in flight. The other 434
     // capabilities stay on the board as `implementation` candidates, which is why that number
     // does not move. See `agentDomainCapabilityLadder.ts` for the measurements.
-    expect(all.filter((s) => s.kind === 'implementation')).toHaveLength(443);
+    expect(all.filter((s) => s.kind === 'implementation')).toHaveLength(444);
     expect(all.filter((s) => s.kind === 'capability_ladder')).toHaveLength(40);
     // Nothing generates the old kind any more. Production rows still carry it until migrated, so
     // the kind still exists in the union -- this asserts the GENERATOR has stopped emitting it.
@@ -249,7 +249,7 @@ describe('the story set, counted correctly', () => {
     expect(all.filter((s) => s.kind === 'research')).toHaveLength(50);
     expect(all.filter((s) => s.kind === 'legacy_migration')).toHaveLength(10);
     expect(all.filter((s) => s.kind === 'command_center')).toHaveLength(10);
-    expect(all).toHaveLength(553);
+    expect(all).toHaveLength(554);
     // 13 releases per domain: ten rungs plus the three originals, kept empty as the rollback path.
     expect(planForAllDomains().reduce((n, p) => n + p.releases.length, 0)).toBe(130);
   });

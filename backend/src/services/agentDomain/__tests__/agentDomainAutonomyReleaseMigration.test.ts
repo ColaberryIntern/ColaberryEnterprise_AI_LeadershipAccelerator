@@ -134,7 +134,7 @@ describe('the migration creates the ladder and keeps the originals', () => {
     expect(pre.lists.map((l) => l.cluster)).toEqual(['r0', 'r1', 'r2']);
     expect(pre.stories.filter((s) => s.release_key === 'r0')).toHaveLength(6);
     expect(pre.stories.filter((s) => s.release_key === 'r1')).toHaveLength(1);
-    expect(pre.stories.filter((s) => s.release_key === 'r2')).toHaveLength(48);
+    expect(pre.stories.filter((s) => s.release_key === 'r2')).toHaveLength(49);
     expect(pre.stories.every((s) => s.autonomy_stage === null)).toBe(true);
   });
 
@@ -495,7 +495,7 @@ describe('every domain migrates, not just the one under test', () => {
     }
   });
 
-  it('projects 40 new stories and re-parents 513 across the ten', () => {
+  it('projects 40 new stories and re-parents 514 across the ten', () => {
     // The two totals this migration is accountable for, measured through the migration rather
     // than through the generator, so a plan that silently dropped a domain would show up here.
     //
@@ -516,6 +516,6 @@ describe('every domain migrates, not just the one under test', () => {
       reparented += plan.stories_to_reparent.length;
     }
     expect(inserted).toBe(40);
-    expect(reparented).toBe(513);
+    expect(reparented).toBe(514);
   });
 });
