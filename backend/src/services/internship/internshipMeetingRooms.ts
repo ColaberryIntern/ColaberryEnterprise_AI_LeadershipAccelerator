@@ -4,8 +4,8 @@ import CohortMembership from '../../models/CohortMembership';
 import {
   DEFAULT_INTERNSHIP_SETTINGS, ensureInternshipCohort, internshipSettings, type RequiredMeeting,
 } from './internshipCohortService';
-import { createMeeting, isZoomConfigured } from '../zoomService';
-import { reserveRoomHost } from '../zoom/roomHostAllocator';
+import { isZoomConfigured } from '../zoomService';
+import { mintEnterableRoomLink } from '../zoom/enterableRoomMint';
 
 /**
  * Provision the internship's Zoom-in-Rooms meeting rooms.
@@ -113,24 +113,36 @@ async function ensureRoomLink(room: CommunityRoom): Promise<string | null> {
   if (room.meeting_link) return room.meeting_link;
   if (!isZoomConfigured()) return null;
   try {
-    // Reserved BEFORE the call, so the sibling room minting in parallel sees this
-    // host as taken rather than reading a usage count that does not yet include it.
-    const hostEmail = await reserveRoomHost(room.id);
-    const res = await createMeeting({
-      topic: `Colaberry — ${room.name}`,
-      agenda: room.description || 'Colaberry AI meeting room',
-      startDateTime: new Date().toISOString().slice(0, 19),
-      durationMinutes: ZOOM_YEAR_MINUTES,
-      timezone: 'America/Chicago',
-      ...(hostEmail ? { hostEmail } : {}),
+    // A LINK NOBODY CAN USE IS WORSE THAN NO LINK. These rooms are always_open and no
+    // host ever signs in, so a meeting that needs one is dead — and on 2026-11-02 one
+    // was minted here, stored, and reported as a success. mintEnterableRoomLink reads
+    // back what Zoom stored and walks to the next host rather than saving a dead URL;
+    // a stored link is never revisited, so this is the only moment the check is cheap.
+    const { result, hostEmail, demotedHosts } = await mintEnterableRoomLink({
+      roomId: room.id,
+      meeting: {
+        topic: `Colaberry — ${room.name}`,
+        agenda: room.description || 'Colaberry AI meeting room',
+        startDateTime: new Date().toISOString().slice(0, 19),
+        durationMinutes: ZOOM_YEAR_MINUTES,
+        timezone: 'America/Chicago',
+      },
     });
-    if (res.joinUrl) await room.update({ meeting_link: res.joinUrl });
-    return res.joinUrl ?? null;
+    if (demotedHosts.length > 0) {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+        event: 'internship_room_host_failover', outcome: 'partial',
+        context: { room_slug: room.slug, landed_on: hostEmail, demoted: demotedHosts },
+      }));
+    }
+    if (result.joinUrl) await room.update({ meeting_link: result.joinUrl });
+    return result.joinUrl ?? null;
   } catch (err: any) {
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'error', service: 'backend',
       event: 'internship_room_zoom_mint_failed', outcome: 'failure',
-      error_class: err?.constructor?.name ?? 'Error', context: { room_slug: room.slug },
+      error_class: err?.error_class ?? err?.constructor?.name ?? 'Error',
+      context: { room_slug: room.slug, message: String(err?.message ?? '').slice(0, 300) },
     }));
     return null;
   }

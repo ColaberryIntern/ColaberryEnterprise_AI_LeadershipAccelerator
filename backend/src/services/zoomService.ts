@@ -9,6 +9,15 @@ import {
   getZoomAccessToken as getAccessToken,
   zoomApiRequest,
 } from './zoom/zoomApiClient';
+// The mint read-back: what Zoom stored, versus what we asked for. Added 2026-11-14
+// after a room that asked for `waiting_room: false` was given one anyway and spent
+// eleven days unenterable while every log line said the create had succeeded.
+import {
+  ZoomMeetingNotEnterableError,
+  type ZoomStoredSettings,
+  isEnterableWithoutHost,
+  settingsMismatches,
+} from './zoom/zoomMeetingSettings';
 
 // Zoom Server-to-Server OAuth + Cloud Recording access — replaces
 // driveService.ts (Google Meet/Drive) as the class meeting/recording
@@ -115,6 +124,13 @@ export function computeZoomWebhookEncryptedToken(plainToken: string): string {
 export interface ZoomMeetingResult {
   joinUrl: string;
   meetingId: string;
+  /**
+   * What Zoom actually stored, as opposed to what we asked for. `null` when the
+   * response carried no settings block — unknown, not "fine". See zoomMeetingSettings.
+   */
+  storedSettings?: ZoomStoredSettings | null;
+  /** `true` / `false` / `null` for unknown. Never collapse the third into the second. */
+  enterableWithoutHost?: boolean | null;
 }
 
 export interface CreateZoomMeetingInput {
@@ -132,6 +148,21 @@ export interface CreateZoomMeetingInput {
    * booking fighting the first for the same one.
    */
   hostEmail?: string;
+  /**
+   * Treat a meeting nobody can enter without the host as a FAILED mint.
+   *
+   * Off by default, and that default is deliberate. A scheduled class has a host who
+   * turns up, so a waiting room there is a nuisance at worst; turning this on
+   * everywhere would convert a harmless difference into an outage on paths that have
+   * worked for a year. A persistent `always_open` room is the opposite case: no host
+   * ever signs in, so an unenterable link is a permanently dead room that still looks
+   * like a successful create. Those callers pass `true`.
+   *
+   * When it is on and Zoom returns a meeting that cannot be entered, the meeting is
+   * DELETED before the error is thrown — an orphaned year-long meeting on a pool host
+   * is exactly the litter the 2026-11-02 re-mint left behind.
+   */
+  requireEnterableWithoutHost?: boolean;
 }
 
 // Creates a meeting under ZOOM_HOST_EMAIL with cloud auto-recording, so
@@ -149,6 +180,11 @@ export async function createMeeting(input: CreateZoomMeetingInput): Promise<Zoom
   assertConfigured();
   // Default, never override: an absent host must behave exactly as before.
   const host = input.hostEmail || env.zoomHostEmail;
+  const requestedSettings = {
+    auto_recording: 'cloud',
+    join_before_host: true,
+    waiting_room: false,
+  };
   const data = await zoomApiRequest<any>('POST', `/users/${encodeURIComponent(host)}/meetings`, {
     topic: input.topic,
     agenda: input.agenda || '',
@@ -156,13 +192,85 @@ export async function createMeeting(input: CreateZoomMeetingInput): Promise<Zoom
     start_time: input.startDateTime,
     duration: input.durationMinutes,
     timezone: input.timezone || 'America/Chicago',
-    settings: {
-      auto_recording: 'cloud',
-      join_before_host: true,
-      waiting_room: false,
-    },
+    settings: requestedSettings,
   });
-  return { joinUrl: data.join_url, meetingId: String(data.id) };
+
+  const meetingId = String(data?.id ?? '');
+  // READ BACK. The create response already carries what Zoom stored, so this costs no
+  // extra call — the settings were there on 2026-11-02 and nothing looked at them.
+  const stored: ZoomStoredSettings | null =
+    data && typeof data.settings === 'object' && data.settings !== null
+      ? (data.settings as ZoomStoredSettings)
+      : null;
+  const mismatches = settingsMismatches(requestedSettings, stored);
+  const enterable = isEnterableWithoutHost(stored);
+
+  if (mismatches.length > 0) {
+    // Loud on EVERY path, including the ones that tolerate it. A silently ignored
+    // setting is how auto_recording and waiting_room both became folklore.
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'zoom',
+      event: 'zoom_mint_settings_not_applied',
+      outcome: 'partial',
+      error_class: 'ContractViolation',
+      context: {
+        host_email: host,
+        meeting_id: meetingId,
+        enterable_without_host: enterable,
+        mismatches,
+      },
+    }));
+  } else if (stored === null) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'zoom',
+      event: 'zoom_mint_settings_unverifiable',
+      outcome: 'partial',
+      context: { host_email: host, meeting_id: meetingId, reason: 'no settings in create response' },
+    }));
+  }
+
+  if (input.requireEnterableWithoutHost && enterable === false) {
+    // Delete first, throw second. A year-long meeting left on a pool host keeps
+    // answering a bookmarked link forever while everyone else is somewhere else.
+    await deleteUnenterableMeeting(meetingId, host);
+    throw new ZoomMeetingNotEnterableError(host, meetingId || null, stored);
+  }
+
+  return {
+    joinUrl: data.join_url,
+    meetingId,
+    storedSettings: stored,
+    enterableWithoutHost: enterable,
+  };
+}
+
+/**
+ * Best-effort cleanup of a meeting we have just decided is useless.
+ *
+ * NEVER THROWS. The caller is already throwing a more informative error, and letting
+ * a failed tidy-up replace it would report "delete failed" for a problem that is
+ * actually "this host forces a waiting room" — the wrong fix, on the wrong page.
+ */
+async function deleteUnenterableMeeting(meetingId: string, host: string): Promise<void> {
+  if (!meetingId) return;
+  try {
+    await zoomApiRequest('DELETE', `/meetings/${encodeURIComponent(meetingId)}`);
+  } catch (err: unknown) {
+    const e = err as { constructor?: { name?: string }; message?: string };
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'zoom',
+      event: 'zoom_unenterable_meeting_cleanup_failed',
+      outcome: 'failure',
+      error_class: e?.constructor?.name ?? 'Error',
+      context: { host_email: host, meeting_id: meetingId, orphaned: true },
+    }));
+  }
 }
 
 export interface ZoomListedMeeting {

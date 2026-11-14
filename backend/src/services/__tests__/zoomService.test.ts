@@ -91,7 +91,15 @@ describe('createMeetingForSession', () => {
 
     const result = await createMeetingForSession(session, { startDateTime: '2026-07-30T18:30:00', durationMinutes: 120 });
 
-    expect(result).toEqual({ joinUrl: 'https://zoom.us/j/987654321', meetingId: '987654321' });
+    // storedSettings/enterableWithoutHost were added 2026-11-14 with the mint read-back.
+    // This response carries no `settings`, which is UNKNOWN rather than bad — the mint
+    // still succeeds, which is the whole point of the three-way answer.
+    expect(result).toEqual({
+      joinUrl: 'https://zoom.us/j/987654321',
+      meetingId: '987654321',
+      storedSettings: null,
+      enterableWithoutHost: null,
+    });
 
     const createCall = (global.fetch as jest.Mock).mock.calls.find(([url]: any[]) => String(url).includes('/meetings'));
     expect(String(createCall[0])).toBe('https://api.zoom.us/v2/users/ali%40refactored.ai/meetings');
@@ -100,6 +108,136 @@ describe('createMeetingForSession', () => {
     expect(body.settings.auto_recording).toBe('cloud');
     expect(body.start_time).toBe('2026-07-30T18:30:00');
     expect(body.duration).toBe(120);
+  });
+});
+
+/**
+ * The mint read-back, added 2026-11-14.
+ *
+ * `createMeeting` asked for `waiting_room: false, join_before_host: true` from the day
+ * it was written and never once read the answer. A host account can force a waiting
+ * room on; Zoom then accepts the request, ignores that field, and returns 201. On
+ * 2026-11-02 that produced a persistent room nobody could enter for eleven days while
+ * every log line said the create had succeeded.
+ */
+describe('createMeeting read-back', () => {
+  const ROOM = {
+    topic: 'Colaberry — Colaberry AI Sessions',
+    startDateTime: '2026-11-14T10:00:00',
+    durationMinutes: 525600,
+  };
+
+  function mockCreate(settings: any, meetingId = 85910290895) {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        id: meetingId, join_url: `https://zoom.us/j/${meetingId}`, settings,
+      }))
+      // A possible DELETE of the unenterable meeting.
+      .mockResolvedValue({ ok: true, status: 204, text: async () => '' });
+    global.fetch = fetchMock as any;
+    return fetchMock;
+  }
+
+  it('reports what Zoom actually stored, not what was asked for', async () => {
+    const { createMeeting } = loadZoomService();
+    mockCreate({ auto_recording: 'cloud', join_before_host: true, waiting_room: true });
+
+    const result = await createMeeting(ROOM);
+
+    expect(result.storedSettings).toEqual(
+      { auto_recording: 'cloud', join_before_host: true, waiting_room: true },
+    );
+    expect(result.enterableWithoutHost).toBe(false);
+  });
+
+  it('logs a ContractViolation when a requested setting did not apply', async () => {
+    const { createMeeting } = loadZoomService();
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockCreate({ auto_recording: 'cloud', join_before_host: true, waiting_room: true });
+
+    await createMeeting(ROOM);
+
+    const logged = errorSpy.mock.calls.map(([line]) => String(line)).join('\n');
+    expect(logged).toContain('zoom_mint_settings_not_applied');
+    expect(logged).toContain('ContractViolation');
+    expect(logged).toContain('waiting_room');
+    errorSpy.mockRestore();
+  });
+
+  it('SUCCEEDS by default even when unenterable — existing callers must not break', async () => {
+    // A scheduled class has a host who turns up. Turning this into a failure
+    // everywhere would convert a nuisance into an outage on year-old working paths.
+    const { createMeeting } = loadZoomService();
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockCreate({ join_before_host: true, waiting_room: true });
+
+    await expect(createMeeting(ROOM)).resolves.toMatchObject({ meetingId: '85910290895' });
+    (console.error as jest.Mock).mockRestore();
+  });
+
+  it('THROWS when the caller required an enterable meeting and did not get one', async () => {
+    const { createMeeting } = loadZoomService();
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockCreate({ join_before_host: true, waiting_room: true });
+
+    await expect(createMeeting({ ...ROOM, requireEnterableWithoutHost: true }))
+      .rejects.toMatchObject({ error_class: 'ZoomMeetingNotEnterable' });
+    (console.error as jest.Mock).mockRestore();
+  });
+
+  it('deletes the unenterable meeting before throwing, so no orphan is left behind', async () => {
+    const { createMeeting } = loadZoomService();
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fetchMock = mockCreate({ join_before_host: true, waiting_room: true });
+
+    await expect(createMeeting({ ...ROOM, requireEnterableWithoutHost: true })).rejects.toThrow();
+
+    const del = fetchMock.mock.calls.find(([, init]: any[]) => init?.method === 'DELETE');
+    expect(del).toBeDefined();
+    expect(String(del[0])).toContain('/meetings/85910290895');
+    (console.error as jest.Mock).mockRestore();
+  });
+
+  it('still throws the real reason when the cleanup DELETE itself fails', async () => {
+    const { createMeeting } = loadZoomService();
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        id: 1, join_url: 'https://zoom.us/j/1', settings: { waiting_room: true },
+      }))
+      .mockResolvedValueOnce(jsonResponse({ message: 'nope' }, false, 500)) as any;
+
+    await expect(createMeeting({ ...ROOM, requireEnterableWithoutHost: true }))
+      .rejects.toMatchObject({ error_class: 'ZoomMeetingNotEnterable' });
+    (console.error as jest.Mock).mockRestore();
+  });
+
+  it('does NOT throw when Zoom returned no settings — unknown is not failure', async () => {
+    // If Zoom stops returning `settings`, every room mint on the platform must not die.
+    const { createMeeting } = loadZoomService();
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockCreate(undefined);
+
+    const result = await createMeeting({ ...ROOM, requireEnterableWithoutHost: true });
+
+    expect(result.enterableWithoutHost).toBeNull();
+    expect(String((console.warn as jest.Mock).mock.calls[0]?.[0]))
+      .toContain('zoom_mint_settings_unverifiable');
+    (console.warn as jest.Mock).mockRestore();
+  });
+
+  it('passes an enterable meeting through with no complaint', async () => {
+    const { createMeeting } = loadZoomService();
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockCreate({ auto_recording: 'cloud', join_before_host: true, waiting_room: false }, 84776284115);
+
+    const result = await createMeeting({ ...ROOM, requireEnterableWithoutHost: true });
+
+    expect(result.enterableWithoutHost).toBe(true);
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });
 
