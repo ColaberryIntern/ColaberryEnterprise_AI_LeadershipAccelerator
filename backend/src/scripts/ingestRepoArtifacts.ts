@@ -8,6 +8,12 @@
  * seven engineering documents and a 50KB project overview, all committed, all synced
  * daily, and `artifacts_real_count: 0`.
  *
+ * It also FETCHES each file into the uploads volume, which is what makes the artifact
+ * open in the viewer the platform already has (PDF, CSV, image, text, and Word and
+ * PowerPoint rendered by officeToHtml). A row recorded by an earlier run that has no file
+ * yet is healed in place on the next run, so the 137 link-only rows from 14 Nov become
+ * openable without anything being re-recorded.
+ *
  * DRY BY DEFAULT. Writing artifact rows for a cohort is not something that should
  * happen because someone pressed up-arrow, so `--go` is required to write anything.
  *
@@ -64,8 +70,11 @@ async function targets(): Promise<Target[]> {
 
 function describe(t: Target, r: IngestResult): void {
   const head = `${t.full_name} <${t.email}>`;
+  const parts: string[] = [];
+  if (r.created.length > 0) parts.push(`${GO ? 'recorded' : 'WOULD record'} ${r.created.length}`);
+  if (r.healed.length > 0) parts.push(`${GO ? 'made openable' : 'WOULD make openable'} ${r.healed.length}`);
   const verdict =
-    r.outcome === 'written' ? `${GO ? 'recorded' : 'WOULD record'} ${r.created.length}`
+    r.outcome === 'written' ? parts.join(', ')
       : r.outcome === 'unchanged' ? `unchanged (${r.alreadyPresent} already recorded)`
         : r.outcome === 'nothing_found' ? 'no deliverables found'
           : r.outcome;
@@ -75,15 +84,23 @@ function describe(t: Target, r: IngestResult): void {
     const kb = c.sizeBytes >= 1024 * 1024
       ? `${(c.sizeBytes / 1024 / 1024).toFixed(1)}MB`
       : `${Math.round(c.sizeBytes / 1024)}KB`;
-    console.log(`    ${c.wrongFormat ? 'format!' : '   ok  '}  ${kb.padStart(7)}  ${c.repoPath}`);
+    // "no file" is the one that matters operationally: the row exists and nothing opens it.
+    const file = !GO ? '' : c.stored ? '  opens' : '  NO FILE';
+    console.log(`    ${c.wrongFormat ? 'format!' : '   ok  '}  ${kb.padStart(7)}  ${c.repoPath}${file}`);
   }
+  for (const h of r.healed) console.log(`    healed            ${h.repoPath}`);
+
   const wrong = r.created.filter((c) => c.wrongFormat).length;
   if (wrong > 0) {
     console.log(`    ${wrong} of these are markdown or plain text, which counts as work in the wrong format.`);
   }
+  if (Object.keys(r.storeFailures).length > 0) {
+    const f = Object.entries(r.storeFailures).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`);
+    console.log(`    could not fetch the file for: ${f.join(', ')}`);
+  }
   if (VERBOSE && Object.keys(r.skipped).length > 0) {
-    const parts = Object.entries(r.skipped).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`);
-    console.log(`    passed over: ${parts.join(', ')}`);
+    const s = Object.entries(r.skipped).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`);
+    console.log(`    passed over: ${s.join(', ')}`);
   }
 }
 
@@ -105,17 +122,22 @@ function describe(t: Target, r: IngestResult): void {
 
   const created = results.reduce((n, x) => n + x.r.created.length, 0);
   const wrong = results.reduce((n, x) => n + x.r.created.filter((c) => c.wrongFormat).length, 0);
+  const healed = results.reduce((n, x) => n + x.r.healed.length, 0);
+  const stored = results.reduce((n, x) => n + x.r.created.filter((c) => c.stored).length, 0) + healed;
+  const noFile = created - results.reduce((n, x) => n + x.r.created.filter((c) => c.stored).length, 0);
   const failed = results.filter((x) => x.r.outcome === 'failed');
 
   console.log('\n────────────────────────────────────────');
   console.log(`${GO ? 'recorded' : 'would record'}: ${created} artifact(s) across ${results.filter((x) => x.r.created.length > 0).length} intern(s)`);
+  console.log(`${GO ? 'made openable' : 'would make openable'}: ${stored} (${healed} of them rows that existed already)`);
+  if (GO && noFile > 0) console.log(`recorded WITHOUT a file (link only): ${noFile}`);
   console.log(`wrong format (markdown or text): ${wrong}`);
   console.log(`already recorded: ${results.reduce((n, x) => n + x.r.alreadyPresent, 0)}`);
   if (failed.length > 0) {
     console.log(`FAILED: ${failed.length}`);
     for (const f of failed) console.log(`  ${f.t.full_name}: ${f.r.reason}`);
   }
-  if (!GO && created > 0) console.log('\nRe-run with --go to write these.');
+  if (!GO && (created > 0 || healed > 0)) console.log('\nRe-run with --go to write these.');
 
   await sequelize.close();
   process.exit(failed.length > 0 ? 1 : 0);
