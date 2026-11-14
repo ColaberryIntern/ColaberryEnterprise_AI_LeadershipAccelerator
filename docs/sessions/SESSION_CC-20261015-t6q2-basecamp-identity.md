@@ -78,23 +78,75 @@ The id extraction is `grep -o | head -1`, not `sed`. The first draft used
 `"id"` in the body, which on this endpoint is a nested object's. That fails closed, so it would
 not have written a wrong token, but it would have silently stopped every refresh.
 
+## Read-path check, 2026-11-14 (same PR, second commit)
+
+Ali chose the read-path lever over raising the cron. `refreshBcToken()` now verifies the
+identity of the token it just pulled from CCPP and records the verdict.
+
+**It logs, it does not throw.** The wrong identity could still see 64 of the 65 projects it
+was asked about, so most ops work kept running on 2026-11-13. Throwing here would convert
+"one project 404s" into "every Basecamp call in the platform fails", which is a worse outage
+bought in exchange for loudness. The mismatch is emitted as a structured error with
+`error_class: 'BasecampIdentityMismatch'`, which is this repo's definition of loud, and
+`lastBcIdentityCheck()` exposes the same verdict in-process for anything that wants to
+degrade deliberately.
+
+Three things it deliberately does not do, each for a specific reason:
+
+- it does **not** call through `bcGet`, which would 401 on a bad token, call back into
+  `refreshBcToken` and recurse
+- it does **not** fail the refresh when the check itself fails. A profile endpoint that times
+  out is an observability problem; letting it break authentication would make this module less
+  reliable than the bug it reports. Those cases record `unknown`, and `unknown` is asserted
+  never to read as `match`
+- it does **not** run on the env-token fallback path, which would put a network call into the
+  local and test paths
+
+### Verification
+
+- 20 new tests in `basecampTokenIdentity.test.ts`, covering the happy path, the actual
+  2026-11-13 mismatch, four ways the check itself can fail, four boundary cases on the
+  `BASECAMP_EXPECTED_PERSON_ID` override, idempotency, and three tests that pin it against
+  becoming a hidden dependency. 29 tests pass across both token suites; the pre-existing
+  9 still pass untouched.
+- `tsc --noEmit` clean under the CI command, **after planting a control error first**. The
+  planted error was reported at `basecampToken.ts(287,7)`, the exact line, which is what makes
+  the clean run afterwards mean something in a fresh worktree.
+- **8 mutations, 8 killed, 0 survived.** Each breaks one guarantee the tests claim: never
+  report a mismatch, downgrade the error to a warning, rename the `error_class`, rethrow
+  instead of recording `unknown`, read a nested `id` instead of the person's, skip verification
+  entirely, accept any override without validating, and collapse `TimeoutError` into
+  `UpstreamUnavailable`. The runner also fails an **anchor miss**, so a mutation whose `sed`
+  silently matched nothing is reported rather than counted as killed.
+- No regression risk to the other callers: `basecampClient.test.ts` and
+  `bcSyncIncremental.test.ts` both mock `refreshBcToken`, so neither reaches this code.
+
+One bug of my own, caught by review rather than by a test: `BC_PROFILE_URL` was first written
+as a module-load constant, which makes the module depend on the order env vars are set. Both it
+and the user agent now read env lazily, matching `getBcToken` above.
+
 ## Residual risk, not closed by this PR
 
-The guard stops **this** job from writing a wrong identity. It cannot stop the other writer from
-inserting one. The legacy refresher is expected to insert another active row around
-**2026-11-27 15:00Z**, and the daily cron next runs **2026-11-28 08:00Z**, so the platform can
-still act as CB System for roughly 17 hours, with the same 404 symptom. Daily cadence bounds
-that window at about 23 hours, not at zero.
+The window still exists. What changed is that it is now **visible instead of invisible**.
 
-Raising the cadence shrinks the window proportionally and is a one-line crontab change; it was
-not made here because the cadence was already daily rather than every three days, so the change
-Ali approved turned out to be a no-op and substituting a different production schedule silently
-would have been the wrong call.
+The legacy refresher is expected to insert another active row around **2026-11-27 15:00Z**, and
+the daily cron next runs **2026-11-28 08:00Z**, so the platform can still act as CB System for
+roughly 17 hours. During that window the first 401-triggered refresh will emit
+`basecamp_identity_mismatch` naming both ids, so the cause is one log line away instead of
+being reconstructed from a 404 that looks like a deleted ticket.
 
-The lever that closes it rather than shrinking it is on the **read** path: have
-`refreshBcToken()` verify the identity once after pulling from CCPP and surface a structured
-mismatch, so the window is loud instead of invisible. That is a change to a module many
-services share and was not in scope for this PR.
+Three things that would close rather than narrow it, none of them done here:
+
+1. **Nothing reads the log yet.** A structured error nobody alerts on is still discovered by a
+   human. Wiring `basecamp_identity_mismatch` to whatever this platform uses for alerting is
+   the cheapest remaining win.
+2. **Raising the cron** shrinks the window proportionally and is a one-line crontab change. Not
+   done because the cadence was already daily rather than every three days, so the change
+   originally approved was a no-op, and substituting a different production schedule silently
+   would have been the wrong call.
+3. **An identity column on `Basecamp_AuthInfo`**, so the resolver selects by identity instead of
+   by recency and the race cannot happen at all. That is a schema change and therefore Ali's
+   decision; offered 2026-11-13 and not taken.
 
 ## Also delivered this pass, 2026-11-13
 
