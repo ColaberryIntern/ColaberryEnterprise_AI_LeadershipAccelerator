@@ -265,6 +265,22 @@ router.get(
 );
 
 /**
+ * GET /api/portal/gov-projects/:projectId/build-artifacts/:artifactId/file — stream ONE build artifact the
+ * intern submitted from their repo (a project overview, a diagram, a report), for the Build Evidence viewer.
+ * Re-scoped to THIS project's build (enrollment + connected repo) before any fetch; always an attachment (an
+ * HTML artifact is read as text and sandboxed on the client). Same guard chain as repo-file.
+ */
+router.get(
+  '/api/portal/gov-projects/:projectId/build-artifacts/:artifactId/file',
+  requireParticipant,
+  requireGovProjectAccess('project.read'),
+  async (req: GovProjectRequest, res: Response) => {
+    const { serveGovBuildArtifact } = await import('./govBuildArtifactResponse');
+    await serveGovBuildArtifact(req.params.projectId, req.params.artifactId, res);
+  },
+);
+
+/**
  * POST /api/portal/gov-projects/:projectId/copilot — the Build Cockpit's project copilot. Guarded by project.read
  * (a member of THIS project), it loads the SAME student-safe projection the page renders and answers
  * DETERMINISTICALLY from it (govCopilot) — so the copilot can only ever repeat what the caller already sees; there

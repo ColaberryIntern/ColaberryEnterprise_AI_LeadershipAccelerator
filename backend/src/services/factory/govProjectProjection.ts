@@ -20,6 +20,7 @@ import type { ProposalBlueprint } from './proposal/proposalBlueprintTypes';
 import type { CheckScores, GovProposalGate, GateStatus } from './proposal/proposalReviewTypes';
 import { proposalReadiness, type ProposalReadiness } from './proposal/proposalReadiness';
 import type { RepoDeliverable } from './repoDeliverables';
+import type { GovBuildArtifact } from './govBuildArtifacts';
 import type { VersionView, GateView } from './proposal/govProposalReviewStore';
 import type { ReviewRunView } from './proposal/govProposalReviewRunStore';
 import type { ProposalDocumentView } from './proposal/govProposalDocumentStore';
@@ -175,6 +176,9 @@ export interface StudentGovProjectView {
    *  ppt/html/md/csv/text), classified for the card + per-type viewer treatment (source files excluded).
    *  Optional on older backends. */
   connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null; deliverables: RepoDeliverable[] } | null;
+  /** The deliverables the intern SUBMITTED from their build repo (build_artifact rows pointing at repo files:
+   *  a project overview, diagrams, reports). Viewable live; carries id/title/name/kind/path only. Optional. */
+  submittedArtifacts?: GovBuildArtifact[];
   /** v2 Proposal view: the named documents a bid must submit (AI-drafted, reviewer-accepted). Admin-only docs
    *  (pricing) are dropped for non-reviewers. Each carries the B.1 per-doc summary (latest/gates/currentGate/
    *  openGapCount/fatalCount/cycle), batch-loaded. */
@@ -591,6 +595,16 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
     const { resolveConnectedRepo } = await import('./govConnectedRepo');
     view.connectedRepo = await resolveConnectedRepo(deliveryProjectId, tracks);
   } catch { /* additive; connectedRepo stays undefined/null */ }
+
+  // The deliverables the intern SUBMITTED from their build repo (a project overview, diagrams, reports) — the
+  // `build_artifact` portfolio rows that point at files in the connected repo. Shown in the Build artifacts
+  // section and viewable live (the repo's source-only tree has no structured documents, so the "Files" block
+  // above stays empty; these curated artifacts are what the intern actually built). Best-effort; carries only
+  // id/title/name/kind/path, no token.
+  try {
+    const { listGovBuildArtifacts } = await import('./govBuildArtifacts');
+    view.submittedArtifacts = await listGovBuildArtifacts(deliveryProjectId);
+  } catch { /* additive; submittedArtifacts stays undefined */ }
 
   // v2 Proposal view: derive the named documents from the established requirements, SYNC them into the store
   // (preserving authored state), and project student-safe — admin-only (pricing) documents are dropped for a

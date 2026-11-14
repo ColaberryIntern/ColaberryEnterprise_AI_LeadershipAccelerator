@@ -146,6 +146,11 @@ export async function adminFetchGovRepoFile(projectId: string, path: string, opt
   });
   return data as Blob;
 }
+/** Fetch one submitted build artifact (by its id) as a Blob, for the Build artifacts viewer (admin cockpit). */
+export async function adminFetchGovBuildArtifact(projectId: string, artifactId: string): Promise<Blob> {
+  const { data } = await api.get(`${adminBase(projectId)}/build-artifacts/${encodeURIComponent(artifactId)}/file`, { responseType: 'blob' });
+  return data as Blob;
+}
 export async function adminInsertGovFigure(projectId: string, docKey: string, artifactId: string): Promise<{ document: GovProposalDocument }> {
   const { data } = await api.post<{ document: GovProposalDocument }>(adminDocUrl(projectId, docKey, 'insert-figure'), { artifactId });
   return data;
@@ -310,4 +315,5 @@ export const adminGovStudioApi: GovStudioApi = {
   buildAll: adminBuildAllGovDocuments,
   setProposalDueDate: adminSetGovDueDate,
   fetchRepoFile: adminFetchGovRepoFile,
+  fetchBuildArtifact: adminFetchGovBuildArtifact,
 };

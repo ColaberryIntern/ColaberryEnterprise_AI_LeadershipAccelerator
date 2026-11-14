@@ -10,6 +10,13 @@ export interface GovRepoDeliverable {
   kind: ArtifactFileKind | 'video';
 }
 
+/** The kind a SUBMITTED build artifact opens as — broader than a repo deliverable (html/image/markdown too),
+ *  because a build's deliverables are its app pages, diagrams and reports. Mirrors backend BuildArtifactKind. */
+export type GovBuildArtifactKind = 'html' | 'image' | 'markdown' | 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'video' | 'other';
+/** One deliverable the intern submitted from their build repo (a build_artifact row pointing at a repo file),
+ *  viewable live in the Build Evidence "Build artifacts" section. Mirrors backend GovBuildArtifact. */
+export interface GovSubmittedArtifact { id: string; title: string; name: string; kind: GovBuildArtifactKind; repoPath: string; }
+
 /** The opportunity-detail shape the admin page reads — reused verbatim so the intern renders the identical component.
  *  estimatedValue is always null from the participant endpoint (the award amount never reaches a participant). */
 export interface PortalGovOpportunityDetail {
@@ -154,6 +161,9 @@ export interface StudentGovProjectView {
    *  `syncedAt` when the tree was last synced. Shown so the cockpit confirms sync and reflects what was built; carries
    *  no token/secret/identity (paths only). Null when no repo is linked. Optional (older backends). */
   connectedRepo?: { owner: string; name: string; url: string; files: string[]; fileCount: number; syncedAt: string | null; deliverables: GovRepoDeliverable[] } | null;
+  /** The deliverables the intern SUBMITTED from their build repo (build_artifact rows pointing at repo files),
+   *  viewable live in the Build artifacts section. Optional (absent on older backends). */
+  submittedArtifacts?: GovSubmittedArtifact[];
   /** v2 Proposal view: the named documents a bid must submit (admin-only pricing dropped for non-reviewers). Optional. */
   proposalDocuments?: GovProposalDocument[];
   /** P2: the blueprint derived from the stored solicitation (scoring, Section L rules, required forms). Null until a
@@ -511,6 +521,13 @@ export async function fetchGovRepoFile(projectId: string, path: string, opts: { 
   return data as Blob;
 }
 
+/** Fetch ONE submitted build artifact (by its id) through the participant-guarded portal route, as a Blob. The
+ *  viewer decides: html/markdown/csv -> read the text, image/pdf/video -> object URL, else download. */
+export async function fetchGovBuildArtifact(projectId: string, artifactId: string): Promise<Blob> {
+  const { data } = await portalApi.get(`${portalBase(projectId)}/build-artifacts/${encodeURIComponent(artifactId)}/file`, { responseType: 'blob' });
+  return data as Blob;
+}
+
 /**
  * GovStudioApi — the Studio shell + agent panel's read-model adapter. The SAME Studio components drive either the
  * portal routes (the default below, participant token) or the admin routes (injected by the admin cockpit page).
@@ -532,6 +549,9 @@ export interface GovStudioApi {
   /** Fetch one connected-repo deliverable file (by repo path) as a Blob, for the Build Evidence per-type viewer.
    *  Member-level read (portal) / section-gated (admin); each api impl points at its own route base. */
   fetchRepoFile?(projectId: string, path: string, opts?: { download?: boolean }): Promise<Blob>;
+  /** Fetch one SUBMITTED build artifact (by its id) as a Blob, for the Build artifacts viewer. Member-level
+   *  (portal) / section-gated (admin); each impl points at its own route base. */
+  fetchBuildArtifact?(projectId: string, artifactId: string): Promise<Blob>;
   /** Management-only: set the solicitation close date (+ optional 0-100 urgency) when the pursuit carried none into the
    *  Studio. Admin route only — the portal (intern) client omits it, and the bar offers it only to a viewer who can
    *  verify. Writes requirements_json.manualDeadline; the projection then surfaces closeDate/priorityScore. */
@@ -550,6 +570,7 @@ export const portalGovStudioApi: GovStudioApi = {
   buildAll: buildAllGovDocuments,
   fetchArtifactImage: fetchGovArtifactImage,
   fetchRepoFile: fetchGovRepoFile,
+  fetchBuildArtifact: fetchGovBuildArtifact,
 };
 
 /** A read-only reviewApi WRITE member: it issues NO request and rejects. The read-only UI disables every control that
