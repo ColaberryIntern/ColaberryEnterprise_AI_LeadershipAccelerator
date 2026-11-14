@@ -1,21 +1,11 @@
 /**
- * hireVideoAnalysisClient - the hand-off to colaberry/video-analysis (kit §4.3).
+ * hireVideoAnalysisClient - the hand-off from an upload to whatever analyses it (kit §4.3).
  *
- * THE WORKER'S CONTRACT (read from that repo, dpu.py + orchestrator.py):
- *   in   an MP4 put at `<record_id>.mp4` in its S3 input bucket (an S3 event feeds its SQS queue;
- *        the record id must not contain "_", which the worker splits on)
- *   out  `<record_id>/res.json` in its output bucket: AWS Transcribe JSON, filler words, pauses,
- *        voiced ratio, head pose, expression
- *
- * OFF UNTIL IT CAN BE ON. This backend holds no AWS identity that can reach those buckets (the
- * prod host's key is a certbot-only IAM user), and the S3 transport needs the AWS SDK, a new
- * dependency. Until both are approved there is NO transport, so the mode is 'off': the studio
- * says captions and coaching are not switched on yet, and a recording publishes without them.
- * There is deliberately no env flag that can claim 'pending' with nothing behind it - that would
- * leave a candidate waiting on a result that never comes.
- *
- * When the transport lands it registers here: `submitForAnalysis` puts the file, a poller reads
- * `res.json`, and `applyAnalysis` (hireVideoService) already turns it into captions and coaching.
+ * The transport is hireVideoCoach (OpenAI transcription + review), chosen by Ali on 2026-11-14
+ * instead of colaberry/video-analysis, which needed an AWS identity this backend does not have.
+ * It registers here at boot ONLY when OPENAI_API_KEY is set. With no transport the mode is
+ * honestly 'off': the studio says coaching is not switched on, and a recording publishes without
+ * it. There is deliberately no env flag that can claim 'pending' with nothing behind it.
  */
 export type AnalysisMode = 'off' | 'pending';
 

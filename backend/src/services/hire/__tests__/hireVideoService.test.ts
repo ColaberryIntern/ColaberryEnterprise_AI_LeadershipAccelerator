@@ -13,11 +13,13 @@ process.env.HIRE_VIDEO_DIR = ROOT;
 
 jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 jest.mock('../../../config/env', () => ({ env: { jwtSecret: 'test-secret' } }));
+jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 
 import { sequelize } from '../../../config/database';
 import {
-  applyAnalysis, deleteVideo, previewToken, readStudioVideo, resolveVideoFile, saveVideo, updateVideo, verifyPreviewToken,
+  deleteVideo, previewToken, readStudioVideo, resolveVideoFile, saveVideo, updateVideo, verifyPreviewToken,
 } from '../hireVideoService';
+import { coachAsset } from '../hireVideoCoach';
 import type { Runner } from '../hireVideoTranscode';
 
 const q = sequelize.query as unknown as jest.Mock;
@@ -59,7 +61,12 @@ beforeEach(() => {
       row = { ...row, video_status: b[2] ?? row.video_status, video_captions_wanted: b[3] ?? row.video_captions_wanted, captions_url: b[4] };
       return [[{ video_asset_id: b[1] }]];
     }
+    if (/SET video_coaching = NULL/.test(sql)) {
+      if (!row || row.video_asset_id !== b[1] || (row.video_coaching as { status?: string } | null)?.status !== 'failed') return [[]];
+      row = { ...row, video_coaching: null }; return [[{ video_asset_id: b[1] }]];
+    }
     if (/UPDATE hire_profile_intro SET video_coaching/.test(sql)) {
+      if (!row || row.video_asset_id !== b[0]) return [[]];
       row = { ...row, video_coaching: b[1] ? JSON.parse(String(b[1])) : null, captions_url: b[2] && row?.video_captions_wanted ? b[2] : row?.captions_url };
       return [[{ video_asset_id: b[0] }]];
     }
@@ -156,36 +163,60 @@ describe('what the public route may serve', () => {
   });
 });
 
-describe('an analysis result', () => {
-  const RESULT = {
-    metrics: {
-      fwrd_counts: "{'um': 4}", transcript_length: '200', fwrd_rate: '2',
-      transcript_json: JSON.stringify({ results: { items: [
-        { start_time: '0.1', end_time: '0.4', type: 'pronunciation', alternatives: [{ content: 'Hello' }] },
-        { type: 'punctuation', alternatives: [{ content: '.' }] },
-      ] } }),
-    },
+describe('coaching (hireVideoCoach, OpenAI and ffmpeg stubbed)', () => {
+  // "Hello. Um, I build agents. Um, really. Um, yes." : three fillers, one sentence break each.
+  const said = ['Hello.', 'Um,', 'I', 'build', 'agents.', 'Um,', 'really.', 'Um,', 'yes.'];
+  const REPLY = { text: said.join(' '), duration: 84, language: 'english', words: said.map((w, i) => ({ word: w, start: i * 0.5, end: i * 0.5 + 0.4 })) };
+  const deps = {
+    transcribeCall: async () => REPLY,
+    reviewCall: async () => null,
+    pcm: async () => Buffer.alloc(0),
+    run: (async () => '') as Runner,
   };
 
-  test('becomes captions and coaching, and applying it twice changes nothing more', async () => {
+  test('becomes captions and coaching, and running it twice changes nothing more', async () => {
     seed(SLOT);
     row = { video_asset_id: SLOT, video_status: 'draft', video_seconds: 84, captions_url: null, video_captions_wanted: true };
-    expect(await applyAnalysis(SLOT, RESULT)).toBe(true);
-    const once = { ...row };
-    expect(await applyAnalysis(SLOT, RESULT)).toBe(true);
-    expect(row).toEqual(once);
+    expect(await coachAsset(SLOT, deps)).toBe('done');
+    const once = JSON.stringify(row);
+    expect(await coachAsset(SLOT, deps)).toBe('done');
+    expect(JSON.stringify(row)).toBe(once);
     expect(fs.readFileSync(path.join(ROOT, SLOT, 'captions.vtt'), 'utf8')).toContain('Hello.');
     const v = (await readStudioVideo(ME, NOW))!;
     expect(v.analysis).toBe('done');
-    expect(v.coaching!.notes).toContain('You said "um" 4 times.');
+    expect(v.coaching!.fillerTotal).toBe(3);
+    expect(v.coaching!.notes).toContain('Filler words were 33.3% of what you said; under 3% is the goal. Most often "um" (3). A short pause works better.');
+    expect(v.coaching!.events.filter((e) => e.kind === 'filler').map((e) => e.t)).toEqual([0.5, 2.5, 3.5]);
     expect(v.captionsUrl).toMatch(/\/captions\?t=/);
   });
 
   test('a candidate who turned captions off gets coaching but no public track', async () => {
     seed(SLOT);
     row = { video_asset_id: SLOT, video_status: 'published', video_seconds: 84, captions_url: null, video_captions_wanted: false };
-    await applyAnalysis(SLOT, RESULT);
+    await coachAsset(SLOT, deps);
     expect(row!.captions_url).toBeNull();
     expect(row!.video_coaching).not.toBeNull();
+  });
+
+  test('a failed transcription is stored as failed, and "Try again" re-queues only that', async () => {
+    seed(SLOT);
+    row = { video_asset_id: SLOT, video_status: 'draft', video_seconds: 84, captions_url: null, video_captions_wanted: true };
+    const failing = { ...deps, transcribeCall: async () => { throw Object.assign(new Error('rate'), { status: 429 }); } };
+    expect(await coachAsset(SLOT, failing)).toBe('failed');
+    expect(row!.video_coaching).toEqual({ status: 'failed', error_class: 'RateLimitError' });
+    expect((await readStudioVideo(ME, NOW))!.analysis).toBe('failed');
+    await updateVideo(ME, { reanalyze: true }, NOW);
+    expect(row!.video_coaching).toBeNull();
+    // A finished one is not cleared by a second "Try again".
+    await coachAsset(SLOT, deps);
+    await updateVideo(ME, { reanalyze: true }, NOW);
+    expect(row!.video_coaching).not.toBeNull();
+  });
+
+  test('a video replaced mid-run writes nothing onto the new one', async () => {
+    seed(SLOT);
+    row = { video_asset_id: OLD, video_status: 'draft', video_seconds: 84, captions_url: null, video_captions_wanted: true };
+    expect(await coachAsset(SLOT, deps)).toBe('gone');
+    expect(row!.video_coaching).toBeUndefined();
   });
 });

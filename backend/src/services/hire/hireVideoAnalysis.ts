@@ -1,68 +1,52 @@
 /**
- * hireVideoAnalysis - reads a colaberry/video-analysis result (`<record_id>/res.json` in its
- * output bucket) into two things Hire can use (kit §4.3):
+ * hireVideoAnalysis - a timestamped transcript becomes the two things Hire uses (kit §4.3):
  *
- *   1. CAPTIONS: a WebVTT track built from the AWS Transcribe items inside `transcript_json`.
- *   2. COACHING: length, pace, filler words and long pauses, as plain sentences. Shown to the
+ *   1. CAPTIONS: a WebVTT track, cues of at most 7 words or 3.5 seconds.
+ *   2. COACHING: delivery scores (0-100, like colaberry/video-analysis gave), the moments behind
+ *      them for the live playback overlay, the content review, and plain sentences. Shown to the
  *      CANDIDATE ONLY, never on Hire.
  *
- * Pure: no I/O, no clock. The worker's output is loosely typed (its text metrics pass through
- * Python `str()`, so `fwrd_counts` arrives as a Python dict repr and `transcript_json` as JSON
- * encoded once or twice), so every read here is defensive and a missing field drops that line
- * rather than failing the whole result.
- *
- * Length comes from OUR probe of the rendition, not the worker's `length`, which is a sample
- * count divided by a config constant rather than seconds.
+ * Pure: no I/O, no clock. Length comes from OUR probe of the rendition.
  */
 import { TARGET_SECONDS } from './hireVideoTranscode';
+import type { Word } from './hireVideoTranscribe';
+import { speechMetrics, type SpeechMetrics } from './hireVideoSpeech';
+import type { ContentReview } from './hireVideoContent';
+import type { VoiceTrack } from './hireVideoVoice';
 
-export interface VideoCoaching {
-  readonly seconds: number;
-  readonly words: number | null;
-  readonly wordsPerMinute: number | null;
-  readonly fillerTotal: number | null;
-  readonly fillerTop: readonly { readonly word: string; readonly count: number }[];
-  readonly fillerRate: number | null;
-  readonly longPauses: number | null;
+export interface DeliveryScore {
+  readonly key: 'length' | 'pace' | 'fillers' | 'repetition';
+  readonly label: string;
+  readonly score: number;
+  readonly value: string;
+  readonly target: string;
+  /** Where the target comes from. Only metrics with a published target are scored. */
+  readonly source: string;
+}
+
+export interface VideoCoaching extends SpeechMetrics {
+  readonly version: 2;
+  readonly scores: readonly DeliveryScore[];
+  readonly voice: VoiceTrack | null;
+  readonly content: ContentReview | null;
   readonly notes: readonly string[];
 }
 
-interface TranscribeItem {
-  readonly start_time?: string;
-  readonly end_time?: string;
-  readonly type?: string;
-  readonly alternatives?: readonly { readonly content?: string }[];
-}
+/**
+ * Target bands. ONLY metrics with a published target are scored (research, 2026-11-14); hedges,
+ * long pauses and voice are shown as information because no source gives a cutoff. A value
+ * inside the band scores 100; outside it falls off linearly to 0 at `zeroAt` past the edge.
+ */
+export const TARGETS = {
+  length: { lo: 60, hi: TARGET_SECONDS + 30, zeroAt: 60, source: 'Hire intro kit: about 90 seconds' },
+  pace: { lo: 100, hi: 165, zeroAt: 60, source: 'Microsoft Speaker Coach: 100 to 165 words a minute' },
+  fillerPercent: { lo: 0, hi: 3, zeroAt: 9, source: 'Yoodli: fillers under 3% of words' },
+  repetitionPercent: { lo: 0, hi: 4, zeroAt: 12, source: 'Yoodli: repetition under 4% of words' },
+} as const;
 
-const num = (v: unknown): number | null => {
-  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number.parseFloat(v) : NaN;
-  return Number.isFinite(n) ? n : null;
-};
-
-/** JSON that may have been encoded once, twice, or not at all. */
-function decode(v: unknown): unknown {
-  let out = v;
-  for (let i = 0; i < 3 && typeof out === 'string'; i += 1) {
-    try { out = JSON.parse(out); } catch { return null; }
-  }
-  return out;
-}
-
-/** `{'um': 3, 'you know': 2}` (a Python repr) or a real object, into counted words. */
-export function fillerCounts(v: unknown): { word: string; count: number }[] {
-  const pairs: { word: string; count: number }[] = [];
-  if (v && typeof v === 'object') {
-    for (const [word, c] of Object.entries(v as Record<string, unknown>)) { const n = num(c); if (n) pairs.push({ word, count: n }); }
-  } else if (typeof v === 'string') {
-    for (const m of v.matchAll(/['"]([^'"]{1,40})['"]\s*:\s*(\d+)/g)) pairs.push({ word: m[1], count: Number(m[2]) });
-  }
-  return pairs.filter((p) => p.count > 0).sort((a, b) => b.count - a.count || a.word.localeCompare(b.word));
-}
-
-export function transcribeItems(transcriptJson: unknown): TranscribeItem[] {
-  const doc = decode(transcriptJson) as { results?: { items?: unknown } } | null;
-  const items = doc && typeof doc === 'object' ? doc.results?.items : null;
-  return Array.isArray(items) ? (items as TranscribeItem[]) : [];
+export function bandScore(v: number, t: { lo: number; hi: number; zeroAt: number }): number {
+  const off = v < t.lo ? t.lo - v : v > t.hi ? v - t.hi : 0;
+  return Math.max(0, Math.round(100 * (1 - off / t.zeroAt)));
 }
 
 const stamp = (s: number): string => {
@@ -72,25 +56,19 @@ const stamp = (s: number): string => {
   return `${pad(h)}:${pad(m)}:${pad(sec)}.${pad(ms % 1000, 3)}`;
 };
 
-/** Cues of at most 7 words or 3.5 seconds, ending early at a sentence stop. `null` when there is nothing to caption. */
-export function transcriptToVtt(transcriptJson: unknown): string | null {
+/** Cues of at most 7 words or 3.5 seconds, ending early at a sentence stop. `null` when nothing was said. */
+export function wordsToVtt(words: readonly Word[]): string | null {
   const cues: { start: number; end: number; text: string }[] = [];
   let cur: { start: number; end: number; words: string[] } | null = null;
   const flush = () => { if (cur && cur.words.length) cues.push({ start: cur.start, end: cur.end, text: cur.words.join(' ') }); cur = null; };
-  for (const it of transcribeItems(transcriptJson)) {
-    const text = String(it.alternatives?.[0]?.content ?? '').replace(/[\r\n]+/g, ' ').replace(/-->/g, '→').trim();
+  for (const w of words) {
+    const text = w.word.replace(/[\r\n]+/g, ' ').replace(/-->/g, '→').trim();
     if (!text) continue;
-    if (it.type === 'punctuation') {
-      if (cur && cur.words.length) cur.words[cur.words.length - 1] += text;
-      if (/[.?!]/.test(text)) flush();
-      continue;
-    }
-    const start = num(it.start_time); const end = num(it.end_time);
-    if (start === null || end === null) continue;
-    if (cur && (cur.words.length >= 7 || end - cur.start > 3.5)) flush();
-    if (!cur) cur = { start, end, words: [] };
+    if (cur && (cur.words.length >= 7 || w.end - cur.start > 3.5)) flush();
+    if (!cur) cur = { start: w.start, end: w.end, words: [] };
     cur.words.push(text);
-    cur.end = end;
+    cur.end = w.end;
+    if (/[.?!]$/.test(text)) flush();
   }
   flush();
   if (!cues.length) return null;
@@ -99,39 +77,45 @@ export function transcriptToVtt(transcriptJson: unknown): string | null {
 
 export const clock = (s: number): string => `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
 
-export function coachingNotes(c: Omit<VideoCoaching, 'notes'>): string[] {
+export function deliveryScores(m: SpeechMetrics): DeliveryScore[] {
+  const T = TARGETS;
+  const out: DeliveryScore[] = [
+    { key: 'length', label: 'Length', score: bandScore(m.seconds, T.length), value: clock(m.seconds), target: `${clock(T.length.lo)} to ${clock(T.length.hi)}`, source: T.length.source },
+  ];
+  if (m.wordsPerMinute !== null) out.push({ key: 'pace', label: 'Pace', score: bandScore(m.wordsPerMinute, T.pace), value: `${m.wordsPerMinute} wpm`, target: `${T.pace.lo} to ${T.pace.hi} wpm`, source: T.pace.source });
+  if (m.fillerPercent !== null) out.push({ key: 'fillers', label: 'Filler words', score: bandScore(m.fillerPercent, T.fillerPercent), value: `${m.fillerTotal} (${m.fillerPercent}%)`, target: `under ${T.fillerPercent.hi}% of words`, source: T.fillerPercent.source });
+  if (m.repetitionPercent !== null) out.push({ key: 'repetition', label: 'Repetition', score: bandScore(m.repetitionPercent, T.repetitionPercent), value: `${m.repetitionPercent}%`, target: `under ${T.repetitionPercent.hi}% of words`, source: T.repetitionPercent.source });
+  return out;
+}
+
+export function coachingNotes(m: SpeechMetrics): string[] {
   const notes: string[] = [];
-  if (c.seconds > TARGET_SECONDS) notes.push(`${clock(c.seconds)}, over the ${TARGET_SECONDS}s target. Try trimming it to 90 seconds.`);
-  else if (c.seconds < 45) notes.push(`${clock(c.seconds)}. You have room to say more; aim for about ${TARGET_SECONDS} seconds.`);
-  else notes.push(`${clock(c.seconds)}, right around the ${TARGET_SECONDS}s target.`);
-  const top = c.fillerTop[0];
-  if (top && top.count >= 3) notes.push(`You said "${top.word}" ${top.count} times.`);
-  else if (c.fillerTotal !== null) notes.push('Very few filler words. Nice.');
-  if (c.wordsPerMinute !== null && c.wordsPerMinute > 0) {
-    const wpm = Math.round(c.wordsPerMinute);
-    if (wpm < 110) notes.push(`About ${wpm} words a minute, a little slow. Most people land between 120 and 160.`);
-    else if (wpm > 170) notes.push(`About ${wpm} words a minute, a little fast. Slowing down helps it land.`);
-    else notes.push(`About ${wpm} words a minute, a comfortable pace.`);
+  if (m.seconds > TARGETS.length.hi) notes.push(`${clock(m.seconds)}, longer than most viewers stay. Try trimming it toward ${clock(TARGET_SECONDS)}.`);
+  else if (m.seconds < TARGETS.length.lo) notes.push(`${clock(m.seconds)}. You have room to say more; aim for about ${clock(TARGET_SECONDS)}.`);
+  else notes.push(`${clock(m.seconds)}, a good length.`);
+  if (m.opening.words > 0 && m.opening.fillers >= 2) notes.push(`${m.opening.fillers} filler words in your first 15 seconds, where first impressions form. Script your opening line.`);
+  if (m.wordsPerMinute !== null) {
+    if (m.wordsPerMinute < TARGETS.pace.lo) notes.push(`About ${m.wordsPerMinute} words a minute, a little slow. Most people land between ${TARGETS.pace.lo} and ${TARGETS.pace.hi}.`);
+    else if (m.wordsPerMinute > TARGETS.pace.hi) notes.push(`About ${m.wordsPerMinute} words a minute, a little fast. Slowing down helps it land.`);
+    else notes.push(`About ${m.wordsPerMinute} words a minute, a comfortable pace.`);
   }
-  if (c.longPauses !== null && c.longPauses >= 3) notes.push(`${c.longPauses} long pauses. A short note of your three points can help.`);
+  // Judged on the same percentage the score uses, so the note can never contradict the score.
+  const top = m.fillerTop[0];
+  if (m.fillerPercent !== null && m.fillerPercent > TARGETS.fillerPercent.hi && top) {
+    notes.push(`Filler words were ${m.fillerPercent}% of what you said; under ${TARGETS.fillerPercent.hi}% is the goal. Most often "${top.word}" (${top.count}). A short pause works better.`);
+  } else if (top && top.count >= 3) notes.push(`You said "${top.word}" ${top.count} times. A short pause works better than a filler.`);
+  else if (m.words > 0) notes.push('Very few filler words. Nice.');
+  const hedge = m.hedgeTop[0];
+  if (hedge && hedge.count >= 2) notes.push(`"${hedge.word}" ${hedge.count} times. Say what you did plainly; it sounds more sure.`);
+  if (m.pauses.long >= 3) notes.push(`${m.pauses.long} long pauses. A short note of your three points can help.`);
+  if (m.startDelay !== null && m.startDelay > 3) notes.push(`${m.startDelay} seconds before your first word. Start talking right away.`);
+  const rep = m.repeatedTop[0];
+  if (m.repetitionPercent !== null && m.repetitionPercent > TARGETS.repetitionPercent.hi && rep) notes.push(`You repeated "${rep.word}" ${rep.count} times. Vary the wording.`);
   return notes;
 }
 
-/** A worker result plus our measured length into coaching. `null` when the worker reported an error. */
-export function readCoaching(res: unknown, seconds: number): VideoCoaching | null {
-  const doc = decode(res) as { error?: unknown; metrics?: Record<string, unknown> } | null;
-  if (!doc || typeof doc !== 'object' || doc.error || !doc.metrics) return null;
-  const m = doc.metrics;
-  const fillers = fillerCounts(m.fwrd_counts);
-  const words = num(m.transcript_length);
-  const base = {
-    seconds,
-    words,
-    wordsPerMinute: words !== null && seconds > 0 ? (words / seconds) * 60 : null,
-    fillerTotal: m.fwrd_counts === undefined ? null : fillers.reduce((n, f) => n + f.count, 0),
-    fillerTop: fillers.slice(0, 3),
-    fillerRate: num(m.fwrd_rate),
-    longPauses: num(m.long_pause_count),
-  };
-  return { ...base, notes: coachingNotes(base) };
+/** The whole coaching record from one transcript (and the voice track, when it could be read). */
+export function buildCoaching(words: readonly Word[], seconds: number, content: ContentReview | null, voice: VoiceTrack | null = null): VideoCoaching {
+  const m = speechMetrics(words, seconds);
+  return { ...m, version: 2, scores: deliveryScores(m), voice, content, notes: coachingNotes(m) };
 }

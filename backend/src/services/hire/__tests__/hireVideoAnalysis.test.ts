@@ -1,87 +1,73 @@
+import { bandScore, buildCoaching, deliveryScores, TARGETS, wordsToVtt } from '../hireVideoAnalysis';
+import { speechMetrics } from '../hireVideoSpeech';
+import type { Word } from '../hireVideoTranscribe';
+
 /**
- * Reading a colaberry/video-analysis result. The fixture is shaped like the worker's real output:
- * text metrics pass through Python str(), so fwrd_counts is a dict repr and transcript_json is a
- * pandas `to_json()` string that was json.dumps'd again (sound_features.TranscriptAnalytics).
+ * Captions and scored coaching from a timestamped transcript. Only metrics with a published
+ * target are scored (pace, fillers, repetition, and our own length target); every score names
+ * its source.
  */
-import { clock, coachingNotes, fillerCounts, readCoaching, transcribeItems, transcriptToVtt } from '../hireVideoAnalysis';
+const at = (text: string, step = 0.4): Word[] => text.split(' ').map((w, i) => ({ word: w, start: i * step, end: i * step + step * 0.8 }));
 
-const w = (content: string, start: number, end: number) =>
-  ({ start_time: start.toFixed(2), end_time: end.toFixed(2), type: 'pronunciation', alternatives: [{ confidence: '0.99', content }] });
-const p = (content: string) => ({ type: 'punctuation', alternatives: [{ confidence: '0.0', content }] });
-
-const ITEMS = [
-  w('Hi', 0.1, 0.3), p(','), w("I'm", 0.35, 0.5), w('Ann', 0.5, 0.8), p('.'),
-  w('I', 1.0, 1.1), w('build', 1.1, 1.4), w('test', 1.4, 1.7), w('suites', 1.7, 2.1), w('that', 2.1, 2.3), w('catch', 2.3, 2.6), w('bugs', 2.6, 2.9), w('early', 2.9, 3.3), p('.'),
-];
-// pandas DataFrame.to_json() is column-oriented: { column: { indexLabel: value } }.
-const PANDAS = JSON.stringify({
-  jobName: { items: 'vfs-x', transcripts: 'vfs-x' },
-  results: { transcripts: [{ transcript: "Hi, I'm Ann. I build test suites that catch bugs early." }], items: ITEMS },
-  status: { items: 'COMPLETED', transcripts: 'COMPLETED' },
-});
-const RES = {
-  api_version: '0.2',
-  metrics: {
-    fwrd_counts: "{'um': 9, 'like': 2, 'so': 1}",
-    transcript_length: '210',
-    fwrd_rate: '5.71',
-    long_pause_count: '4',
-    transcript_json: JSON.stringify(PANDAS),
-  },
-};
-
-describe('captions from the Transcribe items', () => {
-  test('decodes a double-encoded pandas result and finds the items', () => {
-    expect(transcribeItems(RES.metrics.transcript_json)).toHaveLength(ITEMS.length);
-    expect(transcribeItems({ results: { items: ITEMS } })).toHaveLength(ITEMS.length); // raw Transcribe JSON too
+describe('wordsToVtt', () => {
+  test('cues end at a sentence stop or after 7 words, with valid timestamps', () => {
+    const vtt = wordsToVtt(at('Hi. I build retrieval systems for support teams at scale today.'))!;
+    expect(vtt.startsWith('WEBVTT\n\n1\n00:00:00.000 --> 00:00:00.320\nHi.')).toBe(true);
+    expect(vtt).toContain('I build retrieval systems for support teams');
+    expect(vtt.split('-->').length - 1).toBe(3);
   });
 
-  test('builds cues of at most 7 words, breaking at a sentence stop, punctuation attached', () => {
-    const vtt = transcriptToVtt(RES.metrics.transcript_json)!;
-    expect(vtt.startsWith('WEBVTT\n\n')).toBe(true);
-    expect(vtt).toContain("1\n00:00:00.100 --> 00:00:00.800\nHi, I'm Ann.");
-    expect(vtt).toContain('2\n00:00:01.000 --> 00:00:02.900\nI build test suites that catch bugs\n');
-    expect(vtt).toContain('3\n00:00:02.900 --> 00:00:03.300\nearly.');
-  });
-
-  test('a caption can never forge a cue timing line', () => {
-    const vtt = transcriptToVtt({ results: { items: [w('a-->b', 0, 1)] } })!;
-    expect(vtt).not.toMatch(/a-->b/);
-  });
-
-  test('nothing to caption is null, never an empty track', () => {
-    expect(transcriptToVtt('None')).toBeNull();
-    expect(transcriptToVtt(undefined)).toBeNull();
-    expect(transcriptToVtt({ results: { items: [] } })).toBeNull();
+  test('nothing said means no captions, and "-->" in speech cannot break the file', () => {
+    expect(wordsToVtt([])).toBeNull();
+    expect(wordsToVtt([{ word: 'a-->b', start: 0, end: 1 }])).toContain('a→b');
   });
 });
 
-describe('coaching, for the candidate only', () => {
-  test('the kit examples: a filler word count and running over 90 seconds', () => {
-    const c = readCoaching(RES, 125)!;
-    expect(c.fillerTop[0]).toEqual({ word: 'um', count: 9 });
-    expect(c.fillerTotal).toBe(12);
-    expect(c.notes).toContain('2:05, over the 90s target. Try trimming it to 90 seconds.');
-    expect(c.notes).toContain('You said "um" 9 times.');
-    expect(c.notes).toContain('About 101 words a minute, a little slow. Most people land between 120 and 160.');
-    expect(c.notes).toContain('4 long pauses. A short note of your three points can help.');
+describe('bandScore', () => {
+  test('100 inside the band, falling linearly to 0 at zeroAt past an edge', () => {
+    expect(bandScore(140, TARGETS.pace)).toBe(100);
+    expect(bandScore(100, TARGETS.pace)).toBe(100);
+    expect(bandScore(70, TARGETS.pace)).toBe(50);
+    expect(bandScore(10, TARGETS.pace)).toBe(0);
+  });
+});
+
+describe('deliveryScores', () => {
+  test('scores only sourced metrics, each naming where its target comes from', () => {
+    const m = speechMetrics(at(Array.from({ length: 200 }, (_, i) => `word${i}`).join(' '), 0.45), 90);
+    const s = deliveryScores(m);
+    expect(s.map((x) => x.key)).toEqual(['length', 'pace', 'fillers', 'repetition']);
+    for (const x of s) expect(x.source.length).toBeGreaterThan(10);
+    expect(s.find((x) => x.key === 'pace')!.value).toBe('133 wpm');
   });
 
-  test('a clean take reads as encouragement, and missing metrics drop their line', () => {
-    const notes = coachingNotes({ seconds: 88, words: 210, wordsPerMinute: 143, fillerTotal: 1, fillerTop: [{ word: 'so', count: 1 }], fillerRate: 0.5, longPauses: null });
-    expect(notes).toEqual(['1:28, right around the 90s target.', 'Very few filler words. Nice.', 'About 143 words a minute, a comfortable pace.']);
-    expect(readCoaching({ metrics: {} }, 30)!.notes).toEqual(['0:30. You have room to say more; aim for about 90 seconds.']);
+  test('a silent video scores its length and nothing it cannot measure', () => {
+    expect(deliveryScores(speechMetrics([], 30)).map((x) => x.key)).toEqual(['length']);
+  });
+});
+
+describe('buildCoaching', () => {
+  test('notes call out fillers in the first 15 seconds, repeated fillers and a slow start', () => {
+    const words = [{ word: 'Um,', start: 4, end: 4.3 }, { word: 'hi,', start: 4.4, end: 4.6 }, { word: 'um,', start: 5, end: 5.2 },
+      { word: 'I', start: 5.5, end: 5.6 }, { word: 'um', start: 6, end: 6.2 }, { word: 'build.', start: 6.5, end: 6.9 }];
+    const c = buildCoaching(words, 80, null);
+    expect(c.version).toBe(2);
+    expect(c.notes).toEqual(expect.arrayContaining([
+      '3 filler words in your first 15 seconds, where first impressions form. Script your opening line.',
+      'Filler words were 50% of what you said; under 3% is the goal. Most often "um" (3). A short pause works better.',
+      '4 seconds before your first word. Start talking right away.',
+    ]));
+    expect(c.content).toBeNull();
+    expect(c.voice).toBeNull();
   });
 
-  test('a worker error, or no result at all, is no coaching', () => {
-    expect(readCoaching({ error: 'NoFaceDetectedError', metrics: {} }, 80)).toBeNull();
-    expect(readCoaching(null, 80)).toBeNull();
-    expect(readCoaching(JSON.stringify(RES), 80)?.fillerTop[0].word).toBe('um'); // res.json read as text
-  });
-
-  test('filler counts read from a Python repr or a real object, biggest first', () => {
-    expect(fillerCounts("{'you know': 2, 'um': 5}")).toEqual([{ word: 'um', count: 5 }, { word: 'you know', count: 2 }]);
-    expect(fillerCounts({ like: 3, so: 0 })).toEqual([{ word: 'like', count: 3 }]);
-    expect(clock(65)).toBe('1:05');
+  test('the filler note never contradicts the filler score (seen on a real run: 5.6% said "Nice")', () => {
+    // 4 fillers in 71 words, none repeated 3 times: over the 3% target, so no praise.
+    const words = Array.from({ length: 71 }, (_, i) => ({ word: [0, 10, 30, 50].includes(i) ? (i % 20 ? 'um' : 'uh') : `w${i}`, start: i * 0.4, end: i * 0.4 + 0.3 }));
+    const c = buildCoaching(words, 60, null);
+    const score = c.scores.find((s) => s.key === 'fillers')!.score;
+    expect(score).toBeLessThan(100);
+    expect(c.notes.join(' ')).not.toContain('Nice');
+    expect(c.notes.join(' ')).toContain('5.6% of what you said');
   });
 });

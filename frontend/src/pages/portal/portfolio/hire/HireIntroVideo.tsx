@@ -4,6 +4,9 @@ import {
 } from '../../../../services/hireStudioApi';
 import { MIN_TAKE_BYTES, PROMPTS, recClock, uploadProblem } from './hireVideoModel';
 import HireVideoRecorder from './HireVideoRecorder';
+import HireVideoHud from './HireVideoHud';
+import HireVideoScorecard from './HireVideoScorecard';
+import { hasLive } from './hireCoachModel';
 
 /**
  * Intro video (kit §3.2). Record in the browser or upload a file; either becomes a DRAFT that only
@@ -30,6 +33,8 @@ const HireIntroVideo: React.FC<Props> = ({ onChanged }) => {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  /** A jump requested from the moments list; `n` makes a repeat tap on the same moment jump again. */
+  const [seekTo, setSeekTo] = useState<{ t: number; n: number } | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
   const read = useCallback(() => {
@@ -37,6 +42,20 @@ const HireIntroVideo: React.FC<Props> = ({ onChanged }) => {
     fetchHireVideo().then((video) => setLoad({ state: 'ready', video }), () => setLoad({ state: 'failed' }));
   }, []);
   useEffect(read, [read]);
+
+  // While coaching runs (about a minute), check back quietly so it appears without a reload.
+  // Capped at 20 checks; a failure along the way just stops checking.
+  const pending = load.state === 'ready' && load.video?.analysis === 'pending';
+  useEffect(() => {
+    if (!pending) return undefined;
+    let left = 20;
+    const id = window.setInterval(() => {
+      left -= 1;
+      if (left <= 0) { window.clearInterval(id); return; }
+      fetchHireVideo().then((video) => { if (video?.analysis !== 'pending') { window.clearInterval(id); setLoad({ state: 'ready', video }); } }, () => window.clearInterval(id));
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [pending]);
   useEffect(() => () => { if (take) URL.revokeObjectURL(take.url); }, [take]);
 
   const saved = (video: HireVideo | null) => { setLoad({ state: 'ready', video }); onChanged(summary(video)); };
@@ -62,7 +81,7 @@ const HireIntroVideo: React.FC<Props> = ({ onChanged }) => {
     void upload(f, f.name);
   };
 
-  const change = async (u: { published?: boolean; captionsWanted?: boolean }) => {
+  const change = async (u: { published?: boolean; captionsWanted?: boolean; reanalyze?: true }) => {
     setBusy(true); setMsg(null);
     try { saved(await updateHireVideo(u)); } catch (e) { setMsg(videoErrorText(e)); } finally { setBusy(false); }
   };
@@ -136,13 +155,15 @@ const HireIntroVideo: React.FC<Props> = ({ onChanged }) => {
 
       {load.state === 'ready' && mode === 'view' && (video ? (
         <>
-          <div className="hs-vbox">
-            {/* Same origin as the studio, so the preview's caption track needs no crossorigin. */}
-            <video controls playsInline preload="metadata" poster={video.posterUrl} aria-label={`Your intro video${video.seconds ? `, ${recClock(video.seconds)}` : ''}`} data-testid="hs-video-player">
-              <source src={video.streamUrl} type="video/mp4" />
-              {video.captionsUrl && <track kind="captions" src={video.captionsUrl} srcLang="en" label="English" default />}
-            </video>
-          </div>
+          {hasLive(video.coaching) ? <HireVideoHud video={video} coaching={video.coaching} seekTo={seekTo} /> : (
+            <div className="hs-vbox">
+              {/* Same origin as the studio, so the preview's caption track needs no crossorigin. */}
+              <video controls playsInline preload="metadata" poster={video.posterUrl} aria-label={`Your intro video${video.seconds ? `, ${recClock(video.seconds)}` : ''}`} data-testid="hs-video-player">
+                <source src={video.streamUrl} type="video/mp4" />
+                {video.captionsUrl && <track kind="captions" src={video.captionsUrl} srcLang="en" label="English" default />}
+              </video>
+            </div>
+          )}
           <div className="hs-vacts">
             <button type="button" className={`cp-btn${live ? '' : ' cp-btn-primary'}`} disabled={busy} onClick={() => void change({ published: !live })} data-testid="hs-publish">
               {live ? 'Unpublish' : 'Publish to Hire'}
@@ -156,7 +177,7 @@ const HireIntroVideo: React.FC<Props> = ({ onChanged }) => {
             <input type="checkbox" checked={video.captionsWanted} disabled={busy} onChange={(e) => void change({ captionsWanted: e.target.checked })} data-testid="hs-captions" />
             <span>Add captions automatically</span>
           </label>
-          <Coaching video={video} />
+          <Coaching video={video} busy={busy} onRetry={() => void change({ reanalyze: true })} onSeek={(t) => setSeekTo((s) => ({ t, n: (s?.n ?? 0) + 1 }))} />
         </>
       ) : (
         <>
@@ -174,16 +195,26 @@ const HireIntroVideo: React.FC<Props> = ({ onChanged }) => {
   );
 };
 
-/** Candidate-only coaching from colaberry/video-analysis. Never shown on Hire. */
-const Coaching: React.FC<{ video: HireVideo }> = ({ video }) => (
-  <div className="hs-coach" data-testid="hs-coaching">
-    <div className="hs-coach-h">Coaching <span className="cp-muted">· just for you, never on Hire</span></div>
-    {video.coaching?.notes.length
-      ? <ul>{video.coaching.notes.map((n) => <li key={n}>{n}</li>)}</ul>
-      : video.analysis === 'pending'
-        ? <p className="cp-muted" role="status">Listening to your video. Coaching and captions appear here in a few minutes.</p>
-        : <p className="cp-muted">Coaching on length, pace and filler words, and automatic captions, come from our video analysis service, which is not switched on yet. Your video works without them.</p>}
-  </div>
-);
+/** Candidate-only coaching. Never shown on Hire. */
+const Coaching: React.FC<{ video: HireVideo; busy: boolean; onRetry: () => void; onSeek: (t: number) => void }> = ({ video, busy, onRetry, onSeek }) => {
+  if (hasLive(video.coaching)) return <HireVideoScorecard coaching={video.coaching} onSeek={onSeek} />;
+  return (
+    <div className="hs-coach" data-testid="hs-coaching">
+      <div className="hs-coach-h">Coaching <span className="cp-muted">· just for you, never on Hire</span></div>
+      {video.coaching?.notes.length
+        ? <ul>{video.coaching.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+        : video.analysis === 'pending'
+          ? <p className="cp-muted" role="status">Listening to your video. Live coaching and captions appear here in a minute or two.</p>
+          : video.analysis === 'failed'
+            ? (
+              <div role="alert">
+                <p className="cp-muted">We couldn’t analyze this video just now. Your video is fine and still works.</p>
+                <button type="button" className="cp-btn" disabled={busy} onClick={onRetry} data-testid="hs-reanalyze">Try again</button>
+              </div>
+            )
+            : <p className="cp-muted">Coaching on pace, filler words and what you said, and automatic captions, are not switched on yet. Your video works without them.</p>}
+    </div>
+  );
+};
 
 export default HireIntroVideo;

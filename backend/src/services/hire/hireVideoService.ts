@@ -6,7 +6,7 @@
  *   deleteVideo      removes it everywhere
  *   readStudioVideo  what the studio shows, with short-lived signed preview URLs for a draft
  *   resolveVideoFile what the public route may serve: a PUBLISHED asset, or a draft with a valid preview token
- *   applyAnalysis    a colaberry/video-analysis result becomes captions and candidate-only coaching
+ *   applyCoaching    hireVideoCoach's result (captions + candidate-only coaching) lands on the asset
  *
  * THE CALLER IS ALWAYS THE LEARNER for the first four; the enrollment comes from the portal session.
  *
@@ -24,8 +24,12 @@ import { sequelize } from '../../config/database';
 import { env } from '../../config/env';
 import { assetDir, assetFile, assetUrl, isAssetId, newAssetId, removeAsset, VIDEO_FILES, type VideoFileKind } from './hireVideoFiles';
 import { makeRendition, type Runner } from './hireVideoTranscode';
-import { readCoaching, transcriptToVtt, type VideoCoaching } from './hireVideoAnalysis';
+import type { VideoCoaching } from './hireVideoAnalysis';
 import { analysisMode, submitForAnalysis, type AnalysisMode } from './hireVideoAnalysisClient';
+
+/** What an analysis that could not finish stores, so the studio can say so and offer a retry. */
+export interface FailedCoaching { readonly status: 'failed'; readonly error_class: string }
+const isFailed = (v: unknown): v is FailedCoaching => Boolean(v && typeof v === 'object' && (v as FailedCoaching).status === 'failed');
 
 type Row = Record<string, unknown>;
 const PREVIEW_TTL_MS = 2 * 60 * 60 * 1000;
@@ -62,7 +66,7 @@ export interface StudioVideo {
   readonly posterUrl: string;
   readonly captionsUrl: string | null;
   readonly captionsWanted: boolean;
-  readonly analysis: AnalysisMode | 'done';
+  readonly analysis: AnalysisMode | 'done' | 'failed';
   readonly coaching: VideoCoaching | null;
 }
 
@@ -70,6 +74,9 @@ export function toStudioVideo(row: Row | null, now: number, mode: AnalysisMode =
   const id = row?.video_asset_id;
   if (!row || !isAssetId(id)) return null;
   const q = `?t=${previewToken(id, now)}`;
+  if (isFailed(row.video_coaching)) {
+    return { ...toStudioVideo({ ...row, video_coaching: null }, now, mode)!, analysis: 'failed' };
+  }
   const coaching = (row.video_coaching as VideoCoaching | null) ?? null;
   return {
     status: row.video_status === 'published' ? 'published' : 'draft',
@@ -118,7 +125,9 @@ export async function saveVideo(enrollmentId: string, upload: string, run?: Runn
 export const videoUpdateSchema = z.object({
   published: z.boolean().optional(),
   captionsWanted: z.boolean().optional(),
-}).strict().refine((v) => v.published !== undefined || v.captionsWanted !== undefined, 'nothing to change');
+  /** "Try again" after an analysis that could not finish. */
+  reanalyze: z.literal(true).optional(),
+}).strict().refine((v) => v.published !== undefined || v.captionsWanted !== undefined || v.reanalyze !== undefined, 'nothing to change');
 export type VideoUpdate = z.infer<typeof videoUpdateSchema>;
 
 const exists = (file: string) => fs.promises.access(file).then(() => true, () => false);
@@ -127,6 +136,14 @@ export async function updateVideo(enrollmentId: string, u: VideoUpdate, now = Da
   const cur = await one(`${SELECT_VIDEO} WHERE enrollment_id = $1`, [enrollmentId]);
   const id = cur?.video_asset_id;
   if (!cur || !isAssetId(id)) throw notFound('Record or upload a video first.');
+  if (u.reanalyze) {
+    // Only a failed run is cleared and re-queued; a finished one is left alone (idempotent).
+    if (isFailed(cur.video_coaching)) {
+      await one(`UPDATE hire_profile_intro SET video_coaching = NULL, updated_at = NOW() WHERE enrollment_id = $1 AND video_asset_id = $2 AND video_coaching->>'status' = 'failed' RETURNING video_asset_id`, [enrollmentId, id]);
+      submitForAnalysis(id, assetFile(id, 'stream'));
+    }
+    if (u.published === undefined && u.captionsWanted === undefined) return readStudioVideo(enrollmentId, now);
+  }
   // Turning captions off removes the public track; turning them back on restores it if one was made.
   let captions = typeof cur.captions_url === 'string' ? cur.captions_url : null;
   if (u.captionsWanted === false) captions = null;
@@ -168,22 +185,20 @@ export async function resolveVideoFile(id: string, kind: VideoFileKind, token: u
   return { path: file, type: VIDEO_FILES[kind].type, published };
 }
 
-// ── Analysis result (colaberry/video-analysis) ──────────────────────────────────
+// ── Analysis result (hireVideoCoach) ────────────────────────────────────────────
 
-/** Stores coaching, and captions when the candidate wants them. Safe to run twice on the same result. */
-export async function applyAnalysis(id: string, result: unknown): Promise<boolean> {
+/**
+ * Stores coaching (or a failure marker), and points at the captions file when one was written
+ * and the candidate wants captions. Keyed on the asset id, so a video replaced mid-run writes
+ * nothing. Safe to run twice on the same result. True when a row was updated.
+ */
+export async function applyCoaching(id: string, coaching: VideoCoaching | FailedCoaching, captionsWritten: boolean): Promise<boolean> {
   if (!isAssetId(id)) return false;
-  const row = await one('SELECT video_seconds, video_captions_wanted FROM hire_profile_intro WHERE video_asset_id = $1', [id]);
-  if (!row) return false;
-  const coaching = readCoaching(result, Number(row.video_seconds) || 0);
-  const metrics = (coaching && typeof result === 'object' && result) ? (result as { metrics?: Row }).metrics : null;
-  const vtt = metrics ? transcriptToVtt(metrics.transcript_json) : null;
-  if (vtt) await fs.promises.writeFile(assetFile(id, 'captions'), vtt, 'utf8');
-  await one(
+  const row = await one(
     `UPDATE hire_profile_intro SET video_coaching = $2::jsonb,
        captions_url = CASE WHEN $3::text IS NOT NULL AND video_captions_wanted THEN $3 ELSE captions_url END, updated_at = NOW()
      WHERE video_asset_id = $1 RETURNING video_asset_id`,
-    [id, coaching ? JSON.stringify(coaching) : null, vtt ? assetUrl(id, 'captions') : null],
+    [id, JSON.stringify(coaching), captionsWritten ? assetUrl(id, 'captions') : null],
   );
-  return coaching !== null;
+  return row !== null;
 }
