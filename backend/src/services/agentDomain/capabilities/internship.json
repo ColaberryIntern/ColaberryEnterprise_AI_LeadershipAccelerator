@@ -3389,10 +3389,10 @@
       "classification": "inherited",
       "source": "legacy row WorkforceCareerDirector (the domain's single inherited behaviour row)",
       "supporting_evidence": [
-        "legacy-slices/internship.json: WorkforceCareerDirector, kind behavior, source registry, cron 20 6 * * * wired at aiOpsScheduler.ts:343, registered at agentRegistrySeed.ts:2224, domain name Career",
-        "agentRegistrySeed.ts:2260-2269 the row: agent_type workforce_director, module workforce, source_file backend/src/services/workforce/directorActions.ts, trigger_type cron, schedule 20 6 * * *, description Jordan Ellis reads the daily employment-readiness signal and flags the gap as a WorkforceTask, No LLM call, enabled true",
+        "legacy-slices/internship.json: WorkforceCareerDirector, kind behavior, source registry, cron 20 6 * * * wired at aiOpsScheduler.ts:392, registered at agentRegistrySeed.ts:2224, domain name Career",
+        "agentRegistrySeed.ts:2431-2439 the row: agent_type workforce_director, module workforce, source_file backend/src/services/workforce/directorActions.ts, trigger_type cron, schedule 20 6 * * *, description Jordan Ellis reads the daily employment-readiness signal and flags the gap as a WorkforceTask, No LLM call, enabled true",
         "backend/src/services/workforce/directorActions.ts:72 runCareerDirector = runDomainFlag('career', 'WorkforceCareerDirector', 'career'), :215 registered in the director dispatch table",
-        "it is one of a family of identically shaped director rows (curriculum, certification, finance, student success), so the behaviour is a shared runDomainFlag and not career-specific logic"
+        "it is one of a family of identically shaped director rows (curriculum, certification, finance, student success, operations, community), so the behaviour is a shared runDomainFlag and not career-specific logic"
       ],
       "implementation_state": "implemented",
       "requirement_validation_state": "draft",
@@ -3458,7 +3458,7 @@
       "human_decision": false,
       "starting_autonomy": "autonomy:R0",
       "max_permitted_autonomy": "autonomy:R6",
-      "max_autonomy_rationale": "It writes a task, not a change to a person, and already runs deterministically on a cron. A separately approved supervised production pilot under the new employee is reachable, but the shared runDomainFlag shape means the blast radius of a change reaches four sibling directors, so no higher level is proposed.",
+      "max_autonomy_rationale": "It writes a task, not a change to a person, and already runs deterministically on a cron. A separately approved supervised production pilot under the new employee is reachable, but the shared runDomainFlag shape means the blast radius of a change reaches six sibling directors, so no higher level is proposed.",
       "blocked_by": [
         "Dhee has not validated that this flag is worth keeping",
         "the reliability of the underlying career signal is unknown"
@@ -3747,7 +3747,7 @@
       "proposed_kind": "behavior",
       "disposition": "migrated_to_capability",
       "capability_id": "internship.employment_readiness_gap_flag",
-      "reason": "The single inherited row is a live, enabled cron (20 6 * * *, aiOpsScheduler.ts:343, agentRegistrySeed.ts:2260-2269) that reads the daily employment-readiness signal for domain career and flags the top gap as a WorkforceTask, with no LLM call. The behaviour is real and still wanted, so it migrates rather than retiring. Two honesty notes carried into the capability: (1) it is one of an identically shaped director family driven by the shared runDomainFlag at directorActions.ts:72, so the behaviour is not career-specific logic and a change reaches four sibling directors; (2) the reliability of the underlying career signal was not verified in this pass and is recorded as unknown there. Per AI_EMPLOYEE_ROSTER.md:45 the name WorkforceCareerDirector must not be reused as the new employee name."
+      "reason": "The single inherited row is a live, enabled cron (20 6 * * *, aiOpsScheduler.ts:392, agentRegistrySeed.ts:2431-2439) that reads the daily employment-readiness signal for domain career and flags the top gap as a WorkforceTask, with no LLM call. The behaviour is real and still wanted, so it migrates rather than retiring. Two honesty notes carried into the capability: (1) it is one of an identically shaped director family driven by the shared runDomainFlag at directorActions.ts:72, so the behaviour is not career-specific logic and a change reaches six sibling directors; (2) the reliability of the underlying career signal was not verified in this pass and is recorded as unknown there. Per AI_EMPLOYEE_ROSTER.md:45 the name WorkforceCareerDirector must not be reused as the new employee name."
     }
   ],
   "notes": [

@@ -64,7 +64,11 @@ import {
   type AgentDomain,
 } from './agentDomainRegistry';
 import {
+  legacyRunTotal,
+  liveLegacyRows,
   loadDomainMatrix,
+  loadUnresolvedBucket,
+  retirementCandidates,
   type CapabilityRecord,
   type DomainCapabilityMatrix,
 } from './capabilityRecord';
@@ -309,6 +313,8 @@ function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): Genera
   const unknowns = m.legacy_dispositions.filter((r) => r.disposition === 'unknown');
   const retired = m.legacy_dispositions.filter((r) => r.disposition === 'retired');
   const superseded = m.legacy_dispositions.filter((r) => r.disposition === 'superseded');
+  // The undomained bucket, read rather than restated. See the note at the closing section.
+  const bucket = loadUnresolvedBucket();
 
   const total = m.legacy_dispositions.length;
   const summary = total === 0
@@ -356,10 +362,18 @@ function legacyMigrationStory(d: AgentDomain, m: DomainCapabilityMatrix): Genera
           + `functionality is silently lost" is the rule, and an unexamined row is exactly where loss `
           + `hides.\n\n`
         : '')
+      // Every count here is derived. The literals this replaced -- "21 legacy records" and
+      // "Five of them are live production rows" -- went into all ten boards, and the second was
+      // wrong: five is the count of rows whose PROPOSED KIND is unresolved, while thirteen are
+      // live. `_unresolved.json` recorded that correction on 2026-10-28 and this sentence did not
+      // follow, so ten builders were briefed from a superseded number for seventeen days.
+      // Found by Tashima Diah on 2026-11-13, checking the brief against its own sources.
       + `### Not covered by this plan\n`
-      + `The 21 legacy records whose \`proposed_owner_domain\` is \`unresolved\` belong to no domain `
-      + `and are therefore not in any project's plan. Five of them are live production rows. They `
-      + `need an owner decision, and naming that here is the point.`,
+      + `The ${bucket.legacy_row_count} legacy records whose \`proposed_owner_domain\` is `
+      + `\`unresolved\` belong to no domain and are therefore not in any project's plan. `
+      + `${liveLegacyRows(bucket)} of them are live, with ${legacyRunTotal(bucket).toLocaleString('en-US')} `
+      + `runs between them; the ${retirementCandidates(bucket)} proposed for retirement are disabled `
+      + `and have never run. They need an owner decision, and naming that here is the point.`,
     // Claude Code work, same as every other story. See the r0 note above.
     claude_code_prompt: researchPromptFor(`${d.domain_key}.LEGACY-MIGRATION-PLAN`, {
       title: 'Legacy migration plan',

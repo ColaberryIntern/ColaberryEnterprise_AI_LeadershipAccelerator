@@ -29,8 +29,11 @@ import {
 } from './agentDomainRegistry';
 import {
   countsForDomain,
+  legacyRunTotal,
+  liveLegacyRows,
   loadDomainMatrix,
   loadUnresolvedBucket,
+  retirementCandidates,
 } from './capabilityRecord';
 import { coverageForDomain, renderCoverageSummary } from './coverageMatrix';
 import { planProvision, derivedProjectId } from './agentDomainProvisionPlan';
@@ -182,8 +185,16 @@ export function buildPhaseReport(reach: ManagerReachMap): PhaseReport {
       + 'coverage, and is reported as zero rather than as coverage.',
       'READINESS IS `unknown`, not zero. Readiness would require a provisioned project and a '
       + 'lifecycle stage; there is neither, so it is not established rather than measured as absent.',
+      // "Five of them are live production rows" was wrong, and `_unresolved.json` has said so in
+      // writing since 2026-10-28: five is the count of rows whose PROPOSED KIND is unresolved, and
+      // the live population is thirteen. The data file was corrected and this sentence was not, so
+      // the report kept publishing the superseded number. Read the counts from the bucket rather
+      // than restating them, so the next correction to the file cannot leave this behind again.
+      // Found by Tashima Diah on 2026-11-13 while checking the brief against the sources.
       `${bucket.legacy_row_count} legacy agent rows belong to no domain and need an owner decision. `
-      + 'Five of them are live production rows.',
+      + `${liveLegacyRows(bucket)} of them are live production rows, and between them they have run `
+      + `${legacyRunTotal(bucket).toLocaleString('en-US')} times. The `
+      + `${retirementCandidates(bucket)} proposed for retirement are disabled with zero runs.`,
       `${rows.filter((r) => !r.manager_can_reach_surface).length} of ${rows.length} managers cannot `
       + 'reach the admin surface. Each carries a named reason; none is defaulted to reachable.',
       'INTENDED BUILDERS ARE INTENTIONS. The named interns are a selected subset, not the '

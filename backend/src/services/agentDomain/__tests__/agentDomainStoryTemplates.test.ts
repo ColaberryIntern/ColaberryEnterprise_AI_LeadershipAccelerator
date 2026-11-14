@@ -9,7 +9,10 @@ import {
   DENIED_CAPABILITIES,
   allCapabilities,
   assertDraftOnlyInvariant,
+  legacyRunTotal,
+  liveLegacyRows,
   loadAllMatrices,
+  loadUnresolvedBucket,
 } from '../capabilityRecord';
 
 const plans = planForAllDomains();
@@ -333,6 +336,35 @@ describe('the legacy migration plan is real per domain, not a template', () => {
       const s = p.stories.find((x) => x.kind === 'legacy_migration')!;
       expect(s.story_id).toBe(`${p.domain_key}.LEGACY-MIGRATION-PLAN`);
     }
+  });
+
+  /**
+   * The closing section of this story goes to all ten boards, so a wrong number here is wrong in
+   * ten briefs at once. It used to read "Five of them are live production rows", which
+   * `_unresolved.json` had contradicted in writing since 2026-10-28: five counts the rows whose
+   * PROPOSED KIND is unresolved, and thirteen are live. Nothing tested this sentence, so it was
+   * still being handed to builders seventeen days later. Tashima Diah found it on 2026-11-13 by
+   * checking the brief against its own sources.
+   */
+  it('states the undomained counts from the measurement, in every domain', () => {
+    const bucket = loadUnresolvedBucket();
+    const live = liveLegacyRows(bucket);
+    const runs = legacyRunTotal(bucket).toLocaleString('en-US');
+
+    for (const p of plans) {
+      const s = p.stories.find((x) => x.kind === 'legacy_migration')!;
+      expect({ domain: p.domain_key, live: s.body.includes(`${live} of them are live`) })
+        .toEqual({ domain: p.domain_key, live: true });
+      expect({ domain: p.domain_key, runs: s.body.includes(runs) })
+        .toEqual({ domain: p.domain_key, runs: true });
+      // The superseded literal must not come back, in any domain.
+      expect({ domain: p.domain_key, stale: /Five of them are live/.test(s.body) })
+        .toEqual({ domain: p.domain_key, stale: false });
+    }
+
+    // POSITIVE CONTROL: the assertions above are only meaningful if 13 and 5 really differ here.
+    expect(live).toBe(13);
+    expect(live).not.toBe(bucket.rows.filter((r) => r.proposed_kind === 'unresolved').length);
   });
 
   it('a domain with zero inheritance says so, and says an empty bucket is not an empty job', () => {
