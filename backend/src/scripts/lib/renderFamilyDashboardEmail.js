@@ -11,7 +11,7 @@
 //
 // Session originator: CC-20260803-p9r4 (reformat pass after Ali's review)
 
-const { renderPhotos, renderSchool, sectionsText } = require('./renderFamilyDashboardSections');
+const { renderWeek, renderPhotos, renderSchool, sectionsText } = require('./renderFamilyDashboardSections');
 
 const C = {
   navy: '#1a365d',
@@ -259,8 +259,6 @@ function renderRisks(data) {
 
 // ----- COMING SOON -----
 const COMING_SOON = [
-  { name: "Today's Snapshot & Conflicts", desc: 'Family events + work-calendar overlaps, from Google Calendar.' },
-  { name: '7-Day Calendar Grid', desc: 'Family + kids events across the coming week.' },
   { name: 'Travel Countdown', desc: 'Confirmed trips pulled from calendar entries.' },
   { name: 'Weekly Recap', desc: 'One-paragraph roll-up of the last 7 days.' },
   { name: 'Procare Spend Trend', desc: 'Monthly school-charge history and projection.' },
@@ -284,7 +282,7 @@ function renderFooter(d) {
 <tr><td style="padding:32px 16px 16px 16px;text-align:center;font-family:${FONT}">
   <div style="font-size:11px;color:${C.muted};line-height:1.6">
     <strong style="color:${C.ink2}">Family Dashboard</strong><br/>
-    Generated ${esc(d.dayName)} ${esc(d.monthName)} ${esc(String(d.day))}, ${esc(String(d.year))} &middot; Sources: Basecamp (live), school mail via ParentSquare (live), phone camera roll via OneDrive (live), Google Calendar + Procare (planned).<br/>
+    Generated ${esc(d.dayName)} ${esc(d.monthName)} ${esc(String(d.day))}, ${esc(String(d.year))} &middot; Sources: Basecamp (live), school mail via ParentSquare (live), phone camera roll via OneDrive (live), family Google Calendar (live), Procare (planned).<br/>
     Reply to ali@colaberry.com to adjust.
   </div>
 </td></tr>`;
@@ -315,6 +313,7 @@ function renderFamilyDashboardEmail(data) {
   const kit = { C, FONT, esc, chip, sectionOpen, sectionClose, hTitle };
   const body = [
     renderHero(data, d),
+    renderWeek(data, kit),
     renderSchool(data, kit),
     renderPhotos(data, kit),
     renderKpis(data),

@@ -1,5 +1,5 @@
-// renderFamilyDashboardSections - the two newsletter sections of the Family Dashboard email:
-// "Family Photos" (from familyPhotoFeed, embedded inline by cid) and "School" (from familySchoolNews).
+// renderFamilyDashboardSections - the newsletter sections of the Family Dashboard email: "This Week"
+// (familyCalendarFeed), "School" (familySchoolNews) and "Family Photos" (familyPhotoFeed, inline by cid).
 // Kept out of renderFamilyDashboardEmail.js so that file stays under the size ceiling; the shared
 // styling helpers are passed in as `kit` rather than imported, which avoids a require cycle.
 // Each section returns '' when it has nothing to show, so a failed feed never leaves an empty box.
@@ -66,8 +66,37 @@ function renderSchool(data, k) {
   return out;
 }
 
+function weekDay(day, k) {
+  const head = `<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${day.isToday ? k.C.navy : k.C.ink2};font-family:${k.FONT}">${k.esc(day.isToday ? `Today, ${day.label}` : day.label)}${day.busy ? ` ${k.chip('Busy day', k.C.warnSoft, k.C.warn)}` : ''}</div>`;
+  const rows = day.items.length
+    ? day.items.map((it) => {
+      const [bg, fg] = CHILD_COLORS[it.who] || CHILD_COLORS.Family;
+      return `<div style="font-size:13px;color:${k.C.ink};margin-top:5px;font-family:${k.FONT}"><span style="display:inline-block;width:64px;color:${it.source === 'school' ? k.C.action : k.C.ink2};font-size:12px">${k.esc(it.time)}</span>${k.chip(it.who, bg, fg)}${k.esc(it.title)}</div>`;
+    }).join('')
+    : `<div style="font-size:12.5px;color:${k.C.muted};margin-top:4px;font-family:${k.FONT}">Nothing on the calendar.</div>`;
+  return `<tr><td style="padding:10px 0;border-bottom:1px solid ${k.C.lineSoft}">${head}${rows}</td></tr>`;
+}
+
+function renderWeek(data, k) {
+  const w = data.week;
+  if (!w) return '';
+  let out = k.sectionOpen('This Week');
+  out += k.hTitle('The next 7 days', 'Our family Google Calendar, with school dates (red) on the same days. "Busy day" means school and calendar plans overlap.');
+  out += `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${w.days.map((d) => weekDay(d, k)).join('')}</table>`;
+  out += k.sectionClose();
+  return out;
+}
+
 function sectionsText(data) {
   const lines = [];
+  if (data.week) {
+    lines.push('', 'THIS WEEK');
+    for (const d of data.week.days) {
+      if (!d.items.length) continue;
+      lines.push(`${d.label}${d.busy ? ' (busy day)' : ''}`);
+      for (const it of d.items) lines.push(`  ${it.time}  ${it.who}: ${it.title}`);
+    }
+  }
   if (data.school && data.school.items.length) {
     lines.push('', 'SCHOOL');
     for (const it of data.school.items) lines.push(`- ${it.child}${it.date ? ` (${fmtDate(it.date)})` : ''}: ${it.title}${it.action ? `. To do: ${it.action}` : ''}`);
@@ -76,4 +105,4 @@ function sectionsText(data) {
   return lines.join('\n');
 }
 
-module.exports = { renderPhotos, renderSchool, sectionsText };
+module.exports = { renderWeek, renderPhotos, renderSchool, sectionsText };
