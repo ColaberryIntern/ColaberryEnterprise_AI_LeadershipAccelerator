@@ -107,6 +107,175 @@ export const PRICING_TIERS: readonly PricingTier[] = [
 ];
 
 /**
+ * THE THREE SERVICES -- Build, Guide, Train.
+ *
+ * Modeled on `docs/enterprise-site-v4/index.html`, the design Ali named as the
+ * model for site updates. v4 reframes the page from "here is a license ladder"
+ * to "here are three services, one commercial shape each", with a single entry
+ * offer in front of them: the demo pilot.
+ *
+ * NO FIGURES HERE, AND THAT IS THE POINT. Each service carries the *shape* of
+ * its commercial terms, never a number. The license ladder below still renders
+ * its figures through the claims registry, because `/pricing` is the one route
+ * where `pricing.team` and `pricing.department` are publishable and removing
+ * that surface would take governed, approved prices off the site entirely.
+ *
+ * The five engagements in `v2Services.ts` are NOT replaced by these three. They
+ * are the delivery catalogue; these are the three ways a buyer commercially
+ * engages. See the PR description for the mapping and the open question.
+ */
+export interface ServiceShape {
+  readonly key: string;
+  readonly badge: string;
+  /** The verb, rendered large. */
+  readonly verb: string;
+  /** The promise, one sentence. */
+  readonly promise: string;
+  readonly blurb: string;
+  /** The commercial shape. A shape, never a figure. */
+  readonly termsLabel: string;
+  readonly terms: string;
+  readonly includes: readonly string[];
+  readonly ctaLabel: string;
+  readonly ctaRoute: string;
+  readonly icon: IconName;
+  readonly featured?: boolean;
+  readonly accent: 'green' | 'cherry' | 'blue';
+}
+
+export const SERVICE_SHAPES: readonly ServiceShape[] = [
+  {
+    key: 'build',
+    badge: 'Custom application',
+    verb: 'Build',
+    promise: 'A custom application, designed for your business.',
+    blurb:
+      'We work with your business experts, the people who know how your industry actually ' +
+      'runs, to design and build an application around the way you work.',
+    termsLabel: 'Engagement',
+    terms: 'Down payment, then a monthly fee',
+    includes: [
+      'Custom made and custom designed, not a template',
+      'Designed with your own business experts',
+      'A demo pilot before the full build',
+      'Built by Colaberry architects, with governance and audit logging',
+    ],
+    ctaLabel: 'Book a demo pilot',
+    ctaRoute: '/contact',
+    icon: 'blocks',
+    accent: 'blue',
+  },
+  {
+    key: 'guide',
+    badge: 'Cohort',
+    verb: 'Guide',
+    promise: 'Your team automates your workflows. We guide every step.',
+    blurb:
+      'No new tool to log into. Your people build workflows that run locally, in your own ' +
+      'environment, against the systems you already have.',
+    termsLabel: 'Cohort',
+    terms: 'A 12-month engagement, training and guided building together',
+    includes: [
+      'Built locally, in your environment and current systems',
+      'Claude Code training for your builders',
+      'Weekly scrum, a project manager and a mentor',
+      'Answers where your team already works, in Slack or Teams',
+      'Project tracking for every build, confirmed from commits',
+    ],
+    ctaLabel: 'Book a demo pilot',
+    ctaRoute: '/contact',
+    icon: 'compass',
+    accent: 'cherry',
+    featured: true,
+  },
+  {
+    key: 'train',
+    badge: 'Training',
+    verb: 'Train',
+    promise: 'Turn your people into Forward Deployed Engineers.',
+    blurb:
+      'Your team learns by building: a 12-week course, live sessions every week, and a ' +
+      'community of other builders. An assigned FDE keeps it pointed at your own work.',
+    termsLabel: 'Training',
+    terms: 'An FDE assigned to your account',
+    includes: [
+      'One Forward Deployed Engineer accountable for your team',
+      'The 12-week FDE course, building from week one',
+      'Weekly live sessions, with recordings when someone misses one',
+      'A community of other learners',
+    ],
+    ctaLabel: 'Create a free account',
+    ctaRoute: '/try',
+    icon: 'ladder',
+    accent: 'green',
+  },
+];
+
+/**
+ * The side-by-side. Eight rows, taken from v4.
+ *
+ * Column order matches SERVICE_SHAPES so the table and the cards above it can
+ * never drift apart; a test asserts the lengths agree.
+ */
+export interface CompareRow {
+  readonly label: string;
+  readonly build: string;
+  readonly guide: string;
+  readonly train: string;
+}
+
+export const COMPARE_ROWS: readonly CompareRow[] = [
+  {
+    label: 'What gets built',
+    build: 'A custom application, designed for your business',
+    guide: 'Workflows that automate your processes',
+    train: 'Your team’s skills, applied to your work',
+  },
+  {
+    label: 'Who does the building',
+    build: 'Colaberry architects, with your experts',
+    guide: 'Your team, guided by us',
+    train: 'Your team, as they learn',
+  },
+  {
+    label: 'Where it lives',
+    build: 'Your own application',
+    guide: 'Locally, in your environment and current systems',
+    train: 'Wherever your team applies it',
+  },
+  {
+    label: 'Starts with',
+    build: 'A demo pilot',
+    guide: 'A demo pilot',
+    train: 'A free account',
+  },
+  {
+    label: 'Finding ROI in your processes',
+    build: 'With your business experts',
+    guide: 'With your team',
+    train: 'Your FDE points the way',
+  },
+  {
+    label: 'Training in Claude Code',
+    build: 'Optional',
+    guide: 'Included',
+    train: 'The core of it',
+  },
+  {
+    label: 'Your main contact',
+    build: 'Colaberry architects',
+    guide: 'A project manager and a mentor',
+    train: 'Your assigned FDE',
+  },
+  {
+    label: 'Commercial terms',
+    build: 'Down payment, then a monthly fee',
+    guide: 'A 12-month engagement',
+    train: 'An assigned FDE',
+  },
+];
+
+/**
  * Engagements are deliberately absent from the ladder above.
  * `pricing.services` is VERIFIED as "scoped on a call" by decision of 2026-08-07,
  * so putting a number beside them would contradict the registry.
@@ -122,23 +291,47 @@ export interface PricingFaq {
 
 export const PRICING_FAQ: readonly PricingFaq[] = [
   {
-    q: 'What does free actually include?',
+    q: 'What exactly is a demo pilot?',
     a:
-      'The whole platform, for you, plus free invites for your team to try it. It opens on ' +
-      'sample data shaped to the metrics the product really captures, and fills with your ' +
-      'own as people join. No credit card, and no sales call required to look around.',
+      'One of your real processes, automated and running, with the ROI case written beside ' +
+      'it. It is how you decide whether to go further, on evidence rather than on a deck.',
   },
   {
-    q: 'When would we pay?',
+    q: 'Department by department, or company-wide?',
     a:
-      'When you want someone to progress rather than evaluate. A license unlocks the paths, ' +
-      'the certification preparation and the project work. Until then the account stays free.',
+      'Either. Most start with the department where the return is clearest. If leadership is ' +
+      'aligned, every leader can start after the pilot. The method is the same.',
   },
   {
-    q: 'Can seats move between people?',
-    a: 'Yes. Team and department seats are annual and reassignable as people change roles.',
+    q: 'Is Build an off-the-shelf product?',
+    a:
+      'No. It is custom made and custom designed with your business experts, around how your ' +
+      'company and your industry actually work.',
   },
   {
+    q: 'Will Guide add another tool to our stack?',
+    a:
+      'No. Your team builds workflows that run locally in your own environment and work with ' +
+      'the systems you already have: your ERP, CRM, email, drives and chat.',
+  },
+  {
+    q: 'Can we combine services?',
+    a:
+      'Yes. Build a custom application while your people go through Train or Guide to ' +
+      'automate the workflows around it.',
+  },
+  {
+    q: 'Who owns the data?',
+    a:
+      'You do. Guide runs entirely inside your environment, and Build is designed with your ' +
+      'data boundaries and approval rules from day one.',
+  },
+  {
+    /**
+     * Kept from the previous page deliberately. v4 has no equivalent question,
+     * but this is the certification disclaimer the whole site commits to making
+     * on every surface, and dropping it to match a count would be a regression.
+     */
     q: 'Is the certification issued by Colaberry?',
     a:
       'No. We prepare people for it and the credential is issued by the certifying body. We ' +
