@@ -108,9 +108,15 @@ const EXCLUDED = new Map([
   // UPDATEs a second build_plans row to `published` to recreate a legacy state, and the real
   // schema now refuses that write - the state the test documents can no longer be created,
   // which is arguably the point it was making. It is a disagreement between the suite and the
-  // schema, not a flake: 7 of its 8 tests pass.
-  ['src/services/lifecycle/__tests__/lifecyclePlanReads.integration.test.ts',
-    'one test writes a second published build_plans row, which the real schema rejects'],
+  // schema, not a flake.
+  //
+  // L7.6 SPLIT IT OUT so the exclusion costs one test instead of eight. It used to name
+  // `lifecyclePlanReads.integration.test.ts`, whose other SEVEN tests pass - among them the
+  // JSONB round trip, the one claim in that file that cannot be checked any other way and
+  // which `lifecycleEvidence.publishIntegrity.test.ts` delegates to by name. Excluding the
+  // file to exclude the test meant that proof executed nowhere.
+  ['src/services/lifecycle/__tests__/lifecyclePlanReadsTwoPublished.integration.test.ts',
+    'forces a second published build_plans row, which the partial unique index now rejects'],
 ]);
 
 /** Every *.integration.test.ts under backend/src, derived rather than listed. */

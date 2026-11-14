@@ -34,12 +34,24 @@
  * nothing persists. It must never be pointed at production, and it writes only rows it created
  * under a fixed synthetic tenant, which it deletes afterwards.
  *
- * ## Why it stays IN the CI gate rather than on the ignore list
+ * ## Where it runs, and why the name changed
  *
- * Exactly the choice `blueprintApproval.concurrency.integration.test.ts` made and documented:
- * with no `DATABASE_URL` it SKIPS, and a skipped test reports as skipped — visible. An ignored
- * one reports as nothing at all. CI has no `DATABASE_URL` (`jest.ci.config.ts:19`), and a
- * Postgres container there is deliberately a separate change (`:37`).
+ * It is `*.integration.test.ts` as of L7.6, and that rename is the whole point of this
+ * paragraph. The previous version of this header said "CI has no `DATABASE_URL`, and a Postgres
+ * container there is deliberately a separate change", which was true when it was written and
+ * stopped being true when the `integration-tier` job shipped with a `postgres:16-alpine`
+ * service. Until the rename this suite therefore ran in NO tier at all: the unit tier skipped
+ * it for wanting a database, and `scripts/ci/runIntegrationSuites.js` only discovers files
+ * ending `.integration.test.ts`, so the job built for it never saw it. Thirteen assertions
+ * executed nowhere.
+ *
+ * It was not on the runner's exclusion list either, which made it INVISIBLE rather than
+ * excluded — the worse of the two, because the guard that fails when an exclusion rots cannot
+ * see a suite that was never listed.
+ *
+ * Without `DATABASE_URL` it still SKIPS visibly rather than failing, which is the choice
+ * `blueprintApproval.concurrency.integration.test.ts` made and documented. Inside the
+ * integration tier a skip is treated as a FAILURE, so it cannot pass by not running.
  */
 import { QueryTypes } from 'sequelize';
 
@@ -76,6 +88,20 @@ describeIfDb('the design tables round trip through their models', () => {
   let manifestId = '';
 
   beforeAll(async () => {
+    // THE LIFECYCLE TABLES FK TO `tenants` AND `projects`, AND NOTHING IN THE LIFECYCLE TREE
+    // CREATES THEM. On a disposable database that has neither, `ensureProjectLifecycleSchema`
+    // is warn-only, so every statement SKIPS and the suite then fails on missing tables rather
+    // than on anything it was testing. Two verifiers lost time to exactly that, and the
+    // carried-forward register records it as "KNOWN, not a defect" so a third would not.
+    //
+    // Minimal stand-ins, created FIRST so the real DDL applies cleanly, which is the same
+    // preamble `blueprintApproval.concurrency.integration.test.ts` and
+    // `lifecycleAutoAdvance.integration.test.ts` use for the same reason. `name` is included
+    // because this suite inserts it; the concurrency suites do not and so omit it.
+    await sequelize.query('CREATE TABLE IF NOT EXISTS tenants (id UUID PRIMARY KEY, name TEXT)');
+    await sequelize.query('CREATE TABLE IF NOT EXISTS projects (id UUID PRIMARY KEY, name TEXT)');
+    await sequelize.query('CREATE TABLE IF NOT EXISTS delivery_projects (id UUID PRIMARY KEY)');
+
     await ensureProjectLifecycleSchema();
     await sequelize.query(
       "INSERT INTO tenants (id, name) VALUES (:t, 'P4-T6 synthetic') ON CONFLICT (id) DO NOTHING",
