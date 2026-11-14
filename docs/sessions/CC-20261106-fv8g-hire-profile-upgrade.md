@@ -352,3 +352,18 @@ with these.
     `docs/screenshots/2026-11-14-hire-video-coaching/`.
   - Notes: whisper-1 (the only model with word timestamps) retires 2027-02-26; the model is an
     env override (HIRE_TRANSCRIBE_MODEL). Not merged or deployed.
+
+- [x] Phase 8 shipped: merged and deployed (end-to-end upload not yet seen on production)
+  - Date: 2026-11-14
+  - Session: CC-20261106-fv8g
+  - What changed: #4044 merged as 96aefdf54. The first deploy attempt pulled #4040, merged
+    seconds earlier, whose image was not yet published; deploy-prod.sh refused before touching a
+    container (exit 1). After "Build images" succeeded on the new tip, `./scripts/deploy-prod.sh
+    backend nginx` exit 0, prod HEAD 821b9af36 (includes other tabs' merges up to #4040).
+  - Verification (read-only): the running backend (started 19:01:49Z) has hireVideoCoach,
+    Transcribe, Voice, Content and Speech in dist, `startHireVideoCoach` in dist/server.js,
+    OPENAI_API_KEY set, no hire_video errors in its log. The live studio chunk
+    (/static/js/954.300b6a7b.chunk.js) contains the coach view ("COACH VIEW", "Moments to watch").
+    The pipeline itself was proven earlier in this container (real Whisper and review).
+  - Notes: no candidate has a video, so no live upload has gone through the deployed queue yet;
+    production-verified waits on one real upload. #4041 (carousel fill) is still open.
