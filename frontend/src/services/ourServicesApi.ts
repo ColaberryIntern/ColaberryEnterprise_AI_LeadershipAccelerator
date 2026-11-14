@@ -184,3 +184,17 @@ export async function promoteService(serviceId: string): Promise<PromoteServiceR
   const { data } = await api.post<PromoteServiceResult>(`${BASE}/services/${encodeURIComponent(serviceId)}/promote`);
   return data;
 }
+
+/**
+ * The original document behind an outside case study (the imported whitepaper), as a Blob so it can be shown in the
+ * page with the admin's own token. null when the record has none (every inside case study, or a file that is gone).
+ */
+export async function getCaseStudySourceFile(caseStudyId: string): Promise<Blob | null> {
+  try {
+    const { data } = await api.get<Blob>(`${BASE}/case-studies/${encodeURIComponent(caseStudyId)}/source-file`, { responseType: 'blob' });
+    return data;
+  } catch (e: unknown) {
+    if ((e as { response?: { status?: number } })?.response?.status === 404) return null;
+    throw e;
+  }
+}

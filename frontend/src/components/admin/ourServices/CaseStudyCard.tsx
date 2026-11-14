@@ -1,6 +1,7 @@
 import React from 'react';
 import type { EvidenceCaseStudy } from '../../../services/ourServicesApi';
 import { industryIcon } from './ourServicesModel';
+import { useCaseStudyOpener } from './caseStudyOpener';
 
 /**
  * CaseStudyCard - one confirmed case study under a service: an industry thumbnail, the Inside/Drive source badge,
@@ -28,14 +29,23 @@ export function SourcePill({ kind, label, className = '', title }: { kind: 'insi
 export const caseStudyHref = (id: string): string => `/admin/case-studies/${encodeURIComponent(id)}`;
 
 /**
- * The case-study title as a link that opens the record in a new tab, so a half-ticked Intake card or an expanded
- * catalog row is still there when the admin comes back.
+ * The case-study title as a link. On Our Services (inside CaseStudyOpenerContext) a plain click opens the case study
+ * in the page's side panel, so a half-ticked Intake card or an expanded catalog row stays put. Ctrl/Cmd/middle click,
+ * or any page without the provider, still opens the full record in a new tab.
  */
 export function CaseStudyTitleLink({ id, title, className = '' }: { id: string; title: string; className?: string }): React.ReactElement {
+  const open = useCaseStudyOpener();
+  const onClick = (e: React.MouseEvent<HTMLAnchorElement>): void => {
+    if (!open || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    open(id);
+  };
   return (
-    <a href={caseStudyHref(id)} target="_blank" rel="noopener noreferrer" className={`link-body-emphasis link-underline-opacity-25 link-underline-opacity-100-hover ${className}`}
+    <a href={caseStudyHref(id)} target="_blank" rel="noopener noreferrer" onClick={onClick}
+      className={`link-body-emphasis link-underline-opacity-25 link-underline-opacity-100-hover ${className}`}
       data-testid={`open-case-study-${id}`}>
-      {title}<i className="ri-external-link-line ms-1 small text-body-secondary" aria-hidden="true" /><span className="visually-hidden"> (opens the case study in a new tab)</span>
+      {title}<i className={`${open ? 'ri-side-bar-line' : 'ri-external-link-line'} ms-1 small text-body-secondary`} aria-hidden="true" />
+      <span className="visually-hidden">{open ? ' (opens the case study in a side panel)' : ' (opens the case study in a new tab)'}</span>
     </a>
   );
 }

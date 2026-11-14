@@ -153,6 +153,7 @@ import projectLifecycleReviewRoutes from './admin/projectLifecycleReviewRoutes';
 // already past the 500-line ceiling; the route prefixes still live under /api/admin/factory/.
 import caseStudyServiceLinkRoutes from './admin/caseStudyServiceLinkRoutes';
 import caseStudyOutsideIntakeRoutes from './admin/caseStudyOutsideIntakeRoutes';
+import caseStudySourceFileRoutes from './admin/caseStudySourceFileRoutes';
 import serviceProposalRoutes from './admin/serviceProposalRoutes';
 import serviceEvidenceSummaryRoutes from './admin/serviceEvidenceSummaryRoutes';
 // The flow diagram and the delivery stories: the two stages built on a settled decomposition that
@@ -425,6 +426,8 @@ router.use(caseStudyServiceLinkRoutes);
 // Outside case-study intake + the Intake queue (Services Upgrade SV1). Under /api/admin/factory, so mgmtSectionGate's
 // '/api/admin/factory' -> 'program' prefix row covers it; every route also carries requireSection('program').
 router.use(caseStudyOutsideIntakeRoutes);
+// The original document behind an outside case study, read-only (Our Services side panel). Same 'program' gate.
+router.use(caseStudySourceFileRoutes);
 // Propose a growth service from a case study; promote growth -> active with proof (Services Upgrade SV1).
 router.use(serviceProposalRoutes);
 // Read-only evidence summary feed for Our Services (Services Upgrade SV2). Under /api/admin/factory -> 'program';
