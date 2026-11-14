@@ -23,6 +23,18 @@ export interface ParticipantPayload {
 // Safe (non-mutating) HTTP methods — the only ones a read-only viewer may use.
 const READ_ONLY_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// The ONLY writes a read-only viewer may make, as "METHOD /path" (no query string).
+// Each must be safe by construction for an impersonator:
+//   POST /api/portal/handoff (C125): mints a phone QR code. It writes only the
+//   short-lived code row, never the member's data, and portalHandoffService marks
+//   the code so the phone receives a READ-ONLY session, never a writable one.
+export const READ_ONLY_ALLOWED_WRITES = new Set(['POST /api/portal/handoff']);
+
+function isAllowedReadOnlyWrite(req: Request): boolean {
+  const path = (req.originalUrl || req.url || '').split('?')[0].replace(/\/+$/, '');
+  return READ_ONLY_ALLOWED_WRITES.has(`${req.method} ${path}`);
+}
+
 declare global {
   namespace Express {
     interface Request {
@@ -50,7 +62,7 @@ export function requireParticipant(req: Request, res: Response, next: NextFuncti
     // (posts, submissions, progression, presence, billing, recordings, …) with
     // one rule; the handful of GET-that-write endpoints additionally no-op their
     // write when they see req.participant.read_only.
-    if (payload.read_only && !READ_ONLY_SAFE_METHODS.has(req.method)) {
+    if (payload.read_only && !READ_ONLY_SAFE_METHODS.has(req.method) && !isAllowedReadOnlyWrite(req)) {
       res.status(403).json({ error: 'Read-only view — actions are disabled while viewing as this member.' });
       return;
     }

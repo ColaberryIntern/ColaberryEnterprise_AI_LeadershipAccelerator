@@ -6,16 +6,16 @@ import {
 // In-memory store — exercises the token state machine (single-use + expiry)
 // deterministically with no database.
 function makeMemStore(enrollments: Record<string, HandoffEnrollment>): HandoffStore {
-  const rows = new Map<string, { enrollment_id: string; expires_at: number; used: boolean }>();
+  const rows = new Map<string, { enrollment_id: string; expires_at: number; used: boolean; impersonated_by: string | null }>();
   return {
     async insert(r) {
-      rows.set(r.token, { enrollment_id: r.enrollment_id, expires_at: r.expires_at.getTime(), used: false });
+      rows.set(r.token, { enrollment_id: r.enrollment_id, expires_at: r.expires_at.getTime(), used: false, impersonated_by: r.impersonated_by ?? null });
     },
     async claim(token) {
       const r = rows.get(token);
       if (!r || r.used || r.expires_at <= Date.now()) return null;
       r.used = true; // single-use: the very act of claiming burns it
-      return { enrollment_id: r.enrollment_id };
+      return { enrollment_id: r.enrollment_id, impersonated_by: r.impersonated_by };
     },
     async loadEnrollment(id) {
       return enrollments[id] || null;
@@ -82,6 +82,32 @@ describe('portal handoff service', () => {
     await store.insert({ token: 'orphan', enrollment_id: 'ghost', expires_at: new Date(Date.now() + 60_000) });
     const res = await exchangeHandoff('orphan', store);
     expect(res).toEqual({ ok: false, reason: 'enrollment_missing' });
+  });
+
+  // C125: a code minted from a read-only View-as session must never become a writable session.
+  it('read-only View-as code: the phone gets a READ-ONLY session carrying who is viewing', async () => {
+    const store = makeMemStore({ e1: E1 });
+    const created = await createHandoff('e1', store, { impersonatedBy: 'ali@colaberry.com' });
+    expect(created.readOnly).toBe(true);
+    const res = await exchangeHandoff(tokenFromUrl(created.url), store);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const decoded = jwt.decode(res.jwt) as any;
+      expect(decoded.sub).toBe('e1');
+      expect(decoded.read_only).toBe(true);
+      expect(decoded.impersonated_by).toBe('ali@colaberry.com');
+    }
+  });
+
+  it('a normal code still yields a normal, writable session (no read_only claim)', async () => {
+    const store = makeMemStore({ e1: E1 });
+    const created = await createHandoff('e1', store);
+    expect(created.readOnly).toBe(false);
+    const res = await exchangeHandoff(tokenFromUrl(created.url), store);
+    if (!res.ok) throw new Error('exchange failed');
+    const decoded = jwt.decode(res.jwt) as any;
+    expect(decoded.read_only).toBeUndefined();
+    expect(decoded.impersonated_by).toBeUndefined();
   });
 
   it('idempotent creation yields distinct single-use tokens', async () => {

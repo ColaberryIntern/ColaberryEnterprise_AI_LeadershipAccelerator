@@ -426,7 +426,8 @@ export async function fetchPortalFlags(): Promise<PortalFlags> {
 }
 
 // ── "Open on your phone" QR handoff ──────────────────────────────────────────
-export interface HandoffCreate { url: string; qrSvg: string; expiresAt: string; ttlMs: number; }
+/** readOnly (C125): true when minted from a "View as member" session; the phone then opens the same read-only view. */
+export interface HandoffCreate { url: string; qrSvg: string; expiresAt: string; ttlMs: number; readOnly?: boolean; }
 /** Authed: mint a single-use QR to open Today on the phone. */
 export async function createPhoneHandoff(): Promise<HandoffCreate> {
   const { data } = await portalApi.post<HandoffCreate>('/api/portal/handoff');

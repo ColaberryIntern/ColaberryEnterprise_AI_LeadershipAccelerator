@@ -13,6 +13,11 @@
 //     minute later. The desktop panel auto-refreshes the code.
 //   - Bearer only, never logged: the token travels in the QR URL / query, is
 //     exchanged over HTTPS for a JWT, then is burned. No password is involved.
+//   - Read-only stays read-only (C125): a code minted from an admin "View as
+//     member" session records `impersonated_by`, and exchanging it yields a
+//     READ-ONLY JWT (signReadOnlyParticipantJwt), never a full session. Without
+//     this, a read-only viewer could scan their way into a writable session as
+//     the member.
 //
 // The data-access layer is injectable (HandoffStore) so the token state machine
 // is unit-tested deterministically without a live database. The default store
@@ -23,7 +28,7 @@ import QRCode from 'qrcode';
 import { sequelize } from '../config/database';
 import { env } from '../config/env';
 import { Enrollment } from '../models';
-import { signParticipantJwt } from './participantService';
+import { signParticipantJwt, signReadOnlyParticipantJwt } from './participantService';
 
 /** How long a freshly minted handoff code stays valid. */
 export const HANDOFF_TTL_MS = 90 * 1000;
@@ -36,13 +41,14 @@ export interface HandoffEnrollment {
 
 /** Data-access contract for the handoff token lifecycle. Injectable for tests. */
 export interface HandoffStore {
-  insert(row: { token: string; enrollment_id: string; expires_at: Date }): Promise<void>;
+  /** impersonated_by is set only when the code was minted from a read-only View-as session. */
+  insert(row: { token: string; enrollment_id: string; expires_at: Date; impersonated_by?: string | null }): Promise<void>;
   /**
    * Atomically claim a token: mark it used and return its row IFF it exists,
    * is unused, and is unexpired. Returns null otherwise (unknown / expired /
    * already used). Single call = single-use guarantee.
    */
-  claim(token: string): Promise<{ enrollment_id: string } | null>;
+  claim(token: string): Promise<{ enrollment_id: string; impersonated_by?: string | null } | null>;
   loadEnrollment(id: string): Promise<HandoffEnrollment | null>;
 }
 
@@ -50,9 +56,9 @@ export interface HandoffStore {
 export const sqlHandoffStore: HandoffStore = {
   async insert(row) {
     await sequelize.query(
-      `INSERT INTO portal_handoff_tokens (token, enrollment_id, expires_at)
-       VALUES (:token, :eid, :exp)`,
-      { replacements: { token: row.token, eid: row.enrollment_id, exp: row.expires_at } },
+      `INSERT INTO portal_handoff_tokens (token, enrollment_id, expires_at, impersonated_by)
+       VALUES (:token, :eid, :exp, :imp)`,
+      { replacements: { token: row.token, eid: row.enrollment_id, exp: row.expires_at, imp: row.impersonated_by ?? null } },
     );
   },
   async claim(token) {
@@ -60,11 +66,11 @@ export const sqlHandoffStore: HandoffStore = {
       `UPDATE portal_handoff_tokens
           SET used_at = NOW()
         WHERE token = :token AND used_at IS NULL AND expires_at > NOW()
-      RETURNING enrollment_id`,
+      RETURNING enrollment_id, impersonated_by`,
       { replacements: { token } },
     );
-    const row = (rows as Array<{ enrollment_id: string }>)[0];
-    return row ? { enrollment_id: row.enrollment_id } : null;
+    const row = (rows as Array<{ enrollment_id: string; impersonated_by: string | null }>)[0];
+    return row ? { enrollment_id: row.enrollment_id, impersonated_by: row.impersonated_by } : null;
   },
   async loadEnrollment(id) {
     const e = await Enrollment.findByPk(id);
@@ -84,6 +90,8 @@ export async function ensureHandoffSchema(): Promise<void> {
        used_at TIMESTAMPTZ,
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
+    // C125: additive and nullable; set only for codes minted from a read-only View-as session.
+    `ALTER TABLE portal_handoff_tokens ADD COLUMN IF NOT EXISTS impersonated_by VARCHAR(320)`,
     `CREATE INDEX IF NOT EXISTS idx_portal_handoff_token ON portal_handoff_tokens (token)`,
     `CREATE INDEX IF NOT EXISTS idx_portal_handoff_expires ON portal_handoff_tokens (expires_at)`,
   ];
@@ -106,19 +114,25 @@ export interface HandoffCreateResult {
   qrSvg: string;
   expiresAt: string;
   ttlMs: number;
+  /** True when the phone will open a read-only View-as session (C125). */
+  readOnly: boolean;
 }
 
 /**
  * Mint a one-time handoff code for an already-authenticated enrollment and
  * render it as an inline SVG QR that points at the phone-exchange URL.
+ * Pass `impersonatedBy` when the caller is a read-only View-as session: the
+ * phone then receives the same read-only view, never a writable one.
  */
 export async function createHandoff(
   enrollmentId: string,
   store: HandoffStore = sqlHandoffStore,
+  opts: { impersonatedBy?: string | null } = {},
 ): Promise<HandoffCreateResult> {
   const token = crypto.randomBytes(24).toString('base64url'); // 32 url-safe chars
   const expiresAt = new Date(Date.now() + HANDOFF_TTL_MS);
-  await store.insert({ token, enrollment_id: enrollmentId, expires_at: expiresAt });
+  const impersonatedBy = opts.impersonatedBy || null;
+  await store.insert({ token, enrollment_id: enrollmentId, expires_at: expiresAt, impersonated_by: impersonatedBy });
 
   const url = `${portalBaseUrl()}/portal/handoff?t=${token}`;
   const qrSvg = await QRCode.toString(url, {
@@ -129,7 +143,7 @@ export async function createHandoff(
     color: { dark: '#141110', light: '#ffffff' },
   });
 
-  return { url, qrSvg, expiresAt: expiresAt.toISOString(), ttlMs: HANDOFF_TTL_MS };
+  return { url, qrSvg, expiresAt: expiresAt.toISOString(), ttlMs: HANDOFF_TTL_MS, readOnly: impersonatedBy !== null };
 }
 
 export type HandoffExchangeResult =
@@ -152,5 +166,9 @@ export async function exchangeHandoff(
   const enrollment = await store.loadEnrollment(claimed.enrollment_id);
   if (!enrollment) return { ok: false, reason: 'enrollment_missing' };
 
-  return { ok: true, jwt: signParticipantJwt(enrollment) };
+  // A code minted from a read-only View-as session can only ever produce a read-only session.
+  const jwt = claimed.impersonated_by
+    ? signReadOnlyParticipantJwt(enrollment, claimed.impersonated_by)
+    : signParticipantJwt(enrollment);
+  return { ok: true, jwt };
 }
