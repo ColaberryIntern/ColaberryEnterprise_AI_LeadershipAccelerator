@@ -8,7 +8,9 @@ import {
 } from '../blueprintChangeRequest';
 import { AUTHORIZATION_STAGE } from '../lifecycleStages';
 import { STAGE_PERMISSION } from '../lifecycleTransition';
-import { rolesWithDeliveryPermission } from '../../../modules/delivery/deliveryRoles';
+import { deliveryRoleGrants } from '../../../modules/delivery/deliveryRoles';
+import { bridgedDeliveryRole, type LifecycleActor } from '../lifecycleActorRoles';
+import { MGMT_ROLES } from '../../access/mgmtRoles';
 import { emptyRefs } from '../adapters/manifestRefs';
 
 jest.mock('../lifecycleStatus', () => ({
@@ -31,17 +33,43 @@ const LifecycleState = require('../../../models/ProjectLifecycleState').default 
 /* eslint-enable @typescript-eslint/no-var-requires */
 
 /**
- * The roles are DERIVED from the registry, not named here.
+ * The identities are DERIVED, and they are ADMIN identities rather than delivery roles.
  *
- * `rolesWithDeliveryPermission` is the inverse added by P5-T2. Hardcoding "architect" would make
- * this test assert the grant table's contents by accident, and it would start passing for the
- * wrong reason the day that role's grants changed.
+ * ## What was wrong with the old fixture, which looked more careful than it was
+ *
+ * It built `{ role: rolesWithDeliveryPermission(CHANGE_REQUEST_PERMISSION)[0] }` — the right
+ * discipline, derived from the registry rather than hardcoded, applied to the WRONG VOCABULARY.
+ * No mint path in this codebase issues an admin token whose `role` claim is `architect` or
+ * `observer`; `admin_users.role` is one of super_admin / admin / sales / ai_staff, and
+ * `mintMgmtAdminToken` emits only super_admin or admin. So this suite proved the gate admits an
+ * approver who cannot exist, while in production the same gate refused everyone — which is
+ * exactly how L7.6 blocker B1 shipped green.
+ *
+ * ## What it is now
+ *
+ * The shapes the platform can actually mint, and WHICH of them approves is still derived, now
+ * through `bridgedDeliveryRole`. A change to the bridge table or to the grant table moves these
+ * fixtures with it; neither role name is written down here.
  */
-const APPROVER = rolesWithDeliveryPermission(CHANGE_REQUEST_PERMISSION)[0];
-const NON_APPROVER = rolesWithDeliveryPermission('project.read')
-  .find((r) => !rolesWithDeliveryPermission(CHANGE_REQUEST_PERMISSION).includes(r))!;
+const MINTABLE: LifecycleActor[] = [
+  { role: 'super_admin' },
+  { role: 'admin' },
+  // `mintMgmtAdminToken`: the JWT role is 'super_admin' for owner and 'admin' for every other
+  // management role. Reproduced rather than simplified, because that collapse is the reason the
+  // bridge reads `mgmt_role` first.
+  ...MGMT_ROLES.map((mgmt_role) => ({ role: mgmt_role === 'owner' ? 'super_admin' : 'admin', mgmt_role })),
+];
 
-const admin = (role: string) => ({ id: 'a-1', email: 'reviewer@example.test', role });
+const grantsChangeRequest = (actor: LifecycleActor): boolean => {
+  const role = bridgedDeliveryRole(actor);
+  return !!role && (deliveryRoleGrants(role) as readonly string[]).includes(CHANGE_REQUEST_PERMISSION);
+};
+
+const APPROVER = MINTABLE.find(grantsChangeRequest)!;
+/** Reaches the surface — it bridges to a real delivery role — but that role cannot approve. */
+const NON_APPROVER = MINTABLE.find((a) => bridgedDeliveryRole(a) && !grantsChangeRequest(a))!;
+
+const admin = (actor: LifecycleActor) => ({ id: 'a-1', email: 'reviewer@example.test', ...actor });
 
 const refsWith = (over: (r: Record<string, any>) => void) => {
   const r = emptyRefs('sbp', 'p-1') as unknown as Record<string, any>;
@@ -86,7 +114,15 @@ describe('the authority to request changes is DERIVED from the approval stage', 
   it('the derived fixtures are non-empty, or every permission test below is vacuous', () => {
     expect(APPROVER).toBeTruthy();
     expect(NON_APPROVER).toBeTruthy();
-    expect(APPROVER).not.toBe(NON_APPROVER);
+    expect(APPROVER).not.toEqual(NON_APPROVER);
+    // AND they are identities this platform can mint, which is the property the old fixture
+    // lacked. An admin token's role claim is never a delivery role name.
+    for (const actor of [APPROVER, NON_APPROVER]) {
+      expect(['super_admin', 'admin']).toContain(actor.role);
+    }
+    // The approver's authority arrives through the bridge, not from the `role` claim itself.
+    expect(bridgedDeliveryRole(APPROVER)).toBeTruthy();
+    expect(bridgedDeliveryRole(NON_APPROVER)).toBeTruthy();
   });
 });
 

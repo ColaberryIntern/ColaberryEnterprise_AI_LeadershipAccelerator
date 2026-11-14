@@ -203,7 +203,16 @@ export async function requestBlueprintChanges(input: {
   if (!row) throw new ChangeRequestRefused('No lifecycle state for this project.', 404, 'no_lifecycle_row');
 
   const { deliveryPermissionsFor } = await import('../../modules/delivery/deliveryRoles');
-  const held = deliveryPermissionsFor(input.admin?.role ? [input.admin.role] : []);
+  const { resolveActorRoles } = await import('./lifecycleActorRoles');
+  // RESOLVED rather than read off the JWT. `input.admin.role` is a management role and
+  // `ROLE_GRANTS` is keyed on delivery roles, so this set was empty for every caller and this
+  // route was an unconditional 403 (L7.6 blocker B1).
+  const { roles } = await resolveActorRoles({
+    actor: input.admin,
+    kind: input.kind,
+    deliveryProjectId: row.delivery_project_id,
+  });
+  const held = deliveryPermissionsFor(roles);
   if (!held.includes(CHANGE_REQUEST_PERMISSION)) {
     throw new ChangeRequestRefused(
       `Requesting blueprint changes requires ${CHANGE_REQUEST_PERMISSION}.`,
