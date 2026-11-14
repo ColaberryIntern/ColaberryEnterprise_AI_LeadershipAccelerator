@@ -146,20 +146,12 @@ describeIfDb('publishedPlanState against a real build_plans table', () => {
     expect(await publishedPlanState(ROW)).toMatchObject({ publishedCount: 1, hashIntact: false });
   }, 60_000);
 
-  it('counts TWO published rows rather than reporting the newest as healthy', async () => {
-    await clear();
-    await publishOne();
-    // Forced with raw SQL, because `publishPlan` can no longer produce this state — which is
-    // the point of T5. The rows written BEFORE that fix are still in the table, so the read
-    // has to recognise the state even though nothing can create it any more.
-    const d2 = await savePlanDraft(PROJECT, { ...PLAN, descriptor: 'second' }, { gate: { ok: true, violations: [] } });
-    await sequelize.query(
-      "UPDATE build_plans SET status = 'published' WHERE project_id = $1 AND version = $2",
-      { bind: [PROJECT, d2.version] },
-    );
-
-    expect(await publishedPlanState(ROW)).toMatchObject({ publishedCount: 2, hashIntact: true });
-  }, 60_000);
+  // THE TWO-PUBLISHED CASE LIVES IN `lifecyclePlanReadsTwoPublished.integration.test.ts`.
+  // It is the one test here the integration tier cannot run - the partial unique index now
+  // refuses the raw UPDATE it uses to force a second published row - and while it sat in this
+  // file the runner's named exclusion took all eight tests out of the tier with it, including
+  // the JSONB round trip above, which is the one claim in this file that cannot be checked any
+  // other way. Splitting it means seven run and one is excluded, instead of none running.
 
   it('NOTHING PUBLISHED is a measured zero, not an unreadable row', async () => {
     await clear();
