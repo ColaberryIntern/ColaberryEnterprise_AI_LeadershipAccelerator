@@ -31,6 +31,17 @@ export interface AdminIdentity {
   id?: string;
   email?: string;
   role?: string;
+  /**
+   * The MANAGEMENT role, present on bridge-minted staff tokens.
+   *
+   * Declared because it is load-bearing, not optional detail. `mintMgmtAdminToken` stamps the
+   * JWT's `role` as `'super_admin'` for the `owner` management role and `'admin'` for every
+   * other one, so `role` alone cannot tell a platform admin from a `curriculum` staff member -
+   * and `curriculum` reaches these routes. It was always on the request object at runtime and
+   * simply absent from this type, which is how authority derivation came to read the one claim
+   * that cannot distinguish them. See `lifecycleActorRoles.ts`.
+   */
+  mgmt_role?: string;
 }
 
 const RESOURCE_TYPE = 'project_lifecycle';
@@ -192,12 +203,20 @@ export async function readLifecycleStatus(input: {
   const { prerequisiteGaps, blockingGaps } = await import('./lifecyclePrerequisites');
   const { STAGE_PERMISSION } = await import('./lifecycleTransition');
 
-  const { personasForRole } = await import('./lifecyclePersonas');
-  const { permittedActionsForRole } = await import('./lifecycleActions');
-  const role = input.admin?.role ?? '';
-  // Both fail closed on an unknown or absent role — see `permittedActionsForRole`, which is
+  const { personasForRoles } = await import('./lifecyclePersonas');
+  const { permittedActionsForRoles } = await import('./lifecycleActions');
+  const { resolveActorRoles } = await import('./lifecycleActorRoles');
+  // RESOLVED, not read off the JWT. `input.admin.role` is a management vocabulary and
+  // `ROLE_GRANTS` is keyed on the delivery vocabulary, so passing it straight through returned
+  // `[]` for every caller and served an empty `permittedActions` to the owner (L7.6 blocker B1).
+  const actor = await resolveActorRoles({
+    actor: input.admin,
+    kind: input.kind,
+    deliveryProjectId: row.delivery_project_id,
+  });
+  // Both still fail closed on an unresolved actor — see `permittedActionsForRoles`, which is
   // where that behaviour is tested rather than being inline and unreachable from a test.
-  const permittedActions = permittedActionsForRole(role);
+  const permittedActions = permittedActionsForRoles(actor.roles);
 
   const stage = stages.isLifecycleStage(row.stage) ? row.stage : 'discovery';
   const nextStage = stages.ADVANCE[stage];
@@ -211,7 +230,7 @@ export async function readLifecycleStatus(input: {
     conditionReason: row.condition_reason,
     completedStages: stages.completedStages(stage),
     stages: LIFECYCLE_STAGES,
-    viewerPersonas: personasForRole(role),
+    viewerPersonas: personasForRoles(actor.roles),
     permittedActions,
     nextStage,
     blockers,
@@ -250,7 +269,14 @@ export async function requestTransition(input: {
 
   const { evaluateTransition } = await import('./lifecycleTransition');
   const { deliveryPermissionsFor } = await import('../../modules/delivery/deliveryRoles');
-  const roles = input.admin?.role ? [input.admin.role] : [];
+  const { resolveActorRoles } = await import('./lifecycleActorRoles');
+  // See `readLifecycleStatus`: the admin role is not a delivery role, so this list was empty for
+  // every identity the platform can mint and every transition was refused (L7.6 blocker B1).
+  const { roles } = await resolveActorRoles({
+    actor: input.admin,
+    kind: input.kind,
+    deliveryProjectId: row.delivery_project_id,
+  });
 
   const decision = evaluateTransition({
     from: row.stage,

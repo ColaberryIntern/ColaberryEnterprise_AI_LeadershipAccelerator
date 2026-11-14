@@ -55,8 +55,21 @@ export function correlationOf(req: Request): string {
   return String(req.header('X-Correlation-ID') ?? (req as any).correlationId ?? `plc-${Date.now()}`);
 }
 
-/** The authenticated admin. Never read from a request body — that is a spoofable approver. */
-export function adminOf(req: Request): { id?: string; email?: string; role?: string } | undefined {
+/**
+ * The authenticated admin. Never read from a request body — that is a spoofable approver.
+ *
+ * `mgmt_role` is DECLARED, because the services downstream now derive delivery authority from the
+ * identity and `role` alone cannot carry that decision: `mintMgmtAdminToken` stamps `role` as
+ * `'admin'` for every management role except `owner`, so a `curriculum` staff token and a
+ * platform admin are identical in that one claim. The value was always present on
+ * `req.admin` — this type simply did not mention it, and an undeclared claim is one a reader has
+ * no reason to consult. See `services/lifecycle/lifecycleActorRoles.ts`.
+ *
+ * `id` stays optional and is usually ABSENT: the admin JWT's subject claim is `sub`, not `id`, so
+ * identity resolution falls through to the email match. That is not a defect to fix here —
+ * `platform_identity_links` holds no rows, so the id path resolves nothing either way.
+ */
+export function adminOf(req: Request): { id?: string; email?: string; role?: string; mgmt_role?: string } | undefined {
   return (req as any).admin;
 }
 

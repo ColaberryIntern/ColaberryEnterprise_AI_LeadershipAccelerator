@@ -106,7 +106,26 @@ export function rolesForPersona(persona: Persona): readonly DeliveryRole[] {
 
 /** The personas a role holds. A role can hold several — an owner usually also authors. */
 export function personasForRole(role: string): Persona[] {
-  return PERSONAS.filter((p) => (rolesForPersona(p) as readonly string[]).includes(role));
+  return personasForRoles([role]);
+}
+
+/**
+ * The personas held across SEVERAL delivery roles, de-duplicated and in `PERSONAS` order.
+ *
+ * ANY role holding a persona is enough, which is the same "what may this surface OFFER" question
+ * `personaMayPerform` answers - the server still checks the acting permission. Order is the
+ * declared `PERSONAS` order rather than the order roles arrived in, so a response does not
+ * reshuffle between deploys.
+ *
+ * Added for `lifecycleActorRoles.ts`: an actor's delivery roles are resolved from a membership or
+ * a bridge and can legitimately be a set, where before this one string was the admin JWT's role
+ * and matched no delivery role at all (L7.6 blocker B1).
+ */
+export function personasForRoles(roles: readonly string[]): Persona[] {
+  return PERSONAS.filter((p) => {
+    const holders = rolesForPersona(p) as readonly string[];
+    return roles.some((role) => holders.includes(role));
+  });
 }
 
 /**

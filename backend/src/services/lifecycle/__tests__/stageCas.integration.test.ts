@@ -74,9 +74,23 @@ describeIfDb('LC-13 case 3 — two concurrent transitions, one applied', () => {
 
   const TENANT = '61111111-1111-1111-1111-111111111111';
   const PROJECT = '62222222-2222-2222-2222-222222222222';
-  // `observer` grants `project.read`, which is exactly what entering `discovery` requires and
-  // nothing more -- so this cannot pass by being over-privileged.
-  const ADMIN = { id: 'admin-1', email: 'observer@example.test', role: 'observer' };
+  // THE NARROWEST IDENTITY THAT CAN STILL DO THIS, and one the platform can actually mint.
+  //
+  // The intent here was right and the vocabulary was wrong. It used to be `role: 'observer'`,
+  // chosen because `observer` grants `project.read` and nothing more, so the test could not pass
+  // by being over-privileged. But `observer` is a DELIVERY role and `admin.role` carries a
+  // MANAGEMENT role: no mint path in this codebase issues that token, so the apparatus was
+  // proving a transition is permitted for an identity that cannot exist. That mismatch is L7.6
+  // blocker B1, and in production the same path refused everybody.
+  //
+  // A bridge-minted `curriculum` staff token is the mintable identity whose bridged delivery role
+  // IS `observer` (`lifecycleActorRoles.ts`), so the minimum-privilege property is preserved
+  // exactly rather than traded away for a token that happens to work. `role: 'admin'` is not a
+  // widening: `mintMgmtAdminToken` stamps that claim on every management role except owner, and
+  // the resolver reads `mgmt_role` first precisely so it cannot be read as one.
+  const ADMIN = {
+    id: 'admin-1', email: 'curriculum@example.test', role: 'admin', mgmt_role: 'curriculum',
+  };
 
   beforeAll(async () => {
     ({ sequelize } = await import('../../../config/database'));

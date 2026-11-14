@@ -75,7 +75,22 @@ export function personaMayPerform(persona: Persona, action: GatedAction): boolea
  * rather than every button.
  */
 export function permittedActionsForRole(role: string): GatedAction[] {
+  return permittedActionsForRoles([role]);
+}
+
+/**
+ * The same answer for an actor holding SEVERAL delivery roles.
+ *
+ * The plural form is the real one and the singular delegates to it, rather than the other way
+ * around: `rolesHaveDeliveryPermission` already takes a set, so a caller that unioned the
+ * singular results per role would be re-implementing a union the registry performs correctly.
+ *
+ * Needed because an actor's roles are now RESOLVED (`lifecycleActorRoles.ts`) rather than read
+ * off the admin JWT as if a management role were a delivery role - which is L7.6 blocker B1, and
+ * which made this function return `[]` for every caller the platform can mint.
+ */
+export function permittedActionsForRoles(roles: readonly string[]): GatedAction[] {
   return GATED_ACTIONS.filter(
-    (action) => rolesHaveDeliveryPermission([role], ACTION_PERMISSION[action]),
+    (action) => rolesHaveDeliveryPermission(roles, ACTION_PERMISSION[action]),
   );
 }
