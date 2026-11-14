@@ -17,60 +17,168 @@
   "capabilities": [
     {
       "capability_id": "platform.orchestration_health_watch",
-      "name": "Orchestration health watch",
-      "business_outcome": "The scheduler and agent-orchestration layer is checked every five minutes so a stalled or degraded orchestration path is surfaced instead of discovered by a user.",
+      "name": "Curriculum content health scan",
+      "business_outcome": "Curriculum, prompt, skill and student-pipeline integrity is scored every five minutes so content breakage is surfaced on the Health tab before a student walks into it.",
       "intended_users": [
         "Kesetebirhan Delele",
         "platform on-call admin"
       ],
       "classification": "inherited",
-      "source": "legacy slice row OrchestrationHealthAgent (kind=behavior), re-verified against the live scheduler",
+      "source": "legacy slice row OrchestrationHealthAgent (kind=behavior). The word 'orchestration' in the agent name is the only part of this capability that was ever about the scheduler; every descriptive field was corrected on 2026-11-14 against the implementation, after Quincy Ninying's L1 hand-run found the record and the code describing two different agents. The capability_id is deliberately left unchanged: live board stories are keyed on it (platform.CAP.orchestration_health_watch), so renaming it would orphan work already done against it.",
       "supporting_evidence": [
-        "backend/src/services/aiOpsScheduler.ts:192 { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth }",
-        "backend/src/services/aiOpsScheduler.ts:172 SCHEDULE_REGISTRY declaration",
-        "legacy-slices/platform.json row OrchestrationHealthAgent (cited aiOpsScheduler.ts:170 — stale by 22 lines; real line measured 2026-10-09 is 192)"
+        "backend/src/services/agents/orchestrationHealthAgent.ts:63 runOrchestrationHealthAgent calls generateHealthReport(); it does not touch the scheduler",
+        "backend/src/services/healthReportService.ts:36-155 counts CurriculumModule, CurriculumLesson, MiniSection, PromptTemplate, VariableDefinition, SkillDefinition, ArtifactDefinition, Enrollment, LessonInstance and SessionGate, then runs runIntegrityCheck() and getBackfillStatus()",
+        "backend/src/services/agents/orchestrationHealthAgent.ts:15-21 CATEGORY_TO_COMPONENT maps the six finding categories (Curriculum, Prompts, Skills, Backfill, Pipeline, Integrity) onto the components curriculum, prompts, artifacts, students and gating",
+        "backend/src/services/aiOpsScheduler.ts:192 { agentName: 'OrchestrationHealthAgent', hardcodedSchedule: '*/5 * * * *', runner: runOrchestrationHealth } — the timer is real; what it runs is this scan",
+        "Quincy Ninying, L1 run log 2026-11-14, hand-run against platform code at main 13 Nov: independently reached the same reading and confirmed the portal renders the results under Curriculum, Health tab"
       ],
       "implementation_state": "implemented",
       "requirement_validation_state": "draft",
       "validation_dependency": "Kesetebirhan Delele must confirm scope, exceptions and success measures; he has no admin login today",
       "inputs": [
-        "SCHEDULE_REGISTRY entries",
-        "ai_agents rows (schedule, enabled, last_run_at)",
-        "ai_agent_activity_logs results"
+        "CurriculumModule, CurriculumLesson, MiniSection and SessionGate rows",
+        "PromptTemplate and VariableDefinition rows",
+        "SkillDefinition and ArtifactDefinition rows",
+        "Enrollment and LessonInstance rows",
+        "runIntegrityCheck() and getBackfillStatus() results"
       ],
       "outputs": [
-        "orchestration health verdict per run",
-        "AiAgentActivityLog row",
-        "alert when degraded"
+        "orchestration_health snapshot row carrying health_score, status, component_scores and findings",
+        "one finding_<severity> action per finding on the agent activity log",
+        "an ai_event of kind status_change when the status differs from the previous snapshot"
       ],
       "workflow": [
-        "Scheduler fires the timer on its cron expression",
-        "runOrchestrationHealth inspects the orchestration path and records a verdict",
-        "Result is written to the activity log under the agent name",
-        "A degraded verdict is surfaced through the alert path"
+        "The scheduler fires the timer on its cron expression",
+        "runOrchestrationHealthAgent calls generateHealthReport and scores the findings, starting at 100 and subtracting 25 per critical, 10 per warning and 2 per info",
+        "The snapshot is written to orchestration_health with a score per component",
+        "The previous snapshot is read back, and an ai_event is logged only if the status changed",
+        "Each finding is recorded as a separate action on the agent activity log"
       ],
       "exceptions": [
         "The agent has an ai_agents row, so a disabled or paused row skips the run and logs cron_job_skipped_disabled",
-        "A verdict for a timer that carries no ai_agents row cannot be recorded at all"
+        "A failure inside generateHealthReport is caught and returned as an agent error; no snapshot is written for that run",
+        "NOTHING IS ALERTED. A status change writes a log event and stops there. No notification reaches a person, so a degraded verdict is seen only by someone who happens to open the Health tab. The superseded version of this record promised an alert; there has never been one."
       ],
       "dependencies": [
-        "platform.cron_run_instrumentation",
-        "platform.cron_health_alerting"
+        "platform.cron_run_instrumentation"
+      ],
+      "application_pages": [
+        "/admin/orchestration HealthDashboardTab"
+      ],
+      "apis": [
+        "GET /api/admin/ai-ops/health",
+        "POST /api/admin/ai-ops/health/scan"
+      ],
+      "source_modules": [
+        "backend/src/services/agents/orchestrationHealthAgent.ts",
+        "backend/src/services/healthReportService.ts",
+        "backend/src/services/aiOpsScheduler.ts"
+      ],
+      "required_tools": [
+        "read_curriculum_modules",
+        "read_prompt_templates",
+        "read_skill_definitions",
+        "read_enrollment_pipeline_counts",
+        "read_activity_log"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "read_curriculum_modules",
+            "run_sandbox_job"
+          ],
+          "agent": [
+            "read_curriculum_modules",
+            "read_prompt_templates",
+            "read_skill_definitions"
+          ]
+        },
+        "production": {
+          "human": [
+            "read_curriculum_modules",
+            "read_activity_log"
+          ],
+          "agent": []
+        }
+      },
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "Read-and-report over existing records. Shadow evaluation against an approved reference score is the highest rung that needs no new production side effect; anything above R5 would mean acting on the score, which is a separate capability.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Kesetebirhan Delele has an org_members row (3df017df-affa-49ab-884f-a99a4bd2ef4e) but no admin_users row, so every /api/admin/ai-ops/* route is unreachable to him — all are gated by requireAdmin (backend/src/routes/admin/aiOpsRoutes.ts:44-82). The same gate blocks the builder: every ai-ops route carries requireAdmin, so there is no read-only view to grant."
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Answers 'is course content healthy right now, and when did it last change' from the stored snapshots only.",
+          "acceptance_criteria": "Every answer cites the orchestration_health snapshot rows it was derived from, including their scan_timestamp; no answer is produced for a window with no snapshot."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Produces a score in shadow alongside runOrchestrationHealthAgent without replacing it.",
+          "acceptance_criteria": "The shadow score agrees with the live score on an agreed sample of runs, and every disagreement is recorded with both scores and the findings behind them."
+        }
+      ]
+    },
+    {
+      "capability_id": "platform.scheduler_liveness_watch",
+      "name": "Scheduler and agent liveness watch",
+      "business_outcome": "Somebody is told when a scheduled agent stops running, instead of the silence being mistaken for health.",
+      "intended_users": [
+        "Kesetebirhan Delele",
+        "platform on-call admin"
+      ],
+      "classification": "proposed_new",
+      "source": "Filed 2026-11-14 on Ali Muwwakkil's decision, after Quincy Ninying's L1 hand-run of platform.orchestration_health_watch found that the capability believed to perform this check performs a different one. This record exists so the gap is tracked as an absent capability rather than inherited as a false claim about an existing one.",
+      "supporting_evidence": [
+        "backend/src/services/agents/orchestrationHealthAgent.ts:1-124 — the agent historically credited with this check reads no scheduler state: not SCHEDULE_REGISTRY, not ai_agents, not ai_agent_activity_logs",
+        "backend/src/services/agents/orchestrationHealthAgent.ts:101-110 — the activity log is written to (one finding action per finding) and never read, so a missed run leaves no signal this code would notice",
+        "Quincy Ninying, L1 run log 2026-11-14: 'at the moment nothing checks that the scheduler and the agents are running, although the record says something does'",
+        "ABSENCE EVIDENCE: no module in backend/src was found that compares a scheduled agent's last_run_at against its cron expression and raises on the difference"
+      ],
+      "implementation_state": "absent",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Kesetebirhan Delele must confirm which agents are in scope, what counts as late for each cadence, and who is woken; he has no admin login today",
+      "inputs": [
+        "SCHEDULE_REGISTRY entries (agent name, cron expression)",
+        "ai_agents rows (schedule, enabled, last_run_at)",
+        "ai_agent_activity_logs rows (per-run outcome and timestamp)"
+      ],
+      "outputs": [
+        "a liveness verdict per scheduled agent: ran on time, late, or silent",
+        "an alert that reaches a person when an enabled agent is silent past its tolerance",
+        "an activity-log row recording the check itself, so the watcher is auditable"
+      ],
+      "workflow": [
+        "Read every entry in SCHEDULE_REGISTRY and pair it with its ai_agents row",
+        "For each enabled agent, compute the expected next run from its cron expression and its last_run_at",
+        "Classify the agent as on time, late, or silent against a per-cadence tolerance",
+        "Raise an alert for each silent agent, once per silence rather than once per check",
+        "Record the verdict so repeated silence is distinguishable from a first miss"
+      ],
+      "exceptions": [
+        "A disabled or paused agent is expected to be silent and must not alert",
+        "A timer with no ai_agents row cannot be measured at all; that absence is itself the finding and must be reported, not skipped",
+        "A newly registered agent has no last_run_at and must not alert until it has had one full interval to run",
+        "Alerting has to be idempotent: a persistently silent agent produces one alert, not one every five minutes"
+      ],
+      "dependencies": [
+        "platform.cron_run_instrumentation"
       ],
       "application_pages": [
         "/admin/intelligence"
       ],
       "apis": [
-        "GET /api/admin/ai-ops/overview",
-        "GET /api/admin/ai-ops/registry"
+        "GET /api/admin/ai-ops/registry",
+        "GET /api/admin/ai-ops/activity"
       ],
-      "source_modules": [
-        "backend/src/services/aiOpsScheduler.ts"
-      ],
+      "source_modules": [],
       "required_tools": [
         "read_agent_registry",
         "read_cron_run_logs",
-        "read_activity_log"
+        "read_activity_log",
+        "escalate_to_human"
       ],
       "permissions_by_environment": {
         "sandbox": {
@@ -94,20 +202,21 @@
       "human_decision": false,
       "starting_autonomy": "autonomy:R0",
       "max_permitted_autonomy": "autonomy:R5",
-      "max_autonomy_rationale": "Read-and-report over existing records. Shadow evaluation against an approved reference verdict is the highest rung that needs no new production side effect; anything above R5 would mean acting on the verdict, which is a separate capability.",
+      "max_autonomy_rationale": "Read-and-report over scheduler records, plus a notification. Shadow evaluation against an approved reference verdict is the highest rung that needs no new production side effect; acting on a silent agent, such as restarting it, is platform.orchestration_auto_repair's job and not this one's.",
       "blocked_by": [
-        "manager_has_no_admin_login: Kesetebirhan Delele has an org_members row (3df017df-affa-49ab-884f-a99a4bd2ef4e) but no admin_users row, so every /api/admin/ai-ops/* route is unreachable to him — all are gated by requireAdmin (backend/src/routes/admin/aiOpsRoutes.ts:44-82)"
+        "manager_has_no_admin_login: Kesetebirhan Delele cannot reach /api/admin/ai-ops/* to confirm scope, because every route there is gated by requireAdmin (backend/src/routes/admin/aiOpsRoutes.ts:44-82)",
+        "tolerance_undefined: what counts as late is not recorded anywhere for any agent, so the check cannot be specified until an owner sets it per cadence"
       ],
       "release_behaviour": [
         {
           "autonomy": "autonomy:R2",
-          "behaviour": "Answers 'is orchestration healthy right now, and when did it last change' from the registry and activity log only.",
-          "acceptance_criteria": "Every answer cites the ai_agents row and activity-log rows it was derived from; no answer is produced for an agent name with no row."
+          "behaviour": "Answers 'which scheduled agents have not run when they should have' from the registry and activity log, and does nothing else.",
+          "acceptance_criteria": "Every answer cites the ai_agents row and the activity-log rows behind it; an agent with no ai_agents row is reported as unmeasurable rather than omitted or assumed healthy."
         },
         {
           "autonomy": "autonomy:R5",
-          "behaviour": "Produces a verdict in shadow alongside runOrchestrationHealth without replacing it.",
-          "acceptance_criteria": "Shadow verdict agrees with the live verdict on an agreed sample of runs, and every disagreement is recorded with both verdicts."
+          "behaviour": "Produces liveness verdicts in shadow on every cycle, without sending the alert.",
+          "acceptance_criteria": "Shadow verdicts are recorded for an agreed sample window, every late or silent call is reviewable against the raw timestamps, and the same silence does not produce more than one verdict per silence."
         }
       ]
     },

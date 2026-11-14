@@ -74,9 +74,9 @@ describe('a builder holds four live stories, not a backlog', () => {
     // They are NOT deleted. The list of everything the agent could eventually do is real and
     // worth keeping -- it is simply not a list of assignments, and the story body says so.
     const candidates = everyStory.filter((s) => s.kind === 'implementation');
-    expect(candidates).toHaveLength(443);
+    expect(candidates).toHaveLength(444);
     const notInFlight = candidates.filter((s) => s.body.includes('CANDIDATE'));
-    expect(notInFlight).toHaveLength(433);
+    expect(notInFlight).toHaveLength(434);
     for (const s of notInFlight) {
       expect(s.body).toContain('not started, not assigned');
     }
