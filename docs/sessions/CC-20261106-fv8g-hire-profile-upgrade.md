@@ -311,3 +311,16 @@ with these.
   - Notes: the script reports `domain_rows: 0` although it inserted the row (Sequelize returns an
     INSERT's count differently from an UPDATE's); the row was confirmed by a direct read. Cosmetic,
     left as is. Lead scores computed from the old categories are not recomputed.
+
+- [x] Carousel: fill the cover column instead of grey bands (PR #4041, built and tested)
+  - Date: 2026-11-14
+  - Session: CC-20261106-fv8g
+  - What changed: Ali: "I still don't like all this empty space" (Kes, slide 9). The uncropped
+    16:9 cover sat between 193px grey bands in a 636px column. `portfolio.js` adds `.car-fill`
+    (the cover's own URL, aria-hidden) behind the frame; `portfolio.css` blurs and dims it edge to
+    edge, widens the picture column to 1.5fr and clamps the summary to 4 lines.
+  - Verification: hire site `node --test` 133/133 (new fill test). Kes's live profile with the
+    branch assets swapped in (Playwright, Chrome) at 1500 light, 1320 dark, 390: grey band 193px
+    -> 0, fill covers the column, no sideways scroll, 0 page errors. Shots:
+    `docs/screenshots/2026-11-14-hire-carousel-fill/`.
+  - Notes: not merged or deployed; needs an `nginx` deploy after merge.
