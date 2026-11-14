@@ -12,7 +12,12 @@ import fs from 'fs';
 import path from 'path';
 
 const requireSection = jest.fn(() => (req: any, _res: any, next: any) => {
-  req.admin = { email: 'admin@test', role: 'DELIVERY_OWNER' };
+  // An identity the platform can actually mint. It used to be `role: 'DELIVERY_OWNER'` — the
+  // delivery constant's NAME, not even its value `delivery_owner`, and in a claim that carries a
+  // MANAGEMENT role. Harmless here, because every service is doubled below and the authority
+  // derivation never runs, which is exactly what made it a trap: it reads as a valid admin token
+  // and is not one. That confusion between the two vocabularies is L7.6 blocker B1.
+  req.admin = { email: 'admin@test', role: 'super_admin' };
   next();
 });
 jest.mock('../../../middlewares/authMiddleware', () => ({ requireSection: (...a: any[]) => requireSection(...a) }));
