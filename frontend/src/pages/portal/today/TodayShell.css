@@ -159,7 +159,7 @@
 .te-shell.collapsed .te-navbtn .badge,
 .te-shell.collapsed .te-navbtn .te-soon{display:none}
 .te-shell.collapsed .te-presence{display:none}
-@media(max-width:820px){ .te-shell.collapsed{grid-template-columns:1fr} }
+@media(max-width:820px){ .te-shell.collapsed{grid-template-columns:minmax(0,1fr)} }
 
 /* ── nav ── */
 .te-nav{grid-area:nav;background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;
@@ -353,7 +353,15 @@
    340px aside early so the feed keeps its width. Shrink order overall: the right
    rail (contacts) collapses first (≤1200), then the left nav (≤1000); the middle
    feed never shrinks (always 1fr). */
-@media(max-width:1300px){.te-grid{grid-template-columns:1fr}}
+/* C126: minmax(0,1fr), never a bare 1fr. A bare 1fr track is minmax(auto,1fr):
+   it will not shrink below its widest child's min-content. On 14 Nov a phone
+   (390px) measured this track at 2465px inside a 362px box, the page at 2479px,
+   and the browser zoomed its layout out to 1560px, so the video drawer docked
+   off-screen to the right behind its dim layer. The children also get
+   min-width:0 so a wide card scrolls or wraps inside its column instead.
+   Guarded by src/pages/portal/__tests__/todayPhoneWidth.test.ts. */
+@media(max-width:1300px){.te-grid{grid-template-columns:minmax(0,1fr)}}
+.te-grid>*{min-width:0}
 
 /* sticky right rail, same pattern as Classroom's .tl-side (timeline.css) --
    stays in view while the middle column scrolls; drops back to normal flow
@@ -649,7 +657,7 @@
 
 /* STAGE 3 — mobile: hide contacts + nav, single column, bottom tab bar. */
 @media(max-width:820px){
-  .te-shell,.te-shell.collapsed,.te-shell.contacts-collapsed,.te-shell.collapsed.contacts-collapsed{grid-template-columns:1fr;grid-template-areas:"top" "main"}
+  .te-shell,.te-shell.collapsed,.te-shell.contacts-collapsed,.te-shell.collapsed.contacts-collapsed{grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "main"}
   .te-nav,.te-contacts{display:none}
   /* MEASURED FIX for horizontal overflow at mobile widths.
      .te-shell is a grid, and a grid item defaults to `min-width:auto`, which
