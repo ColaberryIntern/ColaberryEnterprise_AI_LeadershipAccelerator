@@ -1,5 +1,6 @@
 // renderFamilyDashboardSections - the newsletter sections of the Family Dashboard email: "This Week"
-// (familyCalendarFeed), "School" (familySchoolNews) and "Family Photos" (familyPhotoFeed, inline by cid).
+// (familyCalendarFeed), "School" (familySchoolNews), "Family Photos" (familyPhotoFeed, inline by cid) and
+// "Throw Back Pics" (familyThrowbacks: older photos, each stamped with the date it was taken).
 // Kept out of renderFamilyDashboardEmail.js so that file stays under the size ceiling; the shared
 // styling helpers are passed in as `kit` rather than imported, which avoids a require cycle.
 // Each section returns '' when it has nothing to show, so a failed feed never leaves an empty box.
@@ -20,6 +21,33 @@ function photoCell(p, k) {
     <div style="font-size:12.5px;color:${k.C.ink};margin-top:6px;font-family:${k.FONT}">${k.esc(p.caption || '')}</div>
     <div style="font-size:11px;color:${k.C.muted};font-family:${k.FONT}">${k.esc(fmtTaken(p.takenAt))}</div>
   </td>`;
+}
+
+function fmtTakenDay(local) {
+  return new Date(`${local.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function throwbackCell(p, k) {
+  return `<td width="50%" valign="top" style="padding:6px">
+    <img src="cid:${p.cid}" alt="${k.esc(`Throw Back Pic from ${fmtTakenDay(p.takenAt)}`)}" width="268" style="display:block;width:100%;max-width:268px;height:auto;border:0" />
+    <div style="margin-top:6px">${k.chip(`Throw Back · ${fmtTakenDay(p.takenAt)}`, k.C.lineSoft, k.C.navy)}</div>
+    <div style="font-size:12.5px;color:${k.C.ink};margin-top:4px;font-family:${k.FONT}">${k.esc(p.caption || '')}</div>
+    ${p.why ? `<div style="font-size:11.5px;color:${k.C.muted};font-family:${k.FONT}">${k.esc(p.why)}</div>` : ''}
+  </td>`;
+}
+
+function renderThrowbacks(data, k) {
+  const tb = data.throwbacks || [];
+  if (!tb.length) return '';
+  let out = k.sectionOpen('Throw Back Pics');
+  out += k.hTitle('Throw Back Pics', 'From the camera roll archive, picked to match this week. Each is dated, and each appears once, ever.');
+  out += '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">';
+  for (let i = 0; i < tb.length; i += 2) {
+    out += `<tr>${throwbackCell(tb[i], k)}${tb[i + 1] ? throwbackCell(tb[i + 1], k) : '<td width="50%"></td>'}</tr>`;
+  }
+  out += '</table>';
+  out += k.sectionClose();
+  return out;
 }
 
 function renderPhotos(data, k) {
@@ -102,7 +130,11 @@ function sectionsText(data) {
     for (const it of data.school.items) lines.push(`- ${it.child}${it.date ? ` (${fmtDate(it.date)})` : ''}: ${it.title}${it.action ? `. To do: ${it.action}` : ''}`);
   }
   if (data.photos && data.photos.length) lines.push('', `FAMILY PHOTOS: ${data.photos.length} new picture(s) in the HTML version.`);
+  if (data.throwbacks && data.throwbacks.length) {
+    lines.push('', 'THROW BACK PICS (in the HTML version)');
+    for (const p of data.throwbacks) lines.push(`- ${fmtTakenDay(p.takenAt)}: ${p.caption || 'family photo'}${p.why ? ` (${p.why})` : ''}`);
+  }
   return lines.join('\n');
 }
 
-module.exports = { renderWeek, renderPhotos, renderSchool, sectionsText };
+module.exports = { renderWeek, renderPhotos, renderThrowbacks, renderSchool, sectionsText };

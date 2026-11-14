@@ -26,10 +26,13 @@
  * a missing ledger (starts empty), a corrupt ledger (refuses to run rather than risk repeats). The
  * caller treats any throw as "no photos today" and still sends the rest of the dashboard.
  * Not handled: photos that never reach OneDrive (backup off on the phone).
+ *
+ * Older photos also appear as "Throw Back Pics" (familyThrowbacks.js), through this same ledger.
  */
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { chooseThrowbacks, labelOrder, OLD_LABEL_BUDGET } = require('./familyThrowbacks');
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const LEDGER_PATH = process.env.FAMILY_PHOTO_LEDGER || '/var/lib/family-dashboard/photo-ledger.json';
@@ -50,6 +53,8 @@ function takenAt(item) {
 }
 const minutes = (a, b) => Math.abs(new Date(a + 'Z') - new Date(b + 'Z')) / 60000;
 const isImage = (item) => /\.(jpe?g|png|heic|heif|webp)$/i.test(item.name || '') && !!item.file;
+/** Capture date is really known: phone file name or the camera's EXIF time (not the upload date). */
+const hasTrueDate = (item) => /^\d{8}_\d{6}/.test(item.name || '') || !!(item.photo && item.photo.takenDateTime);
 const hashOf = (item) => (item.file && item.file.hashes && (item.file.hashes.sha1Hash || item.file.hashes.quickXorHash)) || null;
 
 function emptyLedger() { return { version: 1, posted: {}, hashes: {}, labels: {} }; }
@@ -94,7 +99,7 @@ function groupMoments(items) {
  * per moment (the best-rated), oldest moment first so nothing is skipped, capped at MAX_PER_DAY.
  */
 function choosePicks(items, ledger, today) {
-  const already = Object.entries(ledger.posted).filter(([, p]) => p.postedOn === today).map(([id]) => id);
+  const already = Object.entries(ledger.posted).filter(([, p]) => p.postedOn === today && p.section !== 'throwback').map(([id]) => id);
   if (already.length) {
     const byId = new Map(items.map((i) => [i.id, i]));
     return { reused: true, picks: already.map((id) => byId.get(id) || { id, name: ledger.posted[id].name, _missing: true }).filter((x) => !x._missing) };
@@ -113,10 +118,10 @@ function choosePicks(items, ledger, today) {
   return { reused: false, picks };
 }
 
-/** Record picks as posted on `today`. Pure on the ledger object (caller saves). */
-function markPosted(ledger, picks, today) {
+/** Record picks as posted on `today` in a section ('new' | 'throwback'). Pure on the ledger (caller saves). */
+function markPosted(ledger, picks, today, section = 'new', whyById = {}) {
   for (const p of picks) {
-    ledger.posted[p.id] = { name: p.name, takenAt: takenAt(p), postedOn: today, hash: hashOf(p) };
+    ledger.posted[p.id] = { name: p.name, takenAt: takenAt(p), postedOn: today, hash: hashOf(p), section, ...(whyById[p.id] ? { why: whyById[p.id] } : {}) };
     const h = hashOf(p);
     if (h) ledger.hashes[h] = p.id;
   }
@@ -158,20 +163,20 @@ async function graphAccessToken() {
   return t.access_token;
 }
 
-/** Camera-roll items modified since `sinceYmd` (newest first; stops paging once older). */
-async function listCameraRoll(token, sinceYmd) {
+/** The whole camera roll, newest first (about 1,000 items, five pages). */
+async function listCameraRoll(token) {
   const H = { Authorization: `Bearer ${token}` };
   let url = `${GRAPH}/me/drive/special/cameraroll/children?$top=200&$orderby=lastModifiedDateTime desc&$select=id,name,file,photo,createdDateTime,lastModifiedDateTime,size&$expand=thumbnails`;
   const out = [];
   for (let page = 0; url && page < 20; page++) {
     const d = await fetchJson(url, { headers: H });
     out.push(...d.value);
-    const oldest = d.value[d.value.length - 1];
-    if (!oldest || String(oldest.lastModifiedDateTime).slice(0, 10) < sinceYmd) break;
     url = d['@odata.nextLink'];
   }
   return out;
 }
+
+const helpers = { takenAt, isBlocked, hashOf, groupMoments, hasTrueDate, fetchJson };
 
 async function downloadThumb(item) {
   const t = item.thumbnails && item.thumbnails[0];
@@ -208,15 +213,17 @@ async function labelPhoto(buf) {
  * Today's photos, ready to embed: [{ id, name, takenAt, caption, cid, buf, width, height }].
  * Labels for newly seen photos are cached into the ledger and saved (labels are not "posts").
  */
-async function compileFamilyPhotos({ today, ledgerPath = LEDGER_PATH } = {}) {
+async function compileFamilyPhotos({ today, topics = [], ledgerPath = LEDGER_PATH } = {}) {
   const ledger = loadLedger(ledgerPath);
   const token = await graphAccessToken();
   const windowStart = laterOf(FEED_START, shiftDays(today, -WINDOW_DAYS));
-  const all = (await listCameraRoll(token, windowStart)).filter((i) => isImage(i) && takenAt(i).slice(0, 10) >= windowStart);
+  const roll = (await listCameraRoll(token)).filter(isImage);
+  const all = roll.filter((i) => takenAt(i).slice(0, 10) >= windowStart);
   const items = all.filter((i) => !isBlocked(i, ledger)); // only these are ever labelled or newly picked
+  const archive = labelOrder(roll, ledger, today, windowStart, helpers).slice(0, OLD_LABEL_BUDGET);
 
   let labelled = 0;
-  for (const it of items) {
+  for (const it of [...items, ...archive]) {
     if (ledger.labels[it.id]) continue;
     try {
       ledger.labels[it.id] = { ...(await labelPhoto((await downloadThumb(it)).buf)), name: it.name };
@@ -232,27 +239,44 @@ async function compileFamilyPhotos({ today, ledgerPath = LEDGER_PATH } = {}) {
   for (const p of picks) {
     try {
       const th = await downloadThumb(p);
-      out.push({ id: p.id, name: p.name, takenAt: takenAt(p), caption: (ledger.labels[p.id] || {}).caption || '', cid: `photo-${p.id.replace(/[^A-Za-z0-9]/g, '')}@family`, ...th, _item: p });
+      out.push(embed(p, ledger, th));
     } catch (e) {
       console.warn(`[FamilyPhotos] skipped ${p.name}: ${e.message}`);
     }
   }
-  console.log(`[FamilyPhotos] candidates ${items.length}, newly labelled ${labelled}, picked ${out.length}${reused ? ' (same-day reuse)' : ''}`);
-  return { photos: out, ledger, ledgerPath, today };
+  const tb = await chooseThrowbacks({ items: roll, ledger, today, windowStart, topics, h: helpers });
+  const throwbacks = [];
+  for (const { item, why } of tb.picks) {
+    try {
+      const th = await downloadThumb(item);
+      throwbacks.push({ ...embed(item, ledger, th), why, throwback: true });
+    } catch (e) {
+      console.warn(`[FamilyPhotos] skipped throwback ${item.name}: ${e.message}`);
+    }
+  }
+  console.log(`[FamilyPhotos] candidates ${items.length}, newly labelled ${labelled}, picked ${out.length}${reused ? ' (same-day reuse)' : ''}, throwbacks ${throwbacks.length}${tb.reused ? ' (same-day reuse)' : ''}`);
+  return { photos: out, throwbacks, ledger, ledgerPath, today };
+}
+
+function embed(p, ledger, th) {
+  return { id: p.id, name: p.name, takenAt: takenAt(p), caption: (ledger.labels[p.id] || {}).caption || '', cid: `photo-${p.id.replace(/[^A-Za-z0-9]/g, '')}@family`, ...th, _item: p };
 }
 
 /** Call only after the email was accepted. */
 function commitPicks(feed) {
-  if (!feed || !feed.photos.length) return;
-  const fresh = feed.photos.filter((p) => !(feed.ledger.posted[p.id] && feed.ledger.posted[p.id].postedOn === feed.today));
-  if (!fresh.length) return;
-  markPosted(feed.ledger, fresh.map((p) => p._item), feed.today);
+  if (!feed) return;
+  const isFresh = (p) => !(feed.ledger.posted[p.id] && feed.ledger.posted[p.id].postedOn === feed.today);
+  const fresh = feed.photos.filter(isFresh);
+  const freshTb = (feed.throwbacks || []).filter(isFresh);
+  if (!fresh.length && !freshTb.length) return;
+  markPosted(feed.ledger, fresh.map((p) => p._item), feed.today, 'new');
+  markPosted(feed.ledger, freshTb.map((p) => p._item), feed.today, 'throwback', Object.fromEntries(freshTb.map((p) => [p.id, p.why])));
   saveLedger(feed.ledger, feed.ledgerPath);
-  console.log(`[FamilyPhotos] ledger: ${fresh.length} photo(s) marked posted on ${feed.today}`);
+  console.log(`[FamilyPhotos] ledger: ${fresh.length} new and ${freshTb.length} throwback photo(s) marked posted on ${feed.today}`);
 }
 
 module.exports = {
   compileFamilyPhotos, commitPicks, vaultRefreshToken,
   // exported for tests
-  takenAt, isBlocked, groupMoments, choosePicks, markPosted, loadLedger, saveLedger, emptyLedger, MAX_PER_DAY, FEED_START,
+  takenAt, isBlocked, groupMoments, choosePicks, hasTrueDate, hashOf, helpers, markPosted, loadLedger, saveLedger, emptyLedger, MAX_PER_DAY, FEED_START,
 };

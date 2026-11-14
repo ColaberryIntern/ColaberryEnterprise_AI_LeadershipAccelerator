@@ -11,7 +11,7 @@
 //
 // Session originator: CC-20260803-p9r4 (reformat pass after Ali's review)
 
-const { renderWeek, renderPhotos, renderSchool, sectionsText } = require('./renderFamilyDashboardSections');
+const { renderWeek, renderPhotos, renderThrowbacks, renderSchool, sectionsText } = require('./renderFamilyDashboardSections');
 
 const C = {
   navy: '#1a365d',
@@ -316,6 +316,7 @@ function renderFamilyDashboardEmail(data) {
     renderWeek(data, kit),
     renderSchool(data, kit),
     renderPhotos(data, kit),
+    renderThrowbacks(data, kit),
     renderKpis(data),
     renderWeekLoad(data),
     renderHealth(data),
