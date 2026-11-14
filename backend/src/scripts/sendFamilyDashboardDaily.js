@@ -136,6 +136,7 @@ async function run() {
     attachments: [
       { filename: 'family-dashboard-interactive.html', content: attachmentBuf, contentType: 'text/html' },
       ...data.photos.map((p, i) => ({ filename: `family-photo-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
+      ...data.throwbacks.map((p, i) => ({ filename: `throwback-${p.takenAt.slice(0, 10)}-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
     ],
     vaultAttachments: [{
       filename: `family-dashboard-${TODAY}.html`,
@@ -154,6 +155,13 @@ async function run() {
   }
 }
 
+/** What this edition talks about (calendar and school items), so throwbacks can match it. */
+function newsletterTopics(data) {
+  const week = data.week ? data.week.days.flatMap((d) => d.items.map((it) => `${d.label}: ${it.who}: ${it.title}`)) : [];
+  const school = data.school ? data.school.items.map((it) => `${it.child}: ${it.title}`) : [];
+  return [...new Set([...week, ...school])];
+}
+
 /** Central-time calendar date: the family's "today", whatever the host clock zone. */
 function centralYmd() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' });
@@ -167,6 +175,7 @@ async function compileNewsletterFeeds(data) {
   const today = centralYmd();
   const feeds = { photoFeed: null };
   data.photos = [];
+  data.throwbacks = [];
   data.school = null;
   try {
     data.school = await compileSchoolNews({ today });
@@ -185,9 +194,10 @@ async function compileNewsletterFeeds(data) {
     data.sources.push({ name: 'Family Google Calendar', status: 'broken', detail: e.message.slice(0, 120) });
   }
   try {
-    feeds.photoFeed = await compileFamilyPhotos({ today });
+    feeds.photoFeed = await compileFamilyPhotos({ today, topics: newsletterTopics(data) });
     data.photos = feeds.photoFeed.photos;
-    data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'live', detail: `${data.photos.length} new family photo(s) today` });
+    data.throwbacks = feeds.photoFeed.throwbacks;
+    data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'live', detail: `${data.photos.length} new family photo(s) and ${data.throwbacks.length} Throw Back Pic(s) today` });
   } catch (e) {
     console.error(`[Family Dashboard] photo feed failed (${e.name}): ${e.message}`);
     data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'broken', detail: e.message.slice(0, 120) });
