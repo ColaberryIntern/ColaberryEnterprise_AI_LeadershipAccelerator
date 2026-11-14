@@ -6,8 +6,9 @@ import { saveBlob } from '../../services/artifactViewerTypes';
  * FileCards — a reusable grid of typed document cards, each opening a per-type viewer, reusing the
  * portfolio's KIND_STYLE colour/icon language and saveBlob. Content is fetched LIVE through the injected
  * `fetchFile(id,{download})`, so the host decides the route (gov repo, admin project documents, ...) and
- * nothing is stored here. pdf/image/video render inline; csv as a table; Word/PowerPoint/Excel/RTF/other
- * download. The same treatment as the gov Build Evidence cards, as a shared component.
+ * nothing is stored here. pdf/image/video render inline; csv as a table; Word/PowerPoint inline as
+ * server-built HTML when the host passes `fetchPreview`; Excel/RTF/other download. The same treatment
+ * as the gov Build Evidence cards, as a shared component.
  */
 
 export type FileCardKind = 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'image' | 'video' | 'other';
@@ -87,18 +88,28 @@ const DOWNLOAD_LABEL: Record<string, string> = { word: 'Word', slides: 'PowerPoi
 
 /**
  * FileViewer — a modal that fetches ONE file live and renders it by kind: pdf/image/video inline,
- * csv as a table, and Word/PowerPoint/Excel/RTF/other as a download. `fetchFile(id,{download})` is the
- * host's blob fetcher.
+ * csv as a table, Word/PowerPoint inline as server-built HTML when the host provides `fetchPreview`
+ * (the same office-to-HTML render as the intern artifact viewer), and Excel/RTF/other (and office
+ * files with no preview fetcher, or whose render failed) as a download. `fetchFile(id,{download})` is
+ * the host's blob fetcher; `fetchPreview(id)` returns the office HTML.
  */
 export function FileViewer(
-  { item, fetchFile, onClose }:
-  { item: FileCardItem; fetchFile: (id: string, opts?: { download?: boolean }) => Promise<Blob>; onClose: () => void },
+  { item, fetchFile, fetchPreview, onClose }:
+  { item: FileCardItem;
+    fetchFile: (id: string, opts?: { download?: boolean }) => Promise<Blob>;
+    fetchPreview?: (id: string) => Promise<string>;
+    onClose: () => void },
 ): React.ReactElement {
   const kind = item.kind;
   const blobUrlKind = kind === 'pdf' || kind === 'image' || kind === 'video';
   const inlineKind = blobUrlKind || kind === 'csv';
+  // Word and PowerPoint render inline as server-built HTML when the host supplies a preview fetcher;
+  // without one, or if the render fails, they fall back to the download.
+  const officeKind = (kind === 'word' || kind === 'slides') && !!fetchPreview;
   const [objUrl, setObjUrl] = useState<string | null>(null);
   const [textBody, setTextBody] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -115,6 +126,17 @@ export function FileViewer(
       .catch(() => { if (live) setError('Could not load this file.'); });
     return () => { live = false; if (made) { try { URL.revokeObjectURL(made); } catch { /* noop */ } } };
   }, [item.id, kind, inlineKind, blobUrlKind, fetchFile]);
+
+  useEffect(() => {
+    if (!officeKind || !fetchPreview) return;
+    let live = true;
+    setPreviewHtml(null); setPreviewFailed(false);
+    Promise.resolve()
+      .then(() => fetchPreview(item.id))
+      .then((html) => { if (live) setPreviewHtml(html ?? ''); })
+      .catch(() => { if (live) setPreviewFailed(true); });
+    return () => { live = false; };
+  }, [item.id, officeKind, fetchPreview]);
 
   const download = useCallback(() => {
     setDownloading(true);
@@ -146,9 +168,15 @@ export function FileViewer(
       </table>
     </div>
   ) : <div className="text-muted" aria-busy="true">Loading…</div>;
+  else if (officeKind && !previewFailed) body = previewHtml !== null ? (
+    <iframe title={item.name} srcDoc={previewHtml} sandbox=""
+      data-testid="doc-preview"
+      style={{ width: '100%', height: '78vh', border: '1px solid #e2e8f2', borderRadius: 6, background: '#f1f5f9' }} />
+  ) : <div className="text-muted" aria-busy="true">Rendering document...</div>;
   else body = (
     <div className="border rounded p-3 text-center">
       <FileBadge kind={kind} />
+      {previewFailed && <p className="small text-warning mb-1" style={{ marginTop: 10 }}>Could not render a preview.</p>}
       <p className="small text-muted" style={{ margin: '10px 0' }}>Download to open in {DOWNLOAD_LABEL[kind] ?? 'its app'}.</p>
       <button type="button" className="btn btn-primary btn-sm" data-testid="doc-download" disabled={downloading} onClick={download}>Download {item.name}</button>
     </div>
@@ -162,7 +190,7 @@ export function FileViewer(
         <div className="d-flex justify-content-between align-items-center mb-2">
           <div className="d-flex align-items-center gap-2"><FileBadge kind={kind} /><b style={{ wordBreak: 'break-word' }}>{item.title || item.name}</b></div>
           <div className="d-flex align-items-center gap-2">
-            {inlineKind && <button type="button" className="btn btn-outline-secondary btn-sm" data-testid="doc-download" disabled={downloading} onClick={download}>Download</button>}
+            {(inlineKind || (officeKind && !previewFailed)) && <button type="button" className="btn btn-outline-secondary btn-sm" data-testid="doc-download" disabled={downloading} onClick={download}>Download</button>}
             <button type="button" className="btn btn-outline-secondary btn-sm" data-testid="doc-close" onClick={onClose}>Close</button>
           </div>
         </div>

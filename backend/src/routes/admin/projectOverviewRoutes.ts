@@ -8,7 +8,7 @@ import {
   getProjectDelivery, getProjectGantt, getProjectEvidence, getProjectArtifacts,
 } from '../../services/projectDeliveryService';
 import { listProjectDocuments, getProjectDocumentFile } from '../../services/projectDocuments';
-import { sendArtifactFile, logFailure } from '../artifactFileResponses';
+import { sendArtifactFile, sendOfficePreview, logFailure } from '../artifactFileResponses';
 import { getEnrollmentsWithoutProjects } from '../../services/enrollmentsWithoutProjects';
 import {
   adminArchiveProject, adminRestoreProject, listArchivedProjects,
@@ -479,6 +479,30 @@ router.get('/api/admin/projects/:projectId/documents/:artifactId/file', requireA
   } catch (err: any) {
     logFailure('admin_project_document_failed', err, { projectId: id, artifactId });
     if (!res.headersSent) res.status(500).json({ error: 'Could not load this document.' });
+  }
+});
+
+/**
+ * GET /api/admin/projects/:projectId/documents/:artifactId/preview
+ * A Word or PowerPoint document rendered to self-contained HTML ({ html }), which the card viewer
+ * shows inline in a script-less sandboxed iframe, so the admin reads the document in the page instead
+ * of downloading it. Reuses the same server-side office-to-HTML render as the intern artifact viewer.
+ * The piece is scoped to the project's enrollment and must be a document kind (404 otherwise); a
+ * non-office document (PDF, CSV, spreadsheet, RTF, video) has no preview (400); an unreadable file
+ * falls back to the download (422).
+ */
+router.get('/api/admin/projects/:projectId/documents/:artifactId/preview', requireAdmin, async (req: Request, res: Response) => {
+  const id = validProjectId(req, res);
+  if (!id) return;
+  const artifactId = String(req.params.artifactId ?? '');
+  if (!UUID_RE.test(artifactId)) { res.status(400).json({ error: 'artifactId must be a UUID' }); return; }
+  try {
+    const file = await getProjectDocumentFile(id, artifactId);
+    if (!file) { res.status(404).json({ error: 'No document with that id for this project.' }); return; }
+    await sendOfficePreview(res, file);
+  } catch (err: any) {
+    logFailure('admin_project_document_preview_failed', err, { projectId: id, artifactId });
+    if (!res.headersSent) res.status(500).json({ error: 'Could not render this document.' });
   }
 });
 

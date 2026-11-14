@@ -30,3 +30,13 @@ export async function fetchProjectDocumentFile(
   });
   return res.data as Blob;
 }
+
+/**
+ * A Word or PowerPoint document rendered to self-contained HTML, for the inline preview the card
+ * viewer shows in a sandboxed iframe (the same server render as the intern artifact viewer). Rejects
+ * for a non-office document; the viewer then falls back to the download.
+ */
+export async function fetchProjectDocumentPreview(projectId: string, artifactId: string): Promise<string> {
+  const res = await api.get(`/api/admin/projects/${projectId}/documents/${artifactId}/preview`);
+  return (res.data?.html ?? '') as string;
+}

@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { FileCards, FileViewer, type FileCardItem } from '../../../../components/fileCards/FileCards';
-import { fetchProjectDocumentFile, type AdminProjectDocument } from '../../../../services/adminProjectDocumentsApi';
+import { fetchProjectDocumentFile, fetchProjectDocumentPreview, type AdminProjectDocument } from '../../../../services/adminProjectDocumentsApi';
 
 /**
  * ArtifactsPanel — the DOCUMENTS and video a student produced for this project, as portfolio-style typed
@@ -26,6 +26,10 @@ export default function ArtifactsPanel({ documents, projectId, loading = false }
     (id: string, opts?: { download?: boolean }) => fetchProjectDocumentFile(projectId, id, opts),
     [projectId],
   );
+  const fetchPreview = useCallback(
+    (id: string) => fetchProjectDocumentPreview(projectId, id),
+    [projectId],
+  );
 
   if (loading) {
     return <div className="text-muted small py-2" data-testid="artifacts-loading">Loading documents…</div>;
@@ -46,7 +50,7 @@ export default function ArtifactsPanel({ documents, projectId, loading = false }
   return (
     <div data-testid="artifacts-list">
       <FileCards items={documents} onOpen={setOpen} />
-      {open && <FileViewer item={open} fetchFile={fetchFile} onClose={() => setOpen(null)} />}
+      {open && <FileViewer item={open} fetchFile={fetchFile} fetchPreview={fetchPreview} onClose={() => setOpen(null)} />}
     </div>
   );
 }
