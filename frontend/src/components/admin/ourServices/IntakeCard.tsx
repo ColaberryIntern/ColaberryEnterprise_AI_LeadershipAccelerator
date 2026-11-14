@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { IntakeSummaryItem } from '../../../services/ourServicesApi';
-import { SourcePill } from './CaseStudyCard';
+import { CaseStudyTitleLink, SourcePill } from './CaseStudyCard';
 import { PRECHECK_AT, confidenceTone, industryIcon, suggestionConfidence } from './ourServicesModel';
 
 /**
@@ -44,7 +44,7 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
       <header className="d-flex gap-3 p-3 border-bottom">
         <div className={`rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 fs-3 ${outside ? 'bg-secondary-subtle' : 'bg-info-subtle'}`} style={{ width: 48, height: 48 }} aria-hidden="true"><i className={`${industryIcon(item.industry)} text-body-secondary`} /></div>
         <div className="flex-grow-1">
-          <div className="fw-bold">{item.title}</div>
+          <div className="fw-bold"><CaseStudyTitleLink id={item.id} title={item.title} /></div>
           <div className="small mt-1">
             <SourcePill kind={item.sourceKind} className="me-2" label={outside ? 'Outside · Google Drive' : 'Inside · Project Factory'} />
             <span className="text-secondary">{item.industry ?? 'Industry not set'} · {item.status}</span>
