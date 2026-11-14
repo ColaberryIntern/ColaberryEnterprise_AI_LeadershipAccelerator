@@ -17,6 +17,18 @@
  * the alternative is a recursive tree fetch per intern per run, and a document that
  * arrives a few hours late is not a problem anyone has.
  *
+ * ── AND THEN IT FETCHES THE BYTES ────────────────────────────────────────────
+ * Discovery alone produces a row nobody can open. The artifact viewers build their file
+ * pane from `content.stored_path` and nothing else, so the first 137 rows this recorded
+ * rendered as a GitHub link next to an empty viewer. `repoArtifactStore` fetches each
+ * file and writes it into the uploads volume exactly where a student's own upload lands,
+ * which is all the existing viewers — PDF, CSV, image, text, and Word and PowerPoint
+ * through `officeToHtml` — ever needed to render it.
+ *
+ * Storing is best-effort by design: a row whose bytes could not be fetched is still
+ * recorded, with its GitHub URL, rather than lost. `store_failure` on the content says
+ * which files are in that state so a later run can heal them.
+ *
  * ── NEVER THROWS ─────────────────────────────────────────────────────────────
  * Same contract as `artifactRepoSync`, for the same reason: this runs behind a report
  * and a cron, and a student whose repository happens to be unreachable must not take
@@ -39,6 +51,7 @@ import {
   scanTreeForArtifacts,
   titleFromFilename,
 } from './repoArtifactScan';
+import { type StoreResult, storeRepoFile } from './repoArtifactStore';
 
 /** Lazy so importing this module never constructs the ORM. */
 async function db() {
@@ -47,8 +60,8 @@ async function db() {
 }
 
 export type IngestOutcome =
-  | 'written'        // new artifacts were recorded
-  | 'unchanged'      // every deliverable was already recorded
+  | 'written'        // new artifacts were recorded, or existing ones gained their file
+  | 'unchanged'      // every deliverable was already recorded and already openable
   | 'nothing_found'  // a repo with no deliverables in it yet
   | 'no_repo'        // no connected repository. Normal in weeks 1-3, not a fault.
   | 'no_tree'        // connected, but the repo sync has not stored a tree yet
@@ -58,10 +71,14 @@ export type IngestOutcome =
 export interface IngestResult {
   enrollmentId: string;
   outcome: IngestOutcome;
-  created: Array<{ repoPath: string; title: string; sizeBytes: number; wrongFormat: boolean }>;
+  created: Array<{ repoPath: string; title: string; sizeBytes: number; wrongFormat: boolean; stored: boolean }>;
+  /** Rows that already existed and have now been given their file, so they open. */
+  healed: Array<{ repoPath: string; title: string }>;
   alreadyPresent: number;
   /** Counts by reason, so an operator can see what was passed over and why. */
   skipped: Record<string, number>;
+  /** Counts by failure, so an operator can see which files have no bytes yet and why. */
+  storeFailures: Record<string, number>;
   repoUrl?: string;
   reason?: string;
 }
@@ -70,6 +87,14 @@ interface ConnectionRow {
   repo_url: string | null;
   file_tree_json: { tree?: TreeEntry[] } | null;
   last_sync_at: Date | null;
+}
+
+/** An artifact row this intern already has that came from a repository scan. */
+interface ExistingRow {
+  id: string;
+  repo_path: string;
+  /** False when the row has no bytes on disk, which is what makes it unopenable. */
+  stored: boolean;
 }
 
 function tally(plan: IngestPlan): Record<string, number> {
@@ -112,14 +137,60 @@ async function readConnection(enrollmentId: string): Promise<ConnectionRow | nul
   return rows?.[0] ?? null;
 }
 
-async function existingRepoPaths(enrollmentId: string): Promise<string[]> {
+async function existingRows(enrollmentId: string): Promise<ExistingRow[]> {
   const [rows] = await (await db()).query(
-    `SELECT NULLIF(content->>'repo_path', '') AS repo_path
+    `SELECT id,
+            NULLIF(content->>'repo_path', '') AS repo_path,
+            COALESCE(NULLIF(content->>'stored_path', ''), '') <> '' AS stored
        FROM runtime_portfolio_artifacts
       WHERE enrollment_id = :eid AND NULLIF(content->>'repo_path', '') IS NOT NULL`,
     { replacements: { eid: enrollmentId } },
-  ) as [Array<{ repo_path: string }>, unknown];
-  return (rows ?? []).map((r) => r.repo_path);
+  ) as [ExistingRow[], unknown];
+  return rows ?? [];
+}
+
+/** The GitHub blob URL for a file, which opens it where it actually lives. */
+function blobUrl(repoUrl: string | null, repoPath: string): string | null {
+  if (!repoUrl) return null;
+  const base = repoUrl.replace(/\.git$/, '').replace(/\/$/, '');
+  return `${base}/blob/HEAD/${repoPath.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+/**
+ * Fetch one candidate's bytes into the uploads volume.
+ *
+ * Returns the fields that go on `content`. A failure contributes `store_failure` instead
+ * of `stored_path`, which keeps the row honest: it says the file is known and not yet
+ * readable, rather than pointing a viewer at a path that is not there.
+ */
+async function storeFor(
+  candidate: ArtifactCandidate,
+  repoUrl: string | null,
+): Promise<{ fields: Record<string, unknown>; stored: boolean; failure?: string }> {
+  const result: StoreResult = await storeRepoFile({
+    repoUrl,
+    repoPath: candidate.repoPath,
+    filename: candidate.filename,
+    blobSha: candidate.blobSha,
+    sizeBytes: candidate.sizeBytes,
+  });
+  if (result.ok) {
+    return {
+      stored: true,
+      fields: {
+        stored_path: result.storedPath,
+        stored_name: result.storedName,
+        size_bytes: result.sizeBytes,
+        store_failure: null,
+        stored_at: new Date().toISOString(),
+      },
+    };
+  }
+  return {
+    stored: false,
+    failure: result.failure,
+    fields: { store_failure: result.failure },
+  };
 }
 
 async function insertArtifact(
@@ -127,6 +198,7 @@ async function insertArtifact(
   candidate: ArtifactCandidate,
   sha: string | null,
   repoUrl: string | null,
+  storeFields: Record<string, unknown>,
 ): Promise<void> {
   const content = {
     kind: 'build_artifact',
@@ -138,12 +210,11 @@ async function insertArtifact(
     blob_sha: candidate.blobSha,
     size_bytes: candidate.sizeBytes,
     wrong_format: candidate.wrongFormat,
-    // Opens the file where it actually lives. No viewer page is needed for something
-    // that already has a canonical home.
-    artifact_url: repoUrl
-      ? `${repoUrl.replace(/\.git$/, '').replace(/\/$/, '')}/blob/HEAD/${candidate.repoPath.split('/').map(encodeURIComponent).join('/')}`
-      : null,
+    // Opens the file where it actually lives, and remains the fallback for a file whose
+    // bytes could not be fetched.
+    artifact_url: blobUrl(repoUrl, candidate.repoPath),
     discovered_at: new Date().toISOString(),
+    ...storeFields,
   };
   await (await db()).query(
     `INSERT INTO runtime_portfolio_artifacts (id, enrollment_id, card_id, kind, title, summary, content, competencies, created_at)
@@ -159,25 +230,45 @@ async function insertArtifact(
   );
 }
 
+/**
+ * Give an already-recorded row its file.
+ *
+ * `||` merges into the existing jsonb rather than replacing it, so a row keeps every
+ * field an earlier run wrote. Nothing else about the artifact is touched: this exists to
+ * make a row openable, not to re-describe someone's work.
+ */
+async function healArtifact(id: string, storeFields: Record<string, unknown>): Promise<void> {
+  await (await db()).query(
+    `UPDATE runtime_portfolio_artifacts
+        SET content = content || CAST(:patch AS jsonb)
+      WHERE id = :id`,
+    { replacements: { id, patch: JSON.stringify(storeFields) } },
+  );
+}
+
 export interface IngestOptions {
-  /** Report what would be written, write nothing. */
+  /** Report what would be written, write nothing and fetch nothing. */
   dryRun?: boolean;
   /** The repo's head commit, when the caller already knows it. */
   headSha?: string | null;
+  /** Skip fetching bytes. Discovery only, which is what the first version of this did. */
+  skipStore?: boolean;
 }
 
 /**
- * Record every deliverable already sitting in one intern's repository.
+ * Record every deliverable already sitting in one intern's repository, and make each one
+ * openable in the viewer the platform already has.
  *
- * Safe to run repeatedly: `planRepoArtifactIngest` is keyed on `repo_path`, so an
- * unchanged repository produces `unchanged` and zero writes.
+ * Safe to run repeatedly: `planRepoArtifactIngest` is keyed on `repo_path` and the stored
+ * file is content-addressed, so an unchanged repository produces `unchanged`, zero writes
+ * and zero downloads.
  */
 export async function ingestRepoArtifacts(
   enrollmentId: string,
   opts: IngestOptions = {},
 ): Promise<IngestResult> {
   const base: IngestResult = {
-    enrollmentId, outcome: 'failed', created: [], alreadyPresent: 0, skipped: {},
+    enrollmentId, outcome: 'failed', created: [], healed: [], alreadyPresent: 0, skipped: {}, storeFailures: {},
   };
   try {
     const conn = await readConnection(enrollmentId);
@@ -189,7 +280,8 @@ export async function ingestRepoArtifacts(
         reason: 'the repo sync has not stored a file tree for this repository yet' };
     }
 
-    const plan = planRepoArtifactIngest(scanTreeForArtifacts(tree), await existingRepoPaths(enrollmentId));
+    const existing = await existingRows(enrollmentId);
+    const plan = planRepoArtifactIngest(scanTreeForArtifacts(tree), existing.map((r) => r.repo_path));
     const skipped = tally(plan);
 
     if (plan.tooMany) {
@@ -202,26 +294,65 @@ export async function ingestRepoArtifacts(
       };
     }
 
-    if (plan.toCreate.length === 0) {
+    // Rows recorded by an earlier run that still have no bytes on disk. Matched
+    // case-insensitively on repo_path, the same key the plan deduplicates on.
+    const unstored = new Map(existing.filter((r) => !r.stored).map((r) => [r.repo_path.toLowerCase(), r.id]));
+    const toHeal = opts.skipStore
+      ? []
+      : plan.alreadyPresent
+        .map((c) => ({ candidate: c, id: unstored.get(c.repoPath.toLowerCase()) }))
+        .filter((x): x is { candidate: ArtifactCandidate; id: string } => Boolean(x.id));
+
+    if (plan.toCreate.length === 0 && toHeal.length === 0) {
       const outcome: IngestOutcome = plan.alreadyPresent.length > 0 ? 'unchanged' : 'nothing_found';
       return { ...base, outcome, alreadyPresent: plan.alreadyPresent.length, skipped, repoUrl: conn.repo_url };
     }
 
+    const storeFailures: Record<string, number> = {};
+    const noteFailure = (failure?: string): void => {
+      if (failure) storeFailures[failure] = (storeFailures[failure] ?? 0) + 1;
+    };
+
     const created: IngestResult['created'] = [];
     for (const c of plan.toCreate) {
-      if (!opts.dryRun) {
-        await insertArtifact(enrollmentId, c, provenanceSha(c, opts.headSha ?? null), conn.repo_url);
+      let stored = false;
+      let fields: Record<string, unknown> = {};
+      if (!opts.dryRun && !opts.skipStore) {
+        const s = await storeFor(c, conn.repo_url);
+        stored = s.stored;
+        fields = s.fields;
+        noteFailure(s.failure);
       }
-      created.push({ repoPath: c.repoPath, title: titleFromFilename(c.filename), sizeBytes: c.sizeBytes, wrongFormat: c.wrongFormat });
+      if (!opts.dryRun) {
+        await insertArtifact(enrollmentId, c, provenanceSha(c, opts.headSha ?? null), conn.repo_url, fields);
+      }
+      created.push({ repoPath: c.repoPath, title: titleFromFilename(c.filename), sizeBytes: c.sizeBytes, wrongFormat: c.wrongFormat, stored });
+    }
+
+    const healed: IngestResult['healed'] = [];
+    for (const h of toHeal) {
+      if (opts.dryRun) {
+        healed.push({ repoPath: h.candidate.repoPath, title: titleFromFilename(h.candidate.filename) });
+        continue;
+      }
+      const s = await storeFor(h.candidate, conn.repo_url);
+      noteFailure(s.failure);
+      await healArtifact(h.id, s.fields);
+      if (s.stored) healed.push({ repoPath: h.candidate.repoPath, title: titleFromFilename(h.candidate.filename) });
     }
 
     logEvent('repo_artifacts_ingested', 'info', {
-      enrollment_id: enrollmentId, repo: conn.repo_url, created: created.length,
+      enrollment_id: enrollmentId, repo: conn.repo_url, created: created.length, healed: healed.length,
+      stored: created.filter((c) => c.stored).length + healed.length,
       already_present: plan.alreadyPresent.length, wrong_format: created.filter((c) => c.wrongFormat).length,
-      dry_run: Boolean(opts.dryRun),
+      store_failures: storeFailures, dry_run: Boolean(opts.dryRun),
     });
 
-    return { ...base, outcome: 'written', created, alreadyPresent: plan.alreadyPresent.length, skipped, repoUrl: conn.repo_url };
+    return {
+      ...base,
+      outcome: created.length > 0 || healed.length > 0 ? 'written' : 'unchanged',
+      created, healed, alreadyPresent: plan.alreadyPresent.length, skipped, storeFailures, repoUrl: conn.repo_url,
+    };
   } catch (err: unknown) {
     const e = err as { constructor?: { name?: string }; message?: string };
     logEvent('repo_artifact_ingest_failed', 'error', {
