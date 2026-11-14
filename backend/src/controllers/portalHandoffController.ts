@@ -1,11 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
-import { createHandoff, exchangeHandoff } from '../services/portalHandoffService';
+import { createHandoff, exchangeHandoff, sqlHandoffStore } from '../services/portalHandoffService';
 import { getPortalFlags } from '../services/portalFlagsService';
 
-/** POST /api/portal/handoff — authed: mint a QR to open Today on the phone. */
+/**
+ * POST /api/portal/handoff — authed: mint a QR to open Today on the phone.
+ * From a read-only View-as session (C125) the code is marked with the admin, so the
+ * phone gets the SAME read-only view. requireParticipant lets only this one write
+ * through for read-only sessions.
+ */
 export async function handleCreateHandoff(req: Request, res: Response, next: NextFunction) {
   try {
-    const out = await createHandoff(req.participant!.sub);
+    const p = req.participant!;
+    const impersonatedBy = p.read_only ? (p.impersonated_by || 'admin') : null;
+    const out = await createHandoff(p.sub, sqlHandoffStore, { impersonatedBy });
     res.json(out);
   } catch (err) {
     next(err);

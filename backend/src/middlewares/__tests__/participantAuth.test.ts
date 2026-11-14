@@ -70,3 +70,44 @@ describe('requireParticipant — read-only "view as" enforcement', () => {
     expect(next).not.toHaveBeenCalled();
   });
 });
+
+// C125: a read-only viewer may mint the "Open on your phone" code, and nothing else.
+describe('requireParticipant — the one write a read-only viewer may make', () => {
+  beforeEach(() => jest.clearAllMocks());
+  const at = (method: string, originalUrl: string, payload: any = RO) => {
+    const ctx = mockCtx(method, payload);
+    ctx.req.originalUrl = originalUrl;
+    requireParticipant(ctx.req, ctx.res, ctx.next);
+    return ctx;
+  };
+
+  it('POST /api/portal/handoff passes for a read-only token (query string and trailing slash too)', () => {
+    for (const url of ['/api/portal/handoff', '/api/portal/handoff?x=1', '/api/portal/handoff/']) {
+      const { res, next } = at('POST', url);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(res.statusCode).toBe(0);
+    }
+  });
+
+  it('every other write, look-alike path or method stays blocked', () => {
+    const blocked: Array<[string, string]> = [
+      ['POST', '/api/portal/posts'],
+      ['POST', '/api/portal/handoff/exchange'],
+      ['POST', '/api/portal/handoffx'],
+      ['POST', '/api/portal/handoff/../posts'],
+      ['PUT', '/api/portal/handoff'],
+      ['DELETE', '/api/portal/handoff'],
+      ['POST', '/API/PORTAL/HANDOFF'],
+    ];
+    for (const [m, url] of blocked) {
+      const { res, next } = at(m, url);
+      expect({ m, url, status: res.statusCode }).toEqual({ m, url, status: 403 });
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a normal token is unaffected by the allow-list', () => {
+    const { next } = at('POST', '/api/portal/posts', NORMAL);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+});
