@@ -311,3 +311,44 @@ with these.
   - Notes: the script reports `domain_rows: 0` although it inserted the row (Sequelize returns an
     INSERT's count differently from an UPDATE's); the row was confirmed by a direct read. Cosmetic,
     left as is. Lead scores computed from the old categories are not recomputed.
+
+- [x] Carousel: fill the cover column instead of grey bands (PR #4041, built and tested)
+  - Date: 2026-11-14
+  - Session: CC-20261106-fv8g
+  - What changed: Ali: "I still don't like all this empty space" (Kes, slide 9). The uncropped
+    16:9 cover sat between 193px grey bands in a 636px column. `portfolio.js` adds `.car-fill`
+    (the cover's own URL, aria-hidden) behind the frame; `portfolio.css` blurs and dims it edge to
+    edge, widens the picture column to 1.5fr and clamps the summary to 4 lines.
+  - Verification: hire site `node --test` 133/133 (new fill test). Kes's live profile with the
+    branch assets swapped in (Playwright, Chrome) at 1500 light, 1320 dark, 390: grey band 193px
+    -> 0, fill covers the column, no sideways scroll, 0 page errors.
+  - Notes: this entry was first pushed to #4036 after it merged and was lost; re-logged here.
+
+- [x] Phase 8: intro-video coaching on OpenAI, with a live coach view (built and tested)
+  - Date: 2026-11-14
+  - Session: CC-20261106-fv8g
+  - What changed: Ali chose OpenAI over the AWS-bound colaberry/video-analysis worker, "for the
+    face, just make some futuristic view", and asked to measure what the tool measured plus what
+    newer tools judge. Research (subagent, sourced): pace 100-165 wpm (Microsoft Speaker Coach),
+    fillers under 3% and repetition under 4% (Yoodli), first impression weighted most (Naim et
+    al.), prosody matters but has no cutoff, face analysis dropped industry-wide (HireVue 2021;
+    Illinois AI Video Interview Act), ASR accent bias (Koenecke et al.). Built: whisper-1 word
+    timestamps with a filler-keeping prompt and punctuation carried from the text; delivery
+    metrics with timestamped moments; voice loudness and pitch variation from PCM (no new
+    dependency); grounded content review (quotes not in the transcript are dropped); scores only
+    where a published target exists, each naming its source; one-at-a-time idempotent queue with
+    failure + "Try again" + boot sweep; studio coach view (live pace, fillers, hedges, voice,
+    flashes, rail marks, decorative futuristic frame that reads no face), scorecard, moments list.
+  - Verification: backend tsc clean against a control error; test-file gate clean (local maxmind
+    only); jest CI config over services/controllers/routes/__tests__: 37,158 pass (the 1 local
+    failure is the CRLF-only mountLearnerPortalRoutes); 60 hire video tests; mutations (quote
+    grounding, filler-note rule) fail 3 tests. Frontend tsc clean against a control error,
+    CI=true build compiles, studio jest 43/43. Real run in the prod container on a synthetic
+    speech sample (nothing written to the DB): 4 fillers and 3 hedges with timestamps, 147 wpm,
+    grounded review, about 8 s end to end; it exposed bare captions and a filler note that
+    contradicted its score, both fixed and re-run. Chrome on a local build with that real record
+    and video at 1320/390, light/dark: tiles move with playback, the flash shows, a moment jump
+    lands just before it, no sideways scroll, nothing under 44px, 0 page errors. Shots:
+    `docs/screenshots/2026-11-14-hire-video-coaching/`.
+  - Notes: whisper-1 (the only model with word timestamps) retires 2027-02-26; the model is an
+    env override (HIRE_TRANSCRIBE_MODEL). Not merged or deployed.
