@@ -72,6 +72,33 @@ jest.mock('../mayaCampaignRouter', () => ({
   addMayaInteractionTag: jest.fn(async (..._a: unknown[]) => undefined),
   routeLeadToCampaign: jest.fn(async (..._a: unknown[]) => undefined),
 }));
+// THE SEAM, stubbed to behave as it does when `sendSmsSummary` is LIVE.
+//
+// This suite is about one thing: that the tool never claims a text went when the provider
+// rejected it. That property has to hold on the path where sending is permitted, so the stub
+// delegates to the same mocked `sendSmsViaGhl` the suite already controls and maps its result
+// the way the real seam does - including throwing on a `{ success: false }` return, which is
+// the non-throwing rejection this whole suite exists to catch.
+//
+// What the capability DECIDES is covered by `mayaCapabilityStates.test.ts` (SMS resolves off)
+// and `mayaToolGate.test.ts`. Stubbing it here keeps this suite about honesty rather than
+// turning it into a second copy of those.
+jest.mock('../maya/deliverOrQueue', () => ({
+  sendSmsToContact: async (contactId: string, body: string) => {
+    const { sendSmsViaGhl } = jest.requireMock('../ghlService') as {
+      sendSmsViaGhl: (c: string, b: string) => Promise<{ success?: boolean; error?: string } | undefined>;
+    };
+    const sent = await sendSmsViaGhl(contactId, body);
+    return sent?.success
+      ? { outcome: 'delivered', capability: 'sendSmsSummary', mode: 'live', message: 'Sent.' }
+      : {
+        outcome: 'failed', capability: 'sendSmsSummary', mode: 'live',
+        detail: String(sent?.error ?? 'SmsProviderRejected'),
+        message: 'That did not go through just now.',
+      };
+  },
+  enrolLeadInCampaign: jest.fn(async () => ({ outcome: 'refused', capability: 'enrollInCampaign', mode: 'off', message: 'no' })),
+}));
 jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async (..._a: unknown[]) => undefined) }));
 // The consent chokepoint. `outboundConsent` imports it dynamically, so mocking the module
 // path is what intercepts it - there is no injected dep to pass.

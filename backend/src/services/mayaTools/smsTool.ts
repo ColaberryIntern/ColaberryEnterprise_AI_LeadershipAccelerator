@@ -1,4 +1,7 @@
-import { syncLeadToGhl, sendSmsViaGhl } from '../ghlService';
+import { syncLeadToGhl } from '../ghlService';
+// THE SEAM. The provider is not imported here any more: this tool's SMS resolves the
+// `sendSmsSummary` capability first, like every other SMS Maya could cause.
+import { sendSmsToContact } from '../maya/deliverOrQueue';
 import {
   generateConversationSummary,
   buildSmsSummaryContent,
@@ -127,7 +130,24 @@ export async function sendSmsSummary(
     // `{ success: false, error }` WITHOUT throwing on any GoHighLevel failure, so the `catch`
     // below never fired, the action was logged `completed`, and the tool told the visitor
     // "SMS summary sent to <phone>" when GoHighLevel had rejected the write.
-    const sent = await sendSmsViaGhl(contactId, smsContent);
+    // Through the seam, which resolves `sendSmsSummary`. That capability is refused by name, so
+    // today this returns a refusal and the branch below reports the honest failure the tool was
+    // already written to report. The shape is unchanged on purpose: an `outcome` other than
+    // `delivered` is exactly the "GoHighLevel did not accept it" case this code already handled
+    // correctly, so the refusal needs no new branch and no new sentence.
+    const effect = await sendSmsToContact(contactId, smsContent);
+    // `error` carries the REASON into the structured log below, which is where a refusal needs
+    // to be legible. It is the capability refusal when the gate said no and the provider's
+    // sentence when the gate said yes, and in neither case does it reach the visitor.
+    const sent = {
+      success: effect.outcome === 'delivered',
+      // `detail` is the provider's own reason when it rejected, and the outcome when the
+      // capability refused. Either way it goes to the structured log and the audit row, never
+      // into the summary the model relays.
+      error: effect.outcome === 'delivered'
+        ? undefined
+        : effect.detail ?? `${effect.outcome}:${effect.capability}`,
+    };
 
     if (!sent?.success) {
       // The provider's own error text is kept OUT of the summary the model relays: it can carry

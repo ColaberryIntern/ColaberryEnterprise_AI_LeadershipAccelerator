@@ -341,6 +341,62 @@ export async function sendGovOpportunitySweepEmail(data: { subject: string; html
   });
 }
 
+export interface PreRenderedEmail {
+  to: string;
+  subject: string;
+  /** The exact bytes to transmit. Nothing in this function modifies them. */
+  html: string;
+}
+
+export interface PreRenderedEmailResult {
+  ok: boolean;
+  messageId?: string;
+  error?: string;
+  errorClass?: string;
+}
+
+/**
+ * Send a message that was composed and REVIEWED somewhere else.
+ *
+ * Every other sender in this file builds its own HTML from parameters. This one deliberately
+ * cannot: it exists for Maya's outbound approval queue, where the bytes were rendered at
+ * compose time, shown to Ali, hashed, and must now be transmitted unchanged. A template here
+ * would mean the message Ali approved and the message that left were assembled by different
+ * code at different times, which is the exact defect the queue exists to prevent.
+ *
+ * So there is no template, no interpolation and no document lookup below. `html` goes to the
+ * provider as it arrived. The only thing applied is `resolveEmailRecipient`, which is the test
+ * redirect: in test mode the mail goes to the test mailbox with the intended address in the
+ * subject, and that must stay in force or a verification run would mail a real stranger.
+ */
+export async function sendPreRenderedEmail(params: PreRenderedEmail): Promise<PreRenderedEmailResult> {
+  if (!transporter) {
+    return { ok: false, error: 'SMTP is not configured', errorClass: 'SmtpNotConfigured' };
+  }
+  if (!params.html || params.html.trim().length === 0) {
+    // An empty body is a contract violation, not a send. The queue refuses to store one, so
+    // reaching here means something bypassed it.
+    return { ok: false, error: 'Refusing to send an empty message', errorClass: 'ContractViolation' };
+  }
+  const r = await resolveEmailRecipient(params.to, params.subject);
+  try {
+    const info = await guardedSendMail({
+      from: `"Maya - Colaberry Admissions" <${env.emailFrom}>`,
+      to: r.to,
+      subject: r.subject,
+      html: params.html,
+      text: htmlToPlainText(params.html),
+    });
+    return { ok: true, messageId: String(info?.messageId ?? '') };
+  } catch (err: unknown) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      errorClass: err instanceof Error ? err.constructor.name : 'UnknownSendError',
+    };
+  }
+}
+
 export function htmlToPlainText(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -2255,31 +2311,35 @@ export type AdmissionsDocumentOutcome =
   | { outcome: 'sent'; messageId: string }
   | { outcome: 'refused'; reason: 'no_document_to_send' | 'smtp_not_configured' };
 
-export async function sendAdmissionsDocument(
-  params: AdmissionsDocumentParams,
-): Promise<AdmissionsDocumentOutcome> {
-  // REFUSE rather than send a letter that describes an enclosure we do not have.
-  //
-  // With neither a URL nor inline content there is nothing to deliver, and the body below
-  // used to fall through to a sentence telling the reader the document was enclosed. This
-  // function adds no attachment, ever, so that sentence was false every time it rendered.
-  // A false statement in outbound mail signed as Maya is worse than no mail, so this is a
-  // refusal and not a quieter fallback sentence. The suite asserts the phrase is absent
-  // from this whole file, so do not reintroduce it even in a comment.
-  if (!params.documentUrl && !params.documentContent) {
-    console.warn(JSON.stringify({
-      timestamp: new Date().toISOString(), level: 'warn', service: 'email',
-      event: 'admissions_document_refused', outcome: 'failure',
-      error_class: 'NoDocumentToSend',
-      context: { document_type: params.documentType, to: redactForLogs(params.to) },
-    }));
-    return { outcome: 'refused', reason: 'no_document_to_send' };
-  }
+export interface RenderedAdmissionsDocument {
+  subject: string;
+  html: string;
+}
 
-  if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping admissions document to:', redactForLogs(params.to));
-    return { outcome: 'refused', reason: 'smtp_not_configured' };
-  }
+/**
+ * Render the admissions-document email WITHOUT sending it.
+ *
+ * -- WHY THIS WAS SPLIT OUT (2026-11-13) --
+ *
+ * `sendAdmissionsDocument` below assembled this HTML inline and then handed it straight to the
+ * transport. That was fine while the only way to compose the message was to send it. It stopped
+ * being fine when the message had to be REVIEWED first: Maya's outbound approval queue stores
+ * the exact bytes a person approves, and a queue row built from anything other than the real
+ * rendered message would have let "approved" mean "approved a summary of something that was
+ * then produced, unreviewed, at delivery".
+ *
+ * So the rendering is here, the sending is below, and both use this one function. There is no
+ * second template and no way for the reviewed bytes and the transmitted bytes to be produced by
+ * different code.
+ *
+ * Returns `null` for the same case the sender refuses: no URL and no inline content means there
+ * is no document, and a letter describing an enclosure that does not exist is worse than no
+ * letter. The refusal stays in the sender too; this just cannot render one either.
+ */
+export function renderAdmissionsDocument(
+  params: AdmissionsDocumentParams,
+): RenderedAdmissionsDocument | null {
+  if (!params.documentUrl && !params.documentContent) return null;
 
   const documentTitles: Record<string, string> = {
     executive_briefing: 'Executive Briefing',
@@ -2287,15 +2347,7 @@ export async function sendAdmissionsDocument(
     enterprise_guide: 'Enterprise Training Guide',
     pricing_guide: 'Pricing Guide',
   };
-
   const title = documentTitles[params.documentType] || params.documentType;
-  const subject = `Your ${title} - Colaberry AI Leadership Accelerator`;
-
-  const r = await resolveEmailRecipient(params.to, subject);
-
-  // One of these two is guaranteed present: the no-document case refused above. There is
-  // deliberately no third branch, so a future edit cannot reintroduce a sentence that
-  // promises an enclosure this function never adds.
   const contentSection = params.documentUrl
     ? `<p><a href="${params.documentUrl}" class="cta">Download ${title}</a></p>`
     : `<div class="highlight">${params.documentContent}</div>`;
@@ -2333,6 +2385,43 @@ export async function sendAdmissionsDocument(
 </body>
 </html>
   `.trim();
+
+  return { subject: `Your ${title} - Colaberry AI Leadership Accelerator`, html };
+}
+
+export async function sendAdmissionsDocument(
+  params: AdmissionsDocumentParams,
+): Promise<AdmissionsDocumentOutcome> {
+  // REFUSE rather than send a letter that describes an enclosure we do not have.
+  //
+  // With neither a URL nor inline content there is nothing to deliver, and the body below
+  // used to fall through to a sentence telling the reader the document was enclosed. This
+  // function adds no attachment, ever, so that sentence was false every time it rendered.
+  // A false statement in outbound mail signed as Maya is worse than no mail, so this is a
+  // refusal and not a quieter fallback sentence. The suite asserts the phrase is absent
+  // from this whole file, so do not reintroduce it even in a comment.
+  if (!params.documentUrl && !params.documentContent) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'email',
+      event: 'admissions_document_refused', outcome: 'failure',
+      error_class: 'NoDocumentToSend',
+      context: { document_type: params.documentType, to: redactForLogs(params.to) },
+    }));
+    return { outcome: 'refused', reason: 'no_document_to_send' };
+  }
+
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping admissions document to:', redactForLogs(params.to));
+    return { outcome: 'refused', reason: 'smtp_not_configured' };
+  }
+
+  // ONE TEMPLATE, TWO PATHS. `renderAdmissionsDocument` is the same function Maya's outbound
+  // approval queue calls at compose time, so the bytes reviewed there and the bytes sent here
+  // cannot be produced by different code. The null case is already refused above.
+  const rendered = renderAdmissionsDocument(params);
+  if (!rendered) return { outcome: 'refused', reason: 'no_document_to_send' };
+  const { subject, html } = rendered;
+  const r = await resolveEmailRecipient(params.to, subject);
 
   const info = await guardedSendMail({
     from: `"Maya - Colaberry Admissions" <${env.emailFrom}>`,

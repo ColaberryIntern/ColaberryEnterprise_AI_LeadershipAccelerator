@@ -4,7 +4,12 @@ import CallContactLog from '../../models/CallContactLog';
 import AdmissionsKnowledgeEntry from '../../models/AdmissionsKnowledgeEntry';
 import { triggerVoiceCall } from '../synthflowService';
 import { gateKnowledgeEntries } from '../admissionsKnowledgeGate';
-import { routeLeadToCampaign, addMayaInteractionTag } from '../mayaCampaignRouter';
+import { addMayaInteractionTag } from '../mayaCampaignRouter';
+// THE SEAM. This file held a FIFTH call into the campaign chain that the plan for this work
+// recorded as having four, all in `mayaToolsService`. It was found by the structural test
+// rather than by reading, which is the reason that test scans the whole dispatcher closure
+// instead of a hand-written list of files.
+import { enrolLeadInCampaign } from '../maya/deliverOrQueue';
 import { logCommunication } from '../communicationLogService';
 import { getTestOverrides } from '../settingsService';
 import { pricingPitchRule } from '../admissionsPricing';
@@ -318,7 +323,7 @@ Your goal: Continue the conversation naturally, answer their questions about the
     // Tag + auto-enroll in Voice Call Requested campaign
     if (lead?.id) {
       addMayaInteractionTag(lead.id, 'maya_voice_call_requested').catch(() => {});
-      routeLeadToCampaign(lead.id, 'voice_call', visitorId, conversationId).catch((err: any) => {
+      enrolLeadInCampaign(lead.id, 'voice_call', visitorId, conversationId).catch((err: any) => {
         logOutboundOutcome({
           event: 'maya_voice_campaign_enrollment_failed',
           outcome: 'failure',

@@ -226,6 +226,30 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureAgentToolGrantSchema.ts',
       'ensureBroadcastTelemetrySchema.ts',
       'ensureCapabilityConfirmationSchema.ts',
+      // The twelfth member, 2026-11-13. Maya's outbound approval queue.
+      //
+      // THIS PIN CAUGHT IT, exactly as the note on `ensurePageEventVisitorIndex.ts` below
+      // describes: the module was written, boot-wired and unit-tested, and the first thing that
+      // noticed it had joined this roster was this assertion failing with Received +1 on a full
+      // suite run. That is the check doing its job twice in two days.
+      //
+      // Its post-condition throws for the usual reason - `CREATE TABLE IF NOT EXISTS` is a no-op
+      // against an existing table and every statement error is warned rather than raised, so
+      // `ensure` alone resolves identically whether the DDL worked or did nothing - and for one
+      // reason the other members do not have. Two of its three CHECK constraints are the
+      // enforcement of a governance invariant rather than data hygiene:
+      // `chk_moa_decider_is_a_person` rejects any `decided_by` beginning with `system:`, which
+      // is the exact shape the auto-approving sweep on `approval_requests` writes. A deploy
+      // where that constraint silently did not exist would look identical to one where it did,
+      // right up until something approved a message on nobody's behalf.
+      //
+      // It is wrapped: `ensureMayaOutboundApprovalSchemaGuarded` cannot reject, and
+      // `__tests__/ensureMayaOutboundApprovalSchema.test.ts` drives that failure path with a
+      // rejecting driver, asserting it RESOLVES `{ ok: false }` with the derived error_class.
+      // The safe direction is deliberate: without the table the enqueue throws and Maya refuses
+      // to send, which is a Maya who says she cannot. The unsafe direction - a Maya who sends
+      // because the queue was missing - is not reachable from any path.
+      'ensureMayaOutboundApprovalSchema.ts',
       // The eleventh member, 2026-11-12, and the first one that is NOT a schema module.
       //
       // `ensurePageEventVisitorIndex.ts` adds an index to `page_events`, a table it does not own

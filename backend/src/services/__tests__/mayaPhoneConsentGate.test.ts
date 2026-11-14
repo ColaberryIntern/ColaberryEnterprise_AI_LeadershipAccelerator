@@ -86,6 +86,47 @@ jest.mock('../mayaCampaignRouter', () => ({
   addMayaInteractionTag: jest.fn(async (..._a: unknown[]) => undefined),
   routeLeadToCampaign: jest.fn(async (..._a: unknown[]) => undefined),
 }));
+// THE SEAM, stubbed to behave as it does when every capability is LIVE.
+//
+// This suite is about the CONSENT gate: that `evaluateSend` is consulted before a phone channel
+// is used, and that a suppression is honoured. That question is upstream of the capability
+// decision and has to keep being answerable on the path where sending is permitted - otherwise
+// a capability being off would make the consent tests pass for the wrong reason, which is the
+// worst outcome available here.
+//
+// So the stub delegates to the same provider mocks the suite already controls, and what the
+// capability decides is covered separately by `mayaCapabilityStates.test.ts`.
+jest.mock('../maya/deliverOrQueue', () => ({
+  sendSmsToContact: async (contactId: string, body: string) => {
+    const { sendSmsViaGhl } = jest.requireMock('../ghlService') as {
+      sendSmsViaGhl: (c: string, b: string) => Promise<{ success?: boolean; error?: string } | undefined>;
+    };
+    const sent = await sendSmsViaGhl(contactId, body);
+    return sent?.success
+      ? { outcome: 'delivered', capability: 'sendSmsSummary', mode: 'live', message: 'Sent.' }
+      : {
+        outcome: 'failed', capability: 'sendSmsSummary', mode: 'live',
+        detail: String(sent?.error ?? 'SmsProviderRejected'), message: 'That did not go through.',
+      };
+  },
+  bookCalendarEvent: async (...a: unknown[]) => {
+    const { createBooking } = jest.requireMock('../calendarService') as {
+      createBooking: (...x: unknown[]) => Promise<unknown>;
+    };
+    const value = await createBooking(...a);
+    return { outcome: 'delivered', capability: 'bookStrategyCall', mode: 'live', message: 'Booked.', value };
+  },
+  sendBookingConfirmation: async (...a: unknown[]) => {
+    const { sendStrategyCallConfirmation } = jest.requireMock('../emailService') as {
+      sendStrategyCallConfirmation: (...x: unknown[]) => Promise<unknown>;
+    };
+    await sendStrategyCallConfirmation(...a);
+    return { outcome: 'delivered', capability: 'bookStrategyCall', mode: 'live', message: 'Confirmed.' };
+  },
+  enrolLeadInCampaign: jest.fn(async () => ({
+    outcome: 'refused', capability: 'enrollInCampaign', mode: 'off', message: 'no mailing list',
+  })),
+}));
 jest.mock('../communicationLogService', () => ({ logCommunication: jest.fn(async (..._a: unknown[]) => undefined) }));
 jest.mock('../settingsService', () => ({
   getTestOverrides: jest.fn(async (..._a: unknown[]) => ({ enabled: false, phone: null, email: null })),

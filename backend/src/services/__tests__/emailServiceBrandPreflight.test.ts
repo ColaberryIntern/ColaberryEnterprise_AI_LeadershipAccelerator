@@ -186,6 +186,16 @@ const SENDERS: Array<{ name: string; run: () => Promise<unknown> }> = [
   { name: 'sendGovOpportunitySweepEmail', run: () => emailService.sendGovOpportunitySweepEmail({
     subject: 'Gov pursuit: sweep', html: '<p>test</p>',
   }) },
+  // The one sender in this file that does not own its copy, and so is the one case the brand
+  // preflight genuinely cannot speak for. Its body was composed elsewhere, reviewed by a person
+  // in Maya's outbound approval queue, and hashed; this function transmits those exact bytes.
+  // Applying a copy rule here would mean the message a person approved and the message that
+  // left were different, which is the defect the queue exists to prevent. The body sampled
+  // below is therefore a placeholder for the measurement, not a template this sender renders.
+  { name: 'sendPreRenderedEmail', run: () => emailService.sendPreRenderedEmail({
+    to: 'visitor@example.com', subject: 'Your Executive Briefing',
+    html: '<p>Reviewed and approved before this call was made.</p>',
+  }) },
   { name: 'sendTrainingWelcome', run: () => emailService.sendTrainingWelcome({
     to: 'new@example.com', fullName: 'Jordan Ellis', portalLink: 'https://enterprise.colaberry.ai/portal?token=x',
   }) },
