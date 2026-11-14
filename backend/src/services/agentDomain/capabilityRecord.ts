@@ -224,6 +224,24 @@ export interface OwnerDecision {
   readonly blocked_on?: string;
 }
 
+/**
+ * What production said about this row on a named date.
+ *
+ * Present on every row in `_unresolved.json` since 2026-10-28 and absent from this interface
+ * until 2026-11-14, which is not a harmless omission. Because no caller could read these numbers
+ * off the type, the one sentence that needed them -- "N of them are live production rows" --
+ * hard-coded a literal instead, and when the measurement was corrected in the data file the prose
+ * kept publishing the superseded figure for seventeen days. Typing the block is what lets the
+ * derivations below replace the literal.
+ */
+export interface LegacyRowMeasurement {
+  /** ISO date the measurement was taken. Not a clock: it is a recorded fact. */
+  readonly on: string;
+  readonly enabled: boolean;
+  readonly run_count: number;
+  readonly has_run: boolean;
+}
+
 export interface UnresolvedLegacyRow {
   readonly agent_name: string;
   readonly proposed_kind: string | null;
@@ -232,7 +250,30 @@ export interface UnresolvedLegacyRow {
   readonly disposition: 'unresolved' | 'retired';
   readonly capability_id: null;
   readonly reason: string;
+  /** Optional because a row may predate the measurement pass; never fabricated when absent. */
+  readonly measured?: LegacyRowMeasurement;
   readonly owner_decision?: OwnerDecision;
+}
+
+/**
+ * Rows that were enabled when production was last measured.
+ *
+ * "Live" means enabled, not "has run": a row can be enabled and not yet have fired, and calling
+ * that one dormant would understate the blast radius of a careless retirement. A row with no
+ * `measured` block is NOT counted, because an unmeasured row is unknown rather than idle.
+ */
+export function liveLegacyRows(bucket: UnresolvedBucket): number {
+  return bucket.rows.filter((r) => r.measured?.enabled === true).length;
+}
+
+/** Total recorded runs across the bucket. Unmeasured rows contribute nothing, not a guess. */
+export function legacyRunTotal(bucket: UnresolvedBucket): number {
+  return bucket.rows.reduce((n, r) => n + (r.measured?.run_count ?? 0), 0);
+}
+
+/** Rows whose proposed kind is retirement. Each is required to be disabled with zero runs. */
+export function retirementCandidates(bucket: UnresolvedBucket): number {
+  return bucket.rows.filter((r) => r.proposed_kind === 'retire').length;
 }
 
 export interface UnresolvedBucket {
