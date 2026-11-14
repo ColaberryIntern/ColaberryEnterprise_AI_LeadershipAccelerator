@@ -24,6 +24,22 @@ export function SourcePill({ kind, label, className = '', title }: { kind: 'insi
   );
 }
 
+/** Where an admin reads one case study. Inside and outside records both live on the same review desk. */
+export const caseStudyHref = (id: string): string => `/admin/case-studies/${encodeURIComponent(id)}`;
+
+/**
+ * The case-study title as a link that opens the record in a new tab, so a half-ticked Intake card or an expanded
+ * catalog row is still there when the admin comes back.
+ */
+export function CaseStudyTitleLink({ id, title, className = '' }: { id: string; title: string; className?: string }): React.ReactElement {
+  return (
+    <a href={caseStudyHref(id)} target="_blank" rel="noopener noreferrer" className={`link-body-emphasis link-underline-opacity-25 link-underline-opacity-100-hover ${className}`}
+      data-testid={`open-case-study-${id}`}>
+      {title}<i className="ri-external-link-line ms-1 small text-body-secondary" aria-hidden="true" /><span className="visually-hidden"> (opens the case study in a new tab)</span>
+    </a>
+  );
+}
+
 export default function CaseStudyCard({ cs }: Props): React.ReactElement {
   const m = cs.headlineMetric;
   return (
@@ -34,7 +50,7 @@ export default function CaseStudyCard({ cs }: Props): React.ReactElement {
         <i className={`${industryIcon(cs.industry)} fs-2 text-body-secondary`} aria-hidden="true" />
       </div>
       <div className="p-2 px-3">
-        <div className="fw-bold small lh-sm">{cs.title}</div>
+        <div className="fw-bold small lh-sm"><CaseStudyTitleLink id={cs.id} title={cs.title} /></div>
         <div className="small text-secondary">{cs.industry ?? 'Industry not set'}{cs.status ? ` · ${cs.status}` : ''}</div>
         {m && (
           <div className={`small fw-semibold mt-1 ${m.verified ? 'text-success-emphasis' : 'text-body-secondary'}`}>

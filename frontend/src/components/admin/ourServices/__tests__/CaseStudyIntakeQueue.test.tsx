@@ -48,6 +48,18 @@ describe('CaseStudyIntakeQueue: the must-link gate', () => {
     expect(button('Link & publish').disabled).toBe(false);
   });
 
+  it('every card title opens its case study in a new tab, inside and outside alike', async () => {
+    await render(<CaseStudyIntakeQueue intake={[intakeItem(), intakeItem({ id: 'cs-in', title: 'Inside One', sourceKind: 'inside' })]}
+      growthServiceIds={new Set()} onLink={jest.fn()} onPropose={jest.fn()} />);
+    for (const id of ['cs-9', 'cs-in']) {
+      const a = container.querySelector(`[data-testid="open-case-study-${id}"]`) as HTMLAnchorElement;
+      expect(a).toBeTruthy();
+      expect(a.getAttribute('href')).toBe(`/admin/case-studies/${id}`);
+      expect(a.target).toBe('_blank');
+      expect(a.rel).toContain('noopener');
+    }
+  });
+
   it('outside case studies say they stay internal', async () => {
     await render(<CaseStudyIntakeQueue intake={[intakeItem()]} growthServiceIds={new Set()} onLink={jest.fn()} onPropose={jest.fn()} />);
     expect(button('Link (internal only)')).toBeTruthy();
