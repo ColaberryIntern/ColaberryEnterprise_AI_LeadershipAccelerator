@@ -151,11 +151,17 @@ export const DEFAULT_STATES: Readonly<Record<PromotableCapability, PromotionStat
   sendInAppWelcome: 'shadow',
   createJourneyHandoff: 'shadow',
   readPerson360: 'shadow',
-  // MR2 shipped this as `shadow` because nothing had ever sent an email as Maya, so there was no
-  // existing behavior for a shadow default to interrupt. It stays `shadow` through this task and
-  // moves to `review` in T8, at the same moment `mayaEmailService` learns what `review` means.
-  // Flipping it first would label the capability as queued while the service still discarded.
-  sendEmail: 'shadow',
+  // T8, 2026-11-15: `shadow` -> `review`, in the SAME change that taught `mayaEmailService` what
+  // `review` means. The order was the point. MR2 shipped it `shadow` because nothing had ever
+  // sent an email as Maya, and while the service treated `review` as "record and discard",
+  // flipping the dial first would have labelled the capability as queued for Ali while nothing
+  // was ever queued - a state worse than shadow, because it reads as safer than it is.
+  //
+  // `review` rather than `live` for the obvious reason, and `review` rather than `shadow`
+  // because a shadow row is an artifact nobody is asked to look at: it accumulates in
+  // `maya_email_ledger` until somebody goes looking. A review row is a message with a decision
+  // waiting on it, which is what Ali chose.
+  sendEmail: 'review',
 
   // --- the site chat capabilities, new in this run --------------------------------------------
   // Reach nobody. They write our own records, read our own data, or change what the person

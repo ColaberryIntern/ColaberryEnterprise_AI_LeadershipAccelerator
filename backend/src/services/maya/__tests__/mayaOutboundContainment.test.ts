@@ -174,3 +174,68 @@ describe('T7(a) nothing the queue can reach is able to approve a message', () =>
     expect(stripComments(scheduler)).not.toContain('sweepExpiredMayaOutbound');
   });
 });
+
+/**
+ * T13, 2026-11-15 - THE OTHER DIRECTION.
+ *
+ * Everything above looks DOWN the graph: nothing the queue imports can approve a message. That
+ * is only half the property. `approveOutbound` is now called by something, and the half this
+ * block adds is that exactly one thing calls it.
+ *
+ * It is the same assertion `agentChangeRequestNoTrigger.test.ts` makes about the change-request
+ * service, and for the same reason recorded there: "these modules are correct" is not enough,
+ * because a later `mayaOutboundAutoRelease.ts` importing the queue and deciding rows would leave
+ * every assertion above green. The import list is the doorway, so the doorway is pinned.
+ */
+describe('T13 exactly one module can decide a queued message', () => {
+  /** The review route. One admin API, behind `requireCoryAuthorized` for approve. */
+  const ALLOWED = [path.join('routes', 'admin', 'mayaOutboundRoutes.ts')];
+
+  function tsFilesUnder(dir: string, acc: string[] = []): string[] {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) tsFilesUnder(full, acc);
+      else if (entry.name.endsWith('.ts')) acc.push(full);
+    }
+    return acc;
+  }
+
+  /** Non-test modules that name a symbol in code, with comments stripped. */
+  function callersOf(symbol: string): string[] {
+    return tsFilesUnder(SRC)
+      .filter((f) => !f.includes('__tests__'))
+      .filter((f) => !ROOTS.includes(f))
+      .filter((f) => new RegExp(`\\b${symbol}\\b`).test(stripComments(fs.readFileSync(f, 'utf8'))))
+      .map((f) => path.relative(SRC, f));
+  }
+
+  it('CONTROL - the scan finds a real caller, so an empty list cannot read as a pass', () => {
+    const callers = callersOf('approveOutbound');
+    expect(callers.length).toBeGreaterThan(0);
+  });
+
+  it('only the admin review route calls approveOutbound', () => {
+    for (const caller of callersOf('approveOutbound')) {
+      expect(ALLOWED.some((a) => caller.endsWith(a))).toBe(true);
+    }
+  });
+
+  it('and the same holds for rejectOutbound', () => {
+    for (const caller of callersOf('rejectOutbound')) {
+      expect(ALLOWED.some((a) => caller.endsWith(a))).toBe(true);
+    }
+  });
+
+  it('the route names the authenticated identity as the approver and takes none from the body', () => {
+    // The service refuses `unknown` and `system:` prefixes, but it cannot see where the string
+    // came from. This is the half only the route can prove.
+    const route = stripComments(
+      fs.readFileSync(path.join(SRC, 'routes', 'admin', 'mayaOutboundRoutes.ts'), 'utf8'),
+    );
+    expect(route).toMatch(/req\.admin\?\.email/);
+    // No schema field, and no read of a body field, that could carry a decider.
+    expect(route).not.toMatch(/(?:approved_by|decided_by|approver)\s*:\s*z\./);
+    expect(route).not.toMatch(/body\.data\.(?:approved_by|decided_by|approver)/);
+  });
+});

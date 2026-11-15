@@ -62,6 +62,8 @@ import departmentIntelligenceRoutes from './admin/departmentIntelligenceRoutes';
 import websiteIntelligenceRoutes from './admin/websiteIntelligenceRoutes';
 import admissionsRoutes from './admin/admissionsRoutes';
 import mayaCapabilityRoutes from './admin/mayaCapabilityRoutes';
+import mayaOutboundRoutes from './admin/mayaOutboundRoutes';
+import mayaGoLiveRoutes from './admin/mayaGoLiveRoutes';
 import growthJourneyContentApprovalRoutes from './admin/growthJourneyContentApprovalRoutes';
 import agentDomainRoutes from './admin/agentDomainRoutes';
 import agentNudgeRoutes from './admin/agentNudgeRoutes';
@@ -306,6 +308,11 @@ router.use(departmentIntelligenceRoutes);
 router.use(websiteIntelligenceRoutes);
 router.use(admissionsRoutes);
 router.use(mayaCapabilityRoutes); // M37: Maya shadow-to-live switch
+// The review queue where every message Maya composes for a real person waits for Ali's decision,
+// and the one payload the /admin/maya go-live console reads. Both below router.use(mgmtSectionGate)
+// with the rest, because a sub-router mounted above it escapes section scoping.
+router.use(mayaOutboundRoutes);
+router.use(mayaGoLiveRoutes);
 router.use(growthJourneyContentApprovalRoutes); // R2: content approval from the admin Content tab
 // The ten AI employee domain projects. Read-only; every route carries its own
 // requireSection guard, because the repo's route-auth lint is per FILE not per route.

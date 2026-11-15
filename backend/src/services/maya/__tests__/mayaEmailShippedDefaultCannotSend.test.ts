@@ -77,14 +77,32 @@ function depsWithForbiddenTransport(mode: () => Promise<unknown>) {
   const send = jest.fn(async () => {
     throw new Error('the transport must be unreachable in the shipped configuration');
   });
+  /** Everything the service offered to the approval queue, in order. */
+  const enqueued: Array<{ idempotencyKey: string; recipientRef: string; body: string }> = [];
+  /** Idempotency keys the ledger has already taken, so `claim` answers false on a replay. */
+  const claimed = new Set<string>();
   return {
     send,
+    enqueued,
     deps: {
       mode,
       findLeadId: async () => 77,
       evaluate: async () => ({ allowed: true }),
       ensureTable: async () => undefined,
-      claim: async () => true,
+      claim: async (row: { idempotencyKey: string }) => {
+        // Answers false on a replay, like the real ON CONFLICT DO NOTHING. A stub that always
+        // returned true would let the replay test pass against a service that double-queued.
+        if (claimed.has(row.idempotencyKey)) return false;
+        claimed.add(row.idempotencyKey);
+        return true;
+      },
+      enqueue: async (row: { idempotencyKey: string; recipientRef: string; body: string }) => {
+        // Stands in for `enqueueOutbound`, INCLUDING its dedupe, which the real one gets from a
+        // UNIQUE index on the idempotency key.
+        const dup = enqueued.some((e) => e.idempotencyKey === row.idempotencyKey);
+        if (!dup) enqueued.push(row);
+        return { id: 'queued-1', deduped: dup };
+      },
       send,
       markDelivered: async () => undefined,
       markFailed: async () => undefined,
@@ -107,22 +125,67 @@ beforeEach(() => {
 });
 afterEach(() => { warnSpy.mockRestore(); logSpy.mockRestore(); });
 
-describe('the configuration actually shipped resolves to shadow', () => {
-  it('with no promotion record, sendEmail is shadow and says why', async () => {
+describe('the configuration actually shipped resolves to review, and review does not send', () => {
+  it('with no promotion record, sendEmail is review and says why', async () => {
+    // T8, 2026-11-15: this read `shadow`/`not_promoted` until the shipped default moved. The
+    // property this file defends did not change - `sent` is still unreachable - but WHERE the
+    // composed message goes did: into Ali's approval queue instead of into a ledger nobody is
+    // asked to read.
     const answer = await resolveMayaMode('sendEmail', productionDeps());
-    expect(answer.mode).toBe('shadow');
-    expect(answer.reason).toBe('not_promoted');
+    expect(answer.mode).toBe('review');
+    expect(answer.reason).toBe('default_review');
+    // AND IT IS NOT LIVE, which is the assertion that actually matters here.
+    expect(answer.mode).not.toBe('live');
   });
 
-  it('and the service composes, records and never touches the transport', async () => {
-    const { deps, send } = depsWithForbiddenTransport(
+  it('and the service composes, QUEUES, and never touches the transport', async () => {
+    const { deps, send, enqueued } = depsWithForbiddenTransport(
       () => resolveMayaMode('sendEmail', productionDeps()) as Promise<never>,
     );
 
     const res = await sendMayaEmailForPurpose(REQ, deps);
 
-    expect(res.outcome).toBe('recorded_shadow');
-    expect(res.mode).toBe('shadow');
+    expect(res.outcome).toBe('queued_for_approval');
+    expect(res.mode).toBe('review');
+    expect(send).not.toHaveBeenCalled();
+    // Exactly one message is waiting, and it carries the composed bytes rather than a summary.
+    expect(enqueued).toHaveLength(1);
+    expect(enqueued[0].body.length).toBeGreaterThan(20);
+    // The recipient reference is an id. An address here would put PII in the queue payload.
+    expect(enqueued[0].recipientRef).toBe('lead:77');
+    expect(enqueued[0].recipientRef).not.toContain('@');
+  });
+
+  it('a replay queues ONE message, not two', async () => {
+    // The ledger row already exists on the second call, and `enqueueOutbound` is keyed on the
+    // same idempotency key, so the second compose must not produce a second message. This is
+    // the defect class the whole queue exists to prevent, caught at the compose end rather than
+    // the approve end.
+    const { deps, enqueued } = depsWithForbiddenTransport(
+      () => resolveMayaMode('sendEmail', productionDeps()) as Promise<never>,
+    );
+
+    await sendMayaEmailForPurpose(REQ, deps);
+    const second = await sendMayaEmailForPurpose(REQ, deps);
+
+    expect(second.outcome).toBe('queued_for_approval');
+    expect(enqueued).toHaveLength(1);
+  });
+
+  it('a suppressed recipient is NOT queued, so no reviewer can override an unsubscribe', async () => {
+    // The ORDER inside the service is what this proves: consent is evaluated before anything is
+    // written, so a blocked send leaves no row in front of a human at all. `agentEmailTool`
+    // states the rule - there must not be a record of a message to an unsubscribed person
+    // sitting in a queue for somebody tired to approve later.
+    const { deps, enqueued, send } = depsWithForbiddenTransport(
+      () => resolveMayaMode('sendEmail', productionDeps()) as Promise<never>,
+    );
+    deps.evaluate = async () => ({ allowed: false, blockedReason: 'unsubscribed' });
+
+    const res = await sendMayaEmailForPurpose(REQ, deps);
+
+    expect(res.outcome).toBe('blocked');
+    expect(enqueued).toEqual([]);
     expect(send).not.toHaveBeenCalled();
   });
 });
@@ -150,7 +213,7 @@ describe('it takes TWO independent changes, with two different owners', () => {
   });
 
   it('the environment flag ALONE is not enough either', async () => {
-    // The mirror image: the flag is on, nobody has promoted the capability, and it stays shadow.
+    // The mirror image: the flag is on, nobody has promoted the capability, and it stays held.
     const flagsOn = resolveGrowthJourneyFlags({
       GROWTH_JOURNEY_ENABLED: 'true',
       GROWTH_JOURNEY_EXECUTION_ENABLED: 'true',
@@ -164,8 +227,11 @@ describe('it takes TWO independent changes, with two different owners', () => {
       }),
     }));
 
-    expect(answer.mode).toBe('shadow');
-    expect(answer.reason).toBe('not_promoted');
+    // T8: the shipped default is review, so the mode a lone flag leaves it in is review too.
+    // What has not changed is the point of the test: ONE switch is still not enough to send.
+    expect(answer.mode).toBe('review');
+    expect(answer.reason).toBe('default_review');
+    expect(answer.mode).not.toBe('live');
   });
 
   it('BOTH together, and only both, reach live', async () => {

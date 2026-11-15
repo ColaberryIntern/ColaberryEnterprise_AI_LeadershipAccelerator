@@ -41,7 +41,10 @@ describe('resolveMayaMode defaults (Q2: A)', () => {
     expect(modes.sendInAppWelcome).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
     expect(modes.createJourneyHandoff).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
     expect(modes.readPerson360).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
-    expect(modes.sendEmail).toMatchObject({ mode: 'shadow', reason: 'not_promoted' });
+    // T8, 2026-11-15: `review`, not `shadow`. A review row is a message with a decision waiting
+    // on it; a shadow row is an artifact nobody is asked to look at. The thing that has not
+    // changed is that neither one sends.
+    expect(modes.sendEmail).toMatchObject({ mode: 'review', reason: 'default_review' });
     expect(DEFAULT_STATES.respondToExplorerDm).toBe('live');
   });
 
@@ -142,8 +145,14 @@ describe('sendEmail (MR2): the capability that leaves the platform', () => {
   // the question these tests answer is not "can it be promoted" but "how many independent things
   // must be true before it can send". The answer must be more than one.
 
-  it('defaults to shadow, because nothing has ever sent an email as Maya', () => {
-    expect(DEFAULT_STATES.sendEmail).toBe('shadow');
+  it('defaults to review: composed, queued, and not sent until a person says so', () => {
+    // T8, 2026-11-15. It shipped `shadow` in MR2 and moved here in the SAME change that taught
+    // `mayaEmailService` what `review` means, which is the whole reason it was not flipped
+    // earlier: a dial reading "queued for Ali" while the service recorded and discarded would
+    // have been worse than shadow, because it reads as safer than it is.
+    expect(DEFAULT_STATES.sendEmail).toBe('review');
+    // AND IT IS STILL NOT LIVE. That is the property this describe block exists for.
+    expect(DEFAULT_STATES.sendEmail).not.toBe('live');
   });
 
   it('a promotion ALONE does not make it live: M29 still has to agree', async () => {

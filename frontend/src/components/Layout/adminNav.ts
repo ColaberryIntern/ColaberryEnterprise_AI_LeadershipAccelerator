@@ -242,6 +242,13 @@ export const NAV_GROUPS: NavGroup[] = [
     // is the one section every mgmt role holds. Matches the backend PATH_SECTION row for
     // '/api/admin/agent-domain-tool-requests', and both routes behind it also carry requireAdmin.
     { path: '/admin/tool-requests', label: 'Tool Requests', icon: 'tools-line' },
+    // Maya's go-live console and her outbound queue. Both DELIBERATELY WITHOUT their own section,
+    // for the same reason the line above gives: these are the approver's surfaces, and
+    // 'dashboard' is the one section every mgmt role holds. Every write behind them is decided by
+    // the server - turning her on and widening a capability are Ali's, narrowing either is any
+    // admin's - so visibility here is not the access control.
+    { path: '/admin/maya', label: 'Maya', icon: 'robot-line' },
+    { path: '/admin/outbound-approvals', label: 'Outbound Approvals', icon: 'mail-send-line' },
     // The programme-wide view of the same ten. Sits beside My Domain because the pair is
     // the distinction worth seeing in the nav: one is what you own, one is everything.
     { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },

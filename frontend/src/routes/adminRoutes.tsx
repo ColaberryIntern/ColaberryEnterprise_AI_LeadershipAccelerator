@@ -58,6 +58,12 @@ const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'))
 const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
 // AF4.2 - file a change request, and (for an admin) decide one.
 const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeRequestsPage'));
+// T14/T15 - Maya's go-live console, and the queue where every message she composes for a real
+// person waits for Ali. Two pages rather than one: a console that showed the pending queue beside
+// a "turn her on" button would invite settling both in one glance, and a message is approved by
+// reading it.
+const AdminMayaGoLivePage = lazy(() => import('../pages/admin/AdminMayaGoLivePage'));
+const AdminOutboundApprovalsPage = lazy(() => import('../pages/admin/AdminOutboundApprovalsPage'));
 const AdminToolRequestReviewPage = lazy(() => import('../pages/admin/AdminToolRequestReviewPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
@@ -280,6 +286,10 @@ const adminRoutes = (
             duplicate candidates do not fit in a list row. Admin-only at the API, so a
             non-admin sees "not for you" rather than a failure. */}
         <Route path="/admin/tool-requests" element={<AdminToolRequestReviewPage />} />
+        {/* Maya. Reading either page is open to any admin; every write behind them is decided
+            by the server, which is why there is no client-side role check on either. */}
+        <Route path="/admin/maya" element={<AdminMayaGoLivePage />} />
+        <Route path="/admin/outbound-approvals" element={<AdminOutboundApprovalsPage />} />
         {/* The programme-wide counterpart to My Domain. Same data source as the
             agent-domain routes, gated on 'program'; My Domain stays scoped by
             ownership and must not be widened to cover this. */}

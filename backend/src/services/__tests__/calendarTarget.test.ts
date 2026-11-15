@@ -101,7 +101,18 @@ describe('every admissions caller uses the admissions calendar', () => {
     expect(agent).toMatch(/createBooking\(\{[\s\S]*?\}, admissionsCalendar\(\)\)/);
     const maya = read('mayaToolsService.ts');
     expect(maya).toContain('calendarGetSlots(days, admissionsCalendar())');
-    expect(maya).toMatch(/createBooking\(\{[\s\S]*?\}, admissionsCalendar\(\)\)/);
+    // T4b (2026-11-15): Maya no longer calls `createBooking` directly. Every effect of hers that
+    // reaches a person now goes through ONE governed seam, `maya/deliverOrQueue.ts`, so the
+    // capability's mode is resolved in one place whatever tool invoked it.
+    //
+    // The property is unchanged and is asserted in TWO halves rather than relaxed to one: she
+    // still chooses the admissions calendar, and the seam still hands that same value to the
+    // booking call without forming an opinion of its own.
+    expect(maya).toMatch(/bookCalendarEvent\(\{[\s\S]*?calendar: admissionsCalendar\(\)/);
+    const seam = read('maya/deliverOrQueue.ts');
+    expect(seam).toMatch(/createBooking\(\{[\s\S]*?\}, input\.calendar\)/);
+    // And it holds no calendar of its own, so there is no second place to get this wrong.
+    expect(seam).not.toContain('admissionsCalendar(');
   });
 });
 

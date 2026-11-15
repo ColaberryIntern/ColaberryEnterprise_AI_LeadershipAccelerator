@@ -1,5 +1,7 @@
 import { createBooking, type BookingResult } from '../calendarService';
-import { sendStrategyCallConfirmation, renderAdmissionsDocument } from '../emailService';
+import {
+  sendStrategyCallConfirmation, renderAdmissionsDocument, type RenderedAdmissionsDocument,
+} from '../emailService';
 import { sendSmsViaGhl } from '../ghlService';
 import { routeLeadToCampaign } from '../mayaCampaignRouter';
 import type { CalendarTarget } from '../calendarTarget';
@@ -225,10 +227,15 @@ export function sendSmsToContact(contactId: string, body: string): Promise<Effec
 /**
  * Campaign enrolment. Resolves `enrollInCampaign`, REFUSED BY NAME, from every caller.
  *
- * Four call sites reach this today and two of them are in `captureLeadDetails`, which runs on
- * EVERY lead Maya captures. So this is the highest-volume severing in the run, and it is
- * declared rather than discovered: after this ships, capturing a lead captures the lead and
- * does not enrol it.
+ * FIVE call sites reach this, and two of them are in `captureLeadDetails`, which runs on EVERY
+ * lead Maya captures. So this is the highest-volume severing in the run, and it is declared
+ * rather than discovered: after this ships, capturing a lead captures the lead and does not
+ * enrol it.
+ *
+ * It says five rather than four because the fifth was found by `mayaSeamContainment.test.ts`
+ * after three cycles of reading the call graph by hand had settled on four - `voiceTool.ts:326`,
+ * in a `.catch()`-suppressed fire-and-forget. Three readings missed it and one structural scan
+ * did not, which is the argument for the scan rather than a note in a plan.
  *
  * Measured before accepting it, read-only against production on 2026-11-13: 15,618 live
  * campaign leads and 46,015 scheduled emails exist, but the last one actually sent was
@@ -259,15 +266,31 @@ export interface AdmissionsDocumentInput {
  * be assembled inside the sender, so a row holding a summary would have read as reviewed while
  * the message that actually left was produced afterwards from inputs nobody saw. Approval
  * transmits the stored bytes verbatim and re-renders nothing.
+ *
+ * RENDERED LAZILY, AND THE FIRST VERSION WAS NOT. It used to render before calling `gate`, which
+ * meant an `off` capability still assembled the HTML. Nothing reached a person either way, so
+ * this was not a safety defect - but `off` is documented as "nothing at all", and a seam that
+ * composes anyway makes that sentence untrue in the one place a reader would check it. Found by
+ * T17's completeness check over the exported effects, which is the assertion that noticed this
+ * effect was missing from the `off` table at all.
+ *
+ * Memoized, because both branches read it and rendering twice could in principle differ.
  */
 export function queueAdmissionsDocument(input: AdmissionsDocumentInput): Promise<EffectResult<string>> {
-  const rendered = renderAdmissionsDocument({
-    to: input.to, name: input.name, documentType: input.documentType,
-    documentUrl: input.documentUrl, documentContent: input.documentContent,
-  });
+  let memo: RenderedAdmissionsDocument | null | undefined;
+  const render = (): RenderedAdmissionsDocument | null => {
+    if (memo === undefined) {
+      memo = renderAdmissionsDocument({
+        to: input.to, name: input.name, documentType: input.documentType,
+        documentUrl: input.documentUrl, documentContent: input.documentContent,
+      });
+    }
+    return memo;
+  };
 
   return gate('sendDocument', 'admissions_document', {
     onLive: async () => {
+      const rendered = render();
       if (!rendered) throw new Error('NoDocumentToSend');
       // Even at `live` this goes through the queue's own delivery path rather than calling the
       // sender directly, so there is exactly one way an admissions document leaves.
@@ -281,6 +304,7 @@ export function queueAdmissionsDocument(input: AdmissionsDocumentInput): Promise
       return id;
     },
     onQueue: async () => {
+      const rendered = render();
       if (!rendered) {
         // No document to send is a refusal, not an empty queue row. A letter describing an
         // enclosure that does not exist is worse than no letter.

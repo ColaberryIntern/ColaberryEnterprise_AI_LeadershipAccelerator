@@ -7,13 +7,21 @@ import { isNonRoutableAddress } from '../email/reservedDomains';
 import { computeIdempotencyKey } from '../email/idempotencyKey';
 
 /**
- * MR2 - `sendEmail`: the first Maya capability whose action leaves the platform. SHADOW FIRST.
+ * MR2 - `sendEmail`: the first Maya capability whose action leaves the platform.
+ * T8 (2026-11-15) - HELD FOR APPROVAL, which is now the shipped position.
  *
  *   off     kill switch, or an unreadable one -> nothing at all, not even a ledger row.
- *   shadow  the default -> ONE ledger row holding the exact subject and body she would have
- *           sent, `delivered_at` NULL, and NO send. This is the reviewable artifact.
+ *   shadow  ONE ledger row holding the exact subject and body she would have sent,
+ *           `delivered_at` NULL, and NO send. An artifact nobody is asked to look at.
+ *   review  THE DEFAULT since T8 -> the ledger row AND a row in `maya_outbound_approvals`,
+ *           holding the exact bytes and a hash of them. Nothing is sent. It leaves only when Ali
+ *           approves that one message on `/admin/outbound-approvals`.
  *   live    only after Ali promotes `sendEmail` AND `GROWTH_JOURNEY_EXECUTION_ENABLED` is on
  *           -> claim the ledger row, then ONE send through `sendOnce`, `delivered_at` set.
+ *
+ * The difference between `shadow` and `review` is who is expected to act. A shadow row
+ * accumulates until somebody goes looking for it; a review row is a message with a decision
+ * waiting on it. Ali's choice of 13 Nov 2026, from four options, was the second.
  *
  * ── WHY THIS FILE EXISTS WHEN `agentEmailTool` ALREADY DOES SOMETHING SIMILAR ──
  *
@@ -75,6 +83,12 @@ export type MayaEmailOutcome =
   | 'blocked'
   | 'already_recorded'
   | 'recorded_shadow'
+  /**
+   * T8. The shipped outcome: composed, consent-checked, recorded in the ledger AND put in front
+   * of Ali in `maya_outbound_approvals`. Nothing is sent. It leaves only when he approves that
+   * exact message, through `approveOutbound`, which re-hashes the body first.
+   */
+  | 'queued_for_approval'
   | 'sent'
   | 'send_failed'
   | 'error';
@@ -159,9 +173,18 @@ export interface MayaEmailDeps {
   ensureTable: () => Promise<void>;
   /** INSERT ... ON CONFLICT DO NOTHING; true when THIS call created the row. */
   claim: (row: {
-    idempotencyKey: string; purpose: string; mode: 'shadow' | 'live';
+    idempotencyKey: string; purpose: string; mode: 'shadow' | 'review' | 'live';
     recipient: string; subject: string; body: string; leadId: number;
   }) => Promise<boolean>;
+  /**
+   * T8. Puts the composed message in front of Ali. Keyed on the SAME idempotency key as the
+   * ledger row, so the two can be joined and so a replay produces one queued message rather
+   * than two.
+   */
+  enqueue: (row: {
+    idempotencyKey: string; recipientRef: string; recipientAddress: string;
+    recipientDisplay: string | null; subject: string; body: string; purpose: string;
+  }) => Promise<{ id: string; deduped: boolean }>;
   send: (args: {
     recipient: string; subject: string; body: string; businessEventId: string;
   }) => Promise<MayaEmailSendResult>;
@@ -249,6 +272,32 @@ function defaultDeps(): MayaEmailDeps {
         },
       );
       return rows.length === 1;
+    },
+
+    /**
+     * T8. Lazily imported, the same way `evaluate` and `send` are here, so a list of email
+     * templates does not drag the models barrel into the boot graph of everything that composes
+     * one.
+     *
+     * `correlationId` reuses the idempotency key. That is deliberate rather than lazy: the ledger
+     * row, the queued message and every log line about this one email then carry the same handle,
+     * and tracing an approved send back to the compose that produced it is one grep.
+     */
+    enqueue: async ({ idempotencyKey, recipientRef, recipientAddress, recipientDisplay, subject, body, purpose }) => {
+      const { enqueueOutbound } = await import('./mayaOutboundQueue');
+      const res = await enqueueOutbound({
+        recipientRef,
+        recipientAddress,
+        recipientDisplay,
+        channel: 'email',
+        subject,
+        body,
+        composedBy: `maya_email:${purpose}`,
+        capability: 'sendEmail',
+        correlationId: idempotencyKey,
+        idempotencyKey,
+      });
+      return { id: res.id, deduped: res.deduped };
     },
 
     send: async ({ recipient, subject, body, businessEventId }) => {
@@ -381,15 +430,53 @@ export async function sendMayaEmailForPurpose(
     await deps.ensureTable();
 
     const live = mode.mode === 'live';
+    const review = mode.mode === 'review';
     const claimed = await deps.claim({
       idempotencyKey,
       purpose: req.purpose,
-      mode: live ? 'live' : 'shadow',
+      mode: live ? 'live' : review ? 'review' : 'shadow',
       recipient: sendTo,
       subject,
       body,
       leadId,
     });
+
+    /**
+     * T8. THE SHIPPED PATH. Composed, consent-checked, recorded, and now put in front of Ali.
+     *
+     * Two details here are load-bearing and were not arbitrary choices:
+     *
+     *   ORDER. The ledger row is claimed first and the queue row second. The reverse would allow
+     *   a queued message with no ledger row behind it, so a message Ali approved would have no
+     *   compose-time record to join against. This way round, a crash between the two leaves a
+     *   ledger row and no queued message, which sends nothing - the safe direction.
+     *
+     *   RUN BEFORE THE `claimed` CHECK. A replay whose ledger row already exists still offers the
+     *   message to the queue, because `enqueueOutbound` is keyed on this same idempotency key and
+     *   dedupes on a UNIQUE index rather than inserting a second row. That is the only recovery
+     *   path if a previous run wrote the ledger row and then failed to queue, and it cannot
+     *   produce two messages to the same person.
+     *
+     * The recipient REF is `lead:<id>`, never the address: an id in this repo is not PII, and the
+     * review screen reads the masked address off the row's own column.
+     */
+    if (review) {
+      const queued = await deps.enqueue({
+        idempotencyKey,
+        recipientRef: `lead:${leadId}`,
+        recipientAddress: sendTo,
+        recipientDisplay: req.recipientName ?? null,
+        subject,
+        body,
+        purpose: req.purpose,
+      });
+      log('maya_email_queued_for_approval', 'success', {
+        ...base, lead_id: leadId, idempotency_key: idempotencyKey,
+        detail: queued.deduped ? 'already_queued' : 'queued',
+      });
+      return { outcome: 'queued_for_approval', mode: 'review', idempotencyKey };
+    }
+
     if (!claimed) {
       return { outcome: 'already_recorded', mode: mode.mode, idempotencyKey };
     }

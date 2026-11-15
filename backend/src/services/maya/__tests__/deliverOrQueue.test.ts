@@ -19,6 +19,10 @@ jest.mock('../../ghlService', () => ({ sendSmsViaGhl: (...a: unknown[]) => mockS
 jest.mock('../../mayaCampaignRouter', () => ({ routeLeadToCampaign: (...a: unknown[]) => mockRouteCampaign(...a) }));
 jest.mock('../mayaOutboundQueue', () => ({ enqueueOutbound: (...a: unknown[]) => mockEnqueue(...a) }));
 
+// eslint-disable-next-line import/first
+import fs from 'fs';
+// eslint-disable-next-line import/first
+import path from 'path';
 import {
   bookCalendarEvent, enrolLeadInCampaign, queueAdmissionsDocument, sendBookingConfirmation,
   sendSmsToContact,
@@ -60,20 +64,49 @@ const booking = () => bookCalendarEvent({
 });
 
 describe('T4(b) off means the provider is never called', () => {
-  it.each([
+  /**
+   * Every effect this seam exports, with the provider each one would reach. T17 added the fifth
+   * row and the completeness check below it: the document effect was the only exported effect
+   * missing from this table, and it is the ONE effect that can write to the approval queue, so
+   * `off` leaving a queued message behind was untested in exactly the place it would matter.
+   */
+  const EFFECTS: Array<[string, () => Promise<{ outcome: string }>, () => jest.Mock]> = [
     ['bookCalendarEvent', () => booking(), () => mockCreateBooking],
     ['sendBookingConfirmation', () => sendBookingConfirmation({ to: 'd@e.com', name: 'Dana', scheduledAt: new Date(), timezone: 'America/Chicago', meetLink: '' }), () => mockSendConfirmation],
     ['sendSmsToContact', () => sendSmsToContact('c1', 'hello'), () => mockSendSms],
     ['enrolLeadInCampaign', () => enrolLeadInCampaign(42, 'general', 'v1', 'c1'), () => mockRouteCampaign],
-  ] as Array<[string, () => Promise<{ outcome: string }>, () => jest.Mock]>)(
-    '%s refuses and touches nothing',
-    async (_name, run, provider) => {
-      asMode('off');
-      const result = await run();
-      expect(result.outcome).toBe('refused');
-      expect(provider()).not.toHaveBeenCalled();
-    },
-  );
+    ['queueAdmissionsDocument', () => queueAdmissionsDocument({
+      to: 'd@e.com', name: 'Dana', documentType: 'program_overview', documentContent: 'x',
+      recipientRef: 'lead:42', correlationId: 'corr-1', visitorId: 'v1',
+    }), () => mockRender],
+  ];
+
+  it.each(EFFECTS)('%s refuses and touches nothing', async (_name, run, provider) => {
+    asMode('off');
+    const result = await run();
+    expect(result.outcome).toBe('refused');
+    expect(provider()).not.toHaveBeenCalled();
+  });
+
+  it('OFF QUEUES NOTHING EITHER, which is the half a provider check cannot see', async () => {
+    // `off` and `review` both decline to deliver. The difference is that `review` leaves a
+    // message waiting for a person and `off` must leave nothing at all - a refused capability
+    // that still filed a row would put a message in front of Ali that she was never allowed to
+    // compose, and approving it would send it.
+    asMode('off');
+    for (const [, run] of EFFECTS) await run();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it('COMPLETENESS - every effect this seam exports is in the table above', () => {
+    // The assertion that keeps this suite honest as the seam grows. A sixth effect added without
+    // a row here fails, rather than silently going untested in `off`.
+    const source = fs.readFileSync(path.join(__dirname, '..', 'deliverOrQueue.ts'), 'utf8');
+    const exported = [...source.matchAll(/export function (\w+)/g)].map((m) => m[1]);
+    const covered = EFFECTS.map(([name]) => name);
+    expect(exported.length).toBeGreaterThan(0);
+    expect([...exported].sort()).toEqual([...covered].sort());
+  });
 });
 
 describe('T4(b) shadow composes and delivers nothing', () => {

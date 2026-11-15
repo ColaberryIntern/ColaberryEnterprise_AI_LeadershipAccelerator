@@ -161,6 +161,18 @@ describe('nothing outside the change-request module reaches into the service', (
     // hypothetical `agentChangeRequestBuildBridge.ts` the note warns about would still fail -
     // there, and here, for two independent reasons.
     path.join('scripts', 'fileMayaToolGrantRequests.ts'),
+    // THE FOURTH IMPORTER, 2026-11-15, and like the third it is allowed for a reason that can be
+    // checked rather than trusted.
+    //
+    // `routes/admin/mayaGoLiveRoutes.ts` imports `listAllChangeRequests` and nothing else, to
+    // show Maya's own open tool requests on her go-live console. It is on the READING side: it
+    // lists `submitted` rows and renders them, and the console has no decision control at all -
+    // deciding a tool request is `/admin/tool-requests`, behind its own approver gate.
+    //
+    // The rule this pin protects is "nothing is built as a result of an approval". A read-only
+    // listing cannot violate it, and the assertion below checks the import rather than taking
+    // this comment's word for it.
+    path.join('routes', 'admin', 'mayaGoLiveRoutes.ts'),
   ];
 
   function tsFilesUnder(dir: string, acc: string[] = []): string[] {
@@ -184,6 +196,17 @@ describe('nothing outside the change-request module reaches into the service', (
     expect(importers.length).toBeGreaterThan(0);
     for (const imp of importers) {
       expect(ALLOWED.some((a) => imp.endsWith(a))).toBe(true);
+    }
+  });
+
+  it('the Maya console imports the LISTING function and nothing that decides', () => {
+    // The check the allowlist comment above promises. Without it, "allowed because it only
+    // lists" is an assertion about a comment.
+    const file = path.join(BACKEND_SRC, 'routes', 'admin', 'mayaGoLiveRoutes.ts');
+    const code = codeOf(file);
+    expect(code).toMatch(/import\s*\{\s*listAllChangeRequests\s*\}\s*from/);
+    for (const forbidden of ['decideChangeRequest', 'fileChangeRequest', 'acceptToolGrant']) {
+      expect(code).not.toContain(forbidden);
     }
   });
 });
