@@ -23,6 +23,7 @@ export default function ReadOnlyBanner() {
     <div
       role="status"
       aria-live="polite"
+      className="ro-banner"
       style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 20000,
         background: '#7c2d12', color: '#fff', textAlign: 'center',
@@ -31,8 +32,14 @@ export default function ReadOnlyBanner() {
       }}
     >
       <i className="bi bi-eye-fill" aria-hidden="true" style={{ marginRight: 6 }}></i>
-      Viewing as {claims.email || 'this member'} — READ ONLY. Nothing you do here changes their account.
-      {' '}Employee-only tools, including the Management Portal, are hidden while you view as someone else.
+      <span className="ro-long">
+        Viewing as {claims.email || 'this member'} — READ ONLY. Nothing you do here changes their account.
+        {' '}Employee-only tools, including the Management Portal, are hidden while you view as someone else.
+      </span>
+      {/* C127: on a phone the long text wrapped to four lines and covered the top bar (responsive.css swaps them). */}
+      <span className="ro-short" style={{ display: 'none' }}>
+        READ ONLY · {claims.email || 'this member'} · employee tools hidden
+      </span>
     </div>
   );
 }

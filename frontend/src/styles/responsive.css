@@ -127,6 +127,36 @@ textarea:focus-visible {
   }
 }
 
+/*
+ * C127: typing boxes are 16px on phones.
+ * iPhone Safari zooms the page in when a text box under 16px is tapped, and does not zoom back
+ * out when typing ends. On 2026-11-15 every box in the ad funnel was under 16px (sign-up, sign-in
+ * and Open House 15px, the campus "Where to?" search 13.5px), so a learner signing up was left
+ * panning around a piece of the page. Site-wide on purpose: the boxes are styled in many places
+ * (component <style> strings, inline styles), and !important wins over all of them. Desktop sizes
+ * are untouched. Do not "fix" this with maximum-scale=1 in the viewport meta: that also blocks
+ * pinch zoom, which low-vision users need.
+ * Guarded by styles/__tests__/phoneInputZoom.test.ts and scripts/auditPhoneView.js.
+ */
+@media (max-width: 767.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* The read-only View-as banner (admin-only) is one short line on a phone, not four over the top bar. */
+  .ro-banner {
+    font-size: 11px !important;
+    padding: 3px 8px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ro-banner .ro-long { display: none; }
+  .ro-banner .ro-short { display: inline !important; }
+}
+
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   .card {

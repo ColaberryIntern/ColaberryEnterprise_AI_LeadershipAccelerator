@@ -12,6 +12,7 @@
  *   - scrollWidth vs the phone's width (any sideways scroll at all is a fail)
  *   - the OUTERMOST elements that stick out past the right/left edge (the culprits)
  *   - full-screen fixed layers (backdrops) that are visible, i.e. "the page is dimmed"
+ *   - typing boxes under 16px, which make iPhone Safari zoom in and stay zoomed (C127)
  *   - a viewport screenshot (what the phone actually shows, 390px css wide)
  *
  * Auth: public pages load signed out. Portal pages load as a REAL member through the
@@ -21,7 +22,7 @@
  * Usage:
  *   node scripts/auditPhoneView.js --member <email> [--out <dir>] [--base <url>]
  *   Admin JWT: ADMIN_JWT env or scripts/.ali_admin_jwt.txt (gitignored).
- *   Exit code 1 when any page scrolls sideways, so it can gate a deploy.
+ *   Exit code 1 when any page scrolls sideways or has a typing box that zooms, so it can gate a deploy.
  */
 const fs = require('fs');
 const path = require('path');
@@ -115,7 +116,14 @@ function measure() {
     const tinted = bg && bg !== 'transparent' && !/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)/.test(bg);
     if (tinted || cs.backdropFilter !== 'none') overlays.push({ el: describe(el), bg, w: Math.round(r.width), h: Math.round(r.height) });
   }
-  return { vw, scrollWidth: sw, sideways: sw > vw + 1, offenders, overlays: overlays.slice(0, 5),
+  // C127: iPhone Safari zooms in (and stays zoomed) when a typing box under 16px is tapped.
+  const zoomInputs = [...document.querySelectorAll('input,select,textarea')].filter((el) => {
+    if (/^(hidden|checkbox|radio|range|color|file|submit|button|image|reset)$/.test(el.type || '')) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getBoundingClientRect().width > 0
+      && parseFloat(cs.fontSize) < 16;
+  }).slice(0, 6).map((el) => ({ el: describe(el), fontSize: getComputedStyle(el).fontSize }));
+  return { vw, scrollWidth: sw, sideways: sw > vw + 1, offenders, overlays: overlays.slice(0, 5), zoomInputs,
     h1: (document.querySelector('h1,h2')?.innerText || '').trim().slice(0, 60), url: location.pathname };
 }
 
@@ -136,6 +144,7 @@ async function auditPage(page, item, dir) {
   console.log(`${item.slug.padEnd(16)} ${String(out.status).padEnd(4)} ${flag.padEnd(16)} overlays:${out.overlays.length} -> ${out.url}`);
   for (const o of out.offenders.slice(0, 4)) console.log(`    sticks out: ${o.el} [${o.left}..${o.right}] w${o.width} ${o.position}${o.gridCols ? ' grid:' + o.gridCols : ''}`);
   for (const o of out.overlays) console.log(`    overlay: ${o.el} ${o.bg}`);
+  for (const z of out.zoomInputs) console.log(`    zooms on tap: ${z.el} ${z.fontSize}`);
   return out;
 }
 
@@ -180,7 +189,8 @@ async function viewAsUrl(member) {
     await browser.close();
   }
   fs.writeFileSync(path.join(OUT, '_phone_audit.json'), JSON.stringify({ base: BASE, phone: PHONE.viewport, at: new Date().toISOString(), results }, null, 2));
-  const bad = results.filter((r) => r.sideways);
-  console.log(`\n${results.length} pages, ${bad.length} scroll sideways, ${results.filter((r) => r.overlays.length).length} with a full-screen layer. -> ${OUT}`);
+  const zoom = results.filter((r) => r.zoomInputs.length);
+  const bad = results.filter((r) => r.sideways || r.zoomInputs.length);
+  console.log(`\n${results.length} pages, ${results.filter((r) => r.sideways).length} scroll sideways, ${zoom.length} with a typing box that zooms an iPhone, ${results.filter((r) => r.overlays.length).length} with a full-screen layer. -> ${OUT}`);
   process.exit(bad.length ? 1 : 0);
 })().catch((e) => { console.error(`[phone-audit] ${scrub(e.message)}`); process.exit(2); });
