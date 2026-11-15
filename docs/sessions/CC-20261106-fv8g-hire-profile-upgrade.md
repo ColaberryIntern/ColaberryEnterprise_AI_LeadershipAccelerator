@@ -367,3 +367,13 @@ with these.
     The pipeline itself was proven earlier in this container (real Whisper and review).
   - Notes: no candidate has a video, so no live upload has gone through the deployed queue yet;
     production-verified waits on one real upload. #4041 (carousel fill) is still open.
+
+- [x] Carousel fill shipped
+  - Date: 2026-11-15
+  - Session: CC-20261106-fv8g
+  - What changed: #4041 merged as 729f289e8. After "Build images" succeeded on that tip,
+    `./scripts/deploy-prod.sh nginx` exit 0, prod HEAD 729f289e8.
+  - Verification (read-only): https://hire.refactored.ai/talent/kesetebirhan-delele returns 200
+    and its live portfolio.js and portfolio.css carry the `car-fill` code.
+  - Notes: Ali has the studio link (/portal/portfolio?tab=hire) to run the first real coaching
+    upload on his own account (ali@colaberry.com, active enrollment).
