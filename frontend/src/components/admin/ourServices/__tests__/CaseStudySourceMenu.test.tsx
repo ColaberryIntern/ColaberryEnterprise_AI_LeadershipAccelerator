@@ -27,7 +27,7 @@ const q = (sel: string): HTMLElement | null => container.querySelector(sel);
 const click = async (el: Element | null): Promise<void> => { await act(async () => { (el as HTMLElement).click(); }); };
 
 describe('CaseStudySourceMenu', () => {
-  it('lists only the clicked kind, each with Manage, and Open original only for outside', async () => {
+  it('lists only the clicked kind; an outside item gets Open original and NO Manage', async () => {
     await render(<CaseStudySourceMenu kind="outside" serviceName="Svc" caseStudies={LIST} />);
     const chip = q('[data-testid="cs-menu-outside"]')!;
     expect(chip.textContent).toContain('2');
@@ -37,15 +37,16 @@ describe('CaseStudySourceMenu', () => {
     expect(q('[data-testid="cs-menu-item-out-1"]')).not.toBeNull();
     expect(q('[data-testid="cs-menu-item-out-2"]')).not.toBeNull();
     expect(q('[data-testid="cs-menu-item-in-1"]')).toBeNull();
-    expect(q('[data-testid="manage-case-study-out-1"]')!.getAttribute('href')).toBe('/admin/case-studies/out-1');
-    expect(q('[data-testid="manage-case-study-out-1"]')!.getAttribute('target')).toBe('_blank');
     expect(q('[data-testid="open-original-out-1"]')).not.toBeNull();
+    expect(q('[data-testid="manage-case-study-out-1"]')).toBeNull();
+    expect(q('[data-testid="manage-case-study-out-2"]')).toBeNull();
   });
 
-  it('an inside list has Manage but no Open original (built here, no uploaded file)', async () => {
+  it('an inside item gets Manage (desk, new tab) and NO Open original (built here, no uploaded file)', async () => {
     await render(<CaseStudySourceMenu kind="inside" serviceName="Svc" caseStudies={LIST} />);
     await click(q('[data-testid="cs-menu-inside"]'));
-    expect(q('[data-testid="manage-case-study-in-1"]')).not.toBeNull();
+    expect(q('[data-testid="manage-case-study-in-1"]')!.getAttribute('href')).toBe('/admin/case-studies/in-1');
+    expect(q('[data-testid="manage-case-study-in-1"]')!.getAttribute('target')).toBe('_blank');
     expect(q('[data-testid="open-original-in-1"]')).toBeNull();
   });
 

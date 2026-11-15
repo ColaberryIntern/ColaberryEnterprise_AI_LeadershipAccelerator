@@ -5,8 +5,8 @@ import CaseStudyOpenButtons from './CaseStudyOpenButtons';
 
 /**
  * CaseStudySourceMenu - the Inside / Drive count in the catalog's "Case studies" column, as a button. Clicking it
- * lists that service's confirmed case studies of that kind, each with its title (opens the side panel), Manage (the
- * case-study desk) and, for outside ones, Open original. A zero count stays a plain disabled chip.
+ * lists that service's confirmed case studies of that kind, each with its title (opens the side panel) and one button:
+ * Manage (the case-study desk) for inside ones, or Open original (the imported file) for outside ones. A zero count stays a plain disabled chip.
  *
  * The list is position:fixed, measured from the chip on open, because the catalog sits in a horizontally scrolling
  * wrapper that would clip an absolutely positioned list. It closes on Escape (focus returns to the chip), on a click

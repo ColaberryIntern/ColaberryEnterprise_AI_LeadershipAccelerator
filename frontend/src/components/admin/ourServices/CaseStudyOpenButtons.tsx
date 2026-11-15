@@ -3,10 +3,11 @@ import { getCaseStudySourceFile, type SourceKind } from '../../../services/ourSe
 import { caseStudyHref } from './CaseStudyCard';
 
 /**
- * CaseStudyOpenButtons - the two ways to look at a case study before deciding to link it:
- *   - "Manage": the case-study desk (record, preview, sources), in a new tab. Every case study has one.
- *   - "Open original": the uploaded document of an OUTSIDE case study, in a new tab. Inside case studies were built
- *     here, so they have no original file and get no button.
+ * CaseStudyOpenButtons - exactly ONE way to look at a case study before deciding to link it, by where it came from:
+ *   - INSIDE (built in this app): "Manage", the case-study desk (record, preview, sources), in a new tab. There is
+ *     no uploaded original to open.
+ *   - OUTSIDE (imported from Google Drive): "Open original", the uploaded document, in a new tab. Imported case
+ *     studies are internal evidence and are not managed on the desk, so they get no Manage button.
  *
  * The original is served behind admin auth (GET .../source-file), so it cannot be a plain link: the bytes are
  * fetched with the session's token and opened as a blob URL. The tab is opened synchronously on the click and filled
@@ -50,11 +51,13 @@ export default function CaseStudyOpenButtons({ id, title, sourceKind, className 
   };
   return (
     <span className={`d-inline-flex flex-wrap align-items-center gap-1 ${className}`}>
-      <a className="btn btn-outline-primary btn-sm py-0" href={caseStudyHref(id)} target="_blank" rel="noopener noreferrer"
-        data-testid={`manage-case-study-${id}`}>
-        <i className="ri-settings-3-line me-1" aria-hidden="true" />Manage
-        <span className="visually-hidden"> {title} (opens the case-study desk in a new tab)</span>
-      </a>
+      {sourceKind === 'inside' && (
+        <a className="btn btn-outline-primary btn-sm py-0" href={caseStudyHref(id)} target="_blank" rel="noopener noreferrer"
+          data-testid={`manage-case-study-${id}`}>
+          <i className="ri-settings-3-line me-1" aria-hidden="true" />Manage
+          <span className="visually-hidden"> {title} (opens the case-study desk in a new tab)</span>
+        </a>
+      )}
       {sourceKind === 'outside' && (
         <button type="button" className="btn btn-outline-secondary btn-sm py-0" onClick={() => void openOriginal()}
           disabled={state === 'loading'} data-testid={`open-original-${id}`}>
