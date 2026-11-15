@@ -87,3 +87,49 @@ that state, so it is visible rather than silent.
   truncate, and still need a person to look at them.
 - Test fixtures still slip through: Shabana's `docs/Assignment_1/inbox-triage/inbox/msg*.txt`.
 - Nothing is wired to a cron yet. The script remains the only caller, and still requires `--go`.
+
+## Deployed and healed in production — 2026-11-15
+
+- [x] Run the heal pass in production so the 137 link-only rows open
+  - Date: 2026-11-15
+  - Session: CC-20261112-k7m2
+  - What changed: no code. PR #4042 merged (commit `b979aaff6`, all 11 checks green) and
+    shipped in the `main` image for `821b9af36`; `dist/scripts/ingestRepoArtifacts.js --go`
+    run inside `accelerator-backend`.
+  - Verification: dry run reported `would make openable: 137 (137 of them rows that existed
+    already)`; the real pass reported `made openable: 158 (137 of them rows that existed
+    already)` plus `recorded: 21` new, and printed **no** `recorded WITHOUT a file` line.
+    Production database: 233 repo-path rows, **233 with a `stored_path`, 0 `store_failure`**.
+    Disk: 149 files, 16MB in `/app/uploads/repo-artifacts`, **0 `.part` files left behind**.
+    `officeToHtml.renderOfficeFile` on Swati Raman's healed
+    `docs/references/01-Master-Project-Specification.docx` returned **193,968 characters of
+    HTML**, which is the Word viewer rendering an ingested row end to end.
+  - Notes: 149 files for 158 artifacts is the content-addressing deduplicating the identical
+    `docs/discovery/*.md` templates several interns committed. Of the 233 rows, **160 sit
+    outside the admin viewer's scope** (see below) and are reachable only through the
+    learner's own My work page.
+
+### The admin viewer's scope is narrower than the data
+
+`internArtifactViewer`'s `SQL` requires an **active `internship` membership in an
+`ai_internship` cohort**:
+
+```sql
+AND EXISTS (SELECT 1 FROM cohort_memberships cm JOIN cohorts c ON c.id = cm.cohort_id
+             WHERE cm.enrollment_id = r.enrollment_id AND cm.membership_type = 'internship'
+               AND cm.status = 'active' AND c.cohort_type = 'ai_internship')
+```
+
+73 of the 233 repo rows pass that test; **160 do not**, including every gov-contract
+participant. `/admin/internship/artifact/:id` answers 404 for those, while
+`/portal/portfolio/work/:id` serves them normally because My work is scoped to the learner.
+This predates the ingest and is not caused by it, but it decides which URL opens an
+artifact, so it is the first thing to check when one appears to be missing.
+
+### Also learned: two populations, not one
+
+Eight of the nine Office-format repo artifacts already had a `stored_path` before this run.
+They live under `artifacts/week-NN/` and were stored by the pre-existing weekly-submission
+sync — which is why Quincy Ninying's `data-flow-diagram.docx` already opened in the Word
+viewer. The 137 healed rows are the `docs/`-committed population from the 14 Nov ingest, and
+Swati's master specification is the only Word file among them.
