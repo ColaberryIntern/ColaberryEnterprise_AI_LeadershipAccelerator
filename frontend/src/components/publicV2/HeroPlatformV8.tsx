@@ -82,12 +82,12 @@ export default function HeroPlatformV8(): React.ReactElement {
 
           <h1 id="cbv2-plat-title" className="cbv2-h8__h1">
             <span className="cbv2-h8__line">
-              <span className="cbv2-h8__word cbv2-h8__word--sys">You watch it.</span>
+              <span className="cbv2-h8__word cbv2-h8__word--sys">See your company move to AI,</span>
               <span className="cbv2-h8__rail" aria-hidden="true" />
             </span>
             {' '}
             <span className="cbv2-h8__line">
-              <span className="cbv2-h8__word cbv2-h8__word--ppl">They work in it.</span>
+              <span className="cbv2-h8__word cbv2-h8__word--ppl">department by department.</span>
               <span className="cbv2-h8__rail cbv2-h8__rail--cyan" aria-hidden="true" />
             </span>
           </h1>

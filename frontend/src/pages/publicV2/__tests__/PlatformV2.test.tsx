@@ -119,7 +119,14 @@ describe('PlatformV2 — the evidence-not-completion argument', () => {
    */
   it('makes the evidence-not-completion point explicitly', () => {
     const text = textOf(html());
-    expect(text).toMatch(/momentum, not courses|not course completion/i);
+    /*
+        "momentum, not courses" lived in TwoExperiences, which the v5 cut to
+        four surfaces removed. The POINT is unchanged and is still made
+        explicitly, in CapabilityEarned's stronger wording: course completion is
+        not one of the four bands a competency score is built from. The pattern
+        follows the surviving sentence rather than the removed one.
+    */
+    expect(text).toMatch(/course completion is not one of them|momentum, not courses|not course completion/i);
     expect(text).toMatch(/self-reported/i);
   });
 });

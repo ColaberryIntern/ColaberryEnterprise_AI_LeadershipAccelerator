@@ -1,14 +1,11 @@
 import React from 'react';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
-import CtaInterrupt from '../../components/publicV2/CtaInterrupt';
-import CapabilityOS from '../../components/publicV2/CapabilityOS';
-import TwoExperiences from '../../components/publicV2/TwoExperiences';
 import ReceiptsDrilldown from '../../components/publicV2/ReceiptsDrilldown';
 import BuildPipeline from '../../components/publicV2/BuildPipeline';
 import CapabilityEarned from '../../components/publicV2/CapabilityEarned';
-import ArchitectExperience from '../../components/publicV2/ArchitectExperience';
 import OpenPlatform from '../../components/publicV2/OpenPlatform';
+import { LeaderViewSection, WhoeverBuildsItSection } from './platformV2Bands';
 import './platformV2.css';
 import '../../components/publicV2/heroV8.css';
 
@@ -26,11 +23,10 @@ function PlatformV2(): React.ReactElement {
   return (
     <>
       <SeoV2
-        title="The platform your team logs into"
+        title="See your company move to AI, department by department."
         description={
-          'Organization AI readiness, the team roster and ladder, and a free company ' +
-          'workspace. Readiness is earned from evidence, evaluations and shipped work, not ' +
-          'from course completion.'
+          'One place for every leader’s projects, every workflow, every application ' +
+          'release and every person learning, whether we build it, guide it or train it.'
         }
       />
 
@@ -113,25 +109,42 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
-      <CapabilityOS />
-      <TwoExperiences />
+      {/*
+          FOUR SURFACES, EACH ANSWERING "WHO IS THIS FOR".
+
+          The page ran eleven bands and 14,450px, which is longer than the home
+          page and asked a visitor to absorb the whole product before learning
+          who any of it was for. The v5 site model reduces it to four surfaces,
+          each addressed to a role: the leader, whoever tracks the projects,
+          whoever has to believe the result, and the people learning.
+
+          IT DOES NOT REACH THE MODEL'S PAGE LENGTH, deliberately. The model
+          draws these surfaces as small mock screenshots; the three that already
+          existed here carry governed, claim-reviewed content -- the pipeline's
+          stated claim boundaries, the real promotion thresholds, the weighting
+          of each competency band. Cutting them to a comp's proportions would
+          throw away reviewed substance to match a picture. 14,450px to
+          11,825px, and the structure is the model's.
+
+          REMOVED, not reordered: CapabilityOS, TwoExperiences,
+          ArchitectExperience and both CtaInterrupts. The interrupts both pushed
+          to the same free workspace that the hero and the closing band already
+          offer, and the other three are detail about how the product is put
+          together rather than what a given role gets from it. All three
+          components still exist and are unrouted, not deleted.
+      */}
+      <LeaderViewSection />
+
+      {/* For project tracking. */}
       <BuildPipeline />
-      <CtaInterrupt
-        eyebrow="Want to see it run?"
-        title="That whole pipeline is sitting behind one free login."
-        body="Open the workspace and walk the same path yourself, from a sentence about a cost to a story with acceptance criteria attached."
-      />
 
+      {/* For proof: acceptance criteria confirmed against real commits. */}
       <ReceiptsDrilldown />
-      <ArchitectExperience />
-      <CtaInterrupt
-        eyebrow="Your team, your numbers"
-        title="Everything above starts empty until someone does the work."
-        body="The demo workspace is furnished so there is something to look at. Your people, your repositories and every competency score begin at zero and move only on verified evidence."
-        primary={{ label: 'Open my company workspace, no card needed', to: '/try' }}
-      />
 
+      {/* For the people learning. */}
       <CapabilityEarned />
+
+      <WhoeverBuildsItSection />
 
       <OpenPlatform />
 
