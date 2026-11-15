@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { IntakeSummaryItem } from '../../../services/ourServicesApi';
 import { CaseStudyTitleLink, SourcePill } from './CaseStudyCard';
+import CaseStudyOpenButtons from './CaseStudyOpenButtons';
 import { PRECHECK_AT, confidenceTone, industryIcon, suggestionConfidence } from './ourServicesModel';
 
 /**
@@ -49,6 +50,8 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
             <SourcePill kind={item.sourceKind} className="me-2" label={outside ? 'Outside · Google Drive' : 'Inside · Project Factory'} />
             <span className="text-secondary">{item.industry ?? 'Industry not set'} · {item.status}</span>
           </div>
+          {/* Read it before deciding: the desk, and for outside ones the uploaded original. */}
+          <CaseStudyOpenButtons id={item.id} title={item.title} sourceKind={item.sourceKind} className="mt-2" />
           {item.analysisError && <div className="small text-warning-emphasis mt-1"><i className="ri-error-warning-line me-1" aria-hidden="true" />Needs manual details: the AI could not read this document.</div>}
           {item.keywords.length > 0 && (
             <div className="d-flex flex-wrap gap-1 mt-2">{item.keywords.slice(0, 10).map((k) => <span key={k} className="badge bg-body-tertiary text-body-secondary fw-normal border">#{k}</span>)}</div>
