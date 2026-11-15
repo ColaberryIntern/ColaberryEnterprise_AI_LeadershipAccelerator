@@ -26,6 +26,8 @@ export const CASE_STUDY_READ_LIMIT = 500;
 export interface ServiceFact {
   id: string; name: string; category: string | null; status: 'active' | 'growth' | 'retired';
   keywords: string[]; naicsCodes: string[]; createdAt: Date | null;
+  /** Added for the public government catalog; the admin summary ignores both. */
+  description: string | null; pscCodes: string[];
 }
 export interface LinkFact { caseStudyId: string; serviceId: string; state: 'confirmed' | 'suggested'; decidedAt: Date | null }
 export interface CaseStudyFact {
@@ -63,6 +65,7 @@ export async function loadTenantServices(tenantId: string, status: 'active' | 'g
       status: (s.status as ServiceFact['status']) ?? 'active',
       keywords: strs(s.keywords_json), naicsCodes: strs(s.naics_codes_json),
       createdAt: s.created_at ? new Date(s.created_at as string) : null,
+      description: (s.description as string | null) ?? null, pscCodes: strs(s.psc_codes_json),
     };
   });
 }

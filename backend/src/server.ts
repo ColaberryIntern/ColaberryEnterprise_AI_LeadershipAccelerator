@@ -21,6 +21,7 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import publicCaseStudyRoutes from './routes/publicCaseStudyRoutes';
+import publicServiceRoutes from './routes/publicServiceRoutes';
 import { mountLearnerPortalRoutes } from './routes/mountLearnerPortalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
@@ -353,6 +354,9 @@ app.use(internVideoStreamRoutes);
 app.use(publicHireTalentRoutes); // hire.refactored.ai directory + intro (public, unauthenticated)
 app.use(publicHireVideoRoutes); // hire.refactored.ai intro video playback (published, or a signed studio preview)
 app.use(publicCaseStudyRoutes);
+// The public service catalog behind /government. Public and unauthenticated,
+// so it MUST stay above adminRoutes or every anonymous visitor gets a 401.
+app.use(publicServiceRoutes);
 // A room's stable join address (/api/public/rooms/join/:token). Same rule, and it
 // matters more here than almost anywhere: this URL is pasted into recurring
 // calendar invites, so mounting it below adminRoutes would 401 every attendee
