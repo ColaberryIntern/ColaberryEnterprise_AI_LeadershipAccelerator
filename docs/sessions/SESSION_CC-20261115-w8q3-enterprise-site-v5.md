@@ -191,3 +191,45 @@ still being built. The later commits were pushed to the same branch after that
 merge, which is how work goes missing: the branch carries them, the merged PR
 does not, and nothing tracks them. They were rebased onto current main and
 opened as a separate PR. Phase 1 is already on main.
+
+## Shipped to production
+
+- **PR #4051** (phase 1) merged earlier; **PR #4059** (phases 2 to 7) merged
+  2026-11-15 at 4:10 PM CT as `4a1055594`.
+- `Build images` succeeded for `4a1055594` and main did not move again before
+  the deploy, so the image was not cancelled by a later merge.
+- Deployed nginx only, through `scripts/deploy-prod.sh` in registry mode. The
+  frontend is baked into the nginx image and nothing in this change touches the
+  backend, so the API was not restarted. The script verified
+  `accelerator-nginx:main` matches `sha-4a1055594...` before pulling.
+
+### Production verification (real browser, Edge channel)
+
+20 route checks, all passing: 0 page errors, 0 horizontal overflow at 1440px,
+and every route asserted on a marker string only the new code renders. A 200 is
+not evidence here because every SPA route returns the same `index.html`.
+
+| Route | Lands on | Sections | Height |
+|---|---|---|---|
+| `/` | `/` | 10 | 7,792px |
+| `/services` | `/services` | 4 | 3,559px |
+| `/how-it-works` | `/how-it-works` | 8 | 6,311px |
+| `/platform` | `/platform` | 9 | 11,854px |
+| `/book` | `/book` | 3 | 2,256px |
+| `/demo-pilot` | `/demo-pilot` | 3 | 2,590px |
+| `/pricing` | `/pricing` | 6 | 7,040px |
+| `/proof` | `/proof` | 4 | 11,337px |
+| `/contact` | `/demo-pilot` | 3 | 2,590px |
+| `/lab` | `/demo-pilot` | 3 | 2,590px |
+| `/accelerator` | `/services/train` | 6 | 4,476px |
+| 5 retired service slugs | build / build / build / guide / train | 6 | - |
+
+- **Consent, on the live page:** `/demo-pilot` renders exactly one checkbox and
+  it is not pre-ticked. This is the regression that mattered most, since the
+  model's own form has no consent control at all.
+- **Lead endpoint wired:** `POST /api/leads` with `{}` returns 400 with Zod
+  field errors, not 404. That proves the route is live without writing a lead
+  row to production.
+- **Not proved:** an end-to-end submission from `/demo-pilot` through to a
+  stored lead and its notification. Proving it means creating a real lead
+  record, which is Ali's call, not a verification step to take unasked.
