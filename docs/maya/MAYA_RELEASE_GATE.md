@@ -1,8 +1,10 @@
 # Maya release gate: the ordered ladder that actually turns her on
 
 **Ticket:** MR5 (`Design Explorer Growth`, todo 10503714732) | **Owner of every rung marked ALI:** Ali
-**Companion document:** [`MAYA_PROMOTION_CHECKLIST.md`](./MAYA_PROMOTION_CHECKLIST.md) — the
-per-capability promotion layer. This document does **not** repeat it.
+**Companion documents:** [`MAYA_PROMOTION_CHECKLIST.md`](./MAYA_PROMOTION_CHECKLIST.md) — the
+per-capability promotion layer, and [`MAYA_GOVERNANCE.md`](./MAYA_GOVERNANCE.md) — the governance
+model (both belts, the four modes, the refusals, the approval queue, and which clicks are Ali's).
+This document does **not** repeat either.
 
 NOTHING SENDS is the standing rule of this workstream. This ladder is the only sanctioned way to
 stop that rule applying, one rung at a time, each with evidence before the next.
@@ -276,17 +278,34 @@ cycle. **Not repeated here.**
 
 Her five capabilities and their current state:
 
+**Updated 2026-11-15 (this is a posture change, not a wording change).** Two things on this rung
+moved: there are now **four** modes rather than two, and the site chat's capabilities are on this
+same spine. The model is [`MAYA_GOVERNANCE.md`](./MAYA_GOVERNANCE.md); the short version is that
+`review` composes the message and holds it for Ali's per-message approval, and it is now the
+shipped default for `sendEmail`.
+
+The portal capabilities:
+
 | Capability | Default | Also needs |
 |---|---|---|
 | `respondToExplorerDm` | **live** | `ENABLE_CHAT` |
 | `sendInAppWelcome` | shadow | execution flag **and** `EXPLORER_IN_APP_NUDGE_ENABLED` |
 | `createJourneyHandoff` | shadow | `GROWTH_JOURNEY_HANDOFFS_ENABLED` |
 | `readPerson360` | shadow | `GROWTH_JOURNEY_DECISIONS_ENABLED` |
-| `sendEmail` | shadow | **the execution flag** — see the checklist's `sendEmail` section |
+| `sendEmail` | **review** | nothing further to reach a QUEUED message; `live` still needs **the execution flag** |
 
-**No Maya promotion record exists in `system_settings` today.** The only Maya keys are
-`ai_maya_auto_popup` and `ai_maya_visitor_delay_seconds`, so every governed capability sits at its
-compiled default.
+The site chat capabilities, new on this rung:
+
+| Capability | Default | Note |
+|---|---|---|
+| `captureVisitorRecord`, `readSiteChatCatalog`, `composeMarketingDraft`, `requestHumanCallback`, `runCampusTour`, `offerBookingLink` | live | reach nobody outside the product |
+| `bookStrategyCall` | live | the ONE declared transactional-receipt exception, bounded and pinned to two effects |
+| `sendDocument` | review | real HTML in a stranger's inbox, so it is held |
+| `sendSmsSummary`, `placeVoiceCall`, `enrollInCampaign` | — | **refused by name.** No dial exists, so no promotion can reach them |
+
+**No Maya promotion record exists in `system_settings` today**, so every governed capability still
+sits at its compiled default. What is new is that `/admin/maya` can change that without a database
+write by hand, and `/admin/outbound-approvals` is where a held message is read and decided.
 
 ---
 

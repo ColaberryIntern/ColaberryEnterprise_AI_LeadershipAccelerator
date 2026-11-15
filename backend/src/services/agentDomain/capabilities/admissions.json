@@ -609,7 +609,11 @@
         "read_admissions_chat_conversations",
         "llm_text_generation",
         "sandbox_postgres_read",
-        "sandbox_postgres_write"
+        "sandbox_postgres_write",
+        "retrieve_knowledge",
+        "list_quotable_marketing_assets",
+        "capture_lead_details",
+        "update_lead_record"
       ],
       "permissions_by_environment": {
         "sandbox": {
@@ -822,7 +826,9 @@
       "required_tools": [
         "sandbox_postgres_read",
         "sandbox_postgres_write",
-        "read_call_logs"
+        "read_call_logs",
+        "schedule_callback",
+        "request_callback"
       ],
       "permissions_by_environment": {
         "sandbox": {
@@ -3411,7 +3417,10 @@
       "required_tools": [
         "read_calendar_availability",
         "sandbox_postgres_read",
-        "read_lead_records"
+        "read_lead_records",
+        "get_available_slots",
+        "schedule_strategy_call",
+        "book_admissions_call"
       ],
       "permissions_by_environment": {
         "sandbox": {

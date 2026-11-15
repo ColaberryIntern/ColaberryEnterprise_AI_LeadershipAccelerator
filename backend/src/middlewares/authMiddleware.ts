@@ -182,6 +182,23 @@ export function requireSalesOrAdmin(req: Request, res: Response, next: NextFunct
 // Implementation note: the same `req.admin` slot is populated whether the
 // source was admin_token or participant_token, so downstream Cory handlers
 // that reference `req.admin` work identically without modification.
+/**
+ * The Cory predicate, as a pure function over an already-verified identity.
+ *
+ * `requireCoryAuthorized` below is the middleware form, and it is the right tool when a whole
+ * route belongs to Ali. It is the wrong tool when only SOME requests to a route do - Maya's
+ * capability state setter, where RAISING a capability toward live is Ali's and LOWERING it is
+ * any admin's, so the authority depends on the body, not on the path. Those handlers run behind
+ * `requireAdmin` (which has already verified the token and populated `req.admin`) and then ask
+ * this predicate. Extracted rather than restated so there is one definition of "Ali or a
+ * super_admin" and not two that can drift apart.
+ */
+export function isCoryAuthorizedIdentity(
+  identity: { email?: string | null; role?: string | null } | undefined | null,
+): boolean {
+  return identity?.email === 'ali@colaberry.com' || identity?.role === 'super_admin';
+}
+
 export function requireCoryAuthorized(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -198,8 +215,7 @@ export function requireCoryAuthorized(req: Request, res: Response, next: NextFun
     interface CoryClaims { sub: string; email: string; role: string }
     const payload = jwt.verify(token, env.jwtSecret) as CoryClaims;
 
-    const isAuthorized =
-      payload?.email === 'ali@colaberry.com' || payload?.role === 'super_admin';
+    const isAuthorized = isCoryAuthorizedIdentity(payload);
     if (!isAuthorized) {
       res.status(403).json({ error: 'Cory access denied' });
       return;

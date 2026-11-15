@@ -7,19 +7,22 @@ import { Lead, Visitor, ChatMessage } from '../models';
 import AdmissionsActionLog from '../models/AdmissionsActionLog';
 import AdmissionsMemory from '../models/AdmissionsMemory';
 import CallContactLog from '../models/CallContactLog';
-import { syncNewLeadToGhl, syncLeadToGhl, sendSmsViaGhl } from './ghlService';
+import { syncNewLeadToGhl, syncLeadToGhl } from './ghlService';
 import { triggerVoiceCall } from './synthflowService';
-import {
-  getAvailableSlots as calendarGetSlots,
-  createBooking,
-} from './calendarService';
+import { getAvailableSlots as calendarGetSlots } from './calendarService';
 import { admissionsCalendar } from './calendarTarget';
 import { createAppointment } from './appointmentService';
-import { sendStrategyCallConfirmation } from './emailService';
 import { findRelevantKnowledge } from './admissionsKnowledgeService';
 import { gateKnowledgeEntries } from './admissionsKnowledgeGate';
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
-import { routeLeadToCampaign, addMayaInteractionTag } from './mayaCampaignRouter';
+import { addMayaInteractionTag } from './mayaCampaignRouter';
+// THE SEAM. Every effect below that can reach a real person goes through this module,
+// which resolves that effect's own capability before any provider is called. The
+// providers themselves are deliberately not imported here any more: a source-reading
+// test asserts this file names none of them.
+import {
+  bookCalendarEvent, enrolLeadInCampaign, sendBookingConfirmation, sendSmsToContact,
+} from './maya/deliverOrQueue';
 import {
   generateConversationSummary,
   buildSmsSummaryContent,
@@ -159,11 +162,10 @@ export async function captureLeadDetails(
 
     // Auto-enroll in campaign based on interest type (fire-and-forget)
     if (interest_type && interest_type !== 'general') {
-      routeLeadToCampaign(lead.id, interest_type, visitorId, conversationId).catch(
-        (err: any) => {
-          console.warn('[MayaTools] Campaign enrollment failed:', err.message);
-        },
-      );
+      // SEVERED, DELIBERATELY. This resolves `enrollInCampaign`, which is refused by name,
+      // so capturing a lead now captures the lead and does not enrol it. See the note on
+      // `enrolLeadInCampaign` for the production measurement behind that decision.
+      enrolLeadInCampaign(lead.id, interest_type, visitorId, conversationId).catch(() => {});
     }
 
     await logAction(visitorId, conversationId, 'lead_captured', 'completed', {
@@ -182,9 +184,7 @@ export async function captureLeadDetails(
 
     // Auto-enroll in Inbound Lead campaign if name+email+phone captured and no explicit interest
     if (!interest_type && email && phone) {
-      routeLeadToCampaign(lead.id, 'general', visitorId, conversationId).catch((err: any) => {
-        console.warn('[MayaTools] Inbound campaign enrollment failed:', err.message);
-      });
+      enrolLeadInCampaign(lead.id, 'general', visitorId, conversationId).catch(() => {});
     }
 
     return {
@@ -430,14 +430,18 @@ export async function scheduleStrategyCall(
 
   try {
     // Book on Google Calendar
-    const booking = await createBooking({
-      name,
-      email,
-      company: company || '',
-      phone: phone || '',
-      slotStart: slot_start,
-      timezone: 'America/Chicago',
-    }, admissionsCalendar()); // C90: Maya books admissions calls on the admissions calendar
+    // The calendar write goes through the seam, which resolves `bookStrategyCall`. That
+    // capability ships LIVE: a visitor who picked a time is asking for this, and it is the
+    // one declared transactional-receipt exception to the approval invariant.
+    const invite = await bookCalendarEvent({
+      name, email, company: company || '', phone: phone || '',
+      slotStart: slot_start, timezone: 'America/Chicago',
+      calendar: admissionsCalendar(), // C90: Maya books admissions calls on the admissions calendar
+    });
+    if (invite.outcome !== 'delivered' || !invite.value) {
+      return { success: false, summary: invite.message };
+    }
+    const booking = invite.value;
 
     // Resolve or auto-create lead so appointment, campaign, and SMS all work
     let lead = await resolveLeadForVisitor(visitorId);
@@ -480,16 +484,17 @@ export async function scheduleStrategyCall(
 
       // Tag + enroll in strategy call campaign (fire-and-forget)
       addMayaInteractionTag(lead.id, 'maya_strategy_call_interest').catch(() => {});
-      routeLeadToCampaign(lead.id, 'strategy_call', visitorId, conversationId).catch(() => {});
+      // Was a fire-and-forget call into the campaign cron chain with its error swallowed.
+      // Same seam, same refusal: booking books, it does not enrol.
+      enrolLeadInCampaign(lead.id, 'strategy_call', visitorId, conversationId).catch(() => {});
     }
 
     // Send booking confirmation email with date/time and Meet link
-    await sendStrategyCallConfirmation({
-      to: email,
-      name,
-      scheduledAt: new Date(slot_start),
-      timezone: 'America/Chicago',
-      meetLink: booking.meetLink || '',
+    // Same capability as the invite above, same declared exception: a fixed template
+    // carrying only the facts of the booking the visitor just made.
+    await sendBookingConfirmation({
+      to: email, name, scheduledAt: new Date(slot_start),
+      timezone: 'America/Chicago', meetLink: booking.meetLink || '',
     }).catch((err: any) => {
       console.warn('[MayaTools] Confirmation email failed:', err.message);
     });
@@ -507,7 +512,12 @@ export async function scheduleStrategyCall(
           minute: '2-digit',
           timeZone: 'America/Chicago',
         });
-        await sendSmsViaGhl(
+        // Resolves `sendSmsSummary`, which is refused by name, so this returns a refusal
+        // rather than sending. Note what this call actually did: `sendSmsViaGhl` writes a
+        // record that TRIGGERS a GoHighLevel workflow, and what that workflow sends is
+        // configured outside this codebase. There is no way to hold a message for approval
+        // when we never see the message.
+        await sendSmsToContact(
           contactId,
           `Hi ${name.split(' ')[0]}, your strategy call is confirmed for ${timeStr} CT. ${booking.meetLink ? `Join here: ${booking.meetLink}` : 'Check your email for the meeting link.'} — Maya, Colaberry`,
         ).catch(() => {});
@@ -573,8 +583,16 @@ export async function enrollInCampaign(
   }
 
   try {
-    const result = await routeLeadToCampaign(lead.id, interest_type, visitorId, conversationId);
-    return result;
+    // The seam answers with an outcome and a sentence rather than a MayaActionResult, because
+    // the same answer has to serve four call sites with four different callers. Translating it
+    // here keeps this tool's contract unchanged.
+    //
+    // `enrollInCampaign` is refused by name, so in practice this returns that refusal and the
+    // model tells the visitor a person handles mailing lists. It is written as a general
+    // translation rather than a hardcoded refusal, so that re-opening the capability once a
+    // per-message design exists is a change to the capability and not to this file.
+    const result = await enrolLeadInCampaign(lead.id, interest_type, visitorId, conversationId);
+    return { success: result.outcome === 'delivered', summary: result.message };
   } catch (err: any) {
     return { success: false, summary: `Campaign enrollment failed: ${err.message}` };
   }

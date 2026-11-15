@@ -217,6 +217,7 @@ import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDe
 import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
 import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
+import { ensureMayaOutboundApprovalSchemaGuarded } from './db/ensureMayaOutboundApprovalSchema';
 import { ensurePageEventVisitorIndexGuarded } from './db/ensurePageEventVisitorIndex';
 
 // Import models to register associations before sync
@@ -3333,6 +3334,20 @@ async function start(): Promise<void> {
   // table is absent and the seed then leaves `tools_granted` untouched for that boot, which is
   // the safe direction: a boot of staleness rather than a reverted grant.
   await ensureAgentToolGrantSchemaGuarded();
+  // Maya's outbound approval queue.
+  //
+  // At BOOT rather than lazily on first enqueue, and that is the whole reason this is here.
+  // A queue created on first use cannot be inspected before the first message exists, so the
+  // first time anyone could confirm the table was shaped correctly would be the moment a real
+  // message was already sitting in it. Creating it at boot means `to_regclass` answers on a
+  // freshly deployed container, before Maya has composed anything.
+  //
+  // Guarded, so a failure here is a logged `maya_outbound_approval_schema_unavailable` and not
+  // a boot crash. That is the safe direction for this table specifically: without it the
+  // enqueue path throws and the composing tool refuses, which is a Maya who says she cannot
+  // send. The unsafe direction would be a Maya who sends because the queue was missing, and no
+  // code path does that.
+  await ensureMayaOutboundApprovalSchemaGuarded();
   // The `page_events (visitor_id, timestamp DESC)` index.
   //
   // NOT a schema module like the nine above, and the difference is the point: it owns no table.

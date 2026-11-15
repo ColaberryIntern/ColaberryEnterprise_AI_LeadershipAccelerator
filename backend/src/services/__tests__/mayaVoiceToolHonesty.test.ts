@@ -87,6 +87,23 @@ jest.mock('../mayaCampaignRouter', () => ({
   addMayaInteractionTag: (...a: unknown[]) => mockAddTag(...a),
   routeLeadToCampaign: (...a: unknown[]) => mockRouteCampaign(...a),
 }));
+// THE SEAM, stubbed to behave as it does when the capability is LIVE, so this suite keeps
+// testing what it was written to test: that the voice tool reports honestly.
+//
+// `voiceTool.ts` used to call `routeLeadToCampaign` directly. That was a FIFTH call into the
+// campaign chain, in a file the plan for this work did not know about - it was found by
+// `mayaSeamContainment.test.ts` walking the dispatcher closure. It now goes through the seam,
+// and the stub delegates to the same `mockRouteCampaign` this suite already asserts on, so the
+// existing assertion still means what it meant.
+jest.mock('../maya/deliverOrQueue', () => ({
+  enrolLeadInCampaign: async (...a: unknown[]) => {
+    await mockRouteCampaign(...a);
+    return { outcome: 'delivered', capability: 'enrollInCampaign', mode: 'live', message: 'Enrolled.' };
+  },
+  sendSmsToContact: jest.fn(async () => ({
+    outcome: 'refused', capability: 'sendSmsSummary', mode: 'off', message: 'no texts',
+  })),
+}));
 jest.mock('../communicationLogService', () => ({
   logCommunication: (...a: unknown[]) => mockLogCommunication(...a),
 }));

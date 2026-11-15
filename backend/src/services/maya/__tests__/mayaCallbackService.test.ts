@@ -13,6 +13,14 @@ jest.mock('../../../models/Enrollment', () => ({ __esModule: true, default: { fi
 jest.mock('../../../models/Lead', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../../models/Visitor', () => ({ __esModule: true, default: { findOrCreate: jest.fn() } }));
 jest.mock('../../../models/CallbackRequest', () => ({ __esModule: true, default: { findAll: jest.fn(), create: jest.fn() } }));
+// `mayaPortalTools` now opens with the capability gate, which reaches the kill switch, the
+// settings service and the models barrel. This suite imports that module only for
+// `callbackResultText`, a pure string function, so the gate is mocked rather than wired up:
+// what it decides is covered by `mayaToolGate.test.ts` and `mayaCapabilityStates.test.ts`.
+jest.mock('../mayaToolGate', () => ({
+  guardMayaTool: jest.fn(async () => ({ blocked: false })),
+  capabilityRefusalSentence: jest.fn(() => 'not available'),
+}));
 
 import Enrollment from '../../../models/Enrollment';
 import Lead from '../../../models/Lead';

@@ -1,6 +1,7 @@
 import { withToolRecording } from '../agents/tools/toolInvocationRecorder';
 import OpenAI from 'openai';
 import { requestPortalCallback, type CallbackOutcome } from './mayaCallbackService';
+import { guardMayaTool } from './mayaToolGate';
 
 /**
  * C121/C122/C123/M33 - the ONLY tools Maya has in the portal's shared chat. Five, on purpose:
@@ -149,6 +150,14 @@ export async function executeMayaPortalTool(name: string, args: Record<string, u
 }
 
 async function executeMayaPortalToolInner(name: string, args: Record<string, unknown>, ctx: MayaPortalToolContext): Promise<string> {
+  // THE GATE, the same one the site chat uses. "Combine the Mayas" means one governance spine,
+  // so the portal belt resolves capabilities through the same map and the same resolver rather
+  // than through a second arrangement that happens to agree today.
+  const gate = await guardMayaTool(name);
+  if (gate.blocked) {
+    return JSON.stringify({ ok: false, result: gate.message ?? 'I am not able to do that right now.' });
+  }
+
   try {
     if (name === 'retrieve_knowledge') {
       const query = typeof args.query === 'string' ? args.query.slice(0, 300) : '';

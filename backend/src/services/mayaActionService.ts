@@ -9,9 +9,12 @@ import AdmissionsMemory from '../models/AdmissionsMemory';
 import AdmissionsActionLog from '../models/AdmissionsActionLog';
 import DocumentDeliveryLog from '../models/DocumentDeliveryLog';
 import { canDeliverDocument } from './admissionsWorkflowService';
-import { sendAdmissionsDocument } from './emailService';
 import { evaluateSend } from './communicationSafetyService';
-import { sendOnce } from './email/idempotentSend';
+// THE SEAM. `sendAdmissionsDocument` is deliberately NOT imported here any more: a
+// source-reading test asserts this file names no person-reaching provider directly, because
+// every one of them has to resolve its own capability first.
+import { queueAdmissionsDocument } from './maya/deliverOrQueue';
+import { guardMayaTool } from './maya/mayaToolGate';
 import { addMayaInteractionTag } from './mayaCampaignRouter';
 import {
   captureLeadDetails,
@@ -294,6 +297,18 @@ async function executeMayaActionInner(
   visitorId: string,
   conversationId: string,
 ): Promise<MayaActionResult> {
+  // THE GATE, before the switch. A tool whose capability is `off` never runs; a tool at
+  // `shadow`, `review` or `live` runs and composes, and what happens to what it composed is
+  // decided at the delivery seam. `withToolRecording` above computes its verdict in a
+  // `finally` AFTER the handler returns, so it records and cannot refuse. This can.
+  const gate = await guardMayaTool(functionName);
+  if (gate.blocked) {
+    await logAction(visitorId, conversationId, functionName, 'refused', {
+      capability: gate.capability ?? null, mode: gate.mode ?? null,
+    }).catch(() => {});
+    return { success: false, summary: gate.message ?? 'I am not able to do that right now.' };
+  }
+
   switch (functionName) {
     case 'capture_lead_details':
       return captureLeadDetails(args, visitorId, conversationId);
@@ -469,37 +484,35 @@ async function handleSendDocument(
     if (decision.redirect?.email) sendTo = decision.redirect.email;
   }
 
-  // ── The send, once ──
+  // ── Compose, then let the capability decide what happens to it ──
   //
-  // `sendOnce` claims the send through a UNIQUE index before calling the provider, so a
-  // retried tool call, or the model calling the tool twice in one turn, cannot produce a
-  // second email. The business event is scoped to this visitor and document, so each
-  // document goes to a given address at most once.
+  // This used to call `sendAdmissionsDocument` inside `sendOnce` and mail the visitor directly.
+  // It now goes through the delivery seam, which resolves `sendDocument` and either queues the
+  // message for Ali or delivers it, depending on that capability's state. The visitor is told
+  // the truth either way.
+  //
+  // THE IDEMPOTENCY GUARANTEE DID NOT MOVE, it doubled. `sendOnce`'s UNIQUE-index claim still
+  // wraps the provider call, now inside `mayaOutboundDelivery`, and the queue adds a second
+  // claim of its own on the same business event. A retried tool call lands on the same
+  // `idempotency_key` and produces no second row for Ali to read and no second email.
   const docNames: Record<string, string> = {
     executive_briefing: 'Executive Briefing',
     program_overview: 'Program Overview',
     enterprise_guide: 'Enterprise Guide',
     pricing_guide: 'Pricing Guide',
   };
-  const subject = `Your ${docNames[document_type] || document_type} - Colaberry AI Leadership Accelerator`;
 
-  let result: Awaited<ReturnType<typeof sendOnce>>;
+  let effect: Awaited<ReturnType<typeof queueAdmissionsDocument>>;
   try {
-    result = await sendOnce(
-      {
-        recipient: sendTo,
-        subject,
-        businessEventId: `maya-doc-${document_type}-${visitorId}`,
-      },
-      async () => {
-        const sent = await sendAdmissionsDocument({ to: sendTo, name, documentType: document_type });
-        if (sent.outcome !== 'sent') {
-          // A refusal is not a provider failure to retry past; it is a missing document.
-          return { ok: false, error: sent.reason, errorClass: 'AdmissionsDocumentRefused' };
-        }
-        return { ok: true, messageId: sent.messageId };
-      },
-    );
+    effect = await queueAdmissionsDocument({
+      to: sendTo,
+      name,
+      documentType: document_type,
+      // The opaque id the queue row and every log line carry. Never an email address.
+      recipientRef: consentLeadId ? `lead:${consentLeadId}` : `visitor:${visitorId}`,
+      correlationId: conversationId,
+      visitorId,
+    });
   } catch (err: any) {
     await logAction(visitorId, conversationId, 'send_document', 'failed', {
       document_type,
@@ -508,18 +521,7 @@ async function handleSendDocument(
     return { success: false, summary: `Failed to send email: ${err.message}` };
   }
 
-  if (result.outcome === 'skipped') {
-    await logAction(visitorId, conversationId, 'send_document', 'duplicate_suppressed', {
-      document_type, recipient_email: sendTo, reason: result.reason,
-    });
-    return {
-      success: true,
-      summary: `The ${docNames[document_type]} has already been sent to ${sendTo}. `
-        + 'It can take a few minutes to arrive, and it is worth checking the spam folder.',
-    };
-  }
-
-  if (result.outcome === 'failed') {
+  if (effect.outcome === 'refused' || effect.outcome === 'shadowed') {
     // Record the request so it is actionable by a person, and tell the visitor the truth.
     await DocumentDeliveryLog.create({
       visitor_id: visitorId,
@@ -529,42 +531,44 @@ async function handleSendDocument(
       recipient_email: sendTo,
       status: 'failed',
     }).catch(() => {});
-    await logAction(visitorId, conversationId, 'send_document', 'failed', {
-      document_type, recipient_email: sendTo, error_class: result.errorClass, error: result.error,
+    await logAction(visitorId, conversationId, 'send_document', 'denied', {
+      document_type, recipient_email: sendTo, mode: effect.mode, effect_outcome: effect.outcome,
     });
-    // NOT "sent". This branch is where the old code claimed success on a send that never
-    // left, because the document itself is not wired up yet.
-    return {
-      success: false,
-      summary: `I was not able to email the ${docNames[document_type]} just now. I have logged `
-        + 'your request and a member of the admissions team will send it to you directly.',
-    };
+    // NOT "sent", and not a cheerful sentence either. This is the branch where the old code
+    // claimed success on a send that never left.
+    return { success: false, summary: effect.message };
   }
 
-  // Log delivery
+  // Queued or delivered. Both are honest outcomes, and they are recorded differently.
   await DocumentDeliveryLog.create({
     visitor_id: visitorId,
     lead_id: consentLeadId,
     document_type,
     delivery_method: 'email',
     recipient_email: sendTo,
-    status: 'sent',
+    status: effect.outcome === 'delivered' ? 'sent' : 'pending',
   }).catch(() => {});
 
-  await logAction(visitorId, conversationId, 'send_document', 'completed', {
-    document_type,
-    recipient_email: sendTo,
-    recipient_name: name,
-  });
+  await logAction(visitorId, conversationId, 'send_document',
+    effect.outcome === 'delivered' ? 'completed' : 'queued_for_approval', {
+      document_type,
+      recipient_email: sendTo,
+      recipient_name: name,
+      mode: effect.mode,
+    });
 
   // Tag Maya interaction
   if (consentLeadId) {
     addMayaInteractionTag(consentLeadId, 'maya_document_requested').catch(() => {});
   }
 
+  // The summary is what the model reads before telling the visitor what happened, so a queued
+  // message must NOT be summarised as sent. `effect.message` already says a person checks it.
   return {
     success: true,
-    summary: `Successfully sent ${docNames[document_type]} to ${sendTo}`,
+    summary: effect.outcome === 'delivered'
+      ? `Successfully sent ${docNames[document_type] || document_type} to ${sendTo}`
+      : effect.message,
     details: { document_type, recipient_email: sendTo, recipient_name: name },
   };
 }

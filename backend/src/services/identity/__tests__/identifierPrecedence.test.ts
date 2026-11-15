@@ -268,6 +268,18 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     // admin:<email> actors, never looked up, joined or compared as a subject reference. Classified per this block's rule;
     // the author found this tripwire when it fired in CI (CC-20261016-sqcm).
     'backend/src/routes/colaberryTvRoutes.ts',
+    // `lead:<id>` and `visitor:<id>` as the RECIPIENT REFERENCE on a `maya_outbound_approvals`
+    // row (T5-T8, 2026-11-15): the opaque handle the approval queue and its log lines carry
+    // instead of an email address, because an API response in this repo carries no PII. It is
+    // never looked up, joined or compared as a subject reference - the queue reads a row by its
+    // own uuid - so it is the same class as the `colaberry_tv_audit` actor label above.
+    //
+    // CLASSIFIED rather than dodged, per this block's rule. Narrowing the pattern to miss a
+    // recipient handle would also stop the scan seeing the next genuine constructor that happens
+    // to look like one. Found by this tripwire firing in a full-suite run, which is the tripwire
+    // working; the author did not know it existed.
+    'backend/src/services/maya/mayaEmailService.ts',
+    'backend/src/services/mayaActionService.ts',
   ];
 
   it('names every non-test file that constructs a subject key', () => {
