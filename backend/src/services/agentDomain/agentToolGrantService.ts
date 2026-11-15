@@ -27,6 +27,9 @@
 import { Transaction, type Sequelize } from 'sequelize';
 import AiAgent from '../../models/AiAgent';
 import AgentDomainToolGrant from '../../models/AgentDomainToolGrant';
+import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
+import type { ToolEnvironment } from '../../db/ensureAgentDomainToolRequestSchema';
+import { datasetNames, loadDatasetCatalog } from './datasetCatalog';
 import { resolveRecordedHumans } from './recordedHumans';
 import { configuredApprovers } from './approverConfiguration';
 import { loadConfirmedCapabilityIds } from './capabilityConfirmationService';
@@ -77,6 +80,25 @@ export interface GrantToolArgs {
    * the question the review console asks. Absent for a grant made for a capability promotion.
    */
   readonly changeRequestId?: string | null;
+  /**
+   * Where this grant applies. Phase 2b. REQUIRED, with no default.
+   *
+   * A default would be a guess about where a tool runs, and `'sandbox'` is the dangerous guess
+   * to make silently: it reads as the safe one while recording that a production grant is not a
+   * production grant. Every caller states it, and `tsc` is what makes that true — adding the
+   * field without a default broke both call sites at compile time, which is the point.
+   */
+  readonly environment: ToolEnvironment;
+  /**
+   * The datasets this grant covers. Omitted means none are recorded, which is correct for a tool
+   * that reads no table.
+   *
+   * Checked against `dataset_registry` and, when this grant answers a request, against what that
+   * request declared. The caller passes it rather than the service deriving it from the request
+   * so that an approver can one day record LESS than was asked for; until that path exists the
+   * ordinary caller passes the request's own declaration straight through.
+   */
+  readonly datasets?: readonly string[];
 }
 
 export interface GrantToolResult {
@@ -96,6 +118,17 @@ export interface GrantToolResult {
    * a record it deliberately left alone.
    */
   readonly changeRequestId: string | null;
+  /**
+   * The scope on the row, READ BACK, for the same reason `changeRequestId` is.
+   *
+   * On a re-grant `findOrCreate` returns the existing row and does not rewrite it, so this is
+   * what the ledger SAYS rather than what the caller asked it to say. The contract refuses a
+   * re-grant that would widen the scope, so the two can only differ by a narrowing — and a
+   * caller who narrowed needs to be told the row still holds the wider scope rather than
+   * believing their narrower one took effect.
+   */
+  readonly environment: string;
+  readonly datasets: string[];
   /** True when the agent already held the tool and nothing changed. */
   readonly unchanged: boolean;
 }
@@ -178,7 +211,50 @@ async function gatherFacts(sequelize: Sequelize, args: GrantToolArgs) {
     ? [...(capability.required_tools ?? [])]
     : null;
 
-  return { recordedHumans, capabilityState, capabilityRequiredTools };
+  // Phase 2b — the catalog a dataset name on this grant has to appear in. `loadDatasetCatalog`
+  // never rejects; an unreadable or empty catalog comes back `catalog_absent`, which the contract
+  // turns into `grant_dataset_roster_absent` when the grant actually names something. Passed as
+  // `null` rather than `[]` because the contract treats those as different facts and only one of
+  // them is a refusal.
+  const catalog = await loadDatasetCatalog(sequelize);
+  const knownDatasets: readonly string[] | null = catalog.catalog_absent
+    ? null
+    : datasetNames(catalog);
+
+  // Phase 2b — THE CEILING, when a request is cited.
+  //
+  // Read HERE rather than taken from the caller, which is the same move as the read-back diff
+  // below and for the same stated reason: a check the caller supplies the inputs to only proves
+  // what the caller believes. `assignExistingToolService` passes the request's declaration
+  // through, so today the comparison confirms the two agree. It becomes load-bearing the moment
+  // anything computes a scope instead of copying one — and it is already live for a
+  // HALF-APPLIED DEPLOY, where Phase 2a's `ADD COLUMN` ran and its `SET NOT NULL` did not: the
+  // detail row then carries a null environment, and this refuses the grant rather than writing
+  // a permission that does not say where it applies.
+  //
+  // `undefined` means no request was cited and there is no ceiling. `null` means one was cited
+  // and could not be read, which is a refusal. Those must not collapse.
+  let requestScope: { environment: string; datasets: readonly string[] } | null | undefined;
+  if (args.changeRequestId) {
+    requestScope = null;
+    try {
+      const detail = await AgentDomainToolRequestDetail.findByPk(args.changeRequestId);
+      const declared = String(detail?.environment ?? '').trim();
+      if (detail && declared) {
+        requestScope = {
+          environment: declared,
+          datasets: Array.isArray(detail.read_datasets)
+            ? detail.read_datasets.map((d) => String(d))
+            : [],
+        };
+      }
+    } catch {
+      // Stays null. An unreadable ceiling is refused by name, never treated as absent.
+      requestScope = null;
+    }
+  }
+
+  return { recordedHumans, capabilityState, capabilityRequiredTools, knownDatasets, requestScope };
 }
 
 /**
@@ -192,7 +268,9 @@ export async function grantToolToAgent(
   sequelize: Sequelize,
   args: GrantToolArgs,
 ): Promise<GrantToolResult> {
-  const { recordedHumans, capabilityState, capabilityRequiredTools } = await gatherFacts(sequelize, args);
+  const {
+    recordedHumans, capabilityState, capabilityRequiredTools, knownDatasets, requestScope,
+  } = await gatherFacts(sequelize, args);
   const registered = registeredToolNames();
 
   return sequelize.transaction(async (transaction) => {
@@ -200,6 +278,26 @@ export async function grantToolToAgent(
       transaction,
       lock: Transaction.LOCK.UPDATE,
     });
+
+    // Phase 2b — what the ledger ALREADY says about this (agent, tool), read inside the
+    // transaction and under the same lock, so a concurrent grant cannot slip between the check
+    // and the write. `undefined` when this is the first grant of this tool to this agent.
+    //
+    // Read before the gate rather than after `findOrCreate`, because by then the decision has
+    // been made: `findOrCreate` keeps the existing row, so a caller asking for a wider scope
+    // would get a 200 and a row that does not match it. The contract refuses that instead.
+    const existing = await AgentDomainToolGrant.findOne({
+      where: { agent_id: args.agentId, tool_name: args.toolName },
+      transaction,
+    });
+    const recordedScope = existing
+      ? {
+        environment: String(existing.environment ?? ''),
+        datasets: Array.isArray(existing.datasets)
+          ? existing.datasets.map((d) => String(d))
+          : [],
+      }
+      : undefined;
 
     const verdict = acceptToolGrant({
       agent: agent
@@ -214,6 +312,11 @@ export async function grantToolToAgent(
       proposedBy: args.proposedBy ?? null,
       registeredToolNames: registered,
       capabilityRequiredTools,
+      environment: args.environment,
+      datasets: args.datasets ?? [],
+      knownDatasets,
+      requestScope,
+      recordedScope,
     });
     if (!verdict.ok) throw new ToolGrantRefusedError(verdict.issues);
 
@@ -231,6 +334,8 @@ export async function grantToolToAgent(
         capability_id: grant.capabilityId,
         change_request_id: args.changeRequestId ?? null,
         approved_by_identity: grant.approvedBy,
+        environment: grant.environment,
+        datasets: [...grant.datasets],
       },
       transaction,
     });
@@ -256,6 +361,10 @@ export async function grantToolToAgent(
         capability_id: grant.capabilityId,
         change_request_id: row.change_request_id ?? null,
         approved_by: grant.approvedBy,
+        // Off the ROW, so the log records the scope that is now on the ledger rather than the
+        // one that was asked for. On a re-grant those differ, and the log should say which.
+        environment: row.environment ?? null,
+        datasets: Array.isArray(row.datasets) ? row.datasets : [],
         unchanged: grant.alreadyGranted,
       },
     }));
@@ -269,6 +378,8 @@ export async function grantToolToAgent(
       approvedBy: grant.approvedBy,
       toolsGranted: [...grant.toolsGrantedAfter],
       changeRequestId: row.change_request_id ?? null,
+      environment: String(row.environment ?? ''),
+      datasets: Array.isArray(row.datasets) ? row.datasets.map((d) => String(d)) : [],
       unchanged: grant.alreadyGranted,
     };
   });

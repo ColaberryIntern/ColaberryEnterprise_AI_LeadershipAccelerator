@@ -143,6 +143,10 @@ beforeEach(() => {
   });
   mockDetailFindByPk.mockResolvedValue({
     change_request_id: REQUEST, agent_id: AGENT, capability_id: 'marketing.CAP.outreach',
+    // Phase 2a's two fields, which Phase 2b carries onto the grant. A detail row without them
+    // is what a production row looked like before 2a, and a test fixture that omits them would
+    // assert the carry-through against an absence.
+    environment: 'production', read_datasets: ['leads', 'enrollments'],
   });
   mockLoadDecisions.mockResolvedValue([{
     change_request_id: REQUEST,
@@ -159,7 +163,7 @@ beforeEach(() => {
 });
 
 describe('what it hands to the grant', () => {
-  it('passes exactly six facts, every one of them from a record somebody already wrote', async () => {
+  it('passes exactly eight facts, every one of them from a record somebody already wrote', async () => {
     await assignExistingTool({ sequelize, changeRequestId: REQUEST, calledBy: ALI });
 
     expect(mockGrant).toHaveBeenCalledTimes(1);
@@ -171,7 +175,50 @@ describe('what it hands to the grant', () => {
       approvedBy: ALI,
       proposedBy: INTERN,
       changeRequestId: REQUEST,
+      // Phase 2b. THE POINT OF THE PHASE: the scope the request declared, carried onto the
+      // grant rather than dropped at the moment of approval. Read off the detail row, not
+      // re-derived, and `grantToolToAgent` independently reads the same request and refuses a
+      // grant that exceeds it.
+      environment: 'production',
+      datasets: ['leads', 'enrollments'],
     });
+  });
+
+  it('carries the scope the REQUEST declared, not a default and not a wider one', async () => {
+    // Before this phase a narrow production request and a wide one produced the identical grant
+    // row: the tool was recorded and the datasets a builder picked from the catalog, and Ali
+    // reviewed, were thrown away. This is the assertion that stops being true if that regresses.
+    mockDetailFindByPk.mockResolvedValue({
+      change_request_id: REQUEST, agent_id: AGENT, capability_id: 'marketing.CAP.outreach',
+      environment: 'sandbox', read_datasets: ['interaction_outcomes'],
+    });
+    await assignExistingTool({ sequelize, changeRequestId: REQUEST, calledBy: ALI });
+    expect(mockGrant.mock.calls[0][1]).toMatchObject({
+      environment: 'sandbox', datasets: ['interaction_outcomes'],
+    });
+  });
+
+  it('passes an EMPTY environment through to be refused, never a guessed one', async () => {
+    // What a half-applied Phase 2a deploy looks like: ADD COLUMN ran, SET NOT NULL did not, and
+    // the detail row carries no environment. Defaulting here would write a permission that does
+    // not say where it applies; the grant gate refuses the empty string by name instead.
+    mockDetailFindByPk.mockResolvedValue({
+      change_request_id: REQUEST, agent_id: AGENT, capability_id: 'marketing.CAP.outreach',
+      environment: null, read_datasets: ['leads'],
+    });
+    await assignExistingTool({ sequelize, changeRequestId: REQUEST, calledBy: ALI });
+    expect(mockGrant.mock.calls[0][1].environment).toBe('');
+    expect(mockGrant.mock.calls[0][1].environment).not.toBe('sandbox');
+  });
+
+  it('coerces a non-array read_datasets to an empty scope rather than throwing', async () => {
+    // read_datasets is jsonb, which the MODEL types and the database does not.
+    mockDetailFindByPk.mockResolvedValue({
+      change_request_id: REQUEST, agent_id: AGENT, capability_id: 'marketing.CAP.outreach',
+      environment: 'sandbox', read_datasets: 'leads',
+    });
+    await assignExistingTool({ sequelize, changeRequestId: REQUEST, calledBy: ALI });
+    expect(mockGrant.mock.calls[0][1].datasets).toEqual([]);
   });
 
   it('CANNOT pass an autonomy level, an enabled flag or a tool list', async () => {

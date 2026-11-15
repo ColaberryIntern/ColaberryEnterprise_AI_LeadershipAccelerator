@@ -18,6 +18,9 @@ const mockRegistered = jest.fn();
 const mockAgentFindByPk = jest.fn();
 const mockGrantFindOrCreate = jest.fn();
 const mockGrantFindAll = jest.fn();
+const mockGrantFindOne = jest.fn();
+const mockDetailFindByPk = jest.fn();
+const mockQuery = jest.fn();
 
 jest.mock('./../recordedHumans', () => ({
   resolveRecordedHumans: (...a: unknown[]) => mockResolveHumans(...a),
@@ -49,7 +52,15 @@ jest.mock('../../../models/AgentDomainToolGrant', () => ({
   default: {
     findOrCreate: (...a: unknown[]) => mockGrantFindOrCreate(...a),
     findAll: (...a: unknown[]) => mockGrantFindAll(...a),
+    // Phase 2b. Read inside the transaction, BEFORE the gate, so a re-grant that would widen the
+    // recorded scope is refused rather than reported as a success that changed nothing.
+    findOne: (...a: unknown[]) => mockGrantFindOne(...a),
   },
+}));
+// Phase 2b. The cited request, which is the CEILING a grant may not exceed.
+jest.mock('../../../models/AgentDomainToolRequestDetail', () => ({
+  __esModule: true,
+  default: { findByPk: (...a: unknown[]) => mockDetailFindByPk(...a) },
 }));
 
 import { Transaction } from 'sequelize';
@@ -63,10 +74,27 @@ const AGENT_ID = '11111111-2222-4333-8444-555555555555';
 const ALI = 'ali@colaberry.com';
 const CAP = 'admissions.CAP.reply';
 
-/** A real transaction runner, so the callback executes and the writes are observable. */
+/**
+ * A real transaction runner, so the callback executes and the writes are observable.
+ *
+ * `query` is here because Phase 2b reads the dataset catalog through the REAL
+ * `loadDatasetCatalog`. Stubbing that module instead would have let the roster answer whatever
+ * this test wanted, and the roster-absent refusal is one of the things worth proving.
+ */
 const sequelize = {
   transaction: async (fn: (t: unknown) => Promise<unknown>) => fn({ id: 'txn-1' }),
+  query: (...a: unknown[]) => mockQuery(...a),
 } as never;
+
+/** One `dataset_registry` row, shaped the way the loader's projection reads it. */
+const catalogRow = (table_name: string) => ({
+  table_name,
+  schema_name: 'public',
+  column_count: 3,
+  semantic_types: { id: 'uuid', email: 'email', created_at: 'timestamp' },
+  status: 'scanned',
+  last_scanned: null,
+});
 
 /** The agent row, with the fields the read-back diff watches. */
 function stageAgent(over: Record<string, unknown> = {}) {
@@ -93,6 +121,10 @@ function args(over: Record<string, unknown> = {}) {
     capabilityId: CAP,
     approvedBy: ALI,
     proposedBy: 'kalkidan@colaberry.com',
+    // Phase 2b. A real environment and a catalogued dataset, so the write assertions below are
+    // not quietly passing because the gate refused the scope for an unrelated reason.
+    environment: 'sandbox',
+    datasets: ['leads'],
     ...over,
   } as Parameters<typeof grantToolToAgent>[1];
 }
@@ -110,7 +142,17 @@ beforeEach(() => {
     { capability_id: CAP, requirement_validation_state: 'draft', required_tools: ['send_email'] },
   ]);
   mockRegistered.mockReturnValue(['send_email', 'draft_marketing_email']);
-  mockGrantFindOrCreate.mockResolvedValue([{ id: 'grant-1' }, true]);
+  mockGrantFindOrCreate.mockResolvedValue([
+    // The row the ledger hands back, WITH its scope — the service reports the scope off the row
+    // rather than echoing the caller, so a row without these fields would report an empty scope
+    // on a successful grant.
+    { id: 'grant-1', environment: 'sandbox', datasets: ['leads'] },
+    true,
+  ]);
+  // Phase 2b defaults: no grant recorded yet for this (agent, tool), and a readable catalog.
+  mockGrantFindOne.mockResolvedValue(null);
+  mockDetailFindByPk.mockResolvedValue(null);
+  mockQuery.mockResolvedValue([catalogRow('leads'), catalogRow('enrollments')]);
 });
 
 afterEach(() => { delete process.env.TOOL_GRANT_APPROVERS; });

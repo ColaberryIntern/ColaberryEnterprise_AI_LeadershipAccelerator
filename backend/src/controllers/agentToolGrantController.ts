@@ -75,12 +75,21 @@ export async function handleGrantTool(req: Request, res: Response): Promise<void
       capabilityId: parsed.data.capability_id,
       approvedBy: actor,
       proposedBy: parsed.data.proposed_by ?? null,
+      // Phase 2b. No `changeRequestId` on this route, so no request ceiling applies — this is
+      // the capability-promotion path, which answers no request by definition. What bounds the
+      // scope here is the catalog check and `requireAdmin`, and that is worth saying plainly:
+      // an admin granting production datasets directly is not checked against a reviewed
+      // request, because there isn't one.
+      environment: parsed.data.environment,
+      datasets: parsed.data.datasets ?? [],
     });
     log({
       level: 'info',
       outcome: 'success',
       agent_name: result.agentName,
       tool_name: result.toolName,
+      environment: result.environment,
+      dataset_count: result.datasets.length,
       unchanged: result.unchanged,
     });
     res.json({ grant: result });
@@ -129,6 +138,10 @@ export async function handleListAgentGrants(req: Request, res: Response): Promis
         capability_id: r.capability_id,
         // AF11.4. Null for a grant made for a capability promotion, which answers no request.
         change_request_id: r.change_request_id ?? null,
+        // Phase 2b — the scope the grant was approved for. An audit trail that lists the tool
+        // and omits the data it reaches answers the less interesting half of the question.
+        environment: r.environment ?? null,
+        datasets: Array.isArray(r.datasets) ? r.datasets : [],
         approved_by_identity: r.approved_by_identity,
         approved_at: r.approved_at,
       })),

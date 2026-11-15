@@ -68,6 +68,9 @@ const goodBody = {
   agent_id: AGENT_ID,
   tool_name: 'send_email',
   capability_id: 'admissions.CAP.reply',
+  // Phase 2b. REQUIRED, so the clean body must carry it or every 409/500/200 case below would
+  // be refused at the schema instead and pass for the wrong reason.
+  environment: 'sandbox',
 };
 
 beforeEach(() => { jest.clearAllMocks(); });
@@ -139,7 +142,10 @@ describe('500 — the grant touched more than the tool list', () => {
 
 describe('the actor comes from the token and is never invented', () => {
   it('passes the token email through to the service', async () => {
-    mockGrant.mockResolvedValue({ agentName: 'Maya', toolName: 'send_email', unchanged: false });
+    mockGrant.mockResolvedValue({
+      agentName: 'Maya', toolName: 'send_email', unchanged: false,
+      environment: 'sandbox', datasets: ['leads'],
+    });
     await handleGrantTool(req(goodBody), res());
     expect(mockGrant.mock.calls[0][1]).toMatchObject({ approvedBy: ALI });
   });
@@ -148,7 +154,10 @@ describe('the actor comes from the token and is never invented', () => {
     // approvalRequestController writes `req.admin?.email || 'unknown'`, and because
     // isNonHumanIdentity('unknown') is false, every row it wrote claims a human decided
     // something nobody did. This controller hands the service nothing to misread.
-    mockGrant.mockResolvedValue({ agentName: 'Maya', toolName: 'send_email', unchanged: false });
+    mockGrant.mockResolvedValue({
+      agentName: 'Maya', toolName: 'send_email', unchanged: false,
+      environment: 'sandbox', datasets: ['leads'],
+    });
     await handleGrantTool(req(goodBody, null), res());
     expect(mockGrant.mock.calls[0][1].approvedBy).toBe('');
     expect(mockGrant.mock.calls[0][1].approvedBy).not.toBe('unknown');
@@ -159,11 +168,92 @@ describe('200 — granted', () => {
   it('returns the grant', async () => {
     mockGrant.mockResolvedValue({
       grantId: 'g1', agentName: 'Maya', toolName: 'send_email', unchanged: false,
+      environment: 'sandbox', datasets: ['leads'],
     });
     const r = res();
     await handleGrantTool(req(goodBody), r);
     expect(r.status).not.toHaveBeenCalledWith(400);
     expect(r.json.mock.calls[0][0].grant).toMatchObject({ toolName: 'send_email' });
+  });
+
+  it('returns the SCOPE too, because a grant that hides what it reaches is half a record', async () => {
+    mockGrant.mockResolvedValue({
+      grantId: 'g1', agentName: 'Maya', toolName: 'read_leads', unchanged: false,
+      environment: 'production', datasets: ['leads', 'enrollments'],
+    });
+    const r = res();
+    await handleGrantTool(req({ ...goodBody, environment: 'production' }), r);
+    expect(r.json.mock.calls[0][0].grant).toMatchObject({
+      environment: 'production', datasets: ['leads', 'enrollments'],
+    });
+  });
+});
+
+describe('400 — Phase 2b, the scope fields', () => {
+  it('REFUSES a body with no environment, rather than defaulting it to sandbox', async () => {
+    // The quiet alternative was a default, and `'sandbox'` is the dangerous one to pick
+    // silently: it reads as the safe guess while recording that a production grant is not one.
+    const { environment: _dropped, ...noEnvironment } = goodBody;
+    const r = res();
+    await handleGrantTool(req(noEnvironment), r);
+    expect(r.status).toHaveBeenCalledWith(400);
+    expect(mockGrant).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES an environment outside the two, naming both', async () => {
+    const r = res();
+    await handleGrantTool(req({ ...goodBody, environment: 'staging' }), r);
+    expect(r.status).toHaveBeenCalledWith(400);
+    expect(mockGrant).not.toHaveBeenCalled();
+    const [body] = r.json.mock.calls[0];
+    const detail = body.issues.map((i: { detail: string }) => i.detail).join(' ');
+    expect(detail).toContain('sandbox');
+    expect(detail).toContain('production');
+  });
+
+  it('ACCEPTS a body with no datasets, because a tool that sends email reads no table', async () => {
+    mockGrant.mockResolvedValue({
+      grantId: 'g1', agentName: 'Maya', toolName: 'send_email', unchanged: false,
+      environment: 'sandbox', datasets: [],
+    });
+    const r = res();
+    await handleGrantTool(req(goodBody), r);
+    expect(r.status).not.toHaveBeenCalledWith(400);
+    expect(mockGrant.mock.calls[0][1].datasets).toEqual([]);
+  });
+
+  it('REFUSES more datasets than one grant may cover, without reaching the service', async () => {
+    const r = res();
+    await handleGrantTool(req({
+      ...goodBody,
+      datasets: Array.from({ length: 51 }, (_, i) => `t_${i}`),
+    }), r);
+    expect(r.status).toHaveBeenCalledWith(400);
+    expect(mockGrant).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES a blank dataset name, which would record a scope entry that means nothing', async () => {
+    const r = res();
+    await handleGrantTool(req({ ...goodBody, datasets: ['leads', '  '] }), r);
+    expect(r.status).toHaveBeenCalledWith(400);
+    expect(mockGrant).not.toHaveBeenCalled();
+  });
+
+  it('passes the scope through to the service unchanged', async () => {
+    mockGrant.mockResolvedValue({
+      grantId: 'g1', agentName: 'Maya', toolName: 'read_leads', unchanged: false,
+      environment: 'production', datasets: ['leads'],
+    });
+    await handleGrantTool(
+      req({ ...goodBody, environment: 'production', datasets: ['leads'] }),
+      res(),
+    );
+    expect(mockGrant.mock.calls[0][1]).toMatchObject({
+      environment: 'production', datasets: ['leads'],
+    });
+    // And NO changeRequestId: this route is the capability-promotion path and answers no
+    // request, so no request ceiling applies to it. Stated here so that stops being implicit.
+    expect(mockGrant.mock.calls[0][1].changeRequestId).toBeUndefined();
   });
 });
 
