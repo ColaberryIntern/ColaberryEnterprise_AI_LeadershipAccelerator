@@ -10,15 +10,7 @@
    @font-face rules. Roboto & Roboto Mono are Apache-2.0;
    Quicksand is OFL-1.1 (see assets/fonts/LICENSES.md).
    ============================================================ */
-/*
- * REMOVED 2026-08-13. This @import pulled Roboto, Roboto Mono and Quicksand from
- * fonts.googleapis.com on every page of the app, before any consent was given.
- * Removing the <link> from index.html was not enough on its own -- this import
- * kept the request alive, which the request sweep caught.
- *
- * The same families are now declared from local woff2 in src/fonts/fonts.css,
- * imported first in index.tsx. The note above about moving them local is done.
- */
+/* design-sync: external @import removed (https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&family=Roboto+Mono:wght@400;500;700&family=Quicksand:wght@500;600;700&display=swap); the build is hermetic */
 
 /* ============================================================
    ICON FONT — RemixIcon (Apache-2.0, ~3,000 icons).
@@ -28,7 +20,4 @@
    Names: ri-{name}-line (default, matches our soft 2px style) or
    ri-{name}-fill. Browse at remixicon.com.
    ============================================================ */
-/* Loaded via a <link> in public/index.html instead of @import. An external
-   @import here sits behind main.css in the request chain: the browser cannot
-   discover it until main.css has fully downloaded, adding a serial round-trip
-   to first paint. The <link> downloads in parallel. */
+/* design-sync: external @import removed (https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css); the build is hermetic */

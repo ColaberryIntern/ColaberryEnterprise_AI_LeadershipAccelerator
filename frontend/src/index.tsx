@@ -23,6 +23,7 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 import './styles/global.css';
 import './styles/responsive.css';
 import './colaberry/styles.css';
+import './styles/colaberry-platform-tokens.css';
 import './styles/brand-bridge.css';
 import './styles/admin-shell.css';
 

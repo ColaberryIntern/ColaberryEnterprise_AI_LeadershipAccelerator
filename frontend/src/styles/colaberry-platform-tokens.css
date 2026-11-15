@@ -1,0 +1,39 @@
+/* ============================================================
+   colaberry-platform-tokens.css
+   Tokens this platform needs that the Colaberry design system does not publish.
+
+   WHY THIS FILE EXISTS. src/colaberry/ is a vendored copy of
+   github.com/aleemcolaberry/colaberry-design-system, kept in step by
+   backend/src/scripts/syncDesignSystems.js (design-system-sync.yml). A sync
+   overwrites those files with upstream bytes, so anything added inside them is
+   reverted on the next run. Platform-only additions live here instead, where
+   the sync never writes, and the vendored copy can match upstream exactly.
+
+   Both of these were originally added inside the vendored token files and moved
+   here on 2026-11-15 with values unchanged (see src/colaberry/PROVENANCE.md).
+
+   LOAD ORDER: imported in index.tsx directly after ./colaberry/styles.css, so
+   the palette these reference (--chart-5, --chart-6, --neutral-0) is defined.
+   Declared on :root like the tokens they extend; the var() references resolve
+   per theme because [data-theme] sits on the same <html> element.
+
+   RULE: add a name here only if the design system does not define it. Never
+   redefine a design-system token here; that is a design change and belongs
+   upstream with Aleem. styles/__tests__/platformTokens.test.ts enforces it.
+   ============================================================ */
+
+:root {
+  /* Status: data-viz-extension tones, for cases beyond the 4 core semantic states
+     (e.g. agent-generated ticket types). Sourced from the existing theme-aware
+     --chart-5/--chart-6 tokens (never a new hex value), same color-mix() light-tint
+     technique --surface-brand-subtle already uses. Added 2026-08-12 (55d89de5). */
+  --status-violet:    var(--chart-5);
+  --status-violet-bg: color-mix(in srgb, var(--chart-5) 14%, var(--neutral-0));
+  --status-teal:      var(--chart-6);
+  --status-teal-bg:   color-mix(in srgb, var(--chart-6) 14%, var(--neutral-0));
+
+  /* The persistent broadcast mini-player. Above sticky chrome (--z-sticky: 100) so it
+     is never buried, and BELOW every overlay (--z-overlay: 1000), modal and toast:
+     a player that covers a dialog is a bug. Added 2026-10-05 (a61cb00a). */
+  --z-player: 110;
+}

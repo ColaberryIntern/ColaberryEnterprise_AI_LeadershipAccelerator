@@ -6,8 +6,9 @@
  *   node backend/src/scripts/syncDesignSystems.js --check    # report only, exit 1 on drift
  *   node backend/src/scripts/syncDesignSystems.js --brand cpn
  *
- * The five design systems are authored at github.com/aleemcolaberry, one repository per
- * brand, each published to GitHub Pages. This script vendors their token CSS and fonts so
+ * The brand design systems are authored at github.com/aleemcolaberry, one repository per
+ * brand, plus the original colaberry-design-system that the React app in frontend/ paints
+ * from. This script vendors their token CSS and fonts so
  * the platform build stays hermetic while the vendored copy stays honest. The planning
  * and parsing live in lib/designSystemSync.js and are unit tested; this file is the I/O.
  *
@@ -28,6 +29,8 @@ const fs = require('fs');
 const path = require('path');
 const {
   DESIGN_SYSTEMS,
+  isAllowedTarget,
+  stripExternalImports,
   ENTRY,
   rawUrl,
   collectFiles,
@@ -134,6 +137,12 @@ async function syncOne(system, { check }) {
     return { brandSlug: system.brandSlug, skipped: true, drift: false };
   }
 
+  // The test pins this too; checking again here means a bad registry edit cannot write
+  // anywhere even on a machine where the tests were never run.
+  if (!isAllowedTarget(system.target)) {
+    throw new Error(`refusing to write to unregistered target ${system.target}`);
+  }
+
   const cache = new Map();
   const readFile = async (repoPath) => {
     if (!cache.has(repoPath)) cache.set(repoPath, await fetchFile(system.repo, repoPath));
@@ -146,8 +155,17 @@ async function syncOne(system, { check }) {
   }
 
   // Everything is already in the cache from the walk, so this stages without re-fetching.
+  // The transform runs before the diff so the vendored copy is compared against what we
+  // would write, not against raw upstream: otherwise a stripped import would read as
+  // permanent drift and reopen the same pull request every night.
   const upstream = new Map();
-  for (const repoPath of files) upstream.set(repoPath, cache.get(repoPath));
+  for (const repoPath of files) {
+    let bytes = cache.get(repoPath);
+    if (system.stripExternalImports && repoPath.endsWith('.css')) {
+      bytes = Buffer.from(stripExternalImports(bytes.toString('utf8')), 'utf8');
+    }
+    upstream.set(repoPath, bytes);
+  }
 
   const absTargetDir = path.join(REPO_ROOT, system.target);
   const local = readLocalTree(absTargetDir);
