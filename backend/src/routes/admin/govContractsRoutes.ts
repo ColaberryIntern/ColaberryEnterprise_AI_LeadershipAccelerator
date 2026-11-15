@@ -107,6 +107,16 @@ router.get('/api/admin/gov-contracts/:projectId/repo-file', requireSection('gov_
   await serveGovRepoFile(req.params.projectId, req.query.path, res, { download: req.query.download === '1' });
 });
 
+/**
+ * GET /api/admin/gov-contracts/:projectId/build-artifacts/:artifactId/file — the SAME build artifact the intern
+ * submitted from their repo, for the admin cockpit. Section-gated (gov_contracts); the serving half (scope
+ * re-check, nosniff, attachment) is shared with the portal route so the two can't drift.
+ */
+router.get('/api/admin/gov-contracts/:projectId/build-artifacts/:artifactId/file', requireSection('gov_contracts'), async (req: Request, res: Response) => {
+  const { serveGovBuildArtifact } = await import('../govBuildArtifactResponse');
+  await serveGovBuildArtifact(req.params.projectId, req.params.artifactId, res);
+});
+
 // ── Management-drivable proposal + copilot (Ali, 2026-11-02) ──────────────────────────────────────────────────
 // Management does not just READ a gov contract — from the admin Interns-hub cockpit it can DRIVE the proposal
 // workflow (draft / accept / request-changes / comment) and ask the project copilot. These MIRROR the student

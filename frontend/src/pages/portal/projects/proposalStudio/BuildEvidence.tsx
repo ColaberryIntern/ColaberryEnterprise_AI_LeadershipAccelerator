@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi, GovStudioApi, GovRepoDeliverable } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi, GovStudioApi, GovRepoDeliverable, GovSubmittedArtifact } from '../../../../services/govProjectPortalApi';
 import { Bar } from './studioHelpers';
 import { RepoFileCards, RepoFileViewer } from './RepoFileCards';
+import { BuildArtifactCards, BuildArtifactViewer } from './BuildArtifactCards';
 
 /** A captured screenshot thumbnail — fetched as an object URL. The reviewer (admin) uses the review API; an intern
  *  (no reviewApi) uses the member-level studio image route; a hatched placeholder otherwise or while loading. */
@@ -57,6 +58,19 @@ export default function BuildEvidence(
       return fetchRepoFile(projectId, p, opts);
     },
     [fetchRepoFile, projectId],
+  );
+
+  // The deliverables the intern submitted from their repo (a project overview, diagrams, reports). A source-only
+  // build repo has no structured documents, so the "Files" block above stays empty; these are what they built.
+  const submittedArtifacts: GovSubmittedArtifact[] = view.submittedArtifacts ?? [];
+  const [openArtifact, setOpenArtifact] = useState<GovSubmittedArtifact | null>(null);
+  const fetchBuildArtifact = studioApi?.fetchBuildArtifact;
+  const buildArtifactFetch = useCallback(
+    (id: string) => {
+      if (!fetchBuildArtifact) return Promise.reject(new Error('unavailable'));
+      return fetchBuildArtifact(projectId, id);
+    },
+    [fetchBuildArtifact, projectId],
   );
 
   const saveDemoUrl = useCallback(async () => {
@@ -146,9 +160,17 @@ export default function BuildEvidence(
         </div>
       )}
       {openFile && <RepoFileViewer deliverable={openFile} fetchFile={repoFetch} onClose={() => setOpenFile(null)} />}
-      {builtArtifacts.length === 0 ? (
-        <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo &mdash; and their demo videos once recorded.</div>
-      ) : (
+      {submittedArtifacts.length > 0 && (
+        <div className="gps-panel" data-testid="ev-build-artifacts" style={{ marginBottom: 12 }}>
+          <div className="gps-row" style={{ marginBottom: 8 }}>
+            <b>Submitted from the repo</b>
+            <span className="gps-small gps-muted">{submittedArtifacts.length} artifact{submittedArtifacts.length === 1 ? '' : 's'}</span>
+          </div>
+          <BuildArtifactCards artifacts={submittedArtifacts} onOpen={setOpenArtifact} />
+        </div>
+      )}
+      {openArtifact && <BuildArtifactViewer artifact={openArtifact} fetchFile={buildArtifactFetch} onClose={() => setOpenArtifact(null)} />}
+      {builtArtifacts.length > 0 ? (
         <div className="gps-gallery">
           {builtArtifacts.map(({ story, e }, i) => (
             <div className="gps-panel" key={e.id || `${story.id}-${i}`} data-testid="ev-artifact" data-source={e.source ?? 'student'}>
@@ -163,7 +185,9 @@ export default function BuildEvidence(
             </div>
           ))}
         </div>
-      )}
+      ) : submittedArtifacts.length === 0 ? (
+        <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo &mdash; and their demo videos once recorded.</div>
+      ) : null}
     </div>
   );
 }
