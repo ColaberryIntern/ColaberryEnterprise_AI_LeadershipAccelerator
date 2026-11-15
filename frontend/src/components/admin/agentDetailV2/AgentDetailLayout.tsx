@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AgentDetail } from '../../../services/agentDetailApi';
 import { AutonomyLevel, AUTONOMY_LEVELS, AUTONOMY_LEVEL_DESCRIPTIONS } from '../../../services/workforceOrgChartApi';
 import { timeAgo } from '../shell/trust';
-import { TabKey, TABS, STATUS_LABEL, LEVEL_PILL_CLASS, useAdv2Fonts } from './AgentDetailV2Header';
+import { TabKey, STATUS_LABEL, LEVEL_PILL_CLASS, useAdv2Fonts, tabsFor } from './AgentDetailV2Header';
 
 // Agent Detail redesign, Track A0 (2026-09-21) — Ali: "revamp the entire
 // thing... every employee that has an employee assigned to them will have
@@ -82,7 +82,7 @@ export default function AgentDetailLayout({
         </div>
 
         <nav className="adv2-sidebar-nav" aria-label="Agent workspace" role="tablist">
-          {TABS.map((tab) => (
+          {tabsFor(agent.agent_name).map((tab) => (
             <button
               key={tab.key}
               role="tab"

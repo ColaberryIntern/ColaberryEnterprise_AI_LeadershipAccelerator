@@ -141,6 +141,38 @@ describe('AgentDetailLayout — sidebar nav', () => {
     expect(props.onTabChange).toHaveBeenCalledWith('work');
   });
 
+  it('gives an agent with governed outbound an EIGHTH tab, and gives it to nobody else', async () => {
+    // Maya fold-in (2026-11-15), Ali: "I'm curious as to why you didn't integrate into the
+    // current agent system". Her outbound approval queue was a standalone page; it is now a tab
+    // here. The budget above is deliberately NOT raised to 8: the tab is conditional, so the 275
+    // other agents render the same 7 they rendered yesterday. That is why this is an extra test
+    // rather than an edit to the assertion above - widening who sees it means editing a frozen,
+    // test-pinned list (governedOutboundAgents.ts), which is a louder change than editing an
+    // array of labels.
+    const props = baseProps({ detail: { ...DETAIL, agent: { ...DETAIL.agent, agent_name: 'Maya' } } });
+    await render(props);
+
+    const rendered = Array.from(container.querySelectorAll('.adv2-sidebar-navbtn'))
+      .map((b) => b.textContent);
+    expect(rendered).toEqual([
+      'Overview', 'Talk to Reese', 'Work & commitments', 'Decisions & evidence',
+      'Tools & access', 'Email', 'Performance & settings', 'Outbound approvals',
+    ]);
+    // Appended, not inserted: the seven keep the positions every other agent sees.
+    expect(rendered[rendered.length - 1]).toBe('Outbound approvals');
+
+    await act(async () => {
+      findButton(container, 'Outbound approvals').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(props.onTabChange).toHaveBeenCalledWith('outbound');
+  });
+
+  it('CONTROL - an agent NOT on the list still renders exactly 7, so the test above is about the list', async () => {
+    await render(baseProps({ detail: { ...DETAIL, agent: { ...DETAIL.agent, agent_name: 'Dara' } } }));
+    expect(container.querySelectorAll('.adv2-sidebar-navbtn')).toHaveLength(7);
+    expect(container.textContent).not.toContain('Outbound approvals');
+  });
+
   it('the "Talk to" nav label uses the REAL current agent\'s displayName, not a hardcoded "Reese" (this page is shared by every agent, e.g. Dara)', async () => {
     await render(baseProps({ displayName: 'Dara' }));
 

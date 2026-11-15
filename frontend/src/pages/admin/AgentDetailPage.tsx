@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { getAgentDetail, AgentDetail, AgentDetailTicket } from '../../services/agentDetailApi';
 import { getManagerInboxItems, ManagerInboxItem } from '../../services/managerInboxApi';
 import { getTicketStatusLabel } from '../../utils/ticketTypeMeta';
 import { resetAgents, reactivateAgent, AutonomyLevel } from '../../services/workforceOrgChartApi';
 import '../../styles/agentDetailV2.css';
-import { TabKey } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
+import { TabKey, tabsFor } from '../../components/admin/agentDetailV2/AgentDetailV2Header';
 import AgentDetailLayout from '../../components/admin/agentDetailV2/AgentDetailLayout';
 import AgentOverviewV2 from '../../components/admin/agentDetailV2/AgentOverviewV2';
 import AgentWorkDecisionsTab from '../../components/admin/AgentWorkDecisionsTab';
@@ -14,6 +14,8 @@ import AgentWorkV2 from '../../components/admin/agentDetailV2/AgentWorkV2';
 import AgentTalkTab from '../../components/admin/AgentTalkTab';
 import AgentPerformanceSettingsTab from '../../components/admin/AgentPerformanceSettingsTab';
 import AgentToolsTab from '../../components/admin/agentDetailV2/AgentToolsTab';
+import AgentOutboundTab from '../../components/admin/agentDetailV2/AgentOutboundTab';
+import { showsGovernedOutbound } from '../../components/admin/agentDetailV2/governedOutboundAgents';
 
 // Agent Detail — Ali's requested transparency page: who this agent is, its real
 // system prompt, its real tools/capabilities, its live status, and its linked
@@ -174,6 +176,20 @@ export default function AgentDetailPage() {
   // id with no agent-specific branching) — every agent's own page changes
   // its landing tab, not just Reese's, same disclosed characteristic as
   // Track A0's shell change.
+  //
+  // Tab deep-linking (2026-11-15). `?tab=<key>` sets the landing tab, and nothing else reads or
+  // writes the query string - switching tabs after load deliberately does NOT push a new URL,
+  // because that would put a browser-history entry behind every sidebar click.
+  //
+  // It exists because `/admin/outbound-approvals` was folded into this page and still has to send
+  // its readers somewhere specific. A redirect that silently landed on Overview would be a worse
+  // answer than a 404: it looks like the feature was deleted.
+  //
+  // VALIDATED AGAINST THE TAB LIST, not merely cast. An unknown or non-applicable key falls back
+  // to Overview, so `?tab=outbound` on an agent that has no outbound tab lands somewhere real
+  // rather than rendering a sidebar with no matching content.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   // Agent Detail polish round 4 (2026-09-30) — Ali, live: "Discuss with
   // Reese... should send a message about that case to reese so we can
@@ -207,6 +223,17 @@ export default function AgentDetailPage() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [activeTab]);
+  // Apply `?tab=` once the agent is known, because which tabs EXIST depends on the agent (see
+  // tabsFor / governedOutboundAgents). Guarded by a ref rather than by the dependency list: this
+  // must not fight the user if they click a different tab afterwards, and `detail` is refetched
+  // by several handlers on this page, each of which would otherwise yank them back.
+  const deepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (deepLinkApplied.current || !detail || !requestedTab) return;
+    deepLinkApplied.current = true;
+    const match = tabsFor(detail.agent.agent_name).find((t) => t.key === requestedTab);
+    if (match) setActiveTab(match.key);
+  }, [detail, requestedTab]);
   // AI Workforce Reset (2026-08-24) — Ali, live: deactivate an agent and
   // cancel its open tickets, reversible (enabled:false, real ticket
   // cancellation) — see workforceOrgChartApi.ts::resetAgents().
@@ -387,6 +414,14 @@ export default function AgentDetailPage() {
           `/api/admin/agents/:id/email`. Sharing the state would conflate two different inboxes. */}
       {activeTab === 'email' && (
         <AgentEmailTab agentId={id} />
+      )}
+      {/* Outbound approvals (2026-11-15). Rendered only for the agents in
+          GOVERNED_OUTBOUND_AGENTS, and gated AGAIN here rather than trusting the sidebar not to
+          offer the tab: `activeTab` is component state, so a stale value surviving a navigation
+          between two agents would otherwise mount an approval control on the wrong agent's page.
+          The sidebar decides what is offered; this decides what is rendered. */}
+      {activeTab === 'outbound' && showsGovernedOutbound(detail.agent.agent_name) && (
+        <AgentOutboundTab />
       )}
       {activeTab === 'talk' && (
         <AgentTalkTab

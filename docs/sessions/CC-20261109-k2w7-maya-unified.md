@@ -163,3 +163,34 @@ any of them, and their own test files are untouched:
     refusal that was the true cause of zero grants across all 31 agents, but the table is still
     empty, so her dashboard still reads "held without a grant". Writing those rows is a production
     database write and therefore a console action, not something this deploy performed.
+## 2026-11-15 — folded into the agent workspace, and a gate that was not a gate
+
+- [x] Fold Maya's two standalone pages into `/admin/agents/:id`, and close the enablement bypass
+  - Date: 2026-11-15
+  - Session: CC-20261109-k2w7
+  - What changed: `/admin/maya` and `/admin/outbound-approvals` retired into the existing agent
+    workspace — the outbound queue as a conditional 8th tab, the capability dial as a section in
+    the existing Tools & access tab. Both URLs now redirect. `POST /api/admin/workforce/agents/:id/reactivate`
+    gained the Ali-only check for governed agents.
+  - Verification: backend and frontend `tsc --noEmit` clean, each proven by a planted control
+    error being the only reported error; `checkTestTypecheck.js` at 8192MB heap matched the
+    baseline exactly in both directions; all 6 CI guard scripts pass; backend suite 2812 passed /
+    3 known pre-existing CRLF failures; frontend 730 passed / 1 known CRLF failure / 3 helper
+    files that are not suites; `CI=true react-scripts build` exit 0. Four mutants planted against
+    the new gate, all four killed, source restored byte-identical.
+  - Notes: **The hole this closed is the important part.** PR #4054 put an `isCoryAuthorizedIdentity`
+    check on `POST /api/admin/maya/enable` and `MAYA_GOVERNANCE.md` then stated "Turn her agent row
+    ON | Ali or a super_admin" as a property of the system. It was a property of one route.
+    `/api/admin/workforce/agents/:id/reactivate` has been `requireAdmin` since 2026-08-24, writes
+    `enabled: true` on any agent by id, and is what the workspace's own Reactivate button calls —
+    so any admin could already turn her on. The check now lives at the route that can actually
+    write the column. Its tests assert the two directions that matter: it does NOT fire for an
+    ungoverned agent, and it is NOT present on the deactivation path, because narrowing must stay
+    open to any admin.
+  - Also: the fold-in deliberately did **not** inherit the destination's gates. The Email tab's
+    routes are `requireAgentManagerOrAdmin()`, two rungs wider than `requireCoryAuthorized`;
+    approving an email draft there sends nothing, while approving on the Outbound tab sends. The
+    new tab keeps its own routes and says the difference on screen.
+  - Tab budget: the 7-tab pin in `AgentDetailLayout.test.tsx` is untouched because the new tab is
+    conditional on a frozen, test-pinned agent list. Two tests added — the 8th tab for her, and a
+    control that an agent not on the list still renders exactly 7.

@@ -176,15 +176,36 @@ is any admin's**, because silencing her during an incident must never wait on on
 
 | Action | Who | Where |
 |---|---|---|
-| Approve one outbound message | Ali or a super_admin | `/admin/outbound-approvals` |
-| Reject one outbound message | any admin | the same screen |
-| Turn her agent row ON | Ali or a super_admin | `/admin/maya` |
-| Turn her agent row OFF | any admin | `/admin/maya` |
-| Widen a capability (`shadow -> review -> live`) | Ali or a super_admin | `/admin/maya` |
-| Narrow a capability | any admin | `/admin/maya` |
+| Approve one outbound message | Ali or a super_admin | her workspace, **Outbound approvals** tab |
+| Reject one outbound message | any admin | the same tab |
+| Turn her agent row ON | Ali or a super_admin | her workspace, **Tools & access** tab |
+| Turn her agent row OFF | any admin | the same section |
+| Widen a capability (`shadow -> review -> live`) | Ali or a super_admin | the same section |
+| Narrow a capability | any admin | the same section |
 | Confirm a capability record so a tool can be granted | Ali | the capability ladder |
 | Approve a tool grant | Ali, and never the proposer | `/admin/tool-requests` |
 | Throw the kill switch | any admin | the existing War Room control |
+
+"Her workspace" is `/admin/agents/<her id>`. These were two standalone pages, `/admin/maya` and
+`/admin/outbound-approvals`, for a few hours on 2026-11-15. Ali, the same day: *"I'm curious as to
+why you didn't integrate into the current agent system"* — and he was right: that page already had
+an enable control, a Tools & access tab and an email queue, so the new pages were a second place to
+look. Both URLs still resolve, as redirects. **The surfaces moved; the gates did not.** The
+Outbound approvals tab sits beside the Email tab, whose own routes are
+`requireAgentManagerOrAdmin()`, and it deliberately does not inherit that: approving an email draft
+on the Email tab records a decision and sends nothing, while approving here sends.
+
+### The second door into `enabled`, which this table used to describe as locked
+
+Until 2026-11-15 the row above was **false**. `POST /api/admin/maya/enable` had the Ali-only check,
+but `POST /api/admin/workforce/agents/:id/reactivate` has been `requireAdmin` since 2026-08-24,
+writes `enabled: true` on any agent found by id, and is what the workspace's own "Reactivate"
+button calls. Any admin could turn her on through the button this document did not mention.
+
+A gate that one route enforces and a sibling route does not is not a gate. The check now lives at
+the route that can actually write the column — see `governedEnablementAgents.ts` and
+`reactivateGovernedAgent.test.ts`, whose controls assert that it does **not** fire for an
+ungoverned agent and is **not** present on the deactivation path.
 
 Two of those gates require **Ali's own identity** and nothing in this build routes around either:
 promotion (`requireCoryAuthorized`) and tool-grant approval, which refuses
