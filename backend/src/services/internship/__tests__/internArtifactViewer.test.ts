@@ -62,6 +62,31 @@ describe('the right viewer per file (Ali, 10 Nov 2026: a PDF viewer and a CSV vi
     expect(fileKind('thing.bin', 'application/octet-stream')).toBe('other');
   });
 
+  it('an HTML page is its own kind, not wrong-format text (Ali, 15 Nov 2026)', () => {
+    // `text/html` matches TEXT_MIME, so these used to come back as 'text' and the viewer showed
+    // their SOURCE under "Markdown/text: wrong format". A page built from HTML is the format the
+    // Internship Report asks for, so the scolding was advice to undo the work.
+    expect(fileKind('BusinessAnalysis_FieldGuide.html')).toBe('html');
+    expect(fileKind('project-overview.html', 'text/html')).toBe('html');
+    expect(fileKind('old.htm')).toBe('html');
+    expect(fileKind('page', 'text/html; charset=utf-8')).toBe('html');
+    // The kinds either side of it must not move.
+    expect(fileKind('README.md', 'text/markdown')).toBe('text');
+    expect(fileKind('diagram.svg', 'image/svg+xml')).toBe('image');
+  });
+
+  it('an HTML page is read as text, so the viewer can render it in a sandbox', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'uploads-html-'));
+    fs.writeFileSync(path.join(root, 'guide.html'), '<!doctype html><title>Field guide</title><p>hello');
+    expect(readUpload(path.join(root, 'guide.html'), 'text/html', root).text).toContain('<title>Field guide</title>');
+    // And the view calls it html, so the page picks the sandboxed iframe over the <pre>.
+    const v = shapeArtifact({
+      id: 'i', kind: 'build_artifact', title: 'Field guide', created_at: '2026-11-15T00:00:00Z', intern: 'Jude',
+      content: { stored_path: '/nowhere/guide.html', filename: 'guide.html', mimetype: 'text/html' },
+    });
+    expect(v.file?.kind).toBe('html');
+  });
+
   it('csvRows parses quoted cells with commas and newlines, like the real inventory CSV', () => {
     const rows = csvRows('Deliverable,Exists,Verdict\n"Workspace & CLAUDE.md","Yes - 3 real files, dense",Solid\nAgent skills,"Yes - 14 dirs\nmostly real",Thin\n');
     expect(rows).toEqual([

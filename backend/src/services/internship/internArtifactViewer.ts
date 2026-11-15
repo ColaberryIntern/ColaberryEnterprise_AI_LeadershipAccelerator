@@ -36,7 +36,7 @@ const TEXT_MIME = /^(text\/|application\/(json|xml|x-yaml|yaml))/;
  * to have a pdf viewer in the platform ... I should be able to have a csv viewer where I can view
  * in excel"). From the extension first, then the stored mimetype.
  */
-export type ArtifactFileKind = 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'image' | 'text' | 'other';
+export type ArtifactFileKind = 'pdf' | 'csv' | 'word' | 'slides' | 'spreadsheet' | 'image' | 'html' | 'text' | 'other';
 export function fileKind(name: string, mimetype?: unknown): ArtifactFileKind {
   const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?? '';
   const mime = typeof mimetype === 'string' ? mimetype.toLowerCase() : '';
@@ -46,6 +46,11 @@ export function fileKind(name: string, mimetype?: unknown): ArtifactFileKind {
   if (ext === 'pptx' || ext === 'ppt' || mime.includes('presentationml')) return 'slides';
   if (ext === 'xlsx' || ext === 'xls' || mime.includes('spreadsheetml')) return 'spreadsheet';
   if (/^(png|jpe?g|gif|webp|svg)$/.test(ext) || mime.startsWith('image/')) return 'image';
+  // BEFORE the text check: `text/html` matches TEXT_MIME, so an .html page used to come back as
+  // 'text' and the viewer showed its source under "wrong format: convert this to a PDF". A page
+  // built from HTML is the format the Internship Report ASKS for (renderArtifacts.ts calls it
+  // "Web page"); telling an intern to convert it was advice to undo the work.
+  if (ext === 'html' || ext === 'htm' || mime.startsWith('text/html')) return 'html';
   if (TEXT_MIME.test(mime) || /^(md|markdown|txt|json|ya?ml|xml)$/.test(ext)) return 'text';
   return 'other';
 }
@@ -117,9 +122,11 @@ function shapeFile(content: Record<string, unknown>): NonNullable<InternArtifact
   const kind = fileKind(name, content.mimetype);
   const abs = safeUploadPath(content.stored_path);
   const available = !!abs && fs.existsSync(abs);
-  if (kind === 'csv' || kind === 'text') {
-    // A CSV's stored mimetype is sometimes octet-stream; read it as text either way.
-    const { text, note } = readUpload(content.stored_path, kind === 'csv' ? 'text/csv' : content.mimetype);
+  if (kind === 'csv' || kind === 'text' || kind === 'html') {
+    // A CSV's stored mimetype is sometimes octet-stream; read it as text either way. An HTML page is
+    // read for the same reason the Word preview is built server-side: the viewer renders it in a
+    // script-less sandboxed iframe from this text, so the bytes never load from our own origin.
+    const { text, note } = readUpload(content.stored_path, kind === 'csv' ? 'text/csv' : kind === 'html' ? 'text/html' : content.mimetype);
     const table = kind === 'csv' && text !== null ? csvRows(text, /\.tsv$/i.test(name) ? '\t' : ',') : null;
     return { name, kind, available, text, table, note };
   }
@@ -151,6 +158,8 @@ export function shapeArtifact(row: { id: string; kind: string; title: string; cr
 /** MIME types the file route will serve; anything else goes out as a download. */
 const SERVE_MIME: Record<ArtifactFileKind, string> = {
   pdf: 'application/pdf', csv: 'text/csv; charset=utf-8', text: 'text/plain; charset=utf-8',
+  // Still sent as an attachment by sendArtifactFile, so this never renders as a page on our origin.
+  html: 'text/html; charset=utf-8',
   word: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   slides: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   spreadsheet: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -188,3 +197,4 @@ export async function getInternArtifact(id: string): Promise<InternArtifactView 
   });
   return rows[0] ? shapeArtifact(rows[0]) : null;
 }
+
