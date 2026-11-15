@@ -2,7 +2,8 @@ import { QueryTypes, type Transaction } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { ensureColaberryTvSchema } from '../../db/ensureColaberryTvSchema';
 import { fetchShortTitle } from './tvOembed';
-import { nextPositions, toViewerList, type TvAudience, type TvVideo, type TvVideoRow, type TvViewer } from './tvModel';
+import { nextPositions, type TvAudience, type TvVideo, type TvVideoRow, type TvViewer } from './tvModel';
+import { listLibraryShorts } from './tvLibrarySource';
 
 /**
  * Colaberry TV playlist (Campus v20 N3, Basecamp C134). Raw SQL because there is no model for these two additive tables; every
@@ -49,8 +50,21 @@ export async function listAll(): Promise<TvVideoRow[]> {
   return list;
 }
 
-export async function listForViewer(viewer: TvViewer): Promise<TvVideo[]> {
-  return toViewerList(await listAll(), viewer);
+/**
+ * What the campus plays. Ali, 2026-11-15: "I want Colaberry TV videos picked from videos loaded to
+ * the Colaberry training brand / library ... Instead of having to manage them in two places." So the
+ * playlist is the library (tvLibrarySource), and `colaberry_tv_videos` no longer feeds the TV.
+ *
+ * The viewer is still taken and deliberately ignored: the library has no audience concept, so every
+ * short is on for everyone. The parameter stays because two callers pass it and keeping the plumbing
+ * costs nothing if per-audience shorts are ever wanted again; `_viewer` is the honest signal that
+ * nothing downstream varies by it today.
+ *
+ * The write functions below still operate on `colaberry_tv_videos`, which nothing reads any more.
+ * Removing that surface is a follow-up, not this change.
+ */
+export async function listForViewer(_viewer: TvViewer): Promise<TvVideo[]> {
+  return listLibraryShorts();
 }
 
 export async function addShort(youtubeId: string, actor: string): Promise<{ row: TvVideoRow; created: boolean }> {

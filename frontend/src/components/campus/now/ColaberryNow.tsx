@@ -5,7 +5,6 @@ import { useCampus } from '../CampusContext';
 import { buildingName, CAMPUS_BUILDINGS, type BuildingId } from '../campusMap';
 import ColaberryTv from './ColaberryTv';
 import NowStream from './NowStream';
-import TvManager from './TvManager';
 import { markTvSeen } from './tvNote';
 import { applyOrder, readLastFirst, saveLastFirst, shuffleOrder } from './tvPlaylist';
 import type { NowChip } from './nowModel';
@@ -18,18 +17,22 @@ import './colaberryNow.css';
  * columns: Colaberry TV (42%, always on while this is open) and the stream (58%); on phones (<=900px) the TV sits on top at 52vh.
  *
  * Closing (✕, the scrim, Esc) unmounts the TV, which sends its frame to about:blank and clears its timers. Esc closes the thread
- * drawer first, then the manager, then Colaberry Now. The playlist is re-read every 30 s and after every change in the manager, and
- * the open TV follows it (a removed or off-air short moves on to the next).
+ * drawer first, then Colaberry Now. The playlist is re-read every 30 s and the open TV follows it (a short removed from the
+ * library moves on to the next).
+ *
+ * MANAGING THE TV IS THE LIBRARY (Ali, 2026-11-15): the playlist is every YouTube link in the Colaberry Training brand's media
+ * library, so "Manage TV" opens that library rather than a second editor inside the campus. It opens in a new tab on purpose -
+ * the campus is a modal over the map, and navigating in place would throw away where someone was. The button itself is unchanged
+ * and still renders only when the server says `can_manage`, which is the same `campaigns` section that grants the Marketing tab.
  */
 export const TV_POLL_MS = 30_000;
+export const TV_LIBRARY_PATH = '/admin/marketing/library';
 
 export function ColaberryNow({ me, compose = null, onClose }: { me: string; compose?: 'q' | 'post' | null; onClose: () => void }): React.ReactElement {
   const navigate = useNavigate();
   const { openMap, settings } = useCampus();
   const [tv, setTv] = useState<TvList>({ videos: [], can_manage: false });
-  const [managing, setManaging] = useState(false);
   const [restart, setRestart] = useState(0);
-  const [playing, setPlaying] = useState<string | null>(null);
   const escapeRef = useRef<(() => boolean) | null>(null);
   const openPostRef = useRef<((id: string) => void) | null>(null);
 
@@ -61,12 +64,11 @@ export function ColaberryNow({ me, compose = null, onClose }: { me: string; comp
       if (e.key !== 'Escape') return;
       if (document.fullscreenElement) return; // C137: Esc leaves full screen (the browser's job), never closes Colaberry Now
       if (escapeRef.current?.()) return;
-      if (managing) { setManaging(false); return; }
       onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [managing, onClose]);
+  }, [onClose]);
 
   const nameOf = useMemo(() => (area: string): string | null => {
     const b = CAMPUS_BUILDINGS.find((x) => x.id === area);
@@ -80,13 +82,14 @@ export function ColaberryNow({ me, compose = null, onClose }: { me: string; comp
     else if (c.kind === 'shorts') setRestart((n) => n + 1);
   };
   const toFeed = () => { onClose(); navigate('/portal/community'); };
+  // `noopener` because the library is a different surface; the campus keeps running behind it.
+  const openLibrary = () => { window.open(TV_LIBRARY_PATH, '_blank', 'noopener,noreferrer'); };
 
   return (
     <div className="cn-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="cn-now-dlg" role="dialog" aria-modal="true" aria-label="Colaberry Now" data-testid="cm-cnow">
-        <ColaberryTv videos={tv.videos} canManage={tv.can_manage} onManage={() => setManaging(true)} restart={restart} onPlaying={setPlaying} />
+        <ColaberryTv videos={tv.videos} canManage={tv.can_manage} onManage={openLibrary} restart={restart} />
         <NowStream me={me} compose={compose}onClose={onClose} onFeed={toFeed} nameOf={nameOf} onChip={onChip} escapeRef={escapeRef} openPostRef={openPostRef} />
-        {managing && tv.can_manage && <TvManager playingId={playing} onChanged={refreshTv} onClose={() => setManaging(false)} />}
       </div>
     </div>
   );
