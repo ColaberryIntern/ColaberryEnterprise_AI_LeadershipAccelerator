@@ -51,6 +51,7 @@ const V2_ROUTES = [
   '/services',
   '/how-it-works',
   '/book',
+  '/demo-pilot',
   '/platform',
   '/proof',
   '/lab',

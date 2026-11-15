@@ -194,7 +194,7 @@ export const SERVICE_PAGES: readonly ServicePage[] = [
       },
     ],
     ctaLabel: 'Book a demo pilot',
-    ctaRoute: '/contact',
+    ctaRoute: '/demo-pilot',
   },
   {
     slug: 'guide',
@@ -308,7 +308,7 @@ export const SERVICE_PAGES: readonly ServicePage[] = [
       },
     ],
     ctaLabel: 'Book a demo pilot',
-    ctaRoute: '/contact',
+    ctaRoute: '/demo-pilot',
   },
   {
     slug: 'train',

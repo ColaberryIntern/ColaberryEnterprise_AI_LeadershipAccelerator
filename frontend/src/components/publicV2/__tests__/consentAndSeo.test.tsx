@@ -44,6 +44,7 @@ const DECLARED_ROUTES = [
   '/services/embedded-ai-operations',
   '/how-it-works',
   '/book',
+  '/demo-pilot',
   '/platform',
   '/proof',
   '/lab',

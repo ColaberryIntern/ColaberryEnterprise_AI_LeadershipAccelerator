@@ -48,13 +48,27 @@ describe('PublicHeaderV2', () => {
     expect(html).toContain('id="cbv2-navlinks"');
   });
 
-  it('keeps both CTAs available inside the mobile menu, not merely hidden', () => {
-    // hiding only the primary button still overflowed the bar at 390px
+  /*
+      ONE CTA now, not two. The header used to carry "Talk to an Architect"
+      beside "Explore the Platform"; the v5 site model points every primary
+      button at the demo pilot, and with the nav at seven items two buttons
+      pushed the links into wrapping. The original reason for this test holds
+      and is what it still checks: the CTA must live INSIDE the mobile menu
+      rather than merely being hidden, because hiding it still overflowed the
+      bar at 390px.
+  */
+  it('keeps the primary CTA available inside the mobile menu, not merely hidden', () => {
     const html = at('/', <PublicHeaderV2 />);
     expect(html).toContain('cbv2-navcta-mobile');
     const ctaBlock = html.slice(html.indexOf('cbv2-navcta-mobile'));
-    expect(ctaBlock).toContain('Talk to an Architect');
-    expect(ctaBlock).toContain('Explore the Platform');
+    expect(ctaBlock).toContain('Book a demo pilot');
+  });
+
+  it('offers exactly one primary call to action, pointing at the demo pilot', () => {
+    const html = at('/', <PublicHeaderV2 />);
+    expect((html.match(/Book a demo pilot/g) || []).length).toBe(2); // desktop + mobile
+    expect(textOf(html)).not.toContain('Talk to an Architect');
+    expect(textOf(html)).not.toContain('Explore the Platform');
   });
 
   it('accepts an overridden nav, so IA changes do not require editing markup', () => {

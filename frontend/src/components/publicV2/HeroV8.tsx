@@ -134,7 +134,7 @@ export default function HeroV8(): React.ReactElement {
             <Link className="cbv2-h8__btn cbv2-h8__btn--primary" to="/try">
               Explore the Live Platform
             </Link>
-            <Link className="cbv2-h8__btn cbv2-h8__btn--ghost" to="/lab">
+            <Link className="cbv2-h8__btn cbv2-h8__btn--ghost" to="/demo-pilot">
               Map an AI Opportunity
             </Link>
           </div>

@@ -116,11 +116,8 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
               </Link>
             </li>
             <li className="cbv2-navcta-mobile">
-              <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
-                Talk to an Architect
-              </Link>
-              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/try">
-                Explore the Platform
+              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/demo-pilot">
+                Book a demo pilot
               </Link>
             </li>
           </ul>
@@ -138,11 +135,20 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
           >
             <span aria-hidden="true">{open ? '✕' : '☰'}</span>
           </button>
-          <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
-            Talk to an Architect
-          </Link>
-          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/try">
-            Explore the Platform
+          {/*
+              ONE primary action, not two. The header carried "Talk to an
+              Architect" beside "Explore the Platform", which asked a visitor to
+              choose between two front doors before they knew what either led to
+              -- and with the nav now at seven items, two buttons pushed the
+              links into wrapping at 1280px.
+
+              The v5 model points every primary button at the demo pilot, so
+              that is the one that stays. "Start Free" survives as a nav link,
+              which is where the free workspace belongs: it is an entry point,
+              not the call to action.
+          */}
+          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/demo-pilot">
+            Book a demo pilot
           </Link>
         </div>
       </div>

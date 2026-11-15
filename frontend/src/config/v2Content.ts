@@ -39,7 +39,7 @@ export const GOALS: readonly Goal[] = [
       'score them on value and feasibility, and hand back a prioritized map.',
     proof: 'An opportunity map and 90-day roadmap, produced from your own workflow inventory.',
     cta: 'Map an AI Opportunity',
-    ctaRoute: '/lab',
+    ctaRoute: '/demo-pilot',
     next: 'Run the AI Opportunity Lab to see the shape of the output.',
   },
   {
@@ -82,7 +82,7 @@ export const GOALS: readonly Goal[] = [
       'your team, set the standards, and hand the practice back.',
     proof: 'Architecture reviews, governance standards and a capability-transfer plan.',
     cta: 'Talk to an Architect',
-    ctaRoute: '/contact',
+    ctaRoute: '/demo-pilot',
     next: 'Book a scoping conversation about embedded capacity.',
   },
 ] as const;

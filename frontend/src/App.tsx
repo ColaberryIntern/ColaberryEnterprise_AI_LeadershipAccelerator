@@ -1,6 +1,5 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import ContactPage from './pages/ContactPage';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
@@ -16,9 +15,9 @@ import PlatformV2 from './pages/publicV2/PlatformV2';
 import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
 import HowItWorksV2 from './pages/publicV2/HowItWorksV2';
 import BookV2 from './pages/publicV2/BookV2';
+import DemoPilotV2 from './pages/publicV2/DemoPilotV2';
 import DemoV2 from './pages/publicV2/DemoV2';
 import { readySegments } from './config/v2Segments';
-import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
 import PricingV2 from './pages/publicV2/PricingV2';
@@ -135,6 +134,26 @@ function App() {
                 ideas from it that shape how an engagement actually runs. */}
             <Route path="book" element={<BookV2 />} />
             {/*
+                /demo-pilot. The single conversion page, and the destination of
+                every primary button on the site.
+
+                It replaces /contact and /lab, which both redirect here. The site
+                had two different "get in touch" destinations asking for different
+                things, so a visitor who wanted to start had to guess which was the
+                real front door.
+
+                It asks for one process and two figures -- what the process costs
+                today, and what AI would have to return -- because those are what an
+                architect needs to choose a pilot AND what the customer will judge
+                the pilot by.
+
+                It posts to /api/leads with the same EnterpriseLead shape /contact
+                used, and it keeps the explicit consent tick /contact required. That
+                tick is a compliance surface, not a styling choice, and the design
+                model does not have one.
+            */}
+            <Route path="demo-pilot" element={<DemoPilotV2 />} />
+            {/*
                 /accelerator folded into Train when the five services became three.
                 The v5 site model merges the Workforce Architect Accelerator and this
                 page into one, because they were two addresses describing the same
@@ -158,7 +177,9 @@ function App() {
               <Route key={s.slug} path={s.slug} element={<SegmentPageV2 slug={s.slug} />} />
             ))}
             <Route path="proof" element={<StoriesV2 />} />
-            <Route path="lab" element={<OpportunityLabV2 />} />
+            {/* Folded into /demo-pilot, which asks the same opening question
+                (which process, and what is it worth) in one screen instead of five. */}
+            <Route path="lab" element={<Navigate to="/demo-pilot" replace />} />
             {/* NOT "try": /try is the real product workspace
                 (ManagementPreviewPage, declared above). Mounting the V2 explainer
                 there post-cutover would shadow the product itself. */}
@@ -179,7 +200,9 @@ function App() {
                 carries /enroll and the payment flow), but the ones that are
                 purely marketing should move here too.
             */}
-            <Route path="contact" element={<ContactPage />} />
+            {/* Folded into /demo-pilot. Redirect, not deletion: this is the
+                address every "Talk to an Architect" link has pointed at. */}
+            <Route path="contact" element={<Navigate to="/demo-pilot" replace />} />
             <Route path="privacy" element={<PrivacyV2 />} />
             {/*
                 /start renders SignupV2 no longer. Ali, 2026-08-21, asked three

@@ -89,13 +89,15 @@ const GROUPS: readonly FooterGroup[] = [
        * appears in this list.
        */
       { label: 'Case studies', to: '/proof' },
-      { label: 'Map an opportunity', to: '/lab' },
+      // "Map an opportunity" pointed at /lab, which is now folded into
+      // /demo-pilot. The book is the other thinking page, so it sits here.
+      { label: 'Trust Before Intelligence', to: '/book' },
     ],
   },
   {
     heading: 'Company',
     links: [
-      { label: 'Contact', to: '/contact' },
+      { label: 'Book a demo pilot', to: '/demo-pilot' },
       { label: 'What we collect', to: '/privacy' },
     ],
   },

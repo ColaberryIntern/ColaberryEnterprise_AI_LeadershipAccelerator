@@ -1,0 +1,70 @@
+/* demoPilotV2.css — /demo-pilot, the single conversion page.
+   The field and row classes come from opportunityLabV2.css, which this page
+   imports: /lab is the page being absorbed, so reusing its form pattern is the
+   smaller change and keeps one set of input styles rather than two. */
+
+.cbv2-dp-form {
+  margin-top: var(--space-6);
+}
+
+/* "optional", and the "people x hours" hint, sit inside the label. Lighter and
+   smaller so the label still reads as one thing. */
+.cbv2-opt {
+  font-weight: 400;
+  font-size: var(--fs-caption);
+  color: var(--text-subtle);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* The two figures are grouped in a real fieldset: they are one question asked
+   in two boxes, and a screen reader should hear the legend before either. */
+.cbv2-figures {
+  margin: 0;
+  padding: var(--space-5);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card, #fff);
+}
+.cbv2-figures__hint {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--fs-body-sm);
+}
+
+/* Consent. Never styled away, never pre-ticked, and the hit area is the label
+   as well as the box. */
+.cbv2-consent {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.cbv2-consent input[type='checkbox'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.2rem;
+}
+.cbv2-consent label {
+  color: var(--text-secondary);
+  font-size: var(--fs-body-sm);
+}
+.cbv2-consent .cbv2-field__err {
+  grid-column: 1 / -1;
+}
+
+/* Errors carry a word, not just a colour. */
+.cbv2-field__err {
+  margin: var(--space-1) 0 0;
+  color: var(--status-danger, #C20E1E);
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+}
+
+.cbv2-field__input[aria-invalid='true'] {
+  border-color: var(--status-danger, #C20E1E);
+}
+
+@media (max-width: 720px) {
+  .cbv2-figures { padding: var(--space-4); }
+}
