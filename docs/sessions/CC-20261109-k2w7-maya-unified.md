@@ -130,3 +130,36 @@ any of them, and their own test files are untouched:
   console now exists to do both; this run did not reach into the production database to do it.
 - `GROWTH_JOURNEY_EXECUTION_ENABLED` remains unset, deliberately. It is one of the switches Ali
   did not choose.
+
+---
+
+## 2026-11-15 — merged and deployed
+
+- [x] Merge PR #4054 and deploy the unified governed Maya to production
+  - Date: 2026-11-15
+  - Session: CC-20261109-k2w7
+  - What changed: Ali merged PR #4054 at 18:40 UTC (merge commit `0e10338445`); deployed to
+    production with `./scripts/deploy-prod.sh backend nginx` in registry mode, exit 0, box landing
+    on main HEAD `19cefbec8`.
+  - Verification: merge commit proven an ancestor of the deployed commit on the box; the three
+    compiled Maya markers (`body_changed_since_review`, `kill_switch_unreadable`,
+    `queued_for_approval`) found **inside the running backend container** with a control string at
+    0; both routers mounted at `dist/routes/adminRoutes.js:317-318` and their route tables
+    introspected from the running process; `maya_outbound_approvals` live with
+    `chk_moa_decider_is_a_person` and a status vocabulary containing no `auto_approved`; the live
+    frontend asset `static/js/main.1be571fa.js` contains `outbound-approvals` with a control at 0.
+    Full evidence in `.loop-architect/runs/20261113-maya-unified-governed/deployment-log.md`.
+  - Notes: **Two deploy signals were misleading and had to be discarded.** (1) Compose reported
+    `Running` rather than `Recreated` and container uptime did not reset — a concurrent session had
+    already deployed the same image at 20:18, so the deploy correctly changed nothing, which from
+    the exit code alone is indistinguishable from a deploy that failed to change anything. (2) An
+    HTTP probe of the new admin routes returned 401, but so did `/api/admin/zzz-not-a-route`: the
+    auth gate precedes routing, so 401 proves only that auth works. Both were replaced with checks
+    that can fail. Separately, `maya_email_ledger` is absent from the database and that is correct
+    — it is a lazy `CREATE TABLE IF NOT EXISTS` inside `mayaEmailService.ensureMayaEmailTable()`,
+    created on her first compose, exactly as `maya_welcome_ledger` was.
+  - **Gap carried forward:** scope part 3 asked for real `agent_domain_tool_grants` rows written
+    through the change-request spine. Registration shipped and removed the `tool_not_registered`
+    refusal that was the true cause of zero grants across all 31 agents, but the table is still
+    empty, so her dashboard still reads "held without a grant". Writing those rows is a production
+    database write and therefore a console action, not something this deploy performed.
