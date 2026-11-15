@@ -1,0 +1,145 @@
+/* ============================================================
+   enterprise-brand.css
+   Paints the public enterprise site in COLABERRY ENTERPRISE
+   rather than Colaberry Training.
+
+   WHY THIS EXISTS
+
+   enterprise.colaberry.ai was rendering the career-school brand.
+   Every primary button, pill, active state and accent rule on the
+   public site was cherry #FB2832 -- the Colaberry Training accent.
+   The Colaberry Enterprise design system says the opposite, in its
+   own words, at
+   apps/colaberry-enterprise-design/src/assets/design/tokens/colors.css:
+
+     "Brand constants -- logo artwork only; UI surfaces never use
+      these directly"   (--brand-cherry, --brand-leaf, --brand-berry)
+     "Accent marks only the primary action + active state."
+
+   So cherry belongs to the logo, and the UI accent is #2E6A86.
+   Ali's ruling of 10 November 2026 (see
+   frontend/src/colaberry/PROVENANCE.md) makes Aleem's per-brand
+   repositories the source of truth for each brand's design, and
+   Colaberry Enterprise is one of the five. This file is how that
+   brand finally reaches the React app.
+
+   WHY A BRIDGE AND NOT AN IMPORT
+
+   The enterprise system is vendored and kept current automatically by
+   .github/workflows/design-system-sync.yml, but it lands at
+   apps/colaberry-enterprise-design/src/assets/design -- outside
+   frontend/src. The frontend is plain react-scripts 5.0.1 with no
+   craco or rewired config, so ModuleScopePlugin refuses any import
+   that climbs out of src/. The sync registry records this exact
+   problem and leaves it open: "The CRA question is untouched"
+   (backend/src/scripts/lib/designSystemSync.js).
+
+   This file answers it WITHOUT copying the system in and without
+   introducing a single new hex value. Every value below already
+   exists in the vendored Colaberry token layer the app does load:
+   the blue ramp in frontend/src/colaberry/tokens/colors.css is the
+   enterprise accent family, step for step.
+
+     --blue-600  #2E6A86  ==  enterprise --accent
+     --blue-50   #EAF2F6  ==  enterprise --accent-soft
+     --blue-700  #265A72  =~  enterprise --accent-hover
+     --blue-800  #20485C  =~  enterprise --accent-press
+
+   That identity is not a coincidence to be trusted silently. It is
+   asserted by enterpriseBrandTokens.test.ts, which reads BOTH
+   vendored files and fails if either upstream moves. A design-system
+   sync PR that changes the enterprise accent turns that test red
+   instead of leaving this file quietly wrong.
+
+   WHY SCOPED TO .cbv2-shell
+
+   .cbv2-shell is the wrapper PublicLayoutV2 renders around every V2
+   public page, and nothing else in the app renders inside it. The
+   portal and admin keep the cherry brand, which is correct: they are
+   the career-school product, a different brand with a different
+   audience. Scoping to a plain div also avoids every specificity
+   question -- custom properties inherit from the nearest declaring
+   ancestor, so these win inside the shell regardless of where this
+   file lands in the bundle, and change nothing outside it.
+
+   LOAD ORDER: imported in index.tsx after brand-bridge.css. Remove
+   that one import to revert the public site to the cherry brand.
+
+   WHAT THIS FILE DELIBERATELY DOES NOT TOUCH
+
+   - Status colours (--status-success / -warning / -danger). Those are
+     function, not brand identity, and the enterprise system's own
+     success #468A2E (4.26:1) and warning #B26E00 (4.10:1) do not
+     reach AA for normal text on white. Re-pointing them is a
+     contrast decision, not a rebrand, so it is not smuggled in here.
+     The leaf green in use today is worse (3.02:1) and is worth its
+     own change.
+   - Focus tokens (--border-focus, --focus-ring). Focus visibility is
+     an accessibility guarantee, and the enterprise ring is the accent
+     at 40% where the current one is blue at 45%. A rebrand should not
+     quietly thin a focus ring.
+   - The logo. frontend/public/colaberry-logo-transparent.png stays
+     cherry, which is exactly what the enterprise system prescribes:
+     brand constants are for logo artwork.
+   ============================================================ */
+
+.cbv2-shell {
+  /* ---- The Colaberry Enterprise semantic roles ----
+     Named as the enterprise system names them, so a reader can match
+     this block line-for-line against the vendored tokens/colors.css.
+     Values come from the Colaberry ramp the app already loads. */
+  --accent: var(--blue-600);           /* #2E6A86 */
+  --accent-contrast: var(--neutral-0); /* #FFFFFF */
+  --accent-soft: var(--blue-50);       /* #EAF2F6 */
+  --accent-hover: var(--blue-700);     /* #265A72 */
+  --accent-press: var(--blue-800);     /* #20485C */
+
+  /* ---- Brand family -> enterprise accent ----
+     These are the names the V2 page CSS actually reads. Each one
+     resolved to cherry until now. */
+  --brand-primary: var(--accent);
+  --brand-accent: var(--accent);
+  --surface-brand: var(--accent);
+  --surface-brand-subtle: var(--accent-soft);
+  --border-brand: var(--accent);
+  --text-on-accent: var(--accent-contrast);
+  --accent-strong: var(--accent-press);
+
+  /* Primary action. --action-bg is what every .cbv2-btn--primary
+     paints with, which is why the site read as a career school. */
+  --action-bg: var(--accent);
+  --action-bg-hover: var(--accent-hover);
+  --action-bg-press: var(--accent-press);
+  --action-fg: var(--accent-contrast);
+
+  /* ---- The literal cherry aliases ----
+     styles/tokens.css defines --cherry / --cherry-deep / --cherry-text
+     as raw hex, and roughly a dozen V2 rules read them through
+     var(--cherry, #FB2832). Re-pointing them here is what converts
+     those rules without editing each one.
+
+     --cherry-text existed only because the brand red is 3.85:1 on
+     white and fails AA for normal text, so small text needed a darker
+     stand-in. The enterprise accent is 5.96:1, so one accent now
+     serves both jobs and the workaround collapses into it. */
+  --cherry: var(--accent);
+  --cherry-deep: var(--accent-press);
+  --cherry-text: var(--accent);
+  --cherry-bg: var(--accent-soft);
+
+  /* Two pages read an accent under a different name, with a brick-red
+     literal fallback (#b3261e) that was painting because nothing ever
+     defined the variable. Defining it fixes the segment pages. */
+  --cbv2-accent: var(--accent);
+  --cbv2-accent-deep: var(--accent-press);
+
+  /* Brand-tinted shadow, recoloured to match. Same geometry. */
+  --shadow-brand: 0 6px 18px color-mix(in srgb, var(--accent) 20%, transparent);
+
+  /* ---- Dark bands ----
+     Several sections sit on near-black grounds, where the accent needs
+     to lift off the background rather than sink into it. These are the
+     enterprise system's own dark-theme accent steps. */
+  --accent-on-dark: var(--blue-300);        /* #6F9DB6, 6.55:1 on #0B0F18 */
+  --accent-soft-on-dark: color-mix(in srgb, var(--accent) 24%, transparent);
+}

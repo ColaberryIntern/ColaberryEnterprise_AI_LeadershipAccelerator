@@ -17,7 +17,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(760px 400px at 84% -12%, rgba(251, 40, 50, 0.20), transparent 62%);
+  background: radial-gradient(760px 400px at 84% -12%, color-mix(in srgb, var(--accent, #2E6A86) 28%, transparent), transparent 62%);
 }
 .cbv2-pagehero > * { position: relative; }
 
@@ -40,7 +40,9 @@
   max-width: 62ch;
   margin: 0;
 }
-.cbv2-eyebrow--onDark { color: #ff8a90; }
+/* The enterprise accent's dark step. This was the lighter cherry, which is the
+   Colaberry Training accent, and this eyebrow appears on seven pages. */
+.cbv2-eyebrow--onDark { color: var(--accent-on-dark, #6F9DB6); }
 .cbv2-breadcrumb {
   font-family: var(--font-mono);
   font-size: var(--fs-caption);

@@ -24,6 +24,10 @@ import './styles/global.css';
 import './styles/responsive.css';
 import './colaberry/styles.css';
 import './styles/brand-bridge.css';
+/* Colaberry Enterprise brand for the public site only, scoped to .cbv2-shell.
+   After brand-bridge.css, which is the cherry (Colaberry Training) seam the
+   admin and portal keep. Remove this line to revert the public site to cherry. */
+import './styles/enterprise-brand.css';
 import './styles/admin-shell.css';
 
 initGA();
