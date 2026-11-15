@@ -41,7 +41,7 @@ interface Props {
 export default function CtaInterrupt({
   eyebrow, title, body,
   primary = { label: 'Open the workspace, no card needed', to: '/try' },
-  secondary = { label: 'Talk to an architect', to: '/contact' },
+  secondary = { label: 'Talk to an architect', to: '/demo-pilot' },
 }: Props): React.ReactElement {
   return (
     <section className="cbv2-rv cbv2-cint" aria-labelledby={`cint-${eyebrow.replace(/\W+/g, '-').toLowerCase()}`}>

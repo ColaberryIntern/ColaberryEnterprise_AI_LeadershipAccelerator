@@ -660,3 +660,106 @@
   .cbv2-rc__step { transition: none; }
   .cbv2-rc__step:hover { transform: none; }
 }
+
+/* --------------------------------------------- v5: leader rollout view -- */
+/*
+   The "for leaders" surface. A depiction of the rollout table a leader sees,
+   carrying a sample badge because it shows no real customer. Styled here
+   rather than borrowing /pricing's `.cbv2-compare`, so this page does not
+   depend on another page's stylesheet being in the bundle.
+*/
+.cbv2-rollout {
+  margin: var(--space-7) 0 0;
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card, #fff);
+  overflow: hidden;
+}
+.cbv2-rollout__cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  background: var(--surface-sunken);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+.cbv2-rollout__scroll { overflow-x: auto; }
+.cbv2-rollout__table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  text-align: left;
+}
+.cbv2-rollout__table th,
+.cbv2-rollout__table td {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  vertical-align: top;
+  font-size: var(--fs-body-sm);
+}
+.cbv2-rollout__table thead th {
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+  font-weight: 700;
+}
+.cbv2-rollout__table tbody tr:last-child th,
+.cbv2-rollout__table tbody tr:last-child td { border-bottom: 0; }
+.cbv2-rollout__table tbody th { font-weight: 700; color: var(--text-strong); }
+.cbv2-rollout__leader {
+  display: block;
+  font-weight: 400;
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+
+/* Stage chips. The WORD carries the stage; colour only repeats it. */
+.cbv2-rollout__status {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+.cbv2-rollout__status--automated {
+  background: rgb(22 163 74 / 12%);
+  color: #15803d;
+}
+.cbv2-rollout__status--building {
+  background: rgb(180 83 9 / 12%);
+  color: #b45309;
+}
+.cbv2-rollout__status--pilot {
+  background: var(--cherry-bg, #FFF0F1);
+  color: var(--cherry-deep, #C20E1E);
+}
+
+.cbv2-rollout__foot {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--border-1) solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-body-sm);
+}
+
+/* "Whoever builds it, you see it" - three cards, one per service. */
+.cbv2-pl-three {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .cbv2-pl-three { grid-template-columns: 1fr; }
+}

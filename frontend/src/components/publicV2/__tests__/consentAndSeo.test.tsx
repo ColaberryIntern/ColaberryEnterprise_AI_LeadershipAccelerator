@@ -29,11 +29,22 @@ import {
 const DECLARED_ROUTES = [
   '/',
   '/services',
+  // The three live services.
+  '/services/build',
+  '/services/guide',
+  '/services/train',
+  // The five retired engagement slugs. Still declared because /services/:slug
+  // redirects each of them to the service that absorbed it, so they remain
+  // valid destinations for an existing inbound link -- see
+  // LEGACY_SERVICE_REDIRECTS in config/v2ServicePages.ts.
   '/services/ai-opportunity-sprint',
   '/services/claude-production-pilot',
   '/services/enterprise-build-modernization',
   '/services/workforce-architect-accelerator',
   '/services/embedded-ai-operations',
+  '/how-it-works',
+  '/book',
+  '/demo-pilot',
   '/platform',
   '/proof',
   '/lab',

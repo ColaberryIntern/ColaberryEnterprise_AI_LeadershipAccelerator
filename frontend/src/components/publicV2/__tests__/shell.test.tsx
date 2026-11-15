@@ -48,13 +48,27 @@ describe('PublicHeaderV2', () => {
     expect(html).toContain('id="cbv2-navlinks"');
   });
 
-  it('keeps both CTAs available inside the mobile menu, not merely hidden', () => {
-    // hiding only the primary button still overflowed the bar at 390px
+  /*
+      ONE CTA now, not two. The header used to carry "Talk to an Architect"
+      beside "Explore the Platform"; the v5 site model points every primary
+      button at the demo pilot, and with the nav at seven items two buttons
+      pushed the links into wrapping. The original reason for this test holds
+      and is what it still checks: the CTA must live INSIDE the mobile menu
+      rather than merely being hidden, because hiding it still overflowed the
+      bar at 390px.
+  */
+  it('keeps the primary CTA available inside the mobile menu, not merely hidden', () => {
     const html = at('/', <PublicHeaderV2 />);
     expect(html).toContain('cbv2-navcta-mobile');
     const ctaBlock = html.slice(html.indexOf('cbv2-navcta-mobile'));
-    expect(ctaBlock).toContain('Talk to an Architect');
-    expect(ctaBlock).toContain('Explore the Platform');
+    expect(ctaBlock).toContain('Book a demo pilot');
+  });
+
+  it('offers exactly one primary call to action, pointing at the demo pilot', () => {
+    const html = at('/', <PublicHeaderV2 />);
+    expect((html.match(/Book a demo pilot/g) || []).length).toBe(2); // desktop + mobile
+    expect(textOf(html)).not.toContain('Talk to an Architect');
+    expect(textOf(html)).not.toContain('Explore the Platform');
   });
 
   it('accepts an overridden nav, so IA changes do not require editing markup', () => {
@@ -102,15 +116,25 @@ describe('PublicFooterV2', () => {
     });
   });
 
-  it('links the five service detail routes', () => {
+  /*
+      Three service routes, not the five engagement names that were here before.
+      The five old slugs still resolve (/services/:slug redirects them), but the
+      footer is a map of what is on offer, and five labels pointing at three
+      pages would tell a visitor there are five things to choose between.
+  */
+  it('links the three service routes, and the index', () => {
     const html = at('/', <PublicFooterV2 />);
-    [
-      'ai-opportunity-sprint',
-      'claude-production-pilot',
-      'enterprise-build-modernization',
-      'workforce-architect-accelerator',
-      'embedded-ai-operations',
-    ].forEach((slug) => expect(html).toContain(`/services/${slug}`));
+    ['build', 'guide', 'train'].forEach((slug) =>
+      expect(html).toContain(`/services/${slug}`),
+    );
+    expect(html).toContain('"/services"');
+  });
+
+  it('no longer advertises a retired engagement name', () => {
+    const text = textOf(at('/', <PublicFooterV2 />));
+    ['Opportunity Sprint', 'Production Pilot', 'Workforce Accelerator', 'Embedded AI Ops'].forEach(
+      (gone) => expect(text).not.toContain(gone),
+    );
   });
 
   it('shows the current year', () => {

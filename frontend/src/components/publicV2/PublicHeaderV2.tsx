@@ -35,10 +35,22 @@ export interface NavItem {
  * "Solutions" was dropped rather than repointed: no such page exists, and
  * inventing a destination for a nav label is how the dead links happened.
  */
+/*
+    "How it works" and "The book" were added when the v5 site map was adopted.
+    The model's navigation is Services / How it works / Platform / Pricing /
+    The book / Proof, and /how-it-works had been a live page with no way to
+    reach it from the header -- findable only from a link inside another page.
+
+    "Start Free" stays. It is not in the model's nav list, but it is the only
+    entry point to the product that costs a visitor nothing, and dropping it to
+    match a diagram would be the diagram leading the site.
+*/
 export const V2_NAV: readonly NavItem[] = [
   { label: 'Services', to: '/services' },
+  { label: 'How it works', to: '/how-it-works' },
   { label: 'Platform', to: '/platform' },
   { label: 'Pricing', to: '/pricing' },
+  { label: 'The book', to: '/book' },
   { label: 'Proof', to: '/proof' },
   { label: 'Start Free', to: '/try' },
 ];
@@ -104,11 +116,8 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
               </Link>
             </li>
             <li className="cbv2-navcta-mobile">
-              <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
-                Talk to an Architect
-              </Link>
-              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/try">
-                Explore the Platform
+              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/demo-pilot">
+                Book a demo pilot
               </Link>
             </li>
           </ul>
@@ -126,11 +135,20 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
           >
             <span aria-hidden="true">{open ? '✕' : '☰'}</span>
           </button>
-          <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
-            Talk to an Architect
-          </Link>
-          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/try">
-            Explore the Platform
+          {/*
+              ONE primary action, not two. The header carried "Talk to an
+              Architect" beside "Explore the Platform", which asked a visitor to
+              choose between two front doors before they knew what either led to
+              -- and with the nav now at seven items, two buttons pushed the
+              links into wrapping at 1280px.
+
+              The v5 model points every primary button at the demo pilot, so
+              that is the one that stays. "Start Free" survives as a nav link,
+              which is where the free workspace belongs: it is an entry point,
+              not the call to action.
+          */}
+          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/demo-pilot">
+            Book a demo pilot
           </Link>
         </div>
       </div>

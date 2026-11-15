@@ -320,7 +320,7 @@ export function DemoPilotSection(): React.ReactElement {
         </ol>
 
         <p className="cbv2-proc__foot">
-          <Link to="/services">See the five engagements a pilot can grow into</Link>.
+          <Link to="/services">See the three services a pilot can grow into</Link>.
         </p>
       </div>
     </section>

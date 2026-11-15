@@ -92,3 +92,102 @@ redirects. `/pricing` stays exactly as PR #4043 shipped it, license ladder intac
 | 5 | Home rewrite, 12 sections to 7 |
 | 6 | `/platform` rewrite, 12 sections to 4 |
 | 7 | `/how-it-works` rewrite |
+
+---
+
+# Adoption executed, 2026-11-15
+
+Ali: "Let me know when it's done - don't want to do the back and forth."
+
+One branch, one commit per phase, one PR. Six PRs off main would all have
+edited `App.tsx` routes and conflicted with each other, which is more back and
+forth, not less.
+
+| Phase | Commit | What landed |
+|---|---|---|
+| 1 | `949ab3991` | Home demo-pilot band (variant A) + v5 model installed. **Merged via PR #4051.** |
+| 2 | `5f3179bc4` | Five engagements become Build/Guide/Train; redirects; `/proof` guard |
+| 3 | `3a9da587b` | `/book` |
+| 4 | `8c398b879` | `/demo-pilot` replaces `/contact` and `/lab`; CTAs repointed |
+| 5 | `c30e153b0` | Home rewrite, 12 sections to 10 |
+| 6 | `523c65767` | `/platform`, 12 sections to 9 |
+| 7 | `2417dd1d7` | `/how-it-works`, the one page the model grows |
+
+## Measured, every route, in a real browser (1280px)
+
+All 17 routes checked: **0 page errors, 0 horizontal overflow, every redirect
+landing on its intended page.**
+
+| Page | Before | After | Model |
+|---|---|---|---|
+| Home | 12 sec / 10,100px | 10 / 7,853px | 7 / 7,713px |
+| Services | 2 / 5,896px | 4 / 3,556px | 5 / 4,978px |
+| How it works | 4 / 2,442px | 8 / 6,306px | 6 / 5,675px |
+| Platform | 12 / 14,450px | 9 / 11,825px | 4 / 5,863px |
+| Pricing | 6 / 7,045px | 6 / 7,004px | out of scope |
+
+Redirects confirmed live: `/contact` and `/lab` to `/demo-pilot`,
+`/accelerator` to `/services/train`, all five retired service slugs to their
+absorbing service.
+
+## Deviations from the model, each deliberate
+
+1. **`/pricing` untouched**, per Ali. Only one word changed on it: "the five
+   engagements" became "the three services", because the services merge made
+   that sentence false on a page that links straight to the three. No price,
+   claim or offer touched.
+2. **`/proof` untouched**, per Ali, and now guarded by a mutation-tested route
+   test rather than an intention.
+3. **Segment doors kept on the home page.** The model drops them and defers the
+   segment pages to a later phase, but `/higher-education` is the C2.5
+   beachhead and removing its only entry point would orphan it. This is why
+   home is ten sections and the model's is seven.
+4. **`/platform` does not reach the model's 5,863px.** The model draws its
+   surfaces as small mock screenshots; three of the four already existed here
+   carrying governed, claim-reviewed content. The structure is the model's; the
+   substance stays.
+5. **The five-stage band stays on `/how-it-works`.** The C2.2 audit found two of
+   the five have no platform capability and each says so. The model has no
+   equivalent; dropping it would retire an audited honesty.
+6. **Consent carried onto `/demo-pilot`.** The model's form has none. `/contact`
+   always required it. Pinned by test: present, labelled, bound to its input,
+   never pre-ticked.
+7. **The "95% of AI pilots fail" statistic is never stated bare.** The model
+   uses it as a standalone subtitle; the registry's `research.95pct` is
+   NEEDS_VERIFICATION with no approved routes. `/book` renders the VERIFIED
+   attributed form through `<Claim>` instead.
+8. **"Start Free" kept in the nav** though the model's nav omits it: it is the
+   only entry point that costs a visitor nothing.
+
+## Two guards that were silently broken, now fixed
+
+- **The home demo-pilot band's no-figure test** sliced from its own heading to
+  `cbv2-services-title`. Replacing the five-engagement band removed that
+  anchor, `indexOf` returned -1, and `slice(start, -1)` widened the slice to the
+  rest of the page, so the guard was reading the book citation's "95%" as if it
+  were in the band. Now bounded by the band's own closing tag, with assertions
+  on both edges.
+- **C5.1's "exactly one path to enquiry"** matched on `/contact` and so found
+  zero once CTAs were repointed. Rewritten to its intent: at least one enquiry
+  link, and no enquiry link pointing anywhere but `/demo-pilot`.
+
+## Still outstanding
+
+- **`/book` needs two inputs from Ali**: Ram's two-to-three sentence bio from
+  approved materials, and the purchase or download link. The model has literal
+  placeholders for both. Neither was invented.
+- Components unrouted but not deleted: `EngineModel`, `CapabilityOS`,
+  `TwoExperiences`, `ArchitectExperience`, `BuildPipelineSection`,
+  `HeroServicesV8`, `AcceleratorV2`, `ContactPage`, `OpportunityLabV2`. Check
+  what else imports each before removing the files.
+- `publicNextOpenHouseJs.test.ts` fails in this branch and in its base. It is
+  OH-3's own test, from another workstream, and CI's jest config excludes it
+  (PR #4051 passed Frontend unit tests with it present). Not fixed here.
+
+## A note on how this shipped
+
+PR #4051 was opened for phase 1 and Ali merged it while phases 2 to 7 were
+still being built. The later commits were pushed to the same branch after that
+merge, which is how work goes missing: the branch carries them, the merged PR
+does not, and nothing tracks them. They were rebased onto current main and
+opened as a separate PR. Phase 1 is already on main.

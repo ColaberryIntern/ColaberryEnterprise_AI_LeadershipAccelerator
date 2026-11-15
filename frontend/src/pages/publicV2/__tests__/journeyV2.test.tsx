@@ -45,9 +45,25 @@ const how = render(<HowItWorksV2 />, '/how-it-works');
 const acc = render(<AcceleratorV2 />, '/accelerator');
 
 describe('both pages are actually routed', () => {
-  it('declares both routes, read from the real App.tsx', () => {
+  it('declares /how-it-works, read from the real App.tsx', () => {
     expect(APP).toContain('<Route path="how-it-works" element={<HowItWorksV2 />} />');
-    expect(APP).toContain('<Route path="accelerator" element={<AcceleratorV2 />} />');
+  });
+
+  /*
+      /accelerator USED to render AcceleratorV2 here. The v5 site restructure
+      folds it into Train, because /accelerator and the Workforce Architect
+      Accelerator service page were two addresses describing the same 12-week
+      course -- which splits inbound links and hands search engines a duplicate.
+
+      The route is redirected rather than deleted, so this still asserts the
+      address works; what it now asserts is where it goes. The AcceleratorV2
+      COMPONENT still exists and the content tests below still cover it, but it
+      is no longer reachable from a URL -- so if that component is ever deleted,
+      delete the content tests in this file with it rather than leaving them
+      green against nothing.
+  */
+  it('redirects /accelerator into Train rather than dropping the URL', () => {
+    expect(APP).toContain('<Route path="accelerator" element={<Navigate to="/services/train" replace />} />');
   });
 
   it('mounts them inside the PublicLayoutV2 block, so they get the site nav and footer', () => {
@@ -128,10 +144,27 @@ describe('neither page uses wording the claim registry prohibits', () => {
 });
 
 describe('each page has exactly one path to enquiry, and instruments it', () => {
+  /*
+      THE RULE IS ONE DESTINATION, NOT ONE LINK.
+
+      C5.1's "each page has one path to enquiry" was written when /contact and
+      /lab were two competing front doors, and a page offering both made the
+      visitor choose between them without knowing the difference. The v5 site
+      model folds both into /demo-pilot and points every primary button there,
+      so a page may now carry several buttons -- they all go to the same place,
+      which is what the rule was protecting.
+
+      So this asserts the thing that can still regress: at least one enquiry
+      link, and no enquiry link pointing anywhere other than the one
+      destination.
+  */
+  const ENQUIRY = ['/contact', '/lab', '/demo-pilot'];
   for (const [name, h] of [['how it works', how], ['accelerator', acc]] as const) {
-    it(`${name} offers one enquiry link`, () => {
-      const contact = hrefs(h).filter((x) => x.startsWith('/contact'));
-      expect(contact).toHaveLength(1);
+    it(`${name} offers an enquiry path, and only one destination`, () => {
+      const enquiry = hrefs(h).filter((x) => ENQUIRY.some((e) => x.startsWith(e)));
+      expect(enquiry.length).toBeGreaterThan(0);
+      const destinations = new Set(enquiry.map((x) => x.split('?')[0]));
+      expect(Array.from(destinations)).toEqual(['/demo-pilot']);
     });
   }
 
@@ -156,7 +189,7 @@ describe('each page has exactly one path to enquiry, and instruments it', () => 
         <MemoryRouter initialEntries={['/accelerator']}><AcceleratorV2 /></MemoryRouter>,
       );
     });
-    const cta = container.querySelector('a[href^="/contact"]') as HTMLAnchorElement;
+    const cta = container.querySelector('a[href^="/demo-pilot"]') as HTMLAnchorElement;
     act(() => {
       cta.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });

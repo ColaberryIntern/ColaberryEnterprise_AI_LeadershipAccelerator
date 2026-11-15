@@ -1,0 +1,98 @@
+/* bookV2.css — /book, the Trust Before Intelligence page.
+   Only what this page needs. Section, wrap, eyebrow, lede, pagehero and button
+   classes all come from the shared V2 stylesheets. */
+
+/* Hero: cover beside the thesis. The cover leads on wide screens because it is
+   the one element on the page that is a photograph of a real object. */
+.cbv2-bookhero {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: var(--space-8);
+  align-items: center;
+}
+.cbv2-bookhero__cover {
+  margin: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
+}
+.cbv2-bookhero__cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cbv2-bookhero__body {
+  margin: var(--space-4) 0 0;
+  color: var(--text-on-inverse-muted, rgb(255 255 255 / 78%));
+  max-width: 62ch;
+}
+.cbv2-bookhero__by {
+  margin: var(--space-5) 0 0;
+  font-weight: 700;
+  color: var(--text-on-inverse, #fff);
+}
+
+@media (max-width: 860px) {
+  .cbv2-bookhero {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+  /* Cover after the words on a phone: a 500px-tall image above the fold pushes
+     the thesis off it entirely. */
+  .cbv2-bookhero__cover {
+    order: 2;
+    max-width: 220px;
+  }
+}
+
+/* The three ideas. Each is: the idea, why it holds, and what we therefore do.
+   The "so we" line is the load-bearing part -- it is what makes this a page
+   about the engagement rather than a book summary. */
+.cbv2-ideas {
+  list-style: none;
+  margin: var(--space-7) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+}
+.cbv2-idea {
+  padding: var(--space-6);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised, #fff);
+  display: flex;
+  flex-direction: column;
+}
+.cbv2-idea__n {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.1em;
+  color: var(--cherry, #FB2832);
+}
+.cbv2-idea__title {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: var(--fs-h4, 1.15rem);
+  line-height: var(--lh-snug, 1.25);
+}
+.cbv2-idea__why {
+  margin: 0 0 var(--space-5);
+  color: var(--text-secondary);
+  flex: 1 1 auto;
+}
+.cbv2-idea__so {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-1) solid var(--border-subtle);
+}
+/* A word, not a colour, carries the distinction -- the label reads the same
+   with styling off, and to a screen reader. */
+.cbv2-idea__solabel {
+  display: inline-block;
+  margin-right: var(--space-2);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--cherry, #FB2832);
+}

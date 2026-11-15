@@ -1,0 +1,93 @@
+/* howItWorksV2.css — the bands the v5 site model adds to /how-it-works.
+   The three-step band, the department map and the FAQ list come from the home
+   page and /services stylesheets, which this page's components already pull in;
+   only the two rollout paths are specific to this page. */
+
+.cbv2-hiw__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.cbv2-paths {
+  display: grid;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 860px) {
+  .cbv2-paths { grid-template-columns: 1fr; }
+}
+
+.cbv2-path {
+  padding: var(--space-6);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card, #fff);
+}
+.cbv2-path h3 {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: var(--fs-h4, 1.15rem);
+}
+.cbv2-path__body {
+  margin: 0 0 var(--space-5);
+  color: var(--text-secondary);
+}
+
+/*
+   The rollout shape. Bars show WHETHER departments start staggered or together,
+   never how long anything takes -- no duration is claimed on this page.
+
+   The track is aria-hidden and carries no text of its own; the sentence in
+   .cbv2-path__legend below states the same thing in words, so nothing here
+   depends on seeing the bars.
+*/
+.cbv2-path__track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.cbv2-path__track li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  align-items: center;
+  gap: var(--space-3);
+}
+.cbv2-path__dept {
+  font-size: var(--fs-caption);
+  color: var(--text-subtle);
+}
+.cbv2-path__bar {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.cbv2-path__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cherry, #FB2832);
+}
+
+.cbv2-path__legend {
+  margin: var(--space-4) 0 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-secondary);
+}
+
+/*
+   positioning.primary sits in the dark page hero now, and .cbv2-jy__claim's
+   base colour (#475569, slate-600) was chosen for the light background this
+   page used to have. On the inverted hero it rendered at roughly 1.6:1 --
+   present in the DOM, effectively invisible to read. Overridden in the hero
+   context only, so any other surface using the class keeps its own colour.
+*/
+.cbv2-pagehero .cbv2-jy__claim {
+  color: rgb(255 255 255 / 72%);
+  margin-top: var(--space-3);
+}
