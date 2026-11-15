@@ -112,7 +112,7 @@ export default function ServiceCatalogTable(p: Props): React.ReactElement {
                     </div>
                   </td>
                   <td className="text-nowrap">
-                    {/* Each count is a button listing those case studies, with Manage and (outside) Open original. */}
+                    {/* Each count is a button listing those case studies, with Manage (inside) or Open original (outside). */}
                     <span className="me-1"><CaseStudySourceMenu kind="inside" serviceName={s.name} caseStudies={s.caseStudies} /></span>
                     <CaseStudySourceMenu kind="outside" serviceName={s.name} caseStudies={s.caseStudies} />
                   </td>
