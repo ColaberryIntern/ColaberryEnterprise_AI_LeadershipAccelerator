@@ -38,6 +38,33 @@ export async function approvedGroundingFacts(tenantId: string): Promise<string[]
   return rows.map((r) => { const f = r.get({ plain: true }); return `${f.key}: ${f.value}`; });
 }
 
+/** Strip a résumé's HTML to a short, prompt-safe plain-text digest (no tags, collapsed whitespace, capped). */
+export function resumeDigest(html: string | null | undefined, cap = 400): string | null {
+  if (!html) return null;
+  const text = String(html).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  return text.length > cap ? text.slice(0, cap - 1).trimEnd() + '…' : text;
+}
+
+/** Approved past-performance references — real, named clients the drafter MAY cite. Approved rows only. */
+export async function approvedReferences(tenantId: string): Promise<Array<{ client: string; scope: string | null; contractValue: string | null; dates: string | null; contact: string | null }>> {
+  const rows: any[] = await GovCompanyReference.findAll({ where: { tenant_id: tenantId, approved: true }, order: [['updated_at', 'DESC']] });
+  return rows.map((row) => {
+    const r = row.get({ plain: true });
+    const contact = [r.contact, r.phone, r.email].filter((x: unknown) => typeof x === 'string' && x).join(', ') || null;
+    return { client: String(r.client ?? ''), scope: r.scope ?? null, contractValue: r.contract_value ?? null, dates: r.dates ?? null, contact };
+  }).filter((r: { client: string }) => r.client.trim() !== '');
+}
+
+/** Approved key personnel the drafter MAY name and describe. Approved rows only; résumé reduced to a short digest. */
+export async function approvedPersonnel(tenantId: string): Promise<Array<{ name: string; role: string | null; summary: string | null }>> {
+  const rows: any[] = await GovCompanyPersonnel.findAll({ where: { tenant_id: tenantId, approved: true }, order: [['updated_at', 'DESC']] });
+  return rows.map((row) => {
+    const p = row.get({ plain: true });
+    return { name: String(p.name ?? ''), role: p.role ?? null, summary: resumeDigest(p.resume_html) };
+  }).filter((p: { name: string }) => p.name.trim() !== '');
+}
+
 export async function addCompanyFact(tenantId: string, input: { key: string; value: string; source?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
   const row: any = await GovCompanyFact.create({ tenant_id: tenantId, key: input.key, value: input.value, source: input.source ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
   return row.id;

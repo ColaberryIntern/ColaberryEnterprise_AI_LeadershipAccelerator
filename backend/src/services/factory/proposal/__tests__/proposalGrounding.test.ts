@@ -39,3 +39,53 @@ describe('buildGrounding', () => {
     expect(groundingToPromptText(none)).toMatch(/\[PLACEHOLDER/);
   });
 });
+
+describe('proof grounding (references, personnel, case studies)', () => {
+  const doc = { title: 'Past Performance', requirements: [], sections: [] };
+
+  it('passes references, personnel, and case studies through buildGrounding', () => {
+    const g = buildGrounding({
+      document: doc,
+      references: [{ client: 'City of Plano', scope: 'Permitting portal', contractValue: '$1.2M', dates: '2023-2025', contact: 'Jane Roe, 555-1212' }],
+      personnel: [{ name: 'Ada Lovelace', role: 'Technical Lead', summary: '10y data engineering' }],
+      caseStudies: [{ title: 'Asset Management Rebuild', industry: 'Municipal', year: 2024, capability: 'Platform modernization', metricLabel: 'Cycle time', metricValue: '-40%', metricVerified: true }],
+    });
+    expect(g.references).toHaveLength(1);
+    expect(g.personnel?.[0].name).toBe('Ada Lovelace');
+    expect(g.caseStudies?.[0].title).toBe('Asset Management Rebuild');
+  });
+
+  it('renders references as citable, named clients', () => {
+    const g = buildGrounding({ document: doc, references: [{ client: 'City of Plano', scope: 'Permitting portal', contractValue: '$1.2M', dates: '2023-2025', contact: 'Jane Roe' }] });
+    const text = groundingToPromptText(g);
+    expect(text).toMatch(/you MAY name the client/);
+    expect(text).toMatch(/City of Plano/);
+    expect(text).toMatch(/value \$1\.2M/);
+  });
+
+  it('renders personnel as nameable and describable', () => {
+    const g = buildGrounding({ document: doc, personnel: [{ name: 'Ada Lovelace', role: 'Technical Lead', summary: '10y data engineering' }] });
+    const text = groundingToPromptText(g);
+    expect(text).toMatch(/key personnel/i);
+    expect(text).toMatch(/Ada Lovelace, Technical Lead: 10y data engineering/);
+  });
+
+  it('renders case studies as ANONYMIZED proof, labels metric verification, and forbids inventing a client', () => {
+    const g = buildGrounding({ document: doc, caseStudies: [
+      { title: 'Asset Rebuild', industry: 'Municipal', year: 2024, capability: 'Modernization', metricLabel: 'Cycle time', metricValue: '-40%', metricVerified: true },
+      { title: 'Portal Launch', industry: 'State', year: 2023, metricLabel: 'Adoption', metricValue: '3x', metricVerified: false },
+    ] });
+    const text = groundingToPromptText(g);
+    expect(text).toMatch(/ANONYMIZED/);
+    expect(text).toMatch(/never assert or invent a real client name/);
+    expect(text).toMatch(/Cycle time: -40% \(verified\)/);
+    expect(text).toMatch(/Adoption: 3x \(reported\)/);
+  });
+
+  it('omits every proof block when none are supplied', () => {
+    const text = groundingToPromptText(buildGrounding({ document: doc }));
+    expect(text).not.toMatch(/past-performance references/i);
+    expect(text).not.toMatch(/key personnel/i);
+    expect(text).not.toMatch(/Case-study proof points/);
+  });
+});
