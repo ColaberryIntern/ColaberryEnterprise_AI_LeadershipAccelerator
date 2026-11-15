@@ -99,7 +99,7 @@ export default function AcceleratorV2(): React.ReactElement {
       <section className="cbv2-section cbv2-section--inverse" aria-label="Talk to us">
         <div className="cbv2-wrap cbv2-jy__cta">
           <Link
-            to="/contact?source=accelerator"
+            to="/demo-pilot?source=accelerator"
             onClick={onEnquire}
             className="cbv2-jy__btn"
             data-track="accelerator_enquiry"

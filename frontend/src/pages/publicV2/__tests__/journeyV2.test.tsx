@@ -144,10 +144,27 @@ describe('neither page uses wording the claim registry prohibits', () => {
 });
 
 describe('each page has exactly one path to enquiry, and instruments it', () => {
+  /*
+      THE RULE IS ONE DESTINATION, NOT ONE LINK.
+
+      C5.1's "each page has one path to enquiry" was written when /contact and
+      /lab were two competing front doors, and a page offering both made the
+      visitor choose between them without knowing the difference. The v5 site
+      model folds both into /demo-pilot and points every primary button there,
+      so a page may now carry several buttons -- they all go to the same place,
+      which is what the rule was protecting.
+
+      So this asserts the thing that can still regress: at least one enquiry
+      link, and no enquiry link pointing anywhere other than the one
+      destination.
+  */
+  const ENQUIRY = ['/contact', '/lab', '/demo-pilot'];
   for (const [name, h] of [['how it works', how], ['accelerator', acc]] as const) {
-    it(`${name} offers one enquiry link`, () => {
-      const contact = hrefs(h).filter((x) => x.startsWith('/contact'));
-      expect(contact).toHaveLength(1);
+    it(`${name} offers an enquiry path, and only one destination`, () => {
+      const enquiry = hrefs(h).filter((x) => ENQUIRY.some((e) => x.startsWith(e)));
+      expect(enquiry.length).toBeGreaterThan(0);
+      const destinations = new Set(enquiry.map((x) => x.split('?')[0]));
+      expect(Array.from(destinations)).toEqual(['/demo-pilot']);
     });
   }
 
@@ -172,7 +189,7 @@ describe('each page has exactly one path to enquiry, and instruments it', () => 
         <MemoryRouter initialEntries={['/accelerator']}><AcceleratorV2 /></MemoryRouter>,
       );
     });
-    const cta = container.querySelector('a[href^="/contact"]') as HTMLAnchorElement;
+    const cta = container.querySelector('a[href^="/demo-pilot"]') as HTMLAnchorElement;
     act(() => {
       cta.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
