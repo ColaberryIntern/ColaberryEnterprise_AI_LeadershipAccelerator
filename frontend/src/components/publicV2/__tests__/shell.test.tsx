@@ -102,15 +102,25 @@ describe('PublicFooterV2', () => {
     });
   });
 
-  it('links the five service detail routes', () => {
+  /*
+      Three service routes, not the five engagement names that were here before.
+      The five old slugs still resolve (/services/:slug redirects them), but the
+      footer is a map of what is on offer, and five labels pointing at three
+      pages would tell a visitor there are five things to choose between.
+  */
+  it('links the three service routes, and the index', () => {
     const html = at('/', <PublicFooterV2 />);
-    [
-      'ai-opportunity-sprint',
-      'claude-production-pilot',
-      'enterprise-build-modernization',
-      'workforce-architect-accelerator',
-      'embedded-ai-operations',
-    ].forEach((slug) => expect(html).toContain(`/services/${slug}`));
+    ['build', 'guide', 'train'].forEach((slug) =>
+      expect(html).toContain(`/services/${slug}`),
+    );
+    expect(html).toContain('"/services"');
+  });
+
+  it('no longer advertises a retired engagement name', () => {
+    const text = textOf(at('/', <PublicFooterV2 />));
+    ['Opportunity Sprint', 'Production Pilot', 'Workforce Accelerator', 'Embedded AI Ops'].forEach(
+      (gone) => expect(text).not.toContain(gone),
+    );
   });
 
   it('shows the current year', () => {

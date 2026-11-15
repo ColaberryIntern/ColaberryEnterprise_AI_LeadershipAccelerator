@@ -32,6 +32,7 @@ import PublicHeaderV2, { V2_NAV } from '../PublicHeaderV2';
 import PublicFooterV2 from '../PublicFooterV2';
 import { readySegments } from '../../../config/v2Segments';
 import { SERVICE_DETAILS } from '../../../config/v2Services';
+import { SERVICE_PAGES, LEGACY_SERVICE_REDIRECTS } from '../../../config/v2ServicePages';
 import { CASE_STUDY_SURFACES, caseStudyDetailPath } from '../../../config/caseStudySurfaces';
 
 /**
@@ -59,6 +60,18 @@ const V2_ROUTES = [
   '/pricing',
   '/stories',
   '/stories/:slug',
+  /*
+      The three live service pages, plus the five retired slugs.
+
+      Both lists are declared because both must resolve: /services/build is
+      where a visitor goes now, and /services/claude-production-pilot is where
+      an existing inbound link still points. The retired five render a redirect
+      rather than a page -- see LEGACY_SERVICE_REDIRECTS -- and a redirect to a
+      real page is not a dead link, so they belong here too. If one is ever
+      dropped from the redirect table without being removed from the site, the
+      drill-through suite below catches it.
+  */
+  ...SERVICE_PAGES.map((s) => `/services/${s.slug}`),
   ...SERVICE_DETAILS.map((s) => `/services/${s.slug}`),
   // The homepage's segment doors (C5.2) link to these. GENERATED from the same call
   // App.tsx maps to routes, so this list cannot drift out of step with the routes -
@@ -155,7 +168,7 @@ describe('link integrity — every internal link resolves to a declared route', 
  * not have been enough either, so all five are covered.
  */
 describe('link integrity — every service drill-through', () => {
-  SERVICE_DETAILS.forEach((s) => {
+  SERVICE_PAGES.forEach((s) => {
     it(`/services/${s.slug} links only to routes that exist`, () => {
       const html = renderToStaticMarkup(
         <MemoryRouter initialEntries={[`/services/${s.slug}`]}>
@@ -166,7 +179,7 @@ describe('link integrity — every service drill-through', () => {
       );
       // Guard the guard: if the route ever stops resolving we are back to
       // asserting against the not-found page, which passes trivially.
-      expect(html).toContain(s.name);
+      expect(html).toContain(s.promise);
       expect(html).not.toContain('Service not found');
 
       const dead = deadLinks(html);
@@ -174,9 +187,35 @@ describe('link integrity — every service drill-through', () => {
     });
   });
 
-  it('every nextRoute is a declared route', () => {
-    SERVICE_DETAILS.forEach((s) => {
-      expect(ALL_ROUTES).toContain(s.nextRoute);
+  /*
+      The five retired slugs. They render a <Navigate>, not a page, so there is
+      no markup to scan for dead links -- what matters is that each one still
+      resolves to a service that exists rather than falling through to the
+      not-found page. That is the regression this catches: dropping a slug out
+      of the redirect table turns a live inbound link into a 404 silently.
+  */
+  it('every retired slug lands on a service that exists and is routable', () => {
+    /*
+        Asserted against the redirect table, not against rendered markup, and
+        that is deliberate. <Navigate> resolves in an effect, and effects do not
+        run under renderToStaticMarkup -- so a markup assertion here would scan
+        an empty string and pass no matter what the table said. The real
+        contract is "every retired slug names a live service", so that is what
+        this reads. ServicesV2.test.tsx covers the rendering side, where an
+        unknown slug DOES produce "Service not found" and a retired one does
+        not, which is what makes that pair discriminating.
+    */
+    const live = SERVICE_PAGES.map((s) => s.slug);
+    expect(Object.keys(LEGACY_SERVICE_REDIRECTS).length).toBeGreaterThan(0);
+    Object.entries(LEGACY_SERVICE_REDIRECTS).forEach(([, to]) => {
+      expect(live).toContain(to);
+      expect(ALL_ROUTES).toContain(`/services/${to}`);
+    });
+  });
+
+  it('every service CTA points at a declared route', () => {
+    SERVICE_PAGES.forEach((s) => {
+      expect(ALL_ROUTES).toContain(s.ctaRoute);
     });
   });
 });

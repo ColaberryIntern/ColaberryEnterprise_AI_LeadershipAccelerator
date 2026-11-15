@@ -15,7 +15,6 @@ import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
 import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
 import HowItWorksV2 from './pages/publicV2/HowItWorksV2';
-import AcceleratorV2 from './pages/publicV2/AcceleratorV2';
 import DemoV2 from './pages/publicV2/DemoV2';
 import { readySegments } from './config/v2Segments';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
@@ -131,7 +130,23 @@ function App() {
                 V2 nav and footer.
             */}
             <Route path="how-it-works" element={<HowItWorksV2 />} />
-            <Route path="accelerator" element={<AcceleratorV2 />} />
+            {/*
+                /accelerator folded into Train when the five services became three.
+                The v5 site model merges the Workforce Architect Accelerator and this
+                page into one, because they were two addresses describing the same
+                12-week course, which splits inbound links and gives search engines a
+                duplicate to choose between.
+
+                A redirect rather than a deletion, because this address has been
+                live and nothing here can see who still links to it. `replace`
+                keeps the retired URL out of the visitor's back button.
+
+                The AcceleratorV2 COMPONENT is not deleted, only unrouted and
+                unimported. Removing the file is a separate change: check what
+                else references it first -- a dead route is cheap, a broken
+                import is not.
+            */}
+            <Route path="accelerator" element={<Navigate to="/services/train" replace />} />
             {/* C5.9. Reads nothing from the backend, by design: a page that cannot reach
                 a tenant cannot leak one. */}
             <Route path="demo" element={<DemoV2 />} />

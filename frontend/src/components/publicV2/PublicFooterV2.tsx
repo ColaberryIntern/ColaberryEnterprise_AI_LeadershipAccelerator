@@ -39,12 +39,19 @@ interface FooterGroup {
 const GROUPS: readonly FooterGroup[] = [
   {
     heading: 'Services',
+    /*
+        Three, not the five engagement names that used to be here. The old five
+        still resolve -- /services/:slug redirects them -- but a footer is a map
+        of what the site offers, and pointing five labels at three pages would
+        tell a visitor there are five things to choose between when there are
+        three. Linked by the live slugs so the footer never depends on the
+        redirect table.
+    */
     links: [
-      { label: 'Opportunity Sprint', to: '/services/ai-opportunity-sprint' },
-      { label: 'Production Pilot', to: '/services/claude-production-pilot' },
-      { label: 'Build & Modernization', to: '/services/enterprise-build-modernization' },
-      { label: 'Workforce Accelerator', to: '/services/workforce-architect-accelerator' },
-      { label: 'Embedded AI Ops', to: '/services/embedded-ai-operations' },
+      { label: 'All services', to: '/services' },
+      { label: 'Build', to: '/services/build' },
+      { label: 'Guide', to: '/services/guide' },
+      { label: 'Train', to: '/services/train' },
     ],
   },
   {

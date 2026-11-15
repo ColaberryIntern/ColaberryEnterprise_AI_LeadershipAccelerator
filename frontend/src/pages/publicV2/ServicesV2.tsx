@@ -1,105 +1,205 @@
 import React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import Icon from '../../components/publicV2/Icon';
-import HeroServicesV8 from '../../components/publicV2/HeroServicesV8';
 import { Claim } from '../../components/publicV2/Claim';
-import { SERVICE_DETAILS, getServiceBySlug } from '../../config/v2Services';
+import { SERVICE_SHAPES, COMPARE_ROWS } from '../../config/v2Pricing';
+import { SERVICE_PAGES, getServicePage, LEGACY_SERVICE_REDIRECTS } from '../../config/v2ServicePages';
 import './servicesV2.css';
+/*
+   The offer-shape cards and the comparison table are shared with /pricing rather
+   than reimplemented here. Importing that page's stylesheet is deliberate: the
+   two pages describe the same three services, and giving each its own copy of
+   `.cbv2-shape*` is how they drift into two different offers. /pricing itself is
+   untouched by this change -- the import adds a stylesheet, it does not alter one.
+*/
+import './pricingV2.css';
 import '../../components/publicV2/heroV8.css';
 
 /**
- * ServicesV2 / ServiceDetailV2 — the five productized engagements.
+ * ServicesV2 / ServiceDetailV2 — three services: Build, Guide, Train.
  *
- * Decision-first: the page opens with the outcome question rather than a list of
- * offer names, because a buyer knows the outcome they need before they know what
- * the industry calls it.
+ * WHAT CHANGED, AND WHY. This page used to list five productized engagements,
+ * opening on the outcome question "What outcome do you need next?". The outcome
+ * framing was right and is kept; the five names were not. A buyer experiences
+ * three choices -- have it built, be guided while your team builds, or be
+ * trained -- and five offer names made the chooser do the work the sales call
+ * should do. The v5 site model (docs/enterprise-site-v5/) collapses them, and
+ * this is that collapse.
  *
- * NO PRICES ANYWHERE. Services pricing is "scoped on a call" per the 2026-08-07
- * decision, and a test asserts no currency figure renders on either page. That
- * also matches what independent review scored well: a named tier with the price
- * behind a conversation beats a number that a prospect can anchor on.
+ * The five old slugs are NOT deleted. `/services/:slug` redirects each of them
+ * to the service that absorbed it (LEGACY_SERVICE_REDIRECTS), so inbound links,
+ * bookmarks and search results keep working.
+ *
+ * NO PRICES ANYWHERE, unchanged from before. Services pricing is "scoped on a
+ * call" per the 2026-08-07 decision, and a test asserts no currency figure
+ * renders on this page or any detail page. That is also why Train's terms read
+ * "a free account" here rather than the model's "$0 to get started": same
+ * meaning, and it matches what COMPARE_ROWS already says on /pricing.
  */
 
 const ROUTE = '/services';
+
+/** The four steps of a demo pilot, which is where Build and Guide both begin. */
+const PILOT_STEPS: readonly { title: string; body: string }[] = [
+  {
+    title: 'We map your processes',
+    body: 'With the leader and the people who run the work.',
+  },
+  {
+    title: 'We rank them by ROI',
+    body: 'What each would return if it were automated.',
+  },
+  {
+    title: 'We build the best one',
+    body: 'A working Claude Code demo on your real workflow.',
+  },
+  {
+    title: 'You decide what is next',
+    body: 'Scale it, take it to the next leader, or stop.',
+  },
+];
 
 export function ServicesV2(): React.ReactElement {
   return (
     <>
       <SeoV2
-        title="What outcome do you need next?"
+        title="Build. Guide. Train."
         description={
-          'Five productized engagements: opportunity and readiness, a Claude production ' +
-          'pilot, enterprise build and modernization, the workforce architect accelerator, ' +
-          'and embedded architecture and AI operations.'
+          'Three ways to move your company to AI with Claude Code: we build you a custom ' +
+          'application, we guide your team to automate your workflows, or we train your ' +
+          'people into Forward Deployed Engineers.'
         }
       />
 
-      <HeroServicesV8 />
+      <section className="cbv2-pagehero" aria-labelledby="cbv2-svc-title">
+        <div className="cbv2-wrap">
+          <p className="cbv2-breadcrumb">
+            <Link to="/">Home</Link> / Services
+          </p>
+          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Services</p>
+          <h1 id="cbv2-svc-title">Build. Guide. Train.</h1>
+          <p className="cbv2-pagehero__lede">
+            Three ways to move your company to AI with Claude Code. We build you a custom
+            application, we guide your team to automate your workflows, or we train your
+            people &mdash; department by department, or company-wide.
+          </p>
+          <p style={{ marginTop: 'var(--space-6)' }}>
+            <Link className="cbv2-btn cbv2-btn--primary" to="/contact">
+              Book a demo pilot
+            </Link>
+          </p>
+        </div>
+      </section>
 
-      <section className="cbv2-section" aria-label="All services">
-        <div className="cbv2-wrap cbv2-svc-list">
-          {SERVICE_DETAILS.map((s, i) => (
-            <article className={`cbv2-svc${i % 2 === 1 ? ' cbv2-svc--flip' : ''}`} key={s.slug}>
-              <div className="cbv2-svc__copy">
-                <span className="cbv2-icon-tile cbv2-icon-tile--blue">
-                  <Icon name={s.icon} size={22} />
+      {/*
+          The demo pilot sits ABOVE the three cards on purpose. Two of the three
+          services begin with one, so a visitor who does not yet know which
+          service they want still has a correct first step -- which is the thing
+          the old five-card page never gave them.
+      */}
+      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-pilot-h">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow">Where Build and Guide begin</p>
+          <h2 id="cbv2-pilot-h">The demo pilot.</h2>
+          <p className="cbv2-lede">
+            Before you commit, you see AI running on one of your own processes, with the ROI
+            case beside it.
+          </p>
+          <ol className="cbv2-pilot">
+            {PILOT_STEPS.map((s, i) => (
+              <li className="cbv2-pilot__step" key={s.title}>
+                <span className="cbv2-pilot__n" aria-hidden="true">
+                  {i + 1}
                 </span>
-                <p className="cbv2-eyebrow">Service {s.number}</p>
-                <h2 className="cbv2-svc__name">
-                  <Link to={`/services/${s.slug}`}>{s.name}</Link>
-                </h2>
-                <p className="cbv2-lede">{s.happens}</p>
-                <div className="cbv2-field" style={{ marginTop: 'var(--space-5)' }}>
-                  <h3>Best fit</h3>
-                  <p>{s.bestFit}</p>
+                <div>
+                  <h3 className="cbv2-pilot__title">{s.title}</h3>
+                  <p className="cbv2-pilot__body">{s.body}</p>
                 </div>
-                <div className="cbv2-field" style={{ marginTop: 'var(--space-4)' }}>
-                  <h3>Typical trigger</h3>
-                  <p>{s.trigger}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="cbv2-section" aria-labelledby="cbv2-three-h">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow">Choose by what you need</p>
+          <h2 id="cbv2-three-h">Three services. One question each.</h2>
+
+          <div className="cbv2-shapes">
+            {SERVICE_SHAPES.map((s, i) => (
+              <article
+                className={`cbv2-shape${s.featured ? ' cbv2-shape--featured' : ''}`}
+                key={s.key}
+              >
+                <div className="cbv2-shape__head">
+                  <span className="cbv2-shape__badge">
+                    {String(i + 1).padStart(2, '0')} &middot; {s.badge}
+                  </span>
+                  <h3 className="cbv2-shape__verb">
+                    <Link to={`/services/${s.key}`}>{s.verb}.</Link>
+                  </h3>
                 </div>
-                <p style={{ marginTop: 'var(--space-6)' }}>
-                  <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to={`/services/${s.slug}`}>
-                    See what this includes
+                <p className="cbv2-shape__promise">{s.promise}</p>
+                <p className="cbv2-shape__blurb">{s.blurb}</p>
+                <div className="cbv2-shape__terms">
+                  <p className="cbv2-shape__terms-label">{s.termsLabel}</p>
+                  <p className="cbv2-shape__terms-value">{s.terms}</p>
+                </div>
+                <ul className="cbv2-shape__list">
+                  {s.includes.map((inc) => (
+                    <li key={inc}>
+                      <span aria-hidden="true">&#10003;</span>
+                      {inc}
+                    </li>
+                  ))}
+                </ul>
+                <p className="cbv2-shape__cta">
+                  <Link
+                    className="cbv2-btn cbv2-btn--primary cbv2-btn--sm"
+                    to={`/services/${s.key}`}
+                  >
+                    See {s.verb}
                   </Link>
                 </p>
-              </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
 
-              <div className="cbv2-svc__panel">
-                <figure className="cbv2-svc__shot">
-                  <img
-                    src={s.photo.src}
-                    alt={s.photo.alt}
-                    width={1280}
-                    height={960}
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </figure>
-                <div className="cbv2-card">
-                  <h3 className="cbv2-svc__dlv-head">Deliverables</h3>
-                  <ul className="cbv2-svc__dlv">
-                    {s.deliverables.map((d) => (
-                      <li key={d}>
-                        <span aria-hidden="true">&#10003;</span>
-                        {d}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="cbv2-field" style={{ marginTop: 'var(--space-5)' }}>
-                    <h3>Proof required</h3>
-                    <p>{s.proof}</p>
-                  </div>
-                </div>
-              </div>
-            </article>
-          ))}
-
-          {/* A lone mentor-coaching.jpg used to sit here with alt="" and no
-              relationship to anything around it. Every service row now carries
-              its own photograph, so this one was duplicated content by the time
-              it was reached -- the same image is service 05's. Removed rather
-              than reassigned. */}
+      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-cmp-h">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow">Side by side</p>
+          <h2 id="cbv2-cmp-h">Which one fits?</h2>
+          <div className="cbv2-compare__scroll">
+            <table className="cbv2-compare">
+              <caption className="cbv2-sr-only">
+                The three services compared across {COMPARE_ROWS.length} dimensions.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Compare</th>
+                  {SERVICE_SHAPES.map((s) => (
+                    <th scope="col" key={s.key}>
+                      {s.verb}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARE_ROWS.map((r) => (
+                  <tr key={r.label}>
+                    <th scope="row">{r.label}</th>
+                    <td>{r.build}</td>
+                    <td>{r.guide}</td>
+                    <td>{r.train}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <p className="cbv2-note">
             Engagement pricing is <Claim claimKey="pricing.services" route={ROUTE} /> &mdash; so the
@@ -114,15 +214,27 @@ export function ServicesV2(): React.ReactElement {
 
 export function ServiceDetailV2(): React.ReactElement {
   const { slug } = useParams<{ slug: string }>();
-  const service = slug ? getServiceBySlug(slug) : undefined;
 
-  if (!service) {
+  /*
+      A retired slug resolves before anything renders. `replace` keeps the dead
+      URL out of the visitor's back button, so pressing back from Build does not
+      bounce them through /services/claude-production-pilot again.
+  */
+  const redirectTo = slug ? LEGACY_SERVICE_REDIRECTS[slug] : undefined;
+  if (redirectTo) {
+    return <Navigate to={`/services/${redirectTo}`} replace />;
+  }
+
+  const page = slug ? getServicePage(slug) : undefined;
+  const shape = page ? SERVICE_SHAPES.find((s) => s.key === page.slug) : undefined;
+
+  if (!page || !shape) {
     return (
       <section className="cbv2-section">
         <div className="cbv2-wrap cbv2-wrap--narrow">
           <h1>Service not found</h1>
           <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
-            That engagement does not exist. See all five services instead.
+            That service does not exist. See all three services instead.
           </p>
           <p style={{ marginTop: 'var(--space-6)' }}>
             <Link className="cbv2-btn cbv2-btn--primary" to="/services">
@@ -134,36 +246,31 @@ export function ServiceDetailV2(): React.ReactElement {
     );
   }
 
+  const others = SERVICE_PAGES.filter((s) => s.slug !== page.slug);
+
   return (
     <>
-      <SeoV2 title={service.name} description={service.happens} />
+      <SeoV2 title={`${page.verb}. ${page.promise}`} description={page.lede} />
 
-      {/*
-        The drill-through used to open on a dark band of text and nothing else,
-        so all five detail pages looked identical above the fold and read as a
-        spec sheet. The service photograph now sits beside the copy, which is
-        the only element that differs per service at first glance.
-
-        The photo is decorative-adjacent but NOT decorative: it carries a real
-        alt description, because a screen-reader user asking "what is on this
-        page" should get the same scene a sighted visitor gets. It is not
-        captioned, because a caption would imply it documents this engagement,
-        and it does not -- see the ServicePhoto note in config/v2Services.ts.
-      */}
       <section className="cbv2-pagehero" aria-labelledby="cbv2-svcd-title">
         <div className="cbv2-wrap cbv2-pagehero__split">
           <div>
             <p className="cbv2-breadcrumb">
-              <Link to="/services">Services</Link> / {service.name}
+              <Link to="/services">Services</Link> / {page.verb}
             </p>
-            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Service {service.number}</p>
-            <h1 id="cbv2-svcd-title">{service.name}</h1>
-            <p className="cbv2-pagehero__lede">{service.happens}</p>
+            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{shape.badge}</p>
+            <h1 id="cbv2-svcd-title">{page.verb}.</h1>
+            <p className="cbv2-pagehero__lede">{page.promise}</p>
+            <p style={{ marginTop: 'var(--space-5)' }}>
+              <Link className="cbv2-btn cbv2-btn--primary" to={page.ctaRoute}>
+                {page.ctaLabel}
+              </Link>
+            </p>
           </div>
           <figure className="cbv2-svcd__photo">
             <img
-              src={service.photo.src}
-              alt={service.photo.alt}
+              src={page.photo.src}
+              alt={page.photo.alt}
               width={1280}
               height={960}
               loading="eager"
@@ -173,50 +280,133 @@ export function ServiceDetailV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section">
-        <div className="cbv2-wrap cbv2-grid cbv2-grid--2">
-          <div className="cbv2-field">
-            <h3>Best fit</h3>
-            <p>{service.bestFit}</p>
-          </div>
-          <div className="cbv2-field">
-            <h3>Typical trigger</h3>
-            <p>{service.trigger}</p>
-          </div>
-        </div>
-
-        <div className="cbv2-wrap" style={{ marginTop: 'var(--space-8)' }}>
-          <div className="cbv2-card">
-            <h2 className="cbv2-svc__dlv-head">Deliverables</h2>
-            <ul className="cbv2-svc__dlv cbv2-svc__dlv--wide">
-              {service.deliverables.map((d) => (
-                <li key={d}>
+      {/* The commercial shape, read from SERVICE_SHAPES so it cannot disagree
+          with /pricing. Terms only -- never a figure. */}
+      <section className="cbv2-section" aria-labelledby="cbv2-svcd-what">
+        <div className="cbv2-wrap">
+          <div className="cbv2-shape cbv2-shape--wide">
+            <div className="cbv2-shape__terms">
+              <p className="cbv2-shape__terms-label">{shape.termsLabel}</p>
+              <p className="cbv2-shape__terms-value">{shape.terms}</p>
+            </div>
+            <ul className="cbv2-shape__list">
+              {shape.includes.map((inc) => (
+                <li key={inc}>
                   <span aria-hidden="true">&#10003;</span>
-                  {d}
+                  {inc}
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="cbv2-grid cbv2-grid--2" style={{ marginTop: 'var(--space-6)' }}>
-            <div className="cbv2-field">
-              <h3>Proof required</h3>
-              <p>{service.proof}</p>
-            </div>
-            <div className="cbv2-field">
-              <h3>Next step</h3>
-              <p>{service.nextStep}</p>
-              <p style={{ marginTop: 'var(--space-3)' }}>
-                <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to={service.nextRoute}>
-                  Take this step
-                </Link>
-              </p>
-            </div>
+          <div style={{ marginTop: 'var(--space-8)' }}>
+            <p className="cbv2-eyebrow">What it is</p>
+            <h2 id="cbv2-svcd-what">{page.promise}</h2>
+            <p className="cbv2-lede">{page.lede}</p>
+          </div>
+
+          <div className="cbv2-field" style={{ marginTop: 'var(--space-6)' }}>
+            <h3>Choose {page.verb} when</h3>
+            <p>{page.chooseWhen}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-svcd-inc">
+        <div className="cbv2-wrap">
+          <h2 id="cbv2-svcd-inc">What is included</h2>
+          <ul className="cbv2-inclusions">
+            {page.includes.map((inc) => (
+              <li className="cbv2-inclusion" key={inc.title}>
+                <span className="cbv2-icon-tile cbv2-icon-tile--blue">
+                  <Icon name={page.icon} size={20} />
+                </span>
+                <h3>{inc.title}</h3>
+                <p>{inc.body}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="cbv2-section" aria-labelledby="cbv2-svcd-steps">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow">{page.stepsEyebrow}</p>
+          <h2 id="cbv2-svcd-steps">{page.stepsHeading}</h2>
+          <ol className="cbv2-pilot">
+            {page.steps.map((st) => (
+              <li className="cbv2-pilot__step" key={st.n + st.title}>
+                <span className="cbv2-pilot__n" aria-hidden="true">
+                  {st.n}
+                </span>
+                <div>
+                  <h3 className="cbv2-pilot__title">{st.title}</h3>
+                  <p className="cbv2-pilot__body">{st.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-svcd-isnot">
+        <div className="cbv2-wrap cbv2-grid cbv2-grid--2">
+          <div className="cbv2-field">
+            <h3 id="cbv2-svcd-isnot">{page.isNotHeading}</h3>
+            <ul className="cbv2-svc__dlv cbv2-svc__dlv--neg">
+              {page.isNot.map((n) => (
+                <li key={n}>
+                  <span aria-hidden="true">&times;</span>
+                  {n}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="cbv2-field">
+            <h3>{page.isHeading}</h3>
+            <ul className="cbv2-svc__dlv">
+              {page.isIt.map((n) => (
+                <li key={n}>
+                  <span aria-hidden="true">&#10003;</span>
+                  {n}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section className="cbv2-section" aria-labelledby="cbv2-svcd-faq">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow">Questions</p>
+          <h2 id="cbv2-svcd-faq">Before you ask.</h2>
+          <dl className="cbv2-faq">
+            {page.faqs.map((f) => (
+              <div className="cbv2-faq__item" key={f.q}>
+                <dt>{f.q}</dt>
+                <dd>{f.a}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <div style={{ marginTop: 'var(--space-8)' }}>
+            <h3>The other two services</h3>
+            <ul className="cbv2-otherservices">
+              {others.map((o) => (
+                <li key={o.slug}>
+                  <Link to={`/services/${o.slug}`}>
+                    <strong>{o.verb}.</strong> {o.promise}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link to="/services">Compare all three side by side</Link>
+              </li>
+            </ul>
           </div>
 
           <p className="cbv2-note">
-            Pricing for this engagement is{' '}
-            <Claim claimKey="pricing.services" route={ROUTE} />.
+            Pricing for this service is <Claim claimKey="pricing.services" route={ROUTE} />.
           </p>
         </div>
       </section>
