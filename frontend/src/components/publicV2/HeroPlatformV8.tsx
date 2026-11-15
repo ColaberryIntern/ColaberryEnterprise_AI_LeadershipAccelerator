@@ -114,7 +114,7 @@ export default function HeroPlatformV8(): React.ReactElement {
               Explore the Live Platform
             </Link>
             <Link className="cbv2-h8__btn cbv2-h8__btn--ghost" to="/demo-pilot">
-              Talk to an Architect
+              Book a demo pilot
             </Link>
           </div>
 

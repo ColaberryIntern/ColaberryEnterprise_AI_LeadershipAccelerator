@@ -21,25 +21,42 @@ const html = (): string =>
 const textOf = (h: string): string => h.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 describe('HeroV8', () => {
-  it('carries the positioning as a single h1', () => {
+  /*
+      The headline is now the three services, not "Build the system. Build the
+      people." That line is `positioning.primary` in the claims registry, which
+      is VERIFIED and approved everywhere -- but approved is not mandatory, and
+      the v5 site model leads on what the company sells rather than on the
+      operating model behind it. The claim is unused here, not retired.
+  */
+  it('carries the offer as a single h1', () => {
     const h = html();
     expect((h.match(/<h1/g) || []).length).toBe(1);
     const line = h.slice(h.indexOf('<h1'), h.indexOf('</h1>'))
       .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-    expect(line).toContain('Build the system.');
-    expect(line).toContain('Build the people.');
+    expect(line).toContain('We build, guide and train');
+    expect(line).toContain('your company into AI.');
   });
 
-  it('states the supporting claim in its approved wording', () => {
-    // The supplied design rewrote this to "same platform, same timeline". The
-    // phrasing kept is the one the claims work settled on.
-    expect(textOf(html())).toContain('in one platform, at the same time');
-  });
-
-  it('renders both calls to action in the site-wide title case', () => {
+  it('says what is actually sold, and never promises a result', () => {
     const t = textOf(html());
-    expect(t).toContain('Explore the Live Platform');
-    expect(t).toContain('Map an AI Opportunity');
+    expect(t).toContain('prove it with a demo pilot');
+    expect(t).toContain('department by department');
+    // No figure, and no duration: the hero sells a method, not an outcome.
+    expect(t).not.toMatch(/\$\s?[\d,]/);
+    expect(t).not.toMatch(/in\s+\d+\s+(days?|weeks?|months?)/i);
+  });
+
+  /*
+      Sentence case, not the title case the two retired CTAs used. The v5 model
+      is sentence case throughout, and so are the pages added alongside it
+      (/services, /book, /demo-pilot), so this is the site agreeing with itself.
+  */
+  it('renders both calls to action, pointing at the pilot and the chooser', () => {
+    const t = textOf(html());
+    expect(t).toContain('Start with a demo pilot');
+    expect(t).toContain('Build, guide or train?');
+    expect(html()).toContain('href="/demo-pilot"');
+    expect(html()).toContain('href="/services"');
   });
 
   /**
@@ -50,9 +67,9 @@ describe('HeroV8', () => {
    */
   it('reads the animation out in words', () => {
     const t = textOf(html());
-    expect(t).toContain('System in production');
-    expect(t).toContain('People own the system');
-    expect(t).toContain('Handover complete');
+    expect(t).toContain('We build it');
+    expect(t).toContain('We guide you');
+    expect(t).toContain('We train you');
   });
 
   /**

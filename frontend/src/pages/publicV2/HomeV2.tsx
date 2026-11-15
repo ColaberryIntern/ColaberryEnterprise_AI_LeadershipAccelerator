@@ -1,16 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
-import CtaInterrupt from '../../components/publicV2/CtaInterrupt';
 import HeroV8 from '../../components/publicV2/HeroV8';
-import EngineModel from '../../components/publicV2/EngineModel';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
 import SegmentDoors from '../../components/publicV2/SegmentDoors';
 // ENGINE was imported here and never used, from before this split. Removed rather than
 // carried across, since a dead import is one more thing a reader has to rule out.
-import { BuildPipelineSection, DemoPilotSection, ServicesSection } from './homeV2Sections';
+import { DemoPilotSection } from './homeV2Sections';
+import { DepartmentMapSection, ThreeServicesSection } from './homeV2Bands';
 import './homeV2.css';
 import '../../components/publicV2/heroV8.css';
 import '../../components/publicV2/engineModel.css';
@@ -37,11 +36,11 @@ function HomeV2(): React.ReactElement {
   return (
     <>
       <SeoV2
-        title="Build the system. Build the people. Prove the capability."
+        title="We build, guide and train your company into AI."
         description={
-          'Colaberry helps organizations identify high-value AI opportunities, deploy governed ' +
-          'Claude-powered systems, and develop the people who will own them, through one ' +
-          'connected platform.'
+          'A custom application designed around your business, or workflows that automate ' +
+          'your processes inside the systems you already run. We find where the ROI is, ' +
+          'prove it with a demo pilot, then keep going department by department.'
         }
       />
 
@@ -54,23 +53,41 @@ function HomeV2(): React.ReactElement {
         owned capability -- so it now answers the hero directly instead of
         making a reader scroll past four other things to find out what we mean.
       */}
-{/* 4 ────────────────────────────────────────── dual transformation ──── */}
-      <section className="cbv2-rv cbv2-section cbv2-section--berry" aria-labelledby="cbv2-engine-title">
-        <div className="cbv2-wrap">
-          <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">The operating model</p>
-            <h2 id="cbv2-engine-title">Two engines, one owned capability</h2>
-            <p className="cbv2-lede">
-              Most programmes build a system nobody can maintain, or train people with nothing
-              real to build. These run together &mdash; and every stage hands off to the one
-              beside it.
-            </p>
-          </div>
+{/*
+        THE "TWO ENGINES" BAND WAS REMOVED HERE, not moved.
 
-          <EngineModel />
-        </div>
-      </section>
+        It explained the operating model -- two engines, one owned capability --
+        as an abstraction, directly under a hero that now names the three
+        services outright. The v5 site model replaces that abstraction with two
+        concrete things: the three "we build it / we guide you / we train you"
+        chips in the hero, and the department map immediately below, which shows
+        the rollout rather than describing it.
 
+        EngineModel is unrouted from this page but NOT deleted. Check what else
+        imports it before removing the component.
+      */}
+
+      <DepartmentMapSection />
+
+      {/*
+          WHAT IS FOR SALE COMES THIRD, right after the rollout picture and
+          before any proof or claims material. It used to sit two thirds of the
+          way down, behind the book, the segment doors and the accolades, so a
+          visitor met the evidence for the offer before the offer itself.
+      */}
+      <ThreeServicesSection />
+
+      {/*
+          HOW IT STARTS, immediately after WHAT IS SOLD. The three services
+          raise the obvious question -- how does any of this begin -- and this
+          band is the answer, so it belongs next to them rather than five
+          sections further down behind the book and the accolades.
+
+          The band itself replaced the second of two CTA interrupts rather than
+          being added alongside it; both interrupts are now gone, so the page
+          pushes to the workspace from the hero and the final CTA only.
+      */}
+      <DemoPilotSection />
 
       {/* 2 ──────────────────────────────────────── what we can state today ── */}
       <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-label="What we can state today">
@@ -159,12 +176,15 @@ function HomeV2(): React.ReactElement {
         </section>
       ) : null}
 
-      {/* 3 ─────────────────────────────────────────────────── goal chooser ── */}
-      <CtaInterrupt
-        eyebrow="Heard enough?"
-        title="Stop reading about it. Go stand inside it."
-        body="The workspace opens on sample data so there is something to look at on day one. No credit card, and no procurement conversation required to look."
-      />
+      {/*
+        THE MID-PAGE CTA INTERRUPT WAS REMOVED.
+
+        It pushed to the free workspace from the middle of the page, while the
+        hero and the final CTA both already offer a way in, and the demo-pilot
+        band below answers the same "what do I do next" question with an actual
+        answer. Two interrupts on one page was the thing cut when the demo-pilot
+        band landed; this is the last of them.
+      */}
 
       {/*
         THE FIVE DOORS, replacing the goal picker (C5.2).
@@ -220,41 +240,14 @@ function HomeV2(): React.ReactElement {
         </div>
       </section>
 
-            {/* 4b ───────────────────────────────────────────────── idea to build ── */}
-      {/*
-        The story-build system. Three beats -- plan, build, verified -- ending on
-        the repo, because the repo is the part a sceptical buyer can check.
-
-        THE COPY IS BOUNDED BY WHAT THE PIPELINE DOES. It plans, prompts and
-        verifies; the human writes the code. `renderDocs.ts` emits markdown and
-        JSON and `repoWriter.ts` is path-allowlisted to docs/**, CLAUDE.md and
-        .colaberry/**, so any wording implying the platform builds the project
-        would be false and disprovable by opening the repo. Gated on
-        `surface.storybuild`, so if that claim ever regresses the section
-        disappears rather than going stale.
+            {/*
+        THE BUILD-PIPELINE BAND WAS REMOVED from the home page. It is detail
+        about how a build is planned and verified, which belongs on the service
+        pages rather than in the first scroll. BuildPipelineSection still exists
+        and is still gated on `surface.storybuild`.
       */}
-      {canShow('surface.storybuild', ROUTE) ? (
-        <BuildPipelineSection />
-      ) : null}
 
-      {/*
-        5 ────────────────────────── how an engagement starts, then services ──
 
-        THE SECOND CTA INTERRUPT WAS SWAPPED OUT FOR THIS BAND, not added
-        alongside it. The twelve-section budget's own rule is that the next
-        section to be added should replace one rather than raise the ceiling a
-        third time, and this is the second time that has been honoured.
-
-        The interrupt that went ("Still with us? / The fastest way to judge this
-        is to open it.") was the SECOND of two on one page, both pushing to the
-        same workspace. The first one survives five sections above, so nothing
-        the page could say is now unsaid -- it was the repetition that was cut,
-        not a message. What replaced it answers a question the page never
-        answered at all: how an engagement actually begins.
-      */}
-      <DemoPilotSection />
-
-        <ServicesSection />
 
       {/* 6 ────────────────────────────────────────── workspace ────── */}
       {canShow('surface.free.workspace', ROUTE) ? (
@@ -332,7 +325,7 @@ function HomeV2(): React.ReactElement {
               Open the Free Company Workspace
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">
-              Talk to an Architect
+              Book a demo pilot
             </Link>
           </div>
         </div>

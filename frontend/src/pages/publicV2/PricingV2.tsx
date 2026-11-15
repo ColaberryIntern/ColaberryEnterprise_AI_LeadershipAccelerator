@@ -221,13 +221,13 @@ function PricingV2(): React.ReactElement {
             ))}
           </div>
 
-          {/* Build and Guide are delivered through the five engagements catalogued on
+          {/* Build and Guide are delivered through the three services catalogued on
               /services. Naming that relationship here is deliberate: the two pages would
               otherwise appear to disagree about how many things we sell. */}
           <p className="cbv2-note">
             Build and Guide are priced separately:{' '}
             <Claim claimKey="pricing.services" route={ROUTE} />. {SERVICES_PRICING_NOTE}{' '}
-            <Link to="/services">See the five engagements they are delivered through</Link>.
+            <Link to="/services">See the three services they are delivered through</Link>.
           </p>
         </div>
       </section>

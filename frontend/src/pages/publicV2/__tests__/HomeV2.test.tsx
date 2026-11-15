@@ -83,17 +83,19 @@ describe('HomeV2 — structure', () => {
    * asserts the sentence a reader actually sees rather than the markup that
    * produces it.
    */
-  it('carries the positioning line as the h1', () => {
+  /*
+      The h1 is now the offer, not the operating model. "Build the system. Build
+      the people." is `positioning.primary` in the claims registry: VERIFIED and
+      approved on every route, but approved is not mandatory. The v5 site model
+      leads on what the company sells. The claim is unused here, not retired.
+  */
+  it('carries the offer as the h1', () => {
     const h = html();
     const h1 = h.slice(h.indexOf('<h1'), h.indexOf('</h1>'));
     const line = h1.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-    expect(line).toContain('Build the system.');
-    expect(line).toContain('Build the people.');
-    // "Your team owns it." left the h1 with the v8 hero and is now the deck
-    // paragraph beneath it. That is the better structure -- the h1 is the
-    // positioning statement, the deck supports it -- so the line is asserted on
-    // the page rather than inside the heading.
-    expect(textOf(h)).toContain('Your team owns it.');
+    expect(line).toContain('We build, guide and train');
+    expect(line).toContain('your company into AI.');
+    expect(textOf(h)).toContain('Then the next leader.');
   });
 
   it('has exactly one h1', () => {
@@ -137,8 +139,8 @@ describe('HomeV2 — structure', () => {
 
   it('renders both hero CTAs', () => {
     const text = textOf(html());
-    expect(text).toContain('Explore the Live Platform');
-    expect(text).toContain('Map an AI Opportunity');
+    expect(text).toContain('Start with a demo pilot');
+    expect(text).toContain('Build, guide or train?');
   });
 
   /**
@@ -191,15 +193,33 @@ describe('HomeV2 — structure', () => {
     });
   });
 
-  it('links every service to its detail route', () => {
+  it('links each of the three services to its page', () => {
     const h = html();
-    SERVICES.forEach((s) => expect(h).toContain(`/services/${s.slug}`));
+    ['build', 'guide', 'train'].forEach((slug) =>
+      expect(h).toContain(`/services/${slug}`));
   });
 
-  it('renders both engine lanes with five steps each', () => {
+  /*
+      THE "TWO ENGINES" BAND IS GONE, and with it the lane-step assertion that
+      was here. It described the operating model as an abstraction, directly
+      under a hero that now names the three services outright. What replaced it
+      is concrete: the hero's three chips, and the department map below.
+  */
+  it('shows the rollout as departments at different stages, not as an abstraction', () => {
     const text = textOf(html());
-    ['Discover', 'Design', 'Build', 'Govern', 'Measure'].forEach((s) => expect(text).toContain(s));
-    ['Assess', 'Learn', 'Prove', 'Lead'].forEach((s) => expect(text).toContain(s));
+    ['Finance', 'Operations', 'Customer service', 'Sales', 'HR', 'IT &amp; Data'].forEach((d) =>
+      expect(text).toContain(d));
+  });
+
+  it('states each department stage as a WORD, never colour alone', () => {
+    const text = textOf(html());
+    ['Automating', 'Demo pilot', 'Next leader', 'Not started'].forEach((label) =>
+      expect(text).toContain(label));
+  });
+
+  it('labels the department map as sample data, because it depicts no real customer', () => {
+    // An unlabelled mock of a customer dashboard is a fabricated proof claim.
+    expect(html()).toContain('data-sample="true"');
   });
 });
 
@@ -264,22 +284,48 @@ describe('HomeV2 — the demo-pilot band', () => {
     expect(textOf(html())).toContain('Where everyone starts');
   });
 
+  /*
+      BOUNDED BY THE BAND'S OWN CLOSING TAG, not by the heading of whatever
+      section used to follow it.
+
+      This previously sliced from cbv2-demopilot-title to cbv2-services-title.
+      When the five-engagement band was replaced, that second anchor stopped
+      existing, indexOf returned -1, and `slice(start, -1)` quietly extended the
+      slice to the whole rest of the page -- so the guard started reading the
+      book citation's "95%" and the accolades' figures as if they were in this
+      band. It failed loudly only because the band then moved up the page; had
+      it stayed put, the widening would have gone unnoticed. The length check
+      below did not catch it, because a far-too-long slice is still longer
+      than zero.
+  */
   it('asserts no figure: the ROI case is promised, never quantified', () => {
     const h = html();
-    const band = h.slice(h.indexOf('cbv2-demopilot-title'), h.indexOf('cbv2-services-title'));
-    expect(band.length).toBeGreaterThan(0);
+    const start = h.indexOf('cbv2-demopilot-title');
+    expect(start).toBeGreaterThan(-1);
+    const end = h.indexOf('</section>', start);
+    expect(end).toBeGreaterThan(start);
+    const band = h.slice(start, end);
+    // Sanity-check the bounds: the band's own content must be inside them, and
+    // the neighbouring sections' must not.
+    expect(band).toContain('Three steps. No big-bang project.');
+    expect(band).not.toContain('Trust Before Intelligence');
     const text = band.replace(/<[^>]*>/g, ' ');
     expect(text).not.toMatch(/\$\s?\d/);
     expect(text).not.toMatch(/\d+\s?%/);
   });
 
-  it('keeps one CTA interrupt, having swapped the second for this band', () => {
-    expect((html().match(/cbv2-cint/g) || []).length).toBeGreaterThan(0);
-    expect(textOf(html())).toContain('Stop reading about it');
-    expect(textOf(html())).not.toContain('The fastest way to judge this is to open it');
+  /*
+      BOTH mid-page CTA interrupts are gone now. The first was swapped for this
+      demo-pilot band; the second went with the v5 rewrite, because the hero and
+      the final CTA already offer a way in and this band answers the same "what
+      do I do next" question with an actual answer rather than a nudge.
+  */
+  it('no longer interrupts the page to push the workspace', () => {
+    expect((html().match(/cbv2-cint/g) || []).length).toBe(0);
+    expect(textOf(html())).not.toContain('Stop reading about it');
   });
 
-  it('still routes on to the five engagements', () => {
+  it('still routes on to the services', () => {
     expect(html()).toContain('href="/services"');
   });
 });

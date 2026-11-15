@@ -96,12 +96,12 @@ export default function HeroV8(): React.ReactElement {
         <div className="cbv2-h8__copy">
           <div className="cbv2-h8__eyebrow">
             <span className="cbv2-h8__live" aria-hidden="true" />
-            Systems <b>+</b> People &nbsp;&middot;&nbsp; One platform
+            Build <b>&middot;</b> Guide <b>&middot;</b> Train &nbsp;&middot;&nbsp; with Claude Code
           </div>
 
           <h1 id="cbv2-hero-title" className="cbv2-h8__h1">
             <span className="cbv2-h8__line">
-              <span className="cbv2-h8__word cbv2-h8__word--sys">Build the system.</span>
+              <span className="cbv2-h8__word cbv2-h8__word--sys">We build, guide and train</span>
               <span className="cbv2-h8__rail" aria-hidden="true" />
             </span>
             {/* A real space between the lines: they are separate spans, so the
@@ -109,39 +109,40 @@ export default function HeroV8(): React.ReactElement {
                 lines are block-level, so this changes nothing visually. */}
             {' '}
             <span className="cbv2-h8__line">
-              <span className="cbv2-h8__word cbv2-h8__word--ppl">Build the people.</span>
+              <span className="cbv2-h8__word cbv2-h8__word--ppl">your company into AI.</span>
               <span className="cbv2-h8__rail cbv2-h8__rail--cyan" aria-hidden="true" />
             </span>
           </h1>
 
           <p className="cbv2-h8__deck">
-            One platform. <b>Your team owns it.</b>
+            One process first. <b>Then the next leader.</b>
           </p>
 
           <ul className="cbv2-h8__status">
-            <li className="cbv2-h8__chip"><i /> System in production</li>
-            <li className="cbv2-h8__chip"><i /> People own the system</li>
-            <li className="cbv2-h8__chip"><i /> Handover complete</li>
+            <li className="cbv2-h8__chip"><i /> We build it</li>
+            <li className="cbv2-h8__chip"><i /> We guide you</li>
+            <li className="cbv2-h8__chip"><i /> We train you</li>
           </ul>
 
           <p className="cbv2-h8__body">
-            Most AI work leaves you with a system nobody inside your company can run. We build
-            the system and certify the people who will own it, <b>in one platform, at the same
-            time</b> &mdash; so the capability is still yours after we go.
+            A custom application designed around your business, or workflows that automate your
+            processes inside the systems you already run. We find where the ROI is, <b>prove it
+            with a demo pilot</b>, then keep going &mdash; department by department, or
+            company-wide.
           </p>
 
           <div className="cbv2-h8__cta">
-            <Link className="cbv2-h8__btn cbv2-h8__btn--primary" to="/try">
-              Explore the Live Platform
+            <Link className="cbv2-h8__btn cbv2-h8__btn--primary" to="/demo-pilot">
+              Start with a demo pilot
             </Link>
-            <Link className="cbv2-h8__btn cbv2-h8__btn--ghost" to="/demo-pilot">
-              Map an AI Opportunity
+            <Link className="cbv2-h8__btn cbv2-h8__btn--ghost" to="/services">
+              Build, guide or train?
             </Link>
           </div>
 
           <div className="cbv2-h8__proof">
             <span>Built on Claude &amp; Claude Code</span>
-            <span>Certification path included</span>
+            <span>A demo pilot before you commit</span>
             <span>Free company workspace</span>
           </div>
         </div>

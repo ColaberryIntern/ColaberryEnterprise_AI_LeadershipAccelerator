@@ -1050,3 +1050,128 @@
 .cbv2-proc__list li svg { margin-top: 3px; color: var(--status-success); }
 
 .cbv2-proc__foot { margin-top: var(--space-8); color: var(--text-muted); }
+
+/* ------------------------------------------------------ department map -- */
+/*
+   "Your company, moving to AI. Department by department."
+
+   Added with the v5 site model. The band's job is to make the rollout concrete:
+   "department by department" is the central promise of how an engagement
+   scales, and as words it is abstract, while as a grid of departments at
+   different stages it reads at a glance.
+
+   STATUS IS NEVER COLOUR ALONE. Each card carries the stage as a word in
+   .cbv2-dept__status; the border tint repeats it for people who read the grid
+   by scanning rather than reading. Remove the word and this band stops being
+   accessible, so HomeV2.test asserts the words are present.
+*/
+.cbv2-deptmap__badge { margin: var(--space-5) 0 var(--space-3); }
+
+.cbv2-deptmap {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+  /* Three across, so six departments make two clean rows. auto-fit fitted five
+     at 1280px and left the sixth alone on a second row, which read as a
+     rendering fault rather than a layout. */
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 1000px) {
+  .cbv2-deptmap { grid-template-columns: repeat(2, 1fr); }
+}
+
+.cbv2-dept {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  border: var(--border-1) solid rgb(255 255 255 / 14%);
+  border-top-width: 3px;
+  border-top-color: rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 5%);
+}
+.cbv2-dept__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.cbv2-dept__name {
+  margin: 0;
+  font-size: var(--fs-h5, 1.05rem);
+  color: var(--text-on-inverse, #fff);
+}
+.cbv2-dept__leader {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgb(255 255 255 / 55%);
+}
+.cbv2-dept__n {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--fs-caption);
+  color: rgb(255 255 255 / 40%);
+}
+.cbv2-dept__procs {
+  list-style: none;
+  margin: var(--space-4) 0 var(--space-5);
+  padding: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: var(--space-2);
+}
+.cbv2-dept__procs li {
+  font-size: var(--fs-body-sm);
+  color: rgb(255 255 255 / 72%);
+  padding-left: var(--space-4);
+  position: relative;
+}
+.cbv2-dept__procs li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 32%);
+}
+.cbv2-dept__status {
+  margin: 0;
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgb(255 255 255 / 10%);
+  color: rgb(255 255 255 / 75%);
+}
+
+/* The four stages. green-300 and the lighter cherry are used because they clear
+   contrast on this dark ground; the chip's WORD is what carries the meaning. */
+.cbv2-dept--automating { border-top-color: var(--green-300, #86efac); }
+.cbv2-dept--automating .cbv2-dept__status {
+  background: rgb(134 239 172 / 16%);
+  color: var(--green-300, #86efac);
+}
+.cbv2-dept--pilot { border-top-color: #ff8a90; }
+.cbv2-dept--pilot .cbv2-dept__status {
+  background: rgb(255 138 144 / 16%);
+  color: #ff8a90;
+}
+.cbv2-dept--next { border-top-color: #9ec5ff; }
+.cbv2-dept--next .cbv2-dept__status {
+  background: rgb(158 197 255 / 16%);
+  color: #9ec5ff;
+}
+.cbv2-dept--none { border-top-color: rgb(255 255 255 / 18%); }
+
+.cbv2-deptmap__foot { margin: var(--space-7) 0 0; }
+
+@media (max-width: 560px) {
+  .cbv2-deptmap { grid-template-columns: 1fr; }
+}
