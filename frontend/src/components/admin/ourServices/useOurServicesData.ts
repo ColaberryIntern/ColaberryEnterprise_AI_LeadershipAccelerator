@@ -34,7 +34,7 @@ export interface OurServicesData {
   retire: (id: string) => Promise<void>;
   promote: (id: string, name: string) => Promise<void>;
   link: (item: IntakeSummaryItem, linkIds: string[]) => Promise<void>;
-  propose: (item: IntakeSummaryItem, name: string, category: string) => Promise<void>;
+  propose: (item: IntakeSummaryItem, name: string, category: string, extras?: { description?: string; keywords?: string[] }) => Promise<void>;
 }
 
 export function useOurServicesData(): OurServicesData {
@@ -86,8 +86,9 @@ export function useOurServicesData(): OurServicesData {
     await reload();
   }, [reload]);
 
-  const propose = useCallback(async (item: IntakeSummaryItem, name: string, category: string) => {
-    const r = await proposeServiceFromCaseStudy(item.id, { name, category: category || undefined });
+  const propose = useCallback(async (item: IntakeSummaryItem, name: string, category: string, extras?: { description?: string; keywords?: string[] }) => {
+    // extras come from a reviewed AI draft; the server still validates every field and creates a Growth service.
+    const r = await proposeServiceFromCaseStudy(item.id, { name, category: category || undefined, description: extras?.description, keywords: extras?.keywords });
     setNotice(r.existing
       ? `"${r.service.name}" already existed, so "${item.title}" was linked to it.`
       : `New Growth service "${r.service.name}" created and linked to "${item.title}".`);

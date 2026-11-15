@@ -25,6 +25,10 @@ import { CaseStudyOpenerContext } from '../../components/admin/ourServices/caseS
 import GuidedTour from '../../components/admin/ourServices/GuidedTour';
 import { OUR_SERVICES_TOUR } from '../../components/admin/ourServices/ourServicesTourSteps';
 import { buildKpis, centralYear, nonRetired } from '../../components/admin/ourServices/ourServicesModel';
+import AiServiceOpportunities from '../../components/admin/ourServices/serviceGap/AiServiceOpportunities';
+import { useServiceGap } from '../../components/admin/ourServices/serviceGap/useServiceGap';
+import type { IntakeGapProps } from '../../components/admin/ourServices/IntakeCard';
+import type { IntakeSummaryItem } from '../../services/ourServicesApi';
 
 /**
  * AdminGovServicesPage - "Our Services", the evidence-backed catalog (Services Upgrade SV3). A thin composer: the
@@ -45,6 +49,8 @@ const toOffering = (s: EvidenceService, offerings: ServiceOffering[]): ServiceOf
 export default function AdminGovServicesPage(): React.ReactElement {
   const data = useOurServicesData();
   const { summary, offerings } = data;
+  // AI Service Gap Detector (GD2): recommendations only; reloads whenever the summary does.
+  const gap = useServiceGap(summary?.generatedAt ?? null, data.reload);
   const location = useLocation();
   const [filter, setFilter] = useState<CatalogFilter>('active');
   const [editing, setEditing] = useState<Editing>(null);
@@ -100,6 +106,24 @@ export default function AdminGovServicesPage(): React.ReactElement {
     for (const s of summary.services) for (const c of s.caseStudies) m.set(c.id, { id: c.id, title: c.title, sourceKind: c.sourceKind });
     return m;
   }, [summary]);
+  const titles = useMemo(() => Object.fromEntries((summary?.intake ?? []).map((i) => [i.id, i.title])), [summary]);
+  const jumpToCase = useCallback((id: string) => {
+    const el = document.getElementById(`intake-card-${id}`);
+    if (!el) return;
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
+  }, []);
+  const gapFor = useCallback((item: IntakeSummaryItem): IntakeGapProps => {
+    const a = gap.data?.byCaseStudy[item.id];
+    return {
+      analysis: a, available: !!gap.data, busy: gap.busy.has(item.id), pinnedServiceId: gap.pinned[item.id],
+      serviceCurrent: (id) => { const o = offerings.find((x) => x.id === id); return o ? { description: o.description ?? null, keywords: o.keywords ?? [] } : null; },
+      onAnalyze: (force) => void gap.analyze(item.id, force),
+      onAdoptExisting: () => { if (a) void gap.adoptExisting(item, a); },
+      onApplyExpansion: (cur) => { if (a) void gap.applyExpansion(a, cur); },
+      onDismiss: (note) => { if (a) void gap.review(a, 'dismissed', note); },
+    };
+  }, [gap, offerings]);
   const openCaseStudy = useCallback((id: string) => {
     setReading(seeds.get(id) ?? { id, title: 'Case study', sourceKind: 'inside' });
   }, [seeds]);
@@ -209,13 +233,25 @@ export default function AdminGovServicesPage(): React.ReactElement {
           </SectionCard>
           </div>
 
+          <div id="ai-opportunities" tabIndex={-1} className="mb-4">
+            <SectionCard className="mb-0" icon="sparkling-2-line" title="AI Service Opportunities"
+              subtitle="Which unlinked case studies fit a service we already offer, should widen one, or point to a new service. Recommendations only: nothing changes until you act on a card.">
+              {gap.notice && (
+                <div className="alert alert-success py-1 px-2 small d-flex justify-content-between align-items-center" role="status">
+                  <span>{gap.notice}</span><button type="button" className="btn-close" aria-label="Dismiss message" onClick={gap.dismissNotice} />
+                </div>
+              )}
+              <AiServiceOpportunities gap={gap} titles={titles} onJumpToCase={jumpToCase} />
+            </SectionCard>
+          </div>
+
           <div id="intake" tabIndex={-1} className="mb-4" data-tour="intake">
             <SectionCard className="mb-0"
               icon="inbox-archive-line"
               title={<>Case study intake <span className={`badge rounded-pill ms-1 ${blocked ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'}`}>{blocked ? `${blocked} blocked` : 'all linked'}</span></>}
               subtitle="New case studies wait here until they are linked. Strong matches start selected; pick one or more services, or propose a new one."
               actions={<IntakeLegend />}>
-              <CaseStudyIntakeQueue intake={summary.intake} growthServiceIds={growthIds} onLink={data.link} onPropose={data.propose} />
+              <CaseStudyIntakeQueue intake={summary.intake} growthServiceIds={growthIds} onLink={data.link} onPropose={data.propose} gapFor={gapFor} />
             </SectionCard>
           </div>
 
