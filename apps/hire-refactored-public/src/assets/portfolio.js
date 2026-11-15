@@ -185,13 +185,24 @@
     return ' href="' + caseLink(cs.slug) + '" target="_blank" rel="noopener" data-launch data-from="' + from + '" data-case="' + esc(cs.slug) + '" data-talent-slug="' + esc(talentSlug) + '"';
   }
 
+  /*
+   * The cover stays whole (cropping it cuts the hook words), so a 16:9 picture in a column as
+   * tall as the text left grey bands above and below it. Ali, 2026-11-14: "I still don't like
+   * all this empty space". Behind the cover sits the same picture, blurred and dimmed, filling
+   * the column. Same URL as the cover, so the browser fetches it once.
+   */
+  function fill(cs, api) {
+    var url = C.mediaUrl(api, look(cs).coverImageUrl);
+    return url ? '<span class="car-fill" aria-hidden="true"><img src="' + esc(url) + '" alt="" decoding="async"></span>' : '';
+  }
+
   function slide(s, i, n, talentSlug, api) {
     var cs = s.cs;
     return '<div class="car-slide' + (i === 0 ? ' on' : '') + '" role="group" aria-roledescription="slide" aria-label="' + (i + 1) + ' of ' + n + '"'
       + ' data-kicker="' + esc(KICKER[s.kind]) + '"' + (i === 0 ? '' : ' hidden') + '>'
       // One keyboard stop per slide: the visible "Open the case study" link. The cover is the
       // same link for the mouse, kept out of the tab order and the accessibility tree.
-      + '<a class="car-art art"' + launchAttrs(cs, talentSlug, 'carousel') + ' tabindex="-1" aria-hidden="true">'
+      + '<a class="car-art art"' + launchAttrs(cs, talentSlug, 'carousel') + ' tabindex="-1" aria-hidden="true">' + fill(cs, api)
       + '<span class="car-frame">' + cover(cs, api, 10) + '<span class="car-disc">' + ICON.disc + '</span></span></a>'
       + '<div class="car-body">' + capability(cs) + '<h2>' + esc(cs.title) + '</h2>' + figure(cs)
       + (cs.summary ? '<p>' + esc(cs.summary) + '</p>' : '') + proof(cs)
