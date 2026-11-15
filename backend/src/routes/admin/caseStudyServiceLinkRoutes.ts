@@ -26,6 +26,7 @@ import {
   CaseStudyNotFoundError,
   CaseStudyServiceLinkNotFoundError,
 } from '../../services/caseStudy/caseStudyServiceLinkStore';
+import { suggestLinkForService, ServiceNotSuggestableError } from '../../services/caseStudy/caseStudyServiceLinkPin';
 
 const router = Router();
 
@@ -173,6 +174,43 @@ router.post(
       }
       logFail('service_link_decide_failed', err, { id: p.data.id });
       res.status(500).json({ error: 'Could not record the decision.' });
+    }
+  },
+);
+
+// Body for pinning one service as a suggestion. `.strict()`: a caller cannot set `state` - this route never confirms.
+const pinBody = z.object({ serviceId: z.string().uuid(), rationale: z.string().trim().max(500).nullish() }).strict();
+
+/**
+ * POST /api/admin/factory/case-studies/:caseStudyId/service-links/pin { serviceId, rationale? }
+ * Puts one specific service on the Intake card as a SUGGESTION (the Gap Detector's "Use existing"). Never confirms:
+ * the Link click still does that through the decide route. Idempotent; a decided row is returned untouched.
+ */
+router.post(
+  '/api/admin/factory/case-studies/:caseStudyId/service-links/pin',
+  requireSection('program'),
+  async (req: Request, res: Response) => {
+    const p = caseStudyParam.safeParse(req.params);
+    if (!p.success) { res.status(400).json({ error: 'Invalid case study id.' }); return; }
+    const b = pinBody.safeParse(req.body ?? {});
+    if (!b.success) { res.status(400).json({ error: 'A service id is required.', issues: b.error.issues }); return; }
+    const container = await lookupGovContractsContainer().catch(() => null);
+    if (!container) {
+      logFail('service_link_pin_scope', new Error('gov container not resolvable'), { id: p.data.caseStudyId });
+      res.status(503).json({ error: 'The government contracts workspace is not configured.' });
+      return;
+    }
+    try {
+      const link = await suggestLinkForService({
+        tenantId: container.tenant.id, caseStudyId: p.data.caseStudyId, serviceId: b.data.serviceId,
+        suggestedBy: `service-gap:${actorIdentity(req)}`, rationale: b.data.rationale ?? null,
+      });
+      res.status(link.created ? 201 : 200).json({ link });
+    } catch (err: any) {
+      if (err instanceof CaseStudyNotFoundError) { res.status(404).json({ error: 'That case study was not found.' }); return; }
+      if (err instanceof ServiceNotSuggestableError) { res.status(404).json({ error: err.message }); return; }
+      logFail('service_link_pin_failed', err, { id: p.data.caseStudyId });
+      res.status(500).json({ error: 'Could not add the suggestion.' });
     }
   },
 );

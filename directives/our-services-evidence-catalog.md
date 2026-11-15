@@ -259,6 +259,7 @@ For each unlinked case study, the detector answers one question: does it belong 
 | `POST /api/admin/factory/service-gap-analysis/batch` | Start "Analyze unlinked case studies". Returns 202, or 409 with the running run. |
 | `GET /api/admin/factory/service-gap-analysis/runs/latest` | Batch progress. |
 | `POST /api/admin/factory/service-gap-analyses/:id/review` | `{ state: accepted | dismissed, note? }`. |
+| `POST /api/admin/factory/case-studies/:id/service-links/pin` | `{ serviceId, rationale? }`. Used by "Use existing" when the AI's target is not among the card's keyword suggestions. Writes a **suggested** link only (`suggested_by = service-gap:<admin>`) to an active or growth service of this tenant. Idempotent: a row a person already decided is returned untouched. The Link click (decide route) still confirms. Lives in `caseStudyServiceLinkRoutes.ts`, not the advisory router. |
 
 **Clusters** (`serviceGapCluster.ts`) put one candidate service family over many case studies:
 - Proposals group by name or family similarity.

@@ -153,6 +153,23 @@ describeIfDb('service gap detector against Postgres', () => {
     expect(await B.latestRun(T1)).toMatchObject({ status: 'completed', reused: 3, analyzed: 0, failed: 0 });
   });
 
+  it('"Use existing" pins a SUGGESTED link only: idempotent, never confirms, never a foreign or retired service', async () => {
+    const pin = await import('../../../caseStudy/caseStudyServiceLinkPin');
+    const a = await pin.suggestLinkForService({ tenantId: T1, caseStudyId: ids.cs, serviceId: ids.svc, suggestedBy: 'service-gap:it', rationale: 'Link to Industrial AI.' });
+    const b = await pin.suggestLinkForService({ tenantId: T1, caseStudyId: ids.cs, serviceId: ids.svc, suggestedBy: 'service-gap:it', rationale: null });
+    expect(a).toMatchObject({ state: 'suggested', created: true });
+    expect(b).toMatchObject({ id: a.id, state: 'suggested', created: false });
+    expect(await count(`SELECT COUNT(*)::int AS n FROM case_study_service_links WHERE case_study_id = $1 AND state = 'confirmed'`, [ids.cs])).toBe(0);
+    // A person's rejection is never overwritten by a later pin.
+    await sequelize.query(`UPDATE case_study_service_links SET state = 'rejected' WHERE id = $1`, { bind: [a.id] });
+    expect((await pin.suggestLinkForService({ tenantId: T1, caseStudyId: ids.cs, serviceId: ids.svc, suggestedBy: 'x', rationale: null })).state).toBe('rejected');
+    await expect(pin.suggestLinkForService({ tenantId: T1, caseStudyId: ids.cs, serviceId: ids.other, suggestedBy: 'x', rationale: null })).rejects.toBeInstanceOf(pin.ServiceNotSuggestableError);
+    const retired = await one(`INSERT INTO service_offerings (tenant_id, name, status) VALUES ($1, 'Old Retired', 'retired') RETURNING id`, [T1]);
+    await expect(pin.suggestLinkForService({ tenantId: T1, caseStudyId: ids.cs, serviceId: retired, suggestedBy: 'x', rationale: null })).rejects.toBeInstanceOf(pin.ServiceNotSuggestableError);
+    await sequelize.query(`DELETE FROM case_study_service_links WHERE id = $1`, { bind: [a.id] });
+    await sequelize.query(`DELETE FROM service_offerings WHERE id = $1`, { bind: [retired] });
+  });
+
   it('a run abandoned by a crashed process does not lock the button forever', async () => {
     await sequelize.query(`INSERT INTO service_gap_runs (tenant_id, status, started_at) VALUES ($1, 'running', now() - interval '2 hours')`, { bind: [T2] });
     const r = await B.startRun(T2, 'it@test');

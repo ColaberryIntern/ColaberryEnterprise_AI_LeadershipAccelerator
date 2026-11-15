@@ -39,6 +39,12 @@ jest.mock('../../../services/caseStudy/caseStudyServiceLinkStore', () => {
   };
 });
 
+const suggestLinkForService = jest.fn();
+jest.mock('../../../services/caseStudy/caseStudyServiceLinkPin', () => {
+  const actual = jest.requireActual('../../../services/caseStudy/caseStudyServiceLinkPin');
+  return { ...actual, suggestLinkForService: (...a: any[]) => suggestLinkForService(...a) };
+});
+
 import express from 'express';
 import request from 'supertest';
 import linkRoutes from '../caseStudyServiceLinkRoutes';
@@ -175,6 +181,43 @@ describe('POST /api/admin/factory/service-links/:id/decide', () => {
   });
 });
 
+describe('POST pin (Gap Detector "Use existing")', () => {
+  const PIN_CS = '11111111-1111-4111-a111-111111111111';
+  const PIN_SVC = '33333333-3333-4333-a333-333333333333';
+  const pinUrl = `/api/admin/factory/case-studies/${PIN_CS}/service-links/pin`;
+  beforeEach(() => { suggestLinkForService.mockReset(); lookupGovContractsContainer.mockResolvedValue({ tenant: { id: 't1' } }); });
+
+  it('201s a new SUGGESTED link stamped as the gap detector run by this admin', async () => {
+    suggestLinkForService.mockResolvedValue({ id: 'l1', state: 'suggested', serviceId: PIN_SVC, created: true });
+    const res = await request(app).post(pinUrl).send({ serviceId: PIN_SVC, rationale: 'Link to X.' });
+    expect(res.status).toBe(201);
+    expect(suggestLinkForService).toHaveBeenCalledWith({ tenantId: 't1', caseStudyId: PIN_CS, serviceId: PIN_SVC, suggestedBy: 'service-gap:ali@colaberry.com', rationale: 'Link to X.' });
+  });
+
+  it('200s an existing row untouched (idempotent; a decided row keeps its state)', async () => {
+    suggestLinkForService.mockResolvedValue({ id: 'l1', state: 'rejected', serviceId: PIN_SVC, created: false });
+    const res = await request(app).post(pinUrl).send({ serviceId: PIN_SVC });
+    expect(res.status).toBe(200);
+    expect(res.body.link.state).toBe('rejected');
+  });
+
+  it('400s a body that tries to set a state, or has no service id', async () => {
+    expect((await request(app).post(pinUrl).send({ serviceId: PIN_SVC, state: 'confirmed' })).status).toBe(400);
+    expect((await request(app).post(pinUrl).send({})).status).toBe(400);
+    expect(suggestLinkForService).not.toHaveBeenCalled();
+  });
+
+  it('404s a retired or foreign service and a missing case study; 503s without a workspace', async () => {
+    const { ServiceNotSuggestableError } = jest.requireActual('../../../services/caseStudy/caseStudyServiceLinkPin');
+    suggestLinkForService.mockRejectedValueOnce(new ServiceNotSuggestableError());
+    expect((await request(app).post(pinUrl).send({ serviceId: PIN_SVC })).status).toBe(404);
+    suggestLinkForService.mockRejectedValueOnce(new CaseStudyNotFoundError(PIN_CS));
+    expect((await request(app).post(pinUrl).send({ serviceId: PIN_SVC })).status).toBe(404);
+    lookupGovContractsContainer.mockResolvedValue(null);
+    expect((await request(app).post(pinUrl).send({ serviceId: PIN_SVC })).status).toBe(503);
+  });
+});
+
 describe('route-auth — EVERY route carries its own guard', () => {
   it('pairs each router.get/post with requireSection in its own argument list', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'caseStudyServiceLinkRoutes.ts'), 'utf8');
@@ -182,7 +225,7 @@ describe('route-auth — EVERY route carries its own guard', () => {
     // `requireSection` occurrences in the file: the header comment names the guard in prose, so a whole-file count
     // already reads one higher than the number of guarded routes and could never detect a missing one.
     const declarations = src.match(/router\.(get|post|put|patch|delete)\([\s\S]*?async \(/g) ?? [];
-    expect(declarations.length).toBe(4);
+    expect(declarations.length).toBe(5);
     const unguarded = declarations.filter((d) => !d.includes("requireSection('program')"));
     expect(unguarded).toEqual([]);
   });
