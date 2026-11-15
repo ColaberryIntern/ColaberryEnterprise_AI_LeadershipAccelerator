@@ -148,7 +148,7 @@ export default function HowItWorksV2(): React.ReactElement {
           <p className="cbv2-eyebrow cbv2-eyebrow--onDark">How it works</p>
           <h1 id="cbv2-how-title">Find the ROI. Prove it. Roll it out, leader by leader.</h1>
           <p className="cbv2-pagehero__lede">
-            The same three steps whether you choose Build, Guide or Train &mdash; and whether
+            The same three steps whether you choose Build, Guide or Train, and whether
             you go department by department or company-wide.
           </p>
           {/*

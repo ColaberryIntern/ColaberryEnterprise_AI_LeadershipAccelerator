@@ -68,6 +68,9 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   //
   // ADVERTISING - these are the ones that have to go.
   'frontend/src/config/primaryCta.ts': 1, // the primary CTA label itself, the most-rendered instance on the site
+  // 2026-11-15: new file. Train starts on a free account, worded as
+  // COMPARE_ROWS already words it on /pricing.
+  'frontend/src/config/v2ServicePages.ts': 2,
   'frontend/src/config/v2Pricing.ts': 8, // 2026-11-14: 9 -> 8, the pricing FAQ was replaced with the Build/Guide/Train six
   'frontend/src/config/v2Platform.ts': 5, // "Free company workspace" as a feature label, value and progress row
   'frontend/src/config/v2Content.ts': 1, // next-step prompt pointing at the workspace
@@ -131,7 +134,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/projects/demoPrepGuide.ts': 1,
   'frontend/src/pages/portal/runtime/runtimeKit.tsx': 1,
   'frontend/src/pages/publicV2/HomeV2.tsx': 4,
-  'frontend/src/pages/publicV2/PlatformV2.tsx': 2,
   'frontend/src/pages/publicV2/PricingV2.tsx': 1, // 2026-11-14: 5 -> 1, page rebuilt around the three services
   'frontend/src/pages/publicV2/SignupV2.tsx': 3,
   'frontend/src/pages/publicV2/TryV2.tsx': 9,
@@ -168,7 +170,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 263;
+export const FRONTEND_COPY_BASELINE_TOTAL = 263; // 2026-11-15: -2 PlatformV2, +2 v2ServicePages
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

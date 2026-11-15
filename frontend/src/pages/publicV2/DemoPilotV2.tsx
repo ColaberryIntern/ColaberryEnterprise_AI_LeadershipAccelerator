@@ -230,7 +230,7 @@ export function DemoPilotV2(): React.ReactElement {
           <h1 id="cbv2-dp-title">See AI run on one of your processes.</h1>
           <p className="cbv2-pagehero__lede">
             Tell us about one process and two numbers. An architect will come back to you to
-            plan the demo pilot &mdash; for Build or Guide &mdash; or to set up Train.
+            plan the demo pilot, for Build or Guide, or to set up Train.
           </p>
         </div>
       </section>

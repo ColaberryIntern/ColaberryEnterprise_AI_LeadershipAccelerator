@@ -32,14 +32,14 @@ import rawBaseline from './frontendTypographyBaseline.json';
  *   1,659 files in scope, parsed once each, 2.2 seconds.
  *
  *   em/en dash     5,585 raw = 2,107 copy + 3,476 comment + 2 regex-literal   (580 files)
- *   escaped dash      74 raw =    74 copy                                     ( 42 files)
+ *   escaped dash      72 raw =    72 copy                                     ( 40 files)
  *   emoji            764 raw =   659 copy +   103 comment + 1 regex-literal   (173 files)
  *
  *   Nothing unclassified, and the parser's count equalled the raw count for every file under
  *   all three rules. That second number is the one that makes the first believable: an
  *   occurrence the scanner could not place is reported as a FAILURE, never skipped.
  *
- *   READ THE ESCAPED-DASH ROW AGAIN: 74 raw, 74 copy, NOTHING in a comment. Every single
+ *   READ THE ESCAPED-DASH ROW AGAIN: 72 raw, 72 copy, NOTHING in a comment. Every single
  *   `&mdash;` in this tree is in something a person reads. That row is also the reason the
  *   rule exists - `DASH_RULE` caught none of them, because the source text holds seven ASCII
  *   characters and not U+2014, so the dash gate shipped at 97% of the truth until this was
@@ -111,7 +111,10 @@ export const FRONTEND_TYPOGRAPHY_BASELINE: Readonly<Record<string, TypographyBas
  */
 export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number>> = {
   [DASH_RULE.id]: 2096,
-  [ESCAPED_DASH_RULE.id]: 74,
+  // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
+  // and the four new pages were written to house style, so the two entries
+  // those files held are gone rather than carried over.
+  [ESCAPED_DASH_RULE.id]: 72,
   [EMOJI_RULE.id]: 659,
 };
 

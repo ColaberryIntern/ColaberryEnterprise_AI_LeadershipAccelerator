@@ -82,7 +82,7 @@ export function ServicesV2(): React.ReactElement {
           <p className="cbv2-pagehero__lede">
             Three ways to move your company to AI with Claude Code. We build you a custom
             application, we guide your team to automate your workflows, or we train your
-            people &mdash; department by department, or company-wide.
+            people, department by department, or company-wide.
           </p>
           <p style={{ marginTop: 'var(--space-6)' }}>
             <Link className="cbv2-btn cbv2-btn--primary" to="/contact">
@@ -202,7 +202,7 @@ export function ServicesV2(): React.ReactElement {
           </div>
 
           <p className="cbv2-note">
-            Engagement pricing is <Claim claimKey="pricing.services" route={ROUTE} /> &mdash; so the
+            Engagement pricing is <Claim claimKey="pricing.services" route={ROUTE} />, so the
             scope is agreed with a person who can qualify the work, rather than anchored on a
             number before anyone has seen your systems.
           </p>

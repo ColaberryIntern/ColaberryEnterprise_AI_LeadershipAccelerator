@@ -57,7 +57,7 @@ export function LeaderViewSection(): React.ReactElement {
         <h2 id="cbv2-pl-leader">Every department, its processes, and the return.</h2>
         <p className="cbv2-lede">
           Each leader sees their shortlist, what is in pilot, what is automated, and the ROI
-          case behind each one &mdash; tied back to what the budget was approved to achieve.
+          case behind each one, tied back to what the budget was approved to achieve.
         </p>
 
         <div className="cbv2-grid cbv2-grid--2" style={{ marginTop: 'var(--space-6)' }}>
