@@ -45,6 +45,7 @@
 import type { Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
+import type { ToolEnvironment } from '../../db/ensureAgentDomainToolRequestSchema';
 import { ToolRequestNotFoundError, loadDecisions } from './toolRequestDecisionService';
 import { grantToolToAgent, type GrantToolResult } from './agentToolGrantService';
 import { resolveEffectiveAccess } from '../workforce/agentEffectiveAccessService';
@@ -211,6 +212,17 @@ export async function assignExistingTool(
   // list moved. A refusal from here arrives in the grant's own vocabulary on purpose: "that
   // capability is not confirmed" is the sentence the person needs, and restating it in a second
   // vocabulary would be a second idea of what a grant requires.
+  // Phase 2b — the scope the request declared, carried onto the grant.
+  //
+  // THIS IS THE WHOLE POINT OF THE PHASE. Before it, a builder picked datasets from the catalog,
+  // Ali reviewed them, and the approval recorded the tool and dropped the scope: a narrow
+  // production request and a wide one produced the identical grant row.
+  //
+  // Passed through verbatim rather than re-derived. `grantToolToAgent` independently reads the
+  // same request and refuses a grant that exceeds it, so these two agree or the grant is
+  // refused — and if the detail row carries no environment, which is what a half-applied Phase
+  // 2a deploy looks like, the empty string here is refused by name rather than written as a
+  // permission that does not say where it applies.
   const grant = await grantToolToAgent(sequelize, {
     agentId: assignment.agentId,
     toolName: assignment.toolName,
@@ -218,6 +230,10 @@ export async function assignExistingTool(
     approvedBy: assignment.approvedBy,
     proposedBy: assignment.proposedBy,
     changeRequestId: assignment.changeRequestId,
+    environment: (detail?.environment ?? '') as ToolEnvironment,
+    datasets: Array.isArray(detail?.read_datasets)
+      ? detail!.read_datasets.map((d) => String(d))
+      : [],
   });
 
   const access = await measureAccessAfterGrant(assignment.agentId, assignment.toolName);
@@ -234,6 +250,9 @@ export async function assignExistingTool(
       tool_name: grant.toolName,
       capability_id: grant.capabilityId,
       approved_by: grant.approvedBy,
+      // Phase 2b. Off the grant's read-back, so this records the scope now on the ledger.
+      environment: grant.environment,
+      datasets: grant.datasets,
       unchanged: grant.unchanged,
       // Reported, not enforced. A grant that leaves the tool unusable is a correct outcome and
       // the log should say which of the two it was.

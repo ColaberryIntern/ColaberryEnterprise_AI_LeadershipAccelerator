@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import type { ToolEnvironment } from '../db/ensureAgentDomainToolRequestSchema';
 
 /**
  * AgentDomainToolGrant — one recorded grant of one tool to one agent.
@@ -49,6 +50,26 @@ export interface AgentDomainToolGrantAttributes {
    */
   change_request_id?: string | null;
   approved_by_identity: string;
+  /**
+   * Where this grant applies. Phase 2b. NOT NULL, unlike `change_request_id`: a grant that
+   * answers no request is ordinary, but a grant that does not say where it applies is a
+   * permission of unknown blast radius, and that is not a state worth being able to record.
+   */
+  environment: ToolEnvironment;
+  /**
+   * The datasets this grant covers, as `dataset_registry` names.
+   *
+   * EMPTY MEANS NO DATASET SCOPE WAS RECORDED, not "no data" and not "all data". A tool that
+   * sends email reads no table and legitimately has an empty list here. On the request side the
+   * same empty array additionally carries Ali's 4 Nov ruling — an unscoped read is fine on the
+   * sandbox — which is why `agentToolGrantContract.ts` only treats the request's list as a
+   * ceiling for a PRODUCTION grant.
+   *
+   * A re-grant does not rewrite this, for the same reason it does not rewrite
+   * `change_request_id`: `findOrCreate` keeps the existing row. The contract refuses a re-grant
+   * that would widen the scope rather than letting it report a success that changed nothing.
+   */
+  datasets: string[];
   approved_at?: Date;
   created_at?: Date;
   updated_at?: Date;
@@ -64,6 +85,8 @@ class AgentDomainToolGrant
   declare capability_id: string;
   declare change_request_id: string | null;
   declare approved_by_identity: string;
+  declare environment: ToolEnvironment;
+  declare datasets: string[];
   declare approved_at: Date;
   declare created_at: Date;
   declare updated_at: Date;
@@ -78,6 +101,8 @@ AgentDomainToolGrant.init(
     capability_id: { type: DataTypes.TEXT, allowNull: false },
     change_request_id: { type: DataTypes.UUID, allowNull: true },
     approved_by_identity: { type: DataTypes.TEXT, allowNull: false },
+    environment: { type: DataTypes.TEXT, allowNull: false },
+    datasets: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     approved_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },

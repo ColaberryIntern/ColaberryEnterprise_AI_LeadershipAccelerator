@@ -33,6 +33,7 @@ import {
   ensureAgentToolGrantSchema,
   ensureAgentToolGrantSchemaGuarded,
 } from '../ensureAgentToolGrantSchema';
+import { TOOL_ENVIRONMENTS } from '../ensureAgentDomainToolRequestSchema';
 import { activeBootCall, serverSourceText } from './helpers/bootCalls';
 
 beforeEach(() => { jest.clearAllMocks(); });
@@ -113,6 +114,62 @@ describe('what the DDL does declare', () => {
     }
   });
 
+  it('adds the Phase 2b scope columns by ALTER, for the same reason change_request_id is', async () => {
+    const sql = await issuedStatements();
+    expect(sql).toMatch(
+      /ALTER TABLE agent_domain_tool_grants\s+ADD COLUMN IF NOT EXISTS datasets JSONB/i,
+    );
+    expect(sql).toMatch(
+      /ALTER TABLE agent_domain_tool_grants\s+ADD COLUMN IF NOT EXISTS environment TEXT/i,
+    );
+    // Both named by the post-condition, so a deploy where an ALTER did not run fails at boot.
+    expect(REQUIRED_COLUMNS).toContain('agent_domain_tool_grants.datasets');
+    expect(REQUIRED_COLUMNS).toContain('agent_domain_tool_grants.environment');
+  });
+
+  it('makes environment NOT NULL in a SECOND statement, and gives it no default', async () => {
+    const sql = await issuedStatements();
+    expect(sql).toMatch(/ALTER COLUMN environment SET NOT NULL/i);
+
+    // The negatives are scoped to the ALTER, NOT to the whole DDL, and getting that wrong is
+    // what this comment is for: the first draft forbade `environment TEXT NOT NULL` anywhere
+    // and failed on the CREATE TABLE, where that declaration is exactly right for a database
+    // that does not have the table yet. An assertion that fires on correct code is worse than
+    // none, because the tempting fix is to weaken the DDL until the test goes quiet.
+    //
+    // THE MUTATION THIS CATCHES: collapse the two statements into
+    // `ADD COLUMN IF NOT EXISTS environment TEXT NOT NULL DEFAULT 'sandbox'`, which is tidier,
+    // ships green, and silently records every production grant as a sandbox one.
+    const addColumn = /ADD COLUMN IF NOT EXISTS environment([^\n]*)/i.exec(sql);
+    expect(addColumn).not.toBeNull();
+    expect(addColumn![1].trim()).toBe('TEXT');
+  });
+
+  it('guards the constraint add on its own existence, because Postgres has no IF NOT EXISTS', async () => {
+    // Without the guard this statement throws on every boot after the first, and the ensure
+    // swallows it into a warn — so the log would report a problem that is not one, every boot,
+    // forever, which is how a real warning stops being read.
+    const sql = await issuedStatements();
+    expect(sql).toMatch(/SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtg_environment_known'/i);
+    expect(sql).toMatch(/ADD CONSTRAINT chk_adtg_environment_known/i);
+  });
+
+  it('the SQL constraint allows exactly the environments the code allows', async () => {
+    // DRIFT GUARD. The constraint is written as a SQL literal, which cannot be type-checked
+    // against `TOOL_ENVIRONMENTS`. Add 'staging' to the enum and the contract would accept it
+    // while the database rejected the row — a refusal arriving as a 500 from the driver. This
+    // is the only thing standing between those two lists.
+    const sql = await issuedStatements();
+    for (const environment of TOOL_ENVIRONMENTS) {
+      expect({ environment, inSql: sql.includes(`'${environment}'`) })
+        .toEqual({ environment, inSql: true });
+    }
+    const allowed = /environment IN \(([^)]*)\)/i.exec(sql);
+    expect(allowed).not.toBeNull();
+    const names = allowed![1].split(',').map((x) => x.trim().replace(/'/g, ''));
+    expect(names.sort()).toEqual([...TOOL_ENVIRONMENTS].sort());
+  });
+
   it('reverts whole, and takes nothing else with it', () => {
     expect(ROLLBACK_STATEMENTS).toEqual(['DROP TABLE IF EXISTS agent_domain_tool_grants']);
     expect(ROLLBACK_STATEMENTS.join()).not.toMatch(/ai_agents|ALTER/i);
@@ -121,11 +178,17 @@ describe('what the DDL does declare', () => {
 
 describe('the assert proves the DDL ran, rather than trusting that it did', () => {
   /** Answer every information_schema probe with a full set. */
-  function everythingPresent() {
+  function everythingPresent(over: { nullable?: string[] } = {}) {
     mockQuery.mockImplementation(async (sql: string) => {
       if (/information_schema\.tables/.test(sql)) {
         return REQUIRED_TABLES.map((t) => ({ name: t }));
       }
+      // BEFORE the columns branch, and the order is the whole point. The nullability probe is
+      // ALSO a read of `information_schema.columns`, so one branch answered both — and because
+      // that branch returns QUALIFIED names (`agent_domain_tool_grants.environment`) while the
+      // nullability check looks for a bare `environment`, the invariant passed for a reason that
+      // had nothing to do with it. It would have gone on passing with `SET NOT NULL` deleted.
+      if (/is_nullable/.test(sql)) return (over.nullable ?? []).map((c) => ({ name: c }));
       if (/information_schema\.columns/.test(sql)) {
         return REQUIRED_COLUMNS.map((c) => ({ name: c }));
       }
@@ -174,6 +237,40 @@ describe('the assert proves the DDL ran, rather than trusting that it did', () =
     });
     await expect(assertAgentToolGrantSchema())
       .rejects.toThrow(/missing index uq_adtg_agent_tool/);
+  });
+
+  it('THROWS when environment EXISTS but is still nullable — the half-applied deploy', async () => {
+    // `ADD COLUMN IF NOT EXISTS environment TEXT` and `ALTER COLUMN environment SET NOT NULL`
+    // are two statements, and the ensure swallows each failure independently. So a deploy where
+    // the first ran and the second did not leaves a column that EXISTS and is nullable, and
+    // checking only for PRESENCE passes that state — then the first grant written through it
+    // records a null environment: a permission that does not say where it applies.
+    everythingPresent({ nullable: ['environment'] });
+    await expect(assertAgentToolGrantSchema())
+      .rejects.toThrow(/environment is still nullable/);
+  });
+
+  it('does NOT throw when some other column is nullable, which several legitimately are', async () => {
+    // `change_request_id` is nullable on purpose. A check that fired on any nullable column
+    // would fail every correct deploy.
+    everythingPresent({ nullable: ['change_request_id'] });
+    await expect(assertAgentToolGrantSchema()).resolves.toBeUndefined();
+  });
+
+  it('throws when the environment CHECK constraint is absent', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (/information_schema\.tables/.test(sql)) return [{ name: REQUIRED_TABLES[0] }];
+      if (/is_nullable/.test(sql)) return [];
+      if (/information_schema\.columns/.test(sql)) {
+        return REQUIRED_COLUMNS.map((c) => ({ name: c }));
+      }
+      if (/pg_indexes/.test(sql)) return REQUIRED_INDEXES.map((i) => ({ name: i }));
+      // Only the older of the two checks.
+      if (/table_constraints/.test(sql)) return [{ name: 'chk_adtg_fields_are_present' }];
+      return [];
+    });
+    await expect(assertAgentToolGrantSchema())
+      .rejects.toThrow(/missing constraint chk_adtg_environment_known/);
   });
 
   it('the guarded boot entry point CANNOT reject', async () => {
