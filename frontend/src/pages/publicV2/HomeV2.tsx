@@ -10,7 +10,7 @@ import Accolades from '../../components/publicV2/Accolades';
 import SegmentDoors from '../../components/publicV2/SegmentDoors';
 // ENGINE was imported here and never used, from before this split. Removed rather than
 // carried across, since a dead import is one more thing a reader has to rule out.
-import { BuildPipelineSection, ServicesSection } from './homeV2Sections';
+import { BuildPipelineSection, DemoPilotSection, ServicesSection } from './homeV2Sections';
 import './homeV2.css';
 import '../../components/publicV2/heroV8.css';
 import '../../components/publicV2/engineModel.css';
@@ -237,13 +237,22 @@ function HomeV2(): React.ReactElement {
         <BuildPipelineSection />
       ) : null}
 
-      {/* 5 ──────────────────────────────────────────────────────── services ── */}
-      <CtaInterrupt
-        eyebrow="Still with us?"
-        title="The fastest way to judge this is to open it."
-        body="Both experiences in one account: the management view, and the one your team actually works in. Invite people when it has earned it."
-        primary={{ label: 'Open my company workspace, no card needed', to: '/try' }}
-      />
+      {/*
+        5 ────────────────────────── how an engagement starts, then services ──
+
+        THE SECOND CTA INTERRUPT WAS SWAPPED OUT FOR THIS BAND, not added
+        alongside it. The twelve-section budget's own rule is that the next
+        section to be added should replace one rather than raise the ceiling a
+        third time, and this is the second time that has been honoured.
+
+        The interrupt that went ("Still with us? / The fastest way to judge this
+        is to open it.") was the SECOND of two on one page, both pushing to the
+        same workspace. The first one survives five sections above, so nothing
+        the page could say is now unsaid -- it was the repetition that was cut,
+        not a message. What replaced it answers a question the page never
+        answered at all: how an engagement actually begins.
+      */}
+      <DemoPilotSection />
 
         <ServicesSection />
 
@@ -333,3 +342,4 @@ function HomeV2(): React.ReactElement {
 }
 
 export default HomeV2;
+

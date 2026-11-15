@@ -956,3 +956,97 @@
 .cbv2-repocard__cory p { margin: 0; display: grid; gap: 2px; }
 .cbv2-repocard__cory b { color: var(--text-strong); font-size: var(--fs-body-sm); }
 .cbv2-repocard__cory span { color: var(--text-muted); font-size: var(--fs-body-sm); line-height: 1.5; }
+
+/* ============================================================================
+   THE DEMO-PILOT BAND -- "Three steps. No big-bang project."
+   Modeled on docs/enterprise-site-v4/index.html. Tokens only; cbv2-* only.
+   ========================================================================== */
+
+.cbv2-proc {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  align-items: stretch;
+}
+@media (max-width: 1000px) { .cbv2-proc { grid-template-columns: minmax(0, 1fr); } }
+
+.cbv2-proc__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-7);
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* The middle step is where everyone actually starts, so it is inverted AND labelled.
+   Inversion alone would be colour-only emphasis; the tag is what carries it in
+   greyscale and to a screen reader. */
+.cbv2-proc__step--hl {
+  background: var(--surface-inverse);
+  border-color: var(--surface-inverse);
+}
+.cbv2-proc__step--hl .cbv2-proc__title { color: var(--text-on-inverse); }
+.cbv2-proc__step--hl .cbv2-proc__body { color: color-mix(in srgb, var(--text-on-inverse) 82%, transparent); }
+.cbv2-proc__step--hl .cbv2-proc__list li { color: color-mix(in srgb, var(--text-on-inverse) 92%, transparent); }
+.cbv2-proc__step--hl .cbv2-proc__list { border-top-color: color-mix(in srgb, var(--text-on-inverse) 28%, transparent); }
+/* The tick lifts a few steps on the inverted card. --status-success is green-600 and
+   clears 3:1 on this ground at about 5.6:1, so this is not a fix for a failure; green-300
+   simply reads at about 10.7:1, and the ramp already has the step. */
+.cbv2-proc__step--hl .cbv2-proc__list li svg { color: var(--green-300); }
+
+.cbv2-proc__tag {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--cherry);
+  color: var(--text-on-inverse);
+}
+
+.cbv2-proc__n {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(2.75rem, 5vw, 4rem);
+  line-height: 0.85;
+  letter-spacing: -0.05em;
+  color: var(--cherry);
+}
+.cbv2-proc__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+.cbv2-proc__body { margin: 0; color: var(--text-muted); }
+
+.cbv2-proc__list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-4) 0 0;
+  border-top: var(--border-1) dashed var(--border-subtle);
+  display: grid;
+  gap: var(--space-3);
+}
+.cbv2-proc__list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  color: var(--text-body);
+  font-size: var(--fs-body-sm);
+}
+.cbv2-proc__list li svg { margin-top: 3px; color: var(--status-success); }
+
+.cbv2-proc__foot { margin-top: var(--space-8); color: var(--text-muted); }

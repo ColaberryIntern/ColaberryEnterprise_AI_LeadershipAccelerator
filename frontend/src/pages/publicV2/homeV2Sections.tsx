@@ -223,6 +223,110 @@ export function BuildPipelineSection(): React.ReactElement {
   );
 }
 
+/**
+ * "Three steps. No big-bang project." The demo-pilot band.
+ *
+ * Modeled on `docs/enterprise-site-v4/index.html`, the design Ali named as the model for
+ * site updates. The home page explained WHO we are and WHAT we build; it never said how an
+ * engagement actually begins. v4's answer is one named entry offer, the demo pilot, with a
+ * step either side of it.
+ *
+ * IT CARRIES NO FIGURE. The middle step is where the ROI case gets made, and it says so
+ * without asserting a return we have not measured. Any number here would need a claims
+ * registry key and an approved route, and none exists for this band.
+ */
+const DEMO_PILOT_STEPS: ReadonlyArray<{
+  readonly n: string;
+  readonly title: string;
+  readonly body: string;
+  readonly points: readonly string[];
+  readonly featured?: boolean;
+}> = [
+  {
+    n: '1',
+    title: 'Find the ROI',
+    body:
+      'We sit with your leaders and the people who do the work, map the business processes, '
+      + 'and rank them by what automating each one would return.',
+    points: [
+      'Processes mapped with the people who run them',
+      'Ranked by return and feasibility',
+      'A shortlist, not a wish list',
+    ],
+  },
+  {
+    n: '2',
+    title: 'Prove it with a demo pilot',
+    body:
+      'We take the best process on the list and automate it with Claude Code: a working demo '
+      + 'on your real workflow, so the return is something you can see rather than a slide.',
+    points: [
+      'One process, built and running',
+      'The ROI case beside it',
+      'A clear yes or no on going further',
+    ],
+    featured: true,
+  },
+  {
+    n: '3',
+    title: 'Roll it out, leader by leader',
+    body:
+      'Then we keep going. We work with each of your leaders in turn, moving their department '
+      + 'to AI, one at a time or across the company at once.',
+    points: [
+      'Each leader gets their own shortlist',
+      'Each department proven, then scaled',
+      'One platform tracking all of it',
+    ],
+  },
+];
+
+/** "Three steps. No big-bang project." The demo-pilot band. */
+export function DemoPilotSection(): React.ReactElement {
+  return (
+    <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-demopilot-title">
+      <div className="cbv2-wrap">
+        <div className="cbv2-section__head">
+          <p className="cbv2-eyebrow">How it works</p>
+          <h2 id="cbv2-demopilot-title">Three steps. No big-bang project.</h2>
+          <p className="cbv2-lede">
+            Every engagement follows the same path: find where AI pays, prove it with
+            something running, then take it to the next leader.
+          </p>
+        </div>
+
+        <ol className="cbv2-proc">
+          {DEMO_PILOT_STEPS.map((step) => (
+            <li
+              className={`cbv2-proc__step${step.featured ? ' cbv2-proc__step--hl' : ''}`}
+              key={step.n}
+            >
+              {step.featured ? (
+                <span className="cbv2-proc__tag">Where everyone starts</span>
+              ) : null}
+              <span className="cbv2-proc__n" aria-hidden="true">{step.n}</span>
+              <h3 className="cbv2-proc__title">{step.title}</h3>
+              <p className="cbv2-proc__body">{step.body}</p>
+              <ul className="cbv2-proc__list">
+                {step.points.map((pt) => (
+                  <li key={pt}>
+                    <Icon name="check" size={16} />
+                    <span>{pt}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+
+        <p className="cbv2-proc__foot">
+          <Link to="/services">See the five engagements a pilot can grow into</Link>.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 /** "Five ways an engagement starts." The services band. */
 export function ServicesSection(): React.ReactElement {
   return (
