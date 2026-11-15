@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Services Evidence Review</title>
+<style>
+  :root { --ink:#1a1a2e; --muted:#5b6475; --line:#e3e6ec; --bg:#f6f7f9; --card:#fff; --ok:#2e7d32; --ok-bg:#e8f5e9; --warn:#8a4b00; --warn-bg:#fff4e5; --cherry:#c8102e; --info:#1565c0; --info-bg:#e3f2fd; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 36px 0 10px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .takeaway { background: var(--card); border-left: 5px solid var(--cherry); border-radius: 8px; padding: 14px 18px; margin: 18px 0; font-size: 16px; }
+  .ladder { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+  .ladder span { flex: 1 1 140px; text-align: center; border-radius: 8px; padding: 8px; font-weight: 600; font-size: 13px; border: 1px solid var(--line); }
+  .ok { background: var(--ok-bg); color: var(--ok); } .warn { background: var(--warn-bg); color: var(--warn); } .na { background:#f1f3f6; color: var(--muted); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--ok); border-radius: 8px; padding: 12px 14px; }
+  .kpi b { display: block; font-size: 26px; } .kpi.w { border-top-color: #b26a00; } .kpi.i { border-top-color: var(--info); }
+  .stop { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 14px 0; }
+  .stop img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; margin-top: 10px; }
+  .stop .what { font-weight: 600; } .stop .look { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #f1f3f6; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  .chip { display: inline-block; border-radius: 10px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
+  ol li { margin: 4px 0; }
+  .scroll { overflow-x: auto; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ink:#e8eaf0; --muted:#a3abbb; --line:#2c3240; --bg:#12151c; --card:#1a1f29; --ok-bg:#16301a; --warn-bg:#33240f; --info-bg:#132a40; } th { background:#222836; } .na { background:#222836; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Services Upgrade: production review</h1>
+  <div class="meta">SV4.2 · Basecamp list 10506775132 · captured on production 2026-11-15 · session CC-20261113-s9v4</div>
+
+  <div class="takeaway"><strong>Takeaway:</strong> The M3 decision (Option B) is live. Five services with confirmed case studies are now Active, and two empty services are retired. On a real county RFP, the Gov AI now answers "We have it" for data migration and for cloud hosting <em>and names the case studies that prove it</em>.</div>
+
+  <div class="ladder">
+    <span class="ok">✅ SV1 to SV3 merged and deployed</span>
+    <span class="ok">✅ SV4.1 journey test merged (28/28)</span>
+    <span class="ok">✅ M3 applied on production</span>
+    <span class="ok">✅ Live Fit cites proof</span>
+    <span class="na">⬜ This review doc merged</span>
+  </div>
+
+  <h2>The numbers</h2>
+  <div class="kpis">
+    <div class="kpi"><b>15</b>Active services (12 before, +5 promoted, −2 retired)</div>
+    <div class="kpi"><b>9 of 15</b>Active services have a confirmed case study</div>
+    <div class="kpi i"><b>8</b>proof citations in the live Fit, on 2 of 5 real pursuits</div>
+    <div class="kpi w"><b>6</b>Active services still have no proof (M3 kept them)</div>
+  </div>
+
+  <h2>What changed on production (15 Nov, about 12:40 PM CST)</h2>
+  <div class="scroll"><table>
+    <tr><th>Service</th><th>Change</th><th>Confirmed case studies</th></tr>
+    <tr><td>Applied Data Science &amp; Predictive Analytics</td><td><span class="chip ok">Growth → Active</span></td><td>13</td></tr>
+    <tr><td>Computer Vision &amp; Industrial AI</td><td><span class="chip ok">Growth → Active</span></td><td>2</td></tr>
+    <tr><td>Cloud Migration, Hosting &amp; Security Operations</td><td><span class="chip ok">Growth → Active</span></td><td>2</td></tr>
+    <tr><td>Geospatial &amp; Remote Sensing Analytics</td><td><span class="chip ok">Growth → Active</span></td><td>2</td></tr>
+    <tr><td>Data Migration, Integration &amp; Data Quality</td><td><span class="chip ok">Growth → Active</span> after adding category "Data" and 7 keywords from its own description</td><td>1</td></tr>
+    <tr><td>Ongoing Support and Maintenance</td><td><span class="chip warn">Active → Retired</span> (no category, no keywords, no proof)</td><td>0</td></tr>
+    <tr><td>Training and Documentation</td><td><span class="chip warn">Active → Retired</span> (no category, no keywords, no proof)</td><td>0</td></tr>
+  </table></div>
+  <p class="meta">Every change went through the live admin API. Promote refuses a service that has no confirmed case study. A second run of the same script changed nothing. No other service changed, and all 15 Active services have a name, a category, a plain description and at least 3 keywords, which is what the Gov AI reads.</p>
+
+  <h2>Stop 1: Our Services, top of the page</h2>
+  <div class="stop">
+    <div class="what">Active services: 15 (+5 growth). Services with no proof: 11 (6 active · 5 growth).</div>
+    <div class="look">"Proven services: 2" counts only services whose evidence score is strong (Applied Data Science with 13, Enterprise AI Build with 5). The other 7 with proof are Emerging or Thin, so they are linked but still light.</div>
+    <img src="screenshots/2026-11-15-deploy/services-sv42-01-our-services-top.png" alt="Our Services page on production: KPI row showing 15 active services and the Decide now cards">
+  </div>
+
+  <h2>Stop 2: The Active catalog</h2>
+  <div class="stop">
+    <div class="what">The five promoted services sit in the Active list with their evidence bars. The two retired ones are gone from it.</div>
+    <div class="look">Look for: Applied Data Science at Proven 100 with 13 outside case studies; Computer Vision, Geospatial and Cloud Migration at Emerging; Data Migration at Thin. The 6 "No proof" rows at the bottom are the ones M3 kept.</div>
+    <img src="screenshots/2026-11-15-deploy/services-sv42-02-catalog-active.png" alt="Active service catalog table on production with evidence scores per service">
+  </div>
+
+  <h2>Stop 3: The Gov AI on a real pursuit</h2>
+  <div class="stop">
+    <div class="what">A county Intranet Business Application RFP, Fit step, re-assessed live: 2 "We have it", 1 "Partly", 5 "New capability".</div>
+    <div class="look">Both "We have it" answers now carry a Proof line naming the case study behind them. Data Migration is backed by the energy-forecast data-quality whitepaper, and Cloud Hosting by the Akamai and AWS replatforming whitepapers. Before today, the same pursuit was matching its generic "support" and "training" needs to the two empty services.</div>
+    <img src="screenshots/2026-11-15-deploy/services-sv42-03-fit-with-proof.png" alt="Fit step on production showing We have it answers with a Proof line naming confirmed case studies">
+  </div>
+
+  <h2>Gov AI before and after (5 real pursuits, 3 runs each)</h2>
+  <div class="scroll"><table>
+    <tr><th></th><th>We have it</th><th>Partly</th><th>New</th><th>Proof cited</th></tr>
+    <tr><td>Baseline, 13 Nov (before the upgrade)</td><td>9</td><td>4</td><td>24</td><td>not available then</td></tr>
+    <tr><td>Now, after M3 (proof rule off, as shipped)</td><td>5</td><td>5</td><td>26</td><td>8 citations</td></tr>
+  </table></div>
+  <p class="meta">Every lost "We have it" has a stated reason in the run report. 5 of the 7 were matches to the two services that are now retired (the AI had matched generic support and training needs to empty records); the model reassessed the other 2 as Partly. Fit is advisory and gates nothing. The run persisted nothing.</p>
+
+  <h2>How to check it yourself</h2>
+  <ol>
+    <li>Open <a href="https://enterprise.colaberry.ai/admin/gov-services">Our Services</a>. The first tile reads <strong>Active services 15</strong>.</li>
+    <li>Scroll to the catalog. <strong>Applied Data Science &amp; Predictive Analytics</strong> shows "Proven" and 13 case studies.</li>
+    <li>Search the catalog for "Training and Documentation". It no longer appears under Active.</li>
+    <li>Open Gov qualification for any pursuit that has requirements, go to <strong>Fit</strong>, and click <strong>Re-assess</strong>. That changes nothing; only "Save fit decisions" saves.</li>
+    <li>On any "We have it" card, look for the <strong>Proof:</strong> line naming a case study.</li>
+  </ol>
+
+  <h2>Known gaps</h2>
+  <ul>
+    <li>Data Migration has no NAICS codes, so the keyword-and-NAICS opportunity matcher finds it only by keywords. The Gov AI fit does not use NAICS.</li>
+    <li>Six Active services still have no confirmed case study. M3 kept them on purpose; with the proof rule on they would show as Partly.</li>
+    <li>The econometric whitepaper PDF still contains another paper's outcomes. The app record was cleared on 15 Nov, but the source file needs a fix.</li>
+  </ul>
+</main>
+</body>
+</html>
