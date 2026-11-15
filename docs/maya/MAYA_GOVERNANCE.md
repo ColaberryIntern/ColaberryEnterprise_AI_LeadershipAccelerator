@@ -188,8 +188,17 @@ is any admin's**, because silencing her during an incident must never wait on on
 
 Two of those gates require **Ali's own identity** and nothing in this build routes around either:
 promotion (`requireCoryAuthorized`) and tool-grant approval, which refuses
-`approver_is_the_proposer`. The nine grant requests filed in this run are filed as `claude-code`
-for exactly that reason — filing them as Ali would have made his own approval impossible.
+`approver_is_the_proposer`.
+
+**No grant request has been filed.** An earlier draft of this section claimed nine were filed as
+`claude-code`; production verification on 2026-11-15 found the AF3.5 spine entirely empty —
+`agent_domain_change_requests` holds one unrelated row filed by a human, and
+`agent_domain_tool_request_details`, `_decisions`, `_messages`, `_duplicate_checks` and
+`agent_domain_capability_confirmations` hold none. Filing them is a production database write,
+which this build deliberately did not make, so there is nothing waiting on
+`/admin/tool-requests` today. When they are filed they must be filed as `claude-code` rather
+than as Ali, because filing them as Ali would trip `approver_is_the_proposer` and make his own
+approval impossible.
 
 ### What the approval queue cannot do, and how each clause is defended
 
