@@ -1,0 +1,56 @@
+# Throwaway staging copy for the Our Services write-journey test (ourServicesJourney.e2e.js).
+# Same images production runs (registry :main), its OWN empty Postgres, and every port bound to 127.0.0.1 on the
+# VPS only (reach it through an SSH tunnel). No production database, secrets or volumes are referenced.
+# Up:   docker compose -p our-services-staging -f tests/systemV2/ourServicesStaging/compose.yml up -d
+# Down: docker compose -p our-services-staging -f tests/systemV2/ourServicesStaging/compose.yml down -v
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_USER: accelerator
+      POSTGRES_PASSWORD: accelerator
+      POSTGRES_DB: accelerator_preview
+    volumes:
+      - stagingdb:/var/lib/postgresql/data
+      - ../../../preview-db-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:15441:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accelerator -d accelerator_preview"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: "768m" }
+
+  accelerator-backend:
+    image: ghcr.io/colaberryintern/accelerator-backend:main
+    env_file:
+      - .env.staging
+    environment:
+      DATABASE_URL: postgres://accelerator:accelerator@postgres:5432/accelerator_preview
+      NODE_OPTIONS: "--max-old-space-size=1280"
+      NODE_ENV: preview
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: "1792m" }
+
+  nginx:
+    image: ghcr.io/colaberryintern/accelerator-nginx:main
+    ports:
+      - "127.0.0.1:10441:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - accelerator-backend
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: "256m" }
+
+volumes:
+  stagingdb:
+    name: our-services-staging-db
