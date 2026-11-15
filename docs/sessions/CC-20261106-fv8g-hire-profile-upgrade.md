@@ -377,3 +377,14 @@ with these.
     and its live portfolio.js and portfolio.css carry the `car-fill` code.
   - Notes: Ali has the studio link (/portal/portfolio?tab=hire) to run the first real coaching
     upload on his own account (ali@colaberry.com, active enrollment).
+
+- [x] Studio recording unblocked: Permissions-Policy allows camera and microphone for self
+  - Date: 2026-11-15
+  - Session: CC-20261106-fv8g
+  - What changed: nginx/security-headers.conf sent `camera=(), microphone=()` on every page, so
+    the browser refused getUserMedia before asking and Ali's first live recording failed ("We
+    could not use your camera and microphone"). Now `camera=(self), microphone=(self)`;
+    third-party frames stay locked out. New guard test hireVideoPermissions.test.ts.
+  - Verification: new test 3/3; with the old header restored it fails 2/3.
+  - Notes: found from Ali's screenshot of the live studio; jsdom has no Permissions-Policy, so no
+    unit test could see it. Uploading a file was never affected.
