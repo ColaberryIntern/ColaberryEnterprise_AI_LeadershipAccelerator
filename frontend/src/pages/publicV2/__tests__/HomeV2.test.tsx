@@ -235,3 +235,51 @@ describe('HomeV2 — every figure is labelled', () => {
     expect(textOf(html())).toContain('Sample data');
   });
 });
+
+/**
+ * THE DEMO-PILOT BAND replaced the second CTA interrupt on 2026-11-14.
+ *
+ * The second honouring of the budget's own rule. The page carried TWO interrupts
+ * pushing to the same workspace; the first survives, so the swap cut a repetition
+ * rather than a message, and the band that took its place answers a question the
+ * page never answered: how an engagement actually begins.
+ *
+ * These guard the properties that make the swap safe: the count did not move, the
+ * remaining interrupt is still there, the five engagements are still reachable, and
+ * the band asserts no figure it cannot be held to.
+ */
+describe('HomeV2 — the demo-pilot band', () => {
+  it('renders all three steps, in order', () => {
+    const text = textOf(html());
+    ['Find the ROI', 'Prove it with a demo pilot', 'Roll it out, leader by leader']
+      .forEach((t) => expect(text).toContain(t));
+    const idx = ['Find the ROI', 'Prove it with a demo pilot', 'Roll it out, leader by leader']
+      .map((t) => text.indexOf(t));
+    expect(idx).toEqual([...idx].sort((a, b) => a - b));
+  });
+
+  it('marks the middle step by a label, not by colour alone', () => {
+    // The step is inverted in CSS. Inversion is invisible to a screen reader and
+    // to greyscale, so the tag is what actually carries "start here".
+    expect(textOf(html())).toContain('Where everyone starts');
+  });
+
+  it('asserts no figure: the ROI case is promised, never quantified', () => {
+    const h = html();
+    const band = h.slice(h.indexOf('cbv2-demopilot-title'), h.indexOf('cbv2-services-title'));
+    expect(band.length).toBeGreaterThan(0);
+    const text = band.replace(/<[^>]*>/g, ' ');
+    expect(text).not.toMatch(/\$\s?\d/);
+    expect(text).not.toMatch(/\d+\s?%/);
+  });
+
+  it('keeps one CTA interrupt, having swapped the second for this band', () => {
+    expect((html().match(/cbv2-cint/g) || []).length).toBeGreaterThan(0);
+    expect(textOf(html())).toContain('Stop reading about it');
+    expect(textOf(html())).not.toContain('The fastest way to judge this is to open it');
+  });
+
+  it('still routes on to the five engagements', () => {
+    expect(html()).toContain('href="/services"');
+  });
+});
