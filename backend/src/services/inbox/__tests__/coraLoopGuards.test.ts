@@ -18,7 +18,12 @@ process.env.CORA_MAILBOX_ADDRESS = 'ali@colaberry.com';
 // require (not static import) so the env above is set before module load computes
 // SELF_ADDRESSES.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { resolveDryRun, normalizeEmailAddress, coraAutoReplySkipReason } = require('../coraAgentService');
+const {
+  resolveDryRun,
+  normalizeEmailAddress,
+  coraAutoReplySkipReason,
+  isOwnDistributionList,
+} = require('../coraAgentService');
 
 describe('resolveDryRun — sending is opt-in (safe default)', () => {
   it('defaults to dry-run when the flag is unset', () => {
@@ -82,5 +87,98 @@ describe('coraAutoReplySkipReason — loop guards', () => {
     expect(
       coraAutoReplySkipReason({ from_address: 'jane@acme.com', headers: { 'Auto-Submitted': 'no' } })
     ).toBeNull();
+  });
+});
+
+/**
+ * `Precedence: list` from our OWN support group (Ali, 2026-11-15: "wire her to
+ * support so she can answer those").
+ *
+ * support@colaberry.com is a Google Group. Google stamps `Precedence: list` on
+ * every message it fans out, and the RFC 3834 guard read that as bulk mail, so
+ * the group that delivered Cora her mail was the one thing stopping her from
+ * answering it: 132 of her last 152 skips, 87%, all real people writing in.
+ *
+ * The headers below are copied verbatim from production rows (note the mixed
+ * case `<Support.colaberry.com>` Google actually emits, and the lowercased
+ * header keys the inbox stores) so a reader can see these are not invented.
+ */
+describe('coraAutoReplySkipReason — our own support group is not a mailing list', () => {
+  // Exactly what the inbox stored for "Tuition fee" (10 Nov) and Kes's "Question" (13 Nov).
+  const ownGroupHeaders = {
+    precedence: 'list',
+    'list-id': '<Support.colaberry.com>',
+    'mailing-list': 'list Support@colaberry.com; contact Support+owners@colaberry.com',
+    'delivered-to': 'ali@colaberry.com',
+  };
+
+  it('answers a real person who wrote to the support group', () => {
+    expect(
+      coraAutoReplySkipReason({ from_address: 'sweetaalmin@gmail.com', headers: ownGroupHeaders })
+    ).toBeNull();
+  });
+
+  it('still refuses a FOREIGN mailing list that reaches the same mailbox', () => {
+    expect(
+      coraAutoReplySkipReason({
+        from_address: 'announce@vendor.example',
+        headers: { precedence: 'list', 'list-id': '<announce.vendor.example>' },
+      })
+    ).toBe('foreign_list_precedence');
+  });
+
+  it('still refuses Precedence: list with no list identity at all', () => {
+    expect(
+      coraAutoReplySkipReason({ from_address: 'jane@acme.com', headers: { Precedence: 'list' } })
+    ).toBe('foreign_list_precedence');
+  });
+
+  it('keeps refusing genuine bulk mail even when it arrives through our group', () => {
+    expect(
+      coraAutoReplySkipReason({
+        from_address: 'blast@marketing.example',
+        headers: { ...ownGroupHeaders, precedence: 'bulk' },
+      })
+    ).toBe('bulk_precedence');
+    expect(
+      coraAutoReplySkipReason({
+        from_address: 'blast@marketing.example',
+        headers: { ...ownGroupHeaders, precedence: 'junk' },
+      })
+    ).toBe('bulk_precedence');
+  });
+
+  it('keeps every other loop guard ahead of the group allowance', () => {
+    // The group's own address arriving through the group is still a self-loop.
+    expect(
+      coraAutoReplySkipReason({ from_address: 'support@colaberry.com', headers: ownGroupHeaders })
+    ).toBe('self_address');
+    // A bounce fanned out by the group is still a bounce.
+    expect(
+      coraAutoReplySkipReason({ from_address: 'mailer-daemon@googlemail.com', headers: ownGroupHeaders })
+    ).toBe('automated_sender');
+    // An out-of-office fanned out by the group is still an auto-responder.
+    expect(
+      coraAutoReplySkipReason({
+        from_address: 'jane@acme.com',
+        headers: { ...ownGroupHeaders, 'Auto-Submitted': 'auto-replied' },
+      })
+    ).toBe('auto_submitted');
+  });
+
+  it('identifies the group by List-Id or by Mailing-list, and nothing else', () => {
+    const own = (headers: Record<string, string>): boolean => {
+      const lookup = (name: string): string => {
+        const hit = Object.entries(headers).find(([k]) => k.toLowerCase() === name);
+        return (hit?.[1] ?? '').toString().toLowerCase();
+      };
+      return isOwnDistributionList(lookup, ['support@colaberry.com', 'ali@colaberry.com']);
+    };
+    expect(own({ 'list-id': '<Support.colaberry.com>' })).toBe(true);
+    expect(own({ 'mailing-list': 'list Support@colaberry.com; contact x' })).toBe(true);
+    expect(own({ 'list-id': '<announce.vendor.example>' })).toBe(false);
+    expect(own({})).toBe(false);
+    // A lookalike domain must not pass as ours.
+    expect(own({ 'list-id': '<support.colaberry.com.evil.example>' })).toBe(false);
   });
 });
