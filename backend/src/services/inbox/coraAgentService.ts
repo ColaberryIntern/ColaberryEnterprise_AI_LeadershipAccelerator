@@ -68,6 +68,53 @@ const SELF_ADDRESSES = [
   process.env.CORA_MAILBOX_ADDRESS || process.env.GMAIL_SENDER_EMAIL || 'ali@colaberry.com',
 ].map((a) => a.trim().toLowerCase());
 
+/**
+ * True when the mail reached us through one of OUR OWN distribution groups
+ * (support@colaberry.com is a Google Group fanning out to the support agents),
+ * rather than from a third-party mailing list we happen to be subscribed to.
+ *
+ * Why this exists (measured in production 2026-11-15): Google Groups stamp
+ * `Precedence: list` on every message they fan out, and the RFC 3834 guard below
+ * treated that as "bulk mail, never auto-reply". So the group that DELIVERS Cora
+ * her mail was the exact thing that made her refuse to answer it: 132 of her last
+ * 152 skips over 60 days (87%), and 42 of 44 over 30 days, nearly all of them a
+ * real person writing in ("Tuition fee", "Deployment", "Getting all the software
+ * downloaded", "Unable to Access Power BI Desktop Class Video").
+ *
+ * This guard is one of TWO locks. The other is `CORA_DRY_RUN`, which production
+ * has set to "true" since the 2026-07-14 mail loop — so lifting this guard alone
+ * makes Cora draft replies into the audit log and still send nothing. Arming live
+ * sending is a separate, deliberate flag change.
+ *
+ * Replying is safe here precisely because Cora replies to `from_address` (the
+ * individual who wrote in), never to the list address, so no fan-out and no
+ * loop. The real loop shapes stay guarded: `self_address` catches the group's
+ * own address, the thread dedup log catches a re-ingested reply, and the
+ * circuit breaker caps volume from any cause not yet named.
+ *
+ * Identification: Google renders the List-Id as the address with the `@`
+ * replaced by a dot (`support@colaberry.com` -> `<Support.colaberry.com>`) and
+ * repeats the address in `Mailing-list`. A foreign list carries neither, so it
+ * still reads as bulk and is still refused.
+ *
+ * The identity is matched as a WHOLE TOKEN, never as a substring: a substring
+ * test would accept a spoofed `<support.colaberry.com.evil.example>` and hand an
+ * attacker a way past the guard by naming their own list after ours.
+ */
+export function isOwnDistributionList(
+  headerLookup: (name: string) => string,
+  ownAddresses: string[] = SELF_ADDRESSES
+): boolean {
+  // List-Id: an optional phrase then the id in angle brackets. Take the brackets.
+  const listIdRaw = headerLookup('list-id');
+  const listId = (/<([^>]+)>/.exec(listIdRaw)?.[1] ?? listIdRaw).trim();
+  // Mailing-list: `list <addr>; contact <addr>` — take only the `list` value.
+  const mailingListRaw = headerLookup('mailing-list');
+  const mailingList = (/(?:^|[;,]\s*)list\s+([^;,\s]+)/.exec(mailingListRaw)?.[1] ?? '').trim();
+  if (!listId && !mailingList) return false;
+  return ownAddresses.some((addr) => listId === addr.replace('@', '.') || mailingList === addr);
+}
+
 /** Normalize `Name <local+tag@domain>` to `local@domain`, lowercased. */
 export function normalizeEmailAddress(raw: string): string {
   const angle = /<([^>]+)>/.exec(raw);
@@ -112,7 +159,14 @@ export function coraAutoReplySkipReason(email: {
   };
   const autoSubmitted = header('auto-submitted');
   if (autoSubmitted && autoSubmitted !== 'no') return 'auto_submitted';
-  if (/(^|[ ;,])(bulk|auto_reply|junk|list)([ ;,]|$)/.test(header('precedence'))) return 'bulk_precedence';
+  const precedence = header('precedence');
+  // `bulk` / `junk` / `auto_reply` are bulk mail by any reading — always refused.
+  if (/(^|[ ;,])(bulk|auto_reply|junk)([ ;,]|$)/.test(precedence)) return 'bulk_precedence';
+  // `list` is refused only for a FOREIGN list. Our own support group stamps it on
+  // genuine person-to-support mail; see isOwnDistributionList() for why that is safe.
+  if (/(^|[ ;,])list([ ;,]|$)/.test(precedence) && !isOwnDistributionList(header)) {
+    return 'foreign_list_precedence';
+  }
   if (header('x-autoreply') || header('x-autorespond') || header('x-auto-response-suppress')) {
     return 'x_autoreply';
   }
@@ -382,6 +436,11 @@ export async function handleCoraInquiry(email: {
         reply_to: email.from_address,
         subject: reply.subject,
         body_preview: reply.body.substring(0, 300),
+        // The whole point of shadow mode is that a human reads what WOULD have been
+        // sent and decides whether to arm live sending. A 300-character preview cuts
+        // off before the part that carries the risk, so the full body is logged here
+        // (and only here — the live-send path keeps the short preview).
+        body_full: reply.body.substring(0, 8000),
         needs_human: reply.needsHuman,
       },
     });
