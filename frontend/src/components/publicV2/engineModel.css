@@ -237,8 +237,8 @@
   transition: background 0.5s, border-color 0.5s;
 }
 .cbv2-eg.is-done .cbv2-eg__out {
-  background: rgba(251, 40, 50, 0.16);
-  border-color: rgba(251, 40, 50, 0.5);
+  background: color-mix(in srgb, var(--accent, #2E6A86) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent, #2E6A86) 55%, transparent);
 }
 
 .cbv2-eg__meter { display: flex; gap: 4px; margin-bottom: 11px; }

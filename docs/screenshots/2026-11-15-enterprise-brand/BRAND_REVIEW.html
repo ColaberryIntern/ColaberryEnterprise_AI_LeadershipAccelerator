@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Enterprise brand: before and after</title>
+<style>
+  :root{--bg:#F8F8F7;--card:#FFFFFF;--fg:#1A1A1A;--muted:#6B6B6B;--accent:#2E6A86;--cherry:#FB2832;--line:#D8D8D8;--radius:8px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.55 'Roboto',system-ui,sans-serif}
+  .wrap{max-width:1500px;margin:0 auto;padding:clamp(16px,4vw,32px)}
+  h1{font-size:31px;font-weight:700;line-height:1.2;margin:0 0 .25em}
+  .lede{color:var(--muted);max-width:70ch;margin:0 0 28px}
+  .key{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 28px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px}
+  .sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+  .cmp{background:var(--card);border:1px solid var(--line);border-radius:calc(var(--radius) + 4px);padding:20px;margin:0 0 24px;box-shadow:0 3px 8px rgba(26,26,26,.06),0 1px 3px rgba(26,26,26,.04)}
+  .cmp h2{font-size:20px;font-weight:700;margin:0 0 14px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .cmp code{font:700 13px/1 'Roboto Mono',ui-monospace,monospace;color:var(--accent);background:#EAF2F6;padding:4px 8px;border-radius:4px}
+  .pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(440px,100%),1fr));gap:18px}
+  figure{margin:0}
+  figcaption{margin:0 0 8px}
+  .tag{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:4px;display:inline-block}
+  .tag--old{background:#FFF0F1;color:#C20E1E}
+  .tag--new{background:#EAF2F6;color:#20485C}
+  img{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:var(--radius)}
+  .miss{color:var(--muted);font-size:14px;padding:18px;border:1px dashed var(--line);border-radius:var(--radius)}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){--bg:#0F0F0F;--card:#1A1A1A;--fg:#F4F4F4;--muted:#B4B4B4;--line:#2E2E2E;--accent:#6F9DB6}
+    :root:not([data-theme="light"]) .cmp code{background:#1A3947}
+    :root:not([data-theme="light"]) .tag--old{background:#331417;color:#FF8A90}
+    :root:not([data-theme="light"]) .tag--new{background:#1A3947;color:#A6C5D5}
+  }
+</style></head>
+<body><div class="wrap">
+  <h1>Colaberry Enterprise brand, before and after</h1>
+  <p class="lede">Left is production as it stands. Right is the rebuilt bundle. Same pages, same layout,
+  same copy; the only change is which brand paints the accent. The logo stays cherry, which is what the
+  Colaberry Enterprise design system prescribes.</p>
+  <div class="key">
+    <span class="chip"><span class="sw" style="background:#FB2832"></span> #FB2832 cherry &middot; Colaberry Training, 3.85:1 on white</span>
+    <span class="chip"><span class="sw" style="background:#2E6A86"></span> #2E6A86 berry &middot; Colaberry Enterprise, 5.96:1 on white</span>
+    <span class="chip"><span class="sw" style="background:#6F9DB6"></span> #6F9DB6 &middot; the same accent on dark bands</span>
+  </div>
+
+  <section class="cmp">
+    <h2>Home, hero <code>/</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-home-hero.png" alt="Home, hero, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-home-hero.png" alt="Home, hero, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Home, the three services <code>/</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-home-the-three-services.png" alt="Home, the three services, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-home-the-three-services.png" alt="Home, the three services, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Home, department map <code>/</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-home-department-map.png" alt="Home, department map, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-home-department-map.png" alt="Home, department map, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Services chooser <code>/services</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-services-chooser.png" alt="Services chooser, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-services-chooser.png" alt="Services chooser, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Service detail: Build <code>/services/build</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-service-detail-build.png" alt="Service detail: Build, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-service-detail-build.png" alt="Service detail: Build, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Pricing <code>/pricing</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-pricing.png" alt="Pricing, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-pricing.png" alt="Pricing, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Platform <code>/platform</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-platform.png" alt="Platform, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-platform.png" alt="Platform, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>Demo pilot form <code>/demo-pilot</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-demo-pilot-form.png" alt="Demo pilot form, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-demo-pilot-form.png" alt="Demo pilot form, after"></figure>
+    </div>
+  </section>
+
+  <section class="cmp">
+    <h2>The book <code>/book</code></h2>
+    <div class="pair">
+      <figure><figcaption><span class="tag tag--old">Before &middot; Colaberry Training</span></figcaption>
+        <img src="before-the-book.png" alt="The book, before"></figure>
+      <figure><figcaption><span class="tag tag--new">After &middot; Colaberry Enterprise</span></figcaption>
+        <img src="after-the-book.png" alt="The book, after"></figure>
+    </div>
+  </section>
+  <p class="lede" style="margin-top:28px">Captured 11/15/2026, 4:55:26 PM Central.</p>
+</div></body></html>
