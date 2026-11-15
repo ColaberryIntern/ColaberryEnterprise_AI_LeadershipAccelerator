@@ -270,6 +270,28 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // Feed Control Governance was folded into the Curriculum surface and its
   // route lost its nav entry, which turned the gap from latent into live.
   ['/api/admin/cape', 'program'],
+  // AI Ops. UNMAPPED until 2026-11-15, which made the whole surface a latent 403 of exactly the
+  // kind the rows above keep warning about — and a live one rather than a theoretical one, because
+  // the page that consumes it, /admin/intelligence, is ALREADY gated on 'intelligence'. So any
+  // identity granted that section could open the page and watch every AI Ops call 403 with
+  // nothing in the response explaining why. (/admin/ai-settings is the old path and redirects here.)
+  //
+  // 'intelligence' rather than a new key, deliberately. A new 'ai_ops' section would be a
+  // narrower API grant and a WORSE outcome: the page is gated on 'intelligence' on the frontend,
+  // so a reader would need two grants to make one surface work, and the second would exist only
+  // to paper over the first.
+  //
+  // THIS ROW ADMITS NOBODY NEW TODAY. No scoped role holds 'intelligence' (asserted in
+  // `mgmtSectionGate.aiOps.test.ts`), `owner` and `admin` derive it from ALL_SECTIONS, and legacy
+  // admins skip this gate. It is the condition `brandPaths.test.ts` names for adding a
+  // classification safely: nobody loses anything and nobody silently gains anything.
+  //
+  // WHAT MAKES IT SAFE TO GRANT is not this row. This gate is path-based and cannot separate
+  // `GET /ai-ops/overview` from `POST /ai-ops/emergency-stop`; `requireFullAdmin` on every
+  // non-GET route in `aiOpsRoutes.ts` is what does that. Classifying this prefix WITHOUT that
+  // guard would have handed the emergency stop and the kill switch to every holder of the
+  // section, because `requireAdmin` passes for every management role.
+  ['/api/admin/ai-ops', 'intelligence'],
   ['/api/admin/ceo', 'intelligence'], ['/api/admin/cb-system', 'intelligence'], ['/api/admin/intelligence', 'intelligence'],
   ['/api/admin/insights', 'intelligence'], ['/api/admin/governance', 'intelligence'],
   ['/api/admin/tickets', 'system'], ['/api/admin/reports', 'system'], ['/api/admin/settings', 'system'],
