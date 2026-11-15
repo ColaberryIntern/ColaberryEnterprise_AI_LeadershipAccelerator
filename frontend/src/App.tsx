@@ -15,6 +15,7 @@ import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
 import SegmentPageV2 from './pages/publicV2/SegmentPageV2';
 import HowItWorksV2 from './pages/publicV2/HowItWorksV2';
+import BookV2 from './pages/publicV2/BookV2';
 import DemoV2 from './pages/publicV2/DemoV2';
 import { readySegments } from './config/v2Segments';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
@@ -130,6 +131,9 @@ function App() {
                 V2 nav and footer.
             */}
             <Route path="how-it-works" element={<HowItWorksV2 />} />
+            {/* /book. The tenth page in the v5 site map: the thesis, and the three
+                ideas from it that shape how an engagement actually runs. */}
+            <Route path="book" element={<BookV2 />} />
             {/*
                 /accelerator folded into Train when the five services became three.
                 The v5 site model merges the Workforce Architect Accelerator and this

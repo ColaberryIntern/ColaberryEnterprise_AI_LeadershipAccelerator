@@ -49,6 +49,8 @@ import { CASE_STUDY_SURFACES, caseStudyDetailPath } from '../../../config/caseSt
 const V2_ROUTES = [
   '/',
   '/services',
+  '/how-it-works',
+  '/book',
   '/platform',
   '/proof',
   '/lab',

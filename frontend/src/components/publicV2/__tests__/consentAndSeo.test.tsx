@@ -42,6 +42,8 @@ const DECLARED_ROUTES = [
   '/services/enterprise-build-modernization',
   '/services/workforce-architect-accelerator',
   '/services/embedded-ai-operations',
+  '/how-it-works',
+  '/book',
   '/platform',
   '/proof',
   '/lab',

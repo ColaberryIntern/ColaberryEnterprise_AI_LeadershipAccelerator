@@ -35,10 +35,22 @@ export interface NavItem {
  * "Solutions" was dropped rather than repointed: no such page exists, and
  * inventing a destination for a nav label is how the dead links happened.
  */
+/*
+    "How it works" and "The book" were added when the v5 site map was adopted.
+    The model's navigation is Services / How it works / Platform / Pricing /
+    The book / Proof, and /how-it-works had been a live page with no way to
+    reach it from the header -- findable only from a link inside another page.
+
+    "Start Free" stays. It is not in the model's nav list, but it is the only
+    entry point to the product that costs a visitor nothing, and dropping it to
+    match a diagram would be the diagram leading the site.
+*/
 export const V2_NAV: readonly NavItem[] = [
   { label: 'Services', to: '/services' },
+  { label: 'How it works', to: '/how-it-works' },
   { label: 'Platform', to: '/platform' },
   { label: 'Pricing', to: '/pricing' },
+  { label: 'The book', to: '/book' },
   { label: 'Proof', to: '/proof' },
   { label: 'Start Free', to: '/try' },
 ];
