@@ -67,6 +67,10 @@ function capabilityRequiring(tool: string): { id: string; state: string | null; 
  * deliberate substitution: the approver is Ali and he is a recorded human. The approver gates
  * are covered by `agentToolGrantContract`'s own suite; holding them constant here is what makes
  * the remaining refusal attributable to the capability rather than to the paperwork.
+ *
+ * The Phase 2b scope fields (#4052) are part of that paperwork, held constant the same way: the
+ * least dangerous environment, no dataset named, and no request cited (so no ceiling applies).
+ * Their own gates are covered by `agentToolGrantContract`'s suite.
  */
 function proposeGrant(tool: string): ProposedGrant {
   const capability = capabilityRequiring(tool);
@@ -81,6 +85,9 @@ function proposeGrant(tool: string): ProposedGrant {
     proposedBy: 'claude-code',
     registeredToolNames: registeredToolNames(),
     capabilityRequiredTools: capability?.tools ?? [],
+    environment: 'sandbox',
+    datasets: [],
+    knownDatasets: [],
   };
 }
 
