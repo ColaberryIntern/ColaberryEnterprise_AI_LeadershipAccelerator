@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { EmptyState } from '../shell';
 import type { EvidenceService } from '../../../services/ourServicesApi';
-import CaseStudyCard, { SourcePill } from './CaseStudyCard';
+import CaseStudyCard from './CaseStudyCard';
+import CaseStudySourceMenu from './CaseStudySourceMenu';
 import { TIER_META, freshnessOf, matchesTone, nonRetired, confirmedCount, type Freshness } from './ourServicesModel';
 
 /**
@@ -111,8 +112,9 @@ export default function ServiceCatalogTable(p: Props): React.ReactElement {
                     </div>
                   </td>
                   <td className="text-nowrap">
-                    <SourcePill kind="inside" className="me-1" title="Inside case studies (confirmed)" label={<>{s.insideCount}<span className="visually-hidden"> inside</span></>} />
-                    <SourcePill kind="outside" title="Outside case studies (confirmed)" label={<>{s.outsideCount}<span className="visually-hidden"> outside</span></>} />
+                    {/* Each count is a button listing those case studies, with Manage and (outside) Open original. */}
+                    <span className="me-1"><CaseStudySourceMenu kind="inside" serviceName={s.name} caseStudies={s.caseStudies} /></span>
+                    <CaseStudySourceMenu kind="outside" serviceName={s.name} caseStudies={s.caseStudies} />
                   </td>
                   <td className={`small fw-bold text-nowrap ${FRESH[fresh].className}`}>
                     <i className="ri-checkbox-blank-circle-fill me-1" style={{ color: FRESH[fresh].dot }} aria-hidden="true" />{s.newestEvidenceYear ?? 'none'}
