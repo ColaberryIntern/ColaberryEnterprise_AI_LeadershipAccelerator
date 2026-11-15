@@ -22,6 +22,16 @@ import {
 const AGENT = '11111111-2222-3333-4444-555555555555';
 const DOMAIN = 'marketing';
 
+/**
+ * A stand-in for `dataset_registry`, which held 633 scanned datasets in production on 14 Nov 2026.
+ *
+ * Hard-coded rather than read, because the contract is pure and the catalog is I/O — the same
+ * split the service makes when it passes `datasetNames(await loadDatasetCatalog(...))` in. The
+ * names are real tables from that catalog so a reader can tell this is a projection of something
+ * that exists rather than three invented strings.
+ */
+const KNOWN_DATASETS = ['interaction_outcomes', 'leads', 'enrollments'];
+
 /** Real ids from the real registry, because that is what the service passes. */
 const CAPABILITY_IDS = allCapabilities().map((c) => c.capability_id);
 const A_REAL_CAPABILITY = CAPABILITY_IDS[0];
@@ -39,6 +49,8 @@ function complete(over: Partial<ToolRequestDetailInput> = {}): ToolRequestDetail
     needed_by: '2026-11-30',
     run_frequency: 'daily',
     touches: ['Skool API (read only)', 'interaction_outcomes'],
+    environment: 'sandbox',
+    read_datasets: ['interaction_outcomes'],
     inputs: ['A community id', 'A lookback window in days'],
     writes: false,
     ...over,
@@ -49,12 +61,14 @@ function gate(detail: ToolRequestDetailInput, over: {
   domainKey?: string;
   knownCapabilityIds?: string[];
   ownedAgentIds?: string[];
+  knownDatasets?: string[];
 } = {}) {
   return gateToolRequest({
     detail,
     domainKey: over.domainKey ?? DOMAIN,
     knownCapabilityIds: over.knownCapabilityIds ?? CAPABILITY_IDS,
     ownedAgentIds: over.ownedAgentIds ?? [AGENT],
+    knownDatasets: over.knownDatasets ?? KNOWN_DATASETS,
   });
 }
 
@@ -88,6 +102,8 @@ describe('every required field, named one at a time', () => {
     ['needed_by', 'needed_by_missing'],
     ['run_frequency', 'run_frequency_missing'],
     ['touches', 'touches_missing'],
+    ['environment', 'environment_missing'],
+    ['read_datasets', 'read_datasets_undeclared'],
     ['inputs', 'inputs_undeclared'],
     ['writes', 'writes_undeclared'],
   ];
@@ -153,6 +169,7 @@ describe('WHO — the agent has to be one of yours', () => {
       domainKey: 'marketing',
       knownCapabilityIds: CAPABILITY_IDS,
       ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
     });
     expect(verdict.ok).toBe(true);
     if (verdict.ok) expect(verdict.detail.domain_key).toBe('marketing');
@@ -273,6 +290,7 @@ describe('HOW — the write rule, asserted BOTH ways', () => {
       domainKey: DOMAIN,
       knownCapabilityIds: CAPABILITY_IDS,
       ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
     });
     expect(verdict.ok).toBe(true);
     if (verdict.ok) expect(verdict.detail.reversible).toBe(false);
@@ -286,6 +304,7 @@ describe('acceptToolRequest hands back a NARROWED value', () => {
       domainKey: DOMAIN,
       knownCapabilityIds: CAPABILITY_IDS,
       ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
     });
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
@@ -300,6 +319,7 @@ describe('acceptToolRequest hands back a NARROWED value', () => {
       domainKey: DOMAIN,
       knownCapabilityIds: CAPABILITY_IDS,
       ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
     });
     expect(verdict.ok).toBe(false);
     if (!verdict.ok) expect(verdict.issues.map((i) => i.rule)).toContain('touches_missing');
@@ -313,12 +333,132 @@ describe('acceptToolRequest hands back a NARROWED value', () => {
       domainKey: DOMAIN,
       knownCapabilityIds: CAPABILITY_IDS,
       ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
     });
     expect(verdict.ok).toBe(true);
     if (verdict.ok) {
       expect(verdict.detail.side_effects).toBeNull();
       expect(verdict.detail.reversible).toBeNull();
     }
+  });
+});
+
+describe('WHICH DATA — the dataset scope, and the one rule that differs by environment', () => {
+  it('accepts a catalogued dataset: the POSITIVE control', () => {
+    expect(rules(complete({ read_datasets: ['leads', 'enrollments'] }))).toEqual([]);
+  });
+
+  it('refuses a dataset nobody has on record, and SAYS WHICH ONE', () => {
+    // The name matters more than the rule here. `leadz` is the realistic failure — a typed name
+    // instead of a picked one — and a refusal that does not echo it leaves the builder rereading
+    // a list of five to find the wrong one.
+    const issue = gate(complete({ read_datasets: ['leads', 'leadz'] }))
+      .find((i) => i.rule === 'read_datasets_not_catalogued');
+    expect(issue).toBeDefined();
+    expect((issue as { detail: string }).detail).toContain('leadz');
+    expect((issue as { detail: string }).detail).not.toContain('leads,');
+  });
+
+  it('refuses an uncatalogued name on SANDBOX too, not only on production', () => {
+    // A typo is a typo in both environments. Accepting it on sandbox would mean the first time
+    // anybody finds out is the production request, which is the expensive moment to find out.
+    expect(rules(complete({ environment: 'sandbox', read_datasets: ['leadz'] })))
+      .toContain('read_datasets_not_catalogued');
+  });
+
+  it('refuses an unreadable catalog as its own reason, never as a pass', () => {
+    const found = rules(complete({ read_datasets: ['leads'] }), { knownDatasets: [] });
+    expect(found).toContain('dataset_roster_absent');
+    expect(found).not.toContain('read_datasets_not_catalogued');
+  });
+
+  it('does NOT block a request that names no dataset when the catalog is unreadable', () => {
+    // The roster is consulted only when the request names something, so a tool that reads no
+    // database is never held up by a metadata table being down.
+    expect(rules(complete({ read_datasets: [] }), { knownDatasets: [] })).toEqual([]);
+  });
+
+  describe("Ali's rule: sandbox-wide read is fine, production gets narrowed", () => {
+    it('accepts a SANDBOX request that names no datasets', () => {
+      expect(rules(complete({ environment: 'sandbox', read_datasets: [] }))).toEqual([]);
+    });
+
+    it('refuses a PRODUCTION request that reads something and names no datasets', () => {
+      const found = rules(complete({
+        environment: 'production',
+        reads: ['the lead table'],
+        read_datasets: [],
+      }));
+      expect(found).toContain('production_reads_unscoped');
+    });
+
+    it('accepts a PRODUCTION request once it names them', () => {
+      expect(rules(complete({
+        environment: 'production',
+        reads: ['the lead table'],
+        read_datasets: ['leads'],
+      }))).toEqual([]);
+    });
+
+    it('does not fire on a production tool that declares it reads nothing', () => {
+      // `reads: []` with a non-empty `produces` is a legitimate write-only tool, and the scope
+      // rule has nothing to narrow. `reads_and_produces_both_empty` is what catches a tool that
+      // does neither, and it is a different rule for a different mistake.
+      expect(rules(complete({
+        environment: 'production',
+        reads: [],
+        produces: ['A posted reply'],
+        read_datasets: [],
+      }))).toEqual([]);
+    });
+
+    it('tells the builder BOTH ways out, because most unscoped reads are not database reads', () => {
+      // 24% of the 118 read verbs declared across the capability records are not relational at
+      // all. A refusal that only said "pick datasets" would push somebody with none to pick one
+      // anyway, which is worse than the blank it replaced.
+      const issue = gate(complete({
+        environment: 'production',
+        reads: ['the repository'],
+        read_datasets: [],
+      })).find((i) => i.rule === 'production_reads_unscoped');
+      expect(issue).toBeDefined();
+      const detail = (issue as { detail: string }).detail;
+      expect(detail).toContain('catalog');
+      expect(detail).toContain('touches');
+    });
+  });
+
+  it('refuses an environment that is not one of the two, by its own name', () => {
+    const found = rules(complete({ environment: 'staging' }));
+    expect(found).toContain('environment_unknown');
+    expect(found).not.toContain('environment_missing');
+  });
+
+  it('does not reach the production rule when the environment is unknown', () => {
+    // Otherwise a typo in the enum would also produce a scope refusal, and the builder would fix
+    // the wrong field first.
+    expect(rules(complete({ environment: 'prod', read_datasets: [] })))
+      .not.toContain('production_reads_unscoped');
+  });
+
+  it('carries both fields onto the accepted detail, narrowed', () => {
+    const verdict = acceptToolRequest({
+      detail: complete({
+        environment: 'production',
+        read_datasets: ['  leads  ', '', 'enrollments'],
+      }),
+      domainKey: DOMAIN,
+      knownCapabilityIds: CAPABILITY_IDS,
+      ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
+    });
+    // The padded entry is the point: the gate trims before it checks, so `'  leads  '` resolves
+    // against the catalog, and `accept` has to store the trimmed name or the grant would be
+    // written against a string no table has.
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.detail.read_datasets).toEqual(['leads', 'enrollments']);
+    expect(verdict.detail.environment).toBe('production');
   });
 });
 
@@ -329,6 +469,7 @@ describe('the catalog vocabulary, so a request and a registered tool are compara
       domainKey: DOMAIN,
       knownCapabilityIds: CAPABILITY_IDS,
       ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
     });
     expect(verdict.ok).toBe(true);
     if (!verdict.ok) return;

@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { TOOL_RUN_FREQUENCIES } from '../db/ensureAgentDomainToolRequestSchema';
+import {
+  TOOL_ENVIRONMENTS,
+  TOOL_RUN_FREQUENCIES,
+} from '../db/ensureAgentDomainToolRequestSchema';
 
 /**
  * AF11.1 inbound schema for the tool-request payload.
@@ -64,6 +67,11 @@ export const ToolRequestPayloadSchema = z.object({
     .optional(),
   reads: listOf('reads'),
   produces: listOf('produces'),
+  // WHICH DATA — the dataset picker's output. Shape only, as everywhere in this file: whether the
+  // names exist in `dataset_registry` is the contract's question, because the catalog is I/O and
+  // Zod cannot ask it. `TOOL_LIST_ITEM_MAX` is 300 and the longest table name in the catalog is
+  // nowhere near it, so the limit is a bound rather than a rule.
+  read_datasets: listOf('read_datasets'),
   // WHAT FOR
   capability_id: z.string().trim().max(200).optional(),
   task_unblocked: z.string().trim()
@@ -79,6 +87,13 @@ export const ToolRequestPayloadSchema = z.object({
   }).optional(),
   // WHERE
   touches: listOf('touches'),
+  // An ENUM here as well as in the contract, which is not the duplication it looks like: the enum
+  // rejects a TYPE error (`environment: 5`) and the contract decides PRESENCE and names the
+  // refusal. Zod cannot produce `environment_missing` as a rule code, and a `.enum()` that was
+  // also `.optional()` is exactly what this field needs to be on the wire.
+  environment: z.enum(TOOL_ENVIRONMENTS, {
+    message: `Where this runs has to be one of: ${TOOL_ENVIRONMENTS.join(', ')}.`,
+  }).optional(),
   // HOW
   inputs: listOf('inputs'),
   writes: z.boolean({
