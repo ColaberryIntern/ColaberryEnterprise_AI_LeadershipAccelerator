@@ -122,3 +122,5 @@ ol.cp-list{list-style:decimal;padding-left:18px}
 .cp-jump-list{list-style:none;margin:8px 0 0;padding:0;max-height:50vh;overflow:auto}
 .cp-jump-list li{min-height:44px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:4px;cursor:pointer}
 .cp-jump-list li.active{background:var(--accent-soft)}
+/* CP5.4: a link styled as a button (Join the room, Open your portfolio page) keeps the 44px target */
+a.cp-send{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}

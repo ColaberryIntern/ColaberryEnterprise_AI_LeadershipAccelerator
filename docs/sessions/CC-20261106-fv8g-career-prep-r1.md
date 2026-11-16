@@ -546,3 +546,19 @@ tests/systemV2/career-prep/.
   - Verification at cbe2fcd8e: backend tsc (only the 2 known maxmind errors); backend Career Prep jest 252 pass,
     13 skipped (Postgres integration, run in CI); frontend tsc clean; frontend Career Prep + campus 2424 pass (the
     2 campus testEnv helper files report FAIL because they hold no tests); lint-route-auth OK (168 files).
+
+- [x] CP5.4 Browser checks and layout (T26)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: tests/systemV2/career-prep/careerPrep.e2e.js + fakeApi.js: the built app in Edge, served on
+    127.0.0.1, API answered from fixtures (nothing reaches a server). Checks: /portal/career floor with one door and a
+    one-row styled trail; the room flow (interview, plan, Start, Try recorded with a fake camera and scored, Finish,
+    recap, dashboard marks the moved skill New with readiness equal to the recap's); ‹ Floor n and Esc land on the
+    floor with focus on the door; Add and Create set the anchor pill; sheets from the URL and the jump bar are the
+    topmost element with an opaque background; no API payload carries a fee; a button-styled link is 44px; zero
+    console errors, also inside a sandboxed iframe; layout (no horizontal scroll, no overflowing text) for the room
+    at 1600/1440/390 light and dark and the floor at 1440/390, with the last plan block focused at 390. A self-test
+    (CP_E2E_SELFTEST=flag-off) makes the suite fail. CSS: a link styled as a button keeps its 44px target.
+  - Verification: 10/10 pass, exit 0; self-test exit 1 (0/1).
+  - Notes: declared deviation: no Docker or local Postgres here, so fixtures replace the seeded local stack; the 40 MB
+    nginx upload check moves to the production verification (a no-login 40 MB POST must get 401, not 413).
