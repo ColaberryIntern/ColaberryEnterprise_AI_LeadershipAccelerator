@@ -69,6 +69,19 @@ export default function MetaSyncPanel({ status, onSynced }: Props) {
           {last.error && ` — ${last.error}`}
         </p>
       )}
+      {/*
+        ADS-9. A past run that discarded rows said only "success, 62 rows" here, because the
+        count existed solely in a log line nobody reads. The live Sync now path has warned about
+        this since 2026-11-13; the stored history could not, which is the half that mattered
+        when the ledger was reconciled against Meta.
+      */}
+      {last && last.rowsSkipped > 0 && (
+        <p role="alert" className="small text-danger mb-2" data-testid="meta-last-sync-skipped">
+          That run could not read {last.rowsSkipped} row{last.rowsSkipped === 1 ? '' : 's'}, so the
+          ledger understates spend for {last.rangeStart ?? 'that range'} to {last.rangeEnd ?? 'its end'}.
+          Re-running the sync will pick them up if the cause was temporary.
+        </p>
+      )}
       <button type="button" className="btn btn-outline-primary" onClick={run} disabled={busy}>
         {busy ? 'Syncing…' : 'Sync now'}
       </button>

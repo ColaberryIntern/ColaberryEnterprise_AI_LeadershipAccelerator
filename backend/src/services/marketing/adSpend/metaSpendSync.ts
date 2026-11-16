@@ -222,6 +222,41 @@ export async function runMetaSpendSync(
   }
 }
 
+/**
+ * Write the outcome of a run onto its sync row.
+ *
+ * ADS-9: rows_skipped is PERSISTED, not just logged. The count has always been computed - that
+ * is the 2026-11-13 safeguard, added after 7 rows and $397.17 were dropped by a run that
+ * reported success - but it lived only in a log line, so the ledger could not answer "how many
+ * rows did the last run refuse?". While reconciling on 2026-11-15 that was the first question
+ * worth asking and the one that could not be answered from the database.
+ *
+ * Extracted and injectable so the mapping from result to row is testable without mocking the
+ * database, the HTTP transport and the ledger writer all at once.
+ */
+export type SyncOutcomeWriter = (sql: string, replacements: Record<string, unknown>) => Promise<unknown>;
+
+const defaultOutcomeWriter: SyncOutcomeWriter = (sql, replacements) => sequelize.query(sql, { replacements });
+
+export async function recordSyncOutcome(
+  id: string,
+  result: SyncResult,
+  write: SyncOutcomeWriter = defaultOutcomeWriter,
+): Promise<void> {
+  await write(
+    `UPDATE marketing_spend_syncs SET finished_at = now(), outcome = :outcome, rows_written = :rows,
+            rows_skipped = :skipped, error_class = :errorClass, error = :error WHERE id = :id`,
+    {
+      id,
+      outcome: result.outcome,
+      rows: result.rowsWritten,
+      skipped: result.rowsSkipped,
+      errorClass: result.errorClass,
+      error: result.error,
+    },
+  );
+}
+
 /** The production entry point: real transport, real sleep, the ledger as the writer, and a sync record. */
 export async function syncMetaSpend(opts: { days?: number; triggeredBy: string; nowMs?: number }): Promise<SyncResult> {
   const until = centralToday(opts.nowMs);
@@ -237,11 +272,7 @@ export async function syncMetaSpend(opts: { days?: number; triggeredBy: string; 
     env: process.env,
     write: (rows) => upsertSpend(rows, 'meta_api', 'meta-sync'),
   });
-  await sequelize.query(
-    `UPDATE marketing_spend_syncs SET finished_at = now(), outcome = :outcome, rows_written = :rows,
-            error_class = :errorClass, error = :error WHERE id = :id`,
-    { replacements: { id, outcome: result.outcome, rows: result.rowsWritten, errorClass: result.errorClass, error: result.error } },
-  );
+  await recordSyncOutcome(id, result);
   // A run that silently discarded rows is NOT an `info` event. Before 2026-11-13 this line
   // reported success while 7 rows and $397.17 were dropped, and nothing in it said so.
   const level = result.outcome === 'failure' ? 'error' : result.rowsSkipped > 0 ? 'warn' : 'info';
@@ -264,6 +295,8 @@ export interface SyncStatus {
   meta: MetaAdsConfig;
   lastSync: null | {
     startedAt: string; finishedAt: string | null; outcome: string; rowsWritten: number;
+    /** API rows the run refused to parse. Non-zero means the ledger is INCOMPLETE for that window. */
+    rowsSkipped: number;
     errorClass: string | null; error: string | null; rangeStart: string | null; rangeEnd: string | null;
   };
 }
@@ -273,9 +306,10 @@ export async function getSyncStatus(): Promise<SyncStatus> {
   void _token; // never returned to the browser
   const rows = await sequelize.query<{
     started_at: string; finished_at: string | null; outcome: string; rows_written: number;
+    rows_skipped: number | null;
     error_class: string | null; error: string | null; range_start: string | null; range_end: string | null;
   }>(
-    `SELECT started_at, finished_at, outcome, rows_written, error_class, error,
+    `SELECT started_at, finished_at, outcome, rows_written, rows_skipped, error_class, error,
             range_start::text AS range_start, range_end::text AS range_end
        FROM marketing_spend_syncs WHERE platform = 'meta' ORDER BY started_at DESC LIMIT 1`,
     { type: QueryTypes.SELECT },
@@ -286,7 +320,11 @@ export async function getSyncStatus(): Promise<SyncStatus> {
     lastSync: r ? {
       startedAt: new Date(r.started_at).toISOString(),
       finishedAt: r.finished_at ? new Date(r.finished_at).toISOString() : null,
-      outcome: r.outcome, rowsWritten: r.rows_written, errorClass: r.error_class, error: r.error,
+      outcome: r.outcome, rowsWritten: r.rows_written,
+      // Rows written before ADS-9 have no count; 0 is the honest reading, since nothing was
+      // recorded as skipped at the time.
+      rowsSkipped: Number(r.rows_skipped ?? 0),
+      errorClass: r.error_class, error: r.error,
       rangeStart: r.range_start ? String(r.range_start).slice(0, 10) : null,
       rangeEnd: r.range_end ? String(r.range_end).slice(0, 10) : null,
     } : null,
