@@ -32,6 +32,7 @@
  */
 const loadAndAuthorize = jest.fn();
 const writeBlueprintManifest = jest.fn();
+const loadFactoryProject = jest.fn();
 
 jest.mock('../lifecycleStatus', () => ({
   __esModule: true,
@@ -40,6 +41,14 @@ jest.mock('../lifecycleStatus', () => ({
 jest.mock('../manifestWriter', () => ({
   __esModule: true,
   writeBlueprintManifest: (...a: unknown[]) => writeBlueprintManifest(...a),
+}));
+// THE STORED DECOMPOSITION, mocked at the LOADER rather than at `blueprintStoredCoverage`.
+// L7.6 B2 moved source coverage off the request body and onto `contract_process_documents`, so
+// these tests must be able to state what is stored. Mocking the coverage module instead would
+// hide the absent-versus-empty rule that is the whole point of the fix.
+jest.mock('../generation/gatherCompositionInput', () => ({
+  __esModule: true,
+  loadFactoryProject: (...a: unknown[]) => loadFactoryProject(...a),
 }));
 
 // eslint-disable-next-line import/first
@@ -53,7 +62,10 @@ import { prerequisiteGaps, blockingGaps } from '../lifecyclePrerequisites';
 // eslint-disable-next-line import/first
 import { completeEvidence } from './evidenceFixture';
 
-const ADMIN = { id: 'u-1', email: 'architect@example.test', role: 'SUPER_ADMIN' };
+// `super_admin` in the case the platform actually mints. It used to read `SUPER_ADMIN`, which no
+// mint path issues; harmless here because `loadAndAuthorize` is mocked and the derivation never
+// runs, and corrected anyway because that is exactly the shape of fiction L7.6 B1 was.
+const ADMIN = { id: 'u-1', email: 'architect@example.test', role: 'super_admin' };
 
 const ROW = {
   id: 'lc-1',
@@ -85,6 +97,30 @@ function project(opts: {
   };
 }
 
+/**
+ * What `contract_process_documents` holds for this project, in the loader's success shape.
+ *
+ * `sourceBlocksPresent` defaults TRUE with blocks supplied, because the interesting cases are
+ * explicit. Pass `present: false` for a document written before the field existed.
+ */
+function storedDoc(opts: {
+  present?: boolean;
+  blocks?: Array<{ id: string; kind: string }>;
+  tasks?: Array<{ id: string; source_evidence?: string[] }>;
+} = {}) {
+  return {
+    ok: true as const,
+    project: { source_blocks: opts.blocks ?? [], tasks: opts.tasks ?? [] },
+    documentVersion: 1,
+    trackType: 'solution_build',
+    approvalStatus: 'draft',
+    sourceBlocksPresent: opts.present ?? true,
+    counts: {
+      requirements: 0, sourceBlocks: 0, processes: 0, tasks: 0, roles: 0, assignments: 0, allocation: 0,
+    },
+  };
+}
+
 /** The refs handed to the writer on the most recent call. */
 function persistedRefs(): ManifestRefs {
   expect(writeBlueprintManifest).toHaveBeenCalled();
@@ -95,6 +131,11 @@ function persistedRefs(): ManifestRefs {
 beforeEach(() => {
   loadAndAuthorize.mockReset();
   writeBlueprintManifest.mockReset();
+  loadFactoryProject.mockReset();
+  // THE DEFAULT IS "NO STORED DOCUMENT", which is the fail-closed state and the production
+  // majority: 10 of the 11 delivery projects carrying a lifecycle row have none (measured
+  // 2026-11-16). A test that wants coverage measured says so explicitly.
+  loadFactoryProject.mockResolvedValue({ ok: false, reason: 'no_decomposition' });
   loadAndAuthorize.mockResolvedValue(ROW);
   writeBlueprintManifest.mockResolvedValue({
     manifestId: 'm-1', revision: 1, contentSha256: 'a'.repeat(64), refsSha256: 'b'.repeat(64), created: true,
@@ -207,24 +248,69 @@ describe('the KIND picks the adapter, because a wrong pointer is worse than no m
   });
 });
 
-describe('coverage is MEASURED on the delivery path and absent is not empty', () => {
-  it('source blocks and tasks produce a real measurement', async () => {
+describe('L7.6 B2 — coverage is measured from the STORED document, not from the request', () => {
+  it('THE DEFECT: a body claiming `source_blocks: []` no longer clears the gate', async () => {
+    // This is B2 in one test, and the suite used to assert the opposite under the heading "an
+    // EMPTY source_blocks array is honoured as a measurement of zero blocks". That was true of
+    // the code and wrong of the gate: the body is the thing being gated, so two characters in it
+    // satisfied `source_block_uncited` for a project whose stored document holds a requirement
+    // block no task cites. The stored document now answers, and it says `b-2` is uncited.
+    loadFactoryProject.mockResolvedValue(storedDoc({
+      blocks: [{ id: 'b-1', kind: 'requirement' }, { id: 'b-2', kind: 'requirement' }],
+      tasks: [{ id: 't-1', source_evidence: ['b-1'] }],
+    }));
+
     await persistComposedBlueprint({
       projectId: 'dp-1',
       kind: 'delivery',
       admin: ADMIN,
-      project: project({
-        sourceBlocks: [{ id: 'b-1', kind: 'requirement' }, { id: 'b-2', kind: 'requirement' }],
-        tasks: [{ id: 't-1', source_evidence: ['b-1'] }],
-      }),
+      // The body says: no blocks at all, and a task that cites everything. Both are ignored.
+      project: project({ sourceBlocks: [], tasks: [{ id: 't-x', source_evidence: ['b-1', 'b-2'] }] }),
     });
 
     expect(persistedRefs().coverage.uncitedRequirementBlocks).toEqual(['b-2']);
   });
 
-  it('a body with NO source_blocks records `null`, not `[]`', async () => {
-    // `[]` would mean "somebody checked and every requirement block is cited". A body that
-    // supplied no blocks has not earned that, and the prerequisite must keep blocking.
+  it('the stored document produces a real measurement', async () => {
+    loadFactoryProject.mockResolvedValue(storedDoc({
+      blocks: [{ id: 'b-1', kind: 'requirement' }, { id: 'b-2', kind: 'requirement' }],
+      tasks: [{ id: 't-1', source_evidence: ['b-1'] }],
+    }));
+
+    await persistComposedBlueprint({
+      projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project(),
+    });
+
+    expect(persistedRefs().coverage.uncitedRequirementBlocks).toEqual(['b-2']);
+    expect(loadFactoryProject).toHaveBeenCalledWith('dp-1');
+  });
+
+  it('BOTH halves come from storage: a body task cannot cite a stored block', async () => {
+    // Taking the blocks from storage and the tasks from the body would leave the gate satisfiable
+    // by posting one task that cites everything. The stored document has no tasks at all here, so
+    // its one requirement block is uncited however generous the body is.
+    loadFactoryProject.mockResolvedValue(storedDoc({
+      blocks: [{ id: 'b-1', kind: 'requirement' }], tasks: [],
+    }));
+
+    await persistComposedBlueprint({
+      projectId: 'dp-1',
+      kind: 'delivery',
+      admin: ADMIN,
+      project: project({ tasks: [{ id: 't-body', source_evidence: ['b-1'] }] }),
+    });
+
+    expect(persistedRefs().coverage.uncitedRequirementBlocks).toEqual(['b-1']);
+    // And the pinned business tasks are the STORED ones, so the pointers resolve where they claim.
+    expect(persistedRefs().businessTasks.map((t) => t.id)).toEqual([]);
+  });
+
+  it('NO stored document records `null`, not `[]`', async () => {
+    // `[]` would mean "somebody checked and every requirement block is cited". A project with no
+    // decomposition has not earned that, and the prerequisite must keep blocking. This is the
+    // production majority: 10 of 11.
+    loadFactoryProject.mockResolvedValue({ ok: false, reason: 'no_decomposition' });
+
     await persistComposedBlueprint({
       projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project(),
     });
@@ -232,12 +318,49 @@ describe('coverage is MEASURED on the delivery path and absent is not empty', ()
     expect(persistedRefs().coverage.uncitedRequirementBlocks).toBeNull();
   });
 
-  it('an EMPTY source_blocks array is honoured as a measurement of zero blocks', async () => {
-    // The other side of the same distinction: present-but-empty is a measurement.
+  it('an unreadable document records `null` too, and never a clean measurement', async () => {
+    // Fail closed: "I could not read the authority" must not resolve wider than "the authority
+    // says no".
+    loadFactoryProject.mockRejectedValue(new Error('connection terminated'));
+
     await persistComposedBlueprint({
-      projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project({ sourceBlocks: [] }),
+      projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project(),
     });
 
+    expect(persistedRefs().coverage.uncitedRequirementBlocks).toBeNull();
+  });
+
+  it('a stored document with an explicitly empty block list IS a measured zero', async () => {
+    // The other side of the distinction, and the reason the fix is not simply "always null": a
+    // document that stored `source_blocks: []` genuinely has no requirement blocks.
+    loadFactoryProject.mockResolvedValue(storedDoc({ present: true, blocks: [] }));
+
+    await persistComposedBlueprint({
+      projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project(),
+    });
+
+    expect(persistedRefs().coverage.uncitedRequirementBlocks).toEqual([]);
+  });
+
+  it('a document written before the field existed is unmeasurable, not clean', async () => {
+    loadFactoryProject.mockResolvedValue(storedDoc({ present: false }));
+
+    await persistComposedBlueprint({
+      projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project(),
+    });
+
+    expect(persistedRefs().coverage.uncitedRequirementBlocks).toBeNull();
+  });
+
+  it('the STUDENT path does not consult the document, because SBP has no blocks to read', async () => {
+    loadAndAuthorize.mockResolvedValue({ ...ROW, student_project_id: 'sp-1', delivery_project_id: null });
+
+    await persistComposedBlueprint({
+      projectId: 'sp-1', kind: 'student', admin: ADMIN, project: project(),
+    });
+
+    expect(loadFactoryProject).not.toHaveBeenCalled();
+    // Unchanged and still vacuous, documented as a limitation rather than presented as a pass.
     expect(persistedRefs().coverage.uncitedRequirementBlocks).toEqual([]);
   });
 });
@@ -301,15 +424,18 @@ describe('THE CHAIN IS JOINED — persisted refs satisfy the gate they are read 
   }
 
   it('a delivery blueprint this service persists clears requirements_ready', async () => {
+    // The blocks and tasks now come from the STORED document (B2). `b-2` is a `context` block,
+    // which is legitimately uncited - only `requirement` blocks are asked about.
+    loadFactoryProject.mockResolvedValue(storedDoc({
+      blocks: [{ id: 'b-1', kind: 'requirement' }, { id: 'b-2', kind: 'context' }],
+      tasks: [{ id: 't-1', source_evidence: ['b-1'] }],
+    }));
+
     await persistComposedBlueprint({
       projectId: 'dp-1',
       kind: 'delivery',
       admin: ADMIN,
-      project: project({
-        requirements: 4,
-        sourceBlocks: [{ id: 'b-1', kind: 'requirement' }, { id: 'b-2', kind: 'context' }],
-        tasks: [{ id: 't-1', source_evidence: ['b-1'] }],
-      }),
+      project: project({ requirements: 4 }),
     });
 
     // Mapped to strings rather than asserted as a length, because WHICH gap is the diagnostic and
@@ -329,15 +455,44 @@ describe('THE CHAIN IS JOINED — persisted refs satisfy the gate they are read 
     expect(blockingGaps(gapsFromPersistedRefs()).map((g) => `${g.rule}:${g.kind}`)).toEqual([]);
   });
 
-  it('AND A DELIVERY BLUEPRINT WITH NO SOURCE BLOCKS STILL REFUSES', async () => {
+  it('AND A DELIVERY BLUEPRINT WITH NO STORED DOCUMENT STILL REFUSES', async () => {
     // The control on both tests above. If this passed, what they proved would be that the gate no
     // longer gates rather than that the refs are good. Coverage is unmeasured here, so
     // `source_block_uncited` must come back as `not_assessed` and block.
+    //
+    // Since B2 the cause is a missing stored document rather than a body that omitted the field,
+    // which is the production state of 10 of the 11 delivery projects that carry a lifecycle row.
+    loadFactoryProject.mockResolvedValue({ ok: false, reason: 'no_decomposition' });
+
     await persistComposedBlueprint({
       projectId: 'dp-1', kind: 'delivery', admin: ADMIN, project: project({ requirements: 4 }),
     });
 
     const blocking = blockingGaps(gapsFromPersistedRefs());
     expect(blocking.map((g) => `${g.rule}:${g.kind}`)).toEqual(['source_block_uncited:not_assessed']);
+  });
+
+  it('AND A BODY CANNOT TALK ITS WAY PAST THAT, which is the B2 claim end to end', async () => {
+    // The strongest form of the fix: the richest possible body - blocks declared empty, a task
+    // citing everything - against a stored document with one uncited requirement block. The gate
+    // must refuse, and name the stored block rather than report `not_assessed`.
+    loadFactoryProject.mockResolvedValue(storedDoc({
+      blocks: [{ id: 'b-stored', kind: 'requirement' }], tasks: [],
+    }));
+
+    await persistComposedBlueprint({
+      projectId: 'dp-1',
+      kind: 'delivery',
+      admin: ADMIN,
+      project: project({
+        requirements: 4,
+        sourceBlocks: [],
+        tasks: [{ id: 't-body', source_evidence: ['b-stored'] }],
+      }),
+    });
+
+    const blocking = blockingGaps(gapsFromPersistedRefs());
+    expect(blocking.map((g) => `${g.rule}:${g.kind}`)).toEqual(['source_block_uncited:unmet']);
+    expect(blocking[0].message).toContain('b-stored');
   });
 });
