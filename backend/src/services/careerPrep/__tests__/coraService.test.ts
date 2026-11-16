@@ -1,6 +1,10 @@
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 
-import { askCora, coraContext, firstSentences, numbersGrounded } from '../coraService';
+import { askCora as askCoraDeps, coraContext, firstSentences, numbersGrounded, SYSTEM } from '../coraService';
+import type { LlmCall } from '../careerPrepLlm';
+
+/** The tests drive askCora with a fake model call, a fake clock and an instant wait. */
+const askCora = (m: string, d: Dashboard, call: LlmCall, clock?: () => number) => askCoraDeps(m, d, { call, ...(clock ? { clock } : {}), wait: () => new Promise<null>(() => undefined) });
 import type { Dashboard } from '../prepViews';
 
 const dash: Dashboard = {
@@ -88,6 +92,35 @@ describe('the number guard', () => {
     expect(timedOut.unavailable).toBe(true);
     expect((await askCora('?', dash, async () => 'not json')).messages[0]).toMatch(/could not answer/);
     expect((await askCora('?', dash, async () => null)).messages[0]).toMatch(/could not answer/);
+  });
+});
+
+describe('the coaching prompt', () => {
+  it('carries the coaching rules and none of the email-reply instructions', () => {
+    expect(SYSTEM).toContain('Never promise an outcome: a job, a placement');
+    expect(SYSTEM).toContain('Never use the word "free"');
+    expect(SYSTEM).toContain('Never name a person');
+    expect(SYSTEM).toContain('Never say an action has been taken');
+    expect(SYSTEM).not.toMatch(/knowledge base below/i);
+    expect(SYSTEM).not.toMatch(/needs_human/);
+    expect(SYSTEM).not.toMatch(/follow up/i);
+    expect(SYSTEM).not.toMatch(/support@/);
+  });
+
+  it('sends each call with the time left and no SDK retries', async () => {
+    const call = jest.fn(async () => JSON.stringify({ reply: 'Practice your opening.' }));
+    await askCora('?', dash, call as unknown as LlmCall);
+    const limits = (call.mock.calls[0] as unknown[])[4] as { timeoutMs: number; maxRetries: number };
+    expect(limits.maxRetries).toBe(0);
+    expect(limits.timeoutMs).toBeGreaterThan(0);
+    expect(limits.timeoutMs).toBeLessThanOrEqual(20_000);
+  });
+
+  it('returns the could-not-answer line inside the budget when the first call never answers', async () => {
+    const hung: LlmCall = () => new Promise<string | null>(() => undefined);
+    const r = await askCoraDeps('?', dash, { call: hung, wait: () => Promise.resolve(null) });
+    expect(r).toMatchObject({ unavailable: true });
+    expect(r.messages[0]).toMatch(/could not answer/);
   });
 });
 

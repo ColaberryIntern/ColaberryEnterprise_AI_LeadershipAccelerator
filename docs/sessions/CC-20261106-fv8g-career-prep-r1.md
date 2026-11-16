@@ -286,3 +286,19 @@ tests/systemV2/career-prep/.
     the room's Your plan tab; planCards (the days plan Recommended first; one focused session when the interview is
     today; a 4-day plan for practice).
   - Verification: PlanView + plan cards 7 tests; Career Prep frontend 89 pass; tsc clean.
+
+- [x] CP3.4 fix (attempt 3) Cora's coaching rules and time budget; the room hooks split for real
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: verifier attempt 2: T13 PASS 11/12, T14 FAIL 10/12. (1) Cora's prompt no longer includes the whole
+    email-reply rules block (which told her to answer only from a knowledge base, promise "a person will follow up",
+    and set needs_human); it carries COACHING_RULES, the four rules that apply to a coaching chat (coraPromptRules.ts
+    1, 3, 4 and 5), and every reply is still checked with findCoraReplyViolations. (2) The 20 s budget now bounds
+    every call: each gets only the time left, no SDK retries, and is raced against that time, so a hung first call
+    returns the could-not-answer line with suggestion cards inside the budget (careerPrepLlm accepts per-call
+    limits). (3) CORRECTION: the attempt-2 entry above says no function passed 50 lines; useCareerPrep was 74 and
+    useAnchorFlow 58. Now split into useRoomLog, useAnchorFlow (41), usePlanMaker (23), useAsk (24), usePickCard
+    and useCareerPrep (32).
+  - Verification: coraService 13 tests (new: prompt has the coaching rules and none of "knowledge base below",
+    needs_human, "follow up" or support@; each call gets the time left and no SDK retries; a never-answering first
+    call returns unavailable); backend Career Prep 174 pass; frontend Career Prep 89 pass; both tsc clean.

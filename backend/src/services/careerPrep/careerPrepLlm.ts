@@ -2,15 +2,18 @@ import { getInstrumentedOpenAI } from '../openaiInstrumented';
 
 /**
  * Career Prep v27: the one way Career Prep calls a language model. Instrumented (PII redaction plus
- * an ai_events row with its cost), JSON responses, an explicit 30 s timeout and the SDK's capped
- * retries (2). Returns null without a key. Callers inject a fake `LlmCall` in tests.
+ * an ai_events row with its cost), JSON responses, an explicit timeout (30 s by default) and the SDK's
+ * capped retries (2 by default); a caller with a tighter budget (Cora's chat) passes its own limits.
+ * Returns null without a key. Callers inject a fake `LlmCall` in tests.
  */
-export type LlmCall = (promptVersion: string, system: string, user: string, maxTokens?: number) => Promise<string | null>;
+export interface LlmLimits { timeoutMs?: number; maxRetries?: number }
+export type LlmCall = (promptVersion: string, system: string, user: string, maxTokens?: number, limits?: LlmLimits) => Promise<string | null>;
 
-export const careerPrepChat: LlmCall = async (promptVersion, system, user, maxTokens = 700) => {
+export const careerPrepChat: LlmCall = async (promptVersion, system, user, maxTokens = 700, limits = {}) => {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
-  const client = getInstrumentedOpenAI({ workflow_id: 'career-prep', prompt_version: promptVersion }, { apiKey, timeout: 30_000, maxRetries: 2 });
+  const client = getInstrumentedOpenAI({ workflow_id: 'career-prep', prompt_version: promptVersion },
+    { apiKey, timeout: limits.timeoutMs ?? 30_000, maxRetries: limits.maxRetries ?? 2 });
   const r = await client.chat.completions.create({
     model: process.env.CAREER_PREP_MODEL || process.env.AI_MODEL || 'gpt-4o-mini',
     temperature: 0.3,
