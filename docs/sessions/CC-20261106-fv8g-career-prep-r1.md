@@ -539,3 +539,10 @@ tests/systemV2/career-prep/.
     the floor tooltip names Career Prep. A test covers the card's Go on the campus (START_PREP set, the HQ opened).
   - Verification: frontend Career Prep + campus pass (HQ 121, incl. 4 new tower tests and goStart.test.tsx 3);
     frontend tsc clean.
+
+- [x] CP4.7 Checkpoint (T23): T22 PASS 11/12 (attempt 3), T24 PASS 12/12 (attempt 2), T25 PASS 11/12 (attempt 2)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - Verification at cbe2fcd8e: backend tsc (only the 2 known maxmind errors); backend Career Prep jest 252 pass,
+    13 skipped (Postgres integration, run in CI); frontend tsc clean; frontend Career Prep + campus 2424 pass (the
+    2 campus testEnv helper files report FAIL because they hold no tests); lint-route-auth OK (168 files).
