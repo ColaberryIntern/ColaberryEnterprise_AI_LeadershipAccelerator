@@ -3,6 +3,7 @@ import { sequelize } from '../../../config/database';
 import type { HumanNeed } from './proposalReviewTypes';
 import { collectProjectNeeds } from './collectProjectNeeds';
 import { routeNeedResolution, type NeedSubmission, type ResolveActor } from './resolveNeed';
+import { cleanFactKey } from './proposalFactKey';
 
 /**
  * resolveProjectNeed — "a human answers one open need" end to end (v3 §V1.4; the POST `/needs/:key/resolve`
@@ -89,6 +90,25 @@ export async function resolveProjectNeed(
     }
   } catch (err) {
     return { status: 500, body: { error: 'The answer could not be recorded.', error_class: 'NeedResolvePersistFailed' } };
+  }
+
+  // Close the loop (Dossier Phase 3): a fact-kind need routes to the company library, so the answer becomes a
+  // REUSABLE, tenant-wide fact the agent can cite on the next bid, not just a one-off gap resolution. Approved only
+  // when the approver answered (routeNeedResolution's status); an intern's answer lands as a pending Dossier fact a
+  // human approves. Best-effort: the need is already resolved above, so a library write failure must not fail the answer.
+  if (routed.store === 'library') {
+    try {
+      const { default: GovQualification } = await import('../../../models/GovQualification');
+      const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
+      if (q?.tenant_id) {
+        const { addCompanyFact } = await import('./govCompanyLibrary');
+        await addCompanyFact(
+          q.tenant_id,
+          { key: cleanFactKey(routed.key, need.ask), value: String((routed.payload as { value?: unknown }).value ?? summary), source: 'answered in proposal studio', category: 'general', approved: routed.status === 'approved' },
+          null,
+        );
+      }
+    } catch { /* best-effort; the need is resolved, the library is a bonus */ }
   }
 
   return {
