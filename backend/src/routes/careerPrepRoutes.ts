@@ -8,6 +8,7 @@ import { addInterview, createPractice, linkHireInterviews } from '../services/ca
 import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
 import { askCora } from '../services/careerPrep/coraService';
 import { activePlan, createPlan, NotYoursError } from '../services/careerPrep/plans';
+import { currentSession, NotFoundError, startSession, updateSession } from '../services/careerPrep/sessions';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
 
@@ -154,6 +155,45 @@ export async function getPlan(req: Request, res: Response): Promise<void> {
   }
 }
 
+const SessionStart = z.object({ planId: z.string().uuid() }).strict();
+const SessionPatch = z.object({
+  action: z.enum(['segment_done', 'pause', 'resume', 'finish', 'end']),
+  segmentIndex: z.number().int().min(0).max(20).optional(),
+  secondsActive: z.number().int().min(0).max(24 * 3600),
+}).strict().refine((b) => b.action !== 'segment_done' || b.segmentIndex !== undefined, { message: 'segmentIndex is required' });
+const SessionParams = z.object({ id: z.string().uuid() }).strict();
+
+function sessionError(res: Response, err: unknown, event: string): void {
+  if (err instanceof NotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
+  logFailure(event, err);
+  res.status(500).json({ error: 'Could not save your session. Your practice is not lost; try again.' });
+}
+
+/** Start (or resume) today's session of the student's active plan. */
+export async function postSession(req: Request, res: Response): Promise<void> {
+  const b = SessionStart.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: 'Pick a plan first.' }); return; }
+  try {
+    const r = await startSession(req.participant!.sub, b.data.planId);
+    res.status(r.resumed ? 200 : 201).json(r);
+  } catch (err) { sessionError(res, err, 'career_prep_session_start_failed'); }
+}
+
+export async function patchSession(req: Request, res: Response): Promise<void> {
+  const p = SessionParams.safeParse(req.params);
+  const b = SessionPatch.safeParse(req.body);
+  if (!p.success || !b.success) { res.status(400).json({ error: 'That session update is not valid.' }); return; }
+  try {
+    res.json({ session: await updateSession(req.participant!.sub, p.data.id, b.data) });
+  } catch (err) { sessionError(res, err, 'career_prep_session_update_failed'); }
+}
+
+export async function getCurrentSession(req: Request, res: Response): Promise<void> {
+  const q = SessionStart.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: 'planId must be a plan id.' }); return; }
+  try { res.json({ session: await currentSession(req.participant!.sub, q.data.planId) }); } catch (err) { sessionError(res, err, 'career_prep_session_read_failed'); }
+}
+
 const router = Router();
 router.get('/api/portal/career-prep/flags', requireParticipant, getCareerPrepFlags);
 router.get('/api/portal/career-prep/summary', requireParticipant, requireCareerPrep, getSummary);
@@ -162,5 +202,8 @@ router.post('/api/portal/career-prep/interviews', requireParticipant, requireCar
 router.post('/api/portal/career-prep/cora', requireParticipant, requireCareerPrep, postCora);
 router.post('/api/portal/career-prep/plans', requireParticipant, requireCareerPrep, postPlan);
 router.get('/api/portal/career-prep/plans', requireParticipant, requireCareerPrep, getPlan);
+router.post('/api/portal/career-prep/sessions', requireParticipant, requireCareerPrep, postSession);
+router.patch('/api/portal/career-prep/sessions/:id', requireParticipant, requireCareerPrep, patchSession);
+router.get('/api/portal/career-prep/sessions/current', requireParticipant, requireCareerPrep, getCurrentSession);
 
 export default router;

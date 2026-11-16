@@ -302,3 +302,13 @@ tests/systemV2/career-prep/.
   - Verification: coraService 13 tests (new: prompt has the coaching rules and none of "knowledge base below",
     needs_human, "follow up" or support@; each call gets the time left and no SDK retries; a never-answering first
     call returns unavailable); backend Career Prep 174 pass; frontend Career Prep 89 pass; both tsc clean.
+
+- [x] CP4.3 (backend) Timed sessions
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: sessions.ts (start = today's day of the active plan; starting again the same Central day resumes
+    the open session under a per-student lock, never a second one; applyUpdate is pure: marking segment i done twice
+    changes nothing, seconds_active only grows and is capped at the wall time since the start, a finished session
+    never changes again; updates lock the row FOR UPDATE and stamp ended_at once); POST /sessions (201 new, 200
+    resumed), PATCH /sessions/:id (strict Zod, segment index required for segment_done), GET /sessions/current.
+  - Verification: sessions 8 + session routes 11 tests; backend Career Prep 185 pass; tsc clean; route-auth lint OK.
