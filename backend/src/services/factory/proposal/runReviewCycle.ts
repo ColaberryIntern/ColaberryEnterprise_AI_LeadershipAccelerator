@@ -115,11 +115,13 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
     let references: Awaited<ReturnType<typeof import('./govCompanyLibrary').approvedReferences>> = [];
     let personnel: Awaited<ReturnType<typeof import('./govCompanyLibrary').approvedPersonnel>> = [];
     let caseStudies: Grounding['caseStudies'] = [];
+    let groundTenantId: string | null = null;
     try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
     try {
       const { default: GovQualification } = await import('../../../models/GovQualification');
       const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
       if (q?.tenant_id) {
+        groundTenantId = q.tenant_id;
         const lib = await import('./govCompanyLibrary');
         facts = await lib.approvedGroundingFacts(q.tenant_id);
         references = await lib.approvedReferences(q.tenant_id);
@@ -135,7 +137,9 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
     try {
       const { retrieveRelevantChunks } = await import('./govProposalSources');
       const query = [d?.title ?? docKey, ...(d?.requirementIds ?? []), ...((d?.sections ?? []).map((s: any) => `${s.heading ?? ''} ${s.plan ?? ''}`.trim()))].filter(Boolean).join('\n').slice(0, 4000);
-      const hits = await retrieveRelevantChunks(deliveryProjectId, query, 8);
+      // Pass the tenant so the agent also pulls the tenant-wide company documents (Dossier Phase 2b), not just this
+      // project's own sources.
+      const hits = await retrieveRelevantChunks(deliveryProjectId, query, 8, groundTenantId);
       sourceExcerpts = hits.map((h) => ({ documentName: h.documentName, text: h.text }));
     } catch { /* best-effort; grounding without excerpts is still valid */ }
     return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts, references, personnel, caseStudies, sourceExcerpts });

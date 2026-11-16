@@ -12,6 +12,10 @@ jest.mock('../../services/adminGovDossierApi', () => ({
   getDossier: jest.fn(),
   addDossierItem: jest.fn(),
   approveDossierItem: jest.fn(),
+  listCompanyDocs: jest.fn(),
+  uploadCompanyDoc: jest.fn(),
+  approveCompanyDoc: jest.fn(),
+  deleteCompanyDoc: jest.fn(),
 }));
 
 const lib = (over: Partial<DossierLibrary> = {}): DossierLibrary => ({
@@ -33,6 +37,8 @@ async function renderPage(): Promise<void> {
 beforeEach(() => {
   (dossierApi.getDossier as jest.Mock).mockResolvedValue(lib());
   (dossierApi.approveDossierItem as jest.Mock).mockResolvedValue({ ok: true, id: 'f1', approved: true });
+  (dossierApi.listCompanyDocs as jest.Mock).mockResolvedValue({ documents: [{ id: 'd1', name: 'capability.pdf', status: 'ready', approved: false, chunkCount: 4, embeddedCount: 4, truncated: false, createdAt: null }] });
+  (dossierApi.approveCompanyDoc as jest.Mock).mockResolvedValue({ ok: true, id: 'd1', approved: true });
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.clearAllMocks(); });
 
@@ -56,5 +62,14 @@ describe('AdminGovDossierPage', () => {
     await settle();
     expect(dossierApi.approveDossierItem).toHaveBeenCalledWith('fact', 'f1');
     expect(dossierApi.getDossier).toHaveBeenCalledTimes(2); // initial load + reload after approve
+  });
+
+  it('lists company documents with an upload control', async () => {
+    await renderPage();
+    expect(dossierApi.listCompanyDocs).toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="doc-upload"]')).not.toBeNull();
+    const docRows = container.querySelectorAll('[data-testid="doc-row"]');
+    expect(docRows.length).toBe(1);
+    expect(docRows[0].textContent).toContain('capability.pdf');
   });
 });

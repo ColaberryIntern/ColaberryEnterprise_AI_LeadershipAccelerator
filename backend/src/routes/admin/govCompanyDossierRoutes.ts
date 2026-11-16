@@ -11,7 +11,9 @@
  * so the sidebar entry and the API agree by construction. READS list; WRITES add/approve. Every input is Zod-validated
  * at the boundary (400 on bad input); the service layer stays tenant-scoped.
  */
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import path from 'path';
+import multer from 'multer';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
@@ -19,8 +21,26 @@ import {
   listCompanyLibrary, addCompanyFact, addCompanyReference, addCompanyPersonnel,
   approveCompanyFact, approveCompanyReference, approveCompanyPersonnel,
 } from '../../services/factory/proposal/govCompanyLibrary';
+import {
+  ingestSourceDocument, listCompanyDocuments, approveSourceDocument, deleteSourceDocument,
+} from '../../services/factory/proposal/govProposalSources';
 
 const router = Router();
+
+// Tenant-wide company documents (Phase 2b): same upload guard as the per-project source library.
+const MAX_BYTES = 20 * 1024 * 1024;
+const ALLOWED_EXT = new Set(['.docx', '.pdf', '.txt', '.md']);
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_BYTES, files: 1 } });
+function acceptDoc(req: Request, res: Response, next: NextFunction): void {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (err) {
+      const tooLarge = (err as { code?: string })?.code === 'LIMIT_FILE_SIZE';
+      res.status(tooLarge ? 413 : 400).json({ error: tooLarge ? `That file is over the ${MAX_BYTES}-byte limit.` : 'The upload was malformed. Attach one file in the "file" field.' });
+      return;
+    }
+    next();
+  });
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -130,6 +150,55 @@ router.post('/api/admin/factory/dossier/library/:kind/:id/approve', requireSecti
     log('error', 'gov_dossier_approve_failed', { kind, message: String((err as Error)?.message ?? err).slice(0, 200) });
     res.status(500).json({ error: 'Could not approve the dossier item.' });
   }
+});
+
+/** GET the tenant-wide company documents (the reusable upload library the agent also grounds on). */
+router.get('/api/admin/factory/dossier/documents', requireSection('program'), async (_req: Request, res: Response) => {
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const docs = await listCompanyDocuments(tid);
+    res.json({ documents: docs.map((d: any) => ({ id: d.id, name: d.name, status: d.status, approved: d.approved, chunkCount: d.chunk_count, embeddedCount: d.embedded_count, truncated: d.truncated, createdAt: d.created_at })) });
+  } catch (err) {
+    log('error', 'gov_dossier_docs_list_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not load the company documents.' });
+  }
+});
+
+/** POST upload a tenant-wide company document. Validated at the boundary, ingested unapproved (project_id NULL). */
+router.post('/api/admin/factory/dossier/documents', requireSection('program'), acceptDoc, async (req: Request, res: Response) => {
+  const file = (req as unknown as { file?: { originalname: string; mimetype: string; buffer: Buffer } }).file;
+  if (!file) { res.status(400).json({ error: 'Attach one file in the "file" field.' }); return; }
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (!ALLOWED_EXT.has(ext)) { res.status(400).json({ error: `Unsupported file type "${ext || '(none)'}". Allowed: .docx, .pdf, .txt, .md.` }); return; }
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const result = await ingestSourceDocument(null, tid, { name: file.originalname, mimeType: file.mimetype, buffer: file.buffer, source: 'dossier upload' }, adminIdentity(req));
+    log('info', 'gov_dossier_doc_upload', { chunks: result.chunkCount });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    log('error', 'gov_dossier_doc_upload_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not ingest that document.' });
+  }
+});
+
+/** POST approve (or un-approve) a company document. Only approved documents reach the agent. */
+router.post('/api/admin/factory/dossier/documents/:id/approve', requireSection('program'), async (req: Request, res: Response) => {
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  const approved = (req.body?.approved !== false);
+  const doc = await approveSourceDocument(String(req.params.id), adminIdentity(req), approved);
+  if (!doc) { res.status(404).json({ error: 'Document not found.' }); return; }
+  res.json({ ok: true, id: doc.id, approved: doc.approved });
+});
+
+/** DELETE a company document (its chunks cascade). */
+router.delete('/api/admin/factory/dossier/documents/:id', requireSection('program'), async (req: Request, res: Response) => {
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  const ok = await deleteSourceDocument(String(req.params.id));
+  res.status(ok ? 200 : 404).json({ ok });
 });
 
 export default router;

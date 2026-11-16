@@ -10,7 +10,8 @@ export type GovProposalSourceStatus = 'ready' | 'embedding_pending' | 'error';
 
 interface GovProposalSourceDocumentAttributes {
   id?: string;
-  project_id: string;
+  /** NULL for a tenant-wide company document (Dossier Phase 2b); a project id for a per-pursuit source. */
+  project_id: string | null;
   tenant_id: string;
   name: string;
   mime_type?: string | null;
@@ -29,7 +30,7 @@ interface GovProposalSourceDocumentAttributes {
 
 class GovProposalSourceDocument extends Model<GovProposalSourceDocumentAttributes> implements GovProposalSourceDocumentAttributes {
   declare id: string;
-  declare project_id: string;
+  declare project_id: string | null;
   declare tenant_id: string;
   declare name: string;
   declare mime_type: string | null;
@@ -49,7 +50,7 @@ class GovProposalSourceDocument extends Model<GovProposalSourceDocumentAttribute
 GovProposalSourceDocument.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
-    project_id: { type: DataTypes.UUID, allowNull: false },
+    project_id: { type: DataTypes.UUID, allowNull: true },
     tenant_id: { type: DataTypes.UUID, allowNull: false },
     name: { type: DataTypes.TEXT, allowNull: false },
     mime_type: { type: DataTypes.TEXT, allowNull: true },

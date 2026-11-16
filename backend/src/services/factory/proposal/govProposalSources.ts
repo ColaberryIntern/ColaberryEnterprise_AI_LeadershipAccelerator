@@ -32,7 +32,7 @@ async function embed(text: string): Promise<number[] | null> {
   }
 }
 
-async function insertChunk(documentId: string, projectId: string, tenantId: string, c: SourceChunk, emb: number[] | null): Promise<void> {
+async function insertChunk(documentId: string, projectId: string | null, tenantId: string, c: SourceChunk, emb: number[] | null): Promise<void> {
   const base = { document_id: documentId, project_id: projectId, tenant_id: tenantId, chunk_index: c.index, text: c.text, token_estimate: c.tokenEstimate };
   if (emb) {
     await sequelize.query(
@@ -53,11 +53,12 @@ export interface IngestSourceInput { name: string; mimeType?: string | null; buf
 export interface IngestSourceResult { documentId: string; chunkCount: number; embeddedCount: number; truncated: boolean; status: GovProposalSourceStatus; }
 
 /**
- * Ingest (or re-ingest) a source document for a project. Idempotent on (project_id, name): a prior document with the
- * same name is replaced (its chunks cascade-delete), so re-uploading never duplicates.
+ * Ingest (or re-ingest) a source document. `projectId` is a delivery project for a per-pursuit source, or NULL for a
+ * TENANT-WIDE company document (Dossier Phase 2b) that grounds every pursuit. Idempotent on (project_id, name): a
+ * prior document with the same scope and name is replaced (its chunks cascade-delete), so re-uploading never duplicates.
  */
 export async function ingestSourceDocument(
-  projectId: string, tenantId: string, input: IngestSourceInput, identityId: string | null,
+  projectId: string | null, tenantId: string, input: IngestSourceInput, identityId: string | null,
 ): Promise<IngestSourceResult> {
   const prior = await GovProposalSourceDocument.findAll({ where: { project_id: projectId, name: input.name } });
   for (const d of prior) await d.destroy();
@@ -87,6 +88,11 @@ export async function listSourceDocuments(projectId: string): Promise<GovProposa
   return GovProposalSourceDocument.findAll({ where: { project_id: projectId }, order: [['created_at', 'DESC']] });
 }
 
+/** Tenant-wide company documents (project_id IS NULL): the reusable library the Dossier portal manages (Phase 2b). */
+export async function listCompanyDocuments(tenantId: string): Promise<GovProposalSourceDocument[]> {
+  return GovProposalSourceDocument.findAll({ where: { project_id: null, tenant_id: tenantId }, order: [['created_at', 'DESC']] });
+}
+
 export async function approveSourceDocument(documentId: string, identityId: string | null, approved = true): Promise<GovProposalSourceDocument | null> {
   const doc = await GovProposalSourceDocument.findByPk(documentId);
   if (!doc) return null;
@@ -102,21 +108,24 @@ export async function deleteSourceDocument(documentId: string): Promise<boolean>
 export interface RetrievedExcerpt { documentId: string; documentName: string; chunkIndex: number; text: string; similarity: number; }
 
 /**
- * Retrieve the top-k most relevant chunks for a section's text, from APPROVED documents in this project only.
- * Returns [] when the embedding proxy is unavailable (the caller then grounds without source excerpts).
+ * Retrieve the top-k most relevant chunks for a section's text, from APPROVED documents only. Pulls this project's own
+ * sources AND, when `tenantId` is given, the tenant-wide company documents (project_id IS NULL) the Dossier manages, so
+ * a capability statement uploaded once grounds every pursuit. Returns [] when the embedding proxy is unavailable.
  */
-export async function retrieveRelevantChunks(projectId: string, queryText: string, topK = 6): Promise<RetrievedExcerpt[]> {
+export async function retrieveRelevantChunks(projectId: string, queryText: string, topK = 6, tenantId?: string | null): Promise<RetrievedExcerpt[]> {
   const emb = await embed(queryText);
   if (!emb) return [];
+  const tid = tenantId ?? null;
   const rows: any[] = await sequelize.query(
     `SELECT c.document_id, d.name AS document_name, c.chunk_index, c.text,
             1 - (c.embedding <=> :q::vector) AS similarity
        FROM gov_proposal_source_chunks c
        JOIN gov_proposal_source_documents d ON d.id = c.document_id
-      WHERE c.project_id = :pid AND c.embedding IS NOT NULL AND d.approved = TRUE
+      WHERE (c.project_id = :pid OR (:tid IS NOT NULL AND c.project_id IS NULL AND c.tenant_id = :tid))
+        AND c.embedding IS NOT NULL AND d.approved = TRUE
       ORDER BY c.embedding <=> :q::vector
       LIMIT :k`,
-    { replacements: { q: `[${emb.join(',')}]`, pid: projectId, k: topK }, type: 'SELECT' as any },
+    { replacements: { q: `[${emb.join(',')}]`, pid: projectId, tid, k: topK }, type: 'SELECT' as any },
   );
   return rows.map((r) => ({
     documentId: r.document_id, documentName: r.document_name, chunkIndex: r.chunk_index,

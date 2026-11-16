@@ -39,6 +39,30 @@ export async function approveDossierItem(kind: DossierKind, id: string): Promise
   return data;
 }
 
+// ── Tenant-wide company documents (Phase 2b): uploaded once, grounds every pursuit ──────────────────────────────
+const DOCS = '/api/admin/factory/dossier/documents';
+
+export interface CompanyDoc { id: string; name: string; status: string; approved: boolean; chunkCount: number; embeddedCount: number; truncated: boolean; createdAt: string | null }
+
+export async function listCompanyDocs(): Promise<{ documents: CompanyDoc[] }> {
+  const { data } = await api.get<{ documents: CompanyDoc[] }>(DOCS);
+  return data;
+}
+export async function uploadCompanyDoc(file: File): Promise<{ ok: boolean; chunkCount: number; embeddedCount: number; status: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post<{ ok: boolean; chunkCount: number; embeddedCount: number; status: string }>(DOCS, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  return data;
+}
+export async function approveCompanyDoc(id: string, approved: boolean): Promise<{ ok: boolean; id: string; approved: boolean }> {
+  const { data } = await api.post<{ ok: boolean; id: string; approved: boolean }>(`${DOCS}/${encodeURIComponent(id)}/approve`, { approved });
+  return data;
+}
+export async function deleteCompanyDoc(id: string): Promise<{ ok: boolean }> {
+  const { data } = await api.delete<{ ok: boolean }>(`${DOCS}/${encodeURIComponent(id)}`);
+  return data;
+}
+
 /** The proposal-demand buckets the fill-UI groups facts by. Labels are plain copy (no special punctuation). */
 export const FACT_CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'registrations', label: 'Registrations (SAM, UEI, CAGE, DUNS)' },
