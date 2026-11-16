@@ -225,3 +225,17 @@ tests/systemV2/career-prep/.
   - Verification: Career Prep frontend 73 tests pass (router + anchor 21, useCareerPrep 9 among them); tsc clean.
   - Notes: plans and the Watch/Try session plug in at CP4 through onPlan; until then picking an interview ends at
     the insight. Sheets open in CP4.6 through onSheet.
+
+- [x] CP3.5 Your progress (the dashboard)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: ProgressDashboard.tsx (readiness with its weekly trend and a dashed ready line, or what to do
+    first when there is not enough data; your interviews, each anchoring the room; skills lowest first with the
+    30-day change and sources, skills without data listed as such; Cora's read = the three lowest scored skills with
+    their evidence; where the data comes from, only sources with evidence; practice over time with the streak);
+    charts/PrepCharts.tsx (single-series SVG, a title tooltip on every focusable point, accent color only, a "Show
+    as table" toggle on each).
+  - Verification: ProgressDashboard 6 tests; Career Prep frontend 79 pass; tsc clean.
+  - Notes: "Tips from your data" (time of day, which practice mode lifts real-interview scores) need data this
+    release does not collect, so the kit's rule "a tip without enough data is not shown" means none are shown.
+    "Make me a plan for this" asks Cora for a short session; plans arrive in CP4.

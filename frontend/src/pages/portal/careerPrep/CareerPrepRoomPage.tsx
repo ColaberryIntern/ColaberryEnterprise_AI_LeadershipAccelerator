@@ -5,6 +5,7 @@ import { CareerPrepFloor } from '../../../components/careerPrep/CareerPrepFloor'
 import { CoraChat } from '../../../components/careerPrep/CoraChat';
 import { InterviewForm } from '../../../components/careerPrep/InterviewForm';
 import { useCareerPrep } from '../../../components/careerPrep/useCareerPrep';
+import { ProgressDashboard } from '../../../components/careerPrep/ProgressDashboard';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
 import { careerPrepFloorNum } from '../../../components/careerPrep/careerPrepFloorNum';
 import { careerPrepDoorsFor } from '../../../components/campus/hq/careerPrepDoors';
@@ -42,7 +43,9 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
         </>
       )}
       tabs={{
-        progress: tabs?.progress ?? <Pending text="Your progress appears here as you practice." />,
+        progress: tabs?.progress ?? (room.dashboard
+          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.ask(`10 minutes on ${s.label}`)} />
+          : <Pending text="Loading your progress..." />),
         plan: tabs?.plan ?? <Pending text="Pick a plan with Cora and it appears here." />,
         session: tabs?.session ?? <Pending text="Start a session from your plan." />,
       }}

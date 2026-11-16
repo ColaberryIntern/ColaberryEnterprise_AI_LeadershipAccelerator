@@ -24,6 +24,7 @@ export interface CareerPrepRoomState {
   submitForm: (body: NewInterview) => Promise<void>;
   cancelForm: () => void;
   changeAnchor: () => void;
+  chooseAnchor: (id: string) => void;
 }
 export interface RoomHooks { onTab?: (tab: 'progress' | 'plan' | 'session') => void; onSheet?: (sheet: Sheet) => void; onPlan?: (kind: 'plan' | 'quick') => void }
 
@@ -126,5 +127,7 @@ export function useCareerPrep(initialAnchorId: string | null = null, hooks: Room
   const changeAnchor = useCallback(() => { if (dashboard) askWhich(dashboard, false); }, [dashboard, askWhich]);
   const cancelForm = useCallback(() => setForm(null), []);
 
-  return { dashboard, anchorId, log, busy, form, error, pick, ask, submitForm, cancelForm, changeAnchor };
+  const chooseAnchor = useCallback((id: string) => { void anchorOn(id); }, [anchorOn]);
+
+  return { dashboard, anchorId, log, busy, form, error, pick, ask, submitForm, cancelForm, changeAnchor, chooseAnchor };
 }
