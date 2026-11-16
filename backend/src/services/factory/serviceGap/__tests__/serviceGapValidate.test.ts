@@ -1,5 +1,5 @@
 import { retrieveCandidates } from '../serviceGapRetrieval';
-import { finalizeRecommendation, GapMalformedOutput, insufficientRecommendation } from '../serviceGapValidate';
+import { finalizeRecommendation, GapMalformedOutput, insufficientRecommendation, normalizeDecision } from '../serviceGapValidate';
 import { CATALOG, ev } from './serviceGapFixtures';
 
 const ctxFor = (evidence = ev()) => {
@@ -133,5 +133,46 @@ describe('finalizeRecommendation - the model cannot point outside what we sent',
   it('the abstain record says what is missing and has no target', () => {
     const r = insufficientRecommendation(ev(), 'thin_source', ['What was delivered']);
     expect(r).toMatchObject({ decision: 'INSUFFICIENT_EVIDENCE', target: null, confidence: 'low', missingInformation: ['What was delivered'] });
+  });
+});
+
+// Regression: on production gpt-4o-mini answered with labels and sentences, so every analysis failed as "unusable".
+describe('normalizeDecision - real answers seen in production', () => {
+  it.each([
+    ['Match existing.', 'MATCH_EXISTING'],
+    ['Expand S1 with predictive maintenance for thermal aging.', 'EXPAND_EXISTING'],
+    ['Propose a new service for automated customer service solutions using bot flows.', 'PROPOSE_NEW'],
+    ['Propose new service for automated customer service solutions.', 'PROPOSE_NEW'],
+    ['Insufficient evidence.', 'INSUFFICIENT_EVIDENCE'],
+    ['Link to Growth service.', 'LINK_GROWTH'],
+    ['link_growth', 'LINK_GROWTH'],
+    ['MATCH_EXISTING', 'MATCH_EXISTING'],
+  ])('%s -> %s', (raw, code) => expect(normalizeDecision(raw)).toBe(code));
+
+  it('still refuses anything that does not start like a decision', () => {
+    for (const raw of ['CREATE_SERVICE_NOW', 'The case study is great', '', null, 42]) expect(normalizeDecision(raw)).toBeNull();
+  });
+
+  it('a sentence decision flows through the normal guards (label + S-ref verdict on a Growth target)', () => {
+    const ctx = ctxFor();
+    const cv = refOf(ctx, 'Computer Vision & Industrial AI');
+    const r = finalizeRecommendation({ decision: 'Match existing.', targetRef: cv, verdict: `Match to ${cv}.`, candidates: [cand(cv, 80, 75, 70)] }, ctx);
+    expect(['MATCH_EXISTING', 'LINK_GROWTH']).toContain(r.decision);
+    expect(r.verdict).not.toMatch(/\bS\d+\b/);
+    expect(r.verdict).toContain('Computer Vision & Industrial AI');
+    expect(r.reasonCodes).toContain('verdict_replaced');
+  });
+
+  it('a copied placeholder verdict ("Propose Y.") is replaced with the proposed name', () => {
+    const ctx = ctxFor();
+    const r = finalizeRecommendation({ decision: 'Propose a new service', verdict: 'Propose Y.', proposedService: { name: 'Quantum Ledger Forensics' } }, ctx);
+    expect(r.decision).toBe('PROPOSE_NEW');
+    expect(r.verdict).toBe('Propose Quantum Ledger Forensics.');
+  });
+
+  it('alternatives written as labels are kept, unreadable ones dropped', () => {
+    const ctx = ctxFor();
+    const r = finalizeRecommendation({ decision: 'INSUFFICIENT_EVIDENCE', alternativesConsidered: [{ decision: 'Propose new', whyNot: 'thin' }, { decision: '???', whyNot: 'x' }] }, ctx);
+    expect(r.alternativesConsidered).toEqual([{ decision: 'PROPOSE_NEW', whyNot: 'thin' }]);
   });
 });

@@ -21,7 +21,7 @@ export type ServiceStatus = 'active' | 'growth' | 'retired';
 export type Confidence = 'high' | 'medium' | 'low';
 
 /** Bumping this invalidates every cached analysis (it is part of the idempotency key). */
-export const GAP_PROMPT_VERSION = 'service-gap-v1';
+export const GAP_PROMPT_VERSION = 'service-gap-v2';
 
 /** One catalog service as the detector sees it (tenant-scoped by the loader). */
 export interface CatalogService {
