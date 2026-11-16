@@ -42,6 +42,7 @@
  */
 import { effectiveAuthorityForDomain, isAutonomyStage } from './autonomyLadder';
 import type { CapabilityAutonomy } from './autonomyLadder';
+import { projectCapabilities } from './capabilityProjection';
 import type { DomainCapabilityMatrix } from './capabilityRecord';
 
 export const AGENT_DOMAIN_SNAPSHOT_PATH = '.colaberry/agent-domain.json';
@@ -245,9 +246,14 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
     domain_key: input.domain_key,
     // Criterion 1: every panel names the endpoint it read. Named here so the page cites the real
     // source rather than describing this file as if it were the authority.
+    // AF12.5. `capabilities` used to name `GET /api/admin/agent-domains/<key>`, which is
+    // `requireSection('program')`. Builders hold `dashboard`, so that string pointed every one of
+    // them at a 403 while claiming to be their source. It now names the twin they can actually
+    // reach, which as of AF12.5 returns the same projection this file carries.
     sources: {
       agent: 'GET /api/admin/agent-domains-mine',
-      capabilities: `GET /api/admin/agent-domains/${input.domain_key}`,
+      capabilities: `GET /api/admin/agent-domains-mine/${input.domain_key}`,
+      capability_ladder: `GET /api/admin/agent-domains-mine/${input.domain_key}/coverage`,
       governance: 'GET /api/admin/agent-domain-change-requests-mine',
     },
     // Named `staleness_note` rather than anything containing `captured_at`, so a test can assert
@@ -304,6 +310,27 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
     // `approved_autonomy` goes with it, because a ceiling alone cannot be rendered "against the
     // rung it stops at" -- the page needs the level the record ASKS for, the ceiling, and the
     // level that actually applies, to show all three on one ladder.
+    // ── AF12.5. THE CAPABILITY RECORDS, WHICH THIS FILE PROMISED AND DID NOT CARRY ─────────────
+    //
+    // `agentDomainCommandCenterStory.ts` tells every builder this snapshot "carries the data for
+    // all six panels". It did not carry panel 2 (the capability inventory) or panel 4 (per-rung
+    // behaviour) at all. `input.matrix` was already here — `authority[]` is derived from it — so
+    // the records were in hand and simply never published. Mihret Netsereab, Victoria
+    // Spencer-Auber and Sarbjit Kaur each reported this independently.
+    //
+    // This is the ONLY source for panel 4. `release_behaviour[]` appears in no HTTP response
+    // anywhere in the platform, so a page had nothing to render that panel from, authenticated or
+    // not.
+    //
+    // **FILE ORDER, and it differs from `authority[]` below ON PURPOSE.** Panel 2's rule is "sort
+    // by nothing clever: the order the records come in is the order research recorded them", while
+    // `authority[]` is sorted by `capability_id`. The two arrays therefore do NOT line up
+    // positionally — join them on `capability_id`, never on index. A test pins both orders.
+    //
+    // Unbounded here, unlike the HTTP routes: a public page has no query string to raise a cap
+    // with, and a capped inventory that looks complete is the failure this ticket is about. The
+    // largest domain projects to 61.5 KB.
+    capabilities: projectCapabilities(input.matrix.capabilities).capabilities,
     authority: authority.map((a) => {
       const inputs = ladderInputById.get(a.capability_id);
       return {

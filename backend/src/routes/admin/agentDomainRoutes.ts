@@ -46,6 +46,7 @@ import {
   getAgentDomain,
   isAssignablePlanningState,
 } from '../../services/agentDomain/agentDomainRegistry';
+import { projectCapabilities } from '../../services/agentDomain/capabilityProjection';
 import {
   allDomainCounts,
   countsForDomain,
@@ -90,6 +91,18 @@ const CoverageQuery = z.object({
   // `unknown` is a real answer and is never collapsed into zero, so it is a selectable state.
   state: z.enum(['draft', 'confirmed', 'rejected']).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+/**
+ * AF12.5. The domain detail routes' only query parameter.
+ *
+ * Named `capability_limit` rather than `limit` because this route returns a domain, not a list: a
+ * bare `limit` on it reads as "how many domains", which is always one. Optional with NO default —
+ * panel 2 of the Command Center story is "one row per capability", so a silent cap would make a
+ * builder's own inventory wrong while looking complete. See `capabilityProjection.ts`.
+ */
+const DetailQuery = z.object({
+  capability_limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 
 function badRequest(res: Response, err: z.ZodError): void {
@@ -202,16 +215,27 @@ router.get(
   guarded(async (req: Request, res: Response) => {
     const parsed = DomainParam.safeParse(req.params);
     if (!parsed.success) return badRequest(res, parsed.error);
+    const q = DetailQuery.safeParse(req.query);
+    if (!q.success) return badRequest(res, q.error);
     const key = parsed.data.domainKey;
     const m = loadDomainMatrix(key);
     const plan = planProvision(key);
     const reach = await resolveManagerReach(sequelize);
+    const projected = projectCapabilities(m.capabilities, q.data.capability_limit);
     res.json({
       ...publicDomainView(key, reachFor(reach, key)),
       accountable_human: m.accountable_human,
       researched_at: m.researched_at,
       releases: plan.releases.map((r) => ({ cluster: r.cluster, title: r.title, position: r.position })),
       story_count: plan.stories.length,
+      // AF12.5. The records themselves, in FILE ORDER, which is what panel 2 of the Command Center
+      // story requires: "Sort by nothing clever: the order the records come in is the order
+      // research recorded them." They were loaded on the line above and discarded for as long as
+      // this route has existed, while `agentDomainSnapshot.ts` told every page that this endpoint
+      // was its capability source. Three builders reported the same gap independently.
+      capabilities: projected.capabilities,
+      capabilities_returned: projected.returned,
+      capability_total: projected.total,
       // This handler reads the REGISTRY and the capability files. It does not query the database,
       // so it must not report a provisioning state as though it had checked one.
       //
@@ -417,6 +441,8 @@ router.get(
   guarded(async (req: Request, res: Response) => {
     const parsed = DomainParam.safeParse(req.params);
     if (!parsed.success) return badRequest(res, parsed.error);
+    const q = DetailQuery.safeParse(req.query);
+    if (!q.success) return badRequest(res, q.error);
     const key = parsed.data.domainKey;
 
     const mine = await myDomainKeys(req.admin?.email ?? '');
@@ -425,12 +451,20 @@ router.get(
     const m = loadDomainMatrix(key);
     const plan = planProvision(key);
     const reach = await resolveManagerReach(sequelize);
+    const projected = projectCapabilities(m.capabilities, q.data.capability_limit);
     res.json({
       ...publicDomainView(key, reachFor(reach, key)),
       accountable_human: m.accountable_human,
       researched_at: m.researched_at,
       releases: plan.releases.map((r) => ({ cluster: r.cluster, title: r.title, position: r.position })),
       story_count: plan.stories.length,
+      // AF12.5, and THIS is the handler that unblocks a builder. The `program` twin is
+      // `requireSection('program')` and builders hold `dashboard`, so fixing only that one would
+      // have left Mihret Netsereab with a 403 and her criterion 1 still failing — the same 403
+      // Kalkidan Bezabeh reported on 5 Nov. Same projection, same file order, same fields.
+      capabilities: projected.capabilities,
+      capabilities_returned: projected.returned,
+      capability_total: projected.total,
       // Carried over verbatim from the `program` route rather than paraphrased. This handler reads
       // the REGISTRY and the capability files and queries no provisioning state, so it must not
       // report one -- the field here used to be a hardcoded `provisioned: false` that had become a
