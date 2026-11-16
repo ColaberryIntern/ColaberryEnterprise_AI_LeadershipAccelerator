@@ -226,10 +226,10 @@ describe('the denied-capability list is the real one', () => {
 // ─────────────────────── the data, measured ───────────────────────
 
 describe('the capability data, measured rather than summarised', () => {
-  it('444 records across ten domains, each id unique', () => {
+  it('448 records across ten domains, each id unique', () => {
     const caps = allCapabilities();
-    expect(caps).toHaveLength(444);
-    expect(new Set(caps.map((c) => c.capability_id)).size).toBe(444);
+    expect(caps).toHaveLength(448);
+    expect(new Set(caps.map((c) => c.capability_id)).size).toBe(448);
     expect(loadAllMatrices().size).toBe(AGENT_DOMAIN_KEYS.length);
   });
 

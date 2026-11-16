@@ -18,19 +18,19 @@ import { REFUSED_CAPABILITIES, isRefusedCapability } from '../mayaPromotion';
  * which is Ali's click and must not be automated away. A test that got to `ok: true` would mean
  * this run had confirmed capabilities on his behalf.
  *
- * -- THE FOUR TOOLS THAT CANNOT GET THERE, AND WHY THAT IS NOT A BUG HERE --
+ * -- THE FOUR THAT WERE OWED A CAPABILITY RECORD, AND NOW HAVE ONE (2026-11-15) --
  *
- * Four of her tools are required by no capability record in any of the eleven domain buckets:
- * `send_document`, `draft_marketing_email`, `start_campus_tour` and `create_journey_handoff`.
- * The gate refuses them `tool_not_required_by_capability`, and that refusal is CORRECT: a grant
- * records which capability a tool serves, so a tool whose purpose no capability states would be
- * granted for a purpose nobody wrote down.
+ * `send_document`, `draft_marketing_email`, `start_campus_tour` and `create_journey_handoff`
+ * were required by no capability record in any of the eleven domain buckets, so the gate refused
+ * them `tool_not_required_by_capability`: a grant records which capability a tool serves, and a
+ * tool whose purpose no capability states would be granted for a purpose nobody wrote down.
  *
- * Closing it means authoring four capability records - business outcome, workflow, exceptions,
- * autonomy rationale, the researched evidence the other 47 admissions capabilities carry. That
- * is domain research, not wiring, and inventing it to make a test go green would put fabricated
- * governance data in the file the ladder, the prompts and the command center all read. So the
- * four are PINNED here with the reason, and the gap is reported rather than papered over.
+ * Four records were authored in `capabilities/admissions.json` and the four now answer
+ * `capability_not_confirmed` like the other nine. What closed the gap was the writing, not the
+ * wiring: each record states the business outcome, the workflow, the exceptions and the autonomy
+ * ceiling, and cites the implementation it describes by file and line. Nothing here confirms
+ * anything - all four ship `draft`, and `RECORDED_2026_11_15` below pins each tool to the record
+ * that names it so a later edit cannot quietly detach them again.
  */
 
 const MAYA_TOOLS_ALL = Object.keys(MAYA_TOOL_GOVERNANCE);
@@ -39,17 +39,21 @@ const MAYA_TOOLS_ALL = Object.keys(MAYA_TOOL_GOVERNANCE);
 const REFUSED_TOOLS = MAYA_TOOLS_ALL
   .filter((t) => isRefusedCapability(MAYA_TOOL_GOVERNANCE[t].capability));
 
-/** Tools no capability record requires yet. Each one is owed a capability record. */
-const AWAITING_A_CAPABILITY_RECORD = [
-  'create_journey_handoff',
-  'draft_marketing_email',
-  'send_document',
-  'start_campus_tour',
-];
+/**
+ * The four that were owed a record, and the record each one is now required by. Held as a map
+ * rather than a list because the useful assertion is not "a capability exists somewhere" but
+ * "THIS tool is named by THAT record" - a list would still pass if all four were swept into one
+ * catch-all capability, which is the shortcut this whole gate exists to refuse.
+ */
+const RECORDED_2026_11_15: Readonly<Record<string, string>> = Object.freeze({
+  send_document: 'admissions.maya_document_dispatch_to_a_prospect',
+  draft_marketing_email: 'admissions.maya_quoted_email_draft_for_approval',
+  start_campus_tour: 'admissions.maya_campus_tour_offer',
+  create_journey_handoff: 'admissions.maya_human_handoff_from_chat',
+});
 
 const EXPECT_CONFIRMATION_ONLY = MAYA_TOOLS_ALL
-  .filter((t) => !REFUSED_TOOLS.includes(t))
-  .filter((t) => !AWAITING_A_CAPABILITY_RECORD.includes(t));
+  .filter((t) => !REFUSED_TOOLS.includes(t));
 
 /** Which capability record, if any, requires this tool. */
 function capabilityRequiring(tool: string): { id: string; state: string | null; tools: string[] } | null {
@@ -97,12 +101,15 @@ const rulesFor = (tool: string): string[] => {
 };
 
 describe('T11 the dry run is a real one', () => {
-  it('CONTROL - covers every tool on both belts, and the three groups partition them', () => {
+  it('CONTROL - covers every tool on both belts, and the two groups partition them', () => {
     expect(MAYA_TOOLS_ALL).toHaveLength(16);
     expect(REFUSED_TOOLS).toHaveLength(REFUSED_CAPABILITIES.length);
-    expect([
-      ...REFUSED_TOOLS, ...AWAITING_A_CAPABILITY_RECORD, ...EXPECT_CONFIRMATION_ONLY,
-    ].sort()).toEqual([...MAYA_TOOLS_ALL].sort());
+    expect([...REFUSED_TOOLS, ...EXPECT_CONFIRMATION_ONLY].sort())
+      .toEqual([...MAYA_TOOLS_ALL].sort());
+    // The four are no longer a group of their own; they are inside the thirteen.
+    for (const tool of Object.keys(RECORDED_2026_11_15)) {
+      expect(EXPECT_CONFIRMATION_ONLY).toContain(tool);
+    }
   });
 
   it('CONTROL - the capability records load, so a null read is not mistaken for a clean pass', () => {
@@ -120,11 +127,11 @@ describe('T11 the ONLY thing left is a human confirmation', () => {
     },
   );
 
-  it('and that is nine of her sixteen tools', () => {
-    expect(EXPECT_CONFIRMATION_ONLY).toHaveLength(9);
+  it('and that is thirteen of her sixteen tools', () => {
+    expect(EXPECT_CONFIRMATION_ONLY).toHaveLength(13);
   });
 
-  it('each of those nine is required by a capability that names it', () => {
+  it('each of those thirteen is required by a capability that names it', () => {
     for (const tool of EXPECT_CONFIRMATION_ONLY) {
       const capability = capabilityRequiring(tool);
       expect({ tool, found: capability !== null }).toEqual({ tool, found: true });
@@ -139,52 +146,71 @@ describe('T11 the ONLY thing left is a human confirmation', () => {
   });
 });
 
-describe('T11 the four tools still owed a capability record', () => {
+describe('T11 the four that were owed a capability record', () => {
   /**
-   * These four need the capability held CONFIRMED to show what is really blocking them.
+   * Why these four still need the capability held CONFIRMED in the proposal.
    *
    * The gate checks the tie between tool and capability only `if (issues.length === 0)`, and its
    * own comment says why: "telling somebody their tool is not required by a capability they have
-   * not named, or that was rejected, is noise on top of the real refusal." So while every Maya
-   * capability is `draft`, all sixteen tools answer `capability_not_confirmed` and the second,
-   * deeper problem is invisible.
+   * not named, or that was rejected, is noise on top of the real refusal." So while every record
+   * on disk is `draft`, all sixteen tools answer `capability_not_confirmed` and anything deeper
+   * is invisible.
    *
-   * Confirming the capability in the PROPOSAL only - not in the record on disk - is what makes
-   * it visible: it answers "and if Ali confirmed it tomorrow, would this grant go through?" For
-   * nine tools the answer is yes. For these four it is still no, and this is the test that says
-   * so before he spends a click finding out.
+   * Confirming the capability in the PROPOSAL only - never in the record on disk - is what makes
+   * the deeper layer visible. It answers "and if Ali confirmed it tomorrow, would this grant go
+   * through?" Before 2026-11-15 the answer for these four was no, because no capability required
+   * them. It is now yes, and that is the whole of what the four new records changed.
    */
   const rulesWithCapabilityConfirmed = (tool: string): string[] => {
     const verdict = acceptToolGrant({ ...proposeGrant(tool), capabilityState: 'confirmed' });
     return verdict.ok ? [] : verdict.issues.map((i) => i.rule).sort();
   };
 
-  it.each(AWAITING_A_CAPABILITY_RECORD.map((t) => [t]))(
-    '%s is still refused tool_not_required_by_capability even once a capability is confirmed',
-    (tool) => {
-      expect(rulesWithCapabilityConfirmed(tool)).toEqual(['tool_not_required_by_capability']);
+  it.each(Object.entries(RECORDED_2026_11_15))(
+    '%s is required by %s, by name',
+    (tool, capabilityId) => {
+      const capability = capabilityRequiring(tool);
+      expect({ tool, id: capability?.id ?? null }).toEqual({ tool, id: capabilityId });
+      expect(capability!.tools).toContain(tool);
     },
   );
 
-  it('CONTROL - the same confirmation DOES clear the other nine', () => {
-    // Without this, the four assertions above could be passing because confirming a capability
-    // in the proposal does nothing at all.
-    for (const tool of EXPECT_CONFIRMATION_ONLY) {
-      expect({ tool, rules: rulesWithCapabilityConfirmed(tool) }).toEqual({ tool, rules: [] });
+  it.each(Object.keys(RECORDED_2026_11_15).map((t) => [t]))(
+    '%s is no longer refused tool_not_required_by_capability',
+    (tool) => {
+      expect(rulesWithCapabilityConfirmed(tool)).toEqual([]);
+      expect(rulesFor(tool)).toEqual(['capability_not_confirmed']);
+    },
+  );
+
+  it('CONTROL - a tool no record requires IS still refused, so the gate still bites', () => {
+    // Without this, the four assertions above would pass just as well if the tie check had been
+    // deleted. `zzz_unrecorded_tool` is required by no capability and never will be.
+    const verdict = acceptToolGrant({
+      ...proposeGrant('send_document'),
+      capabilityState: 'confirmed',
+      toolName: 'zzz_unrecorded_tool',
+      registeredToolNames: [...registeredToolNames(), 'zzz_unrecorded_tool'],
+    });
+    // Narrowed the way the rest of this file narrows it: GrantVerdict only carries issues when
+    // it is not ok, so reading them off the union directly does not typecheck.
+    const rules = verdict.ok ? [] : verdict.issues.map((i) => i.rule);
+    expect(verdict.ok).toBe(false);
+    expect(rules).toContain('tool_not_required_by_capability');
+  });
+
+  it('their records ship draft, so nothing here confirmed anything', () => {
+    // The one failure that would make this whole change illegitimate: a record authored as
+    // `confirmed` would be a confirmation written on Ali's behalf.
+    for (const [tool, capabilityId] of Object.entries(RECORDED_2026_11_15)) {
+      const capability = capabilityRequiring(tool);
+      expect({ capabilityId, state: capability?.state }).toEqual({ capabilityId, state: 'draft' });
     }
   });
 
-  it('is registered, so the refusal is about PURPOSE and not about existence', () => {
-    // The distinction matters for whoever picks this up: these four are implemented and
-    // compiled. What is missing is a written statement of what they are for.
-    for (const tool of AWAITING_A_CAPABILITY_RECORD) {
+  it('is registered, so no refusal is about existence', () => {
+    for (const tool of Object.keys(RECORDED_2026_11_15)) {
       expect(registeredToolNames()).toContain(tool);
-    }
-  });
-
-  it('and no capability in ANY of the eleven buckets requires them', () => {
-    for (const tool of AWAITING_A_CAPABILITY_RECORD) {
-      expect({ tool, capability: capabilityRequiring(tool) }).toEqual({ tool, capability: null });
     }
   });
 });
