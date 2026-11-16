@@ -48,11 +48,41 @@ describe('CORA_PROMPT_RULES', () => {
     expect(CORA_PROMPT_RULES).toMatch(/once you're enrolled/);
   });
 
-  it('names software troubleshooting as a handoff rather than an answer', () => {
-    // Rule 7's general wording did not stop her troubleshooting a Power BI
-    // dashboard from general knowledge, so the category is named explicitly.
-    expect(CORA_PROMPT_RULES).toMatch(/do not troubleshoot software from/);
-    expect(CORA_PROMPT_RULES).toMatch(/Power BI/);
+  // Rule 8 was reversed on 2026-11-16. The first version made all troubleshooting a
+  // handoff; Ali's instruction was that she should help. These tests pin the duty and
+  // the three limits, so a later edit cannot quietly turn it back into a refusal.
+  it('states that troubleshooting is her job', () => {
+    expect(CORA_PROMPT_RULES).toMatch(/Troubleshooting is your job, so do it/);
+    expect(CORA_PROMPT_RULES).toMatch(/not a referral to somebody else/);
+  });
+
+  it('does NOT forbid troubleshooting', () => {
+    expect(CORA_PROMPT_RULES).not.toMatch(/do not troubleshoot software/i);
+  });
+
+  it('forbids inventing specifics she cannot check', () => {
+    expect(CORA_PROMPT_RULES).toMatch(/Do not invent specifics you cannot check/);
+    expect(CORA_PROMPT_RULES).toMatch(/menu paths, button names, version/);
+  });
+
+  it('tells her to ask for the error itself', () => {
+    expect(CORA_PROMPT_RULES).toMatch(/Ask for the error itself/);
+    expect(CORA_PROMPT_RULES).toMatch(/collecting it is help, not a delay/);
+  });
+
+  it('keeps another program’s tools with a person without dead-ending the sender', () => {
+    expect(CORA_PROMPT_RULES).toMatch(/SQL Server, SSMS, SSRS, SSIS,\s+Power BI, Tableau, Excel/);
+    expect(CORA_PROMPT_RULES).toMatch(/help as far as the knowledge base takes you/);
+    expect(CORA_PROMPT_RULES).toMatch(/Never close one out yourself/);
+  });
+
+  it('forbids the echo: telling the sender to write to the inbox they wrote to', () => {
+    expect(CORA_PROMPT_RULES).toMatch(/Never tell anyone to write to support@colaberry\.com/);
+  });
+
+  it('lets a fully-answered troubleshooting reply resolve, but not a half-answered one', () => {
+    expect(CORA_PROMPT_RULES).toMatch(/Troubleshooting counts here/);
+    expect(CORA_PROMPT_RULES).toMatch(/whenever you asked\nthem for an error message/);
   });
 
   it('tells her to decline without inviting a follow-up', () => {
