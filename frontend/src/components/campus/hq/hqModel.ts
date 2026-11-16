@@ -94,25 +94,25 @@ function officeFloor(office: HqOffice): HqFloor {
  * `subs` (C92) is the sidebar's live sub-list cards, so a staff floor carries the same sub-rooms the sidebar shows.
  */
 export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, office?: HqOffice, subs: NavSubCards = {}, careerPrep?: CareerPrepFloorState): Hq {
-  const top = nav.groups.length + 1;
+  // Career Prep v27 (CP2.2): for everyone but staff, the Placement floor holds Career Prep's door, never the staff rooms,
+  // and it does not exist at all for anyone Career Prep is not open for. The floors are numbered AFTER it is left out, so
+  // that viewer's tower is exactly the one they had before (no gap, no renumbering) until M4 opens Career Prep.
+  const prepDoors = isStaff ? [] : careerPrepDoorsFor(audience, careerPrep);
+  const groups = nav.groups.filter((g) => isStaff || g.section !== PLACEMENT_SECTION || prepDoors.length > 0);
+  const top = groups.length + 1;
   const subRooms = (g: NavGroup): HqRoom[] => (g.subLists ?? []).flatMap((sl) => (isStaff && canSection(sl.section)
     ? subNavEntries(sl.source, subs).map((e) => ({ path: e.to, label: e.label, icon: sl.icon, section: sl.section, newTab: true, external: false, open: true }))
     : []));
-  const groupFloor = (g: NavGroup, i: number): HqFloor | null => {
+  const groupFloor = (g: NavGroup, i: number): HqFloor => {
     const key = `group-${i}`;
     const num = String(top - i);
     const label = floorLabelFor(g, audience);
-    // Career Prep v27 (CP2.2): for everyone but staff, the Placement floor holds Career Prep's door, never the staff rooms,
-    // and it does not exist at all for anyone Career Prep is not open for (no visible change until M4 opens it).
-    if (!isStaff && g.section === PLACEMENT_SECTION) {
-      const doors = careerPrepDoorsFor(audience, careerPrep);
-      return doors.length ? { ...floor(key, num, label, doors), own: true } : null;
-    }
+    if (!isStaff && g.section === PLACEMENT_SECTION) return { ...floor(key, num, label, prepDoors), own: true };
     return floor(key, num, label, [...g.links.map((l) => room(l, g.section, canSection, isStaff)), ...subRooms(g)]);
   };
   const floors = [
     floor('pinned', 'PH', EXECUTIVE_FLOOR_LABEL, nav.pinned.map((l) => room(l, '', canSection, isStaff))),
-    ...nav.groups.map(groupFloor).filter((f): f is HqFloor => f !== null),
+    ...groups.map(groupFloor),
   ];
   // Additive and gated: with no office, or for staff (who have real floors), the building is exactly as before.
   if (!isStaff && office && office.projects.length > 0) floors.push(officeFloor(office));

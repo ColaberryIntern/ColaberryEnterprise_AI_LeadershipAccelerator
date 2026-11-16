@@ -1,6 +1,7 @@
 import { careerPrepSummary, interviewWhen } from '../logic/careerPrepCopy';
 import { careerPrepDoorsFor, doorsText, CAREER_PREP_ROOM_PATH } from '../../campus/hq/careerPrepDoors';
 import { buildHq, PLACEMENT_SECTION, type HqNav } from '../../campus/hq/hqModel';
+import { NAV_GROUPS } from '../../Layout/adminNav';
 import type { PrepInterview, PrepSummary } from '../careerPrepApi';
 
 const acme: PrepInterview = { id: 'i1', source: 'real', company: 'Acme', role: 'AI Engineer', type: 'technical', startsAt: '2026-11-19T20:00:00Z', readiness: 64, target: 75 };
@@ -66,6 +67,16 @@ describe('the tower with Career Prep (CP2.2)', () => {
     expect(has(buildHq(() => false, false, 'explorer', nav, undefined, undefined, {}, { on: true }))).toBe(false);
     expect(has(buildHq(() => false, false, 'business', nav))).toBe(false);
   });
+  it('leaves everyone else\'s tower exactly as it was: same floors, same numbers, no gap', () => {
+    const real = { pinned: [], groups: NAV_GROUPS };
+    const without = { pinned: [], groups: NAV_GROUPS.filter((g) => g.section !== PLACEMENT_SECTION) };
+    const shape = (hq: ReturnType<typeof buildHq>) => hq.floors.map((f) => `${f.num} ${f.label}`);
+    for (const audience of ['member', 'explorer', 'business'] as const) {
+      expect(shape(buildHq(() => false, false, audience, real, undefined, undefined, {}, { on: false })))
+        .toEqual(shape(buildHq(() => false, false, audience, without)));
+    }
+  });
+
   it('staff still get the Placement floor, under its staff name', () => {
     expect(buildHq(() => true, true, 'staff', nav).floors.some((f) => f.label === 'Placement')).toBe(true);
   });

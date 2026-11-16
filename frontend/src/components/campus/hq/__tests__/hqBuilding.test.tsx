@@ -58,6 +58,8 @@ const esc = async () => {
 const scene = () => $('[data-testid="cm-hq"]').getAttribute('data-scene');
 const marketingHq = () => buildHq((s) => MARKETING.includes(s), true, 'staff');
 const numOf = (label: string) => marketingHq().floors.find((f) => f.label === label)!.num;
+/** A floor's number in a non-staff viewer's own tower (Career Prep v27: their tower leaves the Placement floor out). */
+const numFor = (label: string, aud: 'member' | 'explorer') => buildHq(() => false, false, aud).floors.find((f) => f.label === label)!.num;
 
 describe('staff (Marketing): the badge, the ride, the rooms', () => {
   it('outside: the lit bands are exactly the floors the badge opens, and the badge says so', async () => {
@@ -146,7 +148,7 @@ describe('members and explorers: the ground floor only', () => {
     await click($('[data-testid="cm-hq-call"]'));
     const fbs = $$('.fb');
     expect(fbs.filter((b) => b.getAttribute('aria-disabled') !== 'true').map((b) => b.getAttribute('data-testid'))).toEqual(['cm-hq-fb-G']);
-    const revenue = $(`[data-testid="cm-hq-fb-${numOf('Revenue')}"]`);
+    const revenue = $(`[data-testid="cm-hq-fb-${numFor('Revenue', aud)}"]`);
     expect(revenue.textContent).toContain('Staff only');
     await act(async () => { revenue.dispatchEvent(new FocusEvent('focus', { bubbles: false })); revenue.focus(); });
     const guide = $('[data-testid="cm-hq-guide"]').textContent || '';

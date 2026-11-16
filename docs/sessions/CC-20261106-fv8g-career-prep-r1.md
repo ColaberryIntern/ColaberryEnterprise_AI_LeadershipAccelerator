@@ -183,3 +183,15 @@ tests/systemV2/career-prep/.
   - Verification: 108 Career Prep backend tests pass (interviews 11, interview route 11 among them); tsc clean;
     route-auth lint OK.
   - Notes: the JD prompt avoids the word "accent" so the no-face/no-accent guard test stays a plain word check.
+
+- [x] CP2.2 fix (attempt 3): floors are numbered after the hidden Career Prep floor is left out
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: buildHq numbers floors from the VISIBLE groups, so a member without Career Prep, an explorer or a
+    partner gets exactly the tower they had on main (no gap at the hidden floor, no renumbering of the floors above
+    it on the outside bands, the elevator or the guide). Found by the verifier on attempt 2.
+  - Verification: new test compares every non-staff audience's floors (number + label) with a build that has no
+    Placement group: identical. hqBuilding.test's member/explorer elevator test now reads floor numbers from that
+    viewer's own tower. Frontend campus + Career Prep + pages: 6,666 pass, 0 fail; tsc clean.
+  - Notes: the kit's `key: 'room'` on the door is not modeled (HqRoom has no key field; the door is identified by
+    its path); declared here.
