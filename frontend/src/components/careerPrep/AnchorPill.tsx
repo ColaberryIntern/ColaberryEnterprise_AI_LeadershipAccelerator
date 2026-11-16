@@ -17,7 +17,8 @@ export function AnchorPill({ anchor, onChange }: { anchor: PrepInterview | null 
   if (!anchor) return <span className="cp-anchor is-empty" data-testid="cp-anchor">No interview chosen yet</span>;
   return (
     <span className="cp-anchor" data-testid="cp-anchor">
-      <span>Preparing for <b>{anchorText(anchor)}</b></span>
+      <span>Preparing for <b>{anchor.company}</b>{anchor.startsAt ? <> · {interviewWhen(anchor.startsAt)}</> : null}</span>
+      <span className={`cp-pill ${anchor.source === 'real' ? 'ok' : anchor.source === 'added' ? 'info' : 'warn'}`}>{TAG[anchor.source]}</span>
       <button type="button" className="cp-anchor-change" onClick={onChange}>Change</button>
     </span>
   );

@@ -84,6 +84,8 @@ export interface PrepRecap {
   pending: number;
   readiness?: { after: number; before?: number; interviewId?: string; company?: string };
   skills: Array<{ key: string; label: string; before?: number; after: number }>;
+  /** Skills this session's answers fed that are still short of a first score (count of the observations needed). */
+  building?: Array<{ key: string; label: string; count: number; needed: number }>;
   streak: number;
 }
 

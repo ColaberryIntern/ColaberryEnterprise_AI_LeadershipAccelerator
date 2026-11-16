@@ -18,6 +18,13 @@
  *   1b, 2, 7 (the campus card's Go, the long way through the tower, the audiences) are covered by jest against the real
  *     components: goStart / hqCareerPrepTower / CareerPrepCard / careerPrepFloor tests (no campus stack runs here)
  *   8 zero console errors throughout, and inside a sandboxed iframe
+ *   9 the design (shots L3-4..L3-7): the Try frame shows a LIVE mirrored self-view while recording (a real MediaStream
+ *     from a canvas stands in for the camera) and stops its tracks after; the score card is ONE Delivery number plus the
+ *     two cards; Your progress draws its SVG charts from rich data, and an honest empty state from no data (a ring toward
+ *     the first score, empty gray skill bars, no made-up number); the room is light with the OS in dark mode; a first
+ *     answer that cannot yet move a number reads as "building" in the recap, never "No answer was scored"
+ * Fidelity screenshots (FIDELITY_DIR, default: none): the session part, Try after a scored answer, Your progress rich
+ * and empty at 1600x960, and Try at 390 wide, to read next to the design shots.
  * Layout: no horizontal scroll in any of the room's own scroll containers, no tooltip off screen, for the room (Your progress, Your plan) at 1600, 1440, 390, light
  * and dark, and the floor at 1440 and 390; at 390 the last plan block is focused so its tooltip is on screen.
  *
@@ -56,14 +63,25 @@ function serve() {
 const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok: ok === true, detail }); console.log(`${ok === true ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`); };
 
-/** A fake camera and recorder, so "Record" works headless. */
+/** A fake camera (a REAL MediaStream, drawn on a canvas, so it can be a <video>'s srcObject) and a fake recorder. */
 const FAKE_MEDIA = `
   navigator.mediaDevices = navigator.mediaDevices || {};
-  navigator.mediaDevices.getUserMedia = async () => ({ getTracks: () => [{ stop() {} }] });
+  navigator.mediaDevices.getUserMedia = async () => {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 180;
+    const g = c.getContext('2d'); let k = 0;
+    const paint = () => { g.fillStyle = '#2f5f6f'; g.fillRect(0, 0, 320, 180); g.fillStyle = '#c9d8e2'; g.beginPath(); g.arc(160, 80, 34, 0, 7); g.fill(); g.fillRect(105, 120, 110, 60); g.fillStyle = '#e8f0f6'; g.fillRect(10 + (k++ % 40), 8, 6, 6); };
+    paint();
+    const stream = c.captureStream(10);
+    const timer = setInterval(paint, 100);
+    window.__cpStream = stream; window.__cpStopped = false;
+    stream.getTracks().forEach((t) => { const stop = t.stop.bind(t); t.stop = () => { clearInterval(timer); window.__cpStopped = true; stop(); }; });
+    return stream;
+  };
   window.MediaRecorder = class { constructor() { this.ondataavailable = null; this.onstop = null; } start() {} stop() { this.ondataavailable && this.ondataavailable({ data: new Blob(['x'], { type: 'video/webm' }) }); this.onstop && this.onstop(); } };
 `;
 
 async function newPage(browser, opts = {}) {
+  // opts.api: options for the fixture student ({ empty: true } = no data yet).
   const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1440, height: 900 }, colorScheme: opts.dark ? 'dark' : 'light' });
   await ctx.addInitScript(`localStorage.setItem('participant_token', '${TOKEN}'); ${FAKE_MEDIA}`);
   const page = await ctx.newPage();
@@ -71,7 +89,7 @@ async function newPage(browser, opts = {}) {
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
-  const api = await installFakeApi(page, NOW);
+  const api = await installFakeApi(page, NOW, opts.api || {});
   return { ctx, page, errors, api };
 }
 
@@ -124,8 +142,28 @@ async function flowFloorAndRoom(browser) {
   check('2 room: pick the interview, pick a plan (days shown), Start runs the timer', days.length === 2 && /left in this part$/.test(ring), `${days.length} days, ring "${ring}"`);
   await page.click(tid('cp-session-next'));
   await page.click(tid('cp-record'));
+  await page.waitForSelector(tid('cp-selfview'));
+  await page.waitForTimeout(300);
+  const live = await page.evaluate(() => {
+    const v = document.querySelector('[data-testid="cp-selfview"]');
+    return { stream: v.srcObject instanceof MediaStream && v.srcObject === window.__cpStream, muted: v.muted, inline: v.playsInline, mirrored: getComputedStyle(v).transform,
+      rec: (document.querySelector('[data-testid="cp-rec"]') || {}).textContent || '', inFrame: !!v.closest('[data-testid="cp-cam"]') };
+  });
   await page.click(tid('cp-stop'));
   await page.waitForSelector(tid('cp-try-result'), { timeout: 10_000 });
+  const after = await page.evaluate(() => ({ stopped: window.__cpStopped === true, video: !!document.querySelector('[data-testid="cp-selfview"]') }));
+  check('9a Try: while recording the frame shows a live, muted, mirrored self-view of the camera stream; its tracks stop after',
+    live.stream && live.muted && live.inline && live.mirrored === 'matrix(-1, 0, 0, 1, 0, 0)' && /^Recording 0:0\d$/.test(live.rec) && live.inFrame && after.stopped && !after.video,
+    JSON.stringify({ ...live, ...after }));
+  const card = await page.evaluate(() => {
+    const r = document.querySelector('[data-testid="cp-try-result"]');
+    return { numbers: r.querySelectorAll('[data-testid="cp-delivery"]').length, delivery: (r.querySelector('[data-testid="cp-delivery"]') || {}).textContent,
+      well: !!r.querySelector('[data-testid="cp-fb-well"] li'), fix: !!r.querySelector('[data-testid="cp-fb-fix"] li'), scoredIn: (r.querySelector('[data-testid="cp-scored-in"]') || {}).textContent,
+      side: (() => { const a = r.querySelector('[data-testid="cp-fb-well"]').getBoundingClientRect(); const b = r.querySelector('[data-testid="cp-fb-fix"]').getBoundingClientRect(); return Math.abs(a.top - b.top) < 2 && b.left > a.right - 1; })(),
+      content: /content\s*\d/i.test(r.textContent), closed: !r.querySelector('details.cp-numbers').open };
+  });
+  check('9b the score card: Scored in N seconds, ONE Delivery number (89 = mean of 100, 100, 66), the two cards side by side, no content number, the numbers collapsed',
+    card.numbers === 1 && card.delivery === '89' && card.well && card.fix && /^Scored in \d+ seconds?$/.test(card.scoredIn || '') && card.side && !card.content && card.closed, JSON.stringify(card));
   await page.click(tid('cp-session-next'));
   await page.click(tid('cp-session-next'));
   await page.waitForSelector(tid('cp-recap'));
@@ -133,9 +171,18 @@ async function flowFloorAndRoom(browser) {
   await page.click(tid('cp-recap-dashboard'));
   await page.waitForSelector(tid('cp-new-pace_clarity'));
   const shown = (await page.textContent(`${tid('cp-readiness')} b`)).trim();
-  const recapAfter = (recap.match(/Readiness (\d+) from/) || [])[1];
+  const recapAfter = (recap.match(/Readiness(\d+)/) || [])[1];
   check('3 Try is scored; Finish shows the recap; the dashboard marks the moved skill New, readiness = the recap\'s',
-    /Readiness 69 from 64/.test(recap) && /48 → 57/.test(recap) && !!recapAfter && shown === recapAfter, `recap after ${recapAfter}, dashboard shows ${shown}`);
+    /Readiness69 5 up from 64/.test(recap) && /48 → 57/.test(recap) && !!recapAfter && shown === recapAfter, `recap after ${recapAfter}, dashboard shows ${shown}`);
+  const charts = await page.evaluate(() => ({
+    line: document.querySelectorAll('[data-testid="cp-trend-svg"] polyline').length, dots: document.querySelectorAll('[data-testid="cp-trend-svg"] circle').length,
+    ready: !!document.querySelector('[data-testid="cp-trend-svg"] .cp-ready'), bars: document.querySelectorAll('[data-testid="cp-weekly-svg"] rect').length,
+    skills: document.querySelectorAll('[data-testid="cp-skills"] .cp-bar-fill').length, tiles: document.querySelectorAll('[data-testid="cp-tiles"] li').length,
+    arrows: document.querySelectorAll('[data-testid="cp-skills"] .cp-delta.up, [data-testid="cp-skills"] .cp-delta.down').length,
+    ivBars: document.querySelectorAll('[data-testid^="cp-iv-"] .cp-bar-tick').length, tables: document.querySelectorAll('.cp-chart figcaption button').length,
+  }));
+  check('9c Your progress draws its charts from the data: the readiness line with its dashed ready line, 8 weekly bars, 9 skill bars with arrows, interview bars, 5 source tiles, a table toggle per chart',
+    charts.line === 1 && charts.dots === 8 && charts.ready && charts.bars === 8 && charts.skills === 9 && charts.arrows >= 8 && charts.ivBars === 2 && charts.tiles === 5 && charts.tables === 2, JSON.stringify(charts));
   for (const [how, act] of [['‹ Floor n', () => page.click(tid('cp-back'))], ['Esc', () => page.keyboard.press('Escape')]]) {
     if (how === 'Esc') { await page.goto(`${BASE}/portal/career/room`); await page.waitForSelector(tid('cp-room')); await page.click(tid('cp-cora-col')); }
     await act();
@@ -144,6 +191,111 @@ async function flowFloorAndRoom(browser) {
     check(`4 closing the room with ${how} lands on the floor, focus on the door`, focused === 'cp-door' && new URL(page.url()).pathname === '/portal/career', `focus ${focused}`);
   }
   await ctx.close();
+  return errors;
+}
+
+const FIDELITY = process.env.FIDELITY_DIR || '';
+async function shot(page, name) {
+  if (!FIDELITY) return;
+  fs.mkdirSync(FIDELITY, { recursive: true });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: path.join(FIDELITY, `${name}.png`) });
+}
+
+/** The design's views at 1600x960 (and Try at 390), for the fidelity gate, plus the empty student and the dark OS. */
+async function flowDesign(browser) {
+  const errors = [];
+  {
+    const { ctx, page, errors: e } = await newPage(browser, { viewport: { width: 1600, height: 960 }, dark: true });
+    await page.goto(`${BASE}/portal/career/room`);
+    await page.click(tid('cp-card-i1'));
+    await page.click('[data-testid="cp-card-plan:days"]');
+    await page.waitForSelector(tid('cp-plan'));
+    await shot(page, 'g_plan_1600x960');
+    await page.click(tid('cp-card-start'));
+    await page.waitForSelector(tid('cp-session'));
+    const look = await page.evaluate(() => {
+      const room = getComputedStyle(document.querySelector('[data-testid="cp-room"]'));
+      const cora = getComputedStyle(document.querySelector('[data-testid="cp-cora-col"]'));
+      return { bg: room.backgroundColor, fg: room.color, cora: cora.backgroundColor, scheme: matchMedia('(prefers-color-scheme: dark)').matches };
+    });
+    check('9d the room is LIGHT with the OS in dark mode (design palette on .cp-room)',
+      look.scheme && look.bg === 'rgb(247, 250, 252)' && look.fg === 'rgb(22, 34, 44)' && look.cora === 'rgb(255, 255, 255)', JSON.stringify(look));
+    await shot(page, 'a_session_part_1600x960');
+    // Other pages define global .cp-* rules (PortfolioPage.css: .cp-card with a shadow and margin, .cp-note in italic,
+    // .cp-tab at 15px...). With that stylesheet loaded, the room must look the same.
+    const portfolioCss = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'pages', 'portal', 'portfolio', 'PortfolioPage.css'), 'utf8');
+    const before = await page.evaluate(() => [...document.querySelectorAll('.cp-card, .cp-tab, .cp-chip, .cp-callout, .cp-callout p, .cp-muted')].map((e) => { const c = getComputedStyle(e); return [c.boxShadow, c.marginBottom, c.fontStyle, c.fontSize, c.fontWeight, c.padding, c.color].join('|'); }));
+    await page.addStyleTag({ content: portfolioCss });
+    const after = await page.evaluate(() => [...document.querySelectorAll('.cp-card, .cp-tab, .cp-chip, .cp-callout, .cp-callout p, .cp-muted')].map((e) => { const c = getComputedStyle(e); return [c.boxShadow, c.marginBottom, c.fontStyle, c.fontSize, c.fontWeight, c.padding, c.color].join('|'); }));
+    const changed = before.map((b, i) => (b === after[i] ? null : `${i}: ${b} -> ${after[i]}`)).filter(Boolean);
+    check('9h other pages\' global .cp-* rules (PortfolioPage.css) do not change the room', before.length > 10 && changed.length === 0, changed.slice(0, 3).join('; ') || `${before.length} elements unchanged`);
+    await page.click(tid('cp-session-next'));
+    await page.click(tid('cp-record'));
+    await page.click(tid('cp-stop'));
+    await page.waitForSelector(tid('cp-try-result'));
+    await shot(page, 'b_try_scored_1600x960');
+    await page.click(tid('cp-session-next'));
+    await page.click(tid('cp-session-next'));
+    await page.waitForSelector(tid('cp-recap'));
+    await shot(page, 'f_recap_1600x960');
+    await page.click(tid('cp-recap-dashboard'));
+    await page.waitForSelector(tid('cp-new-pace_clarity'));
+    await shot(page, 'c_progress_rich_1600x960');
+    errors.push(...e);
+    await ctx.close();
+  }
+  {
+    const { ctx, page, errors: e } = await newPage(browser, { viewport: { width: 1600, height: 960 }, api: { empty: true } });
+    await page.goto(`${BASE}/portal/career/room`);
+    await page.waitForSelector(tid('cp-dashboard'));
+    const empty = await page.evaluate(() => ({
+      ring: (document.querySelector('[data-testid="cp-progress-ring"]') || { getAttribute: () => null }).getAttribute('aria-label'),
+      number: !!document.querySelector('[data-testid="cp-readiness"]'), emptyBars: document.querySelectorAll('[data-testid="cp-skills"] .cp-bar.is-empty').length,
+      values: document.querySelectorAll('[data-testid="cp-skills"] .cp-skill-v').length, trendEmpty: !!document.querySelector('[data-testid="cp-trend-empty"]'),
+      weekly: !!document.querySelector('[data-testid="cp-weekly-svg"]'), zeroScore: /\b0 ?\/ ?100\b/.test(document.querySelector('[data-testid="cp-dashboard"]').textContent),
+      note: /not enough practice yet/.test(document.querySelector('[data-testid="cp-skills"]').textContent),
+    }));
+    check('9e Your progress with no data is visual and honest: a ring toward the first score, empty gray skill bars that say so, no readiness number, no 0 / 100',
+      empty.ring === '0 of 5 skills scored' && !empty.number && empty.emptyBars === 9 && empty.values === 0 && empty.trendEmpty && empty.weekly && !empty.zeroScore && empty.note, JSON.stringify(empty));
+    await shot(page, 'd_progress_empty_1600x960');
+    // The first answer of a new student: scored, but no skill can have a number yet. The recap must say so.
+    await page.click(tid('cp-card-i1'));
+    await page.click('[data-testid="cp-card-plan:days"]');
+    await page.click(tid('cp-card-start'));
+    await page.waitForSelector(tid('cp-session'));
+    await page.click(tid('cp-session-next'));
+    await page.click(tid('cp-record'));
+    await page.click(tid('cp-stop'));
+    await page.waitForSelector(tid('cp-try-result'));
+    await page.click(tid('cp-session-next'));
+    await page.click(tid('cp-session-next'));
+    await page.waitForSelector(tid('cp-recap'));
+    const recap = await page.textContent(tid('cp-recap'));
+    const log = await page.textContent(tid('cp-log'));
+    check('9f a first scored answer that cannot move a number yet reads as building (recap and Cora), never "No answer was scored"',
+      !/No answer was scored/.test(recap + log) && /1 of 3 practice results to a first score/.test(recap) && /One answer scored/.test(log), recap.slice(0, 200));
+    errors.push(...e);
+    await ctx.close();
+  }
+  {
+    const { ctx, page, errors: e } = await newPage(browser, { viewport: { width: 390, height: 844 } });
+    await page.goto(`${BASE}/portal/career/room`);
+    await page.click(tid('cp-card-i1'));
+    await page.click('[data-testid="cp-card-plan:days"]');
+    await page.click(tid('cp-card-start'));
+    await page.click(tid('cp-session-next'));
+    await page.click(tid('cp-record'));
+    await page.click(tid('cp-stop'));
+    await page.waitForSelector(tid('cp-try-result'));
+    await page.evaluate(() => document.querySelector('[data-testid="cp-cam"]').scrollIntoView({ block: 'start' }));
+    const sw = await page.evaluate(() => [document.documentElement, ...document.querySelectorAll('.cp-room, .cp-room *')]
+      .filter((el) => /(auto|scroll)/.test(getComputedStyle(el).overflowX) || el === document.documentElement).filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.className || el.tagName));
+    check('9g Try at 390 wide: the frame and the score card fit, no horizontal scroll', sw.length === 0, sw.join(', '));
+    await shot(page, 'e_try_scored_390');
+    errors.push(...e);
+    await ctx.close();
+  }
   return errors;
 }
 
@@ -264,6 +416,7 @@ async function layout(browser) {
     errs.push(...await flowFloorAndRoom(browser));
     errs.push(...await flowAnchors(browser));
     errs.push(...await flowSheets(browser));
+    errs.push(...await flowDesign(browser));
     const frameErrs = await flowIframe(browser);
     check('8 zero console errors in every flow, and inside a sandboxed iframe', errs.length === 0 && frameErrs.length === 0, [...errs, ...frameErrs].slice(0, 3).join(' | '));
     await layout(browser);
@@ -275,5 +428,5 @@ async function layout(browser) {
   }
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
-  process.exit(failed.length || results.length < 8 ? 1 : 0);
+  process.exit(failed.length || results.length < 20 ? 1 : 0);
 })();

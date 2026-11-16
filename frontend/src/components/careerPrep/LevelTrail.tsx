@@ -9,10 +9,10 @@ import './levelTrail.css';
 export type TrailStep = 1 | 2 | 3;
 
 export function LevelTrail({ step, floorNum, className = 'cp-trail' }: { step: TrailStep; floorNum: string | null; className?: string }): React.ReactElement {
-  const items = ['1 Tower', `2 Floor ${floorNum ?? ''}`.trim(), '3 Career Prep'];
+  const items = ['Tower', `Floor ${floorNum ?? ''}`.trim(), 'Career Prep'];
   return (
     <ol className={className} aria-label="Where you are" data-testid="cp-trail" data-step={step}>
-      {items.map((t, i) => <li key={t} aria-current={i + 1 === step ? 'step' : undefined}>{t}</li>)}
+      {items.map((t, i) => <li key={t} aria-current={i + 1 === step ? 'step' : undefined}><span className="cp-trail-n">{i + 1}</span> {t}</li>)}
     </ol>
   );
 }

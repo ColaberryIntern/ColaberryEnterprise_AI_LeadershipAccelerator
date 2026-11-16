@@ -31,9 +31,11 @@ export interface CoraChatProps {
   busy?: boolean;
   onPick: (setId: string, card: OptionCard) => void;
   onAsk: (text: string) => void;
+  /** Drawn at the end of the log, above the ask box (the add-interview form, as in the design). */
+  children?: React.ReactNode;
 }
 
-export function CoraChat({ log, busy = false, onPick, onAsk }: CoraChatProps): React.ReactElement {
+export function CoraChat({ log, busy = false, onPick, onAsk, children }: CoraChatProps): React.ReactElement {
   const [text, setText] = useState('');
   const latest = useRef<HTMLDivElement>(null);
   const live = liveCardsId(log);
@@ -44,25 +46,29 @@ export function CoraChat({ log, busy = false, onPick, onAsk }: CoraChatProps): R
 
   return (
     <div className="cp-chat">
-      <div className="cp-chat-head"><b>Cora</b> · your interview coach <span className="cp-dot" aria-hidden="true" />
-        <small>Reads your videos, interviews, training and projects</small></div>
+      <div className="cp-chat-head"><span className="cp-av" aria-hidden="true">CO</span>
+        <span><b>Cora · your interview coach</b>
+          <small><span className="cp-dot" aria-hidden="true" />Reads your videos, interviews, training and projects</small></span></div>
       <div className="cp-log" aria-live="polite" data-testid="cp-log">
         {log.map((it) => {
-          if (it.kind === 'cora') return <div key={it.id} className="cp-msg cora" tabIndex={-1} ref={it.id === lastCoraId ? latest : undefined}>{it.text}</div>;
+          if (it.kind === 'cora') return <div key={it.id} className="cp-m"><span className="cp-av" aria-hidden="true">CO</span><div className="cp-msg cora" tabIndex={-1} ref={it.id === lastCoraId ? latest : undefined}>{it.text}</div></div>;
           if (it.kind === 'me') return <div key={it.id} className="cp-msg me">{it.text}</div>;
           if (it.kind === 'block') return <div key={it.id} className="cp-block"><b>{it.title}</b><ul>{it.lines.map((l) => <li key={l}>{l}</li>)}</ul></div>;
           return <OptionCards key={it.id} label={it.label} cards={it.cards} live={it.id === live && !busy} onPick={(c) => onPick(it.id, c)} />;
         })}
-        {busy && <div className="cp-msg cora is-busy">Cora is thinking...</div>}
-      </div>
-      <div className="cp-chips" aria-label="Suggestions">
-        {SUGGESTIONS.map((s) => <button key={s} type="button" className="cp-chip" onClick={() => send(s)} disabled={busy}>{s}</button>)}
+        {children}
+        {busy && <div className="cp-m"><span className="cp-av" aria-hidden="true">CO</span><div className="cp-msg cora is-busy">Cora is thinking...</div></div>}
       </div>
       <form className="cp-ask" onSubmit={(e) => { e.preventDefault(); send(text); }}>
-        <label className="visually-hidden" htmlFor="cp-ask-input">Ask Cora</label>
-        <textarea id="cp-ask-input" rows={2} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask Cora anything about your interview"
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} />
-        <button type="submit" className="cp-send" disabled={busy || !text.trim()}>Send</button>
+        <div className="cp-chips" aria-label="Suggestions">
+          {SUGGESTIONS.map((s) => <button key={s} type="button" className="cp-chip" onClick={() => send(s)} disabled={busy}>{s}</button>)}
+        </div>
+        <div className="cp-askrow">
+          <label className="visually-hidden" htmlFor="cp-ask-input">Ask Cora</label>
+          <textarea id="cp-ask-input" rows={1} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Ask Cora anything, or ask for a plan"
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text); } }} />
+          <button type="submit" className="cp-send" disabled={busy || !text.trim()}>Send</button>
+        </div>
       </form>
     </div>
   );

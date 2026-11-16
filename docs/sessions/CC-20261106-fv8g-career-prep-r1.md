@@ -648,3 +648,25 @@ tests/systemV2/career-prep/.
     building imports it after. Both pages now import CareerPrepFloor first, matching the building's order. The local
     builds above used CI=false, which hid the warning; verified this time with CI=true (Compiled successfully),
     browser suite 12/12, page tests 33/33.
+
+- [x] Release 1 fidelity pass: the room rebuilt to the kit's design shots (Ali's live test, 2026-11-16)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: Ali tested production and reported the format looked off, the camera showed nothing, the scoring
+    report was weak and progress was not visual. Against kit/design/shots L3-3 to L3-7 the live room fell well short
+    (a fidelity miss, not a new direction). Rebuilt: light room palette scoped to .cp-room (the Refactored theme
+    forced it dark), every room rule scoped (Portfolio's .cp-* rules were leaking in), part-list markers (the CSS
+    escapes had been written as octal control bytes), live mirrored camera preview while recording, score card (one
+    Delivery number, did-well and fix-next cards, numbers under a disclosure), visual Your progress (readiness trend
+    with target line, interview bars, skill bars lowest first with change arrows, Cora's read from real lowest
+    scores, source tiles, weekly minutes, honest empty states), plan and recap to their shots.
+    Scoring guard: transcripts under 8 words, over 260 wpm, or one repeated phrase (6+ times, 40%+ of words) fail
+    as UnclearAudio with no observations (Ali's attempt was a whisper repetition loop: 371 wpm, "i'm i'm" x69).
+    Recap bug: a skill needs 3 results before it has a number, so first answers produced an empty changed-skills
+    list that the room read as "no answer scored"; the recap now reports those skills as building.
+    Built by a subagent from a written brief; graded here against the design shots.
+  - Verification: browser suite 20/20 (Edge, built app) incl. new checks (live video while recording, score card,
+    charts from fixtures, empty state, light under dark OS, no Portfolio CSS leak); CI=true build compiles clean;
+    backend Career Prep 247 pass; frontend tsc clean, Career Prep 193 pass; screenshots at 1600x960 and 390 reviewed
+    side by side with L3-5 and L3-7. Remaining differences (data the release does not have): part subtitles,
+    "Up 8" versus the previous answer, best-answer stat, tips from your data, two-letter initials.

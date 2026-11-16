@@ -24,6 +24,11 @@ describe('the recap words (CP4.5)', () => {
   it('no scored answer says the numbers did not change', () => {
     expect(recapText({ status: 'finished', minutes: 20, attempts: 0, pending: 0, skills: [], streak: 2 })).toContain('No answer was scored this time');
   });
+  it('REGRESSION (production 2026-11-16): answers scored before any skill has a number say so, never "No answer was scored"', () => {
+    const t = recapText({ status: 'finished', minutes: 6, attempts: 1, pending: 0, skills: [], building: [{ key: 'pace_clarity', label: 'Pace and clarity', count: 1, needed: 3 }], streak: 1 });
+    expect(t).toContain('One answer scored. "Pace and clarity" has 1 of the 3 practice results it needs for a first score.');
+    expect(t).not.toContain('No answer was scored');
+  });
   it('answers still being scored are said plainly, never as "nothing changed"', () => {
     const t = recapText({ status: 'ended', minutes: 3, attempts: 0, pending: 1, skills: [], streak: 1 });
     expect(t).toContain('One answer is still being scored; it will show on Your progress in a minute or two.');

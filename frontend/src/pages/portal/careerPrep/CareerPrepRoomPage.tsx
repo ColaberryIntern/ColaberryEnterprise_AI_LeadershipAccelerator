@@ -18,6 +18,7 @@ import { JumpBar } from '../../../components/careerPrep/JumpBar';
 import type { PrepInterview } from '../../../components/careerPrep/careerPrepApi';
 import type { JumpItem } from '../../../components/careerPrep/logic/sheets';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
+import { useCareerPrepSummary } from '../../../components/careerPrep/useCareerPrepSummary';
 import { CAREER_FLOOR_PATH, NotOpen, useCareerPrepFloorModel } from './CareerPrepFloorPage';
 
 /**
@@ -61,6 +62,9 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
   const { session, newKeys, sessionId } = useRoomSession(room);
   live.current = { start: () => { if (session.state.status === 'idle') void session.start(); }, sessionId };
   const start = () => { setTab('session'); live.current.start(); };
+  // The Try frame shows the student's initial while the camera is off (the summary is cached for the floor already).
+  const firstName = useCareerPrepSummary()?.firstName;
+  const initials = firstName ? firstName.trim().charAt(0).toUpperCase() : undefined;
   return (
     <CareerPrepRoom
       anchor={anchor}
@@ -71,8 +75,9 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
       cora={(
         <>
           {room.error && <p role="alert" className="cp-form-problem">{room.error}</p>}
-          <CoraChat log={room.log} busy={room.busy} onPick={room.pick} onAsk={room.ask} />
-          {room.form && <InterviewForm form={room.form} busy={room.busy} onSubmit={(b) => { void room.submitForm(b); }} onCancel={room.cancelForm} />}
+          <CoraChat log={room.log} busy={room.busy} onPick={room.pick} onAsk={room.ask}>
+            {room.form && <InterviewForm form={room.form} busy={room.busy} onSubmit={(b) => { void room.submitForm(b); }} onCancel={room.cancelForm} />}
+          </CoraChat>
         </>
       )}
       tabs={{
@@ -80,7 +85,7 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
           ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} newKeys={newKeys} />
           : <Pending text="Loading your progress..." />),
         plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
-        session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} onTab={setTab} />,
+        session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} onTab={setTab} initials={initials} />,
       }}
       overlay={<RoomSheets sheets={sheets} prep={room.dashboard?.interviews ?? []} onTab={setTab} onStart={start} />}
     />
