@@ -33,6 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { chooseThrowbacks, labelOrder, OLD_LABEL_BUDGET } = require('./familyThrowbacks');
+const { compileFamilyVideo } = require('./familyVideoFeed');
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const LEDGER_PATH = process.env.FAMILY_PHOTO_LEDGER || '/var/lib/family-dashboard/photo-ledger.json';
@@ -52,6 +53,7 @@ function takenAt(item) {
   return String(t).replace(/Z$/, '').slice(0, 19);
 }
 const minutes = (a, b) => Math.abs(new Date(a + 'Z') - new Date(b + 'Z')) / 60000;
+const mediaOf = (item) => (/.(mp4|mov|m4v)$/i.test(item.name || '') ? 'video' : 'photo');
 const isImage = (item) => /\.(jpe?g|png|heic|heif|webp)$/i.test(item.name || '') && !!item.file;
 /** Capture date is really known: phone file name or the camera's EXIF time (not the upload date). */
 const hasTrueDate = (item) => /^\d{8}_\d{6}/.test(item.name || '') || !!(item.photo && item.photo.takenDateTime);
@@ -78,7 +80,8 @@ function isBlocked(item, ledger) {
   const h = hashOf(item);
   if (h && ledger.hashes[h]) return true;
   const t = takenAt(item);
-  return Object.values(ledger.posted).some((p) => p.takenAt && minutes(p.takenAt, t) <= MOMENT_GAP_MIN);
+  const media = mediaOf(item); // a photo and a video of the same moment do not block each other
+  return Object.values(ledger.posted).some((p) => p.takenAt && (p.media || 'photo') === media && minutes(p.takenAt, t) <= MOMENT_GAP_MIN);
 }
 
 /** Group time-sorted items into moments: a new moment starts after a gap of more than MOMENT_GAP_MIN. */
@@ -121,7 +124,7 @@ function choosePicks(items, ledger, today) {
 /** Record picks as posted on `today` in a section ('new' | 'throwback'). Pure on the ledger (caller saves). */
 function markPosted(ledger, picks, today, section = 'new', whyById = {}) {
   for (const p of picks) {
-    ledger.posted[p.id] = { name: p.name, takenAt: takenAt(p), postedOn: today, hash: hashOf(p), section, ...(whyById[p.id] ? { why: whyById[p.id] } : {}) };
+    ledger.posted[p.id] = { name: p.name, takenAt: takenAt(p), postedOn: today, hash: hashOf(p), section, media: mediaOf(p), ...(whyById[p.id] ? { why: whyById[p.id] } : {}) };
     const h = hashOf(p);
     if (h) ledger.hashes[h] = p.id;
   }
@@ -155,10 +158,10 @@ function vaultRefreshToken() {
   return process.env.MS_GRAPH_REFRESH_TOKEN;
 }
 
-async function graphAccessToken() {
+async function graphAccessToken(scope = 'Files.Read offline_access') {
   const rt = vaultRefreshToken();
   if (!process.env.MS_GRAPH_CLIENT_ID || !rt) throw new Error('MS Graph not configured');
-  const body = new URLSearchParams({ client_id: process.env.MS_GRAPH_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope: 'Files.Read offline_access' });
+  const body = new URLSearchParams({ client_id: process.env.MS_GRAPH_CLIENT_ID, grant_type: 'refresh_token', refresh_token: rt, scope });
   const t = await fetchJson('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() });
   return t.access_token;
 }
@@ -217,7 +220,8 @@ async function compileFamilyPhotos({ today, topics = [], ledgerPath = LEDGER_PAT
   const ledger = loadLedger(ledgerPath);
   const token = await graphAccessToken();
   const windowStart = laterOf(FEED_START, shiftDays(today, -WINDOW_DAYS));
-  const roll = (await listCameraRoll(token)).filter(isImage);
+  const rawRoll = await listCameraRoll(token);
+  const roll = rawRoll.filter(isImage);
   const all = roll.filter((i) => takenAt(i).slice(0, 10) >= windowStart);
   const items = all.filter((i) => !isBlocked(i, ledger)); // only these are ever labelled or newly picked
   const archive = labelOrder(roll, ledger, today, windowStart, helpers).slice(0, OLD_LABEL_BUDGET);
@@ -255,7 +259,16 @@ async function compileFamilyPhotos({ today, topics = [], ledgerPath = LEDGER_PAT
     }
   }
   console.log(`[FamilyPhotos] candidates ${items.length}, newly labelled ${labelled}, picked ${out.length}${reused ? ' (same-day reuse)' : ''}, throwbacks ${throwbacks.length}${tb.reused ? ' (same-day reuse)' : ''}`);
-  return { photos: out, throwbacks, ledger, ledgerPath, today };
+  let video = null;
+  try {
+    const linkToken = await graphAccessToken('Files.ReadWrite offline_access').catch(() => null); // share links need write consent
+    const v = await compileFamilyVideo({ roll: rawRoll, ledger, today, windowStart, token, linkToken, h: { ...helpers, labelPhoto, downloadThumb } });
+    if (v.labelled) saveLedger(ledger, ledgerPath);
+    if (v.video) video = { ...embed(v.video.item, ledger, {}), buf: v.video.buf, section: v.video.section, why: v.video.why, shareUrl: v.video.shareUrl, duration: v.video.duration, cid: `video-${v.video.item.id.replace(/[^A-Za-z0-9]/g, '')}@family` };
+  } catch (e) {
+    console.warn(`[FamilyVideo] video skipped (${e.name}): ${e.message.slice(0, 200)}`);
+  }
+  return { photos: out, throwbacks, video, ledger, ledgerPath, today };
 }
 
 function embed(p, ledger, th) {
@@ -268,11 +281,13 @@ function commitPicks(feed) {
   const isFresh = (p) => !(feed.ledger.posted[p.id] && feed.ledger.posted[p.id].postedOn === feed.today);
   const fresh = feed.photos.filter(isFresh);
   const freshTb = (feed.throwbacks || []).filter(isFresh);
-  if (!fresh.length && !freshTb.length) return;
+  const freshVid = feed.video && isFresh(feed.video) ? feed.video : null;
+  if (!fresh.length && !freshTb.length && !freshVid) return;
+  if (freshVid) markPosted(feed.ledger, [freshVid._item], feed.today, freshVid.section, { [freshVid.id]: freshVid.why });
   markPosted(feed.ledger, fresh.map((p) => p._item), feed.today, 'new');
   markPosted(feed.ledger, freshTb.map((p) => p._item), feed.today, 'throwback', Object.fromEntries(freshTb.map((p) => [p.id, p.why])));
   saveLedger(feed.ledger, feed.ledgerPath);
-  console.log(`[FamilyPhotos] ledger: ${fresh.length} new and ${freshTb.length} throwback photo(s) marked posted on ${feed.today}`);
+  console.log(`[FamilyPhotos] ledger: ${fresh.length} new and ${freshTb.length} throwback photo(s) marked posted on ${feed.today}${freshVid ? ', plus 1 video' : ''}`);
 }
 
 module.exports = {

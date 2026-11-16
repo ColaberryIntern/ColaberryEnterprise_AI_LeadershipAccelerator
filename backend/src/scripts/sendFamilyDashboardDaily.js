@@ -136,6 +136,7 @@ async function run() {
     attachments: [
       { filename: 'family-dashboard-interactive.html', content: attachmentBuf, contentType: 'text/html' },
       ...data.photos.map((p, i) => ({ filename: `family-photo-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
+      ...(data.video ? [{ filename: `family-video-${data.video.takenAt.slice(0, 10)}.gif`, content: data.video.buf, contentType: 'image/gif', cid: data.video.cid, contentDisposition: 'inline' }] : []),
       ...data.throwbacks.map((p, i) => ({ filename: `throwback-${p.takenAt.slice(0, 10)}-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
     ],
     vaultAttachments: [{
@@ -176,6 +177,7 @@ async function compileNewsletterFeeds(data) {
   const feeds = { photoFeed: null };
   data.photos = [];
   data.throwbacks = [];
+  data.video = null;
   data.school = null;
   try {
     data.school = await compileSchoolNews({ today });
@@ -197,7 +199,8 @@ async function compileNewsletterFeeds(data) {
     feeds.photoFeed = await compileFamilyPhotos({ today, topics: newsletterTopics(data) });
     data.photos = feeds.photoFeed.photos;
     data.throwbacks = feeds.photoFeed.throwbacks;
-    data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'live', detail: `${data.photos.length} new family photo(s) and ${data.throwbacks.length} Throw Back Pic(s) today` });
+    data.video = feeds.photoFeed.video;
+    data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'live', detail: `${data.photos.length} new family photo(s) and ${data.throwbacks.length} Throw Back Pic(s)${data.video ? ' and 1 video' : ''} today` });
   } catch (e) {
     console.error(`[Family Dashboard] photo feed failed (${e.name}): ${e.message}`);
     data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'broken', detail: e.message.slice(0, 120) });
