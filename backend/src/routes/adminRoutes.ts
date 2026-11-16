@@ -158,6 +158,7 @@ import caseStudyOutsideIntakeRoutes from './admin/caseStudyOutsideIntakeRoutes';
 import caseStudySourceFileRoutes from './admin/caseStudySourceFileRoutes';
 import serviceProposalRoutes from './admin/serviceProposalRoutes';
 import serviceGapRoutes from './admin/serviceGapRoutes';
+import caseStudyFinderRoutes from './admin/caseStudyFinderRoutes';
 import serviceEvidenceSummaryRoutes from './admin/serviceEvidenceSummaryRoutes';
 // The flow diagram and the delivery stories: the two stages built on a settled decomposition that
 // nothing called until L10.9. Its own router for the same reason as the line above.
@@ -442,6 +443,7 @@ router.use(caseStudySourceFileRoutes);
 router.use(serviceProposalRoutes);
 // AI Service Gap Detector: advisory recommendations per unlinked case study, batch runs, review (Services Upgrade GD1).
 router.use(serviceGapRoutes);
+router.use(caseStudyFinderRoutes);
 // Read-only evidence summary feed for Our Services (Services Upgrade SV2). Under /api/admin/factory -> 'program';
 // the route also carries requireSection('program').
 router.use(serviceEvidenceSummaryRoutes);
