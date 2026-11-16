@@ -59,6 +59,8 @@
 /* CP3.5: Your progress */
 .cp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
 .cp-dash-card{padding:12px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated)}
+/* CP5.4: headings take the room's text color (the app's base styles color h1-h6 near-black, unreadable here) */
+.cp-room h1,.cp-room h2,.cp-room h3,.cp-room h4,.cp-room h5,.cp-room h6{color:var(--fg)}
 .cp-dash-card h3{margin:0 0 8px;font:600 14px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
 .cp-big b{font:700 40px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
 .cp-muted{color:var(--fg-muted)}

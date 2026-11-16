@@ -29,8 +29,10 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.env.PW_PATH || 'playwright');
 const { installFakeApi } = require('./fakeApi');
-// Self-tests that MUST fail the run: flag-off (Career Prep closed: nothing renders) and wide (a 2000px block in the room) and tip (a tooltip pushed off screen).
+// Self-tests that MUST fail the run: flag-off (Career Prep closed: nothing renders) and wide (a 2000px block in the room), tip (a tooltip pushed off screen) and contrast (a room heading colored near-black).
 const SELFTEST = process.env.CP_E2E_SELFTEST || '';
+// CP_E2E_DAYS_AHEAD=n runs the whole suite with the browser clock (and the fixtures' "now") n days in the future.
+const NOW = Date.now() + Number(process.env.CP_E2E_DAYS_AHEAD || 0) * 86_400_000;
 
 const BUILD = path.resolve(process.env.BUILD_DIR || path.join(__dirname, '..', '..', '..', 'frontend', 'build'));
 const PORT = Number(process.env.PORT || 3161);
@@ -65,10 +67,11 @@ async function newPage(browser, opts = {}) {
   const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1440, height: 900 }, colorScheme: opts.dark ? 'dark' : 'light' });
   await ctx.addInitScript(`localStorage.setItem('participant_token', '${TOKEN}'); ${FAKE_MEDIA}`);
   const page = await ctx.newPage();
+  await page.clock.setSystemTime(new Date(NOW));
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
-  const api = await installFakeApi(page);
+  const api = await installFakeApi(page, NOW);
   return { ctx, page, errors, api };
 }
 
@@ -190,6 +193,7 @@ async function layout(browser) {
         // The LAST block of a plan row, focused, so its tooltip is on screen while the room is measured.
         if (tab === 'plan') await page.focus('.cp-day:first-of-type .cp-seg:last-of-type');
         if (SELFTEST === 'tip' && tab === 'plan') await page.addStyleTag({ content: '.cp-seg-tip{position:fixed!important;left:auto!important;right:-300px!important;max-width:none!important}' });
+        if (SELFTEST === 'contrast') await page.addStyleTag({ content: '.cp-room h3{color:rgb(26,26,26)!important}' });
         if (SELFTEST === 'wide') await page.evaluate(() => { const d = document.createElement('div'); d.style.width = '2000px'; d.style.height = '4px'; document.querySelector('.cp-tabs-col').appendChild(d); });
         const m = await page.evaluate(() => {
           // The room is position:fixed and scrolls INSIDE itself, so measure every scroll container in it (and the page),
@@ -201,7 +205,14 @@ async function layout(browser) {
             .map((e) => `${e.className || e.tagName} ${e.scrollWidth}/${e.clientWidth}`);
           const tips = [...document.querySelectorAll('[role="tooltip"]')].filter((t) => getComputedStyle(t).display !== 'none')
             .map((t) => t.getBoundingClientRect()).filter((r) => r.left < 0 || r.right > vw).map((r) => `tooltip ${Math.round(r.left)}..${Math.round(r.right)} of ${vw}`);
-          return [...scrollers, ...tips];
+          // Every visible heading in the room must read at 4.5:1 or better against the background behind it.
+          const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
+          const lum = ([r, g, b]) => [r, g, b].map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+          const bgOf = (e) => { for (let n = e; n; n = n.parentElement) { const c = rgb(getComputedStyle(n).backgroundColor); if (c.length >= 3 && (c[3] === undefined || c[3] > 0.5)) return c; } return [255, 255, 255]; };
+          const dim = [...document.querySelectorAll('.cp-room h1, .cp-room h2, .cp-room h3, .cp-room h4')].filter((h) => h.getClientRects().length && h.textContent.trim())
+            .map((h) => { const a = lum(rgb(getComputedStyle(h).color)); const b = lum(bgOf(h)); return { t: h.textContent.trim().slice(0, 30), r: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }; })
+            .filter((x) => x.r < 4.5).map((x) => `heading "${x.t}" contrast ${x.r.toFixed(2)}`);
+          return [...scrollers, ...tips, ...dim];
         });
         if (m.length) bad.push(`room ${tab} ${w}${dark ? ' dark' : ''}: ${m.join(', ')}`);
       }
@@ -214,7 +225,7 @@ async function layout(browser) {
       await ctx.close();
     }
   }
-  check('layout: no horizontal scroll or overflowing text (room 1600/1440/390 light+dark, floor 1440/390)', bad.length === 0, bad.join('; '));
+  check('layout: no horizontal scroll, no tooltip off screen, every room heading at 4.5:1 (room 1600/1440/390 light+dark, floor 1440/390)', bad.length === 0, bad.join('; '));
 }
 
 (async () => {

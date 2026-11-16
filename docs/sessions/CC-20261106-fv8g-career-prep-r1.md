@@ -577,3 +577,14 @@ tests/systemV2/career-prep/.
   - Verification: 10/10 pass, exit 0; self-tests wide, tip and flag-off each exit 1; frontend Career Prep jest pass.
   - Correction: the attempt-1 entry above claimed "no horizontal scroll" for the room; that check could not see the
     room's own scrolling, and the claim was wrong for a focused last plan block.
+
+- [x] CP5.4 attempt 3: fixes from the T26 verification (FAIL 10/12)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: (1) the fixtures' dates were hard-coded, so the suite would fail tomorrow; every date is now relative
+    to the run's "now" in Central, and CP_E2E_DAYS_AHEAD=n runs the browser clock and the fixtures n days ahead. (2) A
+    real defect from T15/T18: the app's base styles color h1-h6 near-black, so every section heading in Your progress
+    and Your plan read at about 1.05:1 on the room's dark background. The room's headings now take its text color, and
+    the layout check asserts every visible room heading reads at 4.5:1 or better.
+  - Verification: 10/10 pass today and with the clock 2 days ahead (exit 0); self-tests wide, tip, contrast and
+    flag-off each exit 1 (contrast reproduces the 1.05 heading); frontend Career Prep jest pass.
