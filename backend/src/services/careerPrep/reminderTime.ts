@@ -32,8 +32,9 @@ export function centralToInstant(date: string, hour: number, minute: number): Da
     const c = centralClock(t);
     if (c.date === date && c.hour === hour && c.minute === minute) return t;
   }
-  // A wall time skipped by the spring-forward hour: the hour after it.
-  return new Date(Date.UTC(y, m - 1, d, hour + 5, minute));
+  // A wall time skipped by the spring-forward hour (2:00 to 2:59 AM): the same minutes in the hour after it,
+  // in CDT (2:30 AM -> 3:30 AM CDT = 08:30 UTC).
+  return new Date(Date.UTC(y, m - 1, d, hour + 6, minute));
 }
 
 /** The next Central calendar date (noon UTC keeps the step clear of any DST edge). */

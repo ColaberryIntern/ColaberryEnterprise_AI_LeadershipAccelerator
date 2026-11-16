@@ -197,7 +197,7 @@ describe('each part of a session has its own body (CP4.4)', () => {
 });
 
 describe('the recap (CP4.5)', () => {
-  const recap: PrepRecap = { status: 'finished', minutes: 11, attempts: 1, firstName: 'Ali', readiness: { before: 64, after: 69, company: 'Acme' }, skills: [{ key: 'pace_clarity', label: 'Pace and clarity', before: 48, after: 57 }], streak: 5 };
+  const recap: PrepRecap = { status: 'finished', minutes: 11, attempts: 1, pending: 0, firstName: 'Ali', readiness: { before: 64, after: 69, company: 'Acme' }, skills: [{ key: 'pace_clarity', label: 'Pace and clarity', before: 48, after: 57 }], streak: 5 };
   it("finishing shows the server's recap and hands it to the room", async () => {
     const one = [seg('warmup', 'Warm up', 2)];
     mockStart.mockResolvedValue({ session: view(one), resumed: false });
@@ -215,7 +215,7 @@ describe('the recap (CP4.5)', () => {
   it('a recap with no scored answer says the numbers did not change, and shows no readiness it does not have', async () => {
     mockStart.mockResolvedValue({ session: view(three), resumed: false });
     mockPatch.mockImplementation(async (_id: string, b: { action: string }) => (b.action === 'end'
-      ? { session: view(three, { status: 'ended' }), recap: { status: 'ended', minutes: 2, attempts: 0, skills: [], streak: 1 } } : { session: view(three) }));
+      ? { session: view(three, { status: 'ended' }), recap: { status: 'ended', minutes: 2, attempts: 0, pending: 0, skills: [], streak: 1 } } : { session: view(three) }));
     const h = mount(<Harness />);
     await click(h, 'cp-session-start');
     await click(h, 'cp-session-end');
@@ -223,6 +223,16 @@ describe('the recap (CP4.5)', () => {
     expect(r?.textContent).toContain('Session ended');
     expect(r?.textContent).toContain('your numbers did not change');
     expect(r?.textContent).not.toContain('Readiness');
+  });
+  it('an answer still being scored at the end is shown as such, not as "numbers did not change"', async () => {
+    mockStart.mockResolvedValue({ session: view(three), resumed: false });
+    mockPatch.mockImplementation(async (_id: string, b: { action: string }) => (b.action === 'end'
+      ? { session: view(three, { status: 'ended' }), recap: { status: 'ended', minutes: 4, attempts: 0, pending: 1, skills: [], streak: 1 } } : { session: view(three) }));
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await click(h, 'cp-session-end');
+    expect(h.querySelector('[data-testid="cp-recap-pending"]')?.textContent).toContain('One answer is still being scored');
+    expect(h.querySelector('[data-testid="cp-recap"]')?.textContent).not.toContain('did not change');
   });
   it('a session left paused is resumed on the server when it is picked up again', async () => {
     mockStart.mockResolvedValue({ session: view(three, { status: 'paused' }), resumed: true });

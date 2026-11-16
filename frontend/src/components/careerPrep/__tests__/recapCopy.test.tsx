@@ -8,7 +8,7 @@ import { centralTime, recapCards, recapText, reminderSetText, tonightOffered } f
 import { ProgressDashboard } from '../ProgressDashboard';
 
 const recap: PrepRecap = {
-  status: 'finished', minutes: 11, attempts: 2, firstName: 'Ali', readiness: { before: 64, after: 69, company: 'Meridian Freight' },
+  status: 'finished', minutes: 11, attempts: 2, pending: 0, firstName: 'Ali', readiness: { before: 64, after: 69, company: 'Meridian Freight' },
   skills: [{ key: 'few_fillers', label: 'Few filler words', before: 61, after: 64 }, { key: 'pace_clarity', label: 'Pace and clarity', before: 48, after: 57 }], streak: 5,
 };
 
@@ -17,12 +17,22 @@ describe('the recap words (CP4.5)', () => {
     expect(recapText(recap)).toBe('Session done, Ali. Readiness for Meridian Freight: 64 → 69. "Pace and clarity" moved 48 → 57. I have added today\'s 11 minutes to your dashboard.');
   });
   it('a first score says "starts at", and nothing is said about a readiness the recap does not have', () => {
-    const t = recapText({ status: 'ended', minutes: 1, attempts: 1, skills: [{ key: 'pace_clarity', label: 'Pace and clarity', after: 57 }], streak: 1 });
+    const t = recapText({ status: 'ended', minutes: 1, attempts: 1, pending: 0, skills: [{ key: 'pace_clarity', label: 'Pace and clarity', after: 57 }], streak: 1 });
     expect(t).toBe('Session ended. "Pace and clarity" starts at 57. I have added today\'s 1 minute to your dashboard.');
     expect(t).not.toMatch(/Readiness/);
   });
   it('no scored answer says the numbers did not change', () => {
-    expect(recapText({ status: 'finished', minutes: 20, attempts: 0, skills: [], streak: 2 })).toContain('No answer was scored this time');
+    expect(recapText({ status: 'finished', minutes: 20, attempts: 0, pending: 0, skills: [], streak: 2 })).toContain('No answer was scored this time');
+  });
+  it('answers still being scored are said plainly, never as "nothing changed"', () => {
+    const t = recapText({ status: 'ended', minutes: 3, attempts: 0, pending: 1, skills: [], streak: 1 });
+    expect(t).toContain('One answer is still being scored; it will show on Your progress in a minute or two.');
+    expect(t).not.toContain('did not change');
+    expect(recapText({ ...recap, pending: 2 })).toContain('2 answers are still being scored; they will show');
+  });
+  it('a reminder that was already sent, or did not go out, is not confirmed as upcoming', () => {
+    expect(reminderSetText('2026-11-17T00:00:00.000Z', 'sent')).toBe('I already sent that reminder at 6:00 PM Central. Pick the other time if you want one more.');
+    expect(reminderSetText('2026-11-17T00:00:00.000Z', 'skipped')).toBe('That reminder did not go out, and I will not send it late. Pick the other time instead.');
   });
   it('the cards: dashboard, same time tomorrow at the session start in Central, another session', () => {
     const c = recapCards('2026-11-16T23:30:00.000Z');

@@ -23,10 +23,14 @@ export function recapText(r: PrepRecap): string {
   if (r.readiness) parts.push(`Readiness${r.readiness.company ? ` for ${r.readiness.company}` : ''}: ${moved(r.readiness.before, r.readiness.after)}.`);
   const top = [...r.skills].sort((a, b) => Math.abs(b.after - (b.before ?? b.after)) - Math.abs(a.after - (a.before ?? a.after)))[0];
   if (top) parts.push(`"${top.label}" ${top.before === undefined ? `starts at ${top.after}` : `moved ${moved(top.before, top.after)}`}.`);
-  else parts.push('No answer was scored this time, so your numbers did not change.');
+  if (r.pending) parts.push(stillScoring(r.pending));
+  else if (!top) parts.push('No answer was scored this time, so your numbers did not change.');
   parts.push(`I have added today's ${r.minutes} ${r.minutes === 1 ? 'minute' : 'minutes'} to your dashboard.`);
   return parts.join(' ');
 }
+
+/** Answers still being scored when the session ended: said plainly, never counted as "nothing changed". */
+export const stillScoring = (n: number): string => `${n === 1 ? 'One answer is' : `${n} answers are`} still being scored; ${n === 1 ? 'it' : 'they'} will show on Your progress in a minute or two.`;
 
 /** The cards under the recap: dashboard, a reminder for the same time tomorrow, another session. */
 export function recapCards(startedAt: string): OptionCard[] {
@@ -40,4 +44,8 @@ export function recapCards(startedAt: string): OptionCard[] {
 export const REMIND_TONIGHT: OptionCard = { id: 'remind:tonight', icon: 'notification-3-line', title: 'Remind me tonight at 6:00 PM', line: 'Central time, in the app and by email' };
 
 /** What Cora says once a reminder is set. */
-export const reminderSetText = (sendAt: string): string => `Done. I will remind you at ${centralTime(sendAt)} Central, here and by email.`;
+export function reminderSetText(sendAt: string, status = 'pending'): string {
+  if (status === 'pending') return `Done. I will remind you at ${centralTime(sendAt)} Central, here and by email.`;
+  if (status === 'sent') return `I already sent that reminder at ${centralTime(sendAt)} Central. Pick the other time if you want one more.`;
+  return 'That reminder did not go out, and I will not send it late. Pick the other time instead.';
+}

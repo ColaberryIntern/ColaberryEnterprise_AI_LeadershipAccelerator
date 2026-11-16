@@ -76,6 +76,8 @@ export async function startSessionApi(planId: string): Promise<{ session: PrepSe
 /** CP4.5: what changed in a session, computed by the server from the rows it wrote (numbers absent when unknown). */
 export interface PrepRecap {
   status: 'finished' | 'ended'; minutes: number; attempts: number; firstName?: string;
+  /** Answers still being scored when the session ended; they reach Your progress when scoring finishes. */
+  pending: number;
   readiness?: { after: number; before?: number; interviewId?: string; company?: string };
   skills: Array<{ key: string; label: string; before?: number; after: number }>;
   streak: number;

@@ -31,7 +31,7 @@ const session: SessionView = { id: 's1', planId: 'p1', status: 'finished', start
 
 describe('buildRecap (CP4.5)', () => {
   const data = dataOf([...base, ...thisSession]);
-  const recap = buildRecap(data, refs, session, 1, NOW, 'i1');
+  const recap = buildRecap(data, refs, session, { done: 1, pending: 0 }, NOW, 'i1');
 
   it("the recap's numbers ARE the dashboard's: after = with this session, before = without it", () => {
     const after = buildDashboard(data, NOW, 'i1');
@@ -46,18 +46,18 @@ describe('buildRecap (CP4.5)', () => {
   it('lists only the skills this session wrote, with their labels', () => {
     expect(recap.skills.map((s) => s.key).sort()).toEqual(['few_fillers', 'pace_clarity']);
     expect(recap.skills.find((s) => s.key === 'pace_clarity')!.label).toBe('Pace and clarity');
-    expect(recap).toMatchObject({ status: 'finished', minutes: 11, attempts: 1, firstName: 'Ali', streak: 1 });
+    expect(recap).toMatchObject({ status: 'finished', minutes: 11, attempts: 1, pending: 0, firstName: 'Ali', streak: 1 });
   });
   it('a skill this session scored for the first time has no "before" (never 0)', () => {
     const two = [...base.filter((r) => r.skill !== 'pace_clarity'), ...earlier('pace_clarity', 50).slice(0, 2), ...thisSession];
-    const r = buildRecap(dataOf(two), refs, session, 1, NOW, 'i1');
+    const r = buildRecap(dataOf(two), refs, session, { done: 1, pending: 0 }, NOW, 'i1');
     const pace = r.skills.find((s) => s.key === 'pace_clarity')!;
     expect(pace.before).toBeUndefined();
     expect(typeof pace.after).toBe('number');
   });
   it('no scored attempt: no changed skills, and readiness omitted when it cannot be computed', () => {
-    const r = buildRecap(dataOf(earlier('pace_clarity', 50)), new Set(), { ...session, status: 'ended', secondsActive: 90 }, 0, NOW, 'i1');
-    expect(r).toMatchObject({ status: 'ended', minutes: 2, attempts: 0, skills: [] });
+    const r = buildRecap(dataOf(earlier('pace_clarity', 50)), new Set(), { ...session, status: 'ended', secondsActive: 90 }, { done: 0, pending: 0 }, NOW, 'i1');
+    expect(r).toMatchObject({ status: 'ended', minutes: 2, attempts: 0, pending: 0, skills: [] });
     expect(r.readiness).toBeUndefined();
   });
 });
@@ -70,7 +70,7 @@ describe('sessionRecap writes first, then reads (CP4.5)', () => {
       { key: 'fillers', label: 'Fillers', score: 90, value: '1%', target: 'under 3%', source: 'video' },
     ] };
     mockQuery
-      .mockResolvedValueOnce([[{ id: 'a1', result, created_at: NOW.toISOString() }], 1])
+      .mockResolvedValueOnce([[{ id: 'a1', status: 'done', result, created_at: NOW.toISOString() }], 1])
       .mockResolvedValueOnce([[{ interview_id: 'i1' }], 1]);
     const write = jest.fn(async () => 2);
     const load = jest.fn(async () => dataOf([...base, ...thisSession]));
@@ -84,8 +84,18 @@ describe('sessionRecap writes first, then reads (CP4.5)', () => {
     expect(r.readiness?.interviewId).toBe('i1');
     expect(r.attempts).toBe(1);
   });
+  it('answers still being scored are counted, not written and not treated as "nothing changed"', async () => {
+    mockQuery
+      .mockResolvedValueOnce([[{ id: 'a2', status: 'pending', result: null, created_at: NOW }], 1])
+      .mockResolvedValueOnce([[{ interview_id: 'i1' }], 1]);
+    const write = jest.fn(async () => 0);
+    const r = await sessionRecap('e1', session, NOW, { write, load: jest.fn(async () => dataOf(base)) });
+    expect(mockQuery.mock.calls[0][0]).toContain("status IN ('done', 'pending')");
+    expect(write).toHaveBeenCalledWith([]);
+    expect(r).toMatchObject({ attempts: 0, pending: 1, skills: [] });
+  });
   it('a failed write stops the recap (no recap from rows that were not written)', async () => {
-    mockQuery.mockResolvedValueOnce([[{ id: 'a1', result: { seconds: 1, notes: [], scores: [] }, created_at: NOW }], 1]);
+    mockQuery.mockResolvedValueOnce([[{ id: 'a1', status: 'done', result: { seconds: 1, notes: [], scores: [] }, created_at: NOW }], 1]);
     const load = jest.fn();
     await expect(sessionRecap('e1', session, NOW, { write: jest.fn(async () => { throw new Error('db down'); }), load })).rejects.toThrow('db down');
     expect(load).not.toHaveBeenCalled();

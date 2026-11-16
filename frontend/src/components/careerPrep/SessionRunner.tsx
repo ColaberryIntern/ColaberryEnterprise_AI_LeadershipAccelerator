@@ -4,6 +4,7 @@ import type { SessionApi } from './useSession';
 import { clock, secondsLeft } from './logic/sessionMachine';
 import { FOLLOW_UPS, LEARN_TEXT, questionFor, WARM_UP_LINE } from './logic/sessionCopy';
 import { TryRecorder } from './TryRecorder';
+import { stillScoring } from './logic/recapCopy';
 
 /**
  * Career Prep v27 (CP4.4, CP4.5): the Session tab (shots L3-4, L3-5, L3-6). A ring timer with "m:ss left in
@@ -59,7 +60,8 @@ export function RecapView({ r, onDashboard, onPlan }: { r: PrepRecap; onDashboar
       </div>
       <section className="cp-dash-card" aria-labelledby="cp-recap-h">
         <h4 id="cp-recap-h">What changed today</h4>
-        {r.skills.length === 0 ? <p className="cp-muted">No answer was scored this time, so your numbers did not change.</p> : (
+        {r.pending > 0 && <p className="cp-muted" data-testid="cp-recap-pending">{stillScoring(r.pending)}</p>}
+        {r.skills.length === 0 ? (r.pending > 0 ? null : <p className="cp-muted">No answer was scored this time, so your numbers did not change.</p>) : (
           <ul className="cp-list">{r.skills.map((s) => (
             <li key={s.key}><span className="cp-skill-name">{s.label}</span>
               <span className="cp-bar" aria-hidden="true"><span className="cp-bar-fill" style={{ width: `${s.after}%` }} /></span>

@@ -14,7 +14,7 @@ export function useReminder(plan: StoredPlan | null, sessionId: () => string | n
     const sid = sessionId();
     const ref = kind === 'tomorrow' && sid ? { sessionId: sid } : plan ? { planId: plan.id } : null;
     if (!ref) { push(cora('Pick a plan first, then I can remind you.')); return; }
-    try { push(cora(reminderSetText((await setReminderApi(kind, ref)).sendAt))); } catch (e) {
+    try { const r = await setReminderApi(kind, ref); push(cora(reminderSetText(r.sendAt, r.status))); } catch (e) {
       const tooLate = (e as { response?: { status?: number } })?.response?.status === 409;
       if (tooLate) push(cora('It is already past 6:00 PM. Pick "Same time tomorrow" instead.')); else setError('Could not set the reminder. Try again.');
     }

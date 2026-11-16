@@ -16,13 +16,17 @@ import type { SessionView } from './sessions';
  * skill numbers are exactly the dashboard's (no second formula that could drift).
  *
  * NO INVENTED DATA: a readiness or skill that cannot be computed is omitted, never 0. A session with no
- * scored attempt has no changed skills (the list is empty) and says so.
+ * scored attempt has no changed skills (the list is empty) and says so. Answers still being scored when the
+ * session ends are counted in `pending` (scoring runs after the upload returns), so the recap can say they
+ * will appear on Your progress instead of claiming nothing changed.
  */
 export interface RecapSkill { key: string; label: string; before?: number; after: number }
 export interface Recap {
   status: 'finished' | 'ended';
   minutes: number;
   attempts: number;
+  /** Answers recorded in this session that were still being scored when it ended. */
+  pending: number;
   firstName?: string;
   readiness?: { after: number; before?: number; interviewId?: string; company?: string };
   skills: RecapSkill[];
@@ -36,7 +40,7 @@ export function withoutRefs(data: PrepData, refs: ReadonlySet<string>): PrepData
 }
 
 /** Pure: the recap for one ended session, given all of the student's data (this session's rows included). */
-export function buildRecap(data: PrepData, refs: ReadonlySet<string>, session: Pick<SessionView, 'status' | 'secondsActive'>, attempts: number, now: Date, anchorId?: string): Recap {
+export function buildRecap(data: PrepData, refs: ReadonlySet<string>, session: Pick<SessionView, 'status' | 'secondsActive'>, attempts: { done: number; pending: number }, now: Date, anchorId?: string): Recap {
   const after = buildDashboard(data, now, anchorId);
   const before = buildDashboard(withoutRefs(data, refs), now, anchorId);
   const touched = new Set(data.observations.filter((_, i) => refs.has(data.sourceRefs[i].ref)).map((o) => o.skill));
@@ -45,7 +49,8 @@ export function buildRecap(data: PrepData, refs: ReadonlySet<string>, session: P
   return {
     status: session.status === 'finished' ? 'finished' : 'ended',
     minutes: Math.round(session.secondsActive / 60),
-    attempts,
+    attempts: attempts.done,
+    pending: attempts.pending,
     ...(data.firstName ? { firstName: data.firstName } : {}),
     ...(after.readiness ? { readiness: {
       after: after.readiness.value,
@@ -65,17 +70,18 @@ export interface RecapDeps {
   load?: (enrollmentId: string, now: Date) => Promise<PrepData>;
 }
 
-type AttemptRow = { id: string; result: AttemptResult; created_at: string | Date };
+type AttemptRow = { id: string; status: 'done' | 'pending'; result: AttemptResult | null; created_at: string | Date };
 
 /** Write the session's scored attempts (idempotent), THEN read and build the recap. */
 export async function sessionRecap(enrollmentId: string, session: SessionView, now = new Date(), deps: RecapDeps = {}): Promise<Recap> {
   const [rows] = await sequelize.query(
-    `SELECT id, result, created_at FROM prep_attempts WHERE session_id = :s AND enrollment_id = :e AND status = 'done' AND result IS NOT NULL`,
+    `SELECT id, status, result, created_at FROM prep_attempts WHERE session_id = :s AND enrollment_id = :e AND status IN ('done', 'pending')`,
     { replacements: { s: session.id, e: enrollmentId } });
-  const attempts = rows as AttemptRow[];
-  await (deps.write ?? writeObservations)(attempts.flatMap((a) => attemptObservationRows(enrollmentId, String(a.id), a.result, new Date(a.created_at))));
+  const attempts = (rows as AttemptRow[]).filter((a) => a.status === 'done' && a.result);
+  const pending = (rows as AttemptRow[]).filter((a) => a.status === 'pending').length;
+  await (deps.write ?? writeObservations)(attempts.flatMap((a) => attemptObservationRows(enrollmentId, String(a.id), a.result as AttemptResult, new Date(a.created_at))));
   const data = await (deps.load ?? loadPrepData)(enrollmentId, now);
   const [plans] = await sequelize.query('SELECT interview_id FROM prep_plans WHERE id = :p AND enrollment_id = :e', { replacements: { p: session.planId, e: enrollmentId } });
   const anchorId = (plans as Array<{ interview_id: string | null }>)[0]?.interview_id ?? undefined;
-  return buildRecap(data, new Set(attempts.map((a) => `attempt:${a.id}`)), session, attempts.length, now, anchorId);
+  return buildRecap(data, new Set(attempts.map((a) => `attempt:${a.id}`)), session, { done: attempts.length, pending }, now, anchorId);
 }

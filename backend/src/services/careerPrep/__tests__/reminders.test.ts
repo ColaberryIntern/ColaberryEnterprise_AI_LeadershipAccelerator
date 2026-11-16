@@ -33,8 +33,10 @@ describe('reminder times, Central (CP4.5)', () => {
     const late = new Date('2026-11-17T04:15:00Z');
     expect(reminderTime('tomorrow', late, late).toISOString()).toBe('2026-11-18T14:00:00.000Z');
   });
-  it('a wall time skipped by spring-forward lands on the hour after it', () => {
-    expect(centralToInstant('2026-03-08', 2, 30).toISOString()).toBe('2026-03-08T07:30:00.000Z'); // 2:30 does not exist; 3:30 CDT
+  it('a wall time skipped by spring-forward lands on the same minutes in the hour after it', () => {
+    const t = centralToInstant('2026-03-08', 2, 30); // 2:30 AM does not exist that day
+    expect(t.toISOString()).toBe('2026-03-08T08:30:00.000Z');
+    expect(centralClock(t)).toEqual({ date: '2026-03-08', hour: 3, minute: 30 }); // 3:30 AM CDT
   });
 });
 
@@ -90,23 +92,28 @@ describe('sendDueReminders (CP4.5)', () => {
   it('in quiet hours nothing is sent; due reminders move to 8:00 AM Central', async () => {
     const d = deps();
     expect(await sendDueReminders(new Date('2026-11-17T04:00:00Z'), d)).toBe(0);
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    expect(mockQuery.mock.calls[0][0]).toContain("UPDATE prep_reminders SET send_at = :next WHERE status = 'pending'");
-    expect(mockQuery.mock.calls[0][1].replacements.next.toISOString()).toBe('2026-11-17T14:00:00.000Z');
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(mockQuery.mock.calls[1][0]).toContain("UPDATE prep_reminders SET send_at = :next WHERE status = 'pending'");
+    expect(mockQuery.mock.calls[1][1].replacements.next.toISOString()).toBe('2026-11-17T14:00:00.000Z');
     expect(d.mail).not.toHaveBeenCalled();
   });
+  it('a reminder more than 12 hours late is skipped as Stale, never sent late', async () => {
+    await sendDueReminders(DAY, deps());
+    expect(mockQuery.mock.calls[0][0]).toContain("SET status = 'skipped', error_class = 'Stale' WHERE status = 'pending' AND send_at < :cut");
+    expect(mockQuery.mock.calls[0][1].replacements.cut.toISOString()).toBe('2026-11-16T12:00:00.000Z');
+  });
   it('claims due reminders before sending (so two runs never send one twice), then emails each', async () => {
-    mockQuery.mockResolvedValueOnce([[due()], 1]);
+    mockQuery.mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[due()], 1]);
     const d = deps();
     expect(await sendDueReminders(DAY, d)).toBe(1);
-    expect(mockQuery.mock.calls[0][0]).toMatch(/SET status = 'sent'[\s\S]*FOR UPDATE SKIP LOCKED/);
+    expect(mockQuery.mock.calls[1][0]).toMatch(/SET status = 'sent'[\s\S]*FOR UPDATE SKIP LOCKED/);
     expect(d.mail).toHaveBeenCalledWith('ali@example.com', 'Ali Muwwakkil');
   });
   it('a student no longer on the allow-list is skipped, and a failed email is marked failed', async () => {
-    mockQuery.mockResolvedValueOnce([[due(), due({ id: 'r2', enrollment_id: 'e2' })], 2]);
+    mockQuery.mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[due(), due({ id: 'r2', enrollment_id: 'e2' })], 2]);
     const d = deps({ enabled: jest.fn(async (e: string) => e === 'e1'), mail: jest.fn(async () => { throw Object.assign(new Error('smtp'), { name: 'SmtpError' }); }) });
     expect(await sendDueReminders(DAY, d)).toBe(0);
-    const marks = mockQuery.mock.calls.slice(1).map((c) => c[1].replacements);
+    const marks = mockQuery.mock.calls.slice(2).map((c) => c[1].replacements);
     expect(marks).toEqual(expect.arrayContaining([{ s: 'failed', c: 'SmtpError', id: 'r1' }, { s: 'skipped', c: 'NotEnabled', id: 'r2' }]));
   });
 });

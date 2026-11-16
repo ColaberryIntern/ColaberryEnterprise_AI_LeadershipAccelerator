@@ -13,7 +13,8 @@ import { NotFoundError } from './sessions';
  *   schedule   keyed (ref, kind), ref = session:<id> or plan:<id>, UNIQUE, so asking twice makes ONE
  *              reminder. The plan or session must be the caller's own (else "not found").
  *   send       every 5 minutes: due rows are CLAIMED (pending -> sent, FOR UPDATE SKIP LOCKED) before
- *              anything goes out, so two processes never send the same one. In quiet hours nothing is sent
+ *              anything goes out, so two processes never send the same one. A reminder more than 12 hours
+ *              late (held by the kill switch, or by downtime) is skipped as Stale, never sent late. In quiet hours nothing is sent
  *              and due rows move to 8:00 AM Central. A student no longer on the Career Prep allow-list is
  *              skipped. A failed email marks the row failed with its error class.
  *   channels   email (plain text) through the existing mail path (guardedSendMail, test-mode redirect),
@@ -68,8 +69,12 @@ export interface SendDeps { read?: (k: string) => Promise<unknown>; enabled?: (e
 type Due = { id: string; enrollment_id: string; email: string | null; full_name: string | null };
 
 /** One pass of the sender. Returns how many reminders went out. */
+export const STALE_HOURS = 12;
+
 export async function sendDueReminders(now = new Date(), deps: SendDeps = {}): Promise<number> {
   if (await killed(deps.read ?? getSetting)) return 0;
+  await sequelize.query(`UPDATE prep_reminders SET status = 'skipped', error_class = 'Stale' WHERE status = 'pending' AND send_at < :cut`,
+    { replacements: { cut: new Date(now.getTime() - STALE_HOURS * 3_600_000) } });
   if (inQuietHours(now)) {
     await sequelize.query(`UPDATE prep_reminders SET send_at = :next WHERE status = 'pending' AND send_at <= :now`, { replacements: { next: afterQuietHours(now), now } });
     return 0;

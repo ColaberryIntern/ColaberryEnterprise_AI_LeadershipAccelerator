@@ -19,46 +19,57 @@ export interface SessionApi {
   start: () => Promise<void>; next: () => void; pause: () => void; resume: () => void; end: () => void;
 }
 
-export function useSession(plan: StoredPlan | null, onOver: (s: PrepSessionView, recap: PrepRecap | null) => void): SessionApi {
-  const [session, setSession] = useState<PrepSessionView | null>(null);
-  const [state, setStateRaw] = useState<M.SessionState>(M.idle());
-  const [now, setNow] = useState(Date.now());
+/** The machine's state for a session the server returned: parts already done stay done, the timer starts on the next one. Pure. */
+export function resumedState(s: PrepSessionView, t: number): M.SessionState {
+  const done = s.segments.map((x, i) => (x.state === 'done' ? i : -1)).filter((i) => i >= 0);
+  const first = done.length ? Math.max(...done) + 1 : 0;
+  if (first >= s.segments.length) return { ...M.idle(), status: 'finished', done, activeMs: s.secondsActive * 1000 };
+  const begun = M.start(M.idle(), s.segments.slice(first).map((x) => ({ title: x.title, minutes: x.minutes })), t);
+  return { ...begun, index: first, done, activeMs: s.secondsActive * 1000 };
+}
+
+/** The server side of a session: the session row, its recap, and one PATCH per move (errors never stop the timer). */
+function useServerSession(onOver: (s: PrepSessionView, recap: PrepRecap | null) => void) {
+  const [session, setSessionRaw] = useState<PrepSessionView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recap, setRecap] = useState<PrepRecap | null>(null);
   const over = useRef(onOver);
   over.current = onOver;
-  const st = useRef(state);
   const ses = useRef(session);
-  const setState = (s: M.SessionState) => { st.current = s; setStateRaw(s); };
-
-  useEffect(() => { if (state.status !== 'running') return undefined; const t = window.setInterval(() => setNow(Date.now()), 500); return () => window.clearInterval(t); }, [state.status]);
-
+  const setSession = useCallback((v: PrepSessionView) => { ses.current = v; setSessionRaw(v); }, []);
   const sync = useCallback(async (s: M.SessionState, action: Action, segmentIndex?: number): Promise<void> => {
     const current = ses.current;
     if (!current) return;
     try {
       const r = await patchSessionApi(current.id, { action, secondsActive: M.activeSeconds(s, Date.now()), ...(segmentIndex !== undefined ? { segmentIndex } : {}) });
-      ses.current = r.session; setSession(r.session); setError(null);
+      setSession(r.session); setError(null);
       if (r.session.status === 'finished' || r.session.status === 'ended') { setRecap(r.recap ?? null); over.current(r.session, r.recap ?? null); }
     } catch { setError('Could not save your progress just now. Keep going; it will save on the next step.'); }
-  }, []);
+  }, [setSession]);
+  return { session, ses, setSession, error, setError, recap, setRecap, sync };
+}
+
+export function useSession(plan: StoredPlan | null, onOver: (s: PrepSessionView, recap: PrepRecap | null) => void): SessionApi {
+  const { session, ses, setSession, error, setError, recap, setRecap, sync } = useServerSession(onOver);
+  const [state, setStateRaw] = useState<M.SessionState>(M.idle());
+  const [now, setNow] = useState(Date.now());
+  const st = useRef(state);
+  const setState = (s: M.SessionState) => { st.current = s; setStateRaw(s); };
+
+  useEffect(() => { if (state.status !== 'running') return undefined; const t = window.setInterval(() => setNow(Date.now()), 500); return () => window.clearInterval(t); }, [state.status]);
 
   const start = useCallback(async () => {
     if (!plan) return;
     try {
       const { session: s } = await startSessionApi(plan.id);
-      ses.current = s; setSession(s); setRecap(null);
-      const done = s.segments.map((x, i) => (x.state === 'done' ? i : -1)).filter((i) => i >= 0);
-      const first = done.length ? Math.max(...done) + 1 : 0;
-      if (first >= s.segments.length) { setState({ ...M.idle(), status: 'finished', done, activeMs: s.secondsActive * 1000 }); return; }
+      setSession(s); setRecap(null);
       // One clock reading for both the deadline and the display, so the ring opens on the full part (2:00, not 2:01).
       const t = Date.now();
       setNow(t);
-      const begun = M.start(M.idle(), s.segments.slice(first).map((x) => ({ title: x.title, minutes: x.minutes })), t);
-      setState({ ...begun, index: first, done, activeMs: s.secondsActive * 1000 });
-      if (s.status === 'paused') await sync(st.current, 'resume');
+      setState(resumedState(s, t));
+      if (s.status === 'paused' && st.current.status === 'running') await sync(st.current, 'resume');
     } catch { setError('Could not start the session. Try again.'); }
-  }, [plan, sync]);
+  }, [plan, sync, setSession, setRecap, setError]);
 
   const move = useCallback((step: (s: M.SessionState, t: number) => M.SessionState, action: Action) => {
     const t = Date.now();

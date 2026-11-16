@@ -439,3 +439,19 @@ tests/systemV2/career-prep/.
   - Notes: declared deviation: the inbox, offers and applications are not tracked by the platform yet, so those
     sheets say so plainly; no offers payload exists to carry a fee, and a test keeps "fee" out of every sheet
     source and the rendered Offers sheet.
+
+- [x] CP4.5 attempt 2: fixes from the T21 verification (T20 PASS 11/12 on attempt 2; T21 FAIL 10/12 on attempt 1)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: the recap counts answers still being scored when the session ends (`pending`; scoring runs
+    after the upload returns) and says "One answer is still being scored; it will show on Your progress" instead
+    of "your numbers did not change". A wall time skipped by spring-forward now lands on the same minutes in the
+    hour after it (2:30 AM -> 3:30 AM CDT); the old test asserted 1:30 AM CST under a 3:30 label. Reminders more
+    than 12 hours late (held by the kill switch or downtime) are skipped as Stale, never sent late. Asking again
+    for a reminder already sent no longer confirms a past time as upcoming. A Postgres integration test for one
+    reminder per (ref, kind) under concurrent asks and exactly-once sending under two concurrent sender passes;
+    the schema integration test now counts nine tables. useSession split (server sync in its own hook; the
+    resume state is a pure function); the largest hook is 42 lines. The T20 content-scoring deviation text is
+    corrected (scoreAnswer returns a keyword-hit number; the levels come from hireVideoContent).
+  - Verification: backend Career Prep 250 pass, 13 skipped (Postgres integration, run in CI); frontend Career
+    Prep 162 pass; both tsc clean.
