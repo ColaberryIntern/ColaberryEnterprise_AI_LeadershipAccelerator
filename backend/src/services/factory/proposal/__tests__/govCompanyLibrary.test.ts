@@ -5,15 +5,17 @@
 const factFindAll = jest.fn();
 const factCreate = jest.fn();
 const refFindAll = jest.fn();
+const refUpdate = jest.fn();
 const personFindAll = jest.fn();
+const personUpdate = jest.fn();
 const queryMock = jest.fn();
 
 jest.mock('../../../../models/GovCompanyFact', () => ({ __esModule: true, default: { findAll: (...a: any[]) => factFindAll(...a), create: (...a: any[]) => factCreate(...a), update: jest.fn() } }));
-jest.mock('../../../../models/GovCompanyReference', () => ({ __esModule: true, default: { findAll: (...a: any[]) => refFindAll(...a), create: jest.fn() } }));
-jest.mock('../../../../models/GovCompanyPersonnel', () => ({ __esModule: true, default: { findAll: (...a: any[]) => personFindAll(...a), create: jest.fn() } }));
+jest.mock('../../../../models/GovCompanyReference', () => ({ __esModule: true, default: { findAll: (...a: any[]) => refFindAll(...a), create: jest.fn(), update: (...a: any[]) => refUpdate(...a) } }));
+jest.mock('../../../../models/GovCompanyPersonnel', () => ({ __esModule: true, default: { findAll: (...a: any[]) => personFindAll(...a), create: jest.fn(), update: (...a: any[]) => personUpdate(...a) } }));
 jest.mock('../../../../config/database', () => ({ sequelize: { query: (...a: any[]) => queryMock(...a) } }));
 
-import { approvedGroundingFacts, answerQuestionToLibrary, approvedReferences, approvedPersonnel, resumeDigest } from '../govCompanyLibrary';
+import { approvedGroundingFacts, answerQuestionToLibrary, approvedReferences, approvedPersonnel, resumeDigest, approveCompanyReference, approveCompanyPersonnel, addCompanyFact } from '../govCompanyLibrary';
 
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 beforeEach(() => jest.clearAllMocks());
@@ -56,6 +58,26 @@ describe('resumeDigest', () => {
     const long = resumeDigest('x'.repeat(500), 50);
     expect(long!.length).toBeLessThanOrEqual(50);
     expect(long!.endsWith('…')).toBe(true);
+  });
+});
+
+describe('addCompanyFact', () => {
+  it('persists the category alongside key/value', async () => {
+    factCreate.mockResolvedValue({ id: 'f1' });
+    const id = await addCompanyFact('t1', { key: 'UEI', value: 'ABC123', category: 'registrations', approved: true }, 'id-1');
+    expect(id).toBe('f1');
+    expect(factCreate).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 't1', key: 'UEI', value: 'ABC123', category: 'registrations', approved: true, approved_by_identity_id: 'id-1' }));
+  });
+});
+
+describe('approveCompanyReference / approveCompanyPersonnel', () => {
+  it('flips approved=true scoped to (id, tenant_id) for a reference', async () => {
+    await approveCompanyReference('t1', 'r1', 'me');
+    expect(refUpdate).toHaveBeenCalledWith(expect.objectContaining({ approved: true, approved_by_identity_id: 'me' }), { where: { id: 'r1', tenant_id: 't1' } });
+  });
+  it('flips approved=true scoped to (id, tenant_id) for a person', async () => {
+    await approveCompanyPersonnel('t1', 'p1', 'me');
+    expect(personUpdate).toHaveBeenCalledWith(expect.objectContaining({ approved: true, approved_by_identity_id: 'me' }), { where: { id: 'p1', tenant_id: 't1' } });
   });
 });
 
