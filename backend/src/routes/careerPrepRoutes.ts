@@ -45,7 +45,9 @@ const DashboardQuery = z.object({ interviewId: z.string().uuid().optional() }).s
 const TYPE = z.enum(['recruiter', 'hiring_manager', 'technical', 'behavioral']);
 export const InterviewBody = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('add'), company: z.string().trim().min(1).max(120), role: z.string().trim().min(1).max(120), type: TYPE,
-    startsAt: z.string().datetime().nullable(), jdText: z.string().max(20_000).optional() }).strict(),
+    // At most two years ahead: a typo like year 9999 must never reach planDates.
+    startsAt: z.string().datetime().nullable().refine((v) => v === null || Date.parse(v) < Date.now() + 2 * 366 * 86_400_000, { message: 'too far ahead' }),
+    jdText: z.string().max(20_000).optional() }).strict(),
   z.object({ mode: z.literal('practice'), role: z.string().trim().min(1).max(120), type: TYPE }).strict(),
 ]);
 

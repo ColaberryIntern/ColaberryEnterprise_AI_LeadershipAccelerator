@@ -76,6 +76,7 @@ describe('POST /api/portal/career-prep/interviews', () => {
     ['a bad type', { ...add, type: 'panel' }],
     ['an empty company', { ...add, company: '  ' }],
     ['a non-ISO date', { ...add, startsAt: 'Thursday' }],
+    ['a date years away (a typo)', { ...add, startsAt: '9999-01-01T00:00:00Z' }],
     ['an extra field (another student id)', { ...add, enrollmentId: 'enr-2' }],
   ])('400s %s', async (_n, body) => {
     expect((await request(app()).post(url).set('Authorization', token()).send(body)).status).toBe(400);
