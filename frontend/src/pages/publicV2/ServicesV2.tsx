@@ -40,25 +40,35 @@ import '../../components/publicV2/heroV8.css';
 
 const ROUTE = '/services';
 
-/** The four steps of a demo pilot, which is where Build and Guide both begin. */
-const PILOT_STEPS: readonly { title: string; body: string }[] = [
+/**
+ * The chooser's three questions, from the v5 model.
+ *
+ * Each one is about choosing BETWEEN the services, which is why they live here
+ * and not on a service page: "can we combine them", "is Build off the shelf",
+ * "does Guide add a tool". None of them states a figure, a duration or a term,
+ * so none needs a registry claim.
+ */
+const CHOOSER_FAQS: readonly { q: string; a: string }[] = [
   {
-    title: 'We map your processes',
-    body: 'With the leader and the people who run the work.',
+    q: 'Can we combine services?',
+    a:
+      'Yes. For example, Build for a custom application while your people go through Train ' +
+      'or Guide to automate the workflows around it.',
   },
   {
-    title: 'We rank them by ROI',
-    body: 'What each would return if it were automated.',
+    q: 'Is Build an off-the-shelf product?',
+    a:
+      'No. It is custom made and custom designed with your business experts, around how ' +
+      'your company and your industry actually work.',
   },
   {
-    title: 'We build the best one',
-    body: 'A working Claude Code demo on your real workflow.',
-  },
-  {
-    title: 'You decide what is next',
-    body: 'Scale it, take it to the next leader, or stop.',
+    q: 'Will Guide add another tool to our stack?',
+    a:
+      'No. Your team builds workflows that run locally in your own environment and work ' +
+      'with the systems you already have: your ERP, CRM, email, drives and chat.',
   },
 ];
+
 
 export function ServicesV2(): React.ReactElement {
   return (
@@ -85,7 +95,7 @@ export function ServicesV2(): React.ReactElement {
             people, department by department, or company-wide.
           </p>
           <p style={{ marginTop: 'var(--space-6)' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/contact">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/demo-pilot">
               Book a demo pilot
             </Link>
           </p>
@@ -93,35 +103,15 @@ export function ServicesV2(): React.ReactElement {
       </section>
 
       {/*
-          The demo pilot sits ABOVE the three cards on purpose. Two of the three
-          services begin with one, so a visitor who does not yet know which
-          service they want still has a correct first step -- which is the thing
-          the old five-card page never gave them.
-      */}
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-pilot-h">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Where Build and Guide begin</p>
-          <h2 id="cbv2-pilot-h">The demo pilot.</h2>
-          <p className="cbv2-lede">
-            Before you commit, you see AI running on one of your own processes, with the ROI
-            case beside it.
-          </p>
-          <ol className="cbv2-pilot">
-            {PILOT_STEPS.map((s, i) => (
-              <li className="cbv2-pilot__step" key={s.title}>
-                <span className="cbv2-pilot__n" aria-hidden="true">
-                  {i + 1}
-                </span>
-                <div>
-                  <h3 className="cbv2-pilot__title">{s.title}</h3>
-                  <p className="cbv2-pilot__body">{s.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
+          THE DEMO-PILOT BAND CAME OFF THIS PAGE.
 
+          It sat above the three cards so a visitor who did not yet know which
+          service they wanted still had a correct first step. The model has no
+          equivalent band on the chooser, and the fact it carried has not left
+          the page: "Starts with: Demo pilot / Demo pilot / A free account" is a
+          row in the comparison table below, and the closing band the model does
+          have offers the pilot directly.
+      */}
       <section className="cbv2-section" aria-labelledby="cbv2-three-h">
         <div className="cbv2-wrap">
           <p className="cbv2-eyebrow">Choose by what you need</p>
@@ -206,6 +196,64 @@ export function ServicesV2(): React.ReactElement {
             scope is agreed with a person who can qualify the work, rather than anchored on a
             number before anyone has seen your systems.
           </p>
+        </div>
+      </section>
+
+      {/*
+          THE CHOOSER'S OWN FAQ, which the model has and this page did not.
+
+          It is not a duplicate of the three service pages' "Before you ask."
+          Those answer questions about one service; these three are the
+          questions a visitor has while still deciding BETWEEN them, which is
+          the only thing this page is for.
+      */}
+      <section className="cbv2-section" aria-labelledby="cbv2-svc-faq">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow">Questions</p>
+          <h2 id="cbv2-svc-faq">Common questions.</h2>
+          <dl className="cbv2-faq">
+            {CHOOSER_FAQS.map((f) => (
+              <div className="cbv2-faq__item" key={f.q}>
+                <dt>{f.q}</dt>
+                <dd>{f.a}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      {/*
+          THE CLOSING BAND. Every page in the model ends on this one, and the
+          chooser was the page that ended on a pricing footnote instead. It
+          links /demo-pilot directly rather than /contact, which only resolves
+          because a redirect route catches it.
+      */}
+      <section
+        className="cbv2-rv cbv2-section cbv2-section--inverse"
+        aria-labelledby="cbv2-svc-cta"
+      >
+        <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
+          <h2 id="cbv2-svc-cta">
+            See AI run on one of your processes, before you commit to anything.
+          </h2>
+          <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
+            Bring one process and two numbers: what it costs you today, and what you need it
+            to return. We will show you the demo pilot that proves it.
+          </p>
+          <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
+            <Link className="cbv2-btn cbv2-btn--primary" to="/demo-pilot">
+              Book a demo pilot
+            </Link>
+            {/*
+              The model labels this one "Start training free". That word is
+              barred on this site by 40 TAC 807.172(d) and the copy ratchet
+              caught it on the way in, which is what the ratchet is for. The
+              destination is the company workspace, so the button says so.
+            */}
+            <Link className="cbv2-btn cbv2-btn--ghost" to="/try">
+              Open a company workspace
+            </Link>
+          </div>
         </div>
       </section>
     </>

@@ -4,7 +4,6 @@ import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim } from '../../components/publicV2/Claim';
 import { JOURNEY } from '../../config/v2Journey';
 import { trackEvent } from '../../utils/tracker';
-import { DepartmentMapSection } from './homeV2Bands';
 import { DemoPilotSection } from './homeV2Sections';
 import './journeyV2.css';
 import './howItWorksV2.css';
@@ -172,7 +171,12 @@ export default function HowItWorksV2(): React.ReactElement {
         </div>
       </section>
 
-      <DepartmentMapSection />
+      {/*
+          THE ROLLOUT BAND CAME OFF THIS PAGE. The model has no equivalent here,
+          and the same grid now sits inside the home hero, where the model does
+          put it. `DepartmentMapSection` is unrouted by this change, not
+          deleted.
+      */}
 
       <DemoPilotSection />
 
@@ -232,19 +236,22 @@ export default function HowItWorksV2(): React.ReactElement {
               </li>
             ))}
           </ol>
-        </div>
-      </section>
 
-      {/*
-          THE FIVE-STAGE MECHANISM. Kept from the previous page, with its
-          delivery labels intact -- see the note at the top of this file. The
-          three steps above are how an engagement is shaped; this is what
-          happens inside one.
-      */}
-      <section className="cbv2-section cbv2-section--sunken" aria-label="The five stages">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Inside one engagement</p>
-          <h2>Five stages, from a problem you name to software your people built.</h2>
+          {/*
+              THE FIVE-STAGE MECHANISM, FOLDED IN RATHER THAN RETIRED.
+
+              It was a band of its own, and the model has no equivalent, which
+              took this page to eight bands against the model's six. But it
+              carries the C2.2 disclosure: each stage says whether the platform
+              or a person delivers it, and two of the five are people. That is
+              an audited honesty, and matching a picture is not a reason to
+              retire one. So the band's chrome goes and its content stays, one
+              level down, under the band about how an engagement grows.
+          */}
+          <h3 className="cbv2-jy__sub">
+            Inside one engagement: five stages, from a problem you name to software your
+            people built.
+          </h3>
           <ol className="cbv2-jy__stages">
             {JOURNEY.map((s, i) => (
               <li className="cbv2-jy__stage" key={s.key}>
@@ -272,7 +279,7 @@ export default function HowItWorksV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section" aria-labelledby="cbv2-hiw-faq">
+      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-hiw-faq">
         <div className="cbv2-wrap">
           <p className="cbv2-eyebrow">Questions</p>
           <h2 id="cbv2-hiw-faq">Before you ask.</h2>

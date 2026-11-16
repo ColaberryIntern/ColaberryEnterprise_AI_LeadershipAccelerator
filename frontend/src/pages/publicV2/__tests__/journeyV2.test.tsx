@@ -222,3 +222,46 @@ describe('the content the pages depend on is complete', () => {
     expect(hrefs(how)).toContain('/proof');
   });
 });
+
+/**
+ * THE FIDELITY GUARD for /how-it-works.
+ *
+ * Ali gave this repo `colaberry-enterprise-site.html` as the design model and
+ * then said the site did not look like it. Measured at 1440px, this page ran
+ * eight bands against the model's six: it carried the home rollout grid, which
+ * the model does not have here, and gave the five-stage mechanism a band of its
+ * own, which the model has nowhere.
+ *
+ * The count is exact in both directions. The disclosure assertions below are
+ * the reason the five stages were folded into the band above rather than
+ * deleted with it: they are the C2.2 audit's finding on the page, and a band
+ * count is not a reason to retire one.
+ */
+describe('/how-it-works renders the model’s six bands, and keeps the disclosure', () => {
+  it('renders exactly six bands', () => {
+    expect((how.match(/<section/g) || []).length).toBe(6);
+  });
+
+  it('no longer carries the home rollout grid', () => {
+    // Its own heading, and the sample badge that only it puts on this page.
+    expect(how).not.toContain('cbv2-deptmap');
+    expect(textOf(how)).not.toContain('Department by department.');
+  });
+
+  it('still says which stages the platform does and which people do', () => {
+    const t = textOf(how);
+    expect(t).toContain('the platform does this');
+    expect(t).toContain('our team does this');
+  });
+
+  it('still states that two of the five are delivered by people', () => {
+    expect(textOf(how)).toContain('Two of the five are delivered by people');
+  });
+
+  it('keeps the five stages under the band above, not in one of their own', () => {
+    /* If they were a band again, the sub-heading would be an h2 in its own
+       section. The fold is what the sub-heading proves. */
+    expect(how).toContain('cbv2-jy__sub');
+    expect(how).toContain('cbv2-jy__stages');
+  });
+});
