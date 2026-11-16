@@ -95,7 +95,12 @@ import { sequelize } from '../../config/database';
  *    this contract it is the right backstop.
  * 2. Retry? None here. `ensureGovTwoTrackProject` is idempotent and the caller retries.
  * 3. Recovery if exhausted? `unregisteredDeliveryProjectsSince()` below is the detector. Run it
- *    against production to get a count rather than inferring from logs.
+ *    against production to get a count rather than inferring from logs. The REMEDY is
+ *    `lifecycleRegistrationRepair.repairUnregisteredLifecycles`, run via
+ *    `scripts/repairLifecycleRegistration.ts`: it registers whatever these detectors report,
+ *    under its own `entry_point` so a repaired row never claims a hook ran. Until L7.6 B3 that
+ *    remedy did not exist, and this hook was the only writer of the table anywhere in the
+ *    codebase - so a project that missed its hook missed it permanently.
  * 4. Handled vs not handled: this closes every path that goes through `DeliveryProject.create()`,
  *    `findOrCreate()` or an instance `.save()`. It does NOT fire for `bulkCreate` without
  *    `individualHooks: true` (`model.js:1568`), for `upsert`, for raw SQL, or when a caller passes
@@ -126,6 +131,12 @@ import { sequelize } from '../../config/database';
  * `services/sbp/storyAuthorization.ts` then refuses it authorized stories, because a missing
  * lifecycle row is absence of evidence rather than approval. The refusal happens where
  * refusals belong.
+ *
+ * THAT STATE IS NOW RECOVERABLE, which it was not until L7.6 B3. Once the project has a tenant --
+ * which `db/ensureProjectTenantSchema`'s boot backfill supplies --
+ * `lifecycleRegistrationRepair` registers it under its own `entry_point`. The log line above is
+ * still the only evidence of WHY it happened, and it is not retained, so the repair fixes the
+ * row and not the diagnosis.
  */
 
 /**
@@ -324,8 +335,16 @@ export async function studentProjectLifecycleHook(
  *
  * The student counterpart of the delivery detector below, and path-agnostic for the same
  * reason: it asks LC-01's actual question rather than checking the paths somebody remembered
- * to instrument. Returns rows so an operator can see WHICH projects, and `tenant_id` so they
- * can tell an unattributable project from a bypass.
+ * to instrument. Returns rows so an operator can see WHICH projects.
+ *
+ * `tenant_id` IS RETURNED BECAUSE THE REPAIR PATH NEEDS IT, not as a diagnosis. It was
+ * documented here as the way to tell an unattributable project from a bypass, and that was
+ * measured false on 2026-11-16: all 91 `projects` rows carry a tenant, none is null, and there
+ * is one distinct value, because `db/ensureProjectTenantSchema` backfills the column at boot. A
+ * column with one value across the table discriminates nothing. What it is good for is
+ * `lifecycleRegistrationRepair`, which must write that tenant onto the lifecycle row - and which
+ * refuses the row when it is null, because attributing a tenant is a data decision rather than a
+ * repair. L7.6 blocker B3.
  */
 export async function unregisteredStudentProjectsSince(
   since: Date = STUDENT_REGISTRATION_LIVE_SINCE,

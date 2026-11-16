@@ -29,6 +29,27 @@ import type { HealthCheck } from '../systemHealthService';
  * would report all 66 legacy rows here as LC-01 violations and send an operator to investigate a
  * breach that never happened.
  *
+ * ## WHY THIS NO LONGER CALLS A HIT A BYPASS (L7.6 blocker B3)
+ *
+ * The warning used to read "This is an LC-01 bypass: something created a project outside the
+ * models the hooks sit on." That asserts a cause this check cannot establish, and on the one
+ * production occurrence it asserted the WRONG one. Three mechanisms produce an unregistered
+ * project and they share an end state: the hook never ran (a real bypass), the student
+ * `afterCreate` hook ran and DECLINED because `resolveStudentTenantId` returned null, or the
+ * INSERT threw. Only a log line discriminates them, and that line is not retained.
+ *
+ * The detector returns `tenant_id` so an operator could tell an unattributable project from a
+ * bypass. MEASURED ON PRODUCTION 2026-11-16, that column cannot do it: all 91 `projects` rows
+ * carry `tenant_id`, 0 are null, and there is exactly 1 distinct value, because
+ * `db/ensureProjectTenantSchema` backfills it at boot. So the one genuine tenant-resolution
+ * failure reports a populated tenant and reads identically to a bypass. The discriminator was
+ * laundered by a different subsystem doing its job.
+ *
+ * So the wording states the condition, names both causes, says where the discriminating evidence
+ * would be, and names the remedy - which now exists:
+ * `scripts/repairLifecycleRegistration.ts`. A warning that misattributes a cause sends an
+ * operator hunting a breach that did not happen; this one sends them to the log and the repair.
+ *
  * ## WHY THIS FILE EXISTS, rather than the function sitting in `systemHealthService.ts`
  *
  * It was in `systemHealthService.ts`, and adding it took that file to 565 lines - over
@@ -66,9 +87,16 @@ export async function checkLifecycleRegistration(checks: HealthCheck[]): Promise
     checks.push({
       name: 'lifecycle_registration',
       severity: 'warning',
+      // STATES THE CONDITION, NAMES THE CAUSES, ASSERTS NEITHER. See the header section below on
+      // why this wording stopped calling every hit a bypass.
       detail: `${total} project(s) created since the hooks went live have NO lifecycle record `
-        + `(${delivery.length} delivery, ${student.length} student). This is an LC-01 bypass: `
-        + `something created a project outside the models the hooks sit on. First ids: ${ids}.`,
+        + `(${delivery.length} delivery, ${student.length} student). First ids: ${ids}. `
+        + 'Two causes produce this and this surface cannot tell them apart: a bypass (something '
+        + 'created a project outside the models the hooks sit on) or a student project whose '
+        + 'tenant could not be resolved, which the afterCreate hook declines to register by '
+        + 'design. Search the logs for event=student_project_lifecycle_unregistered with that id '
+        + 'to discriminate. Remedy either way: '
+        + 'scripts/repairLifecycleRegistration.ts (dry run by default).',
       metric: total,
     });
   } catch (err: any) {
