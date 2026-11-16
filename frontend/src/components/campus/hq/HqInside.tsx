@@ -5,6 +5,8 @@ import { HqPeople, type HqPerson } from './HqPeople';
 import type { HqPlaced } from './hqModel';
 import type { StaffDesk } from '../campusPeopleApi';
 import { FloorLobbyDesks } from './FloorLobbyDesk';
+import { isCareerPrepFloor } from './careerPrepDoors';
+import { CareerPrepFloor } from '../../careerPrep/CareerPrepFloor';
 
 /**
  * Campus HQ scenes 4 and 5 (H5): the elevator (a brass button panel, top floor first then G, and the floor guide) and a
@@ -70,10 +72,13 @@ export function HqCab({ s, face, people }: { s: HqState; face: string; people: H
 /** `agents`: the AI agents at this floor's front desk (C119, already filtered by floorAgents for this viewer's badge). */
 export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqFloor; people: HqPlaced<HqPerson>; agents?: StaffDesk[] }): React.ReactElement {
   const { hq } = s;
+  // Career Prep v27 (CP2.3): the student's own Career Prep floor has its own scene (one door, the floor screen, Cora).
+  if (isCareerPrepFloor(f)) return <CareerPrepFloor f={f} onElevator={s.toCab} onLobby={s.toLobby} />;
   return (
     <div className="cm-hq-floor" data-testid="cm-hq-floor">
       <div className="corr" />
       <div className="plate"><div className="n">FLOOR {f.num}</div><b>{f.label.toUpperCase()}</b></div>
+      {f.note && <p className="cm-hq-floornote" data-testid="cm-hq-floornote">{f.note}</p>}
       <div className="offices">
         {f.rooms.map((r) => {
           const here = hq.isStaff ? people.byRoom.get(r.path) ?? [] : [];

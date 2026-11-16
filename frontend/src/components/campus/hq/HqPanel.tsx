@@ -3,6 +3,8 @@ import { badgeLevel, floorStatus, openFloors, roomHref, roomName, roomsText, typ
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { StaffDesk } from '../campusPeopleApi';
+import { isCareerPrepFloor, doorsText } from './careerPrepDoors';
+import { CareerPrepPanelRows } from '../../careerPrep/CareerPrepFloor';
 import { FloorLobbyDesks } from './FloorLobbyDesk';
 
 /**
@@ -46,13 +48,18 @@ export function HqPanel({ s, who, face, placed, agents = [] }: { s: HqState; who
       <div className="cm-hq-side" data-testid="cm-hq-panel-floor">
         <div className="kick">FLOOR {f.num}</div>
         <h2>{f.label}</h2>
-        <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>
+        {isCareerPrepFloor(f)
+          ? <p className="lead">One room with Cora, your interview coach. She sees what you need, builds your plan and runs your practice sessions.</p>
+          : f.note
+            ? <p className="lead">{f.note}</p>
+            : <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>}
+        {isCareerPrepFloor(f) && <CareerPrepPanelRows />}
         {agents.length > 0 && <>
           {/* C119: the AI agent at this floor's front desk, the same card the scene's desk opens */}
           <div className="sec">At the front desk</div>
           <FloorLobbyDesks desks={agents} variant="row" />
         </>}
-        <div className="sec">Rooms on this floor <small>{f.openCount} open</small></div>
+        <div className="sec">{isCareerPrepFloor(f) ? <>Doors on this floor <small>{doorsText(f.rooms.length)}</small></> : <>Rooms on this floor <small>{f.openCount} open</small></>}</div>
         <div className="cm-hq-rlist">
           {f.rooms.map((r) => {
             const body = (<><i className={`ic ri-${r.icon}`} /><span className="t"><b>{roomName(r, hq.isStaff)}</b><code>{r.path.replace('https://', '')}</code></span>

@@ -110,3 +110,17 @@ tests/systemV2/career-prep/.
   - Notes: deviation from plan T8: partners get NO doors in Release 1 (locked "Hiring opens here with the employer
     portal") instead of the kit's 4, because the 4 Hiring pages ship in Release 3 and a door to a missing page
     would be a dead link. The door status line ("Cora has today's session ready") waits for plans (CP4).
+
+- [x] CP2.3 The Career Prep floor scene
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: CareerPrepFloor.tsx (sign, floor screen with greeting + Walk in + the stops that have data, ONE
+    large door with "Start here", Cora at her desk; every one opens /portal/career/room) and CareerPrepPanelRows
+    (Waiting on you); useCareerPrepSummary (one request per page, 60 s cache, failure resolves to null); the tower
+    swaps in this scene for the student's own Career Prep floor and shows the locked note on anyone else's;
+    the panel says "Doors on this floor · 1 door".
+  - Verification: CareerPrepFloor 6 tests (every opener's href, no stop without data, works with no summary, floor
+    number from the floor); 2,226 frontend campus + Career Prep tests pass; tsc clean.
+  - Notes: deviation: the Playwright layout check (1440 and 390, 44 px targets, no sideways scroll) needs the app
+    running with a seeded student, which T26 builds; it runs there against this scene instead of here. The CSS
+    gives every link a min-height of 44 px and stacks Cora under 900 px.

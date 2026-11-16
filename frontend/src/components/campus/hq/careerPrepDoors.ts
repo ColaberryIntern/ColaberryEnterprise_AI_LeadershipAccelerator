@@ -31,3 +31,7 @@ export function careerPrepLockedNote(audience: CampusAudience): string {
 }
 
 export const doorsText = (n: number): string => `${n} ${n === 1 ? 'door' : 'doors'}`;
+
+/** The student's own Career Prep floor (the one door built above), which gets its own scene and panel. */
+export const isCareerPrepFloor = (f: { own?: boolean; rooms: ReadonlyArray<{ path: string }> }): boolean =>
+  !!f.own && f.rooms.length === 1 && f.rooms[0].path === CAREER_PREP_ROOM_PATH;
