@@ -6,34 +6,34 @@
  * data-theme). Fonts are self-hosted (see studioFonts.css) — no Google Fonts call.
  */
 .gps{
-  --gps-bg:#eef1f5; --gps-surface:#ffffff; --gps-sunk:#e5e9ef; --gps-line:#d3d9e2; --gps-fg:#172133; --gps-muted:#5d6a7e;
-  --gps-accent:#23408e; --gps-accent-soft:#e2e8f6; --gps-paper:#fdfdfb; --gps-paper-ink:#1d2430;
-  --gps-ok:#1d7a4c; --gps-ok-soft:#dff2e7; --gps-warn:#a35b00; --gps-warn-soft:#fbeed6; --gps-bad:#b4302a; --gps-bad-soft:#f9e1df;
+  --gps-bg:#f4f6f9; --gps-surface:#ffffff; --gps-sunk:#eef1f6; --gps-line:#e1e6ee; --gps-line-strong:#c9d1dd; --gps-fg:#111a2b; --gps-muted:#5b6779;
+  --gps-accent:#1f3f8f; --gps-accent-soft:#e9eefa; --gps-paper:#fdfdfb; --gps-paper-ink:#1d2430;
+  --gps-ok:#17794a; --gps-ok-soft:#e3f4eb; --gps-warn:#9a5800; --gps-warn-soft:#fdf1dc; --gps-bad:#b42d26; --gps-bad-soft:#fbe6e4;
   --gps-pink:#c43f7c; --gps-pink-soft:#f8e3ed; --gps-red:#b4302a; --gps-red-soft:#f9e1df; --gps-gold:#9a6f00; --gps-gold-soft:#f6ecd0; --gps-glove:#4b5568; --gps-glove-soft:#e8ebf0;
-  --gps-agent:#5a3fb0; --gps-agent-soft:#ece7fa;
+  --gps-agent:#5b3fb5; --gps-agent-soft:#f0ecfc; --gps-shadow-sm:0 1px 2px rgba(17,26,43,.06), 0 1px 3px rgba(17,26,43,.04); --gps-shadow-md:0 4px 14px rgba(17,26,43,.08); --gps-radius:10px; --gps-radius-sm:8px;
   --gps-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --gps-serif:"IBM Plex Serif",Georgia,"Times New Roman",serif; --gps-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   color:var(--gps-fg); background:var(--gps-bg); font-family:var(--gps-sans); font-size:14px; line-height:1.5;
 }
 .gps-dark-tokens{
-  --gps-bg:#0f1520; --gps-surface:#161e2c; --gps-sunk:#1d2738; --gps-line:#2b3850; --gps-fg:#e3e9f3; --gps-muted:#94a2b8;
-  --gps-accent:#9db6f2; --gps-accent-soft:#1f2d4d; --gps-paper:#1b2230; --gps-paper-ink:#e6e9ef;
-  --gps-ok:#5ccf98; --gps-ok-soft:#163626; --gps-warn:#f0b25a; --gps-warn-soft:#3a2b13; --gps-bad:#ff8f86; --gps-bad-soft:#3d1c1a;
+  --gps-bg:#0e131c; --gps-surface:#151c28; --gps-sunk:#1c2534; --gps-line:#273246; --gps-line-strong:#34425a; --gps-fg:#e6ebf3; --gps-muted:#9aa7ba;
+  --gps-accent:#a3bbf5; --gps-accent-soft:#1e2b48; --gps-paper:#1b2230; --gps-paper-ink:#e6e9ef;
+  --gps-ok:#5fcf9a; --gps-ok-soft:#14321f; --gps-warn:#f0b45e; --gps-warn-soft:#382912; --gps-bad:#ff8f86; --gps-bad-soft:#3b1b19;
   --gps-pink:#f08bb9; --gps-pink-soft:#3b1d2c; --gps-red:#ff8f86; --gps-red-soft:#3d1c1a; --gps-gold:#e8c35c; --gps-gold-soft:#372d12; --gps-glove:#b7c0d0; --gps-glove-soft:#252f40;
-  --gps-agent:#bba8f5; --gps-agent-soft:#2a2448; color-scheme:dark;
+  --gps-agent:#bba8f5; --gps-agent-soft:#27213f; --gps-shadow-sm:0 1px 2px rgba(0,0,0,.35); --gps-shadow-md:0 6px 18px rgba(0,0,0,.45); --gps-radius:10px; --gps-radius-sm:8px; color-scheme:dark;
 }
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .gps{
-  --gps-bg:#0f1520; --gps-surface:#161e2c; --gps-sunk:#1d2738; --gps-line:#2b3850; --gps-fg:#e3e9f3; --gps-muted:#94a2b8;
-  --gps-accent:#9db6f2; --gps-accent-soft:#1f2d4d; --gps-paper:#1b2230; --gps-paper-ink:#e6e9ef;
-  --gps-ok:#5ccf98; --gps-ok-soft:#163626; --gps-warn:#f0b25a; --gps-warn-soft:#3a2b13; --gps-bad:#ff8f86; --gps-bad-soft:#3d1c1a;
+  --gps-bg:#0e131c; --gps-surface:#151c28; --gps-sunk:#1c2534; --gps-line:#273246; --gps-line-strong:#34425a; --gps-fg:#e6ebf3; --gps-muted:#9aa7ba;
+  --gps-accent:#a3bbf5; --gps-accent-soft:#1e2b48; --gps-paper:#1b2230; --gps-paper-ink:#e6e9ef;
+  --gps-ok:#5fcf9a; --gps-ok-soft:#14321f; --gps-warn:#f0b45e; --gps-warn-soft:#382912; --gps-bad:#ff8f86; --gps-bad-soft:#3b1b19;
   --gps-pink:#f08bb9; --gps-pink-soft:#3b1d2c; --gps-red:#ff8f86; --gps-red-soft:#3d1c1a; --gps-gold:#e8c35c; --gps-gold-soft:#372d12; --gps-glove:#b7c0d0; --gps-glove-soft:#252f40;
-  --gps-agent:#bba8f5; --gps-agent-soft:#2a2448; color-scheme:dark;
+  --gps-agent:#bba8f5; --gps-agent-soft:#27213f; --gps-shadow-sm:0 1px 2px rgba(0,0,0,.35); --gps-shadow-md:0 6px 18px rgba(0,0,0,.45); --gps-radius:10px; --gps-radius-sm:8px; color-scheme:dark;
 }}
 :root[data-theme="dark"] .gps{
-  --gps-bg:#0f1520; --gps-surface:#161e2c; --gps-sunk:#1d2738; --gps-line:#2b3850; --gps-fg:#e3e9f3; --gps-muted:#94a2b8;
-  --gps-accent:#9db6f2; --gps-accent-soft:#1f2d4d; --gps-paper:#1b2230; --gps-paper-ink:#e6e9ef;
-  --gps-ok:#5ccf98; --gps-ok-soft:#163626; --gps-warn:#f0b25a; --gps-warn-soft:#3a2b13; --gps-bad:#ff8f86; --gps-bad-soft:#3d1c1a;
+  --gps-bg:#0e131c; --gps-surface:#151c28; --gps-sunk:#1c2534; --gps-line:#273246; --gps-line-strong:#34425a; --gps-fg:#e6ebf3; --gps-muted:#9aa7ba;
+  --gps-accent:#a3bbf5; --gps-accent-soft:#1e2b48; --gps-paper:#1b2230; --gps-paper-ink:#e6e9ef;
+  --gps-ok:#5fcf9a; --gps-ok-soft:#14321f; --gps-warn:#f0b45e; --gps-warn-soft:#382912; --gps-bad:#ff8f86; --gps-bad-soft:#3b1b19;
   --gps-pink:#f08bb9; --gps-pink-soft:#3b1d2c; --gps-red:#ff8f86; --gps-red-soft:#3d1c1a; --gps-gold:#e8c35c; --gps-gold-soft:#372d12; --gps-glove:#b7c0d0; --gps-glove-soft:#252f40;
-  --gps-agent:#bba8f5; --gps-agent-soft:#2a2448; color-scheme:dark;
+  --gps-agent:#bba8f5; --gps-agent-soft:#27213f; --gps-shadow-sm:0 1px 2px rgba(0,0,0,.35); --gps-shadow-md:0 6px 18px rgba(0,0,0,.45); --gps-radius:10px; --gps-radius-sm:8px; color-scheme:dark;
 }
 .gps *{box-sizing:border-box}
 .gps button{cursor:pointer}
@@ -257,7 +257,6 @@
 .gps-tour-dots span.on{background:var(--gps-accent)}
 .gps-tour-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
 @keyframes gps-tour-in{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
-@media (prefers-reduced-motion:reduce){.gps *{animation:none!important;transition:none!important}}
 
 /* v3 (T15) Needs-you inbox + shared inline field */
 .gps-input{border:1px solid var(--gps-line);background:var(--gps-surface);color:var(--gps-fg);border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;min-width:0;flex:1 1 auto}
@@ -334,3 +333,124 @@
   .gps-pdf-page{padding:22px 18px}
   .gps-vh .gps-act{margin-left:0}
 }
+
+/* v5 style pass (format only): rail, agent panel, palette */
+
+/* --- 1. shared primitives --------------------------------------------- */
+.gps .gps-btn{border-radius:var(--gps-radius-sm);border:1px solid var(--gps-line-strong);min-height:36px;font-weight:600}
+.gps .gps-btn.sm{min-height:32px}
+.gps .gps-btn:hover{border-color:var(--gps-accent)}
+.gps .gps-btn.primary{background:var(--gps-accent);border-color:var(--gps-accent);color:var(--gps-surface)}
+.gps .gps-btn.primary:hover{border-color:var(--gps-accent);filter:brightness(.95)}
+.gps .gps-input{border-radius:var(--gps-radius-sm);border:1px solid var(--gps-line-strong);min-height:36px;padding:0 10px}
+.gps .gps-input:focus{outline:none;border-color:var(--gps-accent);box-shadow:0 0 0 3px var(--gps-accent-soft)}
+.gps .gps-tag{border-radius:999px;padding:2px 8px;font-size:11px;font-weight:600}
+.gps :focus-visible{outline:2px solid var(--gps-accent);outline-offset:2px}
+
+/* --- 2. left rail ----------------------------------------------------- */
+.gps .gps-rail{background:var(--gps-surface);border:1px solid var(--gps-line);border-radius:var(--gps-radius);box-shadow:var(--gps-shadow-sm);padding:6px 8px 10px;gap:2px}
+@media (max-width:760px){.gps .gps-rail{background:none;border:0;box-shadow:none;padding:0 0 4px}}
+
+/* group headings */
+.gps .gps-rail .gps-grp{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--gps-muted);padding:14px 10px 6px;border-top:1px solid var(--gps-line);margin-top:6px}
+.gps .gps-rail .gps-grp:first-child{padding-top:8px;border-top:0;margin-top:0}
+
+/* "Done" list */
+.gps .gps-rail .gps-past{font-size:12px;color:var(--gps-muted);line-height:1.5;padding:0 10px 8px;gap:3px}
+.gps .gps-rail .gps-past span::before{color:var(--gps-ok);font-weight:700;margin-right:6px}
+
+/* all rail steps */
+.gps .gps-rail .gps-step{display:flex;align-items:center;gap:10px;padding:9px 10px;min-height:44px;border-radius:var(--gps-radius-sm);position:relative;font-size:13.5px;font-weight:500;color:var(--gps-fg);box-shadow:none;transition:background-color .15s,color .15s}
+.gps .gps-rail .gps-step:hover{background:var(--gps-sunk);color:var(--gps-fg)}
+
+/* step icons */
+.gps .gps-rail .gps-step .gps-ic{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;border:1.5px solid var(--gps-line-strong);background:var(--gps-surface);color:var(--gps-muted);font-size:11px;font-weight:700}
+.gps .gps-rail .gps-step .gps-ic.done{background:var(--gps-ok);border-color:var(--gps-ok);color:var(--gps-surface)}
+.gps .gps-rail .gps-step .gps-ic.now{background:var(--gps-accent);border-color:var(--gps-accent);color:var(--gps-surface)}
+
+/* current step */
+.gps .gps-rail .gps-step[aria-current="page"]{background:var(--gps-accent-soft);color:var(--gps-accent);font-weight:600;box-shadow:none}
+.gps .gps-rail .gps-step[aria-current="page"]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--gps-accent);z-index:1}
+.gps .gps-rail .gps-step[aria-current="page"] .gps-ic:not(.done){background:var(--gps-accent);border-color:var(--gps-accent);color:var(--gps-surface)}
+
+/* connector line between production steps */
+.gps .gps-rail .gps-step[data-tour]:not([data-v="package"])::after{content:"";position:absolute;left:21px;top:calc(50% + 13px);height:calc(100% - 26px);width:2px;background:var(--gps-line-strong);z-index:0}
+.gps .gps-rail .gps-step[data-tour]:has(.gps-ic.done)::after{background:var(--gps-ok)}
+@media (max-width:760px){.gps .gps-rail .gps-step[data-tour]::after{display:none}}
+
+/* trailing count pills (not the Needs badge) */
+.gps .gps-rail .gps-step small:not(.gps-rail-badge){margin-left:auto;background:var(--gps-sunk);color:var(--gps-muted);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
+.gps .gps-rail .gps-step[aria-current="page"] small:not(.gps-rail-badge){background:var(--gps-surface)}
+
+/* "Needs you" rail item */
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]{border:1px solid var(--gps-line);border-radius:var(--gps-radius-sm);min-height:48px;font-weight:700;font-size:14px}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.warn){background:var(--gps-warn-soft);border-color:var(--gps-warn);border-color:color-mix(in srgb, var(--gps-warn) 45%, transparent)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.warn)::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--gps-warn);z-index:1}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.warn) .gps-ic{background:var(--gps-warn);border-color:var(--gps-warn);color:var(--gps-surface)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.bad){background:var(--gps-bad-soft);border-color:var(--gps-bad);border-color:color-mix(in srgb, var(--gps-bad) 45%, transparent)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.bad)::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--gps-bad);z-index:1}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.bad) .gps-ic{background:var(--gps-bad);border-color:var(--gps-bad);color:var(--gps-surface)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.ok){background:var(--gps-surface);border-color:var(--gps-line)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"]:has(.gps-rail-badge.ok) .gps-ic{background:var(--gps-surface);border-color:var(--gps-line-strong);color:var(--gps-muted)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"] .gps-rail-badge{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;height:22px;min-width:26px;border-radius:999px;padding:0 7px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--gps-surface)}
+.gps .gps-rail .gps-step[data-testid="rail-step-needs"][aria-current="page"]{outline:2px solid var(--gps-accent);outline-offset:1px}
+
+/* --- 3. right agent panel --------------------------------------------- */
+/* .gps-ag is the only scroll container */
+.gps .gps-ag{background:var(--gps-surface);border:1px solid var(--gps-line);border-radius:var(--gps-radius);box-shadow:var(--gps-shadow-sm);max-height:calc(100vh - 88px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--gps-line-strong) transparent}
+.gps .gps-ask{max-height:none;overflow:visible}
+
+/* activity log: capped height + timeline + bottom fade */
+.gps .gps-ag-log{position:relative;flex:none;max-height:220px;overflow-y:auto;padding:12px 14px;gap:10px;border-bottom:1px solid var(--gps-line);-webkit-mask-image:linear-gradient(to bottom,#000 85%,transparent);mask-image:linear-gradient(to bottom,#000 85%,transparent)}
+.gps .gps-ag-log::before{content:"";position:absolute;left:17px;top:16px;bottom:16px;width:2px;background:var(--gps-line);z-index:0}
+.gps .gps-ag-log .gps-ev{position:relative;z-index:1}
+.gps .gps-ag-log .gps-ev::before{width:8px;height:8px;box-shadow:0 0 0 2px var(--gps-surface)}
+
+/* pin the header to the top */
+.gps .gps-ag > header{position:sticky;top:0;z-index:3;background:var(--gps-surface);padding:12px 14px;border-bottom:1px solid var(--gps-line)}
+.gps .gps-ag .gps-av{width:32px;height:32px;border-radius:8px;background:var(--gps-agent-soft);color:var(--gps-agent);font-size:12px;font-weight:700}
+.gps .gps-ag header h2{font-size:14px;font-weight:600;color:var(--gps-fg)}
+.gps .gps-ag header p{font-size:12px;color:var(--gps-muted);line-height:1.4}
+.gps .gps-ag .gps-state{align-self:flex-start;white-space:nowrap;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
+.gps .gps-ag .gps-state.warn{background:var(--gps-warn-soft);color:var(--gps-warn)}
+.gps .gps-ag .gps-state.agent{background:var(--gps-agent-soft);color:var(--gps-agent)}
+
+/* live run message strip */
+.gps .gps-ag > header + .gps-small{background:var(--gps-agent-soft);color:var(--gps-agent);font-size:12px;padding:7px 14px !important;border-bottom:1px solid var(--gps-line)}
+
+/* "Needs you" section */
+.gps .gps-ask[data-testid="agent-needs"]{padding:14px;border-top:1px solid var(--gps-line);gap:10px;background:var(--gps-surface)}
+.gps .gps-ask[data-testid="agent-needs"] h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--gps-muted);display:flex;align-items:center;justify-content:space-between}
+.gps .gps-ask[data-testid="agent-needs"] h3 .gps-num{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;border-radius:999px;font-size:11.5px;font-weight:700;background:var(--gps-warn);color:var(--gps-surface)}
+.gps .gps-ask[data-testid="agent-needs"]:not(:has(.gps-q)) h3 .gps-num{background:var(--gps-ok)}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q{background:var(--gps-surface);border:1px solid var(--gps-line);border-left:3px solid var(--gps-warn);border-radius:var(--gps-radius-sm);padding:12px;gap:6px;box-shadow:var(--gps-shadow-sm)}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q:hover,.gps .gps-ask[data-testid="agent-needs"] .gps-q:focus-within{border-color:var(--gps-line-strong);border-left-color:var(--gps-warn);background:var(--gps-warn-soft)}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q .gps-tag{background:var(--gps-warn-soft);color:var(--gps-warn)}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q b{font-size:13px;font-weight:600;color:var(--gps-fg);line-height:1.4}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q .gps-why{font-size:12px;color:var(--gps-muted);line-height:1.45}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q > div{margin-top:4px}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q input{width:100%;min-height:36px}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q .gps-btn.primary{min-height:36px}
+.gps .gps-ask[data-testid="agent-needs"] .gps-q > .gps-btn.sm{width:100%;justify-content:center}
+.gps .gps-ask[data-testid="agent-needs"] > div > .gps-btn.sm{width:100%;justify-content:center}
+
+/* "Ask the agent" — pinned to the bottom of the panel */
+.gps .gps-ask:has([data-testid="agent-ask"]){position:sticky;bottom:0;z-index:2;margin-top:0 !important;background:linear-gradient(180deg,var(--gps-agent-soft),var(--gps-surface));border-top:1px solid var(--gps-line);padding:12px 14px 14px;gap:8px;box-shadow:0 -6px 16px rgba(17,26,43,.06)}
+:root[data-theme="dark"] .gps .gps-ask:has([data-testid="agent-ask"]),.gps-dark-tokens .gps-ask:has([data-testid="agent-ask"]){box-shadow:0 -6px 16px rgba(0,0,0,.35)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .gps .gps-ask:has([data-testid="agent-ask"]){box-shadow:0 -6px 16px rgba(0,0,0,.35)}}
+.gps .gps-ask:has([data-testid="agent-ask"]) h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--gps-agent)}
+.gps .gps-ask:has([data-testid="agent-ask"]) .gps-input{min-height:38px;background:var(--gps-surface);border:1px solid var(--gps-line-strong)}
+.gps .gps-ask:has([data-testid="agent-ask"]) .gps-input:focus{border-color:var(--gps-agent);box-shadow:0 0 0 3px var(--gps-agent-soft)}
+.gps .gps-ask:has([data-testid="agent-ask"]) .gps-btn.sm{min-height:38px;background:var(--gps-agent);border-color:var(--gps-agent);color:var(--gps-surface)}
+.gps .gps-ask:has([data-testid="agent-ask"]) .gps-btn.sm:disabled{opacity:.55}
+.gps .gps-ask:has([data-testid="agent-ask"]) .gps-small{font-size:13px;color:var(--gps-fg);background:var(--gps-surface);border-left:3px solid var(--gps-agent);border-radius:6px;padding:8px 10px;max-height:30vh;overflow-y:auto}
+
+/* below 1180px (panel drops under the content) undo the sticky/scroll layout */
+@media (max-width:1180px){
+  .gps .gps-ag{max-height:none;overflow:visible}
+  .gps .gps-ag-log{max-height:none;overflow:visible;-webkit-mask-image:none;mask-image:none}
+  .gps .gps-ag > header{position:static}
+  .gps .gps-ask:has([data-testid="agent-ask"]){position:static;box-shadow:none}
+}
+
+@media (prefers-reduced-motion:reduce){.gps *{animation:none!important;transition:none!important}}
