@@ -1,4 +1,31 @@
-import { MARKETING_SPEND_SCHEMA_STATEMENTS } from '../ensureMarketingSpendSchema';
+import { Sequelize } from 'sequelize';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { injectReplacements } = require('sequelize/lib/utils/sql');
+import {
+  MARKETING_SPEND_SCHEMA_STATEMENTS, REQUIRED_COLUMNS_QUERY, requiredColumnTables,
+} from '../ensureMarketingSpendSchema';
+
+/**
+ * Boot crash 2026-11-16: `table_name = ANY(:tables)` was expanded by Sequelize to
+ * `ANY('marketing_spend_syncs')`, a malformed array literal, and production crash-looped.
+ * This runs the query through Sequelize's own replacement step (no database connection).
+ */
+describe('marketing spend schema: required-columns check query', () => {
+  const s = new Sequelize('postgres://u:p@127.0.0.1:5432/never_connected', { logging: false });
+  afterAll(() => s.close());
+
+  it('expands the table list into IN (...), never into ANY(\'...\')', () => {
+    const sql: string = injectReplacements(REQUIRED_COLUMNS_QUERY, s.getDialect() === 'postgres' ? (s as any).dialect : null, { tables: requiredColumnTables() });
+    expect(sql).toContain("table_name IN ('marketing_spend_syncs')");
+    expect(sql).not.toMatch(/ANY\s*\(\s*'/);
+  });
+
+  it('lists each table once', () => {
+    const t = requiredColumnTables();
+    expect(new Set(t).size).toBe(t.length);
+    expect(t.length).toBeGreaterThan(0);
+  });
+});
 
 /**
  * ADS-9: rows_skipped is persisted, so "success with 12 rows skipped" is visible in the ledger
