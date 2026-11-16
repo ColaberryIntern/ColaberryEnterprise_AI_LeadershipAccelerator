@@ -6,16 +6,11 @@
  * section budget is respected, and every figure carries an evidence class.
  */
 import React from 'react';
-import fs from 'fs';
-import path from 'path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import HomeV2 from '../HomeV2';
 import { SERVICES } from '../../../config/v2Content';
-import { SEGMENTS, readySegments } from '../../../config/v2Segments';
 
-/** Read off disk, because a door is only safe if the route it points at is declared. */
-const APP = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'App.tsx'), 'utf8');
 
 const html = (): string =>
   renderToStaticMarkup(
@@ -131,10 +126,50 @@ describe('HomeV2 — structure', () => {
    * by SEGMENT, so it was the right job on the wrong axis and the natural thing
    * to give up. One section out, one in; the count is unchanged.
    */
-  it('stays within the twelve-section budget', () => {
+  /*
+   * 2026-11-15: THE BUDGET BECAME A NUMBER, not a ceiling.
+   *
+   * Ali gave this repo `colaberry-enterprise-site.html` as the design model and
+   * then said the site did not look like it. Measured side by side at 1440px,
+   * home was running ten bands against the model's seven. A ceiling of twelve
+   * cannot catch that -- ten is comfortably under it -- which is why the page
+   * drifted three bands past the model while the guard stayed green.
+   *
+   * So it is now exact, and it is exact in both directions: a band added or a
+   * band dropped both turn it red, and either is a decision worth making on
+   * purpose rather than noticing in a screenshot three weeks later.
+   */
+  it('renders exactly the model’s seven bands', () => {
     const count = (html().match(/<section/g) || []).length;
-    expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThanOrEqual(12);
+    expect(count).toBe(7);
+  });
+
+  it('carries each of the seven, in the model’s order', () => {
+    const text = textOf(html());
+    const spine = [
+      'Department by department.', // folded into the hero, as the model has it
+      'Build. Guide. Train.',
+      'No big-bang project.',
+      'Trust before intelligence',
+      'Every department’s AI work, in one place.',
+      'Short on purpose.',
+      'See what AI could become inside your company.',
+    ];
+    let at = -1;
+    spine.forEach((heading) => {
+      const next = text.indexOf(heading);
+      expect([heading, next > -1]).toEqual([heading, true]);
+      expect([heading, next > at]).toEqual([heading, true]);
+      at = next;
+    });
+  });
+
+  it('does not bring back a band the model has no room for', () => {
+    const text = textOf(html());
+    [
+      'Who is this for?', // the segment doors, now in the footer
+      'Built for outcomes', // merged into "Short on purpose."
+    ].forEach((gone) => expect(text).not.toContain(gone));
   });
 
   it('renders both hero CTAs', () => {
@@ -156,41 +191,22 @@ describe('HomeV2 — structure', () => {
    * are GENERATED from readySegments(), the same source App.tsx maps to routes,
    * so a door cannot point at a page that is not mounted.
    */
-  it('renders a door for every ready segment, and no others', () => {
-    const text = textOf(html());
-    readySegments().forEach((s) => expect(text).toContain(s.name));
-    expect(readySegments().length).toBeGreaterThan(0);
-  });
-
-  it('renders exactly as many doors as there are ready segments', () => {
+  /*
+   * THE DOOR GUARDS MOVED TO THE FOOTER, they were not dropped.
+   *
+   * The "Who is this for?" band came off this page when home was brought to the
+   * v5 model, which has no equivalent band. The property those five assertions
+   * protected is not about home: it is that the segment links are GENERATED
+   * from `readySegments()`, the same source `App.tsx` maps to routes, so a link
+   * cannot point at a page that is not mounted. That is now the footer's job,
+   * and the assertions live in `consentAndSeo.test.tsx` beside the other footer
+   * guards. Deleting them here without moving them would have retired a live
+   * guard in the same commit that moved the thing it guards.
+   */
+  it('no longer renders the segment doors', () => {
     const h = html();
-    const doors = (h.match(/class="cbv2-door"/g) || []).length;
-    expect(doors).toBe(readySegments().length);
-  });
-
-  it('does not render a door for a segment that is not ready', () => {
-    const text = textOf(html());
-    const unready = SEGMENTS.filter((s) => !s.ready);
-    // Guards the guard: if every segment were ready this would pass vacuously.
-    expect(unready.length).toBeGreaterThan(0);
-    unready.forEach((s) => expect(text).not.toContain(s.name));
-  });
-
-  it('points every door at a route App.tsx actually mounts', () => {
-    const h = html();
-    readySegments().forEach((s) => {
-      expect(h).toContain(`href="/${s.slug}"`);
-    });
-    // The routes are generated from the same call, so this asserts the pairing
-    // rather than a hand-maintained list.
-    expect(APP).toContain('readySegments().map');
-  });
-
-  it('instruments each door', () => {
-    const h = html();
-    readySegments().forEach((s) => {
-      expect(h).toContain(`data-track="home_door_${s.slug}"`);
-    });
+    expect(h).not.toContain('class="cbv2-door"');
+    expect(textOf(h)).not.toContain('Who is this for?');
   });
 
   it('links each of the three services to its page', () => {

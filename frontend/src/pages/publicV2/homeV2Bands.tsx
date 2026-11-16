@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { SampleBadge } from '../../components/publicV2/Claim';
+import DepartmentMap from '../../components/publicV2/DepartmentMap';
 import { SERVICE_SHAPES } from '../../config/v2Pricing';
 
 /**
@@ -16,89 +16,17 @@ import { SERVICE_SHAPES } from '../../config/v2Pricing';
 
 /* ------------------------------------------------------- department map -- */
 
-type DeptStatus = 'automating' | 'pilot' | 'next' | 'none';
-
-interface Dept {
-  readonly n: string;
-  readonly name: string;
-  readonly leader: string;
-  readonly status: DeptStatus;
-  readonly processes: readonly string[];
-}
-
-/**
- * THIS IS INVENTED DATA AND IS LABELLED AS SUCH.
- *
- * It depicts what the platform's department view looks like for a company
- * partway through a rollout. No Colaberry customer is shown, no real rollout is
- * described, and no figure appears anywhere in it -- the status chips are
- * states, not measurements. The band carries a <SampleBadge>, and
- * HomeV2.test.tsx fails if that badge ever goes missing, because an unlabelled
- * mock of a customer dashboard is a fabricated proof claim.
- *
- * The departments and the processes under them are ordinary back-office work
- * chosen to be recognisable, not drawn from any engagement.
- */
-const DEPARTMENTS: readonly Dept[] = [
-  {
-    n: '01',
-    name: 'Finance',
-    leader: 'CFO',
-    status: 'automating',
-    processes: ['Invoice matching', 'Month-end close prep', 'Expense review'],
-  },
-  {
-    n: '02',
-    name: 'Operations',
-    leader: 'COO',
-    status: 'automating',
-    processes: ['Order exception triage', 'Vendor onboarding', 'Scheduling'],
-  },
-  {
-    n: '03',
-    name: 'Customer service',
-    leader: 'VP Support',
-    status: 'pilot',
-    processes: ['Ticket routing', 'Reply drafting', 'Refund checks'],
-  },
-  {
-    n: '04',
-    name: 'Sales',
-    leader: 'CRO',
-    status: 'next',
-    processes: ['Lead research', 'Proposal first drafts', 'CRM hygiene'],
-  },
-  {
-    n: '05',
-    name: 'HR',
-    leader: 'CHRO',
-    status: 'none',
-    processes: ['Candidate screening', 'Policy questions', 'Onboarding'],
-  },
-  {
-    n: '06',
-    name: 'IT & Data',
-    leader: 'CIO',
-    status: 'none',
-    processes: ['Access requests', 'Report requests', 'Data cleanup'],
-  },
-];
-
-/** Status chips carry a WORD, never colour alone. */
-const STATUS_LABEL: Readonly<Record<DeptStatus, string>> = {
-  automating: 'Automating',
-  pilot: 'Demo pilot',
-  next: 'Next leader',
-  none: 'Not started',
-};
-
 /**
  * "Your company, moving to AI. Department by department."
  *
- * The band exists to make the rollout concrete. "Department by department" is
- * the central promise of how an engagement scales, and in words alone it is
- * abstract; as a grid of departments at different stages it is obvious at a
- * glance, which is the whole argument for the picture.
+ * The grid itself now lives in `components/publicV2/DepartmentMap.tsx`, because
+ * the v5 model renders it inside the home hero rather than as a band, and a
+ * component reaching up into a page's band file would be the wrong way round.
+ *
+ * This wrapper is what /how-it-works still renders. The model has no equivalent
+ * band there either, so it is expected to go when that page is brought to the
+ * model; it is kept until then rather than deleted out from under a page that
+ * is still using it.
  */
 export function DepartmentMapSection(): React.ReactElement {
   return (
@@ -116,33 +44,7 @@ export function DepartmentMapSection(): React.ReactElement {
           </p>
         </div>
 
-        <p className="cbv2-deptmap__badge">
-          <SampleBadge inverse />
-        </p>
-
-        <ul className="cbv2-deptmap">
-          {DEPARTMENTS.map((d) => (
-            <li className={`cbv2-dept cbv2-dept--${d.status}`} key={d.name}>
-              <div className="cbv2-dept__head">
-                <div>
-                  <h3 className="cbv2-dept__name">{d.name}</h3>
-                  <p className="cbv2-dept__leader">{d.leader}</p>
-                </div>
-                <span className="cbv2-dept__n" aria-hidden="true">
-                  {d.n}
-                </span>
-              </div>
-              <ul className="cbv2-dept__procs">
-                {d.processes.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-              {/* The chip states the stage in words. Colour repeats it; it never
-                  carries it alone. */}
-              <p className="cbv2-dept__status">{STATUS_LABEL[d.status]}</p>
-            </li>
-          ))}
-        </ul>
+        <DepartmentMap />
 
         <p className="cbv2-deptmap__foot">
           <Link className="cbv2-btn cbv2-btn--primary" to="/how-it-works">
