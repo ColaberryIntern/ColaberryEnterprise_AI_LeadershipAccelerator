@@ -194,3 +194,36 @@ any of them, and their own test files are untouched:
   - Tab budget: the 7-tab pin in `AgentDetailLayout.test.tsx` is untouched because the new tab is
     conditional on a frozen, test-pinned agent list. Two tests added — the 8th tab for her, and a
     control that an agent not on the list still renders exactly 7.
+
+---
+
+## 2026-11-15 — the fold-in deployed and production-verified
+
+- [x] Deploy PR #4067 and verify the folded surfaces in the running containers
+  - Date: 2026-11-15
+  - Session: CC-20261109-k2w7
+  - What changed: nothing in the repo. Ali merged PR #4067; the branch was rebased onto main
+    first to clear a conflict in this file (PR #4065 and PR #4067 both appended here; both
+    entries were kept). Deployed with `./scripts/deploy-prod.sh backend nginx` in registry mode,
+    exit 0, box at main HEAD `0e73f94ea`.
+  - Verification: the fold-in commit `9164665b7` proven an ancestor of the deployed tree on the
+    box; `governedEnablementAgents.js` and the refusal text `requires Ali or a super_admin` found
+    inside the running backend container with a control string at 0; five strings new to this PR
+    (`Outbound approvals`, `moved onto her agent workspace`, `waiting for a decision`,
+    `difference between this tab and Email`, `global, not per-agent`) found in the frontend chunks
+    copied out of the running nginx container, with two pre-existing tab labels as positive
+    controls and a bogus string at 0; the retired page's header `Maya: go live` at 0; the carrying
+    chunk served 200 over HTTPS; all three admin URLs resolve. Read-only SELECTs confirm nothing
+    was switched on: `enabled=false`, 0 promotions, 0 queued messages, 0 tool grants.
+  - Notes: **Two of my own checks were bad instruments and were discarded rather than reported.**
+    (1) Comparing the running image to `sha-<HEAD>` returned MISSING for both services, because
+    registry mode pulls `:main` and the sha tag is never pulled locally; replaced with running-id
+    equals `:main`-id, on top of the registry comparison `deploy-prod.sh` had already made before
+    pulling. (2) Grepping `main.<hash>.js` for the new strings returned 0 — but it also returned 0
+    for `Tools & access` and `Decisions & evidence`, live for months, which is what exposed the
+    instrument rather than the deploy: the admin UI is code-split across 399 chunks. Separately,
+    compose again reported `Running` rather than `Recreated` with uptime unchanged, because a
+    concurrent session had already pulled the same image 25 minutes earlier.
+  - Gap unchanged: `agent_domain_tool_grants` is still 0 rows across all 276 agents, so her
+    dashboard still reads "held without a grant". Writing those rows is a production database
+    write through the change-request spine, not something any deploy performs.
