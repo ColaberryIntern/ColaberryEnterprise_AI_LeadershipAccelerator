@@ -20,16 +20,39 @@ describe('the registry is internally consistent', () => {
     expect(assertClassificationKeysAreUnique()).toBe(CLASSIFICATIONS.length);
   });
 
-  it('covers all three streams', () => {
-    expect(classificationsFor('membership').length).toBeGreaterThan(0);
-    expect(classificationsFor('gov_pipeline').length).toBeGreaterThan(0);
-    expect(classificationsFor('hypotheses').length).toBeGreaterThan(0);
+  /**
+   * Listed explicitly rather than derived from the classifications themselves, because the
+   * point of this test is to catch a stream that was added to `FlowStreamKey` and then never
+   * given a classification. Deriving the list from `CLASSIFICATIONS` would make the
+   * assertion circular and it would pass for a stream that renders nothing.
+   *
+   * It went stale once already: `hire_fde` was added on 2026-11-13 while this test still
+   * named three streams, so the total below silently stopped equalling the registry length.
+   */
+  const ALL_STREAMS = [
+    'membership', 'gov_pipeline', 'hypotheses', 'hire_fde', 'subscription_conversion',
+  ] as const;
+
+  it('covers every stream', () => {
+    for (const stream of ALL_STREAMS) {
+      expect(classificationsFor(stream).length).toBeGreaterThan(0);
+    }
   });
 
   it('assigns every classification exactly one stream', () => {
-    const total = (['membership', 'gov_pipeline', 'hypotheses'] as const)
-      .reduce((n, s) => n + classificationsFor(s).length, 0);
+    const total = ALL_STREAMS.reduce((n, s) => n + classificationsFor(s).length, 0);
     expect(total).toBe(CLASSIFICATIONS.length);
+  });
+
+  /**
+   * The other half of the staleness guard: a classification pointing at a stream nobody
+   * listed above. Together the two directions mean neither list can drift from the other
+   * without a red test.
+   */
+  it('has no classification on a stream this test does not know about', () => {
+    const known = new Set<string>(ALL_STREAMS);
+    const unknown = CLASSIFICATIONS.filter((c) => !known.has(c.stream)).map((c) => c.key);
+    expect(unknown).toEqual([]);
   });
 });
 

@@ -51,8 +51,25 @@ export type FlowTone = 'good' | 'info' | 'warn' | 'danger' | 'muted';
 /** Which way money moved, independent of how worried a reader should be. */
 export type FlowDirection = 'in' | 'out' | 'none';
 
-/** Which stream an event belongs to. The dashboard's top-level grouping. */
-export type FlowStreamKey = 'membership' | 'gov_pipeline' | 'hypotheses';
+/**
+ * Which stream an event belongs to. The dashboard's top-level grouping, and the thing the
+ * page's source filter filters on.
+ *
+ * `hire_fde` was added on 2026-11-13 when Ali named FDE hiring as a revenue source. It is a
+ * stream with no revenue classifications on purpose: the only thing recorded about it so far
+ * is how far it has got toward being measurable, so declaring a `placement_paid` key that
+ * nothing produces would make this registry aspirational, which its own header forbids.
+ *
+ * `subscription_conversion` was added on 2026-11-16 when Ali named two campaigns, converting
+ * current customers and converting alumni onto yearly plans, and a third motion arrived with
+ * the Taiwo thread: moving DA-program students onto the AI platform. Same rule applies, and
+ * for a sharper reason. A yearly conversion DOES eventually produce an ordinary `annual` row
+ * on `subscriptions`, which `membershipFlow` already counts. If this stream also carried a
+ * value, the same dollar would appear twice on one page: once as a converted member and once
+ * as campaign yield. It therefore counts audiences and definitions only.
+ */
+export type FlowStreamKey =
+  | 'membership' | 'gov_pipeline' | 'hypotheses' | 'hire_fde' | 'subscription_conversion';
 
 export interface ClassificationDefinition {
   key: string;
@@ -358,8 +375,60 @@ const HYPOTHESES: readonly ClassificationDefinition[] = [
   },
 ];
 
+/**
+ * FDE hiring classifications.
+ *
+ * Exactly one, and that is the honest count. The stream reports how far the idea has got
+ * toward being measurable, so the only thing it can classify is a setup stage. When a
+ * billable placement is finally defined and recorded somewhere, a second key joins this list
+ * and it carries a value; adding it now would be a promise the schema cannot keep.
+ */
+const HIRE_FDE: readonly ClassificationDefinition[] = [
+  {
+    key: 'fde_setup',
+    label: 'Setup progress',
+    stream: 'hire_fde',
+    tone: 'muted',
+    glyph: '◦',
+    direction: 'none',
+    carriesValue: false,
+    means: 'How far FDE hiring has got toward being measurable. Counts ideas, never money.',
+  },
+];
+
+/**
+ * Subscription-conversion classifications.
+ *
+ * One key, for the same reason `HIRE_FDE` has one: the only thing recorded about these
+ * campaigns so far is how far they have got toward being measurable.
+ *
+ * ── WHY THIS IS NOT A MEMBERSHIP CLASSIFICATION ──────────────────────────────────────────
+ *
+ * A converted member ends up as an `annual` row on `subscriptions` and is then counted by
+ * `membershipFlow` like any other member, which is correct and must stay that way. This
+ * stream is about the CAMPAIGN, not the resulting member: how many people we could ask, how
+ * many we can even see, and whether the motion has been defined well enough to run. Folding
+ * it into membership would make the campaign invisible the moment it worked, and double-count
+ * it in the meantime.
+ */
+const SUBSCRIPTION_CONVERSION: readonly ClassificationDefinition[] = [
+  {
+    key: 'conversion_setup',
+    label: 'Setup progress',
+    stream: 'subscription_conversion',
+    tone: 'muted',
+    glyph: '◦',
+    direction: 'none',
+    carriesValue: false,
+    means:
+      'How far a yearly-conversion campaign has got toward being runnable. Counts audiences '
+      + 'and definitions, never money: a conversion only becomes revenue as a subscription '
+      + 'row, where membershipFlow already counts it.',
+  },
+];
+
 export const CLASSIFICATIONS: readonly ClassificationDefinition[] = [
-  ...MEMBERSHIP, ...GOV, ...HYPOTHESES,
+  ...MEMBERSHIP, ...GOV, ...HYPOTHESES, ...HIRE_FDE, ...SUBSCRIPTION_CONVERSION,
 ];
 
 export type ClassificationKey = string;
@@ -434,7 +503,14 @@ export function assertEveryClassificationIsLegibleWithoutColour(): void {
  * otherwise is rejected there rather than rendered.
  */
 export function assertValueCarryingIsDeclaredHonestly(): void {
-  const mustNotCarry = ['bid_flagged', 'proposal_document', 'comped', 'bid_no_bid'];
+  const mustNotCarry = [
+    'bid_flagged', 'proposal_document', 'comped', 'bid_no_bid',
+    // The idea streams. These four are what stop a declared-but-unbuilt revenue source from
+    // ever rendering a figure, which is the condition on which those streams were allowed
+    // onto a board whose headline is money. `conversion_setup` additionally stops the same
+    // dollar being counted as both a converted member and a campaign result.
+    'hypothesis_evidence', 'hypothesis_deadline', 'fde_setup', 'conversion_setup',
+  ];
   for (const key of mustNotCarry) {
     const def = classificationFor(key);
     if (def.carriesValue) {

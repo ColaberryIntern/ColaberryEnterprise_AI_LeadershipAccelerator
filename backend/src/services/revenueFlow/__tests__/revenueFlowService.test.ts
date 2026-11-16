@@ -222,10 +222,22 @@ describe('one broken stream costs that stream, not the page', () => {
    * The rule revenueRoomService established: "A page that disappears under partial failure
    * teaches people not to trust it, which costs more than the missing section."
    */
+  /**
+   * These two assert that the FAILED stream is gone and the surviving one is still there,
+   * rather than pinning the full stream list.
+   *
+   * They used to read `toEqual(['membership'])`, which was accurate when the board had
+   * exactly two streams and became a false failure the moment a third arrived: the
+   * declared-but-unbuilt sources read no database, so they survive any database failure and
+   * are always present. Asserting the whole list made every new source look like a
+   * regression in partial-failure handling, which is not what this describe block is about.
+   */
   it('still renders membership when the government pipeline throws', async () => {
     gov.buildGovFlow.mockRejectedValue(new Error('gov_qualifications exploded'));
     const board = await getRevenueFlowBoard(NOW);
-    expect(board.streams.map((s) => s.key)).toEqual(['membership']);
+    const keys = board.streams.map((s) => s.key);
+    expect(keys).toContain('membership');
+    expect(keys).not.toContain('gov_pipeline');
     expect(board.caveats.join(' ')).toMatch(/government pipeline could not be built: gov_qualifications exploded/);
     expect(board.headline.possibleWinnings.display).toMatch(/Cannot be read/);
   });
@@ -233,8 +245,26 @@ describe('one broken stream costs that stream, not the page', () => {
   it('still renders the pipeline when membership throws', async () => {
     mem.buildMembershipFlow.mockRejectedValue(new Error('subscriptions exploded'));
     const board = await getRevenueFlowBoard(NOW);
-    expect(board.streams.map((s) => s.key)).toEqual(['gov_pipeline']);
+    const keys = board.streams.map((s) => s.key);
+    expect(keys).toContain('gov_pipeline');
+    expect(keys).not.toContain('membership');
     expect(board.headline.bookedAnnualized.display).toMatch(/Cannot be read/);
+  });
+
+  /**
+   * The converse, and the reason the idea streams are worth having on this board at all:
+   * when both database-backed streams fail, the page still says what we are trying to build.
+   * It also proves the streams really are database-free, which `buildIdeaFlows` only claims.
+   */
+  it('still renders the declared sources when both database streams throw', async () => {
+    gov.buildGovFlow.mockRejectedValue(new Error('gov_qualifications exploded'));
+    mem.buildMembershipFlow.mockRejectedValue(new Error('subscriptions exploded'));
+    const board = await getRevenueFlowBoard(NOW);
+    expect(board.streams.map((s) => s.key)).toEqual([
+      'hypotheses', 'hire_fde', 'subscription_conversion',
+    ]);
+    // And not one of them invents a figure to fill the empty headline.
+    for (const s of board.streams) expect(s.headline.cents).toBeNull();
   });
 });
 
