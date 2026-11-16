@@ -217,6 +217,33 @@ describe('colour comes from tokens, and stream identity is fixed', () => {
   });
 
   /**
+   * A categorical hue is reserved for a stream that earns. The declared-but-unbuilt sources
+   * are one state, not three competing identities, so they are all muted — which is also
+   * what keeps the board off the unvalidated end of the chart ramp as sources are added.
+   *
+   * Asserted as "no declared stream holds a chart slot" rather than by listing the three
+   * keys, so a fourth declared source cannot quietly take a hue.
+   */
+  it('gives a chart hue only to the streams that earn', () => {
+    const EARNING = ['membership', 'gov_pipeline'];
+    for (const [key, paint] of Object.entries(STREAM_PAINT)) {
+      if (EARNING.includes(key)) {
+        expect(paint.fg).toMatch(/^var\(--chart-\d+\)$/);
+      } else {
+        expect(paint.fg).toBe('var(--text-muted)');
+      }
+    }
+  });
+
+  /** Every stream still needs words, because muted streams are told apart by name alone. */
+  it('names every stream in something other than its key', () => {
+    for (const [key, paint] of Object.entries(STREAM_PAINT)) {
+      expect(paint.name.trim().length).toBeGreaterThan(2);
+      expect(paint.name).not.toBe(key);
+    }
+  });
+
+  /**
    * chart-3 and chart-4 measure ΔE 1.8 apart under protanopia, far below the floor, despite
    * the ramp advertising itself as colour-blind safe. Nothing here may pair them.
    */

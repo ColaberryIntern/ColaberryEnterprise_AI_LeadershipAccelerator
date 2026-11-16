@@ -4,15 +4,26 @@
  * Ali's ask: "a dashboard at the top so we can see the big picture and all the pieces that
  * went into it. Like a tracking system."
  *
- * ── TWO STREAMS, BECAUSE TWO IS WHAT WAS ASKED FOR AND WHAT EXISTS ───────────────────────
+ * ── FOUR STREAMS: TWO THAT EARN, TWO THAT DO NOT YET EXIST ───────────────────────────────
  *
  * "We can work towards Membership, Annualized (should these be combined) and Gov bids in
  * pursuit." Membership and Annualized turned out to be the same computation printed twice
- * (see `membershipFlow`'s header), so they combine into one stream, leaving two.
+ * (see `membershipFlow`'s header), so they combine into one stream.
  *
- * The five revenue hypotheses are deliberately NOT here. They already have cards on the
- * Revenue Room, they are bets rather than revenue, and adding them to a board whose headline
- * is money would invite them to be read as pipeline. Scope is the two streams named.
+ * R16 then argued, in this header, that the five revenue bets should stay OFF this board:
+ * "they are bets rather than revenue, and adding them to a board whose headline is money
+ * would invite them to be read as pipeline."
+ *
+ * Ali reversed that on 2026-11-13: "The Revenue room should bring back all the business
+ * ideas we had - the only thing is they are just not setup yet and should show that status.
+ * At least we can have everything all in the same place." He also named a new source: FDE
+ * hiring through hire.refactored.ai.
+ *
+ * The risk R16 named is real and is handled rather than dropped. Every idea stream comes from
+ * `ideaFlow`, whose streams carry `noMoney` headlines and whose classifications all declare
+ * `carriesValue: false` — so `enforceValueHonesty` below physically rejects any attempt to
+ * put a dollar figure on an idea. A bet cannot be misread as pipeline if it cannot print a
+ * number.
  *
  * ── THE HEADLINE HAS NO TOTAL, AND THAT IS THE DESIGN ────────────────────────────────────
  *
@@ -37,6 +48,7 @@ import {
   classificationFor,
 } from './revenueClassifications';
 import { buildGovFlow } from './govBidFlow';
+import { buildIdeaFlows } from './ideaFlow';
 import { buildMembershipFlow } from './membershipFlow';
 import {
   FlowEvent, FlowHeadline, RevenueFlowBoard, money, noMoney,
@@ -100,7 +112,7 @@ export async function getRevenueFlowBoard(
   const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const caveats: string[] = [];
 
-  const [membership, gov] = await Promise.all([
+  const [membership, gov, ideas] = await Promise.all([
     buildMembershipFlow(windowStart).catch((e: Error) => {
       caveats.push(`The membership stream could not be built: ${e.message}`);
       return null;
@@ -109,12 +121,23 @@ export async function getRevenueFlowBoard(
       caveats.push(`The government pipeline could not be built: ${e.message}`);
       return null;
     }),
+    buildIdeaFlows(windowStart, now).catch((e: Error) => {
+      caveats.push(`The declared-but-unbuilt sources could not be built: ${e.message}`);
+      return null;
+    }),
   ]);
 
-  const streams = [membership?.stream, gov?.stream].filter(Boolean) as RevenueFlowBoard['streams'];
+  // Order is the page's reading order and is fixed: what earns today, then what might, then
+  // what has not been set up. A reader scanning top to bottom meets revenue before bets,
+  // which is the opposite of how a board that sorted by size would read.
+  const streams = [
+    membership?.stream, gov?.stream, ...(ideas?.streams ?? []),
+  ].filter(Boolean) as RevenueFlowBoard['streams'];
   for (const s of streams) if (s.caveat) caveats.push(s.caveat);
 
-  const rawEvents = [...(membership?.events ?? []), ...(gov?.events ?? [])];
+  const rawEvents = [
+    ...(membership?.events ?? []), ...(gov?.events ?? []), ...(ideas?.events ?? []),
+  ];
   const { events: honest, caveats: honestyCaveats } = enforceValueHonesty(rawEvents);
   caveats.push(...honestyCaveats);
 

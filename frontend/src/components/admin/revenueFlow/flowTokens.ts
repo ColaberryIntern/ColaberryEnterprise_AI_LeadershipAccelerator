@@ -93,11 +93,43 @@ export function paintFor(tone: string): TonePaint {
  * Stream identity. Assigned in FIXED ORDER and never cycled: membership is always slot 1 and
  * government always slot 2, so filtering to one stream can never repaint the other. Colour
  * follows the entity, never its rank.
+ *
+ * ── A CATEGORICAL HUE IS RESERVED FOR A STREAM THAT EARNS ────────────────────────────────
+ *
+ * Only two slots on this page are validated (see the finding above: `--chart-3` and
+ * `--chart-4` are ΔE 1.8 apart for a protanope, so this page uses 1 and 2 and never puts 3
+ * beside 4). On 2026-11-16 the board went from three streams to five — FDE hiring and the
+ * yearly-conversion campaigns joined the five revenue bets — and the obvious move, handing
+ * each new stream the next free slot, is exactly what the dataviz rule forbids: "the fix for
+ * a series that outgrows its palette is to fold, not to generate."
+ *
+ * So the split is not by slot number, it is by whether the stream earns:
+ *
+ *   EARNING streams carry a categorical hue, because a reader has to tell membership from
+ *   government at a glance and those two are genuinely different entities.
+ *
+ *   DECLARED streams are all MUTED, because they are not three different entities competing
+ *   for identity — they are one state, "not set up yet", which is what Ali asked to be able
+ *   to see. Muted is the tone the registry already gives every setup classification, so
+ *   stream and event now agree instead of a grey chip sitting inside a coloured band.
+ *
+ * `hypotheses` moved from `--chart-5` to muted as part of this, which is a deliberate change
+ * to something already shipped. It was the only declared stream when it got a hue, so the
+ * inconsistency did not exist yet; keeping it coloured now would mean one declared stream
+ * looked like revenue and two did not. One line, reversible, and recorded here rather than
+ * done quietly.
+ *
+ * This also means the next declared source costs nothing: it needs no new hue, and no hue it
+ * takes can be one nobody validated.
  */
 export const STREAM_PAINT: Record<string, { fg: string; name: string }> = {
+  // Earning today. Categorical, fixed order, validated slots only.
   membership: { fg: 'var(--chart-1)', name: 'Membership' },
   gov_pipeline: { fg: 'var(--chart-2)', name: 'Government bids' },
-  hypotheses: { fg: 'var(--chart-5)', name: 'Revenue bets' },
+  // Declared, not set up. All muted, on purpose.
+  hypotheses: { fg: 'var(--text-muted)', name: 'Revenue bets' },
+  hire_fde: { fg: 'var(--text-muted)', name: 'FDE hiring' },
+  subscription_conversion: { fg: 'var(--text-muted)', name: 'Yearly conversion' },
 };
 
 export function streamPaint(key: string): { fg: string; name: string } {
