@@ -100,7 +100,8 @@ export function useServiceGap(summaryVersion: string | null, reloadSummary: () =
   }), [withBusy, reload]);
 
   const adoptExisting = useCallback((item: IntakeSummaryItem, a: GapAnalysis) => withBusy(item.id, async () => {
-    const target = a.recommendation?.target;
+    // A single-case-study proposal links to its closest existing service until its family has a second case study.
+    const target = a.recommendation?.target ?? a.recommendation?.closestExisting ?? null;
     if (!target) return;
     if (!item.suggestions.some((s) => s.serviceId === target.serviceId)) {
       const link = await pinServiceSuggestion(item.id, target.serviceId, a.recommendation?.verdict ?? null);

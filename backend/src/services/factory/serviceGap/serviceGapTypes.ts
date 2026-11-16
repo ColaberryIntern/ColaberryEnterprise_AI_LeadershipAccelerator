@@ -23,7 +23,7 @@ export type ServiceStatus = 'active' | 'growth' | 'retired';
 export type Confidence = 'high' | 'medium' | 'low';
 
 /** Bumping this invalidates every cached analysis (it is part of the idempotency key). */
-export const GAP_PROMPT_VERSION = 'service-gap-v3';
+export const GAP_PROMPT_VERSION = 'service-gap-v4';
 
 /** One catalog service as the detector sees it (tenant-scoped by the loader). */
 export interface CatalogService {
@@ -128,6 +128,11 @@ export interface GapRecommendation {
   naics: NaicsSuggestion[];
   /** Codes on the target service that are not work-performed codes (often the client's industry). */
   naicsWarnings: string[];
+  /**
+   * PROPOSE_NEW only: the closest existing service. A new service is only actionable once 2+ case studies share the
+   * family (the UI reads the cluster size); until then the case study is linked to this one.
+   */
+  closestExisting: { serviceId: string; serviceName: string; status: ServiceStatus; fit: number } | null;
 }
 
 /** API view of one stored analysis. */

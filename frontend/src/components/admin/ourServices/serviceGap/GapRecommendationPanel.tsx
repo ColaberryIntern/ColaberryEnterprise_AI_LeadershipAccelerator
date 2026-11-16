@@ -1,7 +1,7 @@
 import React from 'react';
 import type { GapAnalysis, GapCandidate, ProposedServiceDraft } from '../../../../services/serviceGapApi';
 import { ExpansionView, NaicsView, ProposedServiceView } from './GapDraftViews';
-import { DECISION_META, SCORE_HELP, type ServiceCurrent } from './serviceGapModel';
+import { DECISION_META, MIN_FAMILY_FOR_NEW_SERVICE, SCORE_HELP, type ServiceCurrent } from './serviceGapModel';
 
 /**
  * GapRecommendationPanel - the "AI service recommendation" block on an Intake card, above the keyword suggestions.
@@ -28,6 +28,8 @@ export interface GapPanelProps {
   /** Adds the missing work-performed NAICS codes to the matched service (second confirm in the view). */
   onAddNaics: (current: ServiceCurrent) => void;
   onDismiss: (note: string) => void;
+  /** How many case studies share this proposal's family (its cluster). Below 2, the proposal is not actionable yet. */
+  familySize?: number;
 }
 
 const fit = (c: GapCandidate): number => Math.round(0.5 * c.capabilityOverlap + 0.3 * c.buyerProblemOverlap + 0.2 * c.deliverableOverlap);
@@ -79,6 +81,9 @@ export default function GapRecommendationPanel(p: GapPanelProps): React.ReactEle
   }
   const isNew = rec.decision === 'PROPOSE_NEW';
   const canAdopt = (rec.decision === 'MATCH_EXISTING' || rec.decision === 'LINK_GROWTH') && rec.target;
+  // GD3 anti-bloat: one case study never mints a service. Until a second shares the family, link it to the closest one.
+  const waitingForFamily = isNew && (p.familySize ?? 1) < MIN_FAMILY_FOR_NEW_SERVICE;
+  const closest = rec.closestExisting ?? null;
   return (
     <Shell>
       <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
@@ -108,6 +113,12 @@ export default function GapRecommendationPanel(p: GapPanelProps): React.ReactEle
       <NaicsView naics={rec.naics ?? []} warnings={rec.naicsWarnings ?? []} targetName={rec.target?.serviceName ?? null}
         current={rec.target ? p.serviceCurrent(rec.target.serviceId) : null} busy={p.busy}
         onAdd={canAdopt ? p.onAddNaics : null} />
+      {waitingForFamily && (
+        <div className="small border rounded-3 p-2 mb-2 bg-info-subtle text-info-emphasis" data-testid="gap-family-wait">
+          <i className="ri-team-line me-1" aria-hidden="true" />New family candidate: {p.familySize ?? 1} of {MIN_FAMILY_FOR_NEW_SERVICE} case studies. A new service is proposed only when a second case study shares it.
+          {closest ? <> Link this one to <b>{closest.serviceName}</b> (fit {closest.fit}) for now.</> : ' No close existing service was found; keep it in intake for now.'}
+        </div>
+      )}
       {isNew && rec.proposedService && <ProposedServiceView draft={rec.proposedService} rec={rec} />}
       {rec.decision === 'EXPAND_EXISTING' && rec.expansion && (
         <ExpansionView ex={rec.expansion} current={p.serviceCurrent(rec.expansion.serviceId)} busy={p.busy} onApply={p.onApplyExpansion} />
@@ -128,7 +139,8 @@ export default function GapRecommendationPanel(p: GapPanelProps): React.ReactEle
       </details>
       <div className="d-flex flex-wrap gap-2 mt-2">
         {canAdopt && <button type="button" className="btn btn-outline-success btn-sm" disabled={p.busy} onClick={p.onAdoptExisting} data-testid="gap-use-existing">Use existing: {rec.target!.serviceName}</button>}
-        {isNew && rec.proposedService && <button type="button" className="btn btn-outline-danger btn-sm" disabled={p.busy} onClick={() => p.onReviewProposal(rec.proposedService!)} data-testid="gap-review-proposal">Review proposed service</button>}
+        {waitingForFamily && closest && <button type="button" className="btn btn-outline-success btn-sm" disabled={p.busy} onClick={p.onAdoptExisting} data-testid="gap-use-closest">Use closest: {closest.serviceName}</button>}
+        {isNew && !waitingForFamily && rec.proposedService && <button type="button" className="btn btn-outline-danger btn-sm" disabled={p.busy} onClick={() => p.onReviewProposal(rec.proposedService!)} data-testid="gap-review-proposal">Review proposed service</button>}
         <button type="button" className="btn btn-outline-secondary btn-sm" disabled={p.busy} onClick={() => p.onDismiss(isNew ? 'Not a new service' : 'Recommendation not used')} data-testid="gap-dismiss">{isNew ? 'Not a new service' : 'Dismiss'}</button>
         <button type="button" className="btn btn-link btn-sm" disabled={p.busy} onClick={() => p.onAnalyze(true)}>{p.busy ? 'Working…' : 'Reanalyze'}</button>
       </div>

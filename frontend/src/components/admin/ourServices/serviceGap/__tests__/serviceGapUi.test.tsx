@@ -88,13 +88,14 @@ describe('GapRecommendationPanel states', () => {
   });
 
   it('propose new: separate new-service signals, full draft with UNVERIFIED codes, review pre-fills (never creates)', async () => {
-    const p = panel({ analysis: analysis(rec({ decision: 'PROPOSE_NEW', target: null, proposedService: draft, verdict: 'Propose Industrial Digital Twins.', duplicateWarnings: ['Similar to existing active service "CV".'], scores: { existingFitScore: 40, noveltyScore: 70, evidenceReadinessScore: 55, duplicateRiskScore: 20, commercialPotentialScore: null } })) });
+    const p = panel({ familySize: 2, analysis: analysis(rec({ decision: 'PROPOSE_NEW', target: null, proposedService: draft, verdict: 'Propose Industrial Digital Twins.', duplicateWarnings: ['Similar to existing active service "CV".'], scores: { existingFitScore: 40, noveltyScore: 70, evidenceReadinessScore: 55, duplicateRiskScore: 20, commercialPotentialScore: null } })) });
     await render(<GapRecommendationPanel {...p} />);
     expect(container.textContent).toContain('Novelty');
     expect(container.textContent).toContain('Duplicate risk');
     expect(q('[data-testid="gap-proposed-service"]')!.textContent).toContain('Unverified suggestions');
     expect(q('[data-testid="gap-duplicate-warnings"]')!.textContent).toContain('Similar to existing');
     expect(q('[data-testid="gap-use-existing"]')).toBeNull();
+    expect(q('[data-testid="gap-family-wait"]')).toBeNull();
     await click(q('[data-testid="gap-review-proposal"]'));
     expect(p.onReviewProposal).toHaveBeenCalledWith(draft);
     await click(q('[data-testid="gap-dismiss"]'));
@@ -165,6 +166,24 @@ describe('GapRecommendationPanel states', () => {
     expect(box.querySelector('button')).toBeNull();
   });
 
+  it('GD3 anti-bloat: a proposal with 1 case study in its family offers "Use closest", not "Review proposed service"', async () => {
+    const closest = { serviceId: 'svc-ag', serviceName: 'AI Agents & Managed AI Workforce', status: 'active' as const, fit: 58 };
+    const p = panel({ familySize: 1, analysis: analysis(rec({ decision: 'PROPOSE_NEW', target: null, proposedService: draft, closestExisting: closest })) });
+    await render(<GapRecommendationPanel {...p} />);
+    expect(q('[data-testid="gap-family-wait"]')!.textContent).toContain('1 of 2 case studies');
+    expect(q('[data-testid="gap-family-wait"]')!.textContent).toContain('AI Agents & Managed AI Workforce');
+    expect(q('[data-testid="gap-review-proposal"]')).toBeNull();
+    await click(q('[data-testid="gap-use-closest"]'));
+    expect(p.onAdoptExisting).toHaveBeenCalled();
+  });
+
+  it('GD3 anti-bloat: no close service found still blocks the proposal and says so; no family size means 1', async () => {
+    await render(<GapRecommendationPanel {...panel({ analysis: analysis(rec({ decision: 'PROPOSE_NEW', target: null, proposedService: draft, closestExisting: null })) })} />);
+    expect(q('[data-testid="gap-family-wait"]')!.textContent).toContain('No close existing service was found');
+    expect(q('[data-testid="gap-use-closest"]')).toBeNull();
+    expect(q('[data-testid="gap-review-proposal"]')).toBeNull();
+  });
+
   it('labels outside material as a document claim, not a fact', async () => {
     await render(<GapRecommendationPanel {...panel()} />);
     expect(container.textContent).toContain('Document claim');
@@ -192,7 +211,7 @@ describe('IntakeCard with the AI panel', () => {
   it('"Review proposed service" opens the existing form pre-filled; submitting passes the draft extras', async () => {
     const onPropose = jest.fn().mockResolvedValue(undefined);
     const a = analysis(rec({ decision: 'PROPOSE_NEW', target: null, proposedService: draft }));
-    await render(<IntakeCard item={item} growthServiceIds={new Set()} onLink={jest.fn()} onPropose={onPropose} gap={gapProps({ analysis: a })} />);
+    await render(<IntakeCard item={item} growthServiceIds={new Set()} onLink={jest.fn()} onPropose={onPropose} gap={gapProps({ analysis: a, familySize: 2 })} />);
     await click(q('[data-testid="gap-review-proposal"]'));
     expect((q('#ns-name-cs1') as HTMLInputElement).value).toBe('Industrial Digital Twins');
     expect((q('#ns-cat-cs1') as HTMLInputElement).value).toBe('AI Engineering');

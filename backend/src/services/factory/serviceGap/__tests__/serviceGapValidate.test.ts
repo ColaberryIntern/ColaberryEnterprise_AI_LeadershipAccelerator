@@ -86,7 +86,11 @@ describe('finalizeRecommendation - the model cannot point outside what we sent',
     }, ctx);
     expect(r.decision).toBe('INSUFFICIENT_EVIDENCE');
     expect(r.reasonCodes).toContain('target_not_in_catalog');
-    expect(r.candidates).toEqual([]);
+    // Nothing the model named survives; what remains is OUR retrieval ranking over the refs we sent, labeled as such.
+    const sent = new Set(Array.from(ctx.refs.values()).map((s) => s.id));
+    expect(r.candidates.every((c) => sent.has(c.serviceId) && c.reason.includes('keyword retrieval only'))).toBe(true);
+    expect(r.candidates.map((c) => c.serviceId)).not.toContain('00000000-0000-4000-8000-000000000005');
+    expect(r.reasonCodes).toContain('fit_from_retrieval');
   });
 
   it('decision follows the target\'s REAL status (existing on a Growth service -> LINK_GROWTH, and back)', () => {
@@ -174,5 +178,33 @@ describe('normalizeDecision - real answers seen in production', () => {
     const ctx = ctxFor();
     const r = finalizeRecommendation({ decision: 'INSUFFICIENT_EVIDENCE', alternativesConsidered: [{ decision: 'Propose new', whyNot: 'thin' }, { decision: '???', whyNot: 'x' }] }, ctx);
     expect(r.alternativesConsidered).toEqual([{ decision: 'PROPOSE_NEW', whyNot: 'thin' }]);
+  });
+});
+
+// GD3 regression: 14 one-case-study Growth services got through because the model returned no overlap scores.
+describe('anti-bloat (GD3)', () => {
+  it('no model scores: existing fit comes from retrieval instead of n/a, and the proposal names its closest existing service', () => {
+    const ctx = ctxFor();
+    const r = finalizeRecommendation({ decision: 'PROPOSE_NEW', candidates: [], proposedService: { name: 'Quantum Ledger Forensics' } }, ctx);
+    expect(r.decision).toBe('PROPOSE_NEW');
+    expect(r.scores.existingFitScore).not.toBeNull();
+    expect(r.reasonCodes).toContain('fit_from_retrieval');
+    expect(r.closestExisting).toMatchObject({ serviceName: expect.any(String), fit: expect.any(Number) });
+    expect(r.closestExisting!.status).not.toBe('retired');
+  });
+
+  it('a near-identical name to a live service becomes that service (similar_name_guard), not a new one', () => {
+    const ctx = ctxFor();
+    const r = finalizeRecommendation({ decision: 'PROPOSE_NEW', proposedService: { name: 'Computer Vision Industrial Inspection' } }, ctx);
+    expect(['MATCH_EXISTING', 'LINK_GROWTH']).toContain(r.decision);
+    expect(r.target?.serviceName).toBe('Computer Vision & Industrial AI');
+    expect(r.reasonCodes).toContain('similar_name_guard');
+    expect(r.closestExisting).toBeNull();
+  });
+
+  it('closestExisting is only set on a proposal', () => {
+    const ctx = ctxFor();
+    const cv = refOf(ctx, 'Computer Vision & Industrial AI');
+    expect(finalizeRecommendation({ decision: 'MATCH_EXISTING', targetRef: cv, candidates: [cand(cv, 80, 75)] }, ctx).closestExisting).toBeNull();
   });
 });
