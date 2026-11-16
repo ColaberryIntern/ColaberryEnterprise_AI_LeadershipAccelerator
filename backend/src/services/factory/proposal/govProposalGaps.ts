@@ -56,8 +56,11 @@ export const decodeQuestionKey = (key: string): string | null => {
 export async function listOpenQuestions(deliveryProjectId: string): Promise<OpenQuestion[]> {
   if (!deliveryProjectId) return [];
   try {
+    // Exclude grouped `record` gaps: a past-performance reference / key person is answered as ONE record through the
+    // Needs grouped form (-> addCompanyReference / addCompanyPersonnel), never through this flat question rail, which
+    // is kind-blind and would flatten it into a single general fact. `IS DISTINCT FROM` keeps rows whose need is NULL.
     const rows = await sequelize.query<{ question: string; why: string | null; suggestions: unknown; doc_key: string }>(
-      "SELECT question, why, suggestions, doc_key FROM gov_proposal_document_gaps WHERE delivery_project_id = $1 AND resolution = 'open' ORDER BY created_at ASC",
+      "SELECT question, why, suggestions, doc_key FROM gov_proposal_document_gaps WHERE delivery_project_id = $1 AND resolution = 'open' AND (need->>'kind') IS DISTINCT FROM 'record' ORDER BY created_at ASC",
       { bind: [deliveryProjectId], type: QueryTypes.SELECT },
     );
     return groupOpenQuestions(rows);

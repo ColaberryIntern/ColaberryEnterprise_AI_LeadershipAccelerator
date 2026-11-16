@@ -47,6 +47,29 @@ describe('assembleDraftHtml (D2: no gap is lost)', () => {
   it('is total on empty input', () => {
     expect(assembleDraftHtml([], [], 'd')).toBe('');
   });
+
+  it('leaves a grouped [RECORD] marker untouched and never duplicates it as a field placeholder', () => {
+    // A past-performance section the drafter grouped into one record marker; no stray structured gaps.
+    const html = assembleDraftHtml(
+      ['<h3>Past Performance</h3><p>[RECORD: reference]</p>'],
+      [],
+      'past_performance',
+    );
+    expect(html).toContain('[RECORD: reference]');
+    // the record is recognized as already represented, so nothing is appended
+    expect(html.match(/\[PLACEHOLDER:/g)).toBeNull();
+    expect(html.match(/\[RECORD:/g)).toHaveLength(1);
+  });
+
+  it('keeps the record AND still appends a genuinely-missing atomic fact beside it', () => {
+    const html = assembleDraftHtml(
+      ['<h3>Past Performance</h3><p>[RECORD: reference]</p>'],
+      [{ question: 'years in business', suggestions: [] }],
+      'past_performance',
+    );
+    expect(html.match(/\[RECORD:/g)).toHaveLength(1);
+    expect(html).toMatch(/\[PLACEHOLDER: years in business\]/);
+  });
 });
 
 describe('createFirstProposalDraft', () => {
