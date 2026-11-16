@@ -114,7 +114,13 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
   // and the four new pages were written to house style, so the two entries
   // those files held are gone rather than carried over.
-  [ESCAPED_DASH_RULE.id]: 72,
+  //
+  // 2026-11-15: 72 -> 69. Closing the fidelity gap on /platform rewrote
+  // `PlatformV2.tsx` down to four bands; its three escaped dashes went with the
+  // copy that held them, and the new `platformV2Surfaces.tsx` was written to
+  // house style. Its entry is DELETED rather than zeroed, which is what the
+  // drift check asks for.
+  [ESCAPED_DASH_RULE.id]: 69,
   [EMOJI_RULE.id]: 659,
 };
 
