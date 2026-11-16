@@ -90,6 +90,19 @@ const REQUIRED_COLUMNS: readonly { table: string; column: string }[] = [
   { table: 'marketing_spend_syncs', column: 'rows_skipped' },
 ];
 
+/**
+ * `IN (:tables)`, never `= ANY(:tables)`. Sequelize expands an array replacement into a quoted list
+ * ('a', 'b'), so `ANY(:tables)` became `ANY('marketing_spend_syncs')`, which Postgres rejects as a
+ * malformed array literal. That error was thrown at boot and crash-looped production on 2026-11-16.
+ */
+export const REQUIRED_COLUMNS_QUERY =
+  `SELECT table_name, column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name IN (:tables)`;
+
+export function requiredColumnTables(): string[] {
+  return Array.from(new Set(REQUIRED_COLUMNS.map((c) => c.table)));
+}
+
 export async function ensureMarketingSpendSchema(): Promise<void> {
   for (const statement of MARKETING_SPEND_SCHEMA_STATEMENTS) {
     await sequelize.query(statement);
@@ -111,9 +124,8 @@ export async function ensureMarketingSpendSchema(): Promise<void> {
   // A table can exist while an added column does not, which is exactly the state production
   // was in before ADS-9. Checking the tables alone would have called that healthy.
   const cols = await sequelize.query<{ table_name: string; column_name: string }>(
-    `SELECT table_name, column_name FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = ANY(:tables)`,
-    { type: QueryTypes.SELECT, replacements: { tables: REQUIRED_COLUMNS.map((c) => c.table) } },
+    REQUIRED_COLUMNS_QUERY,
+    { type: QueryTypes.SELECT, replacements: { tables: requiredColumnTables() } },
   );
   const have = new Set(cols.map((c) => `${c.table_name}.${c.column_name}`));
   const missingCols = REQUIRED_COLUMNS.filter((c) => !have.has(`${c.table}.${c.column}`));
