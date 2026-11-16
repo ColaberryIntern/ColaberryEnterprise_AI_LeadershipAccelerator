@@ -13,12 +13,27 @@ const SHOTS = ['L1-1_campus_card', 'L1-2_tower', 'L1-3_lobby', 'L1-4_elevator', 
   .map((s) => kit(`design/shots/${s}.jpg`));
 
 const SPEC = 'CAREER_PREP_V27_BUILD_PROMPT.md';
+/** End of a group that is NOT a release: prove the branch is green, no PR, no deploy, no ask. */
+const checkpoint = (id, pr, blockedBy, due, what) => ({
+  id, kind: 'ai', pr, blockedBy, due,
+  title: `Checkpoint (${pr}): full quality gate on the release branch; no PR, no deploy`,
+  what: `${what} Then continue straight to the next group. Ali is not asked anything here.`,
+  why: 'Ali approves, merges and deploys only at the three releases. Each group still has to leave the release branch green, so problems surface where they were made, not in one giant PR.',
+  inputs: ['Every ticket in this group, ticked with evidence', 'The run directory state-ledger.json'],
+  facts: ['Same real CI gates as the release ticket, run locally on the release branch (tsc with a planted control error, jest CI config, frontend build, typography lint)'],
+  inScope: ['Quality gate on the branch', 'Session-log entry'],
+  outOfScope: ['Opening a PR, deploying, or asking Ali anything'],
+  acceptance: ['Every gate green on the release branch head', 'Session-log entry names the head SHA'],
+  tests: ['Covered by the group tickets; this ticket runs them all together'],
+  verify: ['The gate outputs pasted in the comment'],
+});
+
 const ship = (id, pr, blockedBy, due, what) => ({
   id, kind: 'ai', pr, blockedBy, due,
   title: `Ship ${pr}: full quality gate, ONE PR, deploy, independent production verification`,
   what,
-  why: 'One group = one PR = one deploy. Nothing in the group counts as done until the live release passes an independent verifier.',
-  inputs: ['Every ticket in this group, ticked with evidence', 'The run directory state-ledger.json'],
+  why: 'One release = one PR = one deploy (Ali, 2026-11-16: approvals, PRs and deploys only at major milestones). Nothing in the release counts as done until the live release passes an independent verifier.',
+  inputs: ['Every ticket in this release, ticked with evidence', 'The run directory state-ledger.json'],
   facts: [
     'Real CI gates: backend `tsc --noEmit`, test-file typecheck (needs `NODE_OPTIONS=--max-old-space-size=8192`), backend jest with `jest.ci.config.ts --ci`, frontend typecheck, frontend unit tests, `CI=true` build, typography lint (no en/em dashes or emoji in frontend/src), secret scan',
     'Deploy only via `./scripts/deploy-prod.sh <services>` on the VPS, and only after "Build images" succeeds on the main tip (registry mode refuses an unpublished image)',
@@ -46,7 +61,7 @@ module.exports = {
       'What this list is. The build plan and the record for Career Prep in the campus: a student sees their interviews on the campus card, rides to the Career Prep floor, walks through ONE door into a room where Cora, the interview coach, anchors every prep to an interview, builds a plan, runs a timed session, and tracks every metric over time on one dashboard. Then the getting-hired pipeline behind it: job-search inbox, booking, the interview room with recording, employer offers and fees, and the staff desk.',
       `The spec. ${SPEC} (Docs & Files > Career Prep v27 > 01 - Build kit) is the source of truth. Open design/career-prep-in-campus.html first (the three levels), then colaberry-campus-v27.html (audience chip STUDENT · PREVIEW). Every name and number in the design files is illustrative; never ship it.`,
       'Ali\'s rulings (2026-11-13 to 11-15, do not re-litigate): one door, not many; keep the coaching chat; every prep is anchored to an interview (real, added, or made by Cora); questions come as option cards; pick a plan and do the timer; track every metric over time in one dashboard; the campus is part of this build; this is for students preparing for a job, not interns.',
-      'How to work it. One group = one PR = one deploy (CP1 to CP11 follow the kit\'s PR plan). Run each ticket with `/loop-architect`; each is self-contained. A ticket closes only with verification evidence in a comment. Everything ships behind the career_prep flag on Ali\'s account until milestone M4. Start with CP0.1 and milestones M0 and M1.',
+      'How to work it. Ali approves, merges and deploys only at THREE releases (his rule, 2026-11-16: no back-and-forth in between). Release 1 = CP1 to CP5, the whole student experience. Release 2 = CP6, CP8, CP9, the getting-hired pipeline (CP7 is a separate PR in AI-inbox-Manager that Kes approves). Release 3 = CP10, CP11, employers and staff. Inside a release every group ends in a checkpoint (full quality gate on the release branch, no PR, no deploy, no question). Run each ticket with `/loop-architect`; each is self-contained and closes only with verification evidence in a comment. Milestone questions carry defaults that apply automatically; Ali answers only to override. Everything ships behind the career_prep flag on Ali\'s account until milestone M4.',
     ],
   },
   contract: {
@@ -79,6 +94,7 @@ module.exports = {
       'No face or expression analysis and no comment on accent or protected traits anywhere (same rule as the Phase 8 video coaching).',
       'Candidate-facing payloads never carry a fee field (asserted on the response schema).',
       'No em dashes in any email. The frontend typography lint also bans en/em dashes and emoji in `frontend/src`.',
+      'One release = one branch = one PR = one deploy (3 releases; CP7 is its own PR in AI-inbox-Manager). Groups inside a release end in a checkpoint, never a PR. Do not ask Ali anything between releases: apply the milestone defaults and log each as an assumption.',
       'Deploy only via `./scripts/deploy-prod.sh` after "Build images" succeeds on the main tip. Ali merges every PR.',
       'Session log in `docs/sessions/` (PROGRESS.md is sealed); every commit subject carries the ticket id; commit explicit paths only.',
     ],
@@ -134,10 +150,10 @@ module.exports = {
       ],
     },
     {
-      name: 'CP1 - PR 1: design files, data model, metrics ingestion, readiness (P5, no UI)',
+      name: 'CP1 - Release 1 (part 1 of 5): design files, data model, metrics ingestion, readiness (P5, no UI)', formerName: 'CP1 - PR 1: design files, data model, metrics ingestion, readiness (P5, no UI)',
       tickets: [
         {
-          id: 'CP1.1', kind: 'ai', pr: 'PR 1', blockedBy: ['CP0.2'], due: '2026-11-18',
+          id: 'CP1.1', kind: 'ai', pr: 'Release 1', blockedBy: ['CP0.2'], due: '2026-11-18',
           title: 'Commit design/ to docs/design/career-prep/ and add the server-decided career_prep flag (Ali only)',
           what: 'Move the kit\'s design/ (5 HTML files + 13 shots) to docs/design/career-prep/. Add a `career_prep` gate decided on the server (an allow-list setting holding Ali\'s enrollment, read by one function `careerPrepEnabled(enrollment)`), exposed to the portal so the frontend hides everything when it is off.',
           why: 'Every later PR points at the committed design; nothing may leak to students before M4.',
@@ -150,7 +166,7 @@ module.exports = {
           verify: ['`npx tsc --noEmit` (backend + frontend)', 'jest for the gate'],
         },
         {
-          id: 'CP1.2', kind: 'ai', pr: 'PR 1', blockedBy: ['CP1.1'], due: '2026-11-18',
+          id: 'CP1.2', kind: 'ai', pr: 'Release 1', blockedBy: ['CP1.1'], due: '2026-11-18',
           title: 'Migrations: career_interviews, prep_skills (10 seeded), prep_skill_sources, prep_observations, prep_plans, prep_sessions, prep_readiness_daily',
           what: 'Create the P5 tables exactly as specified, with down scripts, plus Sequelize models. prep_observations is append-only with a unique key on (source_ref, skill_key). career_interviews references hire_interviews when the interview came from Hire (a nullable `hire_interview_id`), so nothing is duplicated.',
           why: 'Every number in the room comes from these tables.',
@@ -163,7 +179,7 @@ module.exports = {
           verify: ['Integration tier (Postgres) in CI'],
         },
         {
-          id: 'CP1.3', kind: 'ai', pr: 'PR 1', blockedBy: ['CP1.2'], due: '2026-11-19',
+          id: 'CP1.3', kind: 'ai', pr: 'Release 1', blockedBy: ['CP1.2'], due: '2026-11-19',
           title: 'readiness.ts (pure): skill scores, readiness, targets, streak and week, with the weights in config',
           what: 'Implement backend/src/services/careerPrep/readiness.ts exactly per P5 Readiness: 60-day window, 14-day half-life, source weights (real_interview 1.5, phone_mock 1.2, video 1.0, project 1.0, training 0.8), per-interview-type skill weights from config, fewer than 3 observations = not enough data, readiness hidden under 5 skills, default targets per type, streak and this-week in Central.',
           why: 'Readiness is the headline number; it must be explainable and deterministic.',
@@ -176,7 +192,7 @@ module.exports = {
           verify: ['jest careerPrep/readiness'],
         },
         {
-          id: 'CP1.4', kind: 'ai', pr: 'PR 1', blockedBy: ['CP1.2'], due: '2026-11-20',
+          id: 'CP1.4', kind: 'ai', pr: 'Release 1', blockedBy: ['CP1.2'], due: '2026-11-20',
           title: 'observationWriter + the first scorers: intro-video coaching, mock interviews, training quizzes, verified projects',
           what: 'One writer `careerPrep/observationWriter.ts` that every scorer calls. Wire the sources that exist today: (1) the Phase 8 video coaching record (pace, fillers, repetition, pauses mapped to Pace and clarity / Few filler words; content points mapped to Answer structure / Ending on a result with a number / Proof of work); (2) `interviewService.scoreAnswer` results from interview_sessions; (3) training quiz and lesson scores via prep_skill_sources; (4) verified project evidence to Proof of work. Backfill existing history once, idempotently.',
           why: 'Track every metric possible, over time (Ali\'s ruling 6).',
@@ -189,7 +205,7 @@ module.exports = {
           verify: ['jest careerPrep', 'Backfill dry-run counts on prod read-only'],
         },
         {
-          id: 'CP1.5', kind: 'ai', pr: 'PR 1', blockedBy: ['CP1.3', 'CP1.4'], due: '2026-11-20',
+          id: 'CP1.5', kind: 'ai', pr: 'Release 1', blockedBy: ['CP1.3', 'CP1.4'], due: '2026-11-20',
           title: 'Readiness rollup + GET summary and dashboard APIs (Zod, member-only) + the admin read for placement',
           what: 'Nightly prep_readiness_daily rollup plus on-write refresh. Routes: GET /api/portal/career-prep/summary, GET /api/portal/career-prep/dashboard?interviewId=, GET /api/admin/placement/students/:id/prep. Summary shape matches what careerPrepSummary (CP2.2) needs; missing values are omitted, never zero.',
           why: 'The floor, the card and the room all read these two endpoints.',
@@ -201,14 +217,14 @@ module.exports = {
           tests: ['Schema tests per route', 'Access control', 'Rollup re-run idempotency', 'Empty student returns an empty but valid payload'],
           verify: ['jest', '`npx tsc --noEmit`'],
         },
-        ship('CP1.6', 'PR 1', ['CP1.1', 'CP1.2', 'CP1.3', 'CP1.4', 'CP1.5'], '2026-11-23', 'Ship PR 1 (no UI). After deploy, run the observation backfill on production and confirm Ali\'s summary API answers with real numbers or honest absences.'),
+        checkpoint('CP1.6', 'Release 1', ['CP1.1', 'CP1.2', 'CP1.3', 'CP1.4', 'CP1.5'], '2026-11-23', 'Checkpoint for CP1 (no UI yet).'),
       ],
     },
     {
-      name: 'CP2 - PR 2: Level 2, the Career Prep floor with one door (P2)',
+      name: 'CP2 - Release 1 (part 2 of 5): Level 2, the Career Prep floor with one door (P2)', formerName: 'CP2 - PR 2: Level 2, the Career Prep floor with one door (P2)',
       tickets: [
         {
-          id: 'CP2.1', kind: 'ai', pr: 'PR 2', blockedBy: ['CP1.6'], due: '2026-11-24',
+          id: 'CP2.1', kind: 'ai', pr: 'Release 1', blockedBy: ['CP1.6'], due: '2026-11-24',
           title: 'Placement nav group + section key + recruiter role; one floor, three names per audience',
           what: 'Add the Placement group to NAV_GROUPS (section `placement`, links /admin/placement/queue, /inboxes, /bookings, /fees), add `placement` to SECTION_KEYS and the recruiter role. buildHq numbers it like every floor; HqFloor.label is Career Prep for students, Hiring for partners, Placement for staff.',
           why: 'The floor must be generated like every other floor, never hard-coded.',
@@ -221,7 +237,7 @@ module.exports = {
           verify: ['Frontend jest for hq and adminNav', '`npx tsc --noEmit`'],
         },
         {
-          id: 'CP2.2', kind: 'ai', pr: 'PR 2', blockedBy: ['CP2.1'], due: '2026-11-24',
+          id: 'CP2.2', kind: 'ai', pr: 'Release 1', blockedBy: ['CP2.1'], due: '2026-11-24',
           title: 'careerPrepDoorsFor(audience) and careerPrepSummary(state): one door for students, pure copy',
           what: 'careerPrepDoorsFor: member = exactly one own room (/portal/career/room), business = 4 Hiring doors, explorer = none and locked ("Career Prep opens when you enroll"). careerPrepSummary(state) returns {greeting, sessionMinutes, stops[], waiting[], doorStatus}, fed by the summary API; stops without data are absent.',
           why: 'One function feeds the floor screen, the door, the panel and the campus card, so they never disagree.',
@@ -234,7 +250,7 @@ module.exports = {
           verify: ['Frontend jest'],
         },
         {
-          id: 'CP2.3', kind: 'ai', pr: 'PR 2', blockedBy: ['CP2.2'], due: '2026-11-25',
+          id: 'CP2.3', kind: 'ai', pr: 'Release 1', blockedBy: ['CP2.2'], due: '2026-11-25',
           title: 'The floor scene: sign, floor screen with 4 stops + Walk in, the one door, Cora at her desk, the side panel',
           what: 'Build the student floor exactly as design/shots/L2-1_floor6_one_door.jpg: the sign, the floor screen (greeting, next interview, Readiness / Ready at / Streak / This week, Walk in), the large door with Start here and the status on the glass, Cora at FloorLobbyDesk, and the HqPanel rows. Every one opens the room (route stub until CP3.1).',
           why: 'Level 2 is where students choose to go in; one obvious door.',
@@ -246,14 +262,14 @@ module.exports = {
           tests: ['RTL: each opener calls the same navigation', 'Explorer locked, partner 4 doors'],
           verify: ['Frontend jest', 'Screenshots in the PR'],
         },
-        ship('CP2.4', 'PR 2', ['CP2.1', 'CP2.2', 'CP2.3'], '2026-11-30', 'Ship PR 2. Verify on production as Ali that the Career Prep floor shows one door, and as a non-flagged student that nothing changed.'),
+        checkpoint('CP2.4', 'Release 1', ['CP2.1', 'CP2.2', 'CP2.3'], '2026-11-30', 'Checkpoint for CP2 (the floor).'),
       ],
     },
     {
-      name: 'CP3 - PR 3: Level 3, the room shell, Cora with option cards, the anchor, the dashboard (P3, P4.1-4.3, 4.6, 4.8)',
+      name: 'CP3 - Release 1 (part 3 of 5): Level 3, the room shell, Cora with option cards, the anchor, the dashboard (P3, P4.1-4.3, 4.6, 4.8)', formerName: 'CP3 - PR 3: Level 3, the room shell, Cora with option cards, the anchor, the dashboard (P3, P4.1-4.3, 4.6, 4.8)',
       tickets: [
         {
-          id: 'CP3.1', kind: 'ai', pr: 'PR 3', blockedBy: ['CP2.4'], due: '2026-12-01',
+          id: 'CP3.1', kind: 'ai', pr: 'Release 1', blockedBy: ['CP2.4'], due: '2026-12-01',
           title: 'CareerPrepRoom shell over the floor: /portal/career/room, top bar, level trail, anchor pill, back and Esc, Refactored brand',
           what: 'Mount the room full screen over the HQ (floor stays mounted). Top bar: Floor <n> back, the trail (hidden under 900px), the anchor pill with Change. Back and Esc return focus to the opener; Esc in the ask box does not close. Refactored brand inside, Colaberry around it. Tabs: Your progress (default), Your plan, Session.',
           why: 'The room is the student dashboard (F1 v27).',
@@ -266,7 +282,7 @@ module.exports = {
           verify: ['Frontend jest', '`npx tsc --noEmit`'],
         },
         {
-          id: 'CP3.2', kind: 'ai', pr: 'PR 3', blockedBy: ['CP3.1'], due: '2026-12-01',
+          id: 'CP3.2', kind: 'ai', pr: 'Release 1', blockedBy: ['CP3.1'], due: '2026-12-01',
           title: 'CoraChat + OptionCards: only the newest set is live, picked card echoes, arrow keys, suggestion chips and ask box',
           what: 'Build the chat column per P4.1 and P4.2: Cora and student bubbles, option-card sets, insight and tip blocks, four suggestion chips, the ask box with Send.',
           why: '"When asking questions, present options in cards" (Ali\'s ruling 4).',
@@ -279,7 +295,7 @@ module.exports = {
           verify: ['Frontend jest'],
         },
         {
-          id: 'CP3.3', kind: 'ai', pr: 'PR 3', blockedBy: ['CP3.2'], due: '2026-12-02',
+          id: 'CP3.3', kind: 'ai', pr: 'Release 1', blockedBy: ['CP3.2'], due: '2026-12-02',
           title: 'The anchor: real interviews (from Hire today), Add an interview (JD to question set), Create one for me (practice) + POST interviews',
           what: 'Anchor cards per P4.3. Real interviews come from career_interviews rows linked to hire_interviews (confirmed, upcoming) until the inbox lands. Add saves source=added and turns the JD into a question set with a minimal grounded generator (Position Prep does not exist). Create saves source=practice with role and type cards and a 4-day window. With an anchor, post "What your data says about <company>" from real metrics only, then the plan cards.',
           why: '"Every prep is anchored to an interview" (Ali\'s ruling 3).',
@@ -292,7 +308,7 @@ module.exports = {
           verify: ['jest backend + frontend'],
         },
         {
-          id: 'CP3.4', kind: 'ai', pr: 'PR 3', blockedBy: ['CP3.2'], due: '2026-12-02',
+          id: 'CP3.4', kind: 'ai', pr: 'Release 1', blockedBy: ['CP3.2'], due: '2026-12-02',
           title: 'askRouter (intents before any LLM) + coraService with the number guard + POST /cora',
           what: 'askRouter maps plan, weak/improve, 10 minutes, add, dashboard and the get-hired words to actions without an LLM. Everything else goes to Cora with the student\'s computed summary as context; answer at most 3 sentences plus cards; any number not in the context is rejected, retried once, then answered without numbers.',
           why: 'Cora never invents a number.',
@@ -305,7 +321,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP3.5', kind: 'ai', pr: 'PR 3', blockedBy: ['CP3.1'], due: '2026-12-03',
+          id: 'CP3.5', kind: 'ai', pr: 'Release 1', blockedBy: ['CP3.1'], due: '2026-12-03',
           title: 'Your progress: readiness line, your interviews, skills from every source, Cora\'s read, data sources, practice over time',
           what: 'ProgressDashboard per P4.6 and shots L3-2, L3-7, reading GET dashboard. Single-series charts with tooltips and a data-table toggle each; a skill click offers 10 minutes on this or Add it to my plan.',
           why: '"Show it all together in a dashboard" (Ali\'s ruling 6).',
@@ -317,14 +333,14 @@ module.exports = {
           tests: ['Empty, partial and full payloads', 'Table toggle', 'Status colours never used for series'],
           verify: ['Frontend jest', 'Screenshots'],
         },
-        ship('CP3.6', 'PR 3', ['CP3.1', 'CP3.2', 'CP3.3', 'CP3.4', 'CP3.5'], '2026-12-04', 'Ship PR 3. As Ali on production: open the room, pick or add an interview, see the insight block and a dashboard built only from real data.'),
+        checkpoint('CP3.6', 'Release 1', ['CP3.1', 'CP3.2', 'CP3.3', 'CP3.4', 'CP3.5'], '2026-12-04', 'Checkpoint for CP3 (the room, Cora, the anchor, the dashboard).'),
       ],
     },
     {
-      name: 'CP4 - PR 4: plans, the timed session, recording and scoring into metrics, sheets in the room (P4.4-4.7)',
+      name: 'CP4 - Release 1 (part 4 of 5): plans, the timed session, recording and scoring into metrics, sheets in the room (P4.4-4.7)', formerName: 'CP4 - PR 4: plans, the timed session, recording and scoring into metrics, sheets in the room (P4.4-4.7)',
       tickets: [
         {
-          id: 'CP4.1', kind: 'ai', pr: 'PR 4', blockedBy: ['CP3.6'], due: '2026-12-07',
+          id: 'CP4.1', kind: 'ai', pr: 'Release 1', blockedBy: ['CP3.6'], due: '2026-12-07',
           title: 'planBuilder (pure, deterministic) + POST plans + the plan cards',
           what: 'planBuilder per P4.4: segment kinds and minutes, the 15-minute rule, each day targets the next weakest skill, the last day before the interview is a Full rehearsal, never past the interview, dates in Central. The server runs it and stores prep_plans. Cora\'s one-line purpose per segment may be generated only from real data.',
           why: '"Pick a plan and do the timer thing" (Ali\'s ruling 5).',
@@ -337,7 +353,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP4.2', kind: 'ai', pr: 'PR 4', blockedBy: ['CP4.1'], due: '2026-12-07',
+          id: 'CP4.2', kind: 'ai', pr: 'Release 1', blockedBy: ['CP4.1'], due: '2026-12-07',
           title: 'Your plan tab: days as timelines of segment blocks, weak-skill marks, Start today\'s session',
           what: 'PlanView per P4.4 and shot L3-3, plus Cora\'s follow-up cards (Start today\'s session, Shorter: 10 minutes, Remind me tonight at 6:00 PM Central).',
           why: 'The plan has to be visible before it is run.',
@@ -350,7 +366,7 @@ module.exports = {
           verify: ['Frontend jest'],
         },
         {
-          id: 'CP4.3', kind: 'ai', pr: 'PR 4', blockedBy: ['CP4.1'], due: '2026-12-08',
+          id: 'CP4.3', kind: 'ai', pr: 'Release 1', blockedBy: ['CP4.1'], due: '2026-12-08',
           title: 'sessionMachine (pure) + sessions API: idempotent segment progress, hidden-tab reconciliation, resume after leaving',
           what: 'sessionMachine per P4.5 and POST /sessions, PATCH /sessions/:id keyed by segment_index, POST /sessions/:id/attempts. The timer reconciles from timestamps when the tab returns; leaving saves progress and Cora offers Pick up where you left off.',
           why: 'A timed session that loses progress or double-counts minutes breaks the streak and the week.',
@@ -363,7 +379,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP4.4', kind: 'ai', pr: 'PR 4', blockedBy: ['CP4.3'], due: '2026-12-09',
+          id: 'CP4.4', kind: 'ai', pr: 'Release 1', blockedBy: ['CP4.3'], due: '2026-12-09',
           title: 'SessionRunner and the segment bodies; Try records on camera and is scored inline; Pressure round in the browser',
           what: 'Session tab per shots L3-4, L3-5: ring timer, segment list, stage, End session and Next. Bodies: Warm up, Learn (example from their own answers), Try (record, then score with the Phase 8 coaching pipeline + scoreAnswer, show did-well and lost-points), Pressure round (Cora asks follow-ups in the browser; phone via Synthflow only if M1 Q7 says so), Cool down. Cora tips at each segment start, from data.',
           why: 'This is where practice turns into observations.',
@@ -376,7 +392,7 @@ module.exports = {
           verify: ['jest backend + frontend'],
         },
         {
-          id: 'CP4.5', kind: 'ai', pr: 'PR 4', blockedBy: ['CP4.4'], due: '2026-12-10',
+          id: 'CP4.5', kind: 'ai', pr: 'Release 1', blockedBy: ['CP4.4'], due: '2026-12-10',
           title: 'Finish: observations written FIRST, then the recap from the deltas; reminders (in-app + email, quiet hours)',
           what: 'On Finish, write every scored attempt as observations, refresh readiness, then post the recap computed from those rows, then cards See my dashboard / Same time tomorrow / Another round. Changed skills are marked new on the dashboard. Reminders go by in-app and email (SMS only if M1 Q6), keyed so a re-run sends nothing twice.',
           why: 'The recap must equal what the dashboard shows.',
@@ -389,7 +405,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP4.6', kind: 'ai', pr: 'PR 4', blockedBy: ['CP3.6'], due: '2026-12-10',
+          id: 'CP4.6', kind: 'ai', pr: 'Release 1', blockedBy: ['CP3.6'], due: '2026-12-10',
           title: 'Sheets inside the room: #interviews, #inbox, #offers, #applications, #resume, with honest empty states until their data lands',
           what: 'PageSheet inside the room (right side, Back to Career Prep), reachable from Cora, the jump bar (/ or Ctrl+K) and its URL. Interviews lists career_interviews; Resume links the hire.refactored.ai talent page; Inbox, Offers and Applications say plainly what is coming until CP6 to CP10 fill them.',
           why: 'One door: getting-hired pages open as sheets, never as more doors.',
@@ -401,14 +417,14 @@ module.exports = {
           tests: ['Routing per hash', 'Focus to title on open and back to opener on close'],
           verify: ['Frontend jest'],
         },
-        ship('CP4.7', 'PR 4', ['CP4.1', 'CP4.2', 'CP4.3', 'CP4.4', 'CP4.5', 'CP4.6'], '2026-12-11', 'Ship PR 4. As Ali on production: pick a plan, run a session, record a Try, finish, and see the recap equal the dashboard change.'),
+        checkpoint('CP4.7', 'Release 1', ['CP4.1', 'CP4.2', 'CP4.3', 'CP4.4', 'CP4.5', 'CP4.6'], '2026-12-11', 'Checkpoint for CP4 (plans, sessions, sheets).'),
       ],
     },
     {
-      name: 'CP5 - PR 5: Level 1, the campus card, lobby express, elevator, deep links + the E2E suite (P1, P6)',
+      name: 'CP5 - Release 1 (part 5 of 5, ships): Level 1, the campus card, lobby express, elevator, deep links + the E2E suite (P1, P6)', formerName: 'CP5 - PR 5: Level 1, the campus card, lobby express, elevator, deep links + the E2E suite (P1, P6)',
       tickets: [
         {
-          id: 'CP5.1', kind: 'ai', pr: 'PR 5', blockedBy: ['CP4.7'], due: '2026-12-14',
+          id: 'CP5.1', kind: 'ai', pr: 'Release 1', blockedBy: ['CP4.7'], due: '2026-12-14',
           title: 'CareerPrepCard on the home panel (students only) + prepCardCopy',
           what: 'CareerPrepCard under the Today card in ArrivalPanel, for students only: floor tile, headline by rule, up to 2 interviews (+n more) with readiness bars and source tags, Cora\'s line, Go to Career Prep and per-interview deep links.',
           why: '"The campus is part of this build with showing the interviews" (Ali\'s ruling 7).',
@@ -421,7 +437,7 @@ module.exports = {
           verify: ['Frontend jest'],
         },
         {
-          id: 'CP5.2', kind: 'ai', pr: 'PR 5', blockedBy: ['CP5.1'], due: '2026-12-15',
+          id: 'CP5.2', kind: 'ai', pr: 'Release 1', blockedBy: ['CP5.1'], due: '2026-12-15',
           title: 'Outside lit band, lobby (Reese line, one express button, directory), express elevator, the level trail',
           what: 'Per P1.2 to P1.5 and shots L1-2 to L1-4: lit band and hint, conciergeLine for members, express button, directory of the badge\'s floors plus the locked-floors line, express ride lighting only the student\'s floors, the trail on every tower scene.',
           why: 'The long way must work as well as the card.',
@@ -434,7 +450,7 @@ module.exports = {
           verify: ['Frontend jest'],
         },
         {
-          id: 'CP5.3', kind: 'ai', pr: 'PR 5', blockedBy: ['CP5.1'], due: '2026-12-15',
+          id: 'CP5.3', kind: 'ai', pr: 'Release 1', blockedBy: ['CP5.1'], due: '2026-12-15',
           title: 'goStart(\'prep\') and the deep links /portal/career, /portal/career/room, ?anchor=<id>',
           what: 'Add the prep start intent to hqIntent.ts and the routes, so Go to Career Prep lands on the floor, the room URL lands in the room, and ?anchor preselects the interview.',
           why: 'Emails and the card link straight in.',
@@ -447,7 +463,7 @@ module.exports = {
           verify: ['Frontend jest'],
         },
         {
-          id: 'CP5.4', kind: 'ai', pr: 'PR 5', blockedBy: ['CP5.2', 'CP5.3'], due: '2026-12-16',
+          id: 'CP5.4', kind: 'ai', pr: 'Release 1', blockedBy: ['CP5.2', 'CP5.3'], due: '2026-12-16',
           title: 'Playwright E2E for P6 items 1 to 8 + fidelity against the 13 shots at 1600, 1440 and 390',
           what: 'An E2E spec with a DEV_ONLY seeded student covering P6 items 1 to 8, with the scorer stubbed. Fidelity captures compared side by side with docs/design/career-prep/shots/.',
           why: 'Acceptance for the campus build is end to end.',
@@ -459,14 +475,14 @@ module.exports = {
           tests: ['The E2E spec itself'],
           verify: ['The Playwright run output'],
         },
-        ship('CP5.5', 'PR 5', ['CP5.1', 'CP5.2', 'CP5.3', 'CP5.4'], '2026-12-17', 'Ship PR 5. Run the E2E against production as Ali, build the review HTML with real screenshots, and hand to milestone M2.'),
+        ship('CP5.5', 'Release 1', ['CP5.1', 'CP5.2', 'CP5.3', 'CP5.4'], '2026-12-17', 'Ship Release 1 (CP1 to CP5, the whole student experience) as ONE PR. After Ali merges: deploy backend + nginx, run the observation backfill on production, run the E2E against production as Ali (pick or add an interview, plan, session, Try, recap equals the dashboard change), build the review HTML with real screenshots, and hand to milestone M2. A student without the flag must see no change.'),
       ],
     },
     {
-      name: 'CP6 - PR 6: job-search inbox + inbox integration endpoints, platform side (F2, F3)',
+      name: 'CP6 - Release 2 (part 1 of 3): job-search inbox + inbox integration endpoints, platform side (F2, F3)', formerName: 'CP6 - PR 6: job-search inbox + inbox integration endpoints, platform side (F2, F3)',
       tickets: [
         {
-          id: 'CP6.1', kind: 'ai', pr: 'PR 6', blockedBy: ['M2', 'M3'], due: '2026-12-18',
+          id: 'CP6.1', kind: 'ai', pr: 'Release 2', blockedBy: ['M2', 'M3'], due: '2026-12-18',
           title: 'job_search_inboxes + the 4-step setup + health rules (Quiet, Forwarding broken) in the #inbox sheet',
           what: 'Per F2: table, setup steps with verified ticks, the status card, the received-mail table, What we never do, health rules with the daily test and alerts.',
           why: 'Real interviews come from the student\'s job-search inbox.',
@@ -479,7 +495,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP6.2', kind: 'ai', pr: 'PR 6', blockedBy: ['CP6.1'], due: '2026-12-21',
+          id: 'CP6.2', kind: 'ai', pr: 'Release 2', blockedBy: ['CP6.1'], due: '2026-12-21',
           title: 'Integration contract: GET roster + POST events (HMAC, 5-minute window, idempotent) + backfill',
           what: 'Per F3: /api/integrations/inbox/roster (no personal email or phone) and /api/integrations/inbox/events with X-Signature HMAC + timestamp, unique (message_id, type) with ON CONFLICT DO NOTHING, replay returns 200; confidence bands stay the inbox manager\'s.',
           why: 'The platform owns the roster; the public repo stops holding student PII.',
@@ -491,7 +507,7 @@ module.exports = {
           tests: ['HMAC verify', 'Idempotency', 'Roster payload has no PII'],
           verify: ['jest'],
         },
-        ship('CP6.3', 'PR 6', ['CP6.1', 'CP6.2'], '2026-12-22', 'Ship PR 6. Set the shared secret on production with Ali; verify a signed test event round trip.'),
+        checkpoint('CP6.3', 'Release 2', ['CP6.1', 'CP6.2'], '2026-12-22', 'Checkpoint for CP6 (inbox and integration endpoints).'),
       ],
     },
     {
@@ -526,10 +542,10 @@ module.exports = {
       ],
     },
     {
-      name: 'CP8 - PR 8: interviews and booking (F4); real interviews on the card and as anchors',
+      name: 'CP8 - Release 2 (part 2 of 3): interviews and booking (F4); real interviews on the card and as anchors', formerName: 'CP8 - PR 8: interviews and booking (F4); real interviews on the card and as anchors',
       tickets: [
         {
-          id: 'CP8.1', kind: 'ai', pr: 'PR 8', blockedBy: ['CP7.2'], due: '2027-01-06',
+          id: 'CP8.1', kind: 'ai', pr: 'Release 2', blockedBy: ['CP7.2'], due: '2027-01-06',
           title: 'Interview states + placement_events + the 0.95 auto-reply with a booking link (guarded sender)',
           what: 'States new, awaiting, review, booked, done, cancelled, each change a placement_events row. At 0.95 or more, reply to the employer as the M3-approved sender with Reply-To the job-search address and CC it, carrying a booking link; below 0.95 to the review queue.',
           why: 'Booking is where real interviews enter the room.',
@@ -542,7 +558,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP8.2', kind: 'ai', pr: 'PR 8', blockedBy: ['CP8.1'], due: '2027-01-07',
+          id: 'CP8.2', kind: 'ai', pr: 'Release 2', blockedBy: ['CP8.1'], due: '2027-01-07',
           title: 'Booking page hire.refactored.ai/book/<token>, availability, .ics invites, notifications, reminders, 24-hour nudge',
           what: 'Per F4 steps 3 to 6: single-use 14-day token, 5-day slot grid from availability minus bookings minus a 15-minute buffer, both time zones, Confirm; invites and notifications on booking; reminders at 24 h and 1 h; nudge after 24 h unbooked.',
           why: 'Employers book without a login.',
@@ -555,7 +571,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP8.3', kind: 'ai', pr: 'PR 8', blockedBy: ['CP8.2'], due: '2027-01-08',
+          id: 'CP8.3', kind: 'ai', pr: 'Release 2', blockedBy: ['CP8.2'], due: '2027-01-08',
           title: 'Interviews sheet (next interview, history drawer, availability) + booked interviews become anchors and appear on the campus card',
           what: 'Fill the #interviews sheet per F4 (candidate screen) and create career_interviews rows (source=real) on booking, so they show on the card and as anchor cards.',
           why: 'Acceptance (carried) 1: the interview appears on the card and in the room.',
@@ -567,14 +583,14 @@ module.exports = {
           tests: ['Row created once per interview'],
           verify: ['jest'],
         },
-        ship('CP8.4', 'PR 8', ['CP8.1', 'CP8.2', 'CP8.3'], '2027-01-11', 'Ship PR 8. Prove carried acceptance 1 with a sandbox email through to the campus card.'),
+        checkpoint('CP8.4', 'Release 2', ['CP8.1', 'CP8.2', 'CP8.3'], '2027-01-11', 'Checkpoint for CP8 (booking).'),
       ],
     },
     {
-      name: 'CP9 - PR 9: the interview room, consent, recording, replay into prep_observations (F5)',
+      name: 'CP9 - Release 2 (part 3 of 3, ships): the interview room, consent, recording, replay into prep_observations (F5)', formerName: 'CP9 - PR 9: the interview room, consent, recording, replay into prep_observations (F5)',
       tickets: [
         {
-          id: 'CP9.1', kind: 'ai', pr: 'PR 9', blockedBy: ['CP8.4'], due: '2027-01-12',
+          id: 'CP9.1', kind: 'ai', pr: 'Release 2', blockedBy: ['CP8.4'], due: '2027-01-12',
           title: 'RoomProvider over the existing Zoom services, consent gating, the unrecorded path, side panels per role',
           what: 'Per F5: opens 10 minutes before, consent screen for everyone, records only when all consent, declined = unrecorded with the flag stored, candidate and employer side panels.',
           why: 'Recording without everyone\'s consent is not allowed.',
@@ -587,7 +603,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP9.2', kind: 'ai', pr: 'PR 9', blockedBy: ['CP9.1'], due: '2027-01-13',
+          id: 'CP9.2', kind: 'ai', pr: 'Release 2', blockedBy: ['CP9.1'], due: '2027-01-13',
           title: 'Interview Replay: diarised candidate turns scored and written to prep_observations (idempotent)',
           what: 'After the room: store recording and transcript, diarise the candidate\'s turns, score them with the Phase 8 pipeline + scoreAnswer, write observations with source=real_interview, and show the replay to the candidate only.',
           why: 'Carried acceptance 2: replay scores move the dashboard.',
@@ -599,14 +615,14 @@ module.exports = {
           tests: ['Idempotent replay', 'Employer cannot read the candidate feedback'],
           verify: ['jest'],
         },
-        ship('CP9.3', 'PR 9', ['CP9.1', 'CP9.2'], '2027-01-14', 'Ship PR 9. Prove carried acceptance 2 with a sandbox interview Ali joins.'),
+        ship('CP9.3', 'Release 2', ['CP9.1', 'CP9.2'], '2027-01-14', 'Ship Release 2 (CP6, CP8, CP9, the getting-hired pipeline) as ONE PR. After Ali merges: deploy, set the integration secret with Ali, and prove carried acceptance 1 and 2 with a sandbox email through booking, the room and the replay into the dashboard.'),
       ],
     },
     {
-      name: 'CP10 - PR 10: employer portal, offers, the fee, invoices on accept, follow-ups (F6-F8)',
+      name: 'CP10 - Release 3 (part 1 of 2): employer portal, offers, the fee, invoices on accept, follow-ups (F6-F8)', formerName: 'CP10 - PR 10: employer portal, offers, the fee, invoices on accept, follow-ups (F6-F8)',
       tickets: [
         {
-          id: 'CP10.1', kind: 'ai', pr: 'PR 10', blockedBy: ['CP9.3', 'M3'], due: '2027-01-15',
+          id: 'CP10.1', kind: 'ai', pr: 'Release 3', blockedBy: ['CP9.3', 'M3'], due: '2027-01-15',
           title: 'feeCalculator (pure, integer cents) + versioned offers + agreement + invoice record on accept',
           what: 'Per F7, with the M3 fee answers: firstYearCents and feeCents, Zod bounds, stored inputs and agreement fields, a new version on edit, invoice record on offer.accepted.',
           why: 'Money: exact, auditable, and never shown to the candidate.',
@@ -619,7 +635,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP10.2', kind: 'ai', pr: 'PR 10', blockedBy: ['CP10.1'], due: '2027-01-18',
+          id: 'CP10.2', kind: 'ai', pr: 'Release 3', blockedBy: ['CP10.1'], due: '2027-01-18',
           title: 'Employer portal hire.refactored.ai/client: candidates, interviews, offers and fees, Make an offer',
           what: 'Per F6 with the F1 dashboard pattern for employers, signed in with the ClientSignIn magic-link pattern. Send stays disabled until the agreement is ticked.',
           why: 'Employers act on candidates in one place.',
@@ -632,7 +648,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP10.3', kind: 'ai', pr: 'PR 10', blockedBy: ['CP10.2'], due: '2027-01-19',
+          id: 'CP10.3', kind: 'ai', pr: 'Release 3', blockedBy: ['CP10.2'], due: '2027-01-19',
           title: 'Follow-ups: scheduled_emails, condition checked at send time, em-dash rejection, open and click tracking',
           what: 'Per F8: templates with merge fields, send on (Central), only-if condition, retry 3 times then failed, tracked links and open pixel reused.',
           why: 'Follow-ups move offers to an answer.',
@@ -645,7 +661,7 @@ module.exports = {
           verify: ['jest'],
         },
         {
-          id: 'CP10.4', kind: 'ai', pr: 'PR 10', blockedBy: ['CP10.1'], due: '2027-01-19',
+          id: 'CP10.4', kind: 'ai', pr: 'Release 3', blockedBy: ['CP10.1'], due: '2027-01-19',
           title: 'The candidate\'s Offers sheet: Accept, Talk to my recruiter first, Decline (never the fee)',
           what: 'Fill #offers per F6 candidate view, shown in Waiting on you and as a Cora card when an offer arrives.',
           why: 'Carried acceptance 4.',
@@ -657,14 +673,14 @@ module.exports = {
           tests: ['Idempotent accept', 'No fee in payload'],
           verify: ['jest'],
         },
-        ship('CP10.5', 'PR 10', ['CP10.1', 'CP10.2', 'CP10.3', 'CP10.4'], '2027-01-20', 'Ship PR 10. Prove carried acceptance 4 and 5 with sandbox data.'),
+        checkpoint('CP10.5', 'Release 3', ['CP10.1', 'CP10.2', 'CP10.3', 'CP10.4'], '2027-01-20', 'Checkpoint for CP10 (employer portal, offers, follow-ups).'),
       ],
     },
     {
-      name: 'CP11 - PR 11: staff interview desk (F9), then handoff',
+      name: 'CP11 - Release 3 (part 2 of 2, ships): staff interview desk (F9), then handoff', formerName: 'CP11 - PR 11: staff interview desk (F9), then handoff',
       tickets: [
         {
-          id: 'CP11.1', kind: 'ai', pr: 'PR 11', blockedBy: ['CP10.5'], due: '2027-01-21',
+          id: 'CP11.1', kind: 'ai', pr: 'Release 3', blockedBy: ['CP10.5'], due: '2027-01-21',
           title: '/admin/career-desk: review queue, inbox health, bookings, placements and fees, each student\'s prep summary',
           what: 'Per F9 with the staff dashboard pattern, gated on the placement section. Every action audited; approvals written back to the inbox manager. Recruiters read each student\'s prep read-only (M1 Q3).',
           why: 'Carried acceptance 3 and 6.',
@@ -676,7 +692,7 @@ module.exports = {
           tests: ['Audit rows', 'Section gating'],
           verify: ['jest'],
         },
-        ship('CP11.2', 'PR 11', ['CP11.1'], '2027-01-22', 'Ship PR 11. Prove carried acceptance 3 and 6.'),
+        ship('CP11.2', 'Release 3', ['CP11.1'], '2027-01-22', 'Ship Release 3 (CP10, CP11, employers and staff) as ONE PR. After Ali merges: deploy and prove carried acceptance 3 to 6 with sandbox data.'),
         {
           id: 'CP11.3', kind: 'ai', pr: 'none', blockedBy: ['CP11.2'], due: '2027-01-22',
           title: 'Handoff: owner testing guide, review HTML with real production screenshots, open escalations, the flag inventory for M4',
@@ -710,7 +726,7 @@ module.exports = {
           id: 'M1', kind: 'human', blockedBy: ['CP0.1'], due: '2026-11-18',
           title: 'Rulings the build needs: two conflicts found in the kit, and the kit\'s five "Ask Ali" defaults',
           what: 'Two places where the kit and production disagree, and the five open questions the kit lists with defaults.',
-          why: 'Answering now keeps CP1 to CP5 from building the wrong thing. Every question has a default, so silence does not block.',
+          why: 'The build proceeds on the defaults (logged as assumptions) without waiting; answer only to override, and the affected tickets are adjusted before Release 1 ships.',
           prepares: ['repo-facts.md from CP0.1', 'The Build Contract corrections list'],
           questions: [
             { q: 'The kit lists an "Eye contact" skill and scores delivery with colaberry/video-analysis (face, eye contact, expression). On 2026-11-14 you chose OpenAI with no face analysis (Illinois AI Video Interview Act). Which wins?', options: ['Keep the Phase 8 rule: delivery from voice and words only; drop "Eye contact" from the 10 skills (recommended)', 'Add eye contact through video-analysis after the M0 secret rotation, with a consent step'], default: 'A' },
@@ -725,7 +741,7 @@ module.exports = {
         },
         {
           id: 'M2', kind: 'human', blockedBy: ['CP5.5'], due: '2026-12-17',
-          title: 'Walk Levels 1 to 3 on your own account and approve (or list changes) before the getting-hired half starts',
+          title: 'Release 1 milestone: merge the Release 1 PR, then walk Levels 1 to 3 on your own account and approve (or list changes)',
           what: 'The whole student experience is live behind the flag on your account only: the campus card, the floor with one door, the room, a plan, a session, the dashboard.',
           why: 'This is the half you designed screen by screen; it should be right before we build the pipeline behind it.',
           prepares: ['The review HTML with real production screenshots', 'A 5-minute test script'],
@@ -737,7 +753,7 @@ module.exports = {
           id: 'M3', kind: 'human', blockedBy: [], due: '2026-12-17',
           title: 'Carried decisions for the inbox, booking, recording and fees (from the previous round, still open)',
           what: 'The open questions from the kit\'s Ask Ali item 6.',
-          why: 'CP6, CP8, CP9 and CP10 encode these answers.',
+          why: 'CP6, CP8, CP9 and CP10 encode these answers. The defaults apply automatically when Release 2 starts; answer only to override.',
           prepares: ['The kit text for each'],
           questions: [
             { q: 'Who sends the booking-link reply to employers?', options: ['"Ali M. via Refactored.ai", Reply-To the job-search address (kit)', 'The student\'s recruiter by name via Refactored.ai'], default: 'A' },

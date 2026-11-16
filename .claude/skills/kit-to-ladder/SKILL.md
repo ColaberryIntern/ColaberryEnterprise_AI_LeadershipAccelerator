@@ -26,7 +26,9 @@ One kit in, one Basecamp build list out, ready for `/loop-architect` to work one
 3. **Look for conflicts with decisions already made** (memory, earlier PRs, CLAUDE.md). Each one becomes a lettered question on the first milestone ticket, with the recommended option first and a default. Never resolve a product conflict silently.
 4. **Write the ladder spec** as a JS module next to `examples/career-prep-v27.js` (copy its shape):
    - `CP0`-style control group: stage the kit, execution contract + plan audit, standing bookkeeping.
-   - **One group per PR** in the kit's own PR order; the last ticket of each group is the ship ticket (`ship()` helper): quality gate, ONE PR, Ali merges, `deploy-prod.sh`, `loop-production-verifier`.
+   - **Approvals, PRs and deploys only at a few major releases** (Ali, 2026-11-16: "I only want to approve, PR and deploy on major milestones - don't want to do the back and forth"). Group the kit's PRs into 2-4 releases at natural product milestones. Groups inside a release end in a `checkpoint()` ticket (full quality gate on the release branch, no PR, no deploy, no question); the release's last group ends in the `ship()` ticket (quality gate, ONE PR, Ali merges, `deploy-prod.sh`, `loop-production-verifier`).
+   - Milestone questions carry defaults that **apply automatically** (logged as assumptions); Ali answers only to override. Never block a build ticket on an unanswered question, except the release review itself.
+   - Renaming a group later: set `formerName` to the old name so the publisher renames it in place and keeps its tickets.
    - Every 🤖 ticket: what, why, inputs, repository facts (verified), in scope, out of scope, machine-checkable acceptance, tests (happy, failure, boundary, idempotency), verification commands. The renderer adds the run line, the shared contract and the close-out.
    - `MILESTONE APPROVALS (Ali)`: escalations first (security items from the kit), then the kit's "ask Ali" questions, review gates, and the final "open it up" gate. Every question has 2+ options and a default.
    - Due dates on working days, never before a dependency.
