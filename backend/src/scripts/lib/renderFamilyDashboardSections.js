@@ -36,30 +36,42 @@ function throwbackCell(p, k) {
   </td>`;
 }
 
+function videoCell(v, k) {
+  const label = v.section === 'throwback' ? `Throw Back video · ${fmtTakenDay(v.takenAt)}` : `Video · ${fmtTaken(v.takenAt)}`;
+  return `<td width="50%" valign="top" style="padding:6px">
+    ${v.shareUrl ? `<a href="${k.esc(v.shareUrl)}">` : ''}<img src="cid:${v.cid}" alt="${k.esc(`Family video from ${fmtTakenDay(v.takenAt)}`)}" width="268" style="display:block;width:100%;max-width:268px;height:auto;border:0" />${v.shareUrl ? '</a>' : ''}
+    <div style="margin-top:6px">${k.chip(`▶ ${label} (${v.duration})`, k.C.lineSoft, k.C.navy)}</div>
+    <div style="font-size:12.5px;color:${k.C.ink};margin-top:4px;font-family:${k.FONT}">${k.esc(v.caption || '')}</div>
+    ${v.shareUrl ? `<div style="margin-top:6px"><a href="${k.esc(v.shareUrl)}" style="display:inline-block;background:${k.C.navy};color:#ffffff;text-decoration:none;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:6px;font-family:${k.FONT}">Watch the full video</a></div>` : ''}
+  </td>`;
+}
+
+/** Photo cells plus today's video when it belongs to this section, laid out two per row. */
+function gridRows(cells) {
+  let out = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">';
+  for (let i = 0; i < cells.length; i += 2) out += `<tr>${cells[i]}${cells[i + 1] || '<td width="50%"></td>'}</tr>`;
+  return `${out}</table>`;
+}
+const videoIn = (data, section) => (data.video && data.video.section === section ? data.video : null);
+
 function renderThrowbacks(data, k) {
   const tb = data.throwbacks || [];
-  if (!tb.length) return '';
+  const vid = videoIn(data, 'throwback');
+  if (!tb.length && !vid) return '';
   let out = k.sectionOpen('Throw Back Pics');
   out += k.hTitle('Throw Back Pics', 'From the camera roll archive, picked to match this week. Each is dated, and each appears once, ever.');
-  out += '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">';
-  for (let i = 0; i < tb.length; i += 2) {
-    out += `<tr>${throwbackCell(tb[i], k)}${tb[i + 1] ? throwbackCell(tb[i + 1], k) : '<td width="50%"></td>'}</tr>`;
-  }
-  out += '</table>';
+  out += gridRows([...tb.map((p) => throwbackCell(p, k)), ...(vid ? [videoCell(vid, k)] : [])]);
   out += k.sectionClose();
   return out;
 }
 
 function renderPhotos(data, k) {
   const photos = (data.photos || []);
-  if (!photos.length) return '';
+  const vid = videoIn(data, 'new');
+  if (!photos.length && !vid) return '';
   let out = k.sectionOpen('Family Photos');
   out += k.hTitle('New from the camera roll', 'Each picture appears in this email once, ever. Tomorrow brings new ones.');
-  out += '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">';
-  for (let i = 0; i < photos.length; i += 2) {
-    out += `<tr>${photoCell(photos[i], k)}${photos[i + 1] ? photoCell(photos[i + 1], k) : '<td width="50%"></td>'}</tr>`;
-  }
-  out += '</table>';
+  out += gridRows([...photos.map((p) => photoCell(p, k)), ...(vid ? [videoCell(vid, k)] : [])]);
   out += k.sectionClose();
   return out;
 }
@@ -130,6 +142,7 @@ function sectionsText(data) {
     for (const it of data.school.items) lines.push(`- ${it.child}${it.date ? ` (${fmtDate(it.date)})` : ''}: ${it.title}${it.action ? `. To do: ${it.action}` : ''}`);
   }
   if (data.photos && data.photos.length) lines.push('', `FAMILY PHOTOS: ${data.photos.length} new picture(s) in the HTML version.`);
+  if (data.video) lines.push('', `${data.video.section === 'throwback' ? 'THROW BACK VIDEO' : 'FAMILY VIDEO'} (${fmtTakenDay(data.video.takenAt)}, ${data.video.duration})${data.video.shareUrl ? `: ${data.video.shareUrl}` : ''}`);
   if (data.throwbacks && data.throwbacks.length) {
     lines.push('', 'THROW BACK PICS (in the HTML version)');
     for (const p of data.throwbacks) lines.push(`- ${fmtTakenDay(p.takenAt)}: ${p.caption || 'family photo'}${p.why ? ` (${p.why})` : ''}`);
