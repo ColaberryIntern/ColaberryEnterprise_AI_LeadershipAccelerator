@@ -57,12 +57,35 @@ describe('Your progress (CP3.5)', () => {
     expect(h.textContent).toContain('Streak: 3 days');
   });
 
+  it('a partial payload (skills, no readiness, no interviews) shows only what exists', () => {
+    const h = mount({ ...empty, skills: full.skills });
+    expect(h.querySelector('[data-testid="cp-readiness-empty"]')).not.toBeNull();
+    expect(h.textContent).not.toContain('Your interviews');
+    expect(h.querySelectorAll('[data-testid="cp-skills"] li')).toHaveLength(3);
+    expect(h.textContent).toContain("Cora's read");
+  });
+
+  it('each interview shows its readiness bar with a tick at its ready mark', () => {
+    const h = mount(full);
+    const tick = h.querySelector('[data-testid="cp-iv-i1"] .cp-bar-tick') as HTMLElement;
+    expect(tick.style.left).toBe('75%');
+  });
+
+  it('a focused chart point shows its value in a readout, for keyboard users', () => {
+    const h = mount(full);
+    const dot = h.querySelector('.cp-dotpt') as SVGCircleElement;
+    act(() => { dot.dispatchEvent(new FocusEvent('focusin', { bubbles: true })); });
+    expect(h.querySelector('[data-testid="cp-chart-readout"]')?.textContent).toBe('Nov 2: 55 readiness');
+  });
+
   it('every chart can show its data as a table', () => {
     const h = mount(full);
     const toggles = Array.from(h.querySelectorAll('.cp-chart figcaption button')) as HTMLButtonElement[];
     expect(toggles).toHaveLength(2);
     act(() => toggles[0].click());
     expect(Array.from(h.querySelectorAll('.cp-table td')).map((c) => c.textContent)).toContain('64');
+    act(() => toggles[1].click());
+    expect(Array.from(h.querySelectorAll('.cp-table td')).map((c) => c.textContent)).toContain('40');
   });
 
   it('interview rows anchor, skill rows ask for a short session', () => {

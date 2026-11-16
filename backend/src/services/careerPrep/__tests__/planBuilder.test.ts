@@ -33,8 +33,18 @@ describe('planDates (Central)', () => {
   it('a practice interview uses its window', () => {
     expect(planDates(NOW, { startsAt: null, practiceUntil: '2026-11-19' })).toHaveLength(4);
   });
-  it('caps a far interview at 14 days', () => {
-    expect(planDates(NOW, { startsAt: new Date('2027-01-30T20:00:00Z'), practiceUntil: null })).toHaveLength(14);
+  it('caps a far interview at 14 sessions and keeps the day before it last', () => {
+    const d = planDates(NOW, { startsAt: new Date('2027-01-30T20:00:00Z'), practiceUntil: null });
+    expect(d).toHaveLength(14);
+    expect(d[12]).toBe('2026-11-28');
+    expect(d[13]).toBe('2027-01-29');
+  });
+
+  it('puts the Full rehearsal on the day before a far interview, not weeks early', () => {
+    const p = buildPlan({ kind: 'days', now: NOW, interview: { startsAt: new Date('2027-01-30T20:00:00Z'), practiceUntil: null }, weakest: weak });
+    expect(p.days[13]).toMatchObject({ date: '2027-01-29' });
+    expect(p.days[13].segments.map((s) => s.kind)).toContain('rehearsal');
+    expect(p.days[12].segments.map((s) => s.kind)).not.toContain('rehearsal');
   });
   it('crosses the DST change by calendar date', () => {
     const now = new Date('2026-10-31T17:00:00Z'); // Sat 31 Oct, CDT
@@ -47,7 +57,8 @@ describe('buildPlan', () => {
 
   it('days: one session a day on the next weakest skill, and a Full rehearsal the day before', () => {
     const p = buildPlan({ kind: 'days', now: NOW, interview, weakest: weak });
-    expect(p.days.map((d) => d.label)).toEqual(['Today', 'Tomorrow', 'Wednesday, Nov 18']);
+    expect(p.days.map((d) => d.date)).toEqual(['2026-11-16', '2026-11-17', '2026-11-18']);
+    expect(p.days.every((d) => !('label' in d))).toBe(true); // labels are worked out when shown, never stored
     expect(p.days[0].segments[1].targetSkill).toBe('pace_clarity');
     expect(p.days[1].segments[1].targetSkill).toBe('few_fillers');
     expect(p.days[2].segments.map((s) => s.kind)).toContain('rehearsal');

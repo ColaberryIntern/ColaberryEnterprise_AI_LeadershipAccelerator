@@ -4,7 +4,7 @@ jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: unknow
 const mockLoad = jest.fn();
 jest.mock('../prepData', () => ({ loadPrepData: (...a: unknown[]) => mockLoad(...a) }));
 
-import { activePlan, createPlan, NotYoursError } from '../plans';
+import { activePlan, createPlan, NotYoursError, PastInterviewError } from '../plans';
 
 const NOW = new Date('2026-11-16T18:00:00Z');
 const data = () => ({
@@ -21,14 +21,14 @@ beforeEach(() => { mockQuery.mockReset(); mockLoad.mockReset(); mockTransaction.
 describe('createPlan', () => {
   it('builds on the server from the weakest scored skills and stores it, retiring the previous active plan in one transaction', async () => {
     mockLoad.mockResolvedValue(data());
-    mockQuery.mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[{ id: 'pl1' }], 1]);
+    mockQuery.mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[{ id: 'pl1' }], 1]);
     const r = await createPlan('e1', { interviewId: 'i1', kind: 'days' }, NOW);
     expect(r.id).toBe('pl1');
     expect(r.plan.days.map((d) => d.date)).toEqual(['2026-11-16', '2026-11-17', '2026-11-18']);
     expect(r.plan.days[0].segments[1].targetSkill).toBe('pace_clarity');
-    expect(String(mockQuery.mock.calls[0][0])).toContain("SET status = 'abandoned'");
-    expect(mockQuery.mock.calls[0][1].transaction).toBe('tx');
-    expect(mockQuery.mock.calls[1][1].transaction).toBe('tx');
+    expect(String(mockQuery.mock.calls[0][0])).toContain('pg_advisory_xact_lock');
+    expect(String(mockQuery.mock.calls[1][0])).toContain("SET status = 'abandoned'");
+    expect(mockQuery.mock.calls.slice(0, 3).every((c) => c[1].transaction === 'tx')).toBe(true);
     expect(mockTransaction).toHaveBeenCalledTimes(1);
   });
 
@@ -40,18 +40,30 @@ describe('createPlan', () => {
 
   it('ignores an unknown focus skill rather than inventing one', async () => {
     mockLoad.mockResolvedValue(data());
-    mockQuery.mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[{ id: 'pl2' }], 1]);
+    mockQuery.mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[], 0]).mockResolvedValueOnce([[{ id: 'pl2' }], 1]);
     const r = await createPlan('e1', { interviewId: 'i1', kind: 'custom', minutes: 10, focusSkill: 'eye_contact' }, NOW);
     expect(r.plan.days[0].segments[1].targetSkill).toBe('pace_clarity');
-    expect(mockQuery.mock.calls[1][1].replacements.f).toBeNull();
+    expect(mockQuery.mock.calls[2][1].replacements.f).toBeNull();
+  });
+
+  it('refuses to plan for an interview that has already started', async () => {
+    mockLoad.mockResolvedValue(data());
+    await expect(createPlan('e1', { interviewId: 'i1', kind: 'days' }, new Date('2026-11-19T20:30:00Z'))).rejects.toBeInstanceOf(PastInterviewError);
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });
 
 describe('activePlan', () => {
-  it('reads the newest active plan, or null', async () => {
-    mockQuery.mockResolvedValueOnce([[{ id: 'pl1', interview_id: 'i1', kind: 'days', minutes: 20, days: [{ date: '2026-11-16', label: 'Today', segments: [] }] }], 1]);
-    expect(await activePlan('e1', 'i1')).toMatchObject({ id: 'pl1', plan: { kind: 'days', minutes: 20 } });
-    mockQuery.mockResolvedValueOnce([[], 0]);
+  const own = () => mockQuery.mockResolvedValueOnce([[{ id: 'i1' }], 1]);
+  it('reads the newest active plan, leaving out days already over, or null', async () => {
+    own().mockResolvedValueOnce([[{ id: 'pl1', interview_id: 'i1', kind: 'days', minutes: 20, days: [{ date: '2026-11-16', segments: [] }, { date: '2026-11-17', label: 'Today', segments: [] }] }], 1]);
+    const r = await activePlan('e1', 'i1', new Date('2026-11-17T18:00:00Z'));
+    expect(r?.plan.days).toEqual([{ date: '2026-11-17', segments: [] }]); // yesterday dropped; any stored label ignored
+    own().mockResolvedValueOnce([[], 0]);
     expect(await activePlan('e1', 'i1')).toBeNull();
+  });
+  it("refuses another student's interview", async () => {
+    mockQuery.mockResolvedValueOnce([[], 0]);
+    await expect(activePlan('e2', 'i1')).rejects.toBeInstanceOf(NotYoursError);
   });
 });

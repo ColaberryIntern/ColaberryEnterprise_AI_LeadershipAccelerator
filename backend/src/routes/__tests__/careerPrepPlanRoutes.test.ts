@@ -7,7 +7,8 @@ const mockCreate = jest.fn();
 const mockActive = jest.fn();
 jest.mock('../../services/careerPrep/plans', () => {
   class NotYoursError extends Error {}
-  return { createPlan: (...a: unknown[]) => mockCreate(...a), activePlan: (...a: unknown[]) => mockActive(...a), NotYoursError };
+  class PastInterviewError extends Error {}
+  return { createPlan: (...a: unknown[]) => mockCreate(...a), activePlan: (...a: unknown[]) => mockActive(...a), NotYoursError, PastInterviewError };
 });
 
 import express from 'express';
@@ -51,8 +52,16 @@ describe('POST /api/portal/career-prep/plans', () => {
     mockCreate.mockRejectedValue(new NotYoursError());
     expect((await request(app()).post(URL).set('Authorization', token()).send({ interviewId: I1, kind: 'days' })).status).toBe(404);
   });
+  it('409s an interview that has already started', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PastInterviewError } = require('../../services/careerPrep/plans');
+    mockCreate.mockRejectedValue(new PastInterviewError());
+    const res = await request(app()).post(URL).set('Authorization', token()).send({ interviewId: I1, kind: 'days' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain('already started');
+  });
   it('refuses a read-only view-as token', async () => {
-    expect((await request(app()).post(URL).set('Authorization', token({ read_only: true, impersonated_by: 'a' })).send({ interviewId: I1, kind: 'days' })).status).toBeGreaterThanOrEqual(400);
+    expect((await request(app()).post(URL).set('Authorization', token({ read_only: true, impersonated_by: 'a' })).send({ interviewId: I1, kind: 'days' })).status).toBe(403);
     expect(mockCreate).not.toHaveBeenCalled();
   });
 });
@@ -63,6 +72,18 @@ describe('GET /api/portal/career-prep/plans', () => {
     const res = await request(app()).get(`${URL}?interviewId=${I1}`).set('Authorization', token());
     expect(res.body).toEqual({ plan: null });
     expect(mockActive).toHaveBeenCalledWith('enr-ali', I1);
+  });
+  it('401s without a token and 404s with Career Prep off', async () => {
+    expect((await request(app()).get(`${URL}?interviewId=${I1}`)).status).toBe(401);
+    mockEnabled.mockResolvedValue(false);
+    expect((await request(app()).get(`${URL}?interviewId=${I1}`).set('Authorization', token())).status).toBe(404);
+    expect(mockActive).not.toHaveBeenCalled();
+  });
+  it("404s an interview that is not this student's", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { NotYoursError } = require('../../services/careerPrep/plans');
+    mockActive.mockRejectedValue(new NotYoursError());
+    expect((await request(app()).get(`${URL}?interviewId=${I1}`).set('Authorization', token())).status).toBe(404);
   });
   it('400s without a valid interview id', async () => {
     expect((await request(app()).get(URL).set('Authorization', token())).status).toBe(400);

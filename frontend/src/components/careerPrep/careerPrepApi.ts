@@ -51,7 +51,7 @@ export async function askCoraApi(message: string, interviewId?: string): Promise
 }
 
 export interface PrepSegment { kind: 'warmup' | 'learn' | 'try' | 'pressure' | 'cooldown' | 'rehearsal'; title: string; minutes: number; targetSkill?: string }
-export interface PrepPlan { kind: 'days' | 'tonight' | 'full' | 'custom'; minutes: number; days: Array<{ date: string; label: string; segments: PrepSegment[] }> }
+export interface PrepPlan { kind: 'days' | 'tonight' | 'full' | 'custom'; minutes: number; days: Array<{ date: string; segments: PrepSegment[] }> }
 export interface StoredPlan { id: string; interviewId: string; plan: PrepPlan }
 
 export async function postPlan(body: { interviewId: string; kind: PrepPlan['kind']; minutes?: 10 | 20 | 45; focusSkill?: string }): Promise<StoredPlan> {

@@ -95,6 +95,8 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
      status VARCHAR(10) NOT NULL DEFAULT 'active' CHECK (status IN ('active','done','abandoned')),
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
    )`,
+  // One active plan per interview, guaranteed by the database (plans.ts also serialises with a lock).
+  `CREATE UNIQUE INDEX IF NOT EXISTS prep_plans_one_active ON prep_plans (enrollment_id, interview_id) WHERE status = 'active'`,
   `CREATE TABLE IF NOT EXISTS prep_sessions (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      plan_id UUID REFERENCES prep_plans(id) ON DELETE SET NULL,

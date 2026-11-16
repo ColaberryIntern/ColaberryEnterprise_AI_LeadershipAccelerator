@@ -324,3 +324,22 @@ tests/systemV2/career-prep/.
     deadline and a paused one its time left, so a hidden tab or a sleeping laptop always reconciles; practice time is
     real running time only; finished and ended never change again).
   - Verification: sessionMachine 6 tests; tsc clean.
+
+- [x] CP3.5 / CP4.1 / CP4.2 fixes (attempt 2, after the verifier failed T15 10/12, T17 8/12, T18 9/12)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: (1) Plans store each day's DATE only; "Today", "Tomorrow" and the weekday are worked out when the
+    plan is shown, against the current Central date, so a plan opened the next day puts Start on the right row and
+    drops days already over (server and client). (2) One active plan per interview is now guaranteed by a partial
+    unique index (prep_plans_one_active) and a per-student lock around retire + insert. (3) GET /plans 404s an
+    interview that is not the student's (ownership checked) and has 401 and flag-off tests; read-only view-as is
+    asserted as exactly 403. (4) No plan for an interview that has already started (409). (5) A far interview keeps
+    the Full rehearsal on the day before it (first 13 days, then that day). (6) Your plan shows a visible tooltip
+    on keyboard focus naming the segment, its minutes and the skill, and reads skill names from the dashboard, not
+    from segment titles. (7) Your progress is split into one component per section (largest 18 lines), interviews
+    show a readiness bar with a tick at the ready mark, and a focused chart point shows its value in a readout.
+    (8) The layout checks for Your progress and Your plan are carried into T26 (plan.md, ledger).
+  - Verification: backend Career Prep 197 pass (+ Postgres integration tests for the one-active plan, in CI);
+    frontend Career Prep 105 pass; both tsc clean; test-file typecheck clean (local maxmind only).
+  - Notes: declared: the kit's LineTrend, WeeklyBars and SkillTable are folded into charts/PrepCharts.tsx and the
+    dashboard's Skills section; there is no client-side planBuilder because the server always builds plans.

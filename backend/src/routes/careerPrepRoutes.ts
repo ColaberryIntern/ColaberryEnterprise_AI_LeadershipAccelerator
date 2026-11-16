@@ -7,7 +7,7 @@ import { loadPrepData } from '../services/careerPrep/prepData';
 import { addInterview, createPractice, linkHireInterviews } from '../services/careerPrep/interviews';
 import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
 import { askCora } from '../services/careerPrep/coraService';
-import { activePlan, createPlan, NotYoursError } from '../services/careerPrep/plans';
+import { activePlan, createPlan, NotYoursError, PastInterviewError } from '../services/careerPrep/plans';
 import { currentSession, NotFoundError, startSession, updateSession } from '../services/careerPrep/sessions';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
@@ -139,6 +139,7 @@ export async function postPlan(req: Request, res: Response): Promise<void> {
     res.status(201).json(await createPlan(req.participant!.sub, b.data));
   } catch (err) {
     if (err instanceof NotYoursError) { res.status(404).json({ error: 'Not found' }); return; }
+    if (err instanceof PastInterviewError) { res.status(409).json({ error: 'That interview has already started. Add your next one to plan for it.' }); return; }
     logFailure('career_prep_plan_failed', err);
     res.status(500).json({ error: 'Could not build the plan.' });
   }
@@ -150,6 +151,7 @@ export async function getPlan(req: Request, res: Response): Promise<void> {
   try {
     res.json({ plan: await activePlan(req.participant!.sub, q.data.interviewId) });
   } catch (err) {
+    if (err instanceof NotYoursError) { res.status(404).json({ error: 'Not found' }); return; }
     logFailure('career_prep_plan_read_failed', err);
     res.status(500).json({ error: 'Could not load the plan.' });
   }

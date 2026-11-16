@@ -47,7 +47,7 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
         progress: tabs?.progress ?? (room.dashboard
           ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} />
           : <Pending text="Loading your progress..." />),
-        plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} onStart={() => setTab('session')} />,
+        plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
         session: tabs?.session ?? <Pending text="Start a session from your plan." />,
       }}
     />
