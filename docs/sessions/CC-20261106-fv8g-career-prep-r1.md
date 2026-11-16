@@ -47,3 +47,15 @@ tests/systemV2/career-prep/.
     expression or accent in careerPrep code.
   - Notes: weekly interviews are written exercises, so their source is training, not phone_mock. Quiz mapping table
     starts empty, so quizzes write nothing until a card is mapped (no invented skill links).
+
+- [x] CP1.5 Placement section + readiness rollup + the summary, dashboard and staff read APIs
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: `placement` section key (owner/admin via ALL_SECTIONS; other staff only by per-member extra
+    section; no new role) + mgmtSectionGate row + the extras editor label; prepData (5 reads per student), prepViews
+    (pure dashboard + summary; missing values omitted, never 0), rollup (upsert per student/interview/Central date,
+    nightly 01:30 Central, own cron), GET /api/portal/career-prep/summary and /dashboard (flag-gated 404, Zod,
+    own-interview 404), GET /api/admin/placement/students/:id/prep (requireSection placement), strict response schemas.
+  - Verification: 94 Career Prep backend tests pass (views 11, rollup 4, read routes 12, staff route 7 among them);
+    mgmtExtraSections parity green; lint-route-auth OK (168 files); backend and frontend tsc clean.
+  - Notes: the rollup cron is started from server.ts beside the schema (schedulerService.ts is ~3,900 lines).

@@ -186,6 +186,7 @@ import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySch
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
 import { ensureCareerPrepSchema } from './db/ensureCareerPrepSchema';
+import { startCareerPrepRollupCron } from './services/careerPrep/rollup';
 import { startHireVideoCoach } from './services/hire/hireVideoCoach';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureMarketingTrackingSchema } from './db/ensureMarketingTrackingSchema';
@@ -2739,6 +2740,7 @@ async function start(): Promise<void> {
   await ensureHireInterviewSchema();
   // Career Prep v27 (CP1.2): seven new tables + the 9-skill seed. Additive, idempotent.
   await ensureCareerPrepSchema();
+  startCareerPrepRollupCron();
   // Intro-video coaching (OpenAI): registers the transport and re-queues any video whose coaching
   // never landed. Not awaited past the sweep's query; the queue runs in the background.
   await startHireVideoCoach();

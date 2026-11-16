@@ -1,0 +1,57 @@
+import { sequelize } from '../../config/database';
+import { NO_INTERVIEW, PREP_SKILLS } from '../../db/ensureCareerPrepSchema';
+import type { InterviewType, Observation, ObservationSource, SessionTime } from './readiness';
+
+/**
+ * Career Prep v27, CP1.5: every read the summary, the dashboard and the rollup need, for ONE
+ * student, in five queries. No logic here beyond shaping rows; the views are pure (prepViews.ts).
+ * A database error propagates to the route (500 with a logged error_class).
+ */
+export interface PrepInterview {
+  id: string; source: 'real' | 'added' | 'practice'; company: string; role: string; type: InterviewType;
+  startsAt: Date | null; targetReadiness: number | null; practiceUntil: string | null;
+}
+export interface TrendPoint { date: string; interviewId: string; readiness: number | null }
+export interface PrepData {
+  enrollmentId: string;
+  firstName: string | null;
+  observations: Observation[];
+  sourceRefs: Array<{ source: ObservationSource; ref: string }>;
+  sessions: SessionTime[];
+  interviews: PrepInterview[];
+  trend: TrendPoint[];
+}
+
+export const SKILL_KEYS = PREP_SKILLS.map((s) => s.key);
+type Row = Record<string, unknown>;
+const rows = async (sql: string, replacements: Record<string, unknown>): Promise<Row[]> =>
+  (await sequelize.query(sql, { replacements }))[0] as Row[];
+
+export async function loadPrepData(enrollmentId: string, now: Date): Promise<PrepData> {
+  const r = { e: enrollmentId, now };
+  const [person, obs, sessions, interviews, trend] = await Promise.all([
+    rows(`SELECT l.first_name FROM enrollments e LEFT JOIN leads l ON l.id = e.lead_id WHERE e.id = :e`, r).catch(() => []),
+    rows(`SELECT skill_key, value, source, source_ref, observed_at, weight FROM prep_observations
+           WHERE enrollment_id = :e AND observed_at > :now::timestamptz - INTERVAL '90 days'`, r),
+    rows(`SELECT started_at, seconds_active, status FROM prep_sessions
+           WHERE enrollment_id = :e AND started_at > :now::timestamptz - INTERVAL '70 days'`, r),
+    rows(`SELECT id, source, company, role, type, starts_at, target_readiness, practice_until FROM career_interviews
+           WHERE enrollment_id = :e AND (starts_at IS NULL OR starts_at > :now::timestamptz - INTERVAL '1 day')
+           ORDER BY starts_at NULLS LAST, created_at`, r),
+    rows(`SELECT date::text AS date, interview_id, readiness FROM prep_readiness_daily
+           WHERE enrollment_id = :e AND date > (:now::timestamptz - INTERVAL '84 days')::date ORDER BY date`, r),
+  ]);
+  return {
+    enrollmentId,
+    firstName: (person[0]?.first_name as string | undefined) ?? null,
+    observations: obs.map((o) => ({ skill: String(o.skill_key), value: Number(o.value), source: o.source as ObservationSource, observedAt: new Date(o.observed_at as string), weight: Number(o.weight ?? 1) })),
+    sourceRefs: obs.map((o) => ({ source: o.source as ObservationSource, ref: String(o.source_ref) })),
+    sessions: sessions.map((s) => ({ startedAt: new Date(s.started_at as string), secondsActive: Number(s.seconds_active), status: String(s.status) })),
+    interviews: interviews.map((i) => ({
+      id: String(i.id), source: i.source as PrepInterview['source'], company: String(i.company), role: String(i.role), type: i.type as InterviewType,
+      startsAt: i.starts_at ? new Date(i.starts_at as string) : null, targetReadiness: i.target_readiness === null ? null : Number(i.target_readiness),
+      practiceUntil: (i.practice_until as string | null) ?? null,
+    })),
+    trend: trend.map((t) => ({ date: String(t.date), interviewId: String(t.interview_id ?? NO_INTERVIEW), readiness: t.readiness === null ? null : Number(t.readiness) })),
+  };
+}
