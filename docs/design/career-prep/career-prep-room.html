@@ -1,0 +1,293 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Career Prep Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>:root{--bg:#F7FAFC;--card:#fff;--sunk:#EDF3F8;--ink:#16222C;--muted:#4E6172;--faint:#7B8D9C;--acc:#1F76B4;--acc2:#5CA7DA;--accsoft:#DDEEF9;--line:#D5E0E8;--ok:#1B7A4B;--oksoft:#DCF2E6;--warn:#9A6407;--warnsoft:#FBEED2;--bad:#A82C2C;--badsoft:#F8E0E0;--navy:#0C141B;--track:#E3EAF0;
+--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--r:8px}
+*{box-sizing:border-box}html,body{margin:0;height:100%}body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer}
+h1,h2,h3,h4{font-family:var(--mono);font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.2}
+.muted{color:var(--muted)}.faint{color:var(--faint)}.small{font-size:.86rem}.mono{font-family:var(--mono)}
+.btn{border:1px solid transparent;border-radius:var(--r);padding:.5rem .95rem;font-weight:600;min-height:38px;display:inline-flex;align-items:center;gap:.4rem;background:none}
+.btn.p{background:var(--acc);color:#fff}.btn.p:hover{background:#185f92}.btn.g{background:#fff;border-color:var(--line)}.btn.g:hover{border-color:var(--acc);color:var(--acc)}
+.btn.sm{min-height:30px;padding:.25rem .65rem;font-size:.84rem}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 8px;font:600 .7rem var(--mono);letter-spacing:.03em;white-space:nowrap}
+.p-ok{background:var(--oksoft);color:var(--ok)}.p-info{background:var(--accsoft);color:var(--acc)}.p-warn{background:var(--warnsoft);color:var(--warn)}.p-mute{background:var(--sunk);color:var(--muted)}.p-bad{background:var(--badsoft);color:var(--bad)}
+/* frame */
+.top{display:flex;align-items:center;gap:12px;height:54px;padding:0 16px;border-bottom:1px solid var(--line);background:#fff}
+.crumb{font-size:.86rem;color:var(--muted)}.crumb b{color:var(--ink)}
+.anchor{margin-left:auto;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 12px;font-size:.86rem;background:#fff}
+.anchor b{font-weight:600}.anchor .k{color:var(--faint)}
+.room{display:grid;grid-template-columns:420px minmax(0,1fr);height:calc(100vh - 54px)}
+/* coach column */
+.coach{border-right:1px solid var(--line);background:#fff;display:flex;flex-direction:column;min-height:0}
+.ch-h{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font:700 12px var(--mono);flex:none;background:#0f766e;color:#fff}
+.av.me{background:#1f3a5f}.av.lg{width:64px;height:64px;font-size:18px}
+.ch-h b{display:block}.ch-h small{color:var(--faint)}
+.dotlive{width:8px;height:8px;border-radius:50%;background:#1f8a4c;display:inline-block;margin-right:4px}
+.log{flex:1;overflow:auto;padding:14px 14px 6px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.m{display:flex;gap:8px;align-items:flex-start}.m .b{background:var(--sunk);border-radius:4px 14px 14px 14px;padding:9px 12px;max-width:100%}
+.m.me{justify-content:flex-end}.m.me .b{background:var(--acc);color:#fff;border-radius:14px 4px 14px 14px}
+.m .b p{margin:.3rem 0 0}.m .b p:first-child{margin:0}
+.tipm .b{background:#fff8e6;border:1px solid #f0dca4}
+.cards{display:grid;gap:8px;margin-left:46px}
+.cardopt{text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 12px;display:grid;grid-template-columns:30px minmax(0,1fr);gap:4px 10px;position:relative}
+.cardopt .ic{grid-row:span 3;font-size:20px;line-height:1.2}
+.cardopt b{font-size:.94rem;line-height:1.3}.cardopt small{color:var(--muted);font-size:.8rem;line-height:1.35}
+.cardopt .bar{margin-top:4px}
+.cardopt .rb{position:absolute;right:8px;top:8px}
+.cardopt:hover{border-color:var(--acc);background:#fbfdff}
+.cards.answered .cardopt{opacity:.45;pointer-events:none}.cards.answered .cardopt.picked{opacity:1;border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.insight{margin-left:46px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+.insight h4{font-size:.86rem;margin-bottom:6px}.insight li{font-size:.85rem;margin:4px 0}.insight ul{margin:0;padding-left:1rem}
+.src{display:inline-flex;gap:2px;margin-left:4px;vertical-align:middle}.src i{font-style:normal;font-size:.72rem;background:var(--sunk);border-radius:4px;padding:0 4px;color:var(--muted)}
+.formcard{margin-left:46px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;display:grid;gap:8px}
+.formcard textarea,.formcard input{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg)}
+.formcard textarea{min-height:90px;resize:vertical}
+.ask{border-top:1px solid var(--line);padding:10px 12px 12px}
+.sugg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.sugg button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font-size:.8rem}
+.sugg button:hover{border-color:var(--acc);color:var(--acc)}
+.askrow{display:flex;gap:6px}.askrow input{flex:1;border:1px solid var(--line);border-radius:999px;padding:9px 14px;background:var(--bg)}
+/* workspace */
+.ws{overflow:auto;min-height:0;padding:18px 22px 40px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:16px;position:sticky;top:-18px;background:var(--bg);z-index:3;padding-top:4px}
+.tabs button{border:0;background:none;padding:.55rem .9rem;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:600}
+.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--acc)}
+.tabs .sp{flex:1}
+.g{display:grid;gap:14px}.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.panel h3{font-size:.95rem;margin-bottom:2px}.panel .sub{font-size:.8rem;color:var(--faint);margin-bottom:10px}
+.hero{display:grid;grid-template-columns:220px minmax(0,1fr) 260px;gap:18px;align-items:center}
+.bignum{font:600 3.4rem/1 var(--mono);letter-spacing:-.04em}.bignum small{font-size:1rem;color:var(--faint);margin-left:4px}
+.delta{font:600 .82rem var(--mono)}.up{color:var(--ok)}.down{color:var(--bad)}
+.bar{height:8px;border-radius:4px;background:var(--track);position:relative;overflow:visible}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--acc)}
+.bar .tgt{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink)}
+.iv{display:grid;gap:10px}.iv div{font-size:.84rem}.iv b{font-weight:600}
+.skills{display:grid;gap:2px}
+.sk{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) 44px 54px 96px;gap:10px;align-items:center;padding:7px 6px;border-radius:8px;border:0;background:none;text-align:left;width:100%}
+.sk:hover{background:var(--sunk)}.sk .nm{font-size:.86rem}.sk .v{font:600 .9rem var(--mono);text-align:right}
+.sk.new{background:#eef8f2}
+.sk .srcs{display:flex;gap:3px;justify-content:flex-end}.sk .srcs i{font-style:normal;font-size:.7rem;background:var(--sunk);border-radius:4px;padding:1px 4px;color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:9px 10px}.tile b{display:block;font:600 1.35rem var(--mono)}.tile small{font-size:.76rem;color:var(--muted);line-height:1.3;display:block}
+.read li{margin:0 0 10px;list-style:none;border-left:3px solid var(--acc);padding:2px 0 2px 10px}.read ul{margin:0;padding:0}.read b{display:block;font-size:.9rem}.read small{color:var(--muted)}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .ax{font:500 10px var(--mono);fill:var(--faint)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+#tip{position:fixed;pointer-events:none;background:#16222C;color:#fff;font-size:.78rem;padding:5px 8px;border-radius:6px;z-index:50;display:none;white-space:nowrap}
+/* plan */
+.planh{background:var(--navy);color:#e8f0f6;border-radius:12px;padding:16px 18px;margin-bottom:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}
+.planh .k{font:600 .72rem var(--mono);color:var(--acc2);letter-spacing:.06em;text-transform:uppercase}.planh h2{font-size:1.3rem;margin:4px 0}.planh p{margin:0;color:#9fb3c2;font-size:.88rem}
+.day{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.day:first-of-type{border-top:0}.day .dl b{display:block;font-family:var(--mono)}.day .dl small{color:var(--faint)}
+.day.today .dl b{color:var(--acc)}
+.tl{display:flex;gap:4px}.tl div{flex:var(--w);min-width:62px;background:var(--sunk);border-radius:8px;padding:6px 8px}.tl b{display:block;font-size:.78rem;line-height:1.2}.tl small{font:500 .7rem var(--mono);color:var(--faint)}
+.tl div.fx{background:var(--accsoft)}
+/* session */
+.runner{display:grid;grid-template-columns:210px minmax(0,1fr);gap:22px}
+.ring{width:176px;height:176px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--v)*1%),var(--track) 0);display:grid;place-items:center;margin:0 auto}
+.ring>div{width:146px;height:146px;border-radius:50%;background:#fff;display:grid;place-items:center;text-align:center}
+.ring b{font:600 2.1rem var(--mono);display:block}.ring small{color:var(--faint);font-size:.76rem}
+.seg{margin-top:12px;font-size:.84rem}.seg div{display:flex;gap:8px;padding:4px 0;color:var(--faint)}.seg div.d{color:var(--ok)}.seg div.n{color:var(--ink);font-weight:600}.seg span:last-child{margin-left:auto;font-family:var(--mono)}
+.stage .lab{font:600 .72rem var(--mono);letter-spacing:.06em;color:var(--acc);text-transform:uppercase}.stage h2{font-size:1.35rem;margin:4px 0 12px}
+.vid{aspect-ratio:16/9;border-radius:10px;background:linear-gradient(135deg,#1f3a5f,#2f6f73);display:grid;place-items:center;color:#fff;position:relative;max-width:640px}
+.vid .play{width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.4);border:2px solid #fff;display:grid;place-items:center}
+.vid .w{position:absolute;left:10px;bottom:8px;font-size:.8rem;background:rgba(0,0,0,.45);padding:2px 8px;border-radius:999px}
+.cam{aspect-ratio:16/9;border-radius:10px;background:#0f1a24;display:grid;place-items:center;position:relative;max-width:640px}
+.rec{position:absolute;left:12px;top:10px;color:#f08b8b;font:600 .74rem var(--mono);display:flex;gap:6px;align-items:center}.rec i{width:8px;height:8px;border-radius:50%;background:#f08b8b;animation:bl 1.2s infinite}
+@keyframes bl{50%{opacity:.2}}
+.wave{display:flex;gap:3px;align-items:center;justify-content:center;height:34px}.wave i{width:3px;border-radius:2px;background:var(--acc2);animation:wv 1s ease-in-out infinite alternate}
+@keyframes wv{to{transform:scaleY(.3)}}
+.navrow{display:flex;justify-content:space-between;gap:8px;margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.fb{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px;margin-top:10px}.fb div{border-radius:10px;padding:9px 11px;font-size:.86rem}.fb .w{background:var(--oksoft)}.fb .l{background:#fbeaea}.fb ul{margin:.2rem 0 0;padding-left:1rem}
+.recap{max-width:720px}
+.recap .big{font:600 2.6rem var(--mono)}
+.ba{display:grid;grid-template-columns:200px minmax(0,1fr) 90px;gap:10px;align-items:center;font-size:.86rem;padding:5px 0}
+.ba .bar i.b4{background:var(--acc2);opacity:.5}
+.flash{animation:fl 1.6s ease}@keyframes fl{0%{background:#fff3c4}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.wave i,.rec i{animation:none}.flash{animation:none}.log{scroll-behavior:auto}}
+@media (max-width:1100px){.room{grid-template-columns:minmax(0,1fr);height:auto}.coach{height:70vh;border-right:0;border-bottom:1px solid var(--line)}.hero,.g2,.g3,.runner{grid-template-columns:minmax(0,1fr)}.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.sk{grid-template-columns:minmax(0,1fr) 44px 54px}.sk .bar,.sk .srcs{display:none}.anchor{display:none}.day{grid-template-columns:minmax(0,1fr)}}
+</style></head><body>
+<header class="top"><span class="crumb">Colaberry Tower › Floor 6 › <b>Career Prep</b></span><div class="anchor" id="anchor"></div><button class="btn g sm" data-act="reset" title="Prototype: start over">Start over</button></header>
+<div class="room">
+ <aside class="coach" aria-label="Coach"><div class="ch-h"><span class="av">CO</span><div><b>Cora · your interview coach</b><small><span class="dotlive"></span>Reads your videos, calls, interviews, training and projects</small></div></div>
+  <div class="log" id="log" aria-live="polite"></div>
+  <div class="ask"><div class="sugg"><button data-act="sugg" data-q="Suggest a plan for me">Suggest a plan</button><button data-act="sugg" data-q="What should I work on?">What should I work on?</button><button data-act="sugg" data-q="I only have 10 minutes">I have 10 minutes</button><button data-act="sugg" data-q="Add a new interview">Add an interview</button></div>
+  <div class="askrow"><input id="q" placeholder="Ask Cora anything, or ask for a plan…" aria-label="Ask Cora"><button class="btn p" data-act="send">Send</button></div></div></aside>
+ <main class="ws"><nav class="tabs" role="tablist"><button data-act="tab" data-t="dash" role="tab">Your progress</button><button data-act="tab" data-t="plan" role="tab">Your plan</button><button data-act="tab" data-t="session" role="tab">Session</button><span class="sp"></span><span class="small faint" style="align-self:center">Prototype · illustrative data</span></nav><div id="wsb"></div></main>
+</div><div id="tip" role="tooltip"></div>
+<script>const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* ---------- the data Cora reads (illustrative) ---------- */
+const SRC={video:'🎥 Video',phone:'📞 Phone',real:'🏢 Real',train:'📚 Training',proj:'🛠 Projects',study:'🗂 Study'};
+const D={readiness:64,trend:[52,55,54,58,60,61,63,64],weeks:['Sep 21','Sep 28','Oct 5','Oct 12','Oct 19','Oct 26','Nov 2','Nov 9'],
+ minutes:[40,35,60,55,80,70,95,60],streak:4,
+ interviews:[{id:'mer',co:'Meridian Freight',role:'AI Solutions Analyst',when:'Tue Nov 17 · 2:00 PM',r:64,t:75,src:'From your job-search inbox'},{id:'sum',co:'Summit Analytics',role:'BI Developer',when:'Thu Nov 19 · 10:00 AM',r:58,t:70,src:'From your job-search inbox'}],
+ skills:[
+  {k:'num',n:'Ending on a result, with a number',v:48,d:3,s:['video','phone','real']},
+  {k:'ai',n:'Explaining AI simply',v:58,d:-2,s:['video','phone','train']},
+  {k:'comp',n:'Composure under follow-ups',v:59,d:4,s:['phone','real']},
+  {k:'fill',n:'Few filler words',v:61,d:5,s:['video','phone','real']},
+  {k:'beh',n:'Behavioral stories',v:66,d:2,s:['video','phone']},
+  {k:'role',n:'Role knowledge',v:70,d:6,s:['train','study']},
+  {k:'star',n:'Answer structure (STAR)',v:72,d:4,s:['video','phone','study']},
+  {k:'proof',n:'Proof of work',v:74,d:8,s:['proj']},
+  {k:'pace',n:'Pace and clarity',v:78,d:1,s:['video','phone','real']},
+  {k:'eye',n:'Eye contact',v:81,d:2,s:['video','real']}],
+ sources:[['14','video answers scored','video'],['6','phone mocks with Cora','phone'],['2','real interviews recorded','real'],['18','training lessons done','train'],['62%','cert prep, best domain','train'],['2 · 26','projects shipped · stories verified','proj'],['31','study cards known','study'],['4 days','practice streak','study']]};
+const SKILL=k=>D.skills.find(x=>x.k===k);
+/* ---------- state ---------- */
+const S={tab:'dash',anchor:null,plan:null,log:[],sess:null,updated:false,custom:{mins:20,focus:'num'}};
+let uid=0;
+const say=(html,cls='')=>S.log.push({who:'cora',html,cls});
+const me=t=>S.log.push({who:'me',html:esc(t)});
+/* only the newest set of cards is live; older unanswered sets go quiet so the chat never offers stale choices */
+const cards=(items)=>{S.log.forEach(x=>{if(x.type==='cards'&&x.picked==null)x.stale=true});S.log.push({type:'cards',id:'c'+(++uid),items,picked:null})};
+const block=(html)=>S.log.push({type:'block',html});
+/* ---------- card sets (options always come as cards) ---------- */
+const anchorCards=()=>[...D.interviews.map((v,i)=>({act:'anchor',arg:v.id,ic:i?'📅':'🎯',t:`${v.co} · ${v.role}`,s:`${v.when} · ${v.src}`,bar:[v.r,v.t],badge:i?'':'Next up'})),
+ {act:'add',ic:'➕',t:'Add an interview',s:'Paste the job description or the invite email. I’ll build your prep from it.'},
+ {act:'create',ic:'✨',t:'Create one for me',s:'No interview yet? I’ll make a realistic one for the job you want, and mark it as practice.'}];
+const planCards=()=>[{act:'plan',arg:'four',ic:'🗓',t:S.anchor&&S.anchor.kind==='created'?'A 4-day practice plan':`${daysLeft()} days to the interview`,s:'4 short sessions, about 20 minutes a day, built on your 3 weakest skills',badge:'Recommended'},
+ {act:'plan',arg:'tonight',ic:'⚡',t:'Tonight only: fix your weakest answer',s:'1 session · 15 minutes · ending on a number'},
+ {act:'plan',arg:'full',ic:'🎙',t:'Full rehearsal',s:'A 30-minute mock with Cora as the hiring manager, then a critique'},
+ {act:'plan',arg:'custom',ic:'🛠',t:'Build my own',s:'You pick the time and the focus; I’ll fill in the steps'}];
+const daysLeft=()=>S.anchor&&S.anchor.kind==='created'?3:4;
+/* ---------- plans ---------- */
+const SEG20=[['Warm up','Say your 60-second intro out loud',2],['Learn','Ending on a result, with a number',4,'num'],['Watch','Lena’s answer: result first',3],['Try','Two answers, on camera',5],['Pressure round','Cora asks follow-ups',5],['Cool down','What improved today',1]];
+const PLANS={
+ four:{t:()=>S.anchor.kind==='created'?`4-day practice plan for ${S.anchor.co}`:`${daysLeft()} days to ${S.anchor.co}`,why:['Ending on a result, with a number (48)','Explaining AI simply (58)','Composure under follow-ups (59)'],days:[
+   ['Today','Fri 13',SEG20,'today'],['Saturday','Nov 14',[['Warm up','Intro',2],['Learn','Explaining AI simply',4,'ai'],['Watch','Kwame on RAG',3],['Try','Explain it to a manager',6],['Cool down','Notes',1]],''],
+   ['Monday','Nov 16',[['Warm up','Intro',2],['Pressure round','Full mock with Cora',12,'comp'],['Feedback','Fix the weakest answer',5],['Cool down','Cheat sheet',1]],''],
+   ['Tuesday','Nov 17 · 1:30 PM',[['Warm up','Your opener + 1 story',8],['Breathe','You’re ready',2]],'']]},
+ tonight:{t:()=>'Tonight: fix your weakest answer',why:['Ending on a result, with a number (48)'],days:[['Today','Fri 13',[['Warm up','Intro',2],['Learn','Ending on a number',4,'num'],['Try','Two answers',6],['Feedback','What changed',3]],'today']]},
+ full:{t:()=>'Full rehearsal',why:['Composure under follow-ups (59)','Explaining AI simply (58)'],days:[['Today','Fri 13',[['Warm up','Intro',2],['Pressure round','30-minute mock with Cora',30,'comp'],['Feedback','Critique',5]],'today']]}};
+/* ---------- coach behaviour ---------- */
+function start(){S.log=[];say(`<b>Hi Ali, I’m Cora, your interview coach.</b><p>Everything we do here is for a real interview, so we prepare for the real thing. I found two in your job-search inbox. Which one are we getting ready for?</p>`);cards(anchorCards())}
+function insightHTML(){const a=S.anchor;return `<div class="insight"><h4>What your data says about ${esc(a.co)}</h4><ul>
+ <li><b>Ending without a number</b> in 9 of your last 12 answers<span class="src"><i>🎥</i><i>📞</i><i>🏢</i></span></li>
+ <li><b>Explaining AI simply</b> is your lowest technical skill, 58. Your RAG lesson quiz was 64<span class="src"><i>📞</i><i>📚</i></span></li>
+ <li><b>Filler words double under pressure</b>: 2.1 a minute in mocks vs 0.8 on video<span class="src"><i>🎥</i><i>📞</i></span></li>
+ <li><b>Strong:</b> eye contact 81, and PropertyPulse is proof they’ll want<span class="src"><i>🛠</i></span></li></ul></div>`}
+function anchorSet(a){S.anchor=a;say(`Great. ${a.kind==='created'?'Your practice interview is ready.':`I read the ${a.kind==='added'?'job description you gave me':'interview invite and job description'}.`} Here’s what I see when I put it next to everything you’ve done so far: your videos, phone mocks, real interviews, training and projects.`);block(insightHTML());say('How do you want to prepare? I recommend the first one.');cards(planCards());S.tab='dash'}
+const PICK={
+ anchor:(it)=>{const v=D.interviews.find(x=>x.id===it.arg);anchorSet({...v,kind:'real'})},
+ add:()=>{say('Paste the job description, or the email that invited you. Add the date if you have it.');block(`<div class="formcard"><textarea id="fJD" placeholder="Paste the job description or the invite…">Lumen Retail is hiring an AI Product Associate to work with merchandising and store operations, define AI use cases, write requirements, and test assistants with users.</textarea><div class="row"><input id="fCo" placeholder="Company" value="Lumen Retail" style="flex:1"><input id="fWhen" placeholder="Date and time" value="Mon Nov 23 · 10:00 AM" style="flex:1"></div><button class="btn p" data-act="addgo">Build my prep from this</button></div>`)},
+ create:()=>{say('Happy to. What job do you want?');cards([['AI Solutions Analyst','Turn business requests into AI that removes manual work'],['AI Engineer','Build and ship AI features and agents'],['Data & AI Analyst','Analysis, dashboards and AI-assisted reporting'],['AI Product Associate','Define use cases and work with users']].map(([t,s])=>({act:'role',arg:t,ic:'💼',t,s})))},
+ role:(it)=>{S.role=it.arg;say('And what kind of interview should I make?');cards([['Recruiter screen','15 min · fit, timing, pay'],['Hiring manager','30 min · your projects and judgment'],['Technical','30 min · explain and design out loud'],['Panel','45 min · three interviewers']].map(([t,s])=>({act:'itype',arg:t,ic:'🎙',t,s})))},
+ itype:(it)=>{anchorSet({co:'Northbeam Logistics',role:S.role,when:'Practice · any time',kind:'created',r:61,t:75,itype:it.arg})},
+ plan:(it)=>{if(it.arg==='custom'){say('How much time do you have today?');cards([10,20,45].map(m=>({act:'cmins',arg:m,ic:'⏱',t:`${m} minutes`,s:m===10?'One answer, scored':m===20?'Learn, try and a pressure round':'Everything, plus a full mock'})));return}
+  S.plan=it.arg;S.tab='plan';const p=PLANS[it.arg];say(`Here’s your plan: <b>${esc(p.t())}</b>. It’s on the right. ${p.days.length>1?'One short session a day, each one aimed at a weak spot. ':''}Today’s session is ${p.days[0][2].reduce((a,s)=>a+s[2],0)} minutes. Ready?`);
+  cards([{act:'go',ic:'▶',t:`Start today’s session · ${p.days[0][2].reduce((a,s)=>a+s[2],0)} min`,s:'I’ll time it and coach you as you go',badge:'Now'},{act:'go10',ic:'⏱',t:'Shorter: 10 minutes',s:'Just the most important part'},{act:'later',ic:'🔔',t:'Remind me tonight at 6:00 PM',s:'I’ll send it to your phone'}])},
+ cmins:(it)=>{S.custom.mins=it.arg;say('What should we focus on?');cards(D.skills.slice(0,5).map(s=>({act:'cfocus',arg:s.k,ic:'🎯',t:s.n,s:`Your score: ${s.v}`})))},
+ cfocus:(it)=>{const sk=SKILL(it.arg),m=S.custom.mins;PLANS.custom={t:()=>`Your ${m}-minute plan: ${sk.n}`,why:[`${sk.n} (${sk.v})`],days:[['Today','Fri 13',m<=15?[['Learn',sk.n,3,sk.k],['Try','One answer',5],['Feedback','What changed',2]]:m===20?[['Warm up','Intro',2],['Learn',sk.n,4,sk.k],['Watch','A strong answer',3],['Try','Two answers',6],['Pressure round','Follow-ups',4],['Cool down','Notes',1]]:[['Warm up','Intro',3],['Learn',sk.n,6,sk.k],['Watch','Two strong answers',6],['Try','Three answers',12],['Pressure round','Full mock',15,'comp'],['Cool down','Cheat sheet',3]],'today']]};PICK.plan({arg:'custom2'})},
+ go:()=>runSession(PLANS[S.plan].days[0][2]),
+ go10:()=>runSession([['Learn','Ending on a number',3,'num'],['Try','One answer, on camera',5],['Feedback','What changed',2]]),
+ later:()=>{say('Done. I’ll nudge you at 6:00 PM CST. Your plan stays on the right.')},
+ weak:(it)=>{const sk=SKILL(it.arg);say(`<b>${esc(sk.n)}: ${sk.v}</b>. ${sk.k==='num'?'You tell the story well, then stop before the result. Interviewers remember the number.':sk.k==='ai'?'You go deep too fast. One analogy, why it matters, one limit.':'This shows up most when I push with follow-ups.'} Want a quick plan for just this?`);S.custom.mins=15;cards([{act:'cfocus',arg:it.arg,ic:'⚡',t:'Yes, 10 minutes on this',s:'Learn, try it on camera, feedback'},{act:'dash',ic:'📊',t:'Show me the details',s:'Where the score comes from'}]);S.custom.focus=it.arg},
+ dash:()=>{S.tab='dash'},
+ again:()=>{say('Pick the next one whenever you’re ready.');cards(planCards())}};
+PICK.plan_custom2=null;
+const _plan=PICK.plan;PICK.plan=(it)=>{if(it.arg==='custom2'){S.plan='custom';S.tab='plan';const p=PLANS.custom,mins=p.days[0][2].reduce((a,s)=>a+s[2],0);say(`Built it: <b>${esc(p.t())}</b>. ${mins} minutes. Start now?`);cards([{act:'go',ic:'▶',t:`Start · ${mins} min`,s:'Timed, with tips as you go',badge:'Now'},{act:'again',ic:'↺',t:'Pick a different plan',s:'Back to the options'}]);return}_plan(it)};
+/* free text */
+function ask(q){if(!q.trim())return;me(q);const t=q.toLowerCase();
+ if(!S.anchor&&/(plan|suggest|practi|prep)/.test(t)){say('Let’s pick the interview first, so the plan is for something real.');cards(anchorCards())}
+ else if(/(weak|work on|improve|better|what should)/.test(t)){say('From all your data, these three would move your score most:');cards(['num','ai','comp'].map(k=>{const s=SKILL(k);return {act:'weak',arg:k,ic:'🎯',t:s.n,s:`Score ${s.v} · from ${s.s.map(x=>SRC[x]).join(', ')}`}}))}
+ else if(/(10|ten|quick|short|minute)/.test(t)){say('Quick one. Here’s the most valuable 10 minutes for you today:');cards([{act:'go10',ic:'⏱',t:'10 minutes: end on a number',s:'Learn, one answer on camera, feedback',badge:'Best for you'}])}
+ else if(/(add|paste|new interview|job description)/.test(t)){PICK.add()}
+ else if(/(create|make one|fake|practice interview)/.test(t)){PICK.create()}
+ else if(/(plan|suggest)/.test(t)){say('Here’s what I’d suggest:');cards(planCards())}
+ else{say('Good question. In the real build I answer from your data and the job description. For now, here are things I can do:');cards([{act:'weak',arg:'num',ic:'🎯',t:'What should I work on?',s:'Your top 3, from all your data'},...(S.anchor?planCards().slice(0,1):anchorCards().slice(0,1))])}
+ render()}
+/* ---------- session (the timer) ---------- */
+let TICK=null;
+function runSession(segs){S.sess={segs,i:0,left:segs[0][2]*60,run:true,rec:'ready'};S.tab='session';say(`Let’s go. ${segs.length} parts, ${segs.reduce((a,s)=>a+s[2],0)} minutes. I’m timing it; you can pause any time.`);tipFor(0);clearInterval(TICK);TICK=setInterval(()=>{if(!S.sess||!S.sess.run)return;S.sess.left=Math.max(0,S.sess.left-1);const t=$('tmr');if(t)t.textContent=fmt(S.sess.left);const r=$('ringv');if(r)r.style.setProperty('--v',ringPct())},1000)}
+const fmt=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+function ringPct(){const s=S.sess,tot=s.segs.reduce((a,x)=>a+x[2]*60,0),before=s.segs.slice(0,s.i).reduce((a,x)=>a+x[2]*60,0);return Math.round((before+(s.segs[s.i][2]*60-s.left))/tot*100)}
+const TIPS={'Warm up':'Tip: your intro scored 72. Slow the first sentence down; you rush it.','Learn':'Tip: in 9 of your last 12 answers you stopped before the result. Say the number first, then the story.','Watch':'Tip: watch how Lena gives the result in her first 10 seconds.','Try':'Tip: look at the lens, not the screen. Your eye contact is a strength: 81.','Pressure round':'Tip: when I follow up, pause for a second before answering. Your filler words double under pressure.','Feedback':'Tip: pick one fix, not three.','Cool down':'Nice. Write the one sentence you’ll say on Tuesday.','Breathe':'You’re ready.'};
+function tipFor(i){const k=S.sess.segs[i][0];if(TIPS[k])say(TIPS[k],'tipm')}
+function segBody(seg){const k=seg[0];
+ if(k==='Warm up'||k==='Breathe')return `<div class="panel" style="max-width:640px;background:var(--sunk)"><b>Out loud, no camera.</b><p class="muted" style="margin:.3rem 0 0">“I’m an AI systems architect. I build assistants that take manual work off teams. Most recently PropertyPulse cut a 2-hour analysis to 5 minutes…” Finish in 60 seconds.</p></div>`;
+ if(k==='Learn'){const sk=SKILL(seg[3]||'num');return `<div class="g g3" style="max-width:860px"><div class="panel"><b>Why it matters</b><p class="small muted">Interviewers remember a number long after the story.</p></div><div class="panel"><b>The move</b><p class="small muted">Result first: “cut it from 2 hours to 5 minutes”. Then how.</p></div><div class="panel"><b>Your data</b><p class="small muted">${esc(sk.n)}: ${sk.v}. ${sk.s.map(x=>SRC[x]).join(', ')}.</p></div></div>`}
+ if(k==='Watch')return `<div class="vid"><span class="play">▶</span><span class="w">Lena P. · scored 91 · 2:04</span></div>`;
+ if(k==='Try'){const s=S.sess;return `<div class="cam">${s.rec==='rec'?'<span class="rec"><i></i>RECORDING</span>':''}<span class="av lg me">AM</span></div><div class="row" style="margin-top:10px">${s.rec==='ready'?'<button class="btn p" data-act="rec">● Record “Walk me through a project”</button>':s.rec==='rec'?'<button class="btn p" data-act="stop">■ Stop, and score it</button>':'<span class="pill p-ok">Scored in 38 seconds</span>'}</div>${s.rec==='done'?`<div class="row" style="margin-top:10px;gap:14px"><span class="bignum" style="font-size:2.2rem">74</span><span><b>Up 8. You ended on the number this time.</b><br><span class="small muted">Delivery 76 · content 71</span></span></div><div class="fb"><div class="w"><b>Where you did well</b><ul><li>Result in the first sentence</li><li>Eye contact held</li></ul></div><div class="l"><b>What to fix next</b><ul><li>“basically” 4 times</li><li>Trim the middle by 20 seconds</li></ul></div></div>`:''}`}
+ if(k==='Pressure round')return `<div class="panel" style="max-width:640px;text-align:center;background:var(--sunk)"><span class="av lg" style="margin:0 auto">CO</span><p style="margin:.5rem 0 .1rem"><b>Cora</b> <span class="muted">· playing ${esc(S.anchor?S.anchor.co:'the')} hiring manager</span></p><div class="wave">${Array.from({length:22},(_,k)=>`<i style="height:${8+(k*13)%26}px;animation-delay:${k*.05}s"></i>`).join('')}</div><p>“You said dispatchers approve unusual orders. What counts as unusual, and who decided that?”</p></div>`;
+ if(k==='Feedback')return `<div class="fb"><div class="w"><b>Where you did well</b><ul><li>Numbers in both answers</li><li>Calm on the follow-up</li></ul></div><div class="l"><b>What to fix next</b><ul><li>One answer ran 2:40</li></ul></div></div>`;
+ return `<div class="panel" style="max-width:640px"><b>The one sentence for Tuesday</b><p class="muted small" style="margin:.3rem 0 0">“PropertyPulse cut a 2-hour weekly analysis to 5 minutes, with a person approving every recommendation.”</p></div>`}
+function finish(){clearInterval(TICK);const s=S.sess;s.done=true;s.run=false;
+ if(!S.updated){S.updated=true;D.readiness=69;D.trend.push(69);D.weeks.push('Nov 13');D.minutes[D.minutes.length-1]+=20;D.streak=5;SKILL('num').v=57;SKILL('num').d=9;SKILL('num').fresh=true;SKILL('fill').v=64;SKILL('fill').d=8;SKILL('fill').fresh=true;SKILL('comp').v=62;SKILL('comp').d=7;SKILL('comp').fresh=true;D.sources[0][0]='16';if(S.anchor&&S.anchor.r)S.anchor.r=69;D.interviews[0].r=69}
+ say(`Session done, Ali. <b>Readiness for ${esc(S.anchor?S.anchor.co:'your interview')}: 64 → 69.</b> “Ending on a number” jumped 9 points. I’ve added today to your dashboard. Tomorrow is “explaining AI simply”.`);
+ cards([{act:'dash',ic:'📊',t:'See my dashboard',s:'Everything, updated'},{act:'later',ic:'🔔',t:'Same time tomorrow',s:'6:00 PM CST'},{act:'again',ic:'↺',t:'Another session',s:'Pick a plan'}])}
+/* ---------- charts (single series; hover tooltips) ---------- */
+function lineChart(vals,labels,h=120){const W=560,H=h,p=24,max=80,min=40,x=i=>p+i*(W-2*p)/(vals.length-1),y=v=>H-18-(v-min)/(max-min)*(H-34);
+ const pts=vals.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+ return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Interview readiness by week: ${vals.join(', ')}">${[50,60,70].map(g=>`<line class="grid" x1="${p}" x2="${W-p}" y1="${y(g)}" y2="${y(g)}"/><text class="ax" x="2" y="${y(g)+3}">${g}</text>`).join('')}
+  <line x1="${p}" x2="${W-p}" y1="${y(75)}" y2="${y(75)}" stroke="#16222C" stroke-dasharray="3 3" stroke-width="1"/><text class="ax" x="${W-p}" y="${y(75)-4}" text-anchor="end">75 · ready</text>
+  <polyline points="${pts}" fill="none" stroke="#1F76B4" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  ${vals.map((v,i)=>`<circle cx="${x(i)}" cy="${y(v)}" r="${i===vals.length-1?5:3.5}" fill="${i===vals.length-1?'#1F76B4':'#fff'}" stroke="#1F76B4" stroke-width="2"/><circle cx="${x(i)}" cy="${y(v)}" r="12" fill="transparent" data-tip="Week of ${labels[i]}: ${v}"/>`).join('')}
+  ${[0,vals.length-1].map(i=>`<text class="ax" x="${x(i)}" y="${H-2}" text-anchor="${i?'end':'start'}">${labels[i]}</text>`).join('')}</svg></div>`}
+function barChart(vals,labels){const W=560,H=110,p=8,bw=(W-2*p)/vals.length-8,max=Math.max(...vals,100);
+ return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Minutes practised per week">${vals.map((v,i)=>{const h=(v/max)*(H-26),x=p+i*((W-2*p)/vals.length)+4;return `<rect x="${x}" y="${H-16-h}" width="${bw}" height="${h}" rx="4" fill="#1F76B4" ${i===vals.length-1?'':'opacity=".55"'} data-tip="Week of ${labels[i]}: ${v} minutes"/>`}).join('')}
+  ${[0,vals.length-1].map(i=>`<text class="ax" x="${p+i*((W-2*p)/vals.length)+4+(i?bw:0)}" y="${H-2}" text-anchor="${i?'end':'start'}">${labels[i]}</text>`).join('')}</svg></div>`}
+/* ---------- workspace views ---------- */
+function dashHTML(){const nx=D.interviews;
+ return `<div class="panel hero"><div><div class="small muted">Interview readiness</div><div class="bignum">${D.readiness}<small>/ 100</small></div><div class="delta up">▲ ${D.readiness-D.trend[0]} since Sep 21</div><div class="small faint" style="margin-top:4px">From every video, call, interview, lesson and project</div></div>
+  <div>${lineChart(D.trend,D.weeks)}</div>
+  <div class="iv"><div class="small muted">Your interviews</div>${nx.map(v=>`<div><b>${esc(v.co)}</b> <span class="faint">· ${esc(v.when.split(' · ')[0])}</span><div class="bar" style="margin:5px 0 2px"><i style="width:${v.r}%"></i><span class="tgt" style="left:${v.t}%" title="Ready at ${v.t}"></span></div><span class="small faint">${v.r} now · ${v.t} is ready</span></div>`).join('')}</div></div>
+ <div class="g g2" style="margin-top:14px;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+  <div class="panel"><h3>Your skills, from every source</h3><div class="sub">Lowest first. Click one to ask Cora about it. ▲▼ is the change over 30 days.</div><div class="skills">${D.skills.slice().sort((a,b)=>a.v-b.v).map(s=>`<button class="sk${s.fresh?' new':''}" data-act="skill" data-k="${s.k}"><span class="nm">${esc(s.n)}</span><span class="bar"><i style="width:${s.v}%"></i></span><span class="v">${s.v}</span><span class="delta ${s.d>=0?'up':'down'}">${s.d>=0?'▲':'▼'} ${Math.abs(s.d)}</span><span class="srcs">${s.s.map(x=>`<i title="${SRC[x]}">${SRC[x].split(' ')[0]}</i>`).join('')}</span></button>`).join('')}</div></div>
+  <div class="panel read"><h3>Cora’s read</h3><div class="sub">What would move your score most, and why</div><ul>
+   <li><b>End every answer on a number</b><small>${SKILL('num').v} · 9 of your last 12 answers stopped before the result</small><div><button class="btn g sm" data-act="weakbtn" data-k="num" style="margin-top:6px">Make me a plan for this</button></div></li>
+   <li><b>Explain AI in one analogy</b><small>${SKILL('ai').v} · lowest technical skill; RAG lesson quiz 64</small><div><button class="btn g sm" data-act="weakbtn" data-k="ai" style="margin-top:6px">Make me a plan for this</button></div></li>
+   <li><b>Pause before follow-ups</b><small>Filler words: 2.1 a minute in mocks, 0.8 on video</small><div><button class="btn g sm" data-act="weakbtn" data-k="comp" style="margin-top:6px">Make me a plan for this</button></div></li></ul>
+   <h4 style="font-size:.86rem;margin:6px 0 6px">Tips from your data</h4><div class="small muted">• You score 6 points higher before noon.<br>• Your best stories are about PropertyPulse: lead with it.<br>• Phone mocks lift your real-interview scores more than video does.</div></div></div>
+ <div class="g g2" style="margin-top:14px">
+  <div class="panel"><h3>Where the data comes from</h3><div class="sub">Everything Cora reads to coach you</div><div class="tiles">${D.sources.map(([v,l,s])=>`<div class="tile"><b>${v}</b><small>${SRC[s].split(' ')[0]} ${l}</small></div>`).join('')}</div></div>
+  <div class="panel"><h3>Practice over time</h3><div class="sub">Minutes per week · ${D.streak}-day streak</div>${barChart(D.minutes,D.weeks.slice(-D.minutes.length))}</div></div>`}
+function planHTML(){if(!S.plan)return `<div class="panel" style="max-width:640px"><h3>No plan yet</h3><p class="muted">Tell Cora which interview you’re preparing for, and she’ll suggest a plan built from your data.</p></div>`;
+ const p=PLANS[S.plan];
+ return `<div class="planh"><div><div class="k">Your plan · for ${esc(S.anchor.co)}${S.anchor.kind==='created'?' (practice interview)':''}</div><h2>${esc(p.t())}</h2><p>Built from your weakest skills: ${p.why.map(esc).join(', ')}</p></div><button class="btn p" data-act="go">▶ Start today’s session</button></div>
+ <div class="panel">${p.days.map(([d,sub,segs,c])=>`<div class="day ${c}"><div class="dl"><b>${d}</b><small>${esc(sub)} · ${segs.reduce((a,s)=>a+s[2],0)} min</small></div><div class="tl">${segs.map(s=>`<div class="${s[3]?'fx':''}" style="--w:${s[2]}" data-tip="${esc(s[1])} · ${s[2]} min${s[3]?' · targets '+esc(SKILL(s[3]).n):''}"><b>${esc(s[0])}</b><small>${s[2]}m</small></div>`).join('')}</div>${c==='today'?'<button class="btn p sm" data-act="go">Start</button>':'<span class="pill p-mute">Upcoming</span>'}</div>`).join('')}
+ <p class="small faint" style="margin:.6rem 0 0">Blue blocks target a weak skill. Cora moves sessions if you miss a day.</p></div>`}
+function sessHTML(){const s=S.sess;if(!s)return `<div class="panel" style="max-width:640px"><h3>No session running</h3><p class="muted">Pick a plan with Cora, then start it. Sessions are timed, one step at a time.</p></div>`;
+ if(s.done)return `<div class="recap"><span class="pill p-ok">Session done</span><h2 style="font-size:1.7rem;margin:.5rem 0">Nice work, Ali.</h2><div class="row" style="gap:28px;margin:10px 0 16px"><div><div class="small muted">Readiness</div><span class="big">69</span> <span class="delta up">▲ 5</span></div><div><div class="small muted">Best answer</div><span class="big">74</span></div><div><div class="small muted">Streak</div><span class="big">${D.streak}</span> <span class="small muted">days</span></div></div>
+  <div class="panel"><h3>What changed today</h3><div class="sub">Before and after, from this session</div>${[['num',48],['fill',61],['comp',59]].map(([k,b])=>{const sk=SKILL(k);return `<div class="ba"><span>${esc(sk.n)}</span><span class="bar"><i style="width:${sk.v}%"></i></span><span class="mono">${b} → <b>${sk.v}</b></span></div>`}).join('')}</div>
+  <div class="row" style="margin-top:14px"><button class="btn p" data-act="tab" data-t="dash">See my dashboard</button><button class="btn g" data-act="tab" data-t="plan">Back to my plan</button></div></div>`;
+ const seg=s.segs[s.i];
+ return `<div class="runner"><div><div class="ring" id="ringv" style="--v:${ringPct()}"><div><span><b id="tmr">${fmt(s.left)}</b><small>left in this part</small></span></div></div>
+   <div class="row" style="justify-content:center;margin-top:10px"><button class="btn g sm" data-act="pause">${s.run?'❚❚ Pause':'▶ Resume'}</button></div>
+   <div class="seg">${s.segs.map((x,i)=>`<div class="${i<s.i?'d':i===s.i?'n':''}"><span>${i<s.i?'✓':i===s.i?'▶':'·'}</span><span>${esc(x[0])}</span><span>${x[2]}m</span></div>`).join('')}</div></div>
+  <section class="stage"><div class="lab">Part ${s.i+1} of ${s.segs.length} · ${seg[2]} minutes</div><h2>${esc(seg[0])}: ${esc(seg[1])}</h2>${segBody(seg)}
+   <div class="navrow"><button class="btn g" data-act="endsess">End session</button><button class="btn p" data-act="nextseg">${s.i<s.segs.length-1?`Next: ${esc(s.segs[s.i+1][0])} ›`:'Finish ✓'}</button></div></section></div>`}
+/* ---------- render ---------- */
+function cardHTML(c){return `<div class="cards${c.picked!=null||c.stale?' answered':''}">${c.items.map((it,i)=>`<button class="cardopt${c.picked===i?' picked':''}" data-act="pick" data-c="${c.id}" data-i="${i}"><span class="ic">${it.ic||'•'}</span><b>${esc(it.t)}</b><small>${esc(it.s||'')}</small>${it.bar?`<span class="bar"><i style="width:${it.bar[0]}%"></i><span class="tgt" style="left:${it.bar[1]}%"></span></span><small>Readiness ${it.bar[0]} · ${it.bar[1]} is ready</small>`:''}${it.badge?`<span class="rb pill p-info">${esc(it.badge)}</span>`:''}</button>`).join('')}</div>`}
+function render(){
+ $('log').innerHTML=S.log.map(m=>m.type==='cards'?cardHTML(m):m.type==='block'?m.html:`<div class="m ${m.who==='me'?'me':''} ${m.cls||''}">${m.who==='me'?'':'<span class="av">CO</span>'}<div class="b">${m.html}</div>${m.who==='me'?'<span class="av me">AM</span>':''}</div>`).join('');
+ $('log').scrollTop=$('log').scrollHeight;
+ $('anchor').innerHTML=S.anchor?`<span class="k">Preparing for</span><b>${esc(S.anchor.co)}</b><span class="faint">· ${esc(S.anchor.when)}</span><span class="pill ${S.anchor.kind==='real'?'p-ok':S.anchor.kind==='added'?'p-info':'p-warn'}">${S.anchor.kind==='real'?'Real interview':S.anchor.kind==='added'?'Added by you':'Practice · made by Cora'}</span><button class="btn g sm" data-act="change">Change</button>`:'<span class="k">Preparing for</span><b>Pick an interview with Cora</b>';
+ document.querySelectorAll('.tabs [data-t]').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===S.tab));
+ $('wsb').innerHTML=S.tab==='dash'?dashHTML():S.tab==='plan'?planHTML():sessHTML()}
+const ACT={
+ pick:a=>{const c=S.log.find(x=>x.id===a.dataset.c);if(!c||c.picked!=null||c.stale)return;c.picked=+a.dataset.i;const it=c.items[c.picked];me(it.t);(PICK[it.act]||(()=>{}))(it);render()},
+ addgo:()=>{const co=$('fCo').value||'Your company',w=$('fWhen').value||'Date to be set';me(`Here’s the job at ${co}`);anchorSet({co,role:'AI Product Associate',when:w,kind:'added',r:60,t:75});render()},
+ sugg:a=>{ask(a.dataset.q)},
+ send:()=>{const i=$('q');ask(i.value);i.value=''},
+ tab:a=>{S.tab=a.dataset.t;render()},
+ change:()=>{say('Sure. Which interview are we preparing for?');cards(anchorCards());render()},
+ skill:a=>{const k=a.dataset.k;me(`Tell me about “${SKILL(k).n}”`);PICK.weak({arg:k});render()},
+ weakbtn:a=>{const k=a.dataset.k;me(`Make me a plan for “${SKILL(k).n}”`);S.custom.mins=15;if(!S.anchor){say('Happy to. First, which interview is it for?');cards(anchorCards())}else PICK.cfocus({arg:k});render()},
+ go:()=>{PICK.go();render()},
+ rec:()=>{S.sess.rec='rec';render()},stop:()=>{S.sess.rec='done';say('74, up 8. You ended on the number. That’s the habit we’re building.');render()},
+ pause:()=>{S.sess.run=!S.sess.run;render()},
+ nextseg:()=>{const s=S.sess;if(s.i<s.segs.length-1){s.i++;s.left=s.segs[s.i][2]*60;s.rec='ready';tipFor(s.i)}else finish();render()},
+ endsess:()=>{clearInterval(TICK);S.sess=null;say('Stopped. Your plan is still there when you’re ready.');S.tab='plan';render()},
+ reset:()=>{clearInterval(TICK);location.reload()}};
+document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a)return;const f=ACT[a.dataset.act];if(f){e.preventDefault();f(a)}});
+document.addEventListener('keydown',e=>{if(e.target.id==='q'&&e.key==='Enter')ACT.send()});
+document.addEventListener('mouseover',e=>{const t=e.target.closest('[data-tip]'),tip=$('tip');if(!t){tip.style.display='none';return}tip.textContent=t.dataset.tip;tip.style.display='block'});
+document.addEventListener('mousemove',e=>{const tip=$('tip');tip.style.left=(e.clientX+12)+'px';tip.style.top=(e.clientY+12)+'px'});
+start();render();
+</script></body></html>
