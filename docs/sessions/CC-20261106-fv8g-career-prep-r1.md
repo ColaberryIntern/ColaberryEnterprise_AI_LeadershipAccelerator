@@ -151,3 +151,21 @@ tests/systemV2/career-prep/.
     student bubbles, insight blocks, card sets where only the newest unanswered one is live, four suggestion chips,
     the ask box: Enter sends, Shift+Enter adds a line, empty never sends, nothing clickable while Cora answers).
   - Verification: CoraChat 7 tests; Career Prep frontend 39 pass; tsc clean.
+
+- [x] CP2.1 to CP2.3 fixes (attempt 2, after the verifier failed T7 10/12, T8 8/12, T9 10/12)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: (1) CORRECTION: the CP2.2 entry above says "careerPrepCopy 13"; the file had 11 tests. That claim
+    was wrong. (2) The Career Prep floor no longer exists at all for anyone Career Prep is not open for (members
+    without the flag, explorers, partners), so nobody but Ali sees any change in Release 1, and nothing flashes while
+    the flag loads; the locked-note text and style were removed (M4 adds the explorer note, Release 3 the partners'
+    Hiring doors). (3) Rendered tests: the Placement staff door has no target/rel (same tab), another staff room
+    opens with target _blank, the student's floor swaps in the Career Prep scene, the panel counts "1 door" and its
+    door row opens the room in the same tab. (4) Staff list endpoint: 401 and extra-section 200 tests.
+    (5) T9's Playwright layout check of the floor is carried into T26's scope in plan.md and recorded in
+    state-ledger.json (carryOver).
+  - Verification: careerPrepCopy 11 + careerPrepRender 4 + careerPrepFloor 5 = 20 (counted by the jest run);
+    frontend campus + Career Prep + pages 2,250 pass; placement routes 12 pass; tsc clean.
+  - Notes: declared deviations: Cora on the floor is a plain link into the room, not FloorLobbyDesk (which opens a
+    staff message card; the kit says clicking Cora opens the room); CareerPrepFloor lives in components/careerPrep/
+    with the rest of the room, not hq/. hqModel.test's member floor count now leaves out the hidden Placement floor.

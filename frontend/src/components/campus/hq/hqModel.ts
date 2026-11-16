@@ -2,7 +2,7 @@ import { NAV_GROUPS, PINNED_LINKS, type NavGroup, type NavLink } from '../../Lay
 import { mgmtBridgeTo } from '../../../pages/portal/mgmtNext';
 import { subNavEntries, type NavSubCards } from '../../Layout/adminSubNav';
 import type { CampusAudience } from '../campusMap';
-import { careerPrepDoorsFor, careerPrepLockedNote, type CareerPrepFloorState } from './careerPrepDoors';
+import { careerPrepDoorsFor, type CareerPrepFloorState } from './careerPrepDoors';
 
 /**
  * Campus HQ (H1): the Staff Office / Career Center / Partner Office as an elevator tower, GENERATED from the admin sidebar
@@ -23,7 +23,7 @@ import { careerPrepDoorsFor, careerPrepLockedNote, type CareerPrepFloorState } f
 export const EXECUTIVE_FLOOR_LABEL = 'Executive Floor';
 
 export interface HqRoom { path: string; label: string; icon: string; section: string; newTab: boolean; external: boolean; open: boolean; own?: boolean; inPlace?: boolean }
-export interface HqFloor { key: string; num: string; label: string; rooms: HqRoom[]; openCount: number; access: 'all' | 'some' | 'none'; own?: boolean; note?: string }
+export interface HqFloor { key: string; num: string; label: string; rooms: HqRoom[]; openCount: number; access: 'all' | 'some' | 'none'; own?: boolean }
 export interface GroundRoom { key: 'career' | 'partner' | 'mgmt'; label: string; sub: string; icon: string; route: string; portal: boolean }
 export interface HqNav { pinned: NavLink[]; groups: NavGroup[] }
 export interface Hq { floors: HqFloor[]; ground: GroundRoom[]; isStaff: boolean }
@@ -98,20 +98,21 @@ export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, au
   const subRooms = (g: NavGroup): HqRoom[] => (g.subLists ?? []).flatMap((sl) => (isStaff && canSection(sl.section)
     ? subNavEntries(sl.source, subs).map((e) => ({ path: e.to, label: e.label, icon: sl.icon, section: sl.section, newTab: true, external: false, open: true }))
     : []));
-  const groupFloor = (g: NavGroup, i: number): HqFloor => {
+  const groupFloor = (g: NavGroup, i: number): HqFloor | null => {
     const key = `group-${i}`;
     const num = String(top - i);
     const label = floorLabelFor(g, audience);
-    // Career Prep v27 (CP2.2): for everyone but staff, the Placement floor holds Career Prep's doors, never the staff rooms.
+    // Career Prep v27 (CP2.2): for everyone but staff, the Placement floor holds Career Prep's door, never the staff rooms,
+    // and it does not exist at all for anyone Career Prep is not open for (no visible change until M4 opens it).
     if (!isStaff && g.section === PLACEMENT_SECTION) {
       const doors = careerPrepDoorsFor(audience, careerPrep);
-      return doors.length ? { ...floor(key, num, label, doors), own: true } : { ...floor(key, num, label, []), note: careerPrepLockedNote(audience) };
+      return doors.length ? { ...floor(key, num, label, doors), own: true } : null;
     }
     return floor(key, num, label, [...g.links.map((l) => room(l, g.section, canSection, isStaff)), ...subRooms(g)]);
   };
   const floors = [
     floor('pinned', 'PH', EXECUTIVE_FLOOR_LABEL, nav.pinned.map((l) => room(l, '', canSection, isStaff))),
-    ...nav.groups.map(groupFloor),
+    ...nav.groups.map(groupFloor).filter((f): f is HqFloor => f !== null),
   ];
   // Additive and gated: with no office, or for staff (who have real floors), the building is exactly as before.
   if (!isStaff && office && office.projects.length > 0) floors.push(officeFloor(office));

@@ -50,9 +50,7 @@ export function HqPanel({ s, who, face, placed, agents = [] }: { s: HqState; who
         <h2>{f.label}</h2>
         {isCareerPrepFloor(f)
           ? <p className="lead">One room with Cora, your interview coach. She sees what you need, builds your plan and runs your practice sessions.</p>
-          : f.note
-            ? <p className="lead">{f.note}</p>
-            : <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>}
+          : <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>}
         {isCareerPrepFloor(f) && <CareerPrepPanelRows />}
         {agents.length > 0 && <>
           {/* C119: the AI agent at this floor's front desk, the same card the scene's desk opens */}

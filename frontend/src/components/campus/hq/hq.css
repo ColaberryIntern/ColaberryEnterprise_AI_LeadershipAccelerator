@@ -252,5 +252,3 @@
 .cm-hq.is-reduced *,.cm-hq.is-reduced>div{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){.cm-hq *{animation:none!important;transition:none!important}}
 
-/* Career Prep v27 (CP2.2): a locked Career Prep floor says why, under the plate. */
-.cm-hq-floor .cm-hq-floornote{position:absolute;left:50%;top:96px;transform:translateX(-50%);margin:0;padding:8px 14px;border-radius:6px;background:var(--cm-art-hq-office);color:var(--cm-art-cloud);font-size:14px;text-align:center;max-width:90%}

@@ -1,5 +1,5 @@
 import { careerPrepSummary, interviewWhen } from '../logic/careerPrepCopy';
-import { careerPrepDoorsFor, careerPrepLockedNote, doorsText, CAREER_PREP_ROOM_PATH } from '../../campus/hq/careerPrepDoors';
+import { careerPrepDoorsFor, doorsText, CAREER_PREP_ROOM_PATH } from '../../campus/hq/careerPrepDoors';
 import { buildHq, PLACEMENT_SECTION, type HqNav } from '../../campus/hq/hqModel';
 import type { PrepInterview, PrepSummary } from '../careerPrepApi';
 
@@ -41,7 +41,6 @@ describe('careerPrepDoorsFor: one door for students (CP2.2)', () => {
     expect(careerPrepDoorsFor('member', { on: false })).toEqual([]);
     expect(careerPrepDoorsFor('explorer', { on: true })).toEqual([]);
     expect(careerPrepDoorsFor('business', { on: true })).toEqual([]);
-    expect(careerPrepLockedNote('explorer')).toBe('Career Prep opens when you enroll.');
   });
   it('pluralizes doors', () => {
     expect([doorsText(1), doorsText(4)]).toEqual(['1 door', '4 doors']);
@@ -60,12 +59,14 @@ describe('the tower with Career Prep (CP2.2)', () => {
     expect(f.access).toBe('all');
     expect(f.own).toBe(true);
   });
-  it('an explorer sees the floor locked with the enroll note and no rooms', () => {
-    const f = floorOf(buildHq(() => false, false, 'explorer', nav, undefined, undefined, {}, { on: false }));
-    expect(f).toMatchObject({ access: 'none', rooms: [], note: 'Career Prep opens when you enroll.' });
+  it('nobody Career Prep is not open for sees the floor at all (Release 1 ships dark)', () => {
+    const has = (hq: ReturnType<typeof buildHq>) => hq.floors.some((f) => f.label === 'Career Prep' || f.label === 'Hiring');
+    expect(has(buildHq(() => false, false, 'member', nav, undefined, undefined, {}, { on: false }))).toBe(false);
+    expect(has(buildHq(() => false, false, 'member', nav))).toBe(false); // flag still loading: no flash
+    expect(has(buildHq(() => false, false, 'explorer', nav, undefined, undefined, {}, { on: true }))).toBe(false);
+    expect(has(buildHq(() => false, false, 'business', nav))).toBe(false);
   });
-  it('a partner sees the Hiring floor locked in Release 1', () => {
-    const f = floorOf(buildHq(() => false, false, 'business', nav));
-    expect(f).toMatchObject({ label: 'Hiring', access: 'none', rooms: [] });
+  it('staff still get the Placement floor, under its staff name', () => {
+    expect(buildHq(() => true, true, 'staff', nav).floors.some((f) => f.label === 'Placement')).toBe(true);
   });
 });

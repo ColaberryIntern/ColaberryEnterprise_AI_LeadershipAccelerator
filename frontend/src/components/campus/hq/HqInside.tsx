@@ -78,7 +78,6 @@ export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqF
     <div className="cm-hq-floor" data-testid="cm-hq-floor">
       <div className="corr" />
       <div className="plate"><div className="n">FLOOR {f.num}</div><b>{f.label.toUpperCase()}</b></div>
-      {f.note && <p className="cm-hq-floornote" data-testid="cm-hq-floornote">{f.note}</p>}
       <div className="offices">
         {f.rooms.map((r) => {
           const here = hq.isStaff ? people.byRoom.get(r.path) ?? [] : [];

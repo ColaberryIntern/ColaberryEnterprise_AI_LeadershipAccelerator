@@ -58,6 +58,19 @@ describe('GET /api/admin/placement/students (the Student prep list)', () => {
   const LIST = '/api/admin/placement/students';
   const owner = () => sign({ role: 'admin', mgmt_role: 'owner' });
 
+  it('401s without a token and never queries', async () => {
+    mockQuery.mockReset();
+    expect((await request(app()).get(LIST)).status).toBe(401);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('lets scoped staff list students when placement is granted to them as an extra section', async () => {
+    mockQuery.mockReset().mockResolvedValue([]);
+    const res = await request(app()).get(LIST).set('Authorization', sign({ role: 'admin', mgmt_role: 'support', mgmt_extra_sections: ['placement'] }));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ students: [] });
+  });
+
   it('403s staff without placement and never queries', async () => {
     mockQuery.mockReset();
     expect((await request(app()).get(LIST).set('Authorization', sign({ role: 'admin', mgmt_role: 'support' }))).status).toBe(403);
