@@ -57,6 +57,8 @@ export interface MetaSyncStatus {
   meta: { configured: boolean; accountId: string | null; reason: string | null };
   lastSync: null | {
     startedAt: string; finishedAt: string | null; outcome: string; rowsWritten: number;
+    /** API rows the run refused to parse. Non-zero means the ledger is INCOMPLETE for that window. */
+    rowsSkipped: number;
     errorClass: string | null; error: string | null; rangeStart: string | null; rangeEnd: string | null;
   };
 }

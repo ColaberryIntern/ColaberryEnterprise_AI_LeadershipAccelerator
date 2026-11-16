@@ -68,15 +68,27 @@ export const MARKETING_SPEND_SCHEMA_STATEMENTS: readonly string[] = [
      range_end    DATE,
      outcome      VARCHAR(10) NOT NULL DEFAULT 'running',
      rows_written INTEGER     NOT NULL DEFAULT 0,
+     rows_skipped INTEGER     NOT NULL DEFAULT 0,
      error_class  VARCHAR(40),
      error        TEXT,
      triggered_by VARCHAR(255),
      CONSTRAINT marketing_spend_sync_outcome CHECK (outcome IN ('running', 'success', 'failure', 'skipped'))
    )`,
   `CREATE INDEX IF NOT EXISTS marketing_spend_syncs_recent ON marketing_spend_syncs (platform, started_at DESC)`,
+
+  // ADS-9. The table above already exists in production WITHOUT this column, so the CREATE
+  // alone would never add it - a fresh database would have it and the real one never would.
+  // NOT NULL DEFAULT 0 rather than nullable: a nullable column cannot tell "nothing was
+  // skipped" apart from "this ran before we counted", which is the ambiguity being removed.
+  `ALTER TABLE marketing_spend_syncs ADD COLUMN IF NOT EXISTS rows_skipped INTEGER NOT NULL DEFAULT 0`,
 ];
 
 const REQUIRED_TABLES: readonly string[] = ['marketing_spend_facts', 'marketing_spend_syncs'];
+
+/** Columns added after the table first shipped, so a missed ALTER is caught at boot, not in a report. */
+const REQUIRED_COLUMNS: readonly { table: string; column: string }[] = [
+  { table: 'marketing_spend_syncs', column: 'rows_skipped' },
+];
 
 export async function ensureMarketingSpendSchema(): Promise<void> {
   for (const statement of MARKETING_SPEND_SCHEMA_STATEMENTS) {
@@ -94,5 +106,19 @@ export async function ensureMarketingSpendSchema(): Promise<void> {
   const missing = REQUIRED_TABLES.filter((t) => !present.has(t));
   if (missing.length) {
     throw new Error(`ensureMarketingSpendSchema did not apply: missing tables [${missing.join(', ')}]`);
+  }
+
+  // A table can exist while an added column does not, which is exactly the state production
+  // was in before ADS-9. Checking the tables alone would have called that healthy.
+  const cols = await sequelize.query<{ table_name: string; column_name: string }>(
+    `SELECT table_name, column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = ANY(:tables)`,
+    { type: QueryTypes.SELECT, replacements: { tables: REQUIRED_COLUMNS.map((c) => c.table) } },
+  );
+  const have = new Set(cols.map((c) => `${c.table_name}.${c.column_name}`));
+  const missingCols = REQUIRED_COLUMNS.filter((c) => !have.has(`${c.table}.${c.column}`));
+  if (missingCols.length) {
+    throw new Error(`ensureMarketingSpendSchema did not apply: missing columns `
+      + `[${missingCols.map((c) => `${c.table}.${c.column}`).join(', ')}]`);
   }
 }
