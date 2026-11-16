@@ -211,3 +211,67 @@ The Fit route and the ZIP vetting both call `govCapabilityFitWithProof.ts`. Vett
 | **Catalog / link / case-study reads** (summary) | 500 with a fixed sentence; logged `service_evidence_summary_failed`. | None. | Re-request after the DB recovers. | Not handled: a partial page; without these there is no honest page. |
 | **Proof loader** (Fit) | Logged `gov_fit_proof_load_failed`; the Fit runs exactly as before SV2 (no titles, no proof fields, no downgrade). | None (next Fit call re-reads). | Re-assess Fit. | Handled: any DB error. |
 | **Regression script** | Bad args or unreadable baseline: exits 1 before any DB access. Wrong tenant or no successful run: exits 1, nothing written. A missing pursuit is recorded as `pursuit_not_found`. | The Fit client's single retry. | Re-run (read-only; overwrites its own output files). | Handled: per-run Fit errors (excluded from the vote, counted). |
+
+## 10. AI Service Gap Detector (GD1: engine and API)
+
+For each unlinked case study, the detector answers one question: does it belong to a service we already offer, should an existing service be widened, does a Growth service already cover it, does it justify a new service, or is there not enough to say? **It recommends only.** No detector code creates, links, promotes, publishes or edits a service or a case study. Acting on a recommendation goes through the existing human-click routes: `service-links/:id/decide`, `case-studies/:id/propose-service`, `PATCH services/:id` and `promote`. Every invariant in sections 2 and 8 is unchanged.
+
+### 10.1 How a recommendation is made (`backend/src/services/factory/serviceGap/`)
+1. **Retrieval** (`serviceGapRetrieval.ts`, pure). Every Active and Growth service of the tenant is scored on token and keyword overlap with the case study, and the top 12 go to the model as opaque refs `S1..Sn`. Retired services are never offered; they are used only for duplicate warnings.
+2. **Abstain without a model call.** This happens when an outside document could not be read (`extraction_failed`), when there are fewer than 160 characters of substantive text (`thin_source`), or when the catalog is empty. The detector never guesses a service from a title alone.
+3. **Assessment** (`serviceGapAssessor.ts`). One model call:
+   - It uses the instrumented OpenAI client with a 60 s timeout and one retry.
+   - The case-study text is fenced in `untrustedBlock`.
+   - The system prompt says that a synonym or a narrow vertical variant is not a new service.
+4. **Validation** (`serviceGapValidate.ts`, pure) decides what is allowed through:
+   - **Refs and names.** Refs outside `S1..Sn` are dropped, and service names and statuses come from our catalog.
+   - **Status consistency.** The decision must match the target's real status: an "existing" target that is Growth becomes `LINK_GROWTH`, and the reverse also applies.
+   - **Duplicate name.** A `PROPOSE_NEW` whose name already exists becomes a match to that service (`duplicate_name`).
+   - **High overlap.** A `PROPOSE_NEW` with capability overlap of at least 80 and buyer-problem overlap of at least 70 against one service becomes a match (`high_overlap_guard`).
+   - **Retired namesake.** This is flagged, because propose-service would refuse it.
+   - **Research-only work** is capped at LOW confidence.
+   - **NAICS/PSC** are format-checked and labeled *unverified suggestions*.
+   - **An unreadable decision** is stored as `failed`, never guessed.
+5. **Scores are heuristic indexes (0-100), not probabilities.** Each is defined in `serviceGapTypes.ts`:
+   - `existingFitScore`, `noveltyScore`, `evidenceReadinessScore` and `duplicateRiskScore`.
+   - `commercialPotentialScore` stays null until live-opportunity demand is grounded in real opportunity ids.
+   - `confidence` is qualitative (high, medium or low).
+   - The SV2 evidence score (section 9.1) is separate and unchanged.
+
+### 10.2 Storage, idempotency, review
+- **`service_gap_analyses`** is unique on `(tenant, case study, case fingerprint, catalog fingerprint, prompt version)`. That key is the cache.
+  - The same inputs reuse the stored row, with no model call.
+  - When the case study, the catalog or `GAP_PROMPT_VERSION` changes, the stored row is flagged `stale` and the next analysis writes a new row.
+  - Within one process, simultaneous analyses of the same case study share one in-flight call. Across processes, the database key decides.
+  - A failed row is always retried. `force` re-runs a successful one.
+- **Human review** (`accepted` / `dismissed`, with a note, who and when) is kept when a case study is re-analyzed.
+- **`service_gap_runs`** records each batch run. A partial unique index allows only one running batch per tenant. A run stuck as `running` for more than 30 minutes is marked failed, so a crash cannot lock the button.
+- Each batch takes at most 200 case studies and makes 3 model calls at a time. One failed item is counted and the batch continues.
+- **Resumable:** a re-run only pays for missing or failed rows.
+- **Migration:** `seeds/migrations/20261115_add_service_gap_tables.sql`. Run it BEFORE the deploy; the boot-time ensure (`db/ensureServiceGapSchema.ts`) self-heals if it is forgotten.
+
+### 10.3 API (`routes/admin/serviceGapRoutes.ts`, `requireSection('program')`, gov tenant or 503)
+
+| Route | Purpose |
+|---|---|
+| `GET /api/admin/factory/service-gap-opportunities` | Counters, ranked clusters and the latest analysis for each case study currently in intake, plus the latest run. Read-only; never calls the model. |
+| `GET/POST /api/admin/factory/case-studies/:id/service-gap-analysis` | Read the latest analysis, or analyze/reuse one (`{ force?: true }`). Limited to 20 per minute per admin. |
+| `POST /api/admin/factory/service-gap-analysis/batch` | Start "Analyze unlinked case studies". Returns 202, or 409 with the running run. |
+| `GET /api/admin/factory/service-gap-analysis/runs/latest` | Batch progress. |
+| `POST /api/admin/factory/service-gap-analyses/:id/review` | `{ state: accepted | dismissed, note? }`. |
+| `POST /api/admin/factory/case-studies/:id/service-links/pin` | `{ serviceId, rationale? }`. Used by "Use existing" when the AI's target is not among the card's keyword suggestions. Writes a **suggested** link only (`suggested_by = service-gap:<admin>`) to an active or growth service of this tenant. Idempotent: a row a person already decided is returned untouched. The Link click (decide route) still confirms. Lives in `caseStudyServiceLinkRoutes.ts`, not the advisory router. |
+
+**Clusters** (`serviceGapCluster.ts`) put one candidate service family over many case studies:
+- Proposals group by name or family similarity.
+- Existing-service recommendations group by service.
+- The rank is .30 novelty + .30 readiness + .25 reuse - .15 duplicate risk.
+
+### 10.4 Failure modes
+
+| Boundary | What happens if it fails | Retry | Recovery | Handled / not handled |
+|---|---|---|---|---|
+| **Model** (assess) | The row is stored `failed` with an `error_class` (NoApiKey / UpstreamError / MalformedOutput). Manual linking is untouched. | One retry at the client; the next click or batch retries the failed row. | "Reanalyze". | Handled: no key, timeout, 5xx/429, non-JSON, unknown decision, refs outside the list. Not handled: a wrong but well-formed judgment; that is why a person reviews every result and nothing is created from it. |
+| **DB** (analysis / run rows) | 500 with a fixed sentence; logged `service_gap_*_failed`. A batch that fails is marked `failed` with `last_error`. | None. | Re-run; idempotent. | Handled: per-item failure inside a batch. |
+| **Gov workspace** | 503 (fail closed); nothing is read or written. | None. | Configure the workspace. | Handled. |
+
+**GD2** (the Intake recommendation panel and the AI Service Opportunities section) and **GD3** (running the current backlog and reviewing the verdicts) follow in their own PRs.
