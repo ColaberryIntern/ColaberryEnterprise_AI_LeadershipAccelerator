@@ -6,6 +6,7 @@ import { careerPrepEnabled } from '../services/careerPrep/careerPrepFlag';
 import { loadPrepData } from '../services/careerPrep/prepData';
 import { addInterview, createPractice, linkHireInterviews } from '../services/careerPrep/interviews';
 import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
+import { askCora } from '../services/careerPrep/coraService';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
 
@@ -95,10 +96,29 @@ export async function postInterview(req: Request, res: Response): Promise<void> 
   }
 }
 
+const CoraBody = z.object({ message: z.string().trim().min(1).max(2000), interviewId: z.string().uuid().optional() }).strict();
+
+/** A free question to Cora, answered from the student's own computed metrics only (number guard in coraService). */
+export async function postCora(req: Request, res: Response): Promise<void> {
+  const b = CoraBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: 'Type a question for Cora.' }); return; }
+  try {
+    const now = new Date();
+    const data = await loadPrepData(req.participant!.sub, now);
+    if (b.data.interviewId && !data.interviews.some((i) => i.id === b.data.interviewId)) { res.status(404).json({ error: 'Not found' }); return; }
+    const r = await askCora(b.data.message, buildDashboard(data, now, b.data.interviewId));
+    res.json({ messages: r.messages, cards: [] });
+  } catch (err) {
+    logFailure('career_prep_cora_route_failed', err);
+    res.status(500).json({ error: 'Cora could not answer just now.' });
+  }
+}
+
 const router = Router();
 router.get('/api/portal/career-prep/flags', requireParticipant, getCareerPrepFlags);
 router.get('/api/portal/career-prep/summary', requireParticipant, requireCareerPrep, getSummary);
 router.get('/api/portal/career-prep/dashboard', requireParticipant, requireCareerPrep, getDashboard);
 router.post('/api/portal/career-prep/interviews', requireParticipant, requireCareerPrep, postInterview);
+router.post('/api/portal/career-prep/cora', requireParticipant, requireCareerPrep, postCora);
 
 export default router;

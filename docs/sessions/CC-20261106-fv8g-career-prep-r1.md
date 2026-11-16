@@ -195,3 +195,18 @@ tests/systemV2/career-prep/.
     viewer's own tower. Frontend campus + Career Prep + pages: 6,666 pass, 0 fail; tsc clean.
   - Notes: the kit's `key: 'room'` on the door is not modeled (HqRoom has no key field; the door is identified by
     its path); declared here.
+
+- [x] CP2 verified: T7 PASS 12/12 (attempt 2), T8 PASS 11/12 (attempt 3), T9 PASS 11/12 (attempt 2)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - Notes: open carry-over (also in the run folder's plan.md and state-ledger.json, which are not in git): T26 must
+    run the Playwright layout check on the Career Prep floor at 1440 and 390 as well as the room.
+
+- [x] CP3.4 (backend) Asking Cora, with the number guard
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: coraService.ts (context = only the student's computed metrics; every number in a reply must be in
+    that context, else one retry with a warning, then a no-digits answer, then a fixed line; at most 3 sentences;
+    a model failure gives a polite line, never an error) and POST /api/portal/career-prep/cora (strict Zod,
+    flag-gated, own interview only, read-only view-as refused).
+  - Verification: coraService 8 tests, Cora route 10 tests; 131 Career Prep backend tests pass; tsc clean.
