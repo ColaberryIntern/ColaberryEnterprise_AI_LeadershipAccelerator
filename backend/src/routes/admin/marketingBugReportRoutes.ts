@@ -6,6 +6,7 @@ import { readSendOutcome } from '../../services/email/sendOutcome';
 import { env } from '../../config/env';
 import { getSetting } from '../../services/settingsService';
 import { buildHtmlBody, buildPlainTextBody, buildSubject } from '../../services/marketing/bugReportEmail';
+import { markBugReportDelivered, markBugReportFailed, recordBugReport } from '../../services/marketing/bugReportStore';
 
 /**
  * `POST /api/admin/marketing/bug-report` — the Marketing section's "Report a problem" button.
@@ -24,6 +25,12 @@ import { buildHtmlBody, buildPlainTextBody, buildSubject } from '../../services/
  * SIZE. A PNG of a 4K screen can exceed 10MB, which bounces off most mailboxes. The cap is
  * enforced here rather than only in the browser, because the browser's limit is a suggestion to
  * anyone holding a terminal.
+ *
+ * BUG-5, 2026-11-15: THE REPORT IS WRITTEN DOWN BEFORE IT IS SENT. Until now the email was both
+ * the transport and the only storage, so a transport failure destroyed the report - three of
+ * Sohail's were lost on 2026-11-11 and could not be read or replayed. A row now lands first and
+ * is settled with the outcome. Persistence is best-effort and never blocks the send: a database
+ * problem must not stop bug reporting, or the safety net becomes a second way to fail.
  */
 
 const MAX_SCREENSHOT_BYTES = 6 * 1024 * 1024;
@@ -141,6 +148,11 @@ router.post('/api/admin/marketing/bug-report', requireAdmin, async (req: Request
     return void res.status(400).json({ error: 'That report is missing something.', error_class: 'ValidationError', details: parsed.error.flatten() });
   }
 
+  // Hoisted so the catch below can settle the row and keep the screenshot with it. Before
+  // BUG-5 a throw after the send left no trace of the report at all.
+  let reportId: string | null = null;
+  let shot: { buffer: Buffer; filename: string } | null = null;
+
   try {
     const to = await recipients();
     if (to.length === 0) {
@@ -152,13 +164,35 @@ router.post('/api/admin/marketing/bug-report', requireAdmin, async (req: Request
       });
     }
 
-    const shot = decodeScreenshot(parsed.data.screenshot);
+    shot = decodeScreenshot(parsed.data.screenshot);
     const input = {
       ...parsed.data,
       reporterName: req.admin?.email?.split('@')[0] ?? 'someone',
       reporterEmail: req.admin?.email ?? 'unknown',
       hasScreenshot: Boolean(shot),
     };
+
+    // BUG-5: WRITE IT DOWN FIRST, so a send that fails loses nothing. Fields are listed one by
+    // one rather than spread, so the multi-megabyte screenshot data URL sitting in parsed.data
+    // cannot wander into the row. A null id means the row could not be written; the send still
+    // proceeds, because a database problem must not stop bug reporting.
+    reportId = await recordBugReport({
+      summary: parsed.data.summary,
+      whatHappened: parsed.data.whatHappened,
+      whatExpected: parsed.data.whatExpected,
+      stepsToReproduce: parsed.data.stepsToReproduce,
+      pageUrl: parsed.data.pageUrl,
+      routePath: parsed.data.routePath,
+      brandLabel: parsed.data.brandLabel ?? null,
+      reportedAtCentral: parsed.data.reportedAtCentral,
+      browser: parsed.data.browser,
+      viewport: parsed.data.viewport,
+      errors: parsed.data.errors,
+      failedRequests: parsed.data.failedRequests,
+      hasScreenshot: Boolean(shot),
+      reporterEmail: input.reporterEmail,
+      recipients: to,
+    });
 
     // `from` IS NOT OPTIONAL. Without it the relay accepts the message, answers 250, and
     // then drops it - which is exactly how three of Sohail's reports were lost on
@@ -177,17 +211,24 @@ router.post('/api/admin/marketing/bug-report', requireAdmin, async (req: Request
     // looking for it. If the mail did not leave, say so and let them tell a person.
     const outcome = readSendOutcome(info);
     if (!outcome.delivered) {
+      // Keep the screenshot on the row: this is the report that can still be replayed.
+      await markBugReportFailed(reportId, outcome.reason ?? 'not delivered', shot);
       console.error(JSON.stringify({
         timestamp: new Date().toISOString(),
         level: 'error', service: 'marketing-bug-report', event: 'bug_report_not_delivered',
         outcome: 'failure', error_class: 'BugReportNotDelivered',
-        context: { route: parsed.data.routePath, reason: outcome.reason, recipients: to.length },
+        context: {
+          route: parsed.data.routePath, reason: outcome.reason, recipients: to.length,
+          report_id: reportId, stored: Boolean(reportId),
+        },
       }));
       return void res.status(502).json({
         error: 'The report was accepted but could not be delivered. Please tell Ali directly - nothing was lost on your side.',
         error_class: 'BugReportNotDelivered',
       });
     }
+
+    await markBugReportDelivered(reportId);
 
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
@@ -196,16 +237,24 @@ router.post('/api/admin/marketing/bug-report', requireAdmin, async (req: Request
         route: parsed.data.routePath, recipients: to.length,
         screenshot: Boolean(shot), errors: parsed.data.errors?.length ?? 0,
         failed_requests: parsed.data.failedRequests?.length ?? 0,
+        report_id: reportId, stored: Boolean(reportId),
       },
     }));
 
     res.status(201).json({ sent: true, recipients: to.length, screenshotAttached: Boolean(shot) });
   } catch (err: any) {
+    // The row may exist even though the send threw. Settle it, rather than leaving a row
+    // stuck at "pending" that nothing will ever resolve.
+    await markBugReportFailed(reportId, String(err?.message ?? err), shot);
+
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
       level: 'error', service: 'marketing-bug-report', event: 'bug_report_failed',
       outcome: 'failure', error_class: 'BugReportSendFailed',
-      context: { route: parsed.data.routePath, message: String(err?.message ?? err).slice(0, 300) },
+      context: {
+        route: parsed.data.routePath, message: String(err?.message ?? err).slice(0, 300),
+        report_id: reportId, stored: Boolean(reportId),
+      },
     }));
     res.status(500).json({ error: 'The report could not be sent.', error_class: 'BugReportSendFailed' });
   }
