@@ -25,6 +25,13 @@ export function unblockedDocKeys(need: HumanNeed): string[] {
 
 /** PURE: a short human-readable summary of the answer, for the gap `answer` TEXT column. */
 export function answerSummary(payload: Record<string, unknown>): string {
+  // A grouped record (reference/personnel) summarizes to its primary field (client / name).
+  const rec = payload.record;
+  if (rec && typeof rec === 'object') {
+    const r = rec as Record<string, unknown>;
+    const primary = r.client ?? r.name;
+    return typeof primary === 'string' && primary ? primary : JSON.stringify(rec);
+  }
   const v = payload.value ?? payload.decision ?? payload.fileRef ?? payload.signatureRef;
   if (typeof payload.confirmed === 'boolean') return payload.confirmed ? 'confirmed' : 'declined';
   return typeof v === 'string' && v ? v : JSON.stringify(payload);
@@ -109,6 +116,33 @@ export async function resolveProjectNeed(
         );
       }
     } catch { /* best-effort; the need is resolved, the library is a bonus */ }
+  }
+
+  // Same close-the-loop rail for a GROUPED record: a past-performance reference or a key person answered as one unit
+  // lands as a tenant-wide library record the agent cites whole, so it never fragments into Client/Scope/Period facts
+  // and is reusable on the next bid. Approved iff the approver answered; an intern's record is a pending Dossier entry.
+  // Best-effort for the same reason as the fact path above.
+  if (routed.store === 'library_record') {
+    try {
+      const { default: GovQualification } = await import('../../../models/GovQualification');
+      const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
+      if (q?.tenant_id) {
+        const rt = (routed.payload as { recordType?: unknown }).recordType;
+        const rec = ((routed.payload as { record?: unknown }).record ?? {}) as Record<string, unknown>;
+        const approved = routed.status === 'approved';
+        if (rt === 'reference') {
+          const { addCompanyReference } = await import('./govCompanyLibrary');
+          await addCompanyReference(q.tenant_id, { ...rec, approved }, null);
+        } else if (rt === 'personnel') {
+          const { addCompanyPersonnel } = await import('./govCompanyLibrary');
+          await addCompanyPersonnel(
+            q.tenant_id,
+            { name: String(rec.name ?? ''), role: (rec.role as string) ?? null, resumeHtml: (rec.resumeHtml as string) ?? null, approved },
+            null,
+          );
+        }
+      }
+    } catch { /* best-effort; the need is resolved, the library record is a bonus */ }
   }
 
   return {

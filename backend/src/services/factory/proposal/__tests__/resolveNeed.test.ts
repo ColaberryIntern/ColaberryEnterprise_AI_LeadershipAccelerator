@@ -68,13 +68,45 @@ describe('routeNeedResolution — routing by kind', () => {
     if (nogo.ok) expect(nogo.payload).toMatchObject({ decision: 'no_go' });
   });
 
+  it('record (reference) from an approver lands approved as a grouped library_record', () => {
+    const n = need({ key: 'reference:1', kind: 'record', recordType: 'reference' });
+    const r = routeNeedResolution(n, { record: { client: 'Harris County', scope: ' CAD/RMS ', dates: '2021-2024', junk: '  ' } }, approver);
+    expect(r).toMatchObject({ ok: true, store: 'library_record', status: 'approved', key: 'reference:1' });
+    if (r.ok) {
+      expect(r.payload).toMatchObject({ recordType: 'reference', approved: true, enteredBy: 'ali@colaberry.com' });
+      // trimmed, and empty fields dropped
+      expect(r.payload.record).toEqual({ client: 'Harris County', scope: 'CAD/RMS', dates: '2021-2024' });
+    }
+  });
+
+  it('record from an intern lands pending review', () => {
+    const n = need({ key: 'reference:1', kind: 'record', recordType: 'reference' });
+    const r = routeNeedResolution(n, { record: { client: 'Harris County' } }, intern);
+    expect(r).toMatchObject({ ok: true, store: 'library_record', status: 'pending' });
+  });
+
+  it('record (personnel) requires a name', () => {
+    const n = need({ key: 'personnel:1', kind: 'record', recordType: 'personnel' });
+    expect(routeNeedResolution(n, { record: { role: 'PM' } }, approver)).toMatchObject({ ok: false });
+    const r = routeNeedResolution(n, { record: { name: 'Jane Roe', role: 'PM' } }, approver);
+    expect(r).toMatchObject({ ok: true, store: 'library_record' });
+    if (r.ok) expect(r.payload.record).toMatchObject({ name: 'Jane Roe', role: 'PM' });
+  });
+
+  it('record rejects a missing recordType and missing fields', () => {
+    expect(routeNeedResolution(need({ key: 'r:x', kind: 'record' }), { record: { client: 'X' } }, approver))
+      .toMatchObject({ ok: false });
+    expect(routeNeedResolution(need({ key: 'r:x', kind: 'record', recordType: 'reference' }), {}, approver))
+      .toMatchObject({ ok: false });
+  });
+
   it('rejects a need with no key', () => {
     expect(routeNeedResolution({ key: '', kind: 'fact' } as HumanNeed, { value: 'x' }, approver))
       .toMatchObject({ ok: false });
   });
 
   it('every HumanNeedKind has a branch (no silent unsupported)', () => {
-    const kinds: HumanNeedKind[] = ['fact', 'decision', 'file', 'signature', 'approval', 'confirm_rule', 'setting'];
+    const kinds: HumanNeedKind[] = ['fact', 'decision', 'file', 'signature', 'approval', 'confirm_rule', 'setting', 'record'];
     for (const kind of kinds) {
       const r = routeNeedResolution(need({ key: `k:${kind}`, kind }), {}, approver);
       // Either a clean route or a validation error — never the "unsupported need kind" default.

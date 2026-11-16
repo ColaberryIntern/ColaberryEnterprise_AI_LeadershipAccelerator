@@ -10,8 +10,13 @@ export type CheckKey = 'coverage' | 'format' | 'fact' | 'evaluator' | 'proof' | 
 /** Who resolves a finding: the AI fixes it on the next revision, or a human must supply an input first. */
 export type FindingResolver = 'agent' | 'human';
 
-/** The kinds of input only a human can give (v3 operating model: AI builds + judges, the human supplies these). */
-export type HumanNeedKind = 'fact' | 'decision' | 'file' | 'signature' | 'approval' | 'confirm_rule' | 'setting';
+/** The kinds of input only a human can give (v3 operating model: AI builds + judges, the human supplies these).
+ *  `record` is the GROUPED kind: a past-performance reference (client + scope + period + outcome) or a key person
+ *  answered as ONE unit, so Client/Scope/Period never fragment into independent atomic facts. */
+export type HumanNeedKind = 'fact' | 'decision' | 'file' | 'signature' | 'approval' | 'confirm_rule' | 'setting' | 'record';
+
+/** What a `record` need collects as a unit. `reference` -> gov_company_references; `personnel` -> gov_company_personnel. */
+export type RecordType = 'reference' | 'personnel';
 
 /**
  * A typed request for exactly what a human must provide, why, and what it unblocks. Produced whenever a finding is
@@ -28,6 +33,11 @@ export interface HumanNeed {
   options?: string[];
   blocking: 'fatal' | 'score';
   source?: { quote: string; file: string; page?: number };
+  /** Present iff `kind === 'record'`: whether this groups a past-performance reference or a key person, and the
+   *  field keys the answer form collects (e.g. reference: client, scope, contractValue, dates, contact). Optional so
+   *  every existing need literal and fixture stays valid — the grouped sources set them. */
+  recordType?: RecordType;
+  recordFields?: string[];
 }
 
 /** A finding from a check. `fatal` blocks export whatever the score (over page limit, price leak, missing required
