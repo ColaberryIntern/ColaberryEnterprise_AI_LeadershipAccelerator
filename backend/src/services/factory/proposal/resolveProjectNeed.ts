@@ -145,6 +145,30 @@ export async function resolveProjectNeed(
     } catch { /* best-effort; the need is resolved, the library record is a bonus */ }
   }
 
+  // Answer-once across the tenant's other contracts (spec §B, decision #1). A need's identity is its dossier target,
+  // so the SAME question can be open on several of the tenant's bids at once. Closing it here closes its open twin on
+  // every sibling bid — the question drops off each project's "Needs you" list the moment it is answered once. We do
+  // NOT resume those siblings' documents: only the current project eager-rebuilds (the route's resumeUnblocked). The
+  // sibling payload is flagged { propagated, rebuild_pending } so a later rebuild can tell the answer arrived off-bid.
+  // Best-effort, like the library writes above: the current project's answer is already recorded, so a failure is silent.
+  try {
+    const { default: GovQualification } = await import('../../../models/GovQualification');
+    const { siblingDeliveryProjectIds } = await import('./tenantProjects');
+    const siblings = await siblingDeliveryProjectIds(deliveryProjectId, GovQualification as unknown as Parameters<typeof siblingDeliveryProjectIds>[1]);
+    if (siblings.length) {
+      // Explicit IN with GENERATED positional binds — never `= ANY($1)` with an array bind, which has malformed the
+      // array and crash-looped prod before. $1 need_key, $2 answer, $3 payload, $4.. the sibling delivery-project ids.
+      const placeholders = siblings.map((_, i) => `$${i + 4}`).join(', ');
+      const propagated = JSON.stringify({ ...payload, propagated: true, rebuild_pending: true, source_project: deliveryProjectId });
+      await sequelize.query(
+        `UPDATE gov_proposal_document_gaps
+            SET resolution = 'answered', answer = $2, resolution_payload = $3::jsonb, resolved_at = NOW()
+          WHERE need_key = $1 AND resolution = 'open' AND delivery_project_id IN (${placeholders})`,
+        { bind: [key, summary, propagated, ...siblings], type: QueryTypes.UPDATE },
+      );
+    }
+  } catch { /* best-effort; the current project's answer is already recorded */ }
+
   return {
     status: 200,
     body: { resolved: key, store: routed.store, status: routed.status, unblocked: unblockedDocKeys(need) },
