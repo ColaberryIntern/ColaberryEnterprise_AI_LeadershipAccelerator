@@ -19,7 +19,7 @@ import { requireSection } from '../../middlewares/authMiddleware';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 import {
   listCompanyLibrary, addCompanyFact, addCompanyReference, addCompanyPersonnel,
-  approveCompanyFact, approveCompanyReference, approveCompanyPersonnel,
+  approveCompanyFact, approveCompanyReference, approveCompanyPersonnel, updateCompanyFact,
 } from '../../services/factory/proposal/govCompanyLibrary';
 import {
   ingestSourceDocument, listCompanyDocuments, approveSourceDocument, deleteSourceDocument,
@@ -149,6 +149,34 @@ router.post('/api/admin/factory/dossier/library/:kind/:id/approve', requireSecti
   } catch (err) {
     log('error', 'gov_dossier_approve_failed', { kind, message: String((err as Error)?.message ?? err).slice(0, 200) });
     res.status(500).json({ error: 'Could not approve the dossier item.' });
+  }
+});
+
+const factUpdateBody = z.object({
+  value: z.string().trim().min(1).max(8000),
+  key: z.string().trim().min(1).max(300).optional(),
+  category: z.string().trim().max(60).optional(),
+});
+
+/**
+ * POST edit a fact in place (an admin correcting a saved answer). Value is required; key/category optional. Approval
+ * state is unchanged. A fact-only edit path for now: references and personnel are grouped records handled with the
+ * reference-record work.
+ */
+router.post('/api/admin/factory/dossier/library/fact/:id/update', requireSection('program'), async (req: Request, res: Response) => {
+  const id = String(req.params.id);
+  if (!id) { res.status(400).json({ error: 'An item id is required.' }); return; }
+  const b = factUpdateBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'A fact edit needs a value.' }); return; }
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    await updateCompanyFact(tid, id, b.data, adminIdentity(req));
+    log('info', 'gov_dossier_update', { kind: 'fact' });
+    res.json({ ok: true, id });
+  } catch (err) {
+    log('error', 'gov_dossier_update_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not update the dossier item.' });
   }
 });
 

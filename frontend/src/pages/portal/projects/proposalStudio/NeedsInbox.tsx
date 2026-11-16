@@ -48,6 +48,7 @@ export default function NeedsInbox(
       <div className="gps-vh"><div>
         <h2>Needs you <button type="button" data-testid="help" className="gps-help" title="About this view" onClick={() => onToast('Needs you: everything only a person can supply before this proposal ships. Answer one and the agent resumes the documents it unblocks.')}>i</button></h2>
         <p>Everything only a person can supply before this proposal ships. Answer one and the agent picks the document back up automatically.</p>
+        <p className="gps-small gps-muted" style={{ marginTop: 2 }}>Your answer is not pasted in word for word. The agent rewrites the section to work it in so it reads in context, and reuses it on the next bid that asks the same thing.</p>
       </div></div>
 
       {needs.length === 0 ? (

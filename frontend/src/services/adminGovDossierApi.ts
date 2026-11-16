@@ -39,6 +39,14 @@ export async function approveDossierItem(kind: DossierKind, id: string): Promise
   return data;
 }
 
+export interface FactEdit { value: string; key?: string; category?: string }
+
+/** Edit a saved fact in place (correcting an answered need). Value required; approval state is unchanged server-side. */
+export async function updateDossierFact(id: string, patch: FactEdit): Promise<{ ok: boolean; id: string }> {
+  const { data } = await api.post<{ ok: boolean; id: string }>(`${BASE}/fact/${encodeURIComponent(id)}/update`, patch);
+  return data;
+}
+
 // ── Tenant-wide company documents (Phase 2b): uploaded once, grounds every pursuit ──────────────────────────────
 const DOCS = '/api/admin/factory/dossier/documents';
 
