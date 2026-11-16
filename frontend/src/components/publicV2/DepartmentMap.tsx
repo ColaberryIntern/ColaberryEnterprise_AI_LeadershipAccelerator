@@ -1,29 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SampleBadge } from './Claim';
 
 /**
- * DepartmentMap - the rollout grid, without a band around it.
+ * DepartmentMap - the rollout block from the v5 model's hero.
  *
- * It lived inside `homeV2Bands.tsx` as a full band of its own. The v5 site
- * model puts it INSIDE the hero: "Your company, moving to AI / Department by
- * department" is part of the opening statement there, not a chapter after it.
- * Reading it as a separate dark band immediately under a dark hero was one of
- * the three bands home carried that the model does not.
+ * WHAT CHANGED ON 2026-11-16, and why. Ali, looking at the deployed home page:
+ * "what file are you looking at because nothing I gave you looks like this".
+ * He was right, and the band-count checks could not see it: his file's hero is
+ * this block, full width, with a colour legend and a working
+ * department-by-department / company-wide toggle. What shipped was the grid
+ * alone, squeezed into a column beside a system diagram that appears in
+ * NEITHER file he has supplied.
  *
- * It is a component rather than a page module because the hero renders it, and
- * a component reaching up into a page's band file is the wrong way round.
+ * So the block now carries the three parts the model gives it: the bar with the
+ * legend, the grid, and the mode toggle.
  *
- * THIS IS INVENTED DATA AND IS LABELLED AS SUCH.
+ * THE TOGGLE IS REAL. The model encodes two statuses per department -- one for
+ * each mode -- and this does the same. A control that looked switchable and
+ * changed nothing would be worse than no control.
  *
- * It depicts what the platform's department view looks like for a company
- * partway through a rollout. No Colaberry customer is shown, no real rollout is
- * described, and no figure appears anywhere in it -- the status chips are
- * states, not measurements. It carries a <SampleBadge>, and `HomeV2.test.tsx`
- * fails if that badge ever goes missing, because an unlabelled mock of a
- * customer dashboard is a fabricated proof claim.
- *
- * The departments and the processes under them are ordinary back-office work
- * chosen to be recognisable, not drawn from any engagement.
+ * THIS IS INVENTED DATA AND IS LABELLED AS SUCH. It depicts what the platform's
+ * department view looks like for a company partway through a rollout. No
+ * Colaberry customer is shown, no real rollout is described, and no figure
+ * appears anywhere in it -- the status chips are states, not measurements. It
+ * carries a <SampleBadge>, and the suite fails if that badge goes missing,
+ * because an unlabelled mock of a customer dashboard is a fabricated proof
+ * claim.
  */
 
 export type DeptStatus = 'automating' | 'pilot' | 'next' | 'none';
@@ -32,8 +34,9 @@ export interface Dept {
   readonly n: string;
   readonly name: string;
   readonly leader: string;
-  readonly status: DeptStatus;
-  readonly processes: readonly string[];
+  /** [department by department, company-wide] - the model's own two values. */
+  readonly status: readonly [DeptStatus, DeptStatus];
+  readonly processes: readonly [string, string, string];
 }
 
 export const DEPARTMENTS: readonly Dept[] = [
@@ -41,42 +44,42 @@ export const DEPARTMENTS: readonly Dept[] = [
     n: '01',
     name: 'Finance',
     leader: 'CFO',
-    status: 'automating',
+    status: ['automating', 'automating'],
     processes: ['Invoice matching', 'Month-end close prep', 'Expense review'],
   },
   {
     n: '02',
     name: 'Operations',
     leader: 'COO',
-    status: 'automating',
+    status: ['pilot', 'pilot'],
     processes: ['Order exception triage', 'Vendor onboarding', 'Scheduling'],
   },
   {
     n: '03',
     name: 'Customer service',
     leader: 'VP Support',
-    status: 'pilot',
+    status: ['next', 'pilot'],
     processes: ['Ticket routing', 'Reply drafting', 'Refund checks'],
   },
   {
     n: '04',
     name: 'Sales',
     leader: 'CRO',
-    status: 'next',
+    status: ['none', 'pilot'],
     processes: ['Lead research', 'Proposal first drafts', 'CRM hygiene'],
   },
   {
     n: '05',
     name: 'HR',
     leader: 'CHRO',
-    status: 'none',
+    status: ['none', 'pilot'],
     processes: ['Candidate screening', 'Policy questions', 'Onboarding'],
   },
   {
     n: '06',
     name: 'IT & Data',
     leader: 'CIO',
-    status: 'none',
+    status: ['none', 'pilot'],
     processes: ['Access requests', 'Report requests', 'Data cleanup'],
   },
 ];
@@ -89,42 +92,92 @@ export const STATUS_LABEL: Readonly<Record<DeptStatus, string>> = {
   none: 'Not started',
 };
 
-export interface DepartmentMapProps {
-  /** Light-on-dark sample badge, for an inverse ground. Defaults to true. */
-  readonly inverse?: boolean;
-}
+/** The four states, in the order the model's legend lists them. */
+const LEGEND: readonly DeptStatus[] = ['automating', 'pilot', 'next', 'none'];
 
-/** The grid itself: six departments, each at a stage, each stage named. */
-export default function DepartmentMap({ inverse = true }: DepartmentMapProps): React.ReactElement {
+const MODES: readonly { readonly key: string; readonly label: string; readonly lede: string }[] = [
+  {
+    key: 'staggered',
+    label: 'Department by department',
+    lede:
+      'Start where the return is clearest, prove it, then take the same method to the next ' +
+      'leader.',
+  },
+  {
+    key: 'company-wide',
+    label: 'Company-wide',
+    lede:
+      'Or, if leadership is aligned, every department starts together once a single demo ' +
+      'pilot has proven the approach.',
+  },
+];
+
+export default function DepartmentMap(): React.ReactElement {
+  const [mode, setMode] = useState(0);
+
   return (
-    <>
-      <p className="cbv2-deptmap__badge">
-        <SampleBadge inverse={inverse} />
-      </p>
+    <div className="cbv2-rollout-block">
+      <div className="cbv2-rollout-block__bar">
+        <div>
+          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Your company, moving to AI</p>
+          <h2 id="cbv2-deptmap-title">{MODES[mode].label}.</h2>
+        </div>
+        {/* The legend names every state in words. Colour repeats it, and the
+            chip on each card repeats it again, so nothing here depends on
+            telling four dark blues apart. */}
+        <ul className="cbv2-rollout-block__legend">
+          {LEGEND.map((s) => (
+            <li key={s}>
+              <i className={`cbv2-dept__key cbv2-dept__key--${s}`} aria-hidden="true" />
+              {STATUS_LABEL[s]}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <p className="cbv2-rollout-block__lede">{MODES[mode].lede}</p>
 
       <ul className="cbv2-deptmap">
-        {DEPARTMENTS.map((d) => (
-          <li className={`cbv2-dept cbv2-dept--${d.status}`} key={d.name}>
-            <div className="cbv2-dept__head">
-              <div>
-                <h3 className="cbv2-dept__name">{d.name}</h3>
-                <p className="cbv2-dept__leader">{d.leader}</p>
+        {DEPARTMENTS.map((d) => {
+          const status = d.status[mode];
+          return (
+            <li className={`cbv2-dept cbv2-dept--${status}`} key={d.name}>
+              <div className="cbv2-dept__head">
+                <div>
+                  <h3 className="cbv2-dept__name">{d.name}</h3>
+                  <p className="cbv2-dept__leader">{d.leader}</p>
+                </div>
+                <span className="cbv2-dept__n" aria-hidden="true">
+                  {d.n}
+                </span>
               </div>
-              <span className="cbv2-dept__n" aria-hidden="true">
-                {d.n}
-              </span>
-            </div>
-            <ul className="cbv2-dept__procs">
-              {d.processes.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-            {/* The chip states the stage in words. Colour repeats it; it never
-                carries it alone. */}
-            <p className="cbv2-dept__status">{STATUS_LABEL[d.status]}</p>
-          </li>
-        ))}
+              <ul className="cbv2-dept__procs">
+                {d.processes.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+              <p className="cbv2-dept__status">{STATUS_LABEL[status]}</p>
+            </li>
+          );
+        })}
       </ul>
-    </>
+
+      <div className="cbv2-rollout-block__foot">
+        <div className="cbv2-rollout-block__modes" role="group" aria-label="Rollout pace">
+          {MODES.map((m, i) => (
+            <button
+              type="button"
+              key={m.key}
+              className={`cbv2-rollout-block__mode${i === mode ? ' is-on' : ''}`}
+              aria-pressed={i === mode}
+              onClick={() => setMode(i)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <SampleBadge inverse />
+      </div>
+    </div>
   );
 }

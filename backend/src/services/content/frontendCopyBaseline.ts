@@ -50,7 +50,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/publicV2/HeroPlatformV8.tsx': 1,
   'frontend/src/components/publicV2/HeroPricingV8.tsx': 1, // 2026-11-14: 7 -> 1, hero re-lettered to the demo-pilot arc
   'frontend/src/components/publicV2/HeroServicesV8.tsx': 1,
-  'frontend/src/components/publicV2/HeroV8.tsx': 1,
   'frontend/src/components/publicV2/OpenPlatform.tsx': 2,
   'frontend/src/components/publicV2/PublicFooterV2.tsx': 1,
   'frontend/src/components/publicV2/PublicHeaderV2.tsx': 1,
@@ -170,7 +169,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 261; // 2026-11-15: -2 HomeV2 (the free-workspace band came off)
+export const FRONTEND_COPY_BASELINE_TOTAL = 260; // 2026-11-16: -1 HeroV8 (the proof row went with the rebuilt hero)
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

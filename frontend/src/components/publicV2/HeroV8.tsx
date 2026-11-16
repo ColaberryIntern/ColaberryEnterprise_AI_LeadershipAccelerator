@@ -3,133 +3,93 @@ import { Link } from 'react-router-dom';
 import DepartmentMap from './DepartmentMap';
 
 /**
- * The hero: the headline is physically wired into the system diagram.
+ * The home hero, built to `colaberry-enterprise-site.html`.
  *
- * Ali's v2 design. "system." feeds the machine layer, "people." feeds the human
- * layer, and one handover pulse runs the whole cycle -- the page's argument
- * drawn rather than asserted.
+ * WHY THIS WAS REWRITTEN ON 2026-11-16. Ali, looking at the deployed page:
+ * "what file are you looking at because nothing I gave you looks like this."
  *
- * FOUR DELIBERATE DEPARTURES FROM THE SUPPLIED FILE, all recorded because each
- * would otherwise look like a mistake:
+ * He was right. The hero carried a wired system diagram -- Ingest, Model,
+ * Deploy, Agents, Guardrails, five people and a HANDOVER COMPLETE stamp --
+ * that appears in NEITHER file he has supplied: not in
+ * `colaberry-enterprise-site.html` and not in `colaberry-enterprise-v4.html`.
+ * It came from a much older design. Both of his files specify the same hero,
+ * and it is this one:
  *
- * 1. NAMESPACED cbv2-h8*, not cbv2-hero*. `.cbv2-hero` and `.cbv2-eyebrow` are
- *    still owned by other sections of this page, and generic names like
- *    `.cbv2-node`, `.cbv2-flow` and `.cbv2-person` are exactly the kind that
- *    collide. `.cbv2-goal`, defined twice in two files, already broke an
- *    unrelated section once in this workstream.
+ *   1. the eyebrow, the headline
+ *   2. beside it, the lede and two buttons
+ *   3. three cards, We build it / We guide you / We train you, each with a line
+ *   4. the rollout block, FULL WIDTH, with its legend and its mode toggle
  *
- * 2. NO GOOGLE FONTS. The file links Hanken Grotesk and JetBrains Mono. This
- *    page already has display and mono faces as design tokens, and a duplicate
- *    icon font was removed from it earlier this week precisely to stop a second
- *    render-blocking font request. It uses --font-display and --font-mono.
+ * AND THE CHECKS COULD NOT SEE IT. The fidelity work that preceded this
+ * measured band counts and heading order. Both heroes are one band with one h1,
+ * so every assertion passed while the most prominent element on the site
+ * matched nothing he had sent. Counting sections cannot see a picture. The
+ * guards below assert the hero's PARTS, which is the thing that was missing.
  *
- * 3. THE BODY SENTENCE IS THE APPROVED ONE. The file rewrote it to "same
- *    platform, same timeline"; the wording kept here -- "in one platform, at the
- *    same time" -- is what the claims work settled on and what the suite
- *    asserts. Same meaning, vetted phrasing.
+ * The layout defect this also fixes: `.cbv2-h8` was `display: flex`, so the
+ * rollout block added yesterday became a sibling column of the copy and
+ * overlapped the diagram. Measured on production: the grid at x=878..1440 over
+ * a diagram at x=516..968.
  *
- * 4. CTA LABELS STAY TITLE CASE, matching every other call to action on the
- *    site and the existing link-integrity expectations.
- *
- * The diagram is aria-hidden: every label in it restates a word already in the
- * headline, deck or status list beside it.
+ * WHAT IS DELIBERATELY NOT CARRIED OVER from the old hero: the status chips
+ * (now the three cards, with the sentence each one was missing), the "One
+ * process first" deck, and the three-item proof row. None of the three is in
+ * either file, and the proof row's claims live on in the "Short on purpose."
+ * band further down the page, which is where the model puts them.
  */
 
-/** Top row of the machine. x is the box left edge; the label centres on it. */
-const STAGES = [
-  { key: 'ing', label: 'Ingest', x: 20, cx: 120 },
-  { key: 'mod', label: 'Model', x: 290, cx: 390 },
-  { key: 'dep', label: 'Deploy', x: 560, cx: 660 },
+/** The three services, as the model's hero states them. */
+const VERBS: readonly { n: string; verb: string; title: string; body: string; to: string }[] = [
+  {
+    n: '01',
+    verb: 'Build',
+    title: 'We build it.',
+    body: 'A custom application, designed with your business experts for how your industry works.',
+    to: '/services/build',
+  },
+  {
+    n: '02',
+    verb: 'Guide',
+    title: 'We guide you.',
+    body:
+      'Your people automate your processes as workflows in your own environment and current ' +
+      'systems.',
+    to: '/services/guide',
+  },
+  {
+    n: '03',
+    verb: 'Train',
+    title: 'We train you.',
+    body: 'Your team learns Claude Code and becomes Forward Deployed Engineers.',
+    to: '/services/train',
+  },
 ];
-
-const CONTROLS = [
-  { key: 'agt', label: 'Agents', x: 130, cx: 237 },
-  { key: 'grd', label: 'Guardrails', x: 445, cx: 552 },
-];
-
-/** Wires from the top row down into the control row, and the pulse on each. */
-const TOP_WIRES = [
-  { d: 'M120 108 C120 160, 235 158, 235 208', delay: 0 },
-  { d: 'M390 108 C390 160, 245 158, 245 208', delay: 0.5 },
-  { d: 'M390 108 C390 160, 535 158, 535 208', delay: 0.9 },
-  { d: 'M660 108 C660 160, 545 158, 545 208', delay: 1.3 },
-];
-
-const PEOPLE = [
-  { label: 'Data eng', x: 90 },
-  { label: 'Architect', x: 245 },
-  { label: 'Ops lead', x: 400 },
-  { label: 'Analyst', x: 555 },
-  { label: 'Exec', x: 710 },
-];
-
-/** Spine down to each person. The middle one starts below the pill. */
-const SPINE_DROPS = [
-  { d: 'M90 338 L90 416', delay: 2.9 },
-  { d: 'M245 338 L245 416', delay: 3.1 },
-  { d: 'M400 356 L400 416', delay: 3.3 },
-  { d: 'M555 338 L555 416', delay: 3.5 },
-  { d: 'M710 338 L710 416', delay: 3.7 },
-];
-
-function Person({ label, x, i }: { label: string; x: number; i: number }): React.ReactElement {
-  return (
-    <g className={`cbv2-h8person cbv2-h8person--${i + 1}`} transform={`translate(${x},456)`}>
-      <circle className="cbv2-h8halo" cx="0" cy="0" r="30" />
-      <circle className="cbv2-h8ring" cx="0" cy="0" r="34" />
-      <g className="cbv2-h8glyph">
-        <circle cx="0" cy="-8" r="8" />
-        <path d="M-14 14 a14 14 0 0 1 28 0 z" />
-      </g>
-      <text className="cbv2-h8lbl" x="0" y="62" textAnchor="middle">{label}</text>
-    </g>
-  );
-}
 
 export default function HeroV8(): React.ReactElement {
   return (
     <section className="cbv2-h8" aria-labelledby="cbv2-hero-title">
       <div className="cbv2-h8__field" aria-hidden="true" />
       <div className="cbv2-h8__bloom cbv2-h8__bloom--red" aria-hidden="true" />
-      <div className="cbv2-h8__bloom cbv2-h8__bloom--cyan" aria-hidden="true" />
 
       <div className="cbv2-h8__inner">
         <div className="cbv2-h8__copy">
           <div className="cbv2-h8__eyebrow">
             <span className="cbv2-h8__live" aria-hidden="true" />
-            Build <b>&middot;</b> Guide <b>&middot;</b> Train &nbsp;&middot;&nbsp; with Claude Code
+            <b>Claude Code</b>
+            Colaberry Enterprise AI
           </div>
 
           <h1 id="cbv2-hero-title" className="cbv2-h8__h1">
-            <span className="cbv2-h8__line">
-              <span className="cbv2-h8__word cbv2-h8__word--sys">We build, guide and train</span>
-              <span className="cbv2-h8__rail" aria-hidden="true" />
-            </span>
-            {/* A real space between the lines: they are separate spans, so the
-                accessible name concatenated to "systemBuild" without it. The
-                lines are block-level, so this changes nothing visually. */}
-            {' '}
-            <span className="cbv2-h8__line">
-              <span className="cbv2-h8__word cbv2-h8__word--ppl">your company into AI.</span>
-              <span className="cbv2-h8__rail cbv2-h8__rail--cyan" aria-hidden="true" />
-            </span>
+            We build, guide and train your company{' '}
+            <span className="cbv2-h8__it">into AI.</span>
           </h1>
+        </div>
 
-          <p className="cbv2-h8__deck">
-            One process first. <b>Then the next leader.</b>
-          </p>
-
-          <ul className="cbv2-h8__status">
-            <li className="cbv2-h8__chip"><i /> We build it</li>
-            <li className="cbv2-h8__chip"><i /> We guide you</li>
-            <li className="cbv2-h8__chip"><i /> We train you</li>
-          </ul>
-
+        <div className="cbv2-h8__side">
           <p className="cbv2-h8__body">
             A custom application designed around your business, or workflows that automate your
             processes inside the systems you already run. We find where the ROI is, <b>prove it
-            with a demo pilot</b>, then keep going &mdash; department by department, or
-            company-wide.
+            with a demo pilot</b>, then keep going, department by department, or company-wide.
           </p>
 
           <div className="cbv2-h8__cta">
@@ -140,124 +100,38 @@ export default function HeroV8(): React.ReactElement {
               Build, guide or train?
             </Link>
           </div>
-
-          <div className="cbv2-h8__proof">
-            <span>Built on Claude &amp; Claude Code</span>
-            <span>A demo pilot before you commit</span>
-            <span>Free company workspace</span>
-          </div>
-        </div>
-
-        <div className="cbv2-h8__viz" aria-hidden="true">
-          <svg viewBox="0 0 800 660" xmlns="http://www.w3.org/2000/svg" focusable="false">
-            <defs>
-              <linearGradient id="cbv2-h8spineGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="var(--h8-red)" />
-                <stop offset="50%" stopColor="#b36ac9" />
-                <stop offset="100%" stopColor="var(--h8-cyan)" />
-              </linearGradient>
-            </defs>
-
-            <g>
-              <circle cx="16" cy="16" r="3.5" fill="var(--h8-red)" />
-              <text className="cbv2-h8layer" x="30" y="20" fill="#5a657b">System</text>
-            </g>
-
-            <g>
-              {TOP_WIRES.map((w) => <path className="cbv2-h8wire" key={`w${w.d}`} d={w.d} />)}
-              {TOP_WIRES.map((w) => (
-                <path
-                  className="cbv2-h8flow"
-                  key={`f${w.d}`}
-                  d={w.d}
-                  style={{ animationDelay: `${w.delay}s` }}
-                />
-              ))}
-            </g>
-
-            {STAGES.map((s) => (
-              <g className={`cbv2-h8node cbv2-h8node--${s.key}`} key={s.key}>
-                <rect x={s.x} y={52} width={200} height={56} rx={9} />
-                <text className="cbv2-h8lbl" x={s.cx} y={86} textAnchor="middle">{s.label}</text>
-              </g>
-            ))}
-
-            {CONTROLS.map((c) => (
-              <g className={`cbv2-h8node cbv2-h8node--${c.key}`} key={c.key}>
-                <rect x={c.x} y={208} width={215} height={60} rx={9} />
-                <text className="cbv2-h8lbl" x={c.cx} y={244} textAnchor="middle">{c.label}</text>
-              </g>
-            ))}
-
-            <path className="cbv2-h8wire" d="M237 268 L237 336" />
-            <path className="cbv2-h8wire" d="M552 268 L552 336" />
-            <path className="cbv2-h8flow" style={{ animationDelay: '1.6s' }} d="M237 268 L237 336" />
-            <path className="cbv2-h8flow" style={{ animationDelay: '1.9s' }} d="M552 268 L552 336" />
-
-            <line className="cbv2-h8spine" x1="10" y1="336" x2="790" y2="336" />
-            <line className="cbv2-h8spine-hot" x1="10" y1="336" x2="790" y2="336" />
-            <g className="cbv2-h8pill">
-              <rect x="315" y="318" width="170" height="36" rx="18" />
-              <text className="cbv2-h8tag" x="400" y="341" textAnchor="middle">One platform</text>
-            </g>
-
-            <g>
-              {SPINE_DROPS.map((s) => <path className="cbv2-h8wire" key={`w${s.d}`} d={s.d} />)}
-              {SPINE_DROPS.map((s) => (
-                <path
-                  className="cbv2-h8flow cbv2-h8flow--cyan"
-                  key={`f${s.d}`}
-                  d={s.d}
-                  style={{ animationDelay: `${s.delay}s` }}
-                />
-              ))}
-            </g>
-
-            {PEOPLE.map((p, i) => <Person key={p.label} label={p.label} x={p.x} i={i} />)}
-
-            <g>
-              <circle cx="16" cy="590" r="3.5" fill="var(--h8-cyan)" />
-              <text className="cbv2-h8layer" x="30" y="594" fill="#5a657b">People</text>
-            </g>
-
-            <g className="cbv2-h8stamp">
-              <rect x="556" y="572" width="228" height="38" rx="19" />
-              <text x="670" y="596" textAnchor="middle">HANDOVER COMPLETE</text>
-            </g>
-          </svg>
         </div>
       </div>
 
+      {/* Three cards, not three chips. The chips said the same three words with
+          no sentence under them; the model gives each one a line, and that line
+          is the only place on the home page that says what each service is
+          before the reader is two screens down. */}
+      <ul className="cbv2-h8__verbs">
+        {VERBS.map((v) => (
+          <li className="cbv2-h8__verb" key={v.verb}>
+            <p className="cbv2-h8__verbk">
+              {v.n} <span aria-hidden="true">&middot;</span> {v.verb}
+            </p>
+            <h2>
+              <Link to={v.to}>{v.title}</Link>
+            </h2>
+            <p>{v.body}</p>
+          </li>
+        ))}
+      </ul>
+
       {/*
-        THE ROLLOUT GRID, INSIDE THE HERO.
+          The rollout block, full width, as the model draws it.
 
-        The v5 site model opens with the headline and then, in the same band,
-        "Your company, moving to AI / Department by department" as a grid of six
-        departments at different stages. Home shipped that as a separate dark
-        band immediately under a dark hero, which read as a second chapter and
-        was one of the three bands home carried that the model does not.
-
-        It belongs here: "department by department" is the central promise of
-        how an engagement scales, and in words alone it is abstract. Folding it
-        in is also what takes home from ten bands to the model's seven.
+          NO "see how a rollout runs" BUTTON. The old band had one and I carried
+          it over; the model's hero does not, and on the dark band it rendered
+          dark-on-dark once the hero above went light, because the ghost button
+          takes its ink from the hero's foreground. /how-it-works is in the nav
+          and is linked from the three-steps band below.
       */}
-      <div className="cbv2-wrap cbv2-h8__rollout">
-        <div className="cbv2-section__head">
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Your company, moving to AI</p>
-          <h2 id="cbv2-deptmap-title">Department by department.</h2>
-          <p className="cbv2-lede">
-            Start where the return is clearest, prove it, then take the same method to the
-            next leader. Or, if leadership is aligned, start everywhere at once.
-          </p>
-        </div>
-
+      <div className="cbv2-h8__rollout">
         <DepartmentMap />
-
-        <p className="cbv2-deptmap__foot">
-          <Link className="cbv2-btn cbv2-btn--primary" to="/how-it-works">
-            See how a rollout runs
-          </Link>
-        </p>
       </div>
     </section>
   );
