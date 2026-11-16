@@ -1,5 +1,9 @@
 import fs from 'fs';
 import path from 'path';
+import {
+  AA_GRAPHIC, AA_TEXT, contrastRatio as ratio, declarations, over, parseColor,
+  resolveVar as resolve, ruleBlock as block, type RGBA, type Vars,
+} from '../../../styles/__tests__/testEnv/cssContrast';
 
 /**
  * C11 contrast, from the REAL stylesheets (WCAG 1.4.3 text 4.5:1, 1.4.11 graphics 3:1).
@@ -12,16 +16,6 @@ import path from 'path';
  */
 const SRC = path.join(__dirname, '..', '..', '..');
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-
-type Vars = Record<string, string>;
-const declarations = (body: string): Vars =>
-  Object.fromEntries(Array.from(body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)).map((m) => [m[1], m[2].trim()]));
-/** The body of the first rule whose selector list exactly matches `selector`. */
-function block(css: string, selector: string): Vars {
-  const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
-  const m = css.match(new RegExp(`(?:^|\\})\\s*${esc}\\s*\\{([^}]*)\\}`));
-  return m ? declarations(m[1]) : {};
-}
 
 const COLORS = read('colaberry/tokens/colors.css');
 const SHELL = read('pages/portal/today/TodayShell.css');
@@ -43,38 +37,6 @@ export function varsFor(ctx: Ctx): Vars {
   return Object.assign({}, ...layers);
 }
 
-type RGBA = [number, number, number, number];
-export function parseColor(v: string): RGBA {
-  const s = v.trim();
-  let m = s.match(/^#([0-9a-f]{6})$/i);
-  if (m) return [0, 2, 4].map((i) => parseInt(m![1].slice(i, i + 2), 16)).concat(1) as RGBA;
-  m = s.match(/^#([0-9a-f]{3})$/i);
-  if (m) return m[1].split('').map((c) => parseInt(c + c, 16)).concat(1) as RGBA;
-  m = s.match(/^rgba?\(([^)]+)\)$/i);
-  if (m) { const p = m[1].split(',').map((x) => parseFloat(x)); return [p[0], p[1], p[2], p[3] ?? 1]; }
-  throw new Error(`unparsed color: ${v}`);
-}
-export function resolve(value: string, vars: Vars, depth = 0): string {
-  if (depth > 20) throw new Error(`var() loop at ${value}`);
-  const m = value.trim().match(/^var\((--[\w-]+)\)$/);
-  if (!m) return value.trim();
-  const next = vars[m[1]];
-  if (next === undefined) throw new Error(`undefined token ${m[1]}`);
-  return resolve(next, vars, depth + 1);
-}
-const over = (top: RGBA, under: RGBA): RGBA => {
-  const a = top[3];
-  return [0, 1, 2].map((i) => top[i] * a + under[i] * (1 - a)).concat(1) as RGBA;
-};
-const lum = ([r, g, b]: RGBA) => {
-  const c = [r, g, b].map((x) => { const s = x / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
-  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-};
-export function ratio(fg: RGBA, bg: RGBA): number {
-  const a = lum(fg), b = lum(bg);
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
-
 /** fg on bg, where bg may itself be translucent over `base` (a tint over the card surface). */
 function contrast(vars: Vars, fg: string, bg: string, base = '--surface'): number {
   const baseC = parseColor(resolve(`var(${base})`, vars));
@@ -83,7 +45,11 @@ function contrast(vars: Vars, fg: string, bg: string, base = '--surface'): numbe
   return ratio(fgC, bgC);
 }
 
-const TEXT = 4.5, GRAPHIC = 3;
+// AF12.6: the thresholds and the arithmetic now come from
+// `styles/__tests__/testEnv/cssContrast.ts`, so this suite and the product-wide action-contrast
+// gate cannot disagree about what 4.5:1 means. The PAIRS below stay here, because the pair list
+// IS what this suite asserts.
+const TEXT = AA_TEXT, GRAPHIC = AA_GRAPHIC;
 // [what, foreground token, background token, minimum]
 const PAIRS: [string, string, string, number][] = [
   ['primary button', '--cm-on-accent', '--cm-accent', TEXT],
