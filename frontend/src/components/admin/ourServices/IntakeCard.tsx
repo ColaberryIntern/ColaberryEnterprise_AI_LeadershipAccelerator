@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { IntakeSummaryItem } from '../../../services/ourServicesApi';
 import { CaseStudyTitleLink, SourcePill } from './CaseStudyCard';
 import CaseStudyOpenButtons from './CaseStudyOpenButtons';
+import GapRecommendationPanel, { type GapPanelProps } from './serviceGap/GapRecommendationPanel';
 import { PRECHECK_AT, confidenceTone, industryIcon, suggestionConfidence } from './ourServicesModel';
 
 /**
@@ -9,20 +10,28 @@ import { PRECHECK_AT, confidenceTone, industryIcon, suggestionConfidence } from 
  * see `suggestionConfidence`); those at 75 or more start checked. The gate stays locked until at least one service
  * is picked. "Link" confirms only the picked suggestions through the existing decide route and leaves the rest as
  * suggestions. "New service" proposes a Growth service from this case study. Nothing is confirmed without a click.
+ *
+ * The AI service recommendation (GD2) sits above the suggestions when `gap` is given. "Use existing" arrives as
+ * `gap.pinnedServiceId`, which starts that suggestion ticked; "Review proposed service" opens the propose form
+ * pre-filled with the AI draft (name, category, description, keywords), which the person still edits and submits.
  */
+export type ProposeExtras = { description?: string; keywords?: string[] };
+export type IntakeGapProps = Omit<GapPanelProps, 'onReviewProposal'> & { pinnedServiceId?: string };
 interface Props {
   item: IntakeSummaryItem;
   growthServiceIds: Set<string>;
   onLink: (item: IntakeSummaryItem, linkIds: string[]) => Promise<void>;
-  onPropose: (item: IntakeSummaryItem, name: string, category: string) => Promise<void>;
+  onPropose: (item: IntakeSummaryItem, name: string, category: string, extras?: ProposeExtras) => Promise<void>;
+  gap?: IntakeGapProps;
 }
 
 const BAR = { success: 'var(--status-success)', warning: 'var(--status-warning)', muted: 'var(--border-strong)' } as const;
 const PCT = { success: 'text-success-emphasis', warning: 'text-warning-emphasis', muted: 'text-secondary' } as const;
 
-export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }: Props): React.ReactElement {
+export default function IntakeCard({ item, growthServiceIds, onLink, onPropose, gap }: Props): React.ReactElement {
   const ranked = item.suggestions.map((s) => ({ ...s, pct: suggestionConfidence(s.matchScore) }));
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(ranked.filter((s) => s.pct >= PRECHECK_AT).map((s) => s.linkId)));
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(ranked.filter((s) => s.pct >= PRECHECK_AT || s.serviceId === gap?.pinnedServiceId).map((s) => s.linkId)));
+  const [extras, setExtras] = useState<ProposeExtras | undefined>(undefined);
   const [proposing, setProposing] = useState(false);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
@@ -31,6 +40,11 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
   const ready = picked.size > 0;
   const outside = item.sourceKind === 'outside';
 
+  const reviewProposal = (d: { name: string; category: string | null; buyerValue: string | null; scope: string | null; keywords: string[] }): void => {
+    setName(d.name); setCategory(d.category ?? '');
+    setExtras({ description: [d.buyerValue, d.scope].filter(Boolean).join(' ') || undefined, keywords: d.keywords.length ? d.keywords : undefined });
+    setProposing(true);
+  };
   const toggle = (id: string): void => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const run = async (fn: () => Promise<void>): Promise<void> => {
     setBusy(true); setError(null);
@@ -41,7 +55,7 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
   };
 
   return (
-    <article className={`border rounded-3 bg-body overflow-hidden h-100 d-flex flex-column ${ready ? '' : 'border-danger-subtle'}`} aria-label={`Intake: ${item.title}`} data-testid={`intake-${item.id}`}>
+    <article className={`border rounded-3 bg-body overflow-hidden h-100 d-flex flex-column ${ready ? '' : 'border-danger-subtle'}`} aria-label={`Intake: ${item.title}`} data-testid={`intake-${item.id}`} id={`intake-card-${item.id}`} tabIndex={-1}>
       <header className="d-flex gap-3 p-3 border-bottom">
         <div className={`rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 fs-3 ${outside ? 'bg-secondary-subtle' : 'bg-info-subtle'}`} style={{ width: 48, height: 48 }} aria-hidden="true"><i className={`${industryIcon(item.industry)} text-body-secondary`} /></div>
         <div className="flex-grow-1">
@@ -59,6 +73,7 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
         </div>
       </header>
       <div className="p-3 flex-grow-1">
+        {gap && <GapRecommendationPanel {...gap} onReviewProposal={reviewProposal} />}
         <div className="small fw-bold text-secondary mb-1"><i className="ri-robot-2-line me-1" aria-hidden="true" />Suggested services</div>
         {ranked.length === 0 ? (
           <p className="small text-secondary mb-0">No suggestions yet. Propose a new service, or link it from a service's Evidence panel.</p>
@@ -86,9 +101,9 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
         {error && <div className="alert alert-danger py-1 px-2 small mt-2 mb-0" role="alert">{error}</div>}
       </div>
       {proposing && (
-        <form className="p-3 border-top bg-warning-subtle" onSubmit={(e) => { e.preventDefault(); if (name.trim().length >= 2) void run(() => onPropose(item, name.trim(), category.trim())); }}>
+        <form className="p-3 border-top bg-warning-subtle" onSubmit={(e) => { e.preventDefault(); if (name.trim().length >= 2) void run(() => (extras ? onPropose(item, name.trim(), category.trim(), extras) : onPropose(item, name.trim(), category.trim()))); }}>
           <div className="fw-bold small"><i className="ri-seedling-line me-1" aria-hidden="true" />Propose a new service</div>
-          <div className="small text-secondary mb-2">It enters the catalog as Growth with this case study as its first proof.</div>
+          <div className="small text-secondary mb-2">It enters the catalog as Growth with this case study as its first proof.{extras && ' The description and keywords from the AI draft are included; edit the service afterwards to change them.'}</div>
           <label htmlFor={`ns-name-${item.id}`} className="form-label small mb-1">Service name</label>
           <input id={`ns-name-${item.id}`} className="form-control form-control-sm mb-2" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required minLength={2} />
           <label htmlFor={`ns-cat-${item.id}`} className="form-label small mb-1">Category <span className="text-secondary">(optional)</span></label>
@@ -101,7 +116,7 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose }
           <i className={`${ready ? 'ri-lock-unlock-line' : 'ri-lock-line'} me-1`} aria-hidden="true" />
           {ready ? `Ready: ${picked.size} service${picked.size === 1 ? '' : 's'} selected` : 'Pick at least one service'}
         </span>
-        <button type="button" className="btn btn-outline-danger btn-sm" aria-expanded={proposing} onClick={() => setProposing((v) => !v)} disabled={busy}><i className="ri-seedling-line me-1" aria-hidden="true" />New service</button>
+        <button type="button" className="btn btn-outline-danger btn-sm" aria-expanded={proposing} onClick={() => { setProposing((v) => !v); setExtras(undefined); }} disabled={busy}><i className="ri-seedling-line me-1" aria-hidden="true" />New service</button>
         <button type="button" className="btn btn-primary btn-sm" disabled={!ready || busy} onClick={() => void run(() => onLink(item, [...picked]))}
           title={outside
             ? 'Outside case studies are internal evidence only; linking does not make them public.'

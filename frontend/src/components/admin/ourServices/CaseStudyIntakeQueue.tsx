@@ -1,6 +1,6 @@
 import React from 'react';
 import type { IntakeSummaryItem } from '../../../services/ourServicesApi';
-import IntakeCard from './IntakeCard';
+import IntakeCard, { type IntakeGapProps, type ProposeExtras } from './IntakeCard';
 
 /**
  * CaseStudyIntakeQueue - every case study with no confirmed service link. It cannot publish or count as evidence
@@ -11,7 +11,9 @@ interface Props {
   intake: IntakeSummaryItem[];
   growthServiceIds: Set<string>;
   onLink: (item: IntakeSummaryItem, linkIds: string[]) => Promise<void>;
-  onPropose: (item: IntakeSummaryItem, name: string, category: string) => Promise<void>;
+  onPropose: (item: IntakeSummaryItem, name: string, category: string, extras?: ProposeExtras) => Promise<void>;
+  /** The AI service recommendation props for one card (GD2). Omitted: cards render exactly as before. */
+  gapFor?: (item: IntakeSummaryItem) => IntakeGapProps;
 }
 
 const dot = (color: string): React.CSSProperties => ({ width: 9, height: 9, borderRadius: '50%', display: 'inline-block', background: color });
@@ -27,7 +29,7 @@ export function IntakeLegend(): React.ReactElement {
   );
 }
 
-export default function CaseStudyIntakeQueue({ intake, growthServiceIds, onLink, onPropose }: Props): React.ReactElement {
+export default function CaseStudyIntakeQueue({ intake, growthServiceIds, onLink, onPropose, gapFor }: Props): React.ReactElement {
   if (!intake.length) {
     return (
       <div className="border border-2 border-success-subtle rounded-3 p-3 text-success-emphasis fw-semibold" style={{ borderStyle: 'dashed' }} data-testid="intake-empty">
@@ -40,7 +42,7 @@ export default function CaseStudyIntakeQueue({ intake, growthServiceIds, onLink,
       {intake.map((item) => (
         <div key={item.id} className="col-12 col-xl-6">
           {/* Keyed on the suggestion set so a refreshed card re-derives its pre-checked picks. */}
-          <IntakeCard key={item.suggestions.map((s) => s.linkId).join(',')} item={item} growthServiceIds={growthServiceIds} onLink={onLink} onPropose={onPropose} />
+          <IntakeCard key={item.suggestions.map((s) => s.linkId).join(',')} item={item} growthServiceIds={growthServiceIds} onLink={onLink} onPropose={onPropose} gap={gapFor?.(item)} />
         </div>
       ))}
     </div>
