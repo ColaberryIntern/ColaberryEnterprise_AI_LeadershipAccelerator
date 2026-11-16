@@ -6,10 +6,16 @@
  * credential we are not authorised to claim. The rest checks that the diagram
  * still says in text what it says in colour and motion.
  */
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
+import { createRoot, Root } from 'react-dom/client';
+import { act } from 'react-dom/test-utils';
 import HeroV8 from '../HeroV8';
+
+const CSS = fs.readFileSync(path.join(__dirname, '..', 'heroV8.css'), 'utf8');
 
 const html = (): string =>
   renderToStaticMarkup(
@@ -19,6 +25,127 @@ const html = (): string =>
   );
 
 const textOf = (h: string): string => h.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * THE ROLLOUT TOGGLE IS A REAL CONTROL.
+ *
+ * The model draws a department-by-department / company-wide switch, and a
+ * segmented control that looked switchable but changed nothing would be worse
+ * than none at all. These drive it the way a visitor does.
+ */
+describe('HeroV8 — the rollout toggle', () => {
+  /*
+      Driven on plain react-dom. `@testing-library/react` is not a dependency
+      of this app and adding one to write a test is not a decision to take on
+      the way past.
+  */
+  let host: HTMLDivElement;
+  let root: Root;
+
+  const mount = (): void => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/']}>
+          <HeroV8 />
+        </MemoryRouter>,
+      );
+    });
+  };
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  const modeButton = (label: RegExp): HTMLButtonElement => {
+    const found = [...host.querySelectorAll<HTMLButtonElement>('.cbv2-rollout-block__mode')]
+      .find((b) => label.test(b.textContent || ''));
+    if (!found) throw new Error('no mode button matching ' + String(label));
+    return found;
+  };
+
+  const states = (): string[] =>
+    [...host.querySelectorAll('.cbv2-dept__status')].map((el) => el.textContent as string);
+
+  const heading = (): string =>
+    (host.querySelector('.cbv2-rollout-block__bar h2') as HTMLElement).textContent as string;
+
+  it('starts on department by department', () => {
+    mount();
+    expect(modeButton(/department by department/i).getAttribute('aria-pressed')).toBe('true');
+    expect(modeButton(/company-wide/i).getAttribute('aria-pressed')).toBe('false');
+    expect(heading()).toBe('Department by department.');
+  });
+
+  it('changes what every department is shown at when the mode changes', () => {
+    mount();
+    const before = states();
+    expect(before).toHaveLength(6);
+    expect(before).toContain('Not started');
+
+    act(() => {
+      modeButton(/company-wide/i).click();
+    });
+
+    const after = states();
+    expect(after).not.toEqual(before);
+    // Company-wide means every department moves at once; none is left waiting.
+    expect(after).not.toContain('Not started');
+    expect(after).not.toContain('Next leader');
+    expect(heading()).toBe('Company-wide.');
+    expect(modeButton(/company-wide/i).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('names every state in words, so the grid never reads by colour alone', () => {
+    mount();
+    const legend = host.querySelector('.cbv2-rollout-block__legend') as HTMLElement;
+    ['Automating', 'Demo pilot', 'Next leader', 'Not started'].forEach((state) =>
+      expect(legend.textContent).toContain(state));
+  });
+});
+
+/**
+ * THE INK GUARD, written because of a defect that shipped to production.
+ *
+ * The hero above the rollout band is light, so `--h8-ink` is dark ink. Inside
+ * the band it has to mean the opposite. The first attempt set the colour on the
+ * heading alone; that rule ended up with TWO `color` declarations, and the
+ * later one resolved to the light hero's ink. The heading rendered at 1.17:1
+ * against near-black and the page looked finished.
+ *
+ * Both halves of that are asserted: the band flips the token, and no rule in
+ * this file declares `color` twice.
+ */
+describe('HeroV8 — the dark band cannot inherit the light hero’s ink', () => {
+  it('flips the ink token on the band rather than per element', () => {
+    /*
+        lastIndexOf, not indexOf: `.cbv2-h8__rollout` appears twice, first as
+        the tail of the grouped rule that sets the shared wrap width, then as
+        the band's own rule. indexOf reads the grouped one, and this
+        assertion passed against the wrong block on its first run.
+    */
+    const at = CSS.lastIndexOf('.cbv2-h8__rollout {');
+    expect(at).toBeGreaterThan(-1);
+    const block = CSS.slice(at, CSS.indexOf('}', at));
+    expect(block).toMatch(/--h8-ink:\s*#f4f6fa/);
+  });
+
+  it('declares color at most once in any rule', () => {
+    const offenders: string[] = [];
+    /* Each rule body, with its selector, so a failure names the rule. */
+    const re = /([^{}]+)\{([^{}]*)\}/g;
+    let m = re.exec(CSS);
+    while (m !== null) {
+      const declarations = (m[2].match(/(^|[;\s])color\s*:/g) || []).length;
+      if (declarations > 1) offenders.push(m[1].trim());
+      m = re.exec(CSS);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
 
 describe('HeroV8', () => {
   /*
@@ -73,16 +200,61 @@ describe('HeroV8', () => {
   });
 
   /**
-   * Both layers of the diagram must be present. If someone adds a stage to the
-   * drawing and not the CSS delays, or removes one, this is the guard that the
-   * machine still depicts the whole path the headline argues.
+   * THIS ASSERTION WAS INVERTED ON 2026-11-16, and the inversion is the point.
+   *
+   * It required the wired system diagram -- Ingest, Model, Deploy, Agents,
+   * Guardrails, five people, a handover stamp -- and it passed for months. Then
+   * Ali looked at the deployed page: "what file are you looking at because
+   * nothing I gave you looks like this."
+   *
+   * That diagram is in NEITHER file he has supplied. Not in
+   * `colaberry-enterprise-site.html`, not in `colaberry-enterprise-v4.html`. It
+   * came from a much older design, and a guard that REQUIRED it is a guard
+   * holding the site away from the brief. So it now forbids what it used to
+   * demand, and the case below asserts what the model actually specifies.
    */
-  it('draws the machine layer and the people layer', () => {
+  it('ships no system diagram, which is in neither supplied file', () => {
     const t = textOf(html());
-    ['Ingest', 'Model', 'Deploy', 'Agents', 'Guardrails', 'One platform'].forEach((n) =>
-      expect(t).toContain(n));
-    ['Data eng', 'Architect', 'Ops lead', 'Analyst', 'Exec'].forEach((n) =>
-      expect(t).toContain(n));
+    ['Ingest', 'Guardrails', 'Ops lead', 'HANDOVER COMPLETE', 'Data eng'].forEach((gone) =>
+      expect(t).not.toContain(gone));
+  });
+
+  /**
+   * THE FIDELITY GUARD THAT WAS MISSING.
+   *
+   * The checks that preceded this counted bands and compared heading order.
+   * Both heroes are one band with one h1, so everything passed while the most
+   * prominent element on the site matched nothing Ali had sent. Counting
+   * sections cannot see a picture. These assert the hero's PARTS.
+   */
+  it('builds the hero from the four parts the model gives it', () => {
+    const t = textOf(html());
+
+    // 1. the eyebrow and the headline
+    expect(t).toContain('Claude Code');
+    expect(t).toContain('Colaberry Enterprise AI');
+    expect(t).toContain('We build, guide and train your company into AI.');
+
+    // 2. the lede and both buttons
+    expect(t).toContain('prove it with a demo pilot');
+    expect(t).toContain('Start with a demo pilot');
+    expect(t).toContain('Build, guide or train?');
+
+    // 3. three cards, each with the sentence the old chips did not have
+    [
+      ['We build it.', 'designed with your business experts'],
+      ['We guide you.', 'in your own environment and current systems'],
+      ['We train you.', 'becomes Forward Deployed Engineers'],
+    ].forEach(([title, line]) => {
+      expect(t).toContain(title);
+      expect(t).toContain(line);
+    });
+
+    // 4. the rollout block, with its legend and its toggle
+    expect(t).toContain('Your company, moving to AI');
+    ['Automating', 'Demo pilot', 'Next leader', 'Not started'].forEach((state) =>
+      expect(t).toContain(state));
+    expect(t).toContain('Company-wide');
   });
 
   it('hides the diagram from assistive tech, since the copy already says it', () => {

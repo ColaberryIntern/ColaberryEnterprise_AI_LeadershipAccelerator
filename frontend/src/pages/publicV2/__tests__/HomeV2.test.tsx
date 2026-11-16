@@ -90,7 +90,15 @@ describe('HomeV2 — structure', () => {
     const line = h1.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
     expect(line).toContain('We build, guide and train');
     expect(line).toContain('your company into AI.');
-    expect(textOf(h)).toContain('Then the next leader.');
+    /*
+        "Then the next leader." was the hero's deck. It is in neither supplied
+        file, and it went when the hero was rebuilt to the model. The point it
+        made -- that a rollout moves one leader at a time -- is still on the
+        page twice over: in the lede's "department by department, or
+        company-wide", and as a mode of the rollout toggle below it. The
+        assertion follows the point rather than the removed sentence.
+    */
+    expect(textOf(h)).toContain('department by department, or company-wide');
   });
 
   it('has exactly one h1', () => {

@@ -120,7 +120,11 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // copy that held them, and the new `platformV2Surfaces.tsx` was written to
   // house style. Its entry is DELETED rather than zeroed, which is what the
   // drift check asks for.
-  [ESCAPED_DASH_RULE.id]: 69,
+  //
+  // 2026-11-16: 69 -> 68. The hero was rebuilt to the supplied file and its one
+  // escaped dash went with the sentence that held it. Entry DELETED, not
+  // zeroed: a clean file should not stay on the books owing something.
+  [ESCAPED_DASH_RULE.id]: 68,
   [EMOJI_RULE.id]: 659,
 };
 
