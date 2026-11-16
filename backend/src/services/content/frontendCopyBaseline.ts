@@ -133,7 +133,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/portal/projects/WorkspaceRepoPanel.tsx': 1,
   'frontend/src/pages/portal/projects/demoPrepGuide.ts': 1,
   'frontend/src/pages/portal/runtime/runtimeKit.tsx': 1,
-  'frontend/src/pages/publicV2/HomeV2.tsx': 4,
+  'frontend/src/pages/publicV2/HomeV2.tsx': 2,
   'frontend/src/pages/publicV2/PricingV2.tsx': 1, // 2026-11-14: 5 -> 1, page rebuilt around the three services
   'frontend/src/pages/publicV2/SignupV2.tsx': 3,
   'frontend/src/pages/publicV2/TryV2.tsx': 9,
@@ -170,7 +170,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 263; // 2026-11-15: -2 PlatformV2, +2 v2ServicePages
+export const FRONTEND_COPY_BASELINE_TOTAL = 261; // 2026-11-15: -2 HomeV2 (the free-workspace band came off)
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the
