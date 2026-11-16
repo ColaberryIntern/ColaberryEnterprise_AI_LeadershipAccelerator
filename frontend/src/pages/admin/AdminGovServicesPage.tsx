@@ -117,10 +117,11 @@ export default function AdminGovServicesPage(): React.ReactElement {
     const a = gap.data?.byCaseStudy[item.id];
     return {
       analysis: a, available: !!gap.data, busy: gap.busy.has(item.id), pinnedServiceId: gap.pinned[item.id],
-      serviceCurrent: (id) => { const o = offerings.find((x) => x.id === id); return o ? { description: o.description ?? null, keywords: o.keywords ?? [] } : null; },
+      serviceCurrent: (id) => { const o = offerings.find((x) => x.id === id); return o ? { description: o.description ?? null, keywords: o.keywords ?? [], naicsCodes: o.naicsCodes ?? [] } : null; },
       onAnalyze: (force) => void gap.analyze(item.id, force),
       onAdoptExisting: () => { if (a) void gap.adoptExisting(item, a); },
       onApplyExpansion: (cur) => { if (a) void gap.applyExpansion(a, cur); },
+      onAddNaics: (cur) => { if (a) void gap.addNaics(a, cur); },
       onDismiss: (note) => { if (a) void gap.review(a, 'dismissed', note); },
     };
   }, [gap, offerings]);

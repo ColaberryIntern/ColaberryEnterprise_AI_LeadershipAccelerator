@@ -5,7 +5,7 @@ import {
   type GapAnalysis, type GapCluster, type GapOpportunities, type GapRun,
 } from '../../../../services/serviceGapApi';
 import type { IntakeSummaryItem } from '../../../../services/ourServicesApi';
-import { mergeExpansion } from './serviceGapModel';
+import { mergeExpansion, mergeNaics, type ServiceCurrent } from './serviceGapModel';
 
 /**
  * useServiceGap - the AI service recommendations for the Intake queue, and every action a person can take on one.
@@ -37,7 +37,9 @@ export interface ServiceGapState {
   review: (a: GapAnalysis, state: 'accepted' | 'dismissed', note?: string) => Promise<void>;
   dismissCluster: (c: GapCluster) => Promise<void>;
   adoptExisting: (item: IntakeSummaryItem, a: GapAnalysis) => Promise<void>;
-  applyExpansion: (a: GapAnalysis, current: { description: string | null; keywords: string[] }) => Promise<void>;
+  applyExpansion: (a: GapAnalysis, current: ServiceCurrent) => Promise<void>;
+  /** Adds the recommendation's missing work-performed NAICS codes to the matched service (after a confirm click). */
+  addNaics: (a: GapAnalysis, current: ServiceCurrent) => Promise<void>;
   dismissNotice: () => void;
 }
 
@@ -110,15 +112,26 @@ export function useServiceGap(summaryVersion: string | null, reloadSummary: () =
     setNotice(`"${target.serviceName}" is ticked on "${item.title}". Click Link to confirm it.`);
   }), [withBusy, reloadSummary]);
 
-  const applyExpansion = useCallback((a: GapAnalysis, current: { description: string | null; keywords: string[] }) => withBusy(a.caseStudyId, async () => {
+  const applyExpansion = useCallback((a: GapAnalysis, current: ServiceCurrent) => withBusy(a.caseStudyId, async () => {
     const ex = a.recommendation?.expansion;
     if (!ex) return;
     const next = mergeExpansion(current, ex);
-    if (next.changed) await updateServiceOffering(ex.serviceId, { description: next.description, keywords: next.keywords });
+    if (next.changed) {
+      await updateServiceOffering(ex.serviceId, { description: next.description, keywords: next.keywords, ...(next.naicsAdded.length ? { naicsCodes: next.naicsCodes } : {}) });
+    }
     await reviewGapAnalysis(a.id, 'accepted', `Expansion applied to ${ex.serviceName}`);
     setNotice(`"${ex.serviceName}" updated. Link the case study to it when ready.`);
     await reloadSummary();
   }), [withBusy, reloadSummary]);
 
-  return { data, error, notice, busy, run, pinned, analyze, startBatch, review, dismissCluster, adoptExisting, applyExpansion, dismissNotice: () => setNotice(null) };
+  const addNaics = useCallback((a: GapAnalysis, current: ServiceCurrent) => withBusy(a.caseStudyId, async () => {
+    const target = a.recommendation?.target;
+    if (!target) return;
+    const next = mergeNaics(current.naicsCodes, (a.recommendation?.naics ?? []).filter((n) => !n.onTarget).map((n) => n.code));
+    if (next.added.length) await updateServiceOffering(target.serviceId, { naicsCodes: next.codes });
+    setNotice(next.added.length ? `Added NAICS ${next.added.join(', ')} to "${target.serviceName}".` : `"${target.serviceName}" already has these NAICS codes.`);
+    await reloadSummary();
+  }), [withBusy, reloadSummary]);
+
+  return { data, error, notice, busy, run, pinned, analyze, startBatch, review, dismissCluster, adoptExisting, applyExpansion, addNaics, dismissNotice: () => setNotice(null) };
 }
