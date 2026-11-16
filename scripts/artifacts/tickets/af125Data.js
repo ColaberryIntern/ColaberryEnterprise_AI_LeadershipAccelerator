@@ -39,7 +39,9 @@ const DEFECT = {
     + 'source was GET /api/admin/agent-domains/<domain>, and the builder story told them the '
     + 'snapshot carries the data for all six panels. Both were promises the platform published '
     + 'and did not keep.',
-  hole: 'release_behaviour[] appeared in NO HTTP response anywhere in the platform. It is read in '
+  // spelling-exempt: `release_behaviour` is the field's real name in the capability records.
+  // Respelling it here would name a field that does not exist.
+  hole: 'release_behaviour[] appeared in NO HTTP response anywhere in the platform. It is read in ' // spelling-exempt
     + 'nine service modules and was exposed by none, so panel 4 had no source at all — '
     + 'authenticated or otherwise.',
 };
@@ -81,7 +83,7 @@ const LADDER = [
 const VERIFIED = [
   ['Domains projected', '10', true],
   ['Capabilities projected', '448', true],
-  ['Per-rung release_behaviour entries', '974', true],
+  ['Per-rung release_behaviour entries', '974', true], // spelling-exempt: real field name
   ['Keys outside the allow-list', 'NONE', true],
   ['Mihret’s domain (product_experience)', '25 of 25 rows, file order preserved', true],
   ['Snapshot capabilities', '25 rows', true],
@@ -137,7 +139,7 @@ const BREAKS = [
   ['A gap becoming undefined instead of null', '3 failures'],
   ['Dropped a field but kept it in the allow-list', '5 failures'],
   ['Capped the snapshot at 10 records', '1 failure, exactly the test written for it'],
-  ['Passed release_behaviour entries through unprojected', '5 failures'],
+  ['Passed release_behaviour entries through unprojected', '5 failures'], // spelling-exempt: real field name
 ];
 
 /** Stated plainly, because a closed ticket with an overstated artifact is the worse outcome. */
