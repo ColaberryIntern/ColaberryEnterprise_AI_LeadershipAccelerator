@@ -539,7 +539,7 @@
     "frontend/src/pages/portal/projects/proposalStudio/Blueprint.tsx": 3,
     "frontend/src/pages/portal/projects/proposalStudio/BuildEvidence.tsx": 3,
     "frontend/src/pages/portal/projects/proposalStudio/DocumentSet.tsx": 5,
-    "frontend/src/pages/portal/projects/proposalStudio/DraftVersions.tsx": 6,
+    "frontend/src/pages/portal/projects/proposalStudio/DraftVersions.tsx": 5,
     "frontend/src/pages/portal/projects/proposalStudio/NeedsInbox.tsx": 3,
     "frontend/src/pages/portal/projects/proposalStudio/PackageView.tsx": 5,
     "frontend/src/pages/portal/projects/proposalStudio/ReviewGatesView.tsx": 3,
