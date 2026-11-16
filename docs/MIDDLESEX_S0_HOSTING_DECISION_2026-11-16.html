@@ -1,0 +1,181 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>S0 hosting decision</title><style>
+  :root {
+    --cherry: #FB2832; --cherry-deep: #C20E1E; --cherry-bg: #FFF0F1;
+    --leaf: #77BB4A; --ink: #2d3748; --muted: #718096; --border: #e2e8f0; --bg-alt: #f7fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); background: #fff;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 10.5pt; line-height: 1.5;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1 { font-size: 19pt; line-height: 1.15; margin: 0 0 4px; color: var(--cherry); font-weight: 700; }
+  h2 {
+    font-size: 12.5pt; margin: 20px 0 8px; color: var(--cherry-deep); font-weight: 700;
+    border-bottom: 2px solid var(--cherry-bg); padding-bottom: 4px;
+  }
+  h3 { font-size: 10.5pt; margin: 14px 0 5px; font-weight: 700; color: var(--ink); }
+  p { margin: 0 0 8px; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: var(--bg-alt);
+         padding: 1px 4px; border-radius: 3px; }
+  .meta { font-size: 8.5pt; color: var(--muted); }
+  .rule { height: 3px; background: var(--cherry); margin: 10px 0 14px; border-radius: 2px; }
+
+  /* The takeaway box. Ali reads this and nothing else if the day is bad. */
+  .takeaway {
+    background: var(--cherry-bg); border-left: 5px solid var(--cherry);
+    padding: 12px 14px; margin: 0 0 16px; border-radius: 0 5px 5px 0;
+  }
+  .takeaway .label {
+    font-size: 8pt; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--cherry-deep); margin-bottom: 4px;
+  }
+  .takeaway .headline { font-size: 12pt; font-weight: 700; line-height: 1.35; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; }
+  th {
+    text-align: left; background: var(--bg-alt); color: var(--ink); font-weight: 700;
+    padding: 6px 8px; border-bottom: 2px solid var(--border); font-size: 8.5pt;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #fcfcfd; }
+
+  .chip {
+    display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 7.8pt;
+    font-weight: 700; color: #fff; white-space: nowrap;
+  }
+  .cards { display: flex; gap: 10px; margin: 10px 0 14px; }
+  .card {
+    flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    background: #fff;
+  }
+  .card .n { font-size: 20pt; font-weight: 700; line-height: 1; color: var(--cherry); }
+  .card .k { font-size: 7.8pt; color: var(--muted); text-transform: uppercase;
+             letter-spacing: .05em; margin-top: 3px; }
+  .note {
+    border: 1px solid var(--border); border-left: 4px solid var(--muted);
+    background: var(--bg-alt); padding: 9px 11px; margin: 10px 0; font-size: 9pt;
+    border-radius: 0 5px 5px 0;
+  }
+  .note.warn { border-left-color: #b3261e; background: #fdf3f2; }
+  .note.good { border-left-color: #2f7d32; background: #f3f9f3; }
+  figure { margin: 10px 0 14px; page-break-inside: avoid; }
+  figcaption { font-size: 8pt; color: var(--muted); margin-top: 5px; }
+  .mermaid { text-align: center; }
+  .pagebreak { page-break-before: always; }
+  
+  .two { display:flex; gap:14px; } .two > div { flex:1; }
+  td.r, th.r { text-align:right; white-space:nowrap; }
+  .tl td:first-child { white-space:nowrap; font-weight:700; width:92px; }
+  .ask { border:2px solid var(--cherry); border-radius:6px; padding:10px 12px; margin:12px 0; }
+  .ask b { color: var(--cherry-deep); }
+  ul { margin:4px 0 8px; padding-left:18px; } li { margin:2px 0; }
+</style></head><body>
+<h1>S0: where the Middlesex pilot is hosted</h1>
+<div class="meta">Decision brief for Ali and Ram &middot; 16 Nov 2026 &middot; Basecamp S0, due Wed 18 Nov &middot;
+Middlesex Glass AIA billing, project 49361096</div>
+<div class="rule"></div>
+
+<div class="takeaway">
+  <div class="label">Recommendation</div>
+  <div class="headline">Host the pilot on Render: one vendor for the app and a managed Postgres, Pro
+  workspace, US East. About $52.50 a month ($630 a year), billed to
+  Colaberry. Build it in a new Colaberry-owned repository, not in the Accelerator repo. Decide by
+  Wednesday 18 November. Every day after that comes out of the November dry run (S7).</div>
+</div>
+
+<h2>Why this has to be decided now, and why not the box we already have</h2>
+<p>The December pilot has two project managers and Jamie writing to the same requisition from three
+machines. Today's prototype is one HTML file that keeps its state in the browser, so it cannot run
+the pilot no matter how good it looks. A shared database and a hosted app are December
+dependencies, not January ones, and nothing from S1 to S7 can start until S0 is settled.</p>
+<p><b>Not the Hetzner server.</b> That box runs the Accelerator, every agent, and a Postgres cluster
+holding everything else we have. A client's contract values would sit beside all of it. Two deploys
+there have already raced into a Cloudflare 521, and a client security review would have to answer
+for a shared host. A managed platform gives the pilot its own database, its own backups and its own
+deploys.</p>
+
+<h2>The options</h2>
+<table>
+  <tr><th>Option</th><th>For</th><th>Against</th><th></th></tr>
+  <tr><td><b>Render</b><br>app + Postgres</td>
+    <td>One vendor, one bill, one login. Deploys from a git push. Postgres has point-in-time restore
+    on every paid plan. SOC 2 Type II on all tiers.</td>
+    <td>The restore window is 7 days on Pro, not 30. That is covered by a nightly dump
+    kept outside Render (part of S1).</td>
+    <td><span class="chip" style="background:#2f7d32">Recommended</span></td></tr>
+  <tr><td><b>Fly.io + Neon</b></td>
+    <td>Neon's database branching is good for testing against copies of real data.</td>
+    <td>Two vendors, two bills, two failure modes, for a pilot with one builder. Neon's own pricing
+    table marks SOC 2 as unavailable below its Scale plan.</td>
+    <td><span class="chip" style="background:#b26a00">No</span></td></tr>
+  <tr><td><b>Railway</b></td>
+    <td>Similar developer experience to Render, at a similar price.</td>
+    <td>Backups and restore are on Pro only, and public sources contradict each other on its SOC 2
+    status. Not worth resolving that inside a three-week build.</td>
+    <td><span class="chip" style="background:#b26a00">No</span></td></tr>
+  <tr><td><b>AWS</b></td>
+    <td>The answer to a formal client security review.</td>
+    <td>Days of setup that the 8 December date does not have. Revisit when a client first asks for
+    a review.</td>
+    <td><span class="chip" style="background:#718096">Later</span></td></tr>
+</table>
+
+<div class="two">
+<div>
+<h2>What Ram is approving</h2>
+<table>
+  <tr><th>Line</th><th class="r">Per month</th></tr>
+  <tr><td>Render Pro workspace (7-day restore)</td><td class="r">$25</td></tr>
+  <tr><td>Web service, 0.5 CPU / 512 MB</td><td class="r">$7</td></tr>
+  <tr><td>Postgres, 0.5 CPU / 1 GB</td><td class="r">$19</td></tr>
+  <tr><td>Storage, 5 GB at $0.30</td><td class="r">$1.50</td></tr>
+  <tr><td><b>Total</b></td><td class="r"><b>$52.50</b></td></tr>
+</table>
+<p class="meta">Prices read from render.com/pricing on 16 Nov 2026. The free Hobby workspace
+would make this $27.50 a month, but its restore window is 3 days.
+A billing mistake usually surfaces when a general contractor rejects a line, which is often more
+than three days later. The account is Colaberry's, on a company card, and not tied to any one
+person.</p>
+</div>
+<div>
+<h2>A new repository, and why</h2>
+<p>The schema has tenants in it from the first migration, so this is a product that Middlesex
+uses, not a Middlesex project. Keeping it out of the Accelerator repo means:</p>
+<ul>
+  <li>its deploys don't queue behind the dozens of other workstreams merging into that repo;</li>
+  <li>a client security review covers one small codebase, not ours;</li>
+  <li>Render deploys it on push, with no Hetzner deploy script involved.</li>
+</ul>
+<p>Colaberry owns it. <b>This is the reframe still owed to Jamie</b> (she was told on 26 Oct that
+she would own a repo). She should hear it from Ali, separately from any pricing talk, before she
+finds out any other way.</p>
+</div>
+</div>
+
+<h2>What a yes on Wednesday unlocks, against the real calendar</h2>
+<table class="tl">
+  <tr><td>Wed 18 Nov</td><td><b>S0 decided.</b> Ali and Ram.</td></tr>
+  <tr><td>Thu 19 - Fri 20</td><td><b>S1</b>: account, repo, deploy on push, and a restore actually tested
+    (one done-condition, not a checkbox). <b>S2</b>: schema and migrations, in parallel.</td></tr>
+  <tr><td>Mon 23 - Wed 25</td><td><b>S3/S4</b>: pilot jobs loaded and the PM entry screen.
+    <b>Thanksgiving is Thursday 26 Nov</b>, so this is a three-day week, and the board's due date of
+    Sat 28 Nov really means Wednesday. S3 also needs Jamie's job list, asked for by the 24th.</td></tr>
+  <tr><td>Mon 30 - Thu 3 Dec</td><td><b>S5</b>: finalize and export (G702/G703). <b>S6</b>: a PM sees
+    only his own jobs.</td></tr>
+  <tr><td>Fri 4 Dec</td><td><b>S7</b>: November's requisitions through the platform, tied line by line
+    to what was actually sent. This is the last gate.</td></tr>
+  <tr><td>Tue 8 Dec</td><td>The PMs' December run starts. (8 December is a Tuesday. An earlier note
+    called it Monday; the date is the one that was sent to Jamie.)</td></tr>
+</table>
+
+<div class="ask">
+  <b>If S0 slips past Wednesday</b>, nothing gets compressed into S7. The dry run against November is
+  what protects the client relationship. The fallback is the one already offered to Jamie on 16 Nov:
+  build against October's numbers, so the 8 December start holds, and tell her plainly what the
+  pilot will and won't cover.
+</div>
+</body></html>
