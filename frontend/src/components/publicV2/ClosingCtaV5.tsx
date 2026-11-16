@@ -13,6 +13,9 @@ import Icon from './Icon';
  * LABEL: the model's second button reads "Start training free". The site does not advertise
  * the word "free" (standing rule; the copy ratchet in frontendCopyBaseline.ts counts it), so
  * the button reads "Start training" and goes where the model sends it.
+ *
+ * DASHES: the model's headline and sign-off use an em dash. House style (frontendTypographyLint)
+ * puts a comma there instead, escaped or not, so both read with a comma.
  */
 export default function ClosingCtaV5(): React.ReactElement {
   return (
@@ -20,7 +23,7 @@ export default function ClosingCtaV5(): React.ReactElement {
       <div className="cbv2-wrap">
         <p className="cbv2-eyebrow cbv2-cta5__k">Start here</p>
         <h2 id="cbv2-cta5-title" className="cbv2-cta5__h">
-          See AI run on one of your processes &mdash;{' '}
+          See AI run on one of your processes,{' '}
           <span className="cbv2-it">before you commit to anything.</span>
         </h2>
         <p className="cbv2-cta5__p">
@@ -36,7 +39,7 @@ export default function ClosingCtaV5(): React.ReactElement {
             Start training
           </Link>
         </div>
-        <p className="cbv2-cta5__fine">Build &middot; Guide &middot; Train &mdash; with Claude Code</p>
+        <p className="cbv2-cta5__fine">Build &middot; Guide &middot; Train, with Claude Code</p>
       </div>
     </section>
   );
