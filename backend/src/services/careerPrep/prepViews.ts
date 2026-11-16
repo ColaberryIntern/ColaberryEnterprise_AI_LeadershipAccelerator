@@ -14,7 +14,8 @@ export interface InterviewView {
 export interface SkillView { key: string; label: string; score?: number; change30?: number; count: number; sources: string[] }
 export interface Dashboard {
   anchorId?: string;
-  readiness?: { value: number; target: number; changeSinceFirst?: number; trend: Array<{ week: string; value: number }> };
+  /** target is the anchor interview's "ready at"; absent with no anchor (never a made-up default). */
+  readiness?: { value: number; target?: number; changeSinceFirst?: number; trend: Array<{ week: string; value: number }> };
   interviews: InterviewView[];
   skills: SkillView[];
   sources: { video: number; phone_mock: number; real_interview: number; training: number; project: number };
@@ -76,7 +77,8 @@ export function buildDashboard(data: PrepData, now: Date, anchorId?: string): Da
   return {
     ...(anchor ? { anchorId: anchor.id } : {}),
     ...(value !== null ? { readiness: {
-      value, target: anchor ? targetFor(anchor.type, anchor.targetReadiness) : 70,
+      value,
+      ...(anchor ? { target: targetFor(anchor.type, anchor.targetReadiness) } : {}),
       ...(trend.length >= 2 ? { changeSinceFirst: Math.round((value - trend[0].value) * 10) / 10 } : {}),
       trend,
     } } : {}),
@@ -108,7 +110,8 @@ export function buildSummary(data: PrepData, now: Date): Summary {
     ...(data.firstName ? { firstName: data.firstName } : {}),
     ...(next ? { nextInterview: next } : {}),
     stops: {
-      ...(d.readiness ? { readiness: d.readiness.value, readyAt: d.readiness.target } : {}),
+      ...(d.readiness ? { readiness: d.readiness.value } : {}),
+      ...(d.readiness?.target !== undefined ? { readyAt: d.readiness.target } : {}),
       ...(d.streak > 0 ? { streak: d.streak } : {}),
       ...(d.thisWeek > 0 ? { thisWeek: d.thisWeek } : {}),
     },

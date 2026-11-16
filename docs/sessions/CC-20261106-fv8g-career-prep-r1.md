@@ -59,3 +59,18 @@ tests/systemV2/career-prep/.
   - Verification: 94 Career Prep backend tests pass (views 11, rollup 4, read routes 12, staff route 7 among them);
     mgmtExtraSections parity green; lint-route-auth OK (168 files); backend and frontend tsc clean.
   - Notes: the rollup cron is started from server.ts beside the schema (schedulerService.ts is ~3,900 lines).
+
+- [x] CP1.4 + CP1.5 fixes (attempt 2, after the verifier failed both at 10/12 on "no invented data")
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: video coaching maps ONLY the measured delivery scores (pace, fillers); content levels (strong / ok /
+    work on) are no longer turned into numbers, and "specific" no longer feeds "ending on a number" (it measures
+    something else). Case-study refs carry the student (one case study can credit two students). Dashboard and floor
+    show no "Ready at" without an interview (the hard-coded 70 is gone). Streak window 400 days. The nightly rollup
+    writes only for enrollments Career Prep is on for. First name now comes from enrollments.full_name (the earlier
+    leads join was wrong and its catch-all hid it; read-only prod check returns "Ali").
+  - Verification: 102 Career Prep backend tests pass; backend tsc clean.
+  - Notes: OPEN for Ali at the Release 1 review (no number invented meanwhile): should the intro-video content review
+    (strong / good / work on) ever count toward a skill score, and at what values? Until he says, it does not.
+    Also one adapter file (observationAdapters.ts) instead of the four the plan named; each mapper is about 15 lines.
+    The CP1.4 entry above originally listed the content mapping; that mapping was removed in this attempt.

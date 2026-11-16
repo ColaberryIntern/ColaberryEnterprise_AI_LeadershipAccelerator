@@ -55,5 +55,10 @@ export async function careerPrepEnabled(enrollmentId: string | null | undefined,
   return (await allowList(read, now)).has(enrollmentId);
 }
 
+/** Every enrollment Career Prep is on for (the nightly rollup writes only for these). */
+export async function careerPrepEnrollmentIds(read: Reader = getSetting, now = Date.now()): Promise<string[]> {
+  return [...(await allowList(read, now))];
+}
+
 /** Tests only: forget the cached allow-list. */
 export function resetCareerPrepFlagCache(): void { cache = null; }

@@ -2,6 +2,7 @@ const mockQuery = jest.fn();
 jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: unknown[]) => mockQuery(...a) } }));
 const mockLoad = jest.fn();
 jest.mock('../prepData', () => ({ loadPrepData: (...a: unknown[]) => mockLoad(...a) }));
+jest.mock('../careerPrepFlag', () => ({ careerPrepEnrollmentIds: async () => [] }));
 jest.mock('node-cron', () => ({ __esModule: true, default: { schedule: jest.fn() } }));
 
 import cron from 'node-cron';
@@ -34,7 +35,13 @@ describe('rollupAll', () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     mockQuery.mockResolvedValueOnce([[{ enrollment_id: 'a' }, { enrollment_id: 'b' }], 2]);
     mockLoad.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(data());
-    expect(await rollupAll(NOW)).toEqual({ students: 2, failed: 1 });
+    expect(await rollupAll(NOW, async () => ['a', 'b'])).toEqual({ students: 2, failed: 1 });
+    expect(mockQuery.mock.calls[0][1].replacements.ids).toEqual(['a', 'b']);
+  });
+
+  it('writes nothing for anyone Career Prep is not on for (empty allow-list = no query at all)', async () => {
+    expect(await rollupAll(NOW)).toEqual({ students: 0, failed: 0 });
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });
 

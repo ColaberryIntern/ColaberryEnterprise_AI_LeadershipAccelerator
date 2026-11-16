@@ -3,17 +3,22 @@
  * prep_observations rows. One mapper per source; each returns [] for a record it cannot read
  * (and says why), never a guessed number.
  *
- *   video      the intro-video coaching record (Phase 8, version 2):
- *              delivery scores pace -> pace_clarity, fillers -> few_fillers (already 0-100,
- *              each scored against a published target); content points proof -> proof_of_work,
- *              specific -> ending_with_number, as strong 85 / good 65 / work on 40.
+ *   video      the intro-video coaching record (Phase 8, version 2): ONLY its delivery scores,
+ *              pace -> pace_clarity and fillers -> few_fillers. Those are already 0-100 and each is
+ *              scored against a published target (Microsoft Speaker Coach, Yoodli). The content
+ *              review (strong / good / work on) is a judgement, not a measurement, so it is NOT
+ *              turned into a number here (same rule as Phase 8: score only where a target is
+ *              published). Open for Ali: whether content levels should ever count, and at what values.
+ *              observed_at = the row's updated_at at first write; ON CONFLICT keeps that first time.
  *   training   a quiz attempt (runtime_assessment_attempts, score 0..1) on a card mapped to a
  *              skill in prep_skill_sources; a card with no mapping writes nothing.
  *   training   a scored weekly interview (interview_sessions.total_score 0-100, topic coverage
  *              from interviewService.scoreAnswer) -> role_knowledge. It is a written exercise,
  *              not a phone mock, so its source is training (weight 0.8), not phone_mock.
  *   project    a case study about the student's own build, published on Hire through the
- *              approval gate (hireTalentIndex) -> proof_of_work 100: verified proof of work.
+ *              approval gate (hireTalentIndex) -> proof_of_work 100: verified proof of work. The
+ *              source_ref carries the student, because one case study can link to two students
+ *              (a shared repository) and each must get their own credit.
  *
  * Never: eye contact, expression, accent (no face analysis; Ali's 2026-11-14 ruling).
  */
@@ -30,9 +35,7 @@ export interface ObservationRow {
 export interface Skipped { sourceRef: string; reason: string }
 export type Mapped = { rows: ObservationRow[]; skipped: Skipped | null };
 
-export const LEVEL_VALUE = { strong: 85, ok: 65, work_on: 40 } as const;
 const DELIVERY_SKILL: Record<string, string> = { pace: 'pace_clarity', fillers: 'few_fillers' };
-const CONTENT_SKILL: Record<string, string> = { proof: 'proof_of_work', specific: 'ending_with_number' };
 
 const isScore = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100;
 const validDate = (d: unknown): d is Date => d instanceof Date && !Number.isNaN(d.getTime());
@@ -42,19 +45,13 @@ export interface VideoCoachingInput { enrollmentId: string; assetId: string | nu
 
 export function fromVideoCoaching(v: VideoCoachingInput): Mapped {
   const ref = `hire-intro:${v.assetId ?? 'none'}`;
-  const c = v.coaching as { version?: unknown; scores?: unknown; content?: { points?: unknown } | null } | null;
+  const c = v.coaching as { version?: unknown; scores?: unknown } | null;
   if (!v.assetId || !c || c.version !== 2 || !Array.isArray(c.scores) || !validDate(v.updatedAt)) return skip(ref, 'not a version 2 coaching record');
   const rows: ObservationRow[] = [];
   const push = (skill: string, value: number) => rows.push({ enrollmentId: v.enrollmentId, skill, value, source: 'video', sourceRef: ref, observedAt: v.updatedAt });
   for (const s of c.scores as Array<{ key?: unknown; score?: unknown }>) {
     const skill = DELIVERY_SKILL[String(s?.key)];
     if (skill && isScore(s.score)) push(skill, s.score);
-  }
-  const points = Array.isArray(c.content?.points) ? (c.content?.points as Array<{ key?: unknown; level?: unknown }>) : [];
-  for (const p of points) {
-    const skill = CONTENT_SKILL[String(p?.key)];
-    const value = LEVEL_VALUE[p?.level as keyof typeof LEVEL_VALUE];
-    if (skill && value !== undefined) push(skill, value);
   }
   return { rows, skipped: null };
 }
@@ -81,7 +78,7 @@ export function fromWeeklyInterview(w: WeeklyInterviewInput): Mapped {
 export interface PublishedCaseInput { enrollmentId: string; slug: string; publishedAt: string }
 
 export function fromPublishedCaseStudy(p: PublishedCaseInput): Mapped {
-  const ref = `case-study:${p.slug}`;
+  const ref = `case-study:${p.enrollmentId}:${p.slug}`;
   const at = new Date(p.publishedAt);
   if (!p.slug || !validDate(at)) return skip(ref, 'no published date');
   return { rows: [{ enrollmentId: p.enrollmentId, skill: 'proof_of_work', value: 100, source: 'project', sourceRef: ref, observedAt: at }], skipped: null };

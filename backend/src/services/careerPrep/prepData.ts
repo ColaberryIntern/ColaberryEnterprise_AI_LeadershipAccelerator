@@ -30,11 +30,11 @@ const rows = async (sql: string, replacements: Record<string, unknown>): Promise
 export async function loadPrepData(enrollmentId: string, now: Date): Promise<PrepData> {
   const r = { e: enrollmentId, now };
   const [person, obs, sessions, interviews, trend] = await Promise.all([
-    rows(`SELECT l.first_name FROM enrollments e LEFT JOIN leads l ON l.id = e.lead_id WHERE e.id = :e`, r).catch(() => []),
+    rows(`SELECT NULLIF(split_part(trim(full_name), ' ', 1), '') AS first_name FROM enrollments WHERE id = :e`, r),
     rows(`SELECT skill_key, value, source, source_ref, observed_at, weight FROM prep_observations
            WHERE enrollment_id = :e AND observed_at > :now::timestamptz - INTERVAL '90 days'`, r),
     rows(`SELECT started_at, seconds_active, status FROM prep_sessions
-           WHERE enrollment_id = :e AND started_at > :now::timestamptz - INTERVAL '70 days'`, r),
+           WHERE enrollment_id = :e AND started_at > :now::timestamptz - INTERVAL '400 days'`, r),
     rows(`SELECT id, source, company, role, type, starts_at, target_readiness, practice_until FROM career_interviews
            WHERE enrollment_id = :e AND (starts_at IS NULL OR starts_at > :now::timestamptz - INTERVAL '1 day')
            ORDER BY starts_at NULLS LAST, created_at`, r),

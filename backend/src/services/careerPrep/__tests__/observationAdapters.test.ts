@@ -14,17 +14,16 @@ const coaching = {
 };
 
 describe('fromVideoCoaching', () => {
-  it('maps pace and fillers scores and the proof/specific content points, nothing else', () => {
+  it('maps only the measured delivery scores (pace, fillers); content judgements never become numbers', () => {
     const { rows, skipped } = fromVideoCoaching({ enrollmentId: E, assetId: 'a1', updatedAt: AT, coaching });
     expect(skipped).toBeNull();
-    expect(rows.map((r) => [r.skill, r.value])).toEqual([
-      ['pace_clarity', 42], ['few_fillers', 88], ['proof_of_work', 85], ['ending_with_number', 40],
-    ]);
+    expect(rows.map((r) => [r.skill, r.value])).toEqual([['pace_clarity', 42], ['few_fillers', 88]]);
+    expect(rows.some((r) => r.skill === 'ending_with_number' || r.skill === 'proof_of_work')).toBe(false);
     expect(new Set(rows.map((r) => r.sourceRef))).toEqual(new Set(['hire-intro:a1']));
     expect(rows.every((r) => r.source === 'video' && r.observedAt === AT && r.enrollmentId === E)).toBe(true);
   });
 
-  it('writes delivery skills only when there is no content review', () => {
+  it('writes the same delivery skills when there is no content review', () => {
     const { rows } = fromVideoCoaching({ enrollmentId: E, assetId: 'a1', updatedAt: AT, coaching: { ...coaching, content: null } });
     expect(rows.map((r) => r.skill)).toEqual(['pace_clarity', 'few_fillers']);
   });
@@ -71,7 +70,12 @@ describe('fromWeeklyInterview', () => {
 describe('fromPublishedCaseStudy', () => {
   it('records verified proof of work at the published date', () => {
     expect(fromPublishedCaseStudy({ enrollmentId: E, slug: 'kes-rag', publishedAt: '2026-11-01T00:00:00Z' }).rows)
-      .toEqual([{ enrollmentId: E, skill: 'proof_of_work', value: 100, source: 'project', sourceRef: 'case-study:kes-rag', observedAt: new Date('2026-11-01T00:00:00Z') }]);
+      .toEqual([{ enrollmentId: E, skill: 'proof_of_work', value: 100, source: 'project', sourceRef: `case-study:${E}:kes-rag`, observedAt: new Date('2026-11-01T00:00:00Z') }]);
+  });
+  it('gives two students who share one case study their own credit (distinct source refs)', () => {
+    const a = fromPublishedCaseStudy({ enrollmentId: 'e-a', slug: 'shared', publishedAt: '2026-11-01T00:00:00Z' }).rows[0].sourceRef;
+    const b = fromPublishedCaseStudy({ enrollmentId: 'e-b', slug: 'shared', publishedAt: '2026-11-01T00:00:00Z' }).rows[0].sourceRef;
+    expect(a).not.toBe(b);
   });
   it('skips a case study with no usable date', () => {
     expect(fromPublishedCaseStudy({ enrollmentId: E, slug: 'x', publishedAt: 'not a date' }).skipped).not.toBeNull();

@@ -4,14 +4,16 @@ import { NO_INTERVIEW } from '../../db/ensureCareerPrepSchema';
 import { centralDate, readiness } from './readiness';
 import { loadPrepData, type PrepData } from './prepData';
 import { readingsFor } from './prepViews';
+import { careerPrepEnrollmentIds } from './careerPrepFlag';
 
 /**
  * Career Prep v27, CP1.5: prep_readiness_daily, the rows the readiness trend chart reads.
  *
  * One row per (student, interview, Central date); NO_INTERVIEW holds the general readiness.
  * UPSERT, so re-running a day rewrites the same rows (idempotent: same row count, latest values).
- * Runs nightly at 01:30 Central for every student with an observation in the last 90 days, and
- * on demand after a session writes observations (CP4.5).
+ * Runs nightly at 01:30 Central for every student Career Prep is ON for (the career_prep allow-list)
+ * who has an observation in the last 90 days, and on demand after a session writes observations
+ * (CP4.5). Nobody else gets derived rows written until M4 opens Career Prep to them.
  *
  * Failure: one student's failure is logged with an error_class and the run continues; the job
  * never retries itself (tomorrow's run, or the next session, rewrites the row).
@@ -42,10 +44,13 @@ export async function rollupFor(enrollmentId: string, now = new Date()): Promise
   return rows.length;
 }
 
-export async function rollupAll(now = new Date()): Promise<{ students: number; failed: number }> {
+export async function rollupAll(now = new Date(), allowed: () => Promise<string[]> = careerPrepEnrollmentIds): Promise<{ students: number; failed: number }> {
+  const ids = await allowed();
+  if (!ids.length) return { students: 0, failed: 0 };
   const [list] = await sequelize.query(
-    `SELECT DISTINCT enrollment_id FROM prep_observations WHERE observed_at > :now::timestamptz - INTERVAL '90 days'`,
-    { replacements: { now } },
+    `SELECT DISTINCT enrollment_id FROM prep_observations
+      WHERE observed_at > :now::timestamptz - INTERVAL '90 days' AND enrollment_id::text IN (:ids)`,
+    { replacements: { now, ids } },
   );
   let failed = 0;
   for (const row of list as Array<{ enrollment_id: string }>) {

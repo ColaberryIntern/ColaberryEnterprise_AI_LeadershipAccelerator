@@ -35,6 +35,17 @@ describe('buildDashboard', () => {
     expect(DashboardResponse.safeParse(d).success).toBe(true);
   });
 
+  it('with no interview, shows readiness but no made-up target (no "Ready at")', () => {
+    const data = { ...full(), interviews: [] };
+    const d = buildDashboard(data, NOW);
+    expect(d.readiness?.value).toBe(68);
+    expect(d.readiness?.target).toBeUndefined();
+    const s = buildSummary(data, NOW);
+    expect(s.stops.readiness).toBe(68);
+    expect(s.stops.readyAt).toBeUndefined();
+    expect(DashboardResponse.safeParse(d).success).toBe(true);
+  });
+
   it('hides readiness with only 4 skills scored', () => {
     const data = full();
     data.observations = data.observations.filter((o) => o.skill !== 'pace_clarity');

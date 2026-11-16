@@ -17,7 +17,7 @@ export const InterviewViewSchema = z.object({
 export const DashboardResponse = z.object({
   anchorId: z.string().optional(),
   readiness: z.object({
-    value: score, target: score, changeSinceFirst: z.number().optional(),
+    value: score, target: score.optional(), changeSinceFirst: z.number().optional(),
     trend: z.array(z.object({ week: z.string(), value: score }).strict()),
   }).strict().optional(),
   interviews: z.array(InterviewViewSchema),
@@ -40,3 +40,9 @@ export const SummaryResponse = z.object({
 }).strict();
 
 export const StaffPrepResponse = z.object({ enrollmentId: z.string(), dashboard: DashboardResponse }).strict();
+
+export const StaffStudentListResponse = z.object({
+  students: z.array(z.object({
+    enrollmentId: z.string(), name: z.string(), lastObserved: z.string(), observations: z.number().int().min(0), readiness: score.optional(),
+  }).strict()).max(500),
+}).strict();
