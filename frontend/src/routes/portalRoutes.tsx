@@ -32,6 +32,7 @@ const TodayShell = lazy(() => import('../pages/portal/today/TodayShell'));
 const SettingsPage = lazy(() => import('../pages/portal/settings/SettingsPage'));
 const PathPage = lazy(() => import('../pages/portal/path/PathPage'));
 const InternshipPage = lazy(() => import('../pages/portal/internship/InternshipPage'));
+const CareerPrepRoomPage = lazy(() => import('../pages/portal/careerPrep/CareerPrepRoomPage'));
 const SchedulePage = lazy(() => import('../pages/portal/schedule/SchedulePage'));
 const EventsPage = lazy(() => import('../pages/portal/events/EventsPage'));
 const PointsPage = lazy(() => import('../pages/portal/points/PointsPage'));
@@ -146,6 +147,8 @@ const portalRoutes = (
       <Route path="/portal/settings" element={<SettingsPage />} />
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/internship" element={<InternshipPage />} />
+      {/* Career Prep v27 (CP3.1): the room. Gated in the page by the career_prep flag (server-decided). */}
+      <Route path="/portal/career/room" element={<CareerPrepRoomPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
       {/* Public event list (CCPP Registration-labelled events). Ungated like
           Schedule — these are open-to-the-community events, not paid content. */}

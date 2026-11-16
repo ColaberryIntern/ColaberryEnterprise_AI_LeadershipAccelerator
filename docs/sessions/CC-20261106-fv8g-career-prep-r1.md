@@ -124,3 +124,21 @@ tests/systemV2/career-prep/.
   - Notes: deviation: the Playwright layout check (1440 and 390, 44 px targets, no sideways scroll) needs the app
     running with a seeded student, which T26 builds; it runs there against this scene instead of here. The CSS
     gives every link a min-height of 44 px and stacks Cora under 900 px.
+
+- [x] CP2.4 Checkpoint (CP2 complete; no PR, no deploy)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - Verification: full frontend unit suite 9,833 pass (1 real failure, publicNextOpenHouseJs, CRLF-only and not
+    touched by this branch; 3 "failed" files are test helpers with no tests); `CI=true npm run build` compiles;
+    frontend tsc clean. CP2 task verification (T7 to T9) was in progress at this entry.
+
+- [x] CP3.1 The room shell over the floor
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: CareerPrepRoom.tsx (full screen, Refactored theme via themeForBrand, "‹ Floor n" from the sidebar
+    order, the level trail hidden under 900 px, the anchor pill with Change, three tabs, Esc and Back close it, Esc in
+    a text field does not, focus to Cora on open and back to the opener on close); AnchorPill (source tags); the
+    /portal/career/room page, flag-gated (off = not found), drawing the Career Prep floor behind the room.
+  - Verification: room 7 tests + page 3 tests; Career Prep frontend 35 pass; tsc clean.
+  - Notes: closing goes to /portal until T25 adds the deep link that lands on the floor. The summary loader now
+    turns even a synchronous throw into "no summary" (found by the page test).

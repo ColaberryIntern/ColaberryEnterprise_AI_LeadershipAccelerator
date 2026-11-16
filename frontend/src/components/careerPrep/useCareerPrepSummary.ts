@@ -10,7 +10,8 @@ const TTL_MS = 60_000;
 let cached: { at: number; promise: Promise<PrepSummary | null> } | null = null;
 
 export function loadCareerPrepSummary(now = Date.now()): Promise<PrepSummary | null> {
-  if (!cached || now - cached.at > TTL_MS) cached = { at: now, promise: fetchPrepSummary().catch(() => null) };
+  // Promise.resolve().then(...) so even a synchronous throw becomes null, never a crash in the floor.
+  if (!cached || now - cached.at > TTL_MS) cached = { at: now, promise: Promise.resolve().then(fetchPrepSummary).catch(() => null) };
   return cached.promise;
 }
 
