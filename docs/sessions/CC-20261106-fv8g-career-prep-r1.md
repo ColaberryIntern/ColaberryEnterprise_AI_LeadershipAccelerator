@@ -239,3 +239,20 @@ tests/systemV2/career-prep/.
   - Notes: "Tips from your data" (time of day, which practice mode lifts real-interview scores) need data this
     release does not collect, so the kit's rule "a tip without enough data is not shown" means none are shown.
     "Make me a plan for this" asks Cora for a short session; plans arrive in CP4.
+
+- [x] CP3.6 Checkpoint (CP3 built; no PR, no deploy)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - Verification: frontend full suite 9,891 pass (only the known CRLF open-house test and 3 helper files "fail");
+    `CI=true npm run build` compiled; backend 3,545 pass in careerPrep, routes, middlewares, access and the schema
+    test (1 known CRLF failure); route-auth lint OK. CP3 task verification (T11 to T15) still running at this entry.
+
+- [x] CP4.1 (backend) planBuilder + plans
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: planBuilder.ts (pure, deterministic: days from today to the day before the interview, at most 14,
+    each day on the next weakest skill, the last a Full rehearsal; tonight 15, full 30, custom 10/20/45; 15 minutes
+    or less = warm up, learn, try, cool down; Watch left out until an answer library exists and its 3 minutes go to
+    Try; Central calendar dates); plans.ts (server builds, one active plan per interview, the previous one retired
+    in the same transaction, an unknown focus skill ignored); POST and GET /api/portal/career-prep/plans.
+  - Verification: planBuilder 14, plans 4, plan routes 9; 159 Career Prep backend tests pass; tsc clean.

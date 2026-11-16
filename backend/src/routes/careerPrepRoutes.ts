@@ -7,6 +7,7 @@ import { loadPrepData } from '../services/careerPrep/prepData';
 import { addInterview, createPractice, linkHireInterviews } from '../services/careerPrep/interviews';
 import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
 import { askCora } from '../services/careerPrep/coraService';
+import { activePlan, createPlan, NotYoursError } from '../services/careerPrep/plans';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
 
@@ -114,11 +115,45 @@ export async function postCora(req: Request, res: Response): Promise<void> {
   }
 }
 
+const PlanBody = z.object({
+  interviewId: z.string().uuid(),
+  kind: z.enum(['days', 'tonight', 'full', 'custom']),
+  minutes: z.union([z.literal(10), z.literal(20), z.literal(45)]).optional(),
+  focusSkill: z.string().max(40).optional(),
+}).strict();
+const PlanQuery = z.object({ interviewId: z.string().uuid() }).strict();
+
+/** Build and store a plan; the server runs planBuilder. */
+export async function postPlan(req: Request, res: Response): Promise<void> {
+  const b = PlanBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: 'Pick a plan for one of your interviews.' }); return; }
+  try {
+    res.status(201).json(await createPlan(req.participant!.sub, b.data));
+  } catch (err) {
+    if (err instanceof NotYoursError) { res.status(404).json({ error: 'Not found' }); return; }
+    logFailure('career_prep_plan_failed', err);
+    res.status(500).json({ error: 'Could not build the plan.' });
+  }
+}
+
+export async function getPlan(req: Request, res: Response): Promise<void> {
+  const q = PlanQuery.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: 'interviewId must be an interview id.' }); return; }
+  try {
+    res.json({ plan: await activePlan(req.participant!.sub, q.data.interviewId) });
+  } catch (err) {
+    logFailure('career_prep_plan_read_failed', err);
+    res.status(500).json({ error: 'Could not load the plan.' });
+  }
+}
+
 const router = Router();
 router.get('/api/portal/career-prep/flags', requireParticipant, getCareerPrepFlags);
 router.get('/api/portal/career-prep/summary', requireParticipant, requireCareerPrep, getSummary);
 router.get('/api/portal/career-prep/dashboard', requireParticipant, requireCareerPrep, getDashboard);
 router.post('/api/portal/career-prep/interviews', requireParticipant, requireCareerPrep, postInterview);
 router.post('/api/portal/career-prep/cora', requireParticipant, requireCareerPrep, postCora);
+router.post('/api/portal/career-prep/plans', requireParticipant, requireCareerPrep, postPlan);
+router.get('/api/portal/career-prep/plans', requireParticipant, requireCareerPrep, getPlan);
 
 export default router;
