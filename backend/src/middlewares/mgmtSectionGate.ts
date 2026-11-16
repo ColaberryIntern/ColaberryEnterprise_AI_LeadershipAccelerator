@@ -260,6 +260,8 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // so there is no ordering shadow. Per-project row scope is a SECOND, in-service check (membership),
   // not expressible in this role-level table.
   ['/api/admin/gov-contracts', 'gov_contracts'],
+  // Career Prep v27 (CP1.5): staff read of a student's prep. Classified the day it is mounted (deny-by-default).
+  ['/api/admin/placement', 'placement'],
   // CAPE — the Architecture Skills taxonomy (skill definitions, evidence-band
   // weights) and the Feed Control governance board built on it. Programme work:
   // it defines what students are measured on, so it belongs with curriculum.

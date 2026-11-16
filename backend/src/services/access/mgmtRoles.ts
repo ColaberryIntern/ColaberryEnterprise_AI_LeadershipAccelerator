@@ -53,6 +53,11 @@ export const SECTION_KEYS = [
   // this gate is deny-by-default, so a prefix is classified the day it is mounted, not before.
   'agents',
   'gov_contracts',
+  // Career Prep v27 (CP1.5): the Placement floor and each student's prep, read-only for staff.
+  // owner and admin derive it from ALL_SECTIONS; NO scoped role is granted it here (there is no
+  // recruiter role, and adding one would widen a DB check constraint). Other staff get it per
+  // member through extra sections (normalizeExtraSections).
+  'placement',
 ] as const;
 export type SectionKey = typeof SECTION_KEYS[number];
 

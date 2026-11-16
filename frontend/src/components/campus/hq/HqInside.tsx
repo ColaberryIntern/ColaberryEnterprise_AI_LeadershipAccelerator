@@ -1,10 +1,12 @@
 import React from 'react';
-import { badgeLevel, buttonSub, openFloors, roomHref, roomName, roomsText, type HqFloor } from './hqModel';
+import { badgeLevel, buttonSub, openFloors, roomHref, roomName, roomsText, type HqFloor, opensInPlace } from './hqModel';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { HqPlaced } from './hqModel';
 import type { StaffDesk } from '../campusPeopleApi';
 import { FloorLobbyDesks } from './FloorLobbyDesk';
+import { isCareerPrepFloor, prepElevatorLine, prepFloorOf } from './careerPrepDoors';
+import { CareerPrepFloor } from '../../careerPrep/CareerPrepFloor';
 
 /**
  * Campus HQ scenes 4 and 5 (H5): the elevator (a brass button panel, top floor first then G, and the floor guide) and a
@@ -20,7 +22,7 @@ function Guide({ s, f, face, people }: { s: HqState; f: HqFloor | null; face: st
   if (!f) {
     const open = openFloors(hq);
     return (<><div className="kick">YOUR RIDE</div><h3>Pick a floor</h3>
-      <div className="kv">Lit buttons are the floors your badge opens. Grey buttons with a red ring are locked for you.</div>
+      <div className="kv" data-testid="cm-hq-ride-line">{!hq.isStaff && prepFloorOf(hq.floors) ? prepElevatorLine : 'Lit buttons are the floors your badge opens. Grey buttons with a red ring are locked for you.'}</div>
       <div className="kv"><b>{badgeLevel(hq)}</b>{hq.isStaff && open.length > 0 ? ` · ${open.map((x) => x.num).join(', ')}` : ''}</div></>);
   }
   const on = f.access !== 'none';
@@ -70,6 +72,8 @@ export function HqCab({ s, face, people }: { s: HqState; face: string; people: H
 /** `agents`: the AI agents at this floor's front desk (C119, already filtered by floorAgents for this viewer's badge). */
 export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqFloor; people: HqPlaced<HqPerson>; agents?: StaffDesk[] }): React.ReactElement {
   const { hq } = s;
+  // Career Prep v27 (CP2.3): the student's own Career Prep floor has its own scene (one door, the floor screen, Cora).
+  if (isCareerPrepFloor(f)) return <CareerPrepFloor f={f} onElevator={s.toCab} onLobby={s.toLobby} />;
   return (
     <div className="cm-hq-floor" data-testid="cm-hq-floor">
       <div className="corr" />
@@ -85,7 +89,7 @@ export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqF
             {here.length > 0 && <span className="who"><HqPeople people={here} label={`At ${r.label}`} size="sm" /></span>}
           </>);
           return r.open ? (
-            <a key={r.path} className="office" href={roomHref(r)} target={r.own ? undefined : '_blank'} rel={r.own ? undefined : 'noopener noreferrer'} aria-label={r.own ? r.label : `${r.label}, opens in a new tab`} data-testid="cm-hq-office">{inner}</a>
+            <a key={r.path} className="office" href={roomHref(r)} target={opensInPlace(r) ? undefined : '_blank'} rel={opensInPlace(r) ? undefined : 'noopener noreferrer'} aria-label={opensInPlace(r) ? r.label : `${r.label}, opens in a new tab`} data-testid="cm-hq-office">{inner}</a>
           ) : (
             <button key={r.path} type="button" className="office lock" aria-disabled="true" aria-label={`${roomName(r, hq.isStaff)}, no access`} onClick={() => s.lockedRoom(r)} data-testid="cm-hq-office-locked">{inner}</button>
           );

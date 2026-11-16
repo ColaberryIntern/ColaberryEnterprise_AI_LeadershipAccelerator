@@ -15,7 +15,7 @@ export const SECTION_LABEL: Record<string, string> = {
   dashboard: 'Dashboard', trust: 'Trust Center', war_room: 'War Room', revenue: 'Revenue', campaigns: 'Marketing & Campaigns',
   lead_ingestion: 'Lead Ingestion', inbox_content: 'Inbox & Content', program: 'Program', intelligence: 'Intelligence',
   system: 'System', students: 'Student Story', leads: 'Leads', career_review: 'Portfolio Review', internship: 'AI Internship',
-  brands: 'Brands', agents: 'Agents', gov_contracts: 'Gov Contracts',
+  brands: 'Brands', agents: 'Agents', gov_contracts: 'Gov Contracts', placement: 'Placement',
 };
 
 export interface ExtraSectionsEditorProps {

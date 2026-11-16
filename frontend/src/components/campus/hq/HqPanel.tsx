@@ -1,8 +1,10 @@
 import React from 'react';
-import { badgeLevel, floorStatus, openFloors, roomHref, roomName, roomsText, type HqFloor, type HqPlaced } from './hqModel';
+import { badgeLevel, floorStatus, openFloors, roomHref, roomName, roomsText, type HqFloor, type HqPlaced, opensInPlace } from './hqModel';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { StaffDesk } from '../campusPeopleApi';
+import { isCareerPrepFloor, doorsText } from './careerPrepDoors';
+import { CareerPrepPanelRows } from '../../careerPrep/CareerPrepFloor';
 import { FloorLobbyDesks } from './FloorLobbyDesk';
 
 /**
@@ -46,20 +48,23 @@ export function HqPanel({ s, who, face, placed, agents = [] }: { s: HqState; who
       <div className="cm-hq-side" data-testid="cm-hq-panel-floor">
         <div className="kick">FLOOR {f.num}</div>
         <h2>{f.label}</h2>
-        <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>
+        {isCareerPrepFloor(f)
+          ? <p className="lead">One room with Cora, your interview coach. She sees what you need, builds your plan and runs your practice sessions.</p>
+          : <p className="lead">{f.access === 'all' ? 'Every room on this floor is open to you.' : `Your badge opens ${f.openCount} of the ${f.rooms.length} rooms here. The rest stay locked.`}{f.own ? ' Open it to pick up your build.' : ' Each room opens its admin page in a new tab.'}</p>}
+        {isCareerPrepFloor(f) && <CareerPrepPanelRows />}
         {agents.length > 0 && <>
           {/* C119: the AI agent at this floor's front desk, the same card the scene's desk opens */}
           <div className="sec">At the front desk</div>
           <FloorLobbyDesks desks={agents} variant="row" />
         </>}
-        <div className="sec">Rooms on this floor <small>{f.openCount} open</small></div>
+        <div className="sec">{isCareerPrepFloor(f) ? <>Doors on this floor <small>{doorsText(f.rooms.length)}</small></> : <>Rooms on this floor <small>{f.openCount} open</small></>}</div>
         <div className="cm-hq-rlist">
           {f.rooms.map((r) => {
             const body = (<><i className={`ic ri-${r.icon}`} /><span className="t"><b>{roomName(r, hq.isStaff)}</b><code>{r.path.replace('https://', '')}</code></span>
               <HqPeople people={placed.byRoom.get(r.path) ?? []} label={`At ${r.label}`} size="sm" />
               <span className="go">{r.open ? (r.external ? 'Open ↗' : r.own ? 'Open →' : 'Open in admin ↗') : '🔒'}</span></>);
             return r.open
-              ? <a key={r.path} className="cm-hq-rrow" href={roomHref(r)} target={r.own ? undefined : '_blank'} rel={r.own ? undefined : 'noopener noreferrer'} data-testid="cm-hq-rrow">{body}</a>
+              ? <a key={r.path} className="cm-hq-rrow" href={roomHref(r)} target={opensInPlace(r) ? undefined : '_blank'} rel={opensInPlace(r) ? undefined : 'noopener noreferrer'} data-testid="cm-hq-rrow">{body}</a>
               : <button key={r.path} type="button" className="cm-hq-rrow lock" aria-disabled="true" onClick={() => s.lockedRoom(r)}>{body}</button>;
           })}
         </div>

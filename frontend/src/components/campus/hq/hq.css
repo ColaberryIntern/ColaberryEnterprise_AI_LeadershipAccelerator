@@ -251,3 +251,9 @@
 }
 .cm-hq.is-reduced *,.cm-hq.is-reduced>div{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){.cm-hq *{animation:none!important;transition:none!important}}
+
+/* Career Prep v27 (CP5.3): the level trail on the tower scenes, and the lobby's express button */
+.cm-hq-trail{position:absolute;top:10px;left:10px;z-index:5;display:flex;gap:6px;margin:0;padding:4px 10px;list-style:none;border-radius:999px;background:var(--cm-art-card);color:var(--cm-art-ink);font-size:12px}
+.cm-hq-trail li{opacity:.6}
+.cm-hq-trail li[aria-current="step"]{opacity:1;font-weight:700}
+.cm-hq-express{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:4;min-height:44px}

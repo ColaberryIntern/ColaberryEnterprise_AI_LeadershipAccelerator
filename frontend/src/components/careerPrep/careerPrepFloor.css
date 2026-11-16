@@ -1,0 +1,23 @@
+/* Career Prep v27 (CP2.3): the student's Career Prep floor. Colors come from the campus art tokens (hq.css), never raw hex. */
+.cp-floor .cp-screen{position:absolute;left:50%;top:92px;transform:translateX(-50%);width:min(560px,92%);background:var(--cm-art-hq-office);color:var(--cm-art-cloud);border:4px solid var(--cm-art-hq-brass2);border-radius:8px;padding:14px 18px;box-shadow:var(--cm-art-shadow);text-align:center}
+.cp-floor .cp-greet{margin:0 0 10px;font-size:15px;line-height:1.4}
+.cp-floor .cp-walkin{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:120px;padding:0 18px;border-radius:6px;background:var(--cm-art-hq-brass2);color:var(--cm-art-hq-plate-ink);font-weight:700;text-decoration:none}
+.cp-floor .cp-stops{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:12px 0 0;padding:0}
+.cp-floor .cp-stops a{display:flex;flex-direction:column;align-items:center;min-width:88px;min-height:44px;padding:6px 10px;border-radius:6px;color:var(--cm-art-cloud);text-decoration:none;border:1px solid var(--cm-art-hq-brass3)}
+.cp-floor .cp-stops b{font:700 22px ui-monospace,Menlo,monospace}
+.cp-floor .cp-stops small{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.cp-floor .cp-door{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);width:250px;height:290px;max-height:46%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:8px 8px 0 0;background:linear-gradient(180deg,var(--cm-art-hq-office),var(--cm-art-hq-office2));color:var(--cm-art-cloud);text-decoration:none;outline:3px solid var(--cm-art-hq-brass2);box-shadow:0 0 28px var(--cm-art-hq-brass2)}
+.cp-floor .cp-door i{font-size:34px}
+.cp-floor .cp-door b{font-family:'Fraunces',Georgia,serif;font-size:22px}
+.cp-floor .cp-flag{position:absolute;top:-14px;padding:3px 10px;border-radius:4px;background:var(--cm-art-hq-brass2);color:var(--cm-art-hq-plate-ink);font-size:12px;font-weight:700}
+.cp-floor .cp-open{font:700 12px ui-monospace,Menlo,monospace;letter-spacing:.14em}
+.cp-floor .cp-status{font-size:12px}
+.cp-floor .cp-cora{position:absolute;right:3%;bottom:12%;display:flex;flex-direction:column;gap:4px;max-width:220px;min-height:44px;padding:10px 12px;border-radius:8px;background:var(--cm-art-hq-office2);color:var(--cm-art-cloud);text-decoration:none;box-shadow:var(--cm-art-shadow)}
+.cp-floor .cp-cora .av{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--cm-art-hq-brass2);color:var(--cm-art-hq-plate-ink);font-weight:700}
+.cp-floor .cp-cora .say{font-size:12px;line-height:1.35}
+.cp-floor a:focus-visible{outline:3px solid var(--cm-art-hq-brass2);outline-offset:3px}
+@media (max-width:900px){
+  .cp-floor .cp-screen{top:72px}
+  .cp-floor .cp-door{width:200px;height:230px}
+  .cp-floor .cp-cora{position:static;margin:8px auto 0;max-width:none}
+}

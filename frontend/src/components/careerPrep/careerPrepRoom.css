@@ -1,0 +1,137 @@
+/* Career Prep v27 (CP3.1): the room, Refactored.ai brand. Colors are the theme's custom properties (themeForBrand('refactored')). */
+.cp-room{position:fixed;inset:0;z-index:1200;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font-family:'IBM Plex Sans',system-ui,sans-serif}
+.cp-room-top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.cp-back{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated);color:var(--fg);font:600 14px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+/* .cp-trail lives in levelTrail.css (CP5.3), loaded with LevelTrail. */
+.cp-anchor{display:inline-flex;align-items:center;gap:10px;margin-left:auto;padding:6px 6px 6px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated);font-size:14px}
+.cp-anchor.is-empty{padding:10px 12px;color:var(--fg-muted)}
+.cp-anchor-change{min-height:44px;padding:0 12px;border:1px solid var(--accent);border-radius:4px;background:transparent;color:var(--accent);font-weight:600}
+.cp-room-body{flex:1;display:grid;grid-template-columns:420px 1fr;min-height:0}
+.cp-cora-col{border-right:1px solid var(--line);overflow:auto;padding:14px}
+.cp-cora-col:focus{outline:none}
+.cp-tabs-col{display:flex;flex-direction:column;min-width:0;overflow:auto}
+.cp-tabs{display:flex;gap:4px;padding:8px 14px 0;border-bottom:1px solid var(--line)}
+.cp-tab{min-height:44px;padding:0 14px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--fg-muted);font-weight:600}
+.cp-tab.active{color:var(--fg);border-bottom-color:var(--accent)}
+.cp-panel{padding:16px}
+.cp-room button:focus-visible,.cp-room a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:899px){
+  .cp-trail{display:none}
+  .cp-anchor{margin-left:0;width:100%;justify-content:space-between}
+  .cp-room-body{grid-template-columns:1fr;overflow:auto}
+  .cp-cora-col{border-right:0;border-bottom:1px solid var(--line);overflow:visible}
+  .cp-tabs-col{overflow:visible}
+}
+/* CP3.2: Cora's chat and option cards */
+.cp-chat{display:flex;flex-direction:column;gap:10px;min-height:100%}
+.cp-chat-head{font-size:14px}.cp-chat-head small{display:block;color:var(--fg-muted)}
+.cp-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:6px}
+.cp-log{display:flex;flex-direction:column;gap:8px;flex:1}
+.cp-msg{max-width:92%;padding:8px 12px;border-radius:4px;border:1px solid var(--line);line-height:1.45}
+.cp-msg.cora{align-self:flex-start;background:var(--bg-elevated)}
+.cp-msg.me{align-self:flex-end;background:var(--accent-soft)}
+.cp-msg.is-busy{color:var(--fg-muted)}
+.cp-block{border-left:3px solid var(--accent);padding:6px 10px;background:var(--bg-elevated)}
+.cp-block ul{margin:4px 0 0;padding-left:18px}
+.cp-cards{display:flex;flex-direction:column;gap:6px}
+.cp-cards.is-quiet{opacity:.55}
+.cp-card{display:flex;gap:10px;width:100%;min-height:44px;padding:10px 12px;text-align:left;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated);color:var(--fg)}
+.cp-cards:not(.is-quiet) .cp-card:hover{border-color:var(--accent)}
+.cp-cards.is-quiet .cp-card{cursor:default}
+.cp-card i{font-size:20px;color:var(--accent)}
+.cp-card-body{display:flex;flex-direction:column;gap:2px;flex:1}
+.cp-badge{display:inline-block;margin-left:8px;padding:0 6px;border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:11px;text-transform:uppercase}
+.cp-bar{position:relative;display:block;height:6px;margin-top:4px;background:var(--line);border-radius:3px}
+.cp-bar-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:3px}
+.cp-bar-tick{position:absolute;top:-3px;width:2px;height:12px;background:var(--fg)}
+.cp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cp-chip{min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--fg)}
+.cp-ask{display:flex;gap:6px}
+.cp-ask textarea{flex:1;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);font:inherit}
+.cp-send{min-height:44px;padding:0 16px;border:0;border-radius:4px;background:var(--accent);color:var(--accent-contrast);font-weight:700}
+.cp-pending{color:var(--fg-muted)}
+/* CP3.3: the add / practice interview form */
+.cp-form{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated)}
+.cp-form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--fg-muted)}
+.cp-form input,.cp-form select,.cp-form textarea{min-height:44px;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);font:inherit}
+.cp-form-actions{display:flex;gap:8px}
+.cp-form-problem{margin:0;color:var(--fg)}
+/* CP3.5: Your progress */
+.cp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.cp-dash-card{padding:12px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated)}
+/* CP5.4: headings take the room's text color (the app's base styles color h1-h6 near-black, unreadable here) */
+.cp-room h1,.cp-room h2,.cp-room h3,.cp-room h4,.cp-room h5,.cp-room h6{color:var(--fg)}
+.cp-dash-card h3{margin:0 0 8px;font:600 14px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cp-big b{font:700 40px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cp-muted{color:var(--fg-muted)}
+.cp-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ol.cp-list{list-style:decimal;padding-left:18px}
+.cp-rowbtn{display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%;min-height:44px;padding:6px 8px;text-align:left;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--fg)}
+.cp-rowbtn .cp-bar{flex:1;min-width:80px}
+.cp-skill-name{min-width:160px}
+.cp-linkbtn{min-height:44px;margin-left:8px;padding:0 6px;border:0;background:transparent;color:var(--accent);text-decoration:underline}
+.cp-chart{margin:8px 0 0}
+.cp-chart figcaption{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--fg-muted)}
+.cp-svg{width:100%;height:auto}
+.cp-series{stroke:var(--accent);stroke-width:2}
+.cp-dotpt{fill:var(--accent)}
+.cp-dotpt:focus,.cp-bar-rect:focus{outline:2px solid var(--fg)}
+.cp-bar-rect{fill:var(--accent)}
+.cp-ready{stroke:var(--fg-muted);stroke-width:1}
+.cp-table{width:100%;font-size:13px}
+/* CP4.2: Your plan */
+.cp-plan h3{font:600 16px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:0 0 6px}
+.cp-days{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.cp-day-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.cp-timeline{display:flex;gap:2px;min-height:44px}
+.cp-seg{display:flex;align-items:center;justify-content:center;min-width:6px;padding:0 4px;border-radius:4px;background:var(--accent-soft);color:var(--fg);font-size:12px;overflow:hidden;white-space:nowrap}
+.cp-seg.is-target{outline:2px solid var(--accent);outline-offset:-2px}
+.cp-seg:focus{outline:3px solid var(--fg)}
+/* CP4.2 fix: a visible tooltip on hover and on keyboard focus */
+/* CP5.4: the tip is placed against the whole ROW (.cp-timeline), never wider than it, so it cannot run past the
+   room's edge; the last two blocks open it from the right. */
+.cp-timeline{position:relative}
+.cp-seg{position:static;overflow:visible}
+.cp-seg-tip{display:none;position:absolute;left:0;bottom:calc(100% + 6px);z-index:2;box-sizing:border-box;width:max-content;max-width:100%;padding:6px 8px;border-radius:4px;background:var(--fg);color:var(--bg);font-size:12px;white-space:normal}
+.cp-seg:nth-last-child(-n+2) .cp-seg-tip{left:auto;right:0}
+.cp-seg:hover .cp-seg-tip,.cp-seg:focus .cp-seg-tip{display:block}
+.cp-readout{min-height:1.2em;margin:2px 0 0;font-size:12px;color:var(--fg-muted)}
+.cp-rowbtn .cp-bar{position:relative}
+/* CP4.4: the session */
+.cp-session{display:grid;grid-template-columns:200px 1fr;gap:16px}
+.cp-ring{width:140px;height:140px}
+.cp-ring-bg{stroke:var(--line);stroke-width:8}
+.cp-ring-fg{stroke:var(--accent);stroke-width:8;transform:rotate(-90deg);transform-origin:50% 50%}
+.cp-ring-t{fill:var(--fg);font:700 18px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cp-seglist{list-style:none;margin:8px 0 0;padding:0;font-size:13px}
+.cp-seglist li[aria-current]{font-weight:700}
+.cp-stage h4{font:600 16px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:4px 0 8px}
+.cp-try{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+@media (max-width:899px){.cp-session{grid-template-columns:1fr}}
+/* CP4.5: the recap */
+.cp-recap h3{font:700 28px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:8px 0}
+.cp-recap-stats{display:flex;flex-wrap:wrap;gap:24px;margin:0 0 12px}
+.cp-recap-stats b{font:700 28px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cp-recap-badge{display:inline-block;padding:2px 8px;border-radius:4px;background:var(--accent-soft);color:var(--fg);font:600 12px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cp-new{font-size:11px;font-weight:700;color:var(--accent)}
+/* CP4.6: sheets over the room, and the jump bar */
+.cp-sheet-layer{position:fixed;inset:0;z-index:1060;display:flex;justify-content:flex-end}
+.cp-sheet-scrim{position:absolute;inset:0;border:0;background:rgba(0,0,0,.35)}
+.cp-sheet{position:relative;width:min(1080px,100%);height:100%;overflow:auto;padding:16px 24px;background:var(--bg);color:var(--fg);box-shadow:-8px 0 24px rgba(0,0,0,.2)}
+.cp-sheet h2{font:600 22px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:12px 0 4px}
+.cp-sheet h2:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.cp-sheet-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;border-bottom:1px solid var(--line)}
+.cp-sheet-tab{min-height:44px;padding:0 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--fg-muted)}
+.cp-sheet-tab.active{color:var(--fg);border-bottom-color:var(--accent)}
+.cp-pill{display:inline-block;padding:0 6px;border:1px solid var(--line);border-radius:4px;font-size:12px}
+.cp-jump{position:fixed;top:12vh;left:50%;transform:translateX(-50%);z-index:1070;width:min(560px,calc(100% - 32px));padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);box-shadow:0 12px 32px rgba(0,0,0,.25)}
+.cp-jump-list{list-style:none;margin:8px 0 0;padding:0;max-height:50vh;overflow:auto}
+.cp-jump-list li{min-height:44px;display:flex;align-items:center;gap:8px;padding:0 8px;border-radius:4px;cursor:pointer}
+.cp-jump-list li.active{background:var(--accent-soft)}
+/* CP5.4: a link styled as a button (Join the room, Open your portfolio page) keeps the 44px target */
+a.cp-send{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+/* The part list's markers are drawn by CSS (house style: no glyphs in product copy). */
+.cp-segmark{display:inline-block;width:1.2em}
+.cp-segmark::before{content:" B7"}
+.cp-segmark.is-now::before{content:"B8"}
+.cp-segmark.is-done::before{content:"¹3"}

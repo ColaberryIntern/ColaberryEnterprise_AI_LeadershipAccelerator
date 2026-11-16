@@ -4,6 +4,7 @@ import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
 const AdminChangePasswordPage = lazy(() => import('../pages/admin/AdminChangePasswordPage'));
 const CareerReviewPage = lazy(() => import('../pages/admin/CareerReviewPage'));
+const PlacementStudentsPage = lazy(() => import('../pages/admin/PlacementStudentsPage'));
 const AdminLoginPage = lazy(() => import('../pages/admin/AdminLoginPage'));
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'));
 const WarRoomPage = lazy(() => import('../pages/admin/WarRoomPage'));
@@ -198,6 +199,7 @@ const adminRoutes = (
             was reachable). Found by Ali opening it and seeing no admin chrome — the
             missing sidebar was the visible symptom of the missing guard. */}
         <Route path="/admin/career-review" element={<CareerReviewPage />} />
+        <Route path="/admin/placement/students" element={<PlacementStudentsPage />} />
         {/* Account self-service: reachable by every admin identity regardless
             of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
         <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />

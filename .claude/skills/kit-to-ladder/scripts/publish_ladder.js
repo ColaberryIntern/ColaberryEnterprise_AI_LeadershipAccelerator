@@ -128,6 +128,13 @@ async function main() {
   let made = 0; let updated = 0; let kept = 0;
   for (const g of spec.groups) {
     let group = groups.find((x) => x.name === g.name);
+    const former = !group && g.formerName ? groups.find((x) => x.name === g.formerName) : null;
+    if (former) {
+      // Renamed in the spec: rename in place so its tickets (and their ticks) are kept.
+      say('rename group', g.formerName, '->', g.name);
+      if (!DRY) await call('PUT', `${B}/todolists/${former.id}.json`, { name: g.name });
+      group = former;
+    }
     if (!group) {
       say('create group', g.name);
       group = DRY ? { id: `dry-${g.name}` } : await call('POST', `${B}/todolists/${list.id}/groups.json`, { name: g.name });

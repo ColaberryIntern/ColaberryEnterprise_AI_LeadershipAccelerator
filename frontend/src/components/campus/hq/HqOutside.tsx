@@ -4,6 +4,8 @@ import { conciergeLine, floorStatus, openFloors, readerLine, type HqFloor } from
 import type { HqState } from './useHq';
 import type { CampusAudience } from '../campusMap';
 import { HqPeople, type HqPerson } from './HqPeople';
+import { isCareerPrepFloor, prepExpressLabel, prepFloorOf, prepLobbyLine, prepOutsideHint, prepStaffFloorsLine } from './careerPrepDoors';
+import { useCareerPrepSummary } from '../../careerPrep/useCareerPrepSummary';
 
 /**
  * Campus HQ scenes 2 and 3 (H5): the tower from outside and the lobby. Both are drawn from the generated floors, so a new
@@ -70,7 +72,7 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
       {tip && (
         <div className="cm-hq-tip" style={{ left: tip.x + 14, top: tip.y + 14 }} role="status">
           <b>{tip.f.num} · {tip.f.label}</b>
-          <small>{tip.f.own ? `Your office · ${tip.f.rooms.length} ${tip.f.rooms.length === 1 ? 'room' : 'rooms'}` : !hq.isStaff ? 'Colaberry staff only' : tip.f.access !== 'none' ? `${tip.f.openCount} of ${tip.f.rooms.length} rooms open to you` : '🔒 Your badge doesn’t open this floor'}</small>
+          <small>{isCareerPrepFloor(tip.f) ? 'Career Prep · your floor' : tip.f.own ? `Your office · ${tip.f.rooms.length} ${tip.f.rooms.length === 1 ? 'room' : 'rooms'}` : !hq.isStaff ? 'Colaberry staff only' : tip.f.access !== 'none' ? `${tip.f.openCount} of ${tip.f.rooms.length} rooms open to you` : '🔒 Your badge doesn’t open this floor'}</small>
         </div>
       )}
       <div className="cm-hq-legend">
@@ -80,7 +82,8 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
       </div>
       <div className="cm-hq-cta">
         <button type="button" className="cm-hq-btn is-red" onClick={s.walkIn} data-testid="cm-hq-walk-in">Walk in →</button>
-        <span className="cm-hq-chip">{hq.isStaff ? <>Your badge opens <b>{lit}</b> of {n} floors</> : lit > 0 ? <>Your badge opens your office + the lobby</> : 'You can use the ground floor'}</span>
+        {!hq.isStaff && prepFloorOf(hq.floors) && <span className="cm-hq-chip" data-testid="cm-hq-prep-hint">{prepOutsideHint(prepFloorOf(hq.floors)!.num)}</span>}
+        <span className="cm-hq-chip">{hq.isStaff ? <>Your badge opens <b>{lit}</b> of {n} floors</> : lit > 0 ? (hq.floors.some((f) => f.own && !isCareerPrepFloor(f)) ? <>Your badge opens your office + the lobby</> : <>Your badge opens your floor + the lobby</>) : 'You can use the ground floor'}</span>
       </div>
     </div>
   );
@@ -91,6 +94,10 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
   desk: { name: string; initials: string } | null; lobby: HqPerson[]; people: Map<string, HqPerson[]>; onGround: (route: string) => void;
 }): React.ReactElement {
   const { hq } = s;
+  const prep = hq.isStaff ? undefined : prepFloorOf(hq.floors);
+  const student = !!prep && audience === 'member';
+  const summary = useCareerPrepSummary(student);
+  const listed = student ? hq.floors.filter((f) => f.access !== 'none') : hq.floors;
   const portalDoors = hq.ground.filter((g) => g.portal);
   return (
     <div className="cm-hq-lobby" data-testid="cm-hq-lobby">
@@ -108,7 +115,8 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
         <button type="button" className="cm-hq-callbtn" onClick={s.toCab} aria-label="Call the elevator"><i>▲</i><i>▼</i></button>
         <button type="button" className="cm-hq-elev" onClick={s.toCab} aria-label="Elevator B"><span className="ind">PH</span><span className="dr"><i /><i /></span></button>
       </div>
-      <div className="cm-hq-bubble" data-testid="cm-hq-concierge"><b>CONCIERGE{desk ? ` · ${desk.name.toUpperCase()}` : ''}</b>{conciergeLine(hq, firstName, audience, hour)}</div>
+      <div className="cm-hq-bubble" data-testid="cm-hq-concierge"><b>CONCIERGE{desk ? ` · ${desk.name.toUpperCase()}` : ''}</b>{prep && student ? prepLobbyLine(firstName, prep.num, summary?.sessionMinutes) : conciergeLine(hq, firstName, audience, hour)}</div>
+      {prep && audience === 'member' && <button type="button" className="cm-hq-btn is-navy cm-hq-express" onClick={() => s.ride(prep.num)} data-testid="cm-hq-express">{prepExpressLabel(prep.num)}</button>}
       <div className="cm-hq-desk">
         {desk && <div className="host"><span className="av">{desk.initials}</span><span className="bd" /></div>}
         <div className="top2" /><div className="body">CONCIERGE</div>
@@ -116,7 +124,7 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
       {lobby.length > 0 && <div className="cm-hq-lobby-people" data-testid="cm-hq-lobby-people"><HqPeople people={lobby} label="In the lobby" /></div>}
       <div className="cm-hq-dir" aria-label="Building directory" data-testid="cm-hq-directory">
         <h5>DIRECTORY</h5>
-        {hq.floors.map((f) => {
+        {listed.map((f) => {
           const on = f.access !== 'none';
           const here = hq.isStaff ? people.get(f.num)?.length ?? 0 : 0;
           return (
@@ -128,15 +136,17 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
             </button>
           );
         })}
+        {student && listed.length < hq.floors.length && <p className="r no" data-testid="cm-hq-staff-floors">{prepStaffFloorsLine(hq.floors.length - listed.length)}</p>}
         <button type="button" className="r yes" onClick={() => s.ride('G')}><span className="n">G</span><span className="l">LOBBY · {face.toUpperCase()}</span><span className="s">✓</span></button>
       </div>
-      <div className="cm-hq-gate">
+      {/* CP5.3: a student with Career Prep has the express button instead of the badge gate */}
+      {!(prep && audience === 'member') && <div className="cm-hq-gate">
         <span className="tsl" />
         <button type="button" className={`reader ${hq.isStaff ? 'ok' : 'no'}`} onClick={s.toCab} data-testid="cm-hq-reader">
           <span className="dot">{hq.isStaff ? '✓' : 'G'}</span>{readerLine(hq, audience)}
         </button>
         <span className="tsl" />
-      </div>
+      </div>}
     </div>
   );
 }

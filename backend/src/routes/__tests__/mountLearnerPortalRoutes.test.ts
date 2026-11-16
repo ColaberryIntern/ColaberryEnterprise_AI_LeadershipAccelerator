@@ -1,6 +1,6 @@
 // Each router is a sentinel: this suite is about the ORDER the module mounts them in, not what they serve, and importing the
 // real routers would pull their controllers, models and half the service graph.
-const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes', 'gameRoomRoutes', 'campusAdmissionsCallRoutes', 'campusHallwayRoutes', 'campusWeatherRoutes', 'campusTourProgressRoutes', 'communityBoardRoutes', 'campusWeekdaySessionsRoutes'] as const;
+const ROUTERS = ['participantRoutes', 'capePortalRoutes', 'careerPortfolioRoutes', 'explorerSignalRoutes', 'journeyNudgeRoutes', 'consentPromptRoutes', 'campusRoutes', 'gameRoomRoutes', 'campusAdmissionsCallRoutes', 'campusHallwayRoutes', 'campusWeatherRoutes', 'campusTourProgressRoutes', 'communityBoardRoutes', 'campusWeekdaySessionsRoutes', 'careerPrepRoutes'] as const;
 jest.mock('../participantRoutes', () => ({ __esModule: true, default: 'participantRoutes' }));
 jest.mock('../capePortalRoutes', () => ({ __esModule: true, default: 'capePortalRoutes' }));
 jest.mock('../careerPortfolioRoutes', () => ({ __esModule: true, default: 'careerPortfolioRoutes' }));
@@ -15,6 +15,7 @@ jest.mock('../campusWeatherRoutes', () => ({ __esModule: true, default: 'campusW
 jest.mock('../campusTourProgressRoutes', () => ({ __esModule: true, default: 'campusTourProgressRoutes' }));
 jest.mock('../communityBoardRoutes', () => ({ __esModule: true, default: 'communityBoardRoutes' }));
 jest.mock('../campusWeekdaySessionsRoutes', () => ({ __esModule: true, default: 'campusWeekdaySessionsRoutes' }));
+jest.mock('../careerPrepRoutes', () => ({ __esModule: true, default: 'careerPrepRoutes' }));
 
 import fs from 'fs';
 import path from 'path';
@@ -96,9 +97,10 @@ describe('the mount order, driven for real', () => {
     expect(order.indexOf('consentPromptRoutes')).toBe(order.indexOf('journeyNudgeRoutes') + 1);
   });
 
-  it('mounts the campus routers last, after the consent prompt (Basecamp C1; the Game Room C10, the admissions call C20, the hallway C29, tour progress 2026-10-26)', () => {
+  it('mounts the campus routers last, after the consent prompt (Basecamp C1; the Game Room C10, the admissions call C20, the hallway C29, tour progress 2026-10-26), then Career Prep (a campus floor, CP1.1)', () => {
     const order = mounted();
-    expect(order[order.length - 1]).toBe('campusWeekdaySessionsRoutes');
+    expect(order[order.length - 1]).toBe('careerPrepRoutes');
+    expect(order.indexOf('careerPrepRoutes')).toBe(order.indexOf('campusWeekdaySessionsRoutes') + 1);
     expect(order.indexOf('campusWeekdaySessionsRoutes')).toBe(order.indexOf('communityBoardRoutes') + 1);
     expect(order.indexOf('communityBoardRoutes')).toBe(order.indexOf('campusTourProgressRoutes') + 1);
     expect(order.indexOf('campusTourProgressRoutes')).toBe(order.indexOf('campusWeatherRoutes') + 1);

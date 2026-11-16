@@ -18,7 +18,7 @@
 // linked to a staff CommunityMember (see mgmtBridgeService.loadStaffPortalLinkByEmail).
 // A legacy admin with no staff link at all has no enrollment to send to, so the
 // link would always 403 for them.
-export interface NavLink { path: string; label: string; icon: string; section?: string; newTab?: boolean; requiresMgmtBridge?: boolean; }
+export interface NavLink { path: string; label: string; icon: string; section?: string; newTab?: boolean; requiresMgmtBridge?: boolean; /** Career Prep v27: open in the same tab from the campus tower (default: a new admin tab). */ inPlace?: boolean; }
 /**
  * C92: a LIVE sub-list under a group (its entries come from the server, row-scoped for the viewer), e.g. Interns -> Gov Contracts.
  * Declared here, not in the sidebar component, so the admin sidebar AND the Campus HQ building both render it from this one
@@ -175,6 +175,12 @@ export const NAV_GROUPS: NavGroup[] = [
       paths: [/^\/admin\/internship\/gov-contract\/[A-Za-z0-9-]{1,64}$/] },
     { source: 'agents', label: 'Agents', section: 'agents', icon: 'robot-2-line',
       paths: [/^\/admin\/agents\/[A-Za-z0-9_-]{1,64}$/, /^\/admin\/internship\/agent\/[A-Za-z0-9_-]{1,64}$/] },
+  ]},
+  // Career Prep v27 (CP2.1): one floor, three names in the campus tower (students: Career Prep; partners: Hiring; staff:
+  // Placement). Release 1 ships one staff page, each student's prep, read-only; the kit's queue, inboxes, bookings and
+  // fees pages join this group in Releases 2 and 3 when they exist. Staff doors open in place (M1 Q5 default).
+  { label: 'Placement', section: 'placement', links: [
+    { path: '/admin/placement/students', label: 'Student prep', icon: 'user-star-line', inPlace: true },
   ]},
   { label: 'Inbox & Content', section: 'inbox_content', links: [
     { path: '/admin/inbox', label: 'Inbox COS', icon: 'inbox-2-line' },

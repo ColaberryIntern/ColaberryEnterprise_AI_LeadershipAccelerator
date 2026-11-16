@@ -12,6 +12,8 @@ import { useHomeFacts } from '../home/useHomeFacts';
 import { useCampusMgmt } from '../campusMgmt';
 import { useCampus } from '../CampusContext';
 import type { StaffDesk } from '../campusPeopleApi';
+import { LevelTrail } from '../../careerPrep/LevelTrail';
+import { prepFloorOf } from './careerPrepDoors';
 import './hq.css';
 
 /**
@@ -69,6 +71,7 @@ export default function HqBuilding(p: HqBuildingProps): React.ReactElement {
   const agents = useFloorAgents(s);
   const hour = new Date().getHours();
   const floor = s.scene === 'floor' ? s.floorOf(s.floor) : null;
+  const prep = s.hq.isStaff ? undefined : prepFloorOf(s.hq.floors);
   return (
     <div className={`cm-hq${p.reduceMotion ? ' is-reduced' : ''}`} data-testid="cm-hq" data-scene={s.scene}>
       {s.scene === 'ext' && <HqOutside s={s} face={p.face} hour={hour} people={placed.byFloor} />}
@@ -76,6 +79,8 @@ export default function HqBuilding(p: HqBuildingProps): React.ReactElement {
         lobby={placed.lobby} people={placed.byFloor} onGround={p.onGround} />}
       {s.scene === 'cab' && <HqCab s={s} face={p.face} people={placed} />}
       {s.scene === 'floor' && floor && <HqFloorScene s={s} f={floor} people={placed} agents={agents} />}
+      {/* Career Prep v27 (CP5.3): the level trail on every tower scene, for a student whose Career Prep floor is open */}
+      {prep && <LevelTrail className="cp-trail cm-hq-trail" step={floor && floor.num === prep.num ? 2 : 1} floorNum={prep.num} />}
       <div className="cm-hq-toast" aria-live="polite" data-testid="cm-hq-toast">{s.toast && <div className="t">{s.toast}</div>}</div>
     </div>
   );

@@ -262,3 +262,19 @@
 .cm-tvnote-th i{position:absolute;inset:0;display:grid;place-items:center;color:var(--cm-art-white);font-style:normal;text-shadow:0 1px 3px var(--cm-art-cn-tv)}
 .cm-tvnote-tx{display:flex;flex-direction:column;min-width:0}.cm-tvnote-tx b{font-size:13.5px}.cm-tvnote-tx small{color:var(--cm-art-muted);font-size:12px}
 .cm-tvnote-x{border:0;background:transparent;color:var(--cm-art-muted);cursor:pointer;font-size:14px;width:32px;height:32px;flex:none}
+/* Career Prep v27 (CP5.1): the Career Prep card under Today (shot L1-1). Students with Career Prep open only. */
+.cm-prep-card{display:flex;gap:12px;margin:12px 0;padding:14px 16px;border-radius:16px;background:var(--cm-art-prep-card);color:var(--cm-art-prep-ink)}
+.cm-prep-floor{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;width:52px;height:64px;border-radius:10px;background:linear-gradient(var(--cm-art-prep-brass-a),var(--cm-art-prep-brass-b));color:var(--cm-art-prep-brass-ink)}
+.cm-prep-floor b{font:700 26px/1 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cm-prep-floor small{font-size:9px;font-weight:800;letter-spacing:.12em}
+.cm-prep-body{min-width:0;flex:1}
+.cm-prep-kicker{display:block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--cm-art-prep-brass-a)}
+.cm-prep-card h2{margin:4px 0 6px;font-size:18px;font-weight:700;line-height:1.25;color:var(--cm-art-prep-ink)}
+.cm-prep-rows{list-style:none;margin:0 0 4px;padding:0}
+.cm-prep-row{display:flex;flex-direction:column;gap:4px;width:100%;min-height:44px;padding:4px 0;border:0;background:transparent;color:var(--cm-art-prep-soft);text-align:left;font-size:13px;cursor:pointer}
+.cm-prep-row:focus-visible,.cm-prep-go:focus-visible{outline:3px solid var(--cm-art-prep-brass-a);outline-offset:2px}
+.cm-prep-bar{position:relative;display:block;height:6px;border-radius:3px;background:var(--cm-art-prep-track)}
+.cm-prep-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--cm-art-prep-fill)}
+.cm-prep-tick{position:absolute;top:-3px;width:2px;height:12px;background:var(--cm-art-prep-ink)}
+.cm-prep-more,.cm-prep-line{margin:4px 0;font-size:13px;color:var(--cm-art-prep-soft)}
+.cm-prep-go{min-height:44px;margin-top:6px;padding:0 14px;border:0;border-radius:6px;background:var(--cm-art-prep-go);color:var(--cm-art-prep-ink);font-weight:700}

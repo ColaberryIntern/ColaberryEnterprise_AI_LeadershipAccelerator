@@ -185,6 +185,8 @@ import { ensureRoutingAuditSchema } from './db/ensureRoutingAuditSchema';
 import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySchema';
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
+import { ensureCareerPrepSchema } from './db/ensureCareerPrepSchema';
+import { startCareerPrep } from './services/careerPrep/boot';
 import { startHireVideoCoach } from './services/hire/hireVideoCoach';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureMarketingTrackingSchema } from './db/ensureMarketingTrackingSchema';
@@ -2736,6 +2738,9 @@ async function start(): Promise<void> {
   await ensureCareerPublicationSchema();
   // hire.refactored.ai profile upgrade (Phase 2): intro, interview times, carousel order, interviews. Additive.
   await ensureHireInterviewSchema();
+  // Career Prep v27 (CP1.2): seven new tables + the 9-skill seed. Additive, idempotent.
+  await ensureCareerPrepSchema();
+  await startCareerPrep();
   // Intro-video coaching (OpenAI): registers the transport and re-queues any video whose coaching
   // never landed. Not awaited past the sweep's query; the queue runs in the background.
   await startHireVideoCoach();

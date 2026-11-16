@@ -1,0 +1,7 @@
+/* Career Prep v27 (CP5.3): the level trail. Loaded with LevelTrail itself, so it is styled wherever it renders (the room,
+   the tower, the /portal/career floor page), not only where careerPrepRoom.css happens to be loaded. Inside the room the
+   Refactored theme's variables apply; elsewhere it falls back to the campus art tokens, then to the page's own text color. */
+.cp-trail{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0;font:12px 'IBM Plex Mono',ui-monospace,Menlo,monospace;color:var(--fg-muted,var(--cm-art-ink,currentColor))}
+.cp-trail li+li:before{content:"\203A";margin-right:6px}
+.cp-trail li[aria-current]{color:var(--fg,var(--cm-art-ink,currentColor));font-weight:700}
+.cp-floor-page>.cp-trail{padding:10px 16px}

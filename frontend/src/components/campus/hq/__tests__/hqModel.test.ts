@@ -234,7 +234,10 @@ describe('a member’s own office floor (H4): the one floor an intern’s badge 
   const off = mhq.floors[mhq.floors.length - 1];
 
   it('appends ONE office floor for a member, numbered 1, with a room per assigned project', () => {
-    expect(mhq.floors).toHaveLength(NAV_GROUPS.length + 2); // the staff floors + PH, plus the office
+    // the staff floors + PH, plus the office. The Placement (Career Prep) floor is left out for a member Career Prep is
+    // not open for (CP2.2: Release 1 ships dark), so it is not counted here.
+    const visibleGroups = NAV_GROUPS.filter((g) => g.section !== 'placement').length;
+    expect(mhq.floors).toHaveLength(visibleGroups + 2);
     expect(off).toMatchObject({ key: 'office', num: '1', label: 'Gov Contracts', access: 'all', own: true });
     expect(off.rooms.map((r) => r.path)).toEqual(['/portal/gov-projects/p1', '/portal/gov-projects/p2']);
     expect(off.rooms.map((r) => r.label)).toEqual(['Saratoga Springs RFP', 'Herriman']);

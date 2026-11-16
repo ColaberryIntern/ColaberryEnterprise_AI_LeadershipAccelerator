@@ -2,6 +2,7 @@ import { NAV_GROUPS, PINNED_LINKS, type NavGroup, type NavLink } from '../../Lay
 import { mgmtBridgeTo } from '../../../pages/portal/mgmtNext';
 import { subNavEntries, type NavSubCards } from '../../Layout/adminSubNav';
 import type { CampusAudience } from '../campusMap';
+import { careerPrepDoorsFor, type CareerPrepFloorState } from './careerPrepDoors';
 
 /**
  * Campus HQ (H1): the Staff Office / Career Center / Partner Office as an elevator tower, GENERATED from the admin sidebar
@@ -21,7 +22,7 @@ import type { CampusAudience } from '../campusMap';
 /** The one label the building owns: the sidebar's pinned set has no group label. */
 export const EXECUTIVE_FLOOR_LABEL = 'Executive Floor';
 
-export interface HqRoom { path: string; label: string; icon: string; section: string; newTab: boolean; external: boolean; open: boolean; own?: boolean }
+export interface HqRoom { path: string; label: string; icon: string; section: string; newTab: boolean; external: boolean; open: boolean; own?: boolean; inPlace?: boolean }
 export interface HqFloor { key: string; num: string; label: string; rooms: HqRoom[]; openCount: number; access: 'all' | 'some' | 'none'; own?: boolean }
 export interface GroundRoom { key: 'career' | 'partner' | 'mgmt'; label: string; sub: string; icon: string; route: string; portal: boolean }
 export interface HqNav { pinned: NavLink[]; groups: NavGroup[] }
@@ -41,7 +42,15 @@ function room(link: NavLink, inherited: string, canSection: (s: string) => boole
   return {
     path: link.path, label: link.label, icon: link.icon, section, newTab: !!link.newTab, external: isExternal(link.path),
     open: isStaff && !!section && canSection(section),
+    ...(link.inPlace ? { inPlace: true } : {}),
   };
+}
+
+/** Career Prep v27 (CP2.1): the placement section's floor has one name per audience; every other floor keeps its sidebar label. */
+export const PLACEMENT_SECTION = 'placement';
+export function floorLabelFor(group: NavGroup, audience: CampusAudience): string {
+  if (group.section !== PLACEMENT_SECTION) return group.label ?? group.section;
+  return audience === 'staff' ? 'Placement' : audience === 'business' ? 'Hiring' : 'Career Prep';
 }
 
 function floor(key: string, num: string, label: string, rooms: HqRoom[]): HqFloor {
@@ -84,14 +93,26 @@ function officeFloor(office: HqOffice): HqFloor {
  * a non-staff member's own assigned project(s): when present, their badge opens that one floor and nothing else staff.
  * `subs` (C92) is the sidebar's live sub-list cards, so a staff floor carries the same sub-rooms the sidebar shows.
  */
-export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, office?: HqOffice, subs: NavSubCards = {}): Hq {
-  const top = nav.groups.length + 1;
+export function buildHq(canSection: (s: string) => boolean, isStaff: boolean, audience: CampusAudience = isStaff ? 'staff' : 'member', nav: HqNav = SIDEBAR, careerName?: string, office?: HqOffice, subs: NavSubCards = {}, careerPrep?: CareerPrepFloorState): Hq {
+  // Career Prep v27 (CP2.2): for everyone but staff, the Placement floor holds Career Prep's door, never the staff rooms,
+  // and it does not exist at all for anyone Career Prep is not open for. The floors are numbered AFTER it is left out, so
+  // that viewer's tower is exactly the one they had before (no gap, no renumbering) until M4 opens Career Prep.
+  const prepDoors = isStaff ? [] : careerPrepDoorsFor(audience, careerPrep);
+  const groups = nav.groups.filter((g) => isStaff || g.section !== PLACEMENT_SECTION || prepDoors.length > 0);
+  const top = groups.length + 1;
   const subRooms = (g: NavGroup): HqRoom[] => (g.subLists ?? []).flatMap((sl) => (isStaff && canSection(sl.section)
     ? subNavEntries(sl.source, subs).map((e) => ({ path: e.to, label: e.label, icon: sl.icon, section: sl.section, newTab: true, external: false, open: true }))
     : []));
+  const groupFloor = (g: NavGroup, i: number): HqFloor => {
+    const key = `group-${i}`;
+    const num = String(top - i);
+    const label = floorLabelFor(g, audience);
+    if (!isStaff && g.section === PLACEMENT_SECTION) return { ...floor(key, num, label, prepDoors), own: true };
+    return floor(key, num, label, [...g.links.map((l) => room(l, g.section, canSection, isStaff)), ...subRooms(g)]);
+  };
   const floors = [
     floor('pinned', 'PH', EXECUTIVE_FLOOR_LABEL, nav.pinned.map((l) => room(l, '', canSection, isStaff))),
-    ...nav.groups.map((g, i) => floor(`group-${i}`, String(top - i), g.label ?? g.section, [...g.links.map((l) => room(l, g.section, canSection, isStaff)), ...subRooms(g)])),
+    ...groups.map(groupFloor),
   ];
   // Additive and gated: with no office, or for staff (who have real floors), the building is exactly as before.
   if (!isStaff && office && office.projects.length > 0) floors.push(officeFloor(office));
@@ -104,6 +125,9 @@ export function roomHref(r: HqRoom): string {
   if (r.own) return r.path; // a member's own cockpit is a portal route, reached directly, not through the admin bridge
   return r.external ? r.path : mgmtBridgeTo(r.path);
 }
+
+/** Same tab for a member's own rooms and the Career Prep staff doors (M1 Q5 default); a new admin tab otherwise. */
+export const opensInPlace = (r: HqRoom): boolean => !!(r.own || r.inPlace);
 
 /** The floors your badge opens (the lobby is always yours and is not counted, as in the prototype). */
 export const openFloors = (hq: Hq): HqFloor[] => hq.floors.filter((f) => f.access !== 'none');
