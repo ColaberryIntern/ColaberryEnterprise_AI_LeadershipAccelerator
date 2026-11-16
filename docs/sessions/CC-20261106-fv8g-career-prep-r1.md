@@ -613,3 +613,19 @@ tests/systemV2/career-prep/.
   - Verification: the three copy-lint suites pass; backend Career Prep 299 pass, 7 skipped; backend tsc clean (local
     maxmind only); frontend tsc clean; frontend Career Prep + campus 2415 pass (main's #4107 removed the campus
     tvManager suite, 9 tests, hence the lower count); gitleaks on origin/main..HEAD: no leaks.
+
+- [x] CP5.5 Release 1 deployed to production (T27, part 2)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: PR #4110 merged as 3f341639e (13:34 CT). Build images run 43940757881 succeeded; deployed with
+    scripts/deploy-prod.sh, backend (marker career_prep_reminders_off in dist/services/careerPrep/reminders.js)
+    then nginx (marker career-prep/sessions in /etc/nginx/conf.d/default.conf). Flag seeded for Ali's enrollment
+    aced5b39 only (allow-list count 1). Observation backfill: 16 rows (2 intro-video, 14 published case studies).
+    seedCareerPrepFlag.ts failed in production: it passed a label as setSetting's third argument (updated_by, a
+    uuid). Nothing was written; the seed was applied through the same compiled modules without that argument, and
+    the script is fixed on workstream/career-prep-r2 with a regression test (ships with the next milestone PR).
+  - Verification: both hostnames (enterprise.colaberry.ai, www.refactored.ai): 40 MB POST with no login to
+    /api/portal/career-prep/sessions/<uuid>/attempts returns 401, the same 40 MB to another career-prep path
+    returns 413 (the control); /api/portal/career-prep/summary with no login returns 401; /portal/career serves
+    200. Seed re-run: changed false. Backfill re-run: inserted 0 for every source. Not yet verified: Ali's own
+    signed-in walkthrough of the room.

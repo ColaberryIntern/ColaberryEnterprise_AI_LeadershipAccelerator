@@ -21,3 +21,14 @@ describe('nextAllowList', () => {
     expect(nextAllowList('{bad', A, false)).toEqual({ list: [A], changed: true });
   });
 });
+
+describe('the write', () => {
+  // Production, 2026-11-16: the script passed the label 'seedCareerPrepFlag' as setSetting's third argument, which is
+  // the admin user uuid stored in updated_by, and Postgres refused it ("invalid input syntax for type uuid").
+  it('never passes setSetting an updated_by (a script has no admin; a label fails the uuid cast)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const src: string = require('fs').readFileSync(require('path').join(__dirname, '..', 'seedCareerPrepFlag.ts'), 'utf8');
+    const calls = src.match(/setSetting\(([^)]*)\)/g) ?? [];
+    expect(calls).toEqual(['setSetting(FLAG_KEY, list)']);
+  });
+});
