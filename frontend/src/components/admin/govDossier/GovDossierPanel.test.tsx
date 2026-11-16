@@ -16,6 +16,7 @@ jest.mock('../../../services/adminGovDossierApi', () => ({
   uploadCompanyDoc: jest.fn(),
   approveCompanyDoc: jest.fn(),
   deleteCompanyDoc: jest.fn(),
+  getDossierNeeds: jest.fn(),
 }));
 
 const lib = (over: Partial<DossierLibrary> = {}): DossierLibrary => ({
@@ -39,6 +40,7 @@ beforeEach(() => {
   (dossierApi.approveDossierItem as jest.Mock).mockResolvedValue({ ok: true, id: 'f1', approved: true });
   (dossierApi.listCompanyDocs as jest.Mock).mockResolvedValue({ documents: [{ id: 'd1', name: 'capability.pdf', status: 'ready', approved: false, chunkCount: 4, embeddedCount: 4, truncated: false, createdAt: null }] });
   (dossierApi.approveCompanyDoc as jest.Mock).mockResolvedValue({ ok: true, id: 'd1', approved: true });
+  (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [] });
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.clearAllMocks(); });
 
@@ -62,6 +64,20 @@ describe('GovDossierPanel (standalone)', () => {
     await settle();
     expect(dossierApi.approveDossierItem).toHaveBeenCalledWith('fact', 'f1');
     expect(dossierApi.getDossier).toHaveBeenCalledTimes(2); // initial load + reload after approve
+  });
+
+  it('lists the open needs across contracts, grouping a record need as a Reference with its bids', async () => {
+    (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [
+      { key: 'reference:1', kind: 'record', ask: 'Add a past-performance reference', why: 'The section cannot pass without one.', blocking: 'fatal', recordType: 'reference', projects: [{ projectId: 'p1', projectName: 'Harris County' }, { projectId: 'p2', projectName: 'Dallas ISD' }] },
+    ] });
+    await renderPage();
+    const rows = container.querySelectorAll('[data-testid="dossier-need-row"]');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Reference');
+    expect(rows[0].textContent).toContain('Add a past-performance reference');
+    expect(rows[0].textContent).toContain('Harris County');
+    expect(rows[0].textContent).toContain('Dallas ISD');
+    expect(rows[0].textContent).toContain('2 bids');
   });
 
   it('lists company documents with an upload control', async () => {

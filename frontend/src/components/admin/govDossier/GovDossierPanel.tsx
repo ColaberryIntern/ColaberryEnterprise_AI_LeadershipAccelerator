@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, SectionCard } from '../shell';
 import {
   getDossier, addDossierItem, approveDossierItem, updateDossierFact, FACT_CATEGORIES,
-  listCompanyDocs, uploadCompanyDoc, approveCompanyDoc, deleteCompanyDoc,
-  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc, type DossierFact, type FactEdit,
+  listCompanyDocs, uploadCompanyDoc, approveCompanyDoc, deleteCompanyDoc, getDossierNeeds,
+  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc, type DossierFact, type FactEdit, type DossierNeed,
 } from '../../../services/adminGovDossierApi';
 
 /**
@@ -129,6 +129,7 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
         <p className="text-secondary" role="status">Loading the dossier...</p>
       ) : (
         <>
+          <NeedsAcrossContractsSection />
           <SectionCard className="mb-4" title="Company facts" icon="file-list-3-line"
             subtitle="Registrations, certifications, financials and other specifics the agent may assert. Grouped by what proposals ask for."
             actions={<button type="button" className="btn btn-primary btn-sm" data-testid="add-fact" onClick={() => setAdding({ kind: 'fact' })}><i className="ri-add-line me-1" aria-hidden="true" />Add fact</button>}>
@@ -249,6 +250,54 @@ function EditFactModal({ fact, onCancel, onSave }: { fact: DossierFact; onCancel
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * NeedsAcrossContractsSection - the tenant-wide "Questions across your contracts" surface (spec decision #2). Every
+ * open need across every gov bid, deduped by canonical key, each tagged with the bids that ask it. Read-only here: a
+ * person answers it in that bid's Proposal Studio, and answer-once propagation then clears it from the others. Shows
+ * grouped record needs as "Reference" / "Key person" so past-performance reads as one record, not scattered fields.
+ */
+function NeedsAcrossContractsSection(): React.ReactElement {
+  const [needs, setNeeds] = useState<DossierNeed[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    getDossierNeeds()
+      .then((r) => { if (live) { setNeeds(r.needs); setErr(null); } })
+      .catch(() => { if (live) { setNeeds([]); setErr('Could not load the questions across your contracts.'); } });
+    return () => { live = false; };
+  }, []);
+
+  const kindTag = (n: DossierNeed): string =>
+    n.kind === 'record' ? (n.recordType === 'personnel' ? 'Key person' : 'Reference') : n.kind;
+
+  return (
+    <SectionCard className="mb-4" title="Questions across your contracts" icon="question-answer-line"
+      subtitle="Everything the proposal agent still needs a person to answer, gathered across every bid. Answer one in that bid's Proposal Studio and it clears from the others.">
+      {err && <div className="alert alert-warning py-2" role="alert">{err}</div>}
+      {needs === null ? (
+        <p className="text-secondary mb-0" role="status">Loading questions...</p>
+      ) : needs.length === 0 ? (
+        <p className="text-secondary mb-0">Nothing open right now. Every question your bids raised has been answered.</p>
+      ) : (
+        <ul className="list-group" data-testid="dossier-needs">
+          {needs.map((n) => (
+            <li key={n.key} className="list-group-item d-flex justify-content-between align-items-start gap-2" data-testid="dossier-need-row">
+              <span>
+                <span className={`badge rounded-pill me-2 ${n.blocking === 'fatal' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{kindTag(n)}</span>
+                <strong>{n.ask}</strong>
+                {n.why ? <div className="small text-secondary">{n.why}</div> : null}
+                <div className="small text-secondary">Asked on: {n.projects.map((p) => p.projectName).filter(Boolean).join(', ')}</div>
+              </span>
+              <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis flex-shrink-0">{n.projects.length} {n.projects.length === 1 ? 'bid' : 'bids'}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
   );
 }
 

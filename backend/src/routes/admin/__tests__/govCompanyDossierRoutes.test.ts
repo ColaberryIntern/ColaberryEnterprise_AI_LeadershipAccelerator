@@ -37,6 +37,10 @@ jest.mock('../../../services/factory/proposal/govCompanyLibrary', () => ({
   approveCompanyPersonnel: (...a: any[]) => approveCompanyPersonnel(...a),
   updateCompanyFact: (...a: any[]) => updateCompanyFact(...a),
 }));
+const dbQuery = jest.fn();
+const collectTenantNeeds = jest.fn();
+jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: any[]) => dbQuery(...a) } }));
+jest.mock('../../../services/factory/proposal/tenantNeeds', () => ({ collectTenantNeeds: (...a: any[]) => collectTenantNeeds(...a) }));
 
 import express, { type Express } from 'express';
 import request from 'supertest';
@@ -171,5 +175,38 @@ describe('company documents (tenant-wide, project_id NULL)', () => {
     const del = await request(app).delete(`${DOCS}/d1`);
     expect(del.status).toBe(200);
     expect(del.body).toEqual({ ok: true });
+  });
+});
+
+describe('GET dossier needs (Needs across contracts)', () => {
+  const ENGAGEMENT = 'e2222222-74a3-4b98-b4dd-ba0087efd924';
+  beforeEach(() => {
+    lookupContainer.mockResolvedValue({ tenant: { id: TENANT, name: 'refactored' }, org: { id: 'o1' }, engagement: { id: ENGAGEMENT } });
+  });
+
+  it('collects needs across the tenant gov bids, scoped to the engagement delivery projects', async () => {
+    dbQuery.mockResolvedValue([{ id: 'p1', name: 'Harris County' }, { id: 'p2', name: 'Dallas ISD' }]);
+    collectTenantNeeds.mockResolvedValue([{ key: 'reference:1', kind: 'record', ask: 'Add a reference', blocking: 'fatal', projects: [{ projectId: 'p1', projectName: 'Harris County' }] }]);
+    const res = await request(app).get('/api/admin/factory/dossier/needs');
+    expect(res.status).toBe(200);
+    expect(res.body.needs).toHaveLength(1);
+    // delivery projects are scoped to tenant + gov engagement
+    const [, opts] = dbQuery.mock.calls[0];
+    expect(opts.bind).toEqual([TENANT, ENGAGEMENT]);
+    expect(collectTenantNeeds).toHaveBeenCalledWith([{ projectId: 'p1', projectName: 'Harris County' }, { projectId: 'p2', projectName: 'Dallas ISD' }]);
+  });
+
+  it('503s when the gov workspace is unconfigured', async () => {
+    lookupContainer.mockResolvedValue(null);
+    const res = await request(app).get('/api/admin/factory/dossier/needs');
+    expect(res.status).toBe(503);
+    expect(dbQuery).not.toHaveBeenCalled();
+  });
+
+  it('500s (not a throw) when the collect fails', async () => {
+    dbQuery.mockResolvedValue([{ id: 'p1', name: 'Harris County' }]);
+    collectTenantNeeds.mockRejectedValue(new Error('db down'));
+    const res = await request(app).get('/api/admin/factory/dossier/needs');
+    expect(res.status).toBe(500);
   });
 });

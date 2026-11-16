@@ -71,6 +71,27 @@ export async function deleteCompanyDoc(id: string): Promise<{ ok: boolean }> {
   return data;
 }
 
+// ── Tenant-wide "Needs across contracts" (spec decision #2): every open question across the tenant's bids ──────────
+// Mirrors backend/src/services/factory/proposal/tenantNeeds.ts (TenantNeed) via GET /api/admin/factory/dossier/needs.
+const NEEDS = '/api/admin/factory/dossier/needs';
+
+export interface DossierNeedProject { projectId: string; projectName: string }
+export interface DossierNeed {
+  key: string;
+  kind: string;
+  ask: string;
+  why?: string | null;
+  blocking: 'fatal' | 'score';
+  recordType?: 'reference' | 'personnel';
+  projects: DossierNeedProject[];
+}
+
+/** Every open need across the tenant's bids, deduped by key, each tagged with the bids that ask it. Read-only. */
+export async function getDossierNeeds(): Promise<{ needs: DossierNeed[] }> {
+  const { data } = await api.get<{ needs: DossierNeed[] }>(NEEDS);
+  return data;
+}
+
 /** The proposal-demand buckets the fill-UI groups facts by. Labels are plain copy (no special punctuation). */
 export const FACT_CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'registrations', label: 'Registrations (SAM, UEI, CAGE, DUNS)' },
