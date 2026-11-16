@@ -16,6 +16,8 @@
  * that is actually declared. It is deliberately exhaustive rather than
  * per-component, because the bug was systemic.
  */
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -140,7 +142,26 @@ function internalHrefs(html: string): string[] {
     .filter((h) => h.length > 0)
     // Static assets under /site-v2/ and root images are files, not routes.
     .filter((h) => !/\.(png|jpe?g|svg|webp|woff2?|ico)$/i.test(h))
-    .filter((h) => !h.startsWith('/site-v2/'));
+    .filter((h) => !h.startsWith('/site-v2/'))
+    // A path served as a real file is not a route, and must not be treated as a
+    // dead one. The exemption is granted by the FILESYSTEM rather than by a
+    // hardcoded list, so it can only ever cover a page that genuinely exists.
+    .filter((h) => !servedAsStaticFile(h));
+}
+
+/** The build input, which is what nginx ends up serving. */
+const PUBLIC_DIR = path.join(__dirname, '../../../../public');
+
+/**
+ * Is this path a real directory with an index.html under public/?
+ *
+ * This is the whole reason the check is safe to add: it cannot excuse a typo.
+ * `/goverment/` would not exist on disk and would still be reported dead.
+ */
+function servedAsStaticFile(href: string): boolean {
+  const rel = href.replace(/^\//, '').replace(/\/$/, '');
+  if (!rel) return false;
+  return fs.existsSync(path.join(PUBLIC_DIR, rel, 'index.html'));
 }
 
 describe('link integrity — every internal link resolves to a declared route', () => {
@@ -225,9 +246,39 @@ describe('link integrity — every service drill-through', () => {
 
 describe('link integrity — the specific paths that were broken', () => {
   it('primary nav points into the V2 tree, not at root paths', () => {
-    V2_NAV.forEach((item) => {
+    V2_NAV.filter((item) => !item.external).forEach((item) => {
       expect(item.to.startsWith('/')).toBe(true);
       expect(ALL_ROUTES).toContain(item.to);
+    });
+  });
+
+  /*
+      An `external` nav item is deliberately NOT a route, so the assertion above
+      cannot cover it -- and "not covered" is how a broken nav link ships. It is
+      held to the stronger version of the same promise instead: the file it
+      names must exist on disk in the build input. A <Link> to it would be
+      handled by the router, match no <Route>, and render the 404 for a page
+      that is really there, so the anchor is checked too.
+  */
+  it('every external nav item resolves to a real file under public/', () => {
+    const externals = V2_NAV.filter((item) => item.external);
+    expect(externals.length).toBeGreaterThan(0);
+    externals.forEach((item) => {
+      expect(item.to.startsWith('/')).toBe(true);
+      const rel = item.to.replace(/^\//, '').replace(/\/$/, '');
+      const file = path.join(PUBLIC_DIR, rel, 'index.html');
+      expect(fs.existsSync(file)).toBe(true);
+    });
+  });
+
+  it('renders an external nav item as an anchor, never as a router Link', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={['/']}>
+        <PublicHeaderV2 />
+      </MemoryRouter>,
+    );
+    V2_NAV.filter((item) => item.external).forEach((item) => {
+      expect(html).toContain(`href="${item.to}"`);
     });
   });
 

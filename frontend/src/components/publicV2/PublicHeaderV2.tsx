@@ -20,6 +20,16 @@ import { Link, useLocation } from 'react-router-dom';
 export interface NavItem {
   readonly label: string;
   readonly to: string;
+  /**
+   * Served as a real file rather than by the router, so it must be a plain
+   * anchor and a full page load.
+   *
+   * A <Link> here would be WORSE THAN A WRONG STYLE: react-router would handle
+   * the click itself, find no matching <Route>, and render the 404 for a page
+   * that exists on disk. The only symptom would be that the nav item is broken
+   * while typing the same URL works.
+   */
+  readonly external?: boolean;
 }
 
 /**
@@ -52,6 +62,10 @@ export const V2_NAV: readonly NavItem[] = [
   { label: 'Pricing', to: '/pricing' },
   { label: 'The book', to: '/book' },
   { label: 'Proof', to: '/proof' },
+  /* Served from frontend/public/government/, not by the router: the page is
+     the design package's own single-screen layout with its own render engine,
+     and it reads the live catalog from /api/public/services. */
+  { label: 'Government', to: '/government/', external: true },
   { label: 'Start Free', to: '/try' },
 ];
 
@@ -101,13 +115,19 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
           <ul className="cbv2-navlinks" id="cbv2-navlinks" data-open={open ? 'true' : 'false'}>
             {navItems.map((item) => (
               <li key={item.to}>
-                <Link
-                  className="cbv2-navlink"
-                  to={item.to}
-                  aria-current={isCurrent(item.to) ? 'page' : undefined}
-                >
-                  {item.label}
-                </Link>
+                {item.external ? (
+                  <a className="cbv2-navlink" href={item.to}>
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link
+                    className="cbv2-navlink"
+                    to={item.to}
+                    aria-current={isCurrent(item.to) ? 'page' : undefined}
+                  >
+                    {item.label}
+                  </Link>
+                )}
               </li>
             ))}
             <li>
