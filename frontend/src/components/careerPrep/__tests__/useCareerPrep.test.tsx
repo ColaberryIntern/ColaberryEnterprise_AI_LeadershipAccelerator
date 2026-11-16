@@ -2,10 +2,12 @@ import React from 'react';
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { useCareerPrep, type CareerPrepRoomState, type RoomHooks } from '../useCareerPrep';
-import { askCoraApi, fetchPrepDashboard, postInterview, type PrepDashboard } from '../careerPrepApi';
+import { askCoraApi, fetchActivePlan, fetchPrepDashboard, postInterview, postPlan, type PrepDashboard } from '../careerPrepApi';
 import { centralLocalToIso } from '../InterviewForm';
 
-jest.mock('../careerPrepApi', () => ({ fetchPrepDashboard: jest.fn(), postInterview: jest.fn(), askCoraApi: jest.fn() }));
+jest.mock('../careerPrepApi', () => ({ fetchPrepDashboard: jest.fn(), postInterview: jest.fn(), askCoraApi: jest.fn(), fetchActivePlan: jest.fn(), postPlan: jest.fn() }));
+const active = fetchActivePlan as jest.Mock;
+const makePlan = postPlan as jest.Mock;
 const dash = fetchPrepDashboard as jest.Mock;
 const post = postInterview as jest.Mock;
 const ask = askCoraApi as jest.Mock;
@@ -28,7 +30,7 @@ async function mount(anchor: string | null = null, hooks: RoomHooks = {}): Promi
 }
 const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
 afterEach(() => { if (root) { const r = root; act(() => r.unmount()); } host = null; root = null; });
-beforeEach(() => { dash.mockReset(); post.mockReset(); ask.mockReset(); });
+beforeEach(() => { dash.mockReset(); post.mockReset(); ask.mockReset(); active.mockReset().mockResolvedValue(null); makePlan.mockReset(); });
 const lastCards = () => [...state.log].reverse().find((i) => i.kind === 'cards') as Extract<typeof state.log[number], { kind: 'cards' }>;
 
 describe('useCareerPrep (CP3.3, CP3.4)', () => {
@@ -39,17 +41,52 @@ describe('useCareerPrep (CP3.3, CP3.4)', () => {
     expect(lastCards().cards.map((c) => c.id)).toEqual(['i1', 'add', 'create']);
   });
 
-  it('anchors on a picked interview and shows what their own data says', async () => {
+  it('anchors on a picked interview, echoes the pick, shows what their own data says, then offers plans', async () => {
     dash.mockResolvedValue(withData);
-    const onPlan = jest.fn();
-    await mount(null, { onPlan });
+    await mount();
     await act(async () => { state.pick(lastCards().id, lastCards().cards[0]); });
     await flush();
+    expect(state.log.some((i) => i.kind === 'me' && i.text === 'Acme · AI Engineer')).toBe(true);
     expect(state.anchorId).toBe('i1');
     expect(dash).toHaveBeenLastCalledWith('i1');
-    const block = state.log.find((i) => i.kind === 'block');
-    expect(block).toMatchObject({ title: 'What your data says about Acme' });
-    expect(onPlan).toHaveBeenCalledWith('plan');
+    expect(state.log.find((i) => i.kind === 'block')).toMatchObject({ title: 'What your data says about Acme' });
+    expect(lastCards().label).toBe('Plans');
+    expect(lastCards().cards[0].badge).toBe('Recommended');
+  });
+
+  it('picking a plan asks the server to build it and opens Your plan', async () => {
+    dash.mockResolvedValue(withData);
+    const onTab = jest.fn();
+    await mount('i1', { onTab });
+    await flush();
+    makePlan.mockResolvedValue({ id: 'pl1', interviewId: 'i1', plan: { kind: 'days', minutes: 20, days: [{ date: '2026-11-16', label: 'Today', segments: [] }] } });
+    await act(async () => { state.pick(lastCards().id, lastCards().cards.find((c) => c.id === 'plan:days')!); });
+    await flush();
+    expect(makePlan).toHaveBeenCalledWith({ interviewId: 'i1', kind: 'days' });
+    expect(state.plan?.id).toBe('pl1');
+    expect(onTab).toHaveBeenCalledWith('plan');
+    expect(lastCards().cards[0].id).toBe('start');
+  });
+
+  it('Build my own asks for the time, then the skill, then builds a custom plan', async () => {
+    dash.mockResolvedValue(withData);
+    await mount('i1');
+    await flush();
+    makePlan.mockResolvedValue({ id: 'pl2', interviewId: 'i1', plan: { kind: 'custom', minutes: 10, days: [] } });
+    await act(async () => { state.pick(lastCards().id, lastCards().cards.find((c) => c.id === 'plan:custom')!); });
+    await act(async () => { state.pick(lastCards().id, lastCards().cards.find((c) => c.id === 'min:10')!); });
+    await act(async () => { state.pick(lastCards().id, lastCards().cards.find((c) => c.id === 'focus:f')!); });
+    await flush();
+    expect(makePlan).toHaveBeenCalledWith({ interviewId: 'i1', kind: 'custom', minutes: 10, focusSkill: 'f' });
+  });
+
+  it('shows suggestion cards when Cora cannot answer', async () => {
+    dash.mockResolvedValue(withData);
+    await mount();
+    ask.mockResolvedValue({ messages: ['I could not answer that just now.'], cards: [{ id: 'suggest:plan', icon: 'x', title: 'Suggest a plan', line: '' }] });
+    await act(async () => { state.ask('anything'); });
+    await flush();
+    expect(lastCards().cards[0].id).toBe('suggest:plan');
   });
 
   it('says plainly when there is not enough data, instead of inventing an insight', async () => {
@@ -90,6 +127,7 @@ describe('useCareerPrep (CP3.3, CP3.4)', () => {
     expect(onTab).toHaveBeenCalledWith('progress');
     await act(async () => { state.ask('What should I work on?'); });
     expect(lastCards().cards.map((c) => c.title)).toEqual(['Pace and clarity', 'Few filler words']);
+    expect(lastCards().cards[0].id).toBe('skill:p');
     expect(ask).not.toHaveBeenCalled();
     ask.mockResolvedValue({ messages: ['Lead with the result.'] });
     await act(async () => { state.ask('How do I open a technical interview?'); });

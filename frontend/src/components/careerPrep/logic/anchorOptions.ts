@@ -18,6 +18,9 @@ export const TYPE_CARDS: ReadonlyArray<{ type: InterviewType; title: string; lin
   { type: 'behavioral', title: 'Behavioral', line: 'About 20 minutes: stories about how you work with people.' },
 ];
 
+const SOURCE_WORDS: Record<string, string> = { video: 'your videos', phone_mock: 'phone mocks', real_interview: 'real interviews', training: 'training', project: 'projects' };
+const sourceWords = (keys: string[]) => keys.map((k) => SOURCE_WORDS[k] ?? k).join(', ');
+
 export function anchorCards(interviews: PrepInterview[]): OptionCard[] {
   const real = interviews
     .filter((i) => i.source !== 'practice' && i.startsAt)
@@ -27,8 +30,14 @@ export function anchorCards(interviews: PrepInterview[]): OptionCard[] {
       line: `${interviewWhen(i.startsAt as string)} · ${i.source === 'real' ? 'A real interview' : 'Added by you'}`,
       ...(i.readiness !== undefined ? { bar: { value: i.readiness, target: i.target } } : {}),
     }));
+  // Practice interviews and added ones with no date, after the dated ones, so "Change" can pick them again.
+  const undated = interviews.filter((i) => i.source === 'practice' || !i.startsAt).map((i): OptionCard => ({
+    id: i.id, icon: 'calendar-line', title: `${i.company} · ${i.role}`, line: i.source === 'practice' ? 'Practice · made by Cora' : 'Added by you · no date yet',
+    ...(i.readiness !== undefined ? { bar: { value: i.readiness, target: i.target } } : {}),
+  }));
   return [
     ...real,
+    ...undated,
     { id: ADD_ID, icon: 'add-circle-line', title: 'Add an interview', line: 'Paste the job description or the invite. I will build your prep from it.' },
     { id: CREATE_ID, icon: 'magic-line', title: 'Create one for me', line: 'No interview yet? I will set up a realistic practice one for the job you want.' },
   ];
@@ -43,7 +52,7 @@ export function insightLines(d: PrepDashboard): string[] {
   const lines: string[] = [];
   if (d.readiness) lines.push(`Readiness ${d.readiness.value}${d.readiness.target !== undefined ? `, ready at ${d.readiness.target}` : ''}.`);
   const scored = d.skills.filter((s) => s.score !== undefined);
-  for (const s of scored.slice(0, 2)) lines.push(`${s.label}: ${s.score}, your lowest so far (from ${s.sources.join(', ')}).`);
+  for (const s of scored.slice(0, 2)) lines.push(`${s.label}: ${s.score}, your lowest so far (from ${sourceWords(s.sources)}).`);
   const gain = scored.filter((s) => (s.change30 ?? 0) > 0).sort((a, b) => (b.change30 as number) - (a.change30 as number))[0];
   if (gain) lines.push(`${gain.label} is up ${gain.change30} in 30 days.`);
   return lines.slice(0, 4);

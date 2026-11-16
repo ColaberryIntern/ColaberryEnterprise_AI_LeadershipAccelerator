@@ -29,7 +29,7 @@ function app(): express.Express {
 beforeEach(() => {
   mockEnabled.mockReset().mockResolvedValue(true);
   mockLoad.mockReset().mockResolvedValue({ enrollmentId: 'enr-ali', firstName: 'Ali', observations: [], sourceRefs: [], sessions: [], trend: [], interviews: [] });
-  mockAsk.mockReset().mockResolvedValue({ messages: ['Start with your opening.'], grounded: true });
+  mockAsk.mockReset().mockResolvedValue({ messages: ['Start with your opening.'], grounded: true, unavailable: false });
 });
 
 describe('POST /api/portal/career-prep/cora', () => {
@@ -53,6 +53,13 @@ describe('POST /api/portal/career-prep/cora', () => {
     expect(res.body).toEqual({ messages: ['Start with your opening.'], cards: [] });
     expect(mockLoad).toHaveBeenCalledWith('enr-ali', expect.any(Date));
   });
+  it('gives suggestion cards when Cora cannot answer', async () => {
+    mockAsk.mockResolvedValue({ messages: ['I could not answer that just now.'], grounded: true, unavailable: true });
+    const res = await request(app()).post(URL).set('Authorization', token()).send({ message: 'hi' });
+    expect(res.body.cards.length).toBeGreaterThan(0);
+    expect(res.body.cards[0]).toMatchObject({ id: 'suggest:plan', title: 'Suggest a plan' });
+  });
+
   it('refuses a read-only view-as token', async () => {
     const res = await request(app()).post(URL).set('Authorization', token({ read_only: true, impersonated_by: 'admin-1' })).send({ message: 'hi' });
     expect(res.status).toBeGreaterThanOrEqual(400);

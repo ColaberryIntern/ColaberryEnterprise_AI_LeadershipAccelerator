@@ -46,6 +46,18 @@ export async function postInterview(body: NewInterview): Promise<{ id: string; s
   return (await portalApi.post(`${BASE}/interviews`, body)).data;
 }
 
-export async function askCoraApi(message: string, interviewId?: string): Promise<{ messages: string[] }> {
+export async function askCoraApi(message: string, interviewId?: string): Promise<{ messages: string[]; cards?: Array<{ id: string; icon: string; title: string; line: string }> }> {
   return (await portalApi.post(`${BASE}/cora`, interviewId ? { message, interviewId } : { message })).data;
+}
+
+export interface PrepSegment { kind: 'warmup' | 'learn' | 'try' | 'pressure' | 'cooldown' | 'rehearsal'; title: string; minutes: number; targetSkill?: string }
+export interface PrepPlan { kind: 'days' | 'tonight' | 'full' | 'custom'; minutes: number; days: Array<{ date: string; label: string; segments: PrepSegment[] }> }
+export interface StoredPlan { id: string; interviewId: string; plan: PrepPlan }
+
+export async function postPlan(body: { interviewId: string; kind: PrepPlan['kind']; minutes?: 10 | 20 | 45; focusSkill?: string }): Promise<StoredPlan> {
+  return (await portalApi.post(`${BASE}/plans`, body)).data;
+}
+
+export async function fetchActivePlan(interviewId: string): Promise<StoredPlan | null> {
+  return (await portalApi.get(`${BASE}/plans`, { params: { interviewId } })).data.plan ?? null;
 }

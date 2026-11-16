@@ -256,3 +256,23 @@ tests/systemV2/career-prep/.
     Try; Central calendar dates); plans.ts (server builds, one active plan per interview, the previous one retired
     in the same transaction, an unknown focus skill ignored); POST and GET /api/portal/career-prep/plans.
   - Verification: planBuilder 14, plans 4, plan routes 9; 159 Career Prep backend tests pass; tsc clean.
+
+- [x] CP3.3 + CP3.4 fixes (attempt 2) and CP4.1 (frontend) the plan flow
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: verifier results T11 PASS 11/12, T12 PASS 11/12, T13 FAIL 10/12, T14 FAIL 10/12. Fixes:
+    (1) POST /interviews is retry-safe: the same interview within 10 minutes returns the first row (200) and does not
+    call the model again, checked under a per-student advisory lock so two simultaneous requests make one row; the
+    model call runs after the row is saved and writes its questions onto it. (2) The Hire link cuts company and role
+    to 120 characters, so one long employer name cannot silently stop every link. (3) Cora's coaching path now
+    carries the platform's Cora rules (coraPromptRules.ts) in its prompt and checks every reply with
+    findCoraReplyViolations; a violation is treated like an invented number. (4) Cora's context has no incidental
+    numbers, the exchange has a 20 s budget, and when she cannot answer the reply carries suggestion cards.
+    (5) Insight lines name sources in words; practice and undated interviews are offered again after "Change".
+    (6) The room conversation is split into useRoomLog, useAnchorFlow and useCareerPrep so no function passes the
+    50-line limit, and it now offers plans after the insight, builds the chosen plan on the server (days, tonight,
+    full, or Build my own: time then skill), opens Your plan, and offers "Start today's session".
+  - Verification: backend 163 Career Prep tests pass (+3 Postgres integration tests for the lock, the duplicate
+    check and the 120-character link, run in CI); frontend Career Prep 82 pass; both tsc clean.
+  - Notes: T11's "close returns focus to the door" in the real app is carried into T25's scope (plan.md, ledger).
+    Spelled-out numbers can pass Cora's digit guard; declared as a known limit in coraService.ts.

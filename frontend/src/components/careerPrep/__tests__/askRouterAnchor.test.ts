@@ -29,7 +29,8 @@ describe('anchorCards', () => {
       iv({ id: 'a', company: 'Acme', startsAt: '2026-11-19T20:00:00Z', readiness: 64 }),
       iv({ id: 'p', source: 'practice', company: 'Practice interview' }),
     ]);
-    expect(cards.map((c) => c.id)).toEqual(['a', 'b', ADD_ID, CREATE_ID]);
+    expect(cards.map((c) => c.id)).toEqual(['a', 'b', 'p', ADD_ID, CREATE_ID]); // practice after the dated ones, so Change can pick it again
+    expect(cards[2].line).toBe('Practice · made by Cora');
     expect(cards[0]).toMatchObject({ title: 'Acme · AI Engineer', line: 'Thursday at 2:00 PM · A real interview', bar: { value: 64, target: 75 } });
     expect(cards[1].bar).toBeUndefined();
   });
@@ -50,8 +51,8 @@ describe('insightLines (only from real metrics)', () => {
     ] };
     expect(insightLines(d)).toEqual([
       'Readiness 64, ready at 75.',
-      'Pace and clarity: 41, your lowest so far (from video).',
-      'Few filler words: 48, your lowest so far (from video).',
+      'Pace and clarity: 41, your lowest so far (from your videos).',
+      'Few filler words: 48, your lowest so far (from your videos).',
       'Few filler words is up 9 in 30 days.',
     ]);
   });

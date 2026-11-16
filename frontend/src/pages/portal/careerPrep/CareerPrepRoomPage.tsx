@@ -44,7 +44,7 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
       )}
       tabs={{
         progress: tabs?.progress ?? (room.dashboard
-          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.ask(`10 minutes on ${s.label}`)} />
+          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} />
           : <Pending text="Loading your progress..." />),
         plan: tabs?.plan ?? <Pending text="Pick a plan with Cora and it appears here." />,
         session: tabs?.session ?? <Pending text="Start a session from your plan." />,

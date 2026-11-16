@@ -86,16 +86,23 @@ export async function postInterview(req: Request, res: Response): Promise<void> 
     const me = req.participant!.sub;
     if (b.data.mode === 'practice') {
       const r = await createPractice(me, { role: b.data.role, type: b.data.type });
-      res.status(201).json({ id: r.id, source: 'practice', practiceUntil: r.practiceUntil });
+      res.status(r.duplicate ? 200 : 201).json({ id: r.id, source: 'practice', practiceUntil: r.practiceUntil });
       return;
     }
     const r = await addInterview(me, { company: b.data.company, role: b.data.role, type: b.data.type, startsAt: b.data.startsAt, jdText: b.data.jdText });
-    res.status(201).json({ id: r.id, source: 'added', questions: r.questions ?? null });
+    res.status(r.duplicate ? 200 : 201).json({ id: r.id, source: 'added', questions: r.questions ?? null });
   } catch (err) {
     logFailure('career_prep_interview_create_failed', err);
     res.status(500).json({ error: 'Could not save the interview.' });
   }
 }
+
+/** When Cora cannot answer, the student still gets something to do (kit P4.8: "answered with cards"). */
+export const SUGGESTION_CARDS = [
+  { id: 'suggest:plan', icon: 'calendar-check-line', title: 'Suggest a plan', line: 'A short session a day until your interview.' },
+  { id: 'suggest:weak', icon: 'focus-2-line', title: 'What should I work on?', line: 'Your lowest skills right now.' },
+  { id: 'suggest:quick', icon: 'timer-line', title: 'I have 10 minutes', line: 'One quick session.' },
+] as const;
 
 const CoraBody = z.object({ message: z.string().trim().min(1).max(2000), interviewId: z.string().uuid().optional() }).strict();
 
@@ -108,7 +115,7 @@ export async function postCora(req: Request, res: Response): Promise<void> {
     const data = await loadPrepData(req.participant!.sub, now);
     if (b.data.interviewId && !data.interviews.some((i) => i.id === b.data.interviewId)) { res.status(404).json({ error: 'Not found' }); return; }
     const r = await askCora(b.data.message, buildDashboard(data, now, b.data.interviewId));
-    res.json({ messages: r.messages, cards: [] });
+    res.json({ messages: r.messages, cards: r.unavailable ? SUGGESTION_CARDS : [] });
   } catch (err) {
     logFailure('career_prep_cora_route_failed', err);
     res.status(500).json({ error: 'Cora could not answer just now.' });

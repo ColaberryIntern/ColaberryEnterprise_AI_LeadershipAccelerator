@@ -1,133 +1,100 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { askCoraApi, fetchPrepDashboard, postInterview, type InterviewType, type NewInterview, type PrepDashboard } from './careerPrepApi';
+import { useCallback, useRef, useState } from 'react';
+import { askCoraApi, postInterview, type InterviewType, type NewInterview, type PrepDashboard, type PrepPlan, type StoredPlan } from './careerPrepApi';
 import type { ChatItem } from './CoraChat';
 import type { OptionCard } from './OptionCards';
 import { routeAsk, type Sheet } from './logic/askRouter';
-import { ADD_ID, anchorCards, CREATE_ID, insightLines, typeCards } from './logic/anchorOptions';
+import { ADD_ID, CREATE_ID, typeCards } from './logic/anchorOptions';
+import { focusCards, minuteCards } from './logic/planCards';
+import { useAnchorFlow, type Minutes } from './useAnchorFlow';
+import { cards, cora, me, useRoomLog } from './useRoomLog';
 
 /**
- * Career Prep v27 (CP3.3, CP3.4): the room's conversation. Cora opens by asking what the student is
- * preparing for (anchor cards). Picking a real interview anchors the room and shows what their own data
- * says; "Add an interview" and "Create one for me" open the form. The ask box routes the common asks
- * without a model (askRouter) and sends the rest to Cora. Plans (CP4) plug in where `onPlan` is called.
+ * Career Prep v27 (CP3.3, CP3.4, CP4.1): the room's conversation, on top of useAnchorFlow. The ask box
+ * routes the common asks in code (askRouter) and sends the rest to Cora; `pickCard` dispatches a picked
+ * card by its id prefix (add, create, type:, plan:, min:, focus:, skill:, start, suggest:, or an interview).
  */
 export type PrepForm = null | { mode: 'add' } | { mode: 'practice'; type: InterviewType };
+export interface RoomHooks { onTab?: (tab: 'progress' | 'plan' | 'session') => void; onSheet?: (sheet: Sheet) => void; onStart?: () => void }
 export interface CareerPrepRoomState {
-  dashboard: PrepDashboard | null;
-  anchorId: string | null;
-  log: ChatItem[];
-  busy: boolean;
-  form: PrepForm;
-  error: string | null;
-  pick: (setId: string, card: OptionCard) => void;
-  ask: (text: string) => void;
-  submitForm: (body: NewInterview) => Promise<void>;
-  cancelForm: () => void;
-  changeAnchor: () => void;
-  chooseAnchor: (id: string) => void;
+  dashboard: PrepDashboard | null; anchorId: string | null; plan: StoredPlan | null; log: ChatItem[]; busy: boolean; form: PrepForm; error: string | null;
+  pick: (setId: string, card: OptionCard) => void; ask: (text: string) => void; submitForm: (body: NewInterview) => Promise<void>;
+  cancelForm: () => void; changeAnchor: () => void; chooseAnchor: (id: string) => void; focusSkill: (key: string) => void;
 }
-export interface RoomHooks { onTab?: (tab: 'progress' | 'plan' | 'session') => void; onSheet?: (sheet: Sheet) => void; onPlan?: (kind: 'plan' | 'quick') => void }
 
-let seq = 0;
-const nid = (p: string) => `${p}-${++seq}`;
-const cora = (text: string): ChatItem => ({ id: nid('c'), kind: 'cora', text });
-const me = (text: string): ChatItem => ({ id: nid('m'), kind: 'me', text });
-const cards = (label: string, list: OptionCard[]): ChatItem => ({ id: nid('s'), kind: 'cards', label, cards: list });
+const ASK_ADD = 'Tell me about it. Paste the job description if you have it.';
+const split = (id: string): [string, string] => (id.includes(':') ? [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)] : [id, '']);
 
 export function useCareerPrep(initialAnchorId: string | null = null, hooks: RoomHooks = {}): CareerPrepRoomState {
-  const [dashboard, setDashboard] = useState<PrepDashboard | null>(null);
-  const [anchorId, setAnchorId] = useState<string | null>(null);
-  const [log, setLog] = useState<ChatItem[]>([]);
-  const [busy, setBusy] = useState(false);
+  const { log, push, answer } = useRoomLog();
   const [form, setForm] = useState<PrepForm>(null);
-  const [error, setError] = useState<string | null>(null);
-  const hooksRef = useRef(hooks);
-  hooksRef.current = hooks;
-  const push = useCallback((...items: ChatItem[]) => setLog((l) => [...l, ...items]), []);
-  const answer = useCallback((setId: string) => setLog((l) => l.map((i) => (i.id === setId && i.kind === 'cards' ? { ...i, answered: true } : i))), []);
+  const [error, setErrorState] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const h = useRef(hooks);
+  h.current = hooks;
+  const minutes = useRef<Minutes>(20);
+  const setError = useCallback((e: string) => setErrorState(e), []);
+  const flow = useAnchorFlow(initialAnchorId, push, setError, () => h.current.onTab?.('plan'));
 
-  const askWhich = useCallback((d: PrepDashboard, opening: boolean) => {
-    push(cora(opening ? 'Hi, I am Cora. What are you preparing for?' : 'Which interview are we preparing for?'), cards('What are you preparing for?', anchorCards(d.interviews)));
-  }, [push]);
+  const weakestCards = useCallback(() => {
+    const list = focusCards(flow.dashboard?.skills ?? []).slice(0, 3).map((c) => ({ ...c, id: c.id.replace('focus:', 'skill:') }));
+    if (!list.length) { push(cora('Record one or two answers and I will tell you what to work on first.')); return; }
+    push(cora('These are your three lowest skills right now. Pick one for 10 minutes on it.'), cards('Skills to work on', list));
+  }, [flow.dashboard, push]);
 
-  const anchorOn = useCallback(async (id: string) => {
-    setBusy(true);
-    try {
-      const d = await fetchPrepDashboard(id);
-      setDashboard(d);
-      setAnchorId(id);
-      const iv = d.interviews.find((i) => i.id === id);
-      const lines = insightLines(d);
-      const items: ChatItem[] = [];
-      if (lines.length) items.push({ id: nid('b'), kind: 'block', title: `What your data says${iv ? ` about ${iv.company}` : ''}`, lines });
-      else items.push(cora('I do not have enough of your practice yet to say where you stand. Your first session will give me a starting point.'));
-      push(...items);
-      hooksRef.current.onPlan?.('plan');
-    } catch {
-      setError('Could not load that interview. Try again.');
-    } finally { setBusy(false); }
-  }, [push]);
-
-  useEffect(() => {
-    let live = true;
-    fetchPrepDashboard().then((d) => {
-      if (!live) return;
-      setDashboard(d);
-      if (initialAnchorId && d.interviews.some((i) => i.id === initialAnchorId)) void anchorOn(initialAnchorId);
-      else askWhich(d, true);
-    }).catch(() => { if (live) setError('Could not load Career Prep. Try again.'); });
-    return () => { live = false; };
-  }, [initialAnchorId, anchorOn, askWhich]);
-
-  const pick = useCallback((setId: string, card: OptionCard) => {
-    answer(setId);
-    push(me(card.title));
-    if (card.id === ADD_ID) { setForm({ mode: 'add' }); push(cora('Tell me about it. Paste the job description if you have it.')); return; }
-    if (card.id === CREATE_ID) { push(cora('What kind of interview should I make?'), cards('Interview type', typeCards())); return; }
-    if (card.id.startsWith('type:')) { setForm({ mode: 'practice', type: card.id.slice(5) as InterviewType }); push(cora('What role is it for?')); return; }
-    if (card.id.startsWith('skill:')) { hooksRef.current.onTab?.('progress'); return; }
-    void anchorOn(card.id);
-  }, [answer, push, anchorOn]);
-
-  const submitForm = useCallback(async (body: NewInterview) => {
-    setBusy(true);
-    try {
-      const r = await postInterview(body);
-      setForm(null);
-      push(cora(r.source === 'practice' ? 'Your practice interview is set for the next 4 days.' : 'Saved. Here is where you stand for it.'));
-      setBusy(false);
-      await anchorOn(r.id);
-    } catch {
-      setBusy(false);
-      setError('Could not save the interview. Check the details and try again.');
-    }
-  }, [push, anchorOn]);
-
-  const weakest = useCallback(() => {
-    const scored = (dashboard?.skills ?? []).filter((s) => s.score !== undefined).slice(0, 3);
-    if (!scored.length) { push(cora('Record one or two answers and I will tell you what to work on first.')); return; }
-    push(cora('These are your three lowest skills right now.'), cards('Skills to work on', scored.map((s) => ({ id: `skill:${s.key}`, icon: 'focus-2-line', title: s.label, line: `${s.score} now`, bar: { value: s.score as number } }))));
-  }, [dashboard, push]);
+  const askFree = useCallback((text: string) => {
+    setAsking(true);
+    askCoraApi(text, flow.anchorId ?? undefined)
+      .then((r) => { push(...r.messages.map(cora)); if (r.cards?.length) push(cards('Suggestions', r.cards)); })
+      .catch(() => push(cora('I could not answer that just now. Try one of the suggestions below.')))
+      .finally(() => setAsking(false));
+  }, [flow.anchorId, push]);
 
   const ask = useCallback((text: string) => {
     push(me(text));
     const intent = routeAsk(text);
-    if (intent.kind === 'add') { setForm({ mode: 'add' }); push(cora('Tell me about it. Paste the job description if you have it.')); return; }
-    if (intent.kind === 'progress') { hooksRef.current.onTab?.('progress'); push(cora('Your progress is open on the right.')); return; }
-    if (intent.kind === 'weak') { weakest(); return; }
-    if (intent.kind === 'plan' || intent.kind === 'quick') { hooksRef.current.onPlan?.(intent.kind); return; }
-    if (intent.kind === 'sheet') { hooksRef.current.onSheet?.(intent.sheet); return; }
-    setBusy(true);
-    askCoraApi(intent.text, anchorId ?? undefined)
-      .then((r) => push(...r.messages.map(cora)))
-      .catch(() => push(cora('I could not answer that just now. Try one of the suggestions below.')))
-      .finally(() => setBusy(false));
-  }, [push, weakest, anchorId]);
+    if (intent.kind === 'add') { setForm({ mode: 'add' }); push(cora(ASK_ADD)); return; }
+    if (intent.kind === 'progress') { h.current.onTab?.('progress'); push(cora('Your progress is open on the right.')); return; }
+    if (intent.kind === 'weak') { weakestCards(); return; }
+    if (intent.kind === 'plan') { flow.offerPlans(); return; }
+    if (intent.kind === 'quick') { void flow.makePlan('custom', { minutes: 10 }); return; }
+    if (intent.kind === 'sheet') { h.current.onSheet?.(intent.sheet); return; }
+    askFree(intent.text);
+  }, [push, weakestCards, flow, askFree]);
 
-  const changeAnchor = useCallback(() => { if (dashboard) askWhich(dashboard, false); }, [dashboard, askWhich]);
-  const cancelForm = useCallback(() => setForm(null), []);
+  const pickCard = useCallback((card: OptionCard) => {
+    const [kind, value] = split(card.id);
+    if (kind === ADD_ID) { setForm({ mode: 'add' }); push(cora(ASK_ADD)); return; }
+    if (kind === CREATE_ID) { push(cora('What kind of interview should I make?'), cards('Interview type', typeCards())); return; }
+    if (kind === 'type') { setForm({ mode: 'practice', type: value as InterviewType }); push(cora('What role is it for?')); return; }
+    if (kind === 'plan' && value === 'custom') { push(cora('How long?'), cards('Session length', minuteCards())); return; }
+    if (kind === 'plan') { void flow.makePlan(value as PrepPlan['kind']); return; }
+    if (kind === 'min') {
+      minutes.current = Number(value) as Minutes;
+      const f = focusCards(flow.dashboard?.skills ?? []);
+      if (f.length) push(cora('Which skill?'), cards('Focus', f)); else void flow.makePlan('custom', { minutes: minutes.current });
+      return;
+    }
+    if (kind === 'focus') { void flow.makePlan('custom', { minutes: minutes.current, focusSkill: value }); return; }
+    if (kind === 'skill') { void flow.makePlan('custom', { minutes: 10, focusSkill: value }); return; }
+    if (kind === 'start') { h.current.onTab?.('session'); h.current.onStart?.(); return; }
+    if (kind === 'suggest') { ask(card.title); return; }
+    void flow.anchorOn(card.id);
+  }, [push, flow, ask]);
 
-  const chooseAnchor = useCallback((id: string) => { void anchorOn(id); }, [anchorOn]);
+  const pick = useCallback((setId: string, card: OptionCard) => { answer(setId); push(me(card.title)); pickCard(card); }, [answer, push, pickCard]);
 
-  return { dashboard, anchorId, log, busy, form, error, pick, ask, submitForm, cancelForm, changeAnchor, chooseAnchor };
+  const submitForm = useCallback(async (body: NewInterview) => {
+    try {
+      const r = await postInterview(body);
+      setForm(null);
+      push(cora(r.source === 'practice' ? 'Your practice interview is set for the next 4 days.' : 'Saved. Here is where you stand for it.'));
+      await flow.anchorOn(r.id);
+    } catch { setError('Could not save the interview. Check the details and try again.'); }
+  }, [push, flow, setError]);
+
+  return {
+    dashboard: flow.dashboard, anchorId: flow.anchorId, plan: flow.plan, log, busy: flow.busy || asking, form, error, pick, ask, submitForm,
+    cancelForm: () => setForm(null), changeAnchor: () => flow.askWhich(false), chooseAnchor: (id) => { void flow.anchorOn(id); },
+    focusSkill: (key) => { void flow.makePlan('custom', { minutes: 10, focusSkill: key }); },
+  };
 }
