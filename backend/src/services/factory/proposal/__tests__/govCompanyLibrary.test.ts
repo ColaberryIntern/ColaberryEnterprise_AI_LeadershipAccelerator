@@ -4,8 +4,8 @@
  */
 const factFindAll = jest.fn();
 const factCreate = jest.fn();
-const refFindAll = jest.fn(async () => [] as any[]);
-const personFindAll = jest.fn(async () => [] as any[]);
+const refFindAll = jest.fn();
+const personFindAll = jest.fn();
 const queryMock = jest.fn();
 
 jest.mock('../../../../models/GovCompanyFact', () => ({ __esModule: true, default: { findAll: (...a: any[]) => factFindAll(...a), create: (...a: any[]) => factCreate(...a), update: jest.fn() } }));
