@@ -1,7 +1,8 @@
 # Keep the vendored brand design systems in step with their source repositories.
 #
-# The five design systems are authored at github.com/aleemcolaberry, one repository per
-# brand. Their token CSS and self-hosted fonts are vendored into this repository so the
+# The design systems are authored at github.com/aleemcolaberry: one repository per
+# brand, plus colaberry-design-system, which the React app in frontend/ paints from
+# (vendored at frontend/src/colaberry, token layer only). Their token CSS and self-hosted fonts are vendored into this repository so the
 # build stays hermetic: the alternative, linking the published GitHub Pages CSS at runtime,
 # would make five live sites depend on a third-party host on every page load.
 #
@@ -102,6 +103,8 @@ jobs:
             echo "Sources: [AI Flotation](https://github.com/aleemcolaberry/AI-Flotation-Design-System)"
             echo "· [CPN](https://github.com/aleemcolaberry/Career-Pathways-Network-Design-System)"
             echo "· [Refactored.ai](https://github.com/aleemcolaberry/Refactored.ai-Design-System)"
+            echo "· [Colaberry Enterprise](https://github.com/aleemcolaberry/Colaberry-Enterprise-Design-System)"
+            echo "· [Colaberry app (portal + admin)](https://github.com/aleemcolaberry/colaberry-design-system)"
           } > /tmp/pr-body.md
 
       - name: Open or update the pull request
@@ -123,3 +126,6 @@ jobs:
           delete-branch: true
           add-paths: |
             apps/*/src/assets/design/**
+            frontend/src/colaberry/styles.css
+            frontend/src/colaberry/tokens/**
+            frontend/src/colaberry/.design-sync-manifest.json

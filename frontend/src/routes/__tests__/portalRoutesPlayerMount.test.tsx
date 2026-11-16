@@ -123,7 +123,12 @@ describe('the stacking decision the spec names', () => {
   const read = (rel: string): string =>
     fs.readFileSync(path.resolve(__dirname, '..', '..', rel), 'utf8');
 
-  const tokens = read(path.join('colaberry', 'tokens', 'spacing.css'));
+  // The design system's z-index ramp, plus the platform-only --z-player that sits in it.
+  // --z-player moved out of the vendored spacing.css on 2026-11-15 so the design-system
+  // sync can keep that file identical to upstream; the ordering below still spans both.
+  const tokens =
+    read(path.join('colaberry', 'tokens', 'spacing.css')) +
+    read(path.join('styles', 'colaberry-platform-tokens.css'));
   const playerCss = read(path.join('components', 'portal', 'liveMiniPlayer.css'));
 
   const valueOf = (name: string): number => {

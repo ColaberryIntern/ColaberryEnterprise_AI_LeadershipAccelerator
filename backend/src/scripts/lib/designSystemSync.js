@@ -37,7 +37,11 @@ const RAW_BASE = 'https://raw.githubusercontent.com/aleemcolaberry';
  * this list looks like an oversight, whereas a brand present with `target: null` is a
  * decision someone can read and reverse.
  *
- * @type {ReadonlyArray<{brandSlug: string, repo: string, target: string|null, note: string}>}
+ * `stripExternalImports` (optional) rewrites external `@import`s out of synced CSS; see
+ * stripExternalImports below.
+ *
+ * @type {ReadonlyArray<{brandSlug: string, repo: string, target: string|null, note: string,
+ *   stripExternalImports?: boolean}>}
  */
 const DESIGN_SYSTEMS = Object.freeze([
   {
@@ -85,7 +89,77 @@ const DESIGN_SYSTEMS = Object.freeze([
       'registered in brand_domains and records no events; there is no application here to ' +
       'style.',
   },
+  {
+    brandSlug: 'colaberry-app',
+    repo: 'colaberry-design-system',
+    target: 'frontend/src/colaberry',
+    stripExternalImports: true,
+    note:
+      'The copy the React app in frontend/ (portal and admin) actually paints from: ' +
+      'index.tsx imports ./colaberry/styles.css and brand-bridge.css re-points the legacy ' +
+      'tokens at it. Cherry #FB2832 primary. Vendored by hand on 2026-06-25 and never ' +
+      'synced until 2026-11-15; the only differences from upstream were four recorded ' +
+      'local edits (see frontend/src/colaberry/PROVENANCE.md). Only the token layer ' +
+      'reachable from styles.css is synced; components/core, assets/logo and PROVENANCE.md ' +
+      'are not reachable from it and are never touched. Platform-only tokens live in ' +
+      'frontend/src/styles/colaberry-platform-tokens.css so this copy can match upstream. ' +
+      'External @imports are stripped because upstream fonts.css fetches Google Fonts on ' +
+      'every page before consent, which was removed here on 2026-08-13.',
+  },
 ]);
+
+/**
+ * Write targets outside apps/*\/src/assets/design.
+ *
+ * The sync WRITES to its target, so every target must match a known shape. This list is
+ * the one deliberate exception and it names exact paths, never a pattern: a typo in the
+ * registry must fail rather than land files somewhere new.
+ */
+const NON_APP_TARGETS = Object.freeze(['frontend/src/colaberry']);
+
+const APP_TARGET_RE = /^apps\/[a-z0-9-]+\/src\/assets\/design$/;
+
+/** True when the sync is allowed to write to this repo-relative directory. */
+function isAllowedTarget(target) {
+  return APP_TARGET_RE.test(String(target)) || NON_APP_TARGETS.includes(target);
+}
+
+/**
+ * One whole `@import` statement, in any of its legal forms. IMPORT_RE above is built to
+ * find the referenced path and stops at the first `;`, which is wrong for removal: a
+ * Google Fonts URL carries `;` inside its quotes (`wght@0,400;0,500`), so removing what
+ * IMPORT_RE matched would leave half a statement behind.
+ */
+const IMPORT_STMT_RE =
+  /@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)|"([^"]*)"|'([^']*)')[^;]*;/gi;
+
+/**
+ * Replace every external `@import` with a comment naming what was removed.
+ *
+ * WHY. The build is hermetic by design (see the header), and an external `@import` is a
+ * request to a third-party host on every page load. In frontend/src/colaberry it was also
+ * a privacy defect: Google Fonts fetched before consent. Stripping deterministically at
+ * sync time means the fix survives every future sync instead of being reverted by it.
+ *
+ * Comments are left alone, so a commented-out import is not rewritten and no comment is
+ * nested inside another. Idempotent: the output contains no external import to strip.
+ *
+ * @param {string} css raw stylesheet text
+ * @returns {string} the same text with external imports replaced
+ */
+function stripExternalImports(css) {
+  return String(css)
+    .split(/(\/\*[\s\S]*?\*\/)/)
+    .map((segment) => {
+      if (segment.startsWith('/*')) return segment;
+      return segment.replace(IMPORT_STMT_RE, (stmt, ...groups) => {
+        const ref = groups.slice(0, 5).find((g) => g !== undefined) || '';
+        if (!isExternal(ref)) return stmt;
+        return `/* design-sync: external @import removed (${ref}); the build is hermetic */`;
+      });
+    })
+    .join('');
+}
 
 /** The one file every repo publishes, and the only entry point this module assumes. */
 const ENTRY = 'styles.css';
@@ -335,6 +409,9 @@ function buildManifest({ repo, branch, entry, files }) {
 
 module.exports = {
   DESIGN_SYSTEMS,
+  NON_APP_TARGETS,
+  isAllowedTarget,
+  stripExternalImports,
   ENTRY,
   RAW_BASE,
   parseReferences,

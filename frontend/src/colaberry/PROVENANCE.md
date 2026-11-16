@@ -37,12 +37,45 @@ opens a PR rather than committing, and are covered by an existing written rule i
 vendored CSS under apps/\*/src/assets/design is owned upstream (design-system-sync.yml) and
 must not be rewritten here."*
 
-**This directory is not one of those five, and has no sync.** Its recorded upstream is
-`github.com/colaberry/colaberry-design-system` (MIT, Copyright 2026 Colaberry, Inc.), per the
-`package.json` and `LICENSE` in the pristine copy committed at
-`frontend/public/knowledge/design/`. How that repository relates to the five per-brand ones is
-not recorded anywhere in this repository; the design ownership above is settled, the repository
-lineage is not. Do not infer one from the other.
+**This directory is not one of those five. Since 15 November 2026 it has its own sync.** Its
+upstream is `github.com/aleemcolaberry/colaberry-design-system`, registered as brand slug
+`colaberry-app` in `backend/src/scripts/lib/designSystemSync.js` and pulled by the same nightly
+workflow, which opens a PR rather than committing.
+
+How that was established, because an earlier version of this file said not to infer it: the
+recorded upstream, `github.com/colaberry/colaberry-design-system` (per the `package.json` and
+`LICENSE` in the pristine copy at `frontend/public/knowledge/design/`), **does not resolve on
+GitHub**. `aleemcolaberry/colaberry-design-system` does, and on 15 November 2026 its token files
+differed from this directory by **exactly the four local edits listed below and nothing else**
+(`typography.css` and `base.css` byte-identical; `colors.css`, `spacing.css` and `fonts.css`
+differing only by those edits). That is the lineage, measured rather than inferred.
+
+### What the sync owns here, and what it never touches
+
+The sync follows `styles.css` and its `@import`s, so it owns exactly six files: `styles.css` and
+`tokens/{fonts,colors,typography,spacing,base}.css`, listed in `.design-sync-manifest.json`.
+`components/core/`, `assets/logo/` and this file are not reachable from `styles.css`; the sync
+never writes or deletes them.
+
+### Where the four local edits went
+
+So the synced files can match upstream exactly, without the nightly sync reverting platform
+decisions:
+
+- **`--status-violet`, `--status-teal` (+ `-bg`) and `--z-player`** moved, values unchanged, to
+  `frontend/src/styles/colaberry-platform-tokens.css`, imported in `index.tsx` directly after
+  `./colaberry/styles.css`. `frontend/src/styles/__tests__/platformTokens.test.ts` pins the import
+  position and fails if that file ever redefines a design-system token.
+- **The Google Fonts and jsDelivr RemixIcon `@import`s** are removed by the sync itself
+  (`stripExternalImports: true` on the `colaberry-app` entry), every run, so the 2026-08-13 privacy
+  fix cannot be reverted by a sync. Roboto, Roboto Mono and Quicksand come from local woff2 in
+  `src/fonts/fonts.css`; RemixIcon loads via a `<link>` in `public/index.html`, which downloads in
+  parallel instead of queuing behind `main.css`. The same test fails if any external `@import`
+  reappears here.
+
+**Do not edit the six synced files by hand.** The next sync reverts the edit. A colour, type or
+spacing change belongs upstream with Aleem; a platform-only token belongs in
+`colaberry-platform-tokens.css`.
 
 ### A `CODEOWNERS` entry is not currently possible
 
@@ -103,7 +136,8 @@ the wrong thing:
 
 - `apps/*/src/assets/design` has an upstream owner, an automated sync, a written exclusion rule
   and, for the Colaberry Enterprise copy, **zero content edits** since it was vendored.
-- **This** directory has four local edits, no sync, and is what the product renders. The same
+- **This** directory had four local edits and no sync (both resolved 2026-11-15, see above),
+  and is what the product renders. The same
   capability record puts it explicitly *in* scope at `product_experience.json:56`, which traces
   the cascade through `brand-bridge.css` into these token files and states that *"the resolved
   value is what the audit compares against."*

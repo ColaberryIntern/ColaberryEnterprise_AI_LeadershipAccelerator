@@ -63,7 +63,7 @@
       "exceptions": [
         "A raw colour with no token equivalent is a token-set gap, not a code defect, and is escalated as a design decision rather than auto-substituted.",
         "Chart and data-visualisation scales may legitimately carry their own ramp; the dataviz palette is governed separately and must be excluded or the audit will produce noise.",
-        "Third-party or vendored CSS under apps/*/src/assets/design is owned upstream (design-system-sync.yml) and must not be rewritten here.",
+        "Third-party or vendored CSS under apps/*/src/assets/design, and the synced token layer at frontend/src/colaberry/styles.css and frontend/src/colaberry/tokens/, is owned upstream (design-system-sync.yml) and must not be rewritten here; platform-only tokens go in frontend/src/styles/colaberry-platform-tokens.css.",
         "An occurrence inside a code sample or documentation string is not a styling violation."
       ],
       "dependencies": [

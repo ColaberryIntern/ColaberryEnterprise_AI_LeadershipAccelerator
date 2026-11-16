@@ -23,6 +23,7 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 import './styles/global.css';
 import './styles/responsive.css';
 import './colaberry/styles.css';
+import './styles/colaberry-platform-tokens.css';
 import './styles/brand-bridge.css';
 /* Colaberry Enterprise brand for the public site only, scoped to .cbv2-shell.
    After brand-bridge.css, which is the cherry (Colaberry Training) seam the

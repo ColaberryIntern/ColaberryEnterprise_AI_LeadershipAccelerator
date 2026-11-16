@@ -14,6 +14,10 @@
  */
 const {
   DESIGN_SYSTEMS,
+  NON_APP_TARGETS,
+  isAllowedTarget,
+  stripExternalImports,
+  stripComments,
   MANIFEST,
   orphansToRemove,
   buildManifest,
@@ -197,9 +201,10 @@ describe('diffTrees', () => {
 });
 
 describe('DESIGN_SYSTEMS registry', () => {
-  it('covers all five brand design repositories', () => {
+  it('covers all five brand design repositories plus the copy the React app paints from', () => {
     expect(DESIGN_SYSTEMS.map((d) => d.brandSlug).sort()).toEqual([
       'ai-flotation',
+      'colaberry-app',
       'colaberry-enterprise',
       'colaberry-training',
       'cpn',
@@ -215,16 +220,86 @@ describe('DESIGN_SYSTEMS registry', () => {
     }
   });
 
-  it('keeps every write target inside apps/, never anywhere else in the tree', () => {
+  it('keeps every write target inside apps/ or on the one named exception list', () => {
     for (const entry of DESIGN_SYSTEMS.filter((d) => d.target)) {
-      expect(entry.target).toMatch(/^apps\/[a-z0-9-]+\/src\/assets\/design$/);
+      const appShaped = /^apps\/[a-z0-9-]+\/src\/assets\/design$/.test(entry.target);
+      expect(appShaped || NON_APP_TARGETS.includes(entry.target)).toBe(true);
+      expect(isAllowedTarget(entry.target)).toBe(true);
     }
+  });
+
+  it('names its non-app exceptions exactly, so a near-miss path is refused', () => {
+    expect(NON_APP_TARGETS).toEqual(['frontend/src/colaberry']);
+    expect(isAllowedTarget('frontend/src/colaberry')).toBe(true);
+    expect(isAllowedTarget('frontend/src/colaberry/..')).toBe(false);
+    expect(isAllowedTarget('frontend/src')).toBe(false);
+    expect(isAllowedTarget('frontend/src/colaberry/tokens')).toBe(false);
+    expect(isAllowedTarget('backend/src/assets/design')).toBe(false);
+    expect(isAllowedTarget(null)).toBe(false);
+  });
+
+  it('syncs the React app copy from the original system with external imports stripped', () => {
+    const app = DESIGN_SYSTEMS.find((d) => d.brandSlug === 'colaberry-app');
+    expect(app.repo).toBe('colaberry-design-system');
+    expect(app.target).toBe('frontend/src/colaberry');
+    // Upstream fonts.css fetches Google Fonts before consent; without this the first
+    // sync would put the 2026-08-13 privacy defect back.
+    expect(app.stripExternalImports).toBe(true);
   });
 
   it('builds a raw URL against the real account and branch', () => {
     expect(rawUrl('Career-Pathways-Network-Design-System', 'main', 'tokens/colors.css')).toBe(
       'https://raw.githubusercontent.com/aleemcolaberry/Career-Pathways-Network-Design-System/main/tokens/colors.css'
     );
+  });
+});
+
+describe('stripExternalImports', () => {
+  // The real upstream line: note the `;` characters INSIDE the quoted URL.
+  const GOOGLE =
+    "@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700&family=Quicksand:wght@500;600&display=swap');";
+  const REMIX = "@import url('https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css');";
+
+  it('removes the whole Google Fonts statement, not just up to its first semicolon', () => {
+    const out = stripExternalImports(`${GOOGLE}\n:root { --x: 1; }\n`);
+    // The removal comment names the URL on purpose; what matters is the live CSS.
+    expect(stripComments(out)).not.toMatch(/@import/);
+    expect(stripComments(out)).not.toMatch(/0,500;0,700/);
+    expect(out).toContain('design-sync: external @import removed');
+    expect(out).toContain(':root { --x: 1; }');
+  });
+
+  it('removes every external form and keeps relative imports', () => {
+    const css = [
+      REMIX,
+      '@import "https://example.com/a.css";',
+      "@import '//cdn.example.com/b.css' screen;",
+      '@import url(https://example.com/c.css);',
+      "@import url('./tokens/colors.css');",
+      '@import "tokens/spacing.css";',
+    ].join('\n');
+    const out = stripExternalImports(css);
+    expect(stripComments(out)).not.toMatch(/@import[^\n]*(https?:)?\/\//);
+    expect(out).toContain("@import url('./tokens/colors.css');");
+    expect(out).toContain('@import "tokens/spacing.css";');
+    // What is removed is still parseable CSS and declares nothing.
+    expect(parseReferences(out).imports).toEqual(['./tokens/colors.css', 'tokens/spacing.css']);
+  });
+
+  it('leaves a commented-out import alone rather than nesting a comment inside it', () => {
+    const css = `/* ${REMIX} */\n`;
+    expect(stripExternalImports(css)).toBe(css);
+  });
+
+  it('is idempotent, so a second sync run produces no diff', () => {
+    const once = stripExternalImports(`${GOOGLE}\n${REMIX}\n@import url('./a.css');\n`);
+    expect(stripExternalImports(once)).toBe(once);
+  });
+
+  it('returns a file with no imports unchanged, byte for byte', () => {
+    const css = ':root {\n  --red-500: #FB2832;\n}\n';
+    expect(stripExternalImports(css)).toBe(css);
+    expect(stripExternalImports('')).toBe('');
   });
 });
 
