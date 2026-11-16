@@ -613,3 +613,38 @@ tests/systemV2/career-prep/.
   - Verification: the three copy-lint suites pass; backend Career Prep 299 pass, 7 skipped; backend tsc clean (local
     maxmind only); frontend tsc clean; frontend Career Prep + campus 2415 pass (main's #4107 removed the campus
     tvManager suite, 9 tests, hence the lower count); gitleaks on origin/main..HEAD: no leaks.
+
+- [x] CP5.5 Release 1 deployed to production (T27, part 2)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: PR #4110 merged as 3f341639e (13:34 CT). Build images run 43940757881 succeeded; deployed with
+    scripts/deploy-prod.sh, backend (marker career_prep_reminders_off in dist/services/careerPrep/reminders.js)
+    then nginx (marker career-prep/sessions in /etc/nginx/conf.d/default.conf). Flag seeded for Ali's enrollment
+    aced5b39 only (allow-list count 1). Observation backfill: 16 rows (2 intro-video, 14 published case studies).
+    seedCareerPrepFlag.ts failed in production: it passed a label as setSetting's third argument (updated_by, a
+    uuid). Nothing was written; the seed was applied through the same compiled modules without that argument, and
+    the script is fixed on workstream/career-prep-r2 with a regression test (ships with the next milestone PR).
+  - Verification: both hostnames (enterprise.colaberry.ai, www.refactored.ai): 40 MB POST with no login to
+    /api/portal/career-prep/sessions/<uuid>/attempts returns 401, the same 40 MB to another career-prep path
+    returns 413 (the control); /api/portal/career-prep/summary with no login returns 401; /portal/career serves
+    200. Seed re-run: changed false. Backfill re-run: inserted 0 for every source. Not yet verified: Ali's own
+    signed-in walkthrough of the room.
+
+- [x] Release 1 fix: /portal/career rendered unstyled in production (Ali's screenshot, 2026-11-16)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: the floor is drawn with the tower's classes, but hq.css loads only with the HQ building (campus
+    chunk), so a direct visit to /portal/career had no tower styles and no frame. CareerPrepFloor now imports hq.css
+    itself, and the page wraps the floor in the tower's .cm-hq frame (cp-floor-stage). Cora's name and title stack
+    (they ran together as "Cora AIyour interview coach", in the tower too). Phone: the floor screen clears the plate,
+    the door sits higher, and Cora is a compact chip beside the buttons (she was pushed out of the frame).
+    Why the browser suite missed it: check 1 only tested the trail's styling. New checks 1a (desktop: framed floor,
+    plate placed, tower buttons, door on screen, Cora stacked) and 1a phone (390: screen clears plate, Cora on
+    screen and clear of the door and buttons); both failed on the deployed build before the fix.
+  - Verification: browser suite 12/12 on the rebuilt app (Edge); screenshots at 1920x993 and 390x844 reviewed;
+    frontend tsc clean; Career Prep + campus jest 2414 pass (the two testEnv helper files report FAIL as before).
+  - CI fix (PR #4116, Frontend build): importing hq.css from CareerPrepFloor gave mini-css-extract "Conflicting order"
+    warnings (fatal with CI=true) because the floor and room pages imported levelTrail.css before it while the HQ
+    building imports it after. Both pages now import CareerPrepFloor first, matching the building's order. The local
+    builds above used CI=false, which hid the warning; verified this time with CI=true (Compiled successfully),
+    browser suite 12/12, page tests 33/33.

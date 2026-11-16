@@ -25,7 +25,8 @@ async function main(): Promise<void> {
   const [rows] = await sequelize.query('SELECT id FROM enrollments WHERE id = :id', { replacements: { id } });
   if ((rows as unknown[]).length !== 1) throw new Error(`no enrollment ${id}`);
   const { list, changed } = nextAllowList(await getSetting(FLAG_KEY), id, argv.includes('--remove'));
-  if (changed && !argv.includes('--dry')) await setSetting(FLAG_KEY, list, 'seedCareerPrepFlag');
+  // setSetting's third argument is an admin user uuid (updated_by); a label there fails the uuid cast. A script has no admin.
+  if (changed && !argv.includes('--dry')) await setSetting(FLAG_KEY, list);
   console.log(JSON.stringify({ event: 'career_prep_flag_seed', changed, dry: argv.includes('--dry'), count: list.length }));
 }
 

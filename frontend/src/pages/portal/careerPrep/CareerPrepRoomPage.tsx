@@ -1,7 +1,9 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CareerPrepRoom, type RoomTab } from '../../../components/careerPrep/CareerPrepRoom';
+// CareerPrepFloor BEFORE CareerPrepRoom: the HQ building's CSS order (hq.css, careerPrepFloor.css, then levelTrail.css
+// via the room). The other order is a mini-css-extract "Conflicting order" warning, which fails the CI build.
 import { CareerPrepFloor } from '../../../components/careerPrep/CareerPrepFloor';
+import { CareerPrepRoom, type RoomTab } from '../../../components/careerPrep/CareerPrepRoom';
 import { CoraChat } from '../../../components/careerPrep/CoraChat';
 import { InterviewForm } from '../../../components/careerPrep/InterviewForm';
 import { useCareerPrep } from '../../../components/careerPrep/useCareerPrep';

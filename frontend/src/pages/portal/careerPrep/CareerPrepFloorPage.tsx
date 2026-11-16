@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+// CareerPrepFloor BEFORE LevelTrail: the same CSS order as the HQ building (hq.css, careerPrepFloor.css, levelTrail.css).
+// The other order is a mini-css-extract "Conflicting order" warning, which fails the CI build (warnings are errors there).
 import { CareerPrepFloor } from '../../../components/careerPrep/CareerPrepFloor';
 import { LevelTrail } from '../../../components/careerPrep/LevelTrail';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
@@ -41,7 +43,12 @@ const CareerPrepFloorPage: React.FC = () => {
   return (
     <div className="cp-floor-page" data-testid="cp-floor-page">
       <LevelTrail step={2} floorNum={floor.num || null} />
-      <CareerPrepFloor f={floor} onElevator={() => navigate('/portal')} onLobby={() => navigate('/portal')} />
+      {/* The tower's frame: the floor is laid out to fill a .cm-hq scene, as it does inside the HQ building. */}
+      <div className="cp-floor-stage">
+        <div className="cm-hq" data-scene="floor">
+          <CareerPrepFloor f={floor} onElevator={() => navigate('/portal')} onLobby={() => navigate('/portal')} />
+        </div>
+      </div>
     </div>
   );
 };
