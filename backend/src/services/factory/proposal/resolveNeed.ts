@@ -1,4 +1,4 @@
-import type { HumanNeed, HumanNeedKind } from './proposalReviewTypes';
+import type { HumanNeed, HumanNeedKind, RecordType } from './proposalReviewTypes';
 
 /**
  * resolveNeed — the pure routing core for "a human answers one open need" (v3 §V1.4, the POST
@@ -16,9 +16,11 @@ import type { HumanNeed, HumanNeedKind } from './proposalReviewTypes';
  *   signature   -> upload              (a reference to the signed artifact)
  *   setting     -> setting store       (e.g. the demo URL; validated as a URL when the need asks for one)
  *   approval    -> Gold gate           (approver-only Go / No-go; an intern cannot give it)
+ *   record      -> company library     (GROUPED: a reference or a key person as one unit; approver `approved`,
+ *                                        intern `pending`, exactly like a fact)
  */
 
-export type NeedStore = 'library' | 'decision_log' | 'upload' | 'setting' | 'gate';
+export type NeedStore = 'library' | 'library_record' | 'decision_log' | 'upload' | 'setting' | 'gate';
 
 /** What a human posts to answer a need. Which fields matter depends on the need's kind. */
 export interface NeedSubmission {
@@ -28,9 +30,14 @@ export interface NeedSubmission {
   fileRef?: string;
   /** approval / confirm_rule: Go / acknowledged. */
   approve?: boolean;
+  /** record: the grouped fields as one object (e.g. { client, scope, contractValue, dates, contact }). */
+  record?: Record<string, string>;
   /** optional free-text context recorded alongside the answer. */
   note?: string;
 }
+
+/** The one field that must be present for a grouped record to be meaningful, by record type. */
+const RECORD_PRIMARY: Record<RecordType, string> = { reference: 'client', personnel: 'name' };
 
 /** Who is answering. `canApprove` is the admin/approver rail; an intern has it false. */
 export interface ResolveActor {
@@ -158,6 +165,33 @@ export function routeNeedResolution(
         status: 'recorded',
         key: need.key,
         payload: { key: need.key, decision: submission.approve ? 'go' : 'no_go', decidedBy: by, note: submission.note },
+      };
+    }
+    case 'record': {
+      const recordType = need.recordType;
+      if (recordType !== 'reference' && recordType !== 'personnel') {
+        return { ok: false, error: `record "${need.key}" is missing a valid recordType` };
+      }
+      const submitted = submission.record;
+      if (!submitted || typeof submitted !== 'object') {
+        return { ok: false, error: `record "${need.key}" needs its grouped fields` };
+      }
+      const primary = RECORD_PRIMARY[recordType];
+      if (!isNonEmpty(submitted[primary])) {
+        return { ok: false, error: `record "${need.key}" needs ${primary}` };
+      }
+      // Keep only non-empty string fields, trimmed — the grouped record is stored as a unit.
+      const fields: Record<string, string> = {};
+      for (const [k, v] of Object.entries(submitted)) {
+        if (typeof v === 'string' && v.trim()) fields[k] = v.trim();
+      }
+      const status = actor.canApprove ? 'approved' : 'pending';
+      return {
+        ok: true,
+        store: 'library_record',
+        status,
+        key: need.key,
+        payload: { key: need.key, recordType, record: fields, enteredBy: by, approved: actor.canApprove, note: submission.note },
       };
     }
     default: {
