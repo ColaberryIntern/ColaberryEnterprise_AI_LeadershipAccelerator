@@ -164,6 +164,7 @@ import factoryDownstreamRoutes from './admin/factoryDownstreamRoutes';
 import govQualificationRoutes from './admin/govQualificationRoutes';
 import govContractsRoutes from './admin/govContractsRoutes';
 import govProposalSourceRoutes from './admin/govProposalSourceRoutes';
+import govCompanyDossierRoutes from './admin/govCompanyDossierRoutes';
 import agentFactoryRoutes from './admin/agentFactoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
@@ -450,6 +451,9 @@ router.use(govQualificationRoutes);
 // so the Interns-hub tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(govContractsRoutes);
 router.use(govProposalSourceRoutes);
+// Gov Company Dossier (Dossier Phase 2a): tenant-wide library portal under /api/admin/factory/dossier/*, which
+// mgmtSectionGate already maps to 'program' (its routes also self-declare requireSection('program')).
+router.use(govCompanyDossierRoutes);
 // Agent Factory tab (M2): its own 'agents'-gated router (NOT the '-provisioned' program prefix),
 // so the Interns-hub Agents tab's data agrees with its section gate. mgmtSectionGate maps the prefix.
 router.use(agentFactoryRoutes);

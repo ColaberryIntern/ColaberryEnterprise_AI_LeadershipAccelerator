@@ -21,6 +21,10 @@ export async function ensureGovCompanyLibrarySchema(): Promise<void> {
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_gov_company_facts_tenant ON gov_company_facts (tenant_id)`,
+    // Dossier portal (Phase 2): an optional category so the fill-UI can group facts by the proposal's demand
+    // buckets (registrations, reps_certs, socioeconomic, financials, quality_certs, pricing, general). Additive and
+    // nullable; the grounder still reads only key/value, so existing facts are unaffected.
+    `ALTER TABLE gov_company_facts ADD COLUMN IF NOT EXISTS category TEXT`,
     `CREATE TABLE IF NOT EXISTS gov_company_references (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        tenant_id UUID NOT NULL,

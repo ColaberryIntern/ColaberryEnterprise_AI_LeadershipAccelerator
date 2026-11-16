@@ -267,6 +267,10 @@ export const NAV_GROUPS: NavGroup[] = [
     // Our Services: Colaberry's own offering catalog, matched (advisory) against opportunities. Same 'program'
     // section (backend mgmtSectionGate covers /api/admin/factory/services).
     { path: '/admin/gov-services', label: 'Our Services', icon: 'service-line' },
+    // Gov Company Dossier (Dossier Phase 2a): the tenant-wide fill-and-approve portal for the company library the
+    // proposal agent grounds on (facts, references, personnel). Same 'program' section as the siblings above
+    // (backend mgmtSectionGate covers /api/admin/factory/dossier/*), so nav visibility and API access agree.
+    { path: '/admin/gov-dossier', label: 'Gov Dossier', icon: 'archive-2-line' },
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },

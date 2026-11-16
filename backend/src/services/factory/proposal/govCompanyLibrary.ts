@@ -13,9 +13,9 @@ import GovCompanyReference from '../../../models/GovCompanyReference';
 import GovCompanyPersonnel from '../../../models/GovCompanyPersonnel';
 
 export interface CompanyLibraryView {
-  facts: Array<{ id: string; key: string; value: string; source: string | null; approved: boolean }>;
-  references: Array<{ id: string; client: string; scope: string | null; contractValue: string | null; approved: boolean }>;
-  personnel: Array<{ id: string; name: string; role: string | null; approved: boolean }>;
+  facts: Array<{ id: string; key: string; value: string; source: string | null; category: string | null; approved: boolean }>;
+  references: Array<{ id: string; client: string; scope: string | null; contractValue: string | null; dates: string | null; contact: string | null; phone: string | null; email: string | null; approved: boolean }>;
+  personnel: Array<{ id: string; name: string; role: string | null; resumeHtml: string | null; approved: boolean }>;
 }
 
 export async function listCompanyLibrary(tenantId: string): Promise<CompanyLibraryView> {
@@ -26,9 +26,9 @@ export async function listCompanyLibrary(tenantId: string): Promise<CompanyLibra
   ]);
   const p = (r: any) => r.get({ plain: true });
   return {
-    facts: facts.map(p).map((f: any) => ({ id: f.id, key: f.key, value: f.value, source: f.source ?? null, approved: !!f.approved })),
-    references: refs.map(p).map((r: any) => ({ id: r.id, client: r.client, scope: r.scope ?? null, contractValue: r.contract_value ?? null, approved: !!r.approved })),
-    personnel: people.map(p).map((r: any) => ({ id: r.id, name: r.name, role: r.role ?? null, approved: !!r.approved })),
+    facts: facts.map(p).map((f: any) => ({ id: f.id, key: f.key, value: f.value, source: f.source ?? null, category: f.category ?? null, approved: !!f.approved })),
+    references: refs.map(p).map((r: any) => ({ id: r.id, client: r.client, scope: r.scope ?? null, contractValue: r.contract_value ?? null, dates: r.dates ?? null, contact: r.contact ?? null, phone: r.phone ?? null, email: r.email ?? null, approved: !!r.approved })),
+    personnel: people.map(p).map((r: any) => ({ id: r.id, name: r.name, role: r.role ?? null, resumeHtml: r.resume_html ?? null, approved: !!r.approved })),
   };
 }
 
@@ -65,12 +65,18 @@ export async function approvedPersonnel(tenantId: string): Promise<Array<{ name:
   }).filter((p: { name: string }) => p.name.trim() !== '');
 }
 
-export async function addCompanyFact(tenantId: string, input: { key: string; value: string; source?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
-  const row: any = await GovCompanyFact.create({ tenant_id: tenantId, key: input.key, value: input.value, source: input.source ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
+export async function addCompanyFact(tenantId: string, input: { key: string; value: string; source?: string | null; category?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
+  const row: any = await GovCompanyFact.create({ tenant_id: tenantId, key: input.key, value: input.value, source: input.source ?? null, category: input.category ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
   return row.id;
 }
 export async function approveCompanyFact(tenantId: string, id: string, identityId: string | null): Promise<void> {
   await GovCompanyFact.update({ approved: true, approved_by_identity_id: identityId, updated_at: new Date() } as any, { where: { id, tenant_id: tenantId } });
+}
+export async function approveCompanyReference(tenantId: string, id: string, identityId: string | null): Promise<void> {
+  await GovCompanyReference.update({ approved: true, approved_by_identity_id: identityId, updated_at: new Date() } as any, { where: { id, tenant_id: tenantId } });
+}
+export async function approveCompanyPersonnel(tenantId: string, id: string, identityId: string | null): Promise<void> {
+  await GovCompanyPersonnel.update({ approved: true, approved_by_identity_id: identityId, updated_at: new Date() } as any, { where: { id, tenant_id: tenantId } });
 }
 export async function addCompanyReference(tenantId: string, input: Record<string, unknown>, identityId: string | null): Promise<string> {
   const row: any = await GovCompanyReference.create({ tenant_id: tenantId, client: String(input.client ?? ''), contact: (input.contact as string) ?? null, phone: (input.phone as string) ?? null, email: (input.email as string) ?? null, contract_value: (input.contractValue as string) ?? null, dates: (input.dates as string) ?? null, scope: (input.scope as string) ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
