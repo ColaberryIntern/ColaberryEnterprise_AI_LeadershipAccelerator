@@ -104,3 +104,67 @@ absence let this ship.
 Both ratchets turned down and were recorded: escaped dashes 69 → 68 and the
 word "free" 261 → 260, each with the `HeroV8.tsx` entry deleted rather than
 zeroed, because the hero lost the sentence and the proof row that held them.
+
+## Deployed and verified on production
+
+PR [#4097](https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4097),
+merged by Ali as `bcb4350562d9`.
+
+**Its own image build was cancelled**, by the merge that landed seconds after
+it. Deploying on that green tick would have pulled a pre-merge image and
+reported success, which is the failure mode recorded in
+`successive merges cancel the image build`. So the deploy waited for main's tip
+to finish building instead:
+
+| | |
+|---|---|
+| Deployed tip | `8490e46b7473` (PR #4090) |
+| Image check | `accelerator-nginx:main` matched `sha-8490e46b7473…` before the pull |
+| Command | `scripts/deploy-prod.sh` (registry mode), via the scp'd runner |
+
+### Verified by looking, not only by measuring
+
+That distinction is the whole lesson of this session, so both were done:
+
+- **Measured.** `verifyFidelityProd.js` against production: ALL CHECKS PASSED
+  across 11 routes. `/` 7 bands / 6,997px, `/platform` 4 / 5,942px, `/services`
+  5 / 4,532px, `/how-it-works` 6 / 5,301px; accent `rgb(46, 106, 134)`
+  everywhere; all four segment links present in the footer. **This proves
+  nothing about the hero on its own** — it is the same class of check that let
+  the diagram ship.
+- **Looked at.** The deployed hero was captured and read: light ground,
+  headline with *into AI.* in the accent, lede and two buttons beside it, three
+  ruled verb columns each with its sentence, full-bleed dark band with the
+  colour legend, six departments in one row, the toggle, the sample badge. It
+  matches `colaberry-enterprise-site.html`.
+- **Driven.** The toggle, on production: heading `Department by department.` →
+  `Company-wide.`, statuses `[Automating, Demo pilot, Next leader, Not started
+  ×3]` → `[Automating, Demo pilot ×5]`, zero page errors.
+
+## Production test lead 25739 deleted
+
+The `/gov-refs` verification run earlier in this session wrote a real row to a
+production table: id 25739, *Jane Doe / jane@agency.gov / Harris County*,
+`form_type` `gov_refs_request`. Ali approved the delete on 2026-11-16.
+
+Deleted in one transaction, guarded: the script raises and writes nothing
+unless 25739 is still that exact name and address, because a hardcoded id with
+no identity check is how the wrong lead gets deleted. Dependents were walked
+from the FK catalog rather than from a list typed by hand — 34 tables carry an
+FK to `leads.id`.
+
+**It was not as inert as reported.** One dependent row existed:
+`opportunity_scores`. No outbound email, call, or CRM sync had fired (the lead
+controller defers all of that to the PaySimple webhook), but the scoring
+service had already scored it. Both rows are gone; `leads` now holds no
+`gov_refs_request` row at all, and no Jane Doe row anywhere.
+
+## Still open, and why
+
+- **`/book` is one band short.** It needs Ram Katamaraja's two-to-three
+  sentence bio from approved materials and the purchase or download link.
+  Neither can be written here: a bio is a claim about a person, and inventing
+  one is the thing the claim registry exists to prevent.
+- **`to="/contact"` on `/pricing` and eleven other pages.** Flagged, not
+  fixed. It works through a redirect route and costs one extra client-side
+  navigation. `/pricing` is explicitly out of scope per Ali.
