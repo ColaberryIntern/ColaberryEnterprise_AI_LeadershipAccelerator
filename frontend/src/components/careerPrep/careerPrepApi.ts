@@ -37,3 +37,15 @@ export async function fetchPrepSummary(): Promise<PrepSummary> {
 export async function fetchPrepDashboard(interviewId?: string): Promise<PrepDashboard> {
   return (await portalApi.get(`${BASE}/dashboard`, { params: interviewId ? { interviewId } : {} })).data;
 }
+
+export type NewInterview =
+  | { mode: 'add'; company: string; role: string; type: InterviewType; startsAt: string | null; jdText?: string }
+  | { mode: 'practice'; role: string; type: InterviewType };
+
+export async function postInterview(body: NewInterview): Promise<{ id: string; source: 'added' | 'practice' }> {
+  return (await portalApi.post(`${BASE}/interviews`, body)).data;
+}
+
+export async function askCoraApi(message: string, interviewId?: string): Promise<{ messages: string[] }> {
+  return (await portalApi.post(`${BASE}/cora`, interviewId ? { message, interviewId } : { message })).data;
+}

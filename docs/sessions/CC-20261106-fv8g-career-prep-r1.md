@@ -210,3 +210,18 @@ tests/systemV2/career-prep/.
     a model failure gives a polite line, never an error) and POST /api/portal/career-prep/cora (strict Zod,
     flag-gated, own interview only, read-only view-as refused).
   - Verification: coraService 8 tests, Cora route 10 tests; 131 Career Prep backend tests pass; tsc clean.
+
+- [x] CP3.3 + CP3.4 (frontend) The anchor flow and asking Cora in the room
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: logic/askRouter.ts (plan, weak, 10 minutes, add, progress and the five getting-hired sheets
+    decided in code, everything else to Cora); logic/anchorOptions.ts (a card per real interview soonest first with
+    a readiness bar only when one exists, then Add and Create; the four interview types; insight lines only from
+    real metrics); useCareerPrep.ts (the room conversation: ask which interview, anchor, insight or a plain "not
+    enough data yet", the add and practice forms, weakest skills as cards, free questions to POST /cora, failures
+    stay in the chat); InterviewForm.tsx (date entered in Central and sent as UTC, a nonexistent spring-forward time
+    refused); the room page wires them, with ?anchor= preselecting an interview; the room's tab can be switched from
+    the chat; Esc in a dropdown no longer closes the room.
+  - Verification: Career Prep frontend 73 tests pass (router + anchor 21, useCareerPrep 9 among them); tsc clean.
+  - Notes: plans and the Watch/Try session plug in at CP4 through onPlan; until then picking an interview ends at
+    the insight. Sheets open in CP4.6 through onSheet.

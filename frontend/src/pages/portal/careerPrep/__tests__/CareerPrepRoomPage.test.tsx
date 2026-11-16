@@ -4,13 +4,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import CareerPrepRoomPage from '../CareerPrepRoomPage';
 import { useCareerPrepFlag } from '../../../../components/careerPrep/careerPrepFlag';
-import { fetchPrepSummary } from '../../../../components/careerPrep/careerPrepApi';
+import { fetchPrepDashboard, fetchPrepSummary } from '../../../../components/careerPrep/careerPrepApi';
 import { resetCareerPrepSummaryCache } from '../../../../components/careerPrep/useCareerPrepSummary';
 
 jest.mock('../../../../components/careerPrep/careerPrepFlag', () => ({ useCareerPrepFlag: jest.fn() }));
-jest.mock('../../../../components/careerPrep/careerPrepApi', () => ({ fetchPrepSummary: jest.fn() }));
+jest.mock('../../../../components/careerPrep/careerPrepApi', () => ({ fetchPrepSummary: jest.fn(), fetchPrepDashboard: jest.fn(), postInterview: jest.fn(), askCoraApi: jest.fn() }));
 const flag = useCareerPrepFlag as jest.Mock;
-beforeEach(() => { (fetchPrepSummary as jest.Mock).mockResolvedValue({ stops: {}, interviews: [], today: '2026-11-16' }); resetCareerPrepSummaryCache(); });
+beforeEach(() => {
+  (fetchPrepSummary as jest.Mock).mockResolvedValue({ stops: {}, interviews: [], today: '2026-11-16' });
+  (fetchPrepDashboard as jest.Mock).mockResolvedValue({ interviews: [], skills: [], sources: { video: 0, phone_mock: 0, real_interview: 0, training: 0, project: 0 }, weeklyMinutes: [], streak: 0, thisWeek: 0 });
+  resetCareerPrepSummaryCache();
+});
 
 let host: HTMLDivElement;
 let root: Root;

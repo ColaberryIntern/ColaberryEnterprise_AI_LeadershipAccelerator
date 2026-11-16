@@ -24,12 +24,17 @@ export interface CareerPrepRoomProps {
   cora: React.ReactNode;
   tabs: Record<RoomTab, React.ReactNode>;
   initialTab?: RoomTab;
+  /** Controlled tab (the conversation can switch it, e.g. "show my progress"). */
+  tab?: RoomTab;
+  onTabChange?: (t: RoomTab) => void;
 }
 
-const isTextField = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable);
+const isTextField = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable);
 
-export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, initialTab = 'progress' }: CareerPrepRoomProps): React.ReactElement {
-  const [tab, setTab] = useState<RoomTab>(initialTab);
+export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, initialTab = 'progress', tab: controlled, onTabChange }: CareerPrepRoomProps): React.ReactElement {
+  const [own, setOwn] = useState<RoomTab>(initialTab);
+  const tab = controlled ?? own;
+  const setTab = (t: RoomTab) => { setOwn(t); onTabChange?.(t); };
   const opener = useRef<Element | null>(typeof document !== 'undefined' ? document.activeElement : null);
   const coraRef = useRef<HTMLElement>(null);
   const floorNum = careerPrepFloorNum();
