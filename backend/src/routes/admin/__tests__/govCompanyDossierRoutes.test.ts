@@ -13,8 +13,19 @@ const approveCompanyFact = jest.fn();
 const approveCompanyReference = jest.fn();
 const approveCompanyPersonnel = jest.fn();
 
+const ingestSourceDocument = jest.fn();
+const listCompanyDocuments = jest.fn();
+const approveSourceDocument = jest.fn();
+const deleteSourceDocument = jest.fn();
+
 jest.mock('../../../middlewares/authMiddleware', () => ({ requireSection: () => (_req: any, _res: any, next: any) => next() }));
 jest.mock('../../../scripts/lib/factoryDemoContainer', () => ({ lookupGovContractsContainer: (...a: any[]) => lookupContainer(...a) }));
+jest.mock('../../../services/factory/proposal/govProposalSources', () => ({
+  ingestSourceDocument: (...a: any[]) => ingestSourceDocument(...a),
+  listCompanyDocuments: (...a: any[]) => listCompanyDocuments(...a),
+  approveSourceDocument: (...a: any[]) => approveSourceDocument(...a),
+  deleteSourceDocument: (...a: any[]) => deleteSourceDocument(...a),
+}));
 jest.mock('../../../services/factory/proposal/govCompanyLibrary', () => ({
   listCompanyLibrary: (...a: any[]) => listCompanyLibrary(...a),
   addCompanyFact: (...a: any[]) => addCompanyFact(...a),
@@ -98,5 +109,42 @@ describe('POST approve', () => {
     const res = await request(app).post(`${BASE}/bogus/r1/approve`).send({});
     expect(res.status).toBe(400);
     expect(approveCompanyReference).not.toHaveBeenCalled();
+  });
+});
+
+const DOCS = '/api/admin/factory/dossier/documents';
+
+describe('company documents (tenant-wide, project_id NULL)', () => {
+  it('lists the tenant company documents', async () => {
+    listCompanyDocuments.mockResolvedValue([{ id: 'd1', name: 'cap.pdf', status: 'ready', approved: true, chunk_count: 3, embedded_count: 3, truncated: false, created_at: null }]);
+    const res = await request(app).get(DOCS);
+    expect(res.status).toBe(200);
+    expect(res.body.documents[0]).toMatchObject({ id: 'd1', name: 'cap.pdf', chunkCount: 3 });
+    expect(listCompanyDocuments).toHaveBeenCalledWith(TENANT);
+  });
+
+  it('ingests an uploaded .pdf as a tenant-wide document (project_id null)', async () => {
+    ingestSourceDocument.mockResolvedValue({ documentId: 'd-new', chunkCount: 2, embeddedCount: 2, truncated: false, status: 'ready' });
+    const res = await request(app).post(DOCS).attach('file', Buffer.from('%PDF-1.4 hello'), 'capability.pdf');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, documentId: 'd-new' });
+    expect(ingestSourceDocument).toHaveBeenCalledWith(null, TENANT, expect.objectContaining({ name: 'capability.pdf' }), null);
+  });
+
+  it('rejects a disallowed extension before ingest', async () => {
+    const res = await request(app).post(DOCS).attach('file', Buffer.from('x'), 'malware.exe');
+    expect(res.status).toBe(400);
+    expect(ingestSourceDocument).not.toHaveBeenCalled();
+  });
+
+  it('approves and deletes a company document', async () => {
+    approveSourceDocument.mockResolvedValue({ id: 'd1', approved: true });
+    deleteSourceDocument.mockResolvedValue(true);
+    const ap = await request(app).post(`${DOCS}/d1/approve`).send({});
+    expect(ap.status).toBe(200);
+    expect(approveSourceDocument).toHaveBeenCalledWith('d1', null, true);
+    const del = await request(app).delete(`${DOCS}/d1`);
+    expect(del.status).toBe(200);
+    expect(del.body).toEqual({ ok: true });
   });
 });

@@ -46,6 +46,11 @@ export async function ensureGovProposalSourcesSchema(): Promise<void> {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_gov_proposal_source_chunks_project ON gov_proposal_source_chunks (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_gov_proposal_source_chunks_document ON gov_proposal_source_chunks (document_id)`,
+    // Dossier Phase 2b: TENANT-WIDE company documents (capability statement, past proposals) carry project_id NULL and
+    // ground every pursuit, alongside the per-project docs above. Relaxing NOT NULL is additive and idempotent; the
+    // tenant_id column already present keeps them tenant-scoped.
+    `ALTER TABLE gov_proposal_source_documents ALTER COLUMN project_id DROP NOT NULL`,
+    `ALTER TABLE gov_proposal_source_chunks ALTER COLUMN project_id DROP NOT NULL`,
   ];
 
   for (const sql of statements) {

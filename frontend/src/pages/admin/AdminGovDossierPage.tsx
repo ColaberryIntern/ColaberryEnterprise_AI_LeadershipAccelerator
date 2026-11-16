@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
   getDossier, addDossierItem, approveDossierItem, FACT_CATEGORIES,
-  type DossierLibrary, type DossierKind, type NewItem,
+  listCompanyDocs, uploadCompanyDoc, approveCompanyDoc, deleteCompanyDoc,
+  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc,
 } from '../../services/adminGovDossierApi';
 
 /**
@@ -170,11 +171,77 @@ export default function AdminGovDossierPage(): React.ReactElement {
               </ul>
             )}
           </SectionCard>
+          <DocumentsSection />
         </>
       )}
 
       {adding && <AddModal kind={adding.kind} onCancel={() => setAdding(null)} onSave={save} />}
     </div>
+  );
+}
+
+function DocumentsSection(): React.ReactElement {
+  const [docs, setDocs] = useState<CompanyDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setDocs((await listCompanyDocs()).documents); setErr(null); }
+    catch { setErr('Could not load documents.'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const onFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try { await uploadCompanyDoc(file); await load(); }
+    catch { setErr('Upload failed. Allowed types: pdf, docx, txt, md, up to 20MB.'); }
+    finally { setUploading(false); }
+  }, [load]);
+
+  const act = useCallback(async (id: string, fn: () => Promise<unknown>) => {
+    setBusyId(id);
+    try { await fn(); await load(); } catch { setErr('That action failed.'); } finally { setBusyId(null); }
+  }, [load]);
+
+  return (
+    <SectionCard className="mb-4" title="Company documents" icon="file-text-line"
+      subtitle="Upload a capability statement, a past proposal or a cert. Approved documents are searched and cited on every bid."
+      actions={
+        <label className={`btn btn-primary btn-sm mb-0 ${uploading ? 'disabled' : ''}`}>
+          <i className="ri-upload-2-line me-1" aria-hidden="true" />{uploading ? 'Uploading...' : 'Upload document'}
+          <input type="file" accept=".pdf,.docx,.txt,.md" className="d-none" data-testid="doc-upload" disabled={uploading} onChange={onFile} />
+        </label>
+      }>
+      {err && <div className="alert alert-warning py-2" role="alert">{err}</div>}
+      {loading ? (
+        <p className="text-secondary mb-0" role="status">Loading documents...</p>
+      ) : docs.length === 0 ? (
+        <p className="text-secondary mb-0">No documents yet. A capability statement and one or two strong past proposals give the agent the most to work with.</p>
+      ) : (
+        <ul className="list-group">
+          {docs.map((d) => (
+            <li key={d.id} className="list-group-item d-flex justify-content-between align-items-center gap-2" data-testid="doc-row">
+              <span>
+                <strong>{d.name}</strong>
+                <span className="small text-secondary ms-2">{d.embeddedCount}/{d.chunkCount} chunks{d.status === 'embedding_pending' ? ', embedding pending' : ''}{d.truncated ? ', truncated' : ''}</span>
+              </span>
+              <span className="d-flex align-items-center gap-2 flex-shrink-0">
+                <Badge approved={d.approved} />
+                {!d.approved && <button type="button" className="btn btn-outline-success btn-sm" disabled={busyId === d.id} onClick={() => void act(d.id, () => approveCompanyDoc(d.id, true))}>Approve</button>}
+                <button type="button" className="btn btn-outline-danger btn-sm" disabled={busyId === d.id} onClick={() => void act(d.id, () => deleteCompanyDoc(d.id))}>Delete</button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SectionCard>
   );
 }
 
