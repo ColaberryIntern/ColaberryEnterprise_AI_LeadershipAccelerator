@@ -84,7 +84,7 @@ function Over({ s, onTab }: { s: SessionApi; onTab: (t: 'progress' | 'plan') => 
 
 export function SessionRunner({ s, type, questions, hasPlan, onTab = () => undefined }: { s: SessionApi; type: InterviewType; questions?: string[]; hasPlan: boolean; onTab?: (t: 'progress' | 'plan') => void }): React.ReactElement {
   if (!hasPlan) return <p className="cp-pending">Pick a plan with Cora first, then start today&apos;s session here.</p>;
-  if (!s.session || s.state.status === 'idle') return <button type="button" className="cp-send" onClick={() => void s.start()} data-testid="cp-session-start">▶ Start today&apos;s session</button>;
+  if (!s.session || s.state.status === 'idle') return <button type="button" className="cp-send" onClick={() => void s.start()} data-testid="cp-session-start">Start today&apos;s session</button>;
   if (s.state.status === 'finished' || s.state.status === 'ended') return <Over s={s} onTab={onTab} />;
   const segs = s.session.segments;
   const i = s.state.index;
@@ -96,7 +96,7 @@ export function SessionRunner({ s, type, questions, hasPlan, onTab = () => undef
         <Ring left={left} total={seg.minutes * 60} />
         <p className="cp-muted">{clock(left)} left in this part</p>
         {s.state.status === 'running' ? <button type="button" className="cp-chip" onClick={s.pause}>Pause</button> : <button type="button" className="cp-chip" onClick={s.resume}>Resume</button>}
-        <ol className="cp-seglist">{segs.map((x, j) => <li key={`${x.kind}${j}`} aria-current={j === i ? 'step' : undefined}>{s.state.done.includes(j) ? '✓' : j === i ? '▶' : '·'} {x.title} · {x.minutes} min</li>)}</ol>
+        <ol className="cp-seglist">{segs.map((x, j) => <li key={`${x.kind}${j}`} aria-current={j === i ? 'step' : undefined}><span className={`cp-segmark${s.state.done.includes(j) ? ' is-done' : j === i ? ' is-now' : ''}`} aria-hidden="true" />{s.state.done.includes(j) ? <span className="visually-hidden">Done: </span> : null}{x.title} · {x.minutes} min</li>)}</ol>
       </div>
       <div className="cp-stage">
         <p className="cp-muted">Part {i + 1} of {segs.length} · {seg.minutes} minutes</p>

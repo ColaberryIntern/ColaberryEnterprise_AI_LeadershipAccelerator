@@ -1,9 +1,10 @@
 import { careerPrepChat, logLlmFailure, type LlmCall } from './careerPrepLlm';
+import { FREE_WORD_RULE } from '../content/bannedCopyRule';
 import { findCoraReplyViolations } from '../coraPromptRules';
 import type { Dashboard } from './prepViews';
 
 /**
- * Career Prep v27 (CP3.4): Cora answers a free question. The common intents (plan, weak skills,
+ * Career Prep v27 (CP3.4): Cora answers an open question. The common intents (plan, weak skills,
  * 10 minutes, add an interview, progress, the get-hired sheets) never reach here: the client's
  * askRouter handles them without a model call.
  *
@@ -28,7 +29,7 @@ const BUDGET_MS = 20_000;
 
 /** coraPromptRules.ts rules 1, 3, 4 and 5, restated for a coaching chat. */
 export const COACHING_RULES = `Rules:
-1. Never use the word "free" (Texas Workforce Commission rule 807.172(d)): not about a program, an event or a tool, and not in "feel free".
+1. Never use the word "${FREE_WORD_RULE.word}" (${FREE_WORD_RULE.reason}) Not about a program, an event or a tool, and not as an idiom. Say "${FREE_WORD_RULE.approvedAlternatives.join('" or "')}" instead.
 2. Never promise an outcome: a job, a placement, an introduction, a referral, an interview, or a salary. Never say we do or do not guarantee employment.
 3. Never name a person, team, department or email address that is not in CONTEXT.
 4. Never say an action has been taken (a booking made, a form submitted, a record changed). You can only coach.`;

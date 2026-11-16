@@ -97,3 +97,9 @@ PROGRESS.md:curl-auth-header:7200
 5db90cd4eae848be8446a631cb99eb1f0cc32091:backend/src/services/factory/proposal/texasFormsRules.ts:generic-api-key:80
 # The same form key, quoted in this file's own comment by d581ddfe. Reworded since, but that commit stays in history.
 d581ddfe7d341b120055a7545ef9061b74dbe58c:.gitleaksignore:generic-api-key:86
+
+# Career Prep v27 (CP4.4): not secrets. The attempt-upload route test sends the sample idempotency key
+# "key-12345678" as the multipart field clientKey (a per-recording retry key the browser makes, not a credential).
+b518d1cf1dd65b99f411a55044ac3b7bc5c24545:backend/src/routes/__tests__/careerPrepAttemptRoutes.test.ts:generic-api-key:35
+b518d1cf1dd65b99f411a55044ac3b7bc5c24545:backend/src/routes/__tests__/careerPrepAttemptRoutes.test.ts:generic-api-key:59
+b518d1cf1dd65b99f411a55044ac3b7bc5c24545:backend/src/routes/__tests__/careerPrepAttemptRoutes.test.ts:generic-api-key:61

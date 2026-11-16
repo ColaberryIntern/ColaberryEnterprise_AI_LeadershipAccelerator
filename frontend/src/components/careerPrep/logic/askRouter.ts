@@ -8,7 +8,7 @@
 export type Sheet = 'interviews' | 'inbox' | 'offers' | 'applications' | 'resume';
 export type Intent =
   | { kind: 'plan' } | { kind: 'weak' } | { kind: 'quick' } | { kind: 'add' } | { kind: 'progress' }
-  | { kind: 'sheet'; sheet: Sheet } | { kind: 'free'; text: string };
+  | { kind: 'sheet'; sheet: Sheet } | { kind: 'open'; text: string };
 
 const RULES: ReadonlyArray<[RegExp, (t: string) => Intent]> = [
   [/\badd\b[^.?!]*\binterview\b/i, () => ({ kind: 'add' })],
@@ -27,5 +27,5 @@ const RULES: ReadonlyArray<[RegExp, (t: string) => Intent]> = [
 export function routeAsk(text: string): Intent {
   const t = text.trim();
   for (const [re, make] of RULES) if (re.test(t)) return make(t);
-  return { kind: 'free', text: t };
+  return { kind: 'open', text: t };
 }

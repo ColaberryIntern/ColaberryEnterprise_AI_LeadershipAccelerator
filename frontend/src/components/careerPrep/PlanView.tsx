@@ -44,7 +44,7 @@ export function PlanView({ plan, company, skillLabels = {}, onStart, now }: {
     <div className="cp-plan" data-testid="cp-plan">
       <h3>Your plan{company ? ` · for ${company}` : ''}</h3>
       {targeted.length > 0 && <p className="cp-muted">Built from your weakest skills: {targeted.map((k) => skillLabels[k] ?? k).join(', ')}.</p>}
-      {hasToday && <button type="button" className="cp-send" onClick={onStart} data-testid="cp-start-today">▶ Start today&apos;s session</button>}
+      {hasToday && <button type="button" className="cp-send" onClick={onStart} data-testid="cp-start-today">Start today&apos;s session</button>}
       <ol className="cp-days">
         {days.map((d, i) => {
           const mins = d.segments.reduce((a, s) => a + s.minutes, 0);

@@ -86,7 +86,8 @@ describe('the session (CP4.4)', () => {
     const h = mount(<Harness />);
     await click(h, 'cp-session-start');
     expect(h.textContent).toContain('Part 3 of 3');
-    expect(h.querySelectorAll('.cp-seglist li')[0].textContent).toMatch(/^✓/);
+    expect(h.querySelectorAll('.cp-seglist li')[0].querySelector('.cp-segmark.is-done')).not.toBeNull();
+    expect(h.querySelectorAll('.cp-seglist li')[0].textContent).toMatch(/^Done: /);
   });
 
   it('a session with every part done opens as finished, not on a part that does not exist', async () => {

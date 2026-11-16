@@ -130,3 +130,8 @@ ol.cp-list{list-style:decimal;padding-left:18px}
 .cp-jump-list li.active{background:var(--accent-soft)}
 /* CP5.4: a link styled as a button (Join the room, Open your portfolio page) keeps the 44px target */
 a.cp-send{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+/* The part list's markers are drawn by CSS (house style: no glyphs in product copy). */
+.cp-segmark{display:inline-block;width:1.2em}
+.cp-segmark::before{content:" B7"}
+.cp-segmark.is-now::before{content:"B8"}
+.cp-segmark.is-done::before{content:"¹3"}

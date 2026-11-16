@@ -46,7 +46,7 @@ export function CareerPrepFloor({ f, onElevator, onLobby }: { f: HqFloor; onElev
       </a>
 
       <div className="cm-hq-floorbar">
-        <button type="button" className="cm-hq-btn is-navy" onClick={onElevator} data-testid="cm-hq-to-cab">↕ Elevator</button>
+        <button type="button" className="cm-hq-btn is-navy" onClick={onElevator} data-testid="cm-hq-to-cab">Elevator</button>
         <button type="button" className="cm-hq-btn" onClick={onLobby} data-testid="cm-hq-to-lobby">Lobby</button>
       </div>
       <span className="cm-hq-sr">1 door on this floor</span>

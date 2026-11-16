@@ -41,6 +41,6 @@ export const prepOutsideHint = (num: string): string => `Your floor is lit: ${nu
 export const prepLobbyLine = (firstName: string, num: string, sessionMinutes?: number): string =>
   `Hi${firstName ? ` ${firstName}` : ''}! Career Prep is on Floor ${num}. Cora, your interview coach, ${sessionMinutes ? `has today's ${sessionMinutes}-minute session ready.` : 'is waiting for you up there.'}`;
 /** The lobby directory for a student: only the floors their badge opens, then one line for the rest. */
-export const prepStaffFloorsLine = (k: number): string => `🔒 ${k} other ${k === 1 ? 'floor is a Colaberry staff office' : 'floors are Colaberry staff offices'}.`;
+export const prepStaffFloorsLine = (k: number): string => `${k} other ${k === 1 ? 'floor is a Colaberry staff office' : 'floors are Colaberry staff offices'}.`;
 export const prepElevatorLine = 'Tap your floor. It goes straight up, no stops.';
 export const prepExpressLabel = (num: string): string => `${num} · Go to Career Prep · Elevator A · straight up`;

@@ -599,3 +599,17 @@ tests/systemV2/career-prep/.
     Prep); frontend tsc clean; frontend Career Prep + campus + Layout + admin 3191 pass; lint-route-auth OK.
   - Next: Ali approves and merges; then deploy-prod.sh after Build images, production check (incl. the 40 MB nginx
     probe), flag seed for Ali's enrollment, observation backfill (T27 part 2), handoff (T28).
+
+- [x] Release 1 PR #4110: CI fixes (before any review)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: three repo copy lints failed in CI. (1) "free": Cora's prompt rule now builds its line from the
+    canonical FREE_WORD_RULE (content/bannedCopyRule.ts) instead of quoting the word, and the router's internal
+    intent kind is "open". (2) House style, no glyphs in product copy: the lobby's staff line, the floor's Elevator
+    button, both Start buttons and the session part list no longer carry glyphs (the part list's markers are CSS).
+    Secret scan: the attempt-route test's sample idempotency key "key-12345678" is a generic-api-key false positive;
+    three reviewed fingerprints added to .gitleaksignore (pinned to commit b518d1cf1: a rebase would need them
+    refreshed).
+  - Verification: the three copy-lint suites pass; backend Career Prep 299 pass, 7 skipped; backend tsc clean (local
+    maxmind only); frontend tsc clean; frontend Career Prep + campus 2415 pass (main's #4107 removed the campus
+    tvManager suite, 9 tests, hence the lower count); gitleaks on origin/main..HEAD: no leaks.

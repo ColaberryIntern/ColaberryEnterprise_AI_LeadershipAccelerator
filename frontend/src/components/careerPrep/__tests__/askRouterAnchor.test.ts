@@ -13,7 +13,7 @@ describe('routeAsk (no model call for the common asks)', () => {
     '%s opens the %s sheet', (text, sheet) => expect(routeAsk(text)).toEqual({ kind: 'sheet', sheet }));
 
   it('sends anything else to Cora, trimmed', () => {
-    expect(routeAsk('  How do I explain RAG to a recruiter?  ')).toEqual({ kind: 'free', text: 'How do I explain RAG to a recruiter?' });
+    expect(routeAsk('  How do I explain RAG to a recruiter?  ')).toEqual({ kind: 'open', text: 'How do I explain RAG to a recruiter?' });
   });
 });
 

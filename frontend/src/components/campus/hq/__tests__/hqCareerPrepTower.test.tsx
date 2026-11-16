@@ -113,7 +113,7 @@ describe("a student's tower with Career Prep open (CP5.2, CP5.3)", () => {
     expect($('[data-testid="cm-hq-reader"]')).toBeNull();
     const rows = $$('[data-testid="cm-hq-directory"] button .n').map((n) => n.textContent);
     expect(rows).toEqual(['6', '1', 'G']);
-    expect($('[data-testid="cm-hq-staff-floors"]').textContent).toBe(`🔒 ${live.hq.floors.length - 2} other floors are Colaberry staff offices.`);
+    expect($('[data-testid="cm-hq-staff-floors"]').textContent).toBe(`${live.hq.floors.length - 2} other floors are Colaberry staff offices.`);
   });
 
   it('the elevator says the ride is express, and the outside chip names their floor, not an office they may not have', async () => {
