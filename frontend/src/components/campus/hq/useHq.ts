@@ -6,6 +6,8 @@ import { buildHq, lockedFloorToast, rideOrder, type Hq, type HqFloor, type HqRoo
 import { useHqSubnav } from './useHqSubnav';
 import { takeHqIntent } from './hqIntent';
 import { listMyGovProjects } from '../../../services/govProjectPortalApi';
+import { fetchCareerPrepFlag } from '../../careerPrep/careerPrepFlag';
+import type { CareerPrepFloorState } from './careerPrepDoors';
 
 /**
  * Campus HQ state (H5): which scene you are in (outside, lobby, elevator, a floor), where the cab is, the hovered button, and
@@ -59,8 +61,16 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
     return () => { live = false; };
   }, [audience]);
   const officeKey = office ? office.projects.map((p) => p.projectId).join(',') : '';
+  // Career Prep v27 (CP2.2): whether this member's Career Prep door is open (server-decided, fails closed). Members only.
+  const [careerPrep, setCareerPrep] = useState<CareerPrepFloorState | undefined>(undefined);
+  useEffect(() => {
+    if (audience !== 'member') { setCareerPrep(undefined); return undefined; }
+    let live = true;
+    fetchCareerPrepFlag().then((on) => { if (live) setCareerPrep({ on }); });
+    return () => { live = false; };
+  }, [audience]);
   // rebuilt when the sections, the member's office or the sub-lists change (keyed on their joined lists), not on every render
-  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, office, subs), [sectionsKey, isStaff, audience, careerName, officeKey, subs]);
+  const hq = useMemo(() => buildHq((s) => mgmt.sections.includes(s), isStaff, audience, undefined, careerName, office, subs, careerPrep), [sectionsKey, isStaff, audience, careerName, officeKey, subs, careerPrep?.on]);
   const [scene, setScene] = useState<HqScene>('ext');
   const [floor, setFloor] = useState<string | null>(null);
   const [cabAt, setCabAt] = useState('G');

@@ -97,3 +97,16 @@ tests/systemV2/career-prep/.
   - Notes: the kit's queue, inboxes, bookings and fees links join the Placement group in Releases 2 and 3, when
     those pages exist. The new page test uses react-dom/client + act, the repo's pattern (@testing-library is not a
     declared dependency).
+
+- [x] CP2.2 One door for students + the floor copy
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: careerPrepDoors.ts (member with Career Prep on: exactly one own door to /portal/career/room;
+    member off, explorer and partner: no doors, a locked note); buildHq puts those doors on the Placement floor for
+    every non-staff audience, so students never see the staff room; useHq reads the career_prep flag for members;
+    careerPrepApi.ts (summary, dashboard clients); logic/careerPrepCopy.ts (greeting in Central time, stops and
+    waiting lines only when they have data).
+  - Verification: 2,220 frontend campus + Career Prep tests pass (careerPrepCopy 13 among them); tsc clean.
+  - Notes: deviation from plan T8: partners get NO doors in Release 1 (locked "Hiring opens here with the employer
+    portal") instead of the kit's 4, because the 4 Hiring pages ship in Release 3 and a door to a missing page
+    would be a dead link. The door status line ("Cora has today's session ready") waits for plans (CP4).
