@@ -29,6 +29,10 @@ import AiServiceOpportunities from '../../components/admin/ourServices/serviceGa
 import { useServiceGap } from '../../components/admin/ourServices/serviceGap/useServiceGap';
 import type { IntakeGapProps } from '../../components/admin/ourServices/IntakeCard';
 import type { IntakeSummaryItem } from '../../services/ourServicesApi';
+import GovDossierPanel from '../../components/admin/govDossier/GovDossierPanel';
+
+/** The public page contracting officers see; it reads this catalog live (active services with confirmed proof). */
+export const PUBLIC_GOV_PAGE = '/government/';
 
 /**
  * AdminGovServicesPage - "Our Services", the evidence-backed catalog (Services Upgrade SV3). A thin composer: the
@@ -144,7 +148,11 @@ export default function AdminGovServicesPage(): React.ReactElement {
         subtitle="Every service is backed by real work. Case studies are the evidence the Gov matcher uses."
         icon="heart-3-line"
         actions={
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 flex-wrap">
+            <a className="btn btn-outline-success btn-sm" href={PUBLIC_GOV_PAGE} target="_blank" rel="noopener noreferrer" data-testid="public-gov-link"
+              title="The public Government page, where Active services with a confirmed case study show up for contracting officers">
+              <i className="ri-government-line me-1" aria-hidden="true" />View public Government page<i className="ri-external-link-line ms-1" aria-hidden="true" /><span className="visually-hidden"> (opens in a new tab)</span>
+            </a>
             <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setTourOpen(true)} disabled={!summary} data-testid="start-tour">
               <i className="ri-compass-3-line me-1" aria-hidden="true" />How this page works
             </button>
@@ -270,6 +278,10 @@ export default function AdminGovServicesPage(): React.ReactElement {
           </div>
         </>
       )}
+
+      {/* Gov Company Dossier: the proposal agent's approved company facts, references and people. Its own fetch, so it
+          shows even when the evidence summary is down. Formerly the separate Gov Dossier tab. */}
+      <GovDossierPanel embedded />
 
       {editing && (
         <ServiceFormModal

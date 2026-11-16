@@ -1,17 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PageHeader, SectionCard } from '../../components/admin/shell';
+import { PageHeader, SectionCard } from '../shell';
 import {
   getDossier, addDossierItem, approveDossierItem, FACT_CATEGORIES,
   listCompanyDocs, uploadCompanyDoc, approveCompanyDoc, deleteCompanyDoc,
   type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc,
-} from '../../services/adminGovDossierApi';
+} from '../../../services/adminGovDossierApi';
 
 /**
- * AdminGovDossierPage - "Gov Company Dossier", the tenant-wide fill-and-approve portal for the reusable company
+ * GovDossierPanel - "Gov Company Dossier", the tenant-wide fill-and-approve portal for the reusable company
  * library the Proposal Studio agent grounds on (Dossier Phase 2a). Facts (grouped by proposal-demand category),
  * past-performance references, and key personnel. Only APPROVED rows reach the drafter, so each row carries an
  * approve action. Hunt once here, reuse on every bid.
+ *
+ * It lives on Our Services (/admin/gov-services#dossier) since 16 Nov 2026, not as its own tab: `embedded` renders a
+ * collapsible section header (counts + Open) instead of a page header; it opens on its own when the URL is #dossier.
+ * The old /admin/gov-dossier route redirects there.
  */
+export const DOSSIER_ANCHOR = 'dossier';
 
 type AddState = { kind: DossierKind } | null;
 const CAT_LABEL = new Map(FACT_CATEGORIES.map((c) => [c.id, c.label]));
@@ -22,7 +27,8 @@ function Badge({ approved }: { approved: boolean }): React.ReactElement {
     : <span className="badge rounded-pill bg-warning-subtle text-warning-emphasis">Draft, not used yet</span>;
 }
 
-export default function AdminGovDossierPage(): React.ReactElement {
+export default function GovDossierPanel({ embedded = false }: { embedded?: boolean }): React.ReactElement {
+  const [open, setOpen] = useState(() => !embedded || (typeof window !== 'undefined' && window.location.hash === `#${DOSSIER_ANCHOR}`));
   const [lib, setLib] = useState<DossierLibrary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +43,11 @@ export default function AdminGovDossierPage(): React.ReactElement {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // A client-side redirect to #dossier does not scroll by itself; bring the section into view once it has rendered.
+  useEffect(() => {
+    if (!embedded || loading || typeof window === 'undefined' || window.location.hash !== `#${DOSSIER_ANCHOR}`) return;
+    document.getElementById(DOSSIER_ANCHOR)?.scrollIntoView?.({ block: 'start' });
+  }, [embedded, loading]);
 
   const approve = useCallback(async (kind: DossierKind, id: string) => {
     setBusyId(id);
@@ -69,18 +80,28 @@ export default function AdminGovDossierPage(): React.ReactElement {
     + (lib?.references.filter((r) => !r.approved).length ?? 0)
     + (lib?.personnel.filter((p) => !p.approved).length ?? 0);
 
+  const summaryLine = !lib && error ? 'Could not load the dossier. Open it to retry.'
+    : loading || !lib ? 'Loading counts…'
+    : `${counts.facts} facts, ${counts.references} references, ${counts.personnel} people.${pending > 0 ? ` ${pending} waiting for approval.` : ' All approved.'}`;
+  const subtitle = 'The reusable proof the proposal agent draws on. Only approved items are used; hunt it once here and every bid reuses it.';
+
   return (
-    <div>
-      <PageHeader
-        title="Gov Company Dossier"
-        subtitle="The reusable proof the proposal agent draws on. Only approved items are used; hunt it once here and every bid reuses it."
-        icon="archive-2-line"
-      >
-        <p className="small text-secondary mb-0">
-          {counts.facts} facts, {counts.references} references, {counts.personnel} people.
-          {pending > 0 ? ` ${pending} waiting for approval.` : ' All approved.'}
-        </p>
-      </PageHeader>
+    <div id={embedded ? DOSSIER_ANCHOR : undefined} data-testid="gov-dossier">
+      {embedded ? (
+        <SectionCard className="mb-4" title="Gov company dossier" icon="archive-2-line" subtitle={subtitle}
+          actions={
+            <button type="button" className="btn btn-outline-primary btn-sm" aria-expanded={open} aria-controls="gov-dossier-body" onClick={() => setOpen((v) => !v)} data-testid="dossier-toggle">
+              {open ? 'Close dossier' : 'Open dossier'}
+            </button>
+          }>
+          <p className={`small mb-0 ${pending > 0 ? 'text-warning-emphasis fw-semibold' : 'text-secondary'}`} role="status">{summaryLine}</p>
+        </SectionCard>
+      ) : (
+        <PageHeader title="Gov Company Dossier" subtitle={subtitle} icon="archive-2-line">
+          <p className="small text-secondary mb-0">{summaryLine}</p>
+        </PageHeader>
+      )}
+      {open && <div id="gov-dossier-body">
 
       {error && (
         <div className="alert alert-danger d-flex justify-content-between align-items-center" role="alert">
@@ -174,6 +195,7 @@ export default function AdminGovDossierPage(): React.ReactElement {
           <DocumentsSection />
         </>
       )}
+      </div>}
 
       {adding && <AddModal kind={adding.kind} onCancel={() => setAdding(null)} onSave={save} />}
     </div>
