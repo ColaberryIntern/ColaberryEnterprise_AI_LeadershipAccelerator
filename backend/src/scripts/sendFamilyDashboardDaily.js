@@ -28,6 +28,7 @@ const { getBasecampToken } = require(path.resolve(__dirname, './lib/basecampToke
 const { compileFamilyDashboardData } = require(path.resolve(__dirname, './lib/familyDashboardData'));
 const { renderFamilyDashboardHtml } = require(path.resolve(__dirname, './lib/renderFamilyDashboardHtml'));
 const { renderFamilyDashboardEmail, renderFamilyDashboardEmailText } = require(path.resolve(__dirname, './lib/renderFamilyDashboardEmail'));
+const { leanData } = require(path.resolve(__dirname, './lib/renderFamilyDashboardSections'));
 const { compileFamilyPhotos, commitPicks } = require(path.resolve(__dirname, './lib/familyPhotoFeed'));
 const { compileSchoolNews } = require(path.resolve(__dirname, './lib/familySchoolNews'));
 const { compileFamilyWeek } = require(path.resolve(__dirname, './lib/familyCalendarFeed'));
@@ -106,7 +107,7 @@ async function run() {
   const anchor = await findAnchorTodo();
   console.log(`[Family Dashboard] Anchor todo: ${anchor.id}`);
 
-  const interactiveHtml = renderFamilyDashboardHtml(data);
+  const interactiveHtml = renderFamilyDashboardHtml(leanData(data)); // no image bytes in the page's JSON
   const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const subject = TEST ? `[TEST] Family Dashboard - ${today}` : `Family Dashboard - ${today}`;
 

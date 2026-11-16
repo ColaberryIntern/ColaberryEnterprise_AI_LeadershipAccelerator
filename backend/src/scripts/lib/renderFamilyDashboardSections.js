@@ -150,4 +150,14 @@ function sectionsText(data) {
   return lines.join('\n');
 }
 
-module.exports = { renderWeek, renderPhotos, renderThrowbacks, renderSchool, sectionsText };
+/**
+ * The data for the interactive HTML attachment, which embeds the whole data object as JSON: without
+ * this, every photo and video clip Buffer was serialised into it as a number array (a 2.4 MB clip
+ * made a 9.7 MB attachment). The inline email carries the images by cid; the page keeps only text.
+ */
+function leanData(data) {
+  const strip = (m) => (m ? { takenAt: m.takenAt, caption: m.caption, why: m.why, section: m.section, shareUrl: m.shareUrl, duration: m.duration } : m);
+  return { ...data, photos: (data.photos || []).map(strip), throwbacks: (data.throwbacks || []).map(strip), video: strip(data.video) };
+}
+
+module.exports = { leanData, renderWeek, renderPhotos, renderThrowbacks, renderSchool, sectionsText };

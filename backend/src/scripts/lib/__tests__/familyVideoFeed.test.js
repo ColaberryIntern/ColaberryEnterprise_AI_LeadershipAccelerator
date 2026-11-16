@@ -2,7 +2,7 @@
 // "Watch the full video" button when a share link exists.
 const F = require('../familyPhotoFeed');
 const V = require('../familyVideoFeed');
-const { renderPhotos, renderThrowbacks, sectionsText } = require('../renderFamilyDashboardSections');
+const { renderPhotos, renderThrowbacks, sectionsText, leanData } = require('../renderFamilyDashboardSections');
 
 const h = F.helpers;
 const item = (id, name, hash) => ({ id, name, file: { hashes: { sha1Hash: hash || `h-${id}` } } });
@@ -64,6 +64,17 @@ describe('chooseVideo', () => {
     const L = fam(F.emptyLedger(), ['a', 'b']);
     F.markPosted(L, [b], TODAY, 'new');
     expect(V.chooseVideo([a, b], L, TODAY, WINDOW, h)).toMatchObject({ reused: true, item: { id: 'b' } });
+  });
+});
+
+describe('interactive attachment data', () => {
+  test('carries no photo or video bytes, only the text about them', () => {
+    const big = Buffer.alloc(2 * 1024 * 1024, 1);
+    const data = { kpis: { overdue: 0 }, photos: [{ buf: big, _item: { id: 'p' }, caption: 'a', takenAt: '2026-11-14T10:00:00' }], throwbacks: [{ buf: big, caption: 'b', takenAt: '2024-11-20T10:00:00', why: 'w' }], video: { buf: big, caption: 'c', takenAt: '2026-11-14T17:38:52', shareUrl: 'https://1drv.ms/v/c/x', duration: '1:23', section: 'new' } };
+    const json = JSON.stringify(leanData(data));
+    expect(json.length).toBeLessThan(2000);
+    expect(json).toContain('https://1drv.ms/v/c/x');
+    expect(data.photos[0].buf).toBe(big); // the email's own data is untouched
   });
 });
 
