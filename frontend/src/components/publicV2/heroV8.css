@@ -541,3 +541,33 @@
 }
 /* The content has to sit above the atmosphere, which is absolutely positioned. */
 .cbv2-pagehero--v8 > .cbv2-wrap { position: relative; z-index: 2; }
+
+/* ------------------------------------------------- the rollout, in the hero -- */
+/*
+   The v5 model opens with the headline and then, in the same band, the six
+   departments at their different stages. Home shipped that as a separate
+   `.cbv2-section--inverse` band under the hero, which is where its text
+   treatment came from; inside the hero it has to carry that treatment itself,
+   or the heading and lede inherit the light-theme ink and render dark on dark.
+   That exact defect (1.03:1) shipped once on a page hero during review.
+*/
+.cbv2-h8__rollout {
+  padding-block: var(--space-14) var(--space-4);
+  border-top: var(--border-1) solid rgb(255 255 255 / 10%);
+  margin-top: var(--space-12);
+  color: var(--text-on-inverse, #f8f8f7);
+}
+.cbv2-h8__rollout h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-heading);
+  letter-spacing: var(--ls-tight);
+  color: var(--text-on-inverse, #f8f8f7);
+  margin: var(--space-3) 0 var(--space-4);
+}
+.cbv2-h8__rollout .cbv2-lede { color: var(--text-on-inverse-muted, #a9b4c4); }
+.cbv2-h8__rollout .cbv2-section__head { max-width: 64ch; margin-bottom: var(--space-10); }
+
+@media (max-width: 760px) {
+  .cbv2-h8__rollout { padding-block: var(--space-10) var(--space-2); margin-top: var(--space-8); }
+}

@@ -95,10 +95,31 @@ describe('HeroV8', () => {
    * registry exists to prevent; the readiness dashboard lives further down the
    * page behind its own gate.
    */
-  it('ships no product screenshot and needs no sample label', () => {
+  it('ships no product screenshot', () => {
+    expect(html()).not.toContain('/site-v2/shot-');
+  });
+
+  /**
+   * THIS ASSERTION FLIPPED, and the flip is the point.
+   *
+   * It used to read "and needs no sample label", which was true while the hero
+   * held nothing but a drawing. The hero now carries the rollout grid, which
+   * the v5 model puts inside the opening band and which is invented data: six
+   * departments at made-up stages. The old assertion would have passed only by
+   * the badge being absent, which is the exact failure it existed to catch, so
+   * it is inverted rather than deleted. The most prominent slot on the site is
+   * the last place a mock should go unlabelled.
+   */
+  it('labels the rollout grid as sample data', () => {
     const h = html();
-    expect(h).not.toContain('/site-v2/shot-');
-    expect(h).not.toContain('data-sample');
+    expect(h).toContain('data-sample="true"');
+    expect(textOf(h)).toContain('Sample data');
+  });
+
+  it('states every department stage as a word, never colour alone', () => {
+    const t = textOf(html());
+    ['Automating', 'Demo pilot', 'Next leader', 'Not started'].forEach((label) =>
+      expect(t).toContain(label));
   });
 
   it('claims no Anthropic credential or partner designation', () => {

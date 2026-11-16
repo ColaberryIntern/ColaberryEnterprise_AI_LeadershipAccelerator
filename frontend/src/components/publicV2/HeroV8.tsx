@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import DepartmentMap from './DepartmentMap';
 
 /**
  * The hero: the headline is physically wired into the system diagram.
@@ -225,6 +226,38 @@ export default function HeroV8(): React.ReactElement {
             </g>
           </svg>
         </div>
+      </div>
+
+      {/*
+        THE ROLLOUT GRID, INSIDE THE HERO.
+
+        The v5 site model opens with the headline and then, in the same band,
+        "Your company, moving to AI / Department by department" as a grid of six
+        departments at different stages. Home shipped that as a separate dark
+        band immediately under a dark hero, which read as a second chapter and
+        was one of the three bands home carried that the model does not.
+
+        It belongs here: "department by department" is the central promise of
+        how an engagement scales, and in words alone it is abstract. Folding it
+        in is also what takes home from ten bands to the model's seven.
+      */}
+      <div className="cbv2-wrap cbv2-h8__rollout">
+        <div className="cbv2-section__head">
+          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Your company, moving to AI</p>
+          <h2 id="cbv2-deptmap-title">Department by department.</h2>
+          <p className="cbv2-lede">
+            Start where the return is clearest, prove it, then take the same method to the
+            next leader. Or, if leadership is aligned, start everywhere at once.
+          </p>
+        </div>
+
+        <DepartmentMap />
+
+        <p className="cbv2-deptmap__foot">
+          <Link className="cbv2-btn cbv2-btn--primary" to="/how-it-works">
+            See how a rollout runs
+          </Link>
+        </p>
       </div>
     </section>
   );

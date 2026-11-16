@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Claim, canShow } from './Claim';
+import { readySegments } from '../../config/v2Segments';
 
 /**
  * PublicFooterV2 — the V2 public site footer.
@@ -93,6 +94,24 @@ const GROUPS: readonly FooterGroup[] = [
       // /demo-pilot. The book is the other thinking page, so it sits here.
       { label: 'Trust Before Intelligence', to: '/book' },
     ],
+  },
+  {
+    /*
+        THE SEGMENT PAGES LIVE HERE NOW.
+
+        Home's "Who is this for?" band was their only entry point anywhere on
+        the site, and that band came off when home was brought to the v5 model,
+        which has no equivalent. Four real pages, `/higher-education` among
+        them, would have been reachable only by typing the URL.
+
+        GENERATED from `readySegments()`, the same source `App.tsx` maps to
+        routes and the same source the retired band used, so a link here cannot
+        point at a page that is not mounted. A segment flipped to `ready: false`
+        disappears from the footer in the same commit it disappears from the
+        router.
+    */
+    heading: 'Who it is for',
+    links: readySegments().map((s) => ({ label: s.name, to: `/${s.slug}` })),
   },
   {
     heading: 'Company',

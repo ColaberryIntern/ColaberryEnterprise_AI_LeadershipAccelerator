@@ -5,11 +5,10 @@ import HeroV8 from '../../components/publicV2/HeroV8';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
 import Accolades from '../../components/publicV2/Accolades';
-import SegmentDoors from '../../components/publicV2/SegmentDoors';
 // ENGINE was imported here and never used, from before this split. Removed rather than
 // carried across, since a dead import is one more thing a reader has to rule out.
 import { DemoPilotSection } from './homeV2Sections';
-import { DepartmentMapSection, ThreeServicesSection } from './homeV2Bands';
+import { ThreeServicesSection } from './homeV2Bands';
 import './homeV2.css';
 import '../../components/publicV2/heroV8.css';
 import '../../components/publicV2/engineModel.css';
@@ -65,9 +64,12 @@ function HomeV2(): React.ReactElement {
 
         EngineModel is unrouted from this page but NOT deleted. Check what else
         imports it before removing the component.
-      */}
 
-      <DepartmentMapSection />
+        THE ROLLOUT GRID MOVED INTO THE HERO, it did not leave. The model puts
+        "Your company, moving to AI / Department by department" inside the
+        opening band; here it was a second dark band under a dark hero, reading
+        as a chapter of its own. See `HeroV8.tsx`.
+      */}
 
       {/*
           WHAT IS FOR SALE COMES THIRD, right after the rollout picture and
@@ -88,48 +90,6 @@ function HomeV2(): React.ReactElement {
           pushes to the workspace from the hero and the final CTA only.
       */}
       <DemoPilotSection />
-
-      {/* 2 ──────────────────────────────────────── what we can state today ── */}
-      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-label="What we can state today">
-        <div className="cbv2-wrap cbv2-grid cbv2-grid--3">
-          <article className="cbv2-card">
-            <span className="cbv2-icon-tile cbv2-icon-tile--blue">
-              <Icon name="cpu" size={22} />
-            </span>
-            <p className="cbv2-eyebrow cbv2-eyebrow--info">Capability</p>
-            <h2 className="cbv2-card__title">
-              <Claim claimKey="anthropic.capability" route={ROUTE} />
-            </h2>
-            <p className="cbv2-card__body">
-              Production systems designed, built and governed on Anthropic&rsquo;s models.
-            </p>
-          </article>
-
-          <article className="cbv2-card">
-            <span className="cbv2-icon-tile cbv2-icon-tile--green">
-              <Icon name="medal" size={22} />
-            </span>
-            <p className="cbv2-eyebrow cbv2-eyebrow--info">Credential path</p>
-            <h2 className="cbv2-card__title">Claude Certified Architect, Foundations</h2>
-            <p className="cbv2-card__body">
-              <Claim claimKey="credential.cca.safe" route={ROUTE} />
-            </p>
-          </article>
-
-          {/* Stating the absence is itself the honest move, and it is the thing
-              reviewers scored 9/10. It is not a placeholder. */}
-          <article className="cbv2-card cbv2-card--dashed">
-            <span className="cbv2-icon-tile cbv2-icon-tile--amber">
-              <Icon name="scale" size={22} />
-            </span>
-            <p className="cbv2-eyebrow cbv2-eyebrow--warn">Pending verification</p>
-            <h2 className="cbv2-card__title">Track-record claims withheld</h2>
-            <p className="cbv2-card__body">
-              Volume, partner-status and outcome claims are deliberately absent until verified.
-            </p>
-          </article>
-        </div>
-      </section>
 
       {/* 2a ─────────────────────────────────────────────────────────── book ── */}
       {/*
@@ -187,131 +147,163 @@ function HomeV2(): React.ReactElement {
       */}
 
       {/*
-        THE FIVE DOORS, replacing the goal picker (C5.2).
-
-        The picker asked "what are you trying to accomplish?" and routed by GOAL. The C5.1
-        information architecture routes by SEGMENT, so it was the right job on the wrong
-        axis. The section budget's standing rule is that the next section added must replace
-        one rather than raise the count a third time, so this is a swap and the budget holds
-        at twelve.
-
-        The doors are GENERATED from readySegments(), the same source App.tsx maps to routes,
-        so a door cannot point at a page that is not mounted.
+        THE PLATFORM TEASER. Home had no band for it at all, while the model
+        gives it one between the book and the claims. It is the only place on
+        the home page that answers "and where does all of this show up".
       */}
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-doors-title">
-        <div className="cbv2-wrap">
-          <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">Start where you are</p>
-            <h2 id="cbv2-doors-title">Who is this for?</h2>
-            <p className="cbv2-lede">
-              Four ways in, each written for the people who run that kind of program. They
-              differ in what counts as proof, not in what we do.
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-plat-title">
+        <div className="cbv2-wrap cbv2-split">
+          <div>
+            <p className="cbv2-eyebrow">The platform</p>
+            <h2 id="cbv2-plat-title">Every department&rsquo;s AI work, in one place.</h2>
+            <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
+              Which processes are automated, which are in pilot, who is building what, and
+              what each leader&rsquo;s department has shipped, without anyone writing a status
+              report.
+            </p>
+            <div className="cbv2-grid cbv2-grid--2" style={{ marginTop: 'var(--space-6)' }}>
+              <div className="cbv2-field">
+                <h3>Every project, by department</h3>
+                <p>Owner, status, and what it is waiting on.</p>
+              </div>
+              <div className="cbv2-field">
+                <h3>Confirmed from the work</h3>
+                <p>Progress read from commits, not self-reported.</p>
+              </div>
+            </div>
+            <p style={{ marginTop: 'var(--space-6)' }}>
+              <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
+                Tour the platform
+              </Link>
             </p>
           </div>
-          <SegmentDoors />
+          {/*
+            The readiness dashboard, which moved here with the band it used to
+            sit in. It still renders ONLY behind `surface.readiness.rollup`: it
+            depicts a live product surface, and the gate that licenses that
+            depiction travels with the image rather than being left behind. If
+            that claim regresses this falls back to the accomplishments feed
+            rather than showing an unlicensed surface.
+          */}
+          <figure className="cbv2-shot-frame">
+            {canShow('surface.readiness.rollup', ROUTE) ? (
+              <img
+                className="cbv2-shot"
+                src="/site-v2/shot-hero-dashboard.png"
+                alt="The organization readiness dashboard, showing average architect readiness, builder XP and evidence shipped for a sample company."
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <img
+                className="cbv2-shot"
+                src="/site-v2/shot-accomplishments.png"
+                alt="The team accomplishments feed: a promotion to Architect after clearing the final evidence gate, a shipped portfolio artifact, validated evidence logged from a GitHub pull request, an evaluation passed at 86 percent, a seven-day build streak, and a most-improved entry."
+                loading="lazy"
+                decoding="async"
+              />
+            )}
+            <figcaption className="cbv2-shot-caption">
+              <SampleBadge />
+              <span>The company view, before your own work replaces it.</span>
+            </figcaption>
+          </figure>
         </div>
       </section>
 
       {/*
-        MOVED BELOW THE GOAL CHOOSER, and onto the sunken surface.
+        ONE CLAIMS BAND, NOT TWO.
 
-        Two white sections ran back to back here, so "Built for outcomes" and
-        "Start where you are" bled into one another with nothing dividing them.
-        The page alternates surfaces everywhere else; this restores that rhythm
-        and gives the figures a ground of their own.
-      */}
-      {/* 3b ──────────────────────────────────────────────────── accolades ── */}
-      {/*
-        The live site's "built for outcomes" band, governed. Tiles render only
-        while their claim is publishable, so the three currently-unevidenced
-        accolades (careers launched, since-2012, the credential wording) appear
-        the moment someone records the evidence, and stay absent until then.
+        "What we can state today" (the three cards) and "What we can put our
+        name to" (the governed accolade tiles) were two consecutive bands saying
+        the same thing twice. The model merges them, and names the merged band
+        for what it is: short on purpose.
+
+        THE FIVE DOORS CAME OFF THIS PAGE. The picker-replacement band (C5.2)
+        routed by segment, which is right, but the model has no equivalent and
+        home was three bands over. The segment pages are NOT orphaned by this:
+        `PublicFooterV2` now carries them, generated from the same
+        `readySegments()` the doors used and that `App.tsx` maps to routes, so a
+        footer link still cannot point at a page that is not mounted.
+        `SegmentDoors` is unrouted, not deleted.
       */}
       <section
-        className="cbv2-rv cbv2-section cbv2-section--sunken"
-        aria-labelledby="cbv2-accolades-title"
+        className="cbv2-rv cbv2-section"
+        aria-labelledby="cbv2-shortonpurpose-title"
       >
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">Built for outcomes</p>
-            <h2 id="cbv2-accolades-title">What we can put our name to</h2>
+            <p className="cbv2-eyebrow">What we can put our name to</p>
+            <h2 id="cbv2-shortonpurpose-title">Short on purpose.</h2>
+            <p className="cbv2-lede">
+              Everything absent from this section is absent because it has not been verified
+              yet.
+            </p>
           </div>
+
+          <div className="cbv2-grid cbv2-grid--3">
+            <article className="cbv2-card">
+              <span className="cbv2-icon-tile cbv2-icon-tile--blue">
+                <Icon name="cpu" size={22} />
+              </span>
+              <p className="cbv2-eyebrow cbv2-eyebrow--info">Capability</p>
+              <h3 className="cbv2-card__title">
+                <Claim claimKey="anthropic.capability" route={ROUTE} />
+              </h3>
+              <p className="cbv2-card__body">
+                Production systems designed, built and governed on Anthropic&rsquo;s models.
+              </p>
+            </article>
+
+            <article className="cbv2-card">
+              <span className="cbv2-icon-tile cbv2-icon-tile--green">
+                <Icon name="medal" size={22} />
+              </span>
+              <p className="cbv2-eyebrow cbv2-eyebrow--info">Credential path</p>
+              <h3 className="cbv2-card__title">Claude Certified Architect, Foundations</h3>
+              <p className="cbv2-card__body">
+                <Claim claimKey="credential.cca.safe" route={ROUTE} />
+              </p>
+            </article>
+
+            {/* Stating the absence is itself the honest move, and it is the thing
+                reviewers scored 9/10. It is not a placeholder. */}
+            <article className="cbv2-card cbv2-card--dashed">
+              <span className="cbv2-icon-tile cbv2-icon-tile--amber">
+                <Icon name="scale" size={22} />
+              </span>
+              <p className="cbv2-eyebrow cbv2-eyebrow--warn">Pending verification</p>
+              <h3 className="cbv2-card__title">Track-record claims withheld</h3>
+              <p className="cbv2-card__body">
+                Volume, partner-status and outcome claims are deliberately absent until
+                verified.
+              </p>
+            </article>
+          </div>
+
+          {/*
+            The governed accolade tiles. Each renders only while its claim is
+            publishable, so the currently-unevidenced ones appear the moment
+            someone records the evidence and stay absent until then.
+          */}
           <Accolades />
+
+          <p style={{ marginTop: 'var(--space-8)' }}>
+            <Link to="/proof">See the published case records</Link>
+          </p>
         </div>
       </section>
 
-            {/*
-        THE BUILD-PIPELINE BAND WAS REMOVED from the home page. It is detail
-        about how a build is planned and verified, which belongs on the service
-        pages rather than in the first scroll. BuildPipelineSection still exists
-        and is still gated on `surface.storybuild`.
+      {/*
+        THE FREE-WORKSPACE BAND CAME OFF THIS PAGE.
+
+        It was a third push to /try on a page whose hero and closing band both
+        already offer it, and the model has no equivalent. Its figure was the
+        only thing on it that was not a repeat, and that figure is now the
+        platform teaser's, under the same `surface.readiness.rollup` gate it
+        always carried. The `surface.free.workspace` claim still renders on
+        /platform, so nothing left the site with the band.
       */}
-
-
-
-      {/* 6 ────────────────────────────────────────── workspace ────── */}
-      {canShow('surface.free.workspace', ROUTE) ? (
-        <section
-          className="cbv2-rv cbv2-section cbv2-section--sunken cbv2-section--spot"
-          aria-labelledby="cbv2-free-title"
-        >
-          <div className="cbv2-wrap cbv2-split">
-            <div>
-              <p className="cbv2-eyebrow">Free to start</p>
-              <h2 id="cbv2-free-title">
-                <Claim claimKey="surface.free.workspace" route={ROUTE} />
-              </h2>
-              <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
-                It opens on sample data, arranged in the metrics the product actually captures,
-                so you are judging the real shape of the thing before anyone signs anything.
-                Invite your team and the sample gives way to their own progress.
-              </p>
-              <p style={{ marginTop: 'var(--space-6)' }}>
-                <Link className="cbv2-btn cbv2-btn--primary" to="/try">
-                  Open the Free Company Workspace
-                </Link>
-              </p>
-            </div>
-            {/*
-              The accomplishments feed: promotions, validated evidence, evaluations
-              passed and streaks, each attached to a person. Chosen here over
-              another chart because this is the screen that shows movement, which
-              is what a manager is actually buying.
-            */}
-            {/*
-              The readiness dashboard moved here when the hero became typographic.
-              It still renders ONLY behind `surface.readiness.rollup`: it depicts a
-              live product surface, and the gate that licenses that depiction has to
-              travel with the image rather than being left behind in the hero. If
-              that claim ever regresses, this falls back to the accomplishments feed
-              rather than showing an unlicensed surface.
-            */}
-            <figure className="cbv2-shot-frame">
-              {canShow('surface.readiness.rollup', ROUTE) ? (
-                <img
-                  className="cbv2-shot"
-                  src="/site-v2/shot-hero-dashboard.png"
-                  alt="The organization readiness dashboard, showing average architect readiness, builder XP and evidence shipped for a sample company."
-                  loading="lazy"
-                  decoding="async"
-                />
-              ) : (
-                <img
-                  className="cbv2-shot"
-                  src="/site-v2/shot-accomplishments.png"
-                  alt="The team accomplishments feed: a promotion to Architect after clearing the final evidence gate, a shipped portfolio artifact, validated evidence logged from a GitHub pull request, an evaluation passed at 86 percent, a seven-day build streak, and a most-improved entry."
-                  loading="lazy"
-                  decoding="async"
-                />
-              )}
-              <figcaption className="cbv2-shot-caption">
-                <SampleBadge />
-                <span>The company view, on sample data.</span>
-              </figcaption>
-            </figure>
-          </div>
-        </section>
-      ) : null}
 
       {/* 7 ────────────────────────────────────────────────────── final CTA ── */}
       <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-cta-title">
@@ -324,7 +316,7 @@ function HomeV2(): React.ReactElement {
             <Link className="cbv2-btn cbv2-btn--primary" to="/try">
               Open the Free Company Workspace
             </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">
+            <Link className="cbv2-btn cbv2-btn--ghost" to="/demo-pilot">
               Book a demo pilot
             </Link>
           </div>

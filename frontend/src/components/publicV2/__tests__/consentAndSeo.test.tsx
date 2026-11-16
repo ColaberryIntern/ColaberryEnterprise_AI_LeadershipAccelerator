@@ -10,11 +10,14 @@
  *      because they were written as root paths while V2 is mounted under /v2,
  *      and the original tests only checked that they rendered.
  */
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import ConsentBanner from '../ConsentBanner';
 import { FOOTER_LINKS } from '../PublicFooterV2';
+import { SEGMENTS, readySegments } from '../../../config/v2Segments';
 import { PREVIEW_NOINDEX } from '../SeoV2';
 import {
   CONSENT_KEY,
@@ -62,6 +65,13 @@ const DECLARED_ROUTES = [
   '/pricing',
   '/contact',
   '/try',
+  /*
+      The segment pages. DERIVED, not typed out: `App.tsx` mounts them with
+      `readySegments().map`, so a hand-written list here would be a second
+      source of truth that goes stale the moment a segment flips ready. The
+      footer links them for the same reason and from the same call.
+  */
+  ...readySegments().map((s) => `/${s.slug}`),
 ];
 
 beforeEach(() => {
@@ -148,6 +158,53 @@ describe('SEO — indexable now that this IS the site', () => {
    */
   it('is indexable after cutover', () => {
     expect(PREVIEW_NOINDEX).toBe(false);
+  });
+});
+
+/*
+ * THE SEGMENT-DOOR GUARDS, MOVED HERE FROM HomeV2.test.tsx.
+ *
+ * Home's "Who is this for?" band was the segment pages' only entry point
+ * anywhere on the site. It came off when home was brought to the v5 model,
+ * which has no equivalent band, and the links moved to the footer. The
+ * property worth protecting never was about home: it is that these links are
+ * GENERATED from `readySegments()`, the same source `App.tsx` maps to routes,
+ * so a link cannot point at a page that is not mounted.
+ */
+describe('footer — the segment pages are reachable', () => {
+  it('links every ready segment', () => {
+    expect(readySegments().length).toBeGreaterThan(0);
+    readySegments().forEach((s) => expect(FOOTER_LINKS).toContain(`/${s.slug}`));
+  });
+
+  it('links no segment that is not ready', () => {
+    const unready = SEGMENTS.filter((s) => !s.ready);
+    // Guards the guard: if every segment were ready this would pass vacuously.
+    expect(unready.length).toBeGreaterThan(0);
+    unready.forEach((s) => expect(FOOTER_LINKS).not.toContain(`/${s.slug}`));
+  });
+
+  it('pairs the links with the routes App.tsx actually mounts', () => {
+    const app = fs.readFileSync(
+      path.join(__dirname, '..', '..', '..', 'App.tsx'),
+      'utf8',
+    );
+    expect(app).toContain('readySegments().map');
+  });
+
+  /*
+      A ready segment whose slug also names a directory under `public/` would be
+      shadowed by that static file: nginx `try_files $uri $uri/` serves the
+      directory's index.html and the React route never runs. `government` is a
+      segment slug AND a static page today; it is `ready: false`, so there is no
+      collision, and this fails the day someone flips it without noticing.
+  */
+  it('has no ready segment shadowed by a static page of the same name', () => {
+    const publicDir = path.join(__dirname, '..', '..', '..', '..', 'public');
+    const shadowed = readySegments()
+      .map((s) => s.slug)
+      .filter((slug) => fs.existsSync(path.join(publicDir, slug, 'index.html')));
+    expect(shadowed).toEqual([]);
   });
 });
 
