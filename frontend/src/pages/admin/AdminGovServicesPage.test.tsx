@@ -13,6 +13,7 @@ import { emptySummary, summary } from '../../components/admin/ourServices/__fixt
 jest.mock('../../services/factoryApi');
 jest.mock('../../services/ourServicesApi');
 jest.mock('../../services/caseStudyServiceLinkApi');
+jest.mock('../../services/adminGovDossierApi');
 // The charts and the CDN-loaded Mermaid diagram have their own tests; jsdom has no layout to draw them in.
 jest.mock('../../components/visuals/MermaidDiagram', () => () => null);
 jest.mock('../../components/admin/ourServices/ServiceEvidenceBarChart', () => () => <div data-testid="chart-evidence" />);
@@ -71,6 +72,11 @@ describe('AdminGovServicesPage: the evidence-backed catalog', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     expect(text).toContain('Dashboards and ETL'); // description joined from the catalog read
     expect(text).toContain('1 blocked');
+    // Gov Dossier now lives on this page, last; the public Government page is one click from the header.
+    expect(text.indexOf('Gov company dossier')).toBeGreaterThan(text.indexOf('Gaps from live proposals'));
+    const pub = container.querySelector('[data-testid="public-gov-link"]') as HTMLAnchorElement;
+    expect(pub.getAttribute('href')).toBe('/government/');
+    expect(pub.getAttribute('target')).toBe('_blank');
   });
 
   it('the catalog filter is client-side over the one summary', async () => {
