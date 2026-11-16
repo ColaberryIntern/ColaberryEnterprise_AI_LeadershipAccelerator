@@ -133,3 +133,59 @@ id 25739** — "Jane Doe / jane@agency.gov / Harris County", `form_type`
 `leadController` defers all automation to the PaySimple webhook. The row is inert
 but it is test data in a production table and will show up in lead counts. It
 needs one `DELETE` to remove, which is Ali's call, not mine to take.
+
+---
+
+# Deployed and verified on production, 2026-11-15
+
+Ali merged all three. Main's tip `5d6e4557c`.
+
+**The cancellation pattern happened, as it always does.** Three merges in 31
+seconds: the image builds for `6efb5031` and `dc08c801` were both cancelled by
+the merge after them, and only the third, `5d6e4557c`, survived. That one
+carries all three changes, so the deploy waited for it rather than going on the
+first green tick. Deploying into a cancelled build is how a deploy reports
+success while serving pre-merge code.
+
+`./scripts/deploy-prod.sh nginx`, registry mode. The script verified
+`accelerator-nginx:main` matches `sha-5d6e4557cd4f...` before pulling. nginx
+only: the frontend is baked into that image, and the two backend files in these
+PRs are lint baselines with no runtime path, so the API was left running.
+
+## Verified in a real browser against the live hostname
+
+All eleven public routes. Band counts, a marker string only the new code
+renders, horizontal overflow at 1440px, h1 count, broken images after a full
+scroll, page errors, the accent, and that each segment page renders rather than
+falling through to the SPA's not-found.
+
+| Route | Bands | Height | Against the model |
+|---|---|---|---|
+| `/` | 7 | 6,777px | matches |
+| `/platform` | 4 | 5,884px | matches |
+| `/services` | 5 | 4,532px | matches |
+| `/how-it-works` | 6 | 5,301px | matches |
+| `/services/build` `guide` `train` | 6 each | — | unchanged by these PRs |
+| `/book` | 3 | 2,450px | one short: needs Ram's bio and the purchase link |
+| `/demo-pilot` | 3 | 2,784px | two over: consent, and what happens next |
+| `/pricing` | 6 | 7,234px | out of scope, per Ali |
+| `/proof` | 4 | 11,531px | untouched, per Ali |
+
+**ALL CHECKS PASSED.** The four segment links are present in the footer and all
+four pages render, which is the thing that would have broken silently when
+home's doors came off.
+
+**The accent reads `rgb(46, 106, 134)` on all eleven routes**, so the brand did
+not drift while the structure moved.
+
+## The verifier failed once, and it was the verifier's fault
+
+First run reported `/platform: MARKER MISSING: For project tracking` on a page
+whose band count and height were both right. The eyebrow is
+`text-transform: uppercase`, so `innerText` returns `FOR PROJECT TRACKING` and a
+sentence-case marker never matches. The page was correct; the check was wrong.
+
+Fixed to compare `textContent` case-insensitively, then re-proved it can still
+fail by planting a marker no page renders and watching it go red. A false FAIL
+left standing is worse than no check, because the next real one gets waved
+through with it.
