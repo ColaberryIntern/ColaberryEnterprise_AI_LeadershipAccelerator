@@ -38,8 +38,8 @@ describe('skillReading: the 30-day change', () => {
     const rows = [obs('f', 50, 31), obs('f', 50, 32), obs('f', 50, 33), obs('f', 90, 0), obs('f', 90, 1), obs('f', 90, 2)];
     const r = skillReading(rows, 'f', NOW);
     expect(skillScore(rows, 'f', ago(30))).toBe(50);
-    expect(r.change30).toBe(Math.round(((r.score as number) - 50) * 10) / 10);
-    expect(r.change30).toBeGreaterThan(0);
+    expect(r.score).toBe(82.9); // hand-computed: 90 at 0-2 d dominates 50 at 31-33 d (weights 0.5^(d/14))
+    expect(r.change30).toBe(32.9);
     expect(r.count).toBe(6);
     expect(r.sources).toEqual(['video']);
   });
@@ -84,6 +84,27 @@ describe('Central time: streak and this week', () => {
     expect(streak(rows, new Date('2026-11-03T02:00:00Z'))).toBe(3); // Mon 8 PM Central
     expect(streak(rows, new Date('2026-11-03T15:00:00Z'))).toBe(3); // Tue 9 AM, nothing yet today
     expect(streak(rows, new Date('2026-11-04T15:00:00Z'))).toBe(0); // Wed: Tuesday was missed
+  });
+
+  it('steps back by calendar date, not 24 hours: fall-back night at 23:30 CST is still 3, not 4', () => {
+    const rows = [s('2026-10-31T17:00:00Z'), s('2026-11-01T17:00:00Z'), s('2026-11-02T17:00:00Z')];
+    expect(streak(rows, new Date('2026-11-03T05:30:00Z'))).toBe(3); // Mon 2 Nov 23:30 CST
+  });
+
+  it('steps back by calendar date: spring-forward at 00:30 CDT is still 3, not 2', () => {
+    const rows = [s('2027-03-13T17:00:00Z'), s('2027-03-14T17:00:00Z'), s('2027-03-15T17:00:00Z')];
+    expect(streak(rows, new Date('2027-03-15T05:30:00Z'))).toBe(3); // Mon 15 Mar 00:30 CDT
+  });
+
+  it('sums this week across the DST change (week of Mon 26 Oct to Sun 1 Nov 2026)', () => {
+    const now = new Date('2026-11-01T22:00:00Z'); // Sun 1 Nov 16:00 CST, the fall-back day
+    expect(centralWeekStart(now)).toBe('2026-10-26');
+    const rows = [
+      s('2026-10-26T04:30:00Z', 'finished', 6000), // Sun 25 Oct 23:30 CDT: last week
+      s('2026-10-26T06:30:00Z', 'finished', 600),  // Mon 26 Oct 01:30 CDT
+      s('2026-11-01T15:00:00Z', 'finished', 600),  // Sun 1 Nov 09:00 CST
+    ];
+    expect(minutesThisWeek(rows, now)).toBe(20);
   });
 
   it('counts only finished sessions toward the streak', () => {

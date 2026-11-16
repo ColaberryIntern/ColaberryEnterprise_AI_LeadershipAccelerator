@@ -48,6 +48,21 @@ describeIfDb('career prep schema against Postgres', () => {
     expect((await one<{ n: number }>('SELECT COUNT(*)::int AS n FROM prep_skills')).n).toBe(9);
   });
 
+  it('creates all seven tables (ensure swallows statement errors, so prove none was skipped)', async () => {
+    const n = await one<{ n: number }>(`SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_name IN
+      ('career_interviews','prep_skills','prep_skill_sources','prep_observations','prep_plans','prep_sessions','prep_readiness_daily')`);
+    expect(n.n).toBe(7);
+  });
+
+  it('links one Hire interview to at most one career interview', async () => {
+    const hi = '75555555-5555-4555-8555-555555555555';
+    const ins = `INSERT INTO career_interviews (enrollment_id, source, company, role, type, hire_interview_id)
+                 VALUES ('${E1}', 'real', 'Acme', 'Engineer', 'technical', '${hi}') ON CONFLICT (hire_interview_id) DO NOTHING`;
+    await sequelize.query(ins);
+    await sequelize.query(ins);
+    expect((await one<{ n: number }>(`SELECT COUNT(*)::int AS n FROM career_interviews WHERE hire_interview_id = '${hi}'`)).n).toBe(1);
+  });
+
   it('keeps one observation per (source_ref, skill_key)', async () => {
     const ins = `INSERT INTO prep_observations (enrollment_id, skill_key, value, source, source_ref, observed_at)
                  VALUES ('${E1}', 'few_fillers', 80, 'video', 'video:abc', NOW()) ON CONFLICT (source_ref, skill_key) DO NOTHING`;

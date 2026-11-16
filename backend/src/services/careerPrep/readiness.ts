@@ -83,15 +83,20 @@ export function targetFor(type: InterviewType, override?: number | null): number
   return typeof override === 'number' ? override : config.targets[type];
 }
 
+/** The calendar date before a YYYY-MM-DD date. Steps by DATE, never by 24 hours (DST days are 23 or 25). */
+export function previousDate(date: string): string {
+  return new Date(Date.parse(`${date}T12:00:00Z`) - DAY_MS).toISOString().slice(0, 10);
+}
+
 /** Consecutive Central days with a finished session, back from today (or yesterday). */
 export function streak(sessions: SessionTime[], now: Date): number {
   const days = new Set(sessions.filter((s) => s.status === 'finished').map((s) => centralDate(s.startedAt)));
-  let cursor = new Date(now.getTime());
-  if (!days.has(centralDate(cursor))) cursor = new Date(cursor.getTime() - DAY_MS);
+  let cursor = centralDate(now);
+  if (!days.has(cursor)) cursor = previousDate(cursor);
   let n = 0;
-  while (days.has(centralDate(cursor))) {
+  while (days.has(cursor)) {
     n++;
-    cursor = new Date(cursor.getTime() - DAY_MS);
+    cursor = previousDate(cursor);
   }
   return n;
 }
