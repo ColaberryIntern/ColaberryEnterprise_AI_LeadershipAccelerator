@@ -312,3 +312,15 @@ tests/systemV2/career-prep/.
     never changes again; updates lock the row FOR UPDATE and stamp ended_at once); POST /sessions (201 new, 200
     resumed), PATCH /sessions/:id (strict Zod, segment index required for segment_done), GET /sessions/current.
   - Verification: sessions 8 + session routes 11 tests; backend Career Prep 185 pass; tsc clean; route-auth lint OK.
+
+- [x] CP3 verified: T11 PASS 11/12, T12 PASS 11/12, T13 PASS 11/12 (attempt 2), T14 PASS 12/12 (attempt 3)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+
+- [x] CP4.3 (frontend) the session timer as a pure state machine
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: logic/sessionMachine.ts (idle, running, paused, finished, ended; a running segment stores its
+    deadline and a paused one its time left, so a hidden tab or a sleeping laptop always reconciles; practice time is
+    real running time only; finished and ended never change again).
+  - Verification: sessionMachine 6 tests; tsc clean.
