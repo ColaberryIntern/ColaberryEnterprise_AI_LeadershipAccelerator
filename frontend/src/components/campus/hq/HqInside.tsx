@@ -1,5 +1,5 @@
 import React from 'react';
-import { badgeLevel, buttonSub, openFloors, roomHref, roomName, roomsText, type HqFloor } from './hqModel';
+import { badgeLevel, buttonSub, openFloors, roomHref, roomName, roomsText, type HqFloor, opensInPlace } from './hqModel';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { HqPlaced } from './hqModel';
@@ -85,7 +85,7 @@ export function HqFloorScene({ s, f, people, agents = [] }: { s: HqState; f: HqF
             {here.length > 0 && <span className="who"><HqPeople people={here} label={`At ${r.label}`} size="sm" /></span>}
           </>);
           return r.open ? (
-            <a key={r.path} className="office" href={roomHref(r)} target={r.own ? undefined : '_blank'} rel={r.own ? undefined : 'noopener noreferrer'} aria-label={r.own ? r.label : `${r.label}, opens in a new tab`} data-testid="cm-hq-office">{inner}</a>
+            <a key={r.path} className="office" href={roomHref(r)} target={opensInPlace(r) ? undefined : '_blank'} rel={opensInPlace(r) ? undefined : 'noopener noreferrer'} aria-label={opensInPlace(r) ? r.label : `${r.label}, opens in a new tab`} data-testid="cm-hq-office">{inner}</a>
           ) : (
             <button key={r.path} type="button" className="office lock" aria-disabled="true" aria-label={`${roomName(r, hq.isStaff)}, no access`} onClick={() => s.lockedRoom(r)} data-testid="cm-hq-office-locked">{inner}</button>
           );

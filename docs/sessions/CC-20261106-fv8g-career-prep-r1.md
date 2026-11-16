@@ -74,3 +74,26 @@ tests/systemV2/career-prep/.
     (strong / good / work on) ever count toward a skill score, and at what values? Until he says, it does not.
     Also one adapter file (observationAdapters.ts) instead of the four the plan named; each mapper is about 15 lines.
     The CP1.4 entry above originally listed the content mapping; that mapping was removed in this attempt.
+
+- [x] CP1.6 Checkpoint (CP1 complete; no PR, no deploy)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: nothing new; gate run on the release branch.
+  - Verification: verifier PASS on every CP1 task (T1 11/12; T2 11/12; T3 12/12 on attempt 2; T4 12/12 and T5 11/12
+    on attempt 2). Backend tsc with a planted control error reported only that file, then 0 errors; test-file
+    typecheck (8192 MB) clean apart from the local-only maxmind file; jest over careerPrep, routes, middlewares,
+    access, db and scripts: 3,486 pass, 6 integration tests skipped (CI Postgres tier), 1 known CRLF-only failure;
+    frontend tsc clean; lint-route-auth OK (168 files).
+
+- [x] CP2.1 Placement floor: one floor, three names; staff Student prep page
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: NAV_GROUPS Placement group (section placement) with one Release 1 link, /admin/placement/students
+    (inPlace); hqModel floorLabelFor (Career Prep / Hiring / Placement) and opensInPlace; HqInside and HqPanel open
+    in-place rooms in the same tab; PlacementStudentsPage (read-only list + one student's skills) on
+    GET /api/admin/placement/students (prepStudents.ts, placement-gated).
+  - Verification: frontend 212 tests in campus/hq, adminNav, Layout and the new page pass; backend placement and
+    careerPrep tests pass; both tsc clean; lint-route-auth OK.
+  - Notes: the kit's queue, inboxes, bookings and fees links join the Placement group in Releases 2 and 3, when
+    those pages exist. The new page test uses react-dom/client + act, the repo's pattern (@testing-library is not a
+    declared dependency).

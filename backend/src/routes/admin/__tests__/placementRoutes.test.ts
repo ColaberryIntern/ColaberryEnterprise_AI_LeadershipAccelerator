@@ -1,5 +1,7 @@
 const mockLoad = jest.fn();
 jest.mock('../../../services/careerPrep/prepData', () => ({ loadPrepData: (...a: unknown[]) => mockLoad(...a) }));
+const mockQuery = jest.fn();
+jest.mock('../../../services/careerPrep/prepStudents', () => ({ listPrepStudents: (...a: unknown[]) => mockQuery(...a) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -49,6 +51,34 @@ describe('GET /api/admin/placement/students/:id/prep', () => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     mockLoad.mockRejectedValue(new Error('db'));
     expect((await request(app()).get(URL).set('Authorization', sign({ role: 'admin', mgmt_role: 'owner' }))).status).toBe(500);
+  });
+});
+
+describe('GET /api/admin/placement/students (the Student prep list)', () => {
+  const LIST = '/api/admin/placement/students';
+  const owner = () => sign({ role: 'admin', mgmt_role: 'owner' });
+
+  it('403s staff without placement and never queries', async () => {
+    mockQuery.mockReset();
+    expect((await request(app()).get(LIST).set('Authorization', sign({ role: 'admin', mgmt_role: 'support' }))).status).toBe(403);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('lists students (readiness absent when there is none)', async () => {
+    mockQuery.mockReset().mockResolvedValue([
+      { enrollmentId: STUDENT, name: 'Ann Lee', lastObserved: '2026-11-15T10:00:00.000Z', observations: 12, readiness: 71.5 },
+      { enrollmentId: '44444444-4444-4444-8444-444444444444', name: 'Bo Kim', lastObserved: '2026-11-14T10:00:00.000Z', observations: 2 },
+    ]);
+    const res = await request(app()).get(LIST).set('Authorization', owner());
+    expect(res.status).toBe(200);
+    expect(res.body.students[0]).toEqual({ enrollmentId: STUDENT, name: 'Ann Lee', lastObserved: '2026-11-15T10:00:00.000Z', observations: 12, readiness: 71.5 });
+    expect(res.body.students[1].readiness).toBeUndefined();
+  });
+
+  it('500s when the query fails', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockQuery.mockReset().mockRejectedValue(new Error('db'));
+    expect((await request(app()).get(LIST).set('Authorization', owner())).status).toBe(500);
   });
 });
 

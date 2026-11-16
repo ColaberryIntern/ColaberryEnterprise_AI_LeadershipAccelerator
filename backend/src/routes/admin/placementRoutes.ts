@@ -2,8 +2,9 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { loadPrepData } from '../../services/careerPrep/prepData';
+import { listPrepStudents } from '../../services/careerPrep/prepStudents';
 import { buildDashboard } from '../../services/careerPrep/prepViews';
-import { StaffPrepResponse } from '../careerPrepSchemas';
+import { StaffPrepResponse, StaffStudentListResponse } from '../careerPrepSchemas';
 import { logFailure, sendValidated } from '../campusRoutes';
 
 /**
@@ -26,7 +27,21 @@ export async function getStudentPrep(req: Request, res: Response): Promise<void>
   }
 }
 
+/**
+ * The Student prep page's list: every student with Career Prep evidence in the last 90 days, newest
+ * first, with their latest general readiness (null when too little data). Capped at 500 rows.
+ */
+export async function listStudents(_req: Request, res: Response): Promise<void> {
+  try {
+    sendValidated(res, StaffStudentListResponse, { students: await listPrepStudents() }, 'placement_student_list');
+  } catch (err) {
+    logFailure('placement_student_list_failed', err);
+    res.status(500).json({ error: 'Could not load students.' });
+  }
+}
+
 const router = Router();
+router.get('/api/admin/placement/students', requireSection('placement'), listStudents);
 router.get('/api/admin/placement/students/:id/prep', requireSection('placement'), getStudentPrep);
 
 export default router;
