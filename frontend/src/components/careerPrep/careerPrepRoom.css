@@ -79,3 +79,11 @@ ol.cp-list{list-style:decimal;padding-left:18px}
 .cp-bar-rect{fill:var(--accent)}
 .cp-ready{stroke:var(--fg-muted);stroke-width:1}
 .cp-table{width:100%;font-size:13px}
+/* CP4.2: Your plan */
+.cp-plan h3{font:600 16px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:0 0 6px}
+.cp-days{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.cp-day-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.cp-timeline{display:flex;gap:2px;min-height:44px}
+.cp-seg{display:flex;align-items:center;justify-content:center;min-width:6px;padding:0 4px;border-radius:4px;background:var(--accent-soft);color:var(--fg);font-size:12px;overflow:hidden;white-space:nowrap}
+.cp-seg.is-target{outline:2px solid var(--accent);outline-offset:-2px}
+.cp-seg:focus{outline:3px solid var(--fg)}

@@ -276,3 +276,13 @@ tests/systemV2/career-prep/.
     check and the 120-character link, run in CI); frontend Career Prep 82 pass; both tsc clean.
   - Notes: T11's "close returns focus to the door" in the real app is carried into T25's scope (plan.md, ledger).
     Spelled-out numbers can pass Cora's digit guard; declared as a known limit in coraService.ts.
+
+- [x] CP4.2 Your plan
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: PlanView.tsx (one row per day with its minutes; each day a timeline of segment blocks whose width
+    follows the minutes; blocks that work on a weak skill are marked; every block is focusable and names itself;
+    today has Start, later days read Upcoming; "Built from your weakest skills"; Start today's session), wired into
+    the room's Your plan tab; planCards (the days plan Recommended first; one focused session when the interview is
+    today; a 4-day plan for practice).
+  - Verification: PlanView + plan cards 7 tests; Career Prep frontend 89 pass; tsc clean.
