@@ -31,8 +31,8 @@ here only so the difference is visible — it is not what the browser paints.
 
 | Token | RENDERS AS | `tokens.css` says | Usage |
 |---|---|---|---|
-| `--color-primary` | `#FB2832` | `#FB2832` | **Colaberry cherry** — headings, primary buttons, brand |
-| `--color-primary-light` | **`#FD5760`** | ~~`#C20E1E`~~ | Links, hover, focus outlines. A light coral, **not** a deep cherry |
+| `--color-primary` | `#FB2832` | `#FB2832` | **Colaberry cherry** — headings and brand. **White text on it is 3.85:1 and FAILS WCAG AA.** Do not use it as a fill behind white text; see the contrast table below |
+| `--color-primary-light` | **`#FD5760`** | ~~`#C20E1E`~~ | Links, hover, focus outlines. A light coral, **not** a deep cherry. **White on it is 3.13:1, the worst ratio in the system** |
 | `--color-secondary` | **`#E5121D`** | ~~`#e53e3e`~~ | CTAs, warnings, destructive actions |
 | `--color-accent` | **`#5BA63C`** | ~~`#38a169`~~ | Green — success states, positive indicators |
 | `--color-bg` | `#FFFFFF` | `#ffffff` | Page background |
@@ -44,6 +44,32 @@ here only so the difference is visible — it is not what the browser paints.
 
 Only `--color-primary` and `--color-bg` survive the cascade unchanged. The other nine are
 re-pointed, and the neutrals shift from blue-tinted slate to true grey.
+
+### White text on a brand red — the ratios, because a hex alone is not enough
+
+This table has been wrong twice, and both times the cause was publishing a value with no
+evidence attached. A colour can be correctly published and still unusable as a text background.
+
+| Fill | Ratio under white text | Verdict |
+|---|---|---|
+| `--red-400` `#FD5760` (`--color-primary-light`, the Bootstrap hover) | **3.13:1** | FAILS AA and AA-large |
+| `--red-500` `#FB2832` (`--color-primary`, `--action-bg`, what ships) | **3.85:1** | FAILS AA (needs 4.5:1) |
+| `--red-600` `#E5121D` (`--color-secondary`, `--action-bg-hover`) | **4.73:1** | Passes |
+| `--red-700` `#C20E1E` (`--cherry-deep`, `--action-bg-press`) | **6.22:1** | Passes |
+
+**Both passing values are already in this product**, so an accessible filled button needs no new
+colour. Note that red-600 is `#E5121D` in Colaberry's own ramp, **not** Tailwind's `#DC2626`,
+which appears nowhere in the brand and would introduce a foreign hue.
+
+Normal-size text needs 4.5:1 (WCAG 1.4.3); the 3:1 allowance is only for 18.66px bold or 24px
+normal, which almost no button label in this product reaches. Icons and focus rings need 3:1
+(WCAG 1.4.11).
+
+**This is measured, not asserted.** `frontend/src/styles/__tests__/actionContrast.test.ts`
+recomputes every one of these from the real stylesheets on each run and holds a pinned inventory
+of the surfaces that currently fail, so a new failure breaks the build. The recolour itself
+(AF12.6 step 2) is Aleem's and Ali's decision and has not happened — which is why the failing
+values above are still what ships.
 
 **Brand palette** (in `tokens.css`, used by the cherry/leaf/berry designs). **These four are
 NOT redefined by `brand-bridge.css`**, so unlike the table above, `tokens.css` is the
@@ -164,6 +190,14 @@ These are the canonical patterns used throughout the admin UI:
 ```
 
 ### Buttons
+
+> **A filled `.btn-primary` is 3.85:1 under white text and fails WCAG AA today.** Two independent
+> paths paint it: `global.css` sets `.btn-primary { background-color: var(--color-primary)
+> !important }`, which beats `brand-bridge.css` regardless of load order, and the vendored design
+> system ships its own `.cb-btn` on `var(--action-bg)`. Editing tokens alone changes neither.
+> For new work needing a filled action button, use `--color-secondary` (`#E5121D`, 4.73:1) as
+> Aleem instructed, until the ramp is corrected upstream.
+
 ```html
 <button class="btn btn-primary btn-sm">Primary</button>
 <button class="btn btn-outline-secondary btn-sm">Secondary</button>
