@@ -2,9 +2,7 @@
 .cp-room{position:fixed;inset:0;z-index:1200;display:flex;flex-direction:column;background:var(--bg);color:var(--fg);font-family:'IBM Plex Sans',system-ui,sans-serif}
 .cp-room-top{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .cp-back{min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated);color:var(--fg);font:600 14px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
-.cp-trail{display:flex;gap:6px;list-style:none;margin:0;padding:0;font:12px 'IBM Plex Mono',ui-monospace,Menlo,monospace;color:var(--fg-muted)}
-.cp-trail li+li:before{content:"›";margin-right:6px}
-.cp-trail li[aria-current]{color:var(--fg);font-weight:700}
+/* .cp-trail lives in levelTrail.css (CP5.3), loaded with LevelTrail. */
 .cp-anchor{display:inline-flex;align-items:center;gap:10px;margin-left:auto;padding:6px 6px 6px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated);font-size:14px}
 .cp-anchor.is-empty{padding:10px 12px;color:var(--fg-muted)}
 .cp-anchor-change{min-height:44px;padding:0 12px;border:1px solid var(--accent);border-radius:4px;background:transparent;color:var(--accent);font-weight:600}

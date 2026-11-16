@@ -5,7 +5,7 @@ import { HqPeople, type HqPerson } from './HqPeople';
 import type { HqPlaced } from './hqModel';
 import type { StaffDesk } from '../campusPeopleApi';
 import { FloorLobbyDesks } from './FloorLobbyDesk';
-import { isCareerPrepFloor } from './careerPrepDoors';
+import { isCareerPrepFloor, prepElevatorLine, prepFloorOf } from './careerPrepDoors';
 import { CareerPrepFloor } from '../../careerPrep/CareerPrepFloor';
 
 /**
@@ -22,7 +22,7 @@ function Guide({ s, f, face, people }: { s: HqState; f: HqFloor | null; face: st
   if (!f) {
     const open = openFloors(hq);
     return (<><div className="kick">YOUR RIDE</div><h3>Pick a floor</h3>
-      <div className="kv">Lit buttons are the floors your badge opens. Grey buttons with a red ring are locked for you.</div>
+      <div className="kv" data-testid="cm-hq-ride-line">{!hq.isStaff && prepFloorOf(hq.floors) ? prepElevatorLine : 'Lit buttons are the floors your badge opens. Grey buttons with a red ring are locked for you.'}</div>
       <div className="kv"><b>{badgeLevel(hq)}</b>{hq.isStaff && open.length > 0 ? ` · ${open.map((x) => x.num).join(', ')}` : ''}</div></>);
   }
   const on = f.access !== 'none';

@@ -1,4 +1,5 @@
 import React from 'react';
+import './levelTrail.css';
 
 /**
  * Career Prep v27 (CP5.3): the level trail, "1 Tower · 2 Floor <n> · 3 Career Prep", with the current step marked

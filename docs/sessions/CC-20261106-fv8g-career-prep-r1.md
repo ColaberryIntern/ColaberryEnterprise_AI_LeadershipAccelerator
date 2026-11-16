@@ -525,3 +525,17 @@ tests/systemV2/career-prep/.
   - Notes: declared: the lobby greeting says Cora "is waiting for you up there" (the kit's "has today's session
     ready" needs a per-session readiness the lobby does not load); the directory's "k other floors are Colaberry
     staff offices" line is not added (the directory already shows staff floors as locked).
+
+- [x] CP5.2 + CP5.3 attempt 2: fixes from the T25 verification (T22 PASS 11/12 on attempt 3; T24 PASS 12/12 on attempt 2; T25 FAIL 9/12)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: the level trail loads its own styles (levelTrail.css, imported by LevelTrail; theme variables
+    with campus fallbacks), so /portal/career shows the styled trail on a direct load (it was a bare numbered list).
+    The kit items previously dropped are now built, not declared: students with Career Prep get no badge gate in
+    the lobby (the express button replaces it); the elevator says "Tap your floor. It goes straight up, no stops.";
+    the lobby greeting says Cora "has today's <m>-minute session ready" when today has a planned session (from the
+    summary), else "is waiting for you up there"; the directory lists only the student's floors plus "🔒 k other
+    floors are Colaberry staff offices." The outside chip no longer promises an office a student may not have, and
+    the floor tooltip names Career Prep. A test covers the card's Go on the campus (START_PREP set, the HQ opened).
+  - Verification: frontend Career Prep + campus pass (HQ 121, incl. 4 new tower tests and goStart.test.tsx 3);
+    frontend tsc clean.

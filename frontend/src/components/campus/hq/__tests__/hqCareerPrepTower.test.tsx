@@ -10,11 +10,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react-dom/test-utils';
 
 let mockOn = true;
+let mockMinutes: number | undefined;
 jest.mock('../../campusMgmt', () => ({ useCampusMgmt: () => ({ isMgmt: false, label: null, sections: [], canSection: () => false }) }));
 jest.mock('../../home/useHomeFacts', () => ({ useHomeFacts: () => ({ firstName: 'Ali', fullName: 'Ali M', initials: 'AM' }) }));
 jest.mock('../../../../services/govProjectPortalApi', () => ({ listMyGovProjects: () => Promise.resolve([{ projectId: 'g1', name: 'County RFP', status: 'active' }]) }));
 jest.mock('../../../careerPrep/careerPrepFlag', () => ({ fetchCareerPrepFlag: () => Promise.resolve(mockOn), useCareerPrepFlag: () => mockOn }));
-jest.mock('../../../careerPrep/careerPrepApi', () => ({ fetchPrepSummary: () => Promise.resolve({ stops: {}, interviews: [], interviewCount: 0, today: '2026-11-16' }) }));
+jest.mock('../../../careerPrep/careerPrepApi', () => ({ fetchPrepSummary: () => Promise.resolve({ stops: {}, interviews: [], interviewCount: 0, today: '2026-11-16', ...(mockMinutes ? { sessionMinutes: mockMinutes } : {}) }) }));
 
 // eslint-disable-next-line import/first
 import { useHq, type HqState } from '../useHq';
@@ -24,6 +25,8 @@ import HqBuilding from '../HqBuilding';
 import { setHqIntent, START_PREP } from '../hqIntent';
 // eslint-disable-next-line import/first
 import { prepFloorOf } from '../careerPrepDoors';
+// eslint-disable-next-line import/first
+import { resetCareerPrepSummaryCache } from '../../../careerPrep/useCareerPrepSummary';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,7 +44,8 @@ async function render(reduce = true): Promise<void> {
   await act(async () => { root = createRoot(container); root.render(<Harness reduce={reduce} />); });
   await act(async () => { await Promise.resolve(); await Promise.resolve(); });
 }
-afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); mockOn = true; jest.useRealTimers(); });
+beforeEach(() => resetCareerPrepSummaryCache());
+afterEach(() => { if (root) act(() => root!.unmount()); root = undefined; container?.remove(); mockOn = true; mockMinutes = undefined; jest.useRealTimers(); });
 const $ = (sel: string) => container.querySelector(sel) as HTMLElement;
 const $$ = (sel: string) => Array.from(container.querySelectorAll(sel)) as HTMLElement[];
 const click = async (el: Element) => { await act(async () => { (el as HTMLElement).click(); }); };
@@ -93,6 +97,31 @@ describe("a student's tower with Career Prep open (CP5.2, CP5.3)", () => {
     expect($('[data-testid="cm-hq-express"]').textContent).toBe('6 · Go to Career Prep · Elevator A · straight up');
     await click($('[data-testid="cm-hq-express"]'));
     expect(live.floor).toBe('6');
+  });
+
+  it('with a session planned for today, the concierge says Cora has it ready (from the student\'s plan)', async () => {
+    mockMinutes = 20;
+    await render();
+    await click($('[data-testid="cm-hq-walk-in"]'));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect($('[data-testid="cm-hq-concierge"]').textContent).toContain("Cora, your interview coach, has today's 20-minute session ready.");
+  });
+
+  it('the lobby: no badge gate, and the directory lists only their floors plus one line for the staff floors', async () => {
+    await render();
+    await click($('[data-testid="cm-hq-walk-in"]'));
+    expect($('[data-testid="cm-hq-reader"]')).toBeNull();
+    const rows = $$('[data-testid="cm-hq-directory"] button .n').map((n) => n.textContent);
+    expect(rows).toEqual(['6', '1', 'G']);
+    expect($('[data-testid="cm-hq-staff-floors"]').textContent).toBe(`🔒 ${live.hq.floors.length - 2} other floors are Colaberry staff offices.`);
+  });
+
+  it('the elevator says the ride is express, and the outside chip names their floor, not an office they may not have', async () => {
+    await render();
+    expect(container.textContent).toContain('Your badge opens your office + the lobby'); // this student has an office
+    await click($('[data-testid="cm-hq-walk-in"]'));
+    await click($('[data-testid="cm-hq-call"]'));
+    expect($('[data-testid="cm-hq-ride-line"]').textContent).toBe('Tap your floor. It goes straight up, no stops.');
   });
 
   it("goStart('prep') opens the HQ already on the Career Prep floor", async () => {
