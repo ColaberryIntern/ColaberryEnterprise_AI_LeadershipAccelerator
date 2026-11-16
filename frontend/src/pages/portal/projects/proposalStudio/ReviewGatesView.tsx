@@ -78,8 +78,10 @@ function DocGatePanel({ projectId, doc, reviewApi }: { projectId: string; doc: G
         <div style={{ marginTop: 8 }}>
           <div className="gps-tags">{GATES.map((g) => { const st = byGate.get(g)?.status ?? 'pending'; const ai = g !== 'gold'; return <span key={g} className={`gps-tag ${statusCls(st)}`}>{GATE_LABEL[g]}: {st}{ai ? ' · AI' : ''}</span>; })}</div>
           <div className="gps-tags" style={{ marginTop: 10 }}>
-            <button type="button" className="gps-btn sm" disabled={!!busy} onClick={() => run(() => reviewApi.runChecks(projectId, doc.key), 'checks')}>{busy === 'checks' ? 'Running…' : 'Re-run checks'}</button>
+            <button type="button" className="gps-btn sm" disabled={!!busy} onClick={() => run(() => reviewApi.runChecks(projectId, doc.key), 'checks')}>{busy === 'checks' ? 'Rejudging...' : 'Rejudge'}</button>
+            <button type="button" className="gps-btn sm" disabled={!!busy} onClick={() => run(() => reviewApi.runReviewCycle(projectId, doc.key), 'rebuild')}>{busy === 'rebuild' ? 'Rebuilding...' : 'Rebuild'}</button>
           </div>
+          <p className="gps-small gps-muted" style={{ marginTop: 6 }}>Rejudge re-scores the current draft against the latest Dossier proof, without rewriting it. Rebuild redrafts the document from the Dossier, so it picks up any proof you have added since.</p>
           <p className="gps-small gps-muted" style={{ marginTop: 8 }}>Pink, Red and White glove are recorded automatically by the AI judge when the version passes their checks. Gold is the one human decision — made for the whole package below.</p>
           {msg && <p className="gps-small" style={{ color: 'var(--gps-warn)', marginTop: 8 }}>{msg}</p>}
         </div>
