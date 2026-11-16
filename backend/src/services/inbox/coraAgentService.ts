@@ -15,6 +15,7 @@
 import OpenAI from 'openai';
 import { Op } from 'sequelize';
 import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
+import { findCoraReplyViolations } from '../coraPromptRules';
 import { logAuditEvent } from './inboxAuditService';
 import { emitAlert } from '../alertService';
 import CoraReplyLog from '../../models/CoraReplyLog';
@@ -189,6 +190,15 @@ export interface CoraReply {
    * whether the email is archived or routed back to the human INBOX.
    */
   needsHuman: boolean;
+  /**
+   * Ids of the prompt rules this reply text trips (see coraPromptRules.ts).
+   * Empty on a clean reply. A non-empty list forces needsHuman to true, because
+   * a rule a model broke once is a rule it will break again: measured on the
+   * 2026-11-15 replay set, the rules block took violations from 15 of 20 replies
+   * down to 2, and the last 2 moved between runs at the same temperature. The
+   * prompt is what makes a violation rare; this is what makes it visible.
+   */
+  ruleViolations: string[];
 }
 
 /** Disposition of an email Cora handled — tells the dispatcher whether to archive. */
@@ -205,6 +215,10 @@ export interface CoraDispatchResult {
  * without an OpenAI round-trip. Throws when the body is missing (the caller
  * treats that as a generation failure). A missing/invalid needs_human defaults
  * to false (treat as a normal, fully-answered reply).
+ *
+ * It also enforces the compliance rules in coraPromptRules.ts: a reply whose text
+ * trips one is forced to needsHuman regardless of what the model said about itself.
+ * That is the deterministic half of the rule. The prompt asks; this decides.
  */
 export function parseCoraReply(content: string, fallbackSubject: string): CoraReply {
   const parsed = JSON.parse(content) as {
@@ -213,10 +227,14 @@ export function parseCoraReply(content: string, fallbackSubject: string): CoraRe
     needs_human?: unknown;
   };
   if (!parsed.body) throw new Error('Missing body in Cora OpenAI response');
+  const modelSaysNeedsHuman = parsed.needs_human === true || parsed.needs_human === 'true';
+  const ruleViolations = findCoraReplyViolations(parsed.body);
   return {
     subject: parsed.subject?.trim() || `Re: ${fallbackSubject}`,
     body: parsed.body,
-    needsHuman: parsed.needs_human === true || parsed.needs_human === 'true',
+    // One-way: a violation can only ever ADD a human, never remove one.
+    needsHuman: modelSaysNeedsHuman || ruleViolations.length > 0,
+    ruleViolations,
   };
 }
 
@@ -245,6 +263,20 @@ export function decideCoraDisposition(opts: {
 }
 
 /**
+ * The prompt used when the knowledge base cannot be loaded at all. It must not
+ * route the sender to support@colaberry.com: that is the address they just wrote
+ * to, and telling them to write there again is the "echo" reply this inbox was
+ * producing before the KB was attached on 2026-11-15. With no knowledge loaded
+ * there is nothing Cora can answer, so every reply from here is a handoff.
+ */
+const DEGRADED_SYSTEM_PROMPT =
+  'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
+  'No program knowledge base is currently loaded, so you do not know any program facts. ' +
+  'Do not answer the question, do not state any price, date, policy or fact, and do not give ' +
+  'the sender an address to write to. Acknowledge their email in one or two sentences, say a ' +
+  'person will follow up, and set needs_human to true.';
+
+/**
  * Build Cora's system prompt from the KB Ops DB (cora_kb_entries/cora_cohorts),
  * scoped to the currently active program. Degrades to a generic handoff prompt
  * if the configured course isn't found, rather than failing the whole reply.
@@ -254,18 +286,12 @@ async function getCoraSystemPrompt(): Promise<string> {
     const course = await getCourseBySlug(CORA_COURSE_SLUG);
     if (!course) {
       console.warn(`${LOG_PREFIX} No KB course found for slug "${CORA_COURSE_SLUG}"`);
-      return (
-        'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
-        'No program knowledge base is currently configured — acknowledge receipt and route to support@colaberry.com.'
-      );
+      return DEGRADED_SYSTEM_PROMPT;
     }
     return await buildCoraSystemPromptFromDB(course.id);
   } catch (error: any) {
     console.warn(`${LOG_PREFIX} Could not build DB-backed system prompt: ${error.message}`);
-    return (
-      'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
-      'Acknowledge receipt and route to support@colaberry.com.'
-    );
+    return DEGRADED_SYSTEM_PROMPT;
   }
 }
 
@@ -300,7 +326,21 @@ export async function generateCoraReply(
   const content = response.choices?.[0]?.message?.content;
   if (!content) throw new Error('Empty response from OpenAI');
 
-  return parseCoraReply(content, subject);
+  const reply = parseCoraReply(content, subject);
+  if (reply.ruleViolations.length > 0) {
+    // Structured so a rising count is visible without reading drafts: a rule that
+    // starts tripping often means the prompt and the knowledge base have drifted.
+    console.warn(
+      `${LOG_PREFIX} ${JSON.stringify({
+        event: 'cora_rule_violation',
+        outcome: 'partial',
+        error_class: 'ContractViolation',
+        rules: reply.ruleViolations,
+        forced_needs_human: true,
+      })}`
+    );
+  }
+  return reply;
 }
 
 // ─── Main Dispatch Handler ────────────────────────────────────────────────
@@ -442,6 +482,9 @@ export async function handleCoraInquiry(email: {
         // (and only here — the live-send path keeps the short preview).
         body_full: reply.body.substring(0, 8000),
         needs_human: reply.needsHuman,
+        // Which compliance rules the draft tripped, so a reviewer can filter the
+        // shadow log for the drafts that need reading first rather than reading all.
+        rule_violations: reply.ruleViolations,
       },
     });
     return decideCoraDisposition({ generated: true, dryRun: true, needsHuman: reply.needsHuman, sent: false });
@@ -462,6 +505,7 @@ export async function handleCoraInquiry(email: {
         subject: reply.subject,
         body_preview: reply.body.substring(0, 300),
         needs_human: reply.needsHuman,
+        rule_violations: reply.ruleViolations,
       },
     });
   } catch (error: any) {

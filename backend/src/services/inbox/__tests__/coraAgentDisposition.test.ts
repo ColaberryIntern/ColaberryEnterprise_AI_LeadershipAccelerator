@@ -20,7 +20,12 @@ describe('parseCoraReply', () => {
       JSON.stringify({ subject: 'Re: Pricing', body: 'It is $4,500.', needs_human: false }),
       'Pricing'
     );
-    expect(r).toEqual({ subject: 'Re: Pricing', body: 'It is $4,500.', needsHuman: false });
+    expect(r).toEqual({
+      subject: 'Re: Pricing',
+      body: 'It is $4,500.',
+      needsHuman: false,
+      ruleViolations: [],
+    });
   });
 
   it('flags needs_human when the model returns true (boolean and string forms)', () => {
@@ -45,6 +50,53 @@ describe('parseCoraReply', () => {
 
   it('failure path: throws on malformed JSON', () => {
     expect(() => parseCoraReply('not json', 'S')).toThrow();
+  });
+
+  // ── compliance-rule enforcement ────────────────────────────────────────────
+  // The rules block in the prompt made violations rare (15 of 20 replies down to 2
+  // on the 2026-11-15 replay set) but not impossible, and the survivors moved
+  // between runs at the same temperature. These cases pin the deterministic half.
+
+  it('reports no violations for a clean reply', () => {
+    const r = parseCoraReply(
+      JSON.stringify({ body: 'I have passed your request to the team.' }),
+      'S'
+    );
+    expect(r.ruleViolations).toEqual([]);
+    expect(r.needsHuman).toBe(false);
+  });
+
+  it('forces needsHuman when the body trips a rule, even if the model said false', () => {
+    const r = parseCoraReply(
+      JSON.stringify({ body: 'The Open House is free to attend.', needs_human: false }),
+      'S'
+    );
+    expect(r.ruleViolations).toEqual(['advertises_free']);
+    expect(r.needsHuman).toBe(true);
+  });
+
+  it('enforcement is one-way: it adds a human, it never removes one', () => {
+    const r = parseCoraReply(
+      JSON.stringify({ body: 'A person will follow up.', needs_human: true }),
+      'S'
+    );
+    expect(r.ruleViolations).toEqual([]);
+    expect(r.needsHuman).toBe(true);
+  });
+
+  it('reports every rule a reply trips', () => {
+    const r = parseCoraReply(
+      JSON.stringify({
+        body: 'We do not offer refunds. Your account has been deleted. Feel free to ask.',
+      }),
+      'S'
+    );
+    expect(r.ruleViolations).toEqual([
+      'advertises_free',
+      'states_refund_policy',
+      'confirms_action',
+    ]);
+    expect(r.needsHuman).toBe(true);
   });
 });
 

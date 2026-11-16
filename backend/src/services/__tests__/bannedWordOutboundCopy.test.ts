@@ -113,6 +113,13 @@ const BASELINE = {
   // this scanner would disable the very rule the line exists to enforce — the same reasoning
   // the four POLICY LIST entries above already carry.
   'services/mayaPersona.ts': [1, "POLICY LIST: Maya's own guardrail forbids the word and names 807.172(d)"],
+  // Added 2026-11-15, same reasoning as Maya's line above, from the other direction: on
+  // 2026-11-15 Cora's knowledge base was edited to say "no charge" precisely to avoid this
+  // word, and her next reply said "free" anyway, because the model paraphrases knowledge
+  // into its own voice. The ban therefore had to move into her prompt and NAME the word.
+  // Two occurrences, both inside rule 1: the word itself, and the phrase "feel free",
+  // which is also rule 8 (a decline must not reopen the conversation).
+  'services/coraPromptRules.ts': [2, "POLICY LIST: Cora's own rule 1 forbids the word and the phrase \"feel free\""],
   // Moved out of `bannedCopyScanner.ts` when knowledge grounding needed the canonical rule
   // from a pure runtime module: the scanner imports the TypeScript compiler and so cannot be
   // imported outside tests. Same three occurrences, same authority, one fewer declaration of
