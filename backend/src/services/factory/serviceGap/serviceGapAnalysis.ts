@@ -82,8 +82,10 @@ export async function computeRecommendation(evidence: CaseStudyEvidence, catalog
     const rec = finalizeRecommendation(res.raw, { refs, catalog, evidence });
     return { status: rec.decision === 'INSUFFICIENT_EVIDENCE' ? 'insufficient' : 'ok', recommendation: rec, errorClass: null, error: null, model: res.model };
   } catch (err) {
-    if (err instanceof GapMalformedOutput) return { status: 'failed', recommendation: null, errorClass: 'MalformedOutput', error: 'The AI analysis returned an unusable answer.', model: res.model };
-    throw err;
+    if (!(err instanceof GapMalformedOutput)) throw err;
+    console.error(JSON.stringify({ timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'service_gap_unusable_answer',
+      outcome: 'failure', error_class: 'MalformedOutput', context: { case_study_id: evidence.id, detail: err.message } }));
+    return { status: 'failed', recommendation: null, errorClass: 'MalformedOutput', error: 'The AI analysis returned an unusable answer.', model: res.model };
   }
 }
 

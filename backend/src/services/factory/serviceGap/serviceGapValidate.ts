@@ -78,17 +78,39 @@ function candidatesFrom(raw: unknown, refs: ValidateContext['refs']): GapCandida
   return out.sort((a, b) => fitOf(b) - fitOf(a));
 }
 
+/**
+ * The decision as one of our five codes. Models often answer with the label or a sentence instead of the code
+ * ("Match existing.", "Propose a new service for ..."), so the LEADING words are mapped deterministically. Anything
+ * that does not start like one of the five decisions is unreadable (null). Order matters: "link ... growth" is
+ * checked before a plain "link", which means an existing service (the status correction then fixes Growth targets).
+ */
+export function normalizeDecision(v: unknown): GapDecision | null {
+  const s = String(v ?? '').trim().toUpperCase();
+  if ((GAP_DECISIONS as readonly string[]).includes(s)) return s as GapDecision;
+  const w = s.replace(/[^A-Z]+/g, ' ').trim();
+  if (/^LINK( TO)?( A| THE)?( EXISTING)? GROWTH\b/.test(w)) return 'LINK_GROWTH';
+  if (/^(MATCH|USE EXISTING|LINK)\b/.test(w)) return 'MATCH_EXISTING';
+  if (/^(EXPAND|EXTEND)\b/.test(w)) return 'EXPAND_EXISTING';
+  if (/^(PROPOSE|NEW SERVICE)\b/.test(w)) return 'PROPOSE_NEW';
+  if (/^(INSUFFICIENT|NOT ENOUGH|NEED MORE)\b/.test(w)) return 'INSUFFICIENT_EVIDENCE';
+  return null;
+}
+
+/** A verdict that names our opaque refs ("Match to S1.") or copies the prompt's placeholder ("Propose Y.") is useless to a person. */
+const UNUSABLE_VERDICT = /\bS\d{1,2}\b|\b(?:X|Y)\b\.?$/;
+
 export function finalizeRecommendation(raw: unknown, ctx: ValidateContext): GapRecommendation {
   const r = obj(raw);
-  const decisionRaw = String(r.decision ?? '').trim().toUpperCase();
-  if (!(GAP_DECISIONS as readonly string[]).includes(decisionRaw)) throw new GapMalformedOutput(`unknown decision "${decisionRaw.slice(0, 40)}"`);
-  let decision = decisionRaw as GapDecision;
+  const normalized = normalizeDecision(r.decision);
+  if (!normalized) throw new GapMalformedOutput(`unknown decision "${String(r.decision ?? '').slice(0, 40)}"`);
+  let decision = normalized;
   const reasonCodes = list(r.reasonCodes, 8, 60).map((c) => c.toLowerCase().replace(/[^a-z0-9_]+/g, '_'));
   const maturity = ((MATURITY_LEVELS as readonly string[]).includes(String(r.maturity)) ? r.maturity : 'unknown') as Maturity;
   const candidates = candidatesFrom(r.candidates, ctx.refs);
   let target = ctx.refs.get(String(r.targetRef ?? '').trim().toUpperCase()) ?? null;
   const duplicateWarnings: string[] = [];
   let verdict = str(r.verdict, 300) ?? '';
+  if (UNUSABLE_VERDICT.test(verdict)) { verdict = ''; reasonCodes.push('verdict_replaced'); }
 
   // Decision vs the target's REAL status.
   if (decision === 'MATCH_EXISTING' || decision === 'EXPAND_EXISTING' || decision === 'LINK_GROWTH') {
@@ -197,8 +219,9 @@ function evidenceFrom(raw: unknown): GapEvidenceRef[] {
 
 function alternativesFrom(raw: unknown): Array<{ decision: GapDecision; whyNot: string }> {
   return (Array.isArray(raw) ? raw : []).map(obj)
-    .filter((a) => (GAP_DECISIONS as readonly string[]).includes(String(a.decision)) && str(a.whyNot, 300))
-    .slice(0, 4).map((a) => ({ decision: a.decision as GapDecision, whyNot: str(a.whyNot, 300) as string }));
+    .map((a) => ({ decision: normalizeDecision(a.decision), whyNot: str(a.whyNot, 300) }))
+    .filter((a): a is { decision: GapDecision; whyNot: string } => !!a.decision && !!a.whyNot)
+    .slice(0, 4);
 }
 
 export function defaultVerdict(d: GapDecision, target: string | null, proposed: string | null): string {
