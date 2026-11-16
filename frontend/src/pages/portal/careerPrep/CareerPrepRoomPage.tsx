@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CareerPrepRoom, type RoomTab } from '../../../components/careerPrep/CareerPrepRoom';
 import { CareerPrepFloor } from '../../../components/careerPrep/CareerPrepFloor';
@@ -7,6 +7,8 @@ import { InterviewForm } from '../../../components/careerPrep/InterviewForm';
 import { useCareerPrep } from '../../../components/careerPrep/useCareerPrep';
 import { ProgressDashboard } from '../../../components/careerPrep/ProgressDashboard';
 import { PlanView } from '../../../components/careerPrep/PlanView';
+import { SessionRunner } from '../../../components/careerPrep/SessionRunner';
+import { useSession } from '../../../components/careerPrep/useSession';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
 import { careerPrepFloorNum } from '../../../components/careerPrep/careerPrepFloorNum';
 import { careerPrepDoorsFor } from '../../../components/campus/hq/careerPrepDoors';
@@ -27,8 +29,13 @@ const Pending = ({ text }: { text: string }) => <p className="cp-pending">{text}
 function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClose: () => void }): React.ReactElement {
   const [params] = useSearchParams();
   const [tab, setTab] = useState<RoomTab>('progress');
-  const room = useCareerPrep(params.get('anchor'), { onTab: setTab });
+  // Cora's "Start today's session" card opens the Session tab and starts it (the session hook is made below, so it is reached through a ref).
+  const startRef = useRef<() => void>(() => undefined);
+  const room = useCareerPrep(params.get('anchor'), { onTab: setTab, onStart: () => { setTab('session'); startRef.current(); } });
   const anchor = room.dashboard?.interviews.find((i) => i.id === room.anchorId) ?? null;
+  // The recap after a finished session is CP4.5 (T21); until then the runner shows its own finished line.
+  const session = useSession(room.plan, () => undefined);
+  startRef.current = () => { if (session.state.status === 'idle') void session.start(); };
   return (
     <CareerPrepRoom
       anchor={anchor}
@@ -48,7 +55,7 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
           ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} />
           : <Pending text="Loading your progress..." />),
         plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
-        session: tabs?.session ?? <Pending text="Start a session from your plan." />,
+        session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} />,
       }}
     />
   );

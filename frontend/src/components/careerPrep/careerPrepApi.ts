@@ -8,6 +8,8 @@ export type InterviewType = 'recruiter' | 'hiring_manager' | 'technical' | 'beha
 export interface PrepInterview {
   id: string; source: 'real' | 'added' | 'practice'; company: string; role: string; type: InterviewType;
   startsAt?: string; readiness?: number; target: number;
+  /** Practice questions from the job description, when there were some. */
+  questions?: string[];
 }
 export interface PrepSummary {
   firstName?: string;
@@ -60,4 +62,34 @@ export async function postPlan(body: { interviewId: string; kind: PrepPlan['kind
 
 export async function fetchActivePlan(interviewId: string): Promise<StoredPlan | null> {
   return (await portalApi.get(`${BASE}/plans`, { params: { interviewId } })).data.plan ?? null;
+}
+
+export interface SessionSegment extends PrepSegment { state: 'pending' | 'done' }
+export interface PrepSessionView { id: string; planId: string; status: 'running' | 'paused' | 'finished' | 'ended' | 'abandoned'; startedAt: string; secondsActive: number; segments: SessionSegment[] }
+export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; errorClass: string | null;
+  result: { seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[] } | null }
+
+export async function startSessionApi(planId: string): Promise<{ session: PrepSessionView; resumed: boolean }> {
+  return (await portalApi.post(`${BASE}/sessions`, { planId })).data;
+}
+
+export async function patchSessionApi(id: string, body: { action: 'segment_done' | 'pause' | 'resume' | 'finish' | 'end'; segmentIndex?: number; secondsActive: number }): Promise<PrepSessionView> {
+  return (await portalApi.patch(`${BASE}/sessions/${encodeURIComponent(id)}`, body)).data.session;
+}
+
+/** Upload one Try answer. `clientKey` makes a retried upload the same attempt on the server. */
+export async function uploadAttemptApi(sessionId: string, segmentIndex: number, clientKey: string, file: Blob, onProgress?: (f: number) => void): Promise<AttemptView> {
+  const form = new FormData();
+  form.append('segmentIndex', String(segmentIndex));
+  form.append('clientKey', clientKey);
+  form.append('video', file, 'try.webm');
+  const res = await portalApi.post(`${BASE}/sessions/${encodeURIComponent(sessionId)}/attempts`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300_000,
+    onUploadProgress: (e) => { if (onProgress && e.total) onProgress(e.loaded / e.total); },
+  });
+  return res.data.attempt;
+}
+
+export async function fetchAttemptApi(sessionId: string, attemptId: string): Promise<AttemptView> {
+  return (await portalApi.get(`${BASE}/sessions/${encodeURIComponent(sessionId)}/attempts/${encodeURIComponent(attemptId)}`)).data.attempt;
 }

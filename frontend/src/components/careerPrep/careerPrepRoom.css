@@ -93,3 +93,14 @@ ol.cp-list{list-style:decimal;padding-left:18px}
 .cp-seg:hover .cp-seg-tip,.cp-seg:focus .cp-seg-tip{display:block}
 .cp-readout{min-height:1.2em;margin:2px 0 0;font-size:12px;color:var(--fg-muted)}
 .cp-rowbtn .cp-bar{position:relative}
+/* CP4.4: the session */
+.cp-session{display:grid;grid-template-columns:200px 1fr;gap:16px}
+.cp-ring{width:140px;height:140px}
+.cp-ring-bg{stroke:var(--line);stroke-width:8}
+.cp-ring-fg{stroke:var(--accent);stroke-width:8;transform:rotate(-90deg);transform-origin:50% 50%}
+.cp-ring-t{fill:var(--fg);font:700 18px 'IBM Plex Mono',ui-monospace,Menlo,monospace}
+.cp-seglist{list-style:none;margin:8px 0 0;padding:0;font-size:13px}
+.cp-seglist li[aria-current]{font-weight:700}
+.cp-stage h4{font:600 16px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:4px 0 8px}
+.cp-try{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+@media (max-width:899px){.cp-session{grid-template-columns:1fr}}

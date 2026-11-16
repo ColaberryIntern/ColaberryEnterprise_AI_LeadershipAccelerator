@@ -10,6 +10,8 @@ import type { InterviewType, Observation, ObservationSource, SessionTime } from 
 export interface PrepInterview {
   id: string; source: 'real' | 'added' | 'practice'; company: string; role: string; type: InterviewType;
   startsAt: Date | null; targetReadiness: number | null; practiceUntil: string | null;
+  /** Practice questions from the job description (CP3.3), when there were some. */
+  questions?: string[] | null;
 }
 export interface TrendPoint { date: string; interviewId: string; readiness: number | null }
 export interface PrepData {
@@ -35,7 +37,7 @@ export async function loadPrepData(enrollmentId: string, now: Date): Promise<Pre
            WHERE enrollment_id = :e AND observed_at > :now::timestamptz - INTERVAL '90 days'`, r),
     rows(`SELECT started_at, seconds_active, status FROM prep_sessions
            WHERE enrollment_id = :e AND started_at > :now::timestamptz - INTERVAL '400 days'`, r),
-    rows(`SELECT id, source, company, role, type, starts_at, target_readiness, practice_until FROM career_interviews
+    rows(`SELECT id, source, company, role, type, starts_at, target_readiness, practice_until, questions FROM career_interviews
            WHERE enrollment_id = :e AND (starts_at IS NULL OR starts_at > :now::timestamptz - INTERVAL '1 day')
            ORDER BY starts_at NULLS LAST, created_at`, r),
     rows(`SELECT date::text AS date, interview_id, readiness FROM prep_readiness_daily
@@ -51,6 +53,7 @@ export async function loadPrepData(enrollmentId: string, now: Date): Promise<Pre
       id: String(i.id), source: i.source as PrepInterview['source'], company: String(i.company), role: String(i.role), type: i.type as InterviewType,
       startsAt: i.starts_at ? new Date(i.starts_at as string) : null, targetReadiness: i.target_readiness === null ? null : Number(i.target_readiness),
       practiceUntil: (i.practice_until as string | null) ?? null,
+      questions: Array.isArray(i.questions) ? (i.questions as string[]) : null,
     })),
     trend: trend.map((t) => ({ date: String(t.date), interviewId: String(t.interview_id ?? NO_INTERVIEW), readiness: t.readiness === null ? null : Number(t.readiness) })),
   };

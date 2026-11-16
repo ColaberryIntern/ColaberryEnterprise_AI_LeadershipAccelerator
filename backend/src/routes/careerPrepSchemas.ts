@@ -12,6 +12,7 @@ export const InterviewViewSchema = z.object({
   id: z.string(), source: z.enum(['real', 'added', 'practice']), company: z.string(), role: z.string(),
   type: z.enum(['recruiter', 'hiring_manager', 'technical', 'behavioral']),
   startsAt: z.string().optional(), readiness: score.optional(), target: score,
+  questions: z.array(z.string()).max(8).optional(),
 }).strict();
 
 export const DashboardResponse = z.object({

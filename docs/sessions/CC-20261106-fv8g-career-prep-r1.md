@@ -365,3 +365,21 @@ tests/systemV2/career-prep/.
   - Verification: attempts 7, attempt routes 9 tests; Career Prep + nginx contract + schema 219 pass; tsc clean;
     route-auth lint OK.
   - Notes: the nginx change is the one infrastructure file in Release 1 and will be called out in the PR body.
+
+- [x] CP4.3 / CP4.4 (frontend) The Session tab: timed parts, recorded Try answers
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: useSession.ts keeps the pure session machine in step with the server (Start resumes today's
+    open session after the parts already done; a session with every part done opens as finished; the last Next
+    marks the part done, then finishes, because the server ignores changes after finish; a failed save never
+    stops the timer). SessionRunner.tsx: ring timer with "m:ss left in this part", Pause / Resume, the part list
+    (done, current, upcoming), "Part i of n", End session, Next / Finish. Bodies from logic/sessionCopy.ts: warm-up
+    line, Learn text per skill, Try and Pressure questions (the interview's own job-description questions first,
+    then a bank per interview type; Pressure adds a follow-up and can be read aloud by the browser). TryRecorder.tsx:
+    camera asked for only on Record; upload with a client key; "Send again" re-sends the same recording with the
+    same key (one attempt on the server); polls the score every 3 s up to 40 times; shows each score with its
+    source; "Record again" after a failure. The room's Session tab and Cora's "start" card both open it.
+    Backend: interview views now carry their job-description questions (prepData, prepViews, schema).
+  - Verification: frontend Career Prep 117 pass (12 new: SessionRunner.test.tsx); frontend tsc clean; backend
+    Career Prep tests pass (207) with the questions passthrough.
+  - Notes: the recap after a finished session is CP4.5 (T21); until then the runner shows "Session finished".

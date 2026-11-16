@@ -9,7 +9,7 @@ import type { PrepData, PrepInterview } from './prepData';
  */
 export interface InterviewView {
   id: string; source: PrepInterview['source']; company: string; role: string; type: PrepInterview['type'];
-  startsAt?: string; readiness?: number; target: number;
+  startsAt?: string; readiness?: number; target: number; questions?: string[];
 }
 export interface SkillView { key: string; label: string; score?: number; change30?: number; count: number; sources: string[] }
 export interface Dashboard {
@@ -37,6 +37,7 @@ function interviewView(i: PrepInterview, readings: SkillReading[]): InterviewVie
     ...(i.startsAt ? { startsAt: i.startsAt.toISOString() } : {}),
     ...(r !== null ? { readiness: r } : {}),
     target: targetFor(i.type, i.targetReadiness),
+    ...(i.questions && i.questions.length ? { questions: i.questions } : {}),
   };
 }
 
