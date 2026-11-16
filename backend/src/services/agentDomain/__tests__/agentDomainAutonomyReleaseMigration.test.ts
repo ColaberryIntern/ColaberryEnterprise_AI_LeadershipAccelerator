@@ -495,7 +495,7 @@ describe('every domain migrates, not just the one under test', () => {
     }
   });
 
-  it('projects 40 new stories and re-parents 514 across the ten', () => {
+  it('projects 40 new stories and re-parents 518 across the ten', () => {
     // The two totals this migration is accountable for, measured through the migration rather
     // than through the generator, so a plan that silently dropped a domain would show up here.
     //
@@ -516,6 +516,6 @@ describe('every domain migrates, not just the one under test', () => {
       reparented += plan.stories_to_reparent.length;
     }
     expect(inserted).toBe(40);
-    expect(reparented).toBe(514);
+    expect(reparented).toBe(518);
   });
 });

@@ -60,7 +60,7 @@ describe('the report covers every domain, with figures read from the data', () =
   it('the capability total AGREES with the capability data, rather than being typed', () => {
     // The check that makes "read from the data" true rather than aspirational.
     expect(r.totals.capabilities).toBe(allCapabilities().length);
-    expect(r.totals.capabilities).toBe(444);
+    expect(r.totals.capabilities).toBe(448);
   });
 
   it('the legacy figures reconcile to 246 across the two buckets', () => {
@@ -70,7 +70,7 @@ describe('the report covers every domain, with figures read from the data', () =
     expect(r.totals.legacy_rows_total).toBe(246);
   });
 
-  it('reports 554 stories and 130 releases, which is the corrected composition', () => {
+  it('reports 558 stories and 130 releases, which is the corrected composition', () => {
     // 503 + the ten Command Centers, one per domain = 513. Then Phase 2 projected the 964
     // `release_behaviour[]` entries into per-rung stories = 1,477, and gave each project the ten
     // rungs on top of its three kept originals = 130 releases.
@@ -83,9 +83,9 @@ describe('the report covers every domain, with figures read from the data', () =
     // The implementation total is pinned alongside both so a story count that moves for the wrong
     // reason cannot hide behind the right one: 443 is the number of CAPABILITIES, and it must not
     // move when the ladder shape changes, because a ladder step is not a new capability.
-    expect(r.totals.stories).toBe(554);
+    expect(r.totals.stories).toBe(558);
     expect(r.totals.releases).toBe(130);
-    expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(444);
+    expect(r.rows.reduce((n, x) => n + x.implementation_stories, 0)).toBe(448);
   });
 
   /**

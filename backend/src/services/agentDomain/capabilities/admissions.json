@@ -5,11 +5,11 @@
   "researched_at": "2026-10-09",
   "counts": {
     "legacy_rows_analyzed": 28,
-    "distinct_capabilities": 47,
-    "unique_tools_required": 26,
+    "distinct_capabilities": 51,
+    "unique_tools_required": 39,
     "by_classification": {
       "inherited": 15,
-      "existing_application": 16,
+      "existing_application": 20,
       "manager_defined": 7,
       "proposed_new": 9
     }
@@ -5161,6 +5161,412 @@
           "acceptance_criteria": "A newly added scheduler entry whose name has no registry row is reported within one run, and every unresolved name carries an explicit unknown rather than an assumed status."
         }
       ]
+    },
+    {
+      "capability_id": "admissions.maya_document_dispatch_to_a_prospect",
+      "name": "Programme document dispatch to a prospect",
+      "business_outcome": "A prospective applicant who asks for the programme overview or the executive briefing receives that document by email, from the approved document set, with a person having read the message before it left.",
+      "intended_users": [
+        "prospective_applicant",
+        "admissions_operations"
+      ],
+      "classification": "existing_application",
+      "source": "Maya's site-chat tool `send_document`, implemented and compiled, governed by the `sendDocument` capability in her frozen tool map and delivered through the outbound approval queue added 2026-11-15",
+      "supporting_evidence": [
+        "backend/src/services/mayaActionService.ts:81 (the send_document tool definition)",
+        "backend/src/services/mayaActionService.ts:395 (handleSendDocument)",
+        "backend/src/services/mayaActionService.ts:490 (the delivery seam that queues rather than sends)",
+        "backend/src/services/maya/deliverOrQueue.ts (EffectOutcome: delivered | queued | refused | shadowed | failed)",
+        "backend/src/services/maya/mayaOutboundQueue.ts:118 (enqueueOutbound)",
+        "backend/src/services/maya/mayaToolGovernance.ts:175 (send_document -> sendDocument, effectClass outbound)",
+        "backend/src/services/admissionsMayaService.ts:148 (the prompt line that tells her the tool exists)",
+        "backend/src/services/admissionsMayaService.ts:241 (never call it without the contact details)",
+        "backend/src/services/agentPermissionService.ts:125",
+        "backend/src/services/agentRegistrySeed.ts:3366"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Taiwo Oludimimu must confirm which documents a prospect may be sent unprompted and which require a person's decision; he has no admin login today",
+      "inputs": [
+        "the document type the visitor asked for",
+        "the visitor's email address, given by the visitor",
+        "the approved document set"
+      ],
+      "outputs": [
+        "a queued outbound message awaiting a per-message human approval",
+        "an admissions_action_logs entry recording the attempt and its outcome"
+      ],
+      "workflow": [
+        "Resolve the requested document against the approved set (mayaActionService.ts:395)",
+        "Refuse and log when the document or the recipient address is absent",
+        "Hand the composed message to the delivery seam, which resolves the capability's mode",
+        "Queue it for a per-message human approval rather than sending it"
+      ],
+      "exceptions": [
+        "No recipient address in the conversation: refuse, because a document emailed to an address the visitor did not give is unsolicited contact",
+        "A document outside the approved set: refuse, because an attachment nobody approved is an unreviewed claim about the programme",
+        "The capability resolves off or the kill switch is unreadable: refuse and say so honestly rather than silently dropping the request"
+      ],
+      "dependencies": [
+        "admissions.maya_applicant_chat_response",
+        "the outbound approval queue",
+        "an email provider"
+      ],
+      "application_pages": [
+        "public marketing pages hosting the chat widget",
+        "the agent workspace's Outbound approvals tab"
+      ],
+      "apis": [
+        "POST /api/chat/message (trackingRoutes.ts:76)"
+      ],
+      "source_modules": [
+        "backend/src/services/mayaActionService.ts",
+        "backend/src/services/maya/deliverOrQueue.ts",
+        "backend/src/services/maya/mayaOutboundQueue.ts"
+      ],
+      "required_tools": [
+        "send_document",
+        "sandbox_postgres_read",
+        "sandbox_postgres_write"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review queued documents"
+          ],
+          "agent": [
+            "compose a document request"
+          ]
+        },
+        "production": {
+          "human": [
+            "read and approve each queued message",
+            "curate the approved document set"
+          ],
+          "agent": []
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R5",
+      "max_autonomy_rationale": "The ceiling is autonomy:R5 and deliberately stops below unattended sending. This is the only one of Maya's four unrecorded capabilities that puts a message in a stranger's inbox, and the queue exists because an agent that can email a prospect without a person reading it first is the failure this system was built to prevent. Raising it past R5 would mean deleting the approval step, which is a decision for Ali rather than a tuning change.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Taiwo Oludimimu has no admin_users row (agentDomainRegistry.ts:148-151)",
+        "no approved document set is recorded anywhere as data; the document types live in the prompt text"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Composes the request and queues it; a person approves every message.",
+          "acceptance_criteria": "No message reaches a recipient without an approval row naming the human who approved it, and a replay of the same approval delivers nothing a second time."
+        },
+        {
+          "autonomy": "autonomy:R5",
+          "behaviour": "Same, with the refusal paths exercised: missing address, unapproved document, capability off.",
+          "acceptance_criteria": "Each refusal path logs its own error_class and sends nothing."
+        }
+      ]
+    },
+    {
+      "capability_id": "admissions.maya_quoted_email_draft_for_approval",
+      "name": "Quoted follow-up email drafted for a person to approve",
+      "business_outcome": "A visitor who asks to be sent something in writing gets a follow-up email that quotes only approved marketing material, drafted in the conversation and held for a person, so the claims in it trace to an asset rather than to an improvisation.",
+      "intended_users": [
+        "prospective_applicant",
+        "admissions_operations",
+        "marketing_operations"
+      ],
+      "classification": "existing_application",
+      "source": "Maya's site-chat tool `draft_marketing_email`, implemented and compiled, governed by the `composeMarketingDraft` capability with effect class compose_only",
+      "supporting_evidence": [
+        "backend/src/services/mayaActionService.ts:242 (the draft_marketing_email tool definition: 'It is NOT sent')",
+        "backend/src/services/mayaActionService.ts:335 (the dispatch case)",
+        "backend/src/services/mayaActionService.ts:362 (handleDraftMarketingEmail)",
+        "backend/src/services/mayaQuoteComposer.ts:133 (composeQuotedEmail)",
+        "backend/src/services/maya/mayaToolGovernance.ts:157 (draft_marketing_email -> composeMarketingDraft, effectClass compose_only)",
+        "backend/src/services/agentRegistrySeed.ts:3378"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Taiwo Oludimimu must confirm the scope as admissions conversational work; the quotable-asset rules it depends on are Sohail Syed's and may move this record to the marketing domain on review",
+      "inputs": [
+        "a subject and body composed in the conversation",
+        "the ids of the quotable assets the message draws on",
+        "the quotable-asset digest and its copy rules"
+      ],
+      "outputs": [
+        "a draft held for a human decision",
+        "a record of which assets were cited"
+      ],
+      "workflow": [
+        "Retrieve the quotable assets and their copy rules (mayaQuoteComposer.quotableMaterialForMaya)",
+        "Compose a subject and body citing assets by id",
+        "Refuse any citation that is not a real asset id",
+        "Hold the result as a draft; nothing is sent by this capability"
+      ],
+      "exceptions": [
+        "A cited asset id does not exist: refuse the draft, because a citation nobody can resolve is indistinguishable from an invented one",
+        "The draft states a price, a cohort date, a deadline or a seat count: refuse, because those are not Maya's to state and an applicant will act on them",
+        "Subject or body missing: refuse rather than composing the missing half"
+      ],
+      "dependencies": [
+        "admissions.maya_applicant_chat_response",
+        "the quotable-asset registry and its copy rules",
+        "marketing's brand governance"
+      ],
+      "application_pages": [
+        "public marketing pages hosting the chat widget"
+      ],
+      "apis": [
+        "POST /api/chat/message (trackingRoutes.ts:76)"
+      ],
+      "source_modules": [
+        "backend/src/services/mayaActionService.ts",
+        "backend/src/services/mayaQuoteComposer.ts"
+      ],
+      "required_tools": [
+        "draft_marketing_email",
+        "list_quotable_marketing_assets",
+        "llm_text_generation"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "read drafts"
+          ],
+          "agent": [
+            "compose a draft"
+          ]
+        },
+        "production": {
+          "human": [
+            "read, edit and approve each draft",
+            "curate the quotable assets"
+          ],
+          "agent": [
+            "compose a draft"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": true,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R6",
+      "max_autonomy_rationale": "Composing is autonomy:R6 work because this capability cannot reach anyone: its effect class is compose_only and the draft sits until a person acts. The ceiling stays below R7 because the copy rules it enforces are the brand boundary, and a drafting capability that silently stopped enforcing them would be invisible until a claim reached a prospect.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Taiwo Oludimimu has no admin_users row (agentDomainRegistry.ts:148-151)"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Drafts with every citation resolved against a real asset id.",
+          "acceptance_criteria": "On a fixture set including invalid ids, every invalid citation is refused and no draft is produced with an unresolvable id."
+        },
+        {
+          "autonomy": "autonomy:R6",
+          "behaviour": "Drafts unattended; a person still approves before anything is sent by another capability.",
+          "acceptance_criteria": "Zero drafts containing a price, date, deadline or seat count across a 30-day window."
+        }
+      ]
+    },
+    {
+      "capability_id": "admissions.maya_campus_tour_offer",
+      "name": "Campus guided-tour offer in the portal conversation",
+      "business_outcome": "A signed-in learner who asks what is on campus or where something is gets the link that starts the campus guided tour, so they are walked through the places their enrollment opens instead of being told about them.",
+      "intended_users": [
+        "enrolled_learner",
+        "admissions_operations"
+      ],
+      "classification": "existing_application",
+      "source": "Maya's portal tool `start_campus_tour` (C123, Ali 2026-11-07: 'she should be able to give tours'), governed by the `runCampusTour` capability with effect class in_product",
+      "supporting_evidence": [
+        "backend/src/services/maya/mayaPortalTools.ts:101 (the start_campus_tour tool definition)",
+        "backend/src/services/maya/mayaPortalTools.ts:172 (the handler: returns a link and changes nothing)",
+        "backend/src/services/maya/mayaPortalTools.ts:32 (TOUR_PATH /portal/campus?tour=start)",
+        "backend/src/services/maya/mayaToolGovernance.ts:162 (start_campus_tour -> runCampusTour, effectClass in_product)",
+        "backend/src/services/maya/mayaPortalPrompt.ts:60 (include the link exactly as the tool returns it)",
+        "backend/src/services/maya/mayaLinkGuard.ts:6 (the guard written because she invented a tour link instead of calling the tool)",
+        "backend/src/services/maya/mayaReplyService.ts:120 (tourOffered)",
+        "frontend/src/components/campus/tourLink.ts"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Taiwo Oludimimu must confirm which learners may be offered a tour and what the tour is allowed to claim about what their enrollment opens",
+      "inputs": [
+        "the learner's request for a tour or for where something is",
+        "the sender's enrollment, bound by the caller and never taken from the model"
+      ],
+      "outputs": [
+        "a markdown link that starts the guided tour",
+        "a note that staff accounts have no tour"
+      ],
+      "workflow": [
+        "Recognise a request for a tour, a walkthrough or where things are (mayaPortalPrompt.ts:60)",
+        "Return the fixed tour link; the capability itself starts nothing",
+        "Include the link verbatim in the reply and say in a sentence what the tour shows"
+      ],
+      "exceptions": [
+        "A staff account asks: there is no tour for them, and the reply must say so rather than returning a link that does nothing",
+        "Maya writes her own tour link instead of calling the tool: refused by the link guard, because an invented link is a broken promise to the learner",
+        "She offers a call in place of a tour: forbidden by the prompt, because it answers a different question than the one asked"
+      ],
+      "dependencies": [
+        "the campus map and its existing guided tour",
+        "the chat dock that turns the deep link into the tour"
+      ],
+      "application_pages": [
+        "/portal/campus",
+        "/portal/campus?tour=start"
+      ],
+      "apis": [],
+      "source_modules": [
+        "backend/src/services/maya/mayaPortalTools.ts",
+        "backend/src/services/maya/mayaLinkGuard.ts",
+        "backend/src/services/maya/mayaReplyService.ts"
+      ],
+      "required_tools": [
+        "start_campus_tour"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review transcripts"
+          ],
+          "agent": [
+            "offer the tour link"
+          ]
+        },
+        "production": {
+          "human": [
+            "review transcripts"
+          ],
+          "agent": [
+            "offer the tour link"
+          ]
+        }
+      },
+      "pii_exposure": "none",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R7",
+      "max_autonomy_rationale": "This is the lowest-risk capability of the four and carries the highest ceiling for that reason: it returns a fixed, reviewed link, writes nothing, contacts nobody and makes no claim of its own. The residual risk is a wrong or invented link, which the link guard already refuses, so autonomy:R7 is appropriate for the narrow action class 'offer the campus tour link'.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Taiwo Oludimimu has no admin_users row (agentDomainRegistry.ts:148-151)"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Offers the tour link when a tour is asked for.",
+          "acceptance_criteria": "Every tour offer in a fixture set contains the exact TOUR_PATH string and no hand-written link passes the guard."
+        },
+        {
+          "autonomy": "autonomy:R7",
+          "behaviour": "Offers it unattended in the portal conversation.",
+          "acceptance_criteria": "Zero invented tour links in a 30-day window, measured by the link guard's own refusals."
+        }
+      ]
+    },
+    {
+      "capability_id": "admissions.maya_human_handoff_from_chat",
+      "name": "Handoff of a conversation to a person on the admissions team",
+      "business_outcome": "A learner who asks for a person, or asks something only a person may answer, is handed to the admissions team as a real row they will see, and is told someone will follow up only when that row actually exists.",
+      "intended_users": [
+        "enrolled_learner",
+        "admissions_operations"
+      ],
+      "classification": "existing_application",
+      "source": "Maya's portal tool `create_journey_handoff` (M33, Ali 2026-11-09), the only path by which she hands a person to admissions; the never-fired voice handoff it replaced was retired",
+      "supporting_evidence": [
+        "backend/src/services/maya/mayaJourneyHandoff.ts:10 (M33: the single path, with its five outcomes)",
+        "backend/src/services/maya/mayaPortalTools.ts:87 (the create_journey_handoff tool definition)",
+        "backend/src/services/maya/mayaPortalTools.ts:183 (the handler: bound to the sender, the model's free text is not stored)",
+        "backend/src/services/maya/mayaToolGovernance.ts:163 (create_journey_handoff -> createJourneyHandoff, effectClass in_product)",
+        "backend/src/services/maya/mayaPortalPrompt.ts:61 (say someone will follow up ONLY if it returns handed_off true)",
+        "backend/src/services/maya/mayaPortalPrompt.ts:62 (never state a seat count, deadline, cohort or anything about consent: use this instead)",
+        "backend/src/services/campus/campusTourHandoff.ts:14 (the tour opt-in caller this was generalised from)"
+      ],
+      "implementation_state": "implemented",
+      "requirement_validation_state": "draft",
+      "validation_dependency": "Taiwo Oludimimu must confirm what the admissions team commits to when a handoff row appears, including how quickly and by which surface",
+      "inputs": [
+        "the sender's enrollment, bound by the caller",
+        "a fixed reason code",
+        "whether a handoff for this subject is already open"
+      ],
+      "outputs": [
+        "a growth-journey handoff row, or an honest refusal",
+        "handed_off true or false, which is the only thing the reply may be built on"
+      ],
+      "workflow": [
+        "Recognise a request for a person, or a question only a person may answer (mayaPortalPrompt.ts:61)",
+        "Create the handoff bound to the sender, with a fixed reason code and no free text from the conversation",
+        "Return handed_off true only when a row exists; otherwise offer the booking calendar",
+        "Say someone will follow up only on handed_off true, and never promise a time"
+      ],
+      "exceptions": [
+        "The handoff writer is disabled or unavailable: handed_off false and nothing was written, so the reply must not say anyone will reach out",
+        "A handoff is already open for this subject: the same handoff twice yields one row, because a learner asking twice must not become two tickets",
+        "A previous handoff is closed: a later day opens a new one rather than reopening a settled conversation",
+        "Maya promises a follow-up on a false result: the failure this capability exists to prevent, because a promise nobody received is worse than a refusal"
+      ],
+      "dependencies": [
+        "the growth-journey handoff writer",
+        "admissions' acceptance of the handoff (dispositionService.acceptHandoff)",
+        "the Explorer governor, which stops proposing contact while a handoff is human-owned"
+      ],
+      "application_pages": [
+        "/portal/campus",
+        "the admissions handoff queue"
+      ],
+      "apis": [],
+      "source_modules": [
+        "backend/src/services/maya/mayaJourneyHandoff.ts",
+        "backend/src/services/maya/mayaPortalTools.ts",
+        "backend/src/services/campus/campusTourHandoff.ts"
+      ],
+      "required_tools": [
+        "create_journey_handoff"
+      ],
+      "permissions_by_environment": {
+        "sandbox": {
+          "human": [
+            "review handoffs"
+          ],
+          "agent": [
+            "create a handoff"
+          ]
+        },
+        "production": {
+          "human": [
+            "accept, work and close the handoff"
+          ],
+          "agent": [
+            "create a handoff"
+          ]
+        }
+      },
+      "pii_exposure": "applicant_identifiable",
+      "human_decision": false,
+      "starting_autonomy": "autonomy:R0",
+      "max_permitted_autonomy": "autonomy:R7",
+      "max_autonomy_rationale": "Handing a person to a human is the safe direction of travel and must never wait on an approval, so the ceiling is autonomy:R7 for the narrow action class 'create a handoff bound to the sender with a fixed reason code'. The risk here is not the write, which is idempotent and carries no free text; it is the sentence Maya says afterwards, which the prompt binds to the returned handed_off value.",
+      "blocked_by": [
+        "manager_has_no_admin_login: Taiwo Oludimimu has no admin_users row (agentDomainRegistry.ts:148-151)",
+        "GROWTH_JOURNEY_HANDOFFS off yields handed_off false with nothing queried, so the capability is inert wherever that flag is unset"
+      ],
+      "release_behaviour": [
+        {
+          "autonomy": "autonomy:R2",
+          "behaviour": "Creates the handoff and reports only what the writer returned.",
+          "acceptance_criteria": "Across all five writer outcomes, a follow-up is promised on created and already_open only, and never on closed, disabled or unavailable."
+        },
+        {
+          "autonomy": "autonomy:R7",
+          "behaviour": "Hands off unattended from the portal conversation.",
+          "acceptance_criteria": "Zero promises of follow-up on a false result in a 30-day window, and one open row per subject per day under replay."
+        }
+      ]
     }
   ],
   "legacy_dispositions": [
@@ -5377,6 +5783,7 @@
     "FIVE THINGS ARE RECORDED AS UNKNOWN RATHER THAN GUESSED. One: which component writes admissions_memory.visitor_type, which is why AdmissionsVisitorIdentityAgent's disposition is unknown. Two: whether the three scheduler-to-registry name mismatches (aiOpsScheduler.ts:234, :235, :237 against agentRegistrySeed.ts:885, :905, :987) cause those entries to no-op, which needs runAgent's lookup read. Three: whether internship_interview_sessions.transcript, provider_payload and internship_administrative_intakes.accommodation_request are encrypted at rest; no encryption attribute appears in the model definitions and migrations were not inspected. Four: whether POST /api/webhook/synthflow/call-complete verifies a provider signature. Five: whether payment_pending is reachable in production, which depends on a cohort requires_subscription default that was not read. Every intent threshold, merge window, suppression threshold and inactivity threshold referenced in this matrix is likewise undefined at source and is recorded as unknown rather than invented.",
     "THE HIGHEST-SENSITIVITY FIELD IN THE DOMAIN IS NOT THE RESUME. internship_administrative_intakes.accommodation_request (InternshipAdministrativeIntake.ts:76) is free text that will in practice carry disability and health disclosure, and work_auth_category (:72) carries immigration category. Both sit in the same row an assessment capability reads. There is no field-level minimisation rule anywhere in the tree and no adverse-impact review process for an AI reading of an applicant; admissions.applicant_pii_minimization_review exists to produce the first and names the absence of the second.",
     "TWENTY-NINE OF 47 CAPABILITIES TOUCH applicant_identifiable DATA. Eight are aggregate_only and ten are none. The ten with no PII exposure are the audits, the knowledge work and the governance capabilities, and they are deliberately among those carrying the highest autonomy ceilings, because autonomy and exposure should move in opposite directions in this domain. Implementation states across the 47: 29 implemented, 4 partial, 10 absent, 4 unknown. Seventeen capabilities are marked human_decision.",
-    "NOTHING WAS BUILT, ACTIVATED OR CONTACTED. This run read the repository and wrote this one file. No applicant was contacted, no email was sent, no application state was advanced, no agent was registered, no access was granted and no ai_agents row was written. Ruth Kumera, recorded at signed_documents_uploaded in INTENDED_INTERN_ROSTER_2026-10-07.md:20-25, was not advanced or activated."
+    "NOTHING WAS BUILT, ACTIVATED OR CONTACTED. This run read the repository and wrote this one file. No applicant was contacted, no email was sent, no application state was advanced, no agent was registered, no access was granted and no ai_agents row was written. Ruth Kumera, recorded at signed_documents_uploaded in INTENDED_INTERN_ROSTER_2026-10-07.md:20-25, was not advanced or activated.",
+    "FOUR RECORDS WERE ADDED ON 2026-11-15, AFTER THE ORIGINAL RESEARCH PASS. admissions.maya_document_dispatch_to_a_prospect, admissions.maya_quoted_email_draft_for_approval, admissions.maya_campus_tour_offer and admissions.maya_human_handoff_from_chat describe four of Maya's tools that were implemented and compiled but required by no capability in any of the eleven buckets, so a grant for them was refused tool_not_required_by_capability. The counts block above is recomputed and now reads 51; the narrative notes above it describe the original 47-record pass and are left exactly as that pass wrote them, because rewriting another run's research prose to match a later number is the drift this file's own counts rule exists to prevent. All four carry requirement_validation_state 'draft' like every other record here: nothing in this addition confirms anything. A SEPARATE, OLDER DRIFT WAS FOUND AND CORRECTED IN THE SAME EDIT: unique_tools_required read 26 while the union of required_tools across the records was already 35. The difference was exactly the nine tool names commit 1cb0491f4 added to three existing records without updating the block. The number now reads 39, recomputed from the file's own contents rather than adjusted by hand."
   ]
 }
