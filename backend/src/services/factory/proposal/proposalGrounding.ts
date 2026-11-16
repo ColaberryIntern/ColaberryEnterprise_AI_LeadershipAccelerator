@@ -115,3 +115,27 @@ export function groundingToPromptText(g: Grounding): string {
   }
   return lines.join('\n');
 }
+
+/**
+ * Flatten the grounding's CITABLE proof into compact backing lines for the proof judge. This is the SAME approved
+ * facts, past-performance references, key personnel and (anonymized) case studies the drafter may cite in
+ * groundingToPromptText — so the judge marks a claim "backed" against exactly the proof we actually hold, instead of
+ * being handed "(no backing provided)" and failing every claim. Pure. Mirrors the drafter's guardrails: case studies
+ * stay anonymized (the shape carries no client name) and keep the (verified)/(reported) metric label. Source excerpts
+ * are deliberately NOT backing — an excerpt cannot assert a hard specific, so it cannot substantiate a claim.
+ */
+export function groundingToBackingRefs(g: Grounding): string[] {
+  const out: string[] = [];
+  for (const f of g.facts ?? []) out.push(f);
+  for (const r of g.references ?? []) {
+    const parts = [r.scope ? r.scope : null, r.contractValue ? `value ${r.contractValue}` : null, r.dates ? r.dates : null].filter(Boolean).join('; ');
+    out.push(`Past-performance reference: ${r.client}${parts ? ` - ${parts}` : ''}`);
+  }
+  for (const cs of g.caseStudies ?? []) {
+    const head = [cs.industry, typeof cs.year === 'number' ? String(cs.year) : null].filter(Boolean).join(', ');
+    const metric = cs.metricLabel ? `, ${cs.metricLabel}: ${cs.metricValue ?? 'n/a'} (${cs.metricVerified ? 'verified' : 'reported'})` : '';
+    out.push(`Case study (anonymized): ${cs.title}${head ? ` (${head})` : ''}${cs.capability ? ` [${cs.capability}]` : ''}${metric}`);
+  }
+  for (const p of g.personnel ?? []) out.push(`Key personnel: ${p.name}${p.role ? `, ${p.role}` : ''}${p.summary ? `: ${p.summary}` : ''}`);
+  return out;
+}

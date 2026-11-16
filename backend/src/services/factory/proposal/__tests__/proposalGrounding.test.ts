@@ -3,7 +3,7 @@
  * document's requirements + section plans, inserted artifacts, approved facts) and nothing else; the prompt text
  * tells the model those approved facts are its ONLY source, and falls back to the [PLACEHOLDER] instruction when none.
  */
-import { buildGrounding, groundingToPromptText } from '../proposalGrounding';
+import { buildGrounding, groundingToPromptText, groundingToBackingRefs } from '../proposalGrounding';
 import type { ProposalBlueprint } from '../proposalBlueprintTypes';
 
 const blueprint: ProposalBlueprint = {
@@ -87,5 +87,54 @@ describe('proof grounding (references, personnel, case studies)', () => {
     expect(text).not.toMatch(/past-performance references/i);
     expect(text).not.toMatch(/key personnel/i);
     expect(text).not.toMatch(/Case-study proof points/);
+  });
+});
+
+describe('groundingToBackingRefs (the proof judge sees the same proof the drafter cites)', () => {
+  const doc = { title: 'Past Performance', requirements: [], sections: [] };
+
+  it('passes approved facts through verbatim as backing', () => {
+    const g = buildGrounding({ document: doc, approvedFacts: ['SAM UEI: ABC123', 'ISO 9001 certified'] });
+    expect(groundingToBackingRefs(g)).toEqual(['SAM UEI: ABC123', 'ISO 9001 certified']);
+  });
+
+  it('renders a reference as a named, citable past-performance line', () => {
+    const g = buildGrounding({ document: doc, references: [{ client: 'City of Plano', scope: 'Permitting portal', contractValue: '$1.2M', dates: '2023-2025', contact: 'Jane Roe' }] });
+    const [line] = groundingToBackingRefs(g);
+    expect(line).toBe('Past-performance reference: City of Plano - Permitting portal; value $1.2M; 2023-2025');
+  });
+
+  it('renders a case study ANONYMIZED with its verified/reported metric label and no client field', () => {
+    const g = buildGrounding({ document: doc, caseStudies: [
+      { title: 'Asset Rebuild', industry: 'Municipal', year: 2024, capability: 'Modernization', metricLabel: 'Cycle time', metricValue: '-40%', metricVerified: true },
+      { title: 'Portal Launch', industry: 'State', year: 2023, metricLabel: 'Adoption', metricValue: '3x', metricVerified: false },
+    ] });
+    const refs = groundingToBackingRefs(g);
+    expect(refs[0]).toBe('Case study (anonymized): Asset Rebuild (Municipal, 2024) [Modernization], Cycle time: -40% (verified)');
+    expect(refs[1]).toContain('Adoption: 3x (reported)');
+  });
+
+  it('renders key personnel as a nameable backing line', () => {
+    const g = buildGrounding({ document: doc, personnel: [{ name: 'Ada Lovelace', role: 'Technical Lead', summary: '10y data engineering' }] });
+    expect(groundingToBackingRefs(g)).toEqual(['Key personnel: Ada Lovelace, Technical Lead: 10y data engineering']);
+  });
+
+  it('is empty when there is no citable proof (so the judge is honestly told none exists)', () => {
+    expect(groundingToBackingRefs(buildGrounding({ document: doc }))).toEqual([]);
+  });
+
+  it('orders proof facts first, then references, case studies, personnel', () => {
+    const g = buildGrounding({
+      document: doc,
+      approvedFacts: ['F'],
+      references: [{ client: 'R', scope: null, contractValue: null, dates: null, contact: null }],
+      caseStudies: [{ title: 'C', industry: null, year: null, capability: null, metricLabel: null, metricValue: null, metricVerified: false }],
+      personnel: [{ name: 'P', role: null, summary: null }],
+    });
+    const refs = groundingToBackingRefs(g);
+    expect(refs[0]).toBe('F');
+    expect(refs[1]).toMatch(/^Past-performance reference: R/);
+    expect(refs[2]).toMatch(/^Case study \(anonymized\): C/);
+    expect(refs[3]).toBe('Key personnel: P');
   });
 });

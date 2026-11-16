@@ -16,6 +16,7 @@ import { runAiChecks } from './documentChecksAI';
 import { renderProposalPdf } from './renderProposalPdf';
 import { recordVersionChecks, recordAiGates } from './govProposalReviewStore';
 import { reconcilePlaceholderGaps } from './govProposalGaps';
+import { collectProofBacking } from './proposalProofBacking';
 import { withClassification } from './classifyFinding';
 import { judgeRunIds } from './judgeRuns';
 import type { CheckRunResult } from './proposalReviewTypes';
@@ -55,10 +56,15 @@ export async function runProposalDocumentChecks(deliveryProjectId: string, docKe
     } catch { pageCount = null; }
   }
 
+  // The proof judge marks a claim backed only against this. Give it the SAME approved facts / references / personnel /
+  // case studies the drafter grounds on (collectProofBacking resolves the tenant exactly like runReviewCycle.gather),
+  // so rejudge and the in-cycle judge both verify against the dossier instead of being told "(no backing provided)".
+  // Best-effort: collectProofBacking never throws, so a backing read failure degrades to the old no-backing behavior.
+  const backingRefs = await collectProofBacking(deliveryProjectId);
   const ai = await runAiChecks({
     docKey, title: doc.title, contentHtml,
     scoringFactors: blueprint?.scoring?.factors ?? [],
-    backingRefs: [],
+    backingRefs,
   });
 
   const input: DocumentCheckInput = {
