@@ -35,3 +35,15 @@ tests/systemV2/career-prep/.
   - What changed: skill score (60-day window, 14-day half-life, source weights), 30-day change, readiness per
     interview type (hidden under 5 skills), targets, streak and this-week in Central.
   - Verification: 15 tests with hand-computed values (71.4, 74.2, 80, 75.3), DST end 2026-11-01, Central midnight.
+
+- [x] CP1.4 observationWriter + the four source mappers + the backfill
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: observationAdapters.ts (pure): intro-video coaching (pace, fillers; proof and specific content
+    points as strong 85 / good 65 / work on 40), quiz attempts on cards mapped in prep_skill_sources (score x 100),
+    scored weekly interviews to role_knowledge, Hire-published case studies to proof_of_work 100.
+    observationWriter.ts (ON CONFLICT DO NOTHING, batches of 200). backfillPrepObservations (--dry, --enrollment).
+  - Verification: 52 Career Prep backend tests pass (adapters 17, writer 6 among them); grep test: no eye contact,
+    expression or accent in careerPrep code.
+  - Notes: weekly interviews are written exercises, so their source is training, not phone_mock. Quiz mapping table
+    starts empty, so quizzes write nothing until a card is mapped (no invented skill links).
