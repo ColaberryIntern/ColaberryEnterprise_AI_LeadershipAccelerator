@@ -125,7 +125,13 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // escaped dash went with the sentence that held it. Entry DELETED, not
   // zeroed: a clean file should not stay on the books owing something.
   [ESCAPED_DASH_RULE.id]: 68,
-  [EMOJI_RULE.id]: 659,
+  // 2026-11-16: 659 -> 657. TV-2 deleted `TvManager.tsx`, the in-campus playlist editor
+  // that TV-1 left unreachable when the Manage button started opening the marketing
+  // library instead. Its two emoji went with the file, so its entry is DELETED rather
+  // than zeroed - a file that no longer exists should not stay on the books owing
+  // anything. No copy was rewritten for this: the ratchet turned because the surface
+  // went away.
+  [EMOJI_RULE.id]: 657,
 };
 
 /**
