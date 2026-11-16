@@ -30,7 +30,15 @@ function Booked({ list, now }: { list: HireInterview[]; now: number }): React.Re
   );
 }
 
-export function InterviewsSheet({ prep, now = Date.now() }: { prep: PrepInterview[]; now?: number }): React.ReactElement {
+/** The clock "Join the room" reads: re-checked every 30 s while the sheet is open, so the link appears on time. */
+function useClock(fixed?: number): number {
+  const [t, setT] = useState(() => fixed ?? Date.now());
+  useEffect(() => { if (fixed !== undefined) return undefined; const id = window.setInterval(() => setT(Date.now()), 30_000); return () => window.clearInterval(id); }, [fixed]);
+  return fixed ?? t;
+}
+
+export function InterviewsSheet({ prep, now: fixed }: { prep: PrepInterview[]; now?: number }): React.ReactElement {
+  const now = useClock(fixed);
   const [booked, setBooked] = useState<HireInterview[] | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => { let live = true; Promise.resolve().then(fetchHireInterviews).then((l) => { if (live) setBooked(l); }).catch(() => { if (live) setFailed(true); }); return () => { live = false; }; }, []);

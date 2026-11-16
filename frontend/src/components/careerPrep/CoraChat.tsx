@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { layerOpen } from './useEscapeLayer';
 import { OptionCards, type OptionCard } from './OptionCards';
 
 /**
@@ -37,7 +38,8 @@ export function CoraChat({ log, busy = false, onPick, onAsk }: CoraChatProps): R
   const latest = useRef<HTMLDivElement>(null);
   const live = liveCardsId(log);
   const lastCoraId = [...log].reverse().find((i) => i.kind === 'cora')?.id;
-  useEffect(() => { latest.current?.focus(); }, [lastCoraId]);
+  // A new Cora message takes focus, unless a sheet or the jump bar is open over the room (it keeps focus).
+  useEffect(() => { if (!layerOpen()) latest.current?.focus(); }, [lastCoraId]);
   const send = (t: string) => { const v = t.trim(); if (!v || busy) return; onAsk(v); setText(''); };
 
   return (

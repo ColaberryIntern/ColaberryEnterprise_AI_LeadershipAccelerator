@@ -115,7 +115,7 @@ ol.cp-list{list-style:decimal;padding-left:18px}
 .cp-sheet-scrim{position:absolute;inset:0;border:0;background:rgba(0,0,0,.35)}
 .cp-sheet{position:relative;width:min(1080px,100%);height:100%;overflow:auto;padding:16px 24px;background:var(--bg);color:var(--fg);box-shadow:-8px 0 24px rgba(0,0,0,.2)}
 .cp-sheet h2{font:600 22px 'IBM Plex Mono',ui-monospace,Menlo,monospace;margin:12px 0 4px}
-.cp-sheet h2:focus{outline:none}
+.cp-sheet h2:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .cp-sheet-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;border-bottom:1px solid var(--line)}
 .cp-sheet-tab{min-height:44px;padding:0 10px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--fg-muted)}
 .cp-sheet-tab.active{color:var(--fg);border-bottom-color:var(--accent)}

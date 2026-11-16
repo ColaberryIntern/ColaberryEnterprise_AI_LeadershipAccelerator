@@ -455,3 +455,18 @@ tests/systemV2/career-prep/.
     corrected (scoreAnswer returns a keyword-hit number; the levels come from hireVideoContent).
   - Verification: backend Career Prep 250 pass, 13 skipped (Postgres integration, run in CI); frontend Career
     Prep 162 pass; both tsc clean.
+
+- [x] CP4.6 attempt 2: fixes from the T22 verification (T21 PASS 12/12 on attempt 2; T22 FAIL 8/12 on attempt 1)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: Esc closes only the top layer (useEscapeLayer.ts: the jump bar over a sheet over the room is a
+    stack; one capture listener hands Esc to the newest layer and stops it there). The jump bar puts focus back on
+    what had it BEFORE the chosen item runs, so a sheet opened from it returns focus to that element on close (it
+    used to land on the page body). The sheet traps Tab (campus focusTrap; it is a modal dialog) and its title
+    shows a focus mark. Cora's chat no longer moves focus to a new message while a sheet or the jump bar is open
+    (on a direct link, the greeting used to steal focus from the sheet's title). "Join the room" re-checks the
+    time every 30 s while the sheet is open.
+  - Verification: CareerPrepRoomSheets.test.tsx (17 new): every one of the five sheets opens from its URL, from
+    Cora and from the jump bar, with focus on the title, closes on browser Back, and returns focus to the opener;
+    Esc closes the jump bar, then the sheet, never the room; Tab stays in the sheet. Frontend Career Prep and
+    campus 2401 pass; tsc clean.
