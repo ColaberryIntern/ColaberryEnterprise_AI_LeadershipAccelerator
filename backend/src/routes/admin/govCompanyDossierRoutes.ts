@@ -15,6 +15,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import path from 'path';
 import multer from 'multer';
 import { z } from 'zod';
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
 import { requireSection } from '../../middlewares/authMiddleware';
 import { lookupGovContractsContainer } from '../../scripts/lib/factoryDemoContainer';
 import {
@@ -98,6 +100,30 @@ router.get('/api/admin/factory/dossier/library', requireSection('program'), asyn
   } catch (err) {
     log('error', 'gov_dossier_list_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
     res.status(500).json({ error: 'Could not load the company dossier.' });
+  }
+});
+
+/**
+ * GET the tenant-wide "Needs across contracts": every OPEN need across the tenant's gov bids, deduped by canonical
+ * key, each tagged with the bids that ask it. Read-only here — a person answers it in that bid's Proposal Studio, and
+ * answer-once propagation then clears it from the others. Scoped to the gov engagement's delivery projects.
+ */
+router.get('/api/admin/factory/dossier/needs', requireSection('program'), async (_req: Request, res: Response) => {
+  let container: Awaited<ReturnType<typeof lookupGovContractsContainer>> = null;
+  try { container = await lookupGovContractsContainer(); }
+  catch (err) { log('error', 'gov_dossier_needs_scope_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) }); }
+  if (!container) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const projects = await sequelize.query<{ id: string; name: string }>(
+      'SELECT id, name FROM delivery_projects WHERE tenant_id = $1 AND engagement_id = $2',
+      { bind: [container.tenant.id, container.engagement.id], type: QueryTypes.SELECT },
+    );
+    const { collectTenantNeeds } = await import('../../services/factory/proposal/tenantNeeds');
+    const needs = await collectTenantNeeds(projects.map((p) => ({ projectId: p.id, projectName: p.name })));
+    res.json({ needs });
+  } catch (err) {
+    log('error', 'gov_dossier_needs_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not load the needs across contracts.' });
   }
 });
 
