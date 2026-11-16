@@ -1,4 +1,10 @@
 /**
+ * RELOCATED 2026-11-15 from pages/admin/__tests__/AdminOutboundApprovalsPage.test.tsx, when the
+ * standalone page became a part of the agent workspace. The assertions are the page's own,
+ * carried over rather than rewritten, because the behaviour moved verbatim and these are the
+ * properties that would otherwise be lost in the move.
+ */
+/**
  * T15 - the review queue, and the one property that carries all the risk.
  *
  * THERE IS NO WAY TO APPROVE A MESSAGE WITHOUT OPENING IT.
@@ -24,7 +30,7 @@ const mockList = jest.fn();
 const mockGet = jest.fn();
 const mockApprove = jest.fn();
 const mockReject = jest.fn();
-jest.mock('../../../services/mayaConsoleApi', () => ({
+jest.mock('../../../../services/mayaConsoleApi', () => ({
   listOutboundQueue: (...a: unknown[]) => mockList(...a),
   getOutboundMessage: (...a: unknown[]) => mockGet(...a),
   approveOutboundMessage: (...a: unknown[]) => mockApprove(...a),
@@ -36,7 +42,7 @@ jest.mock('../../../services/mayaConsoleApi', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import AdminOutboundApprovalsPage from '../AdminOutboundApprovalsPage';
+import AgentOutboundTab from '../AgentOutboundTab';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -48,7 +54,7 @@ async function render(): Promise<void> {
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter><AdminOutboundApprovalsPage /></MemoryRouter>);
+    root.render(<MemoryRouter><AgentOutboundTab /></MemoryRouter>);
   });
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
 }
@@ -95,7 +101,7 @@ afterEach(() => {
   container?.remove();
 });
 
-describe('T15 the list cannot decide anything', () => {
+describe('the list cannot decide anything', () => {
   it('CONTROL - the queue really did render two rows, so the counts below mean something', async () => {
     await render();
     expect(container.querySelectorAll('tbody tr')).toHaveLength(2);
@@ -125,7 +131,7 @@ describe('T15 the list cannot decide anything', () => {
   });
 });
 
-describe('T15 a decision is made on one opened message', () => {
+describe('a decision is made on one opened message', () => {
   it('shows the exact bytes as source rather than rendering them', async () => {
     await render();
     await click(container.querySelector('tbody button'));
@@ -195,7 +201,7 @@ describe('T15 a decision is made on one opened message', () => {
   });
 });
 
-describe('T15 the empty queue says so', () => {
+describe('the empty queue says so', () => {
   it('renders an empty state and no decision controls', async () => {
     mockList.mockResolvedValue({ pending: [], count: 0 });
     await render();

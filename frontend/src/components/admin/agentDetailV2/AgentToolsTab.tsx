@@ -8,6 +8,8 @@ import {
 import { timeAgo } from '../shell/trust';
 import { toolColors, toolLastUsed } from './agentDetailV2Correlation';
 import AgentToolRequests from './AgentToolRequests';
+import AgentGovernedCapabilities from './AgentGovernedCapabilities';
+import { showsGovernedOutbound } from './governedOutboundAgents';
 
 // Agent Tools section, Phase 1 (2026-11-11) — Ali: "I would like to add a tools section to the
 // Agent dashboard which will facilitate the request, approval and access to the tools... when I
@@ -216,6 +218,15 @@ export default function AgentToolsTab({ detail }: Props) {
           order — the question "what can this agent do today" is answered above, and "what is
           being asked for" is a different, slower-moving question that should not displace it. */}
       <AgentToolRequests agentId={agentId} />
+
+      {/* Governed capabilities (2026-11-15), for the agents in GOVERNED_OUTBOUND_AGENTS. Folded
+          in from the standalone `/admin/maya` page, which duplicated this tab. Placed LAST, below
+          both held and requested tools, because the dial answers a narrower question than either:
+          what mode each declared capability resolves to. See AgentGovernedCapabilities.tsx for
+          why the two capability vocabularies on this page are not the same thing. */}
+      {showsGovernedOutbound(detail.agent.agent_name) && (
+        <AgentGovernedCapabilities agentName={detail.agent.agent_name} />
+      )}
     </>
   );
 }

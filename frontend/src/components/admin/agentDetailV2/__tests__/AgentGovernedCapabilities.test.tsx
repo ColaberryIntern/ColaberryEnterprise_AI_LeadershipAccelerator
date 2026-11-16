@@ -1,4 +1,10 @@
 /**
+ * RELOCATED 2026-11-15 from pages/admin/__tests__/AdminMayaGoLivePage.test.tsx, when the
+ * standalone page became a part of the agent workspace. The assertions are the page's own,
+ * carried over rather than rewritten, because the behaviour moved verbatim and these are the
+ * properties that would otherwise be lost in the move.
+ */
+/**
  * T14 - the go-live console. Four properties, each one a thing a reader could otherwise get
  * wrong at a glance:
  *
@@ -22,7 +28,7 @@ import { MemoryRouter } from 'react-router-dom';
 const mockGet = jest.fn();
 const mockSetEnabled = jest.fn();
 const mockSetState = jest.fn();
-jest.mock('../../../services/mayaConsoleApi', () => ({
+jest.mock('../../../../services/mayaConsoleApi', () => ({
   getMayaGoLive: (...a: unknown[]) => mockGet(...a),
   setMayaEnabled: (...a: unknown[]) => mockSetEnabled(...a),
   setMayaCapabilityState: (...a: unknown[]) => mockSetState(...a),
@@ -32,7 +38,7 @@ jest.mock('../../../services/mayaConsoleApi', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import AdminMayaGoLivePage from '../AdminMayaGoLivePage';
+import AgentGovernedCapabilities from '../AgentGovernedCapabilities';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,7 +50,7 @@ async function render(): Promise<void> {
   document.body.appendChild(container);
   await act(async () => {
     root = createRoot(container);
-    root.render(<MemoryRouter><AdminMayaGoLivePage /></MemoryRouter>);
+    root.render(<MemoryRouter><AgentGovernedCapabilities agentName="Maya" /></MemoryRouter>);
   });
   for (let i = 0; i < 4; i += 1) await act(async () => { await Promise.resolve(); });
 }
@@ -104,19 +110,21 @@ afterEach(() => {
   container?.remove();
 });
 
-describe('T14 the console reports what she is actually doing', () => {
+describe('the console reports what she is actually doing', () => {
   it('CONTROL - it rendered the real report, so the assertions below are not about a loading state', async () => {
     await render();
     expect(container.textContent).toContain('sendDocument');
     expect(container.textContent).toContain('Turn Maya on');
   });
 
-  it('shows how many messages are waiting, as a link rather than a list', async () => {
+  it('shows how many messages are waiting, as a count rather than a list', async () => {
+    // Was a link to /admin/outbound-approvals until 2026-11-15. That page is now a sibling TAB
+    // on this same workspace, so the count names the tab instead of navigating away from it.
+    // The half of this test that carries the risk is unchanged: a count, never a body.
     await render();
-    const link = [...container.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/admin/outbound-approvals');
-    expect(link).toBeDefined();
-    expect(link!.textContent).toContain('3');
-    // No message bodies on this page: approving happens where a message is read.
+    expect(container.textContent).toContain('3');
+    expect(container.textContent).toContain('Outbound approvals');
+    // No message bodies in this section: approving happens where a message is read.
     expect(container.querySelector('pre')).toBeNull();
   });
 
@@ -127,7 +135,7 @@ describe('T14 the console reports what she is actually doing', () => {
   });
 });
 
-describe('T14 an overridden dial is never shown as the truth', () => {
+describe('an overridden dial is never shown as the truth', () => {
   it.each([
     ['active', 'The kill switch is ON'],
     ['unreadable', 'could NOT be read'],
@@ -146,7 +154,7 @@ describe('T14 an overridden dial is never shown as the truth', () => {
   });
 });
 
-describe('T14 a refused capability has no dial at all', () => {
+describe('a refused capability has no dial at all', () => {
   it('renders a select for the promotable one and NONE for the refused one', async () => {
     await render();
     const selects = [...container.querySelectorAll('select')];
@@ -169,7 +177,7 @@ describe('T14 a refused capability has no dial at all', () => {
   });
 });
 
-describe('T14 every change carries a reason', () => {
+describe('every change carries a reason', () => {
   it('the enable button is disabled until a note is typed, then calls with it', async () => {
     await render();
     expect(byText('Turn Maya on')!.disabled).toBe(true);
@@ -206,7 +214,7 @@ describe('T14 every change carries a reason', () => {
   });
 });
 
-describe('T14 the switch touches nothing else', () => {
+describe('the switch touches nothing else', () => {
   it('offers no autonomy control and no way to grant a tool', async () => {
     await render();
     // The only `select` on the page is the one capability dial, so there is no autonomy picker.
@@ -215,7 +223,7 @@ describe('T14 the switch touches nothing else', () => {
     // "autonomy" - a label scan failed on its own prose, which is the false-failure direction
     // that gets a test weakened rather than a bug fixed.
     const source = fs
-      .readFileSync(path.join(__dirname, '..', 'AdminMayaGoLivePage.tsx'), 'utf8')
+      .readFileSync(path.join(__dirname, '..', 'AgentGovernedCapabilities.tsx'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/\/\/.*$/gm, ' ');
     // CONTROL: it really does call the two writers it is allowed to call.

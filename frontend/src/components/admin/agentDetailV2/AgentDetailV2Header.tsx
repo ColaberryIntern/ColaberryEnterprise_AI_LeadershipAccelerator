@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AgentDetail } from '../../../services/agentDetailApi';
 import { AutonomyLevel } from '../../../services/workforceOrgChartApi';
+import { showsGovernedOutbound } from './governedOutboundAgents';
 
 // Agent Detail V2 (2026-09-11) — Ali pasted a full mockup and asked to match
 // its format for Reese's page. This file originally rendered the page's own
@@ -41,7 +42,19 @@ import { AutonomyLevel } from '../../../services/workforceOrgChartApi';
 // stays where it is: it answers what a tool reads and produces, this tab answers who authorized
 // it and which capability it serves. Placed after Decisions & evidence, since granting a tool is
 // the same kind of act as the decisions recorded there.
-export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'tools' | 'email' | 'performance_settings';
+// Maya fold-in (2026-11-15), Ali: "I'm curious as to why you didn't integrate into the current
+// agent system". Her go-live console and her outbound approval queue shipped on 2026-11-15 as
+// two STANDALONE pages, duplicating this page's own enable control and Tools & access tab. They
+// are folded in here. 'outbound' is the queue; the capability dial became a section inside the
+// existing 'tools' tab rather than a tab of its own, because it answers the same question that
+// tab already answers (what may this agent do, and who said so).
+//
+// 'outbound' IS CONDITIONAL, which is why the 7-tab budget in AgentDetailLayout.test.tsx is
+// untouched. See governedOutboundAgents.ts: the capability vocabulary and promotion record
+// exist for exactly one agent, so every other agent renders the same 7 tabs it rendered
+// yesterday. A conditional tab is NOT a loophole around that budget - widening who sees it
+// means editing a frozen, test-pinned list, which is a louder change than editing this array.
+export type TabKey = 'overview' | 'talk' | 'work' | 'decisions' | 'tools' | 'email' | 'outbound' | 'performance_settings';
 
 export const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview', label: 'Overview' },
@@ -58,6 +71,31 @@ export const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'email', label: 'Email' },
   { key: 'performance_settings', label: 'Performance & settings' },
 ];
+
+/**
+ * The outbound approval queue tab, appended only for the agents in GOVERNED_OUTBOUND_AGENTS.
+ *
+ * Kept out of TABS rather than filtered out of it, so that the 7 entries above remain literally
+ * the tabs every agent gets. Reading TABS tells you the truth for 275 of the 276 agents; reading
+ * tabsFor() tells you the truth for all of them.
+ *
+ * Labelled "Outbound approvals" and not "Outbound" because it sits next to Email, and a reader
+ * scanning the sidebar needs to know which of the two decides whether something is SENT. Email
+ * holds drafts the agent could not send and approving one there deliberately does not send it;
+ * this one holds messages that go out the moment they are approved.
+ */
+export const OUTBOUND_TAB: { key: TabKey; label: string } = { key: 'outbound', label: 'Outbound approvals' };
+
+/**
+ * The tabs this particular agent's workspace renders.
+ *
+ * Nullable input means "the base seven": the caller reads the name off a payload that is null
+ * while loading, and a tab that decides whether a person is contacted must not appear by
+ * default on an unknown agent.
+ */
+export function tabsFor(agentName: string | null | undefined): Array<{ key: TabKey; label: string }> {
+  return showsGovernedOutbound(agentName) ? [...TABS, OUTBOUND_TAB] : TABS;
+}
 
 export const STATUS_LABEL: Record<AgentDetail['live_status'], string> = {
   online: 'Online', away: 'Away', offline: 'Offline', unknown: 'Status unknown',

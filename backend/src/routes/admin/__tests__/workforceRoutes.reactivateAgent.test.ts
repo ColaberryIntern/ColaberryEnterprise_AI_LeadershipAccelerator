@@ -1,5 +1,6 @@
 import express from 'express';
 import request from 'supertest';
+import AiAgent from '../../../models/AiAgent';
 
 // AI Workforce Reset, Phase C (2026-08-24) — POST
 // /api/admin/workforce/agents/:id/reactivate, happy/failure path (requireAdmin
@@ -44,6 +45,16 @@ describe('POST /api/admin/workforce/agents/:id/reactivate — happy/failure path
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Governed enablement (2026-11-15) gave this route a lookup it did not have: it resolves the
+    // agent and, for the agents in GOVERNED_ENABLEMENT_AGENTS, requires Ali. This suite's agent
+    // is ungoverned, so the gate must not fire - which is exactly what makes it a useful control
+    // for that change. Spied rather than module-mocked, because `models/index.ts` wires
+    // associations onto the real AiAgent at import time and a plain object breaks them.
+    jest.spyOn(AiAgent, 'findByPk').mockResolvedValue({ id: 'agent-1', agent_name: 'ExecutiveStrategyArchitect' } as any);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('happy path: 200, real result returned, real autonomy_level forwarded to the service', async () => {

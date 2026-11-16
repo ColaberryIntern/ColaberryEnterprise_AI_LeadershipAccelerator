@@ -1,24 +1,45 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { EmptyState, PageHeader, SectionCard, StatusBadge } from '../../components/admin/shell';
+import { EmptyState, SectionCard, StatusBadge } from '../shell';
 import {
   approveOutboundMessage, getOutboundMessage, listOutboundQueue, mayaErrorMessage,
   rejectOutboundMessage, type MayaOutboundDetail, type MayaOutboundSummary,
-} from '../../services/mayaConsoleApi';
+} from '../../../services/mayaConsoleApi';
 
 /**
- * T15 - "Outbound approvals". Every message Maya composed for a real person, waiting on a
+ * "Outbound approvals". Every message the agent composed for a real person, waiting on a
  * decision. One message at a time.
  *
  * Ali's choice, 13 Nov 2026, from four options: *on, outbound held for your approval.* She is
  * switched on and her in-product surfaces are live, and every message she writes for a real
  * person stops here until he reads that exact message and says yes.
  *
+ * ── RELOCATED, NOT REWRITTEN (2026-11-15) ───────────────────────────────────
+ *
+ * This shipped on 2026-11-15 as a standalone page at `/admin/outbound-approvals`. Ali, the same
+ * day: "I'm curious as to why you didn't integrate into the current agent system". He was right -
+ * the agent workspace already had an Email tab, a Tools & access tab and an enable control, and
+ * this page was a second place to look. The body below is the page's own render, moved verbatim:
+ * same markup, same handlers, same copy. What was dropped is the `PageHeader` and its breadcrumb,
+ * because the workspace supplies that chrome. `AdminOutboundApprovalsPage.tsx` no longer exists;
+ * its route is a redirect into this tab.
+ *
+ * ── THE GATE DID NOT MOVE WITH THE SCREEN ───────────────────────────────────
+ *
+ * This tab sits beside the Email tab, whose routes are `requireAgentManagerOrAdmin()`. These
+ * calls still go to `/api/admin/maya/outbound/*`, where approve is `requireCoryAuthorized` and
+ * reject is `requireAdmin`. Folding the surface in must not fold in the weaker gate: an agent
+ * manager who may approve an email DRAFT (which, on that tab, deliberately does not send) must
+ * not thereby gain the ability to approve a message that goes out on the click. Widening is
+ * Ali's; narrowing is any admin's.
+ *
  * ## THERE IS NO BULK APPROVE ON THIS SCREEN, AND THAT IS THE FEATURE
  *
  * Not a checkbox column, not an "approve all", not an approve button on a list row. The queue
  * rows carry an OPEN button and nothing else, so a decision cannot be made from a subject line.
- * `AdminOutboundApprovalsPage.test.tsx` asserts it by counting controls, because this is exactly
- * the property that would be lost to a well-meaning tidy-up.
+ * `AgentOutboundTab.test.tsx` asserts it by counting controls, because this is exactly the
+ * property that would be lost to a well-meaning tidy-up - and the tidy-up most likely to happen
+ * now is "make this look like the Email tab next door", which renders its whole queue with an
+ * Approve and a Discard on every row.
  *
  * The reason is a measured one rather than a principle. `approvalRequestTimeoutJob.ts` approved
  * every expired pending row on a fifteen-minute cron, and `reeseOutreachHolds.ts` records what
@@ -30,8 +51,8 @@ import {
  * `body` holds the exact bytes the provider will receive, and for email that is HTML. It is
  * displayed as text in a `<pre>`, not injected with `dangerouslySetInnerHTML`, for two reasons:
  * the review has to be of the bytes that will actually leave - the server re-hashes them before
- * transmitting and refuses if anything moved - and content Maya composed should not become live
- * markup inside the admin app. Reading the source is the stricter review, not the weaker one.
+ * transmitting and refuses if anything moved - and content the agent composed should not become
+ * live markup inside the admin app. Reading the source is the stricter review, not the weaker one.
  *
  * ## WHAT THE SERVER STILL REFUSES AFTER A CLICK HERE
  *
@@ -50,7 +71,7 @@ function daysLeft(iso: string): number {
   return Math.floor((new Date(iso).getTime() - Date.now()) / 86400000);
 }
 
-export default function AdminOutboundApprovalsPage(): React.ReactElement {
+export default function AgentOutboundTab(): React.ReactElement {
   const [queue, setQueue] = useState<MayaOutboundSummary[]>([]);
   const [open, setOpen] = useState<MayaOutboundDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,7 +112,7 @@ export default function AdminOutboundApprovalsPage(): React.ReactElement {
 
   /**
    * One decision, on the one message on screen. The id comes from the opened message rather than
-   * from a row, so there is no path on this page that decides something the reader did not read.
+   * from a row, so there is no path on this tab that decides something the reader did not read.
    */
   const decide = useCallback(async (verb: 'approve' | 'reject') => {
     if (!open) return;
@@ -120,18 +141,6 @@ export default function AdminOutboundApprovalsPage(): React.ReactElement {
 
   return (
     <div>
-      <PageHeader
-        title="Outbound approvals"
-        icon="mail-send-line"
-        subtitle="Every message Maya composed for a real person. Nothing leaves until you approve that exact message."
-        breadcrumb={[{ label: 'Admin', to: '/admin' }, { label: 'Maya', to: '/admin/maya' }, { label: 'Outbound approvals' }]}
-        actions={(
-          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => void load()} disabled={loading}>
-            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
-          </button>
-        )}
-      />
-
       {error && <div className="alert alert-danger" role="alert">{error}</div>}
       {outcome && (
         <div className={`alert ${outcome.ok ? 'alert-success' : 'alert-warning'}`} role="status">
@@ -143,13 +152,26 @@ export default function AdminOutboundApprovalsPage(): React.ReactElement {
         title={`Waiting for you${queue.length ? ` (${queue.length})` : ''}`}
         icon="time-line"
         subtitle="Open a message to read it. There is no way to decide one from this list, on purpose."
+        actions={(
+          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => void load()} disabled={loading}>
+            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
+          </button>
+        )}
       >
+        {/* Said on the surface because this tab sits directly below "Email", where approving a
+            draft deliberately does NOT send it. Two adjacent queues whose Approve buttons mean
+            opposite things is a trap, so each one says which it is. */}
+        <p className="small text-muted">
+          Approving here <strong>sends the message</strong>. That is the difference between this
+          tab and Email, where approving a draft records a decision and sends nothing.
+        </p>
+
         {loading && <p className="text-muted mb-0">Loading the queue...</p>}
         {!loading && queue.length === 0 && (
           <EmptyState
             icon="checkbox-circle-line"
             title="Nothing is waiting"
-            description="Maya has composed no messages for a real person that need a decision."
+            description="No messages for a real person need a decision."
           />
         )}
         {!loading && queue.length > 0 && (

@@ -21,6 +21,9 @@ import {
 import { assignTaskToAgent } from '../services/workforce/orgChartTaskAssignmentService';
 import { resetAgents } from '../services/workforce/agentResetService';
 import { reactivateAgent, AUTONOMY_LEVELS } from '../services/workforce/agentReactivationService';
+import { enablementRequiresAli } from '../services/workforce/governedEnablementAgents';
+import { isCoryAuthorizedIdentity } from '../middlewares/authMiddleware';
+import AiAgent from '../models/AiAgent';
 import { setAgentAbacOverride, ABAC_OVERRIDE_VALUES } from '../services/workforce/agentAbacOverrideService';
 import { setAgentReportsTo } from '../services/workforce/agentReportsToService';
 import { checkWireContract } from '../utils/responseContract';
@@ -244,7 +247,27 @@ const reactivateAgentSchema = z.object({
 export async function handleReactivateAgent(req: Request, res: Response, next: NextFunction) {
   try {
     const parsed = reactivateAgentSchema.parse(req.body || {});
-    const result = await reactivateAgent(String(req.params.id), parsed.autonomy_level);
+    const agentId = String(req.params.id);
+
+    // Governed enablement (2026-11-15). This route writes `enabled: true` on any agent by id and
+    // has been `requireAdmin` since 2026-08-24. For agents whose enablement is Ali's alone, that
+    // made the stricter check on `POST /api/admin/maya/enable` bypassable by clicking "Reactivate"
+    // on the agent workspace - and MAYA_GOVERNANCE.md stated the stricter rule as though it held
+    // everywhere. The check belongs HERE, at the route that can actually write the column, rather
+    // than at each UI that calls it. See governedEnablementAgents.ts.
+    //
+    // Resolved by id first and matched on NAME, because the list is name-keyed: ids differ per
+    // environment and a list of UUIDs would silently match nothing outside production.
+    const target = await AiAgent.findByPk(agentId);
+    if (target && enablementRequiresAli(target.agent_name) && !isCoryAuthorizedIdentity(req.admin)) {
+      res.status(403).json({
+        error: `Turning ${target.agent_name} on requires Ali or a super_admin. Turning ${target.agent_name} off does not.`,
+        error_class: 'AuthError',
+      });
+      return;
+    }
+
+    const result = await reactivateAgent(agentId, parsed.autonomy_level);
     res.json({ result });
   } catch (e) { fail(res, e, next); }
 }

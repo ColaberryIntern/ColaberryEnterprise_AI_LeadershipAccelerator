@@ -58,12 +58,12 @@ const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'))
 const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
 // AF4.2 - file a change request, and (for an admin) decide one.
 const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeRequestsPage'));
-// T14/T15 - Maya's go-live console, and the queue where every message she composes for a real
-// person waits for Ali. Two pages rather than one: a console that showed the pending queue beside
-// a "turn her on" button would invite settling both in one glance, and a message is approved by
-// reading it.
-const AdminMayaGoLivePage = lazy(() => import('../pages/admin/AdminMayaGoLivePage'));
-const AdminOutboundApprovalsPage = lazy(() => import('../pages/admin/AdminOutboundApprovalsPage'));
+// Maya's go-live console and her outbound queue were two standalone pages for a few hours on
+// 2026-11-15, then folded into the agent workspace, which already had an enable control, a
+// Tools & access tab and an email queue. Ali: "I'm curious as to why you didn't integrate into
+// the current agent system". These two URLs still resolve, as redirects, because they were
+// pasted and bookmarked while they existed and a dead admin link reads as a deleted feature.
+const AdminMayaLegacyRedirect = lazy(() => import('../pages/admin/AdminMayaLegacyRedirect'));
 const AdminToolRequestReviewPage = lazy(() => import('../pages/admin/AdminToolRequestReviewPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
@@ -286,10 +286,10 @@ const adminRoutes = (
             duplicate candidates do not fit in a list row. Admin-only at the API, so a
             non-admin sees "not for you" rather than a failure. */}
         <Route path="/admin/tool-requests" element={<AdminToolRequestReviewPage />} />
-        {/* Maya. Reading either page is open to any admin; every write behind them is decided
-            by the server, which is why there is no client-side role check on either. */}
-        <Route path="/admin/maya" element={<AdminMayaGoLivePage />} />
-        <Route path="/admin/outbound-approvals" element={<AdminOutboundApprovalsPage />} />
+        {/* Both now land on her agent workspace. `/admin/outbound-approvals` carries the tab
+            through, so the old link still reaches the screen it named rather than Overview. */}
+        <Route path="/admin/maya" element={<AdminMayaLegacyRedirect />} />
+        <Route path="/admin/outbound-approvals" element={<AdminMayaLegacyRedirect tab="outbound" />} />
         {/* The programme-wide counterpart to My Domain. Same data source as the
             agent-domain routes, gated on 'program'; My Domain stays scoped by
             ownership and must not be widened to cover this. */}
