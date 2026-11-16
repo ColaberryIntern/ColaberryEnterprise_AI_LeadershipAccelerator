@@ -37,6 +37,8 @@ export const SummaryResponse = z.object({
   nextInterview: InterviewViewSchema.optional(),
   stops: z.object({ readiness: score.optional(), readyAt: score.optional(), streak: z.number().int().optional(), thisWeek: z.number().int().optional() }).strict(),
   interviews: z.array(InterviewViewSchema),
+  interviewCount: z.number().int().min(0),
+  sessionMinutes: z.number().int().positive().optional(),
   today: z.string(),
 }).strict();
 

@@ -470,3 +470,21 @@ tests/systemV2/career-prep/.
     Cora and from the jump bar, with focus on the title, closes on browser Back, and returns focus to the opener;
     Esc closes the jump bar, then the sheet, never the room; Tab stays in the sheet. Frontend Career Prep and
     campus 2401 pass; tsc clean.
+
+- [x] CP5.1 The Career Prep card on the campus home panel
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: campus/home/CareerPrepCard.tsx, directly under Today in CampusConcierge (shot L1-1): students
+    only, and only when Career Prep is open for them (explorers, partners, staff and non-flagged students see no
+    change; the summary is not even requested). logic/prepCardCopy.ts (pure): headline by rule, first match
+    wins (a dated interview within 7 days -> "Get ready for <weekday>'s interview", weekday in Central; later ->
+    "Get ready for your <company> interview"; practice only -> "Keep practicing for <role>"; none -> "Get ready
+    for your next interview"); rows soonest first, past ones left out, at most 2, "+n more" from the server's full
+    count; readiness bar against ready-at only when the server has a readiness. The summary now carries
+    interviewCount and sessionMinutes (today's Central-date minutes in the next interview's active plan; prepData
+    reads active plans as a sixth query). Card colors are campus art tokens (campusArtTokens.css, the one file
+    allowed hex). Rows open the room anchored on that interview; Go opens the room until T25's goStart('prep').
+  - Verification: CareerPrepCard.test.tsx (17): every headline rule with expected strings, precedence, Central
+    weekday across DST, sort and cap, hidden for explorer / business / staff / non-flagged / loading. Backend
+    prepViews 14 pass (2 new: interviewCount, sessionMinutes). Frontend Career Prep + campus 2401 pass; tsc clean.
+  - Notes: carried to T25: Go to Career Prep switches to goStart('prep').

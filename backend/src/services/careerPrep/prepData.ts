@@ -4,7 +4,7 @@ import type { InterviewType, Observation, ObservationSource, SessionTime } from 
 
 /**
  * Career Prep v27, CP1.5: every read the summary, the dashboard and the rollup need, for ONE
- * student, in five queries. No logic here beyond shaping rows; the views are pure (prepViews.ts).
+ * student, in six queries (CP5.1 added the active plans' days, for the campus card's session line). No logic here beyond shaping rows; the views are pure (prepViews.ts).
  * A database error propagates to the route (500 with a logged error_class).
  */
 export interface PrepInterview {
@@ -22,6 +22,8 @@ export interface PrepData {
   sessions: SessionTime[];
   interviews: PrepInterview[];
   trend: TrendPoint[];
+  /** CP5.1: each active plan's interview and the minutes planned per date (absent in older fixtures). */
+  plans?: Array<{ interviewId: string | null; days: Array<{ date: string; minutes: number }> }>;
 }
 
 export const SKILL_KEYS = PREP_SKILLS.map((s) => s.key);
@@ -29,9 +31,17 @@ type Row = Record<string, unknown>;
 const rows = async (sql: string, replacements: Record<string, unknown>): Promise<Row[]> =>
   (await sequelize.query(sql, { replacements }))[0] as Row[];
 
+/** A stored plan's days as { date, minutes }: the minutes are the sum of that day's segments. */
+function planDays(raw: unknown): Array<{ date: string; minutes: number }> {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((d: { date?: unknown; segments?: Array<{ minutes?: unknown }> }) => ({
+    date: String(d.date ?? ''), minutes: (Array.isArray(d.segments) ? d.segments : []).reduce((n, s) => n + (Number(s.minutes) || 0), 0),
+  }));
+}
+
 export async function loadPrepData(enrollmentId: string, now: Date): Promise<PrepData> {
   const r = { e: enrollmentId, now };
-  const [person, obs, sessions, interviews, trend] = await Promise.all([
+  const [person, obs, sessions, interviews, trend, plans] = await Promise.all([
     rows(`SELECT NULLIF(split_part(trim(full_name), ' ', 1), '') AS first_name FROM enrollments WHERE id = :e`, r),
     rows(`SELECT skill_key, value, source, source_ref, observed_at, weight FROM prep_observations
            WHERE enrollment_id = :e AND observed_at > :now::timestamptz - INTERVAL '90 days'`, r),
@@ -42,6 +52,7 @@ export async function loadPrepData(enrollmentId: string, now: Date): Promise<Pre
            ORDER BY starts_at NULLS LAST, created_at`, r),
     rows(`SELECT date::text AS date, interview_id, readiness FROM prep_readiness_daily
            WHERE enrollment_id = :e AND date > (:now::timestamptz - INTERVAL '84 days')::date ORDER BY date`, r),
+    rows(`SELECT interview_id, days FROM prep_plans WHERE enrollment_id = :e AND status = 'active'`, r),
   ]);
   return {
     enrollmentId,
@@ -56,5 +67,6 @@ export async function loadPrepData(enrollmentId: string, now: Date): Promise<Pre
       questions: Array.isArray(i.questions) ? (i.questions as string[]) : null,
     })),
     trend: trend.map((t) => ({ date: String(t.date), interviewId: String(t.interview_id ?? NO_INTERVIEW), readiness: t.readiness === null ? null : Number(t.readiness) })),
+    plans: plans.map((p) => ({ interviewId: (p.interview_id as string | null) ?? null, days: planDays(p.days) })),
   };
 }

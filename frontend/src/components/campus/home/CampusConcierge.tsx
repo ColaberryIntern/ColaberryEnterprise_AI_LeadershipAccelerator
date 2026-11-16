@@ -33,6 +33,7 @@ import PhotoPrompt from './PhotoPrompt';
 import { ComingUpCall } from '../admissions/BookCallHost';
 import { OpenHouseCard } from '../events/OpenHouseCard';
 import { TodayCard } from './TodayCard';
+import { CareerPrepCard } from './CareerPrepCard';
 import type { OpenHouseView } from '../../../services/onboardingApi';
 import type { AdmissionsBooking } from '../admissions/admissionsCallApi';
 import { ComingUpAgenda } from '../events/Agenda';
@@ -183,6 +184,8 @@ export default function CampusConcierge(p: ConciergeProps): React.ReactElement {
       {p.weatherLine && <p className="cm-lead cm-lead-wx" data-testid="cm-cc-weather">{p.weatherLine}</p>}
       {/* C50 (v13 T2): Today, the Explorer's home base, first in the panel (a slim row for everyone else) */}
       {audience !== 'business' && <TodayCard audience={audience} stops={p.stops} desks={p.desks} now={p.now} />}
+      {/* Career Prep v27 (CP5.1): directly under Today, for students Career Prep is open for (renders nothing otherwise) */}
+      <CareerPrepCard audience={audience} now={p.now} />
       <Pulse p={p} />
       {/* v20 N4 (C135): new shorts on Colaberry TV, once a day, dismissible; opens Colaberry Now */}
       <TvNote />

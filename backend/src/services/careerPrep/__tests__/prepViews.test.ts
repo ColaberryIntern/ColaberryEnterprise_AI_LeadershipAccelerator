@@ -93,6 +93,25 @@ describe('buildSummary', () => {
     expect(s).toMatchObject({ firstName: 'Ali', nextInterview: { id: 'i1' }, stops: { readiness: 75.3, readyAt: 75, streak: 1, thisWeek: 20 }, today: '2026-11-18' });
     expect(SummaryResponse.safeParse(s).success).toBe(true);
   });
+
+  it('counts every dated interview (the card shows 2 and "+n more") while listing at most 3', () => {
+    const many = [1, 2, 3, 4, 5].map((d) => interview({ id: `i${d}`, startsAt: new Date(NOW.getTime() + d * DAY) }));
+    const s = buildSummary({ ...full(), interviews: [...many, interview({ id: 'p1', source: 'practice', startsAt: null })] }, NOW);
+    expect(s.interviews.map((i) => i.id)).toEqual(['i1', 'i2', 'i3']);
+    expect(s.interviewCount).toBe(5);
+    expect(SummaryResponse.safeParse(s).success).toBe(true);
+  });
+
+  it("today's session minutes come from the next interview's active plan for today's Central date, else are absent", () => {
+    const plans = [
+      { interviewId: 'i1', days: [{ date: '2026-11-17', minutes: 30 }, { date: '2026-11-18', minutes: 20 }] },
+      { interviewId: 'other', days: [{ date: '2026-11-18', minutes: 45 }] },
+    ];
+    expect(buildSummary({ ...full(), plans }, NOW).sessionMinutes).toBe(20);
+    expect(buildSummary({ ...full(), plans: [{ interviewId: 'i1', days: [{ date: '2026-11-19', minutes: 20 }] }] }, NOW).sessionMinutes).toBeUndefined();
+    expect(buildSummary(full(), NOW)).not.toHaveProperty('sessionMinutes');
+    expect(SummaryResponse.safeParse(buildSummary({ ...full(), plans }, NOW)).success).toBe(true);
+  });
 });
 
 describe('rollupRows', () => {

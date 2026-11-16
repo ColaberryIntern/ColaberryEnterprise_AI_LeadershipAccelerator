@@ -32,6 +32,16 @@
   --cm-art-commons:#d9962b; --cm-art-commons-d30:#bb780d; --cm-art-commons-d35:#b67308;
   --cm-art-gallery:#b4533a;
   --cm-art-career:#1f4f7a;
+  /* Career Prep v27 (CP5.1): the Career Prep card on the home panel (shot L1-1): navy in both themes, a brass floor tile */
+  --cm-art-prep-card:#141c2e;
+  --cm-art-prep-ink:#ffffff;
+  --cm-art-prep-soft:#dfe5f0;
+  --cm-art-prep-brass-a:#e6c26a;
+  --cm-art-prep-brass-b:#c9962e;
+  --cm-art-prep-brass-ink:#1d1a12;
+  --cm-art-prep-fill:#5fa8d3;
+  --cm-art-prep-go:#2f7ec1;
+  --cm-art-prep-track:rgba(255,255,255,.18);
   --cm-art-arcade:#6b2fa0;
   /* C26 (v6 D4): the auditorium: red seats in tiered rows, the raised stage, heads for the people really here */
   --cm-art-in-seat:#a8232a; --cm-art-in-seat-back:#7d1a1f; --cm-art-in-seat-edge:#5c1216; --cm-art-in-head:#e9c9a8; --cm-art-in-head-ink:#2a2026;

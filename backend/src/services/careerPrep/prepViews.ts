@@ -100,7 +100,17 @@ export interface Summary {
   nextInterview?: InterviewView;
   stops: { readiness?: number; readyAt?: number; streak?: number; thisWeek?: number };
   interviews: InterviewView[];
+  /** CP5.1: how many dated interviews there are in all (the card shows 2 and "+n more"). */
+  interviewCount: number;
+  /** CP5.1: minutes planned for today (Central) in the next interview's active plan; absent when none. */
+  sessionMinutes?: number;
   today: string;
+}
+
+function todaysMinutes(data: PrepData, interviewId: string | null, today: string): { sessionMinutes?: number } {
+  const plan = (data.plans ?? []).find((p) => p.interviewId === interviewId);
+  const minutes = plan?.days.find((d) => d.date === today)?.minutes ?? 0;
+  return minutes > 0 ? { sessionMinutes: minutes } : {};
 }
 
 /** The floor screen, the door and the campus card all read this. Stops with no data are omitted. */
@@ -117,6 +127,8 @@ export function buildSummary(data: PrepData, now: Date): Summary {
       ...(d.thisWeek > 0 ? { thisWeek: d.thisWeek } : {}),
     },
     interviews: d.interviews.filter((i) => i.startsAt).slice(0, 3),
+    interviewCount: d.interviews.filter((i) => i.startsAt).length,
+    ...todaysMinutes(data, next?.id ?? null, centralDate(now)),
     today: centralDate(now),
   };
 }

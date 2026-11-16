@@ -16,6 +16,10 @@ export interface PrepSummary {
   nextInterview?: PrepInterview;
   stops: { readiness?: number; readyAt?: number; streak?: number; thisWeek?: number };
   interviews: PrepInterview[];
+  /** CP5.1: every dated interview, counted (the list above holds at most 3). */
+  interviewCount?: number;
+  /** CP5.1: minutes planned for today in the next interview's plan; absent when none. */
+  sessionMinutes?: number;
   today: string;
 }
 export interface PrepSkill { key: string; label: string; score?: number; change30?: number; count: number; sources: string[] }
