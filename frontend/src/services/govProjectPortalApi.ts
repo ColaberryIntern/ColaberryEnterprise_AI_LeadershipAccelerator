@@ -223,18 +223,24 @@ export interface GovProposalDocument {
 export interface GovOpenQuestion { key: string; question: string; why: string | null; documentKeys: string[]; suggestions: string[]; }
 
 // ── v3 (V1): the typed HumanNeed model (the one "Needs you" list) ──────────────────────────────────────────────
-export type GovNeedKind = 'fact' | 'decision' | 'file' | 'signature' | 'approval' | 'confirm_rule' | 'setting';
+export type GovNeedKind = 'fact' | 'decision' | 'file' | 'signature' | 'approval' | 'confirm_rule' | 'setting' | 'record';
+/** The grouped-record sub-kinds a `record` need collects as one unit. */
+export type GovRecordType = 'reference' | 'personnel';
 /** Exactly what a human must supply, why, and what it unblocks (mirrors backend HumanNeed). */
 export interface GovProjectNeed {
   kind: GovNeedKind; key: string; ask: string; why: string;
   usedIn: Array<{ docKey: string; sectionKey?: string }>;
   format: string; options?: string[]; blocking: 'fatal' | 'score';
   source?: { quote: string; file: string; page?: number };
+  /** Present iff kind === 'record': whether this groups a past-performance reference or a key person, and the
+   *  field keys the grouped form collects. */
+  recordType?: GovRecordType; recordFields?: string[];
 }
 /** The one needs list, grouped Blocking-export (fatal) then Holding-score. */
 export interface GovNeedsGrouped { needs: GovProjectNeed[]; blockingExport: GovProjectNeed[]; holdingScore: GovProjectNeed[]; }
-/** What a human submits to resolve one need (shape by kind; the server validates). */
-export interface GovNeedSubmission { value?: string; fileRef?: string; approve?: boolean; note?: string; }
+/** What a human submits to resolve one need (shape by kind; the server validates). `record` carries the grouped
+ *  fields (e.g. { client, scope, contractValue, dates, contact }) answered as one unit. */
+export interface GovNeedSubmission { value?: string; fileRef?: string; approve?: boolean; note?: string; record?: Record<string, string>; }
 export interface GovNeedResolveResult { resolved: string; store: string; status: string; unblocked: string[]; }
 /** The result of a bounded Build-all / auto-resume enqueue. */
 export interface GovBuildAllResult { started: boolean; enqueued: Array<{ docKey: string; runId: string }>; skipped: string[]; }

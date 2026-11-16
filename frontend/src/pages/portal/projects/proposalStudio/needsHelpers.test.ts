@@ -1,4 +1,4 @@
-import { needControl, needKindLabel, unblockLabel, needsBadge, submissionFor, partitionNeeds } from './needsHelpers';
+import { needControl, needKindLabel, unblockLabel, needsBadge, submissionFor, partitionNeeds, recordTypeLabel, recordFieldsFor, recordPrimaryField, recordFieldLabel, recordSubmission } from './needsHelpers';
 import type { GovProjectNeed } from '../../../../services/govProjectPortalApi';
 
 const need = (over: Partial<GovProjectNeed>): GovProjectNeed => ({
@@ -16,6 +16,7 @@ describe('needControl', () => {
     expect(needControl(need({ kind: 'approval' }))).toBe('approve');
     expect(needControl(need({ kind: 'setting', format: 'a URL (https://…)' }))).toBe('url');
     expect(needControl(need({ kind: 'setting', format: 'a plain value' }))).toBe('text');
+    expect(needControl(need({ kind: 'record' }))).toBe('record');
   });
 });
 
@@ -23,6 +24,30 @@ describe('needKindLabel', () => {
   it('labels each kind', () => {
     expect(needKindLabel('signature')).toBe('Signature');
     expect(needKindLabel('fact')).toBe('Fact');
+    expect(needKindLabel('record')).toBe('Record');
+  });
+});
+
+describe('grouped-record helpers', () => {
+  it('labels the record sub-kind for the chip', () => {
+    expect(recordTypeLabel('reference')).toBe('Reference');
+    expect(recordTypeLabel('personnel')).toBe('Key person');
+    expect(recordTypeLabel(undefined)).toBe('Reference');
+  });
+  it('gives the default field set and primary field per type', () => {
+    expect(recordFieldsFor('reference')).toEqual(['client', 'scope', 'contractValue', 'dates', 'contact']);
+    expect(recordFieldsFor('personnel')).toEqual(['name', 'role', 'summary']);
+    expect(recordPrimaryField('reference')).toBe('client');
+    expect(recordPrimaryField('personnel')).toBe('name');
+  });
+  it('labels known field keys and humanizes unknown ones', () => {
+    expect(recordFieldLabel('contractValue')).toBe('Contract value');
+    expect(recordFieldLabel('dates')).toBe('Period of performance');
+    expect(recordFieldLabel('somethingNew')).toBe('Something New');
+  });
+  it('shapes the submission keeping only non-empty trimmed fields', () => {
+    expect(recordSubmission({ client: ' Harris County ', scope: '', dates: '2021-2024' }))
+      .toEqual({ record: { client: 'Harris County', dates: '2021-2024' } });
   });
 });
 

@@ -889,6 +889,9 @@ router.post(
         fileRef: typeof b.fileRef === 'string' ? b.fileRef : undefined,
         approve: typeof b.approve === 'boolean' ? b.approve : undefined,
         note: typeof b.note === 'string' ? b.note : undefined,
+        // Grouped `record` need: a plain object of fields. routeNeedResolution filters per-field (non-empty strings),
+        // so passing the object through is safe; a non-object is dropped.
+        record: (b.record && typeof b.record === 'object' && !Array.isArray(b.record)) ? (b.record as Record<string, string>) : undefined,
       };
       const result = await resolveProjectNeed(projectId, key, submission, { email: actor?.email, canApprove: false });
       // v3 (T12) AUTO-RESUME: the intern's answer kicks a bounded review cycle for each unblocked document.
