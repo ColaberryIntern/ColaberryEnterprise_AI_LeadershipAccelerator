@@ -82,17 +82,24 @@ describe('approveCompanyReference / approveCompanyPersonnel', () => {
 });
 
 describe('answerQuestionToLibrary', () => {
-  it('saves an approved fact and resolves the open gaps that asked the question', async () => {
+  it('derives a clean fact key from the gap need_key, saves an approved categorized fact, and resolves matching gaps', async () => {
     factCreate.mockResolvedValue({ id: 'fact-1' });
-    queryMock.mockResolvedValue([[], 2]); // UPDATE affected 2 rows
-    const r = await answerQuestionToLibrary('t1', 'dp-1', { question: 'Who signs the offer?', answer: 'The PM, Jane Doe' }, 'me');
+    queryMock
+      .mockResolvedValueOnce([{ need_key: 'fact:project_name_1' }]) // factKeyForQuestion SELECT
+      .mockResolvedValueOnce([[], 2]);                              // UPDATE affected 2 rows
+    const r = await answerQuestionToLibrary('t1', 'dp-1', { question: 'What specific projects have you completed?', answer: 'Saratoga Springs asset system' }, 'me');
     expect(r.factId).toBe('fact-1');
     expect(r.gapsResolved).toBe(2);
-    // saved approved
-    expect(factCreate).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 't1', value: 'The PM, Jane Doe', approved: true }));
-    // resolved the matching open gaps for this project + question
-    const sql = String(queryMock.mock.calls[0][0]);
-    expect(sql).toMatch(/UPDATE gov_proposal_document_gaps/);
-    expect(sql).toMatch(/resolution = 'answered'/);
+    // a clean, categorized fact (not keyed by the raw sentence)
+    expect(factCreate).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: 't1', key: 'Project Name 1', category: 'general', value: 'Saratoga Springs asset system', approved: true }));
+    const updateSql = String(queryMock.mock.calls.find((c: any[]) => /UPDATE gov_proposal_document_gaps/.test(String(c[0])))?.[0] ?? '');
+    expect(updateSql).toMatch(/resolution = 'answered'/);
+  });
+
+  it('falls back to the question text when the gap has no need_key', async () => {
+    factCreate.mockResolvedValue({ id: 'fact-2' });
+    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([[], 1]); // no need_key, then UPDATE
+    await answerQuestionToLibrary('t1', 'dp-1', { question: 'Who signs the offer?', answer: 'Jane Doe' }, 'me');
+    expect(factCreate).toHaveBeenCalledWith(expect.objectContaining({ key: 'Who signs the offer?', value: 'Jane Doe' }));
   });
 });

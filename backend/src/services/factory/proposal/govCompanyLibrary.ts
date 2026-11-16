@@ -11,6 +11,19 @@ import { sequelize } from '../../../config/database';
 import GovCompanyFact from '../../../models/GovCompanyFact';
 import GovCompanyReference from '../../../models/GovCompanyReference';
 import GovCompanyPersonnel from '../../../models/GovCompanyPersonnel';
+import { cleanFactKey } from './proposalFactKey';
+
+/** The clean fact key for an answered question: prefer the gap's typed need_key (humanized) over the raw sentence. */
+async function factKeyForQuestion(deliveryProjectId: string, question: string): Promise<string | null> {
+  try {
+    const rows: any[] = await sequelize.query(
+      `SELECT need_key FROM gov_proposal_document_gaps WHERE delivery_project_id = $1 AND question = $2 AND need_key IS NOT NULL ORDER BY created_at ASC LIMIT 1`,
+      { bind: [deliveryProjectId, question], type: QueryTypes.SELECT },
+    );
+    const nk = rows[0]?.need_key as string | undefined;
+    return nk ? cleanFactKey(nk, question) : null;
+  } catch { return null; }
+}
 
 export interface CompanyLibraryView {
   facts: Array<{ id: string; key: string; value: string; source: string | null; category: string | null; approved: boolean }>;
@@ -98,8 +111,8 @@ export async function answerQuestionToLibrary(
   input: { question: string; answer: string; key?: string },
   identityId: string | null,
 ): Promise<{ factId: string; gapsResolved: number }> {
-  const key = (input.key && input.key.trim()) || input.question.slice(0, 120);
-  const factId = await addCompanyFact(tenantId, { key, value: input.answer, source: 'answered in proposal studio', approved: true }, identityId);
+  const key = (input.key && input.key.trim()) || (await factKeyForQuestion(deliveryProjectId, input.question)) || input.question.slice(0, 120);
+  const factId = await addCompanyFact(tenantId, { key, value: input.answer, source: 'answered in proposal studio', category: 'general', approved: true }, identityId);
   let gapsResolved = 0;
   try {
     const [, meta]: any = await sequelize.query(
