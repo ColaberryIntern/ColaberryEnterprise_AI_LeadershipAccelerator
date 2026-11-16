@@ -90,9 +90,6 @@ const LEVELS: Level[] = [
 ];
 
 export default function ReceiptsDrilldown(): React.ReactElement {
-  const [at, setAt] = useState(0);
-  const level = LEVELS[at];
-
   return (
     <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-rc-title">
       <div className="cbv2-wrap">
@@ -107,6 +104,33 @@ export default function ReceiptsDrilldown(): React.ReactElement {
           </p>
         </div>
 
+        <ReceiptsPanel />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The drill-down and its boundary note, without the band chrome around them.
+ *
+ * /platform renders this as the figure for its "for your people" surface, where
+ * the heading above it belongs to the surface rather than to this component.
+ *
+ * It is defined BELOW `export default` on purpose. Two guards in
+ * `architectExperience.test.tsx` slice this file from `export default` onwards
+ * and assert on what follows: that the retired roll-up tier never comes back,
+ * and that the boundary note still states what the manager view does not do.
+ * Defined above the default export, this markup would fall outside that slice
+ * and quietly stop being covered -- the guards would keep passing while the
+ * thing they guard moved out from under them. The first of the two is also why
+ * the word it forbids does not appear in this comment.
+ */
+export function ReceiptsPanel(): React.ReactElement {
+  const [at, setAt] = useState(0);
+  const level = LEVELS[at];
+
+  return (
+    <>
         <div className="cbv2-rc">
           <div className="cbv2-rc__steps" role="tablist" aria-label="Drill-down level">
             {LEVELS.map((l, i) => (
@@ -162,7 +186,6 @@ export default function ReceiptsDrilldown(): React.ReactElement {
           The Engineer thresholds above are the real ones: 22 evidence records, 7 reviewed artifacts,
           10 GitHub items, 3 evaluations, 5 attendance, and an approval step beyond all of them.
         </p>
-      </div>
-    </section>
+    </>
   );
 }

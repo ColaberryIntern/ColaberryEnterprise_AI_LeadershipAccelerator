@@ -1,0 +1,171 @@
+/* ============================================================================
+   platformV2Surfaces.css -- the four surfaces, as one band.
+
+   Its own file rather than more lines on `platformV2.css`, which is already 779
+   lines and over this repo's hard ceiling: the rule is that the next change to
+   an oversize file splits it rather than growing it.
+
+   The geometry is the v5 model's `.surf`: a two-column grid, copy on one side
+   and the figure on the other, alternating, with the rows separated by a rule
+   instead of by section padding. That is what makes four surfaces fit in one
+   band -- stacked, the same four cost a page nearly twice this tall.
+
+   Design-system tokens only; cbv2-* namespace only.
+   ========================================================================== */
+
+.cbv2-surfaces { padding-block: var(--space-10) var(--space-14); }
+
+.cbv2-surf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-12);
+  align-items: center;
+  padding-block: var(--space-12);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-surf:last-child { border-bottom: 0; }
+
+/* Flip via CSS order only. Reordering the DOM as well cancels it out. */
+.cbv2-surf--flip .cbv2-surf__copy { order: 2; }
+
+@media (max-width: 980px) {
+  .cbv2-surf {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-7);
+    padding-block: var(--space-9);
+  }
+  .cbv2-surf--flip .cbv2-surf__copy { order: 0; }
+}
+
+.cbv2-surf__copy > h2 {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 2.9vw, 38px);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--ls-tight);
+  color: var(--text-strong);
+  margin: var(--space-4) 0 var(--space-3);
+}
+
+/* The numeral and who the surface is for, on one line. */
+.cbv2-surf__n {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+.cbv2-surf__n b {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--accent, #2E6A86);
+  color: var(--accent-contrast, #fff);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+.cbv2-surf__n .cbv2-eyebrow { margin: 0; }
+
+.cbv2-surf__notes { margin-top: var(--space-6); }
+
+/* The figure column. Each surface supplies its own figure, so this only has to
+   stop a wide table from pushing the grid out. */
+.cbv2-surf__fig { min-width: 0; }
+.cbv2-surf__fig > * { margin: 0; }
+
+/* ------------------------------------------------- the repository figure -- */
+/*
+   Surface 3's figure: commits with the acceptance criterion each one confirms.
+   The data is invented and carries a <SampleBadge>, same rule as the rollout
+   and releases tables -- an unlabelled mock of a customer's repository would be
+   a fabricated proof claim.
+*/
+
+.cbv2-repo {
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised, #fff);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.cbv2-repo__cap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  background: var(--surface-sunken);
+}
+.cbv2-repo__name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body-sm);
+  color: var(--text-strong);
+  font-weight: 500;
+}
+/* "Connected" is a word first. The dot repeats it and never carries it alone. */
+.cbv2-repo__conn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+.cbv2-repo__conn::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-success, #468A2E);
+}
+
+.cbv2-repo__rows { list-style: none; margin: 0; padding: 0; }
+.cbv2-repo__rows li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+  font-size: var(--fs-body-sm);
+}
+.cbv2-repo__rows li:last-child { border-bottom: 0; }
+.cbv2-repo__rows code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+.cbv2-repo__rows b {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.cbv2-repo__rows b.is-met {
+  background: rgb(22 163 74 / 12%);
+  color: #15803d;
+}
+.cbv2-repo__rows b.is-pending {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+  /* The sha is the least useful column on a phone; the message and the state
+     are what the figure is for. */
+  .cbv2-repo__rows li { grid-template-columns: minmax(0, 1fr) auto; }
+  .cbv2-repo__rows code { display: none; }
+}
+
+.cbv2-repo__foot {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--border-1) solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-body-sm);
+}
