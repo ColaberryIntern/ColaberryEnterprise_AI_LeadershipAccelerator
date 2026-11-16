@@ -22,11 +22,11 @@ const DOC_TYPE_TEMPLATES: Record<string, string> = {
   cover_letter:
     'Write a concise transmittal letter: address the agency, name the solicitation, state that the firm commits to the scope and terms, and close with a signature-block placeholder. No marketing language.',
   past_performance:
-    'Present each reference as a structured entry — client, scope, period of performance, outcome. Use a [PLACEHOLDER: …] for any specific client, date, dollar figure, or metric not in the grounding.',
+    'Present each reference as a structured entry — client, scope, period of performance, outcome. For a reference NOT in the grounding, write ONE grouped marker [RECORD: reference] for it (exactly one if the solicitation does not state a number) rather than a separate [PLACEHOLDER] per field — it is answered as a whole record and must never be split into fields.',
   management:
-    'Describe the team and management approach. For each key person give role, responsibilities, and the relevant qualification; use a [PLACEHOLDER: …] for any named person or credential not in the grounding.',
+    'Describe the team and management approach. For each key person give role, responsibilities, and the relevant qualification; for a person NOT in the grounding, write ONE grouped marker [RECORD: personnel] rather than per-field placeholders.',
   key_personnel:
-    'For each key person give role, responsibilities, and the relevant qualification; use a [PLACEHOLDER: …] for any named person, credential, or years-of-experience figure not in the grounding.',
+    'For each key person give role, responsibilities, and the relevant qualification; for a person NOT in the grounding, write ONE grouped marker [RECORD: personnel] (answered as a whole record: name, role, relevant experience) rather than a [PLACEHOLDER] per field.',
   technical:
     'Lead each requirement with the hot button, then the feature, the benefit to the agency, then the proof. Stay specific to this scope; never write filler that would fit any proposal.',
   reps_certs:

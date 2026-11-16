@@ -85,6 +85,11 @@ export async function generateProposalDocumentDraftAI(input: DocumentDraftInput)
     'statements; do NOT invent any specific fact - no client names, project names, metrics, dates, dollar figures, ' +
     'certifications, or personnel. Whenever a strong document WOULD need such a specific fact, insert a visible ' +
     'placeholder exactly like [PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
+    'EXCEPTION for grouped records: for a PAST-PERFORMANCE or REFERENCES entry do NOT write a separate [PLACEHOLDER] ' +
+    'per field; write ONE grouped marker [RECORD: reference] for each reference the section needs (exactly one if the ' +
+    'solicitation does not state a number). For a KEY-PERSON entry write [RECORD: personnel]. A [RECORD] marker is ' +
+    'answered as a whole record (client, scope, period, outcome / name, role, experience) and must NEVER be split ' +
+    'into per-field placeholders. ' +
     'Return STRICT JSON {"html":"...","gaps":[{"question":"...","suggestions":["..."]}]} where html uses ONLY these ' +
     'tags: h2, h3, h4, p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no ' +
     '<script>, no <style>, no links or images. `gaps` lists each specific fact you needed but could not find in the ' +
