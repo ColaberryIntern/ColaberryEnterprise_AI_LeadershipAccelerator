@@ -13,6 +13,8 @@ import { block, cards, cora } from './useRoomLog';
 export interface AnchorFlow {
   dashboard: PrepDashboard | null; anchorId: string | null; loadedPlan: StoredPlan | null; busy: boolean;
   askWhich: (opening: boolean) => void; offerPlans: () => void; anchorOn: (id: string) => Promise<void>;
+  /** Reload the dashboard for the current interview, quietly (no chat), e.g. after a session (CP4.5). */
+  reload: () => Promise<void>;
 }
 
 export function useAnchorFlow(initialAnchorId: string | null, push: (...i: ChatItem[]) => void, setError: (e: string) => void): AnchorFlow {
@@ -54,5 +56,8 @@ export function useAnchorFlow(initialAnchorId: string | null, push: (...i: ChatI
 
   const askWhich = useCallback((opening: boolean) => { if (dashboard) askWhichFor(dashboard, opening); }, [dashboard, askWhichFor]);
   const offerPlans = useCallback(() => { if (dashboard && anchorId) offerFor(dashboard, anchorId); else askWhich(false); }, [dashboard, anchorId, offerFor, askWhich]);
-  return { dashboard, anchorId, loadedPlan, busy, askWhich, offerPlans, anchorOn };
+  const reload = useCallback(async () => {
+    try { setDashboard(await fetchPrepDashboard(anchorId ?? undefined)); } catch { setError('Could not refresh your progress. Reopen the room to see it.'); }
+  }, [anchorId, setError]);
+  return { dashboard, anchorId, loadedPlan, busy, askWhich, offerPlans, anchorOn, reload };
 }

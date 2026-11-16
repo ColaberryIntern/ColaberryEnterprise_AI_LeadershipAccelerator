@@ -11,13 +11,15 @@ import { cards, cora, me } from './useRoomLog';
 /**
  * Career Prep v27 (CP3.4): what the student types and picks. `ask` routes the common asks in code
  * (askRouter) and sends the rest to Cora; `pickCard` dispatches a picked card by its id prefix (add,
- * create, type:, plan:, min:, focus:, skill:, start, suggest:, or an interview id).
+ * create, type:, plan:, min:, focus:, skill:, start, suggest:, remind:, tab:, offer, or an interview id).
  */
 export type PrepForm = null | { mode: 'add' } | { mode: 'practice'; type: InterviewType };
 export interface ConversationDeps {
   push: (...i: ChatItem[]) => void; skills: PrepSkill[]; anchorId: string | null; setForm: (f: PrepForm) => void;
   offerPlans: () => void; makePlan: (kind: PrepPlan['kind'], opts?: { minutes?: Minutes; focusSkill?: string }) => Promise<void>;
   anchorOn: (id: string) => Promise<void>; onTab: (t: 'progress' | 'plan' | 'session') => void; onSheet: (s: Sheet) => void; onStart: () => void;
+  /** CP4.5: set a reminder (tonight at 6:00 PM for the plan, or the same time tomorrow for the session). */
+  remind: (kind: 'tonight' | 'tomorrow') => void;
 }
 
 export const ASK_ADD = 'Tell me about it. Paste the job description if you have it.';
@@ -67,6 +69,9 @@ export function usePickCard(d: ConversationDeps, ask: (text: string) => void): (
     if (kind === 'skill') { void d.makePlan('custom', { minutes: 10, focusSkill: value }); return; }
     if (kind === 'start') { d.onTab('session'); d.onStart(); return; }
     if (kind === 'suggest') { ask(card.title); return; }
+    if (kind === 'remind') { d.remind(value === 'tonight' ? 'tonight' : 'tomorrow'); return; }
+    if (kind === 'tab') { d.onTab(value === 'plan' ? 'plan' : value === 'session' ? 'session' : 'progress'); return; }
+    if (kind === 'offer') { d.offerPlans(); return; }
     void d.anchorOn(card.id);
   }, [d, ask]);
 }

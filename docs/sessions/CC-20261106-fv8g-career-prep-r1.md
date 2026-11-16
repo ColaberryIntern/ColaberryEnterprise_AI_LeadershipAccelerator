@@ -383,3 +383,42 @@ tests/systemV2/career-prep/.
   - Verification: frontend Career Prep 117 pass (12 new: SessionRunner.test.tsx); frontend tsc clean; backend
     Career Prep tests pass (207) with the questions passthrough.
   - Notes: the recap after a finished session is CP4.5 (T21); until then the runner shows "Session finished".
+
+- [x] CP4.4 attempt 2: fixes from the T20 verification (T19 PASS 11/12; T20 FAIL 7/12 on attempt 1)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: a route test proves an oversized upload gets the readable 413 (and the real limit is 100 MB);
+    RTL tests for every part's body (Warm up, Learn, Try, Pressure with "Hear Cora ask" and without speech, Full
+    rehearsal, Cool down); each part gets its own recorder (keyed), so a score never carries to the next
+    question; the Full rehearsal now asks three questions in one recording; TryRecorder split into a view and
+    useTryRecorder (no function over 50 lines); useSession computes each move once outside React's state updater
+    (one request per move, StrictMode-safe) and resumes a session left paused on the server; nginx: the attempts
+    block sits above the intro-video comment again and accepts upper-case ids; a frontend guard test finds no
+    face / eye contact / expression / spoken-accent wording in Career Prep.
+  - Declared deviations (also in the run's plan.md, for Ali's Release 1 review): (1) Try answers are scored on
+    delivery only; interviewService.scoreAnswer content scoring is not wired because it yields levels, and
+    whether levels may count toward skill numbers is Ali's open question. (2) The Pressure round runs in the
+    browser only; "by phone (Synthflow)" is a Release 2 candidate. (3) Carried to T26: a 40 MB upload through
+    nginx to the attempts path returns 202.
+
+- [x] CP4.5 Finish, recap, reminders
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: recap.ts: on finish or end, every scored attempt of the session is written as observations
+    FIRST (idempotent), then the recap is read: "before" is the dashboard without this session's rows, "after"
+    the dashboard with them, both through buildDashboard, so the recap's numbers are the dashboard's; omitted,
+    never 0, when unknown. PATCH /sessions/:id returns { session, recap } on finish/end; a recap failure never
+    loses the session. Reminders: prep_reminders (UNIQUE ref + kind, so asking twice is one), reminderTime.ts
+    (tonight = 6:00 PM Central, refused after 6; tomorrow = next Central date at the session's start time,
+    DST-exact; quiet hours 9 PM to 8 AM Central move a reminder to 8 AM), reminders.ts (5-minute sender claims due
+    rows before sending; kill switch system_settings career_prep_reminders_off, fail closed; students off the
+    allow-list skipped; plain-text email through guardedSendMail), POST/GET /api/portal/career-prep/reminders.
+    Frontend: the Session tab ends in the recap (readiness, streak, minutes, "What changed today" before and
+    after); Cora posts the recap with See my dashboard / Same time tomorrow / Another session; the dashboard
+    reloads and marks the moved skills New; "Remind me tonight at 6:00 PM" follows a new plan before 6 PM; a
+    reminder sent in the last 12 hours is Cora's first line in the room.
+  - Verification: backend Career Prep 248 pass, 11 skipped (Postgres integration, run in CI); frontend Career Prep
+    144 pass; both tsc clean (local maxmind only); no test type-check error in a Career Prep file.
+  - Notes: declared deviation: the in-app half of a reminder is Cora's line in the room, not the community
+    notification feed (its notification_type CHECK lists six community kinds; widening it changes a shared table).
+    Rollback: kill switch stops all sends; UPDATE prep_reminders SET status = 'cancelled' WHERE status = 'pending'.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { postPlan, type PrepPlan, type StoredPlan } from './careerPrepApi';
 import type { ChatItem } from './CoraChat';
 import { cards, cora } from './useRoomLog';
+import { REMIND_TONIGHT, tonightOffered } from './logic/recapCopy';
 
 /**
  * Career Prep v27 (CP4.1): asks the SERVER to build a plan for the anchored interview (the client never
@@ -28,7 +29,8 @@ export function usePlanMaker(anchorId: string | null, loadedPlan: StoredPlan | n
       ready.current();
       const n = p.plan.days.length;
       push(cora(`Your plan is ready: ${n} ${n === 1 ? 'session' : 'sessions'}.`),
-        cards('Next', [{ id: 'start', icon: 'play-circle-line', title: `Start today's session · ${p.plan.minutes} min`, line: 'The timer starts when you do.', badge: 'Now' }]));
+        cards('Next', [{ id: 'start', icon: 'play-circle-line', title: `Start today's session · ${p.plan.minutes} min`, line: 'The timer starts when you do.', badge: 'Now' },
+          ...(tonightOffered(new Date()) ? [REMIND_TONIGHT] : [])]));
     } catch { setError('Could not build the plan. Try again.'); } finally { setBusy(false); }
   }, [anchorId, askWhich, push, setError]);
 

@@ -11,6 +11,8 @@ import { activePlan, createPlan, NotYoursError, PastInterviewError } from '../se
 import { currentSession, NotFoundError, startSession, updateSession } from '../services/careerPrep/sessions';
 import { prepAttemptUpload } from '../config/prepAttemptUpload';
 import { getAttemptStatus, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
+import { getReminders, postReminder } from '../controllers/careerPrepReminderController';
+import { sessionRecap, type Recap } from '../services/careerPrep/recap';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
 
@@ -190,7 +192,12 @@ export async function patchSession(req: Request, res: Response): Promise<void> {
   const b = SessionPatch.safeParse(req.body);
   if (!p.success || !b.success) { res.status(400).json({ error: 'That session update is not valid.' }); return; }
   try {
-    res.json({ session: await updateSession(req.participant!.sub, p.data.id, b.data) });
+    const session = await updateSession(req.participant!.sub, p.data.id, b.data);
+    const over = (b.data.action === 'finish' || b.data.action === 'end') && (session.status === 'finished' || session.status === 'ended');
+    // CP4.5: the recap writes the session's scores first, then reads them. A recap failure never loses the session.
+    let recap: Recap | undefined;
+    if (over) recap = await sessionRecap(req.participant!.sub, session).catch((err) => { logFailure('career_prep_recap_failed', err); return undefined; });
+    res.json({ session, ...(recap ? { recap } : {}) });
   } catch (err) { sessionError(res, err, 'career_prep_session_update_failed'); }
 }
 
@@ -214,5 +221,8 @@ router.get('/api/portal/career-prep/sessions/current', requireParticipant, requi
 // CP4.4: a recorded Try answer (multipart, 100 MB; nginx raises its body cap for this path).
 router.post('/api/portal/career-prep/sessions/:id/attempts', requireParticipant, requireCareerPrep, guardUpload(prepAttemptUpload.single('video')), postAttempt);
 router.get('/api/portal/career-prep/sessions/:id/attempts/:attemptId', requireParticipant, requireCareerPrep, getAttemptStatus);
+// CP4.5: reminders (tonight at 6:00 PM, same time tomorrow).
+router.post('/api/portal/career-prep/reminders', requireParticipant, requireCareerPrep, postReminder);
+router.get('/api/portal/career-prep/reminders', requireParticipant, requireCareerPrep, getReminders);
 
 export default router;

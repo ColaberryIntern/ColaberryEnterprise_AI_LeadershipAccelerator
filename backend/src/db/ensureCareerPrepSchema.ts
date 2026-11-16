@@ -121,6 +121,20 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      UNIQUE (session_id, client_key)
    )`,
+  // CP4.5: one reminder per (ref, kind); ref = session:<id> or plan:<id>. Sent at most once (claimed before sending).
+  `CREATE TABLE IF NOT EXISTS prep_reminders (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     ref VARCHAR(80) NOT NULL,
+     kind VARCHAR(10) NOT NULL CHECK (kind IN ('tonight','tomorrow')),
+     send_at TIMESTAMPTZ NOT NULL,
+     status VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sent','skipped','failed','cancelled')),
+     sent_at TIMESTAMPTZ,
+     error_class VARCHAR(40),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     UNIQUE (ref, kind)
+   )`,
+  'CREATE INDEX IF NOT EXISTS prep_reminders_due_idx ON prep_reminders (status, send_at)',
   `CREATE TABLE IF NOT EXISTS prep_readiness_daily (
      enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
      interview_id UUID NOT NULL DEFAULT '${NO_INTERVIEW}',
@@ -134,6 +148,7 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
 
 /** Run by hand to roll CP1.2 back. Never run at boot. Dependents first. */
 export const CAREER_PREP_ROLLBACK: readonly string[] = [
+  'DROP TABLE IF EXISTS prep_reminders',
   'DROP TABLE IF EXISTS prep_readiness_daily',
   'DROP TABLE IF EXISTS prep_attempts',
   'DROP TABLE IF EXISTS prep_sessions',

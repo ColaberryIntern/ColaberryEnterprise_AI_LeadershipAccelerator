@@ -54,7 +54,7 @@ function Interviews({ list, onAnchor }: { list: PrepInterview[]; onAnchor: (id: 
   );
 }
 
-function Skills({ skills, onSkill }: { skills: PrepSkill[]; onSkill: (s: PrepSkill) => void }): React.ReactElement {
+function Skills({ skills, onSkill, newKeys = [] }: { skills: PrepSkill[]; onSkill: (s: PrepSkill) => void; newKeys?: string[] }): React.ReactElement {
   const scored = skills.filter((s) => s.score !== undefined);
   const unscored = skills.filter((s) => s.score === undefined);
   return (
@@ -63,7 +63,7 @@ function Skills({ skills, onSkill }: { skills: PrepSkill[]; onSkill: (s: PrepSki
       {scored.length === 0 && <p className="cp-muted">No skill has enough practice yet.</p>}
       <ul className="cp-list" data-testid="cp-skills">{scored.map((s) => (
         <li key={s.key}><button type="button" className="cp-rowbtn" onClick={() => onSkill(s)}>
-          <span className="cp-skill-name">{s.label}</span>
+          <span className="cp-skill-name">{s.label}{newKeys.includes(s.key) && <span className="cp-new" data-testid={`cp-new-${s.key}`}> New</span>}</span>
           <span className="cp-bar" aria-hidden="true"><span className="cp-bar-fill" style={{ width: `${s.score}%` }} /></span>
           <b>{s.score}</b>{changeText(s) && <small> {changeText(s)} in 30 days</small>}<small className="cp-muted"> · {s.sources.join(', ')}</small>
         </button></li>
@@ -110,12 +110,13 @@ function Practice({ d }: { d: PrepDashboard }): React.ReactElement | null {
   );
 }
 
-export function ProgressDashboard({ d, onAnchor, onSkill }: { d: PrepDashboard; onAnchor: (id: string) => void; onSkill: (s: PrepSkill) => void }): React.ReactElement {
+/** `newKeys`: skills the session just finished changed (CP4.5), marked New. */
+export function ProgressDashboard({ d, onAnchor, onSkill, newKeys }: { d: PrepDashboard; onAnchor: (id: string) => void; onSkill: (s: PrepSkill) => void; newKeys?: string[] }): React.ReactElement {
   return (
     <div className="cp-dash" data-testid="cp-dashboard">
       <Readiness d={d} />
       <Interviews list={d.interviews} onAnchor={onAnchor} />
-      <Skills skills={d.skills} onSkill={onSkill} />
+      <Skills skills={d.skills} onSkill={onSkill} newKeys={newKeys} />
       <CoraRead skills={d.skills} onSkill={onSkill} />
       <Sources sources={d.sources} />
       <Practice d={d} />

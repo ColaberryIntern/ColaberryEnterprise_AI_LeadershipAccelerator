@@ -2,10 +2,12 @@ import React from 'react';
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { useCareerPrep, type CareerPrepRoomState, type RoomHooks } from '../useCareerPrep';
-import { askCoraApi, fetchActivePlan, fetchPrepDashboard, postInterview, postPlan, type PrepDashboard } from '../careerPrepApi';
+import { askCoraApi, fetchActivePlan, fetchPrepDashboard, postInterview, postPlan, setReminderApi, type PrepDashboard } from '../careerPrepApi';
+import { tonightOffered } from '../logic/recapCopy';
 import { centralLocalToIso } from '../InterviewForm';
 
-jest.mock('../careerPrepApi', () => ({ fetchPrepDashboard: jest.fn(), postInterview: jest.fn(), askCoraApi: jest.fn(), fetchActivePlan: jest.fn(), postPlan: jest.fn() }));
+jest.mock('../careerPrepApi', () => ({ fetchPrepDashboard: jest.fn(), postInterview: jest.fn(), askCoraApi: jest.fn(), fetchActivePlan: jest.fn(), postPlan: jest.fn(), setReminderApi: jest.fn() }));
+const remindApi = setReminderApi as jest.Mock;
 const active = fetchActivePlan as jest.Mock;
 const makePlan = postPlan as jest.Mock;
 const dash = fetchPrepDashboard as jest.Mock;
@@ -30,7 +32,7 @@ async function mount(anchor: string | null = null, hooks: RoomHooks = {}): Promi
 }
 const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
 afterEach(() => { if (root) { const r = root; act(() => r.unmount()); } host = null; root = null; });
-beforeEach(() => { dash.mockReset(); post.mockReset(); ask.mockReset(); active.mockReset().mockResolvedValue(null); makePlan.mockReset(); });
+beforeEach(() => { dash.mockReset(); post.mockReset(); ask.mockReset(); active.mockReset().mockResolvedValue(null); makePlan.mockReset(); remindApi.mockReset(); });
 const lastCards = () => [...state.log].reverse().find((i) => i.kind === 'cards') as Extract<typeof state.log[number], { kind: 'cards' }>;
 
 describe('useCareerPrep (CP3.3, CP3.4)', () => {
@@ -155,5 +157,58 @@ describe('centralLocalToIso', () => {
   it('rejects a time that does not exist (spring forward) and malformed input', () => {
     expect(centralLocalToIso('2027-03-14T02:30')).toBeNull();
     expect(centralLocalToIso('tomorrow')).toBeNull();
+  });
+});
+
+describe('reminders and the cards after a session (CP4.5)', () => {
+  const planned = async (hooks: RoomHooks = {}) => {
+    dash.mockResolvedValue(withData);
+    await mount('i1', hooks);
+    await flush();
+    makePlan.mockResolvedValue({ id: 'pl1', interviewId: 'i1', plan: { kind: 'days', minutes: 20, days: [{ date: '2026-11-16', segments: [] }] } });
+    await act(async () => { state.pick(lastCards().id, lastCards().cards.find((c) => c.id === 'plan:days')!); });
+    await flush();
+  };
+  const pickId = async (id: string, title = id) => { await act(async () => { state.pick('x', { id, icon: 'i', title, line: '' }); }); await flush(); };
+
+  it('after a plan, "Remind me tonight at 6:00 PM" is offered exactly when it is still before 6:00 PM Central', async () => {
+    await planned();
+    expect(lastCards().cards.some((c) => c.id === 'remind:tonight')).toBe(tonightOffered(new Date()));
+  });
+  it('tonight is set on the plan, and Cora confirms the real send time', async () => {
+    await planned();
+    remindApi.mockResolvedValue({ id: 'r1', kind: 'tonight', sendAt: '2026-11-17T00:00:00.000Z', status: 'pending' });
+    await pickId('remind:tonight');
+    expect(remindApi).toHaveBeenCalledWith('tonight', { planId: 'pl1' });
+    expect(state.log[state.log.length - 1]).toMatchObject({ kind: 'cora', text: 'Done. I will remind you at 6:00 PM Central, here and by email.' });
+  });
+  it('past 6:00 PM the server refuses tonight, and Cora points to Same time tomorrow', async () => {
+    await planned();
+    remindApi.mockRejectedValue({ response: { status: 409 } });
+    await pickId('remind:tonight');
+    expect(state.log[state.log.length - 1]).toMatchObject({ kind: 'cora', text: 'It is already past 6:00 PM. Pick "Same time tomorrow" instead.' });
+    expect(state.error).toBeNull();
+  });
+  it('Same time tomorrow is set on the session just done', async () => {
+    await planned({ sessionId: () => 'ses-9' });
+    remindApi.mockResolvedValue({ id: 'r2', kind: 'tomorrow', sendAt: '2026-11-17T23:30:00.000Z', status: 'pending' });
+    await pickId('remind:tomorrow');
+    expect(remindApi).toHaveBeenCalledWith('tomorrow', { sessionId: 'ses-9' });
+  });
+  it('See my dashboard opens Your progress; Another session offers the plans again', async () => {
+    const onTab = jest.fn();
+    await planned({ onTab });
+    await pickId('tab:progress', 'See my dashboard');
+    expect(onTab).toHaveBeenLastCalledWith('progress');
+    await pickId('offer', 'Another session');
+    expect(lastCards().label).toBe('Plans');
+  });
+  it('the recap is said in the chat and the dashboard reloads quietly', async () => {
+    await planned();
+    const before = dash.mock.calls.length;
+    await act(async () => { state.say({ id: 'c-x', kind: 'cora', text: 'Session done.' }); await state.reload(); });
+    expect(state.log[state.log.length - 1]).toMatchObject({ kind: 'cora', text: 'Session done.' });
+    expect(dash.mock.calls.length).toBe(before + 1);
+    expect(dash).toHaveBeenLastCalledWith('i1');
   });
 });

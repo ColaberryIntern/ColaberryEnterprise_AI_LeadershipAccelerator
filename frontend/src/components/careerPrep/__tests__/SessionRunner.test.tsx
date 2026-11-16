@@ -1,7 +1,7 @@
 import React from 'react';
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
-import type { AttemptView, PrepSessionView, SessionSegment, StoredPlan } from '../careerPrepApi';
+import type { AttemptView, PrepRecap, PrepSessionView, SessionSegment, StoredPlan } from '../careerPrepApi';
 import { SessionRunner } from '../SessionRunner';
 import { TryRecorder } from '../TryRecorder';
 import { useSession } from '../useSession';
@@ -37,14 +37,15 @@ afterEach(() => { if (root) { const r = root; act(() => r.unmount()); } host?.re
 const flush = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
 const click = async (h: HTMLElement, id: string) => { await act(async () => { (h.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click(); }); await flush(); };
 
-function Harness({ hasPlan = true }: { hasPlan?: boolean }): React.ReactElement {
-  const s = useSession(hasPlan ? plan : null, () => undefined);
-  return <SessionRunner s={s} type="recruiter" hasPlan={hasPlan} />;
+const onOver = jest.fn();
+function Harness({ hasPlan = true, questions }: { hasPlan?: boolean; questions?: string[] }): React.ReactElement {
+  const s = useSession(hasPlan ? plan : null, onOver);
+  return <SessionRunner s={s} type="recruiter" hasPlan={hasPlan} questions={questions} />;
 }
 
 beforeEach(() => {
-  mockStart.mockReset(); mockPatch.mockReset(); mockUpload.mockReset(); mockFetch.mockReset();
-  mockPatch.mockImplementation(async (_id: string, b: { action: string }) => view(three, { status: b.action === 'finish' ? 'finished' : 'running' }));
+  mockStart.mockReset(); mockPatch.mockReset(); mockUpload.mockReset(); mockFetch.mockReset(); onOver.mockReset();
+  mockPatch.mockImplementation(async (_id: string, b: { action: string }) => ({ session: view(three, { status: b.action === 'finish' ? 'finished' : b.action === 'end' ? 'ended' : 'running' }) }));
 });
 
 describe('the session (CP4.4)', () => {
@@ -117,6 +118,118 @@ describe('the session (CP4.4)', () => {
   it('uses the interview\'s own questions first, then the bank', () => {
     expect(questionFor(0, 'recruiter', ['Why Acme?'])).toBe('Why Acme?');
     expect(questionFor(4, 'technical', null)).toBe(QUESTION_BANK.technical[1]);
+  });
+});
+
+const all = [seg('warmup', 'Warm up', 2), { ...seg('learn', 'Learn: Pace and clarity', 4), targetSkill: 'pace_clarity' }, seg('try', 'Try it on camera', 8), seg('pressure', 'Pressure round', 5), seg('rehearsal', 'Full rehearsal', 25), seg('cooldown', 'Cool down', 1)];
+const toPart = async (h: HTMLElement, n: number) => { for (let k = 0; k < n; k++) await click(h, 'cp-session-next'); };
+
+describe('each part of a session has its own body (CP4.4)', () => {
+  beforeEach(() => { mockStart.mockResolvedValue({ session: view(all), resumed: false }); mockPatch.mockImplementation(async () => ({ session: view(all) })); });
+  afterEach(() => { delete (window as unknown as { speechSynthesis?: unknown }).speechSynthesis; });
+
+  it('Warm up gives the line to say and no camera', async () => {
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    expect(h.querySelector('[data-testid="cp-body-warmup"]')?.textContent).toContain('Hi, I am glad to be here.');
+    expect(h.querySelector('[data-testid="cp-try"]')).toBeNull();
+  });
+  it("Learn explains the part's skill in plain words", async () => {
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 1);
+    expect(h.querySelector('[data-testid="cp-body-learn"]')?.textContent).toContain('100 to 165 words a minute');
+  });
+  it("Try asks the interview's own question and records it", async () => {
+    const h = mount(<Harness questions={['Why Acme?', 'What did you ship?']} />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 2);
+    expect(h.querySelector('.cp-try-q')?.textContent).toBe('Question: Why Acme?');
+    expect(h.querySelector('[data-testid="cp-record"]')).not.toBeNull();
+  });
+  it('the Pressure round adds a follow-up and Cora can read it aloud', async () => {
+    const speak = jest.fn();
+    (window as unknown as { speechSynthesis: unknown }).speechSynthesis = { speak };
+    (window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance = function U(this: { text: string }, t: string) { this.text = t; };
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 3);
+    const q = h.querySelector('.cp-try-q')?.textContent ?? '';
+    expect(q).toContain('Then: Why did you choose that approach?');
+    await click(h, 'cp-hear');
+    expect(speak.mock.calls[0][0].text).toBe(q.replace('Question: ', ''));
+  });
+  it('without browser speech there is no Hear button, and the recorder still works', async () => {
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 3);
+    expect(h.querySelector('[data-testid="cp-hear"]')).toBeNull();
+    expect(h.querySelector('[data-testid="cp-record"]')).not.toBeNull();
+  });
+  it('the Full rehearsal asks three questions in one recording', async () => {
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 4);
+    expect(h.querySelector('.cp-try-q')?.textContent).toMatch(/\(1\) .+ \(2\) .+ \(3\) .+/);
+  });
+  it('Cool down says where the scores go', async () => {
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 5);
+    expect(h.querySelector('[data-testid="cp-body-cooldown"]')?.textContent).toContain('appear on Your progress');
+  });
+  it('each part gets a fresh recorder: a score never carries to the next question', async () => {
+    const original = navigator.mediaDevices;
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: jest.fn(async () => ({ getTracks: () => [{ stop: jest.fn() }] })) } });
+    (window as unknown as { MediaRecorder: unknown }).MediaRecorder = class { ondataavailable: ((e: { data: Blob }) => void) | null = null; onstop: (() => void) | null = null; start() { /* rec */ } stop() { this.onstop?.(); } };
+    mockUpload.mockResolvedValue({ id: 'att-1', status: 'done', errorClass: null, result: { seconds: 30, scores: [], notes: ['Good pace.'] } });
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await toPart(h, 2);
+    await click(h, 'cp-record');
+    await click(h, 'cp-stop');
+    expect(h.querySelector('[data-testid="cp-try-result"]')).not.toBeNull();
+    await toPart(h, 1);
+    expect(h.querySelector('[data-testid="cp-try-result"]')).toBeNull();
+    expect(h.querySelector('[data-testid="cp-record"]')).not.toBeNull();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: original });
+  });
+});
+
+describe('the recap (CP4.5)', () => {
+  const recap: PrepRecap = { status: 'finished', minutes: 11, attempts: 1, firstName: 'Ali', readiness: { before: 64, after: 69, company: 'Acme' }, skills: [{ key: 'pace_clarity', label: 'Pace and clarity', before: 48, after: 57 }], streak: 5 };
+  it("finishing shows the server's recap and hands it to the room", async () => {
+    const one = [seg('warmup', 'Warm up', 2)];
+    mockStart.mockResolvedValue({ session: view(one), resumed: false });
+    mockPatch.mockImplementation(async (_id: string, b: { action: string }) => (b.action === 'finish'
+      ? { session: view([seg('warmup', 'Warm up', 2, 'done')], { status: 'finished' }), recap } : { session: view([seg('warmup', 'Warm up', 2, 'done')]) }));
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await click(h, 'cp-session-next');
+    const r = h.querySelector('[data-testid="cp-recap"]');
+    expect(r?.textContent).toContain('Nice work, Ali.');
+    expect(r?.textContent).toContain('Readiness 69 from 64');
+    expect(r?.textContent).toContain('48 → 57');
+    expect(onOver).toHaveBeenCalledWith(expect.objectContaining({ status: 'finished' }), recap);
+  });
+  it('a recap with no scored answer says the numbers did not change, and shows no readiness it does not have', async () => {
+    mockStart.mockResolvedValue({ session: view(three), resumed: false });
+    mockPatch.mockImplementation(async (_id: string, b: { action: string }) => (b.action === 'end'
+      ? { session: view(three, { status: 'ended' }), recap: { status: 'ended', minutes: 2, attempts: 0, skills: [], streak: 1 } } : { session: view(three) }));
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await click(h, 'cp-session-end');
+    const r = h.querySelector('[data-testid="cp-recap"]');
+    expect(r?.textContent).toContain('Session ended');
+    expect(r?.textContent).toContain('your numbers did not change');
+    expect(r?.textContent).not.toContain('Readiness');
+  });
+  it('a session left paused is resumed on the server when it is picked up again', async () => {
+    mockStart.mockResolvedValue({ session: view(three, { status: 'paused' }), resumed: true });
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    expect(mockPatch).toHaveBeenCalledWith('ses-1', expect.objectContaining({ action: 'resume' }));
+    expect(h.textContent).toContain('Part 1 of 3');
   });
 });
 

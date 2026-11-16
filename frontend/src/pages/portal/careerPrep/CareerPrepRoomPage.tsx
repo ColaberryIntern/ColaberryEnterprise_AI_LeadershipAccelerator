@@ -8,17 +8,17 @@ import { useCareerPrep } from '../../../components/careerPrep/useCareerPrep';
 import { ProgressDashboard } from '../../../components/careerPrep/ProgressDashboard';
 import { PlanView } from '../../../components/careerPrep/PlanView';
 import { SessionRunner } from '../../../components/careerPrep/SessionRunner';
-import { useSession } from '../../../components/careerPrep/useSession';
+import { useRoomSession } from '../../../components/careerPrep/useRoomSession';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
 import { careerPrepFloorNum } from '../../../components/careerPrep/careerPrepFloorNum';
 import { careerPrepDoorsFor } from '../../../components/campus/hq/careerPrepDoors';
 import type { HqFloor } from '../../../components/campus/hq/hqModel';
 
 /**
- * /portal/career/room (Career Prep v27, CP3.1 + CP3.3). The room over the Career Prep floor: on a direct
+ * /portal/career/room (Career Prep v27, CP3.1 + CP3.3 + CP4.5). The room over the Career Prep floor: on a direct
  * load the floor is drawn behind it, so closing is instant. Career Prep off for this student (or unknown)
- * = the page does not exist for them. `?anchor=<interviewId>` preselects an interview. The tabs are
- * filled by CP3.5 (progress) and CP4 (plan, session); until then each says plainly what is coming.
+ * = the page does not exist for them. `?anchor=<interviewId>` preselects an interview. Tabs: Your progress
+ * (CP3.5), Your plan (CP4.2) and the Session (CP4.4), which ends in the recap (CP4.5).
  */
 export interface CareerPrepRoomPageProps {
   tabs?: Partial<Record<RoomTab, React.ReactNode>>;
@@ -29,13 +29,13 @@ const Pending = ({ text }: { text: string }) => <p className="cp-pending">{text}
 function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClose: () => void }): React.ReactElement {
   const [params] = useSearchParams();
   const [tab, setTab] = useState<RoomTab>('progress');
-  // Cora's "Start today's session" card opens the Session tab and starts it (the session hook is made below, so it is reached through a ref).
-  const startRef = useRef<() => void>(() => undefined);
-  const room = useCareerPrep(params.get('anchor'), { onTab: setTab, onStart: () => { setTab('session'); startRef.current(); } });
+  // Cora's "Start today's session" card opens the Session tab and starts it; "Same time tomorrow" needs the
+  // session's id. The session hook is made after the room's, so both are reached through a ref.
+  const live = useRef<{ start: () => void; sessionId: () => string | null }>({ start: () => undefined, sessionId: () => null });
+  const room = useCareerPrep(params.get('anchor'), { onTab: setTab, onStart: () => { setTab('session'); live.current.start(); }, sessionId: () => live.current.sessionId() });
   const anchor = room.dashboard?.interviews.find((i) => i.id === room.anchorId) ?? null;
-  // The recap after a finished session is CP4.5 (T21); until then the runner shows its own finished line.
-  const session = useSession(room.plan, () => undefined);
-  startRef.current = () => { if (session.state.status === 'idle') void session.start(); };
+  const { session, newKeys, sessionId } = useRoomSession(room);
+  live.current = { start: () => { if (session.state.status === 'idle') void session.start(); }, sessionId };
   return (
     <CareerPrepRoom
       anchor={anchor}
@@ -52,10 +52,10 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
       )}
       tabs={{
         progress: tabs?.progress ?? (room.dashboard
-          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} />
+          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} newKeys={newKeys} />
           : <Pending text="Loading your progress..." />),
         plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
-        session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} />,
+        session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} onTab={setTab} />,
       }}
     />
   );

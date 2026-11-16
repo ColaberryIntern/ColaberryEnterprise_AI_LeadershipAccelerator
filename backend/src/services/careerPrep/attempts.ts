@@ -11,8 +11,9 @@ import { NotFoundError } from './sessions';
  * Career Prep v27, CP4.4: a recorded "Try" answer (prep_attempts), scored with the same pipeline as the
  * Hire intro video (hireVideoTranscribe, hireVideoSpeech, hireVideoAnalysis): pace and filler words
  * against their published targets. The intro video's LENGTH target (about 90 s) does not apply to a
- * practice answer, so its score and note are left out. Content and voice are not scored here, and no face
- * or expression is ever read.
+ * practice answer, so its score and note are left out. Only the audio's words and timing are used; no video
+ * frame is analyzed. CONTENT is not scored into observations in Release 1 (declared deviation, plan.md T20):
+ * content scoring gives levels, and whether levels may ever count toward skill numbers is Ali's open call.
  *
  * RETRY-SAFE: (session_id, client_key) is UNIQUE, so a retried upload returns the same attempt and is not
  * scored twice. Scoring runs in a one-at-a-time in-process queue; the uploaded file is deleted after
@@ -55,15 +56,19 @@ export function attemptResult(words: Parameters<typeof speechMetrics>[0], second
   return { seconds: m.seconds, scores: deliveryScores(m).filter((s) => s.key !== 'length'), notes: coachingNotes(m).slice(1) };
 }
 
+/** The observations one scored attempt becomes (pace and fillers only; ref attempt:<id>). Shared with the recap. */
+export function attemptObservationRows(enrollmentId: string, attemptId: string, result: AttemptResult, observedAt: Date): ObservationRow[] {
+  return result.scores.filter((s) => SKILL_OF[s.key])
+    .map((s) => ({ enrollmentId, skill: SKILL_OF[s.key], value: s.score, source: 'video', sourceRef: `attempt:${attemptId}`, observedAt }));
+}
+
 export interface ScoreDeps { transcribeCall?: TranscribeCall }
 
 export async function scoreAttempt(attemptId: string, enrollmentId: string, file: string, deps: ScoreDeps = {}): Promise<'done' | 'failed'> {
   try {
     const t = await transcribe(file, deps.transcribeCall);
     const result = attemptResult(t.words, t.duration);
-    const rows: ObservationRow[] = result.scores.filter((s) => SKILL_OF[s.key])
-      .map((s) => ({ enrollmentId, skill: SKILL_OF[s.key], value: s.score, source: 'video', sourceRef: `attempt:${attemptId}`, observedAt: new Date() }));
-    await writeObservations(rows);
+    await writeObservations(attemptObservationRows(enrollmentId, attemptId, result, new Date()));
     await sequelize.query(`UPDATE prep_attempts SET status = 'done', result = CAST(:r AS JSONB) WHERE id = :a`, { replacements: { r: JSON.stringify(result), a: attemptId } });
     return 'done';
   } catch (err) {

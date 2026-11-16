@@ -73,8 +73,26 @@ export async function startSessionApi(planId: string): Promise<{ session: PrepSe
   return (await portalApi.post(`${BASE}/sessions`, { planId })).data;
 }
 
-export async function patchSessionApi(id: string, body: { action: 'segment_done' | 'pause' | 'resume' | 'finish' | 'end'; segmentIndex?: number; secondsActive: number }): Promise<PrepSessionView> {
-  return (await portalApi.patch(`${BASE}/sessions/${encodeURIComponent(id)}`, body)).data.session;
+/** CP4.5: what changed in a session, computed by the server from the rows it wrote (numbers absent when unknown). */
+export interface PrepRecap {
+  status: 'finished' | 'ended'; minutes: number; attempts: number; firstName?: string;
+  readiness?: { after: number; before?: number; interviewId?: string; company?: string };
+  skills: Array<{ key: string; label: string; before?: number; after: number }>;
+  streak: number;
+}
+
+/** A session move. Finishing or ending it also returns the recap (when the server could build one). */
+export async function patchSessionApi(id: string, body: { action: 'segment_done' | 'pause' | 'resume' | 'finish' | 'end'; segmentIndex?: number; secondsActive: number }): Promise<{ session: PrepSessionView; recap?: PrepRecap }> {
+  return (await portalApi.patch(`${BASE}/sessions/${encodeURIComponent(id)}`, body)).data;
+}
+
+export interface PrepReminder { id: string; kind: 'tonight' | 'tomorrow'; sendAt: string; status: string }
+/** CP4.5: "Remind me tonight at 6:00 PM" (a plan) or "Same time tomorrow" (a session). Asking twice is one reminder. */
+export async function setReminderApi(kind: PrepReminder['kind'], ref: { planId: string } | { sessionId: string }): Promise<PrepReminder> {
+  return (await portalApi.post(`${BASE}/reminders`, { kind, ...ref })).data.reminder;
+}
+export async function fetchRemindersApi(): Promise<PrepReminder[]> {
+  return (await portalApi.get(`${BASE}/reminders`)).data.reminders;
 }
 
 /** Upload one Try answer. `clientKey` makes a retried upload the same attempt on the server. */

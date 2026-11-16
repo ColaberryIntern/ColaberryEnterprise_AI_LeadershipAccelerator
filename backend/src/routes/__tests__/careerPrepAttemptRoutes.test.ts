@@ -84,11 +84,29 @@ describe('GET /sessions/:id/attempts/:attemptId', () => {
   });
 });
 
+describe('an upload over the limit', () => {
+  it('413s with a readable message, and the real limit is 100 MB for one file', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { guardUpload } = require('../../controllers/careerPrepAttemptController');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const multer = require('multer');
+    const tiny = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4, files: 1 } });
+    const a = express();
+    a.post('/up', guardUpload(tiny.single('video')), (_req: express.Request, res: express.Response) => { res.status(202).json({}); });
+    const res = await request(a).post('/up').attach('video', video, { filename: 'try.webm', contentType: 'video/webm' });
+    expect(res.status).toBe(413);
+    expect(res.body.error).toBe('That recording is too large. Keep an answer under 100 MB.');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PREP_ATTEMPT_MAX_BYTES } = require('../../config/prepAttemptUpload');
+    expect(PREP_ATTEMPT_MAX_BYTES).toBe(100 * 1024 * 1024);
+  });
+});
+
 describe('the upload path has its own nginx body-size rule', () => {
   it('nginx.conf raises the cap for the attempts path to 100m', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const conf = require('fs').readFileSync(require('path').join(__dirname, '..', '..', '..', '..', 'nginx', 'nginx.conf'), 'utf8') as string;
-    const block = /location ~ "\^\/api\/portal\/career-prep\/sessions\/\[0-9a-f-\]\+\/attempts\$" \{([\s\S]*?)\n    \}/.exec(conf);
+    const block = /location ~ "\^\/api\/portal\/career-prep\/sessions\/\[0-9a-fA-F-\]\+\/attempts\$" \{([\s\S]*?)\n    \}/.exec(conf);
     expect(block?.[1]).toContain('client_max_body_size 100m;');
   });
 });
