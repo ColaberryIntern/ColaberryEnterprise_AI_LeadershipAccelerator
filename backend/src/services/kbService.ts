@@ -8,6 +8,7 @@ import type {
   CreatePersonInput, UpdatePersonInput,
   CreateCohortInput, UpdateCohortInput,
 } from '../schemas/kbSchemas';
+import { CORA_PROMPT_RULES } from './coraPromptRules';
 
 // ── Merge tag resolution ─────────────────────────────────────────────────────
 
@@ -299,10 +300,15 @@ export async function buildCoraSystemPromptFromDB(courseId: string): Promise<str
     'Respond to incoming emails with the tone: friendly, empathetic, confident, and professional.',
     cohortContext,
     '',
+    // The rules come BEFORE the knowledge deliberately. They are instructions about
+    // how to use what follows, and they override it -- see coraPromptRules.ts for
+    // the replies that each rule exists to prevent.
+    CORA_PROMPT_RULES,
+    '',
     'Use the following Q&A knowledge base to answer questions accurately:',
     resolvedQA.join('\n\n'),
     '',
-    'If a question is not answered by the knowledge base, acknowledge receipt and route to the appropriate staff member.',
+    'If a question is not answered by the knowledge base, do not answer it from general knowledge. Acknowledge receipt, say a person will follow up, and set needs_human to true.',
   ].join('\n');
 }
 
