@@ -14,10 +14,19 @@
 .cp-floor .cp-status{font-size:12px}
 .cp-floor .cp-cora{position:absolute;right:3%;bottom:12%;display:flex;flex-direction:column;gap:4px;max-width:220px;min-height:44px;padding:10px 12px;border-radius:8px;background:var(--cm-art-hq-office2);color:var(--cm-art-cloud);text-decoration:none;box-shadow:var(--cm-art-shadow)}
 .cp-floor .cp-cora .av{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--cm-art-hq-brass2);color:var(--cm-art-hq-plate-ink);font-weight:700}
+.cp-floor .cp-cora .tx{display:flex;flex-direction:column;gap:2px}
+.cp-floor .cp-cora .tx b{font-size:15px;line-height:1.2}
+.cp-floor .cp-cora .tx b small{margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--cm-art-hq-brass2);color:var(--cm-art-hq-plate-ink);font-size:10px;font-weight:700;vertical-align:middle}
+.cp-floor .cp-cora .tx>small{font-size:12px}
 .cp-floor .cp-cora .say{font-size:12px;line-height:1.35}
+/* /portal/career: the page gives the floor the tower's frame to fill (the trail sits above it). */
+.cp-floor-stage{position:relative;height:calc(100dvh - 40px);min-height:520px}
 .cp-floor a:focus-visible{outline:3px solid var(--cm-art-hq-brass2);outline-offset:3px}
 @media (max-width:900px){
-  .cp-floor .cp-screen{top:72px}
-  .cp-floor .cp-door{width:200px;height:230px}
-  .cp-floor .cp-cora{position:static;margin:8px auto 0;max-width:none}
+  .cp-floor .cp-screen{top:128px}
+  .cp-floor .cp-door{width:200px;height:230px;bottom:110px}
+  /* Cora stays in the frame on a phone: a compact desk chip beside the Elevator and Lobby buttons. */
+  .cp-floor .cp-cora{right:12px;bottom:20px;max-width:150px;padding:6px 10px}
+  .cp-floor .cp-cora .av{width:26px;height:26px;font-size:13px}
+  .cp-floor .cp-cora .say{display:none}
 }

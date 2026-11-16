@@ -629,3 +629,17 @@ tests/systemV2/career-prep/.
     returns 413 (the control); /api/portal/career-prep/summary with no login returns 401; /portal/career serves
     200. Seed re-run: changed false. Backfill re-run: inserted 0 for every source. Not yet verified: Ali's own
     signed-in walkthrough of the room.
+
+- [x] Release 1 fix: /portal/career rendered unstyled in production (Ali's screenshot, 2026-11-16)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: the floor is drawn with the tower's classes, but hq.css loads only with the HQ building (campus
+    chunk), so a direct visit to /portal/career had no tower styles and no frame. CareerPrepFloor now imports hq.css
+    itself, and the page wraps the floor in the tower's .cm-hq frame (cp-floor-stage). Cora's name and title stack
+    (they ran together as "Cora AIyour interview coach", in the tower too). Phone: the floor screen clears the plate,
+    the door sits higher, and Cora is a compact chip beside the buttons (she was pushed out of the frame).
+    Why the browser suite missed it: check 1 only tested the trail's styling. New checks 1a (desktop: framed floor,
+    plate placed, tower buttons, door on screen, Cora stacked) and 1a phone (390: screen clears plate, Cora on
+    screen and clear of the door and buttons); both failed on the deployed build before the fix.
+  - Verification: browser suite 12/12 on the rebuilt app (Edge); screenshots at 1920x993 and 390x844 reviewed;
+    frontend tsc clean; Career Prep + campus jest 2414 pass (the two testEnv helper files report FAIL as before).

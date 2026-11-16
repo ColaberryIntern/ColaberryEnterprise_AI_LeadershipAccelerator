@@ -3,6 +3,9 @@ import type { HqFloor } from '../campus/hq/hqModel';
 import { CAREER_PREP_ROOM_PATH } from '../campus/hq/careerPrepDoors';
 import { careerPrepSummary } from './logic/careerPrepCopy';
 import { useCareerPrepSummary } from './useCareerPrepSummary';
+// The floor is drawn with the tower's classes (cm-hq-floor, cm-hq-btn, cm-hq-sr), so it loads the tower's styles itself:
+// reached directly at /portal/career the campus chunk that normally carries hq.css never loads.
+import '../campus/hq/hq.css';
 import './careerPrepFloor.css';
 
 /**

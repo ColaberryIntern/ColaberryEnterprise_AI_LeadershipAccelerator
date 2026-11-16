@@ -83,6 +83,34 @@ async function flowFloorAndRoom(browser) {
   await page.waitForSelector(tid('cp-floor'));
   const trail = await page.$eval(tid('cp-trail'), (el) => ({ display: getComputedStyle(el).display, tops: [...el.children].map((c) => Math.round(c.getBoundingClientRect().top)), step: el.getAttribute('data-step') }));
   check('1 /portal/career: the floor, one door, a styled one-row trail at step 2', trail.display === 'flex' && new Set(trail.tops).size === 1 && trail.step === '2' && (await page.$$(tid('cp-door'))).length === 1, JSON.stringify(trail));
+  // Production 2026-11-16: reached directly, the floor rendered unstyled (the tower's hq.css lives in the campus chunk,
+  // never loaded here) and the floor had no frame to fill. Prove the floor is drawn as the tower draws it.
+  const floorLook = await page.evaluate(() => {
+    const q = (s) => document.querySelector(s);
+    const r = (s) => q(s)?.getBoundingClientRect();
+    return {
+      floorH: Math.round(r('[data-testid="cp-floor"]')?.height ?? 0),
+      plate: getComputedStyle(q('.cp-floor .plate')).position,
+      btnRadius: getComputedStyle(q('[data-testid="cm-hq-to-cab"]')).borderRadius,
+      doorInView: (r('[data-testid="cp-door"]')?.bottom ?? 1e9) <= innerHeight,
+      coraTx: getComputedStyle(q('.cp-cora .tx')).flexDirection,
+    };
+  });
+  check('1a the floor is drawn as in the tower (framed, plate placed, tower buttons, door on screen, Cora name over title)',
+    floorLook.floorH >= 400 && floorLook.plate === 'absolute' && floorLook.btnRadius === '20px' && floorLook.doorInView && floorLook.coraTx === 'column', JSON.stringify(floorLook));
+  // On a phone: the floor screen clears the plate, and Cora stays inside the frame without covering the door or the buttons.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(100);
+  const phone = await page.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const plate = r('.cp-floor .plate'); const screen = r('.cp-floor .cp-screen'); const cora = r('[data-testid="cp-cora"]');
+    const door = r('[data-testid="cp-door"]'); const bar = r('.cp-floor .cm-hq-floorbar');
+    return { gap: Math.round(screen.top - plate.bottom), coraIn: cora.width > 0 && cora.top >= 0 && cora.bottom <= innerHeight && cora.left >= 0 && cora.right <= innerWidth, coraHitsDoor: hit(cora, door), coraHitsBar: hit(cora, bar) };
+  });
+  check('1a phone (390): the screen clears the plate; Cora is on screen, clear of the door and the buttons',
+    phone.gap >= 0 && phone.coraIn && !phone.coraHitsDoor && !phone.coraHitsBar, JSON.stringify(phone));
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.click(tid('cp-door'));
   await page.waitForSelector(tid('cp-room'));
   await page.click(tid('cp-card-i1'));

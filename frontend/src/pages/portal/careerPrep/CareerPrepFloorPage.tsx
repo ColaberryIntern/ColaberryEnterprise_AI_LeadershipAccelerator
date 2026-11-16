@@ -41,7 +41,12 @@ const CareerPrepFloorPage: React.FC = () => {
   return (
     <div className="cp-floor-page" data-testid="cp-floor-page">
       <LevelTrail step={2} floorNum={floor.num || null} />
-      <CareerPrepFloor f={floor} onElevator={() => navigate('/portal')} onLobby={() => navigate('/portal')} />
+      {/* The tower's frame: the floor is laid out to fill a .cm-hq scene, as it does inside the HQ building. */}
+      <div className="cp-floor-stage">
+        <div className="cm-hq" data-scene="floor">
+          <CareerPrepFloor f={floor} onElevator={() => navigate('/portal')} onLobby={() => navigate('/portal')} />
+        </div>
+      </div>
     </div>
   );
 };
