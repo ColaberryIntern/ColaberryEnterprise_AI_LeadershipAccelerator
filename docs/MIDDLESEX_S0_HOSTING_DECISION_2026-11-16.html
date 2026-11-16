@@ -83,7 +83,8 @@ Middlesex Glass AIA billing, project 49361096</div>
   <div class="label">Recommendation</div>
   <div class="headline">Host the pilot on Render: one vendor for the app and a managed Postgres, Pro
   workspace, US East. About $52.50 a month ($630 a year), billed to
-  Colaberry. Build it in a new Colaberry-owned repository, not in the Accelerator repo. Decide by
+  Colaberry. The product lives in its own repository; Enterprise controls it but holds none of its
+  code. Decide by
   Wednesday 18 November. Every day after that comes out of the November dry run (S7).</div>
 </div>
 
@@ -142,17 +143,22 @@ than three days later. The account is Colaberry's, on a company card, and not ti
 person.</p>
 </div>
 <div>
-<h2>A new repository, and why</h2>
-<p>The schema has tenants in it from the first migration, so this is a product that Middlesex
-uses, not a Middlesex project. Keeping it out of the Accelerator repo means:</p>
+<h2>Its own repository, controlled from Enterprise</h2>
+<p>All of the product lives in its own repo (for example <code>ColaberryIntern/aia-billing</code>):
+code, schema, tests and deploy config. Enterprise is the control panel, not the container:</p>
 <ul>
-  <li>its deploys don't queue behind the dozens of other workstreams merging into that repo;</li>
-  <li>a client security review covers one small codebase, not ours;</li>
-  <li>Render deploys it on push, with no Hetzner deploy script involved.</li>
+  <li><b>Deploys:</b> a merge to its <code>main</code> auto-deploys on Render. Enterprise can
+  trigger a deploy and read its status through Render's API.</li>
+  <li><b>Health:</b> the product exposes <code>/health</code>, which Enterprise polls and shows
+  alongside everything else.</li>
+  <li><b>Work:</b> tickets stay on this Basecamp board, with each PR paired to its ticket.</li>
+  <li><b>Data:</b> any exchange goes through a small token-protected API. The product's database
+  is never shared.</li>
 </ul>
+<p>This is the training.colaberry.com pattern we already run. It keeps deploys out of the
+Accelerator merge queue, and a client security review covers one small codebase, not ours.</p>
 <p>Colaberry owns it. <b>This is the reframe still owed to Jamie</b> (she was told on 26 Oct that
-she would own a repo). She should hear it from Ali, separately from any pricing talk, before she
-finds out any other way.</p>
+she would own a repo). She should hear it from Ali, separately from any pricing talk.</p>
 </div>
 </div>
 
