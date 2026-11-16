@@ -4,6 +4,12 @@ jest.mock('../../services/careerPrep/careerPrepFlag', () => ({ careerPrepEnabled
 jest.mock('../../services/campus/campusPilot', () => ({ campusOnFor: () => true }));
 const mockLoad = jest.fn();
 jest.mock('../../services/careerPrep/prepData', () => ({ loadPrepData: (...a: unknown[]) => mockLoad(...a) }));
+const mockLink = jest.fn();
+const mockAdd = jest.fn();
+const mockPractice = jest.fn();
+jest.mock('../../services/careerPrep/interviews', () => ({
+  linkHireInterviews: (...a: unknown[]) => mockLink(...a), addInterview: (...a: unknown[]) => mockAdd(...a), createPractice: (...a: unknown[]) => mockPractice(...a),
+}));
 
 import express from 'express';
 import request from 'supertest';
@@ -21,12 +27,82 @@ const data = () => ({
 
 function app(): express.Express {
   const a = express();
+  a.use(express.json());
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   a.use(require('../careerPrepRoutes').default);
   return a;
 }
 
-beforeEach(() => { mockEnabled.mockReset().mockResolvedValue(true); mockLoad.mockReset().mockResolvedValue(data()); });
+beforeEach(() => {
+  mockEnabled.mockReset().mockResolvedValue(true);
+  mockLoad.mockReset().mockResolvedValue(data());
+  mockLink.mockReset().mockResolvedValue(0);
+  mockAdd.mockReset();
+  mockPractice.mockReset();
+});
+
+describe('reads link real Hire interviews first', () => {
+  it('links before loading, and a link failure never blocks the read', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockLink.mockRejectedValue(new Error('db'));
+    const res = await request(app()).get('/api/portal/career-prep/summary').set('Authorization', token());
+    expect(res.status).toBe(200);
+    expect(mockLink).toHaveBeenCalledWith('enr-ali');
+  });
+});
+
+describe('POST /api/portal/career-prep/interviews', () => {
+  const url = '/api/portal/career-prep/interviews';
+  const add = { mode: 'add', company: 'Acme', role: 'AI Engineer', type: 'technical', startsAt: '2026-11-19T20:00:00Z', jdText: 'x' };
+
+  it('401s without a token', async () => {
+    expect((await request(app()).post(url).send(add)).status).toBe(401);
+  });
+
+  it('refuses a read-only "view as member" token (no writes while viewing as a student)', async () => {
+    const ro = 'Bearer ' + jwt.sign({ sub: 'enr-ali', cohort_id: 'coh-1', role: 'participant', read_only: true, impersonated_by: 'admin-1' }, SECRET);
+    const res = await request(app()).post(url).set('Authorization', ro).send(add);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(mockAdd).not.toHaveBeenCalled();
+  });
+
+  it('404s when Career Prep is off', async () => {
+    mockEnabled.mockResolvedValue(false);
+    expect((await request(app()).post(url).set('Authorization', token()).send(add)).status).toBe(404);
+  });
+
+  it.each([
+    ['an unknown mode', { mode: 'real', company: 'A', role: 'R', type: 'technical' }],
+    ['a bad type', { ...add, type: 'panel' }],
+    ['an empty company', { ...add, company: '  ' }],
+    ['a non-ISO date', { ...add, startsAt: 'Thursday' }],
+    ['an extra field (another student id)', { ...add, enrollmentId: 'enr-2' }],
+  ])('400s %s', async (_n, body) => {
+    expect((await request(app()).post(url).set('Authorization', token()).send(body)).status).toBe(400);
+    expect(mockAdd).not.toHaveBeenCalled();
+  });
+
+  it('adds an interview for the signed-in student only', async () => {
+    mockAdd.mockResolvedValue({ id: 'i9', questions: null });
+    const res = await request(app()).post(url).set('Authorization', token()).send(add);
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'i9', source: 'added', questions: null });
+    expect(mockAdd.mock.calls[0][0]).toBe('enr-ali');
+  });
+
+  it('creates a practice interview', async () => {
+    mockPractice.mockResolvedValue({ id: 'p9', practiceUntil: '2026-11-19' });
+    const res = await request(app()).post(url).set('Authorization', token()).send({ mode: 'practice', role: 'AI Engineer', type: 'behavioral' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: 'p9', source: 'practice', practiceUntil: '2026-11-19' });
+  });
+
+  it('500s plainly when the save fails', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockAdd.mockRejectedValue(new Error('db'));
+    expect((await request(app()).post(url).set('Authorization', token()).send(add)).body.error).toBe('Could not save the interview.');
+  });
+});
 
 describe.each(['/api/portal/career-prep/summary', '/api/portal/career-prep/dashboard'])('GET %s', (url) => {
   it('401s without a token', async () => {

@@ -4,6 +4,7 @@ import { requireParticipant } from '../middlewares/participantAuth';
 import { campusOnFor } from '../services/campus/campusPilot';
 import { careerPrepEnabled } from '../services/careerPrep/careerPrepFlag';
 import { loadPrepData } from '../services/careerPrep/prepData';
+import { addInterview, createPractice, linkHireInterviews } from '../services/careerPrep/interviews';
 import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
@@ -38,8 +39,21 @@ export async function requireCareerPrep(req: Request, res: Response, next: NextF
 
 const DashboardQuery = z.object({ interviewId: z.string().uuid().optional() }).strict();
 
+const TYPE = z.enum(['recruiter', 'hiring_manager', 'technical', 'behavioral']);
+export const InterviewBody = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('add'), company: z.string().trim().min(1).max(120), role: z.string().trim().min(1).max(120), type: TYPE,
+    startsAt: z.string().datetime().nullable(), jdText: z.string().max(20_000).optional() }).strict(),
+  z.object({ mode: z.literal('practice'), role: z.string().trim().min(1).max(120), type: TYPE }).strict(),
+]);
+
+/** Real interviews from Hire are linked before every read; idempotent, and a failure never blocks the read. */
+async function linkQuietly(enrollmentId: string): Promise<void> {
+  try { await linkHireInterviews(enrollmentId); } catch (err) { logFailure('career_prep_link_hire_failed', err); }
+}
+
 export async function getSummary(req: Request, res: Response): Promise<void> {
   try {
+    await linkQuietly(req.participant!.sub);
     const now = new Date();
     sendValidated(res, SummaryResponse, buildSummary(await loadPrepData(req.participant!.sub, now), now), 'career_prep_summary');
   } catch (err) {
@@ -52,6 +66,7 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
   const q = DashboardQuery.safeParse(req.query);
   if (!q.success) { res.status(400).json({ error: 'interviewId must be an interview id.' }); return; }
   try {
+    await linkQuietly(req.participant!.sub);
     const now = new Date();
     const data = await loadPrepData(req.participant!.sub, now);
     if (q.data.interviewId && !data.interviews.some((i) => i.id === q.data.interviewId)) { res.status(404).json({ error: 'Not found' }); return; }
@@ -62,9 +77,28 @@ export async function getDashboard(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function postInterview(req: Request, res: Response): Promise<void> {
+  const b = InterviewBody.safeParse(req.body);
+  if (!b.success) { res.status(400).json({ error: 'Check the interview details and try again.' }); return; }
+  try {
+    const me = req.participant!.sub;
+    if (b.data.mode === 'practice') {
+      const r = await createPractice(me, { role: b.data.role, type: b.data.type });
+      res.status(201).json({ id: r.id, source: 'practice', practiceUntil: r.practiceUntil });
+      return;
+    }
+    const r = await addInterview(me, { company: b.data.company, role: b.data.role, type: b.data.type, startsAt: b.data.startsAt, jdText: b.data.jdText });
+    res.status(201).json({ id: r.id, source: 'added', questions: r.questions ?? null });
+  } catch (err) {
+    logFailure('career_prep_interview_create_failed', err);
+    res.status(500).json({ error: 'Could not save the interview.' });
+  }
+}
+
 const router = Router();
 router.get('/api/portal/career-prep/flags', requireParticipant, getCareerPrepFlags);
 router.get('/api/portal/career-prep/summary', requireParticipant, requireCareerPrep, getSummary);
 router.get('/api/portal/career-prep/dashboard', requireParticipant, requireCareerPrep, getDashboard);
+router.post('/api/portal/career-prep/interviews', requireParticipant, requireCareerPrep, postInterview);
 
 export default router;

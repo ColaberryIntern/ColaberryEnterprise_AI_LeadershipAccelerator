@@ -169,3 +169,17 @@ tests/systemV2/career-prep/.
   - Notes: declared deviations: Cora on the floor is a plain link into the room, not FloorLobbyDesk (which opens a
     staff message card; the kit says clicking Cora opens the room); CareerPrepFloor lives in components/careerPrep/
     with the rest of the room, not hq/. hqModel.test's member floor count now leaves out the hidden Placement floor.
+
+- [x] CP3.3 (backend) Interviews: real from Hire, added (with JD questions), practice
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: interviews.ts (linkHireInterviews: confirmed, upcoming hire_interviews into career_interviews,
+    ON CONFLICT on hire_interview_id; addInterview with optional job description; createPractice with a 4-day Central
+    window); jdQuestions.ts (the minimal grounded JD-to-questions step, 5 to 8 validated questions, failure = saved
+    without questions); careerPrepLlm.ts (the one instrumented model call: 30 s timeout, 2 retries, JSON, error
+    classes); POST /api/portal/career-prep/interviews (Zod discriminated union, strict, flag-gated, enrollment from
+    the token, read-only view-as tokens refused); summary and dashboard link Hire interviews before reading (a link
+    failure never blocks the read).
+  - Verification: 108 Career Prep backend tests pass (interviews 11, interview route 11 among them); tsc clean;
+    route-auth lint OK.
+  - Notes: the JD prompt avoids the word "accent" so the no-face/no-accent guard test stays a plain word check.
