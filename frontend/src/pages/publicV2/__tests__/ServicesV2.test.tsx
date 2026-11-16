@@ -66,10 +66,64 @@ describe('ServicesV2 index', () => {
     expect(textOf(indexHtml())).toMatch(/scoped on a call|pricing/i);
   });
 
-  it('leads with the demo pilot, because two of the three services start there', () => {
+  /**
+   * THE SUBSTANCE, NOT THE BAND.
+   *
+   * This used to require a "The demo pilot." band above the three cards, and
+   * that it came first. The band came off when the chooser was brought to the
+   * v5 model, which has no equivalent on this page.
+   *
+   * The fact it protected has not left: a visitor who does not yet know which
+   * service they want still learns, from the comparison table, that two of the
+   * three begin with a demo pilot, and the closing band offers them one. That
+   * is what is asserted now. Pinning the band's heading was pinning a layout;
+   * this pins the thing a visitor needs to be able to find out.
+   */
+  it('says two of the three services start with a demo pilot, and offers one', () => {
     const text = textOf(indexHtml());
-    expect(text).toContain('The demo pilot.');
-    expect(text.indexOf('The demo pilot.')).toBeLessThan(text.indexOf('Three services.'));
+    const startsWith = COMPARE_ROWS.find((r) => r.label === 'Starts with');
+    expect(startsWith).toBeDefined();
+    const row = startsWith as NonNullable<typeof startsWith>;
+    expect([row.build, row.guide].filter((v) => /demo pilot/i.test(v))).toHaveLength(2);
+    expect(row.train).not.toMatch(/demo pilot/i);
+    // and the page itself offers the pilot, rather than only describing it
+    expect(indexHtml()).toContain('/demo-pilot');
+  });
+
+  /**
+   * The model closes every page on the same band, and this was the one page
+   * that ended on a pricing footnote instead.
+   */
+  it('closes on the demo-pilot band, linked directly rather than through a redirect', () => {
+    const h = indexHtml();
+    expect(textOf(h)).toContain('See AI run on one of your processes');
+    expect(h).toContain('href="/demo-pilot"');
+    expect(h).not.toContain('href="/contact"');
+  });
+
+  /**
+   * The chooser's own three questions, which the model has and this page did
+   * not. They are about choosing BETWEEN the services, not about any one of
+   * them, which is why they are not a duplicate of the service pages' FAQ.
+   */
+  it('answers the three questions a visitor has while still deciding', () => {
+    const text = textOf(indexHtml());
+    expect(text).toContain('Common questions.');
+    [
+      'Can we combine services?',
+      'Is Build an off-the-shelf product?',
+      'Will Guide add another tool to our stack?',
+    ].forEach((q) => expect(text).toContain(q));
+  });
+
+  /**
+   * THE FIDELITY GUARD. The model draws this page as five bands; it was
+   * shipping four, missing the FAQ and the close and carrying a demo-pilot
+   * band the model does not have. Exact in both directions, so adding or
+   * dropping a band is a decision made on purpose.
+   */
+  it('renders exactly the model’s five bands', () => {
+    expect((indexHtml().match(/<section/g) || []).length).toBe(5);
   });
 
   it('compares the three across every declared dimension', () => {
