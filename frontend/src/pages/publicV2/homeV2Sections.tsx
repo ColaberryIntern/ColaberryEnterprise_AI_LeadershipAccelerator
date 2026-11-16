@@ -288,7 +288,9 @@ export function DemoPilotSection(): React.ReactElement {
       <div className="cbv2-wrap">
         <div className="cbv2-section__head">
           <p className="cbv2-eyebrow">How it works</p>
-          <h2 id="cbv2-demopilot-title">Three steps. No big-bang project.</h2>
+          <h2 id="cbv2-demopilot-title">
+            Three steps. <span className="cbv2-it">No big-bang project.</span>
+          </h2>
           <p className="cbv2-lede">
             Every engagement follows the same path: find where AI pays, prove it with
             something running, then take it to the next leader.
@@ -319,8 +321,11 @@ export function DemoPilotSection(): React.ReactElement {
           ))}
         </ol>
 
-        <p className="cbv2-proc__foot">
-          <Link to="/services">See the three services a pilot can grow into</Link>.
+        <p className="cbv2-center-link cbv2-proc__foot">
+          <Link className="cbv2-lnk" to="/how-it-works">
+            See how a rollout runs, department by department
+            <Icon name="arrowRight" size={15} />
+          </Link>
         </p>
       </div>
     </section>

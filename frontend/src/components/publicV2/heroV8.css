@@ -193,7 +193,7 @@
   text-transform: uppercase;
   color: var(--accent-on-dark, #6F9DB6);
 }
-.cbv2-h8__verb h2 {
+.cbv2-h8__verb h3 {
   margin: 0 0 10px;
   font-family: var(--font-display);
   font-size: clamp(22px, 2vw, 29px);
@@ -201,8 +201,8 @@
   letter-spacing: -0.02em;
   color: var(--text-strong, #1A1A1A);
 }
-.cbv2-h8__verb h2 a { color: inherit; text-decoration: none; }
-.cbv2-h8__verb h2 a:hover { text-decoration: underline; }
+.cbv2-h8__verb h3 a { color: inherit; text-decoration: none; }
+.cbv2-h8__verb h3 a:hover { text-decoration: underline; }
 .cbv2-h8__verb p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text-secondary, #6B6B6B); }
 
 /* --------------------------------------------------- the rollout block -- */

@@ -10,6 +10,9 @@ import { trackingAllowed } from '../../config/v2Consent';
 import useReveal from './useReveal';
 import './publicV2.css';
 import './cinematicV2.css';
+// The site model's shared layer (tokens, scale, cards, closing band). Last, and scoped
+// under .cbv2-shell, so it holds regardless of which page chunk's CSS loads after it.
+import './fidelityV5.css';
 
 /**
  * PublicLayoutV2 — the shell every V2 public page renders inside.

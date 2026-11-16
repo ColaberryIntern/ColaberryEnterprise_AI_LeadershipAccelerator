@@ -50,7 +50,7 @@
   gap: 0.15rem;
   min-width: 0;
   padding-right: var(--space-4);
-  font-size: var(--text-sm);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -67,7 +67,7 @@
 }
 
 .cbv2-cs-rail__label time {
-  font-size: var(--text-xs);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-strong, var(--brand-primary));
@@ -134,7 +134,7 @@
 
 .cbv2-cs-next__term {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   font-weight: var(--weight-bold, 700);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -147,7 +147,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--text-sm);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   line-height: 1.45;
 }
 

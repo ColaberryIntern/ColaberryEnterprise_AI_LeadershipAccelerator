@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import DepartmentMap from '../../components/publicV2/DepartmentMap';
-import { SERVICE_SHAPES } from '../../config/v2Pricing';
+import ServiceCardsV5 from '../../components/publicV2/ServiceCardsV5';
+import Icon from '../../components/publicV2/Icon';
 
 /**
  * homeV2Bands - the two bands the v5 site model adds to the home page.
@@ -61,9 +62,9 @@ export function DepartmentMapSection(): React.ReactElement {
 /**
  * "Build. Guide. Train." The three-service band.
  *
- * REPLACES the five-engagement band (ServicesSection). Same job, three cards
- * instead of five, reading from SERVICE_SHAPES so the home page, /services and
- * /pricing all describe one offer rather than three versions of it.
+ * REPLACES the five-engagement band (ServicesSection). The cards are the model's
+ * (ServiceCardsV5, delta S4), reading SERVICE_SHAPES so the home page, /services and
+ * /pricing describe one offer rather than three versions of it.
  */
 export function ThreeServicesSection(): React.ReactElement {
   return (
@@ -73,54 +74,20 @@ export function ThreeServicesSection(): React.ReactElement {
           <p className="cbv2-eyebrow">Three ways to work with us</p>
           <h2 id="cbv2-three-title">Build. Guide. Train.</h2>
           <p className="cbv2-lede">
-            All three use Claude Code. Choose by what you need: a custom application built
-            for you, workflows your team builds in the systems you already have, or people
-            trained to do it themselves.
+            All three use Claude Code. Choose by what you need:{' '}
+            <strong>a custom application built for you</strong>,{' '}
+            <strong>workflows your team builds in the systems you already have</strong>, or{' '}
+            <strong>people trained to do it themselves</strong>.
           </p>
         </div>
 
-        <div className="cbv2-shapes">
-          {SERVICE_SHAPES.map((s, i) => (
-            <article
-              className={`cbv2-shape${s.featured ? ' cbv2-shape--featured' : ''}`}
-              key={s.key}
-            >
-              <div className="cbv2-shape__head">
-                <span className="cbv2-shape__badge">
-                  {String(i + 1).padStart(2, '0')} &middot; {s.badge}
-                </span>
-                <h3 className="cbv2-shape__verb">
-                  <Link to={`/services/${s.key}`}>{s.verb}.</Link>
-                </h3>
-              </div>
-              <p className="cbv2-shape__promise">{s.promise}</p>
-              <p className="cbv2-shape__blurb">{s.blurb}</p>
-              <div className="cbv2-shape__terms">
-                <p className="cbv2-shape__terms-label">{s.termsLabel}</p>
-                <p className="cbv2-shape__terms-value">{s.terms}</p>
-              </div>
-              <ul className="cbv2-shape__list">
-                {s.includes.map((inc) => (
-                  <li key={inc}>
-                    <span aria-hidden="true">&#10003;</span>
-                    {inc}
-                  </li>
-                ))}
-              </ul>
-              <p className="cbv2-shape__cta">
-                <Link
-                  className="cbv2-btn cbv2-btn--primary cbv2-btn--sm"
-                  to={`/services/${s.key}`}
-                >
-                  See {s.verb}
-                </Link>
-              </p>
-            </article>
-          ))}
-        </div>
+        <ServiceCardsV5 />
 
-        <p className="cbv2-note">
-          <Link to="/services">Compare the three side by side</Link>
+        <p className="cbv2-center-link">
+          <Link className="cbv2-lnk" to="/services">
+            Compare the three in detail
+            <Icon name="arrowRight" size={15} />
+          </Link>
         </p>
       </div>
     </section>

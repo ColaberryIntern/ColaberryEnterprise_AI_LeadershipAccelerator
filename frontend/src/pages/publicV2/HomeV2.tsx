@@ -4,7 +4,7 @@ import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroV8 from '../../components/publicV2/HeroV8';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
-import Accolades from '../../components/publicV2/Accolades';
+import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
 // ENGINE was imported here and never used, from before this split. Removed rather than
 // carried across, since a dead import is one more thing a reader has to rule out.
 import { DemoPilotSection } from './homeV2Sections';
@@ -119,18 +119,40 @@ function HomeV2(): React.ReactElement {
               />
             </figure>
             <div>
-              <p className="cbv2-eyebrow">The thesis behind the work</p>
-              <h2 id="cbv2-book-title">Trust before intelligence</h2>
-              <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
+              <p className="cbv2-eyebrow cbv2-eyebrow--onDark">The book behind the method</p>
+              <h2 id="cbv2-book-title" className="cbv2-book__h">
+                Trust before <span className="cbv2-it">intelligence.</span>
+              </h2>
+              {/* The model's subtitle line states the 95% figure in our own voice, which is
+                  `research.book95` and stays blocked. The attributed form sits in its place. */}
+              <p className="cbv2-book__sub">
                 <Claim claimKey="book.trust.attributed" route={ROUTE} />
               </p>
               <p className="cbv2-book__body">
-                The argument the platform is built on: capability that cannot be evidenced is
-                not capability, and an organization earns trust in its AI the same way it
-                earns trust in its people, by seeing what they have actually shipped. That is
-                why readiness here is computed from evidence rather than from attendance.
+                Ram Katamaraja&rsquo;s argument is the reason we work the way we do: an
+                organization comes to trust its AI the same way it comes to trust its people, by
+                seeing what they have actually shipped. That is why we start with a demo pilot you
+                can see running, and why we move one leader at a time instead of announcing a
+                transformation.
               </p>
-              <p className="cbv2-book__by">Ram Katamaraja, CEO, Colaberry</p>
+              <ul className="cbv2-book__lessons">
+                <li><b>In practice</b>Prove one process before scaling to ten.</li>
+                <li><b>In practice</b>Work inside the systems you already run.</li>
+                <li><b>In practice</b>Measure readiness by what shipped, not who attended.</li>
+              </ul>
+              <div className="cbv2-book__by">
+                <span className="cbv2-book__av" aria-hidden="true">RK</span>
+                <div>
+                  <strong>Ram Katamaraja</strong>
+                  <span>CEO, Colaberry &middot; author of Trust Before Intelligence</span>
+                </div>
+              </div>
+              <p className="cbv2-book__btns">
+                <Link className="cbv2-btn cbv2-btn--primary" to="/book">
+                  About the book
+                  <Icon name="arrowRight" size={16} />
+                </Link>
+              </p>
             </div>
           </div>
         </section>
@@ -151,29 +173,38 @@ function HomeV2(): React.ReactElement {
         gives it one between the book and the claims. It is the only place on
         the home page that answers "and where does all of this show up".
       */}
-      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-plat-title">
-        <div className="cbv2-wrap cbv2-split">
+      <section className="cbv2-rv cbv2-section cbv2-plat5" aria-labelledby="cbv2-plat-title">
+        {/* `cbv2-split5`, not `cbv2-split`: platformV2.css also defines `.cbv2-split` (a
+            bordered, clipped box), and once /platform had loaded it restyled this band. */}
+        <div className="cbv2-wrap cbv2-split5">
           <div>
             <p className="cbv2-eyebrow">The platform</p>
-            <h2 id="cbv2-plat-title">Every department&rsquo;s AI work, in one place.</h2>
-            <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
+            <h2 id="cbv2-plat-title" className="cbv2-h2">
+              Every department&rsquo;s AI work, <span className="cbv2-it">in one place.</span>
+            </h2>
+            <p className="cbv2-lede">
               Which processes are automated, which are in pilot, who is building what, and
               what each leader&rsquo;s department has shipped, without anyone writing a status
               report.
             </p>
-            <div className="cbv2-grid cbv2-grid--2" style={{ marginTop: 'var(--space-6)' }}>
-              <div className="cbv2-field">
-                <h3>Every project, by department</h3>
-                <p>Owner, status, and what it is waiting on.</p>
-              </div>
-              <div className="cbv2-field">
-                <h3>Confirmed from the work</h3>
-                <p>Progress read from commits, not self-reported.</p>
-              </div>
-            </div>
-            <p style={{ marginTop: 'var(--space-6)' }}>
-              <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
+            <ul className="cbv2-ticks">
+              <li>
+                <span className="cbv2-ticks__ic"><Icon name="layers" size={19} /></span>
+                <div><strong>Every project, by department</strong><span>Owner, status, and what it is waiting on.</span></div>
+              </li>
+              <li>
+                <span className="cbv2-ticks__ic"><Icon name="shieldCheck" size={19} /></span>
+                <div><strong>Confirmed from the work</strong><span>Progress read from commits, not self-reported.</span></div>
+              </li>
+              <li>
+                <span className="cbv2-ticks__ic"><Icon name="trend" size={19} /></span>
+                <div><strong>Your people&rsquo;s growth</strong><span>Training and readiness, earned from what they ship.</span></div>
+              </li>
+            </ul>
+            <p className="cbv2-plat__go">
+              <Link className="cbv2-lnk" to="/platform">
                 Tour the platform
+                <Icon name="arrowRight" size={15} />
               </Link>
             </p>
           </div>
@@ -185,7 +216,7 @@ function HomeV2(): React.ReactElement {
             that claim regresses this falls back to the accomplishments feed
             rather than showing an unlicensed surface.
           */}
-          <figure className="cbv2-shot-frame">
+          <figure className="cbv2-plat5__fig">
             {canShow('surface.readiness.rollup', ROUTE) ? (
               <img
                 className="cbv2-shot"
@@ -203,7 +234,7 @@ function HomeV2(): React.ReactElement {
                 decoding="async"
               />
             )}
-            <figcaption className="cbv2-shot-caption">
+            <figcaption className="cbv2-cap">
               <SampleBadge />
               <span>The company view, before your own work replaces it.</span>
             </figcaption>
@@ -227,8 +258,14 @@ function HomeV2(): React.ReactElement {
         footer link still cannot point at a page that is not mounted.
         `SegmentDoors` is unrouted, not deleted.
       */}
+      {/*
+        THE STATS ROW CAME OFF (delta H6, Ali 2026-11-16). <Accolades /> rendered
+        "8k+ data students / 2,500+ certified / 1,000+ hires / 12+ years" directly under
+        a card saying track-record claims are withheld, and the model has no such row.
+        The component is unrouted from this page, not deleted.
+      */}
       <section
-        className="cbv2-rv cbv2-section"
+        className="cbv2-rv cbv2-section cbv2-section--soft"
         aria-labelledby="cbv2-shortonpurpose-title"
       >
         <div className="cbv2-wrap">
@@ -239,58 +276,41 @@ function HomeV2(): React.ReactElement {
               Everything absent from this section is absent because it has not been verified
               yet.
             </p>
+            <p className="cbv2-head-link">
+              <Link className="cbv2-lnk" to="/proof">
+                See the published case records
+                <Icon name="arrowRight" size={15} />
+              </Link>
+            </p>
           </div>
 
-          <div className="cbv2-grid cbv2-grid--3">
-            <article className="cbv2-card">
-              <span className="cbv2-icon-tile cbv2-icon-tile--blue">
-                <Icon name="cpu" size={22} />
-              </span>
-              <p className="cbv2-eyebrow cbv2-eyebrow--info">Capability</p>
-              <h3 className="cbv2-card__title">
+          <div className="cbv2-pcs">
+            <article className="cbv2-pc">
+              <span className="cbv2-pc__ic"><Icon name="cpu" size={21} /></span>
+              <h3 className="cbv2-pc__h">
                 <Claim claimKey="anthropic.capability" route={ROUTE} />
               </h3>
-              <p className="cbv2-card__body">
-                Production systems designed, built and governed on Anthropic&rsquo;s models.
-              </p>
+              <p>Systems designed, built and governed on Anthropic&rsquo;s models, with the same tools your team will use.</p>
             </article>
 
-            <article className="cbv2-card">
-              <span className="cbv2-icon-tile cbv2-icon-tile--green">
-                <Icon name="medal" size={22} />
-              </span>
-              <p className="cbv2-eyebrow cbv2-eyebrow--info">Credential path</p>
-              <h3 className="cbv2-card__title">Claude Certified Architect, Foundations</h3>
-              <p className="cbv2-card__body">
+            <article className="cbv2-pc">
+              <span className="cbv2-pc__ic"><Icon name="medal" size={21} /></span>
+              <h3 className="cbv2-pc__h">Claude Certified Architect, Foundations</h3>
+              <p>
                 <Claim claimKey="credential.cca.safe" route={ROUTE} />
               </p>
             </article>
 
-            {/* Stating the absence is itself the honest move, and it is the thing
-                reviewers scored 9/10. It is not a placeholder. */}
-            <article className="cbv2-card cbv2-card--dashed">
-              <span className="cbv2-icon-tile cbv2-icon-tile--amber">
-                <Icon name="scale" size={22} />
-              </span>
-              <p className="cbv2-eyebrow cbv2-eyebrow--warn">Pending verification</p>
-              <h3 className="cbv2-card__title">Track-record claims withheld</h3>
-              <p className="cbv2-card__body">
-                Volume, partner-status and outcome claims are deliberately absent until
-                verified.
+            {/* Stating the absence is itself the honest move. It is not a placeholder. */}
+            <article className="cbv2-pc cbv2-pc--w">
+              <span className="cbv2-pc__ic"><Icon name="scale" size={21} /></span>
+              <h3 className="cbv2-pc__h">Track-record claims withheld</h3>
+              <p>
+                Volume, partner and outcome claims stay off this page until they are verified,
+                then they appear with the basis beside them.
               </p>
             </article>
           </div>
-
-          {/*
-            The governed accolade tiles. Each renders only while its claim is
-            publishable, so the currently-unevidenced ones appear the moment
-            someone records the evidence and stay absent until then.
-          */}
-          <Accolades />
-
-          <p style={{ marginTop: 'var(--space-8)' }}>
-            <Link to="/proof">See the published case records</Link>
-          </p>
         </div>
       </section>
 
@@ -305,23 +325,8 @@ function HomeV2(): React.ReactElement {
         /platform, so nothing left the site with the band.
       */}
 
-      {/* 7 ────────────────────────────────────────────────────── final CTA ── */}
-      <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-cta-title">
-        <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
-          <h2 id="cbv2-cta-title">See what AI could become inside your company.</h2>
-          <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
-            Start free, or bring one workflow to an architect.
-          </p>
-          <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/try">
-              Open the Free Company Workspace
-            </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/demo-pilot">
-              Book a demo pilot
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* 7 ── final CTA: the model's one closing band (delta S5), shared by every page that adopts it. */}
+      <ClosingCtaV5 />
     </>
   );
 }

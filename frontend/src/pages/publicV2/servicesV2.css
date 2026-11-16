@@ -235,18 +235,18 @@
   background: var(--cherry-bg, #FFF0F1);
   color: var(--cherry, #FB2832);
   font-weight: 700;
-  font-size: var(--text-sm);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   line-height: 1;
 }
 .cbv2-pilot__title {
   margin: 0 0 var(--space-1);
-  font-size: var(--text-md);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   line-height: 1.3;
 }
 .cbv2-pilot__body {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
 }
 
 /* "What is included" on a service page. */
@@ -266,13 +266,13 @@
 }
 .cbv2-inclusion h3 {
   margin: var(--space-3) 0 var(--space-2);
-  font-size: var(--text-md);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
   line-height: 1.3;
 }
 .cbv2-inclusion p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--text-sm);
+  font-size: inherit; /* was a --text-sm/md/xs token that was never defined, which resolves to unset (inherit). Kept exact. */
 }
 
 /* The "what this is not" column. The cross is decorative -- the heading above
