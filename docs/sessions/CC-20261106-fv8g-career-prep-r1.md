@@ -588,3 +588,14 @@ tests/systemV2/career-prep/.
     the layout check asserts every visible room heading reads at 4.5:1 or better.
   - Verification: 10/10 pass today and with the clock 2 days ahead (exit 0); self-tests wide, tip, contrast and
     flag-off each exit 1 (contrast reproduces the 1.05 heading); frontend Career Prep jest pass.
+
+- [x] CP5.5 Release 1 PR (T27, part 1): https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/4110
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: T26 PASS 11/12 (attempt 3). Branch rebased on origin/main (40 commits, merged cleanly), pushed, one
+    PR opened with the nginx location called out and the five declared deviations listed.
+  - Verification after the rebase: backend tsc clean (local maxmind only); backend Career Prep + access + mount suites
+    407 pass, 13 skipped, 1 known local CRLF failure (mountLearnerPortalRoutes "nudge router in its slot", not Career
+    Prep); frontend tsc clean; frontend Career Prep + campus + Layout + admin 3191 pass; lint-route-auth OK.
+  - Next: Ali approves and merges; then deploy-prod.sh after Build images, production check (incl. the 40 MB nginx
+    probe), flag seed for Ali's enrollment, observation backfill (T27 part 2), handoff (T28).
