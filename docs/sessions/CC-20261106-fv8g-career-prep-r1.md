@@ -562,3 +562,18 @@ tests/systemV2/career-prep/.
   - Verification: 10/10 pass, exit 0; self-test exit 1 (0/1).
   - Notes: declared deviation: no Docker or local Postgres here, so fixtures replace the seeded local stack; the 40 MB
     nginx upload check moves to the production verification (a no-login 40 MB POST must get 401, not 413).
+
+- [x] CP5.4 attempt 2: fixes from the T26 verification (FAIL 8/12: the room layout check could not fail)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: the layout check measured the document, but the room is position:fixed and scrolls inside itself,
+    so it could never fail; it now measures every scroll container in the room and every visible tooltip against the
+    viewport, with no silent catches. That exposed a real defect it had missed: a focused last plan block's tooltip
+    ran past the right edge (453/390 at 390, 1026/1020 at 1440). Fixed: the tooltip is placed against the whole plan
+    row and never wider than it, opening from the right for the last two blocks. Check 3 now compares the readiness
+    the dashboard SHOWS with the recap's; check 6 reads the rendered Offers sheet (the payload rule is the server's
+    strict schemas). The fake Cora reply has the server's shape. Self-tests: flag-off, wide (a 2000px block in the
+    room) and tip (a tooltip pushed off screen) each make the suite exit 1.
+  - Verification: 10/10 pass, exit 0; self-tests wide, tip and flag-off each exit 1; frontend Career Prep jest pass.
+  - Correction: the attempt-1 entry above claimed "no horizontal scroll" for the room; that check could not see the
+    room's own scrolling, and the claim was wrong for a focused last plan block.

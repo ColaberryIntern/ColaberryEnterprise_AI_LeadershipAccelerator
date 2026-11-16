@@ -13,10 +13,12 @@
  *     and its readiness equals the recap's
  *   4 ‹ Floor n and Esc both land on the floor with focus on the door
  *   5 Add an interview and Create one for me set the anchor pill (Added by you / Practice)
- *   6 the Offers sheet opens from its URL and the jump bar, is drawn above the room, and no API payload has a fee
- *   7 (audiences) covered by jest: CareerPrepCard / hqCareerPrepTower / careerPrepFloor tests (no campus stack here)
+ *   6 the Offers sheet opens from its URL and the jump bar, is drawn above the room, and shows no fee (the payload rule
+ *     is the server's strict response schemas, tested in the backend)
+ *   1b, 2, 7 (the campus card's Go, the long way through the tower, the audiences) are covered by jest against the real
+ *     components: goStart / hqCareerPrepTower / CareerPrepCard / careerPrepFloor tests (no campus stack runs here)
  *   8 zero console errors throughout, and inside a sandboxed iframe
- * Layout: no horizontal scroll and no text overflow for the room (Your progress, Your plan) at 1600, 1440, 390, light
+ * Layout: no horizontal scroll in any of the room's own scroll containers, no tooltip off screen, for the room (Your progress, Your plan) at 1600, 1440, 390, light
  * and dark, and the floor at 1440 and 390; at 390 the last plan block is focused so its tooltip is on screen.
  *
  * Usage (repo root): node tests/systemV2/career-prep/careerPrep.e2e.js   (env: BUILD_DIR, PORT=3161, PW_CHANNEL=msedge)
@@ -27,6 +29,8 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.env.PW_PATH || 'playwright');
 const { installFakeApi } = require('./fakeApi');
+// Self-tests that MUST fail the run: flag-off (Career Prep closed: nothing renders) and wide (a 2000px block in the room) and tip (a tooltip pushed off screen).
+const SELFTEST = process.env.CP_E2E_SELFTEST || '';
 
 const BUILD = path.resolve(process.env.BUILD_DIR || path.join(__dirname, '..', '..', '..', 'frontend', 'build'));
 const PORT = Number(process.env.PORT || 3161);
@@ -97,9 +101,10 @@ async function flowFloorAndRoom(browser) {
   const recap = await page.textContent(tid('cp-recap'));
   await page.click(tid('cp-recap-dashboard'));
   await page.waitForSelector(tid('cp-new-pace_clarity'));
-  const readiness = await page.textContent(tid('cp-dashboard'));
+  const shown = (await page.textContent(`${tid('cp-readiness')} b`)).trim();
+  const recapAfter = (recap.match(/Readiness (\d+) from/) || [])[1];
   check('3 Try is scored; Finish shows the recap; the dashboard marks the moved skill New, readiness = the recap\'s',
-    /Readiness 69 from 64/.test(recap) && /48 → 57/.test(recap) && /69/.test(readiness) && api.state.readiness === 69, recap.replace(/\s+/g, ' ').slice(0, 120));
+    /Readiness 69 from 64/.test(recap) && /48 → 57/.test(recap) && !!recapAfter && shown === recapAfter, `recap after ${recapAfter}, dashboard shows ${shown}`);
   for (const [how, act] of [['‹ Floor n', () => page.click(tid('cp-back'))], ['Esc', () => page.keyboard.press('Escape')]]) {
     if (how === 'Esc') { await page.goto(`${BASE}/portal/career/room`); await page.waitForSelector(tid('cp-room')); await page.click(tid('cp-cora-col')); }
     await act();
@@ -120,7 +125,7 @@ async function flowAnchors(browser) {
   await page.fill('form[data-testid="cp-form"] label:has-text("Role") input', 'Data Analyst');
   await page.click('form[data-testid="cp-form"] button[type="submit"]');
   await page.waitForFunction(() => /Added by you/.test(document.querySelector('[data-testid="cp-anchor"]')?.textContent || ''), null, { timeout: 8000 })
-    .catch(async (e) => { throw new Error(); });
+    .catch(async (e) => { throw new Error(`added pill: ${await page.textContent(tid('cp-anchor')).catch(() => '?')} (${e.message})`); });
   const added = await page.textContent(tid('cp-anchor'));
   await page.click('[data-testid="cp-anchor"] button, .cp-anchor-change');
   await page.waitForSelector(tid('cp-card-create'));
@@ -141,6 +146,7 @@ async function flowSheets(browser) {
   await page.waitForSelector(tid('cp-sheet-offers'));
   const onTop = async (sel) => page.evaluate((s) => { const el = document.querySelector(s); const r = el.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + 5, r.top + r.height / 2); return !!hit && (hit === el || el.contains(hit)); }, sel);
   const titleTop = await onTop('#cp-sheet-title');
+  const offersText = await page.textContent(tid('cp-sheet-offers'));
   const bg = await page.$eval('.cp-sheet', (el) => getComputedStyle(el).backgroundColor);
   await page.keyboard.press('Control+k');
   await page.waitForSelector(tid('cp-jump-input'));
@@ -150,9 +156,9 @@ async function flowSheets(browser) {
   await page.waitForSelector(tid('cp-sheet-resume'));
   const linkH = await page.$eval('[data-testid="cp-resume-sheet"] a', (el) => el.getBoundingClientRect().height);
   check('6b a link styled as a button in a sheet is at least 44px tall', linkH >= 44, `${linkH}px`);
-  const fee = api.sent.filter((x) => /"[^"]*fee[^"]*"\s*:/i.test(JSON.stringify(x.payload)));
-  check('6 sheets open from the URL and the jump bar, drawn above the room; no payload carries a fee',
-    titleTop && jumpTop && !/rgba\(0, 0, 0, 0\)/.test(bg) && fee.length === 0, `title ${titleTop}, jump ${jumpTop}, bg ${bg}, fee keys ${fee.length}`);
+  const fee = /\bfees?\b/i.test(offersText) ? 1 : 0;
+  check('6 sheets open from the URL and the jump bar, drawn above the room; the Offers sheet shows no fee',
+    titleTop && jumpTop && !/rgba\(0, 0, 0, 0\)/.test(bg) && fee === 0, `title ${titleTop}, jump ${jumpTop}, bg ${bg}, fee words ${fee}`);
   await ctx.close();
   return errors;
 }
@@ -178,11 +184,26 @@ async function layout(browser) {
       await page.click(tid('cp-card-i1'));
       await page.click('[data-testid="cp-card-plan:days"]');
       for (const tab of ['progress', 'plan']) {
-        await page.click(`#cp-tab-${tab}`).catch(() => undefined);
-        if (tab === 'plan' && w === 390) await page.focus('.cp-day:first-of-type .cp-seg:last-of-type').catch(() => undefined);
-        const m = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth,
-          over: [...document.querySelectorAll('.cp-room *')].filter((e) => e.children.length === 0 && e.textContent.trim() && e.clientWidth > 1 && e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflow !== 'visible' && getComputedStyle(e).textOverflow !== 'ellipsis').length }));
-        if (m.sw > m.cw || m.over) bad.push(`room ${tab} ${w}${dark ? ' dark' : ''}: scroll ${m.sw}/${m.cw}, overflow ${m.over}`);
+        // No silent catches: a renamed tab or block must fail the run, not quietly measure the wrong view.
+        await page.click(`#cp-tab-${tab}`);
+        await page.waitForSelector(tid(`cp-panel-${tab}`));
+        // The LAST block of a plan row, focused, so its tooltip is on screen while the room is measured.
+        if (tab === 'plan') await page.focus('.cp-day:first-of-type .cp-seg:last-of-type');
+        if (SELFTEST === 'tip' && tab === 'plan') await page.addStyleTag({ content: '.cp-seg-tip{position:fixed!important;left:auto!important;right:-300px!important;max-width:none!important}' });
+        if (SELFTEST === 'wide') await page.evaluate(() => { const d = document.createElement('div'); d.style.width = '2000px'; d.style.height = '4px'; document.querySelector('.cp-tabs-col').appendChild(d); });
+        const m = await page.evaluate(() => {
+          // The room is position:fixed and scrolls INSIDE itself, so measure every scroll container in it (and the page),
+          // every visible tooltip's box against the viewport, and clipped text.
+          const vw = document.documentElement.clientWidth;
+          const scrollers = [document.documentElement, ...document.querySelectorAll('.cp-room, .cp-room *')]
+            .filter((e) => e === document.documentElement || /(auto|scroll|hidden)/.test(getComputedStyle(e).overflowX))
+            .filter((e) => e.clientWidth > 1 && e.scrollWidth > e.clientWidth + 1 && !(e.textContent.trim() && getComputedStyle(e).textOverflow === 'ellipsis'))
+            .map((e) => `${e.className || e.tagName} ${e.scrollWidth}/${e.clientWidth}`);
+          const tips = [...document.querySelectorAll('[role="tooltip"]')].filter((t) => getComputedStyle(t).display !== 'none')
+            .map((t) => t.getBoundingClientRect()).filter((r) => r.left < 0 || r.right > vw).map((r) => `tooltip ${Math.round(r.left)}..${Math.round(r.right)} of ${vw}`);
+          return [...scrollers, ...tips];
+        });
+        if (m.length) bad.push(`room ${tab} ${w}${dark ? ' dark' : ''}: ${m.join(', ')}`);
       }
       if (w !== 1600 && !dark) {
         await page.goto(`${BASE}/portal/career`);

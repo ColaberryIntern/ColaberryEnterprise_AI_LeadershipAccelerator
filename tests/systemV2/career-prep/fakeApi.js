@@ -63,11 +63,11 @@ function route(state, method, path, query, body) {
   if (path === `${P}/dashboard`) return dashboard(state);
   if (path === `${P}/reminders` && method === 'GET') return { reminders: [] };
   if (path === `${P}/reminders`) return { reminder: { id: 'r1', kind: body.kind, sendAt: '2026-11-17T00:00:00.000Z', status: 'pending' } };
-  if (path === `${P}/cora`) return { reply: 'Here is what I would work on first.', cards: [] };
+  if (path === `${P}/cora`) return { messages: ['Here is what I would work on first.'], cards: [] }; // the server's shape
   if (path === `${P}/interviews` && method === 'POST') {
     const id = `i${state.interviews.length + 1}`;
     const iv = body.mode === 'practice' || !body.company
-      ? { id, source: 'practice', company: 'Practice', role: body.role, type: body.type || 'behavioral', target: 70 }
+      ? { id, source: 'practice', company: 'Practice interview', role: body.role, type: body.type || 'behavioral', target: 70 }
       : { id, source: 'added', company: body.company, role: body.role, type: body.type || 'recruiter', target: 65, ...(body.startsAt ? { startsAt: body.startsAt } : {}) };
     state.interviews.push(iv);
     return { id, source: iv.source };
