@@ -712,6 +712,8 @@ router.post('/api/admin/gov-contracts/:projectId/needs/:key/resolve', requireSec
       fileRef: typeof b.fileRef === 'string' ? b.fileRef : undefined,
       approve: typeof b.approve === 'boolean' ? b.approve : undefined,
       note: typeof b.note === 'string' ? b.note : undefined,
+      // Grouped `record` need: a plain object of fields; routeNeedResolution filters per-field, so pass it through.
+      record: (b.record && typeof b.record === 'object' && !Array.isArray(b.record)) ? (b.record as Record<string, string>) : undefined,
     };
     const result = await resolveProjectNeed(String(req.params.projectId), String(req.params.key), submission, { email: actor?.email, canApprove: true });
     // v3 (T12) AUTO-RESUME: a just-answered need kicks a bounded review cycle for each document it unblocked, so the

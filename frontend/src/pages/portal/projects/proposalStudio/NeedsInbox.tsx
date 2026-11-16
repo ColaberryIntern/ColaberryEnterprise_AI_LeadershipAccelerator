@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { GovProposalDocument, GovStudioApi, GovProjectNeed } from '../../../../services/govProjectPortalApi';
 import type { StudioView } from './StageRail';
-import { needControl, needKindLabel, unblockLabel, submissionFor, type NeedControl } from './needsHelpers';
+import { needControl, needKindLabel, unblockLabel, submissionFor, recordTypeLabel, recordFieldsFor, recordPrimaryField, recordFieldLabel, recordSubmission, type NeedControl } from './needsHelpers';
 
 /**
  * NeedsInbox — the v3 "Needs you" view (T15), replacing Open items. The ONE list of exactly what a person must supply
@@ -24,10 +24,10 @@ export default function NeedsInbox(
 
   const titleFor = (docKey: string): string => docs.find((d) => d.key === docKey)?.title ?? docKey;
 
-  const resolve = useCallback(async (need: GovProjectNeed, control: NeedControl, value: string) => {
+  const submitResolve = useCallback(async (need: GovProjectNeed, submission: Parameters<typeof studioApi.resolveNeed>[2]) => {
     setBusyKey(need.key);
     try {
-      const r = await studioApi.resolveNeed(projectId, need.key, submissionFor(control, value));
+      const r = await studioApi.resolveNeed(projectId, need.key, submission);
       onToast(r.unblocked.length ? `Answered — the agent is resuming ${r.unblocked.length} document${r.unblocked.length === 1 ? '' : 's'}.` : 'Answered.');
       load();
       onReload();
@@ -37,6 +37,9 @@ export default function NeedsInbox(
       setBusyKey(null);
     }
   }, [projectId, studioApi, onReload, onToast, load]);
+
+  const resolve = useCallback((need: GovProjectNeed, control: NeedControl, value: string) => submitResolve(need, submissionFor(control, value)), [submitResolve]);
+  const resolveRecord = useCallback((need: GovProjectNeed, fields: Record<string, string>) => submitResolve(need, recordSubmission(fields)), [submitResolve]);
 
   if (needs === null) return <div className="gps-view"><div className="gps-panel"><p className="gps-muted" style={{ margin: 0 }}>Loading what needs you…</p></div></div>;
 
@@ -55,8 +58,8 @@ export default function NeedsInbox(
         <div className="gps-panel"><p className="gps-muted" style={{ margin: 0 }}>Nothing needs you right now. The agent has what it needs — follow progress in Where we are, or review the gates.</p></div>
       ) : (
         <>
-          <NeedGroup testid="needs-group-fatal" label="Blocking export" tone="bad" needs={blocking} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onNavigate={onNavigate} />
-          <NeedGroup testid="needs-group-score" label="Holding a score under 95" tone="warn" needs={holding} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onNavigate={onNavigate} />
+          <NeedGroup testid="needs-group-fatal" label="Blocking export" tone="bad" needs={blocking} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onResolveRecord={resolveRecord} onNavigate={onNavigate} />
+          <NeedGroup testid="needs-group-score" label="Holding a score under 95" tone="warn" needs={holding} busyKey={busyKey} titleFor={titleFor} onResolve={resolve} onResolveRecord={resolveRecord} onNavigate={onNavigate} />
         </>
       )}
     </div>
@@ -64,8 +67,8 @@ export default function NeedsInbox(
 }
 
 function NeedGroup(
-  { testid, label, tone, needs, busyKey, titleFor, onResolve, onNavigate }:
-  { testid: string; label: string; tone: string; needs: GovProjectNeed[]; busyKey: string | null; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onNavigate: (v: StudioView) => void },
+  { testid, label, tone, needs, busyKey, titleFor, onResolve, onResolveRecord, onNavigate }:
+  { testid: string; label: string; tone: string; needs: GovProjectNeed[]; busyKey: string | null; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void; onNavigate: (v: StudioView) => void },
 ): React.ReactElement {
   return (
     <div className="gps-panel" data-testid={testid} style={{ marginTop: 14 }}>
@@ -73,7 +76,7 @@ function NeedGroup(
       <div className="gps-needs">
         {needs.length === 0 && <div className="gps-muted gps-small">None.</div>}
         {needs.map((n) => (
-          <NeedCard key={n.key} need={n} busy={busyKey === n.key} titleFor={titleFor} onResolve={onResolve} onNavigate={onNavigate} />
+          <NeedCard key={n.key} need={n} busy={busyKey === n.key} titleFor={titleFor} onResolve={onResolve} onResolveRecord={onResolveRecord} onNavigate={onNavigate} />
         ))}
       </div>
     </div>
@@ -81,20 +84,21 @@ function NeedGroup(
 }
 
 function NeedCard(
-  { need, busy, titleFor, onResolve, onNavigate }:
-  { need: GovProjectNeed; busy: boolean; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onNavigate: (v: StudioView) => void },
+  { need, busy, titleFor, onResolve, onResolveRecord, onNavigate }:
+  { need: GovProjectNeed; busy: boolean; titleFor: (k: string) => string; onResolve: (n: GovProjectNeed, c: NeedControl, v: string) => void; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void; onNavigate: (v: StudioView) => void },
 ): React.ReactElement {
   const control = needControl(need);
   const [value, setValue] = useState('');
   const docKeys = [...new Set((need.usedIn || []).map((u) => u.docKey).filter(Boolean))];
   const border = need.blocking === 'fatal' ? 'var(--gps-bad)' : 'var(--gps-warn)';
   const blockLabel = need.blocking === 'fatal' ? 'blocks export' : 'holds a score under 95';
+  const typeChip = control === 'record' ? recordTypeLabel(need.recordType) : needKindLabel(need.kind);
 
   return (
     <div className="gps-need-card gps-need-2col" data-testid="need-card" data-key={need.key} data-kind={need.kind} data-blocking={need.blocking} data-done="false" style={{ borderLeft: `3px solid ${border}` }}>
       <div className="gps-need-left" style={{ minWidth: 0 }}>
         <div className="gps-need-head">
-          <span className="gps-tag">{needKindLabel(need.kind)}</span>
+          <span className="gps-tag">{typeChip}</span>
           <span className={`gps-tag ${need.blocking === 'fatal' ? 'bad' : 'warn'}`}>{blockLabel}</span>
           {(need.usedIn || []).some((u) => u.docKey === 'pricing') && <span className="gps-tag gold">admin only</span>}
         </div>
@@ -114,7 +118,9 @@ function NeedCard(
       </div>
 
       <div className="gps-need-control" data-testid="need-control" data-control={control}>
-        {control === 'approve' ? (
+        {control === 'record' ? (
+          <RecordForm need={need} busy={busy} onResolveRecord={onResolveRecord} />
+        ) : control === 'approve' ? (
           <button className="gps-btn sm" onClick={() => onNavigate('gates')}>Review &amp; decide at the Gold gate</button>
         ) : control === 'confirm' ? (
           <button className="gps-btn sm primary" disabled={busy} onClick={() => onResolve(need, control, 'yes')}>Confirm</button>
@@ -136,6 +142,40 @@ function NeedCard(
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * RecordForm — the grouped resolve control for a `record` need. One labeled field per `recordFields` (client, scope,
+ * period, outcome for a reference; name, role, experience for a person), answered and saved as ONE record rather than
+ * split into separate facts. The primary field (client / name) is required; the rest are optional. The answer is not
+ * pasted in verbatim — the agent rewrites the section to work it in, and the record is reusable on the next bid.
+ */
+function RecordForm(
+  { need, busy, onResolveRecord }:
+  { need: GovProjectNeed; busy: boolean; onResolveRecord: (n: GovProjectNeed, fields: Record<string, string>) => void },
+): React.ReactElement {
+  const fields = (need.recordFields && need.recordFields.length ? need.recordFields : recordFieldsFor(need.recordType));
+  const primary = recordPrimaryField(need.recordType);
+  const [vals, setVals] = useState<Record<string, string>>({});
+  const set = (k: string, v: string) => setVals((cur) => ({ ...cur, [k]: v }));
+  const canSave = !!(vals[primary] && vals[primary].trim());
+  const multiline = (k: string) => k === 'scope' || k === 'summary';
+
+  return (
+    <div className="gps-record-form" data-control="record" data-record-type={need.recordType || 'reference'}>
+      {fields.map((f) => (
+        <label key={f} className="gps-record-field" style={{ display: 'block', marginBottom: 6 }}>
+          <span className="gps-small gps-muted">{recordFieldLabel(f)}{f === primary ? ' (required)' : ''}</span>
+          {multiline(f) ? (
+            <textarea className="gps-input" data-record-field={f} rows={2} value={vals[f] ?? ''} disabled={busy} onChange={(e) => set(f, e.target.value)} />
+          ) : (
+            <input className="gps-input" type="text" data-record-field={f} value={vals[f] ?? ''} disabled={busy} onChange={(e) => set(f, e.target.value)} />
+          )}
+        </label>
+      ))}
+      <button className="gps-btn sm primary" data-testid="need-record-save" disabled={busy || !canSave} onClick={() => onResolveRecord(need, vals)}>Save record</button>
     </div>
   );
 }
