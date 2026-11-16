@@ -643,3 +643,8 @@ tests/systemV2/career-prep/.
     screen and clear of the door and buttons); both failed on the deployed build before the fix.
   - Verification: browser suite 12/12 on the rebuilt app (Edge); screenshots at 1920x993 and 390x844 reviewed;
     frontend tsc clean; Career Prep + campus jest 2414 pass (the two testEnv helper files report FAIL as before).
+  - CI fix (PR #4116, Frontend build): importing hq.css from CareerPrepFloor gave mini-css-extract "Conflicting order"
+    warnings (fatal with CI=true) because the floor and room pages imported levelTrail.css before it while the HQ
+    building imports it after. Both pages now import CareerPrepFloor first, matching the building's order. The local
+    builds above used CI=false, which hid the warning; verified this time with CI=true (Compiled successfully),
+    browser suite 12/12, page tests 33/33.

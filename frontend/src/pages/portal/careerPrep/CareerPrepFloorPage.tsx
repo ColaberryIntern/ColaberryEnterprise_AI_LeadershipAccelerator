@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+// CareerPrepFloor BEFORE LevelTrail: the same CSS order as the HQ building (hq.css, careerPrepFloor.css, levelTrail.css).
+// The other order is a mini-css-extract "Conflicting order" warning, which fails the CI build (warnings are errors there).
 import { CareerPrepFloor } from '../../../components/careerPrep/CareerPrepFloor';
 import { LevelTrail } from '../../../components/careerPrep/LevelTrail';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
