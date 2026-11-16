@@ -19,7 +19,13 @@ export interface ProposedServiceDraft {
   targetBuyer: string | null; differentiators: string[]; keywords: string[];
   naicsSuggestionsUnverified: string[]; pscSuggestionsUnverified: string[]; suggestedStatus: 'growth';
 }
-export interface ExpansionDraft { serviceId: string; serviceName: string; descriptionAddition: string | null; keywordsToAdd: string[]; scopeChange: string | null }
+/** A work-performed NAICS code from the backend's closed list, marked against the matched service. Unverified. */
+export interface NaicsSuggestion { code: string; title: string; onTarget: boolean }
+export interface ExpansionDraft {
+  serviceId: string; serviceName: string; descriptionAddition: string | null; keywordsToAdd: string[]; scopeChange: string | null;
+  /** Absent on analyses stored before prompt service-gap-v3. */
+  naicsToAdd?: string[];
+}
 export interface GapScores {
   existingFitScore: number | null; noveltyScore: number; evidenceReadinessScore: number; duplicateRiskScore: number | null; commercialPotentialScore: null;
 }
@@ -29,6 +35,8 @@ export interface GapRecommendation {
   proposedService: ProposedServiceDraft | null; expansion: ExpansionDraft | null; duplicateWarnings: string[];
   alternativesConsidered: Array<{ decision: GapDecision; whyNot: string }>; missingInformation: string[];
   evidence: Array<{ kind: 'document_claim' | 'confirmed_fact' | 'inference'; text: string }>; reasonCodes: string[];
+  /** Absent on analyses stored before prompt service-gap-v3. */
+  naics?: NaicsSuggestion[]; naicsWarnings?: string[];
 }
 export interface GapAnalysis {
   id: string; caseStudyId: string; status: 'ok' | 'insufficient' | 'failed'; decision: GapDecision | null;

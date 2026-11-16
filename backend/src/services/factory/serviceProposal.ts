@@ -24,6 +24,7 @@
  */
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { toServiceOfferingDto, toStrArray } from './serviceCatalog';
+import { WORK_NAICS } from './serviceGap/serviceGapNaics';
 import type { CaseStudyServiceLinkAttributes } from '../../models/CaseStudyServiceLink';
 
 export type ServiceProposalErrorClass = 'CaseStudyNotFound' | 'ServiceNotFound' | 'ServiceRetired' | 'PromotionRefused';
@@ -65,12 +66,16 @@ function log(event: string, outcome: 'success' | 'failure', ctx: Record<string, 
   if (outcome === 'success') console.log(line); else console.warn(line);
 }
 
-/** Keywords / NAICS from the case study's outside-import analysis, when it has one. */
+/**
+ * Keywords / NAICS from the case study's outside-import analysis, when it has one. NAICS are kept only when they are
+ * work-performed codes: the document analysis often names the CLIENT's industry (a utility's 221118), which is not a
+ * code this firm would bid under (see serviceGap/serviceGapNaics).
+ */
 async function analysisPrefill(caseStudyId: string): Promise<{ keywords: string[]; naics: string[] }> {
   const { default: CaseStudyExternalImport } = await import('../../models/CaseStudyExternalImport');
   const row = await CaseStudyExternalImport.findOne({ where: { case_study_id: caseStudyId } });
   const a = (row?.analysis ?? {}) as { keywords?: unknown; suggestedNaics?: unknown };
-  return { keywords: toStrArray(a.keywords) ?? [], naics: toStrArray(a.suggestedNaics) ?? [] };
+  return { keywords: toStrArray(a.keywords) ?? [], naics: (toStrArray(a.suggestedNaics) ?? []).filter((c) => !!WORK_NAICS[c]) };
 }
 
 export async function proposeServiceFromCaseStudy(input: ProposeServiceInput): Promise<ProposeServiceResult> {

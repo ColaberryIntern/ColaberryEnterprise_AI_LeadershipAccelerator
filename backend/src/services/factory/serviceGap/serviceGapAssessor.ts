@@ -14,6 +14,7 @@ import { DEFAULT_MODEL } from '../../components/costEstimationService';
 import { untrustedBlock } from '../govUntrustedText';
 import type { CatalogService } from './serviceGapTypes';
 import { GAP_PROMPT_VERSION } from './serviceGapTypes';
+import { naicsPromptBlock } from './serviceGapNaics';
 
 export type AssessErrorClass = 'NoApiKey' | 'UpstreamError' | 'MalformedOutput';
 export interface AssessResult { raw: unknown | null; errorClass: AssessErrorClass | null; error: string | null; model: string }
@@ -35,7 +36,7 @@ export const SYSTEM_PROMPT =
   + '"candidates":[{"ref","capabilityOverlap","buyerProblemOverlap","deliverableOverlap","missingCapabilities","reason"}],'
   + '"capabilityNovelty","expansion":{"descriptionAddition","keywordsToAdd","scopeChange"},'
   + '"proposedService":{"name","category","buyerValue","scope","deliverables","targetBuyer","differentiators","keywords","naics","psc"},'
-  + '"alternativesConsidered":[{"decision","whyNot"}],"missingInformation","evidence":[{"kind","text"}],"reasonCodes"}.\n'
+  + '"alternativesConsidered":[{"decision","whyNot"}],"missingInformation","evidence":[{"kind","text"}],"reasonCodes","naics"}.\n'
   + 'decision (and alternativesConsidered[].decision): EXACTLY one of the codes MATCH_EXISTING, EXPAND_EXISTING, '
   + 'LINK_GROWTH, PROPOSE_NEW, INSUFFICIENT_EVIDENCE - the code itself, never a label or a sentence. '
   + 'verdict: one plain sentence a person can act on, naming the service by its NAME (never its S-ref) or the new '
@@ -45,6 +46,9 @@ export const SYSTEM_PROMPT =
   + 'canonical name for the capability family (so similar case studies group together). expansion: only for '
   + 'EXPAND_EXISTING, else null. proposedService: only for PROPOSE_NEW, else null; buyerValue is one sentence. '
   + 'evidence.kind: "document_claim" for what the text states, "inference" for your reasoning. '
+  + 'naics (and proposedService.naics): up to 4 six-digit codes for the WORK THE FIRM PERFORMED in this case study '
+  + '(e.g. custom programming, systems design, consulting, training), chosen ONLY from the NAICS list given with the '
+  + 'catalog, most relevant first. Never the client\'s industry: work for a utility is still programming or consulting. '
   + 'Use only refs from the catalog list.';
 
 /** The catalog block: opaque refs, our own data (not untrusted), descriptions clipped. */
@@ -77,7 +81,7 @@ export async function assessCaseStudy(input: {
       model, temperature: 0.1, max_tokens: 1800, response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: `${SYSTEM_PROMPT}\n${rule}` },
-        { role: 'user', content: `Catalog (our services):\n${catalogBlock(input.refs)}\n\nCase study:\n${block}` },
+        { role: 'user', content: `Catalog (our services):\n${catalogBlock(input.refs)}\n\nNAICS list (work performed; pick only from these):\n${naicsPromptBlock()}\n\nCase study:\n${block}` },
       ],
     });
     content = res.choices?.[0]?.message?.content || '';

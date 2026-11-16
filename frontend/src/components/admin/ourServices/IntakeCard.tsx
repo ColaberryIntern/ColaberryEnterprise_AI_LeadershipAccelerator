@@ -15,7 +15,7 @@ import { PRECHECK_AT, confidenceTone, industryIcon, suggestionConfidence } from 
  * `gap.pinnedServiceId`, which starts that suggestion ticked; "Review proposed service" opens the propose form
  * pre-filled with the AI draft (name, category, description, keywords), which the person still edits and submits.
  */
-export type ProposeExtras = { description?: string; keywords?: string[] };
+export type ProposeExtras = { description?: string; keywords?: string[]; naicsCodes?: string[] };
 export type IntakeGapProps = Omit<GapPanelProps, 'onReviewProposal'> & { pinnedServiceId?: string };
 interface Props {
   item: IntakeSummaryItem;
@@ -40,9 +40,10 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose, 
   const ready = picked.size > 0;
   const outside = item.sourceKind === 'outside';
 
-  const reviewProposal = (d: { name: string; category: string | null; buyerValue: string | null; scope: string | null; keywords: string[] }): void => {
+  const reviewProposal = (d: { name: string; category: string | null; buyerValue: string | null; scope: string | null; keywords: string[]; naicsSuggestionsUnverified: string[] }): void => {
     setName(d.name); setCategory(d.category ?? '');
-    setExtras({ description: [d.buyerValue, d.scope].filter(Boolean).join(' ') || undefined, keywords: d.keywords.length ? d.keywords : undefined });
+    // NAICS always travels (even empty), so the server never falls back to the document's client-industry codes.
+    setExtras({ description: [d.buyerValue, d.scope].filter(Boolean).join(' ') || undefined, keywords: d.keywords.length ? d.keywords : undefined, naicsCodes: d.naicsSuggestionsUnverified });
     setProposing(true);
   };
   const toggle = (id: string): void => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -103,7 +104,7 @@ export default function IntakeCard({ item, growthServiceIds, onLink, onPropose, 
       {proposing && (
         <form className="p-3 border-top bg-warning-subtle" onSubmit={(e) => { e.preventDefault(); if (name.trim().length >= 2) void run(() => (extras ? onPropose(item, name.trim(), category.trim(), extras) : onPropose(item, name.trim(), category.trim()))); }}>
           <div className="fw-bold small"><i className="ri-seedling-line me-1" aria-hidden="true" />Propose a new service</div>
-          <div className="small text-secondary mb-2">It enters the catalog as Growth with this case study as its first proof.{extras && ' The description and keywords from the AI draft are included; edit the service afterwards to change them.'}</div>
+          <div className="small text-secondary mb-2">It enters the catalog as Growth with this case study as its first proof.{extras && ` The description, keywords${extras.naicsCodes?.length ? ` and NAICS ${extras.naicsCodes.join(', ')}` : ''} from the AI draft are included; edit the service afterwards to change them.`}</div>
           <label htmlFor={`ns-name-${item.id}`} className="form-label small mb-1">Service name</label>
           <input id={`ns-name-${item.id}`} className="form-control form-control-sm mb-2" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required minLength={2} />
           <label htmlFor={`ns-cat-${item.id}`} className="form-label small mb-1">Category <span className="text-secondary">(optional)</span></label>

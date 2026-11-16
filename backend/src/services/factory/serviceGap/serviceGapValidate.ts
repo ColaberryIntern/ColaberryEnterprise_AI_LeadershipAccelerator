@@ -18,6 +18,7 @@ import {
   type GapDecision, type GapEvidenceRef, type GapRecommendation, type Maturity, type ProposedServiceDraft,
 } from './serviceGapTypes';
 import { nameSimilarity, normalizeName } from './serviceGapRetrieval';
+import { nonWorkCodeWarnings, pickNaics, type NaicsSuggestion } from './serviceGapNaics';
 
 export class GapMalformedOutput extends Error { constructor(m: string) { super(m); this.name = 'GapMalformedOutput'; } }
 
@@ -144,6 +145,8 @@ export function finalizeRecommendation(raw: unknown, ctx: ValidateContext): GapR
   if ((decision === 'MATCH_EXISTING' || decision === 'LINK_GROWTH') && (existingFitScore ?? 0) >= 70) confidence = 'high';
   if (maturity === 'research_concept' || evidenceReadinessScore < 35 || decision === 'INSUFFICIENT_EVIDENCE') confidence = 'low';
   if (maturity === 'research_concept' && decision === 'PROPOSE_NEW') reasonCodes.push('research_only');
+  const linked = target && decision !== 'PROPOSE_NEW' && decision !== 'INSUFFICIENT_EVIDENCE' ? target : null;
+  const naics = naicsFor(r, linked);
 
   return {
     decision, verdict: verdict || defaultVerdict(decision, target?.name ?? null, proposedName),
@@ -151,12 +154,24 @@ export function finalizeRecommendation(raw: unknown, ctx: ValidateContext): GapR
     maturity, serviceFamily: str(r.serviceFamily, 120), candidates,
     scores: { existingFitScore, noveltyScore, evidenceReadinessScore, duplicateRiskScore, commercialPotentialScore: null },
     confidence,
-    proposedService: decision === 'PROPOSE_NEW' && proposedName ? draftFrom(ps, proposedName) : null,
-    expansion: decision === 'EXPAND_EXISTING' && target ? { serviceId: target.id, serviceName: target.name, ...expansionFields } : null,
+    proposedService: decision === 'PROPOSE_NEW' && proposedName ? draftFrom(ps, proposedName, naics) : null,
+    expansion: decision === 'EXPAND_EXISTING' && target
+      ? { serviceId: target.id, serviceName: target.name, ...expansionFields, naicsToAdd: naics.filter((n) => !n.onTarget).map((n) => n.code) }
+      : null,
     duplicateWarnings: duplicateWarnings.slice(0, 5), alternativesConsidered: alternativesFrom(r.alternativesConsidered),
     missingInformation: list(r.missingInformation, 6, 200), evidence: evidenceFrom(r.evidence),
     reasonCodes: Array.from(new Set(reasonCodes)).slice(0, 10),
+    naics, naicsWarnings: linked ? nonWorkCodeWarnings(linked.name, linked.naicsCodes) : [],
   };
+}
+
+/**
+ * Work-performed NAICS for this case study, from the closed list only (see serviceGapNaics), marked against the
+ * service it is being linked to. The top-level answer is preferred; a proposal's own codes are the fallback.
+ */
+function naicsFor(r: Obj, linked: { naicsCodes: string[] } | null): NaicsSuggestion[] {
+  const raw = Array.isArray(r.naics) && r.naics.length ? r.naics : obj(r.proposedService).naics;
+  return pickNaics(raw, linked?.naicsCodes ?? []);
 }
 
 type Target = (CatalogService & { retrievalScore: number }) | null;
@@ -194,13 +209,13 @@ function proposalGuard(name: string | null, candidates: GapCandidate[], ctx: Val
   return { decision: null, target: null, verdict: null, reasonCodes: [], duplicateWarnings, duplicateRiskScore: Math.round(worst * 100) };
 }
 
-function draftFrom(ps: Obj, name: string): ProposedServiceDraft {
+function draftFrom(ps: Obj, name: string, naics: NaicsSuggestion[]): ProposedServiceDraft {
   return {
     name, category: str(ps.category, 120), buyerValue: str(ps.buyerValue, 400), scope: str(ps.scope, 800),
     deliverables: list(ps.deliverables, 8, 160), targetBuyer: str(ps.targetBuyer, 200), differentiators: list(ps.differentiators, 6, 200),
     keywords: list(ps.keywords, 20, 60).map((k) => k.toLowerCase()),
-    // Filter BEFORE capping: clamping first would turn a 7-digit string into a "valid" 6-digit code.
-    naicsSuggestionsUnverified: list(ps.naics, 20, 32).filter((c) => /^\d{6}$/.test(c)).slice(0, 8),
+    // Closed list only (work performed, never the client's industry); see serviceGapNaics.
+    naicsSuggestionsUnverified: naics.map((n) => n.code),
     pscSuggestionsUnverified: list(ps.psc, 20, 32).map((c) => c.toUpperCase()).filter((c) => /^[A-Z0-9]{4}$/.test(c)).slice(0, 8),
     suggestedStatus: 'growth',
   };
@@ -241,6 +256,6 @@ export function insufficientRecommendation(ev: CaseStudyEvidence, reasonCode: st
     serviceFamily: null, candidates: [], confidence: 'low',
     scores: { existingFitScore: null, noveltyScore: 0, evidenceReadinessScore: readinessScore('unknown', ev), duplicateRiskScore: null, commercialPotentialScore: null },
     proposedService: null, expansion: null, duplicateWarnings: [], alternativesConsidered: [], missingInformation: missing,
-    evidence: [], reasonCodes: [reasonCode],
+    evidence: [], reasonCodes: [reasonCode], naics: [], naicsWarnings: [],
   };
 }

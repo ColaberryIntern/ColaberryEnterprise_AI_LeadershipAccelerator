@@ -10,6 +10,8 @@
  * qualitative. `commercialPotentialScore` is null until grounded opportunity demand is wired (null = unknown, never 0).
  */
 import { z } from 'zod';
+import type { NaicsSuggestion } from './serviceGapNaics';
+export type { NaicsSuggestion } from './serviceGapNaics';
 
 export const GAP_DECISIONS = ['MATCH_EXISTING', 'EXPAND_EXISTING', 'LINK_GROWTH', 'PROPOSE_NEW', 'INSUFFICIENT_EVIDENCE'] as const;
 export type GapDecision = typeof GAP_DECISIONS[number];
@@ -21,7 +23,7 @@ export type ServiceStatus = 'active' | 'growth' | 'retired';
 export type Confidence = 'high' | 'medium' | 'low';
 
 /** Bumping this invalidates every cached analysis (it is part of the idempotency key). */
-export const GAP_PROMPT_VERSION = 'service-gap-v2';
+export const GAP_PROMPT_VERSION = 'service-gap-v3';
 
 /** One catalog service as the detector sees it (tenant-scoped by the loader). */
 export interface CatalogService {
@@ -87,6 +89,8 @@ export interface ExpansionDraft {
   descriptionAddition: string | null;
   keywordsToAdd: string[];
   scopeChange: string | null;
+  /** Work-performed NAICS codes the case study suggests that the service does not carry yet (closed list). */
+  naicsToAdd: string[];
 }
 
 export interface GapScores {
@@ -120,6 +124,10 @@ export interface GapRecommendation {
   missingInformation: string[];
   evidence: GapEvidenceRef[];
   reasonCodes: string[];
+  /** Work-performed NAICS codes for this case study, from the closed list, marked against the target service. Unverified. */
+  naics: NaicsSuggestion[];
+  /** Codes on the target service that are not work-performed codes (often the client's industry). */
+  naicsWarnings: string[];
 }
 
 /** API view of one stored analysis. */

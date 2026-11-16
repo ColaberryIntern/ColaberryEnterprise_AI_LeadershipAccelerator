@@ -28,12 +28,22 @@ export const SCORE_HELP = {
 
 const norm = (s: string): string => s.trim().toLowerCase();
 
+/** What the UI knows about a service now, to diff a recommendation against. */
+export interface ServiceCurrent { description: string | null; keywords: string[]; naicsCodes: string[] }
+
+/** PURE: NAICS codes after adding `add` (6-digit only, order kept, no duplicates). `added` is what is actually new. */
+export function mergeNaics(current: string[], add: string[]): { codes: string[]; added: string[] } {
+  const have = new Set(current);
+  const added = Array.from(new Set(add.filter((c) => /^\d{6}$/.test(c) && !have.has(c))));
+  return { codes: [...current, ...added], added };
+}
+
 /**
  * PURE: the service fields after an expansion is applied. The description gets the addition appended once (never
- * twice: applying again is a no-op), keywords are merged case-insensitively. `changed` is false when there is nothing
- * new to write, so the UI can disable "Apply".
+ * twice: applying again is a no-op), keywords are merged case-insensitively, missing NAICS work codes are added.
+ * `changed` is false when there is nothing new to write, so the UI can disable "Apply".
  */
-export function mergeExpansion(current: { description: string | null; keywords: string[] }, ex: ExpansionDraft): { description: string; keywords: string[]; changed: boolean } {
+export function mergeExpansion(current: ServiceCurrent, ex: ExpansionDraft): { description: string; keywords: string[]; naicsCodes: string[]; naicsAdded: string[]; changed: boolean } {
   const base = (current.description ?? '').trim();
   const add = [ex.descriptionAddition, ex.scopeChange].filter((x): x is string => !!x && !!x.trim()).map((x) => x.trim());
   const missing = add.filter((a) => !base.toLowerCase().includes(a.toLowerCase()));
@@ -41,7 +51,8 @@ export function mergeExpansion(current: { description: string | null; keywords: 
   const have = new Set(current.keywords.map(norm));
   const extra = ex.keywordsToAdd.filter((k) => k.trim() && !have.has(norm(k)));
   const keywords = [...current.keywords, ...extra];
-  return { description, keywords, changed: missing.length > 0 || extra.length > 0 };
+  const naics = mergeNaics(current.naicsCodes, ex.naicsToAdd ?? []);
+  return { description, keywords, naicsCodes: naics.codes, naicsAdded: naics.added, changed: missing.length > 0 || extra.length > 0 || naics.added.length > 0 };
 }
 
 /** PURE: the counter tiles for the opportunities section, in display order. */

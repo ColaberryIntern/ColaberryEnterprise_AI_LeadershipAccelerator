@@ -230,8 +230,9 @@ For each unlinked case study, the detector answers one question: does it belong 
    - **High overlap.** A `PROPOSE_NEW` with capability overlap of at least 80 and buyer-problem overlap of at least 70 against one service becomes a match (`high_overlap_guard`).
    - **Retired namesake.** This is flagged, because propose-service would refuse it.
    - **Research-only work** is capped at LOW confidence.
-   - **NAICS/PSC** are format-checked and labeled *unverified suggestions*.
-   - **An unreadable decision** is stored as `failed`, never guessed.
+   - **NAICS (every decision, `serviceGapNaics.ts`).** The model picks up to 4 codes for the work the firm PERFORMED, and only from the closed `WORK_NAICS` list (2022 titles: programming, systems design, consulting, R&D, training, staffing). Codes outside the list are dropped, which keeps out invented codes and the client's industry (a utility client's 221118). Each code is marked on or not on the matched service. An expansion carries `naicsToAdd`, and a match offers "Add NAICS to <service>" with a second confirm. Codes already on a service that are not work codes are flagged, never removed. The propose-service pre-fill applies the same filter. PSC codes are format-checked. Both are labeled *unverified suggestions*.
+   - **An unreadable decision** is stored as `failed`, never guessed. Labels and sentences in `decision` ("Match existing.") are mapped onto the five codes by `normalizeDecision` first.
+   - **Inside case studies** are read from their latest snapshot (`serviceGapSnapshotText.ts`), because `canonical_summary` is usually empty.
 5. **Scores are heuristic indexes (0-100), not probabilities.** Each is defined in `serviceGapTypes.ts`:
    - `existingFitScore`, `noveltyScore`, `evidenceReadinessScore` and `duplicateRiskScore`.
    - `commercialPotentialScore` stays null until live-opportunity demand is grounded in real opportunity ids.

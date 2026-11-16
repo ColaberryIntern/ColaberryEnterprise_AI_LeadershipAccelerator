@@ -1,7 +1,7 @@
 import React from 'react';
 import type { GapAnalysis, GapCandidate, ProposedServiceDraft } from '../../../../services/serviceGapApi';
-import { ExpansionView, ProposedServiceView } from './GapDraftViews';
-import { DECISION_META, SCORE_HELP } from './serviceGapModel';
+import { ExpansionView, NaicsView, ProposedServiceView } from './GapDraftViews';
+import { DECISION_META, SCORE_HELP, type ServiceCurrent } from './serviceGapModel';
 
 /**
  * GapRecommendationPanel - the "AI service recommendation" block on an Intake card, above the keyword suggestions.
@@ -12,7 +12,7 @@ import { DECISION_META, SCORE_HELP } from './serviceGapModel';
  * Evidence, missing information and the alternatives the model rejected sit behind a disclosure.
  *
  * Nothing here writes on its own. Every action is a click: Use existing (ticks the service; Link confirms), Apply
- * change (second confirm), Review proposed service (pre-fills the existing form), Not a new service (dismiss),
+ * change (second confirm, also adds missing NAICS), Add NAICS to the matched service (second confirm), Review proposed service (pre-fills the existing form), Not a new service (dismiss),
  * Reanalyze. Every state is explicit: not analyzed, failed, dismissed, accepted, stale.
  */
 export interface GapPanelProps {
@@ -20,11 +20,13 @@ export interface GapPanelProps {
   /** False when the recommendations feed could not be read: show "unavailable", never a guess. */
   available: boolean;
   busy: boolean;
-  serviceCurrent: (serviceId: string) => { description: string | null; keywords: string[] } | null;
+  serviceCurrent: (serviceId: string) => ServiceCurrent | null;
   onAnalyze: (force: boolean) => void;
   onAdoptExisting: () => void;
   onReviewProposal: (draft: ProposedServiceDraft) => void;
-  onApplyExpansion: (current: { description: string | null; keywords: string[] }) => void;
+  onApplyExpansion: (current: ServiceCurrent) => void;
+  /** Adds the missing work-performed NAICS codes to the matched service (second confirm in the view). */
+  onAddNaics: (current: ServiceCurrent) => void;
   onDismiss: (note: string) => void;
 }
 
@@ -103,6 +105,9 @@ export default function GapRecommendationPanel(p: GapPanelProps): React.ReactEle
           ))}
         </ul>
       )}
+      <NaicsView naics={rec.naics ?? []} warnings={rec.naicsWarnings ?? []} targetName={rec.target?.serviceName ?? null}
+        current={rec.target ? p.serviceCurrent(rec.target.serviceId) : null} busy={p.busy}
+        onAdd={canAdopt ? p.onAddNaics : null} />
       {isNew && rec.proposedService && <ProposedServiceView draft={rec.proposedService} rec={rec} />}
       {rec.decision === 'EXPAND_EXISTING' && rec.expansion && (
         <ExpansionView ex={rec.expansion} current={p.serviceCurrent(rec.expansion.serviceId)} busy={p.busy} onApply={p.onApplyExpansion} />

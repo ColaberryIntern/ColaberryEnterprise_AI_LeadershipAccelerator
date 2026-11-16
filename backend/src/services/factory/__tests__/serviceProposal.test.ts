@@ -60,6 +60,12 @@ describe('proposeServiceFromCaseStudy', () => {
     expect(out.prefilledFromAnalysis).toEqual({ keywords: true, naicsCodes: true });
   });
 
+  it('drops a client-industry NAICS from the pre-fill and keeps only work-performed codes (the 221118 bug)', async () => {
+    impFindOne.mockResolvedValue({ analysis: { keywords: ['bots'], suggestedNaics: ['221118', '541511'] } });
+    await proposeServiceFromCaseStudy(base);
+    expect(soCreate.mock.calls[0][0]).toMatchObject({ naics_codes_json: ['541511'] });
+  });
+
   it('uses the body keywords/NAICS when given, and does not read the analysis', async () => {
     const out = await proposeServiceFromCaseStudy({ ...base, keywords: ['custom'], naicsCodes: ['541512'] });
     expect(impFindOne).not.toHaveBeenCalled();
