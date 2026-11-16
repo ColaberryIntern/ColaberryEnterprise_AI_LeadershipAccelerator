@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { StudentGovProjectView, GovProposalDocument, GovReviewApi, GovStudioApi, GovDocumentVersion, GovVersionContent, GovDiffSegment, GovSectionPlanFields } from '../../../../services/govProjectPortalApi';
+import type { StudentGovProjectView, GovProposalDocument, GovReviewApi, GovStudioApi, GovDocumentVersion, GovVersionContent, GovDiffSegment } from '../../../../services/govProjectPortalApi';
 import { CHECKS, Bar, colr, weightedScore } from './studioHelpers';
 import { outlineRows } from './editorHelpers';
 
@@ -12,17 +12,11 @@ const withNeedChips = (html: string): string =>
     return `<span class="gps-needchip" data-testid="ed-needchip" title="${inner.replace(/"/g, '&quot;')}">${label}</span>`;
   });
 
-const PLAN_FIELDS: Array<{ k: keyof GovSectionPlanFields; label: string }> = [
-  { k: 'hotButton', label: 'Hot button' }, { k: 'feature', label: 'Feature' }, { k: 'benefit', label: 'Benefit' }, { k: 'proof', label: 'Proof' }, { k: 'discriminator', label: 'Discriminator' },
-];
-const EMPTY_PLAN: GovSectionPlanFields = { hotButton: '', feature: '', benefit: '', proof: '', discriminator: '' };
-
 /**
  * DraftVersions — the Draft & versions editor. One working copy per document: the paper preview (the version's
- * content, with diff mode against the previous version), the section plan (reviewer-editable; saving writes a human
- * version), the six-check scores, and the version history. The "Run review cycle" button starts the agent loop and
- * polls the run until it stops. Ported from the approved design. Admin gets the full history/diff/section-plan via
- * the review API; the portal shows the latest version + the run cycle.
+ * content, with diff mode against the previous version), the six-check scores, and the version history. The "Run
+ * review cycle" button starts the agent loop and polls the run until it stops. Ported from the approved design.
+ * Admin gets the full history/diff via the review API; the portal shows the latest version + the run cycle.
  */
 export default function DraftVersions(
   { view, projectId, docs, studioApi, reviewApi, initialDocKey, onReload, onToast }:
@@ -37,8 +31,6 @@ export default function DraftVersions(
   const [content, setContent] = useState<GovVersionContent | null>(null);
   const [diff, setDiff] = useState<GovDiffSegment[] | null>(null);
   const [running, setRunning] = useState(false);
-  const [planDraft, setPlanDraft] = useState<GovSectionPlanFields>(EMPTY_PLAN);
-  const [selSection, setSelSection] = useState<string>('');
   const [mode, setMode] = useState<EditorMode>('paper');
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -58,7 +50,7 @@ export default function DraftVersions(
   useEffect(() => { setSelVerId(null); loadVersions(); }, [loadVersions]);
   useEffect(() => {
     if (!docKey || !selVerId) { setContent(null); return; }
-    studioApi.getVersionContent(projectId, docKey, selVerId).then((c) => { setContent(c); setSelSection((cur) => cur || c.sections[0]?.sectionKey || ''); }).catch(() => setContent(null));
+    studioApi.getVersionContent(projectId, docKey, selVerId).then((c) => setContent(c)).catch(() => setContent(null));
     setDiff(null);
   }, [projectId, docKey, selVerId, studioApi]);
   useEffect(() => () => { if (poll.current) window.clearInterval(poll.current); }, []);
@@ -95,15 +87,6 @@ export default function DraftVersions(
       onToast?.(status === 409 ? 'A review cycle is already running for this document.' : status === 403 ? 'Running a cycle needs an edit share on this document.' : 'Could not start the review cycle.');
     });
   }, [running, docKey, projectId, studioApi, onReload, loadVersions, onToast]);
-
-  const section = content?.sections.find((s) => s.sectionKey === selSection) ?? null;
-  useEffect(() => { setPlanDraft(section?.planFields ?? EMPTY_PLAN); }, [section]);
-  const savePlan = useCallback(() => {
-    if (!reviewApi?.saveSectionPlan || !selSection) { onToast?.('Section plans are reviewer-only.'); return; }
-    reviewApi.saveSectionPlan(projectId, docKey, selSection, planDraft).then(() => { onToast?.('Section plan saved as a new version.'); onReload(); loadVersions(); }).catch(() => onToast?.('Could not save the section plan.'));
-  }, [reviewApi, selSection, projectId, docKey, planDraft, onReload, loadVersions, onToast]);
-
-  const canEditPlan = !!reviewApi?.saveSectionPlan;
 
   // Seed the Edit textarea from the current version's content whenever Edit opens or the content changes.
   useEffect(() => { if (mode === 'edit') setEditText(content?.contentHtml ?? ''); }, [mode, content]);
@@ -202,17 +185,6 @@ export default function DraftVersions(
             )}
           </div>
           <div className="gps-side">
-            <div className="gps-panel" data-testid="ed-plan"><h3>Section plan{content && content.sections.length > 1 ? <select value={selSection} onChange={(e) => setSelSection(e.target.value)} style={{ marginLeft: 'auto', maxWidth: 120 }} aria-label="Section">{content.sections.map((s) => <option key={s.sectionKey} value={s.sectionKey}>{s.heading.slice(0, 28)}</option>)}</select> : null}</h3>
-              <dl className="gps-small" style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr)', gap: '6px 10px', alignItems: 'center' }}>
-                {PLAN_FIELDS.map((f) => (
-                  <React.Fragment key={f.k}>
-                    <dt className="gps-muted">{f.label}</dt>
-                    <dd style={{ margin: 0 }}>{canEditPlan ? <input style={{ width: '100%', border: '1px solid var(--gps-line)', background: 'var(--gps-surface)', borderRadius: 5, padding: '4px 7px', fontSize: 12, minWidth: 0 }} value={planDraft[f.k]} onChange={(e) => setPlanDraft((p) => ({ ...p, [f.k]: e.target.value }))} /> : (section?.planFields?.[f.k] || <span className="gps-muted">—</span>)}</dd>
-                  </React.Fragment>
-                ))}
-              </dl>
-              {canEditPlan && <div style={{ marginTop: 8 }}><button className="gps-btn sm primary" onClick={savePlan}>Save plan</button></div>}
-            </div>
             <div className="gps-panel" data-testid="ed-checks"><h3>Checks &middot; v{selVer?.version ?? '—'}</h3>
               <div className="gps-checks">
                 {CHECKS.map((c) => { const v = selVer?.scores?.[c.k] ?? 0; return (<div className="gps-ck" key={c.k}><span>{c.n}</span><b className="gps-sc gps-num" style={{ color: colr(v) }}>{v}</b><Bar v={v} /></div>); })}

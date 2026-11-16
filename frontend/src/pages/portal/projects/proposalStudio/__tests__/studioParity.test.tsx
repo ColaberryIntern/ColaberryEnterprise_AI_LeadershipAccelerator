@@ -97,7 +97,7 @@ const VIEW_TESTIDS: Record<string, string[]> = {
   blueprint: ['bp-reanalyze', 'bp-log', 'bp-weights', 'bp-rules', 'bp-state-forms', 'help'],
   gates: ['gates-matrix', 'gates-row', 'gates-row-chips', 'gates-team-pink', 'gates-team-red', 'gates-team-glove', 'gates-team-gold', 'help'],
   evidence: ['ev-demo-url', 'ev-capture', 'ev-insert', 'ev-decide', 'help'],
-  editor: ['ed-paper', 'ed-running-header', 'ed-tab-paper', 'ed-tab-outline', 'ed-tab-pdf', 'ed-doc-pick', 'ed-section', 'ed-reqref', 'ed-checks', 'ed-plan', 'ed-versions', 'help'],
+  editor: ['ed-paper', 'ed-running-header', 'ed-tab-paper', 'ed-tab-outline', 'ed-tab-pdf', 'ed-doc-pick', 'ed-section', 'ed-reqref', 'ed-checks', 'ed-versions', 'help'],
   package: ['pkg-files', 'pkg-sealed', 'pkg-checklist', 'pkg-export', 'help'],
 };
 

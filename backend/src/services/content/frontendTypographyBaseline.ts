@@ -110,7 +110,10 @@ export const FRONTEND_TYPOGRAPHY_BASELINE: Readonly<Record<string, TypographyBas
  * lint quietly keeps reporting a number better than the truth.
  */
 export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number>> = {
-  [DASH_RULE.id]: 2096,
+  // 2026-11-16: 2096 -> 2095. The Section plan authoring panel was removed from the gov
+  // proposal editor (DraftVersions.tsx) at Ali's request; its one JSX dash (the empty-field
+  // placeholder) went with it, so that file's entry drops 6 -> 5. No copy was rewritten.
+  [DASH_RULE.id]: 2095,
   // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
   // and the four new pages were written to house style, so the two entries
   // those files held are gone rather than carried over.

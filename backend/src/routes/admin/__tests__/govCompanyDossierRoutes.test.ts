@@ -12,6 +12,7 @@ const addCompanyPersonnel = jest.fn();
 const approveCompanyFact = jest.fn();
 const approveCompanyReference = jest.fn();
 const approveCompanyPersonnel = jest.fn();
+const updateCompanyFact = jest.fn();
 
 const ingestSourceDocument = jest.fn();
 const listCompanyDocuments = jest.fn();
@@ -34,6 +35,7 @@ jest.mock('../../../services/factory/proposal/govCompanyLibrary', () => ({
   approveCompanyFact: (...a: any[]) => approveCompanyFact(...a),
   approveCompanyReference: (...a: any[]) => approveCompanyReference(...a),
   approveCompanyPersonnel: (...a: any[]) => approveCompanyPersonnel(...a),
+  updateCompanyFact: (...a: any[]) => updateCompanyFact(...a),
 }));
 
 import express, { type Express } from 'express';
@@ -109,6 +111,29 @@ describe('POST approve', () => {
     const res = await request(app).post(`${BASE}/bogus/r1/approve`).send({});
     expect(res.status).toBe(400);
     expect(approveCompanyReference).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST fact update (edit a saved answer in place)', () => {
+  it('updates a fact value, tenant-scoped, approval untouched', async () => {
+    updateCompanyFact.mockResolvedValue(undefined);
+    const res = await request(app).post(`${BASE}/fact/f1/update`).send({ value: 'corrected value', category: 'registrations' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, id: 'f1' });
+    expect(updateCompanyFact).toHaveBeenCalledWith(TENANT, 'f1', expect.objectContaining({ value: 'corrected value', category: 'registrations' }), null);
+  });
+
+  it('400 when the edit has no value, nothing written', async () => {
+    const res = await request(app).post(`${BASE}/fact/f1/update`).send({ value: '   ' });
+    expect(res.status).toBe(400);
+    expect(updateCompanyFact).not.toHaveBeenCalled();
+  });
+
+  it('503 when the workspace tenant cannot be resolved', async () => {
+    lookupContainer.mockResolvedValue(null);
+    const res = await request(app).post(`${BASE}/fact/f1/update`).send({ value: 'x' });
+    expect(res.status).toBe(503);
+    expect(updateCompanyFact).not.toHaveBeenCalled();
   });
 });
 

@@ -85,6 +85,19 @@ export async function addCompanyFact(tenantId: string, input: { key: string; val
 export async function approveCompanyFact(tenantId: string, id: string, identityId: string | null): Promise<void> {
   await GovCompanyFact.update({ approved: true, approved_by_identity_id: identityId, updated_at: new Date() } as any, { where: { id, tenant_id: tenantId } });
 }
+/**
+ * Edit a fact's value (and optionally its key/category) in place — an admin correcting a saved answer. Tenant-scoped.
+ * Approval state is left untouched: an admin who can reach this portal has already vetted the row, so editing the
+ * wording of an approved fact keeps it approved and the next rebuild picks up the new wording. Only provided fields
+ * are written.
+ */
+export async function updateCompanyFact(tenantId: string, id: string, patch: { value?: string; key?: string; category?: string }, _identityId: string | null): Promise<void> {
+  const set: Record<string, unknown> = { updated_at: new Date() };
+  if (typeof patch.value === 'string') set.value = patch.value;
+  if (typeof patch.key === 'string') set.key = patch.key;
+  if (typeof patch.category === 'string') set.category = patch.category;
+  await GovCompanyFact.update(set as any, { where: { id, tenant_id: tenantId } });
+}
 export async function approveCompanyReference(tenantId: string, id: string, identityId: string | null): Promise<void> {
   await GovCompanyReference.update({ approved: true, approved_by_identity_id: identityId, updated_at: new Date() } as any, { where: { id, tenant_id: tenantId } });
 }

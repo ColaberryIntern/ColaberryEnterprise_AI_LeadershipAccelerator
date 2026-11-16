@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PageHeader, SectionCard } from '../shell';
 import {
-  getDossier, addDossierItem, approveDossierItem, FACT_CATEGORIES,
+  getDossier, addDossierItem, approveDossierItem, updateDossierFact, FACT_CATEGORIES,
   listCompanyDocs, uploadCompanyDoc, approveCompanyDoc, deleteCompanyDoc,
-  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc,
+  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc, type DossierFact, type FactEdit,
 } from '../../../services/adminGovDossierApi';
 
 /**
@@ -34,6 +34,7 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState<AddState>(null);
+  const [editingFact, setEditingFact] = useState<DossierFact | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -59,6 +60,11 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
   const save = useCallback(async (kind: DossierKind, input: NewItem) => {
     try { await addDossierItem(kind, input); setAdding(null); setNotice('Saved to the dossier.'); await load(); }
     catch { setError('Could not save that item.'); }
+  }, [load]);
+
+  const saveFactEdit = useCallback(async (id: string, patch: FactEdit) => {
+    try { await updateDossierFact(id, patch); setEditingFact(null); setNotice('Saved. The next rebuild uses the new wording.'); await load(); }
+    catch { setError('Could not save that edit.'); }
   }, [load]);
 
   const factsByCat = useMemo(() => {
@@ -138,6 +144,7 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
                         <span><strong>{f.key}:</strong> {f.value}</span>
                         <span className="d-flex align-items-center gap-2 flex-shrink-0">
                           <Badge approved={f.approved} />
+                          <button type="button" className="btn btn-outline-secondary btn-sm" data-testid="fact-edit" disabled={busyId === f.id} onClick={() => setEditingFact(f)}>Edit</button>
                           {!f.approved && <button type="button" className="btn btn-outline-success btn-sm" disabled={busyId === f.id} onClick={() => void approve('fact', f.id)}>Approve</button>}
                         </span>
                       </li>
@@ -198,6 +205,49 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
       </div>}
 
       {adding && <AddModal kind={adding.kind} onCancel={() => setAdding(null)} onSave={save} />}
+      {editingFact && <EditFactModal fact={editingFact} onCancel={() => setEditingFact(null)} onSave={saveFactEdit} />}
+    </div>
+  );
+}
+
+function EditFactModal({ fact, onCancel, onSave }: { fact: DossierFact; onCancel: () => void; onSave: (id: string, patch: FactEdit) => Promise<void> }): React.ReactElement {
+  const [key, setKey] = useState(fact.key);
+  const [value, setValue] = useState(fact.value);
+  const [category, setCategory] = useState(fact.category && CAT_LABEL.has(fact.category) ? fact.category : 'general');
+  const [saving, setSaving] = useState(false);
+  const valid = !!(key.trim() && value.trim());
+
+  const submit = async () => {
+    setSaving(true);
+    await onSave(fact.id, { key: key.trim(), value: value.trim(), category });
+    setSaving(false);
+  };
+
+  return (
+    <div className="modal d-block" tabIndex={-1} role="dialog" style={{ background: 'rgba(0,0,0,0.4)' }} data-testid="edit-fact-modal">
+      <div className="modal-dialog modal-dialog-centered" role="document">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">Edit company fact</h5>
+            <button type="button" className="btn-close" aria-label="Close" onClick={onCancel} />
+          </div>
+          <div className="modal-body">
+            <p className="small text-secondary">Correct a saved answer. The next time a document rebuilds, the agent uses the new wording in context; it is not pasted in word for word. The fact stays approved.</p>
+            <label className="form-label">Category</label>
+            <select className="form-select mb-2" value={category} onChange={(e) => setCategory(e.target.value)}>
+              {FACT_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <label className="form-label">Name</label>
+            <input className="form-control mb-2" data-testid="edit-fact-key" value={key} onChange={(e) => setKey(e.target.value)} />
+            <label className="form-label">Value</label>
+            <textarea className="form-control" rows={3} data-testid="edit-fact-value" value={value} onChange={(e) => setValue(e.target.value)} />
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>
+            <button type="button" className="btn btn-primary" data-testid="save-fact-edit" disabled={!valid || saving} onClick={() => void submit()}>{saving ? 'Saving...' : 'Save'}</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
