@@ -7,8 +7,8 @@ const query = sequelize.query as unknown as jest.Mock;
 const created = CAREER_PREP_STATEMENTS.map((s) => /CREATE TABLE IF NOT EXISTS (\w+)/.exec(s)?.[1]).filter(Boolean) as string[];
 
 describe('ensureCareerPrepSchema (statements)', () => {
-  it('creates exactly the seven P5 tables', () => {
-    expect(created.sort()).toEqual(['career_interviews', 'prep_observations', 'prep_plans', 'prep_readiness_daily', 'prep_sessions', 'prep_skill_sources', 'prep_skills']);
+  it('creates exactly the seven P5 tables plus prep_attempts (CP4.4)', () => {
+    expect(created.sort()).toEqual(['career_interviews', 'prep_attempts', 'prep_observations', 'prep_plans', 'prep_readiness_daily', 'prep_sessions', 'prep_skill_sources', 'prep_skills']);
   });
 
   it('is additive and re-runnable: every statement is IF NOT EXISTS or ON CONFLICT DO NOTHING, and none ALTERs or DROPs', () => {
@@ -36,6 +36,7 @@ describe('ensureCareerPrepSchema (statements)', () => {
     expect([...dropped].sort()).toEqual([...created].sort());
     expect(dropped.indexOf('prep_observations')).toBeLessThan(dropped.indexOf('prep_skills'));
     expect(dropped.indexOf('prep_plans')).toBeLessThan(dropped.indexOf('career_interviews'));
+    expect(dropped.indexOf('prep_attempts')).toBeLessThan(dropped.indexOf('prep_sessions'));
   });
 
   it('keeps booting when one statement fails, and says so', async () => {

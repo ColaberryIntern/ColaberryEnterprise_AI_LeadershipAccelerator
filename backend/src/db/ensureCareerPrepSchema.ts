@@ -3,7 +3,7 @@ import { sequelize } from '../config/database';
 /**
  * Career Prep v27, CP1.2 (kit section P5): the tables every number in the Career Prep room comes from.
  *
- * ADDITIVE ONLY. Seven new tables; nothing existing is altered. Every statement is IF NOT EXISTS
+ * ADDITIVE ONLY. Eight new tables (prep_attempts added in CP4.4); nothing existing is altered. Every statement is IF NOT EXISTS
  * or ON CONFLICT DO NOTHING, so this runs on every boot and a re-run is a no-op. The kit says
  * `participant_id`; in this repo a student is an enrollment, so the column is `enrollment_id`.
  *
@@ -108,6 +108,19 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
      status VARCHAR(10) NOT NULL DEFAULT 'running' CHECK (status IN ('running','paused','finished','ended','abandoned'))
    )`,
   'CREATE INDEX IF NOT EXISTS prep_sessions_enrollment_idx ON prep_sessions (enrollment_id, started_at)',
+  // CP4.4: one recorded "Try" answer. client_key makes a retried upload the same attempt (UNIQUE per session).
+  `CREATE TABLE IF NOT EXISTS prep_attempts (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     session_id UUID NOT NULL REFERENCES prep_sessions(id) ON DELETE CASCADE,
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     segment_index INTEGER NOT NULL CHECK (segment_index BETWEEN 0 AND 20),
+     client_key VARCHAR(64) NOT NULL,
+     status VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done','failed')),
+     result JSONB,
+     error_class VARCHAR(40),
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+     UNIQUE (session_id, client_key)
+   )`,
   `CREATE TABLE IF NOT EXISTS prep_readiness_daily (
      enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
      interview_id UUID NOT NULL DEFAULT '${NO_INTERVIEW}',
@@ -122,6 +135,7 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
 /** Run by hand to roll CP1.2 back. Never run at boot. Dependents first. */
 export const CAREER_PREP_ROLLBACK: readonly string[] = [
   'DROP TABLE IF EXISTS prep_readiness_daily',
+  'DROP TABLE IF EXISTS prep_attempts',
   'DROP TABLE IF EXISTS prep_sessions',
   'DROP TABLE IF EXISTS prep_plans',
   'DROP TABLE IF EXISTS prep_observations',

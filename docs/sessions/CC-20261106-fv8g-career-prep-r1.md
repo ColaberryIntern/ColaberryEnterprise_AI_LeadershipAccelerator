@@ -343,3 +343,25 @@ tests/systemV2/career-prep/.
     frontend Career Prep 105 pass; both tsc clean; test-file typecheck clean (local maxmind only).
   - Notes: declared: the kit's LineTrend, WeeklyBars and SkillTable are folded into charts/PrepCharts.tsx and the
     dashboard's Skills section; there is no client-side planBuilder because the server always builds plans.
+
+- [x] CP3.5 / CP4.1 / CP4.2 verified on attempt 2: T15 PASS 12/12, T17 PASS 12/12, T18 PASS 12/12
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - Notes: hardening from the verifier's non-blocking notes: interview dates more than two years ahead are refused
+    (a year-9999 typo can never reach planDates); T26 must focus the last plan block at 390 when measuring overflow.
+
+- [x] CP4.4 (backend) Recorded "Try" answers, scored into observations
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: prep_attempts table (UNIQUE session_id + client_key, so a retried upload is the same attempt);
+    config/prepAttemptUpload.ts (one video, 100 MB, video types only); attempts.ts (scored with the intro video's
+    pipeline: pace and filler words against their published targets; the 90-second length target does not apply
+    to a practice answer and is dropped; scores become observations with source video, ref attempt:<id>; a
+    one-at-a-time queue; the file is deleted after scoring on every path; failures stored with an error class);
+    careerPrepAttemptController.ts (413 too large, 400 not a video, 202 new, 200 retried, 404 not yours);
+    POST /sessions/:id/attempts and GET /sessions/:id/attempts/:attemptId; services/careerPrep/boot.ts starts the
+    rollup and marks attempts left pending by a restart as failed ("record again"); nginx/nginx.conf gets the
+    100m location for the attempts path (the upload-limit contract test now enforces it).
+  - Verification: attempts 7, attempt routes 9 tests; Career Prep + nginx contract + schema 219 pass; tsc clean;
+    route-auth lint OK.
+  - Notes: the nginx change is the one infrastructure file in Release 1 and will be called out in the PR body.

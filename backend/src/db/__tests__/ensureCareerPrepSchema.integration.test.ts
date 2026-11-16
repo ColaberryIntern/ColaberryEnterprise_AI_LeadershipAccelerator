@@ -50,8 +50,8 @@ describeIfDb('career prep schema against Postgres', () => {
 
   it('creates all seven tables (ensure swallows statement errors, so prove none was skipped)', async () => {
     const n = await one<{ n: number }>(`SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_name IN
-      ('career_interviews','prep_skills','prep_skill_sources','prep_observations','prep_plans','prep_sessions','prep_readiness_daily')`);
-    expect(n.n).toBe(7);
+      ('career_interviews','prep_skills','prep_skill_sources','prep_observations','prep_plans','prep_sessions','prep_readiness_daily','prep_attempts')`);
+    expect(n.n).toBe(8);
   });
 
   it('links one Hire interview to at most one career interview', async () => {

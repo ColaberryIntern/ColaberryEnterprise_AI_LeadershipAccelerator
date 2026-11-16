@@ -9,6 +9,8 @@ import { buildDashboard, buildSummary } from '../services/careerPrep/prepViews';
 import { askCora } from '../services/careerPrep/coraService';
 import { activePlan, createPlan, NotYoursError, PastInterviewError } from '../services/careerPrep/plans';
 import { currentSession, NotFoundError, startSession, updateSession } from '../services/careerPrep/sessions';
+import { prepAttemptUpload } from '../config/prepAttemptUpload';
+import { getAttemptStatus, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
 
@@ -209,5 +211,8 @@ router.get('/api/portal/career-prep/plans', requireParticipant, requireCareerPre
 router.post('/api/portal/career-prep/sessions', requireParticipant, requireCareerPrep, postSession);
 router.patch('/api/portal/career-prep/sessions/:id', requireParticipant, requireCareerPrep, patchSession);
 router.get('/api/portal/career-prep/sessions/current', requireParticipant, requireCareerPrep, getCurrentSession);
+// CP4.4: a recorded Try answer (multipart, 100 MB; nginx raises its body cap for this path).
+router.post('/api/portal/career-prep/sessions/:id/attempts', requireParticipant, requireCareerPrep, guardUpload(prepAttemptUpload.single('video')), postAttempt);
+router.get('/api/portal/career-prep/sessions/:id/attempts/:attemptId', requireParticipant, requireCareerPrep, getAttemptStatus);
 
 export default router;
