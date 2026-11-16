@@ -135,8 +135,14 @@ function EnrollSuccessPage() {
                   <div className="callout-box text-start mb-4">
                     <h3 className="h6 mb-2">Pre-Class Requirements</h3>
                     <ul className="text-muted mb-0">
+                      {/* Claude Code is included on Anthropic's Pro plan. This said
+                          "Max or Team plan" until 2026-11-16, on the page shown
+                          immediately after payment: it overstated the cost 5x and
+                          named a Team plan Anthropic sells only for groups of two or
+                          more. See code.claude.com/docs/en/setup. */}
                       <li className="mb-1">
-                        <strong>Claude Code paid account</strong> (Max or Team plan)
+                        <strong>A paid Anthropic plan with Claude Code</strong> - the
+                        Pro plan at $20/month covers it ($17/month paid annually)
                       </li>
                       <li className="mb-1">
                         <strong>Company-approved LLM API key</strong> (OpenAI,

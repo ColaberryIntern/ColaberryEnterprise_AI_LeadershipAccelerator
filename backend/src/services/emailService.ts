@@ -1533,7 +1533,10 @@ function buildConfirmationHtml(data: EnrollmentConfirmationData): string {
   <h2>Before Your First Session</h2>
   <p>To hit the ground running, please prepare the following:</p>
   <ul>
-    <li><strong>Claude Code paid account</strong> (Max or Team plan)</li>
+    <!-- Claude Code is included on Anthropic's Pro plan; this said "Max or Team plan"
+         until 2026-11-16, which overstated the cost by 5x and pointed at a Team plan
+         Anthropic sells only for groups of two or more. See code.claude.com/docs/en/setup. -->
+    <li><strong>A paid Anthropic plan with Claude Code</strong> - the Pro plan at $20/month covers it ($17/month paid annually)</li>
     <li><strong>Company-approved LLM API key</strong> (OpenAI, Anthropic, or equivalent)</li>
     <li><strong>GitHub account</strong> with repository creation access</li>
     <li><strong>1-page summary</strong> of your organization's current AI initiatives</li>
