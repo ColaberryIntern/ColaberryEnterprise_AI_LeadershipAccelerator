@@ -422,3 +422,20 @@ tests/systemV2/career-prep/.
   - Notes: declared deviation: the in-app half of a reminder is Cora's line in the room, not the community
     notification feed (its notification_type CHECK lists six community kinds; widening it changes a shared table).
     Rollback: kill switch stops all sends; UPDATE prep_reminders SET status = 'cancelled' WHERE status = 'pending'.
+
+- [x] CP4.6 Sheets and the jump bar
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: the getting-hired pages open as sheets over the room (kit 4.7), each a hash on the room URL
+    (#interviews, #inbox, #offers, #applications, #resume): from the URL (email links), from Cora ("my offers",
+    "inbox", "applications", "resume", "show my interviews"; routed before any model call) and from the jump bar
+    (/ when not typing, or Ctrl+K / Cmd+K; filter by every word, arrows, Enter, Esc). logic/sheets.ts (pure),
+    useSheet.ts (opening pushes history so browser Back closes; sideways replaces; a direct link closes by
+    clearing the hash; focus returns to the opener), PageSheet.tsx ("‹ Back to Career Prep", sibling tabs, title
+    focused on open, Esc and scrim close without closing the room), SheetBodies.tsx (Your interviews: real Hire
+    bookings in Central with status and "Join the room" from 10 minutes before the start, plus added and practice
+    interviews; Digital resume links the portfolio page), JumpBar.tsx (combobox over a listbox).
+  - Verification: frontend Career Prep 159 pass (sheets.test.tsx 15 new + 3 room-level); frontend tsc clean.
+  - Notes: declared deviation: the inbox, offers and applications are not tracked by the platform yet, so those
+    sheets say so plainly; no offers payload exists to carry a fee, and a test keeps "fee" out of every sheet
+    source and the rendered Offers sheet.
