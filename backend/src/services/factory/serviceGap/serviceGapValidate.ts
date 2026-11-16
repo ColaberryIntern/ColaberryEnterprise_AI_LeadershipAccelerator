@@ -25,6 +25,8 @@ export class GapMalformedOutput extends Error { constructor(m: string) { super(m
 /** PROPOSE_NEW is overridden to MATCH_EXISTING at or above both of these overlaps with one existing service. */
 export const OVERLAP_GUARD = { capability: 80, buyerProblem: 70 };
 export const SIMILAR_NAME_AT = 0.5;
+/** A proposed name at least this similar to a live service is that service, not a new one (similar_name_guard). */
+export const SIMILAR_NAME_REUSE = 0.6;
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? v as Obj : {});
@@ -61,6 +63,19 @@ export function readinessScore(maturity: Maturity, ev: CaseStudyEvidence): numbe
   const base: Record<Maturity, number> = { client_deployed: 80, internally_validated: 60, implemented_demo: 45, research_concept: 20, unknown: 25 };
   const outcomes = ev.analysis?.outcomes.length ?? 0;
   return Math.max(0, Math.min(100, base[maturity] + Math.min(20, outcomes * 5) - (ev.analysisError ? 20 : 0)));
+}
+
+/**
+ * When the model scores no candidates, the anti-bloat guards would have no number to act on (existing fit "n/a" let
+ * single-case-study proposals straight through in GD3). Fall back to OUR retrieval ranking (refs are in retrieval
+ * order, S1 first): the keyword-overlap score stands in for all three overlaps, labeled as such.
+ */
+function retrievalCandidates(refs: ValidateContext['refs']): GapCandidate[] {
+  return Array.from(refs.values()).filter((s) => s.retrievalScore > 0).slice(0, 3).map((s) => ({
+    serviceId: s.id, serviceName: s.name, status: s.status, retrievalScore: s.retrievalScore,
+    capabilityOverlap: s.retrievalScore, buyerProblemOverlap: s.retrievalScore, deliverableOverlap: s.retrievalScore,
+    missingCapabilities: [], reason: 'The model gave no overlap scores; keyword retrieval only.',
+  }));
 }
 
 function candidatesFrom(raw: unknown, refs: ValidateContext['refs']): GapCandidate[] {
@@ -107,9 +122,11 @@ export function finalizeRecommendation(raw: unknown, ctx: ValidateContext): GapR
   let decision = normalized;
   const reasonCodes = list(r.reasonCodes, 8, 60).map((c) => c.toLowerCase().replace(/[^a-z0-9_]+/g, '_'));
   const maturity = ((MATURITY_LEVELS as readonly string[]).includes(String(r.maturity)) ? r.maturity : 'unknown') as Maturity;
-  const candidates = candidatesFrom(r.candidates, ctx.refs);
+  const scored = candidatesFrom(r.candidates, ctx.refs);
+  const candidates = scored.length ? scored : retrievalCandidates(ctx.refs);
   let target = ctx.refs.get(String(r.targetRef ?? '').trim().toUpperCase()) ?? null;
   const duplicateWarnings: string[] = [];
+  if (!scored.length && candidates.length) reasonCodes.push('fit_from_retrieval');
   let verdict = str(r.verdict, 300) ?? '';
   if (UNUSABLE_VERDICT.test(verdict)) { verdict = ''; reasonCodes.push('verdict_replaced'); }
 
@@ -162,6 +179,7 @@ export function finalizeRecommendation(raw: unknown, ctx: ValidateContext): GapR
     missingInformation: list(r.missingInformation, 6, 200), evidence: evidenceFrom(r.evidence),
     reasonCodes: Array.from(new Set(reasonCodes)).slice(0, 10),
     naics, naicsWarnings: linked ? nonWorkCodeWarnings(linked.name, linked.naicsCodes) : [],
+    closestExisting: decision === 'PROPOSE_NEW' ? closestOf(candidates) : null,
   };
 }
 
@@ -172,6 +190,12 @@ export function finalizeRecommendation(raw: unknown, ctx: ValidateContext): GapR
 function naicsFor(r: Obj, linked: { naicsCodes: string[] } | null): NaicsSuggestion[] {
   const raw = Array.isArray(r.naics) && r.naics.length ? r.naics : obj(r.proposedService).naics;
   return pickNaics(raw, linked?.naicsCodes ?? []);
+}
+
+/** PROPOSE_NEW only: the best existing service, so a single case study can be linked now while its family waits for a second. */
+function closestOf(candidates: GapCandidate[]): GapRecommendation['closestExisting'] {
+  const best = candidates.filter((c) => c.status !== 'retired').sort((a, b) => fitOf(b) - fitOf(a))[0];
+  return best ? { serviceId: best.serviceId, serviceName: best.serviceName, status: best.status, fit: fitOf(best) } : null;
 }
 
 type Target = (CatalogService & { retrievalScore: number }) | null;
@@ -197,6 +221,12 @@ function proposalGuard(name: string | null, candidates: GapCandidate[], ctx: Val
     return { ...none, decision: best.status === 'growth' ? 'LINK_GROWTH' : 'MATCH_EXISTING',
       target: Array.from(ctx.refs.values()).find((s) => s.id === best.serviceId) ?? null,
       verdict: `"${best.serviceName}" already covers this (high overlap), so no new service is proposed.`, reasonCodes: ['high_overlap_guard'] };
+  }
+  const reuse = ctx.catalog.filter((s) => s.status !== 'retired')
+    .map((s) => ({ s, sim: nameSimilarity(name, s.name) })).sort((a, b) => b.sim - a.sim)[0];
+  if (reuse && reuse.sim >= SIMILAR_NAME_REUSE) {
+    return { ...none, decision: reuse.s.status === 'growth' ? 'LINK_GROWTH' : 'MATCH_EXISTING', target: { ...reuse.s, retrievalScore: 0 },
+      verdict: `"${reuse.s.name}" already covers this (near-identical name), so no new service is proposed.`, reasonCodes: ['similar_name_guard'] };
   }
   const duplicateWarnings: string[] = [];
   let worst = 0;
@@ -256,6 +286,6 @@ export function insufficientRecommendation(ev: CaseStudyEvidence, reasonCode: st
     serviceFamily: null, candidates: [], confidence: 'low',
     scores: { existingFitScore: null, noveltyScore: 0, evidenceReadinessScore: readinessScore('unknown', ev), duplicateRiskScore: null, commercialPotentialScore: null },
     proposedService: null, expansion: null, duplicateWarnings: [], alternativesConsidered: [], missingInformation: missing,
-    evidence: [], reasonCodes: [reasonCode], naics: [], naicsWarnings: [],
+    evidence: [], reasonCodes: [reasonCode], naics: [], naicsWarnings: [], closestExisting: null,
   };
 }

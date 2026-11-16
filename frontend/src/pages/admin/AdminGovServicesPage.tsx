@@ -113,10 +113,16 @@ export default function AdminGovServicesPage(): React.ReactElement {
     if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.focus({ preventScroll: true });
   }, []);
+  // Case study id -> how many case studies share its proposed new-service family (GD3: one alone never mints a service).
+  const familySizes = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of gap.data?.clusters ?? []) if (c.kind === 'new_service') for (const id of c.caseStudyIds) m.set(id, c.caseStudyIds.length);
+    return m;
+  }, [gap.data]);
   const gapFor = useCallback((item: IntakeSummaryItem): IntakeGapProps => {
     const a = gap.data?.byCaseStudy[item.id];
     return {
-      analysis: a, available: !!gap.data, busy: gap.busy.has(item.id), pinnedServiceId: gap.pinned[item.id],
+      analysis: a, available: !!gap.data, busy: gap.busy.has(item.id), pinnedServiceId: gap.pinned[item.id], familySize: familySizes.get(item.id),
       serviceCurrent: (id) => { const o = offerings.find((x) => x.id === id); return o ? { description: o.description ?? null, keywords: o.keywords ?? [], naicsCodes: o.naicsCodes ?? [] } : null; },
       onAnalyze: (force) => void gap.analyze(item.id, force),
       onAdoptExisting: () => { if (a) void gap.adoptExisting(item, a); },
@@ -124,7 +130,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
       onAddNaics: (cur) => { if (a) void gap.addNaics(a, cur); },
       onDismiss: (note) => { if (a) void gap.review(a, 'dismissed', note); },
     };
-  }, [gap, offerings]);
+  }, [gap, offerings, familySizes]);
   const openCaseStudy = useCallback((id: string) => {
     setReading(seeds.get(id) ?? { id, title: 'Case study', sourceKind: 'inside' });
   }, [seeds]);

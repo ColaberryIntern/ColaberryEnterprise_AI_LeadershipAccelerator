@@ -37,6 +37,8 @@ export interface GapRecommendation {
   evidence: Array<{ kind: 'document_claim' | 'confirmed_fact' | 'inference'; text: string }>; reasonCodes: string[];
   /** Absent on analyses stored before prompt service-gap-v3. */
   naics?: NaicsSuggestion[]; naicsWarnings?: string[];
+  /** PROPOSE_NEW only (prompt service-gap-v4+): the closest existing service, used while the family has 1 case study. */
+  closestExisting?: { serviceId: string; serviceName: string; status: ServiceStatus; fit: number } | null;
 }
 export interface GapAnalysis {
   id: string; caseStudyId: string; status: 'ok' | 'insufficient' | 'failed'; decision: GapDecision | null;

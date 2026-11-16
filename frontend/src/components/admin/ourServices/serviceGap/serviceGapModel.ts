@@ -28,6 +28,9 @@ export const SCORE_HELP = {
 
 const norm = (s: string): string => s.trim().toLowerCase();
 
+/** A new service is only proposed for action once this many case studies share the family (GD3 anti-bloat rule). */
+export const MIN_FAMILY_FOR_NEW_SERVICE = 2;
+
 /** What the UI knows about a service now, to diff a recommendation against. */
 export interface ServiceCurrent { description: string | null; keywords: string[]; naicsCodes: string[] }
 
