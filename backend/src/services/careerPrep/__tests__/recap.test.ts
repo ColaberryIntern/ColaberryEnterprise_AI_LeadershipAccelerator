@@ -55,9 +55,22 @@ describe('buildRecap (CP4.5)', () => {
     expect(pace.before).toBeUndefined();
     expect(typeof pace.after).toBe('number');
   });
+  it('REGRESSION (production 2026-11-16): a first scored answer that cannot yet move a number is listed as building, not as "nothing scored"', () => {
+    // A new student: no earlier observations. One scored answer gives each skill 1 of the 3 observations a score needs.
+    const r = buildRecap(dataOf(thisSession), refs, session, { done: 1, pending: 0 }, NOW, 'i1');
+    expect(r.attempts).toBe(1);
+    expect(r.skills).toEqual([]);
+    expect(r.building).toEqual(expect.arrayContaining([
+      { key: 'pace_clarity', label: 'Pace and clarity', count: 1, needed: 3 },
+      { key: 'few_fillers', label: 'Few filler words', count: 1, needed: 3 },
+    ]));
+    expect(r.building).toHaveLength(2);
+    // A skill that HAS a score is never also listed as building.
+    expect(recap.building).toEqual([]);
+  });
   it('no scored attempt: no changed skills, and readiness omitted when it cannot be computed', () => {
     const r = buildRecap(dataOf(earlier('pace_clarity', 50)), new Set(), { ...session, status: 'ended', secondsActive: 90 }, { done: 0, pending: 0 }, NOW, 'i1');
-    expect(r).toMatchObject({ status: 'ended', minutes: 2, attempts: 0, pending: 0, skills: [] });
+    expect(r).toMatchObject({ status: 'ended', minutes: 2, attempts: 0, pending: 0, skills: [], building: [] });
     expect(r.readiness).toBeUndefined();
   });
 });

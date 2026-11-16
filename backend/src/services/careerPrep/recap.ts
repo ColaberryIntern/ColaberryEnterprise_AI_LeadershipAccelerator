@@ -5,6 +5,7 @@ import { loadPrepData, type PrepData } from './prepData';
 import { buildDashboard } from './prepViews';
 import type { ObservationRow } from './observationAdapters';
 import type { SessionView } from './sessions';
+import config from './readinessWeights.json';
 
 /**
  * Career Prep v27, CP4.5: the recap after a session ends ("What changed today", shot L3-6).
@@ -16,11 +17,18 @@ import type { SessionView } from './sessions';
  * skill numbers are exactly the dashboard's (no second formula that could drift).
  *
  * NO INVENTED DATA: a readiness or skill that cannot be computed is omitted, never 0. A session with no
- * scored attempt has no changed skills (the list is empty) and says so. Answers still being scored when the
- * session ends are counted in `pending` (scoring runs after the upload returns), so the recap can say they
+ * scored attempt has no changed skills (the list is empty) and says so.
+ *
+ * BUILDING (fix, production 2026-11-16): a skill gets a number only after `minObservationsPerSkill` (3)
+ * observations, so the first answers ever scored move no number. They used to leave `skills` empty, which
+ * the room read as "No answer was scored this time" while the dashboard counted the answers. Those skills
+ * are now listed in `building` with how many observations they have and how many a first score needs.
+ * Answers still being scored when the session ends are counted in `pending` (scoring runs after the upload returns), so the recap can say they
  * will appear on Your progress instead of claiming nothing changed.
  */
 export interface RecapSkill { key: string; label: string; before?: number; after: number }
+/** A skill this session added to that does not have a score yet: `count` of the `needed` observations so far. */
+export interface RecapBuilding { key: string; label: string; count: number; needed: number }
 export interface Recap {
   status: 'finished' | 'ended';
   minutes: number;
@@ -30,6 +38,8 @@ export interface Recap {
   firstName?: string;
   readiness?: { after: number; before?: number; interviewId?: string; company?: string };
   skills: RecapSkill[];
+  /** Skills this session's answers fed that are still short of a first score. */
+  building: RecapBuilding[];
   streak: number;
 }
 
@@ -61,6 +71,8 @@ export function buildRecap(data: PrepData, refs: ReadonlySet<string>, session: P
       const b = beforeScore.get(s.key);
       return { key: s.key, label: s.label, after: s.score as number, ...(b !== undefined ? { before: b } : {}) };
     }),
+    building: after.skills.filter((s) => touched.has(s.key) && s.score === undefined)
+      .map((s) => ({ key: s.key, label: s.label, count: s.count, needed: config.minObservationsPerSkill })),
     streak: after.streak,
   };
 }

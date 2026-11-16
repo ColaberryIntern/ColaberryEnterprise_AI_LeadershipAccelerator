@@ -5,19 +5,45 @@
  * built, a session started and moved, a recorded answer scored, and a finished session returns a recap whose numbers
  * equal the dashboard it then serves. Every JSON body sent back is recorded, so the suite can assert that no payload
  * ever carries a fee.
+ *
+ * Two students: the default one has eight weeks of history (readiness trend, every skill scored, minutes per week, a
+ * streak), so Your progress draws every chart; `{ empty: true }` is a student with no data yet (no readiness, every
+ * skill short of a score, zero minutes), for the honest empty state. Dates are relative to "now", weeks are Central.
  */
 const DAY = 86_400_000;
 const CT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
 /** The Central calendar date `days` after `now` (dates are never hard-coded, so the suite passes on any day). */
 const centralDay = (now, days = 0) => CT.format(new Date(now + days * DAY));
 
-function makeState(now) {
-  const acme = { id: 'i1', source: 'real', company: 'Acme', role: 'AI Engineer', type: 'technical', startsAt: new Date(now + 3 * DAY).toISOString(), target: 75, readiness: 64 };
-  const skill = (key, label, score) => ({ key, label, score, count: 4, sources: ['video'] });
+/** The Monday (Central) of the week `weeksAgo` weeks before `now`, as YYYY-MM-DD. */
+function centralMonday(now, weeksAgo = 0) {
+  const today = centralDay(now - weeksAgo * 7 * DAY);
+  const dow = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return new Date(Date.parse(`${today}T12:00:00Z`) - ((dow + 6) % 7) * DAY).toISOString().slice(0, 10);
+}
+
+function makeState(now, opts = {}) {
+  const empty = !!opts.empty;
+  const acme = { id: 'i1', source: 'real', company: 'Acme', role: 'AI Engineer', type: 'technical', startsAt: new Date(now + 3 * DAY).toISOString(), target: 75, ...(empty ? {} : { readiness: 64 }) };
+  const globex = { id: 'i9', source: 'added', company: 'Initech', role: 'Data Analyst', type: 'recruiter', startsAt: new Date(now + 6 * DAY).toISOString(), target: 65, ...(empty ? {} : { readiness: 58 }) };
+  const skill = (key, label, score, change30, sources) => (empty
+    ? { key, label, count: key === 'pace_clarity' ? 1 : 0, sources: key === 'pace_clarity' ? ['video'] : [] }
+    : { key, label, score, change30, count: 4, sources });
   return {
-    interviews: [acme],
-    skills: [skill('pace_clarity', 'Pace and clarity', 48), skill('few_fillers', 'Few filler words', 61), skill('explaining_ai', 'Explaining AI simply', 66), skill('role_knowledge', 'Role knowledge', 70), skill('composure_followups', 'Composure under follow-ups', 59)],
-    readiness: 64,
+    empty,
+    interviews: [acme, globex],
+    skills: [
+      skill('pace_clarity', 'Pace and clarity', 48, 4, ['video', 'phone_mock']),
+      skill('ending_with_number', 'Ending on a result with a number', 57, 9, ['video', 'real_interview']),
+      skill('explaining_ai', 'Explaining AI simply', 58, -2, ['video', 'training']),
+      skill('composure_followups', 'Composure under follow-ups', 62, 7, ['phone_mock']),
+      skill('few_fillers', 'Few filler words', 64, 8, ['video', 'phone_mock']),
+      skill('behavioral_stories', 'Behavioral stories', 66, 2, ['video', 'phone_mock']),
+      skill('role_knowledge', 'Role knowledge', 70, 6, ['training', 'project']),
+      skill('answer_structure', 'Answer structure (STAR)', 72, 4, ['video', 'project']),
+      skill('proof_of_work', 'Proof of work', 74, 0, ['project']),
+    ],
+    readiness: empty ? null : 64,
     plan: null,
     session: null,
     attempts: 0,
@@ -32,16 +58,32 @@ const segs = (state) => [
   { kind: 'cooldown', title: 'Cool down', minutes: 1, state: 'pending' },
 ].map((s, i) => ({ ...s, state: state.session && state.session.done.includes(i) ? 'done' : 'pending' }));
 
+const TREND = [52, 55, 54, 58, 60, 61, 63];
+const MINUTES = [20, 15, 35, 30, 55, 45, 70];
+
 function dashboard(state) {
+  const thisWeek = state.finished ? 11 : 0;
+  if (state.empty) {
+    return {
+      anchorId: 'i1',
+      interviews: state.interviews,
+      skills: state.skills,
+      sources: { video: state.attempts, phone_mock: 0, real_interview: 0, training: 0, project: 0 },
+      weeklyMinutes: Array.from({ length: 8 }, (_, k) => ({ week: centralMonday(state.now, 7 - k), minutes: k === 7 ? thisWeek : 0 })),
+      streak: state.finished ? 1 : 0,
+      thisWeek,
+    };
+  }
   return {
     anchorId: 'i1',
-    readiness: { value: state.readiness, target: 75, trend: [{ week: centralDay(state.now, -7), value: 60 }, { week: centralDay(state.now), value: state.readiness }] },
+    readiness: { value: state.readiness, target: 75, changeSinceFirst: state.readiness - TREND[0],
+      trend: [...TREND.map((value, k) => ({ week: centralMonday(state.now, 7 - k), value })), { week: centralMonday(state.now), value: state.readiness }] },
     interviews: state.interviews.map((i) => (i.id === 'i1' ? { ...i, readiness: state.readiness } : i)),
-    skills: [...state.skills].sort((a, b) => a.score - b.score),
-    sources: { video: 4 + state.attempts, phone_mock: 0, real_interview: 0, training: 3, project: 1 },
-    weeklyMinutes: [{ week: centralDay(state.now, -7), minutes: 40 }, { week: centralDay(state.now), minutes: state.finished ? 11 : 0 }],
-    streak: state.finished ? 1 : 0,
-    thisWeek: state.finished ? 11 : 0,
+    skills: [...state.skills].sort((a, b) => (a.score ?? 101) - (b.score ?? 101)),
+    sources: { video: 15 + state.attempts, phone_mock: 6, real_interview: 2, training: 18, project: 3 },
+    weeklyMinutes: [...MINUTES.map((minutes, k) => ({ week: centralMonday(state.now, 7 - k), minutes })), { week: centralMonday(state.now), minutes: 60 + thisWeek }],
+    streak: state.finished ? 5 : 4,
+    thisWeek: 60 + thisWeek,
   };
 }
 
@@ -49,13 +91,24 @@ function finish(state, status) {
   const before = state.readiness;
   const pace = state.skills.find((s) => s.key === 'pace_clarity');
   const paceBefore = pace.score;
-  if (state.attempts > 0 && !state.finished) { pace.score = 57; state.readiness = 69; }
+  if (state.empty) {
+    // A new student: the answer counts toward pace and fillers, but no skill has a number yet (it needs 3 results).
+    if (state.attempts > 0 && !state.finished) pace.count += state.attempts;
+    state.finished = true;
+    return {
+      status, minutes: 11, attempts: state.attempts, pending: 0, firstName: 'Ali', skills: [],
+      building: state.attempts ? [{ key: 'pace_clarity', label: 'Pace and clarity', count: pace.count, needed: 3 }, { key: 'few_fillers', label: 'Few filler words', count: state.attempts, needed: 3 }] : [],
+      streak: 1,
+    };
+  }
+  if (state.attempts > 0 && !state.finished) { pace.score = 57; pace.change30 = 13; state.readiness = 69; }
   state.finished = true;
   return {
     status, minutes: 11, attempts: state.attempts, pending: 0, firstName: 'Ali',
     readiness: { before, after: state.readiness, interviewId: 'i1', company: 'Acme' },
     skills: state.attempts ? [{ key: 'pace_clarity', label: 'Pace and clarity', before: paceBefore, after: pace.score }] : [],
-    streak: 1,
+    building: [],
+    streak: 5,
   };
 }
 
@@ -63,7 +116,7 @@ function route(state, method, path, query, body) {
   const P = '/api/portal/career-prep';
   // CP_E2E_SELFTEST=flag-off: Career Prep closed, so the suite must FAIL (proves its checks can go red).
   if (path === `${P}/flags`) return { careerPrep: process.env.CP_E2E_SELFTEST !== 'flag-off' };
-  if (path === `${P}/summary`) return { firstName: 'Ali', nextInterview: dashboard(state).interviews[0], stops: { readiness: state.readiness, readyAt: 75 }, interviews: dashboard(state).interviews, interviewCount: 1, today: centralDay(state.now) };
+  if (path === `${P}/summary`) return { firstName: 'Ali', nextInterview: dashboard(state).interviews[0], stops: { ...(state.readiness ? { readiness: state.readiness } : {}), readyAt: 75 }, interviews: dashboard(state).interviews, interviewCount: state.interviews.length, today: centralDay(state.now) };
   if (path === `${P}/dashboard`) return dashboard(state);
   if (path === `${P}/reminders` && method === 'GET') return { reminders: [] };
   if (path === `${P}/reminders`) return { reminder: { id: 'r1', kind: body.kind, sendAt: new Date(state.now + DAY).toISOString(), status: 'pending' } };
@@ -87,7 +140,12 @@ function route(state, method, path, query, body) {
   }
   const attempt = /^\/api\/portal\/career-prep\/sessions\/[^/]+\/attempts(\/[^/]+)?$/.exec(path);
   if (attempt && method === 'POST') { state.attempts += 1; return { attempt: { id: `a${state.attempts}`, status: 'pending', result: null, errorClass: null } }; }
-  if (attempt) return { attempt: { id: 'a1', status: 'done', errorClass: null, result: { seconds: 41, notes: ['Good pace; end on the number.'], scores: [{ key: 'pace', label: 'Pace', score: 82, value: '142 words a minute', target: '100 to 165', source: 'your recording' }] } } };
+  // The scorer's real shape (attempts.attemptResult): pace, fillers and repetition against their published targets, and its notes.
+  if (attempt) return { attempt: { id: 'a1', status: 'done', errorClass: null, result: { seconds: 41, scores: [
+    { key: 'pace', label: 'Pace', score: 100, value: '142 wpm', target: '100 to 165 wpm', source: 'Microsoft Speaker Coach: 100 to 165 words a minute' },
+    { key: 'fillers', label: 'Filler words', score: 100, value: '1 (1.1%)', target: 'under 3% of words', source: 'Yoodli: fillers under 3% of words' },
+    { key: 'repetition', label: 'Repetition', score: 66, value: '8.1%', target: 'under 4% of words', source: 'Yoodli: repetition under 4% of words' },
+  ], notes: ['About 142 words a minute, a comfortable pace.', 'Very few filler words. Nice.', '4.2 seconds before your first word. Start talking right away.', 'You repeated "the project" 5 times. Vary the wording.'] } } };
   if (/^\/api\/portal\/career-prep\/sessions\/[^/]+$/.test(path) && method === 'PATCH') {
     if (body.action === 'segment_done' && !state.session.done.includes(body.segmentIndex)) state.session.done.push(body.segmentIndex);
     if (body.action === 'finish' || body.action === 'end') {
@@ -105,8 +163,8 @@ function sessionView(state) {
 }
 
 /** Install on a Playwright page. Returns { state, sent } (sent = every JSON body served, for the no-fee check). */
-async function installFakeApi(page, now = Date.now()) {
-  const state = makeState(now);
+async function installFakeApi(page, now = Date.now(), opts = {}) {
+  const state = makeState(now, opts);
   const sent = [];
   await page.route('**/api/**', async (r) => {
     const req = r.request();

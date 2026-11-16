@@ -8,11 +8,15 @@ jest.mock('../observationWriter', () => ({ writeObservations: (...a: unknown[]) 
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { attemptResult, createAttempt, failStaleAttempts, getAttempt, scoreAttempt } from '../attempts';
+import { attemptResult, createAttempt, failStaleAttempts, getAttempt, scoreAttempt, unclearAudio } from '../attempts';
 import { NotFoundError } from '../sessions';
 
-/** 60 words over 30 s with 3 "um"s: 120 wpm, 5% fillers. */
-const words = Array.from({ length: 60 }, (_, i) => ({ word: i % 20 === 5 ? 'um' : 'word', start: i * 0.5, end: i * 0.5 + 0.4 }));
+/** A real answer: 60 words over 30 s with 3 "um"s: 120 wpm, 5% fillers. */
+const ANSWER = ('At my last job I built an assistant um that read every support ticket and drafted a reply for the agent. ' +
+  'Agents approved or edited each draft before it went out. Um within six weeks the median reply time fell from four hours ' +
+  'to forty minutes and um the team closed the backlog for the first time that year, which my manager reported to the director.').split(/\s+/).slice(0, 60);
+const timed = (toks: string[], step = 0.5) => toks.map((word, i) => ({ word, start: i * step, end: i * step + step * 0.8 }));
+const words = timed(ANSWER);
 
 beforeEach(() => { mockQuery.mockReset().mockResolvedValue([[], 0]); mockTranscribe.mockReset(); mockWrite.mockReset().mockResolvedValue(2); jest.spyOn(console, 'warn').mockImplementation(() => undefined); });
 afterEach(() => jest.restoreAllMocks());
@@ -42,6 +46,30 @@ describe('attemptResult', () => {
   });
 });
 
+describe('unclearAudio: a silent or garbled recording is never scored', () => {
+  it('a real answer passes, and so does a fast but real talker (230 wpm)', () => {
+    expect(ANSWER).toHaveLength(60);
+    expect(unclearAudio(words, 30)).toBeNull();
+    expect(unclearAudio(timed(ANSWER, 60 / 230), 20)).toBeNull();
+  });
+  it('the production hallucination shape fails: one phrase looped ("i\'m i\'m" 69 times, 371 wpm)', () => {
+    const loop = timed([...Array.from({ length: 69 }, () => "I'm"), 'here', 'today'], 60 / 371);
+    expect(unclearAudio(loop, 25)).not.toBeNull();
+    // The loop alone, at a plausible pace, is still caught by its repetition.
+    expect(unclearAudio(timed(Array.from({ length: 40 }, (_, i) => (i % 2 ? 'thank' : 'you')), 0.5), 25)).toBe('loop');
+  });
+  it('short or silent recordings fail', () => {
+    expect(unclearAudio([], 20)).toBe('few_words');
+    expect(unclearAudio(timed(['Hello', 'um', 'so']), 20)).toBe('few_words');
+  });
+  it('words faster than a person speaks fail', () => {
+    expect(unclearAudio(timed(ANSWER, 60 / 300), 15)).toBe('too_fast');
+  });
+  it('a short real answer that repeats "and I" is not a loop', () => {
+    expect(unclearAudio(timed('I wrote the spec and I built it and I shipped it in two weeks'.split(' ')), 10)).toBeNull();
+  });
+});
+
 describe('scoreAttempt', () => {
   const file = () => { const p = path.join(os.tmpdir(), `attempt-test-${Math.random()}.webm`); fs.writeFileSync(p, 'x'); return p; };
 
@@ -53,6 +81,16 @@ describe('scoreAttempt', () => {
     expect(rows.map((r) => r.skill).sort()).toEqual(['few_fillers', 'pace_clarity']);
     expect(rows.every((r) => r.sourceRef === 'attempt:a1' && r.enrollmentId === 'e1' && r.source === 'video')).toBe(true);
     expect(String(mockQuery.mock.calls[0][0])).toContain("status = 'done'");
+    expect(fs.existsSync(f)).toBe(false);
+  });
+
+  it('an unclear recording is failed as UnclearAudio, writes NO observations, stores no result, and deletes the file', async () => {
+    mockTranscribe.mockResolvedValue({ words: timed(Array.from({ length: 69 }, () => "i'm"), 60 / 371), duration: 25, text: '', language: 'en' });
+    const f = file();
+    expect(await scoreAttempt('a1', 'e1', f)).toBe('failed');
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(String(mockQuery.mock.calls[0][0])).toContain("status = 'failed'");
+    expect(mockQuery.mock.calls[0][1].replacements.c).toBe('UnclearAudio');
     expect(fs.existsSync(f)).toBe(false);
   });
 

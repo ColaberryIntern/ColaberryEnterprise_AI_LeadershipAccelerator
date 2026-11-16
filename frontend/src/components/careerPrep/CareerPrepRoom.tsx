@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { themeForBrand, themeStyle } from '../../theme/deliveryBrandThemes';
 import { AnchorPill } from './AnchorPill';
 import type { PrepInterview } from './careerPrepApi';
 import { careerPrepFloorNum } from './careerPrepFloorNum';
@@ -12,7 +11,8 @@ import './careerPrepRoom.css';
  * the level trail (hidden under 900px), the anchor pill, nothing else. Left: Cora. Right: three tabs,
  * Your progress (default), Your plan, Session. Back and Esc close it and return focus to whatever
  * opened it; Esc inside a text field (the ask box) does not. The room is Refactored.ai inside a
- * Colaberry campus.
+ * Colaberry campus, drawn LIGHT as in the design (shots L3-1..L3-7) whatever the OS theme: its palette is defined
+ * on .cp-room in careerPrepRoom.css, not taken from the page theme.
  */
 export type RoomTab = 'progress' | 'plan' | 'session';
 const TABS: ReadonlyArray<{ key: RoomTab; label: string }> = [
@@ -61,7 +61,7 @@ export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, in
   }, [onClose]);
 
   return (
-    <div className="cp-room" role="dialog" aria-modal="true" aria-label="Career Prep" style={themeStyle(themeForBrand('refactored'))} data-testid="cp-room">
+    <div className="cp-room" role="dialog" aria-modal="true" aria-label="Career Prep" data-testid="cp-room">
       <header className="cp-room-top">
         <button type="button" className="cp-back" onClick={onClose} data-testid="cp-back">‹ {floorNum ? `Floor ${floorNum}` : 'Back'}</button>
         <LevelTrail step={3} floorNum={floorNum} />

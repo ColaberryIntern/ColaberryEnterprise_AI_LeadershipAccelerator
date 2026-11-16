@@ -24,9 +24,21 @@ export function recapText(r: PrepRecap): string {
   const top = [...r.skills].sort((a, b) => Math.abs(b.after - (b.before ?? b.after)) - Math.abs(a.after - (a.before ?? a.after)))[0];
   if (top) parts.push(`"${top.label}" ${top.before === undefined ? `starts at ${top.after}` : `moved ${moved(top.before, top.after)}`}.`);
   if (r.pending) parts.push(stillScoring(r.pending));
+  else if (!top && r.attempts > 0) parts.push(buildingText(r));
   else if (!top) parts.push('No answer was scored this time, so your numbers did not change.');
   parts.push(`I have added today's ${r.minutes} ${r.minutes === 1 ? 'minute' : 'minutes'} to your dashboard.`);
   return parts.join(' ');
+}
+
+/**
+ * Answers WERE scored, but no skill has a number yet (a skill needs a few answers first). Said plainly, so it never
+ * reads as "nothing was scored" while Your progress counts the answers (production 2026-11-16).
+ */
+export function buildingText(r: PrepRecap): string {
+  const scored = `${r.attempts === 1 ? 'One answer' : `${r.attempts} answers`} scored.`;
+  const b = (r.building ?? [])[0];
+  if (!b) return `${scored} Your numbers appear once each skill has a few answers behind it.`;
+  return `${scored} "${b.label}" has ${b.count} of the ${b.needed} practice results it needs for a first score.`;
 }
 
 /** Answers still being scored when the session ended: said plainly, never counted as "nothing changed". */

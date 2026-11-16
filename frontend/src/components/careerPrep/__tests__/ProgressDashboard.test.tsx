@@ -35,33 +35,49 @@ function mount(d: PrepDashboard, onAnchor = jest.fn(), onSkill = jest.fn()): HTM
 afterEach(() => { if (root) { const r = root; act(() => r.unmount()); } host?.remove(); host = null; root = null; });
 
 describe('Your progress (CP3.5)', () => {
-  it('with no data shows what to do first and invents nothing', () => {
+  it('with no data: still visual and honest (a ring toward the first score, empty trend, real zero counts), invents nothing', () => {
     const h = mount(empty);
     expect(h.querySelector('[data-testid="cp-readiness-empty"]')).not.toBeNull();
     expect(h.querySelector('[data-testid="cp-readiness"]')).toBeNull();
-    expect(h.textContent).not.toMatch(/\b0 \/ 100\b/);
+    expect(h.querySelector('[data-testid="cp-progress-ring"]')?.getAttribute('aria-label')).toBe('0 of 5 skills scored');
+    expect(h.querySelector('[data-testid="cp-trend-empty"]')).not.toBeNull();
+    expect(h.textContent).not.toMatch(/\b0 ?\/ ?100\b/);
     expect(h.textContent).not.toContain("Cora's read");
-    expect(h.textContent).not.toContain('Where the data comes from');
-    expect(h.textContent).not.toContain('Practice over time');
+    expect(h.querySelectorAll('[data-testid="cp-tiles"] li')).toHaveLength(5);
+    expect(h.textContent).toContain('no streak yet');
+    expect(h.textContent).toContain('No practice minutes yet');
   });
 
-  it('with data: readiness, its trend with the ready line, interviews, skills lowest first, sources and practice', () => {
+  it('skills without enough practice are empty gray bars that say so, never a 0', () => {
+    const h = mount({ ...empty, skills: [{ key: 'w', label: 'Proof of work', count: 1, sources: ['project'] }, { key: 'x', label: 'Answer structure', count: 0, sources: [] }] });
+    const row = h.querySelector('[data-testid="cp-skill-w"]') as HTMLElement;
+    expect(row.querySelector('.cp-bar.is-empty')).not.toBeNull();
+    expect(row.querySelector('.cp-skill-v')).toBeNull();
+    expect(row.textContent).toContain('not enough practice yet · 1 of 3');
+    expect(h.querySelector('[data-testid="cp-skill-x"]')?.textContent).toContain('not enough practice yet');
+  });
+
+  it('with data: readiness, its change, the trend with the ready line, interviews, skills lowest first, sources and practice', () => {
     const h = mount(full);
-    expect(h.querySelector('[data-testid="cp-readiness"]')?.textContent).toContain('64 / 100');
-    expect(h.textContent).toContain('up 9 since your first week');
-    expect(h.querySelector('.cp-ready')).not.toBeNull();
-    expect(Array.from(h.querySelectorAll('[data-testid="cp-skills"] .cp-skill-name')).map((e) => e.textContent)).toEqual(['Pace and clarity', 'Few filler words', 'Role knowledge']);
-    expect(h.textContent).toContain('Not enough data yet: Proof of work.');
-    expect(h.textContent).toContain('4 video answers scored');
-    expect(h.textContent).not.toContain('phone mocks');
-    expect(h.textContent).toContain('Streak: 3 days');
+    expect(h.querySelector('[data-testid="cp-readiness"] b')?.textContent).toBe('64');
+    expect(h.querySelector('[data-testid="cp-readiness-change"]')?.textContent).toBe('up 9 since Nov 2');
+    expect(h.querySelector('[data-testid="cp-trend-svg"] .cp-ready')).not.toBeNull();
+    expect(h.querySelector('[data-testid="cp-trend-svg"]')?.textContent).toContain('75 · ready');
+    expect(Array.from(h.querySelectorAll('[data-testid="cp-skills"] .cp-skill-name')).map((e) => e.textContent)).toEqual(['Pace and clarity', 'Few filler words', 'Role knowledge', 'Proof of work']);
+    expect(h.querySelector('[data-testid="cp-skill-p"] .cp-delta.down')?.textContent).toBe('down 2');
+    expect(h.querySelector('[data-testid="cp-skill-f"] .cp-delta.up')?.textContent).toBe('up 9');
+    expect(h.querySelector('[data-testid="cp-skill-w"]')?.textContent).toContain('not enough practice yet');
+    expect(Array.from(h.querySelectorAll('[data-testid="cp-tiles"] li')).map((t) => t.textContent)).toEqual(['4video answers scored', '0phone mocks with Cora', '0real interviews recorded', '2training lessons done', '0projects verified']);
+    expect(h.textContent).toContain('Minutes per week · 3-day streak');
+    expect(h.querySelector('[data-testid="cp-weekly-svg"]')).not.toBeNull();
   });
 
   it('a partial payload (skills, no readiness, no interviews) shows only what exists', () => {
     const h = mount({ ...empty, skills: full.skills });
     expect(h.querySelector('[data-testid="cp-readiness-empty"]')).not.toBeNull();
-    expect(h.textContent).not.toContain('Your interviews');
-    expect(h.querySelectorAll('[data-testid="cp-skills"] li')).toHaveLength(3);
+    expect(h.querySelector('[data-testid="cp-progress-ring"]')?.getAttribute('aria-label')).toBe('3 of 5 skills scored');
+    expect(h.querySelector('[data-testid^="cp-iv-"]')).toBeNull();
+    expect(h.querySelectorAll('[data-testid="cp-skills"] li')).toHaveLength(4);
     expect(h.textContent).toContain("Cora's read");
   });
 
@@ -92,7 +108,7 @@ describe('Your progress (CP3.5)', () => {
     const onAnchor = jest.fn();
     const onSkill = jest.fn();
     const h = mount(full, onAnchor, onSkill);
-    act(() => (Array.from(h.querySelectorAll('.cp-rowbtn')).find((b) => b.textContent?.includes('Acme')) as HTMLButtonElement).click());
+    act(() => (h.querySelector('[data-testid="cp-iv-i1"]') as HTMLButtonElement).click());
     expect(onAnchor).toHaveBeenCalledWith('i1');
     act(() => (h.querySelector('[data-testid="cp-skills"] .cp-rowbtn') as HTMLButtonElement).click());
     expect(onSkill).toHaveBeenCalledWith(expect.objectContaining({ key: 'p' }));
@@ -100,7 +116,7 @@ describe('Your progress (CP3.5)', () => {
 
   it("Cora's read is the three lowest scored skills, with their evidence", () => {
     expect(coraRead(full.skills).map((s) => s.key)).toEqual(['p', 'f', 'r']);
-    expect(mount(full).textContent).toContain('Pace and clarity is at 41, from 4 observations (video).');
+    expect(mount(full).querySelector('.cp-read li')?.textContent).toBe('Pace and clarity41 · from 4 results (video)Make me a plan for this');
   });
 
   it('never uses status colors for a chart series', () => {

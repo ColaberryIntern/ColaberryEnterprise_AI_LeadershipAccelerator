@@ -50,6 +50,42 @@ export async function getAttempt(enrollmentId: string, sessionId: string, attemp
   return view(r);
 }
 
+/**
+ * When a transcript is not a real answer. Whisper fills a mostly silent recording with a loop of one phrase
+ * (production 2026-11-16: "i'm i'm" 69 times, scored as 371 wpm and 83.3% repetition), so such a transcript
+ * must never become a score or an observation. The thresholds are set so a real speaker never trips them:
+ *   minWords 8        under 8 words is not an answer to an interview question (a real 30-60 s answer is 70+).
+ *   maxWpm 260        fast conversational speech peaks around 200-230 words a minute (the pace target is
+ *                     100 to 165); above 260 over the speaking span is words that were not really said.
+ *   loop share 0.4    one 1- to 4-word phrase, said at least 6 times, covering 40% or more of all words. In
+ *                     real speech the most common word ("the", "I") is under 10% of words, and a repeated
+ *                     phrase rarely covers more than 5%; the minimum of 6 keeps a short answer that says
+ *                     "and I" twice from tripping it.
+ */
+export const UNCLEAR = { minWords: 8, maxWpm: 260, loopShare: 0.4, loopMinRepeats: 6 } as const;
+export class UnclearAudioError extends Error {
+  readonly error_class = 'UnclearAudio';
+  constructor(readonly reason: string) { super(`unclear audio: ${reason}`); this.name = 'UnclearAudioError'; }
+}
+
+/** Pure: why this transcript is not a clear answer ('few_words' | 'too_fast' | 'loop'), or null when it is one. */
+export function unclearAudio(words: Parameters<typeof speechMetrics>[0], seconds: number): string | null {
+  const toks = words.map((w) => w.word.toLowerCase().replace(/[^a-z']/g, '')).filter(Boolean);
+  if (toks.length < UNCLEAR.minWords) return 'few_words';
+  const wpm = speechMetrics(words, seconds).wordsPerMinute;
+  if (wpm !== null && wpm > UNCLEAR.maxWpm) return 'too_fast';
+  for (let n = 1; n <= 4; n += 1) {
+    const counts = new Map<string, number>();
+    for (let i = 0; i + n <= toks.length; i += 1) {
+      const key = toks.slice(i, i + n).join(' ');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const top = Math.max(0, ...counts.values());
+    if (top >= UNCLEAR.loopMinRepeats && (top * n) / toks.length >= UNCLEAR.loopShare) return 'loop';
+  }
+  return null;
+}
+
 /** Pure: the result shown to the student, from a transcript. */
 export function attemptResult(words: Parameters<typeof speechMetrics>[0], seconds: number): AttemptResult {
   const m = speechMetrics(words, seconds);
@@ -67,6 +103,9 @@ export interface ScoreDeps { transcribeCall?: TranscribeCall }
 export async function scoreAttempt(attemptId: string, enrollmentId: string, file: string, deps: ScoreDeps = {}): Promise<'done' | 'failed'> {
   try {
     const t = await transcribe(file, deps.transcribeCall);
+    // A silent or garbled recording is failed as UnclearAudio BEFORE anything is written (no observations).
+    const unclear = unclearAudio(t.words, t.duration);
+    if (unclear) throw new UnclearAudioError(unclear);
     const result = attemptResult(t.words, t.duration);
     await writeObservations(attemptObservationRows(enrollmentId, attemptId, result, new Date()));
     await sequelize.query(`UPDATE prep_attempts SET status = 'done', result = CAST(:r AS JSONB) WHERE id = :a`, { replacements: { r: JSON.stringify(result), a: attemptId } });

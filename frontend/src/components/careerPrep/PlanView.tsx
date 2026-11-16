@@ -25,10 +25,19 @@ function Block({ s, skill }: { s: PrepSegment; skill?: string }): React.ReactEle
   const tip = `${s.title}, ${s.minutes} min${skill ? `, works on ${skill}` : ''}`;
   return (
     <span role="listitem" tabIndex={0} className={`cp-seg cp-seg-${s.kind}${s.targetSkill ? ' is-target' : ''}`} style={{ flexGrow: s.minutes }} aria-label={tip} data-minutes={s.minutes}>
-      <span aria-hidden="true">{s.minutes >= 4 ? s.title.replace(/^Learn: .*/, 'Learn') : ''}</span>
+      <b aria-hidden="true">{s.title.replace(/^Learn: .*/, 'Learn')}</b><small aria-hidden="true">{s.minutes}m</small>
       <span className="cp-seg-tip" role="tooltip">{tip}</span>
     </span>
   );
+}
+
+const monthDay = (date: string) => new Date(`${date}T18:00:00Z`).toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' });
+
+/** The plan's headline (shot L3-3: "4 days to Meridian Freight"), from the plan's own days and minutes. */
+export function planTitle(days: PrepPlan['days'], company?: string): string {
+  if (days.length > 1) return `${days.length} days${company ? ` to ${company}` : ' of practice'}`;
+  const mins = days[0].segments.reduce((a, s) => a + s.minutes, 0);
+  return `${mins} minutes${company ? ` for ${company}` : ' of practice'}`;
 }
 
 export function PlanView({ plan, company, skillLabels = {}, onStart, now }: {
@@ -42,24 +51,31 @@ export function PlanView({ plan, company, skillLabels = {}, onStart, now }: {
   const hasToday = days[0].date === today;
   return (
     <div className="cp-plan" data-testid="cp-plan">
-      <h3>Your plan{company ? ` · for ${company}` : ''}</h3>
-      {targeted.length > 0 && <p className="cp-muted">Built from your weakest skills: {targeted.map((k) => skillLabels[k] ?? k).join(', ')}.</p>}
-      {hasToday && <button type="button" className="cp-send" onClick={onStart} data-testid="cp-start-today">Start today&apos;s session</button>}
+      <div className="cp-planh">
+        <div>
+          <h3>Your plan{company ? ` · for ${company}` : ''}</h3>
+          <p className="cp-plan-title">{planTitle(days, company)}</p>
+          {targeted.length > 0 && <p>Built from your weakest skills: {targeted.map((k) => skillLabels[k] ?? k).join(', ')}.</p>}
+        </div>
+        {hasToday && <button type="button" className="cp-send" onClick={onStart} data-testid="cp-start-today"><i className="ri-play-fill" aria-hidden="true" />Start today&apos;s session</button>}
+      </div>
       <ol className="cp-days">
         {days.map((d, i) => {
           const mins = d.segments.reduce((a, s) => a + s.minutes, 0);
           const label = dayLabel(d.date, today);
+          const near = label === 'Today' || label === 'Tomorrow';
           return (
-            <li key={d.date} className="cp-day" data-testid={`cp-day-${i}`}>
-              <div className="cp-day-head"><b>{label}</b><span className="cp-muted">{mins} min</span>
-                {d.date === today ? <button type="button" className="cp-chip" onClick={onStart}>Start</button> : <span className="cp-muted">Upcoming</span>}</div>
+            <li key={d.date} className={`cp-day${d.date === today ? ' is-today' : ''}`} data-testid={`cp-day-${i}`}>
+              <div className="cp-day-head"><b>{label}</b><small>{near ? `${monthDay(d.date)} · ` : ''}{mins} min</small></div>
               <div className="cp-timeline" role="list" aria-label={`${label}: ${mins} minutes`}>
                 {d.segments.map((s, j) => <Block key={`${s.kind}${j}`} s={s} skill={s.targetSkill ? skillLabels[s.targetSkill] ?? s.targetSkill : undefined} />)}
               </div>
+              <div className="cp-day-act">{d.date === today ? <button type="button" className="cp-send sm" onClick={onStart}>Start</button> : <span className="cp-pill">Upcoming</span>}</div>
             </li>
           );
         })}
       </ol>
+      <p className="cp-plan-foot">Blue blocks work on a weak skill.</p>
     </div>
   );
 }

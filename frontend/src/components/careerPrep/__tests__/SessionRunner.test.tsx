@@ -74,7 +74,7 @@ describe('the session (CP4.4)', () => {
     expect(h.textContent).toContain('Part 2 of 3');
     expect(h.querySelector('[data-testid="cp-try"]')).not.toBeNull();
     await click(h, 'cp-session-next');
-    expect(h.querySelector('[data-testid="cp-session-next"]')?.textContent).toBe('Finish ✓');
+    expect(h.querySelector('[data-testid="cp-session-next"]')?.textContent).toBe('Finish');
     await click(h, 'cp-session-next');
     const actions = mockPatch.mock.calls.map((c) => [c[1].action, c[1].segmentIndex]);
     expect(actions).toEqual([['segment_done', 0], ['segment_done', 1], ['segment_done', 2], ['finish', undefined]]);
@@ -209,7 +209,7 @@ describe('the recap (CP4.5)', () => {
     await click(h, 'cp-session-next');
     const r = h.querySelector('[data-testid="cp-recap"]');
     expect(r?.textContent).toContain('Nice work, Ali.');
-    expect(r?.textContent).toContain('Readiness 69 from 64');
+    expect(h.querySelector('[data-testid="cp-recap-readiness"]')?.textContent).toBe('Readiness69 5 up from 64');
     expect(r?.textContent).toContain('48 → 57');
     expect(onOver).toHaveBeenCalledWith(expect.objectContaining({ status: 'finished' }), recap);
   });
@@ -224,6 +224,18 @@ describe('the recap (CP4.5)', () => {
     expect(r?.textContent).toContain('Session ended');
     expect(r?.textContent).toContain('your numbers did not change');
     expect(r?.textContent).not.toContain('Readiness');
+  });
+  it('REGRESSION (production 2026-11-16): answers scored but no skill number yet reads as building, never "No answer was scored"', async () => {
+    mockStart.mockResolvedValue({ session: view(three), resumed: false });
+    mockPatch.mockImplementation(async (_id: string, b: { action: string }) => (b.action === 'end'
+      ? { session: view(three, { status: 'ended' }), recap: { status: 'ended', minutes: 6, attempts: 1, pending: 0, skills: [], streak: 1,
+        building: [{ key: 'pace_clarity', label: 'Pace and clarity', count: 2, needed: 3 }] } } : { session: view(three) }));
+    const h = mount(<Harness />);
+    await click(h, 'cp-session-start');
+    await click(h, 'cp-session-end');
+    const r = h.querySelector('[data-testid="cp-recap"]');
+    expect(r?.textContent).not.toContain('No answer was scored');
+    expect(h.querySelector('[data-testid="cp-recap-building-pace_clarity"]')?.textContent).toBe('Pace and clarity2 of 3 practice results to a first score');
   });
   it('an answer still being scored at the end is shown as such, not as "numbers did not change"', async () => {
     mockStart.mockResolvedValue({ session: view(three), resumed: false });
@@ -272,6 +284,56 @@ describe('recording a Try (CP4.4)', () => {
     expect(mockFetch).toHaveBeenCalledWith('ses-1', 'att-1');
     expect(h.querySelector('[data-testid="cp-try-result"]')?.textContent).toContain('Pace: 172 words a minute (target 100 to 165)');
     expect(h.textContent).toContain('Slow down a little.');
+  });
+
+  it('while recording the frame shows a LIVE mirrored self-view of the camera stream; the tracks stop after', async () => {
+    const stream = { getTracks: () => [{ stop: stopTracks }] };
+    (navigator.mediaDevices.getUserMedia as jest.Mock).mockResolvedValue(stream);
+    mockUpload.mockResolvedValue(done);
+    const h = mount(<TryRecorder sessionId="ses-1" segmentIndex={1} prompt="Q" initials="A" />);
+    expect(h.querySelector('[data-testid="cp-cam"] video')).toBeNull();
+    expect(h.querySelector('[data-testid="cp-cam"]')?.textContent).toBe('A');
+    await click(h, 'cp-record');
+    const video = h.querySelector('[data-testid="cp-selfview"]') as HTMLVideoElement;
+    expect(video).not.toBeNull();
+    expect(video.muted).toBe(true);
+    expect(video.autoplay).toBe(true);
+    expect((video as unknown as { srcObject: unknown }).srcObject).toBe(stream);
+    expect(h.querySelector('[data-testid="cp-rec"]')?.textContent).toMatch(/^Recording 0:0\d$/);
+    await click(h, 'cp-stop');
+    expect(stopTracks).toHaveBeenCalled();
+    expect(h.querySelector('[data-testid="cp-selfview"]')).toBeNull();
+  });
+
+  it('the score card: Scored in N seconds, ONE Delivery number (the mean of the metric scores), and the two cards', async () => {
+    const scored: AttemptView = { id: 'att-2', status: 'done', errorClass: null, result: { seconds: 41, scores: [
+      { key: 'pace', label: 'Pace', score: 100, value: '142 wpm', target: '100 to 165 wpm', source: 'Microsoft Speaker Coach' },
+      { key: 'fillers', label: 'Filler words', score: 100, value: '1 (1.2%)', target: 'under 3% of words', source: 'Yoodli' },
+      { key: 'repetition', label: 'Repetition', score: 67, value: '8.1%', target: 'under 4% of words', source: 'Yoodli' },
+    ], notes: ['About 142 words a minute, a comfortable pace.', 'Very few filler words. Nice.', '17.7 seconds before your first word. Start talking right away.'] } };
+    mockUpload.mockResolvedValue(scored);
+    const h = mount(<TryRecorder sessionId="ses-1" segmentIndex={1} prompt="Q" />);
+    await click(h, 'cp-record');
+    await click(h, 'cp-stop');
+    expect(h.querySelector('[data-testid="cp-scored-in"]')?.textContent).toMatch(/^Scored in \d+ seconds?$/);
+    expect(h.querySelector('[data-testid="cp-delivery"]')?.textContent).toBe('89');
+    expect(h.querySelector('[data-testid="cp-try-result"]')?.textContent).not.toMatch(/content \d/i);
+    const well = h.querySelector('[data-testid="cp-fb-well"]')?.textContent ?? '';
+    const fix = h.querySelector('[data-testid="cp-fb-fix"]')?.textContent ?? '';
+    expect(well).toContain('Pace: 142 wpm, on target');
+    expect(fix).toContain('17.7 seconds before your first word');
+    expect(fix).toContain('Repetition: 8.1%; the target is under 4% of words.');
+    expect(fix).not.toContain('comfortable pace');
+  });
+
+  it('an UnclearAudio failure says plainly to check the microphone', async () => {
+    mockUpload.mockResolvedValue({ id: 'att-3', status: 'failed', errorClass: 'UnclearAudio', result: null });
+    const h = mount(<TryRecorder sessionId="ses-1" segmentIndex={1} prompt="Q" />);
+    await click(h, 'cp-record');
+    await click(h, 'cp-stop');
+    expect(h.querySelector('[role="alert"]')?.textContent).toBe('I could not hear a clear answer. Check your microphone and record again.');
+    expect(h.querySelector('[data-testid="cp-try-result"]')).toBeNull();
+    expect(h.querySelector('[data-testid="cp-rerecord"]')).not.toBeNull();
   });
 
   it('a dropped upload is sent again with the same key, so the server sees one attempt', async () => {
