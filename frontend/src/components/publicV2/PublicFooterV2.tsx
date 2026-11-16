@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Claim, canShow } from './Claim';
 import { readySegments } from '../../config/v2Segments';
+import EnterpriseLockup from './EnterpriseLockup';
 
 /**
  * PublicFooterV2 — the V2 public site footer.
@@ -133,8 +134,10 @@ function PublicFooterV2(): React.ReactElement {
       <div className="cbv2-wrap">
         <div className="cbv2-footer__grid">
           <div>
-            <div className="cbv2-footer__brand">
-              <img src="/colaberry-logo-transparent.png" alt="Colaberry" width={291} height={82} />
+            {/* The Colaberry Enterprise lockup in its on-dark form, not the
+                Colaberry Training wordmark this drew until 2026-11-16. */}
+            <div className="cbv2-footer__brand" role="img" aria-label="Colaberry Enterprise">
+              <EnterpriseLockup tone="dark" />
             </div>
             <p style={{ fontSize: 'var(--fs-caption)', maxWidth: '32ch', margin: 0 }}>
               <Claim claimKey="positioning.primary" />

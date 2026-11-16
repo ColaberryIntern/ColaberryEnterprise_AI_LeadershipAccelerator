@@ -52,7 +52,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/components/publicV2/HeroServicesV8.tsx': 1,
   'frontend/src/components/publicV2/OpenPlatform.tsx': 2,
   'frontend/src/components/publicV2/PublicFooterV2.tsx': 1,
-  'frontend/src/components/publicV2/PublicHeaderV2.tsx': 1,
   'frontend/src/components/timeline/claudeStudioParse.ts': 1,
 
   // ── frontend/src/config — brought into scope by C5.12 on 2026-11-02 ──────────────────
@@ -169,7 +168,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 260; // 2026-11-16: -1 HeroV8 (the proof row went with the rebuilt hero)
+export const FRONTEND_COPY_BASELINE_TOTAL = 259; // 2026-11-16: -1 HeroV8 (the proof row went with the rebuilt hero); -1 PublicHeaderV2 ("Start Free" left the nav bar, entry deleted)
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the
