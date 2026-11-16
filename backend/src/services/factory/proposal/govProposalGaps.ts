@@ -6,7 +6,7 @@
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
-import { parsePlaceholderNeeds } from './placeholderNeeds';
+import { parseDraftNeeds } from './placeholderNeeds';
 
 /** Open-gap count per `doc_key` for a project (resolution='open'), in ONE query. Backs the projection summary. */
 export async function openGapCountsByDoc(deliveryProjectId: string): Promise<Map<string, number>> {
@@ -75,7 +75,9 @@ export async function reconcilePlaceholderGaps(
   deliveryProjectId: string, docKey: string, contentHtml: string | null | undefined,
 ): Promise<number> {
   if (!deliveryProjectId || !docKey) return 0;
-  const needs = parsePlaceholderNeeds(contentHtml, docKey);
+  // Both marker families: atomic [PLACEHOLDER] facts and grouped [RECORD] references/personnel. A record persists as
+  // ONE gap carrying a `record` need (recordType + fields), so Client/Scope/Period never fragment into field-gaps.
+  const needs = parseDraftNeeds(contentHtml, docKey);
   const wantKeys = new Set(needs.map((n) => n.needKey));
   try {
     const existing = await sequelize.query<{ id: string; need_key: string }>(

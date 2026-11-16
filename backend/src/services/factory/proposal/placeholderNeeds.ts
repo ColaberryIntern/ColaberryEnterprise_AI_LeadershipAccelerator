@@ -1,4 +1,4 @@
-import type { HumanNeed } from './proposalReviewTypes';
+import type { HumanNeed, RecordType } from './proposalReviewTypes';
 
 /**
  * placeholderNeeds — the pure half of v3's "placeholders are always questions" rule. The AI drafter writes
@@ -68,9 +68,94 @@ export function parsePlaceholderNeeds(
   return [...byKey.values()];
 }
 
-/** The invariant, as a predicate: content that still has a marker must produce at least one need. */
+/**
+ * The GROUPED marker: `[RECORD: reference]` or `[RECORD: personnel]`, optionally with `| slot=2` to pin a slot and
+ * `| fields=client,scope,outcome` to override the collected fields. The drafter writes ONE of these per
+ * past-performance entry / key person instead of a per-field [PLACEHOLDER], so Client/Scope/Period/Outcome are
+ * answered as a single record, never fragmented into atomic facts.
+ */
+const RECORD_MARKER = /\[RECORD:\s*(reference|personnel)\s*(?:\|\s*([^\]]*?))?\s*\]/gi;
+
+/** Per-type defaults for a `record` need: the fields it collects and the human-facing ask / why / format. */
+const RECORD_DEFAULTS: Record<RecordType, { fields: string[]; ask: string; format: string; why: string }> = {
+  reference: {
+    fields: ['client', 'scope', 'contractValue', 'dates', 'contact'],
+    ask: 'Add a past-performance reference (client, scope, period of performance, outcome).',
+    format: 'one past-performance record: client, scope, contract value, period of performance, outcome',
+    why: 'The draft needs a real past-performance reference it could not ground, so it left a grouped placeholder instead of inventing a client. The section cannot pass until a reference is provided.',
+  },
+  personnel: {
+    fields: ['name', 'role', 'summary'],
+    ask: 'Add a key person (name, role, relevant experience).',
+    format: 'one key-personnel record: name, role, relevant experience',
+    why: 'The draft needs a named key person it could not ground, so it left a grouped placeholder instead of inventing one. The section cannot pass until a person is provided.',
+  },
+};
+
+/**
+ * Every `[RECORD: reference|personnel]` in the content, as deduped `record`-kind needs keyed `reference:<slot>` /
+ * `personnel:<slot>` (the canonical cross-document key). Markers with no explicit `slot=` are numbered in order of
+ * appearance per type. Pure — no I/O. Same {@link ParsedPlaceholder} shape as placeholders, so the write path
+ * persists both identically.
+ */
+export function parseRecordNeeds(
+  contentHtml: string | null | undefined,
+  docKey: string,
+  opts?: { sectionKey?: string },
+): ParsedPlaceholder[] {
+  const text = typeof contentHtml === 'string' ? contentHtml : '';
+  const byKey = new Map<string, ParsedPlaceholder>();
+  const counters: Record<RecordType, number> = { reference: 0, personnel: 0 };
+  let m: RegExpExecArray | null = RECORD_MARKER.exec(text);
+  while (m) {
+    const recordType = m[1].toLowerCase() as RecordType;
+    const params = m[2] ? m[2].trim() : '';
+    const slotMatch = /slot\s*=\s*(\d{1,3})/i.exec(params);
+    const fieldsMatch = /fields\s*=\s*([a-z0-9_,\s]+)/i.exec(params);
+    const slot = slotMatch ? Number(slotMatch[1]) : counters[recordType] + 1;
+    counters[recordType] = Math.max(counters[recordType], slot);
+    const key = `${recordType}:${slot}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      if (opts?.sectionKey && !existing.need.usedIn.some((u) => u.docKey === docKey && u.sectionKey === opts.sectionKey)) {
+        existing.need.usedIn.push({ docKey, sectionKey: opts.sectionKey });
+      }
+    } else {
+      const def = RECORD_DEFAULTS[recordType];
+      const fields = fieldsMatch ? fieldsMatch[1].split(',').map((s) => s.trim()).filter(Boolean) : def.fields;
+      const need: HumanNeed = {
+        kind: 'record',
+        key,
+        ask: def.ask,
+        why: def.why,
+        usedIn: docKey ? [{ docKey, sectionKey: opts?.sectionKey }] : [],
+        format: def.format,
+        blocking: 'fatal',
+        recordType,
+        recordFields: fields,
+      };
+      byKey.set(key, { ask: def.ask, needKey: key, need });
+    }
+    m = RECORD_MARKER.exec(text);
+  }
+  RECORD_MARKER.lastIndex = 0;
+  return [...byKey.values()];
+}
+
+/** Both marker families from one draft: atomic `[PLACEHOLDER]` facts + grouped `[RECORD]` records. The write path
+ *  (reconcilePlaceholderGaps) uses THIS, so a grouped record persists as one gap carrying a `record` need. */
+export function parseDraftNeeds(
+  contentHtml: string | null | undefined,
+  docKey: string,
+  opts?: { sectionKey?: string },
+): ParsedPlaceholder[] {
+  return [...parsePlaceholderNeeds(contentHtml, docKey, opts), ...parseRecordNeeds(contentHtml, docKey, opts)];
+}
+
+/** The invariant, as a predicate: content that still has a marker (placeholder OR record) must produce >=1 need. */
 export function everyMarkerHasNeed(contentHtml: string | null | undefined, docKey: string): boolean {
-  const markerCount = (typeof contentHtml === 'string' ? contentHtml.match(/\[PLACEHOLDER:/gi) : null)?.length ?? 0;
+  const text = typeof contentHtml === 'string' ? contentHtml : '';
+  const markerCount = (text.match(/\[PLACEHOLDER:/gi)?.length ?? 0) + (text.match(/\[RECORD:/gi)?.length ?? 0);
   if (markerCount === 0) return true;
-  return parsePlaceholderNeeds(contentHtml, docKey).length > 0;
+  return parseDraftNeeds(text, docKey).length > 0;
 }
