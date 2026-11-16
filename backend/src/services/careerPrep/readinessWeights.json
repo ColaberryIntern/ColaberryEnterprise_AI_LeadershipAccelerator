@@ -1,0 +1,14 @@
+{
+  "windowDays": 60,
+  "halfLifeDays": 14,
+  "minObservationsPerSkill": 3,
+  "minSkillsForReadiness": 5,
+  "sourceWeights": { "real_interview": 1.5, "phone_mock": 1.2, "video": 1.0, "project": 1.0, "training": 0.8 },
+  "targets": { "recruiter": 65, "hiring_manager": 75, "technical": 75, "behavioral": 70 },
+  "skillWeightsByType": {
+    "recruiter": { "pace_clarity": 1.5, "few_fillers": 1.5, "behavioral_stories": 1.2 },
+    "hiring_manager": { "ending_with_number": 1.5, "proof_of_work": 1.5, "role_knowledge": 1.2 },
+    "technical": { "explaining_ai": 2, "role_knowledge": 2, "composure_followups": 1.2 },
+    "behavioral": { "behavioral_stories": 2, "answer_structure": 1.5, "composure_followups": 1.2 }
+  }
+}
