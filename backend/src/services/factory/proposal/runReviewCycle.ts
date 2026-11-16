@@ -112,11 +112,22 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
   async function gather(): Promise<Grounding> {
     const d = await docOf();
     let blueprint: any = null; let facts: string[] = [];
+    let references: Awaited<ReturnType<typeof import('./govCompanyLibrary').approvedReferences>> = [];
+    let personnel: Awaited<ReturnType<typeof import('./govCompanyLibrary').approvedPersonnel>> = [];
+    let caseStudies: Grounding['caseStudies'] = [];
     try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
     try {
       const { default: GovQualification } = await import('../../../models/GovQualification');
       const q: any = await GovQualification.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] });
-      if (q?.tenant_id) { const { approvedGroundingFacts } = await import('./govCompanyLibrary'); facts = await approvedGroundingFacts(q.tenant_id); }
+      if (q?.tenant_id) {
+        const lib = await import('./govCompanyLibrary');
+        facts = await lib.approvedGroundingFacts(q.tenant_id);
+        references = await lib.approvedReferences(q.tenant_id);
+        personnel = await lib.approvedPersonnel(q.tenant_id);
+        // Our own delivered case studies as proof points. Separate try so a case-study read failure never drops the
+        // approved facts/references/personnel already loaded above.
+        try { const { loadProofCaseStudies } = await import('./proposalProofCaseStudies'); caseStudies = await loadProofCaseStudies(q.tenant_id); } catch { /* best-effort */ }
+      }
     } catch { /* best-effort; grounding without facts still instructs a [PLACEHOLDER], never an invention */ }
     // P-SRC: retrieve the most relevant excerpts from this project's APPROVED uploaded source documents and ground them
     // as cited reference material. Best-effort: no source library, or the embedding proxy down, yields no excerpts.
@@ -127,7 +138,7 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
       const hits = await retrieveRelevantChunks(deliveryProjectId, query, 8);
       sourceExcerpts = hits.map((h) => ({ documentName: h.documentName, text: h.text }));
     } catch { /* best-effort; grounding without excerpts is still valid */ }
-    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts, sourceExcerpts });
+    return buildGrounding({ blueprint, document: { title: d?.title ?? docKey, requirements: (d?.requirementIds ?? []).map((id) => ({ canonicalReqId: id, statement: id })), sections: d?.sections ?? [] }, approvedFacts: facts, references, personnel, caseStudies, sourceExcerpts });
   }
 
   const deps: ReviewCycleDeps = {

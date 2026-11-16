@@ -9,6 +9,13 @@
  */
 import type { ProposalBlueprint, BlueprintRule } from './proposalBlueprintTypes';
 
+/** A human-approved past-performance reference. The client name is REAL and assertable (a human entered and approved it). */
+export interface GroundingReference { client: string; scope?: string | null; contractValue?: string | null; dates?: string | null; contact?: string | null }
+/** A human-approved key person. Name and role are assertable; summary is a short plain-text résumé digest. */
+export interface GroundingPersonnel { name: string; role?: string | null; summary?: string | null }
+/** A confirmed, non-archived case study used as a proof point. ANONYMIZED by design — carries NO real client name. */
+export interface GroundingCaseStudy { title: string; industry?: string | null; year?: number | null; capability?: string | null; metricLabel?: string | null; metricValue?: string | null; metricVerified?: boolean }
+
 export interface GroundingInput {
   blueprint?: ProposalBlueprint | null;
   document: {
@@ -20,6 +27,12 @@ export interface GroundingInput {
   artifacts?: Array<{ caption: string | null; requirementIds: string[] }>;
   /** Approved company-library facts as "key: value" strings. */
   approvedFacts?: string[];
+  /** Approved past-performance references (real, named clients the agent MAY cite). */
+  references?: GroundingReference[];
+  /** Approved key personnel the agent MAY name and describe. */
+  personnel?: GroundingPersonnel[];
+  /** Confirmed case studies as proof points — citable for approach/outcome, but ANONYMIZED (never a real client name). */
+  caseStudies?: GroundingCaseStudy[];
   /** Retrieved excerpts from APPROVED uploaded source documents (P-SRC). Reference material the agent may paraphrase;
    *  hard specifics (figures, dates, named metrics) still require an approved fact or a [PLACEHOLDER]. */
   sourceExcerpts?: Array<{ documentName: string; text: string }>;
@@ -34,7 +47,10 @@ export interface Grounding {
   sections: Array<{ heading: string; plan: string | null }>;
   artifacts: string[];
   facts: string[];
-  /** Optional so existing Grounding fixtures (built as literals) stay valid; buildGrounding always sets it to []. */
+  /** Optional so existing Grounding fixtures (built as literals) stay valid; buildGrounding always sets them to []. */
+  references?: GroundingReference[];
+  personnel?: GroundingPersonnel[];
+  caseStudies?: GroundingCaseStudy[];
   sourceExcerpts?: Array<{ documentName: string; text: string }>;
 }
 
@@ -52,6 +68,9 @@ export function buildGrounding(input: GroundingInput): Grounding {
     sections: (Array.isArray(input?.document?.sections) ? input.document.sections : []).map((s) => ({ heading: s.heading, plan: s.plan ?? null })),
     artifacts: (Array.isArray(input?.artifacts) ? input.artifacts : []).map((a) => `${a.caption ?? 'Build screenshot'} (proves ${(a.requirementIds || []).join(', ') || 'requirements'})`),
     facts: Array.isArray(input?.approvedFacts) ? input.approvedFacts : [],
+    references: Array.isArray(input?.references) ? input.references : [],
+    personnel: Array.isArray(input?.personnel) ? input.personnel : [],
+    caseStudies: Array.isArray(input?.caseStudies) ? input.caseStudies : [],
     sourceExcerpts: Array.isArray(input?.sourceExcerpts) ? input.sourceExcerpts : [],
   };
 }
@@ -67,6 +86,28 @@ export function groundingToPromptText(g: Grounding): string {
   if (g.artifacts.length) { lines.push('Build evidence you may cite:'); for (const a of g.artifacts) lines.push(`- ${a}`); }
   if (g.facts.length) { lines.push('Approved company facts (the ONLY specific facts you may assert):'); for (const f of g.facts) lines.push(`- ${f}`); }
   else lines.push('No approved company facts are available — insert a [PLACEHOLDER: …] for any specific fact rather than inventing one.');
+  const references = g.references ?? [];
+  if (references.length) {
+    lines.push('Approved past-performance references (human-approved; you MAY name the client and cite these):');
+    for (const r of references) {
+      const parts = [r.scope ? r.scope : null, r.contractValue ? `value ${r.contractValue}` : null, r.dates ? r.dates : null, r.contact ? `contact ${r.contact}` : null].filter(Boolean).join('; ');
+      lines.push(`- ${r.client}${parts ? ` — ${parts}` : ''}`);
+    }
+  }
+  const personnel = g.personnel ?? [];
+  if (personnel.length) {
+    lines.push('Approved key personnel (human-approved; you MAY name and describe them):');
+    for (const p of personnel) lines.push(`- ${p.name}${p.role ? `, ${p.role}` : ''}${p.summary ? `: ${p.summary}` : ''}`);
+  }
+  const caseStudies = g.caseStudies ?? [];
+  if (caseStudies.length) {
+    lines.push('Case-study proof points (our own delivered work; you MAY cite the approach and outcome). These are ANONYMIZED — never assert or invent a real client name from a case study. State a metric marked (verified) as fact; attribute a metric marked (reported) as a reported result, not a guarantee:');
+    for (const cs of caseStudies) {
+      const head = [cs.industry, typeof cs.year === 'number' ? String(cs.year) : null].filter(Boolean).join(', ');
+      const metric = cs.metricLabel ? ` — ${cs.metricLabel}: ${cs.metricValue ?? 'n/a'} (${cs.metricVerified ? 'verified' : 'reported'})` : '';
+      lines.push(`- ${cs.title}${head ? ` (${head})` : ''}${cs.capability ? ` [${cs.capability}]` : ''}${metric}`);
+    }
+  }
   const excerpts = g.sourceExcerpts ?? [];
   if (excerpts.length) {
     lines.push('Source excerpts (reference material from uploaded project documents. You MAY paraphrase these, naming the document, but any specific figure, date, dollar, or named metric still requires an approved company fact above or a [PLACEHOLDER]. Never assert a hard specific from an excerpt alone):');
