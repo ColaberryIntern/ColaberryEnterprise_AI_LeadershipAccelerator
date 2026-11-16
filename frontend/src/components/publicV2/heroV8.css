@@ -334,3 +334,76 @@
   outline: 2px solid var(--accent-on-dark, #6F9DB6);
   outline-offset: 2px;
 }
+
+/* ------------------------------------------- the --svc heroes (platform, pricing) --
+   /platform and /pricing share this shell with a different set of parts:
+   headline in two lines, a deck, three status chips, a body, two buttons and a
+   proof row. Their CSS went out with the home rebuild on 2026-11-16 along with
+   the diagram they drew, and production showed the diagram as solid black
+   shapes over unstyled text. The diagram is gone (it is in neither design
+   file); these rules style what is left, on the light ground, and are scoped
+   to --svc so the home hero cannot be touched by them. */
+
+.cbv2-h8--svc { padding-bottom: clamp(56px, 8vh, 88px); }
+.cbv2-h8--svc .cbv2-h8__inner { grid-template-columns: minmax(0, 1fr); }
+.cbv2-h8--svc .cbv2-h8__copy { max-width: 820px; }
+.cbv2-h8--svc .cbv2-h8__line,
+.cbv2-h8--svc .cbv2-h8__word { display: block; }
+.cbv2-h8--svc .cbv2-h8__word--ppl { color: var(--accent, #2E6A86); }
+.cbv2-h8--svc .cbv2-h8__rail { display: none; }
+
+.cbv2-h8--svc .cbv2-h8__deck {
+  margin: 24px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 1.6vw, 23px);
+  line-height: 1.35;
+  color: var(--h8-ink);
+}
+.cbv2-h8--svc .cbv2-h8__deck b { font-weight: 700; }
+
+.cbv2-h8--svc .cbv2-h8__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+.cbv2-h8--svc .cbv2-h8__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-default, #D8D8D8);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--h8-muted);
+}
+.cbv2-h8--svc .cbv2-h8__chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #2E6A86);
+  flex: 0 0 auto;
+}
+
+.cbv2-h8--svc .cbv2-h8__body { margin-top: 20px; }
+
+.cbv2-h8--svc .cbv2-h8__proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 28px 0 0;
+  font-size: 13px;
+  color: var(--h8-muted);
+}
+.cbv2-h8--svc .cbv2-h8__proof span { display: inline-flex; align-items: center; gap: 8px; }
+.cbv2-h8--svc .cbv2-h8__proof span::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border-default, #D8D8D8);
+}

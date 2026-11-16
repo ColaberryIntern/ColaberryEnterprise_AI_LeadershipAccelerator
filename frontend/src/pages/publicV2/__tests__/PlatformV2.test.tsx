@@ -29,9 +29,28 @@ const html = (): string =>
 const textOf = (h: string): string => h.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 describe('PlatformV2 — only live surfaces are depicted', () => {
-  it('renders a tab for every surface whose capability is live', () => {
-    const text = textOf(html());
-    SHOWROOM_SURFACES.forEach((s) => expect(text).toContain(s.label));
+  /*
+     INVERTED 2026-11-16, not deleted. This used to REQUIRE every showroom
+     surface label on the page ("renders a tab for every surface whose
+     capability is live"). The tabs went on 2026-08-20; after that it stayed
+     green only because the hero's diagram carried the labels as SVG <title>
+     tooltips. That diagram is in neither design file Ali supplied and was
+     removed when its CSS vanished and production drew it as black boxes. The
+     v5 model names none of these surfaces. A guard that requires something the
+     model does not have holds the page away from the model, so it now says the
+     opposite: no surface is depicted as a diagram node, a tooltip, or a tab.
+     ("Free company workspace" is also the offer's name in running copy, so this
+     is asserted on markup, not on text.)
+  */
+  it('depicts no showroom surface as a diagram node, a tooltip or a tab', () => {
+    const h = html();
+    expect(h).not.toContain('<svg');
+    SHOWROOM_SURFACES.forEach((s) => expect(h).not.toContain(`<title>${s.label}</title>`));
+    const tabTexts = [...h.matchAll(/<(\w+)[^>]*role="tab"[^>]*>([\s\S]*?)<\/\1>/g)].map((m) =>
+      textOf(m[2]),
+    );
+    expect(tabTexts.length).toBeGreaterThan(0);
+    SHOWROOM_SURFACES.forEach((s) => tabTexts.forEach((t) => expect(t).not.toContain(s.label)));
   });
 
   it('never depicts the unbuilt four-view console as a product surface', () => {
