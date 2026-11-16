@@ -700,7 +700,6 @@
     "frontend/src/components/campus/now/NowComposer.tsx": 2,
     "frontend/src/components/campus/now/NowPost.tsx": 3,
     "frontend/src/components/campus/now/NowStream.tsx": 1,
-    "frontend/src/components/campus/now/TvManager.tsx": 2,
     "frontend/src/components/campus/now/nowModel.ts": 5,
     "frontend/src/components/campus/partner/PartnerTeam.tsx": 1,
     "frontend/src/components/campus/pathAhead.ts": 3,
