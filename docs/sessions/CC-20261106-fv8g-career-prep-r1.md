@@ -142,3 +142,12 @@ tests/systemV2/career-prep/.
   - Verification: room 7 tests + page 3 tests; Career Prep frontend 35 pass; tsc clean.
   - Notes: closing goes to /portal until T25 adds the deep link that lands on the floor. The summary loader now
     turns even a synchronous throw into "no summary" (found by the page test).
+
+- [x] CP3.2 Cora's chat and option cards
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: OptionCards.tsx (icon, title, line, badge, readiness bar with a target tick; buttons in a
+    role="list"; arrow keys move and wrap; a non-live set is dimmed and not clickable) and CoraChat.tsx (Cora and
+    student bubbles, insight blocks, card sets where only the newest unanswered one is live, four suggestion chips,
+    the ask box: Enter sends, Shift+Enter adds a line, empty never sends, nothing clickable while Cora answers).
+  - Verification: CoraChat 7 tests; Career Prep frontend 39 pass; tsc clean.

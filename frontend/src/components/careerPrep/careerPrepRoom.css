@@ -24,3 +24,31 @@
   .cp-cora-col{border-right:0;border-bottom:1px solid var(--line);overflow:visible}
   .cp-tabs-col{overflow:visible}
 }
+/* CP3.2: Cora's chat and option cards */
+.cp-chat{display:flex;flex-direction:column;gap:10px;min-height:100%}
+.cp-chat-head{font-size:14px}.cp-chat-head small{display:block;color:var(--fg-muted)}
+.cp-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:6px}
+.cp-log{display:flex;flex-direction:column;gap:8px;flex:1}
+.cp-msg{max-width:92%;padding:8px 12px;border-radius:4px;border:1px solid var(--line);line-height:1.45}
+.cp-msg.cora{align-self:flex-start;background:var(--bg-elevated)}
+.cp-msg.me{align-self:flex-end;background:var(--accent-soft)}
+.cp-msg.is-busy{color:var(--fg-muted)}
+.cp-block{border-left:3px solid var(--accent);padding:6px 10px;background:var(--bg-elevated)}
+.cp-block ul{margin:4px 0 0;padding-left:18px}
+.cp-cards{display:flex;flex-direction:column;gap:6px}
+.cp-cards.is-quiet{opacity:.55}
+.cp-card{display:flex;gap:10px;width:100%;min-height:44px;padding:10px 12px;text-align:left;border:1px solid var(--line);border-radius:4px;background:var(--bg-elevated);color:var(--fg)}
+.cp-cards:not(.is-quiet) .cp-card:hover{border-color:var(--accent)}
+.cp-cards.is-quiet .cp-card{cursor:default}
+.cp-card i{font-size:20px;color:var(--accent)}
+.cp-card-body{display:flex;flex-direction:column;gap:2px;flex:1}
+.cp-badge{display:inline-block;margin-left:8px;padding:0 6px;border:1px solid var(--accent);border-radius:4px;color:var(--accent);font-size:11px;text-transform:uppercase}
+.cp-bar{position:relative;display:block;height:6px;margin-top:4px;background:var(--line);border-radius:3px}
+.cp-bar-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:3px}
+.cp-bar-tick{position:absolute;top:-3px;width:2px;height:12px;background:var(--fg)}
+.cp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cp-chip{min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--fg)}
+.cp-ask{display:flex;gap:6px}
+.cp-ask textarea{flex:1;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--fg);font:inherit}
+.cp-send{min-height:44px;padding:0 16px;border:0;border-radius:4px;background:var(--accent);color:var(--accent-contrast);font-weight:700}
+.cp-pending{color:var(--fg-muted)}
