@@ -38,6 +38,12 @@ describe('prepCardCopy: the headline, by rule (CP5.1)', () => {
     const s = sum({ nextInterview: iv({ id: 'p1', source: 'practice', role: 'Data Analyst' }), interviews: [iv({ id: 'b', company: 'Later Co', startsAt: inDays(12) }), iv({ id: 'a', startsAt: inDays(2) })] });
     expect(prepCardCopy(s, MON).headline).toBe("Get ready for Wednesday's interview");
   });
+  it('the 7-day edge: exactly 7 days ahead still names the weekday, a minute later names the company', () => {
+    const seven = new Date(MON.getTime() + 7 * 86_400_000).toISOString();
+    expect(prepCardCopy(sum({ interviews: [iv({ startsAt: seven })] }), MON).headline).toBe("Get ready for Monday's interview");
+    const after = new Date(MON.getTime() + 7 * 86_400_000 + 60_000).toISOString();
+    expect(prepCardCopy(sum({ interviews: [iv({ startsAt: after })] }), MON).headline).toBe('Get ready for your Meridian Freight interview');
+  });
   it('the weekday is Central across DST: 11:30 PM CST Saturday is Saturday, not Sunday (UTC)', () => {
     const sat = sum({ interviews: [iv({ startsAt: '2026-11-22T05:30:00.000Z' })] }); // Sat 21 Nov 11:30 PM CST
     expect(prepCardCopy(sat, MON).headline).toBe("Get ready for Saturday's interview");
@@ -49,9 +55,10 @@ describe('prepCardCopy: the headline, by rule (CP5.1)', () => {
 describe('prepCardCopy: the rows (CP5.1)', () => {
   const four = [iv({ id: 'c', startsAt: inDays(6), source: 'added', readiness: 70 }), iv({ id: 'a', startsAt: inDays(1), readiness: 64 }), iv({ id: 'b', startsAt: inDays(3) }), iv({ id: 'old', startsAt: inDays(-1) })];
   it('soonest first, at most 2, past interviews left out, "+n more" from the full count', () => {
-    const c = prepCardCopy(sum({ interviews: four, interviewCount: 4 }), MON);
+    // The server counts only interviews still ahead (3 here); the one that already happened is neither shown nor counted.
+    const c = prepCardCopy(sum({ interviews: four, interviewCount: 3 }), MON);
     expect(c.rows.map((r) => r.id)).toEqual(['a', 'b']);
-    expect(c.more).toBe(2);
+    expect(c.more).toBe(1);
     expect(c.rows[0]).toEqual({ id: 'a', title: 'Meridian Freight · AI Engineer', when: 'Tuesday at 2:00 PM CT', readiness: 64, target: 75, tag: 'Real interview' });
   });
   it('a readiness the server does not have is left out, never 0', () => {
@@ -91,6 +98,7 @@ describe('CareerPrepCard (CP5.1)', () => {
     const h = mount(<MemoryRouter><CareerPrepCard audience={audience} now={MON} /></MemoryRouter>);
     expect(h.querySelector('[data-testid="cm-prep-card"]')).toBeNull();
     expect(summary).toHaveBeenCalledWith(false);
+    expect(flag).toHaveBeenCalledWith(false); // the Career Prep flag is not even asked for
   });
   it('hidden for a student Career Prep is not open for, and while the flag or summary is loading', () => {
     flag.mockReturnValue(false);
@@ -99,12 +107,12 @@ describe('CareerPrepCard (CP5.1)', () => {
     flag.mockReturnValue(true); summary.mockReturnValue(undefined);
     expect(mount(<MemoryRouter><CareerPrepCard audience="member" now={MON} /></MemoryRouter>).querySelector('[data-testid="cm-prep-card"]')).toBeNull();
   });
-  it('an interview row opens the room anchored on it; Go opens Career Prep', () => {
+  it('an interview row opens the room anchored on it; off the campus, Go goes to the Career Prep floor', () => {
     const h = mount(<MemoryRouter><CareerPrepCard audience="member" now={MON} /><Where /></MemoryRouter>);
     act(() => (h.querySelector('[data-testid="cm-prep-row-i1"]') as HTMLButtonElement).click());
     expect(h.querySelector('[data-testid="where"]')?.textContent).toBe('/portal/career/room?anchor=i1');
     act(() => (h.querySelector('[data-testid="cm-prep-go"]') as HTMLButtonElement).click());
-    expect(h.querySelector('[data-testid="where"]')?.textContent).toBe('/portal/career/room');
+    expect(h.querySelector('[data-testid="where"]')?.textContent).toBe('/portal/career');
   });
   it('when the summary failed, the card still offers Go with the generic headline and no made-up rows', () => {
     const h = mount(<CareerPrepCardView s={null} now={MON} floor="6" onGo={jest.fn()} onInterview={jest.fn()} />);

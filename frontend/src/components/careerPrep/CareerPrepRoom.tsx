@@ -3,6 +3,8 @@ import { themeForBrand, themeStyle } from '../../theme/deliveryBrandThemes';
 import { AnchorPill } from './AnchorPill';
 import type { PrepInterview } from './careerPrepApi';
 import { careerPrepFloorNum } from './careerPrepFloorNum';
+import { LevelTrail } from './LevelTrail';
+import { layerOpen } from './useEscapeLayer';
 import './careerPrepRoom.css';
 
 /**
@@ -27,11 +29,13 @@ export interface CareerPrepRoomProps {
   /** Controlled tab (the conversation can switch it, e.g. "show my progress"). */
   tab?: RoomTab;
   onTabChange?: (t: RoomTab) => void;
+  /** CP4.6: layers drawn INSIDE the room (the open sheet, the jump bar), so they stack above it and share its theme. */
+  overlay?: React.ReactNode;
 }
 
 const isTextField = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable);
 
-export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, initialTab = 'progress', tab: controlled, onTabChange }: CareerPrepRoomProps): React.ReactElement {
+export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, initialTab = 'progress', tab: controlled, onTabChange, overlay }: CareerPrepRoomProps): React.ReactElement {
   const [own, setOwn] = useState<RoomTab>(initialTab);
   const tab = controlled ?? own;
   const setTab = (t: RoomTab) => { setOwn(t); onTabChange?.(t); };
@@ -40,7 +44,8 @@ export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, in
   const floorNum = careerPrepFloorNum();
 
   useEffect(() => {
-    coraRef.current?.focus();
+    // A sheet opened by a direct link focuses its own title first (it renders inside the room); leave it there.
+    if (!layerOpen()) coraRef.current?.focus();
     const back = opener.current;
     return () => { if (back instanceof HTMLElement && document.contains(back)) back.focus(); };
   }, []);
@@ -59,9 +64,7 @@ export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, in
     <div className="cp-room" role="dialog" aria-modal="true" aria-label="Career Prep" style={themeStyle(themeForBrand('refactored'))} data-testid="cp-room">
       <header className="cp-room-top">
         <button type="button" className="cp-back" onClick={onClose} data-testid="cp-back">‹ {floorNum ? `Floor ${floorNum}` : 'Back'}</button>
-        <ol className="cp-trail" aria-label="Where you are" data-testid="cp-trail">
-          <li>1 Tower</li><li>2 Floor {floorNum ?? ''}</li><li aria-current="step">3 Career Prep</li>
-        </ol>
+        <LevelTrail step={3} floorNum={floorNum} />
         <AnchorPill anchor={anchor} onChange={onChangeAnchor} />
       </header>
       <div className="cp-room-body">
@@ -76,6 +79,7 @@ export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, in
           <div className="cp-panel" role="tabpanel" id={`cp-panel-${tab}`} aria-labelledby={`cp-tab-${tab}`} data-testid={`cp-panel-${tab}`}>{tabs[tab]}</div>
         </section>
       </div>
+      {overlay}
     </div>
   );
 }

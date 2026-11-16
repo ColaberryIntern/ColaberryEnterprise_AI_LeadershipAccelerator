@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CareerPrepRoom, type RoomTab } from '../../../components/careerPrep/CareerPrepRoom';
 import { CareerPrepFloor } from '../../../components/careerPrep/CareerPrepFloor';
@@ -16,9 +16,7 @@ import { JumpBar } from '../../../components/careerPrep/JumpBar';
 import type { PrepInterview } from '../../../components/careerPrep/careerPrepApi';
 import type { JumpItem } from '../../../components/careerPrep/logic/sheets';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
-import { careerPrepFloorNum } from '../../../components/careerPrep/careerPrepFloorNum';
-import { careerPrepDoorsFor } from '../../../components/campus/hq/careerPrepDoors';
-import type { HqFloor } from '../../../components/campus/hq/hqModel';
+import { CAREER_FLOOR_PATH, NotOpen, useCareerPrepFloorModel } from './CareerPrepFloorPage';
 
 /**
  * /portal/career/room (Career Prep v27, CP3.1 + CP3.3 + CP4.5). The room over the Career Prep floor: on a direct
@@ -62,7 +60,6 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
   live.current = { start: () => { if (session.state.status === 'idle') void session.start(); }, sessionId };
   const start = () => { setTab('session'); live.current.start(); };
   return (
-    <>
     <CareerPrepRoom
       anchor={anchor}
       onChangeAnchor={room.changeAnchor}
@@ -83,27 +80,25 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
         plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
         session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} onTab={setTab} />,
       }}
+      overlay={<RoomSheets sheets={sheets} prep={room.dashboard?.interviews ?? []} onTab={setTab} onStart={start} />}
     />
-    <RoomSheets sheets={sheets} prep={room.dashboard?.interviews ?? []} onTab={setTab} onStart={start} />
-    </>
   );
 }
 
 const CareerPrepRoomPage: React.FC<CareerPrepRoomPageProps> = ({ tabs }) => {
   const on = useCareerPrepFlag();
   const navigate = useNavigate();
-  const close = useCallback(() => navigate('/portal'), [navigate]);
-  const floor = useMemo<HqFloor>(() => {
-    const rooms = careerPrepDoorsFor('member', { on: true });
-    return { key: 'career-prep', num: careerPrepFloorNum() ?? '', label: 'Career Prep', rooms, openCount: rooms.length, access: 'all', own: true };
-  }, []);
+  // CP5.2: closing the room (‹ Floor n or Esc) lands on the Career Prep floor, with focus on its door.
+  const close = useCallback(() => navigate(CAREER_FLOOR_PATH, { state: { from: 'room' } }), [navigate]);
+  const toCampus = useCallback(() => navigate('/portal'), [navigate]);
+  const floor = useCareerPrepFloorModel();
 
   if (on === null) return <p className="text-muted p-3" aria-live="polite">Loading Career Prep...</p>;
-  if (!on) return <div className="p-4" data-testid="cp-not-found"><h1 className="h4">Page not found</h1><p>This page does not exist or is not open for your account.</p></div>;
+  if (!on) return <NotOpen />;
 
   return (
     <>
-      <CareerPrepFloor f={floor} onElevator={close} onLobby={close} />
+      <CareerPrepFloor f={floor} onElevator={toCampus} onLobby={toCampus} />
       <Room tabs={tabs} onClose={close} />
     </>
   );

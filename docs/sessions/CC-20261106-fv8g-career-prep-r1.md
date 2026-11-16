@@ -488,3 +488,40 @@ tests/systemV2/career-prep/.
     weekday across DST, sort and cap, hidden for explorer / business / staff / non-flagged / loading. Backend
     prepViews 14 pass (2 new: interviewCount, sessionMinutes). Frontend Career Prep + campus 2401 pass; tsc clean.
   - Notes: carried to T25: Go to Career Prep switches to goStart('prep').
+
+- [x] CP4.6 attempt 3 and CP5.1 attempt 2: fixes from the verification (T22 FAIL 9/12 on attempt 2; T24 FAIL 9/12)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: T22: in a real browser the sheet and the jump bar were drawn BEHIND the room (they rendered beside
+    it, z-index 1060/1070 against the room's 1200, and missed its theme variables, so the sheet had no background).
+    They now render inside the room (CareerPrepRoom `overlay`), stacking above its content and sharing its theme.
+    The room no longer takes focus on mount while a sheet is open (the sheet's title keeps it). A sheet opened by a
+    direct link closes with focus on Cora's column, never the page body; the jump bar does the same when what had
+    focus is gone. T24: the summary lists and counts only interviews still ahead, soonest first (the data includes
+    ones that started up to a day ago, so "+n more" counted an interview that had happened); the card test that
+    asserted the wrong count is corrected. Today's minutes are rounded. The card's flag request is skipped for
+    non-students (useCareerPrepFlag(enabled)). The Go button is darker (6.15:1 white-on-blue, was 4.31:1).
+  - Verification: a test that the sheet and the jump bar sit inside the room; a test for focus after closing a
+    direct-link sheet; a backend test with an interview 5 hours ago; the exact 7-day edge; the flag not asked for
+    other audiences. Carried to T26: elementFromPoint at the sheet title and the jump input is the sheet / jump bar.
+
+- [x] CP5.2 + CP5.3 Tower scenes, goStart('prep'), deep links
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: goStart('prep') (hq/goStart.ts) records a start intent and opens the HQ building; useHqStartIntent
+    holds it until the Career Prep floor is known, then rides there, or opens the lobby when the badge does not open
+    it (off the campus it goes to /portal/career). Members' rides are express (no intermediate floor on the
+    indicator). LevelTrail.tsx: "1 Tower · 2 Floor n · 3 Career Prep" on every tower scene (step 1 outside, lobby,
+    elevator; step 2 on the Career Prep floor) and in the room (step 3). Outside: "Your floor is lit: n · Career
+    Prep"; lobby: "Hi <first>! Career Prep is on Floor n. Cora, your interview coach, is waiting for you up there."
+    and the express button "n · Go to Career Prep · Elevator A · straight up". /portal/career (CareerPrepFloorPage)
+    lands on the floor; closing the room (‹ Floor n or Esc) lands there with focus on the door. The campus card's Go
+    is goStart('prep'). Nobody Career Prep is not open for sees any of it.
+  - Verification: hqCareerPrepTower.test.tsx (6, through the real useHq): elevator lights exactly G, 1, 6; express
+    ride shows no intermediate floor; trail steps; outside hint, lobby line and express button; goStart to the floor
+    and to the lobby when off. CareerPrepFloorPage.test.tsx (6): /portal/career floor, room with ?anchor, close by
+    ‹ Floor n and by Esc lands on the floor with focus on the door. Frontend Career Prep + campus 2418 pass; backend
+    Career Prep 252 pass, 13 skipped; both tsc clean.
+  - Notes: declared: the lobby greeting says Cora "is waiting for you up there" (the kit's "has today's session
+    ready" needs a per-session readiness the lobby does not load); the directory's "k other floors are Colaberry
+    staff offices" line is not added (the directory already shows staff floors as locked).

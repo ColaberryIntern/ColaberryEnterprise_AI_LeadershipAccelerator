@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGoStart } from '../hq/goStart';
 import type { CampusAudience } from '../campusMap';
 import type { PrepSummary } from '../../careerPrep/careerPrepApi';
 import { useCareerPrepFlag } from '../../careerPrep/careerPrepFlag';
@@ -12,8 +13,8 @@ import { prepCardCopy } from '../../careerPrep/logic/prepCardCopy';
  * L1-1). Students only: explorers, partners and staff never see it, and neither does a student Career Prep is
  * not open for (Release 1 ships dark). Real data only: the floor number comes from the built floor, the
  * headline and rows from prepCardCopy, and a readiness the server does not have is left out. An interview row
- * opens the room with that interview as the anchor (?anchor=<id>). "Go to Career Prep" opens the room until
- * CP5.2 (T25) adds goStart('prep'), which opens the tower already on the Career Prep floor.
+ * opens the room with that interview as the anchor (?anchor=<id>). "Go to Career Prep" is goStart('prep'): the
+ * tower opens already on the Career Prep floor (CP5.2).
  */
 export interface CareerPrepCardProps { audience: CampusAudience; now: Date; onGo?: () => void }
 
@@ -47,10 +48,11 @@ export function CareerPrepCardView({ s, now, floor, onGo, onInterview }: { s: Pr
 
 export function CareerPrepCard({ audience, now, onGo }: CareerPrepCardProps): React.ReactElement | null {
   const navigate = useNavigate();
+  const goStart = useGoStart();
   const member = audience === 'member';
-  const on = useCareerPrepFlag();
+  const on = useCareerPrepFlag(member);
   const s = useCareerPrepSummary(member && on === true);
   if (!member || on !== true || s === undefined) return null;
-  return <CareerPrepCardView s={s} now={now} floor={careerPrepFloorNum()} onGo={onGo ?? (() => navigate('/portal/career/room'))}
+  return <CareerPrepCardView s={s} now={now} floor={careerPrepFloorNum()} onGo={onGo ?? (() => goStart('prep'))}
     onInterview={(id) => navigate(`/portal/career/room?anchor=${encodeURIComponent(id)}`)} />;
 }

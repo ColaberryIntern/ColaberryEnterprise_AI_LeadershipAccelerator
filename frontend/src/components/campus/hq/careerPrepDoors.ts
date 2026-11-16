@@ -29,3 +29,14 @@ export const doorsText = (n: number): string => `${n} ${n === 1 ? 'door' : 'door
 /** The student's own Career Prep floor (the one door built above), which gets its own scene and panel. */
 export const isCareerPrepFloor = (f: { own?: boolean; rooms: ReadonlyArray<{ path: string }> }): boolean =>
   !!f.own && f.rooms.length === 1 && f.rooms[0].path === CAREER_PREP_ROOM_PATH;
+
+/**
+ * Career Prep v27 (CP5.3): the tower's words for a student whose Career Prep floor is open (kit P1 sections 2 and
+ * 3). `prepFloorOf` is that floor, or undefined (everyone else: no Career Prep words anywhere in the tower).
+ */
+export const prepFloorOf = (floors: ReadonlyArray<{ own?: boolean; num: string; access: string; rooms: ReadonlyArray<{ path: string }> }>) =>
+  floors.find((f) => isCareerPrepFloor(f) && f.access !== 'none');
+export const prepOutsideHint = (num: string): string => `Your floor is lit: ${num} · Career Prep`;
+export const prepLobbyLine = (firstName: string, num: string): string =>
+  `Hi${firstName ? ` ${firstName}` : ''}! Career Prep is on Floor ${num}. Cora, your interview coach, is waiting for you up there.`;
+export const prepExpressLabel = (num: string): string => `${num} · Go to Career Prep · Elevator A · straight up`;

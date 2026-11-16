@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { filterJump, JUMP_ITEMS, type JumpItem } from './logic/sheets';
 import { useEscapeLayer } from './useEscapeLayer';
+import { focusOrCora } from './useSheet';
 
 /**
  * Career Prep v27 (CP4.6): "Jump to anything" (kit 4.7). Opens on "/" (when not typing in a field) or
@@ -29,7 +30,7 @@ export function JumpBar({ onGo }: { onGo: (item: JumpItem) => void }): React.Rea
   const input = useRef<HTMLInputElement>(null);
   const before = useRef<HTMLElement | null>(null);
   const show = useRef(() => { if (!input.current) before.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setOpen(true); }).current;
-  const hide = () => { setOpen(false); before.current?.focus(); };
+  const hide = () => { setOpen(false); focusOrCora(before.current); };
   useJumpKeys(show);
   useEscapeLayer(open, hide);
   useEffect(() => { if (open) { setQuery(''); setActive(0); input.current?.focus(); } }, [open]);

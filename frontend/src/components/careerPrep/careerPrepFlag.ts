@@ -26,13 +26,15 @@ export async function fetchCareerPrepFlag(): Promise<boolean> {
   }
 }
 
-/** null while loading, then true or false. Components render nothing until it is true. */
-export function useCareerPrepFlag(): boolean | null {
+/** null while loading, then true or false. Components render nothing until it is true. `enabled` false (e.g. not a
+ *  student) asks nothing and reads false (CP5.1: the campus card does not ask for explorers, partners or staff). */
+export function useCareerPrepFlag(enabled = true): boolean | null {
   const [on, setOn] = useState<boolean | null>(null);
   useEffect(() => {
+    if (!enabled) { setOn(false); return undefined; }
     let live = true;
     fetchCareerPrepFlag().then((v) => { if (live) setOn(v); });
     return () => { live = false; };
-  }, []);
-  return on;
+  }, [enabled]);
+  return enabled ? on : false;
 }

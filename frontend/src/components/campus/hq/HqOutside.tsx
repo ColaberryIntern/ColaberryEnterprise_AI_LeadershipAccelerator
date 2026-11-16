@@ -4,6 +4,7 @@ import { conciergeLine, floorStatus, openFloors, readerLine, type HqFloor } from
 import type { HqState } from './useHq';
 import type { CampusAudience } from '../campusMap';
 import { HqPeople, type HqPerson } from './HqPeople';
+import { prepExpressLabel, prepFloorOf, prepLobbyLine, prepOutsideHint } from './careerPrepDoors';
 
 /**
  * Campus HQ scenes 2 and 3 (H5): the tower from outside and the lobby. Both are drawn from the generated floors, so a new
@@ -80,6 +81,7 @@ export function HqOutside({ s, face, hour, people }: { s: HqState; face: string;
       </div>
       <div className="cm-hq-cta">
         <button type="button" className="cm-hq-btn is-red" onClick={s.walkIn} data-testid="cm-hq-walk-in">Walk in →</button>
+        {!hq.isStaff && prepFloorOf(hq.floors) && <span className="cm-hq-chip" data-testid="cm-hq-prep-hint">{prepOutsideHint(prepFloorOf(hq.floors)!.num)}</span>}
         <span className="cm-hq-chip">{hq.isStaff ? <>Your badge opens <b>{lit}</b> of {n} floors</> : lit > 0 ? <>Your badge opens your office + the lobby</> : 'You can use the ground floor'}</span>
       </div>
     </div>
@@ -91,6 +93,7 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
   desk: { name: string; initials: string } | null; lobby: HqPerson[]; people: Map<string, HqPerson[]>; onGround: (route: string) => void;
 }): React.ReactElement {
   const { hq } = s;
+  const prep = hq.isStaff ? undefined : prepFloorOf(hq.floors);
   const portalDoors = hq.ground.filter((g) => g.portal);
   return (
     <div className="cm-hq-lobby" data-testid="cm-hq-lobby">
@@ -108,7 +111,8 @@ export function HqLobby({ s, face, audience, firstName, hour, desk, lobby, peopl
         <button type="button" className="cm-hq-callbtn" onClick={s.toCab} aria-label="Call the elevator"><i>▲</i><i>▼</i></button>
         <button type="button" className="cm-hq-elev" onClick={s.toCab} aria-label="Elevator B"><span className="ind">PH</span><span className="dr"><i /><i /></span></button>
       </div>
-      <div className="cm-hq-bubble" data-testid="cm-hq-concierge"><b>CONCIERGE{desk ? ` · ${desk.name.toUpperCase()}` : ''}</b>{conciergeLine(hq, firstName, audience, hour)}</div>
+      <div className="cm-hq-bubble" data-testid="cm-hq-concierge"><b>CONCIERGE{desk ? ` · ${desk.name.toUpperCase()}` : ''}</b>{prep && audience === 'member' ? prepLobbyLine(firstName, prep.num) : conciergeLine(hq, firstName, audience, hour)}</div>
+      {prep && audience === 'member' && <button type="button" className="cm-hq-btn is-navy cm-hq-express" onClick={() => s.ride(prep.num)} data-testid="cm-hq-express">{prepExpressLabel(prep.num)}</button>}
       <div className="cm-hq-desk">
         {desk && <div className="host"><span className="av">{desk.initials}</span><span className="bd" /></div>}
         <div className="top2" /><div className="body">CONCIERGE</div>

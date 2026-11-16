@@ -11,6 +11,12 @@ import { sheetFromHash } from './logic/sheets';
  */
 export interface SheetApi { sheet: Sheet | null; open: (s: Sheet) => void; close: () => void }
 
+/** Focus `el` when it is still on the page, else Cora's column in the room. */
+export function focusOrCora(el: HTMLElement | null): void {
+  if (el && el !== document.body && document.contains(el)) { el.focus(); return; }
+  document.querySelector<HTMLElement>('[data-testid="cp-cora-col"]')?.focus();
+}
+
 export function useSheet(): SheetApi {
   const loc = useLocation();
   const navigate = useNavigate();
@@ -36,7 +42,8 @@ export function useSheet(): SheetApi {
   }, [sheet, navigate, loc.search]);
 
   useEffect(() => {
-    if (wasOpen.current && sheet === null) { opener.current?.focus(); opener.current = null; pushed.current = false; }
+    // No opener (a direct link), or it is gone: focus goes to Cora's column, never to the page body.
+    if (wasOpen.current && sheet === null) { focusOrCora(opener.current); opener.current = null; pushed.current = false; }
     wasOpen.current = sheet !== null;
   }, [sheet]);
 

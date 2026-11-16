@@ -107,6 +107,20 @@ describe('Esc closes only the top layer (CP4.6)', () => {
     expect(host.querySelector('[data-testid="cp-room"]')).not.toBeNull();
   });
 
+  it('the sheet and the jump bar are drawn INSIDE the room, so they stack above it and share its theme', async () => {
+    await mount([ROOM, `${ROOM}#offers`]);
+    await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })); });
+    const room = host.querySelector('[data-testid="cp-room"]') as HTMLElement;
+    expect(room.contains(host.querySelector('.cp-sheet-layer'))).toBe(true);
+    expect(room.contains(host.querySelector('[data-testid="cp-jump"]'))).toBe(true);
+  });
+
+  it('closing a sheet opened by a direct link puts focus on Cora, never on the page body', async () => {
+    await mount([`${ROOM}#inbox`]);
+    await act(async () => { (host.querySelector('[data-testid="cp-sheet-back"]') as HTMLButtonElement).click(); });
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('cp-cora-col');
+  });
+
   it('Tab stays inside an open sheet (it is a modal dialog)', async () => {
     await mount([ROOM, `${ROOM}#resume`]);
     const sheet = host.querySelector('[data-testid="cp-sheet-resume"]') as HTMLElement;

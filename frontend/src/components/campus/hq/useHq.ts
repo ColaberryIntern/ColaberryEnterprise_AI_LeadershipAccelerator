@@ -4,7 +4,7 @@ import { useCampusMgmt } from '../campusMgmt';
 import { isTypingTarget } from '../campusEsc';
 import { buildHq, lockedFloorToast, rideOrder, type Hq, type HqFloor, type HqRoom, type HqOffice } from './hqModel';
 import { useHqSubnav } from './useHqSubnav';
-import { takeHqIntent } from './hqIntent';
+import { useHqStartIntent } from './useHqStartIntent';
 import { listMyGovProjects } from '../../../services/govProjectPortalApi';
 import { fetchCareerPrepFlag } from '../../careerPrep/careerPrepFlag';
 import type { CareerPrepFloorState } from './careerPrepDoors';
@@ -15,6 +15,10 @@ import type { CareerPrepFloorState } from './careerPrepDoors';
  * always agree. Riding: the doors close, the indicator counts through the floors, the doors open on the floor, all under
  * 1.5 s; with reduce motion every step is instant. Esc steps back floor -> elevator -> lobby -> outside, and only from
  * outside does it fall through to the campus (which closes the building).
+ *
+ * Career Prep v27 (CP5.2): for everyone but staff the ride is EXPRESS (the indicator goes straight to the floor, no
+ * intermediate stops: a member's badge opens only their own floors). The 'prep' start intent waits for the Career
+ * Prep floor to be known, then rides there, or opens the lobby when the badge does not open it.
  */
 export type HqScene = 'ext' | 'lobby' | 'cab' | 'floor';
 export interface HqState {
@@ -103,6 +107,7 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
     const stepMs = steps ? Math.max(40, Math.floor((RIDE_BUDGET_MS - DOORS_MS - SETTLE_MS) / steps)) : 0;
     const arrive = () => { setMoving(false); setDoorsShut(false); setHover(null); setFloor(num); setScene(num === 'G' ? 'lobby' : 'floor'); };
     if (reduceMotion) { setCabAt(num); arrive(); return; }
+    if (!isStaff) { later(() => { setCabAt(num); later(arrive, SETTLE_MS); }, DOORS_MS); return; } // express: no intermediate floors
     let cur = from;
     const step = () => {
       if (cur === to) { later(arrive, SETTLE_MS); return; }
@@ -121,14 +126,8 @@ export function useHq(audience: CampusAudience, reduceMotion: boolean, active = 
     return false;
   }, [scene, moving]);
 
-  // A Where-to pick (hqIntent) rides to its floor as the HQ opens.
-  const rideRef = useRef(ride);
-  rideRef.current = ride;
-  useEffect(() => {
-    if (!active) return;
-    const f = takeHqIntent();
-    if (f) rideRef.current(f);
-  }, [active]);
+  // A Where-to pick (hqIntent) rides to its floor as the HQ opens; goStart('prep') rides to the Career Prep floor.
+  useHqStartIntent(active, hq, audience, careerPrep, ride, () => setScene('lobby'));
 
   useEffect(() => {
     if (active) return;

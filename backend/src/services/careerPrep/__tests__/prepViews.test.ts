@@ -94,9 +94,10 @@ describe('buildSummary', () => {
     expect(SummaryResponse.safeParse(s).success).toBe(true);
   });
 
-  it('counts every dated interview (the card shows 2 and "+n more") while listing at most 3', () => {
-    const many = [1, 2, 3, 4, 5].map((d) => interview({ id: `i${d}`, startsAt: new Date(NOW.getTime() + d * DAY) }));
-    const s = buildSummary({ ...full(), interviews: [...many, interview({ id: 'p1', source: 'practice', startsAt: null })] }, NOW);
+  it('counts every interview still ahead (the card shows 2 and "+n more") while listing at most 3, soonest first', () => {
+    const many = [5, 4, 3, 2, 1].map((d) => interview({ id: `i${d}`, startsAt: new Date(NOW.getTime() + d * DAY) }));
+    const past = interview({ id: 'gone', startsAt: new Date(NOW.getTime() - 5 * 3_600_000) }); // started 5 hours ago
+    const s = buildSummary({ ...full(), interviews: [past, ...many, interview({ id: 'p1', source: 'practice', startsAt: null })] }, NOW);
     expect(s.interviews.map((i) => i.id)).toEqual(['i1', 'i2', 'i3']);
     expect(s.interviewCount).toBe(5);
     expect(SummaryResponse.safeParse(s).success).toBe(true);

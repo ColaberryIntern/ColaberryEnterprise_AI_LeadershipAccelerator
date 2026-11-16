@@ -109,7 +109,7 @@ export interface Summary {
 
 function todaysMinutes(data: PrepData, interviewId: string | null, today: string): { sessionMinutes?: number } {
   const plan = (data.plans ?? []).find((p) => p.interviewId === interviewId);
-  const minutes = plan?.days.find((d) => d.date === today)?.minutes ?? 0;
+  const minutes = Math.round(plan?.days.find((d) => d.date === today)?.minutes ?? 0);
   return minutes > 0 ? { sessionMinutes: minutes } : {};
 }
 
@@ -117,6 +117,9 @@ function todaysMinutes(data: PrepData, interviewId: string | null, today: string
 export function buildSummary(data: PrepData, now: Date): Summary {
   const d = buildDashboard(data, now);
   const next = d.interviews.find((i) => i.id === d.anchorId);
+  // CP5.1: only interviews still ahead (the data includes ones that started up to a day ago), soonest first.
+  const ahead = d.interviews.filter((i) => i.startsAt && Date.parse(i.startsAt) > now.getTime())
+    .sort((a, b) => Date.parse(a.startsAt as string) - Date.parse(b.startsAt as string));
   return {
     ...(data.firstName ? { firstName: data.firstName } : {}),
     ...(next ? { nextInterview: next } : {}),
@@ -126,8 +129,8 @@ export function buildSummary(data: PrepData, now: Date): Summary {
       ...(d.streak > 0 ? { streak: d.streak } : {}),
       ...(d.thisWeek > 0 ? { thisWeek: d.thisWeek } : {}),
     },
-    interviews: d.interviews.filter((i) => i.startsAt).slice(0, 3),
-    interviewCount: d.interviews.filter((i) => i.startsAt).length,
+    interviews: ahead.slice(0, 3),
+    interviewCount: ahead.length,
     ...todaysMinutes(data, next?.id ?? null, centralDate(now)),
     today: centralDate(now),
   };
