@@ -4,13 +4,15 @@
  *   loadCatalog(tenantId)      every service of THIS tenant (active, growth AND retired: retired is used only for
  *                              duplicate warnings, never offered to the model), with its confirmed-proof count
  *                              counted only over links into this tenant's services;
- *   loadEvidence(ids)          the case-study text the detector may read: the record's own summary fields, plus the
- *                              outside import's AI-extracted analysis (claims). The original file is not re-read.
+ *   loadEvidence(ids)          the case-study text the detector may read: the record's own summary fields, plus
+ *                              EITHER the outside import's AI-extracted analysis (claims; the file is not re-read)
+ *                              OR, for inside case studies, the latest snapshot's story (serviceGapSnapshotText).
  */
 import { Op } from 'sequelize';
 import { toStrArray } from '../serviceCatalog';
 import { classifyCaseStudySource } from '../../caseStudy/caseStudySourceKind';
 import type { CaseStudyEvidence, CatalogService, ServiceStatus } from './serviceGapTypes';
+import { analysisFromSnapshot } from './serviceGapSnapshotText';
 
 const plain = <T>(row: unknown): T => ((row as { get?: (o: { plain: true }) => T })?.get ? (row as { get: (o: { plain: true }) => T }).get({ plain: true }) : (row as T));
 const strs = (v: unknown): string[] => (toStrArray(v) ?? []).filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim());
@@ -61,14 +63,30 @@ export async function loadEvidence(ids: string[]): Promise<Map<string, CaseStudy
     const i = plain<{ case_study_id: string; analysis: unknown; analysis_error: string | null }>(row);
     if (!importBy.has(i.case_study_id)) importBy.set(i.case_study_id, i);
   }
+  const snapshotBy = await latestSnapshotAnalysis(ids.filter((id) => !importBy.has(id)));
   for (const row of rows) {
     const r = plain<{ id: string; title: string; status: string; source_type: string; industry: string | null; canonical_summary: string | null; primary_capability: string | null }>(row);
     const imp = importBy.get(r.id);
     out.set(r.id, {
       id: r.id, title: r.title, sourceKind: classifyCaseStudySource(r.source_type), status: r.status,
       industry: r.industry ?? null, canonicalSummary: r.canonical_summary ?? null, primaryCapability: r.primary_capability ?? null,
-      analysis: toAnalysis(imp?.analysis), analysisError: imp?.analysis_error ?? null,
+      analysis: imp ? toAnalysis(imp.analysis) : snapshotBy.get(r.id) ?? null, analysisError: imp?.analysis_error ?? null,
     });
+  }
+  return out;
+}
+
+/** Inside case studies: the story lives in the latest snapshot, not in `case_studies` (see serviceGapSnapshotText). */
+async function latestSnapshotAnalysis(ids: string[]): Promise<Map<string, Analysis>> {
+  const out = new Map<string, Analysis>();
+  if (!ids.length) return out;
+  const { default: CaseStudySnapshot } = await import('../../../models/CaseStudySnapshot');
+  const snaps = await CaseStudySnapshot.findAll({ where: { case_study_id: { [Op.in]: ids } }, attributes: ['case_study_id', 'version', 'content'], order: [['version', 'DESC']] });
+  for (const row of snaps) {
+    const s = plain<{ case_study_id: string; content: unknown }>(row);
+    if (out.has(s.case_study_id)) continue;
+    const a = analysisFromSnapshot(s.content);
+    if (a) out.set(s.case_study_id, a);
   }
   return out;
 }
