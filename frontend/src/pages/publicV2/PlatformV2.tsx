@@ -1,22 +1,47 @@
 import React from 'react';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
-import ReceiptsDrilldown from '../../components/publicV2/ReceiptsDrilldown';
-import BuildPipeline from '../../components/publicV2/BuildPipeline';
-import CapabilityEarned from '../../components/publicV2/CapabilityEarned';
 import OpenPlatform from '../../components/publicV2/OpenPlatform';
-import { LeaderViewSection, WhoeverBuildsItSection } from './platformV2Bands';
+import { SurfacesSection } from './platformV2Surfaces';
+import { WhoeverBuildsItSection } from './platformV2Bands';
 import './platformV2.css';
 import '../../components/publicV2/heroV8.css';
 
 /**
- * PlatformV2 — the Platform Showroom.
+ * PlatformV2 — four bands, which is what the v5 site model draws.
  *
- * Ali's call (2026-08-20): the page runs thesis -> the nine-section argument ->
- * close. The surface showroom, the role-based-views notice, the duplicate
- * maturity ladder, the 12-week roadmap and the Experience Studio block were all
- * removed from here; the argument carries the page now, and the roadmap's home
- * is /program.
+ * Ali gave this repo `colaberry-enterprise-site.html` as the design model and
+ * then said, on 2026-11-15, that the site did not look like it. Measured side
+ * by side in one browser at 1440px, this page was the largest gap on the whole
+ * site: nine bands and 11,854px against the model's four and 5,910px. His call
+ * on being shown the comparison: the colour is right, close the structural gap.
+ *
+ * So the page is now the model's four bands:
+ *
+ *   1. the hero
+ *   2. the four surfaces, each addressed to a role, in ONE band
+ *   3. "whoever builds it, you see it"
+ *   4. the close
+ *
+ * The four surfaces used to be four separate full-width bands, each paying for
+ * its own eyebrow, h2 and section padding. They are siblings inside one band
+ * now; see `platformV2Surfaces.tsx` for what each one keeps, what came off the
+ * page, and why the readiness drill-down stayed when the build pipeline and the
+ * maturity ladder did not.
+ *
+ * CLAIM BOUNDARIES, settled with Ali on 2026-08-19 and still in force:
+ *  - Claude Code is NOT claimed as an embedded runtime. What is true, and what
+ *    the page says, is that every story ships with a Claude Code prompt written
+ *    from the team's own requirements, and the platform reads their repository
+ *    to confirm each acceptance criterion against a real commit. Both halves are
+ *    disprovable by opening a repo, which is what makes them worth saying.
+ *  - "Production-grade" is NOT used. The honest claim is real systems against
+ *    real workflows, with governance and evidence.
+ *
+ * Unrouted, not deleted: `BuildPipeline`, `CapabilityEarned`, `ReceiptsDrilldown`
+ * (its panel is still rendered, by the surfaces band), `CapabilityOS`,
+ * `TwoExperiences`, `ArchitectExperience`. Check what else imports each before
+ * removing any file.
  */
 
 function PlatformV2(): React.ReactElement {
@@ -32,122 +57,11 @@ function PlatformV2(): React.ReactElement {
 
       <HeroPlatformV8 />
 
-      {/*
-        THE THESIS, STATED BEFORE THE TOUR.
-
-        This page used to open straight into a showroom of six surfaces, which
-        answers "what screens do I get" -- a question nobody asks until after
-        they have decided. The objection actually in the room is "why would I put
-        my own people on this instead of hiring a vendor", and the page never
-        engaged it.
-
-        So the argument comes first and the surfaces become evidence for it.
-
-        CLAIM BOUNDARIES, settled with Ali on 2026-08-19 and deliberately narrow:
-         - Claude Code is NOT claimed as an embedded runtime. What is true, and
-           what is written here, is that every story ships with a Claude Code
-           prompt written from the team's own requirements, and the platform
-           reads their repository to confirm each acceptance criterion against a
-           real commit. Both halves are disprovable by opening a repo, which is
-           what makes them worth saying.
-         - "Production-grade" is NOT used. The honest claim is real systems
-           against real workflows, with governance and evidence.
-      */}
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-thesis-title">
-        <div className="cbv2-wrap">
-          <div className="cbv2-section__head">
-            <p className="cbv2-eyebrow">Why your own people</p>
-            <h2 id="cbv2-thesis-title">
-              The best people to work on your AI already work for you
-            </h2>
-            <p className="cbv2-lede">
-              They know the workflow, the exceptions, and which numbers matter. What they have
-              not had is a way to build with AI on the job. That is what this platform is:
-              they become architects <strong>by building your systems</strong>, not by
-              finishing a course and hoping it transfers.
-            </p>
-          </div>
-
-          <div className="cbv2-thesis">
-            <article className="cbv2-thesiscard">
-              <span className="cbv2-thesiscard__n" aria-hidden="true">1</span>
-              <h3>They learn on the real thing</h3>
-              <p>
-                The build is not a capstone bolted onto a syllabus. It is a real system on your
-                own workflows, and the curriculum is the scaffolding around it &mdash;
-                requirements, releases, stories and a schedule that fits the weeks you have.
-              </p>
-            </article>
-
-            <article className="cbv2-thesiscard">
-              <span className="cbv2-thesiscard__n" aria-hidden="true">2</span>
-              <h3>Every story arrives with its prompt</h3>
-              <p>
-                Each story ships with a Claude Code prompt written from{' '}
-                <strong>your own requirements</strong> &mdash; not a generic exercise. Your
-                people write the code. That is the point, and it is why the capability is real
-                once we leave.
-              </p>
-            </article>
-
-            <article className="cbv2-thesiscard">
-              <span className="cbv2-thesiscard__n" aria-hidden="true">3</span>
-              <h3>Done is proven, not claimed</h3>
-              <p>
-                The platform reads the repository they connect and confirms every acceptance
-                criterion against a real commit before a story counts. Nobody marks their own
-                homework, which is what makes the record worth showing a board.
-              </p>
-            </article>
-          </div>
-
-          <p className="cbv2-thesis__foot">
-            What comes out is a system running against your workflows, under governance, with
-            the evidence trail behind it &mdash; and the people who built it still on your
-            payroll.
-          </p>
-        </div>
-      </section>
-
-      {/*
-          FOUR SURFACES, EACH ANSWERING "WHO IS THIS FOR".
-
-          The page ran eleven bands and 14,450px, which is longer than the home
-          page and asked a visitor to absorb the whole product before learning
-          who any of it was for. The v5 site model reduces it to four surfaces,
-          each addressed to a role: the leader, whoever tracks the projects,
-          whoever has to believe the result, and the people learning.
-
-          IT DOES NOT REACH THE MODEL'S PAGE LENGTH, deliberately. The model
-          draws these surfaces as small mock screenshots; the three that already
-          existed here carry governed, claim-reviewed content -- the pipeline's
-          stated claim boundaries, the real promotion thresholds, the weighting
-          of each competency band. Cutting them to a comp's proportions would
-          throw away reviewed substance to match a picture. 14,450px to
-          11,825px, and the structure is the model's.
-
-          REMOVED, not reordered: CapabilityOS, TwoExperiences,
-          ArchitectExperience and both CtaInterrupts. The interrupts both pushed
-          to the same free workspace that the hero and the closing band already
-          offer, and the other three are detail about how the product is put
-          together rather than what a given role gets from it. All three
-          components still exist and are unrouted, not deleted.
-      */}
-      <LeaderViewSection />
-
-      {/* For project tracking. */}
-      <BuildPipeline />
-
-      {/* For proof: acceptance criteria confirmed against real commits. */}
-      <ReceiptsDrilldown />
-
-      {/* For the people learning. */}
-      <CapabilityEarned />
+      <SurfacesSection />
 
       <WhoeverBuildsItSection />
 
       <OpenPlatform />
-
     </>
   );
 }

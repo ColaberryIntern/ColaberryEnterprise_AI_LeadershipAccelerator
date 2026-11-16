@@ -121,13 +121,83 @@ describe('PlatformV2 — the evidence-not-completion argument', () => {
     const text = textOf(html());
     /*
         "momentum, not courses" lived in TwoExperiences, which the v5 cut to
-        four surfaces removed. The POINT is unchanged and is still made
-        explicitly, in CapabilityEarned's stronger wording: course completion is
-        not one of the four bands a competency score is built from. The pattern
-        follows the surviving sentence rather than the removed one.
+        four surfaces removed. CapabilityEarned's "course completion is not one
+        of them" then carried it, and CapabilityEarned came off the page in turn
+        when the four surfaces were folded into one band.
+
+        The POINT has never changed and is still made explicitly, now by the
+        "for your people" surface: readiness is computed from evidence, not
+        attendance. The pattern follows whichever sentence is on the page rather
+        than pinning one phrasing -- pinning the phrase is exactly what made
+        this assertion go red twice while the claim itself was intact.
     */
-    expect(text).toMatch(/course completion is not one of them|momentum, not courses|not course completion/i);
+    expect(text).toMatch(
+      /computed from evidence, not attendance|course completion is not one of them|momentum, not courses|not course completion/i,
+    );
     expect(text).toMatch(/self-reported/i);
+  });
+});
+
+/**
+ * THE FIDELITY GUARD.
+ *
+ * Ali gave this repo `colaberry-enterprise-site.html` as the design model and
+ * then said the site did not look like it. Measured side by side at 1440px,
+ * this page was the biggest gap on the site: nine bands and 11,854px against
+ * the model's four and 5,910px, because each of the four surfaces was its own
+ * full-width band.
+ *
+ * A note saying "keep it to four bands" does not fail a build. This does. Every
+ * assertion below was mutation-tested: re-rendering any surface as its own
+ * <section>, or putting a retired band back on the page, turns one of them red.
+ */
+describe('PlatformV2 — four bands, as the v5 model draws it', () => {
+  it('renders exactly four top-level bands', () => {
+    expect((html().match(/<section/g) || []).length).toBe(4);
+  });
+
+  it('carries all four surfaces, each addressed to a role', () => {
+    const text = textOf(html());
+    ['For leaders', 'For project tracking', 'For proof', 'For your people'].forEach((who) =>
+      expect(text).toContain(who),
+    );
+  });
+
+  it('numbers the surfaces one to four', () => {
+    const h = html();
+    ['leaders', 'tracking', 'proof', 'people'].forEach((id) =>
+      expect(h).toContain(`id="cbv2-surf-${id}"`),
+    );
+  });
+
+  it('does not bring back a band the model has no room for', () => {
+    const text = textOf(html());
+    /* The build pipeline, the maturity ladder and the inline thesis band. Each
+       component still exists; none of them belongs on this page. */
+    [
+      'From a sentence about your business',
+      'From AI Aware to AI Organization',
+      'The best people to work on your AI already work for you',
+    ].forEach((gone) => expect(text).not.toContain(gone));
+  });
+
+  /**
+   * Every invented figure on this page is badged. Three of them now exist -- the
+   * rollout table, the releases table and the repository panel -- and an
+   * unbadged mock of a customer's dashboard, plan or repository is a fabricated
+   * proof claim, not a layout detail.
+   */
+  it('badges every invented figure, not just the first', () => {
+    const h = html();
+    expect((h.match(/Sample data/g) || []).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('shows the repository figure as illustrative, with a pending criterion', () => {
+    const text = textOf(html());
+    expect(text).toContain('your-org/order-exceptions');
+    /* If every criterion read "confirmed" the figure would be a claim that
+       nothing ever fails verification. One is deliberately pending. */
+    expect(text).toMatch(/AC-\d pending/);
   });
 });
 
