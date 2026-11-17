@@ -3,6 +3,7 @@ import type { StudentGovProjectView, GovBuildArtifactView, GovReviewApi, GovStud
 import { Bar } from './studioHelpers';
 import { RepoFileCards, RepoFileViewer } from './RepoFileCards';
 import { BuildArtifactCards, BuildArtifactViewer } from './BuildArtifactCards';
+import DemoVideoGallery from './DemoVideoGallery';
 
 /** A captured screenshot thumbnail — fetched as an object URL. The reviewer (admin) uses the review API; an intern
  *  (no reviewApi) uses the member-level studio image route; a hatched placeholder otherwise or while loading. */
@@ -63,6 +64,8 @@ export default function BuildEvidence(
   // The deliverables the intern submitted from their repo (a project overview, diagrams, reports). A source-only
   // build repo has no structured documents, so the "Files" block above stays empty; these are what they built.
   const submittedArtifacts: GovSubmittedArtifact[] = view.submittedArtifacts ?? [];
+  // The intern's recorded demo videos (Presentation Studio takes), admin-only + ticketed by the projection.
+  const demoVideos = view.demoVideos ?? [];
   const [openArtifact, setOpenArtifact] = useState<GovSubmittedArtifact | null>(null);
   const fetchBuildArtifact = studioApi?.fetchBuildArtifact;
   const buildArtifactFetch = useCallback(
@@ -144,7 +147,10 @@ export default function BuildEvidence(
       </div>
 
       {/* Build artifacts REPOSITORY — what the intern has built + submitted from their repo, for the proposal writer. */}
-      <div className="gps-vh" style={{ marginTop: 24 }}><div><h3>Build artifacts</h3><p>What the intern has built and submitted from their repo &mdash; the deliverables behind the verified stories, for the proposal to draw from. Demo videos join here as interns record their demos.</p></div></div>
+      <div className="gps-vh" style={{ marginTop: 24 }}><div><h3>Build artifacts</h3><p>What the intern has built and submitted from their repo &mdash; the deliverables behind the verified stories, for the proposal to draw from, alongside the demo videos they recorded.</p></div></div>
+      {/* The intern's recorded demo videos (Presentation Studio takes). Admin-only; the player reuses the ticketed
+          /api/internship-video route. Renders nothing when there are none. */}
+      <DemoVideoGallery videos={demoVideos} />
       {/* The connected repo's deliverable DOCUMENTS as typed cards, pulled from the synced tree (read-only) — each
           opens a per-type viewer that fetches the file live. Reflects the real product and confirms sync. */}
       {view.connectedRepo && deliverables.length > 0 && (
@@ -186,7 +192,7 @@ export default function BuildEvidence(
           ))}
         </div>
       ) : submittedArtifacts.length === 0 ? (
-        <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo &mdash; and their demo videos once recorded.</div>
+        <div className="gps-panel gps-muted" data-testid="ev-artifacts-empty">No build artifacts submitted yet. They appear here as the intern pushes work and submits it from their repo.</div>
       ) : null}
     </div>
   );
