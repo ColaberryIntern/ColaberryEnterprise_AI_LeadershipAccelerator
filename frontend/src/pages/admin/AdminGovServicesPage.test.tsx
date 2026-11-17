@@ -14,6 +14,7 @@ jest.mock('../../services/factoryApi');
 jest.mock('../../services/ourServicesApi');
 jest.mock('../../services/caseStudyServiceLinkApi');
 jest.mock('../../services/adminGovDossierApi');
+jest.mock('../../services/caseStudyFinderApi');
 // The charts and the CDN-loaded Mermaid diagram have their own tests; jsdom has no layout to draw them in.
 jest.mock('../../components/visuals/MermaidDiagram', () => () => null);
 jest.mock('../../components/admin/ourServices/ServiceEvidenceBarChart', () => () => <div data-testid="chart-evidence" />);
@@ -146,7 +147,7 @@ describe('AdminGovServicesPage: the evidence-backed catalog', () => {
     // The bar comes before the first section, so it is reachable without scrolling.
     expect(nav.compareDocumentPosition(container.querySelector('#overview')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const ids = Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'));
-    expect(ids).toEqual(['#overview', '#evidence', '#catalog', '#industries', '#ai-opportunities', '#intake', '#gaps', '#dossier']);
+    expect(ids).toEqual(['#overview', '#evidence', '#catalog', '#industries', '#case-study-finder', '#ai-opportunities', '#intake', '#gaps', '#dossier']);
     for (const href of ids) expect(container.querySelector(href!)).not.toBeNull(); // no dead pill
     expect(nav.querySelector('[data-testid="section-nav-intake"]')?.textContent).toContain('1 blocked');
     // The dossier is collapsed by default; its pill opens it before scrolling there.
