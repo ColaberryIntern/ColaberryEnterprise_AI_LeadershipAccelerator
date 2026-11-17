@@ -740,13 +740,34 @@ footer{background:#0F0F0F}
 .gv-nc__s button.prep{border-style:dashed;color:var(--mute)}
 
 /* coverage matrix */
-.gv-mx{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:#fff}
-.gv-mx table{border-collapse:collapse;width:100%;min-width:820px;font-size:14px}
-.gv-mx th,.gv-mx td{padding:12px 10px;border-bottom:1px solid #F1F1F0;text-align:center}
-.gv-mx th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:500;background:#F8F8F7}
-.gv-mx td:first-child,.gv-mx th:first-child{text-align:left;padding-left:18px}
-.gv-mx td:first-child{font-family:var(--disp);font-weight:700;color:var(--text);font-size:14.5px}
+/* Coverage matrix: fits the page at every width, no sideways scroll (Ali, 2026-11-16).
+   Fixed layout shares the width across the industry columns; their names stand upright so
+   a long one ("Career services and technical hiring") does not set a column's width.
+   Under 760px each service becomes a card listing only the industries it has case studies in. */
+.gv-mx{border:1px solid var(--line);border-radius:16px;background:#fff;overflow:hidden}
+.gv-mx table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:14px}
+.gv-mx th,.gv-mx td{padding:12px 4px;border-bottom:1px solid #F1F1F0;text-align:center}
+.gv-mx th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:500;background:#F8F8F7;vertical-align:bottom}
+.gv-mx th:first-child{width:24%}
+.gv-mx th:last-child{width:64px}
+.gv-mx thead th:not(:first-child) span{writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;max-height:150px;text-align:left;line-height:1.35}
+.gv-mx td:first-child,.gv-mx th:first-child{text-align:left;padding-left:18px;padding-right:12px}
+.gv-mx td:first-child{font-family:var(--disp);font-weight:700;color:var(--text);font-size:14.5px;overflow-wrap:anywhere}
 .gv-mx tr:last-child td{border-bottom:0}
+.gv-mx td .dot{max-width:100%}
+@media (max-width:760px){
+  .gv-mx{border:0;border-radius:0;background:none;overflow:visible}
+  .gv-mx table,.gv-mx tbody,.gv-mx tr,.gv-mx td{display:block;width:auto}
+  .gv-mx thead{display:none}
+  .gv-mx tr{border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px 16px;margin-bottom:10px}
+  .gv-mx td,.gv-mx td:first-child{border:0;padding:0;text-align:left}
+  .gv-mx td.z{display:none}
+  .gv-mx td[data-l]{display:inline-flex;align-items:center;gap:6px;margin:10px 14px 0 0;font-size:13px;color:var(--text)}
+  .gv-mx td[data-l]::after{content:attr(data-l)}
+  .gv-mx td[data-l] .dot{width:24px;height:24px;font-size:10.5px}
+  .gv-mx td.t{margin-top:10px;font-size:13px;color:var(--mute)}
+  .gv-mx td.t::before{content:"Case studies: "}
+}
 .dot{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;font-family:var(--mono);font-size:11.5px}
 .dot--0{border:1.5px dashed #D8D8D8}
 .dot--1{background:#FFDBDD;color:#9B0E18}
@@ -1256,8 +1277,8 @@ function nx(){
 }
 (function(){
   var cols=allInd;
-  $('#mx').innerHTML='<table><thead><tr><th>Service</th>'+cols.map(function(c){return '<th>'+c+'</th>'}).join('')+'<th>Total</th></tr></thead><tbody>'+
-   pub.map(function(x){return '<tr><td><button type="button" data-jump="'+x.slug+'" style="font:inherit;background:none;border:0;cursor:pointer;color:inherit;text-align:left;padding:0">'+x.name+'</button></td>'+cols.map(function(c){var v=(x.ind||{})[c]||0;return '<td><span class="dot dot--'+(v===0?0:v<2?1:v<5?2:3)+'">'+(v||'')+'</span></td>'}).join('')+'<td><strong>'+x.caseStudies+'</strong></td></tr>'}).join('')+'</tbody></table>';
+  $('#mx').innerHTML='<table><thead><tr><th>Service</th>'+cols.map(function(c){return '<th><span>'+c+'</span></th>'}).join('')+'<th><span>Total</span></th></tr></thead><tbody>'+
+   pub.map(function(x){return '<tr><td><button type="button" data-jump="'+x.slug+'" style="font:inherit;background:none;border:0;cursor:pointer;color:inherit;text-align:left;padding:0">'+x.name+'</button></td>'+cols.map(function(c){var v=(x.ind||{})[c]||0;return '<td'+(v?' data-l="'+c+'"':' class="z"')+'><span class="dot dot--'+(v===0?0:v<2?1:v<5?2:3)+'">'+(v||'')+'</span></td>'}).join('')+'<td class="t"><strong>'+x.caseStudies+'</strong></td></tr>'}).join('')+'</tbody></table>';
 })();
 $('#prep').innerHTML=prep.map(function(x){return '<button type="button" data-req="'+x.slug+'|refs"><span class="tier tier--prep" style="margin-bottom:10px"><i></i>In preparation</span><strong>'+x.name+'</strong><span>'+x.naics.join(' · ')+'</span><span style="display:block;margin-top:8px;font-family:var(--sans);font-size:13px;color:var(--red2);font-weight:600">Request references →</span></button>'}).join('');
 $('#mapbtn').onclick=function(){document.body.classList.toggle('mapmode');this.textContent=document.body.classList.contains('mapmode')?'Hide data mapping':'Show data mapping'};
@@ -1576,7 +1597,11 @@ if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es
 #nav .gn-note{margin:6px 0 0;font-size:12.5px;color:#6B6B6B}
 #nav .gn-foot{grid-column:1/-1;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding-top:14px;border-top:1px solid #E4E4E3;font-size:14px;color:#6B6B6B}
 #nav .gn-foot a{color:#2E6A86;font-weight:700;text-decoration:none;padding:0;background:none}
-@media (max-width:820px){
+/* The full nav needs ~1,080px; below that it pushed "Book a demo pilot" off the right edge and
+   the page scrolled sideways (measured 1,077px wide at 900-1,024). The menu button takes over at 1,100. */
+@media (max-width:1100px){
+  .nav__links,.nav__r{display:none}.burger{display:block}
+  .nav.open .nav__links{display:flex;flex-direction:column;position:absolute;top:74px;left:0;right:0;background:var(--bg);padding:12px 20px 18px;border-bottom:1px solid var(--line)}
   #nav .gn-item{display:block}
   #nav .gn-btn{width:100%;justify-content:space-between;padding:10px 11px}
   #nav .gn-panel{position:static;box-shadow:none;border:0}
@@ -1584,6 +1609,11 @@ if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es
   #nav .gn-in--proof .gn-groups,#nav .gn-in--gov,#nav .gn-in--gov .gn-groups{grid-template-columns:1fr;gap:14px}
   #nav .gn-aside{border-left:0;padding-left:0}
 }
+/* Footer at phone width: two columns plus a 40px gap left the email address 4px past the edge at 360. */
+.fg>div{min-width:0}.fg a{overflow-wrap:anywhere}
+@media (max-width:420px){.fg{gap:28px 20px}}
+/* Hero grid: its one column sized to the widest child's min-content (335px at a 320 screen). */
+.gx{grid-template-columns:minmax(0,1fr)}.gx>.wrap{min-width:0}
 </style>
 <script>
 /* Header menus, 2026-11-16. Mirrors PublicHeaderV2 + navMenus.ts on the React
