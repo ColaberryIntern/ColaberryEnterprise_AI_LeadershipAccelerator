@@ -5,7 +5,7 @@ import type { SequenceStep } from '../models/FollowUpSequence';
 import { env } from '../config/env';
 
 /**
- * AI Systems Architect Accelerator — Open House campaign (Founding Cohort launch).
+ * Forward Deployed AI Engineer Accelerator — Open House campaign (Founding Cohort launch).
  *
  * Converts the Sohail/Ali-approved 5-email plan (BC todo 9946499631) into this repo's native,
  * prompt-based campaign engine. Three audience segments (alumni, dropouts, prospects) share ONE
@@ -30,10 +30,10 @@ import { env } from '../config/env';
 const REGISTER_LINK =
   `${env.openHouseLandingUrl}?utm_source=accelerator&utm_medium=email&utm_campaign=open_house_2026`;
 
-const SEQUENCE_NAME = 'AI Systems Architect — Open House Launch';
+const SEQUENCE_NAME = 'Forward Deployed AI Engineer — Open House Launch';
 
 // Shared brand voice. Per-segment framing is appended in SEGMENTS below.
-const BASE_SYSTEM_PROMPT = `You are Cory, writing on behalf of Ali Muwwakkil at Colaberry, inviting people to the FREE AI Systems Architect Accelerator Open House.
+const BASE_SYSTEM_PROMPT = `You are Cory, writing on behalf of Ali Muwwakkil at Colaberry, inviting people to the FREE Forward Deployed AI Engineer Accelerator Open House.
 
 Positioning: Learn With Claude. Build Through Colaberry. Deploy In The Real World.
 The program is a 12-week, implementation-focused program that takes working professionals from AI consumer to AI builder. Campaign goal: drive free Open House registrations, then convert attendees into the Founding Cohort (40 seats).
@@ -115,7 +115,7 @@ Alternate subjects: "What if you could turn your idea into a real AI system?" / 
 Weeks 1 to 3 Build your AI foundation. Weeks 4 to 6 Create your AI team (multiple agents working together). Weeks 7 to 9 Connect AI to the real world (live data, tools, APIs). Weeks 10 to 12 Design AI that scales (reliable enough to deploy).
 Say the full structure is walked through live at the Open House. No price.
 CTA: Reserve your seat. Link: ${REGISTER_LINK}
-Alternate subjects: "What happens during the 12 weeks?" / "Inside the AI Systems Architect Accelerator"`,
+Alternate subjects: "What happens during the 12 weeks?" / "Inside the Forward Deployed AI Engineer Accelerator"`,
   },
   {
     delay_days: 11,

@@ -29,14 +29,14 @@ async function bcPost(url, body) {
 
 const bcComment = `<div>${MENTION} <strong>Training program v1 package ready for your critique.</strong></div>
 <div><br></div>
-<div>I pulled the entire ChatGPT research conversation and synthesized it into three deliverables. All three are emailed to you (subject line: <strong>[Training Program] AI Systems Architect Accelerator - v1 critique package</strong>) and are also committed in the repo at <code>docs/training-program-2026-q3/</code>:</div>
+<div>I pulled the entire ChatGPT research conversation and synthesized it into three deliverables. All three are emailed to you (subject line: <strong>[Training Program] Forward Deployed AI Engineer Accelerator - v1 critique package</strong>) and are also committed in the repo at <code>docs/training-program-2026-q3/</code>:</div>
 <ul>
 <li><strong>TRAINING_INTEGRATION_PLAN.md</strong> - the integration plan. Where every piece lands in this codebase (Project Builder backend, Anthropic Companion Course wrapper, 6 AI agents, Architect Portfolio Dashboard, GitHub integration, CCPP schema, Stripe enrollment, etc.) with owner team and ETA against the 41-day clock.</li>
 <li><strong>TRAINING_PROGRAM_CRITIQUE.html</strong> - the critique-ready strategic doc. Program identity, user base, curriculum, pricing, marketing, operations, team structure, timeline, 15 open decisions called out, risk register, cost + revenue model. Designed for you to red-pen.</li>
 <li><strong>TRAINING_OVERVIEW.pptx</strong> - the 10-slide team deck. For showing the website / sales / marketing / AI teams how the program works.</li>
 </ul>
 <div><br></div>
-<div><strong>Headline:</strong> AI Systems Architect Accelerator. 12 weeks. Mon Architecture Day + Thu Build Day. 4 stackable $499 intensives or $1,497 bundle (TWC compliance). Hosted on enterprise.colaberry.com. Powered by Anthropic Partner Network. Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23).</div>
+<div><strong>Headline:</strong> Forward Deployed AI Engineer Accelerator. 12 weeks. Mon Architecture Day + Thu Build Day. 4 stackable $499 intensives or $1,497 bundle (TWC compliance). Hosted on enterprise.colaberry.com. Powered by Anthropic Partner Network. Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23).</div>
 <div><br></div>
 <div><strong>Hard gates I flagged:</strong></div>
 <ol>
@@ -47,7 +47,7 @@ const bcComment = `<div>${MENTION} <strong>Training program v1 package ready for
 <div><br></div>
 <div><strong>By Jun 6 (next week) I need your call on:</strong></div>
 <ul>
-<li>Brand name lock (recommended: "AI Systems Architect Accelerator")</li>
+<li>Brand name lock (recommended: "Forward Deployed AI Engineer Accelerator")</li>
 <li>Launch wedge persona (recommended: career changer)</li>
 <li>Pricing: $79 + $149 BYO Claude vs. $99 bundled (recommended: BYO per the research)</li>
 <li>Team leads: who runs Website / Marketing / Sales for the next 41 days?</li>
@@ -61,7 +61,7 @@ const emailHtml = `<!doctype html><html><head><meta charset="utf-8"></head>
 
 <div style="background:linear-gradient(135deg,#1a365d 0%,#2b6cb0 100%);color:white;padding:28px 32px">
 <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#bfdbfe;font-weight:700">Strategic plan + critique package</div>
-<div style="font-size:24px;font-weight:800;margin-top:6px;line-height:1.25">AI Systems Architect Accelerator</div>
+<div style="font-size:24px;font-weight:800;margin-top:6px;line-height:1.25">Forward Deployed AI Engineer Accelerator</div>
 <div style="font-size:14px;color:#cbd5e0;margin-top:6px">v1 - assembled from your ChatGPT research - 41 days to Jul 10 launch</div>
 </div>
 
@@ -104,7 +104,7 @@ const emailHtml = `<!doctype html><html><head><meta charset="utf-8"></head>
 <h2 style="font-size:18px;color:#1a365d;border-bottom:2px solid #cbd5e0;padding-bottom:8px;margin:28px 0 14px">What I need from you by Jun 6 (Week 0)</h2>
 
 <ol style="font-size:14px;line-height:1.7;margin:0 0 0 18px;padding:0">
-<li><strong>Brand name lock.</strong> I recommend "AI Systems Architect Accelerator" (the research's final pick). Alternatives listed in the HTML.</li>
+<li><strong>Brand name lock.</strong> I recommend "Forward Deployed AI Engineer Accelerator" (the research's final pick). Alternatives listed in the HTML.</li>
 <li><strong>Launch wedge persona.</strong> I recommend leading with career changers / working professionals - broadest audience for viral content, highest-margin, no B2B sales motion required.</li>
 <li><strong>Pricing model.</strong> I recommend $79 + $149 BYO Claude (the research's final pick). Your earlier instinct was $99 bundled with Claude - the research explicitly rejected that. Confirm or push back.</li>
 <li><strong>Team leads.</strong> Right now you're effectively running all 4 teams plus Ops. Realistic 41-day delivery needs a Website Team lead (full-time), Marketing Team lead (part-time), AI Team contract dev (full-time), and you running Sales with a part-time SDR.</li>
@@ -152,7 +152,7 @@ HARD GATES:
 - Jul 4: Stripe enrollment live
 
 WHAT I NEED FROM YOU BY JUN 6 (Week 0):
-1. Brand name lock (recommended: "AI Systems Architect Accelerator")
+1. Brand name lock (recommended: "Forward Deployed AI Engineer Accelerator")
 2. Launch wedge persona (recommended: career changer)
 3. Pricing model: $79 + $149 BYO Claude vs $99 bundled (recommended: BYO per the research)
 4. Team leads named for Website, Marketing, AI contract dev
@@ -193,7 +193,7 @@ Colaberry Inc.`;
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
     cc: 'alimuwwakkil@gmail.com',
-    subject: '[Training Program] AI Systems Architect Accelerator - v1 critique package',
+    subject: '[Training Program] Forward Deployed AI Engineer Accelerator - v1 critique package',
     text: textClean,
     html: htmlClean,
     attachments: [

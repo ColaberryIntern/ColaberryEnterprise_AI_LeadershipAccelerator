@@ -70,7 +70,7 @@ async function generateFeedback(
     model: env.advisorClaudeModel,
     max_tokens: 800,
     system:
-      'You are a technical interviewer for the AI Systems Architect program at Colaberry. ' +
+      'You are a technical interviewer for the Forward Deployed AI Engineer program at Colaberry. ' +
       'Write concise, actionable feedback (3–5 sentences) on the student\'s mock interview answers. ' +
       'Be specific, constructive, and encouraging. Do not repeat the questions verbatim.',
     messages: [

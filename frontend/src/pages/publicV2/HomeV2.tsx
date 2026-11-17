@@ -221,7 +221,7 @@ function HomeV2(): React.ReactElement {
               <img
                 className="cbv2-shot"
                 src="/site-v2/shot-hero-dashboard.png"
-                alt="The organization readiness dashboard, showing average architect readiness, builder XP and evidence shipped for a sample company."
+                alt="The organization readiness dashboard, showing average engineer readiness, builder XP and evidence shipped for a sample company."
                 loading="lazy"
                 decoding="async"
               />

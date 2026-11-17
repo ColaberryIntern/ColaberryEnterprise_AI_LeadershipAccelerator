@@ -40,7 +40,7 @@ export function deriveDna(
   const journey = journeyContribution(cards);
   const dominant = dominantDifficulty(cards);
   return {
-    purpose: blueprint.purpose || (blueprint.title ? `Advance mastery of ${blueprint.title}` : 'Advance the student toward AI Systems Architect'),
+    purpose: blueprint.purpose || (blueprint.title ? `Advance mastery of ${blueprint.title}` : 'Advance the student toward Forward Deployed AI Engineer'),
     learning_outcomes: blueprint.learning_objectives || [],
     competencies: ev.competencies,
     architect_domains: blueprint.architect_domains || [],

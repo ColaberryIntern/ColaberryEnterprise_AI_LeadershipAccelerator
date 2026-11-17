@@ -6,7 +6,7 @@
 
 ## Purpose of this document
 
-The AI Systems Architect Accelerator is sold as four (4) **independent stackable seminars**, each at $499. This document captures the **independent learning outcomes, independent artifacts, independent completion criteria, and independent stand-alone value** of each seminar, demonstrating that each meets TWC seminar-classification criteria and is **not** a chopped-up course.
+The Forward Deployed AI Engineer Accelerator is sold as four (4) **independent stackable seminars**, each at $499. This document captures the **independent learning outcomes, independent artifacts, independent completion criteria, and independent stand-alone value** of each seminar, demonstrating that each meets TWC seminar-classification criteria and is **not** a chopped-up course.
 
 A purchaser may enroll in any seminar in any order. Bundle pricing ($1,497 for all four) is offered as a marketing discount, not as a course prerequisite.
 

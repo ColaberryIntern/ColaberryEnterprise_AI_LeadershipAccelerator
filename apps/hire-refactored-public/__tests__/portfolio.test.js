@@ -11,7 +11,7 @@ const NOW = new Date('2026-11-06T12:00:00Z');
 const body = (over = {}) => ({
   ok: true,
   portfolio: {
-    identity: { full_name: 'Ann Lee', headline: 'AI Systems Architect', cohort_name: 'July 2026', avatar_data_url: null, linkedin_url: 'https://www.linkedin.com/in/ann', location: 'Dallas, TX', github_url: 'https://github.com/annlee' },
+    identity: { full_name: 'Ann Lee', headline: 'Forward Deployed AI Engineer', cohort_name: 'July 2026', avatar_data_url: null, linkedin_url: 'https://www.linkedin.com/in/ann', location: 'Dallas, TX', github_url: 'https://github.com/annlee' },
     about: ['Ships agent workflows.'],
     stats: { years_experience: 26, files_committed: 412 },
     capabilities: [{ name: 'Agent Skills', count: 4, proven: true }],

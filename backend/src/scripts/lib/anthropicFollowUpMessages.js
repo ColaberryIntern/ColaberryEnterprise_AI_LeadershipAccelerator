@@ -92,7 +92,7 @@ const SEQUENCE = [
     subject: 'Claude Partner Network: what we are building on Claude',
     paragraphs: [
       'A little context on the team behind our June 24 submission.',
-      'Colaberry runs an AI Systems Architect Accelerator for working professionals, and the material your Academy path covers is now foundational to how we teach it. Every architect we graduate learns MCP, agent skills, and Claude Code as core practice rather than as an elective.',
+      'Colaberry runs a Forward Deployed AI Engineer Accelerator for working professionals, and the material your Academy path covers is now foundational to how we teach it. Every architect we graduate learns MCP, agent skills, and Claude Code as core practice rather than as an elective.',
       'Partner status would let us do that with your blessing and your resources behind it, which is why we keep asking.',
     ],
     ask: 'A quick note on our application status would mean a lot to this team.',

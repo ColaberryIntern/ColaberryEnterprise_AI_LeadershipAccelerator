@@ -40,7 +40,7 @@ during class: we're still looking into that one separately and I'll follow
 up once it's resolved.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -63,7 +63,7 @@ Please sign in again here: https://training.colaberry.com — click Log In
 troubleshooting earlier; the problem was never on your end.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -85,7 +85,7 @@ Please sign in again here: https://training.colaberry.com — click Log In
 have full access now. Sorry for the delay in getting this sorted.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -108,7 +108,7 @@ Please sign in again here: https://training.colaberry.com — click Log In
 should be fully caught up with your peers now.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -130,7 +130,7 @@ Please sign in again here: https://training.colaberry.com — click Log In
 The curriculum should be fully unlocked now.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -168,6 +168,6 @@ will personally check it within the hour, not route you back through general
 support.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai

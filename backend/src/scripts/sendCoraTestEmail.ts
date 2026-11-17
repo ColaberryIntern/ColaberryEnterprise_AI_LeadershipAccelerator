@@ -46,7 +46,7 @@ async function run(): Promise<void> {
     console.warn(`[sendCoraTestEmail] DB connection failed (${err.message}) — Cora will fall back to its generic system prompt.`);
   }
 
-  const testSubject = 'How much does the AI Systems Architect Accelerator cost?';
+  const testSubject = 'How much does the Forward Deployed AI Engineer Accelerator cost?';
   const testBody = `Hi,
 
 I came across the program and I'm interested in learning more about pricing

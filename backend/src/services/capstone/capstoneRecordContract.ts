@@ -39,7 +39,7 @@ export type RecordVisibility = 'private' | 'unlisted' | 'public';
 /** Band 0 — who this is and the three things a reader does next. */
 export interface RecordIdentity {
   full_name: string;
-  /** e.g. "AI Systems Architect". Never invented — from their own manifesto post. */
+  /** e.g. "Forward Deployed AI Engineer". Never invented — from their own manifesto post. */
   headline: string | null;
   cohort_name: string | null;
   repo_url: string | null;

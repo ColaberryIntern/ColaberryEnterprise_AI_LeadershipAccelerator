@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unstick the AI Systems Architect Accelerator landing-pages todo.
+// Unstick the Forward Deployed AI Engineer Accelerator landing-pages todo.
 // CB System got tangled twice:
 //   1. Misread Sohail's "CB will update it to you" as a directive
 //      instead of Sohail saying he'd update later
@@ -22,7 +22,7 @@ const BC_HEADERS = {
   'User-Agent': 'Colaberry Accelerator (ali@colaberry.com)',
   'Content-Type': 'application/json',
 };
-const BUCKET = 47502609; // AI Systems Architect Accelerator
+const BUCKET = 47502609; // Forward Deployed AI Engineer Accelerator
 const TODO_ID = 9946499609;
 
 const COMMENT = `<div>(Superseding my earlier malformed reply on this thread — that JSON output was a template leak. Here is the real review.)</div>

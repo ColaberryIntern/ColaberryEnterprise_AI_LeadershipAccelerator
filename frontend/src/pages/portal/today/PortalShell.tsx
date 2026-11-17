@@ -376,7 +376,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
         </button>
         <div className="te-brand te-brand--site">
           <img className="te-mark" src="/colaberry-horizontal.png" alt="Colaberry" width={436} height={102} />
-          <span>AI Systems Architect Accelerator</span>
+          <span>Forward Deployed AI Engineer Accelerator</span>
         </div>
         {/* Scroll-condensed slot — whatever the current page hands us via
             condensedSlot "sucks up" into this gap once condensed is true.

@@ -182,12 +182,12 @@ const TIERS: Tier[] = [
 ];
 
 // The Challenge as a single visual flow: how a builder moves from the door to
-// the Certified Anthropic AI Systems Architect credential.
+// the Certified Anthropic Forward Deployed AI Engineer credential.
 const CHALLENGE_FLOW = `flowchart LR
   A([Join / Redeem a seat]) --> B[Build with Claude]
   B --> C{{Climb the leaderboard}}
   C --> D[Demo Day]
-  D --> E([Certified Anthropic<br/>AI Systems Architect])
+  D --> E([Certified Anthropic<br/>Forward Deployed AI Engineer])
   B -.points.-> C
   C -.top builders.-> D`;
 
@@ -295,20 +295,20 @@ function SponsorChallengePage() {
           <h2 className="cbc-h2 cbc-mt2">One path. From your first build to a recognized credential.</h2>
           <p className="cbc-lead cbc-mt4 cbc-narrow">
             Join or redeem a seat, build hands-on with Claude Code, climb the leaderboard, and present at Demo
-            Day. Finish the 12-week program and you walk away a <strong>Certified Anthropic AI Systems
-            Architect</strong> (CCA-F prep) — trained in Anthropic-partner hands.
+            Day. Finish the 12-week program and you walk away a <strong>Certified Anthropic Forward Deployed AI
+            Engineer</strong> (CCA-F prep) — trained in Anthropic-partner hands.
           </p>
           <div className="cbc-flow">
             <MermaidDiagram
               chart={CHALLENGE_FLOW}
-              caption="The Challenge flow: Join/Redeem → Build with Claude → Leaderboard → Demo Day → Certified Anthropic AI Systems Architect."
+              caption="The Challenge flow: Join/Redeem → Build with Claude → Leaderboard → Demo Day → Certified Anthropic Forward Deployed AI Engineer."
             />
           </div>
           <div className="cbc-stat-tiles">
             <StatCounter value="12 wks" label="One continuous program, four phases" />
             <StatCounter value="100%" label="Hands-on building with Claude Code" />
             <StatCounter value="1 stage" label="Live Demo Day capstone showcase" />
-            <StatCounter value="CCA-F" label="Certified Anthropic AI Systems Architect prep" />
+            <StatCounter value="CCA-F" label="Certified Anthropic Forward Deployed AI Engineer prep" />
           </div>
         </div>
       </section>
@@ -396,7 +396,7 @@ function SponsorChallengePage() {
             title="You don't finish with a certificate. You finish as a builder."
             body={[
               'Every points-earning move on the leaderboard is a real, shipped project built hands-on with Claude Code — reviewed by mentors, defended at Demo Day. This is what it means to put your people in Anthropic-partner hands.',
-              'Complete the 12 weeks and you earn the Certified Anthropic AI Systems Architect credential (CCA-F prep): proof you can architect and deploy AI in the real world, not just talk about it.',
+              'Complete the 12 weeks and you earn the Certified Anthropic Forward Deployed AI Engineer credential (CCA-F prep): proof you can architect and deploy AI in the real world, not just talk about it.',
             ]}
             caption="Most people consume AI. Very few learn to build with it."
             side="right"

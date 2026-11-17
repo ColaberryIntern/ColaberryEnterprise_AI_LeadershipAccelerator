@@ -18,7 +18,7 @@ const loadedProfile = () => ({
   identity: {
     full_name: 'Kesetebirhan Delele',
     email: 'SENTINEL_EMAIL@example.com',
-    title: 'AI Systems Architect',
+    title: 'Forward Deployed AI Engineer',
     company: 'SENTINEL_COMPANY',
     linkedin_url: 'https://linkedin.com/in/example',
     avatar_data_url: 'data:image/png;base64,AAA',

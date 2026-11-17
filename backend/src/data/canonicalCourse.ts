@@ -1,5 +1,5 @@
 /**
- * Canonical Course Structure — AI Systems Architect Accelerator (12 weeks).
+ * Canonical Course Structure — Forward Deployed AI Engineer Accelerator (12 weeks).
  *
  * Single source of truth for the ONE canonical course. This typed object is what
  * "passes into the curriculum types to speed creation" — the seed
@@ -120,9 +120,9 @@ export interface WeeklyLessonDef {
 /* ------------------------------------------------------------------ */
 
 const program: ProgramDef = {
-  name: 'AI Systems Architect Accelerator',
+  name: 'Forward Deployed AI Engineer Accelerator',
   description:
-    'A 12-week, 4-intensive program that turns business technologists into AI Systems Architects. Each 3-week intensive is a stand-alone, stackable seminar built around an Anthropic Academy course, culminating in the Claude Certified Architect — Foundations (CCA-F) gate.',
+    'A 12-week, 4-intensive program that turns business technologists into Forward Deployed AI Engineers. Each 3-week intensive is a stand-alone, stackable seminar built around an Anthropic Academy course, culminating in the Claude Certified Architect — Foundations (CCA-F) gate.',
   goals: [
     'Stand up a working Claude Code environment, a reusable Skills library, and a Workflow Assistant',
     'Build an enterprise Prompt Library and a coordinated multi-agent team',
@@ -142,9 +142,9 @@ const program: ProgramDef = {
   ],
   default_prompt_injection_rules: {
     system_context:
-      'You are the curriculum engine for the AI Systems Architect Accelerator. Learners build real AI systems with Claude Code, Agent Skills, the Claude API, MCP, and subagents across a 12-week, 4-intensive arc. Be concrete, build-oriented, and tie every concept to the week’s shippable deliverable.',
+      'You are the curriculum engine for the Forward Deployed AI Engineer Accelerator. Learners build real AI systems with Claude Code, Agent Skills, the Claude API, MCP, and subagents across a 12-week, 4-intensive arc. Be concrete, build-oriented, and tie every concept to the week’s shippable deliverable.',
     tone: 'Practical, senior-engineer-to-architect. Precise, no hype. Show the build, not just the theory.',
-    audience_level: 'Technical leaders and senior ICs becoming AI Systems Architects.',
+    audience_level: 'Technical leaders and senior ICs becoming Forward Deployed AI Engineers.',
   },
 };
 
@@ -155,7 +155,7 @@ const program: ProgramDef = {
 const cohort: CohortDef = {
   name: 'Cohort 1 — July 2026',
   description:
-    'First run of the AI Systems Architect Accelerator. 12 weeks, two live sessions per week (Mon Architecture Day, Thu Build Day).',
+    'First run of the Forward Deployed AI Engineer Accelerator. 12 weeks, two live sessions per week (Mon Architecture Day, Thu Build Day).',
   start_date: '2026-07-13', // Monday
   core_day: 'Monday',
   // Central, not Eastern: live class times are stored and scheduled as Central

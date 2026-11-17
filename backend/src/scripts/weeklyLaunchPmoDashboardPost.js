@@ -7,7 +7,7 @@
 // filename still says "weekly" to avoid breaking references; rename to
 // dailyLaunchPmoDashboardPost.js is a tracked follow-up.
 //
-// Pattern: one persistent Message Board thread on the AI Systems Architect
+// Pattern: one persistent Message Board thread on the Forward Deployed AI Engineer
 // Accelerator project (47502609). Every weekday at 10 AM CT a fresh comment
 // lands on that thread with the dashboard PNG, rendered from LIVE project
 // state (not a hardcoded snapshot). The whole team sees the same view, same
@@ -153,7 +153,7 @@ function saveState(state) {
     console.log('\nNo dashboard MB thread on file. Creating parent thread...');
     const introHtml = `<div>
 <p><strong>What this thread is</strong> - every weekday (Mon-Fri) at 10 AM CT, a fresh snapshot of the Launch Readiness Dashboard lands here as a comment, rendered from live Basecamp state. One thread, daily comments, durable history.</p>
-<p>The dashboard tracks the AI Systems Architect Accelerator launch (target ${LAUNCH.targetLaunchDate}). Sections: hero KPIs (days to launch / overall readiness / open task counts / overdue), YOUR TURN ALI next-decision banner, per-area next-human-step grid, feasibility-per-area scoring, escalations, and blocked downstream tasks.</p>
+<p>The dashboard tracks the Forward Deployed AI Engineer Accelerator launch (target ${LAUNCH.targetLaunchDate}). Sections: hero KPIs (days to launch / overall readiness / open task counts / overdue), YOUR TURN ALI next-decision banner, per-area next-human-step grid, feasibility-per-area scoring, escalations, and blocked downstream tasks.</p>
 <p>This is an automated, read-only snapshot feed for the team. No action is needed on this thread. For AI help on a specific task, ask CB on that task's own ticket, not here.</p>
 </div>`;
     const subject = 'Launch Readiness Dashboard - daily snapshots (one thread)';

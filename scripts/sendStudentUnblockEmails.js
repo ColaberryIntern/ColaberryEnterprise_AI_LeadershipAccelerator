@@ -57,7 +57,7 @@ const NEVER_MAIL = [
 
 const SIGNATURE_TEXT = [
   'Ali Muwwakkil',
-  'Managing Director / AI Systems Architect',
+  'Managing Director / Forward Deployed AI Engineer',
   'Colaberry Inc.',
   '',
   '200 Chisholm Place, Suite 200, Plano, TX 75075',
@@ -68,7 +68,7 @@ const SIGNATURE_TEXT = [
 const SIGNATURE_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 20px;">
   <tr><td>
     <div style="font-weight: 700; font-size: 16px; color: #1a365d;">Ali Muwwakkil</div>
-    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / AI Systems Architect</div>
+    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / Forward Deployed AI Engineer</div>
     <div style="color: #718096;">Colaberry Inc.</div>
     <div style="margin-top: 10px; color: #2d3748;">200 Chisholm Place, Suite 200 &middot; Plano, TX 75075</div>
     <div style="color: #2d3748;"><a href="mailto:ali@colaberry.com" style="color: #2b6cb0; text-decoration: none;">ali@colaberry.com</a> &nbsp; <a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a></div>
@@ -260,8 +260,8 @@ function auditComposed(c, pre) {
   if (c.headers[OUTBOUND_COPY_HEADER] !== BUSINESS_EVENT_ID) {
     problems.push(`${OUTBOUND_COPY_HEADER} header is wrong or missing`);
   }
-  if (!c.html.includes('Managing Director / AI Systems Architect')) problems.push('HTML part has no branded signature');
-  if (!c.text.includes('Managing Director / AI Systems Architect')) problems.push('text part has no branded signature');
+  if (!c.html.includes('Managing Director / Forward Deployed AI Engineer')) problems.push('HTML part has no branded signature');
+  if (!c.text.includes('Managing Director / Forward Deployed AI Engineer')) problems.push('text part has no branded signature');
   if ((c.html.match(/Ali Muwwakkil/g) || []).length > 1) problems.push('HTML part has a duplicate signature');
   if (/—/.test(c.text.replace(new RegExp(escapeRegex(pre.person.project_name || ' '), 'g'), ''))) {
     problems.push('em-dash in the text part');

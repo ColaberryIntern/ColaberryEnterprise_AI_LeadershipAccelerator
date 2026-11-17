@@ -12,7 +12,7 @@ import { sectionState } from './HireSectionState';
 const SETUPS: ReadonlyArray<{ value: WorkSetup; label: string }> = [
   { value: 'remote', label: 'Remote' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'onsite', label: 'Onsite' },
 ];
-const SUGGESTED_ROLES = ['AI Systems Architect', 'Forward Deployed Engineer', 'AI Engineer', 'Data Engineer', 'Solutions Architect', 'Analytics Engineer'];
+const SUGGESTED_ROLES = ['Forward Deployed AI Engineer', 'Forward Deployed Engineer', 'AI Engineer', 'Data Engineer', 'Solutions Architect', 'Analytics Engineer'];
 const WORK_AUTH = ['Authorized, no sponsorship needed', 'Will need sponsorship'];
 const MAX_ROLES = 5;
 

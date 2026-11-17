@@ -8,7 +8,7 @@
 
 Texas Workforce Commission (TWC) regulates career schools. Their classification distinguishes between **a course** (longer-form regulated instruction) and **a seminar** (short, focused, independently-valuable instruction). Seminars carry lighter regulatory burden.
 
-We're selling the AI Systems Architect Accelerator as **four (4) independent stackable Architect Intensives**, each $499, not as a single 12-week course. The bundle ($1,497) is a marketing discount, not a course prerequisite.
+We're selling the Forward Deployed AI Engineer Accelerator as **four (4) independent stackable Architect Intensives**, each $499, not as a single 12-week course. The bundle ($1,497) is a marketing discount, not a course prerequisite.
 
 For each intensive to qualify as a seminar, it has to demonstrably stand alone — independent outcomes, independent artifacts, independent completion criteria, independent stand-alone value to a participant who enrolls only in that one.
 

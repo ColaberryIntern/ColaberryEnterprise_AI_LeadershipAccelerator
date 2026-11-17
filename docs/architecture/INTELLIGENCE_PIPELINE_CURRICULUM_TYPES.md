@@ -64,7 +64,7 @@ yet). All ten prompts are built by one shared `intelGenerationPrompt(config)` sk
 
 ### The executive quality standard (`body_html`)
 
-Every card answers, in order: **What happened · Why it matters · Why an AI Systems Architect
+Every card answers, in order: **What happened · Why it matters · Why a Forward Deployed AI Engineer
 should care · Implications (Business / Technical / Enterprise) · Recommended next action ·
 Related (skills, technologies, curriculum) · Source (with date + confidence).** Plus a
 `reflection` prompt and a cohort `discussion_prompt`. Executive voice, no hype.

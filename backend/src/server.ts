@@ -188,6 +188,7 @@ import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySch
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
 import { ensureCareerPrepSchema } from './db/ensureCareerPrepSchema';
+import { ensureProgramRenameFdae } from './db/ensureProgramRenameFdae';
 import { startCareerPrep } from './services/careerPrep/boot';
 import { startHireVideoCoach } from './services/hire/hireVideoCoach';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -2744,6 +2745,9 @@ async function start(): Promise<void> {
   await ensureHireInterviewSchema();
   // Career Prep v27 (CP1.2): seven new tables + the 9-skill seed. Additive, idempotent.
   await ensureCareerPrepSchema();
+  // Program rename (2026-11-17): "AI Systems Architect Accelerator" -> "Forward Deployed AI Engineer
+  // Accelerator" in forward-facing rows only, backed up first. No-op once converged; never throws.
+  await ensureProgramRenameFdae();
   await startCareerPrep();
   // Intro-video coaching (OpenAI): registers the transport and re-queues any video whose coaching
   // never landed. Not awaited past the sweep's query; the queue runs in the background.

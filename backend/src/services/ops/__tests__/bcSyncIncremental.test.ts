@@ -117,7 +117,7 @@ describe('isExcludedProject', () => {
 
   it('keeps real ops projects', () => {
     expect(isExcludedProject('Gov Contracts')).toBe(false);
-    expect(isExcludedProject('AI Systems Architect Accelerator')).toBe(false);
+    expect(isExcludedProject('Forward Deployed AI Engineer Accelerator')).toBe(false);
     expect(isExcludedProject('LandJet Growth Engine')).toBe(false);
     expect(isExcludedProject(null)).toBe(false);
     expect(isExcludedProject(undefined)).toBe(false);

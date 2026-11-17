@@ -309,7 +309,7 @@ function renderDashboardHtml(view) {
 
 <div class="head">
   <div class="title-block">
-    <div class="eyebrow">AI Systems Architect Accelerator &middot; Launch PMO</div>
+    <div class="eyebrow">Forward Deployed AI Engineer Accelerator &middot; Launch PMO</div>
     <h1>Launch Readiness Dashboard</h1>
     <div class="sub">${clean(view.longDate)} &middot; ${view.daysToLaunch} days to launch${view.targetDate ? ` &middot; target ${htmlEsc(view.targetDate)}` : ''}</div>
   </div>
@@ -361,7 +361,7 @@ ${blockedHtml}
 </div>` : ''}
 
 <div class="footer">
-  <div><strong>Source</strong> &middot; Basecamp project 47502609 (AI Systems Architect Accelerator) &middot; pulled live at post time</div>
+  <div><strong>Source</strong> &middot; Basecamp project 47502609 (Forward Deployed AI Engineer Accelerator) &middot; pulled live at post time</div>
   <div><strong>Cadence</strong> &middot; Mon-Fri 10:00 AM CT via runReportingAuditAndSend cron &middot; idempotent on date</div>
   <div><strong>Help</strong> &middot; Tag <code>@CB System</code> on any task for AI execution, artifact drafting, or follow-up scheduling</div>
 </div>

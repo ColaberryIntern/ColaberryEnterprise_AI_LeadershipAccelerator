@@ -1,4 +1,4 @@
-# Student Platform Strategy - AI Systems Architect Accelerator
+# Student Platform Strategy - Forward Deployed AI Engineer Accelerator
 
 **Date:** 2026-06-10 · **Session:** CC-20260610-q4d7 · **Author:** Claude Code (for Ali)
 **Status:** Strategy locked, build sequencing proposed. Owners: Kes (platform), Swati (curriculum), Ali (approval).
@@ -130,7 +130,7 @@ Two tiers - this resolves the structure-vs-flexibility tension:
   one-pager/infographic, PPT, architecture doc, live-preview link, social posts. AI drafts each (build-log engine).
 
 **Structured container, flexible contents.** Portfolio = Tier A (graded) + Tier B (promotional), per project,
-feeding the AI Architect Readiness Score (0-100 across MCP / Claude Code / Architecture / Reliability / Governance).
+feeding the Forward Deployed AI Engineer Readiness Score (0-100 across MCP / Claude Code / Architecture / Reliability / Governance).
 
 ---
 

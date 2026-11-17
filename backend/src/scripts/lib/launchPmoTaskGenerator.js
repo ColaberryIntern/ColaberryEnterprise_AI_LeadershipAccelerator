@@ -1,6 +1,6 @@
 // Launch PMO task generator (v2).
 //
-// For each area in the AI Systems Architect Accelerator launch project, ask
+// For each area in the Forward Deployed AI Engineer Accelerator launch project, ask
 // gpt-4o to propose 6-12 concrete tasks per the 41-day plan. Each task is
 // returned with:
 //   - content (Basecamp todo title, <=120 chars)
@@ -19,7 +19,7 @@
 
 const path = require('path');
 
-const SYSTEM_PROMPT = `You are CB System, the autonomous Program Management Office for the AI Systems Architect Accelerator launch (Colaberry Inc, target 2026-07-11).
+const SYSTEM_PROMPT = `You are CB System, the autonomous Program Management Office for the Forward Deployed AI Engineer Accelerator launch (Colaberry Inc, target 2026-07-11).
 
 You generate tasks for a single area of the launch project. Each task must be a concrete deliverable a single owner can complete, with enough detail that the assignee can drop the task + their role brief into Claude Code and start working immediately.
 

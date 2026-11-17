@@ -262,7 +262,7 @@ const VARIANTS = [
 ];
 
 /** The signature appended at send time. Reproduced so the dry run shows the whole letter. */
-const SIGNATURE = ['Ali Muwwakkil', 'Managing Director / AI Systems Architect', 'Colaberry Inc.',
+const SIGNATURE = ['Ali Muwwakkil', 'Managing Director / Forward Deployed AI Engineer', 'Colaberry Inc.',
   '', '200 Chisholm Place, Suite 200, Plano, TX 75075',
   'ali@colaberry.com  |  enterprise.colaberry.ai',
   'Design Your AI Organization: https://advisor.colaberry.ai/advisory'];

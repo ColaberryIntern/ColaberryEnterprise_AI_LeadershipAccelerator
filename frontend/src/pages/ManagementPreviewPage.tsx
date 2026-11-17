@@ -9,7 +9,7 @@ import { registerOrg, persistParticipantSession } from '../services/orgApi';
  * "Your company" tab above "Your day". Company view = momentum dashboard + a team
  * accomplishments feed (real event types) + roster; click a person to drill into
  * the real signals: pre->post knowledge growth (runtime_assessment_attempts),
- * competency confidence (student_competency), Architect Readiness + promotion gaps
+ * competency confidence (student_competency), Engineer Readiness + promotion gaps
  * (student_level / builder_levels), evidence by type (evidence_records), XP by
  * stream (xp_events), streak/attendance, and weekly AI architect eval.
  *
@@ -213,7 +213,7 @@ function ManagementPreviewPage() {
   return (
     <div className="te-shell">
       <header className="te-top">
-        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-horizontal.png" alt="Colaberry" width={436} height={102} /><span>AI Systems Architect Accelerator</span></div>
+        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-horizontal.png" alt="Colaberry" width={436} height={102} /><span>Forward Deployed AI Engineer Accelerator</span></div>
         <div className="te-top-right">
           <div className="te-rail">
             <span className="te-cd class" title="Next class"><span className="ic">{Ic.class}</span><span className="tx"><span className="lbl">Next class</span><span className="when mono">3d 11h</span></span></span>
@@ -266,7 +266,7 @@ function ManagementPreviewPage() {
             <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>My learning</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Your own free student account</h1><p style={muted}>Your management account includes full student access, so you learn and build alongside your team. This is the experience your people get.</p></div>
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}><span style={{ display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: '50%', background: 'color-mix(in srgb, #5BA63C 16%, white)', color: 'var(--text-strong)', fontWeight: 800 }}>NZ</span><div><div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--fs-h5)', color: 'var(--text-strong)' }}>Welcome back</div><span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: '#5BA63C', padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>Developer · 540 pts</span></div></div>
-              <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Architect Readiness · 44% (Evidence 1/3 · Implementation 0/1 · Attendance 1/1)</div>
+              <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Engineer Readiness · 44% (Evidence 1/3 · Implementation 0/1 · Attendance 1/1)</div>
               <div style={{ height: 10, borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', overflow: 'hidden', marginBottom: 'var(--space-5)' }}><div style={{ width: '44%', height: '100%', background: '#5BA63C', borderRadius: 'var(--radius-pill)' }} /></div>
               <div style={{ display: 'grid', gap: 'var(--space-4)', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                 <div style={{ padding: 'var(--space-4)', border: 'var(--border-1) solid var(--border-subtle)', borderRadius: 'var(--radius-md)' }}><div style={{ fontSize: 'var(--fs-caption)', color: '#367895', fontWeight: 700 }}>NEXT UP</div><div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>Build a multi-agent workflow</div></div>
@@ -303,7 +303,7 @@ function ManagementPreviewPage() {
 
               {/* readiness + what's left */}
               <div style={{ ...card, borderTop: '4px solid #7A5AF0' }}>
-                <div style={sub}>Architect readiness · {m.readiness}% → {m.nextLevel}</div>
+                <div style={sub}>Engineer readiness · {m.readiness}% → {m.nextLevel}</div>
                 <div style={{ height: 10, borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', overflow: 'hidden', marginBottom: 'var(--space-4)' }}><div style={{ width: `${m.readiness}%`, height: '100%', background: '#7A5AF0', borderRadius: 'var(--radius-pill)' }} /></div>
                 <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>What&rsquo;s left to promote ({m.eta})</div>
                 {m.gaps.length ? m.gaps.map((g) => (<div key={g} style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-body)', padding: '4px 8px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>{g}</div>)) : <div style={{ fontSize: 'var(--fs-caption)', color: '#5BA63C', fontWeight: 700 }}>All gates cleared — top of the ladder.</div>}
@@ -373,7 +373,7 @@ function ManagementPreviewPage() {
 
               <div style={card}>
                 <h2 style={h2}>Where your team sits</h2>
-                <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Builder level, Architect Readiness, and Builder-XP velocity. Click anyone to drill in.</p>
+                <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Builder level, Engineer Readiness, and Builder-XP velocity. Click anyone to drill in.</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {TEAM.map((mm) => (
                     <button key={mm.name} type="button" onClick={() => openStudent(mm.name)} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 'var(--space-3)', alignItems: 'center', textAlign: 'left', background: 'none', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', padding: 'var(--space-2)' }} onMouseOver={(e) => { e.currentTarget.style.background = 'var(--surface-subtle)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'none'; }}>

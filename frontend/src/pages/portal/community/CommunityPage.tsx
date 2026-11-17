@@ -171,7 +171,7 @@ const CommunityPage: React.FC = () => {
         <div className="cm-rail">
           <aside className="cm-side">
             <div className="te-card cm-identity">
-              <div className="cm-identity-name">Colaberry · AI Systems Architect Accelerator</div>
+              <div className="cm-identity-name">Colaberry · Forward Deployed AI Engineer Accelerator</div>
               <p className="cm-identity-about">Where your cohort builds AI that ships — share work, get unblocked, and climb from AI Aware to AI Architect.</p>
               <div className="cm-identity-links">
                 <a href="/portal/path">Start here · Week guide</a>

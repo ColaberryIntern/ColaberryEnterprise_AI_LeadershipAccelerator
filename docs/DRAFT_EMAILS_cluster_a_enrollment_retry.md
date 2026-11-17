@@ -28,7 +28,7 @@ For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 Thank you again for your patience through this.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -56,7 +56,7 @@ For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 Thanks for your patience.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -83,7 +83,7 @@ For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 Thanks for your patience.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai
 
@@ -109,6 +109,6 @@ account myself rather than routing you through support again.
 For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 
 Ali Muwwakkil
-Managing Director, AI Systems Architect
+Managing Director, Forward Deployed AI Engineer
 Colaberry Inc.
 ali@colaberry.com | enterprise.colaberry.ai

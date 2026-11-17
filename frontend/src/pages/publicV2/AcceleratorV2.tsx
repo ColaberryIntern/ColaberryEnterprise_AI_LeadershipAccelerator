@@ -35,7 +35,7 @@ export default function AcceleratorV2(): React.ReactElement {
   return (
     <>
       <SeoV2
-        title="The AI Systems Architect Accelerator"
+        title="The Forward Deployed AI Engineer Accelerator"
         description={
           'Your people build working AI systems against your own business problems, and you '
           + 'get proof of what each person built, verified against the code they wrote.'

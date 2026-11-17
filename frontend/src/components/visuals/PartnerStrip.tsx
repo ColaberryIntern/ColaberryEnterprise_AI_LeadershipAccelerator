@@ -3,8 +3,8 @@ import React from 'react';
 /* ------------------------------------------------------------------ *
  * PartnerStrip — a premium trust band that positions Colaberry as an
  * Official Anthropic Partner Network member where learners train
- * hands-on with Claude Code and prep for the Certified Anthropic AI
- * Systems Architect credential.
+ * hands-on with Claude Code and prep for the Certified Anthropic Forward Deployed
+ * AI Engineer credential.
  *
  * Built on the Colaberry design system: semantic tokens only (never
  * raw hex in layout), scoped <style> so the component is fully
@@ -318,7 +318,7 @@ function PartnerStrip({ className = '' }: PartnerStripProps) {
         <p className="ps-support">
           Learners train <strong>hands-on with Claude Code</strong> on real,
           guided work and prepare for the{' '}
-          <strong>Certified Anthropic AI Systems Architect</strong> credential
+          <strong>Certified Anthropic Forward Deployed AI Engineer</strong> credential
           &mdash; not slideware, but the same tools and workflows teams ship
           with in production.
         </p>

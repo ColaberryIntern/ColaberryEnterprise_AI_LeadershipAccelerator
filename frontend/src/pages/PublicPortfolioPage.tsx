@@ -70,7 +70,7 @@ function PublicPortfolioPage() {
         <h1 className="h4 fw-bold mb-1" style={{ color: '#FB2832' }}>
           <i className="bi bi-briefcase me-2"></i>Enterprise AI Portfolio
         </h1>
-        <p className="small text-muted mb-0">A Colaberry AI Systems Architect Accelerator student project.</p>
+        <p className="small text-muted mb-0">A Colaberry Forward Deployed AI Engineer Accelerator student project.</p>
       </div>
 
       <PortfolioPreview

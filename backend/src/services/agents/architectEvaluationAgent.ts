@@ -104,7 +104,7 @@ export async function evaluateOneEnrollment(enrollmentId: string, weekNumber: nu
     ? `Mock Interview (week ${weekNumber}): scored ${interviewScore}/100.`
     : 'No mock interview completed for this week.';
 
-  const systemPrompt = `You are the Architect Evaluation Agent for the Colaberry AI Systems Architect Accelerator (12-week program for enterprise professionals building production AI systems).
+  const systemPrompt = `You are the Architect Evaluation Agent for the Colaberry Forward Deployed AI Engineer Accelerator (12-week program for enterprise professionals building production AI systems).
 
 Evaluate a student's project progress at week ${weekNumber} and return JSON only — no prose before or after:
 {

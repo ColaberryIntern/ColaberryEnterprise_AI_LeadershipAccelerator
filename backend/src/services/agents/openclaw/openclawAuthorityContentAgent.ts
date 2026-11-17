@@ -188,7 +188,7 @@ async function generateLinkedInPost(
   tone: string,
   baseUrl: string,
 ): Promise<string> {
-  const prompt = `You are an AI Systems Architect who designs and builds AI systems for operating companies. Your team ships real systems for utilities, freight, professional services, and government. Write a LinkedIn post (150-250 words) that synthesizes these recent industry signals into an authoritative insight from a builder's perspective:
+  const prompt = `You are a Forward Deployed AI Engineer who designs and builds AI systems for operating companies. Your team ships real systems for utilities, freight, professional services, and government. Write a LinkedIn post (150-250 words) that synthesizes these recent industry signals into an authoritative insight from a builder's perspective:
 
 Topic: ${topic}
 Signals:
@@ -230,7 +230,7 @@ These recent industry signals should inform your perspective (synthesize, don't 
 ${signalSummaries}
 
 Requirements:
-- You are Ali Muwwakkil, an AI Systems Architect whose firm designs and builds AI systems for utilities, freight, professional services, and government.
+- You are Ali Muwwakkil, a Forward Deployed AI Engineer whose firm designs and builds AI systems for utilities, freight, professional services, and government.
 - Core thesis: companies do not get AI leverage from picking better tools, they get it by redesigning the operation around AI as the operating layer. Carry this thesis through the article.
 - Write from experience shipping real client systems, not from theory. Share specific patterns you have seen across builds.
 - NEVER pitch a cohort, training program, accelerator, class, or curriculum. The article is about systems and AI org redesign, not training.

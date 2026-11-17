@@ -123,7 +123,7 @@ const PLANS: PlanCard[] = [
     blurb: 'Activate one license for instant, full platform access for one person, from first login to Certified Architect. The single paid step, only when you are ready.',
     features: [
       'Self-paced learning paths on your own schedule',
-      'Certification prep for the Certified Anthropic AI Systems Architect (CCA-F)',
+      'Certification prep for the Certified Anthropic Forward Deployed AI Engineer (CCA-F)',
       'Build a real, deployed project of your own',
       'Weekly live events and office hours to stay current',
       'The AI Architect network across companies and phases',
@@ -170,7 +170,7 @@ const PLANS: PlanCard[] = [
 
 const ECOSYSTEM_INCLUSIONS: FeatureItem[] = [
   { label: 'Self-paced learning paths you take on your own schedule' },
-  { label: 'Certified Anthropic AI Systems Architect prep (CCA-F)' },
+  { label: 'Certified Anthropic Forward Deployed AI Engineer prep (CCA-F)' },
   { label: 'Build real, deployed projects on your own workflows' },
   { label: 'The AI Architect network, across companies and phases' },
   { label: 'Weekly live events and office hours' },

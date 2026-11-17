@@ -1,5 +1,5 @@
 // Launch PMO team roster - source of truth for who's on the
-// AI Systems Architect Accelerator launch (Basecamp project 47502609).
+// Forward Deployed AI Engineer Accelerator launch (Basecamp project 47502609).
 //
 // Each entry: { handle, displayName, basecampPersonId, email, role, hats }
 //   handle: short slug CB uses internally (e.g., "kes")
@@ -113,7 +113,7 @@ function missing() { return TEAM.filter((t) => !t.basecampPersonId); }
 
 const LAUNCH = {
   projectId: 47502609,
-  projectName: 'AI Systems Architect Accelerator',
+  projectName: 'Forward Deployed AI Engineer Accelerator',
   // Launch milestones surfaced in launch reporting (Ali, 2026-07-10):
   //   platformLaunchDate - platform + site + Open House go-live / first paid enrollment (moved from 2026-07-10)
   //   programLaunchDate  - program launch / Cohort 1 orientation (kickoff)

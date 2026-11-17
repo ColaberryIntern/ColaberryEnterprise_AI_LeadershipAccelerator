@@ -17,8 +17,8 @@ import PartnerStrip from '../components/visuals/PartnerStrip';
  *
  * Positions the offering as a SELF-PACED program that lives inside a living
  * AI Systems Capability ecosystem, not a fixed cohort. Training is one part of
- * the ecosystem: learners also get certified (Certified Anthropic AI Systems
- * Architect, CCA-F), build real projects on their own workflows with Claude
+ * the ecosystem: learners also get certified (Certified Anthropic Forward Deployed AI
+ * Engineer, CCA-F), build real projects on their own workflows with Claude
  * Code, join a network of AI Architects across companies and phases, attend
  * weekly live events, and follow a rolling timeline that keeps them current as
  * AI moves. Single persona, same as the rest of the site: a decision-maker who
@@ -90,8 +90,8 @@ function ProgramPage() {
   return (
     <>
       <SEOHead
-        title="The Self-Paced AI Systems Architect Program"
-        description="A self-paced program inside a living AI Systems Capability ecosystem. Learn on your own time, start any day, build real systems with Claude Code, get certified as an Anthropic AI Systems Architect (CCA-F), and join a network of AI Architects with weekly live events."
+        title="The Self-Paced Forward Deployed AI Engineer Program"
+        description="A self-paced program inside a living AI Systems Capability ecosystem. Learn on your own time, start any day, build real systems with Claude Code, get certified as an Anthropic Forward Deployed AI Engineer (CCA-F), and join a network of AI Architects with weekly live events."
       />
 
       {/* ============================ HERO ============================ */}
@@ -219,9 +219,9 @@ function ProgramPage() {
           <div style={{ display: 'grid', gap: 'var(--space-10)', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'center' }}>
             <div>
               <Badge tone="green" style={{ marginBottom: 'var(--space-4)' }}>The certification</Badge>
-              <h2 style={h2Style}>Get certified as an Anthropic AI Systems Architect</h2>
+              <h2 style={h2Style}>Get certified as an Anthropic Forward Deployed AI Engineer</h2>
               <p style={{ ...leadStyle, marginBottom: 'var(--space-6)' }}>
-                The program prepares you for the Certified Anthropic AI Systems Architect credential (CCA-F). It
+                The program prepares you for the Certified Anthropic Forward Deployed AI Engineer credential (CCA-F). It
                 is not a certificate of attendance. It proves you can ship: you learn the pattern, then you build
                 and defend a real system. A credential a hiring manager, a board, or your own team can trust.
               </p>
@@ -242,7 +242,7 @@ function ProgramPage() {
                 </ul>
               </Card>
             </div>
-            <img src="/img/certificate.jpg" alt="The Certified Anthropic AI Systems Architect credential"
+            <img src="/img/certificate.jpg" alt="The Certified Anthropic Forward Deployed AI Engineer credential"
               style={{ width: '100%', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', display: 'block' }} loading="lazy" />
           </div>
         </div>
@@ -279,8 +279,8 @@ function ProgramPage() {
             <h2 className="cb-balance" style={h2Style}>A guided path from first prompt to certified architect</h2>
             <p style={leadStyle}>
               Self-paced does not mean unstructured. A guided path of roughly twelve weeks runs a project lane
-              and a CCA-F certification lane side by side, converging on one finish: Certified Anthropic AI
-              Systems Architect. You follow it on your own clock.
+              and a CCA-F certification lane side by side, converging on one finish: Certified Anthropic Forward
+              Deployed AI Engineer. You follow it on your own clock.
             </p>
           </div>
           <ProgramRoadmap />

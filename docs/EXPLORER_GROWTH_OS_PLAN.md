@@ -1432,7 +1432,7 @@ New page `/admin/explorer-growth`, composed entirely from the existing shell (`P
 │ SELECTED  Event Preparation · email · Open House campaign step 1          │
 │ REASON    Confirmed event occurs within 36 hours; logistics for a         │
 │           registered attendee outranks commercial messaging.              │
-│ ASSETS    open_house_events#f3a1 "AI Systems Architect Open House"        │
+│ ASSETS    open_house_events#f3a1 "Forward Deployed AI Engineer Open House"        │
 │ DEFERRED  Ali Outreach → after the event (2026-08-14)                     │
 └───────────────────────────────────────────────────────────────────────────┘
 ```

@@ -53,7 +53,7 @@ describe('DARA_PERSONA_BLOCK', () => {
   });
 
   it('never copies Reese\'s own opening line — a genuinely different persona, not a name-swap', () => {
-    expect(DARA_PERSONA_BLOCK).not.toContain('AI Systems Architect mentor');
+    expect(DARA_PERSONA_BLOCK).not.toContain('Forward Deployed AI Engineer mentor');
     expect(DARA_PERSONA_BLOCK).not.toContain('direct message thread');
   });
 });

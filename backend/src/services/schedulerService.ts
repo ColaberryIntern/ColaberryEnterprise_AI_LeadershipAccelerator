@@ -1589,7 +1589,7 @@ function wrapEmailHtml(
 ): string {
   const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
   const senderEmail = tracking?.senderEmail || env.emailFrom;
-  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect' : '';
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / Forward Deployed AI Engineer' : '';
   const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
   // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)

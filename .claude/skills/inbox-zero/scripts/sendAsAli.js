@@ -15,7 +15,7 @@
 const fs = require('fs');
 
 const KIT = '/tmp/ali-signature';
-const PLAIN_SIG = ['Ali Muwwakkil', 'Managing Director / AI Systems Architect', 'Colaberry Inc.', '', '200 Chisholm Place, Suite 200, Plano, TX 75075', 'ali@colaberry.com  |  enterprise.colaberry.ai', 'Design Your AI Organization: https://advisor.colaberry.ai/advisory'].join('\n');
+const PLAIN_SIG = ['Ali Muwwakkil', 'Managing Director / Forward Deployed AI Engineer', 'Colaberry Inc.', '', '200 Chisholm Place, Suite 200, Plano, TX 75075', 'ali@colaberry.com  |  enterprise.colaberry.ai', 'Design Your AI Organization: https://advisor.colaberry.ai/advisory'].join('\n');
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const linkify = (s) => s.replace(/(https?:\/\/[^\s<]+)/g, (u) => `<a href="${u}" style="color:#3a8fb5;text-decoration:none;">${u}</a>`);
 

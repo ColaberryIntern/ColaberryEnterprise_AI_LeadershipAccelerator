@@ -737,7 +737,7 @@ export interface CaseStudyBuilderProfile {
   readonly initials?: string;
   /** Person-focused introduction, one or two short paragraphs; biography, consent-gated. */
   readonly intro: readonly string[];
-  /** Career progression as supplied, oldest first, e.g. Intern, Hired by Colaberry, AI Systems Architect; consent-gated. */
+  /** Career progression as supplied, oldest first, e.g. Intern, Hired by Colaberry, Forward Deployed AI Engineer; consent-gated. */
   readonly progression?: readonly string[];
   /** What this person did on THIS project, from the repository or an approved record. */
   readonly contribution: string;

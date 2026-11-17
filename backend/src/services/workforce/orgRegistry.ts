@@ -24,7 +24,7 @@ const E = (e: AiEmployee) => e;
 
 export const AI_ORG: AiEmployee[] = [
   E({ slug: 'ceo', name: 'Ada Sterling', role: 'Chief Executive', department: 'Executive', avatar: '#1F2A33', supervisor: null,
-    mission: 'Grow an institution that reliably turns learners into employed AI Systems Architects.',
+    mission: 'Grow an institution that reliably turns learners into employed Forward Deployed AI Engineers.',
     responsibilities: ['Set strategy', 'Approve major decisions', 'Own school health'], kpis: ['School Health', 'Employment rate', 'Revenue'], ops_domain: null }),
   E({ slug: 'chief_of_staff', name: 'Miles Chen', role: 'Chief of Staff', department: 'Executive', avatar: '#2E6A86', supervisor: 'ceo',
     mission: 'Orchestrate the AI leadership team: collect reports, resolve conflicts, brief the CEO, assign work.',

@@ -72,12 +72,12 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
     shot: {
       src: '/site-v2/shot-readiness.png',
       alt:
-        'The architect readiness trajectory panel: 63 percent average readiness, a rising ' +
+        'The engineer readiness trajectory panel: 63 percent average readiness, a rising ' +
         'eight-week trend line, and tiles for builder XP, evidence shipped, projects shipped ' +
         'and attendance.',
     },
     stats: [
-      { value: '63%', label: 'Average architect readiness' },
+      { value: '63%', label: 'Average engineer readiness' },
       { value: '1,640', label: 'Builder XP this week' },
       { value: '12', label: 'Evidence records this week' },
       { value: '9', label: 'Evaluations passed this month' },
@@ -254,7 +254,7 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
     shot: {
       src: '/site-v2/shot-workspace.png',
       alt:
-        'The company workspace on sample data: 63 percent average architect readiness across ' +
+        'The company workspace on sample data: 63 percent average engineer readiness across ' +
         '19 members with a projected trend line, tiles for 1,640 builder XP per week, 12 ' +
         'evidence records, 86 percent attendance, 9 evaluations passed and 7 level-ups, and ' +
         'the nine-rank ladder showing the team spread from Builder toward Architect.',

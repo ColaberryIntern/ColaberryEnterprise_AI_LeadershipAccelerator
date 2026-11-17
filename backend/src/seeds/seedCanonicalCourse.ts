@@ -1,5 +1,5 @@
 /**
- * Idempotent seed for the ONE canonical course: AI Systems Architect Accelerator (12 weeks).
+ * Idempotent seed for the ONE canonical course: Forward Deployed AI Engineer Accelerator (12 weeks).
  *
  * Turns the typed CANONICAL_COURSE (data/canonicalCourse.ts) into:
  *   ProgramBlueprint  (the course)

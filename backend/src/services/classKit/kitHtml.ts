@@ -126,7 +126,7 @@ function diagramHtml(slide: KitSlide): string {
     : '';
   const foot =
     '<div class="kdiag-ft">' +
-    '<span class="kdiag-brand"><b>colaberry</b> · AI Systems Architect Accelerator</span>' +
+    '<span class="kdiag-brand"><b>colaberry</b> · Forward Deployed AI Engineer Accelerator</span>' +
     where +
     '</div>';
   return (

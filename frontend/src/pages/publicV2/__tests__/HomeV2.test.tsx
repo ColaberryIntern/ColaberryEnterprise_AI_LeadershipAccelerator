@@ -27,7 +27,7 @@ describe('HomeV2 — governance guarantees', () => {
     [
       'Claude Code partner',
       'Anthropic / Claude Code',
-      'Certified Anthropic AI Systems Architect',
+      'Certified Anthropic Forward Deployed AI Engineer',
       '5,000+',
       '10,000+',
       '$100M',
@@ -55,7 +55,7 @@ describe('HomeV2 — governance guarantees', () => {
   it('uses the safe credential wording, not the blocked one', () => {
     const text = textOf(html());
     expect(text).toContain('certification preparation');
-    expect(text).not.toContain('Certified Anthropic AI Systems Architect');
+    expect(text).not.toContain('Certified Anthropic Forward Deployed AI Engineer');
   });
 
   it('shows the capability statement instead of a partner designation', () => {

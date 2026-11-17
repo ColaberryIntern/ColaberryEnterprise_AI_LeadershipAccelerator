@@ -8,7 +8,7 @@ import {
 
 describe('CANONICAL_COURSE structure', () => {
   it('is one course with a program and a cohort', () => {
-    expect(CANONICAL_COURSE.program.name).toBe('AI Systems Architect Accelerator');
+    expect(CANONICAL_COURSE.program.name).toBe('Forward Deployed AI Engineer Accelerator');
     expect(CANONICAL_COURSE.cohort.name).toBe('Cohort 1 — July 2026');
     expect(CANONICAL_COURSE.cohort.start_date).toBe('2026-07-13');
   });

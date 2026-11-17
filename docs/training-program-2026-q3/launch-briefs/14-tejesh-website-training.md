@@ -16,11 +16,11 @@
 
 ### What `training.colaberry.com` is
 
-The **public marketing site** for the AI Systems Architect Accelerator. Career changer / working professional audience (LOCKED — A2). This is the funnel: visitor → landing page → enrollment → handoff to `enterprise.colaberry.ai` (Kes's platform).
+The **public marketing site** for the Forward Deployed AI Engineer Accelerator. Career changer / working professional audience (LOCKED — A2). This is the funnel: visitor → landing page → enrollment → handoff to `enterprise.colaberry.ai` (Kes's platform).
 
 ### The migration brief (from Ali's 2026-05-31 directive)
 
-We're doing away with the old Data Analytics program. The website was already migrated to Claude Code so we could build fast. Now we're redesigning it for the new AI Systems Architect class.
+We're doing away with the old Data Analytics program. The website was already migrated to Claude Code so we could build fast. Now we're redesigning it for the new Forward Deployed AI Engineer class.
 
 **Keep:**
 - Testimonials
@@ -30,8 +30,8 @@ We're doing away with the old Data Analytics program. The website was already mi
 - SEO equity (existing rankings shouldn't drop)
 
 **Swap:**
-- DA-positioning → AI Systems Architect positioning
-- Any "data analytics" prose → "AI systems architect" / "build real AI systems" prose
+- DA-positioning → Forward Deployed AI Engineer positioning
+- Any "data analytics" prose → "forward deployed AI engineer" / "build real AI systems" prose
 - Career changer / working professional audience framing throughout
 
 ### Pages you ship

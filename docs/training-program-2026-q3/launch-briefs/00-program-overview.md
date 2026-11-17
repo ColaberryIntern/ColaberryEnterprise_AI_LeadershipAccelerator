@@ -1,4 +1,4 @@
-# Program Overview — AI Systems Architect Accelerator
+# Program Overview — Forward Deployed AI Engineer Accelerator
 
 **Read this first. Every other brief assumes you know what's in here.**
 
@@ -6,9 +6,9 @@
 
 ## What we are building
 
-**AI Systems Architect Accelerator** — a 12-week, project-based, AI-systems-architect training program. Career changers and working professionals arrive with their own venture idea; the platform turns that idea into a 12-week build; they graduate with a working AI system, a GitHub portfolio, the Claude Certified Architect — Foundations cert, and ongoing community + consulting opportunities.
+**Forward Deployed AI Engineer Accelerator** — a 12-week, project-based, AI-systems-architect training program. Career changers and working professionals arrive with their own venture idea; the platform turns that idea into a 12-week build; they graduate with a working AI system, a GitHub portfolio, the Claude Certified Architect — Foundations cert, and ongoing community + consulting opportunities.
 
-- **Brand:** AI Systems Architect Accelerator
+- **Brand:** Forward Deployed AI Engineer Accelerator
 - **Powered by:** Anthropic + Claude Code (Partner Network co-branding once partner status confirmed 2026-06-12)
 - **One-line:** "Bring your idea. We help you turn it into a real AI system."
 - **Positioning:** "Learn from Anthropic. Build through Colaberry. Deploy in the real world."

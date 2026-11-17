@@ -39,7 +39,7 @@ describe('/proof — a suppressed claim must not surface on the page that promis
     const text = textOf(staticHtml('/proof'));
     [
       'Anthropic',
-      'Certified Anthropic AI Systems Architect',
+      'Certified Anthropic Forward Deployed AI Engineer',
       'Select Partner',
       'Preferred Partner',
       '5,000+',

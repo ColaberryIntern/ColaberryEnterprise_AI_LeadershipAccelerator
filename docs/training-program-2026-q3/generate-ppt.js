@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Generates docs/training-program-2026-q3/TRAINING_OVERVIEW.pptx
-// 10-slide team-presentation deck for the AI Systems Architect Accelerator.
+// 10-slide team-presentation deck for the Forward Deployed AI Engineer Accelerator.
 // Brand: Colaberry navy + warm gold. No emojis. Slide count exactly 10.
 
 const path = require('path');
@@ -21,7 +21,7 @@ const GREEN_DARK = '166534';
 
 const pres = new PPTXGenJS();
 pres.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5
-pres.title = 'AI Systems Architect Accelerator';
+pres.title = 'Forward Deployed AI Engineer Accelerator';
 pres.author = 'Colaberry / CB System';
 
 function addBrandHeader(slide, kicker, title, subtitle) {
@@ -38,7 +38,7 @@ const s1 = pres.addSlide();
 s1.background = { color: NAVY };
 s1.addShape(pres.ShapeType.rect, { x: 0, y: 3.0, w: 13.33, h: 0.04, fill: { color: WARM } });
 s1.addText('Colaberry / Anthropic Partner Network', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 12, color: WARM, bold: true, charSpacing: 4 });
-s1.addText('AI Systems Architect Accelerator', { x: 0.6, y: 1.0, w: 12, h: 1.5, fontSize: 48, color: WHITE, bold: true });
+s1.addText('Forward Deployed AI Engineer Accelerator', { x: 0.6, y: 1.0, w: 12, h: 1.5, fontSize: 48, color: WHITE, bold: true });
 s1.addText('Bring your idea. We help you turn it into a real AI system.', { x: 0.6, y: 3.3, w: 12, h: 0.6, fontSize: 22, color: SLATE_300, italic: true });
 s1.addText('12-week project-driven residency built on enterprise.colaberry.com', { x: 0.6, y: 4.1, w: 12, h: 0.5, fontSize: 18, color: WHITE });
 s1.addText('Target launch: Cohort 1 classes start Mon 2026-07-27 (orientation Thu 2026-07-23)', { x: 0.6, y: 4.7, w: 12, h: 0.4, fontSize: 14, color: WARM });
@@ -50,7 +50,7 @@ addBrandHeader(s2, 'SECTION 1', 'Why now', 'The moment is here. Three forces con
 s2.addText([
   { text: '1.  Anthropic Partner Network is live.\n', options: { fontSize: 20, color: NAVY, bold: true } },
   { text: 'The Claude Certified Architect cert exists, the Skilljar courses ship, and our cohort gets free access. The upstream knowledge layer is solved. We build the application layer.\n\n', options: { fontSize: 14, color: SLATE_700 } },
-  { text: '2.  The market is hungry for "AI Systems Architect."\n', options: { fontSize: 20, color: NAVY, bold: true } },
+  { text: '2.  The market is hungry for "Forward Deployed AI Engineer."\n', options: { fontSize: 20, color: NAVY, bold: true } },
   { text: 'Career changers, enterprise employees, consultants, and indie founders all want a credible path. Bootcamps too expensive. Coursera not credible enough. We slot in the middle.\n\n', options: { fontSize: 14, color: SLATE_700 } },
   { text: '3.  We have the platform.\n', options: { fontSize: 20, color: NAVY, bold: true } },
   { text: 'enterprise.colaberry.com already runs. The @CB nudge engine, the agent registry, the dispatcher, the CCPP integration - we built the foundation for the last 5 weeks. The accelerator IS the platform.', options: { fontSize: 14, color: SLATE_700 } },
@@ -224,7 +224,7 @@ for (const r of risks) {
 const s10 = pres.addSlide();
 addBrandHeader(s10, 'SECTION 9', 'Next 7 days', 'What we need to lock by Jun 6 - Week 0.');
 const next = [
-  { who: 'Ali', what: 'Lock the brand name. Confirm "AI Systems Architect Accelerator".' },
+  { who: 'Ali', what: 'Lock the brand name. Confirm "Forward Deployed AI Engineer Accelerator".' },
   { who: 'Ali', what: 'Confirm launch wedge persona = career changer.' },
   { who: 'Ali', what: 'Confirm pricing = $79 / $149 BYO Claude (rejecting the $99 bundled model).' },
   { who: 'Ali', what: 'Name leads: Website lead, Marketing lead, Sales lead.' },

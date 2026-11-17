@@ -2,7 +2,7 @@
   "schema": "colaberry.kb/v1",
   "version": "1.1",
   "name": "Colaberry Knowledge Base",
-  "description": "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
+  "description": "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The Forward Deployed AI Engineer Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
   "generated_from": [
     "sales/kb-data.js",
     "marketing/hub-data.js",
@@ -11,7 +11,7 @@
     "data/product-kb.js",
     "data/compliance-kb.js"
   ],
-  "core_facts": "Program public name: AI Systems Architect Accelerator, powered by Anthropic + Claude Code. Tagline: Learn With Claude. Build Through Colaberry. Deploy In The Real World. It is a 12-week program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder. Journey: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales. Certification: Anthropic Architect certification. Brand proof point: 1,000+ hires since 2012. Open House (free): Thursday, July 16, 2026. Cohort 1 kickoff: Thursday, July 23, 2026. The Open House precedes the cohort it feeds by one week. Founding Cohort: 40 seats (cap). Pricing (Ali-confirmed 2026-06-25): $149/mo founding annual rate, $199/mo monthly. Pricing is revealed at the Open House, so it stays out of awareness posts. Student-paid third-party tool costs, disclosed before enrollment and paid directly to providers: an Anthropic subscription for Claude Code (about $20/mo) and LLM API usage (most projects under $10/mo). Campaign goal: generate free Open House registrations, then convert attendees into Founding Cohort enrollment. Audiences: alumni, dropouts, prospects. Channels: LinkedIn (primary), X, Instagram, plus the parallel 5-email sequence. Open items: the Open House registration URL [reg link] and exact start time [time + TZ] are not set yet; refund and cancellation terms are drafted and pending Ali. Do not invent these. If a detail is not in this knowledge base, say so plainly and point to the relevant document or the Open House. Never invent facts, metrics, testimonials, names, or claims.",
+  "core_facts": "Program public name: Forward Deployed AI Engineer Accelerator, powered by Anthropic + Claude Code. Tagline: Learn With Claude. Build Through Colaberry. Deploy In The Real World. It is a 12-week program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder. Journey: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales. Certification: Anthropic Architect certification. Brand proof point: 1,000+ hires since 2012. Open House (free): Thursday, July 16, 2026. Cohort 1 kickoff: Thursday, July 23, 2026. The Open House precedes the cohort it feeds by one week. Founding Cohort: 40 seats (cap). Pricing (Ali-confirmed 2026-06-25): $149/mo founding annual rate, $199/mo monthly. Pricing is revealed at the Open House, so it stays out of awareness posts. Student-paid third-party tool costs, disclosed before enrollment and paid directly to providers: an Anthropic subscription for Claude Code (about $20/mo) and LLM API usage (most projects under $10/mo). Campaign goal: generate free Open House registrations, then convert attendees into Founding Cohort enrollment. Audiences: alumni, dropouts, prospects. Channels: LinkedIn (primary), X, Instagram, plus the parallel 5-email sequence. Open items: the Open House registration URL [reg link] and exact start time [time + TZ] are not set yet; refund and cancellation terms are drafted and pending Ali. Do not invent these. If a detail is not in this knowledge base, say so plainly and point to the relevant document or the Open House. Never invent facts, metrics, testimonials, names, or claims.",
   "categories_by_domain": {
     "sales": [
       {
@@ -278,7 +278,7 @@
       "domain": "sales",
       "category": "Program basics & format",
       "category_key": "program-basics",
-      "question": "What exactly is the AI Systems Architect Accelerator?",
+      "question": "What exactly is the Forward Deployed AI Engineer Accelerator?",
       "answer": "It's a membership built around a 12-week, project-based program, powered by Anthropic and Claude Code. Most people consume AI; here you learn to build with it. You arrive with an idea and leave with a deployed AI system.",
       "detail": "Positioning: Learn from Anthropic. Build through Colaberry. Deploy in the real world.",
       "tags": [
@@ -1735,7 +1735,7 @@
       "category": "Campaign & goal",
       "category_key": "campaign",
       "question": "What is this campaign and what is the single goal?",
-      "answer": "It is the marketing push for the AI Systems Architect Accelerator. The single goal is to generate free registrations for the Open House on July 16, then convert attendees into the Founding Cohort. Every post and email drives to the Open House.",
+      "answer": "It is the marketing push for the Forward Deployed AI Engineer Accelerator. The single goal is to generate free registrations for the Open House on July 16, then convert attendees into the Founding Cohort. Every post and email drives to the Open House.",
       "detail": "",
       "tags": [
         "goal",
@@ -2437,7 +2437,7 @@
       "domain": "marketing",
       "category": "Program facts",
       "category_key": "program",
-      "question": "What is the AI Systems Architect Accelerator?",
+      "question": "What is the Forward Deployed AI Engineer Accelerator?",
       "answer": "A 12-week, implementation-focused program that moves people from AI consumer to AI builder. You learn with Claude and modern AI agents, build real systems, and finish with a deployed system, a portfolio, and the Anthropic Architect certification.",
       "detail": "",
       "tags": [
@@ -3522,7 +3522,7 @@
       "domain": "curriculum",
       "category": "Overview & philosophy",
       "category_key": "overview",
-      "question": "What is the AI Systems Architect Accelerator curriculum?",
+      "question": "What is the Forward Deployed AI Engineer Accelerator curriculum?",
       "answer": "It is a 12-week, project-based program that moves you from AI consumer to AI builder, powered by Anthropic and Claude Code. You learn by building real systems rather than watching lectures, and the work is organized into four intensives that each end in something you have actually shipped.",
       "detail": "",
       "tags": [
@@ -4009,7 +4009,7 @@
       "category": "The membership & what's included",
       "category_key": "membership",
       "question": "What is the Colaberry AI Membership?",
-      "answer": "It is the product that gives you the full AI Systems Architect Accelerator: all four intensives, certification prep, the full-time internship, and a guided portfolio, with no separate course fees. The membership is the program.",
+      "answer": "It is the product that gives you the full Forward Deployed AI Engineer Accelerator: all four intensives, certification prep, the full-time internship, and a guided portfolio, with no separate course fees. The membership is the program.",
       "detail": "",
       "tags": [
         "membership",
@@ -4146,7 +4146,7 @@
       "category_key": "credentials",
       "question": "Is Colaberry a regulated school?",
       "answer": "Yes. Colaberry operates as a regulated Texas career school. The Colaberry School of Data Analytics holds a Texas Workforce Commission Certificate of Approval, school code U5306, first approved in 2018 and renewed since. Colaberry is an established institution, not a pop-up bootcamp.",
-      "detail": "The Certificate of Approval covers the data analytics school and its programs; it is the foundation of credibility the AI Systems Architect Accelerator is built on.",
+      "detail": "The Certificate of Approval covers the data analytics school and its programs; it is the foundation of credibility the Forward Deployed AI Engineer Accelerator is built on.",
       "tags": [
         "accredited",
         "regulated",
@@ -4183,7 +4183,7 @@
       "category": "Track record",
       "category_key": "track-record",
       "question": "What is Colaberry's track record?",
-      "answer": "Colaberry has recorded 1,000+ hires since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course.",
+      "answer": "Colaberry has recorded 1,000+ hires since 2012. That track record, built over more than a decade, is the foundation the Forward Deployed AI Engineer Accelerator stands on, not a single new course.",
       "detail": "",
       "tags": [
         "track record",

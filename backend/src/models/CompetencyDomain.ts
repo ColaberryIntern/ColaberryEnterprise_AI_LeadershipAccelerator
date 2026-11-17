@@ -3,7 +3,7 @@ import { sequelize } from '../config/database';
 
 /**
  * CompetencyDomain — a promotion-relevant skill domain with a confidence
- * threshold and a weight toward Architect Readiness. Seeded from the program's
+ * threshold and a weight toward Engineer Readiness. Seeded from the program's
  * core competency domains; the Competency Engine scores students against these.
  */
 export interface CompetencyDomainAttributes {

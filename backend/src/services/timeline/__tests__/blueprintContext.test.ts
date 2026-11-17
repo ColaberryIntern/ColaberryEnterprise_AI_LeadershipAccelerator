@@ -16,7 +16,7 @@ const base: BlueprintContextFields = {
 describe('buildBlueprintPromptText', () => {
   it('always anchors the content to the week + course, even with no optional fields', () => {
     const text = buildBlueprintPromptText(base);
-    expect(text).toContain('Week 1 of the AI Systems Architect Accelerator: "Claude Code Foundations"');
+    expect(text).toContain('Week 1 of the Forward Deployed AI Engineer Accelerator: "Claude Code Foundations"');
     // The closing "be specific" instruction must always be present.
     expect(text).toContain("specific to this week's topic");
   });

@@ -23,7 +23,7 @@ const BodySchema = z.object({
 
 // Confirmed canonical facts — safe to ground on even when retrieval misses.
 const PINNED_FACTS =
-  'AI Systems Architect Accelerator (Founding Cohort), powered by Anthropic + Claude Code. ' +
+  'Forward Deployed AI Engineer Accelerator (Founding Cohort), powered by Anthropic + Claude Code. ' +
   'The membership IS the full 12-week, project-based program: all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. No separate course fees. ' +
   'Pricing: $149/mo billed annually (founding rate, locks for as long as the membership stays active) or $199/mo monthly (cancel anytime). ' +
   'Founding Cohort capped at 40 seats. Schedule: 4 live hours per week (Monday Architecture Day 2h + Thursday Build Day 2h). ' +
@@ -33,7 +33,7 @@ const PINNED_FACTS =
   'Refund/cancellation terms are drafted and pending final approval.';
 
 const SYSTEM =
-  'You are Cory, Colaberry\'s warm, sharp admissions assistant for the AI Systems Architect Accelerator. ' +
+  'You are Cory, Colaberry\'s warm, sharp admissions assistant for the Forward Deployed AI Engineer Accelerator. ' +
   'Your user is a Colaberry sales rep talking live to a prospect, so be confident, concise, and human, and write a natural answer in your own words rather than restating a knowledge-base entry verbatim. ' +
   'Ground every factual claim in the PINNED FACTS and the CONTEXT provided. Never invent prices, dates, policies, or numbers. ' +
   'If the answer is not in the facts or context, say you do not have that detail and suggest confirming with Ali. ' +

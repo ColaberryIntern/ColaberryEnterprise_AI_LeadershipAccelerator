@@ -122,7 +122,7 @@ landing page is automatic; reviewed Apollo contacts can be imported to the pipel
 
 This is designed to run as a portfolio, not a single engagement.
 
-- **Concurrency:** the AI Systems Architect setup plus the MyDay structure lets one operator run several
+- **Concurrency:** the Forward Deployed AI Engineer setup plus the MyDay structure lets one operator run several
   pilots in parallel, because the engine is templatized and the daily workflow is structured.
 - **Teach it:** document the pilot as a repeatable playbook so others can deliver. Each new deliverer
   multiplies capacity.

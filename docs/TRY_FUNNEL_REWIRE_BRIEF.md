@@ -223,7 +223,7 @@ HeroPlatformV8 was already correct. **Re-check after any hero work.**
 ### 4. Fix the Colaberry logo to match the site
 
 The portal shell (/try, /portal/*) renders a lowercase "colaberry" wordmark with
-the ring mark and the "AI Systems Architect Accelerator" subtitle. The marketing
+the ring mark and the "Forward Deployed AI Engineer Accelerator" subtitle. The marketing
 site renders the cherry mark plus "Colaberry" and "Enterprise AI". A visitor
 crossing from /platform to /try sees two different brands. Ali wants the portal
 one to match the site. Find the shell's logo component and align it -- do NOT

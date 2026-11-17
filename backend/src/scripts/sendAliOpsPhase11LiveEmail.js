@@ -42,7 +42,7 @@ const HTML = `<!doctype html><html><body style="margin:0;padding:0;background:#f
 <tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">Data Analytics Sales Team</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">64</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">55</td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">Ali Personal</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">49</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">11</td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">Management Team</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">46</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">40</td></tr>
-<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">AI Systems Architect Accelerator</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">39</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">3</td></tr>
+<tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">Forward Deployed AI Engineer Accelerator</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">39</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">3</td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">Anthropic Partner Network - 10-Person Onboarding</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">18</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">0</td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">TWC</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">17</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">13</td></tr>
 <tr><td style="padding:8px 12px;border-bottom:1px solid #e2e8f0">ShipCES - Autonomous Brokerage</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;font-weight:700">15</td><td style="padding:8px 12px;text-align:right;border-bottom:1px solid #e2e8f0;color:#7f1d1d;font-weight:700">1</td></tr>
@@ -132,7 +132,7 @@ TOP 10 PROJECTS:
 - Data Analytics Sales Team: 64 open / 55 red
 - Ali Personal: 49 / 11
 - Management Team: 46 / 40
-- AI Systems Architect Accelerator: 39 / 3
+- Forward Deployed AI Engineer Accelerator: 39 / 3
 - Anthropic Partner Network 10-Person Onboarding: 18 / 0
 - TWC: 17 / 13
 - ShipCES - Autonomous Brokerage: 15 / 1

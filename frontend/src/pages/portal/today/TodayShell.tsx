@@ -170,7 +170,7 @@ const TodayShell: React.FC = () => {
 
   const total = points?.total ?? 0;
   const lvl = levelFor(total);
-  // Architect Readiness — backend-owned (CAPE Phase 0-1), replaces the previous
+  // Engineer Readiness — backend-owned (CAPE Phase 0-1), replaces the previous
   // hardcoded 0/100 literal. Rounds the same overall_proficiency SkillMeter renders,
   // so the ring and the radar can never disagree (design doc §2, §11, §17 AC 10).
   const readiness = capeProfile ? Math.round(capeProfile.overall_proficiency) : 0;

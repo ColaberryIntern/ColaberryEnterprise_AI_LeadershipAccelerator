@@ -1466,14 +1466,14 @@ const PAGES={
   Bc:{icon:'📅',t:'Talk to a person',p:'Book 30 minutes with the admissions team on Google Meet.'},feed:[]},
  lecture:{kicker:'WEEK 1',title:'Classroom — Week 1',lead:'Your week as a feed. Watch, build, test, reflect: every item scores on-site and feeds your points. Complete each card to advance.',
   sum:{big:'Week 1',sub:'17 items this week',pct:24,foot:'4 of 17 complete'},
-  next:{k:'YOUR NEXT STEP · VIDEO',pts:'+10 PTS',t:'Video: Getting Started with Claude Code | AI Systems Architect Accelerator',s:'Introductory Guide to Claude Code Setup',cta:'Open'},
+  next:{k:'YOUR NEXT STEP · VIDEO',pts:'+10 PTS',t:'Video: Getting Started with Claude Code | Forward Deployed AI Engineer Accelerator',s:'Introductory Guide to Claude Code Setup',cta:'Open'},
   A:{icon:'☆',t:'Your status',rows:[['Level','AI Enabled II'],['Architect readiness','25%',25],['Builder XP','53'],['Learning XP','115'],['Community XP','11']],accent:'acc-g'},
   Bc:{icon:'📊',t:'This week',rows:[['Items complete','4 / 17',24]],accent:'acc-n'},
   search:'Search this week · try “Prompt Lab”',
-  feed:[{ty:'ANNOUNCEMENT',pts:'+5 pts',t:'This Week · Claude Code',p:'Get ready to dive into the world of Claude Code! This week, we will lay the groundwork for your journey as an AI Systems Architect.',done:true,ic:'◫'},
+  feed:[{ty:'ANNOUNCEMENT',pts:'+5 pts',t:'This Week · Claude Code',p:'Get ready to dive into the world of Claude Code! This week, we will lay the groundwork for your journey as a Forward Deployed AI Engineer.',done:true,ic:'◫'},
         {ty:'KNOWLEDGE CHECK',pts:'+10 pts',t:'Claude Code Knowledge Check',p:'Complete a knowledge check to evaluate your understanding of the concepts covered this week.',ic:'✓'},
         {ty:'SELF STUDY',pts:'+5 pts',t:'Self Study · Claude Code Foundations + Workspace',p:'Read this at your own pace before class: the vocabulary and mental models for this week. Not tested, not timed.',done:true,ic:'◫'},
-        {ty:'VIDEO',pts:'+10 pts',t:'Getting Started with Claude Code',p:'This video provides a hands-on introduction to setting up Claude Code for your AI Systems Architect projects, focusing on the foundational skills needed to drive the agentic loop effectively.',ic:'▶'}]},
+        {ty:'VIDEO',pts:'+10 pts',t:'Getting Started with Claude Code',p:'This video provides a hands-on introduction to setting up Claude Code for your Forward Deployed AI Engineer projects, focusing on the foundational skills needed to drive the agentic loop effectively.',ic:'▶'}]},
  studio:{kicker:'BUILD AND LEARN',title:'Projects',lead:'Your builds live here: every project you ship, as lists and tasks in the same feed you see across the platform.',
   sum:{big:'Release 0',sub:'3 tasks this release',pct:33,foot:'1 of 3 complete'},
   next:{k:'YOUR NEXT STEP · PROPERTYPULSE AI',pts:'+50 PTS',t:'STORY-001 · User selects location and receives Opportunity Score',s:'As an investor, I want to select a location and receive an Opportunity Score, so that I can identify potential properties.',cta:'Build · +50 pts',cta2:'Copy prompt'},
@@ -1491,10 +1491,10 @@ const PAGES={
   next:{k:'UP NEXT ON YOUR CALENDAR · ORIENTATION',pts:'30 MIN',t:'The Architect Time Machine · Orientation',s:'Architect Mindset · on today’s plan',cta:'Start'},
   A:{icon:'📅',t:'Today',list:[['Deep Dive · Understanding Modern Software Development',0,'#0f766e'],['The Architect Time Machine · Orientation',0,'#0f766e'],['Intro to Large Language Models',0,'#0f766e']]},
   Bc:{icon:'🗓',t:'Coming up',rows:[['Next class','Today'],['Next event','Oct 29']]},
-  feed:[{ty:'EVENT',pts:'Oct 29',t:'AI Systems Architect Accelerator Open House',p:'Thu Oct 29 · 6:30 PM CDT · Events Hall',ic:'🎪'}]},
+  feed:[{ty:'EVENT',pts:'Oct 29',t:'Forward Deployed AI Engineer Accelerator Open House',p:'Thu Oct 29 · 6:30 PM CDT · Events Hall',ic:'🎪'}]},
  amphi:{kicker:'BELONG',title:'Events',lead:'Open houses, demos and sessions with the whole Colaberry community.',
   sum:{big:'3',sub:'events this week',pct:0,foot:'0 registered'},
-  next:{k:'NEXT EVENT · OPEN HOUSE',pts:'OCT 29',t:'AI Systems Architect Accelerator Open House',s:'Thu Oct 29 · 6:30 PM CDT · in 6 days',cta:'Register'},
+  next:{k:'NEXT EVENT · OPEN HOUSE',pts:'OCT 29',t:'Forward Deployed AI Engineer Accelerator Open House',s:'Thu Oct 29 · 6:30 PM CDT · in 6 days',cta:'Register'},
   A:{icon:'🎟',t:'Coming up',list:[['AI Internship Presentation Event · Tue 10:00 AM',0,'#d9962b'],['AI Strategy and Collaboration Session · Wed 10:00 AM',0,'#d9962b']]},
   Bc:{icon:'▶',t:'Replays',p:'Every session is recorded with captions. Replays appear here the day after.'},
   feed:[{ty:'EVENT',pts:'Register',t:'AI Internship Presentation Event',p:'See the next generation of AI professionals in action. Join our internship session.',ic:'🎪'}]},
@@ -1538,7 +1538,7 @@ const PAGES={
 const EVENTS=[
  {id:'e1',t:'AI Internship Presentation Event',day:27,dow:'TUE',time:'10:00 AM',where:'Events Hall',s:'See the next generation of AI professionals in action'},
  {id:'e2',t:'AI Strategy and Collaboration Session',day:28,dow:'WED',time:'10:00 AM',where:'Events Hall',s:'Hang out and brainstorm with people who love this tech'},
- {id:'e3',t:'AI Systems Architect Accelerator Open House',day:29,dow:'THU',time:'6:30 PM CDT',where:'Events Hall',s:'Bring a friend or a teammate who’s curious'}];
+ {id:'e3',t:'Forward Deployed AI Engineer Accelerator Open House',day:29,dow:'THU',time:'6:30 PM CDT',where:'Events Hall',s:'Bring a friend or a teammate who’s curious'}];
 const GOING=new Set(['c1']);
 EVENTS.unshift({id:'c1',kind:'class',t:'Week 1 · Build Day',day:24,dow:'SAT',time:'6:30 PM CDT',where:'Classroom',b:'lecture',s:'Your cohort’s live class'});
 EVENTS.forEach(e=>{e.kind=e.kind||'event';e.b=e.b||'amphi'});
@@ -1613,7 +1613,7 @@ let TOUR=TOUR_MEMBER=[
    The front door is the section page (Classroom, Projects…). The back door drops you at your desk for one card.
    ===================================================================== */
 const CARDS={
- 'c-video1':{type:'lesson',b:'lecture',kicker:'WEEK 1 · VIDEO',t:'Video: Getting Started with Claude Code | AI Systems Architect Accelerator',short:'Getting Started with Claude Code',s:'Introductory Guide to Claude Code Setup',pts:10,mins:'18 min',
+ 'c-video1':{type:'lesson',b:'lecture',kicker:'WEEK 1 · VIDEO',t:'Video: Getting Started with Claude Code | Forward Deployed AI Engineer Accelerator',short:'Getting Started with Claude Code',s:'Introductory Guide to Claude Code Setup',pts:10,mins:'18 min',
    bench:[['This Week · Claude Code','done','+5 pts'],['Self Study · Claude Code Foundations + Workspace','done','+5 pts'],['Getting Started with Claude Code','active','Video · +10 pts'],['Claude Code Knowledge Check','queued','12 questions · +10 pts']],
    q:{t:'What does a Claude Code session run, over and over?',o:['Plan → act → observe','Write → deploy → forget','Read → summarize → stop'],a:0}},
  'story-001':{type:'story',b:'studio',kicker:'RELEASE 0 · INITIAL PROPERTY ANALYSIS',t:'STORY-001 · User selects location and receives Opportunity Score',short:'STORY-001 · Opportunity Score',s:'As an investor, I want to select a location and receive an Opportunity Score, so that I can identify potential properties.',pts:50,req:'REQ-001',build:'PropertyPulse AI',release:'Release 0 · Initial Property Analysis',
@@ -1638,7 +1638,7 @@ setTimeout(()=>{Object.keys(WROOMS).forEach(b=>{const p=curItem(b);PAGES[b].card
 // plan steps are cards too
 PLAN.forEach(p=>{CARDS[p.id]={type:'lesson',b:p.b,kicker:'TODAY’S PLAN · '+p.d.toUpperCase(),t:p.t,short:p.t,s:p.b==='tower'?'An orientation to how architects think about systems over time':'A short deep dive from today’s plan',pts:p.pts,mins:p.d.split(' · ')[1],plan:p.id,
   bench:PLAN.map(x=>[x.t,x.done?'done':x.id===p.id?'active':'queued',byId[x.b].name+' · '+x.d.split(' · ')[1]]),
-  q:{t:'Which role does this course train you for?',o:['AI Systems Architect','Data entry specialist','Graphic designer'],a:0}}});
+  q:{t:'Which role does this course train you for?',o:['Forward Deployed AI Engineer','Data entry specialist','Graphic designer'],a:0}}});
 // every other building's page next step gets a simple card
 Object.keys(PAGES).forEach(id=>{
   if(id==='chow'){PAGES[id].card='g-admissions';PAGES[id].front='Order food';PAGES[id].doorName='Chow Hall';return}
@@ -1835,7 +1835,7 @@ const RIT={roll_call:['Roll Call','👋','intro','👋 Welcome'],skill_drop:['Sk
  question:['Question','❓','q','🙋 Me too'],ann:['Announcement','📣','ann','👍 Got it'],post:['Post','💬','general','👍 Like']};
 const H=1,D=24;
 const NOTES2=[
- {id:'n1',rit:'ann',by:'reese',h:20,t:'Open House Thursday 6:30 PM CDT · bring a friend',b:'Colaberry AI Systems Architect Accelerator Open House in the Events Hall. Demos from this cohort, Q&A with the instructors, and seats held for anyone you invite.',likes:9,replies:2,pinned:true},
+ {id:'n1',rit:'ann',by:'reese',h:20,t:'Open House Thursday 6:30 PM CDT · bring a friend',b:'Colaberry Forward Deployed AI Engineer Accelerator Open House in the Events Hall. Demos from this cohort, Q&A with the instructors, and seats held for anyone you invite.',likes:9,replies:2,pinned:true},
  {id:'n2',rit:'question',by:'p6',h:3,t:'How do I connect Claude Code to my GitHub repo?',b:'I ran the sync but the workstation still says “No repo linked”. Do I need a token or does the GitHub app handle it?',likes:2,replies:0},
  {id:'n3',rit:'unblock_me',by:'p2',h:9,t:'My MCP server times out on our CRM’s rate limit',b:'Tried retries with backoff, still getting 429s under load. Anyone batch calls through a queue?',likes:4,replies:0},
  {id:'n4',rit:'question',by:'p10',h:30,t:'Is the Week 2 knowledge check timed?',b:'I want to take it after the Build Day session but might need to leave early.',likes:1,replies:0},
@@ -3055,7 +3055,7 @@ function showPage(bid,route,fromRect,openNext){
   pg.innerHTML=`
   <div class="ph">
     <svg viewBox="0 0 120 26" height="30" aria-label="Colaberry"><circle cx="9" cy="15" r="8" fill="#e31b23"/><circle cx="22" cy="16" r="6.5" fill="#e31b23"/><path d="M9 7q4-6 10-3M22 9q-1-5 3-7" stroke="#3c7a2c" stroke-width="2" fill="none"/><text x="31" y="20" font-family="DM Sans" font-size="19" fill="#4aa3c8" font-weight="500">laberry</text></svg>
-    <span class="prog">AI Systems Architect Accelerator</span>
+    <span class="prog">Forward Deployed AI Engineer Accelerator</span>
     <span style="flex:1"></span>
     <span class="chipc">🎓<span><small>NEXT CLASS</small><b>0d 0h</b></span></span><span class="chipc">📅<span><small>NEXT EVENT</small><b>6d 3h</b></span></span>
     <button class="iconbtn" aria-label="Messages">💬<span class="badge-n">1</span></button><button class="iconbtn" aria-label="Notifications">🔔<span class="badge-n">3</span></button>

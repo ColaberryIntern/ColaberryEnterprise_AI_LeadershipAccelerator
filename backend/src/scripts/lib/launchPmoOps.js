@@ -1,7 +1,7 @@
 // Launch PMO operations - Basecamp write primitives for CB-as-PMO.
 //
 // Surfaces every Basecamp action CB needs to operate as the autonomous PMO
-// for the AI Systems Architect Accelerator launch (project 47502609).
+// for the Forward Deployed AI Engineer Accelerator launch (project 47502609).
 //
 // All functions are idempotent where Basecamp allows:
 //   - createTodolist: name-keyed; existing list by same name is returned

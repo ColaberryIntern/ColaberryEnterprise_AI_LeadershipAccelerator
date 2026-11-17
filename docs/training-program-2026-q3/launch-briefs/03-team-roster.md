@@ -1,6 +1,6 @@
 # Team Roster + How To Tag Each Other
 
-**Source of truth for who's who on the AI Systems Architect Accelerator launch. Use Basecamp @-mentions; CB watches them and acts when tagged.**
+**Source of truth for who's who on the Forward Deployed AI Engineer Accelerator launch. Use Basecamp @-mentions; CB watches them and acts when tagged.**
 
 ---
 
@@ -76,7 +76,7 @@ Every CB reply is signed (you see it from "CB System" in Basecamp). If something
 
 ## Basecamp project link
 
-**AI Systems Architect Accelerator:** https://3.basecamp.com/3945211/projects/47502609
+**Forward Deployed AI Engineer Accelerator:** https://3.basecamp.com/3945211/projects/47502609
 
 Open this, drill into your area todolist, your assigned todos are in there with full briefs.
 

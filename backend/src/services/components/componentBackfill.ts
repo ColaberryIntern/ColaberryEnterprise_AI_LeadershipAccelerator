@@ -19,11 +19,11 @@ function defaultPrompts(c: CurriculumTypeDefinition) {
     : 'AI systems architecture';
   return {
     design_prompt:
-      `Design a "${label}" learning experience for an AI Systems Architect student. Define the learning goal, the ` +
+      `Design a "${label}" learning experience for a Forward Deployed AI Engineer student. Define the learning goal, the ` +
       `single big idea, the interaction model (${band}), and the evidence of mastery. Competencies: ${comps}. ` +
       `Difficulty: ${c.difficulty || 'core'}.`,
     generation_prompt:
-      `You are generating a "${label}" learning card for an AI Systems Architect student.\n` +
+      `You are generating a "${label}" learning card for a Forward Deployed AI Engineer student.\n` +
       `Topic: {{topic}}. Week: {{week}}. Cohort context: {{cohort}}.\n` +
       `Produce the ${label} content in the "${band}" style. Keep it concrete, hands-on, and mapped to the competencies: ${comps}.\n` +
       `Difficulty: ${c.difficulty || 'core'}.`,

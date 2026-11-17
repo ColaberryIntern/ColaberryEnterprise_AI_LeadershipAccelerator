@@ -64,7 +64,7 @@ const news: IntelFormat = {
       <div><b>Business</b>${esc(d.business)}</div>
       <div><b>Technical</b>${esc(d.technical)}</div>
       <div><b>Enterprise</b>${esc(d.enterprise)}</div></div>
-    <div class="nf-mean"><b>Why an AI Systems Architect should care</b>${esc(d.architect)}</div>
+    <div class="nf-mean"><b>Why a Forward Deployed AI Engineer should care</b>${esc(d.architect)}</div>
     <p><strong>Do this next:</strong> ${esc(d.next)}</p>
     <div class="chips">${d.tags.map((t: string) => `<span class="chip">${esc(t)}</span>`).join('')}</div>
     <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">link</a>` : ''}<span class="conf"><span class="dot" style="background:#e11d48"></span>Confidence: ${esc(d.confidence)}</span></div>

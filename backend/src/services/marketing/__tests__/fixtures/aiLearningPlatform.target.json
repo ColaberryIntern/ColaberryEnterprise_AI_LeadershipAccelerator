@@ -120,7 +120,7 @@
         { "label": "Complete checks" },
         { "label": "Track your progress" },
         { "label": "Join live sessions when available" },
-        { "label": "Continue toward the full AI Systems Architect Accelerator" }
+        { "label": "Continue toward the full Forward Deployed AI Engineer Accelerator" }
       ],
       "callout": {
         "tone": "success",
@@ -134,10 +134,10 @@
       "eyebrow": "The next step",
       "heading": "Ready to go further?",
       "paragraphs": [
-        "The platform is your starting point. When you are ready, Colaberry's AI Systems Architect Accelerator helps you go deeper.",
+        "The platform is your starting point. When you are ready, Colaberry's Forward Deployed AI Engineer Accelerator helps you go deeper.",
         "The goal is to help you move from simply using AI to understanding how to build with it."
       ],
-      "emphasis": ["AI Systems Architect Accelerator"],
+      "emphasis": ["Forward Deployed AI Engineer Accelerator"],
       "aside": {
         "title": "In the full program, learners",
         "items": [

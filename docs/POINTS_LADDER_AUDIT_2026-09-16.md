@@ -25,7 +25,7 @@ Underneath that is the real problem: **the things Ali names as milestones — cu
 | 5 | **CAPE proficiency** `cape_*` | Card completions via the CAPE bridge | Today shell "Readiness /100" ring | No |
 | 6 | **Cert Prep readiness** `cert_readiness_snapshots` | Practice/mock/diagnostic sittings + verified cert evidence | Cert Prep page; awards ledger-1 points (5/25/40/50/150) | No |
 
-Plus three leftovers still written or read somewhere: legacy `community_members.points/level` (tiers 0/1500/2700/4200), accelerator `enrollment.readiness_score` (public portfolio "AI Architect Readiness Score"), and the case-study maturity ladder (a project-level band, not a person-level one).
+Plus three leftovers still written or read somewhere: legacy `community_members.points/level` (tiers 0/1500/2700/4200), accelerator `enrollment.readiness_score` (public portfolio "Forward Deployed AI Engineer Readiness Score"), and the case-study maturity ladder (a project-level band, not a person-level one).
 
 **Four different numbers are all labelled "readiness" to students**: competency mean (Points tab), CAPE proficiency (Today), `currentWeek/12` (Path page), accelerator readiness score (public portfolio). **Four threshold sets exist**: 0/150/400/900 (bands), 0/1500/2700/4200 (legacy community), 150/800/2400 (company roster colour tiers), and the 9-rank evidence gates.
 

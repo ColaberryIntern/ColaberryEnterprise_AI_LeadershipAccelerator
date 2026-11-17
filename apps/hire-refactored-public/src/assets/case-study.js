@@ -32,7 +32,7 @@
      is reachable on Hire; without it the chip renders, unlinked.
 
      A RECORD THAT NAMES A ROLE, NOT A PERSON, STILL HAS A PERSON ON HIRE. Records written
-     role-only ("AI Systems Architect") cross with `builder.name` null, so the Cora records
+     role-only ("Forward Deployed AI Engineer") cross with `builder.name` null, so the Cora records
      drew no "Built by" chip and no Request intro, on a site whose whole point is the
      person (audit, 2026-11-08). When the server says the record links to a listed
      portfolio, `person` is that portfolio's own public identity, which its owner already

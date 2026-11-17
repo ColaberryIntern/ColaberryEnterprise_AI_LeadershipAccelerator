@@ -19,7 +19,7 @@ import { SampleBadge } from './Claim';
  */
 
 const MGMT = [
-  { l: 'Architect readiness', v: '63%' },
+  { l: 'Engineer readiness', v: '63%' },
   { l: 'Team capability', v: '9 ranks' },
   { l: 'Individual progress', v: 'drill-down' },
   { l: 'Evidence & velocity', v: 'weekly' },

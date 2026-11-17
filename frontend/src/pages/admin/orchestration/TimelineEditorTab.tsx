@@ -718,14 +718,14 @@ const TimelineEditorTab: React.FC = () => {
     return cardHit ? [cardHit] : hits;
   }, []);
 
-  // Load the courses once and default to the AI Systems Architect Accelerator —
+  // Load the courses once and default to the Forward Deployed AI Engineer Accelerator —
   // the Timeline is scoped to one course.
   useEffect(() => {
     (async () => {
       try {
         const cs = await composerApi.courses();
         setCourses(cs);
-        const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+        const def = cs.find((c) => /forward deployed|architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
         setCourseId(def?.id || '');
       } catch { setError('Failed to load courses'); }
     })();

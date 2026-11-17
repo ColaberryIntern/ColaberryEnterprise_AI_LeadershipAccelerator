@@ -24,14 +24,14 @@ const { getByHandle } = require('./lib/launchPmoTeam');
 </div>
 
 <h3>Objective</h3>
-<p>Retrain Cora on the AI Systems Architect Accelerator class data + migrate her execution off Relevance AI to our internal Claude Code / agent infrastructure.</p>
+<p>Retrain Cora on the Forward Deployed AI Engineer Accelerator class data + migrate her execution off Relevance AI to our internal Claude Code / agent infrastructure.</p>
 
 <h3>Deliverable</h3>
 <p>Cora answering support@colaberry.com inquiries about the new program (intensives, pricing, schedule, enrollment, Founding Cohort offer) using our own infrastructure - no Relevance AI calls.</p>
 
 <h3>Definition of done</h3>
 <ol>
-<li>Cora runs end-to-end against test inbound emails about the AI Systems Architect Accelerator without hitting Relevance AI.</li>
+<li>Cora runs end-to-end against test inbound emails about the Forward Deployed AI Engineer Accelerator without hitting Relevance AI.</li>
 <li>Kes confirms no other production system still depends on Relevance AI.</li>
 <li>Ali cancels the Relevance AI subscription (logged on expense audit todo 9948510922) and the recurring $349/month is dropped.</li>
 </ol>
@@ -60,7 +60,7 @@ const { getByHandle } = require('./lib/launchPmoTeam');
   const c = await ops.bcPost(`/buckets/7463955/recordings/9948510922/comments.json`, {
     content: `<div><strong>RELEVANCE AI - conditional on Cora migration (per Ali 2026-06-01):</strong></div>
 <div>Relevance AI ($349/mo) still has one production dependency - <strong>Cora, the inbox AI at support@colaberry.com</strong>. Once Kes migrates Cora to the new program data + off Relevance AI, this subscription can be cancelled.</div>
-<div>Tracking the migration as <a href="${todo.app_url}">[URGENT] Migrate Cora off Relevance AI</a> in the AI Systems Architect Accelerator project. Assigned to Kes. Due <strong>2026-06-17</strong>. Tagged URGENT because every week of delay costs Colaberry $87.</div>
+<div>Tracking the migration as <a href="${todo.app_url}">[URGENT] Migrate Cora off Relevance AI</a> in the Forward Deployed AI Engineer Accelerator project. Assigned to Kes. Due <strong>2026-06-17</strong>. Tagged URGENT because every week of delay costs Colaberry $87.</div>
 <div style="font-size:11px;color:#64748b;margin-top:6px">When that todo closes, CB will append the $349/mo savings to the running total here.</div>`,
   });
   console.log(`expense audit comment: ${c.id}`);

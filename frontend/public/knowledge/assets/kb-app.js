@@ -21,7 +21,7 @@
   ];
 
   var CORE = [
-    "Colaberry runs the AI Systems Architect Accelerator, powered by Anthropic and Claude Code: a 12-week, project-based program that moves people from AI consumer to AI builder.",
+    "Colaberry runs the Forward Deployed AI Engineer Accelerator, powered by Anthropic and Claude Code: a 12-week, project-based program that moves people from AI consumer to AI builder.",
     "Free Open House: Thursday July 16, 2026. Founding Cohort kickoff: Thursday July 23, 2026. Founding cohort capped at 40 seats. Pricing: $149/mo billed annually (founding rate, locked while active) or $199/mo monthly. Enroll at training.colaberry.com.",
     "Students also cover their own third-party tool costs, paid directly to providers: an Anthropic subscription for Claude Code (about $20/mo) and LLM API usage (usually under $10/mo). Disclose before enrollment.",
     "Refund and cancellation terms are drafted and pending final approval. Do not quote them as final.",

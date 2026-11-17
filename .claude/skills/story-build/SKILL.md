@@ -194,7 +194,7 @@ different facts, and a blank panel renders them identically.
 
 | Project | bucket | todoset | vault |
 |---|---|---|---|
-| Internship (AI Systems Architect Accelerator) | 24865175 | 4327600402 | 4327600403 |
+| Internship (Forward Deployed AI Engineer Accelerator) | 24865175 | 4327600402 | 4327600403 |
 | Gov Contracts | 47346103 | 9908475794 | 9908475797 |
 
 People seen so far: Anvi 52639032, Meghana 52489233, Sohail 47335940, Ram 17346350, Ali 17454835.

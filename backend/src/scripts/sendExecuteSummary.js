@@ -79,7 +79,7 @@ const emailHtml = `<!doctype html><html><head><meta charset="utf-8"></head>
 <li><strong>7 BLACK exit approvals</strong> - open the [Action Required] BLACK pre-review email (sent earlier). Each card has the CLI pre-filled.</li>
 <li><strong>Flip nudges to live</strong> after BLACK is processed - tag <code style="background:#1f2937;color:#fbbf24;padding:2px 6px;border-radius:3px">@CB System set intern nudge mode live</code>.</li>
 <li><strong>Anthropic Partner chase</strong> - use the drill-down (separate email). Direct-message each STALLED person tonight.</li>
-<li><strong>Confirm or override the 4 main Jun-6 assumptions</strong> - if silent, downstream proceeds under: brand "AI Systems Architect Accelerator" / persona career changer / pricing $79+$149 BYO / team leads to be hired.</li>
+<li><strong>Confirm or override the 4 main Jun-6 assumptions</strong> - if silent, downstream proceeds under: brand "Forward Deployed AI Engineer Accelerator" / persona career changer / pricing $79+$149 BYO / team leads to be hired.</li>
 <li><strong>Engage TWC-aware counsel</strong> - forward TWC_INTENSIVE_OUTCOMES.md.</li>
 <li><strong>Post the JDs</strong> to your network (LinkedIn, founder networks, ex-colleagues).</li>
 <li><strong>Run ccpp-training-schema.sql</strong> against CCPP when comfortable. Wrapped in transaction; review the sanity-check SELECT before COMMIT.</li>
