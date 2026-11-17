@@ -42,9 +42,19 @@ describe('PlatformV2 — only live surfaces are depicted', () => {
      ("Free company workspace" is also the offer's name in running copy, so this
      is asserted on markup, not on text.)
   */
+  /*
+     NARROWED 2026-11-16 (page group 2), not loosened. The page now draws the model's
+     line icons and button arrows, so "no <svg> at all" would forbid the model itself.
+     What the guard is about is a DIAGRAM: an svg that names something. So every svg
+     must be decorative (aria-hidden) and carry no <title> or <text> at all.
+  */
   it('depicts no showroom surface as a diagram node, a tooltip or a tab', () => {
     const h = html();
-    expect(h).not.toContain('<svg');
+    const svgs = h.match(/<svg[\s\S]*?<\/svg>/g) || [];
+    svgs.forEach((svg) => {
+      expect(svg).toMatch(/^<svg[^>]*aria-hidden="true"/);
+      expect(svg).not.toMatch(/<title|<text/);
+    });
     SHOWROOM_SURFACES.forEach((s) => expect(h).not.toContain(`<title>${s.label}</title>`));
     const tabTexts = [...h.matchAll(/<(\w+)[^>]*role="tab"[^>]*>([\s\S]*?)<\/\1>/g)].map((m) =>
       textOf(m[2]),

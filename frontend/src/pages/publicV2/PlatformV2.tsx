@@ -1,9 +1,8 @@
 import React from 'react';
 import SeoV2 from '../../components/publicV2/SeoV2';
-import HeroPlatformV8 from '../../components/publicV2/HeroPlatformV8';
-import OpenPlatform from '../../components/publicV2/OpenPlatform';
+import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
 import { SurfacesSection } from './platformV2Surfaces';
-import { WhoeverBuildsItSection } from './platformV2Bands';
+import { PlatformHeroV5, WhoeverBuildsItSection } from './platformV2Bands';
 import './platformV2.css';
 import '../../components/publicV2/heroV8.css';
 
@@ -38,10 +37,17 @@ import '../../components/publicV2/heroV8.css';
  *  - "Production-grade" is NOT used. The honest claim is real systems against
  *    real workflows, with governance and evidence.
  *
- * Unrouted, not deleted: `BuildPipeline`, `CapabilityEarned`, `ReceiptsDrilldown`
- * (its panel is still rendered, by the surfaces band), `CapabilityOS`,
- * `TwoExperiences`, `ArchitectExperience`. Check what else imports each before
- * removing any file.
+ * 2026-11-16, page group 2 of the fidelity rebuild: the hero is the model's dark
+ * one with the product picture (PlatformHeroV5), the surfaces draw the model's
+ * figures, the third band is the model's dark one, and the close is the shared
+ * ClosingCtaV5 every page ends on. OpenPlatform ("the workspace is free", with the
+ * surface.free.workspace claim) came off with it: the model's close is the same
+ * on every page, and the site does not advertise the word.
+ *
+ * Unrouted, not deleted: `HeroPlatformV8`, `OpenPlatform`, `BuildPipeline`,
+ * `CapabilityEarned`, `ReceiptsDrilldown` (its panel is still rendered, by the
+ * surfaces band), `CapabilityOS`, `TwoExperiences`, `ArchitectExperience`. Check
+ * what else imports each before removing any file.
  */
 
 function PlatformV2(): React.ReactElement {
@@ -55,13 +61,13 @@ function PlatformV2(): React.ReactElement {
         }
       />
 
-      <HeroPlatformV8 />
+      <PlatformHeroV5 />
 
       <SurfacesSection />
 
       <WhoeverBuildsItSection />
 
-      <OpenPlatform />
+      <ClosingCtaV5 />
     </>
   );
 }
