@@ -602,7 +602,6 @@
     "frontend/src/components/publicV2/CapabilityOS.tsx": 2,
     "frontend/src/components/publicV2/GovernanceReal.tsx": 2,
     "frontend/src/components/publicV2/HeroPlatformV8.tsx": 1,
-    "frontend/src/components/publicV2/HeroPricingV8.tsx": 1,
     "frontend/src/components/publicV2/ReceiptsDrilldown.tsx": 2,
     "frontend/src/components/publicV2/TwoExperiences.tsx": 3,
     "frontend/src/components/timeline/BuildArtifactsRender.tsx": 1,

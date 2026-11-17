@@ -127,7 +127,10 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // 2026-11-16: 69 -> 68. The hero was rebuilt to the supplied file and its one
   // escaped dash went with the sentence that held it. Entry DELETED, not
   // zeroed: a clean file should not stay on the books owing something.
-  [ESCAPED_DASH_RULE.id]: 68,
+  //
+  // 2026-11-16: 68 -> 67. The /pricing hero (HeroPricingV8.tsx) moved to the model's
+  // light page hero; its one escaped dash became a comma, house style. Entry DELETED.
+  [ESCAPED_DASH_RULE.id]: 67,
   // 2026-11-16: 659 -> 657. TV-2 deleted `TvManager.tsx`, the in-campus playlist editor
   // that TV-1 left unreachable when the Manage button started opening the marketing
   // library instead. Its two emoji went with the file, so its entry is DELETED rather

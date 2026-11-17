@@ -2070,3 +2070,163 @@
   .cbv2-shell .cbv2-fgrid5 { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .cbv2-shell .cbv2-fcard5 { padding: 24px; }
 }
+
+/* =========================================================================
+   18. PRICING (2026-11-16, page group 3). LAYOUT ONLY while W4 is open: these
+   rules restyle the page's existing copy into the model's shapes. Model:
+   `.prhero`, `.sec--ink` + `.price/.pr` (+ `--hl`), `.ask`. The ladder keeps
+   its cards, drawn in the model's card language.
+   ========================================================================= */
+/* Hero: the model's light page hero, plus this page's own body, chips and proof row. */
+.cbv2-shell .cbv2-prc5 > .cbv2-wrap > .cbv2-k5 { display: inline; }
+.cbv2-shell .cbv2-prc5__deck b { font-weight: 700; color: var(--v5-ink); }
+.cbv2-shell .cbv2-prc5__body { font-size: 20px; line-height: 1.55; color: var(--v5-body); max-width: 680px; margin: 16px 0 0; }
+.cbv2-shell .cbv2-prc5__body b { color: var(--v5-ink); }
+.cbv2-shell .cbv2-prc5__btns { margin-top: 32px; }
+.cbv2-shell .cbv2-prc5__status { list-style: none; padding: 0; margin: 32px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.cbv2-shell .cbv2-prc5__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--v5-mute);
+  border: 1px solid var(--v5-line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+}
+.cbv2-shell .cbv2-prc5__chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--v5-leaf); }
+.cbv2-shell .cbv2-prc5__proof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 18px 0 0;
+  font-size: 14px;
+  color: var(--v5-mute);
+}
+
+/* Dark price band. */
+.cbv2-shell .cbv2-ink5 .cbv2-section__head .cbv2-lede { color: #B8C1CC; }
+.cbv2-shell .cbv2-price5 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cbv2-shell .cbv2-pr5 {
+  border-radius: 16px;
+  padding: 34px 30px;
+  background: #1E1E1E;
+  border: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.cbv2-shell .cbv2-pr5--hl {
+  background: linear-gradient(180deg, rgba(46, 106, 134, 0.22), #1E1E1E 55%);
+  border-color: rgba(46, 106, 134, 0.6);
+}
+.cbv2-shell .cbv2-pr5 .cbv2-k5 { display: inline; color: var(--v5-accent-on-dark); }
+.cbv2-shell .cbv2-pr5 h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #fff;
+  margin: 12px 0 4px;
+}
+.cbv2-shell .cbv2-pr5__model {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #fff;
+  margin: 16px 0 0;
+  padding: 18px 0;
+  border-top: 1px solid #333;
+  border-bottom: 1px solid #333;
+}
+.cbv2-shell .cbv2-pr5__p { font-size: 15px; line-height: 1.6; color: #AEB8C4; margin: 16px 0 0; }
+.cbv2-shell .cbv2-pr5__p b { font-weight: 500; color: #E4E4E3; }
+.cbv2-shell .cbv2-pr5__list { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 8px; flex: 1; align-content: start; }
+.cbv2-shell .cbv2-pr5__list li { display: flex; gap: 10px; font-size: 14.5px; line-height: 1.45; color: #E4E4E3; }
+.cbv2-shell .cbv2-pr5__list svg { flex: none; width: 17px; height: 17px; margin-top: 1px; color: var(--v5-leaf); }
+.cbv2-shell .cbv2-pr5__row { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 0; }
+.cbv2-shell .cbv2-pr5__row span {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: #B8C1CC;
+  border: 1px solid #2F3946;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.cbv2-shell .cbv2-pr5__btn { margin-top: 22px; width: 100%; justify-content: center; }
+
+/* The ask: accent panel, white button with no shadow (the model's plain `.btn`). */
+.cbv2-shell .cbv2-ask5 {
+  margin-top: 18px;
+  border-radius: 24px;
+  padding: 30px 34px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 30px;
+  align-items: center;
+  background: var(--v5-accent);
+  color: #fff;
+}
+.cbv2-shell .cbv2-ask5 h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: #fff;
+  margin: 0;
+}
+.cbv2-shell .cbv2-ask5 p { color: rgba(255, 255, 255, 0.9); margin: 6px 0 0; font-size: 15.5px; line-height: 1.6; max-width: 720px; }
+.cbv2-shell .cbv2-btn.cbv2-ask5__btn {
+  background: #fff;
+  color: var(--v5-ink);
+  border-color: #fff;
+  box-shadow: none;
+}
+.cbv2-shell .cbv2-btn.cbv2-ask5__btn:hover { background: #111; border-color: #111; color: #fff; }
+
+/* The ladder, in the model's card language: hairline border, 16px radius, accent
+   (not the Training cherry) for the recommended tier. */
+.cbv2-shell .cbv2-tiers5 .cbv2-tier {
+  border: 1px solid var(--v5-line);
+  border-radius: 16px;
+  padding: 30px;
+  background: #fff;
+  box-shadow: none;
+}
+.cbv2-shell .cbv2-tiers5 .cbv2-tier--featured { border-color: rgba(46, 106, 134, 0.55); box-shadow: var(--v5-shL); }
+.cbv2-shell .cbv2-tiers5 .cbv2-tier--featured::before { background: var(--v5-accent); border-radius: 16px 16px 0 0; }
+.cbv2-shell .cbv2-tiers5 .cbv2-tier__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--v5-ink);
+}
+.cbv2-shell .cbv2-tiers5 .cbv2-tier__badge {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 4px;
+}
+
+/* The unit line ("per seat, per year, volume pricing as you scale") must wrap: unwrapped
+   it ran 58px past its card at 390 and pushed the page sideways. */
+.cbv2-shell .cbv2-tiers5 .cbv2-tier__price,
+.cbv2-shell .cbv2-tiers5 .cbv2-tier__unit { white-space: normal; min-width: 0; }
+
+@media (max-width: 1080px) {
+  .cbv2-shell .cbv2-price5 { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-shell .cbv2-ask5 { grid-template-columns: minmax(0, 1fr); }
+}
