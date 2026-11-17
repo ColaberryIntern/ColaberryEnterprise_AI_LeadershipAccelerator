@@ -9,7 +9,7 @@ import { pickLeadForEnrollment, normalizeEmailForLink } from '../enrollmentLeadL
 
 describe('pickLeadForEnrollment (R18)', () => {
   it('returns null when there is no lead to link', () => {
-    // NULL means "not linked", which is the permanent state of the 100 of production's 1,436
+    // NULL means "not linked", which is the permanent state of the 96 of production's 1,395
     // enrollment emails that have no leads row at all. It does not mean organic.
     expect(pickLeadForEnrollment([])).toBeNull();
     expect(pickLeadForEnrollment(null)).toBeNull();
@@ -17,7 +17,7 @@ describe('pickLeadForEnrollment (R18)', () => {
   });
 
   it('returns the only candidate, which is the live book in every measured case', () => {
-    // Measured on production 2026-11-17: 1,336 of 1,436 enrollment emails match exactly one
+    // Measured on production 2026-11-17: 1,299 of 1,395 enrollment emails match exactly one
     // lead row and ZERO match more than one.
     expect(pickLeadForEnrollment([{ id: 42, created_at: '2026-07-01T00:00:00Z' }])).toBe(42);
   });

@@ -84,7 +84,7 @@ export interface EnrollmentAttributes {
    * chain (visitor_sessions -> visitors -> leads -> HERE -> subscriptions).
    *
    * NULL means "not linked", which is the honest reading for two different populations: every
-   * row that predates the column, and the 100 of production's 1,436 enrollment emails that have
+   * row that predates the column, and the 96 of production's 1,395 enrollment emails that have
    * no `leads` row at all and never will. It does NOT mean organic.
    *
    * Stamped at INSERT by `enrollmentLeadLinkHook` and never rewritten afterwards. Deliberately

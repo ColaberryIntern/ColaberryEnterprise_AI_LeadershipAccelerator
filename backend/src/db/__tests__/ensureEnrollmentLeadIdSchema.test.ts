@@ -28,8 +28,8 @@ describe('ensureEnrollmentLeadIdSchema (R18)', () => {
       'ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS lead_id INTEGER',
     );
     expect(ENROLLMENT_LEAD_ID_STATEMENTS[1]).toMatch(/CREATE INDEX IF NOT EXISTS idx_enrollments_lead_id/);
-    // The index is partial on purpose: on the day this lands every row is NULL, and 100 of
-    // production's 1,436 enrollment emails stay NULL permanently because they have no lead row.
+    // The index is partial on purpose: on the day this lands every row is NULL, and 96 of
+    // production's 1,395 enrollment emails stay NULL permanently because they have no lead row.
     expect(ENROLLMENT_LEAD_ID_STATEMENTS[1]).toMatch(/WHERE lead_id IS NOT NULL/);
     for (const s of ENROLLMENT_LEAD_ID_STATEMENTS) {
       expect(s).not.toMatch(/DROP|DEFAULT|UPDATE |ALTER COLUMN/i);

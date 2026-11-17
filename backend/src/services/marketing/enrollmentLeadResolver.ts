@@ -92,7 +92,7 @@ export async function resolveLeadIdForEmail(email: unknown): Promise<number | nu
  * resolution is only the fallback for the paths that have none.
  *
  * Never throws, and never blocks the insert. An unresolvable lead leaves `lead_id` NULL, which
- * reads as "not linked" everywhere — the state 100 of production's 1,436 enrollment emails will
+ * reads as "not linked" everywhere — the state 96 of production's 1,395 enrollment emails will
  * stay in permanently, because they have no `leads` row at all.
  */
 export async function enrollmentLeadLinkHook(instance: LinkableEnrollment): Promise<void> {

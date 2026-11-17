@@ -10,8 +10,8 @@
  * ── WHY EMAIL, AND WHY THAT IS ENOUGH HERE ───────────────────────────────────────────
  *
  * Email is the only identifier the two sides share. That is normally a weak join, and on this
- * data it is not: measured against production on 2026-11-17, of 1,436 distinct enrollment emails,
- * 1,336 match exactly one `leads` row, 100 match none, and **zero match more than one**. There is
+ * data it is not: measured against production on 2026-11-17, of 1,395 distinct enrollment emails,
+ * 1,299 match exactly one `leads` row, 96 match none, and **zero match more than one**. There is
  * no ambiguity to resolve in the live book.
  *
  * `pickLeadForEnrollment` still handles multiplicity rather than asserting it away, because the

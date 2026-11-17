@@ -50,7 +50,7 @@ import { sequelize } from '../config/database';
  * ── THE INDEX IS PARTIAL ─────────────────────────────────────────────────────────────
  *
  * On the day this lands every row is NULL, and "which enrollment belongs to this lead" never
- * selects a NULL. 100 of the 1,436 enrollment emails in production have no `leads` row at all
+ * selects a NULL. 96 of the 1,395 enrollment emails in production have no `leads` row at all
  * and never will, so a share of rows stays NULL permanently. Indexing them buys nothing, which
  * is the same reasoning `ensurePageEventLeadId.ts` applies to its second index.
  *

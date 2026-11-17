@@ -6,7 +6,7 @@
  * existing rows get the same edge.
  *
  * Measured against production on 2026-11-17:
- *   - 1,436 distinct enrollment emails; 1,336 match exactly one `leads` row, 100 match none
+ *   - 1,395 distinct enrollment emails; 1,299 match exactly one `leads` row, 96 match none
  *   - ZERO match more than one, so there is no ambiguity to resolve in the live book
  *   - all 26 currently-paying members match, covering $4,824/mo of MRR
  *
@@ -30,7 +30,7 @@
  * ── FAILURE PATH ──
  *
  * Per row. A row whose lookup or update throws is counted `failed` with its reason and the loop
- * continues: one unresolvable enrollment must not cost the other 1,335. Nothing is deleted and
+ * continues: one unresolvable enrollment must not cost the other 1,298. Nothing is deleted and
  * nothing already set is overwritten, so the worst outcome of a bad run is that some rows stay
  * NULL and the script can be run again.
  *
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
     + `${execute ? `${linked} linked` : `${linked} would be linked`}, `
     + `${count('no-lead')} with no lead row, ${count('no-email')} with no email, ${count('failed')} failed.`,
   );
-  // Coverage, not just a row count. "1,336 linked" says nothing about whether the rows that
+  // Coverage, not just a row count. "1,299 linked" says nothing about whether the rows that
   // matter moved, and the rows that matter are the ones with revenue behind them.
   console.log(
     `coverage: ${rows.length === 0 ? 'n/a' : `${Math.round((linked / rows.length) * 100)}%`} of the rows examined`,

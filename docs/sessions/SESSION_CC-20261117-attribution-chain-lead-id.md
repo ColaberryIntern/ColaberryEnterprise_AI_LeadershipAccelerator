@@ -58,8 +58,8 @@ All 26 paying members are attributable at CHANNEL level and none came from an ad
 
 ## Why email is a sound join here
 
-Normally it is weak. On this data it is not: of 1,436 distinct enrollment emails, 1,336 match
-exactly one `leads` row, 100 match none, and **zero match more than one**. `pickLeadForEnrollment`
+Normally it is weak. On this data it is not: of 1,395 distinct enrollment emails, 1,299 match
+exactly one `leads` row, 96 match none, and **zero match more than one**. `pickLeadForEnrollment`
 still handles multiplicity, because `leads` has no unique index on email and a duplicate is a
 future data-entry event rather than an impossibility.
 
@@ -77,14 +77,45 @@ future data-entry event rather than an impossibility.
 - 26 new tests across the two new suites, all passing.
 - The 35 suites that touch enrollment creation and boot schema: 585 tests, all passing. This was
   the real risk of a model-level hook and it is the assertion that matters most.
+- All 10 PR checks green on the PR head commit, including the Postgres integration tier. That
+  tier runs `*.integration.test.ts` suites only, so it proves nothing was broken rather than
+  proving this works.
+
+### Against the live production database, read-only
+
+`resolveLeadIdForEmail` was compiled and run inside the production container against the real
+`leads` and `enrollments` tables, with the real models. SELECTs only, and both the compiled files
+and the harness were removed from the container and the host afterwards:
+
+```
+RESOLVER over 1395 enrollment emails: 1299 linked, 96 unlinked
+PAYING MEMBERS: 26 of 26 resolve to a lead
+STABLE: 3149 === 3149 -> true
+BLANK EMAIL -> null      UNKNOWN EMAIL -> null
+```
+
+This is the resolver, not a re-derivation of the query: 26 of 26 paying members resolve, the
+answer is stable across two calls, and the two guards hold.
+
+### A figure this corrected
+
+The first version of this change said "1,436 distinct enrollment emails; 1,336 match exactly one
+`leads` row, 100 match none", and that is what the commit message and the first PR body say.
+1,436 is the number of enrollment ROWS carrying an email, not distinct emails -- the Phase A
+query's CTE was not `DISTINCT`. The live run surfaced the difference, and re-measuring gives the
+real figures: **1,395 distinct emails, 1,299 match exactly one, 96 match none, 0 match more than
+one.** 41 enrollment rows share an email with another row. Every file now carries the corrected
+numbers; the conclusion is unchanged, and "zero match more than one" was computed per email and
+was never affected.
 
 ## Not verified
 
-- The hook has not run against a live database. It is proven against both callers it is written
-  for (a Sequelize instance with `set`, and a plain object) and against a failing lookup, but no
-  enrollment has been created in production with this code deployed.
-- The backfill has not been run anywhere. Its dry run on production is the first thing to do after
-  deploy, and it needs Ali's word because it writes.
+- No enrollment has been created in production with this code deployed, so the hook itself has
+  run only against its unit callers (a Sequelize instance with `set`, a plain object, a failing
+  lookup, a no-match and a blank email). The resolver it calls is verified against production;
+  the `beforeCreate` wiring that invokes it is not.
+- The backfill has not been run anywhere. Its dry run on production is the first thing to do
+  after deploy, and `--execute` needs Ali's word because it writes.
 
 ## Owed
 
