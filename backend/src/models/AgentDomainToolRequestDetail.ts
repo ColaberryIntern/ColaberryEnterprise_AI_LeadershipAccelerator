@@ -2,6 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 import type {
   ToolEnvironment,
+  ToolProductState,
   ToolRunFrequency,
 } from '../db/ensureAgentDomainToolRequestSchema';
 
@@ -47,6 +48,23 @@ export interface AgentDomainToolRequestDetailAttributes {
   capability_id: string;
   task_unblocked: string;
   manual_today: string;
+  /**
+   * AF11.7. The email of the person who will act on the output, in the people record's own
+   * spelling. Not a role and not free text — see `services/agentDomain/actorRoster.ts`.
+   */
+  acts_on_output: string;
+  /** The number that decides whether this tool worked. */
+  judged_threshold: string;
+  /** What the system already records that would produce that number. */
+  judged_measured_from: string;
+  /**
+   * Always `not_built` on a stored row — `chk_adtr_build_request_is_unbuilt` enforces it, because
+   * this is the detail of a BUILD request. The type carries all three states because the gate has
+   * to recognize all three in order to route the other two away from here.
+   */
+  tried_in_product: ToolProductState;
+  /** What the product cannot do today. The case for building anything at all. */
+  missing_from_product: string;
   /** `YYYY-MM-DD`. A `DATE` column, so no timezone can move it a day either way. */
   needed_by: string;
   run_frequency: ToolRunFrequency;
@@ -74,6 +92,11 @@ class AgentDomainToolRequestDetail extends Model<AgentDomainToolRequestDetailAtt
   declare capability_id: string;
   declare task_unblocked: string;
   declare manual_today: string;
+  declare acts_on_output: string;
+  declare judged_threshold: string;
+  declare judged_measured_from: string;
+  declare tried_in_product: ToolProductState;
+  declare missing_from_product: string;
   declare needed_by: string;
   declare run_frequency: ToolRunFrequency;
   declare touches: string[];
@@ -100,6 +123,11 @@ AgentDomainToolRequestDetail.init(
     capability_id: { type: DataTypes.TEXT, allowNull: false },
     task_unblocked: { type: DataTypes.TEXT, allowNull: false },
     manual_today: { type: DataTypes.TEXT, allowNull: false },
+    acts_on_output: { type: DataTypes.TEXT, allowNull: false },
+    judged_threshold: { type: DataTypes.TEXT, allowNull: false },
+    judged_measured_from: { type: DataTypes.TEXT, allowNull: false },
+    tried_in_product: { type: DataTypes.TEXT, allowNull: false },
+    missing_from_product: { type: DataTypes.TEXT, allowNull: false },
     needed_by: { type: DataTypes.DATEONLY, allowNull: false },
     run_frequency: { type: DataTypes.TEXT, allowNull: false },
     touches: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },

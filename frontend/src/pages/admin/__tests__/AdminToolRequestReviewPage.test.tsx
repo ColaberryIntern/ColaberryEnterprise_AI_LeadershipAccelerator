@@ -71,9 +71,19 @@ const DETAIL = {
   capability_id: 'product_experience.CAP.daily_digest',
   task_unblocked: 'The daily digest the agent cannot write today',
   manual_today: 'Someone opens Skool and copies the posts into a doc',
+  // AF11.7 — the three answers that decide whether this gets built at all.
+  acts_on_output: 'sohail@colaberry.com',
+  judged_threshold: 'Sohail sends the digest unedited 8 of the next 10 weekdays',
+  judged_measured_from: 'The edit count already stored against each digest',
+  tried_in_product: 'not_built',
+  missing_from_product: 'Nothing in the app reads Skool, so there is no feed to open',
   needed_by: '2026-11-20',
   run_frequency: 'daily',
   touches: ['skool', 'postgres'],
+  // Required by the API since the dataset-scope change, and absent from this fixture until
+  // AF11.7 — which is how the approver's console came to be missing both.
+  environment: 'sandbox',
+  read_datasets: ['community_posts'],
   inputs: ['community_id'],
   writes: false,
   side_effects: null,
@@ -176,9 +186,59 @@ async function type(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectEleme
 describe('PROPERTY 1 — all six field groups, on one screen', () => {
   it('renders every group, with nothing collapsed behind a tab', async () => {
     await render();
-    for (const g of ['who', 'what', 'what_for', 'when', 'where', 'how']) {
+    for (const g of [
+      'who', 'what', 'what_for', 'when', 'where', 'how',
+      // AF11.7 added `worth_building`; `which_data` carries two fields the API has required since
+      // the dataset-scope change and which appeared in no group at all.
+      'worth_building', 'which_data',
+    ]) {
       expect(container.querySelector(`[data-testid="facts-group-${g}"]`)).toBeTruthy();
     }
+  });
+
+  it('AF11.7: puts "worth building" FIRST, before the blast radius', async () => {
+    // Reading it last would mean reading it after the decision had effectively been made. The
+    // order is the point, so it is asserted rather than left to the array literal.
+    await render();
+    const keys = [...container.querySelectorAll('[data-testid^="facts-group-"]')]
+      .map((el) => el.getAttribute('data-testid'));
+    expect(keys[0]).toBe('facts-group-worth_building');
+    // And the blast radius is still on the page, further down rather than removed.
+    expect(keys).toContain('facts-group-where');
+  });
+
+  it('AF11.7: shows who acts on the output, the threshold, and what the app cannot do', async () => {
+    // These three are the ones whose ABSENCE let a capability reach seven builders' boards with
+    // nobody waiting on its output. A required field the approver cannot see is not a check.
+    await render();
+    expect(text()).toContain('sohail@colaberry.com');
+    expect(text()).toContain('8 of the next 10 weekdays');
+    expect(text()).toContain('The edit count already stored');
+    expect(text()).toContain('Nothing in the app reads Skool');
+  });
+
+  it('AF11.7: reads `tried_in_product` as a sentence, not as a raw enum', async () => {
+    await render();
+    expect(text()).toContain('The app cannot do this');
+    expect(text()).not.toContain('not_built');
+  });
+
+  it('AF11.7: flags a request whose feature ALREADY EXISTS, which the gate should have refused', async () => {
+    // `used_by_hand` cannot be stored — `chk_adtr_build_request_is_unbuilt` forbids it and the
+    // contract refuses it. If one appears on this screen the gate was bypassed, and that is worth
+    // noticing rather than scanning past as another gray row.
+    mocked.fetchAllChangeRequests.mockResolvedValue([
+      REQ({ tool_request: { ...DETAIL, tried_in_product: 'used_by_hand' } }),
+    ]);
+    await render();
+    expect(text()).toContain('this should be a grant');
+    expect(container.querySelector('.badge.bg-warning')).toBeTruthy();
+  });
+
+  it('shows the environment and the datasets a grant would be written against', async () => {
+    await render();
+    expect(text()).toContain('sandbox');
+    expect(text()).toContain('community_posts');
   });
 
   it('shows the blast-radius field itself, not a count of it', async () => {

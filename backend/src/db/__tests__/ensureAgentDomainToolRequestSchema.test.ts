@@ -27,6 +27,7 @@ import {
   REQUIRED_INDEXES,
   REQUIRED_TABLES,
   ROLLBACK_STATEMENTS,
+  TOOL_PRODUCT_STATES,
   TOOL_RUN_FREQUENCIES,
   assertAgentDomainToolRequestSchema,
   ensureAgentDomainToolRequestSchema,
@@ -382,5 +383,133 @@ describe('the frequency enum is a comparable risk input, not free text', () => {
     expect(TOOL_RUN_FREQUENCIES).toContain('hourly');
     expect(TOOL_RUN_FREQUENCIES).toContain('quarterly');
     expect(new Set(TOOL_RUN_FREQUENCIES).size).toBe(TOOL_RUN_FREQUENCIES.length);
+  });
+});
+
+describe('AF11.7 — the five "should this be built at all" columns', () => {
+  const NEW_COLUMNS = [
+    'acts_on_output',
+    'judged_threshold',
+    'judged_measured_from',
+    'tried_in_product',
+    'missing_from_product',
+  ];
+
+  it('adds each one with IF NOT EXISTS and then SET NOT NULL, as a SEPARATE statement', () => {
+    // The trap this file already records once, for `environment`: `CREATE TABLE IF NOT EXISTS` is a
+    // NO-OP against the table sitting in production, so a column declared only in the CREATE ships
+    // green and is absent on every environment that has ever run this file.
+    const sql = sourceSql();
+    for (const col of NEW_COLUMNS) {
+      expect(sql).toMatch(new RegExp(`ADD COLUMN IF NOT EXISTS ${col} TEXT`));
+      expect(sql).toMatch(new RegExp(`ALTER COLUMN ${col} SET NOT NULL`));
+    }
+  });
+
+  it('gives NONE of them a default, so no row can read as answered when it was not', () => {
+    // The distinction this file draws for `read_datasets`: an empty list is the truthful value for
+    // a request that named no datasets. There is no value of "who acts on the output" that honestly
+    // means "nobody asked", and the whole point of this group is that the question WAS asked. A
+    // default would make every pre-existing row claim an answer nobody gave.
+    const sql = sourceSql();
+    for (const col of NEW_COLUMNS) {
+      expect(sql).not.toMatch(new RegExp(`ADD COLUMN IF NOT EXISTS ${col} TEXT NOT NULL`));
+      expect(sql).not.toMatch(new RegExp(`ADD COLUMN IF NOT EXISTS ${col} TEXT DEFAULT`));
+      expect(sql).not.toMatch(new RegExp(`ALTER COLUMN ${col} SET DEFAULT`));
+    }
+  });
+
+  it('declares each one in the CREATE as well, for an environment that has never run this file', () => {
+    const create = createBlock();
+    for (const col of NEW_COLUMNS) {
+      expect(create).toMatch(new RegExp(`${col} TEXT NOT NULL`));
+    }
+  });
+
+  it('names each one in REQUIRED_COLUMNS, so `assert` fails a boot that lacks one', () => {
+    for (const col of NEW_COLUMNS) {
+      expect(REQUIRED_COLUMNS).toContain(`${TABLE}.${col}`);
+    }
+  });
+
+  it.each([
+    'acts_on_output',
+    'judged_threshold',
+    'judged_measured_from',
+    'tried_in_product',
+    'missing_from_product',
+  ])('THROWS when %s is present but still NULLABLE', async (col) => {
+    // `SET NOT NULL` is its own statement and the loop that runs it warns and continues, so a
+    // column can arrive and stay optional. Checking only that it EXISTS would pass on exactly that
+    // environment, leaving a column that accepts the blank the contract refuses. The nullability
+    // read was `environment`-only before AF11.7; five more columns arrive the same way, so the
+    // assertion sweeps a list rather than special-casing one name.
+    stageAssert({ nullable: [col] });
+    await expect(assertAgentDomainToolRequestSchema())
+      .rejects.toThrow(new RegExp(`${col} is still nullable`));
+  });
+
+  it('still tolerates the columns that are LEGITIMATELY nullable', async () => {
+    // `side_effects`, `reversible` and `reversibility_note` are nullable on purpose — they are
+    // mandatory only on a write. The nullability read no longer filters by column name, so it now
+    // returns those three on a perfectly sound schema. If the assertion ever treated its result as
+    // "everything here is a problem", a healthy database would fail its own boot.
+    stageAssert({ nullable: ['side_effects', 'reversible', 'reversibility_note'] });
+    await expect(assertAgentDomainToolRequestSchema()).resolves.toBeUndefined();
+  });
+});
+
+describe('AF11.7 — the storage half of the routing rule, which is NARROWER than its own enum', () => {
+  it('pins a stored row to `not_built`, because this table is the detail of a BUILD request', () => {
+    // `TOOL_PRODUCT_STATES` carries three values because the GATE has to recognize all three in
+    // order to route two of them away. A row saying "the product already does this" would be a
+    // build request for something we already own — the exact thing Ali named on 16 Nov 2026:
+    // *"people are proposing things we don't even need."*
+    const sql = sourceSql();
+    expect(sql).toMatch(
+      /CONSTRAINT chk_adtr_build_request_is_unbuilt CHECK \(\s*tried_in_product = 'not_built'\s*\)/,
+    );
+    expect(REQUIRED_CHECKS).toContain('chk_adtr_build_request_is_unbuilt');
+  });
+
+  it('guards the constraint add on its own existence, since Postgres has no IF NOT EXISTS for it', () => {
+    // A plain ADD throws `duplicate_object` on every boot after the first and fills the logs with a
+    // failure that is actually the success case.
+    expect(sourceSql())
+      .toMatch(/SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtr_build_request_is_unbuilt'/);
+  });
+
+  it('is DELIBERATELY not an IN list over the enum, and this test is why', () => {
+    // If this ever becomes `IN ('used_by_hand','exists_unused','not_built')`, the table has started
+    // accepting build requests for features that already exist, and the refusal in
+    // `toolRequestContract.ts` is the only thing left stopping them. That is the failure mode both
+    // sibling constraints in this file were written against: a future caller that skips the
+    // contract.
+    expect(sourceSql()).not.toMatch(/tried_in_product IN \(/);
+  });
+
+  it('lets `missing_from_product` be plain NOT NULL rather than a conditional pairing check', () => {
+    // Because the only storable state is `not_built`, the gap is ALWAYS required. A pairing check
+    // in the shape of `chk_adtr_write_declares_effects` would be dead weight here, and a reader
+    // finding one would reasonably conclude the other two states can be stored.
+    expect(sourceSql()).not.toMatch(/tried_in_product\s*<>\s*'not_built'\s*OR/);
+    expect(REQUIRED_COLUMNS).toContain(`${TABLE}.missing_from_product`);
+  });
+
+  it('keeps all three states in the TYPE, because the gate routes on them', () => {
+    expect(TOOL_PRODUCT_STATES).toEqual(['used_by_hand', 'exists_unused', 'not_built']);
+    expect(new Set(TOOL_PRODUCT_STATES).size).toBe(TOOL_PRODUCT_STATES.length);
+  });
+
+  it('ACTUALLY CREATES the constraint rather than only asserting it afterwards', () => {
+    // The mutation this file's sibling test records: `assert` is driven through a mock that answers
+    // "the constraint is there", so deleting the DDL that creates it leaves every other test green.
+    // Both the CREATE clause and the guarded ADD have to be present, because an environment that
+    // already has the table only ever runs the second.
+    const sql = sourceSql();
+    const inCreate = /CONSTRAINT chk_adtr_build_request_is_unbuilt CHECK/.test(createBlock());
+    const inAlter = /ADD CONSTRAINT chk_adtr_build_request_is_unbuilt/.test(sql);
+    expect(inCreate).toBe(true);
+    expect(inAlter).toBe(true);
   });
 });

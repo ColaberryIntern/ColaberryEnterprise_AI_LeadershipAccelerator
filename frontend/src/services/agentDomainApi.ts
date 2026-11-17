@@ -136,12 +136,46 @@ export interface ToolRequestDetail {
   capability_id: string;
   task_unblocked: string;
   manual_today: string;
+  /**
+   * AF11.7. The email of the person who will act on the output, in the people record's own
+   * spelling. Not a team and not a role: the API checks it against a roster and refuses anything
+   * that is not on it.
+   *
+   * This is the field whose absence let a capability reach seven builders' boards with nobody
+   * waiting on its output. `task_unblocked` names the WORK; this names the HUMAN.
+   */
+  acts_on_output: string;
+  /** The number that decides whether the tool worked. The API refuses a value with no number. */
+  judged_threshold: string;
+  /** What the system already records that would produce that number. */
+  judged_measured_from: string;
+  /**
+   * Always `not_built` on a stored request: the other two states are real answers that the API
+   * routes elsewhere — a feature you have used is a GRANT, and one you have not tried sends you to
+   * use it first. The union carries all three because the API's refusals name all three.
+   */
+  tried_in_product: 'used_by_hand' | 'exists_unused' | 'not_built';
+  /** What the product cannot do today. The case for building anything at all. */
+  missing_from_product: string;
   /** `YYYY-MM-DD`. */
   needed_by: string;
   run_frequency:
   | 'once' | 'on_demand' | 'per_event' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'quarterly';
   /** Every system the tool would touch. The blast-radius field, and the one being approved. */
   touches: string[];
+  /**
+   * Which environment the tool reads. Ali's rule: a sandbox read gets a wide grant, a production
+   * one gets a narrow one.
+   *
+   * This field and `read_datasets` below were MISSING from this interface, which claims to be
+   * "field-for-field the backend's `ToolRequestDetail`" and was not: the dataset-scope change
+   * added both to the API and to the approver's record and never to this type. Nothing broke,
+   * because no caller read them — which is why it went unnoticed, and why the approver's console
+   * could not show two required fields.
+   */
+  environment: 'sandbox' | 'production';
+  /** Dataset names from the catalog. Required on a production tool that reads anything. */
+  read_datasets: string[];
   inputs: string[];
   writes: boolean;
   /** Required by the API when `writes` is true, and null when it is false. */

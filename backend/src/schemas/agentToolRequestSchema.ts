@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   TOOL_ENVIRONMENTS,
+  TOOL_PRODUCT_STATES,
   TOOL_RUN_FREQUENCIES,
 } from '../db/ensureAgentDomainToolRequestSchema';
 
@@ -36,6 +37,12 @@ export const TOOL_NARRATIVE_MAX = 1000;
 export const TOOL_SIDE_EFFECTS_MAX = 2000;
 export const TOOL_LIST_ITEM_MAX = 300;
 export const TOOL_LIST_MAX_ITEMS = 50;
+/**
+ * AF11.7. An email address, bounded. 254 is the RFC 5321 ceiling for a whole address, so this is a
+ * bound on what gets persisted rather than a rule about what an address may look like — the roster
+ * decides that, and it decides it by whether the address is on it.
+ */
+export const TOOL_ACTOR_MAX = 254;
 
 /**
  * One entry of a `reads` / `produces` / `touches` / `inputs` list.
@@ -78,6 +85,33 @@ export const ToolRequestPayloadSchema = z.object({
     .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
     .optional(),
   manual_today: z.string().trim()
+    .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
+    .optional(),
+  // WHETHER IT SHOULD BE BUILT AT ALL — AF11.7.
+  //
+  // `acts_on_output` is NOT `z.string().email()`, which looks like the obvious call and is the
+  // wrong one. A syntactically valid address that belongs to nobody is exactly the non-answer this
+  // field exists to refuse, and a Zod email check would report `invalid_email` where the contract
+  // reports `acts_on_output_not_a_person` — two refusals for one field, one of which is a shape
+  // error dressed as a roster miss. The roster is the only authority on whether this names a
+  // person, and the roster is I/O. So: length only here, membership there.
+  acts_on_output: z.string().trim()
+    .max(TOOL_ACTOR_MAX, `An email can be at most ${TOOL_ACTOR_MAX} characters.`)
+    .optional(),
+  judged_threshold: z.string().trim()
+    .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
+    .optional(),
+  judged_measured_from: z.string().trim()
+    .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
+    .optional(),
+  // An ENUM here as well as in the contract, for the reason `environment` records below: this
+  // rejects a TYPE error (`tried_in_product: 3`), and the contract decides PRESENCE, names the
+  // refusal, and — uniquely for this field — turns two of the three valid values into a ROUTE
+  // rather than a fault. Zod cannot express "this is a valid answer and it belongs somewhere else."
+  tried_in_product: z.enum(TOOL_PRODUCT_STATES, {
+    message: `Whether you have done this by hand has to be one of: ${TOOL_PRODUCT_STATES.join(', ')}.`,
+  }).optional(),
+  missing_from_product: z.string().trim()
     .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
     .optional(),
   // WHEN
