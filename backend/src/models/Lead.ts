@@ -36,7 +36,11 @@ interface LeadAttributes {
   assigned_admin?: string;
   pipeline_stage?: string;
   consent_contact?: boolean;
-  /** Opted in at signup to be shown by first name in landing-page snack bars. */
+  /**
+   * Consent to be shown by first name in landing-page snack bars. NOTHING WRITES IT YET - no
+   * signup form collects the consent, so it is `false` on every row and the snack bar can only
+   * say "Someone in <city>". See services/marketing/snackbarFeedService.ts.
+   */
   social_proof_opt_in?: boolean;
   lead_source_type?: string;
   industry?: string;
