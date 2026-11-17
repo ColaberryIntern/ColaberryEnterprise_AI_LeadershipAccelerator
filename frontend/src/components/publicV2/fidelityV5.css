@@ -62,6 +62,23 @@
 .cbv2-shell .cbv2-section__head { max-width: 860px; margin-bottom: 64px; }
 .cbv2-shell .cbv2-section__head > .cbv2-eyebrow { display: flex; margin: 0 0 20px; }
 
+/* Page width: the model's .wrap is 1200px with 28px sides, a 1,144px content column. The site's
+   was 1280px with 24px sides (1,232px), so every two-column band ran 40-70px wider than the model
+   and titles broke in different places. The audit's 12% width tolerance hid it; the line-break
+   check found it (Ali, 2026-11-16: "something is off about the services page"). */
+.cbv2-shell .cbv2-wrap { max-width: 1200px; padding-inline: 28px; }
+.cbv2-shell .cbv2-h8__inner,
+.cbv2-shell .cbv2-h8__verbs,
+.cbv2-shell .cbv2-h8__rollout { max-width: 1200px; padding-inline: 28px; }
+@media (min-width: 901px) {
+  .cbv2-shell .cbv2-h8__inner { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 56px; }
+}
+
+/* Line breaks: the model never balances a title. Page sheets (heroV8, platform, demo pilot)
+   set `text-wrap: balance`, which moved breaks ("Three services. / One question each."). At
+   .cbv2-shell + element weight this outranks a page's one-class rule; a two-class rule still wins. */
+.cbv2-shell :is(h1, h2, h3) { text-wrap: wrap; }
+
 /* Section titles (S2): the model's scale, tight tracking, one weight. */
 .cbv2-shell .cbv2-section__head h2,
 .cbv2-shell .cbv2-h2 {
@@ -72,7 +89,7 @@
   font-weight: 700;
   color: var(--v5-ink);
   margin: 0;
-  text-wrap: balance;
+  text-wrap: wrap; /* the model wraps titles normally; balance moved the break ("Three services. / One question each.") */
 }
 .cbv2-shell .cbv2-h2 { margin-top: 18px; }
 
@@ -526,7 +543,7 @@
   color: #fff;
   max-width: 980px;
   margin: 20px auto 0;
-  text-wrap: balance;
+  text-wrap: wrap; /* as the model: no balancing */
 }
 .cbv2-shell .cbv2-cta5__h .cbv2-it { color: var(--v5-accent-on-dark); }
 .cbv2-shell .cbv2-cta5__p { color: #AEB8C4; font-size: 19px; line-height: 1.6; max-width: 620px; margin: 22px auto 0; }
@@ -543,7 +560,7 @@
 .cbv2-shell .cbv2-main > :last-child.cbv2-cta5 { margin-bottom: 0; }
 
 /* ------------------------------------------------------- 10. home: hero (H1) */
-.cbv2-shell .cbv2-h8__h1 { font-size: clamp(46px, 7vw, 96px); letter-spacing: -0.045em; line-height: 1.04; }
+.cbv2-shell .cbv2-h8__h1 { font-size: clamp(46px, 7vw, 96px); letter-spacing: -0.035em; line-height: 1.04; } /* model: h1,h2 brand override -.035em */
 .cbv2-shell .cbv2-h8__body { font-size: 19.5px; line-height: 1.55; color: var(--v5-body); }
 .cbv2-shell .cbv2-h8__btn {
   display: inline-flex;
