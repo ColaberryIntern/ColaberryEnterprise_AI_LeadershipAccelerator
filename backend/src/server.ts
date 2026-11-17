@@ -224,6 +224,7 @@ import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMes
 import { ensureToolRequestPackageSchemaGuarded } from './db/ensureToolRequestPackageSchema';
 import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
+import { ensureCapabilityInstructionSchemaGuarded } from './db/ensureCapabilityInstructionSchema';
 import { ensureMayaOutboundApprovalSchemaGuarded } from './db/ensureMayaOutboundApprovalSchema';
 import { ensurePageEventVisitorIndexGuarded } from './db/ensurePageEventVisitorIndex';
 
@@ -3358,6 +3359,9 @@ async function start(): Promise<void> {
   // table is absent and the seed then leaves `tools_granted` untouched for that boot, which is
   // the safe direction: a boot of staleness rather than a reverted grant.
   await ensureAgentToolGrantSchemaGuarded();
+  // AF11.14 — somewhere for standing instructions to live. Guarded: a problem here is loud in
+  // the log and never stops the backend binding its port.
+  await ensureCapabilityInstructionSchemaGuarded();
   // Maya's outbound approval queue.
   //
   // At BOOT rather than lazily on first enqueue, and that is the whole reason this is here.
