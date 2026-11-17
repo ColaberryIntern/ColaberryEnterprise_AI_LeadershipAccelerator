@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAdmin, requireSection } from '../../middlewares/authMiddleware';
 import { handleSearchDatasetCatalog } from '../../controllers/datasetCatalogController';
+import { handleListAgentDomainActors } from '../../controllers/agentDomainActorController';
 import {
   handleDecideChangeRequest,
   handleFileChangeRequest,
@@ -85,6 +86,23 @@ router.get(
   '/api/admin/agent-domain-datasets',
   requireSection('dashboard'),
   handleSearchDatasetCatalog,
+);
+
+/**
+ * GET — the people an `acts_on_output` address may name. AF11.11.
+ *
+ * `requireSection('dashboard')`, matching the FILING route and the dataset picker beside it, for
+ * the reason the dataset picker records: a field whose refusal names a roster the filer cannot see
+ * is a refusal with no way to resolve it. AF11.7 made `acts_on_output` required and refuses an
+ * address that is not on this roster, so before this route a builder could only discover the
+ * accepted addresses by guessing at them one submission at a time.
+ *
+ * Read-only, emails only, no names or roles. See the controller for why that is the whole payload.
+ */
+router.get(
+  '/api/admin/agent-domain-actors',
+  requireSection('dashboard'),
+  handleListAgentDomainActors,
 );
 
 /** POST — approve or decline. 200, or 400/403/404/409. No build is started. */

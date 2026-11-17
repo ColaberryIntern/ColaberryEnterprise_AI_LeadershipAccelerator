@@ -45,6 +45,8 @@ const MINE = '/api/admin/agent-domain-change-requests-mine';
 const QUEUE = '/api/admin/agent-domain-change-requests';
 /** The dataset picker's read surface, added to this router with the dataset-scope change. */
 const DATASETS = '/api/admin/agent-domain-datasets';
+/** AF11.11. The people picker for `acts_on_output`, read while filling the same form. */
+const ACTORS = '/api/admin/agent-domain-actors';
 const DECIDE = '/api/admin/agent-domain-change-requests/11111111-2222-4333-8444-555555555555/decide';
 
 function tokenFor(mgmtRole: string | null, role = 'staff'): string {
@@ -88,13 +90,15 @@ beforeEach(() => {
 });
 
 describe('every route carries its own guard', () => {
-  it('POSITIVE CONTROL: the router registers five routes, so the enumeration is not empty', () => {
+  it('POSITIVE CONTROL: the router registers six routes, so the enumeration is not empty', () => {
     const routes = registeredRoutes();
-    expect(routes).toHaveLength(5);
+    expect(routes).toHaveLength(6);
     expect(routes.map((r) => `${r.methods[0]} ${r.path}`).sort()).toEqual([
       `get ${QUEUE}`,
       `get ${MINE}`,
       `get ${DATASETS}`,
+      // AF11.11. This control caught the route being added, which is what it is for.
+      `get ${ACTORS}`,
       `post ${QUEUE}/:id/decide`,
       `post ${MINE}`,
     ].sort());
@@ -110,15 +114,18 @@ describe('every route carries its own guard', () => {
    * total count is compared against the number of registered routes, so a route ADDED without a
    * guard also fails here — the thing the per-file lint cannot see.
    */
-  it('exactly three requireSection(dashboard) and exactly two requireAdmin, matching the route count', () => {
+  it('exactly four requireSection(dashboard) and exactly two requireAdmin, matching the route count', () => {
     const src = routerCode();
     const sections = [...src.matchAll(/requireSection\(\s*'([a-z_]+)'\s*\)/g)].map((m) => m[1]);
     const admins = [...src.matchAll(/\brequireAdmin\b/g)].length;
-    // THREE now: filing, the intern's own list, and the dataset picker they read while filing.
-    // The picker deliberately sits on the FILING grant rather than the deciding one — behind
-    // `requireAdmin` the only people who could see the list would be the ones who never fill in
-    // the form, which would make `read_datasets_not_catalogued` a refusal with no way out.
-    expect(sections).toEqual(['dashboard', 'dashboard', 'dashboard']);
+    // FOUR now: filing, the intern's own list, and the TWO pickers they read while filling the
+    // form — the dataset picker and, since AF11.11, the people picker behind `acts_on_output`.
+    //
+    // Both pickers deliberately sit on the FILING grant rather than the deciding one. Behind
+    // `requireAdmin` the only people who could see either list would be the ones who never fill
+    // in the form, which would make `read_datasets_not_catalogued` and
+    // `acts_on_output_not_a_person` refusals with no way out.
+    expect(sections).toEqual(['dashboard', 'dashboard', 'dashboard', 'dashboard']);
     // One import mention plus two usages.
     expect(admins).toBe(3);
     expect(sections.length + 2).toBe(registeredRoutes().length);
@@ -129,6 +136,15 @@ describe('every route carries its own guard', () => {
     // Anchored on the path rather than on ordering, so a reshuffle of the router does not make
     // this pass for the wrong reason.
     const block = src.slice(src.indexOf(`'${DATASETS}'`), src.indexOf(`'${DATASETS}'`) + 160);
+    expect(block).toMatch(/requireSection\(\s*'dashboard'\s*\)/);
+    expect(block).not.toMatch(/requireAdmin/);
+  });
+
+  it('puts the PEOPLE picker on the FILING grant too, for the same reason', () => {
+    const src = routerCode();
+    // AF11.7 refuses an address that is not on the roster, so a filer who cannot read the roster
+    // cannot resolve the refusal. Same shape of problem as the dataset picker above, same fix.
+    const block = src.slice(src.indexOf(`'${ACTORS}'`), src.indexOf(`'${ACTORS}'`) + 160);
     expect(block).toMatch(/requireSection\(\s*'dashboard'\s*\)/);
     expect(block).not.toMatch(/requireAdmin/);
   });
