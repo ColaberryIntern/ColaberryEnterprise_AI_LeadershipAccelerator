@@ -5,6 +5,7 @@ import Icon from '../../components/publicV2/Icon';
 import ModelGlyph from '../../components/publicV2/ModelGlyph';
 import ServiceCardsV5, { RingTick } from '../../components/publicV2/ServiceCardsV5';
 import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
+import FaqCards from '../../components/publicV2/FaqCardsV5';
 import { Claim } from '../../components/publicV2/Claim';
 import { SERVICE_SHAPES, COMPARE_ROWS } from '../../config/v2Pricing';
 import type { CompareRow } from '../../config/v2Pricing';
@@ -107,19 +108,6 @@ function compareCell(row: CompareRow, col: keyof Omit<CompareRow, 'label'>): Rea
   return text;
 }
 
-/** FAQ as the model draws it: two columns of cards that open in place. */
-function FaqCards({ items }: { items: readonly { q: string; a: string }[] }): React.ReactElement {
-  return (
-    <div className="cbv2-faq5">
-      {items.map((f) => (
-        <details key={f.q}>
-          <summary>{f.q}</summary>
-          <p>{f.a}</p>
-        </details>
-      ))}
-    </div>
-  );
-}
 
 export function ServicesV2(): React.ReactElement {
   return (

@@ -282,12 +282,20 @@ const DEMO_PILOT_STEPS: ReadonlyArray<{
 ];
 
 /** "Three steps. No big-bang project." The demo-pilot band. */
-export function DemoPilotSection(): React.ReactElement {
+export function DemoPilotSection({
+  eyebrow = 'How it works',
+  onHowItWorks = false,
+}: {
+  /** The model labels this band "How it works" on Home and "The three steps" on /how-it-works. */
+  eyebrow?: string;
+  /** On /how-it-works itself the "see how a rollout runs" link would point at the page it is on. */
+  onHowItWorks?: boolean;
+} = {}): React.ReactElement {
   return (
     <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-demopilot-title">
       <div className="cbv2-wrap">
         <div className="cbv2-section__head">
-          <p className="cbv2-eyebrow">How it works</p>
+          <p className="cbv2-eyebrow">{eyebrow}</p>
           <h2 id="cbv2-demopilot-title">
             Three steps. <span className="cbv2-it">No big-bang project.</span>
           </h2>
@@ -321,12 +329,14 @@ export function DemoPilotSection(): React.ReactElement {
           ))}
         </ol>
 
-        <p className="cbv2-center-link cbv2-proc__foot">
-          <Link className="cbv2-lnk" to="/how-it-works">
-            See how a rollout runs, department by department
-            <Icon name="arrowRight" size={15} />
-          </Link>
-        </p>
+        {onHowItWorks ? null : (
+          <p className="cbv2-center-link cbv2-proc__foot">
+            <Link className="cbv2-lnk" to="/how-it-works">
+              See how a rollout runs, department by department
+              <Icon name="arrowRight" size={15} />
+            </Link>
+          </p>
+        )}
       </div>
     </section>
   );
