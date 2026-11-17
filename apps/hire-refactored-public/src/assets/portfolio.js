@@ -338,7 +338,7 @@
       + '<button type="button" class="btn btn-star' + (on ? ' on' : '') + '" data-star="' + esc(slug) + '" data-name="' + esc(id.full_name) + '" aria-pressed="' + on + '">★ ' + (on ? 'Shortlisted' : 'Shortlist') + '</button>'
       + '<button type="button" class="btn btn-ghost btn-icon" data-copy aria-label="Copy profile link">' + LINK_ICON + '</button></div></div>'
       + ledger(p, hire, now)
-      + '<div class="p-cols"><div>' + carousel(slides, slug, api) + X.inTheirWords(hire.intro, api)
+      + '<div class="p-cols"><div>' + carousel(slides, slug, api) + X.inTheirWords(hire.intro, api) + X.practiceAnswers(hire.practiceAnswers, api)
       + (about.length ? '<div class="card about"><div class="label">About <span class="src">from their record and resume</span></div>' + about.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</div>' : '')
       + (vc.length ? '<div class="card"><div class="label">Verified commits</div><h3 class="t">The work, commit by commit</h3>' + commits(vc) + '</div>' : '')
       + (xp.length ? '<div class="card"><div class="label">Experience <span class="src">parsed from their resume</span></div>' + experience(xp) + '</div>' : '')

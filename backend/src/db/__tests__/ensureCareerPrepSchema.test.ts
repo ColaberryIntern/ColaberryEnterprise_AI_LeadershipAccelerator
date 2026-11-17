@@ -12,10 +12,17 @@ describe('ensureCareerPrepSchema (statements)', () => {
   });
 
   it('is additive and re-runnable: every statement is IF NOT EXISTS or ON CONFLICT DO NOTHING, and none ALTERs or DROPs', () => {
+    // The ONE kind of ALTER allowed: adding a column, IF NOT EXISTS, to a Career Prep table (R1.2's show_public).
+    // Nothing existing outside Career Prep is ever altered, and nothing is dropped or retyped.
+    const addColumn = /^ALTER TABLE prep_[a-z_]+ ADD COLUMN IF NOT EXISTS [a-z_]+ [A-Z ]+(DEFAULT [a-z0-9']+)?$/;
     for (const s of CAREER_PREP_STATEMENTS) {
       expect(/IF NOT EXISTS|ON CONFLICT \(key\) DO NOTHING/.test(s)).toBe(true);
+      if (addColumn.test(s)) continue;
       expect(s).not.toMatch(/\bALTER\b|\bDROP\b/i);
     }
+    expect(CAREER_PREP_STATEMENTS.filter((s) => /\bALTER\b/i.test(s))).toEqual([
+      'ALTER TABLE prep_saved_answers ADD COLUMN IF NOT EXISTS show_public BOOLEAN NOT NULL DEFAULT false',
+    ]);
   });
 
   it('carries the idempotency keys the scorers and the rollup rely on', () => {

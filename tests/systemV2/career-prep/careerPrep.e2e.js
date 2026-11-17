@@ -23,6 +23,9 @@
  *     two cards; Your progress draws its SVG charts from rich data, and an honest empty state from no data (a ring toward
  *     the first score, empty gray skill bars, no made-up number); the room is light with the OS in dark mode; a first
  *     answer that cannot yet move a number reads as "building" in the recap, never "No answer was scored"
+ *   11 (R1.2) Hire studio > Video: a saved answer's "Show on my public profile" is unchecked by default; ticking and
+ *     unticking send on / off; the note says employers never see the score (1600 and 390). The public side (the rule,
+ *     the 404s, the card on hire.refactored.ai) is covered by the backend integration suite and the hire site's tests.
  * Fidelity screenshots (FIDELITY_DIR, default: none): the session part, Try after a scored answer, Your progress rich
  * and empty at 1600x960, and Try at 390 wide, to read next to the design shots.
  * Layout: no horizontal scroll in any of the room's own scroll containers, no tooltip off screen, for the room (Your progress, Your plan) at 1600, 1440, 390, light
@@ -451,6 +454,34 @@ async function flowR11(browser) {
   return errors;
 }
 
+/** R1.2 (Ali, Q1: A): a saved answer's second opt-in, "Show on my public profile", in Hire studio > Video. */
+async function flowR12(browser) {
+  const errors = [];
+  for (const [w, h] of [[1600, 960], [390, 844]]) {
+    await unit(browser, errors, `11 ${w}: a saved answer's "Show on my public profile" is UNCHECKED by default; ticking sends on, unticking sends off; the note says employers never see the score`,
+      { viewport: { width: w, height: h }, api: { saved: ['a1'] } }, async (page) => {
+        const puts = [];
+        page.on('request', (r) => { if (r.method() === 'PUT' && /\/attempts\/a1\/public$/.test(new URL(r.url()).pathname)) puts.push((r.postDataJSON() || {}).on); });
+        await page.goto(`${BASE}/portal/portfolio?tab=hire&section=video`);
+        await page.waitForSelector(tid('hs-saved-public'));
+        const box = () => page.$eval(tid('hs-saved-public'), (el) => el.checked);
+        const before = await box();
+        const look = await page.evaluate(() => {
+          const el = document.querySelector('[data-testid="hs-saved-public"]').closest('label').getBoundingClientRect();
+          return { onScreen: el.left >= 0 && el.right <= innerWidth, overflow: document.documentElement.scrollWidth > innerWidth, note: (document.querySelector('.hs-saved-note') || {}).textContent || '' };
+        });
+        await page.click(tid('hs-saved-public'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="hs-saved-public"]').checked === true);
+        const status = await page.$eval(tid('hs-saved-status'), (el) => el.textContent);
+        await page.click(tid('hs-saved-public'));
+        await page.waitForFunction(() => document.querySelector('[data-testid="hs-saved-public"]').checked === false);
+        return [before === false && puts.join(',') === 'true,false' && status === 'Some are on your public profile' && look.onScreen && !look.overflow && /never your score/.test(look.note),
+          JSON.stringify({ before, puts, status, ...look })];
+      });
+  }
+  return errors;
+}
+
 async function flowAnchors(browser) {
   const { ctx, page, errors } = await newPage(browser);
   await page.goto(`${BASE}/portal/career/room`);
@@ -587,6 +618,7 @@ async function layout(browser) {
     errs.push(...await flowSheets(browser));
     errs.push(...await flowDesign(browser));
     errs.push(...await flowR11(browser));
+    errs.push(...await flowR12(browser));
     const frameErrs = await flowIframe(browser);
     check('8 zero console errors in every flow, and inside a sandboxed iframe', errs.length === 0 && frameErrs.length === 0, [...errs, ...frameErrs].slice(0, 3).join(' | '));
     await layout(browser);

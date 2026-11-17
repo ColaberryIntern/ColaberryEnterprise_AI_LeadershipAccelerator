@@ -20,6 +20,7 @@ import { restrictToHireCaseStudies } from './hireCaseStudyOnly';
 import { availabilityOf, signatureFor, type HireCaseStudyCard } from './hireTalentProjection';
 import { readCaseStudyOrder, readPublicIntro, type PublicIntro } from './hireStudioSettings';
 import { bookingSummary, type BookingSummary } from './hireInterviews';
+import { readPublicAnswers, type PublicPracticeAnswer } from '../careerPrep/savedAnswers';
 
 export interface HirePortfolioBlock {
   readonly signature: HireCaseStudyCard | null;
@@ -35,6 +36,11 @@ export interface HirePortfolioBlock {
   readonly caseStudyOrder: readonly string[];
   /** Interview booking (kit §1.5). `enabled: false` keeps today's Request intro. */
   readonly booking: BookingSummary;
+  /**
+   * Practice answers the candidate switched on (R1.2, a second opt-in, off by default): the question and the
+   * recording only, never the score. Always empty on an unlisted page (visibility must be 'public').
+   */
+  readonly practiceAnswers: readonly PublicPracticeAnswer[];
 }
 
 const NO_BOOKING: BookingSummary = { enabled: false, nextSlots: [], formats: [] };
@@ -69,10 +75,13 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
   if (!result) return null;
   const eid = entry.page.enrollment_id;
   const published = new Set(entry.cases.map((c) => c.slug));
-  const [intro, order, booking] = await Promise.all([
+  const [intro, order, booking, practiceAnswers] = await Promise.all([
     optional('intro', entry.page.slug, null, () => readPublicIntro(eid)),
     optional('case_study_order', entry.page.slug, [] as string[], () => readCaseStudyOrder(eid)),
     optional('booking', entry.page.slug, NO_BOOKING, () => bookingSummary(eid, now)),
+    entry.page.visibility === 'public'
+      ? optional('practice_answers', entry.page.slug, [] as PublicPracticeAnswer[], () => readPublicAnswers(eid))
+      : Promise.resolve([] as PublicPracticeAnswer[]),
   ]);
   return {
     // NO EMAIL ON HIRE (Ali, 2026-11-10). The enterprise portfolio keeps `identity.email`
@@ -98,6 +107,7 @@ export async function getHirePortfolio(slug: string, now: Date = new Date()): Pr
       intro,
       caseStudyOrder: order.filter((s) => published.has(s)),
       booking,
+      practiceAnswers,
     },
   };
 }

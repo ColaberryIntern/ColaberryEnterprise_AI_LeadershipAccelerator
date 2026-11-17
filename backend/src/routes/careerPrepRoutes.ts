@@ -12,7 +12,7 @@ import { currentSession, NotFoundError, startSession, updateSession } from '../s
 import { prepAttemptUpload } from '../config/prepAttemptUpload';
 import { getAttemptStatus, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
 import { getReminders, postReminder } from '../controllers/careerPrepReminderController';
-import { deleteSavedAnswer, getSavedAnswers, getSkillSources, postSaveAnswer, serveAnswerVideo } from '../controllers/careerPrepAnswerController';
+import { deleteSavedAnswer, getSavedAnswers, getSkillSources, postSaveAnswer, putShowPublic, serveAnswerVideo } from '../controllers/careerPrepAnswerController';
 import rateLimit from 'express-rate-limit';
 import { sessionRecap, type Recap } from '../services/careerPrep/recap';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
@@ -230,6 +230,8 @@ router.get('/api/portal/career-prep/skills/:key/sources', requireParticipant, re
 router.get('/api/portal/career-prep/answers', requireParticipant, requireCareerPrep, getSavedAnswers);
 router.post('/api/portal/career-prep/attempts/:attemptId/save', requireParticipant, requireCareerPrep, postSaveAnswer);
 router.delete('/api/portal/career-prep/attempts/:attemptId/save', requireParticipant, requireCareerPrep, deleteSavedAnswer);
+// R1.2: the second opt-in, "Show on my public profile" (off by default).
+router.put('/api/portal/career-prep/attempts/:attemptId/public', requireParticipant, requireCareerPrep, putShowPublic);
 // A <video> cannot send the bearer token: playback is authorized by the signed ?t= token that only the owner's
 // authed list (or sources) response carries. Unsigned, expired or unknown = 404.
 router.get('/api/portal/career-prep/answer-video/:assetId/:kind', answerVideoLimiter, serveAnswerVideo);

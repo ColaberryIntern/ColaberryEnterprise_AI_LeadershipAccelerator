@@ -133,7 +133,11 @@ export async function fetchSkillSourcesApi(skill: string, source: PrepSourceKey)
 }
 
 /** R1.1: a Try answer the student chose to keep. Playback URLs are signed for the owner and expire. */
-export interface SavedAnswer { attemptId: string; question: string | null; delivery: number | null; seconds: number | null; savedAt: string; streamUrl: string; posterUrl: string }
+/** showPublic (R1.2): the second opt-in, "Show on my public profile". Off by default; older responses omit it (off). */
+export interface SavedAnswer { attemptId: string; question: string | null; delivery: number | null; seconds: number | null; savedAt: string; streamUrl: string; posterUrl: string; showPublic?: boolean }
+export async function setShowPublicApi(attemptId: string, on: boolean): Promise<SavedAnswer> {
+  return (await portalApi.put(`${BASE}/attempts/${encodeURIComponent(attemptId)}/public`, { on })).data.answer;
+}
 export async function saveAnswerApi(attemptId: string, question?: string): Promise<SavedAnswer> {
   return (await portalApi.post(`${BASE}/attempts/${encodeURIComponent(attemptId)}/save`, question ? { question: question.slice(0, 600) } : {})).data.answer;
 }

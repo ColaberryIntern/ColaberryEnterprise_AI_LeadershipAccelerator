@@ -10,11 +10,14 @@ import helmet from 'helmet';
 import request from 'supertest';
 
 jest.mock('../../services/hire/hireVideoService', () => ({ resolveVideoFile: jest.fn() }));
+jest.mock('../../services/careerPrep/savedAnswers', () => ({ resolvePublicAnswerFile: jest.fn() }));
 
 import { resolveVideoFile } from '../../services/hire/hireVideoService';
+import { resolvePublicAnswerFile } from '../../services/careerPrep/savedAnswers';
 import { createHireVideoRouter } from '../publicHireVideoRoutes';
 
 const resolve = resolveVideoFile as unknown as jest.Mock;
+const resolveAnswer = resolvePublicAnswerFile as unknown as jest.Mock;
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'hire-video-route-'));
 const FILE = path.join(DIR, 'stream.mp4');
 fs.writeFileSync(FILE, Buffer.from('0123456789'));
@@ -23,8 +26,33 @@ const ID = 'c'.repeat(24);
 // Mounted behind helmet() exactly as server.ts does, so the CORP override is tested against the real default.
 const app = express().use(helmet()).use(createHireVideoRouter());
 
-beforeEach(() => resolve.mockReset());
+beforeEach(() => { resolve.mockReset(); resolveAnswer.mockReset(); });
 afterAll(() => fs.rmSync(DIR, { recursive: true, force: true }));
+
+describe('a public practice answer (R1.2, the second opt-in)', () => {
+  const url = (kind: string) => `/api/public/hire/practice-answer/${ID}/${kind}`;
+  test('switched off, deleted, or not public is the same 404 as a missing file, never cached', async () => {
+    resolveAnswer.mockResolvedValue(null);
+    const r = await request(app).get(url('stream'));
+    expect(r.status).toBe(404);
+    expect(r.headers['cache-control']).toBe('no-store');
+  });
+  test('switched on: cross-origin readable, never cached (so off takes effect at once), byte ranges work', async () => {
+    resolveAnswer.mockResolvedValue({ path: FILE, type: 'video/mp4' });
+    const r = await request(app).get(url('stream'));
+    expect(r.status).toBe(200);
+    expect(r.headers['cache-control']).toBe('no-store');
+    expect(r.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    const part = await request(app).get(url('stream')).set('Range', 'bytes=2-5');
+    expect(part.status).toBe(206);
+    expect(resolveAnswer).toHaveBeenCalledWith(ID, 'stream');
+  });
+  test('the owner token is not a key here: ?t= is ignored', async () => {
+    resolveAnswer.mockResolvedValue(null);
+    expect((await request(app).get(`${url('stream')}?t=1234567890123.${'a'.repeat(64)}`)).status).toBe(404);
+    expect(resolveAnswer).toHaveBeenCalledWith(ID, 'stream');
+  });
+});
 
 test('a published video is cross-origin readable and cached briefly', async () => {
   resolve.mockResolvedValue({ path: FILE, type: 'video/mp4', published: true });
