@@ -1,5 +1,7 @@
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
+import { sequelize } from '../config/database';
 import { LiveSession, AttendanceRecord, Enrollment } from '../models';
+import { openHouseEventIdOf } from './openHouseReminderPolicy';
 import { award } from './pointsService';
 import { classInstant } from './acceleratorService';
 import { recordPresenceEvent, formatDisplayName } from './sessionPresenceService';
@@ -49,6 +51,43 @@ export function resolveJoinedStatus(
   return computed;
 }
 
+/**
+ * Pure: may this caller join this session?
+ *
+ * A class is joined by its own cohort. An Open House (a session carrying an
+ * Eventbrite event id) is also joined by anyone REGISTERED for that event,
+ * whatever their cohort. OH1 (2026-11-17): 11 of the 171 platform registrants
+ * for the Nov 19 Open House sit in other cohorts, so the reminder's Join button
+ * answered them "Session not found or not joinable" and recorded no attendance.
+ * Registration is the invitation; being in some other cohort grants nothing.
+ */
+export function maySelfJoin(args: {
+  sessionCohortId: string | null | undefined;
+  callerCohortId: string | null | undefined;
+  openHouseEventId: string | null;
+  registeredForEvent: boolean;
+}): boolean {
+  if (args.sessionCohortId && args.callerCohortId && String(args.sessionCohortId) === String(args.callerCohortId)) return true;
+  return Boolean(args.openHouseEventId) && args.registeredForEvent;
+}
+
+/** The session, when `maySelfJoin` allows this caller; null otherwise. */
+async function findJoinableSessionFor(enrollmentId: string, sessionId: string, cohortId: string): Promise<LiveSession | null> {
+  const session = await LiveSession.findByPk(sessionId);
+  if (!session) return null;
+  const sessionCohortId = (session as any).cohort_id ?? null;
+  const openHouseEventId = openHouseEventIdOf(session as any);
+  let registeredForEvent = false;
+  if (openHouseEventId && String(sessionCohortId) !== String(cohortId)) {
+    const rows = await sequelize.query(
+      `SELECT 1 FROM open_house_registrations WHERE event_id = :eventId AND enrollment_id::text = :enrollmentId LIMIT 1`,
+      { replacements: { eventId: openHouseEventId, enrollmentId: String(enrollmentId) }, type: QueryTypes.SELECT },
+    );
+    registeredForEvent = rows.length > 0;
+  }
+  return maySelfJoin({ sessionCohortId, callerCohortId: cohortId, openHouseEventId, registeredForEvent }) ? session : null;
+}
+
 export interface JoinResult {
   ok: true;
   status: string;
@@ -69,7 +108,7 @@ export async function joinLiveSession(
   now: Date = new Date(),
   source: 'classroom' | 'meet' = 'classroom',
 ): Promise<JoinResult | null> {
-  const session = await LiveSession.findOne({ where: { id: sessionId, cohort_id: cohortId } });
+  const session = await findJoinableSessionFor(enrollmentId, sessionId, cohortId);
   if (!session || !JOINABLE_STATUSES.has(session.status)) return null;
 
   const computed = computeAttendanceStatus(session.session_date, session.start_time, now);
@@ -131,7 +170,7 @@ export async function joinLiveSession(
 export async function leaveMeetingSession(
   enrollmentId: string, sessionId: string, cohortId: string,
 ): Promise<boolean> {
-  const session = await LiveSession.findOne({ where: { id: sessionId, cohort_id: cohortId } });
+  const session = await findJoinableSessionFor(enrollmentId, sessionId, cohortId);
   if (!session) return false;
   try {
     const enrollment = await Enrollment.findByPk(enrollmentId);

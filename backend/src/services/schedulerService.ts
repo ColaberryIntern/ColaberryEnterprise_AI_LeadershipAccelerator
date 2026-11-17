@@ -2889,6 +2889,7 @@ export function startScheduler(): void {
           meetingLink: session.meeting_link || null,
           materialsJson: session.materials_json || null,
           isOneHour: window === '1h',
+          isOpenHouse: true,
         });
         // Stamped immediately after the send, per recipient, so an interrupted
         // sweep re-sends at most the one in flight rather than the whole list.

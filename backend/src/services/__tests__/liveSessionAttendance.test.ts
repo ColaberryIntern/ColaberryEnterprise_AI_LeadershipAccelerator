@@ -1,6 +1,7 @@
 import {
   computeAttendanceStatus,
   resolveJoinedStatus,
+  maySelfJoin,
   ATTENDANCE_GRACE_MINUTES,
 } from '../liveSessionAttendanceService';
 import { centralWallClockToInstant } from '../centralDate';
@@ -79,5 +80,34 @@ describe('resolveJoinedStatus', () => {
   it('lets a late row be upgraded (late is not protected)', () => {
     expect(resolveJoinedStatus('late', 'present')).toBe('present');
     expect(resolveJoinedStatus('late', 'late')).toBe('late');
+  });
+});
+
+describe('maySelfJoin (OH1: an Open House is joined by its registrants, whatever their cohort)', () => {
+  const COH = 'f116084b-80d8-4998-903e-8fd1b1b3bd15';
+  const OTHER = '0d6c1f7e-0000-4000-8000-000000000001';
+
+  it('lets a class be joined by its own cohort', () => {
+    expect(maySelfJoin({ sessionCohortId: COH, callerCohortId: COH, openHouseEventId: null, registeredForEvent: false })).toBe(true);
+  });
+
+  it('refuses a class to another cohort', () => {
+    expect(maySelfJoin({ sessionCohortId: COH, callerCohortId: OTHER, openHouseEventId: null, registeredForEvent: false })).toBe(false);
+  });
+
+  it('lets an Open House registrant in another cohort join', () => {
+    expect(maySelfJoin({ sessionCohortId: COH, callerCohortId: OTHER, openHouseEventId: '2004289439668', registeredForEvent: true })).toBe(true);
+  });
+
+  it('refuses an Open House to someone in another cohort who did not register', () => {
+    expect(maySelfJoin({ sessionCohortId: COH, callerCohortId: OTHER, openHouseEventId: '2004289439668', registeredForEvent: false })).toBe(false);
+  });
+
+  it('never treats a registration as an invitation to a class', () => {
+    expect(maySelfJoin({ sessionCohortId: COH, callerCohortId: OTHER, openHouseEventId: null, registeredForEvent: true })).toBe(false);
+  });
+
+  it('does not match two missing cohorts to each other', () => {
+    expect(maySelfJoin({ sessionCohortId: null, callerCohortId: null, openHouseEventId: null, registeredForEvent: false })).toBe(false);
   });
 });
