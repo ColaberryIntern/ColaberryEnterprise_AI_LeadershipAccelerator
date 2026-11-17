@@ -417,10 +417,25 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     }
   }
 
+  // OH1: Open House countdown (event-relative scheduling). Every step is timed back
+  // from the start of the Open House this lead registered for. FAIL CLOSED: with no
+  // upcoming Open House for the lead, NOTHING is scheduled. Unlike the cohort mode
+  // above, it never degrades to "all steps now".
+  const isEventTMinus = allZeroDelay && sequence.steps.some((s: SequenceStep) => s.minutes_before_event != null);
+  let openHouseEvent: import('./openHouseCountdown').OpenHouseEventForLead | null = null;
+  if (isEventTMinus) {
+    const { findNextOpenHouseForEmail } = await import('./openHouseCountdown');
+    openHouseEvent = await findNextOpenHouseForEmail(lead.email, now);
+    if (!openHouseEvent) {
+      console.log(`[Sequence] Event countdown: no upcoming Open House for lead ${leadId}, scheduling nothing`);
+      return [];
+    }
+  }
+
   // Event-driven sequencing: for regular campaigns, only schedule Step 0 at enrollment.
   // Subsequent steps are scheduled after each step is sent (see scheduleNextStep).
-  // T-minus campaigns (appointment/cohort-relative) still pre-schedule all steps.
-  const isEventDriven = !isTMinus && !isCohortTMinus;
+  // T-minus campaigns (appointment/cohort/event-relative) still pre-schedule all steps.
+  const isEventDriven = !isTMinus && !isCohortTMinus && !isEventTMinus;
 
   for (let i = 0; i < sequence.steps.length; i++) {
     // Event-driven: only create Step 0 at enrollment; later steps are created by scheduleNextStep()
@@ -430,7 +445,16 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     const channel: CampaignChannel = step.channel || 'email';
 
     let scheduledFor: Date;
-    if (isTMinus && appointmentTime && step.minutes_before_call != null) {
+    if (isEventTMinus) {
+      if (!openHouseEvent || step.minutes_before_event == null) continue;
+      const { eventStepTime } = await import('./openHouseCountdown');
+      const at = eventStepTime(openHouseEvent.starts_at, step.minutes_before_event, now);
+      if (!at) {
+        console.log(`[Sequence] Skipping step ${i + 1}: T-${step.minutes_before_event}min before the Open House is already past`);
+        continue;
+      }
+      scheduledFor = at;
+    } else if (isTMinus && appointmentTime && step.minutes_before_call != null) {
       scheduledFor = new Date(appointmentTime.getTime() - step.minutes_before_call * 60 * 1000);
       if (scheduledFor.getTime() < now.getTime()) {
         console.log(`[Sequence] Skipping step ${i + 1} — T-${step.minutes_before_call}min is already past`);
@@ -463,11 +487,18 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
         .replace(/\{\{referred_by\}\}/g, (lead as any).alumni_context?.referred_by_name || '');
 
     const subject = replaceVars(step.subject || '');
-    const body = replaceVars(
+    let body = replaceVars(
       channel === 'sms' && step.sms_template
         ? step.sms_template
         : step.body_template || ''
     );
+    // OH1: an event-countdown email always carries a safe, true fallback body with the
+    // Join link, so a failed or rejected AI draft never leaves it empty.
+    if (isEventTMinus && openHouseEvent && channel === 'email') {
+      const { fallbackReminderBody } = await import('./openHouseCountdown');
+      const first = (lead.name || '').trim().split(/\s+/)[0] || '';
+      body = fallbackReminderBody(first && !first.includes('@') ? first : null, openHouseEvent, step.minutes_before_event ?? 0);
+    }
 
     const action = await ScheduledEmail.create({
       lead_id: leadId,
@@ -492,6 +523,15 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
         ai_context_notes: step.ai_context_notes || null,
         voice_prompt: channel === 'voice' && step.voice_prompt ? step.voice_prompt : null,
         ...(isCohortTMinus && cohortStartDate ? { cohort_start_date: cohortStartDate.toISOString() } : {}),
+        ...(isEventTMinus && openHouseEvent ? {
+          event_countdown: true,
+          event_session_id: openHouseEvent.session_id,
+          event_title: openHouseEvent.title,
+          event_starts_at: openHouseEvent.starts_at.toISOString(),
+          event_when: openHouseEvent.when_label,
+          event_join_url: openHouseEvent.join_url,
+          minutes_before_event: step.minutes_before_event ?? null,
+        } : {}),
       },
     } as any);
 

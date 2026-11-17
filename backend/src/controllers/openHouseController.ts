@@ -5,6 +5,7 @@ import { openHouseRegisterSchema, openHousePublicSignupSchema } from '../schemas
 import { createExplorerEnrollment } from '../services/enrollmentService';
 import { getCurrentOpenHouseEvent, OpenHouseEventInfo } from '../services/openHouseEventService';
 import { recordOpenHouseRegistration } from '../services/openHouseRegistrationStore';
+import { enrollInOpenHouseCountdown } from '../services/openHouseCountdown';
 import { captureSignupConsent, SIGNUP_CONSENT_TEXT } from '../services/consent/captureSignupConsent';
 import { capturePhoneConsent } from '../services/consent/capturePhoneConsent';
 import { instantAccessFor, greetInBackground } from '../services/openHouse/instantAccess';
@@ -184,6 +185,9 @@ async function attachToCurrentOpenHouse(args: {
       // for a repeat signup and not a failure.
       first_time: created,
     });
+    // OH1: every registrant is enrolled in Maya's Open House countdown campaign.
+    // Never throws and never blocks: a sign-up must succeed whatever happens here.
+    void enrollInOpenHouseCountdown(args.email);
     return { event, registered: true };
   } catch (err) {
     log('error', 'open_house_registration_write_failed', 'failure', {

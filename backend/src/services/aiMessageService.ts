@@ -68,6 +68,18 @@ export interface GenerateMessageParams {
   };
   compositeContext?: import('./contextGraphService').CompositeContext;
   /**
+   * OH1: an Open House countdown step. When present the message is a helpful
+   * reminder for an event the person registered for, never a sales message: the
+   * only link is `join_url`, and price, offers and calls to book are forbidden.
+   */
+  eventContext?: {
+    title: string;
+    when: string;
+    join_url: string;
+    minutes_before: number;
+    platform_activity?: string;
+  };
+  /**
    * Who this message is sent AS.
    *
    * Omit it and the prompt uses {@link DEFAULT_BRAND_VOICE}, which reproduces the
@@ -212,6 +224,30 @@ CRITICAL: Always address the lead by their actual name from the LEAD PROFILE bel
     ? `\n\nBRAND VOICE (published rule set v${brand.rulesVersion}; follow it over any general style preference):\n${voiceParts.join('\n')}`
     : '';
 
+  // OH1: an Open House countdown replaces the sales rules below with event rules.
+  // The general rules push booking a strategy call and quote the cohort; a reminder
+  // for an event someone already registered for must do neither.
+  if (params.eventContext) {
+    const ev = params.eventContext;
+    const emailFormat = channel === 'email'
+      ? `OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
+{"subject": "...", "body": "..."}
+The "body" must be HTML using <p> and <a> tags only. 80-160 words. Do NOT add a sign-off name or signature: Maya's signature is added automatically.`
+      : channelInstructions[channel];
+    return `${campaignPrompt || defaultPersona}${voiceBlock}
+
+${emailFormat}
+
+OPEN HOUSE REMINDER RULES (these override everything else):
+- This person registered for: ${ev.title}, ${ev.when}. You are reminding them and helping them get there. You are NOT selling.
+- The ONLY link you may include is the Join link, exactly: ${ev.join_url}
+  It signs them in and checks them in. Include it once, as a link.
+- NEVER mention price, cost, tuition, a discount, an offer, a deal, an early bird, a scholarship, seats, deadlines to buy, or the word "free". Any offer is shared live at the Open House only.
+- NEVER ask them to book a call. NEVER mention a cohort start date.
+- Never invent facts about the program, outcomes, salaries or jobs. Never invent facts about the person.
+- Warm, short, human. Written by Maya. No emojis, no hashtags, no exclamation-mark pile-ups.`;
+  }
+
   return `${campaignPrompt || defaultPersona}${voiceBlock}
 
 ${channelInstructions[channel]}
@@ -239,7 +275,37 @@ ALUMNI MESSAGING RULES:
 - Always reference Ali, Colaberry, and the alumni community` : ''}`;
 }
 
+/**
+ * OH1: the user prompt for an Open House countdown step. Deliberately NOT the
+ * composite sales context: no cohort, no seats, no booking or landing-page links.
+ * Only the event, the person's own platform activity, and what was already sent
+ * (subjects only, so the message does not repeat itself).
+ */
+export function buildEventUserPrompt(params: GenerateMessageParams): string {
+  const ev = params.eventContext!;
+  const first = (params.lead.name || '').trim().split(/\s+/)[0] || '';
+  const parts: string[] = [];
+  parts.push('VERIFIED FACTS (use ONLY these; never invent):');
+  parts.push(`- Person's first name: ${first && !first.includes('@') ? first : '(unknown: greet with "Hi there")'}`);
+  parts.push(`- Event: ${ev.title}`);
+  parts.push(`- When: ${ev.when}`);
+  parts.push(`- Join link (the only link allowed): ${ev.join_url}`);
+  parts.push(`- This message goes out about ${ev.minutes_before >= 1440 ? `${Math.round(ev.minutes_before / 1440)} day(s)` : `${Math.max(1, Math.round(ev.minutes_before / 60))} hour(s)`} before it starts.`);
+  if (ev.platform_activity) parts.push(`- On the platform: ${ev.platform_activity}`);
+  const prev = params.compositeContext?.previousMessages || [];
+  if (prev.length > 0) {
+    parts.push('');
+    parts.push('ALREADY SENT TO THEM (do not repeat these):');
+    for (const m of prev.slice(0, 5)) parts.push(`- ${m.sentAt}: "${m.subject}"`);
+  }
+  parts.push('');
+  parts.push(`STEP INSTRUCTIONS: ${params.ai_instructions}`);
+  if (params.tone) parts.push(`TONE: ${params.tone}`);
+  return parts.join('\n');
+}
+
 function buildUserPrompt(params: GenerateMessageParams): string {
+  if (params.eventContext) return buildEventUserPrompt(params);
   const { lead, conversationHistory, campaignContext, cohortContext, ai_instructions, tone, context_notes, compositeContext } = params;
 
   const parts: string[] = [];

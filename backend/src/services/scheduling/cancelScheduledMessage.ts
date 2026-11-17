@@ -72,6 +72,8 @@ export type CancellationReason =
   // Scheduler guards
   | 'enrollment_already_paid'
   | 'cohort_already_started'
+  // OH1: an Open House countdown step still pending when the Open House has begun
+  | 'event_already_started'
   // Campaign lifecycle
   | 'campaign_archived'
   | 'campaign_paused'

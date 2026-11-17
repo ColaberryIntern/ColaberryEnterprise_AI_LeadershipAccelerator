@@ -327,6 +327,31 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       contextNotes = `${contextNotes ? contextNotes + '\n' : ''}ORIGINAL CAMPAIGN TYPE: ${metaOrigType}`;
     }
 
+    // OH1: an Open House countdown step is written from the EVENT, not the sales
+    // pipeline. No cohort or seats (nothing to sell), and the only link allowed is the
+    // event's own Join link. What the person has been doing on the platform is added so
+    // Maya can relate to it (Ali, 2026-11-17: "relate to what they are doing, but not try
+    // to sell").
+    const eventCountdown = action.metadata?.event_countdown ? {
+      title: String(action.metadata.event_title || 'Colaberry Open House'),
+      when: String(action.metadata.event_when || ''),
+      join_url: String(action.metadata.event_join_url || ''),
+      minutes_before: Number(action.metadata.minutes_before_event ?? 0),
+      platform_activity: await (async () => {
+        try {
+          const { describePlatformActivity } = await import('./openHouseCountdownContext');
+          return await describePlatformActivity(lead.email);
+        } catch { return ''; }
+      })(),
+    } : undefined;
+    if (eventCountdown && compositeContext?.allowedUrls) {
+      compositeContext.allowedUrls = {
+        booking: eventCountdown.join_url,
+        landingPage: eventCountdown.join_url,
+        mainSite: 'https://enterprise.colaberry.ai',
+      };
+    }
+
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
       ai_instructions: action.ai_instructions,
@@ -335,14 +360,31 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       lead: leadData as any,
       conversationHistory,
       campaignContext,
-      cohortContext: nextCohort ? {
+      cohortContext: nextCohort && !eventCountdown ? {
         name: nextCohort.name,
         start_date: nextCohort.start_date,
         seats_remaining: nextCohort.seats_remaining,
       } : undefined,
-      appointmentContext,
+      appointmentContext: eventCountdown ? undefined : appointmentContext,
       compositeContext,
+      eventContext: eventCountdown,
     });
+
+    // OH1: the AI draft of a countdown email must pass the screen (no price, offer,
+    // discount or "free"; the Join link present; no other links). A draft that fails
+    // is NOT sent: the step keeps its safe fallback body, and the reason is recorded.
+    if (eventCountdown && channel === 'email') {
+      const { screenEventReminderCopy } = await import('./openHouseCountdown');
+      const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url);
+      if (problems.length > 0) {
+        await action.update({
+          metadata: { ...(action.metadata || {}), ai_rejected: problems, ai_model: result.model },
+        } as any);
+        await action.reload();
+        console.warn(`[Scheduler] Countdown AI draft rejected for action ${action.id}: ${problems.join('; ')}. Sending the fallback.`);
+        return false;
+      }
+    }
 
     // Update the action with AI-generated content
     const updates: Record<string, any> = {
@@ -623,6 +665,16 @@ async function processScheduledActions(): Promise<void> {
       continue;
     }
 
+    // OH1: an Open House countdown step is never sent once the Open House has begun.
+    // It can still be pending past its time (pacing, the send window, a busy queue),
+    // and "See you tomorrow" arriving after the event is worse than silence.
+    if (action.metadata?.event_countdown && action.metadata?.event_starts_at
+      && Date.now() >= new Date(action.metadata.event_starts_at).getTime()) {
+      await cancelScheduledMessage(action, 'event_already_started');
+      console.log(`[Scheduler] Cancelled countdown step ${action.id}: the Open House has started`);
+      continue;
+    }
+
     // Guard: skip payment_readiness actions if enrollment is already paid
     if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.to_email) {
       const paidEnrollment = await Enrollment.findOne({
@@ -746,7 +798,12 @@ async function processScheduledActions(): Promise<void> {
 
       // Cross-campaign daily cap: max 1 outbound communication per lead per 24h (all channels)
       // Exception: if the lead REPLIED today, we can continue the conversation
-      {
+      // Exception (OH1): an Open House countdown step. The person asked for this event,
+      // the steps are already spaced by the sequence, and the cap's "try again tomorrow"
+      // would land a "starts soon" note after the Open House. The day here is the
+      // database's (UTC) day, so a 6:30 PM CT and a 5:30 PM CT step the next day fall on
+      // the same UTC date and the second would always be pushed past the event.
+      if (!action.metadata?.event_countdown) {
         const [capCheck] = await sequelize.query(
           `SELECT
             (SELECT COUNT(*) FROM communication_logs WHERE lead_id = :leadId AND direction = 'outbound' AND created_at::date = CURRENT_DATE) as outbound_today,
@@ -1589,13 +1646,24 @@ function wrapEmailHtml(
 ): string {
   const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
   const senderEmail = tracking?.senderEmail || env.emailFrom;
-  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect' : '';
+  // OH1: Maya signs her campaign mail with her own title (the same one the
+  // admissions-document email uses).
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect'
+    : senderEmail === 'maya@colaberry.com' ? 'Director of Admissions' : '';
   const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
   // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
   // and inject a styled button after the body so it's visually prominent rather than buried inline.
   let primaryCtaButton = '';
-  const ctaMatch = body.match(/https?:\/\/enterprise\.colaberry\.ai\/(pilot\/[a-z0-9-]+|partners|demo|contact|executive-overview|ai-architect|enroll|ai-workforce-designer)(?:\?[^\s"<>]*)?/i);
+  // OH1: an Open House countdown email's Join link (the portal check-in) gets the button.
+  const joinMatch = body.match(/https?:\/\/enterprise\.colaberry\.ai\/portal\/class-checkin\/[0-9a-f-]{36}/i);
+  const ctaMatch = joinMatch ? null : body.match(/https?:\/\/enterprise\.colaberry\.ai\/(pilot\/[a-z0-9-]+|partners|demo|contact|executive-overview|ai-architect|enroll|ai-workforce-designer)(?:\?[^\s"<>]*)?/i);
+  if (joinMatch) {
+    primaryCtaButton = `
+  <div style="text-align: center; margin: 28px 0;">
+    <a href="${joinMatch[0]}" class="cta" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">Join the Open House &rarr;</a>
+  </div>`;
+  }
   if (ctaMatch) {
     const ctaUrl = ctaMatch[0];
     const slug = ctaMatch[1];
@@ -2843,6 +2911,17 @@ export function startScheduler(): void {
   async function runOpenHouseReminderSweep(session: any): Promise<void> {
     const eventId = openHouseEventIdOf(session);
     if (!eventId) return; // unreachable from the call site; kept so this is safe alone
+
+    // OH1 (Ali, 2026-11-17): the Open House countdown is a Maya campaign. Once it is
+    // live it owns the reminders, and this sweep stands down so nobody gets two. While
+    // the campaign is not live (not set up, awaiting approval, paused) this sweep is the
+    // safety net, and it sends the Open House email, never the class template.
+    try {
+      const { isOpenHouseCountdownLive } = await import('./openHouseCountdown');
+      if (await isOpenHouseCountdownLive()) return;
+    } catch (err: any) {
+      console.error(`[Scheduler] Open House ${eventId}: countdown campaign check failed, sending the plain reminder:`, err.message);
+    }
 
     const startsAt = classInstant(session.session_date, session.start_time);
     if (!startsAt || Number.isNaN(startsAt.getTime())) {
