@@ -6,7 +6,7 @@
  * attached both states as finished email HTML (community-digest-active-day.
  * email.html and community-digest-quiet-day.email.html) and described them:
  *
- *   "A daily email sent each morning to learners in the AI Systems Architect
+ *   "A daily email sent each morning to learners in the Forward Deployed AI Engineer
  *    Accelerator. It answers one question in under ten seconds: did anything
  *    happen in my cohort that needs me today? It replaces the plain-text
  *    version you shared, which buried two zeros and an empty 'Upcoming' line
@@ -310,7 +310,7 @@ export function buildCommunityDigestHtml(data: CommunityDigestEmailData): string
   rows.push(upcomingCard(data.upcomingEvents, calendarUrl));
   rows.push(
     footerRow(
-      'Colaberry Enterprise AI · AI Systems Architect Accelerator',
+      'Colaberry Enterprise AI · Forward Deployed AI Engineer Accelerator',
       `You get this digest once a day. <a class="gm-link" href="mailto:${escapeHtml(env.emailFrom)}?subject=unsubscribe" style="color:${T.link};text-decoration:underline;">Unsubscribe</a>`
     )
   );

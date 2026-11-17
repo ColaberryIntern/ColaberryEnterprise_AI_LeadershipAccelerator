@@ -1,7 +1,7 @@
 /**
  * architectJourney — the north star. Every curriculum decision must move a
  * student along the path Builder → Prompt Engineer → Context Engineer → Systems
- * Builder → AI Engineer → Architect Candidate → AI Systems Architect. This maps
+ * Builder → AI Engineer → Architect Candidate → Forward Deployed AI Engineer. This maps
  * a plan's competencies onto that journey and names the stage it advances, so
  * every generated week can answer "why does this move the student closer to
  * becoming an Architect?". Pure.
@@ -12,7 +12,7 @@ import { resolveCompetencies } from './competencyDictionary';
 
 export const ARCHITECT_JOURNEY = [
   'Builder', 'Prompt Engineer', 'Context Engineer', 'Systems Builder',
-  'AI Engineer', 'Architect Candidate', 'AI Systems Architect',
+  'AI Engineer', 'Architect Candidate', 'Forward Deployed AI Engineer',
 ] as const;
 export type ArchitectStage = typeof ARCHITECT_JOURNEY[number];
 
@@ -24,7 +24,7 @@ const STAGE_COMPETENCIES: Record<ArchitectStage, string[]> = {
   'Systems Builder': ['architecture', 'testing'],
   'AI Engineer': ['deployment', 'github'],
   'Architect Candidate': ['leadership', 'documentation', 'security', 'communication'],
-  'AI Systems Architect': [],
+  'Forward Deployed AI Engineer': [],
 };
 
 export interface JourneyStage { name: ArchitectStage; index: number; contributes: boolean; competencies: string[] }
@@ -51,7 +51,7 @@ export function journeyContribution(cards: PlanCard[], sessionCompetencies: stri
 
   const touched = stages.filter((s) => s.contributes).map((s) => s.name);
   const why = touched.length
-    ? `This span advances ${touched.join(', ')} — moving the student toward AI Systems Architect via ${focus}.`
+    ? `This span advances ${touched.join(', ')} — moving the student toward Forward Deployed AI Engineer via ${focus}.`
     : 'This span builds foundational fluency (Builder stage).';
   return { stages, focus_stage: focus, why };
 }

@@ -16,7 +16,7 @@ import type { OpenHouseView } from '../../../services/onboardingApi';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const NOW = new Date('2026-10-25T18:00:00Z');
 const EV: OpenHouseView = {
-  id: 'oh-1', title: 'Colaberry AI Systems Architect Accelerator Open House', description: null, starts_at: '2026-10-29T23:30:00.000Z', ends_at: '2026-10-30T01:00:00.000Z',
+  id: 'oh-1', title: 'Colaberry Forward Deployed AI Engineer Accelerator Open House', description: null, starts_at: '2026-10-29T23:30:00.000Z', ends_at: '2026-10-30T01:00:00.000Z',
   timezone: 'America/Chicago', registration_url: 'https://www.eventbrite.com/e/oh-1', meeting_link: null, image_url: null, signup_count: null, is_registered: false,
 };
 
@@ -37,7 +37,7 @@ const show = (audience: string, registered = false) => act(() => { root.render(<
 
 it('Explorer: the real title and Central time, and Save my seat opens Eventbrite in a new tab', () => {
   show('explorer');
-  expect(q('[data-testid="cm-cc-openhouse"]')!.textContent).toContain('Colaberry AI Systems Architect Accelerator Open House');
+  expect(q('[data-testid="cm-cc-openhouse"]')!.textContent).toContain('Colaberry Forward Deployed AI Engineer Accelerator Open House');
   expect(q('[data-testid="cm-cc-openhouse"]')!.textContent).toContain('6:30 PM');
   const a = q('[data-testid="cm-oh-signup"]') as HTMLAnchorElement;
   expect([a.getAttribute('href'), a.getAttribute('target'), (a.getAttribute('rel') || '').includes('noopener')]).toEqual(['https://www.eventbrite.com/e/oh-1', '_blank', true]);

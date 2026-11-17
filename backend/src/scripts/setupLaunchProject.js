@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One-shot setup for the AI Systems Architect Accelerator launch project.
+ * One-shot setup for the Forward Deployed AI Engineer Accelerator launch project.
  *
  * Idempotent: re-running adds missing pieces, updates descriptions, never
  * duplicates. Safe to run as many times as needed.
@@ -44,7 +44,7 @@ const AREAS = [
     name: 'Curriculum',
     description: `<div><h3>Curriculum</h3>
 <p><strong>Owner:</strong> Swati Raman | <strong>Drafts:</strong> CB System | <strong>Approval:</strong> Swati + Ali | <strong>Tie-in:</strong> Kes (delivery platform)</p>
-<p><strong>Scope:</strong> Dynamic project-based curriculum for AI Systems Architect Accelerator. Project work with Claude Code + MCP Servers + NotebookLM. Portfolio generation + certification prep.</p>
+<p><strong>Scope:</strong> Dynamic project-based curriculum for Forward Deployed AI Engineer Accelerator. Project work with Claude Code + MCP Servers + NotebookLM. Portfolio generation + certification prep.</p>
 <p><strong>Cadence:</strong> CB drafts -> Swati reviews -> Ali approves design -> Kes wires into platform. Cycle weekly.</p>
 ${dodLine()}
 <p><strong>Critical path:</strong> curriculum flow + design visuals due 2026-06-02 (2 days). Testable on enterprise.colaberry.ai by 2026-06-07 (1 week).</p>
@@ -54,7 +54,7 @@ ${dodLine()}
     name: 'Website - training.colaberry.com',
     description: `<div><h3>training.colaberry.com (Public Marketing Site)</h3>
 <p><strong>Owner:</strong> Sai Tejesh | <strong>Design approval:</strong> Aleem + Ali | <strong>SEO + content:</strong> Sohail</p>
-<p><strong>Scope:</strong> Replace existing Data Analytics positioning with AI Systems Architect Accelerator. Keep testimonials + naming + reviews + blogs - swap product framing. Career changer / working professional audience.</p>
+<p><strong>Scope:</strong> Replace existing Data Analytics positioning with Forward Deployed AI Engineer Accelerator. Keep testimonials + naming + reviews + blogs - swap product framing. Career changer / working professional audience.</p>
 <p><strong>Cadence:</strong> Tejesh ships drafts -> Aleem design review -> Ali final approval -> deploy.</p>
 ${dodLine()}
 <p><strong>Critical path:</strong> 1st draft 2026-06-07 (end of next week). Finalized 2026-06-21 (3 weeks).</p>
@@ -114,7 +114,7 @@ ${dodLine()}
     name: 'TWC Compliance',
     description: `<div><h3>TWC Compliance</h3>
 <p><strong>Owner:</strong> Swati Raman | <strong>Research:</strong> Dheeraj Garg | <strong>Approval:</strong> Ali (notarize where needed)</p>
-<p><strong>Scope:</strong> Get the new AI Systems Architect Accelerator class registered with Texas Workforce Commission. Document the process steps. Tasks spread evenly Mon-Fri through to launch date.</p>
+<p><strong>Scope:</strong> Get the new Forward Deployed AI Engineer Accelerator class registered with Texas Workforce Commission. Document the process steps. Tasks spread evenly Mon-Fri through to launch date.</p>
 <p><strong>Cadence:</strong> Dheeraj researches each step -> Swati executes/files -> Ali notarizes/signs as needed. Weekly status to Ali.</p>
 ${dodLine()}
 <p><strong>Note:</strong> We will launch even if TWC approval is not yet final. Goal is to create urgency, not gate on TWC.</p>
@@ -157,7 +157,7 @@ function kickoffMessage() {
     .map((p) => `<li><strong>${p.displayName}</strong> (${p.role}) - ${p.note || 'Needs to be added to Basecamp'}</li>`)
     .join('');
   return `<div>
-<h2>AI Systems Architect Accelerator - Launch PMO Kickoff</h2>
+<h2>Forward Deployed AI Engineer Accelerator - Launch PMO Kickoff</h2>
 <p><strong>Target launch:</strong> 2026-07-11 (40 days from today, 2026-05-31)</p>
 <p><strong>Operating model:</strong> CB System is the autonomous Program Management Office. CB plans, drafts, builds, escalates and reports. Humans are decision makers (approve / reject / pick a direction). AI is execution. Progress never waits on a human - CB always has the next AI task running.</p>
 
@@ -240,7 +240,7 @@ ${missingRoster ? `<h3>Blockers - need Ali action</h3><ul>${missingRoster}</ul>`
   if (!DRY) {
     try {
       const m = await ops.postMessage({
-        subject: 'Launch PMO Kickoff - AI Systems Architect Accelerator (target 2026-07-11)',
+        subject: 'Launch PMO Kickoff - Forward Deployed AI Engineer Accelerator (target 2026-07-11)',
         content: kickoffMessage(),
       });
       console.log(`   + message id=${m.id} url=${m.app_url}`);

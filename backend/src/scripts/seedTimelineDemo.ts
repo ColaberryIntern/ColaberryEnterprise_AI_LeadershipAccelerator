@@ -19,7 +19,7 @@ const DEMO_TOKEN = '11111111-1111-1111-1111-111111111111';
 
 interface CardSpec { type: string; title: string; subtitle?: string; week: number; }
 const CARDS: CardSpec[] = [
-  { type: 'announcement', title: 'Welcome to the AI Systems Architect Accelerator', subtitle: 'Read this first — how your timeline works', week: 1 },
+  { type: 'announcement', title: 'Welcome to the Forward Deployed AI Engineer Accelerator', subtitle: 'Read this first — how your timeline works', week: 1 },
   { type: 'warmup', title: 'Warm-up: what is an AI system, really?', week: 1 },
   { type: 'video', title: 'Video: anatomy of an AI operating system', week: 1 },
   { type: 'live_class', title: 'Live Class — Architecture Day', subtitle: 'Tuesday 1:30pm CT', week: 1 },

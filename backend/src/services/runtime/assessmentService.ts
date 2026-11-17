@@ -67,7 +67,7 @@ async function generateQuestions(card: any): Promise<AssessmentQuestion[]> {
     ? 'an end-of-section Evaluation — applied, scenario-based questions that test whether the student can USE the concepts'
     : 'a quick entry Knowledge Check — short, foundational recall questions that gauge what the student knows coming in';
   const compList = competencies.length ? competencies.join(', ') : 'the week topic';
-  const system = `${bp ? bp.prompt_text + '\n\n' : ''}You write ${style} for the AI Systems Architect Accelerator. `
+  const system = `${bp ? bp.prompt_text + '\n\n' : ''}You write ${style} for the Forward Deployed AI Engineer Accelerator. `
     + `Cover these competencies as evenly as possible: ${compList}. Every question tags exactly ONE competency from that list. Return STRICT json.`;
   const user = `Return json: { "questions": [ { "question": string, "options": [exactly 4 distinct strings], `
     + `"correct_index": integer 0-3, "explanation": string (1-2 sentences on why the correct option is right), `

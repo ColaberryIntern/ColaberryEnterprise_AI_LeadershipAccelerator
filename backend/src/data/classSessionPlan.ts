@@ -1,6 +1,6 @@
 /**
- * classSessionPlan.ts — the canonical per-class content spine for the AI Systems
- * Architect Accelerator live sessions ("AI Architect Today · Learn It Monday /
+ * classSessionPlan.ts — the canonical per-class content spine for the Forward Deployed AI
+ * Engineer Accelerator live sessions ("AI Architect Today · Learn It Monday /
  * Build It Thursday").
  *
  * This file is the single source of truth that BOTH of these consume:
@@ -215,7 +215,7 @@ export const ORIENTATION_PLAN: {
   publicTitle: 'From AI User to AI Builder — Orientation',
   intensive: 'Kickoff',
   welcome:
-    'Welcome to the AI Systems Architect Accelerator. Tonight is the big picture, the platform, and getting your build environment live — you leave able to open Claude Code and start.',
+    'Welcome to the Forward Deployed AI Engineer Accelerator. Tonight is the big picture, the platform, and getting your build environment live — you leave able to open Claude Code and start.',
   segments: [
     {
       presenter: 'Ali Muwwakkil',

@@ -214,12 +214,12 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
         </div>
         )}
 
-        {/* Lens 3 — Architect Readiness. This is the BUILD track (a different axis
+        {/* Lens 3 — Engineer Readiness. This is the BUILD track (a different axis
             from points): you earn the AI Builder → AI Architect bands by shipping
             build evidence in the program, not by collecting points. Framed around
             the band you're working toward so it matches the journey + HUD. */}
         <div className="pts-lens accent-leaf">
-          <div className="pts-lens-h"><span className="tag">3 · Readiness</span><h3>Architect Readiness</h3></div>
+          <div className="pts-lens-h"><span className="tag">3 · Readiness</span><h3>Engineer Readiness</h3></div>
           <div className="pts-readi">
             <ReadinessRing pct={readiness?.pct ?? 0} />
             <div className="pts-readi-meta">

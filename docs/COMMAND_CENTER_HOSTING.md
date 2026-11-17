@@ -42,7 +42,7 @@ Student-owned repos invert it: **their code never leaves infrastructure they alr
 
 A capstone hosted on `colaberry.ai` is a demo that dies when the cohort ends. A capstone on the student's own GitHub, on their own account, at a URL that has their name in it, is a **portfolio artifact they keep forever** — linkable in a résumé, reviewable in an interview, extendable after graduation.
 
-The program's promise is that students leave as AI Systems Architects with proof. Proof they do not own is not proof.
+The program's promise is that students leave as Forward Deployed AI Engineers with proof. Proof they do not own is not proof.
 
 ---
 

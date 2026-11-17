@@ -31,7 +31,7 @@ function teamLinks() {
   const provBlock = provisioned().map((p) => `<li><strong>${p.displayName}</strong> (${p.role})</li>`).join('');
   const missBlock = missing().map((p) => `<li><strong>${p.displayName}</strong> (${p.role}) - ${p.note || 'Needs to be added to Basecamp'}</li>`).join('');
   const content = `<div>
-<h2>AI Systems Architect Accelerator - Launch PMO Kickoff (v2)</h2>
+<h2>Forward Deployed AI Engineer Accelerator - Launch PMO Kickoff (v2)</h2>
 <p><strong>Target launch:</strong> 2026-07-11 (41 days from 2026-05-31)</p>
 <p><strong>How this project works:</strong> CB System is the autonomous Program Management Office. CB plans, drafts, builds, escalates, and reports. Humans decide. AI executes. Progress never waits on a human - CB always has the next AI task running.</p>
 
@@ -93,7 +93,7 @@ ${missBlock ? `<h3>Blockers - need Ali action</h3><ul>${missBlock}</ul>` : ''}
 </div>`;
 
   const msg = await ops.postMessage({
-    subject: 'Launch PMO Kickoff - AI Systems Architect Accelerator (target 2026-07-11)',
+    subject: 'Launch PMO Kickoff - Forward Deployed AI Engineer Accelerator (target 2026-07-11)',
     content,
   });
   console.log(`Updated kickoff: id=${msg.id} url=${msg.app_url}`);

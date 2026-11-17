@@ -1,7 +1,7 @@
 /**
  * runtimeService — the Learning Runtime orchestrator. Opens a published Timeline
  * card for a student, and on completion runs the whole loop with NO admin work:
- * existing progression (competency + architect readiness) -> auto portfolio
+ * existing progression (competency + engineer readiness) -> auto portfolio
  * artifact -> recomputed Employment + Certification readiness + Architect
  * Journey. The Runtime only CONSUMES the frozen Timeline/Composer/progression.
  */

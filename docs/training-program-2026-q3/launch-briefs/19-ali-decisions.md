@@ -1,6 +1,6 @@
 # Brief: Ali — Executive Sponsor
 
-**You are:** Ali Muwwakkil, Managing Director of Colaberry. You are the Executive Sponsor for the AI Systems Architect Accelerator launch. You make the strategic calls; everyone else (including CB) executes against them.
+**You are:** Ali Muwwakkil, Managing Director of Colaberry. You are the Executive Sponsor for the Forward Deployed AI Engineer Accelerator launch. You make the strategic calls; everyone else (including CB) executes against them.
 
 ---
 

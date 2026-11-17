@@ -21,7 +21,7 @@ Ali`;
 
 const HTML_SIG = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 20px;"><tr><td>
 <div style="font-weight: 700; font-size: 16px; color: #1a365d;">Ali Muwwakkil</div>
-<div style="color: #2b6cb0; font-weight: 600;">Managing Director / AI Systems Architect</div>
+<div style="color: #2b6cb0; font-weight: 600;">Managing Director / Forward Deployed AI Engineer</div>
 <div style="color: #718096;">Colaberry Inc.</div>
 <div style="margin-top: 10px; color: #2d3748;">200 Chisholm Place, Suite 200 &middot; Plano, TX 75075</div>
 <div style="color: #2d3748;"><a href="mailto:ali@colaberry.com" style="color: #2b6cb0;">ali@colaberry.com</a> &nbsp; <a href="https://enterprise.colaberry.ai" style="color: #2b6cb0;">enterprise.colaberry.ai</a></div>

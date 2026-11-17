@@ -5,7 +5,7 @@
 ---
 
 ## A1. Brand name
-**LOCKED:** AI Systems Architect Accelerator (co-brand "Powered by Anthropic + Claude Code" after 2026-06-12).
+**LOCKED:** Forward Deployed AI Engineer Accelerator (co-brand "Powered by Anthropic + Claude Code" after 2026-06-12).
 **If override:** Landing page slugs change. Stripe product names need to be edited. Partner co-branding ask re-formulated.
 
 ## A2. Launch wedge persona

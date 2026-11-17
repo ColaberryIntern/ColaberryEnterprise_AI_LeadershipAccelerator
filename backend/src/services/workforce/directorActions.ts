@@ -183,7 +183,7 @@ export async function runMarketingDirector(): Promise<DirectorRunResult> {
           {
             role: 'system',
             content:
-              'You are the Marketing Director for an AI Systems Architect training program. Given one internal school signal, propose ONE short content idea (a headline + 2-sentence angle) that tells the school\'s real story. Plain text, no markdown.',
+              'You are the Marketing Director for a Forward Deployed AI Engineer training program. Given one internal school signal, propose ONE short content idea (a headline + 2-sentence angle) that tells the school\'s real story. Plain text, no markdown.',
           },
           { role: 'user', content: `Signal: [${top.domain}] ${top.title} — ${top.why}` },
         ],

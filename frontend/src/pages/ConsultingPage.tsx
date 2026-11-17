@@ -15,7 +15,7 @@ import { StatCounter } from '../components/visuals/charts';
  * run it." Premium employer/consulting page positioning Colaberry as
  * an Anthropic / Claude Code partner. Five engagement models:
  * Hire · Embed · Project · Train · Certify, all anchored on the same
- * Certified Anthropic AI Systems Architect credential.
+ * Certified Anthropic Forward Deployed AI Engineer credential.
  *
  * Built entirely on the Colaberry design system: DS components +
  * shared visual components + semantic tokens only (never raw layout
@@ -105,13 +105,13 @@ interface Engagement {
 }
 
 /* The five engagement models. Anchored on ONE outcome: we create
-   Certified Anthropic AI Systems Architects and put them to work. */
+   Certified Anthropic Forward Deployed AI Engineers and put them to work. */
 const ENGAGEMENTS: Engagement[] = [
   {
     tag: 'HIRE',
     icon: '\u{1F91D}',
     title: 'Hire from us',
-    body: 'Bring on job-ready, Certified Anthropic AI Systems Architects. They have already built and deployed working systems with Claude Code, so they make real impact on day one, not month six.',
+    body: 'Bring on job-ready, Certified Anthropic Forward Deployed AI Engineers. They have already built and deployed working systems with Claude Code, so they make real impact on day one, not month six.',
     accent: 'red',
   },
   {
@@ -139,7 +139,7 @@ const ENGAGEMENTS: Engagement[] = [
     tag: 'CERTIFY',
     icon: '\u{1F396}\u{FE0F}',
     title: 'We get your team certified',
-    body: 'We prepare and guide your people all the way to the Certified Anthropic AI Systems Architect credential (CCA-F prep), so your capability is proven, not just claimed.',
+    body: 'We prepare and guide your people all the way to the Certified Anthropic Forward Deployed AI Engineer credential (CCA-F prep), so your capability is proven, not just claimed.',
     accent: 'blue',
   },
 ];
@@ -155,7 +155,7 @@ const WHY_PARTNER: Reason[] = [
   {
     icon: '\u{1F517}',
     title: 'One credential, every door',
-    body: 'Hire, embed, project, train, or certify — every engagement runs on the same Certified Anthropic AI Systems Architect standard. You always know exactly what "good" means.',
+    body: 'Hire, embed, project, train, or certify — every engagement runs on the same Certified Anthropic Forward Deployed AI Engineer standard. You always know exactly what "good" means.',
   },
   {
     icon: '\u{26A1}',
@@ -173,7 +173,7 @@ const WHY_PARTNER: Reason[] = [
    shared MermaidDiagram component. Renders to a tasteful fallback card
    if the runtime blocks the CDN import. */
 const ENGAGEMENT_CHART = `flowchart TD
-  C["Colaberry · Anthropic / Claude Code partner"] --> A["Certified Anthropic\\nAI Systems Architects"]
+  C["Colaberry · Anthropic / Claude Code partner"] --> A["Certified Anthropic\\nForward Deployed AI Engineers"]
   A --> H["HIRE\\nJob-ready architects"]
   A --> E["EMBED\\nPlaced on your team,\\nunder our leadership"]
   A --> P["PROJECT\\nWe build, with your team"]
@@ -206,7 +206,7 @@ function ConsultingPage(): JSX.Element {
       <style>{SCOPED_CSS}</style>
       <SEOHead
         title="AI Consulting — Colaberry"
-        description="We build your AI capability, and the people who run it. Hire, embed, or build with Certified Anthropic AI Systems Architects — put your people in Anthropic-partner hands and train hands-on with Claude Code."
+        description="We build your AI capability, and the people who run it. Hire, embed, or build with Certified Anthropic Forward Deployed AI Engineers — put your people in Anthropic-partner hands and train hands-on with Claude Code."
       />
 
       <div id="consulting-page" style={S.page}>
@@ -248,8 +248,8 @@ function ConsultingPage(): JSX.Element {
                 margin: '0 auto var(--space-3)',
               }}
             >
-              Hire them, embed them, or build with them. We create Certified Anthropic AI Systems
-              Architects, then put them to work inside your company.
+              Hire them, embed them, or build with them. We create Certified Anthropic Forward Deployed AI
+              Engineers, then put them to work inside your company.
             </p>
             <p
               style={{
@@ -303,7 +303,7 @@ function ConsultingPage(): JSX.Element {
               eyebrow="The offer"
               title="Real AI capability you can hire, embed, or build alongside."
               body={[
-                'Every AI vendor sells you a tool. We do something more durable: we create skilled people — Certified Anthropic AI Systems Architects — who can make real impact in your company, and we hand them to you in whatever shape fits.',
+                'Every AI vendor sells you a tool. We do something more durable: we create skilled people — Certified Anthropic Forward Deployed AI Engineers — who can make real impact in your company, and we hand them to you in whatever shape fits.',
                 'Need talent? Hire job-ready architects from us. Need a managed team? We embed our certified architects under our leadership. Need it done? We deliver the project with your team. Need to grow your own? We train and certify them.',
               ]}
               cta={{ label: 'Book a consulting call', to: '/contact' }}
@@ -381,7 +381,7 @@ function ConsultingPage(): JSX.Element {
           <div style={S.inner}>
             <SectionFigure
               src="/img/architect-plan.jpg"
-              alt="An AI systems architect walking a client team through a solution plan on a large screen"
+              alt="A forward deployed AI engineer walking a client team through a solution plan on a large screen"
               side="left"
               eyebrow="Embed, under our leadership"
               title="Our certified architects, on your team, run by us."
@@ -402,7 +402,7 @@ function ConsultingPage(): JSX.Element {
               <h2 style={S.h2}>The same path that produces our own architects.</h2>
               <p style={S.lead}>
                 When we upskill your team, we run them through the flagship program — one continuous
-                12-week path, four phases, ending at the Certified Anthropic AI Systems Architect
+                12-week path, four phases, ending at the Certified Anthropic Forward Deployed AI Engineer
                 credential and CCA-F prep.
               </p>
             </div>

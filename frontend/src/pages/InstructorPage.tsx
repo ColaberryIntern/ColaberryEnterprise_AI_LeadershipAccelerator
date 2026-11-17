@@ -12,8 +12,8 @@ import CohortUrgency from '../components/visuals/CohortUrgency';
 /**
  * InstructorPage — "ALI — the AI guy."
  *
- * The instructor story for the program that produces Certified Anthropic AI
- * Systems Architects. Ali Muwwakkil leads every cohort: learners train
+ * The instructor story for the program that produces Certified Anthropic Forward Deployed
+ * AI Engineers. Ali Muwwakkil leads every cohort: learners train
  * hands-on with Claude Code in Anthropic-partner training and ship a real,
  * deployed AI build.
  *
@@ -98,7 +98,7 @@ const TEACHES: { accent: 'red' | 'blue' | 'green'; title: string; body: string }
   },
   {
     accent: 'red',
-    title: 'The AI Systems Architect mindset',
+    title: 'The Forward Deployed AI Engineer mindset',
     body:
       'How to design something deterministic on top of a probabilistic model: scoping, agent design, validation, and the governance that makes a system safe to run.',
   },
@@ -112,7 +112,7 @@ const TEACHES: { accent: 'red' | 'blue' | 'green'; title: string; body: string }
     accent: 'blue',
     title: 'Certification, the right way',
     body:
-      'He runs the official Learn-With-Claude track that preps the Certified Anthropic AI Systems Architect credential (CCA-F) — the same path Colaberry uses internally.',
+      'He runs the official Learn-With-Claude track that preps the Certified Anthropic Forward Deployed AI Engineer credential (CCA-F) — the same path Colaberry uses internally.',
   },
 ];
 
@@ -126,7 +126,7 @@ function InstructorPage() {
     <div style={{ background: 'var(--surface-page)' }}>
       <SEOHead
         title="ALI — the AI guy | Your Instructor"
-        description="Meet Ali Muwwakkil — the instructor who leads the Anthropic-partner program that produces Certified AI Systems Architects. Hands-on with Claude Code, every cohort, a real deployed build."
+        description="Meet Ali Muwwakkil — the instructor who leads the Anthropic-partner program that produces Certified Forward Deployed AI Engineers. Hands-on with Claude Code, every cohort, a real deployed build."
       />
 
       {/* ── Hero (dark photo → all hero text uses light --text-on-inverse) ──── */}
@@ -191,8 +191,8 @@ function InstructorPage() {
             >
               Ali Muwwakkil leads the program that turns people who consume AI into
               people who <strong>build with it</strong> — hands-on with Claude Code,
-              in Anthropic-partner training, all the way to a Certified AI Systems
-              Architect and a deployed system.
+              in Anthropic-partner training, all the way to a Certified Forward Deployed AI
+              Engineer and a deployed system.
             </p>
             <p
               style={{
@@ -254,7 +254,7 @@ function InstructorPage() {
             >
               <img
                 src="/ali-muwwakkil.jpg"
-                alt="Ali Muwwakkil, lead instructor for the Colaberry AI Systems Architect program"
+                alt="Ali Muwwakkil, lead instructor for the Colaberry Forward Deployed AI Engineer program"
                 loading="eager"
                 decoding="async"
                 style={{
@@ -351,7 +351,7 @@ function InstructorPage() {
           <div style={{ maxWidth: 680, marginBottom: 'var(--space-10)' }}>
             <span style={eyebrow}>What he teaches</span>
             <h2 style={{ ...h2, marginTop: 'var(--space-4)' }}>
-              The skills that produce a Certified AI Systems Architect.
+              The skills that produce a Certified Forward Deployed AI Engineer.
             </h2>
           </div>
           <div
@@ -381,12 +381,12 @@ function InstructorPage() {
         <div style={container}>
           <SectionFigure
             src="/img/certificate.jpg"
-            alt="A cohort building together in Colaberry's 12-week AI Systems Architect program"
+            alt="A cohort building together in Colaberry's 12-week Forward Deployed AI Engineer program"
             eyebrow="The program he leads"
             title="One continuous 12-week path to Architect."
             body={[
               'It is one continuous 12-week program — the four phases simply group the weeks — built around real deployment instead of theory.',
-              'The outcome credential is the Certified Anthropic AI Systems Architect (CCA-F prep). You put your people in Anthropic-partner hands, and they come out with the credential and a build to prove it.',
+              'The outcome credential is the Certified Anthropic Forward Deployed AI Engineer (CCA-F prep). You put your people in Anthropic-partner hands, and they come out with the credential and a build to prove it.',
             ]}
             side="left"
             cta={{ label: 'Start free', to: TRY_PATH }}

@@ -12,7 +12,7 @@
 //     phases (Weeks 1–3 / 4–6 / 7–9 / 10–12) simply group the weeks.
 //   • Colaberry is an Anthropic / Claude Code partner. Position the experience as
 //     training "in Anthropic-partner hands": learners work hands-on with Claude Code.
-//   • The outcome credential is the "Certified Anthropic AI Systems Architect"
+//   • The outcome credential is the "Certified Anthropic Forward Deployed AI Engineer"
 //     (CCA-F prep). Weave it into the copy as the thing you walk out able to claim.
 //   • $149/mo membership pricing is unchanged.
 
@@ -57,15 +57,15 @@ const SPONSOR_LINE =
 export const workingProfessionals: PersonaContent = {
   slug: 'working-professionals',
   seo: {
-    title: 'Learn To Build With AI — Become A Certified Anthropic AI Systems Architect',
+    title: 'Learn To Build With AI — Become A Certified Anthropic Forward Deployed AI Engineer',
     description:
-      'One 12-week program, two doors. Working professionals train hands-on with Claude Code in Anthropic-partner hands, build real projects, and graduate as a Certified Anthropic AI Systems Architect — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
+      'One 12-week program, two doors. Working professionals train hands-on with Claude Code in Anthropic-partner hands, build real projects, and graduate as a Certified Anthropic Forward Deployed AI Engineer — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
   },
   hero: {
     headline: 'Most People Consume AI. You’ll Learn To Build With It.',
     body: [
       'AI is changing every role — but consuming AI and building with it are not the same skill.',
-      'This is one continuous 12-week program, entered through two doors. Join as an individual for $149/month, or redeem a seat code your employer sponsored. Either door, same cohort: you train hands-on with Claude Code in Anthropic-partner hands, build real projects on your own time, and graduate as a Certified Anthropic AI Systems Architect.',
+      'This is one continuous 12-week program, entered through two doors. Join as an individual for $149/month, or redeem a seat code your employer sponsored. Either door, same cohort: you train hands-on with Claude Code in Anthropic-partner hands, build real projects on your own time, and graduate as a Certified Anthropic Forward Deployed AI Engineer.',
       'Start at our free Open House and see how working professionals turn AI from a buzzword into a workflow.',
     ],
     price: PRICE,
@@ -77,7 +77,7 @@ export const workingProfessionals: PersonaContent = {
       'Almost everyone on your team is experimenting with AI tools. Very few are learning to build with AI — to wire it into real research, analysis, and decision-making.',
       'Most professionals stall at clever prompts. The advantage goes to the people who can design a workflow, connect AI to real data, and ship something that holds up at work.',
       'That building skill is exactly what this 12-week program develops — hands-on with Claude Code, in Anthropic-partner hands — through one class you can enter on your own, or through a seat your employer sponsors.',
-      'Whichever door you walk through, you end up in the same room: learning by building toward your Certified Anthropic AI Systems Architect credential, not just watching.',
+      'Whichever door you walk through, you end up in the same room: learning by building toward your Certified Anthropic Forward Deployed AI Engineer credential, not just watching.',
     ],
   },
   builtFor: {
@@ -95,7 +95,7 @@ export const workingProfessionals: PersonaContent = {
       'Managers and Team Leads',
     ],
     closing: [
-      'You do not need to become a machine learning engineer — you need practical AI skills you can apply at work, and a credential that proves it: Certified Anthropic AI Systems Architect.',
+      'You do not need to become a machine learning engineer — you need practical AI skills you can apply at work, and a credential that proves it: Certified Anthropic Forward Deployed AI Engineer.',
       'Two doors, one 12-week program: join yourself for $149/month, or redeem an employer-sponsored seat code and learn on your own time.',
     ],
   },
@@ -110,7 +110,7 @@ export const workingProfessionals: PersonaContent = {
       'AI-assisted project development',
       'Use cases drawn from your own role',
     ],
-    goal: 'The goal is simple: stop consuming AI and start building with it as a practical work partner — and walk out a Certified Anthropic AI Systems Architect.',
+    goal: 'The goal is simple: stop consuming AI and start building with it as a practical work partner — and walk out a Certified Anthropic Forward Deployed AI Engineer.',
   },
   practice: {
     title: 'Build Through Real Projects',
@@ -118,7 +118,7 @@ export const workingProfessionals: PersonaContent = {
       'Learning about AI is not the same as building with it. You need reps — hands-on with Claude Code, across all 12 weeks.',
       'Inside the program you work real projects that show AI doing real work — in operations, analysis, workflows, and problem solving — on your own time, at your own pace.',
       'You learn by building. You learn by applying. You learn by shipping something you can demo.',
-      'And at Demo Day, you present what you built — the clearest proof of who can really build with AI, and the capstone of your Certified Anthropic AI Systems Architect path.',
+      'And at Demo Day, you present what you built — the clearest proof of who can really build with AI, and the capstone of your Certified Anthropic Forward Deployed AI Engineer path.',
     ],
   },
   openHouse: {
@@ -128,7 +128,7 @@ export const workingProfessionals: PersonaContent = {
       'How one 12-week program works through two doors — individual or employer-sponsored',
       'How working professionals train hands-on with Claude Code in Anthropic-partner hands',
       'How real projects turn AI skills into work you can demo',
-      'What the Certified Anthropic AI Systems Architect credential proves to employers',
+      'What the Certified Anthropic Forward Deployed AI Engineer credential proves to employers',
       'How to join yourself for $149/month',
       'How to redeem an employer seat code if your company is sponsoring you',
     ],
@@ -144,7 +144,7 @@ export const workingProfessionals: PersonaContent = {
       'You use Claude Code and real AI workflows to solve real problems.',
       'You’ve built and demoed work that applies AI to your actual role.',
       'You can speak — and build — confidently across AI use cases.',
-      'You graduate a Certified Anthropic AI Systems Architect — visibly one of the people who builds with AI, not just talks about it.',
+      'You graduate a Certified Anthropic Forward Deployed AI Engineer — visibly one of the people who builds with AI, not just talks about it.',
     ],
   },
   different: {
@@ -152,14 +152,14 @@ export const workingProfessionals: PersonaContent = {
     body: [
       'Most AI courses teach tools and prompts, then leave you with information and no reps. You finish knowing about AI without having built anything.',
       'Colaberry runs one continuous 12-week program, entered through two doors — you self-serve, or your employer sponsors your seat — and both put you in Anthropic-partner hands, building hands-on with Claude Code.',
-      'You learn with Claude, build through real projects, present at Demo Day, and graduate a Certified Anthropic AI Systems Architect (CCA-F prep). The deliverable isn’t a paper certificate — it’s proof you can build.',
+      'You learn with Claude, build through real projects, present at Demo Day, and graduate a Certified Anthropic Forward Deployed AI Engineer (CCA-F prep). The deliverable isn’t a paper certificate — it’s proof you can build.',
     ],
   },
   finalCta: {
     title: 'Join The Free Open House',
     body: [
       'See the 12-week program behind both doors, and choose yours.',
-      'Join the challenge yourself for $149/month, or sponsor your team and discover who your real AI builders are — without taking anyone off the job. Either way, you train in Anthropic-partner hands toward the Certified Anthropic AI Systems Architect credential.',
+      'Join the challenge yourself for $149/month, or sponsor your team and discover who your real AI builders are — without taking anyone off the job. Either way, you train in Anthropic-partner hands toward the Certified Anthropic Forward Deployed AI Engineer credential.',
       SPONSOR_LINE,
     ],
     price: PRICE,
@@ -170,15 +170,15 @@ export const workingProfessionals: PersonaContent = {
 export const beginners: PersonaContent = {
   slug: 'beginners',
   seo: {
-    title: 'Start Building With AI — Graduate A Certified Anthropic AI Systems Architect',
+    title: 'Start Building With AI — Graduate A Certified Anthropic Forward Deployed AI Engineer',
     description:
-      'One 12-week program, two doors. Beginners, students, and career switchers train hands-on with Claude Code in Anthropic-partner hands and graduate as a Certified Anthropic AI Systems Architect — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
+      'One 12-week program, two doors. Beginners, students, and career switchers train hands-on with Claude Code in Anthropic-partner hands and graduate as a Certified Anthropic Forward Deployed AI Engineer — self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
   },
   hero: {
     headline: 'Most People Consume AI. You Can Learn To Build With It.',
     body: [
       'AI is creating new opportunities everywhere — but most people only ever learn to consume it. Very few learn to build.',
-      'This is one continuous 12-week program, entered through two doors. Start as an individual for $149/month, or redeem a seat code your employer sponsored. Either way, same cohort: a clear, step-by-step path that puts you in Anthropic-partner hands, building real things with Claude Code from zero — and graduating a Certified Anthropic AI Systems Architect.',
+      'This is one continuous 12-week program, entered through two doors. Start as an individual for $149/month, or redeem a seat code your employer sponsored. Either way, same cohort: a clear, step-by-step path that puts you in Anthropic-partner hands, building real things with Claude Code from zero — and graduating a Certified Anthropic Forward Deployed AI Engineer.',
       'Start at our free Open House and see exactly where to begin.',
     ],
     price: PRICE,
@@ -191,7 +191,7 @@ export const beginners: PersonaContent = {
       'They consume videos and tips, but never build anything they can point to.',
       'They don’t know how Claude works, what to learn first, or how to turn watching into a real, demoable skill.',
       'This 12-week program gives you one clear starting point, guided practice with Claude Code in Anthropic-partner hands, and a path from consuming AI to building with it.',
-      'Walk through either door — join yourself, or redeem a seat your employer sponsored — and graduate a Certified Anthropic AI Systems Architect.',
+      'Walk through either door — join yourself, or redeem a seat your employer sponsored — and graduate a Certified Anthropic Forward Deployed AI Engineer.',
     ],
   },
   builtFor: {
@@ -206,7 +206,7 @@ export const beginners: PersonaContent = {
       'Anyone who wants to start building with AI from the ground up',
     ],
     closing: [
-      'You don’t need advanced technical experience — you need the right guidance, real reps, and a credential that proves it: Certified Anthropic AI Systems Architect.',
+      'You don’t need advanced technical experience — you need the right guidance, real reps, and a credential that proves it: Certified Anthropic Forward Deployed AI Engineer.',
       'Two doors, one 12-week program: start yourself for $149/month, or redeem an employer-sponsored seat code and learn on your own time.',
     ],
   },
@@ -220,7 +220,7 @@ export const beginners: PersonaContent = {
       'How AI workflows are designed, not just prompted',
       'How real AI projects get built from scratch',
     ],
-    goal: 'The goal isn’t to overwhelm you — it’s to move you from consuming AI to building with it, one confident step at a time, until you graduate a Certified Anthropic AI Systems Architect.',
+    goal: 'The goal isn’t to overwhelm you — it’s to move you from consuming AI to building with it, one confident step at a time, until you graduate a Certified Anthropic Forward Deployed AI Engineer.',
   },
   practice: {
     title: 'Build Through Guided Projects',
@@ -228,7 +228,7 @@ export const beginners: PersonaContent = {
       'Watching videos makes you a consumer. Building makes you a builder.',
       'To gain real AI skills you need reps, so across the 12 weeks you work guided projects with Claude Code that apply what you learn.',
       'You learn by doing — and start creating work you can explain, improve, and show.',
-      'At Demo Day you present what you built, proof that you’ve moved from beginner to Certified Anthropic AI Systems Architect.',
+      'At Demo Day you present what you built, proof that you’ve moved from beginner to Certified Anthropic Forward Deployed AI Engineer.',
     ],
   },
   openHouse: {
@@ -238,7 +238,7 @@ export const beginners: PersonaContent = {
       'How one 12-week program works through two doors — individual or employer-sponsored',
       'How beginners train hands-on with Claude Code in Anthropic-partner hands, not just watching tutorials',
       'How guided projects turn learning into work you can demo',
-      'What the Certified Anthropic AI Systems Architect credential opens for career switchers',
+      'What the Certified Anthropic Forward Deployed AI Engineer credential opens for career switchers',
       'How to start yourself for $149/month',
       'How to redeem an employer seat code if your company is sponsoring you',
     ],
@@ -254,7 +254,7 @@ export const beginners: PersonaContent = {
       'You understand the basics of AI and how Claude Code works.',
       'You use Claude with confidence on real tasks.',
       'You’ve built and demoed practical projects of your own.',
-      'You graduate a Certified Anthropic AI Systems Architect, with a clear path to keep building.',
+      'You graduate a Certified Anthropic Forward Deployed AI Engineer, with a clear path to keep building.',
     ],
   },
   different: {
@@ -262,14 +262,14 @@ export const beginners: PersonaContent = {
     body: [
       'Most AI learning is a pile of random tutorials that leaves you consuming, never building.',
       'Colaberry runs one guided, continuous 12-week program, entered through two doors — you start yourself, or your employer sponsors your seat — and both put you in Anthropic-partner hands, building hands-on with Claude Code.',
-      'You learn with Claude, build through projects, get real support, present at Demo Day, and graduate a Certified Anthropic AI Systems Architect (CCA-F prep).',
+      'You learn with Claude, build through projects, get real support, present at Demo Day, and graduate a Certified Anthropic Forward Deployed AI Engineer (CCA-F prep).',
     ],
   },
   finalCta: {
     title: 'Join The Free Open House',
     body: [
       'See how beginners and career switchers go from consuming AI to building with it the right way.',
-      'Start the challenge yourself for $149/month — or, if you lead a team, sponsor seats and discover who your real AI builders are without taking anyone off the job. Either way, you train in Anthropic-partner hands toward the Certified Anthropic AI Systems Architect credential.',
+      'Start the challenge yourself for $149/month — or, if you lead a team, sponsor seats and discover who your real AI builders are without taking anyone off the job. Either way, you train in Anthropic-partner hands toward the Certified Anthropic Forward Deployed AI Engineer credential.',
       SPONSOR_LINE,
     ],
     price: PRICE,
@@ -280,15 +280,15 @@ export const beginners: PersonaContent = {
 export const builders: PersonaContent = {
   slug: 'builders',
   seo: {
-    title: 'Turn Your AI Idea Into A Working System — Certified Anthropic AI Systems Architect',
+    title: 'Turn Your AI Idea Into A Working System — Certified Anthropic Forward Deployed AI Engineer',
     description:
-      'One 12-week program, two doors. Builders, founders, and idea owners train hands-on with Claude Code in Anthropic-partner hands to turn ideas into real AI systems — and graduate as a Certified Anthropic AI Systems Architect. Self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
+      'One 12-week program, two doors. Builders, founders, and idea owners train hands-on with Claude Code in Anthropic-partner hands to turn ideas into real AI systems — and graduate as a Certified Anthropic Forward Deployed AI Engineer. Self-serve at $149/month, or redeem an employer-sponsored seat code. Start at the free Open House.',
   },
   hero: {
     headline: 'You Have An Idea. Learn To Build It With AI.',
     body: [
       'Most people consume AI. Very few build with it. You’re ready to be in the second group.',
-      'This is one continuous 12-week program, entered through two doors. Join as an individual for $149/month, or redeem a seat code your employer sponsored. Either door, same cohort: the structure, tools, and Anthropic-partner guidance to turn your idea into a working AI system with Claude Code — and graduate a Certified Anthropic AI Systems Architect.',
+      'This is one continuous 12-week program, entered through two doors. Join as an individual for $149/month, or redeem a seat code your employer sponsored. Either door, same cohort: the structure, tools, and Anthropic-partner guidance to turn your idea into a working AI system with Claude Code — and graduate a Certified Anthropic Forward Deployed AI Engineer.',
       'Start at our free Open House and see how builders go from concept to deployed.',
     ],
     price: PRICE,
@@ -325,7 +325,7 @@ export const builders: PersonaContent = {
       'Anyone with an idea they want to build using AI',
     ],
     closing: [
-      'You don’t need everything figured out — you need a clear path, practical guidance, and a place to start building toward your Certified Anthropic AI Systems Architect credential.',
+      'You don’t need everything figured out — you need a clear path, practical guidance, and a place to start building toward your Certified Anthropic Forward Deployed AI Engineer credential.',
       'Two doors, one 12-week program: join yourself for $149/month, or redeem an employer-sponsored seat code and build on your own time.',
     ],
   },
@@ -341,7 +341,7 @@ export const builders: PersonaContent = {
       'Real-world problem solving',
       'Implementation and deployment support',
     ],
-    goal: 'The goal is to move you from scattered ideas to a build plan to something you’ve actually shipped — graduating a Certified Anthropic AI Systems Architect.',
+    goal: 'The goal is to move you from scattered ideas to a build plan to something you’ve actually shipped — graduating a Certified Anthropic Forward Deployed AI Engineer.',
   },
   buildPath: {
     title: 'Your 12-Week Build Path',
@@ -364,7 +364,7 @@ export const builders: PersonaContent = {
       {
         weeks: 'Weeks 10–12',
         title: 'Design AI That Scales',
-        desc: 'Turn your project into a stronger system with architecture, documentation, and deployment planning — ready to present at Demo Day and graduate a Certified Anthropic AI Systems Architect.',
+        desc: 'Turn your project into a stronger system with architecture, documentation, and deployment planning — ready to present at Demo Day and graduate a Certified Anthropic Forward Deployed AI Engineer.',
       },
     ],
   },
@@ -375,7 +375,7 @@ export const builders: PersonaContent = {
       'How one 12-week program works through two doors — individual or employer-sponsored',
       'How builders train hands-on with Claude Code in Anthropic-partner hands to develop and ship ideas',
       'How live projects move you from concept to deployed system',
-      'How the continuous 12-week build path, Demo Day, and the Certified Anthropic AI Systems Architect credential work',
+      'How the continuous 12-week build path, Demo Day, and the Certified Anthropic Forward Deployed AI Engineer credential work',
       'How to join yourself for $149/month',
       'How to redeem an employer seat code if your company is sponsoring you',
     ],
@@ -391,14 +391,14 @@ export const builders: PersonaContent = {
       'You have a clear build path and know how to use Claude Code through it.',
       'You’ve built your AI-powered system, not just planned it.',
       'You can improve, demo, and keep developing what you made.',
-      'You present at Demo Day and graduate a Certified Anthropic AI Systems Architect — someone who builds with AI, not just talks about it.',
+      'You present at Demo Day and graduate a Certified Anthropic Forward Deployed AI Engineer — someone who builds with AI, not just talks about it.',
     ],
   },
   finalCta: {
     title: 'Join The Free Open House',
     body: [
       'See how builders and idea owners turn ideas into deployed AI systems.',
-      'Join the challenge yourself for $149/month — or sponsor your team and discover who your real AI builders are without taking anyone off the job. Either way, you train in Anthropic-partner hands across one 12-week program toward the Certified Anthropic AI Systems Architect credential.',
+      'Join the challenge yourself for $149/month — or sponsor your team and discover who your real AI builders are without taking anyone off the job. Either way, you train in Anthropic-partner hands across one 12-week program toward the Certified Anthropic Forward Deployed AI Engineer credential.',
       SPONSOR_LINE,
     ],
     price: PRICE,

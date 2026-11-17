@@ -44,7 +44,7 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeatureCopy> = {
     title: 'Unlock the full 12-week Accelerator',
     subtitle: 'Every week of curriculum, live Build Day classes, and hands-on labs — enroll and pay to open it all.',
     benefits: [
-      '12 weeks of guided AI Systems Architect curriculum',
+      '12 weeks of guided Forward Deployed AI Engineer curriculum',
       'Live weekly Build Day classes with real feedback',
       'Graded projects that build your certification portfolio',
       'Full access to the Colaberry community and mentors',
@@ -84,7 +84,7 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeatureCopy> = {
     key: 'cert-prep',
     eyebrow: 'Cert Prep',
     title: 'Get certification-ready',
-    subtitle: 'Practice exams and a study track mapped directly to the AI Systems Architect certification.',
+    subtitle: 'Practice exams and a study track mapped directly to the Forward Deployed AI Engineer certification.',
     benefits: [
       'Practice exams mapped to the real certification',
       'A guided study track, not a generic question bank',

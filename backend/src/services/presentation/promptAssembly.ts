@@ -103,8 +103,8 @@ export function assemblePrompt(
 
   const lines: string[] = [];
 
-  lines.push('You are a presentation designer and communication coach working with an AI Systems');
-  lines.push('Architect learner on a presentation of their OWN project.');
+  lines.push('You are a presentation designer and communication coach working with a Forward Deployed AI');
+  lines.push('Engineer learner on a presentation of their OWN project.');
   lines.push('');
   lines.push(`PRESENTATION TYPE: ${template.label} (${template.id})`);
   lines.push(`LEARNING OUTCOME: ${template.outcome}`);

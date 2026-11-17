@@ -24,7 +24,8 @@ function projectHint(project) {
   if (p.includes('pathway')) {
     return 'AI Pathway curriculum/content generation lives in backend/src/services/ (curriculumGenerationService.ts, contentGenerationService.ts, chapterQualityService.ts, chapterOnTopicGuard.ts, qualityScoringService.ts); models in backend/src/models/ (CurriculumLesson, MiniSection, Enrollment, LessonInstance). For the JD/skill pipeline, grep "jd parser" / "skill".';
   }
-  if (p.includes('architect')) {
+  // Basecamp project 47502609: "AI Systems Architect Accelerator", renamed "Forward Deployed AI Engineer Accelerator" 2026-11-17.
+  if (p.includes('architect') || p.includes('forward deployed')) {
     return 'Reporting/cron pattern: a script in backend/src/scripts/*.js registered in backend/src/scripts/lib/reportingRegistry.js and run by runReportingAuditAndSend.js. Admin dashboards: backend/src/routes/admin/ + frontend/src/pages/admin/. The ticket lives in the "Launch Readiness Dashboard" area.';
   }
   return 'Discover the relevant subsystem with Grep/Glob before implementing.';

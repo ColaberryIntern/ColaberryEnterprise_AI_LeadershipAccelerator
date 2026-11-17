@@ -334,7 +334,7 @@ const ClassroomPage: React.FC = () => {
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{ flex: 'none' }}><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="var(--cherry)" strokeWidth="2" strokeLinejoin="round" /></svg>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontWeight: 700 }}>You're on the AI Preview, no card needed</div>
-            <div className="tl-small">Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live classes, the community, and your certification.</div>
+            <div className="tl-small">Enroll in the Forward Deployed AI Engineer Accelerator to unlock all 12 weeks, the live classes, the community, and your certification.</div>
           </div>
           <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/settings?tab=subscription')}>Enroll to unlock →</button>
         </div>
@@ -467,7 +467,7 @@ const ClassroomPage: React.FC = () => {
             <div className="tl-card side-card tl-ac-leaf">
               <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your status</h3>
               <div className="side-stat"><span className="lab">Level</span><span className="num">{prog.band?.rungName ?? titleCase(prog.level.slug)}</span></div>
-              <div className="side-stat"><span className="lab">Architect readiness</span><span className="num">{readinessPct}%</span></div>
+              <div className="side-stat"><span className="lab">Engineer readiness</span><span className="num">{readinessPct}%</span></div>
               <div className="ribbon"><i style={{ width: `${readinessPct}%`, background: 'var(--cherry)' }} /></div>
               <div className="side-stat"><span className="lab">Builder XP</span><span className="num">{prog.xp.builder}</span></div>
               <div className="side-stat"><span className="lab">Learning XP</span><span className="num">{prog.xp.learning}</span></div>

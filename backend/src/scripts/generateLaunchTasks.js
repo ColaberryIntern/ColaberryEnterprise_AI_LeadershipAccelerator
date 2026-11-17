@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate (v2) detailed launch tasks for AI Systems Architect Accelerator.
+ * Generate (v2) detailed launch tasks for Forward Deployed AI Engineer Accelerator.
  *
  * Reads:
  *   - tmp/launch-briefs-vault-urls.json (run uploadLaunchBriefs.js first)

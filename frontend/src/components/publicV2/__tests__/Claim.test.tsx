@@ -89,9 +89,9 @@ describe('badges communicate by text and shape, not colour alone', () => {
 
 describe('<Metric> — a figure cannot render unlabelled', () => {
   it('renders value, label and an evidence marker', () => {
-    const out = html(<Metric value="63%" label="Avg Architect Readiness" evidence="illustrative" />);
+    const out = html(<Metric value="63%" label="Avg Engineer Readiness" evidence="illustrative" />);
     expect(out).toContain('63%');
-    expect(out).toContain('Avg Architect Readiness');
+    expect(out).toContain('Avg Engineer Readiness');
     expect(out).toContain('Sample data');
     expect(out).toContain('data-metric="true"');
   });

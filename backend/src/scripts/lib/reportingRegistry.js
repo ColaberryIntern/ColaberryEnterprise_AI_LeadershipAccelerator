@@ -30,7 +30,7 @@ const REPORTS = [
     skipFlag: '--skip-launch-pmo',
     cadence: 'daily',
     sendHourUTC: 15,  // 10 AM CT
-    description: 'AI Systems Architect Accelerator launch project. YOUR TURN banner, per-area cards, AI completion log, blockers, escalations.',
+    description: 'Forward Deployed AI Engineer Accelerator launch project. YOUR TURN banner, per-area cards, AI completion log, blockers, escalations.',
   },
   {
     name: 'Launch Readiness Dashboard (visual)',

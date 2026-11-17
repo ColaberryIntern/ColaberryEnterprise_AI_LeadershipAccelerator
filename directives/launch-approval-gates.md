@@ -1,6 +1,6 @@
 # Directive — Launch Oversight Approval Gates
 
-**Status:** active · **Owner:** Ali (sole approver) · **System:** AI Systems Architect Accelerator launch (Basecamp project 47502609) · **Established:** 2026-06-10
+**Status:** active · **Owner:** Ali (sole approver) · **System:** Forward Deployed AI Engineer Accelerator launch (Basecamp project 47502609) · **Established:** 2026-06-10
 
 ## Goal
 Every launch deliverable that needs Ali's oversight sign-off is gated **inside its own functional area**, by a "Review and approve X" todo bound to the task that produces the artifact. There is **no standalone "Approval Queues" list.**

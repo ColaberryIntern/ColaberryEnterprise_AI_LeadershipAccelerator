@@ -36,8 +36,8 @@ const RFPS = [
   { n: 10, title: 'Professional Licensing & Registration (RFI)',          agency: 'U3P Utah',               actualClose: '2026-06-16', daysFromKick: 8,  value: 0, fit: 8, status: 'OUT (11d + RFI not RFP)', verdict: 'OPTIONAL - relationship play', why: 'RFI not RFP - no contract awarded. Strong fit for the FUTURE RFP this informs. Worth a small response for strategic positioning.' },
 ];
 
-const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family:arial;font-size:14px;color:#2d3748;border-left:3px solid #1a365d;padding-left:14px;margin-top:24px"><tr><td><div style="font-weight:700;font-size:16px;color:#1a365d">Ali Muwwakkil</div><div style="color:#2b6cb0;font-weight:600">Managing Director / AI Systems Architect</div><div style="color:#718096">Colaberry Inc.</div></td></tr></table>`;
-const SIG_TEXT = `Ali Muwwakkil\nManaging Director / AI Systems Architect\nColaberry Inc.`;
+const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family:arial;font-size:14px;color:#2d3748;border-left:3px solid #1a365d;padding-left:14px;margin-top:24px"><tr><td><div style="font-weight:700;font-size:16px;color:#1a365d">Ali Muwwakkil</div><div style="color:#2b6cb0;font-weight:600">Managing Director / Forward Deployed AI Engineer</div><div style="color:#718096">Colaberry Inc.</div></td></tr></table>`;
+const SIG_TEXT = `Ali Muwwakkil\nManaging Director / Forward Deployed AI Engineer\nColaberry Inc.`;
 
 function dollar(v) {
   if (v === 0) return '-';

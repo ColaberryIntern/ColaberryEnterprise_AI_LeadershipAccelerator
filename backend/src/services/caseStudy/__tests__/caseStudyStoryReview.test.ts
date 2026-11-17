@@ -82,9 +82,9 @@ describe('the story review', () => {
     expect(f).toContain('warning:story_situation_opens_on_biography');
     expect(f).toContain('warning:story_progression_repeated');
     // The standfirst may say it once, and the current role title is a role, not a repeat:
-    // "what an AI Systems Architect is responsible for" in the closing is fine.
+    // "what a Forward Deployed AI Engineer is responsible for" in the closing is fine.
     expect(reviewCaseStudyStory(story(), 'training').findings.map((x) => x.code)).not.toContain('story_progression_repeated');
-    const roleInClosing = story({}, { closing: 'This shows what an AI Systems Architect is responsible for.' });
+    const roleInClosing = story({}, { closing: 'This shows what a Forward Deployed AI Engineer is responsible for.' });
     expect(reviewCaseStudyStory(roleInClosing, 'training').findings.map((x) => x.code)).not.toContain('story_progression_repeated');
   });
 

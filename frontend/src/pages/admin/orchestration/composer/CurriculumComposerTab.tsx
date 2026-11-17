@@ -127,13 +127,13 @@ const CurriculumComposerTab: React.FC = () => {
     } finally { setBusy(''); }
   };
 
-  // Load the courses once, then default to the AI Systems Architect Accelerator.
+  // Load the courses once, then default to the Forward Deployed AI Engineer Accelerator.
   useEffect(() => {
     (async () => {
       try {
         const cs = await composerApi.courses();
         setCourses(cs);
-        const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+        const def = cs.find((c) => /forward deployed|architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
         setCourseId(def?.id || '');
       } catch { setError('Failed to load courses.'); }
     })();
@@ -401,7 +401,7 @@ const CurriculumComposerTab: React.FC = () => {
               <Meter label="Competency coverage" value={v.competency_coverage * 100} />
               <Meter label="Architect domains" value={v.domain_coverage * 100} />
               <Meter label="Certification" value={(ev?.certification_coverage || 0) * 100} tone="leaf" />
-              <Meter label="Architect readiness" value={(ev?.architect_readiness || 0) * 100} tone="amber" />
+              <Meter label="Engineer readiness" value={(ev?.architect_readiness || 0) * 100} tone="amber" />
               {jr && <div style={{ margin: '12px 0', fontSize: 11.5, color: 'var(--muted)' }}><Lab>Focus stage</Lab><b style={{ color: 'var(--cherry-deep)' }}>{jr.focus_stage}</b> — {jr.why}</div>}
               <h5 style={{ marginTop: 14 }}>Recommendations</h5>
               {assess!.recommendations.length === 0 ? <div className="cc-muted">No fixes — this week is sound.</div> : assess!.recommendations.slice(0, 5).map((r) => {

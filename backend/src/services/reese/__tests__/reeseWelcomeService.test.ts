@@ -183,7 +183,7 @@ describe('isGreetable', () => {
 
 describe('the two messages', () => {
   it('both lead with mentor, not admissions', () => {
-    expect(accountWelcomeMessage('Ali')).toMatch(/AI Systems Architect mentor/);
+    expect(accountWelcomeMessage('Ali')).toMatch(/Forward Deployed AI Engineer mentor/);
     expect(studentWelcomeMessage('Ali', 'July 2026')).toMatch(/your mentor/i);
   });
 

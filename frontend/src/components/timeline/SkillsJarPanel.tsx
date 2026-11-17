@@ -65,7 +65,7 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
     } finally { setBusy(false); }
   };
 
-  const shareText = `I completed ${course?.name || 'an Anthropic Skills course'} — verified through the Colaberry AI Systems Architect Accelerator. 🎓`;
+  const shareText = `I completed ${course?.name || 'an Anthropic Skills course'} — verified through the Colaberry Forward Deployed AI Engineer Accelerator. 🎓`;
   const openShare = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
 
   return (

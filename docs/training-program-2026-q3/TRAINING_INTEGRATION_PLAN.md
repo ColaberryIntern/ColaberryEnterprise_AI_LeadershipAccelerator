@@ -1,4 +1,4 @@
-# AI Systems Architect Accelerator — Integration Plan
+# Forward Deployed AI Engineer Accelerator — Integration Plan
 
 **Status:** Draft v1 for Ali's critique
 **Authored:** 2026-05-30 (CC-20260530-training)
@@ -30,7 +30,7 @@ We are taking the strategy laid out in the ChatGPT research and turning it into 
 
 ## 1. Program identity (final, from the research)
 
-**Brand:** AI Systems Architect Accelerator
+**Brand:** Forward Deployed AI Engineer Accelerator
 **Powered by:** Anthropic + Claude Code (Partner Network branding once secured)
 **One-line:** "Bring your idea. We help you turn it into a real AI system."
 **Positioning:** "Learn from Anthropic. Build through Colaberry. Deploy in the real world."
@@ -85,7 +85,7 @@ We are taking the strategy laid out in the ChatGPT research and turning it into 
 **Assessment / cert:**
 - External: Claude Certified Architect – Foundations (CCA-F), ~60 questions, ~$99, free for first 5K Anthropic Partner Network employees.
 - Internal Colaberry: per-module 10 scenario questions + reflection + AI Mentor review.
-- **AI Architect Readiness Score** 0–100 across MCP / Claude Code / Architecture / Reliability / Governance.
+- **Forward Deployed AI Engineer Readiness Score** 0–100 across MCP / Claude Code / Architecture / Reliability / Governance.
 
 ---
 
@@ -145,7 +145,7 @@ This is the integration map. For each component: existing system or new build, f
 - **Status:** New page. Replaces the generic portal home for enrolled students.
 - **Lands at:** `frontend/src/pages/portal/ArchitectDashboard.tsx`. Backend: `backend/src/routes/portal/architectRoutes.ts`.
 - **Components:**
-  - AI Architect Readiness Score (0–100, by MCP / Claude Code / Architecture / Reliability / Governance)
+  - Forward Deployed AI Engineer Readiness Score (0–100, by MCP / Claude Code / Architecture / Reliability / Governance)
   - GitHub activity (commits / repos / PRs / stars) via GitHub API
   - Anthropic Skilljar progress
   - Colaberry lab + assessment progress
@@ -206,7 +206,7 @@ This is the integration map. For each component: existing system or new build, f
 - **Lands at:** `frontend/src/pages/public/intensive/[slug].tsx` (one landing page per intensive + bundle). Backend: Stripe wiring in `backend/src/services/billingService.ts` (new).
 - **SKUs at launch:**
   - 4 individual seminars at $499
-  - "AI Systems Architect Accelerator" bundle at $1,497
+  - "Forward Deployed AI Engineer Accelerator" bundle at $1,497
   - Architect Network Membership $79/mo and $790/yr (graduate-only)
   - Architect Pro $149/mo (graduate-only)
 - **Owner:** Website Team + Ali for Stripe account / tax setup.

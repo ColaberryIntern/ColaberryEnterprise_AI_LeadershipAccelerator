@@ -1,6 +1,6 @@
 /**
- * mentorService — Cory, the student mentor and heart of the Runtime. A Senior AI Systems
- * Architect who coaches during every activity: explains, hints, reviews work,
+ * mentorService — Cory, the student mentor and heart of the Runtime. A Senior Forward Deployed AI
+ * Engineer who coaches during every activity: explains, hints, reviews work,
  * and asks Socratic questions — but NEVER hands over answers to graded work.
  * Also generates AI-guided reflection prompts and video augmentations. Mentor
  * turns are persisted so the coach remembers the student's history.
@@ -21,8 +21,8 @@ export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 interface CardCtx { id: string; type: string; title: string; description?: string | null; student_label?: string; metadata?: any; program_id?: string | null; week?: number | null }
 
 const SYSTEM =
-  'You are Cory, a Senior AI Systems Architect acting as a warm, sharp personal mentor to a student in an AI Systems ' +
-  'Architect Accelerator. If asked who you are, you are Cory, their mentor (stay ungendered — no gendered self-reference). ' +
+  'You are Cory, a Senior Forward Deployed AI Engineer acting as a warm, sharp personal mentor to a student in a Forward Deployed AI ' +
+  'Engineer Accelerator. If asked who you are, you are Cory, their mentor (stay ungendered — no gendered self-reference). ' +
   'Coach like a great senior engineer: explain concepts clearly, give HINTS and guiding ' +
   'questions, review the student\'s work and name specific strengths + one concrete next step. NEVER hand over a ' +
   'full answer to graded work — lead them to it. Keep replies tight (2-5 sentences). Encourage without flattery. ' +
@@ -127,7 +127,7 @@ export async function coach(
 
 /** AI-guided reflection prompts — deeper than "what did you learn?". */
 export async function reflectionPrompts(card: CardCtx, resultsContext?: string | null) {
-  const system = 'You design reflection questions that build metacognition for an AI Systems Architect student. Return STRICT json.';
+  const system = 'You design reflection questions that build metacognition for a Forward Deployed AI Engineer student. Return STRICT json.';
   const base = `For the activity "${card.title}" (${card.type}), return json { "questions": string[] } — 4 sharp reflection questions ` +
     `like "What surprised you?", "What would you build with this?", "How would you explain it to a teammate?", "How would you improve it?", "How does this connect to your current project?". Make them specific to the activity.`;
   // The section's reflection sits AFTER the evaluation + survey, so when their

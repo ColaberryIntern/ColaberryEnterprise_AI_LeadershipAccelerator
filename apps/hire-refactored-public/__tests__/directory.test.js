@@ -8,7 +8,7 @@ const D = require('../src/assets/directory.js');
 const C = require('../src/assets/common.js');
 
 const person = (over = {}) => ({
-  slug: 'ann-lee', name: 'Ann Lee', avatarUrl: null, role: 'AI Systems Architect', track: 'architect',
+  slug: 'ann-lee', name: 'Ann Lee', avatarUrl: null, role: 'Forward Deployed AI Engineer', track: 'architect',
   headline: 'Ships agent workflows into claims operations', location: 'Dallas, TX', cohort: 'July 2026',
   availability: null, caseStudyCount: 2, verifiedCommitCount: 7,
   capabilities: [{ name: 'Agent Skills', proven: true }, { name: 'MCP', proven: false }],

@@ -54,7 +54,7 @@ describe('PricingV2 — every figure comes from the registry', () => {
   it('does not claim to issue the credential itself', () => {
     const text = textOf(html());
     expect(text).toContain('issued by the certifying body');
-    expect(text).not.toContain('Certified Anthropic AI Systems Architect');
+    expect(text).not.toContain('Certified Anthropic Forward Deployed AI Engineer');
   });
 });
 

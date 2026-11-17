@@ -5,7 +5,7 @@
  * ("DOL AI Literacy Training - Claims Examiners") was authored at global scope
  * — cohort_id NULL, visibility 'published', status 'active' — which is exactly
  * the shape the student feed selects on. Its 23 published week 1-3 cards
- * therefore rendered inside the AI Systems Architect Accelerator classroom,
+ * therefore rendered inside the Forward Deployed AI Engineer Accelerator classroom,
  * reading as empty duplicates of the real cards ("Welcome to Session 1!"
  * beside "Welcome to Week 1!").
  *

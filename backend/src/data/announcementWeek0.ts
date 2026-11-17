@@ -66,7 +66,7 @@ export const ANNOUNCEMENT_WEEK0 = {
 <div class="res"><p class="eyebrow">🧰 Everything at your fingertips</p><ul>
   <li><span class="ic">📚</span><span>A growing library of articles, blogs &amp; podcasts</span></li>
   <li><span class="ic">♾️</span><span>A never-ending feed of fresh AI content to explore</span></li>
-  <li><span class="ic">🧭</span><span>A clear path toward becoming an AI Systems Architect</span></li>
+  <li><span class="ic">🧭</span><span>A clear path toward becoming a Forward Deployed AI Engineer</span></li>
 </ul></div>
 <div class="next"><h3>🚀 Where this can take you</h3><p>Like what you see? We can take you all the way down the AI journey. An affordable monthly membership unlocks our <span class="eco">entire AI ecosystem</span>: training, projects, certifications, internships, and more.</p></div>
 <div class="talk"><h3>💬 Join the conversation</h3><p>Say hi and tell us what you're hoping to learn! Your comment is visible to the whole community, and it's the best way to meet fellow explorers. 👇</p></div>

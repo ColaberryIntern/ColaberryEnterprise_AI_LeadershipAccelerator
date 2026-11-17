@@ -85,7 +85,7 @@ describe('normalizeAliEmailText — makes a draft compliant without rewriting it
     expect(out).not.toMatch(/[—–]/);
     expect(out).toContain('Confirmed - the refund ships Friday.');
     expect(out).not.toMatch(/Best,\s*\nAli\b/);
-    expect((out.match(/Managing Director \/ AI Systems Architect/g) || []).length).toBe(1);
+    expect((out.match(/Managing Director \/ Forward Deployed AI Engineer/g) || []).length).toBe(1);
     expect(lintAliEmail({ text: out })).toEqual({ ok: true, hardFails: [], softFails: [] });
   });
 
@@ -140,7 +140,7 @@ describe('the guard is wired into the /inbox-zero send path', () => {
     expect(mime).toContain('To: student@example.com');
     expect(mime).toContain('Subject: Re: Refund - question');
     expect(mime).toContain('Confirmed - the refund ships Friday.');
-    expect(mime).toContain('Managing Director / AI Systems Architect');
+    expect(mime).toContain('Managing Director / Forward Deployed AI Engineer');
     expect(mime).not.toMatch(/[—–]/);
   });
 });

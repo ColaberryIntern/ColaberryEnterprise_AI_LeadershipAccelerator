@@ -15,7 +15,7 @@ const body = (over = {}) => ({
     slug: 'claims-triage', title: 'Claims triage that flags itself', standfirst: 'Late claims surface first.',
     industry: 'Insurance', organizationLabel: 'A regional insurer', stack: ['Node', 'Postgres'],
     heroMetrics: [{ label: 'queues merged', valueDisplay: '3', unit: null }],
-    builder: { name: 'Ann Lee', roleTitle: 'AI Systems Architect', photoUrl: null },
+    builder: { name: 'Ann Lee', roleTitle: 'Forward Deployed AI Engineer', photoUrl: null },
     repositories: [{ label: 'annlee/claims', url: 'https://github.com/annlee/claims', role: 'primary' }],
   },
   builderPortfolioSlug: 'ann-lee',
@@ -44,7 +44,7 @@ describe('the hire hero', () => {
 });
 
 describe('a role-only record linked to a listed person (audit 2026-11-08)', () => {
-  const roleOnly = (over) => { const b = body(over); b.caseStudy.builder = { name: null, roleTitle: 'AI Systems Architect', photoUrl: null }; return b; };
+  const roleOnly = (over) => { const b = body(over); b.caseStudy.builder = { name: null, roleTitle: 'Forward Deployed AI Engineer', photoUrl: null }; return b; };
   const portfolioRes = { ok: true, status: 200, body: { ok: true, portfolio: { identity: { full_name: 'Kes D', headline: 'QA', avatar_data_url: null } } } };
 
   test('names the builder from their public portfolio, keeping the record\'s role title', () => {
@@ -52,7 +52,7 @@ describe('a role-only record linked to a listed person (audit 2026-11-08)', () =
     assert.deepEqual(person, { name: 'Kes D', role: 'QA', avatarUrl: null });
     const html = S.hero(roleOnly(), person);
     assert.match(html, /Built by Kes D/);
-    assert.match(html, /AI Systems Architect/, 'the record\'s role beats the portfolio headline');
+    assert.match(html, /Forward Deployed AI Engineer/, 'the record\'s role beats the portfolio headline');
     assert.match(S.hireCard(roleOnly(), person), /Request intro/);
   });
 

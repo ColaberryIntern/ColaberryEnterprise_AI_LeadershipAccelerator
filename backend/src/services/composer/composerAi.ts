@@ -140,9 +140,9 @@ export async function generateCurriculum(bp: BlueprintInput, instruction: string
   }
   const pal = palTypes.map((t) => `${t.slug} (${t.label}, ${t.bucket}${t.evidence_required ? ', evidence' : ''}${t.github_required ? ', github' : ''})`).join('; ');
   const system =
-    'You are a Senior Instructional Designer + AI Curriculum Architect for an AI Systems Architect Accelerator. ' +
+    'You are a Senior Instructional Designer + AI Curriculum Architect for a Forward Deployed AI Engineer Accelerator. ' +
     'You assemble reusable component types into a coherent learning sequence. Your north star: maximize each ' +
-    "student's progress toward becoming an AI Systems Architect. Use ONLY the provided component type slugs. Return STRICT json.";
+    "student's progress toward becoming a Forward Deployed AI Engineer. Use ONLY the provided component type slugs. Return STRICT json.";
   const user =
     `Blueprint: ${JSON.stringify({ title: bp.title, purpose: bp.purpose, week, difficulty: bp.difficulty, competencies: bp.competencies, architect_domains: bp.architect_domains, learning_objectives: bp.learning_objectives })}\n` +
     `Instruction: "${instruction}"\nScope: ${scope}.\n` +

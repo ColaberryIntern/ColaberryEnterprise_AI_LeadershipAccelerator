@@ -12,7 +12,7 @@
 
 ## Brand
 
-- **Program name:** AI Systems Architect Accelerator
+- **Program name:** Forward Deployed AI Engineer Accelerator
 - **Co-brand (after 2026-06-12):** Powered by Anthropic + Claude Code
 - **One-line pitch:** "Bring your idea. We help you turn it into a real AI system."
 - **Positioning statement:** "Learn from Anthropic. Build through Colaberry. Deploy in the real world."

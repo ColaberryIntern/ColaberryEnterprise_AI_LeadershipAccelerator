@@ -66,7 +66,7 @@ just happens to be made of pixels.
 | "Priya Nair shipped the Claims Triage Copilot" | `/case-studies` | Fabricated case study with invented client quotations. `casestudy.fabricated` is `DO_NOT_PUBLISH`. |
 | "Marcus Bell shipped the Maintenance Knowledge Agent" | `/case-studies` | Same. |
 | **"We put your people in Anthropic-partner hands"** | `/case-studies` | The unverified partner designation. `anthropic.partner` is blocked; the application was submitted, admission is not evidenced. |
-| **"Get certified as an Anthropic AI Systems Architect"** | `/program` | `credential.cca` is blocked. The safe wording — certification *preparation*, credential issued by the certifying body — is already in V2. |
+| **"Get certified as an Anthropic Forward Deployed AI Engineer"** | `/program` | `credential.cca` is blocked. The safe wording — certification *preparation*, credential issued by the certifying body — is already in V2. |
 | "95% of AI pilots fail" as a bare fact | homepage, book cover | `research.book95` is `NEEDS_VERIFICATION` **but its registry note says it may ship once rendered as an attributed citation rather than a bare fact.** So: usable as *"the thesis of Trust Before Intelligence, by Ram Katamaraja"*, not as a statistic in our own voice. |
 | "477% ROI in 90 days" | book marketing | `DO_NOT_PUBLISH`. It is a case study *inside the book*, not a Colaberry client outcome, and next to platform copy it reads as ours. |
 

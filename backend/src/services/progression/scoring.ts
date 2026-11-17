@@ -26,7 +26,7 @@ export interface DomainConfidence {
   weight: number;       // domain weight toward readiness
 }
 
-/** Architect Readiness = weight-normalized mean of domain confidences (0..1). */
+/** Engineer Readiness = weight-normalized mean of domain confidences (0..1). */
 export function computeReadiness(domains: DomainConfidence[]): number {
   const totalWeight = domains.reduce((s, d) => s + (d.weight || 0), 0);
   if (totalWeight <= 0) return 0;

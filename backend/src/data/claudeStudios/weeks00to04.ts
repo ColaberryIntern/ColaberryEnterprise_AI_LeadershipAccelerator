@@ -2,7 +2,7 @@
  * Claude Studio content — Weeks 0-4.
  *
  * Each studio is adapted to the EXISTING week theme in data/weekBlueprints.ts
- * (the AI Systems Architect track) while retaining the intended career asset.
+ * (the Forward Deployed AI Engineer track) while retaining the intended career asset.
  * Where placement deviates from the source curriculum brief the reason is
  * recorded in `adaptation` and surfaced in the instructor view.
  */
@@ -86,7 +86,7 @@ export const STUDIOS_00_TO_04: ClaudeStudioWeek[] = [
       sources: [
         'Your own role description or a recent project brief with client identifiers removed',
         'Your employer\'s acceptable-use or data-handling policy, if one exists',
-        'The program syllabus for the AI Systems Architect Accelerator',
+        'The program syllabus for the Forward Deployed AI Engineer Accelerator',
       ],
     },
     prompts: [
@@ -94,7 +94,7 @@ export const STUDIOS_00_TO_04: ClaudeStudioWeek[] = [
         kind: 'starter',
         label: 'Surface your own delegation boundary',
         why: 'Starts from your real work instead of a generic AI-policy template, so the boundaries you end up with are ones you would actually defend.',
-        text: `I am setting my personal rules for working with AI before I start a 12-week AI Systems Architect program.
+        text: `I am setting my personal rules for working with AI before I start a 12-week Forward Deployed AI Engineer program.
 
 My role: [describe your role in 2-3 sentences]
 Work I do weekly: [list 4-6 recurring tasks]

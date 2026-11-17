@@ -1,5 +1,5 @@
 /**
- * Elaborated Week Blueprints — AI Systems Architect Accelerator (weeks 0–12).
+ * Elaborated Week Blueprints — Forward Deployed AI Engineer Accelerator (weeks 0–12).
  *
  * These are the rich, per-week Blueprint fields that the Curriculum Composer's
  * Blueprint rows (table `curriculum_blueprints`, one row per week under the
@@ -92,13 +92,13 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     difficulty: 'intro',
     estimated_hours: 2.5,
     purpose:
-      'Week 0 is the free lead-magnet tier of the AI Systems Architect Accelerator — a guided taste of what AI can do for real work before committing to the full 12-week program. Learners sample testimonials, a short podcast, blog explainers, micro-videos, small learnings, and quick quizzes that demystify AI and preview the AI Systems Architect path. The goal is curiosity and confidence: show why AI fluency matters now, what an AI Systems Architect actually builds, and how the paid program turns a business technologist into one. No setup or coding required.',
+      'Week 0 is the free lead-magnet tier of the Forward Deployed AI Engineer Accelerator — a guided taste of what AI can do for real work before committing to the full 12-week program. Learners sample testimonials, a short podcast, blog explainers, micro-videos, small learnings, and quick quizzes that demystify AI and preview the Forward Deployed AI Engineer path. The goal is curiosity and confidence: show why AI fluency matters now, what a Forward Deployed AI Engineer actually builds, and how the paid program turns a business technologist into one. No setup or coding required.',
     learning_objectives: [
       'Describe, in plain language, what generative AI and Claude can do for everyday knowledge work',
       'Recognize the difference between using AI as a chat tool and architecting AI systems',
       'Write a basic, well-structured prompt and predict how phrasing changes the result',
       'Identify three real tasks in your own work that AI could accelerate this week',
-      'Explain the arc of the AI Systems Architect Accelerator and what you would build in it',
+      'Explain the arc of the Forward Deployed AI Engineer Accelerator and what you would build in it',
     ],
     competencies: ['ai_foundations', 'prompting_basics', 'ai_use_cases', 'ai_literacy', 'tool_awareness'],
     architect_domains: ['ai_systems_architecture', 'build_discipline'],
@@ -533,7 +533,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     difficulty: 'stretch',
     estimated_hours: 8,
     purpose:
-      'Week 9 closes Intensive 3. There is no dedicated Anthropic course — this is Colaberry-original architecture content and the start of the "AI Systems Architect" differentiator. You wrap the system you have built in a reliability + quality layer: timeouts, retries with backoff, circuit breakers, fallbacks, dead-letter handling, and idempotency so operations are safe to re-run. You add evaluation and quality gates so AI output is measured, not assumed. This is failure-first design: you design the failure path before the happy path.',
+      'Week 9 closes Intensive 3. There is no dedicated Anthropic course — this is Colaberry-original architecture content and the start of the "Forward Deployed AI Engineer" differentiator. You wrap the system you have built in a reliability + quality layer: timeouts, retries with backoff, circuit breakers, fallbacks, dead-letter handling, and idempotency so operations are safe to re-run. You add evaluation and quality gates so AI output is measured, not assumed. This is failure-first design: you design the failure path before the happy path.',
     learning_objectives: [
       'Design the failure path first: enumerate failure modes for each external boundary',
       'Implement timeouts, capped retries with backoff, and circuit breakers',

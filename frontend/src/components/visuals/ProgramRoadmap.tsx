@@ -8,7 +8,7 @@ import React, { useId } from 'react';
  * are GROUPINGS of weeks within the 12 — never standalone classes. Two dotted
  * accent lanes (a cherry "project" lane and an amber "CCA-F certification"
  * lane) branch off the path and converge on a single highlighted finish marker:
- * "Certified Anthropic AI Systems Architect".
+ * "Certified Anthropic Forward Deployed AI Engineer".
  *
  * Self-contained: a scoped <style> block carries semantic design-system token
  * values; the only literal hex values are inside the SVG data-viz fills, which
@@ -125,7 +125,7 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
   const certStartY = nodeY(7);
 
   const ariaLabel =
-    'Twelve-week AI Systems Architect roadmap: one continuous program of 12 weekly milestones (W1 through W12), grouped into four phases — Build Your AI Foundation, Create Your AI Team, Connect AI to the Real World, and Design AI That Scales. A project build lane and a CCA-F certification lane run alongside the weeks and converge at the finish: Certified Anthropic AI Systems Architect.';
+    'Twelve-week Forward Deployed AI Engineer roadmap: one continuous program of 12 weekly milestones (W1 through W12), grouped into four phases — Build Your AI Foundation, Create Your AI Team, Connect AI to the Real World, and Design AI That Scales. A project build lane and a CCA-F certification lane run alongside the weeks and converge at the finish: Certified Anthropic Forward Deployed AI Engineer.';
 
   return (
     <div className={`pr-root${compact ? ' pr-compact' : ''}`} data-uid={uid}>
@@ -507,10 +507,10 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
               CERTIFIED
             </text>
             <text className="pr-finish-label" x={finishX} y={finishY + 76}>
-              Anthropic AI Systems
+              Forward Deployed
             </text>
             <text className="pr-finish-label" x={finishX} y={finishY + 94}>
-              Architect
+              AI Engineer
             </text>
           </g>
         </svg>
@@ -567,7 +567,7 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
           );
         })}
         <div className="pr-vfinish">
-          Certified Anthropic AI Systems Architect
+          Certified Anthropic Forward Deployed AI Engineer
           <small>PROJECT BUILD + CCA-F CERTIFICATION</small>
         </div>
       </div>
@@ -590,7 +590,7 @@ const ProgramRoadmap: React.FC<ProgramRoadmapProps> = ({ compact = false }) => {
         })}
         <li>
           The project build lane starts in week 3 and the CCA-F certification lane starts in week 7;
-          both converge at the finish: Certified Anthropic AI Systems Architect.
+          both converge at the finish: Certified Anthropic Forward Deployed AI Engineer.
         </li>
       </ol>
     </div>

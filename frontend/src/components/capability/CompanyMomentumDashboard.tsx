@@ -3,7 +3,7 @@ import type { OrgOverview } from '../../services/orgApi';
 
 /**
  * CompanyMomentumDashboard — company view, shaped to the REAL metric schema the
- * platform captures: team Architect Readiness (student_level.architect_readiness),
+ * platform captures: team Engineer Readiness (student_level.architect_readiness),
  * Builder-XP velocity (xp_events, builder stream), evidence/projects shipped
  * (evidence_records / runtime_portfolio_artifacts), attendance (attendance_records),
  * evaluations passed (runtime_assessment_attempts), and the 9-level Builder ladder
@@ -28,7 +28,7 @@ const LADDER_COLOR = (i: number): string => (i <= 2 ? '#367895' : i <= 5 ? '#5BA
 type Tile = { v: string; l: string; delta?: string; up?: boolean };
 
 const SAMPLE_TILES: Tile[] = [
-  { v: '63%', l: 'Avg Architect Readiness', delta: '+18 in 8 wks', up: true },
+  { v: '63%', l: 'Avg Engineer Readiness', delta: '+18 in 8 wks', up: true },
   { v: '1,640', l: 'Builder XP / week (velocity)', delta: '▲ 9% vs prior', up: true },
   { v: '12', l: 'Evidence shipped this week', delta: '▲ 4', up: true },
   { v: '17', l: 'Projects & artifacts shipped', delta: '+5 this week', up: true },
@@ -98,7 +98,7 @@ function liveModel(o: OrgOverview): DashModel {
   const members = o.member_count;
   const memberWord = members === 1 ? 'member' : 'members';
   const tiles: Tile[] = [
-    { v: `${o.avg_readiness}%`, l: 'Avg Architect Readiness' },
+    { v: `${o.avg_readiness}%`, l: 'Avg Engineer Readiness' },
     { v: last.toLocaleString(), l: 'Builder XP / week (velocity)' },
     { v: `${o.evidence_this_week}`, l: 'Evidence shipped this week' },
     { v: `${Math.round(o.attendance_rate * 100)}%`, l: 'Live-session attendance' },
@@ -180,7 +180,7 @@ export default function CompanyMomentumDashboard({ overview }: { overview?: OrgO
 
       <div className="cmd-head">
         <div>
-          <div className="cmd-eyebrow">Architect Readiness trajectory</div>
+          <div className="cmd-eyebrow">Engineer Readiness trajectory</div>
           <h3 className="cmd-title">Your company, on the rise in AI</h3>
         </div>
         <span className="cmd-badge">{m.badge}</span>
@@ -191,7 +191,7 @@ export default function CompanyMomentumDashboard({ overview }: { overview?: OrgO
           <div className="cmd-score">{m.score}</div>
           <div className="cmd-up">{m.scoreSub}</div>
           <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', margin: 'var(--space-3) 0 0' }}>
-            Average Architect Readiness across your team, from validated evidence, evaluations passed, and competency confidence. The line tracks Builder XP shipped per week.
+            Average Engineer Readiness across your team, from validated evidence, evaluations passed, and competency confidence. The line tracks Builder XP shipped per week.
           </p>
         </div>
         <div className="cmd-scroll">

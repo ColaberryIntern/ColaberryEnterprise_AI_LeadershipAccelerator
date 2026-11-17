@@ -21,7 +21,7 @@ const INFORMAL_SIGNOFFS = [
 ];
 
 const SIGNATURE_BLOCK_MARKERS = [
-  /Managing Director.{0,80}AI Systems Architect/i,
+  /Managing Director.{0,80}(?:Forward Deployed AI Engineer|AI Systems Architect)/i,
   /Colaberry Inc\.?\s*<\/?br/i,
   /200 Chisholm Place/i,
   /enterprise\.colaberry\.ai/i,
@@ -48,7 +48,7 @@ function findInformalSignoff(body) {
  * two are structural parts of the block itself.
  */
 const SIGNATURE_ANCHORS = [
-  /Managing Director.{0,80}AI Systems Architect/gi,
+  /Managing Director.{0,80}?(?:Forward Deployed AI Engineer|AI Systems Architect)/gi,
   /200 Chisholm Place/gi,
 ];
 

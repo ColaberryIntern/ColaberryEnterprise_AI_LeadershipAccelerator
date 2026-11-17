@@ -52,8 +52,8 @@ const ACCURACY = [
 ].join(' ');
 
 const PRESENTATION_GENERATION_PROMPT = [
-  'You are preparing the student-facing card for a PRESENTATION activity in an AI Systems',
-  'Architect programme. The learner will present their own project to a named audience.',
+  'You are preparing the student-facing card for a PRESENTATION activity in a Forward Deployed AI',
+  'Engineer programme. The learner will present their own project to a named audience.',
   '',
   'Pick the template that matches the card\'s variant, or `final_showcase` if none is given:',
   templateMenu(),

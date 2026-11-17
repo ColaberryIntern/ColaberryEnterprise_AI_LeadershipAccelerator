@@ -1,5 +1,5 @@
-// Curriculum build-tracker data — the 12-week structure for the AI Systems
-// Architect Accelerator, plus the per-week build checklist and schedule.
+// Curriculum build-tracker data — the 12-week structure for the Forward Deployed AI
+// Engineer Accelerator, plus the per-week build checklist and schedule.
 // Pure data + pure functions, NO I/O — unit-tests without Basecamp and is the
 // single source of truth for reconfigureCurriculumList.js.
 //
@@ -10,7 +10,7 @@
 // Each week is pre-mapped to its specific Anthropic Skilljar course (validated
 // against the live catalog at anthropic.skilljar.com, 2026-06-10). Weeks 4/9/
 // 10/11 have NO Anthropic course — they are Colaberry-original architecture
-// content (the "AI Systems Architect" differentiator).
+// content (the "Forward Deployed AI Engineer" differentiator).
 //
 // "Lean 5-item per week" (Ali, 2026-06-10): Anthropic course confirmed+wired /
 // Lab+artifact spec / Assessment pack (quiz+survey) / NotebookLM video / Swati

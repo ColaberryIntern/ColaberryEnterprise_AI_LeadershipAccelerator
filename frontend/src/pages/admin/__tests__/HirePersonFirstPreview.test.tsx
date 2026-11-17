@@ -12,7 +12,7 @@ import type { CaseStudyLinkedPerson } from '../../../services/caseStudyAdminType
 
 const person = (over: Partial<CaseStudyLinkedPerson> = {}): CaseStudyLinkedPerson => ({
   portfolioSlug: 'ann-lee', pageStatus: 'published', pageVisibility: 'public', listed: true,
-  name: 'Ann Lee', avatarUrl: null, role: 'AI Systems Architect', cohort: 'July 2026',
+  name: 'Ann Lee', avatarUrl: null, role: 'Forward Deployed AI Engineer', cohort: 'July 2026',
   availability: { kind: 'open', label: 'Open to FDE roles' }, spotlight: false,
   proof: { publishedCaseStudies: 2, verifiedCommits: 7, capabilitiesProven: 3, filesCommitted: 412 },
   ...over,

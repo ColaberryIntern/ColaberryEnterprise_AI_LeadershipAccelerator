@@ -1,7 +1,7 @@
 /**
  * Launch-date contract.
  *
- * The AI Systems Architect Accelerator has three dated milestones:
+ * The Forward Deployed AI Engineer Accelerator has three dated milestones:
  *   - platform launch (site + Open House go-live / first paid enrollment): 2026-07-16
  *   - program launch  (Cohort 1 orientation / kickoff):                    2026-07-23
  *   - first teaching class (task-scheduling / feasibility anchor):          2026-07-27

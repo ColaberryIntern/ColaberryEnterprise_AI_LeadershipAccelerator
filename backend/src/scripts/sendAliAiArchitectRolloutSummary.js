@@ -79,7 +79,7 @@ const HTML = `<!doctype html><html><body style="margin:0;padding:0;background:#f
 <ul style="font-size:13px;color:#1f2937;padding-left:22px;line-height:1.7">
 <li><strong>This repo</strong> - code + comments + PROGRESS.md + CLAUDE.md hierarchy + Basecamp project structure. Most names + roles came from working code.</li>
 <li><strong>Memory</strong> - prior session notes flagged the Mika + Shveta offboarding, Karun's Coca-Cola work, Kes's platform ownership, etc.</li>
-<li><strong>The AI Systems Architect Accelerator program docs</strong> at <code>docs/training-program-2026-q3/</code> - 17 launch briefs that map every team member's track for the July 10 cohort.</li>
+<li><strong>The Forward Deployed AI Engineer Accelerator program docs</strong> at <code>docs/training-program-2026-q3/</code> - 17 launch briefs that map every team member's track for the July 10 cohort.</li>
 <li><strong>The AI_ProjectArchitect GitHub repo</strong> (<a href="https://github.com/ColaberryIntern/AI_ProjectArchitect">ColaberryIntern/AI_ProjectArchitect</a>) - confirms the "bridge from idea to execution" framing + the library/sync architecture.</li>
 <li><strong>The Alden DoRosario / GAI Insights talk</strong> Ram sent + my prior synthesis (Mandrill <code>9303b5d0...</code>).</li>
 </ul>

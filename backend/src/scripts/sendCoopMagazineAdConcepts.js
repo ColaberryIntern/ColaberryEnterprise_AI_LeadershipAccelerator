@@ -352,7 +352,7 @@ ${CONCEPTS.map(conceptBlock).join('\n')}
 
 <div style="padding:22px 36px;background:white;border-top:1px solid #e2e8f0;font-size:13px;color:#475569">
 Ali Muwwakkil<br>
-Managing Director / AI Systems Architect<br>
+Managing Director / Forward Deployed AI Engineer<br>
 Colaberry Inc. | <a href="mailto:ali@colaberry.com" style="color:#2b6cb0;text-decoration:none">ali@colaberry.com</a>
 </div>
 

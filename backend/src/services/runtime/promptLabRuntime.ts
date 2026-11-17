@@ -21,7 +21,7 @@ export interface PromptEvaluation {
 
 export async function evaluatePrompt(card: CardCtx, prompt: string, output?: string): Promise<PromptEvaluation> {
   const system =
-    'You are a Senior AI Systems Architect grading a student\'s prompt. Score craft (clarity, structure, explicit ' +
+    'You are a Senior Forward Deployed AI Engineer grading a student\'s prompt. Score craft (clarity, structure, explicit ' +
     'contracts, constraints, examples) AND architect-thinking (does it treat the model as a component with I/O ' +
     'contracts, failure handling, evaluability?). Be specific and encouraging. Return STRICT json.';
   const user =

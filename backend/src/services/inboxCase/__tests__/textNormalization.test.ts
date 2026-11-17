@@ -127,7 +127,7 @@ describe('parseDigestTodoLines — real production Basecamp digest samples', () 
     const parsed = parseDigestTodoLines(DIGEST_SAMPLE_12A);
     expect(parsed).toHaveLength(12);
     expect(parsed[0]).toEqual({
-      project: 'AI Systems Architect Accelerator',
+      project: 'Forward Deployed AI Engineer Accelerator',
       todolist: 'Website - enterprise.colaberry.ai',
       title: 'Final review and approval of enterprise.colaberry.ai',
       dueRaw: 'Jul 10',
@@ -146,7 +146,7 @@ describe('parseDigestTodoLines — real production Basecamp digest samples', () 
     const parsed = parseDigestTodoLines(DIGEST_SAMPLE_12B);
     expect(parsed).toHaveLength(12);
     // "Student Platform Build" and "TWC Compliance" are two distinct
-    // todolists both under "AI Systems Architect Accelerator" — the real
+    // todolists both under "Forward Deployed AI Engineer Accelerator" — the real
     // case that tests currentTodolist correctly resets mid-project.
     expect(parsed[0].todolist).toBe('Student Platform Build');
     expect(parsed[1].todolist).toBe('TWC Compliance');

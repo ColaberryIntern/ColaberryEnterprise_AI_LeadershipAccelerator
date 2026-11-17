@@ -26,7 +26,7 @@ if (!DRY && !process.env.MANDRILL_API_KEY) {
 const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 20px;">
   <tr><td>
     <div style="font-weight: 700; font-size: 16px; color: #1a365d;">Ali Muwwakkil</div>
-    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / AI Systems Architect</div>
+    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / Forward Deployed AI Engineer</div>
     <div style="color: #718096;">Colaberry Inc.</div>
     <div style="margin-top: 10px; color: #2d3748;">200 Chisholm Place, Suite 200 &middot; Plano, TX 75075</div>
     <div style="color: #2d3748;"><a href="mailto:ali@colaberry.com" style="color: #2b6cb0; text-decoration: none;">ali@colaberry.com</a> &nbsp; <a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a></div>
@@ -34,7 +34,7 @@ const SIG_HTML = `<table cellpadding="0" cellspacing="0" border="0" style="font-
 </table>`;
 
 const SIG_TEXT = `Ali Muwwakkil
-Managing Director / AI Systems Architect
+Managing Director / Forward Deployed AI Engineer
 Colaberry Inc.
 
 200 Chisholm Place, Suite 200, Plano, TX 75075
@@ -64,7 +64,7 @@ const HTML = `<!doctype html><html><body style="margin:0;padding:0;background:#f
 <div style="max-width:760px;margin:0 auto;padding:24px">
 <div style="background:#1a365d;color:#fff;padding:18px 24px;border-radius:10px 10px 0 0">
   <div style="font-size:18px;font-weight:800">Escalation rules: new vs. what already existed</div>
-  <div style="font-size:13px;color:#cbd5e1;margin-top:4px">AI Systems Architect Accelerator &middot; Launch Readiness Dashboard</div>
+  <div style="font-size:13px;color:#cbd5e1;margin-top:4px">Forward Deployed AI Engineer Accelerator &middot; Launch Readiness Dashboard</div>
 </div>
 <div style="background:#fff;padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 10px 10px">
 
@@ -98,7 +98,7 @@ ${SIG_HTML}
 </div></body></html>`;
 
 const TEXT = `ESCALATION RULES: NEW vs. WHAT ALREADY EXISTED
-AI Systems Architect Accelerator / Launch Readiness Dashboard
+Forward Deployed AI Engineer Accelerator / Launch Readiness Dashboard
 
 BOTTOM LINE
 The system already had a more sophisticated escalation engine for launch work

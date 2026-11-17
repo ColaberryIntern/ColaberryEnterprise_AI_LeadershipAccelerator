@@ -192,7 +192,7 @@ const CompanyPage: React.FC = () => {
           {/* Roster */}
           <div style={card}>
             <h2 style={h2}>Where your team sits</h2>
-            <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Builder level, Architect Readiness, and Builder-XP velocity. Click anyone to drill in.</p>
+            <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Builder level, Engineer Readiness, and Builder-XP velocity. Click anyone to drill in.</p>
             {roster.length === 0 ? (
               <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)' }}>No members yet. Send your first free invite below.</div>
             ) : (

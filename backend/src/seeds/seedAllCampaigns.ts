@@ -175,7 +175,7 @@ Tone: Professional, peer-level, consultative. Never sound like marketing. Always
     console.warn('[Seed] Pilot program campaigns seed skipped:', err?.message);
   }
 
-  // ─── 20-22. AI Systems Architect Open House (DRAFT — pending approval) ──
+  // ─── 20-22. Forward Deployed AI Engineer Open House (DRAFT — pending approval) ──
   // Creates the shared 5-email sequence + 3 segment campaigns as DRAFTS only.
   // No leads enrolled, nothing activated: nothing can send until approved + activated.
   if (createdBy) {

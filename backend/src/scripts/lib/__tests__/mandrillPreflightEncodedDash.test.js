@@ -45,12 +45,12 @@ const check = (html, text) => () => validateBeforeSend(html, text);
 
 describe('the original literal-character rule is untouched', () => {
   it('still rejects a literal em-dash in the HTML body', () => {
-    expect(check('<p>Managing Director ' + LITERAL_EM_DASH + ' AI Systems Architect</p>', 'clean'))
+    expect(check('<p>Managing Director ' + LITERAL_EM_DASH + ' Forward Deployed AI Engineer</p>', 'clean'))
       .toThrow(/Em-dash/);
   });
 
   it('still rejects a literal em-dash in the TEXT body', () => {
-    expect(check('<p>clean</p>', 'Managing Director ' + LITERAL_EM_DASH + ' AI Systems Architect'))
+    expect(check('<p>clean</p>', 'Managing Director ' + LITERAL_EM_DASH + ' Forward Deployed AI Engineer'))
       .toThrow(/Em-dash/);
   });
 
@@ -136,8 +136,8 @@ describe('every encoded dash form is refused (positive controls)', () => {
 describe('innocent text passes (negative controls)', () => {
   const INNOCENT = [
     ['a plain ASCII hyphen', 'Launch PMO - Daily Update'],
-    ['a hyphen with spaces, the approved replacement', 'Managing Director - AI Systems Architect'],
-    ['a slash, the house rule for the signature', 'Managing Director / AI Systems Architect'],
+    ['a hyphen with spaces, the approved replacement', 'Managing Director - Forward Deployed AI Engineer'],
+    ['a slash, the house rule for the signature', 'Managing Director / Forward Deployed AI Engineer'],
     ['a unicode MINUS SIGN, which is not a dash rule', 'temperature ' + MINUS_SIGN + '4 degrees'],
     ['the word "commander", which contains "mdash" nowhere but looks close', 'commander'],
     // The `&m` / `&n` traps. Each is a real entity used in this repo's emails.
@@ -231,13 +231,13 @@ describe('the canonical signature obeys the house rule', () => {
    * would pass just as happily against a gate that checks nothing at all.
    */
   it('the PRE-FIX signature string fails the hardened gate', () => {
-    const preFix = '<div style="font-size: 13px; color: #4ab1c4; font-weight: 500;">Managing Director &mdash; AI Systems Architect</div>';
+    const preFix = '<div style="font-size: 13px; color: #4ab1c4; font-weight: 500;">Managing Director &mdash; Forward Deployed AI Engineer</div>';
     expect(check(preFix, '')).toThrow(/named em-dash entity/);
   });
 
   it('the title uses a slash, not a dash of any form', () => {
     const source = readRepoFile(SIGNATURE_FILE);
-    expect(source).toContain('Managing Director / AI Systems Architect');
+    expect(source).toContain('Managing Director / Forward Deployed AI Engineer');
     expect(source).not.toContain('Managing Director &mdash;');
     expect(source).not.toContain('Managing Director ' + LITERAL_EM_DASH);
   });
@@ -346,11 +346,11 @@ describe('numeric entities with leading zeros or no semicolon are refused', () =
   ];
 
   it.each(sneaky)('refuses %s (%s)', (form) => {
-    expect(check(`<p>Managing Director ${form} AI Systems Architect</p>`, 'clean')).toThrow(/dash/i);
+    expect(check(`<p>Managing Director ${form} Forward Deployed AI Engineer</p>`, 'clean')).toThrow(/dash/i);
   });
 
   it.each(sneaky)('refuses %s (%s) in the TEXT body too', (form) => {
-    expect(check('<p>clean</p>', `Managing Director ${form} AI Systems Architect`)).toThrow(/dash/i);
+    expect(check('<p>clean</p>', `Managing Director ${form} Forward Deployed AI Engineer`)).toThrow(/dash/i);
   });
 
   it('names the form it found, so the author can locate it', () => {

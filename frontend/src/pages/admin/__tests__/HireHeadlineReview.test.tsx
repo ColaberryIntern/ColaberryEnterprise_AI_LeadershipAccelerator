@@ -11,7 +11,7 @@ jest.mock('../../../services/hireHeadlineAdminApi', () => ({ fetchHeadlineDrafts
 const m = api as jest.Mocked<typeof api>;
 
 const EID = '22222222-2222-4222-8222-222222222222';
-const DRAFT = { enrollmentId: EID, name: 'Ann Lee', slug: 'ann-lee', live: 'Data Analyst', draft: 'AI Systems Architect', updatedAt: '2026-11-13T10:00:00.000Z' };
+const DRAFT = { enrollmentId: EID, name: 'Ann Lee', slug: 'ann-lee', live: 'Data Analyst', draft: 'Forward Deployed AI Engineer', updatedAt: '2026-11-13T10:00:00.000Z' };
 
 async function render(): Promise<void> {
   H.mount(<HireHeadlineReview />, '/');
@@ -25,11 +25,11 @@ it('shows today\'s headline beside the proposed one, and approves the exact text
   m.decideHeadline.mockResolvedValue(undefined);
   await render();
   expect(H.el(`hire-headline-${EID}`).textContent).toContain('Data Analyst');
-  expect(H.el(`hire-headline-${EID}`).textContent).toContain('AI Systems Architect');
+  expect(H.el(`hire-headline-${EID}`).textContent).toContain('Forward Deployed AI Engineer');
   H.click('hire-headline-approve');
   await H.settle();
-  expect(m.decideHeadline).toHaveBeenCalledWith(EID, 'approve', 'AI Systems Architect');
-  expect(H.text()).toContain('Hire headline is now "AI Systems Architect"');
+  expect(m.decideHeadline).toHaveBeenCalledWith(EID, 'approve', 'Forward Deployed AI Engineer');
+  expect(H.text()).toContain('Hire headline is now "Forward Deployed AI Engineer"');
   expect(H.query(`hire-headline-${EID}`)).toBeNull();
 });
 
@@ -39,7 +39,7 @@ it('says what the server said when the draft changed since it was read, and relo
   await render();
   H.click('hire-headline-reject');
   await H.settle();
-  expect(m.decideHeadline).toHaveBeenCalledWith(EID, 'reject', 'AI Systems Architect');
+  expect(m.decideHeadline).toHaveBeenCalledWith(EID, 'reject', 'Forward Deployed AI Engineer');
   expect(H.text()).toContain('This headline changed');
   expect(m.fetchHeadlineDrafts).toHaveBeenCalledTimes(2);
 });

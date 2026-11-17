@@ -588,6 +588,6 @@ export async function renderSessionReadinessReport(sessionId: string): Promise<s
   <li><b>N</b> = presenter notes/script · <b>V</b> = Focus (clean recording) · <b>C</b> = Compact (side-by-side with Claude Code) · <b>Q</b> = full-screen QR.</li>
   <li>If live sync drops, the class content still works — keep teaching; the pace tracker is client-side.</li>
 </ul>
-<div class="foot">Readiness report · generated from the Class Kit · AI Systems Architect Accelerator</div>
+<div class="foot">Readiness report · generated from the Class Kit · Forward Deployed AI Engineer Accelerator</div>
 </body></html>`;
 }

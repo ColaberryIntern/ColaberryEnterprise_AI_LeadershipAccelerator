@@ -224,7 +224,7 @@ function EnrollPage() {
     <>
       <SEOHead
         title="Enroll"
-        description="Create your Colaberry account at $0 to start and explore the AI Systems Architect Accelerator, or redeem a sponsor code from your employer."
+        description="Create your Colaberry account at $0 to start and explore the Forward Deployed AI Engineer Accelerator, or redeem a sponsor code from your employer."
       />
 
       {/* Hero */}

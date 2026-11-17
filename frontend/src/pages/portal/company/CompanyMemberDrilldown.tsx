@@ -85,7 +85,7 @@ export default function CompanyMemberDrilldown({
 
         {/* readiness + what's left */}
         <div style={{ ...card, borderTop: '4px solid #7A5AF0' }}>
-          <div style={sub}>Architect readiness · {readinessPct}%{nextLevel ? ` → ${buildRungForSlug(nextLevel)}` : ''}</div>
+          <div style={sub}>Engineer readiness · {readinessPct}%{nextLevel ? ` → ${buildRungForSlug(nextLevel)}` : ''}</div>
           <div style={{ height: 10, borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', overflow: 'hidden', marginBottom: 'var(--space-4)' }}><div style={{ width: `${Math.max(2, Math.min(100, readinessPct))}%`, height: '100%', background: '#7A5AF0', borderRadius: 'var(--radius-pill)' }} /></div>
           <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>What&rsquo;s left to promote</div>
           {gaps.length ? gaps.map((g) => (<div key={g} style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-body)', padding: '4px 8px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>{g}</div>)) : <div style={{ fontSize: 'var(--fs-caption)', color: '#5BA63C', fontWeight: 700 }}>All gates cleared — top of the ladder.</div>}

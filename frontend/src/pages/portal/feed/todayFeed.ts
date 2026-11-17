@@ -109,7 +109,7 @@ export function buildTodayFeed(ctx: TodayFeedCtx, h: TodayFeedHandlers): FeedIte
     desc: 'Every task from all four tracks — learning, project, internship, and certification — on one calendar.',
     cta: { label: 'Open schedule', to: '/portal/schedule', variant: 'berry' } });
 
-  items.push({ ...base('path', 'path-overview'), title: 'Your path to AI Systems Architect', meta: '12-week spine',
+  items.push({ ...base('path', 'path-overview'), title: 'Your path to Forward Deployed AI Engineer', meta: '12-week spine',
     desc: 'Four intensives are the spine; your project, internship, and certification run as parallel lanes around them.',
     cta: { label: 'See your path', to: '/portal/path', variant: 'leaf' } });
 

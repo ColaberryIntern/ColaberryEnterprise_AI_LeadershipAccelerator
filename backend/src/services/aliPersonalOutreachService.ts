@@ -22,7 +22,7 @@ export const ALI_SIGNATURE = `
 --<br>
 Ali Muwwakkil<br>
 Managing Director<br>
-Data Scientist | AI Systems Architect<br>
+Data Scientist | Forward Deployed AI Engineer<br>
 200 Chisholm Place, Suite 200 Plano, TX 75075`;
 
 /**

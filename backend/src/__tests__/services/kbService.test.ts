@@ -39,7 +39,7 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
-const mockCourse: any = { id: 'course-1', name: 'AI Systems Architect Accelerator', slug: 'ai-architect' };
+const mockCourse: any = { id: 'course-1', name: 'Forward Deployed AI Engineer Accelerator', slug: 'ai-architect' };
 const mockCohort: any = {
   id: 'cohort-1',
   course_id: 'course-1',
@@ -59,7 +59,7 @@ describe('resolveMergeTags', () => {
     const template = 'Join {{course.name}} — starts {{cohort.start_date}} at ${{cohort.price_annual}}/mo.';
     const resolved = resolveMergeTags(template, mockCohort, mockCourse);
     expect(resolved).toBe(
-      'Join AI Systems Architect Accelerator — starts July 23, 2026 at $149/mo.'
+      'Join Forward Deployed AI Engineer Accelerator — starts July 23, 2026 at $149/mo.'
     );
   });
 

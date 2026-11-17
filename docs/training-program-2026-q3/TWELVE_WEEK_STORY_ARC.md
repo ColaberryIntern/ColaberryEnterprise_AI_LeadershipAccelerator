@@ -1,4 +1,4 @@
-# The 12-Week Story Arc — AI Systems Architect Accelerator
+# The 12-Week Story Arc — Forward Deployed AI Engineer Accelerator
 
 **Purpose.** Twelve weeks of classes should read as *one story with twelve chapters*, not twelve
 disconnected lessons. This document is the connective tissue: the spine every week's narrative

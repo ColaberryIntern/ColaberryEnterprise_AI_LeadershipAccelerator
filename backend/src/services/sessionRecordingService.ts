@@ -75,7 +75,7 @@ const PROVIDERS: Record<string, {
  * Which Room should hold a session's artefacts (recordings, Class Notes).
  *
  * NOT the booking's room. Every class booking points at the cohort's single
- * PERSISTENT room ("July 2026 - AI Systems Architect"), but each session also
+ * PERSISTENT room ("July 2026 - Forward Deployed AI Engineer"), but each session also
  * has its own `scheduled` room, and that per-session room is what students
  * actually open — the portal's "YOUR CLASSES" list links there.
  *

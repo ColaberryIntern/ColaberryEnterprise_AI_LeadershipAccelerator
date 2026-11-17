@@ -268,9 +268,9 @@ describe('orientationOf — the whole answer for a row', () => {
     // The boundary of the name fallback. Note what is NOT asserted here: a name that DOES carry a
     // month and year is read as a batch even if it is an older-style name, because that is exactly
     // what `batchMonthOf` was built to do and it is how the live November row resolves at all. My
-    // first draft of this test asserted the opposite for 'July 2026 - AI Systems Architect' and
+    // first draft of this test asserted the opposite for 'July 2026 - Forward Deployed AI Engineer' and
     // the module was right, not the test.
-    for (const name of ['AI Systems Architect Program', 'Explorer - Prospects', 'Accelerator', '']) {
+    for (const name of ['Forward Deployed AI Engineer Program', 'Explorer - Prospects', 'Accelerator', '']) {
       expect(orientationOf({ id: 'x', name, cohort_type: 'accelerator' } as any)).toBeNull();
     }
   });

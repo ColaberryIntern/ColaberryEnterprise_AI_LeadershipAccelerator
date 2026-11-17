@@ -35,7 +35,7 @@ const STEPS: Step[] = [
   { n: '02', title: 'They learn on their own time', body: 'Self-paced paths they take whenever it fits, plus optional weekly live events and office hours to stay current. Nobody comes off the job.' },
   { n: '03', title: 'They build with Claude Code', body: 'Every path ends in a real, deployed build on your own workflows, guided hands-on in Anthropic-partner training.' },
   { n: '04', title: 'You watch capability climb', body: 'One dashboard shows who is advancing from Aware to Builder to Architect, what they have shipped, and the ROI behind it.' },
-  { n: '05', title: 'They get certified & present', body: 'Builders earn the Certified Anthropic AI Systems Architect credential and present deployed work at Demo Day to the wider network.' },
+  { n: '05', title: 'They get certified & present', body: 'Builders earn the Certified Anthropic Forward Deployed AI Engineer credential and present deployed work at Demo Day to the wider network.' },
 ];
 
 interface FreeStep { n: string; title: string; body: string; }
@@ -50,7 +50,7 @@ const PILLARS: Pillar[] = [
   { tone: 'red', title: 'Discover the builders you already employ', body: 'Your next AI builders may already be on your payroll. The platform surfaces them by having them build, so capability is revealed by output, not inferred from a resume.' },
   { tone: 'blue', title: 'Nobody comes off the job', body: 'People learn on their own time, around the work they already do. No billable hours lost, minimal disruption by design.' },
   { tone: 'green', title: 'Proven output, not resumes', body: 'Every seat ends in a real, deployed AI build at Demo Day. A shipped artifact is the hardest credential to fake.' },
-  { tone: 'red', title: 'A reassignable capability asset', body: 'Annual seats are reassignable, so the capability stays with your company even if a person leaves. Graduates earn the Certified Anthropic AI Systems Architect credential.' },
+  { tone: 'red', title: 'A reassignable capability asset', body: 'Annual seats are reassignable, so the capability stays with your company even if a person leaves. Graduates earn the Certified Anthropic Forward Deployed AI Engineer credential.' },
 ];
 
 interface Outcome { value: string; label: string; accent?: string; }
@@ -58,7 +58,7 @@ const OUTCOMES: Outcome[] = [
   { value: '5,000+', label: 'careers launched through hands-on, build-first programs', accent: 'var(--chart-3)' },
   { value: 'Since 2012', label: 'building real careers in data and AI', accent: 'var(--chart-1)' },
   { value: '12 wks', label: 'from AI Aware to a deployed build at Demo Day', accent: 'var(--brand-accent)' },
-  { value: 'CCA-F', label: 'Certified Anthropic AI Systems Architect, what builders graduate as', accent: 'var(--chart-4)' },
+  { value: 'CCA-F', label: 'Certified Anthropic Forward Deployed AI Engineer, what builders graduate as', accent: 'var(--chart-4)' },
 ];
 
 const h2Style: React.CSSProperties = {

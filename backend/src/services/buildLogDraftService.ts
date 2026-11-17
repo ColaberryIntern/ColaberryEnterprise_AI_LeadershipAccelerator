@@ -95,7 +95,7 @@ function buildSectionPrompt(
     project.automation_goal ? `Automation goal: ${project.automation_goal}` : null,
   ].filter(Boolean).join('\n') || 'No project details provided yet — draft a generic but plausible AI systems project update.';
 
-  const system = `You draft a "${SECTION_LABELS[type]}" for a student in the AI Systems Architect Accelerator, summarizing one week of progress on their AI project. Tone: first-person, genuine, not salesy. Return STRICT ${SECTION_SHAPES[type]}.`;
+  const system = `You draft a "${SECTION_LABELS[type]}" for a student in the Forward Deployed AI Engineer Accelerator, summarizing one week of progress on their AI project. Tone: first-person, genuine, not salesy. Return STRICT ${SECTION_SHAPES[type]}.`;
 
   const user = `Project context:\n${context}\n\nThis is week ${weekNumber} of a 12-week program. The student just completed and submitted this week's build milestone (artifact reference: ${artifact.url || 'not provided'}). Draft the ${SECTION_LABELS[type]}.`;
 

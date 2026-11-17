@@ -1,5 +1,5 @@
 /**
- * Seed: KB Ops — AI Systems Architect Accelerator, Founding Cohort
+ * Seed: KB Ops — Forward Deployed AI Engineer Accelerator, Founding Cohort
  * Run: npx ts-node src/seeds/seedKbData.ts
  * Idempotent: skips rows that already exist (matched by slug / email / question_pattern+course_id)
  */
@@ -18,7 +18,7 @@ async function seed() {
   const [course] = await CoraKbCourse.findOrCreate({
     where: { slug: 'ai-architect' },
     defaults: {
-      name: 'AI Systems Architect Accelerator',
+      name: 'Forward Deployed AI Engineer Accelerator',
       slug: 'ai-architect',
       description: '12-week online cohort for professionals designing and leading AI systems.',
       is_active: true,
@@ -160,7 +160,7 @@ async function seed() {
       course_id: course.id,
       main_category: 'Program Basics',
       sub_category: 'What is the program',
-      question_pattern: 'What is the AI Systems Architect Accelerator?',
+      question_pattern: 'What is the Forward Deployed AI Engineer Accelerator?',
       answer_template: 'The {{course.name}} is a 12-week online cohort designed for professionals who want to design, build, and govern AI-powered systems. You\'ll work through four intensives — AI Foundation, Build Your AI Team, Connect AI to the Real World, and Design AI That Scales — finishing with a live Expo and Anthropic Architect Certification (CCA-F) prep.',
       primary_person_id: P['Roselen'],
       team_person_ids: [P['Roselen'], P['Kes Delele']],

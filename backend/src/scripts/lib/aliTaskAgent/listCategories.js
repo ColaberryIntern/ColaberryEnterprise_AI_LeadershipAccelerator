@@ -151,7 +151,7 @@ const PROJECTS = {
   46699826: { cat: 'delivery', owns: true, label: 'LandJet', name: 'LandJet Growth Engine' },
   46697389: { cat: 'delivery', owns: true, label: 'NuOrg', name: 'AI Pathway' },
   49210714: { cat: 'learning', label: 'Colaberry Live', name: 'Colaberry Live' },
-  47502609: { cat: 'learning', label: 'AI Systems Architect', name: 'AI Systems Architect Accelerator' },
+  47502609: { cat: 'learning', label: 'Forward Deployed AI Engineer', name: 'Forward Deployed AI Engineer Accelerator' },
   24865175: { cat: 'learning', label: 'Internships', name: 'Internship / Apprenticeship Projects' },
   17200971: { cat: 'learning', owns: true, label: 'TWC compliance', name: 'TWC' },
   47346103: { cat: 'government', owns: true, label: 'Gov Contracts', name: 'Gov Contracts' },

@@ -48,7 +48,7 @@
  "qa": [
   {
    "category": "program-basics",
-   "q": "What exactly is the AI Systems Architect Accelerator?",
+   "q": "What exactly is the Forward Deployed AI Engineer Accelerator?",
    "a": "It's a membership built around a 12-week, project-based program, powered by Anthropic and Claude Code. Most people consume AI; here you learn to build with it. You arrive with an idea and leave with a deployed AI system.",
    "detail": "Positioning: Learn from Anthropic. Build through Colaberry. Deploy in the real world.",
    "tags": [

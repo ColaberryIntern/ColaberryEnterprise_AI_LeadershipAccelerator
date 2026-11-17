@@ -15,7 +15,7 @@ export interface Briefing {
 
 export async function generateBriefing(signals: SchoolSignals, health: SchoolHealth, directors: Director[]): Promise<Briefing> {
   const top = rankRecommendations(directors).slice(0, 5).map((r) => r.title);
-  const system = 'You are the Chief of Staff writing the CEO\'s morning briefing for an AI Systems Architect school. Be warm, sharp, and executive — no fluff. Return STRICT json.';
+  const system = 'You are the Chief of Staff writing the CEO\'s morning briefing for a Forward Deployed AI Engineer school. Be warm, sharp, and executive — no fluff. Return STRICT json.';
   const user =
     `School Health ${health.overall}/100 (${health.band}).\n` +
     `Signals: ${JSON.stringify({ students: signals.students, employment: signals.employment, certification: signals.certification, revenue: signals.revenue, curriculum: signals.curriculum })}\n` +

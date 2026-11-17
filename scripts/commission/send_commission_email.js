@@ -72,7 +72,7 @@ if (!LOGO_CID) { console.error('ABORT: signature html carries no cid: logo refer
 // plain-text fallback for the text/plain part only; the HTML part carries the real block
 const SIG_TEXT =
   'Ali Muwwakkil\n' +
-  'Managing Director / AI Systems Architect\n' +
+  'Managing Director / Forward Deployed AI Engineer\n' +
   'Colaberry Inc.\n' +
   '200 Chisholm Place, Suite 200, Plano, TX 75075\n' +
   'ali@colaberry.com  |  enterprise.colaberry.ai\n' +

@@ -45,7 +45,7 @@ You own two parallel workstreams:
 - Governance layer (audit log, approval flow, escalation path)
 - Business case (problem framing, value, who pays)
 
-Pass = 12/20. Honors = 17/20. Tied to AI Architect Readiness Score.
+Pass = 12/20. Honors = 17/20. Tied to Forward Deployed AI Engineer Readiness Score.
 
 **Immediate deliverables:**
 - **2026-06-02 (Tue) — Curriculum flow + design visuals** (UI/UX-grade, professional-tool quality). Aleem + Ali approve. CB drafts the structure; you + Aleem polish.

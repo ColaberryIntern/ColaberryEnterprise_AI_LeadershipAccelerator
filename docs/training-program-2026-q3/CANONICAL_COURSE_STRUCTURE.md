@@ -1,4 +1,4 @@
-# Canonical Course Structure — AI Systems Architect Accelerator (12 weeks)
+# Canonical Course Structure — Forward Deployed AI Engineer Accelerator (12 weeks)
 
 **Status:** Locked. This document is the single source of truth for the one canonical course.
 **Owner:** Ali Muwwakkil · **Session:** CC-20260712-q7m2 · **Date:** 2026-07-12
@@ -21,7 +21,7 @@ object is what "passes into the curriculum types to speed creation" — the Comp
 
 | Layer | Entity | Value |
 |---|---|---|
-| Course / program | `ProgramBlueprint` | **AI Systems Architect Accelerator** (12-week, 4-intensive) |
+| Course / program | `ProgramBlueprint` | **Forward Deployed AI Engineer Accelerator** (12-week, 4-intensive) |
 | Run / instance | `Cohort` | **Cohort 1 — July 2026**, starts **2026-07-13** (Mon) |
 | Schedule | `LiveSession` × 24 | Mon **Architecture Day** (core) + Thu **Build Day** (lab), per week |
 | Content | `CurriculumModule` × 12 | one **week-module** per week, tagged `intensive_number` 1–4 |

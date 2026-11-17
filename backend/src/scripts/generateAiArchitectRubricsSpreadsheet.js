@@ -60,8 +60,8 @@ const EMPLOYEES = [
     ],
   },
   {
-    name: 'Ali Muwwakkil', email: 'ali@colaberry.com', role: 'Executive Sponsor / Managing Director / AI Systems Architect', wave: 'PHASE 2 (after pilot)',
-    domain: 'CEO-tier strategic decisions, AI Systems Architect Accelerator launch, partner relationships (Anthropic), final approvals, CLAUDE.md DRI.',
+    name: 'Ali Muwwakkil', email: 'ali@colaberry.com', role: 'Executive Sponsor / Managing Director / Forward Deployed AI Engineer', wave: 'PHASE 2 (after pilot)',
+    domain: 'CEO-tier strategic decisions, Forward Deployed AI Engineer Accelerator launch, partner relationships (Anthropic), final approvals, CLAUDE.md DRI.',
     systems: ['Basecamp', 'Gmail', 'Mandrill', 'GitHub', 'Claude Code', 'HubSpot', 'CCPP', 'Bonfire', 'Apollo', 'Anthropic Partner Portal'],
     numbers: [
       { n: 'AI Accelerator launch milestones on-time', target: '100% by 2026-07-10', rubric: '5=>50% slipped / 7=1-2 critical slipped / 9=0 critical slipped / 10=on or ahead of plan' },
@@ -188,7 +188,7 @@ const EMPLOYEES = [
       { n: 'Curriculum modules ready per sprint', target: '3+', rubric: '5=<1 / 7=1-2 / 9=2-3 / 10=3+ with student verification' },
       { n: 'Student satisfaction (curriculum NPS)', target: '70+', rubric: '5=<30 / 7=30-50 / 9=50-70 / 10=70+' },
       { n: 'Instructor utilization', target: '80%+', rubric: '5=<50% / 7=50-65% / 9=65-80% / 10=80%+ w/ feedback loop' },
-      { n: 'AI Architect Accelerator curriculum % complete', target: '100% by 2026-07-10', rubric: '5=<60% / 7=60-80% / 9=80-95% / 10=100% on or before' },
+      { n: 'Forward Deployed AI Engineer Accelerator curriculum % complete', target: '100% by 2026-07-10', rubric: '5=<60% / 7=60-80% / 9=80-95% / 10=100% on or before' },
     ],
     skills: [
       'Curriculum design (project-based)',

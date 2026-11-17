@@ -179,7 +179,7 @@ export function renderArtifactIndex(artifacts: ArtifactRecord[]): string {
   return [
     '# Build Artifacts',
     '',
-    'Everything built in Claude Code across the AI Systems Architect Accelerator,',
+    'Everything built in Claude Code across the Forward Deployed AI Engineer Accelerator,',
     'week by week. Each row links to the artifact in this repo.',
     '',
     '| Week | Built for | Artifact | Built on | Size |',
