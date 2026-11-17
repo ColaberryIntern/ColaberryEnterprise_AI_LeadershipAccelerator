@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import DepartmentMap from './DepartmentMap';
+import Icon from './Icon';
 
 /**
  * The home hero, built to `colaberry-enterprise-site.html`.
@@ -95,6 +96,7 @@ export default function HeroV8(): React.ReactElement {
           <div className="cbv2-h8__cta">
             <Link className="cbv2-h8__btn cbv2-h8__btn--primary" to="/demo-pilot">
               Start with a demo pilot
+              <Icon name="arrowRight" size={16} />
             </Link>
             <Link className="cbv2-h8__btn cbv2-h8__btn--ghost" to="/services">
               Build, guide or train?
@@ -113,9 +115,10 @@ export default function HeroV8(): React.ReactElement {
             <p className="cbv2-h8__verbk">
               {v.n} <span aria-hidden="true">&middot;</span> {v.verb}
             </p>
-            <h2>
+            {/* h3: these sit under the page's h1 as its three parts, as the model marks them. */}
+            <h3>
               <Link to={v.to}>{v.title}</Link>
-            </h2>
+            </h3>
             <p>{v.body}</p>
           </li>
         ))}

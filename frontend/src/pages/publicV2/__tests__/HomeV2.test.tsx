@@ -161,7 +161,7 @@ describe('HomeV2 — structure', () => {
       'Trust before intelligence',
       'Every department’s AI work, in one place.',
       'Short on purpose.',
-      'See what AI could become inside your company.',
+      'See AI run on one of your processes', // the model's closing band (S5)
     ];
     let at = -1;
     spine.forEach((heading) => {
@@ -331,7 +331,7 @@ describe('HomeV2 — the demo-pilot band', () => {
     const band = h.slice(start, end);
     // Sanity-check the bounds: the band's own content must be inside them, and
     // the neighbouring sections' must not.
-    expect(band).toContain('Three steps. No big-bang project.');
+    expect(band.replace(/<[^>]*>/g, '')).toContain('Three steps. No big-bang project.');
     expect(band).not.toContain('Trust Before Intelligence');
     const text = band.replace(/<[^>]*>/g, ' ');
     expect(text).not.toMatch(/\$\s?\d/);
