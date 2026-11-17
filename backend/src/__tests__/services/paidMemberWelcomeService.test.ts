@@ -163,24 +163,30 @@ describe('what the email is actually given', () => {
   const at = (iso: string) => jest.spyOn(Date, 'now').mockReturnValue(new Date(iso).getTime());
   afterEach(() => jest.restoreAllMocks());
 
-  it('after 12 November: the real batch, the orientation from the convention, and the room URL', async () => {
+  it('the real batch, the orientation from the convention, and the room URL', async () => {
     at('2026-11-13T18:00:00Z');
     const row = await welcomeOnePaidMember(member(), true);
     expect(row.outcome).toBe('sent');
     expect(row.batchLabel).toBe('November 2026');
-    expect(row.orientation).toBe('Thursday, December 3, 2026 at 6:30 PM CT');
+    expect(row.orientation).toBe('Monday, December 7, 2026 at 6:30 PM CT');
     const sent = send.mock.calls[0][0];
     expect(sent.subject).toContain('November 2026');
     expect(sent.html).toContain('/portal/rooms/room-1');
-    expect(sent.text).toContain('Thursday, December 3, 2026 at 6:30 PM CT');
+    expect(sent.text).toContain('Monday, December 7, 2026 at 6:30 PM CT');
   });
 
-  it('on or before 12 November (Central): the November batch is told 12 November', async () => {
-    // 05:00 UTC on the 13th is still the evening of the 12th in Central: the boundary is Central.
-    at('2026-11-13T05:00:00Z');
-    const row = await welcomeOnePaidMember(member(), true);
-    expect(row.orientation).toBe('Thursday, November 12, 2026 at 6:30 PM CT');
-    expect(send.mock.calls[0][0].text).toContain('Your first live session is Thursday, November 12, 2026 at 6:30 PM CT.');
+  it('gives the same date whatever day it is sent on, now the exception is gone', async () => {
+    // This used to be two cases: 12 November up to the 12th, then Thursday 3 December. The
+    // exception was withdrawn on 2026-11-16 because 3 December is an Open House, so the batch
+    // follows the convention and the answer no longer moves with the clock.
+    for (const clock of ['2026-11-13T05:00:00Z', '2026-11-13T18:00:00Z', '2026-11-30T18:00:00Z']) {
+      send.mockClear();
+      at(clock);
+      const row = await welcomeOnePaidMember(member(), true);
+      expect(row.orientation).toBe('Monday, December 7, 2026 at 6:30 PM CT');
+      expect(send.mock.calls[0][0].text)
+        .toContain('Your first live session is Monday, December 7, 2026 at 6:30 PM CT.');
+    }
   });
 
   it('still sends when the batch has no room, dropping the room paragraph', async () => {
@@ -343,7 +349,7 @@ describe('new payers only (Ali, 2026-11-09, option A)', () => {
   });
 
   it('never prints a first session that has already happened', async () => {
-    at('2026-12-04T18:00:00Z'); // the November batch's Dec 3 is now behind us
+    at('2026-12-08T18:00:00Z'); // the November batch's Dec 7 is now behind us
     const row = await welcomeOnePaidMember(member(), true);
     expect(row.outcome).toBe('sent');
     expect(row.orientation).toBeNull();
@@ -351,8 +357,8 @@ describe('new payers only (Ali, 2026-11-09, option A)', () => {
   });
 
   it('on the day of the session it is still printed: it is an evening session', async () => {
-    at('2026-12-03T15:00:00Z');
+    at('2026-12-07T15:00:00Z');
     const row = await welcomeOnePaidMember(member(), true);
-    expect(row.orientation).toBe('Thursday, December 3, 2026 at 6:30 PM CT');
+    expect(row.orientation).toBe('Monday, December 7, 2026 at 6:30 PM CT');
   });
 });

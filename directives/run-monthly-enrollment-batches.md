@@ -44,6 +44,32 @@ Nothing in this model asks a member to wait for a date before beginning.
 | WhatsApp group | Created by Jackie. Not automated; there is no WhatsApp integration in this repo. |
 | Production DB access | `ssh root@95.216.199.47`, then `docker exec accelerator-backend node <script>`. |
 
+### The orientation must not land on an Open House, and the convention guarantees it
+
+The Accelerator Open House runs on the **first and third Thursday** of every month at
+18:30 Central, published one Eventbrite page per event. Orientation runs at the same hour.
+A first Monday is never a Thursday, so **an orientation left on the convention cannot
+collide with an Open House in any month** - the guarantee comes from the rule, not from
+anyone checking.
+
+It is overriding the rule that breaks it. On 2026-11-09 the November batch was moved off
+the first Monday, 7 December, onto Thursday 3 December, to match the Thursday of its 12
+November session. 3 December is a first Thursday and already had an Open House published
+against it with registrations. Taiwo found the clash on 2026-11-16, and the override was
+deleted rather than re-dated: nobody had been given 3 December, because that date only
+reached members joining from 13 November and the batch's last enrollment was the 11th.
+
+**So: do not move an orientation onto a Thursday.** If one genuinely has to move, the
+`FIRST_SESSION_EXCEPTIONS` table in `backend/src/services/batch/batchOrientation.ts` is the
+only place to do it, and `isOpenHouseCadenceDate` in the same module fails the build on a
+first or third Thursday.
+
+The reason this is worth a section: **the schedule lives in three systems that cannot see
+each other.** Orientation is computed in that TypeScript module, the Open House calendar is
+in CCPP's `vw_EventBrite_Events_w_Cnt` and on Eventbrite, and the class day is a column on
+`cohorts`. No screen shows all three, so no collision is visible in the data. The cadence
+check in code is the only guard that can run at all.
+
 ### Date convention, and why `start_date` is the orientation date
 
 `cohorts.start_date` on a batch row holds **the batch's orientation date**, not the first of
