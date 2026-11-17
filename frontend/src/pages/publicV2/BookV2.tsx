@@ -1,7 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import Icon from '../../components/publicV2/Icon';
+import { EnterpriseLead, toLeadPayload } from '../../models/EnterpriseLead';
+import { getUTMParams } from '../../services/utmService';
+import { identifyVisitor } from '../../utils/tracker';
+import api from '../../utils/api';
 import { Claim, canShow } from '../../components/publicV2/Claim';
 import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
 
@@ -29,11 +33,236 @@ import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
  * "[Add a two-to-three sentence bio from Ram's approved materials.]" and
  * "[Add the purchase or download link.]". Neither is invented here: a bio and a
  * buy link are facts about a real person and a real product. The author band
- * keeps the parts that are known (name, role, how to ask for a copy) and
- * "Get the book" goes to that card rather than to a store that is not named yet.
+ * keeps the parts that are known (name and role).
+ *
+ * THE E-BOOK IS GIVEN FOR A FORM (Ali, 2026-11-17): "We can give them a free
+ * electronic copy but not the paperback. Make them fill out a form for it and it
+ * should go in as a Trust before Intelligence brand lead." So the "Get your copy"
+ * card is a short form. It posts to the same `/api/leads` endpoint as every other
+ * public form, with `source: 'trustbeforeintelligence'`, which is the source string
+ * `leadSourceGroups` already files under "Trust Before Intelligence" and which
+ * `leadService` already keeps out of the warm-call campaign. On success the card
+ * turns into the download. Nothing is emailed. The paperback is not offered here.
+ * The page never uses the word "free"; that is the site's copy rule.
+ *
+ * A known limit: `createLead` returns the existing row for an email it already
+ * has, so a person who is already a lead keeps their first source.
  */
 
 const ROUTE = '/book';
+
+/** The `leads.source` string for the Trust Before Intelligence brand (leadSourceGroups). */
+export const EBOOK_LEAD_SOURCE = 'trustbeforeintelligence';
+export const EBOOK_FORM_TYPE = 'book_ebook_request';
+/** Served from frontend/public. Not under /book/, which would shadow the route in nginx. */
+export const EBOOK_URL = '/site-v2/book/trust-before-intelligence.pdf';
+
+interface EbookFields {
+  fullName: string;
+  email: string;
+  company: string;
+  role: string;
+  consentContact: boolean;
+}
+
+const EMPTY_EBOOK: EbookFields = {
+  fullName: '',
+  email: '',
+  company: '',
+  role: '',
+  consentContact: false,
+};
+
+/** The lead the form sends. Exported so the test can pin the brand source without a DOM. */
+export function ebookLeadPayload(f: EbookFields, pageUrl: string): Record<string, unknown> {
+  const lead: EnterpriseLead = {
+    fullName: f.fullName.trim(),
+    email: f.email.trim(),
+    company: f.company.trim() || undefined,
+    title: f.role.trim() || undefined,
+    message: 'Asked for the Trust Before Intelligence e-book on enterprise.colaberry.ai/book.',
+    consentContact: f.consentContact,
+    formType: EBOOK_FORM_TYPE,
+    ...getUTMParams(),
+    pageOrigin: pageUrl,
+  };
+  return { ...toLeadPayload(lead), source: EBOOK_LEAD_SOURCE };
+}
+
+function EbookForm(): React.ReactElement {
+  const [form, setForm] = useState<EbookFields>(EMPTY_EBOOK);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState('');
+  const [done, setDone] = useState(false);
+
+  const change = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const { name, value, type, checked } = e.target;
+    setForm((f) => ({ ...f, [name]: type === 'checkbox' ? checked : value }));
+    setErrors((er) => {
+      if (!er[name]) return er;
+      const next = { ...er };
+      delete next[name];
+      return next;
+    });
+  };
+
+  const submit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    setServerError('');
+    const next: Record<string, string> = {};
+    if (!form.fullName.trim()) next.fullName = 'Please tell us your name';
+    if (!form.email.trim()) next.email = 'Please give us a work email';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      next.email = 'That does not look like an email address';
+    }
+    if (!form.consentContact) next.consentContact = 'You must agree to be contacted';
+    if (Object.keys(next).length > 0) {
+      setErrors(next);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = ebookLeadPayload(form, window.location.href);
+      await api.post('/api/leads', payload);
+      identifyVisitor(form.email.trim(), {
+        name: form.fullName.trim(),
+        company: form.company.trim() || undefined,
+        metadata: { source_form: EBOOK_FORM_TYPE, title: form.role.trim() || undefined },
+      });
+      setDone(true);
+    } catch (err) {
+      setServerError(
+        'That did not send. Please try again, or email info@colaberry.com and we will send it.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div role="status">
+        <p className="cbv2-k5">The e-book</p>
+        <h3 className="cbv2-copy5__h">Your copy is ready.</h3>
+        <p>Thank you, {form.fullName.trim().split(/\s+/)[0]}. The e-book is a PDF; download it below.</p>
+        <p className="cbv2-copy5__go">
+          <a className="cbv2-btn cbv2-btn--primary" href={EBOOK_URL} download>
+            Download the e-book
+            <Icon name="arrowRight" size={16} />
+          </a>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} noValidate aria-labelledby="bk-copy-h">
+      <p className="cbv2-k5">The e-book</p>
+      <h3 className="cbv2-copy5__h" id="bk-copy-h">
+        Get your copy
+      </h3>
+      <p>
+        Tell us who you are and the electronic edition is yours to download straight away.
+        The paperback is not part of this offer.
+      </p>
+
+      <div className="cbv2-field5">
+        <label htmlFor="bk-name">Full name</label>
+        <input
+          id="bk-name"
+          name="fullName"
+          value={form.fullName}
+          onChange={change}
+          autoComplete="name"
+          aria-invalid={Boolean(errors.fullName)}
+          aria-describedby={errors.fullName ? 'bk-name-err' : undefined}
+        />
+        {errors.fullName ? (
+          <p className="cbv2-field5__err" id="bk-name-err">
+            {errors.fullName}
+          </p>
+        ) : null}
+      </div>
+      <div className="cbv2-field5">
+        <label htmlFor="bk-email">Work email</label>
+        <input
+          id="bk-email"
+          name="email"
+          type="email"
+          value={form.email}
+          onChange={change}
+          autoComplete="email"
+          aria-invalid={Boolean(errors.email)}
+          aria-describedby={errors.email ? 'bk-email-err' : undefined}
+        />
+        {errors.email ? (
+          <p className="cbv2-field5__err" id="bk-email-err">
+            {errors.email}
+          </p>
+        ) : null}
+      </div>
+      <div className="cbv2-fgrid5">
+        <div className="cbv2-field5">
+          <label htmlFor="bk-company">
+            Company <small>optional</small>
+          </label>
+          <input
+            id="bk-company"
+            name="company"
+            value={form.company}
+            onChange={change}
+            autoComplete="organization"
+          />
+        </div>
+        <div className="cbv2-field5">
+          <label htmlFor="bk-role">
+            Your role <small>optional</small>
+          </label>
+          <input
+            id="bk-role"
+            name="role"
+            value={form.role}
+            onChange={change}
+            autoComplete="organization-title"
+          />
+        </div>
+      </div>
+
+      <div className="cbv2-consent5">
+        <input
+          type="checkbox"
+          id="bk-consent"
+          name="consentContact"
+          checked={form.consentContact}
+          onChange={change}
+          aria-invalid={Boolean(errors.consentContact)}
+          aria-describedby={errors.consentContact ? 'bk-consent-err' : undefined}
+        />
+        <label htmlFor="bk-consent">
+          I agree that Colaberry may contact me about this request.
+        </label>
+        {errors.consentContact ? (
+          <p className="cbv2-field5__err" id="bk-consent-err">
+            {errors.consentContact}
+          </p>
+        ) : null}
+      </div>
+
+      {serverError ? (
+        <p className="cbv2-field5__err" role="alert">
+          {serverError}
+        </p>
+      ) : null}
+
+      <button className="cbv2-btn cbv2-btn--primary cbv2-fcard5__go" type="submit" disabled={submitting}>
+        {submitting ? 'Sending…' : 'Get the e-book'}
+        {submitting ? null : <Icon name="arrowRight" size={16} />}
+      </button>
+    </form>
+  );
+}
 
 interface Idea {
   readonly n: string;
@@ -128,7 +357,7 @@ export function BookV2(): React.ReactElement {
             </div>
             <p className="cbv2-book__btns cbv2-btns5">
               <a className="cbv2-btn cbv2-btn--primary" href="#cbv2-book-copy">
-                Get the book
+                Get the e-book
                 <Icon name="arrowRight" size={16} />
               </a>
               <a className="cbv2-btn cbv2-btn--line cbv2-btn--onDark" href="#cbv2-ideas">
@@ -183,18 +412,7 @@ export function BookV2(): React.ReactElement {
             </p>
           </div>
           <div className="cbv2-pc cbv2-copy5" id="cbv2-book-copy">
-            <p className="cbv2-k5">Where to get it</p>
-            <h3 className="cbv2-copy5__h">Get your copy</h3>
-            <p>
-              Leaders who book a demo pilot can ask for a copy as part of the first
-              conversation.
-            </p>
-            <p className="cbv2-copy5__go">
-              <Link className="cbv2-lnk" to="/demo-pilot">
-                Book a demo pilot
-                <Icon name="arrowRight" size={16} />
-              </Link>
-            </p>
+            <EbookForm />
           </div>
         </div>
       </section>

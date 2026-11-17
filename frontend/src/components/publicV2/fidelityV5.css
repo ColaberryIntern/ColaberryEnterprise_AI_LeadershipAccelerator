@@ -1900,6 +1900,10 @@
   margin: 12px 0 10px;
 }
 .cbv2-shell .cbv2-copy5 p.cbv2-copy5__go { margin-top: 18px; }
+/* The /book e-book form (2026-11-17) sits in a `.cbv2-pc` card, whose `p` rule outranks the
+   field error style, so errors rendered body-grey. Restate them, and space the intro from the fields. */
+.cbv2-shell .cbv2-copy5 form > p:not([class]) { margin-bottom: 20px; }
+.cbv2-shell .cbv2-pc p.cbv2-field5__err { margin: 2px 0 0; color: var(--status-danger); font-size: 14px; font-weight: 600; }
 
 @media (max-width: 1080px) {
   .cbv2-shell .cbv2-ideas5 { grid-template-columns: minmax(0, 1fr); }
