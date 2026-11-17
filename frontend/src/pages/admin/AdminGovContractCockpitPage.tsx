@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/admin/shell';
 import StudioShell from '../portal/projects/proposalStudio/StudioShell';
 import { fetchGovContractCockpit, errorMessage, adminGovCockpitApi, adminGovReviewApi, adminGovStudioApi, adminReanalyzeGovBlueprint } from '../../services/adminGovContractsApi';
+import { getViewAsUrl } from '../../services/adminOrgApi';
 import type { StudentGovProjectView } from '../../services/govProjectPortalApi';
 
 /**
@@ -39,6 +40,20 @@ const AdminGovContractCockpitPage: React.FC = () => {
 
   useEffect(() => load(), [load]);
 
+  // Open the project workspace AS the assigned intern, read-only, landing on their own gov cockpit. Reuses the
+  // admin read-only view-as flow (a short-lived participant token minted server-side, writes blocked), so this is a
+  // safe way to see exactly what the intern sees. The owner enrollment id is admin-only on the projection.
+  const openViewAs = useCallback(async () => {
+    const view = state.k === 'ready' ? state.view : null;
+    if (!view?.ownerEnrollmentId) return;
+    try {
+      const url = await getViewAsUrl(view.ownerEnrollmentId);
+      if (!url) return;
+      const next = `/portal/gov-projects/${encodeURIComponent(projectId)}`;
+      window.open(`${url}&next=${encodeURIComponent(next)}`, '_blank');
+    } catch { /* the view-as endpoint failed; nothing opens, and the admin can retry */ }
+  }, [state, projectId]);
+
   const [reanalyzing, setReanalyzing] = useState(false);
   const onReanalyze = useCallback(() => {
     setReanalyzing(true);
@@ -58,6 +73,18 @@ const AdminGovContractCockpitPage: React.FC = () => {
           { label: 'Interns', to: '/admin/internship' },
           { label: 'Gov Contracts' },
         ]}
+        actions={state.k === 'ready' && state.view.ownerEnrollmentId ? (
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm"
+            data-testid="cockpit-view-as"
+            title={`Open this project as ${state.view.ownerName || 'the assigned intern'} (read-only)`}
+            onClick={openViewAs}
+          >
+            <i className="ri-eye-line me-1" aria-hidden="true" />
+            View as {state.view.ownerName || 'the intern'}
+          </button>
+        ) : undefined}
       />
       {state.k === 'loading' && <div className="text-muted p-4">Loading the contract…</div>}
       {state.k === 'not_found' && (

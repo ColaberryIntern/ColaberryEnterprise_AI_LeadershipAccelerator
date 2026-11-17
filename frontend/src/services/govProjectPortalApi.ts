@@ -178,6 +178,25 @@ export interface StudentGovProjectView {
   /** v3 (T05): open-need counts for this viewer (pricing/ungivable approvals already dropped). Optional (older backends). */
   needsCount?: number;
   fatalNeedsCount?: number;
+  /** The intern's recorded demo videos (Presentation Studio ingested takes), shown in the Build artifacts section.
+   *  ADMIN-ONLY: each carries a ticketed, same-origin fileUrl/thumbnailUrl usable directly as <video src>/poster.
+   *  Absent for an intern mount and on older backends. */
+  demoVideos?: GovDemoVideo[];
+  /** The assigned intern's enrollment id + name (ADMIN-ONLY), for the read-only "View as them" link. Optional. */
+  ownerEnrollmentId?: string | null;
+  ownerName?: string | null;
+}
+
+/** One recorded demo video (a Presentation Studio ingested take). fileUrl/thumbnailUrl are ticketed, same-origin
+ *  paths; prefix with the API base (internVideoApi.apiUrl) before use as a <video src>/poster. */
+export interface GovDemoVideo {
+  recordingId: string;
+  typeLabel: string;
+  storyId: string | null;
+  durationSeconds: number | null;
+  recordedAt: string;
+  fileUrl: string;
+  thumbnailUrl: string;
 }
 
 /** U1: the readiness meter the Studio header + Where-we-are read ("Proposal ready x% / 95%"). */

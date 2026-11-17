@@ -515,6 +515,34 @@ describe('BuildEvidence — the build-artifacts repository the proposal writer d
     expect(present('ev-artifacts-empty')).toBe(true);
   });
 
+  // Demo videos: the intern's recorded Presentation Studio takes, surfaced (admin-only, ticketed) in Build artifacts.
+  const withVideos = {
+    ...VIEW,
+    demoVideos: [
+      { recordingId: 'rec-1', typeLabel: 'Working-system demo', storyId: 'PREP-2', durationSeconds: 95, recordedAt: '2026-11-15T00:00:00.000Z', fileUrl: '/api/internship-video/rec-1/file?t=tok1', thumbnailUrl: '/api/internship-video/rec-1/thumbnail?t=tok1' },
+      { recordingId: 'rec-2', typeLabel: 'Project introduction', storyId: 'PREP-1', durationSeconds: 60, recordedAt: '2026-11-14T00:00:00.000Z', fileUrl: '/api/internship-video/rec-2/file?t=tok2', thumbnailUrl: '/api/internship-video/rec-2/thumbnail?t=tok2' },
+    ],
+  } as unknown as StudentGovProjectView;
+
+  it('shows the recorded demo videos, one card per take', async () => {
+    await render(<BuildEvidence view={withVideos} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
+    expect(present('ev-demo-videos')).toBe(true);
+    expect(container.querySelectorAll('[data-testid="ev-demo-video"]').length).toBe(2);
+  });
+
+  it('playing a demo video opens the player on the ticketed file url', async () => {
+    await render(<BuildEvidence view={withVideos} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} />);
+    await act(async () => { (container.querySelector('[data-testid="ev-demo-video"]') as HTMLElement).click(); });
+    expect(present('ev-demo-video-modal')).toBe(true);
+    const player = container.querySelector('[data-testid="ev-demo-video-player"]') as HTMLVideoElement;
+    expect(player.getAttribute('src')).toContain('/api/internship-video/rec-1/file?t=tok1');
+  });
+
+  it('no demo-videos block when the view carries none (an intern mount never gets them)', async () => {
+    await render(<BuildEvidence view={VIEW} projectId="p1" reviewApi={reviewApi} onReload={noop} onToast={noop} readOnly />);
+    expect(present('ev-demo-videos')).toBe(false);
+  });
+
   // Connected-repo display (Phase A): the intern (readOnly) sees the connected repo read-only and NEVER a demo-URL
   // input — even though the read-only reviewApi still defines setDemoUrl. The admin (readOnly=false) keeps its input.
   const withRepo = { ...VIEW, connectedRepo: { owner: 'ColaberryIntern', name: 'crash-records', url: 'https://github.com/ColaberryIntern/crash-records', files: ['src/App.tsx', 'media/demo.mp4', 'docs/plan.pdf'], fileCount: 3, syncedAt: '2026-11-13T00:00:00.000Z', deliverables: [{ path: 'docs/plan.pdf', name: 'plan.pdf', kind: 'pdf' }, { path: 'media/demo.mp4', name: 'demo.mp4', kind: 'video' }] } } as unknown as StudentGovProjectView;

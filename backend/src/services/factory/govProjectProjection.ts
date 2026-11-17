@@ -21,6 +21,7 @@ import type { CheckScores, GovProposalGate, GateStatus } from './proposal/propos
 import { proposalReadiness, type ProposalReadiness } from './proposal/proposalReadiness';
 import type { RepoDeliverable } from './repoDeliverables';
 import type { GovBuildArtifact } from './govBuildArtifacts';
+import type { GovDemoVideo } from './govDemoVideos';
 import type { VersionView, GateView } from './proposal/govProposalReviewStore';
 import type { ReviewRunView } from './proposal/govProposalReviewRunStore';
 import type { ProposalDocumentView } from './proposal/govProposalDocumentStore';
@@ -200,6 +201,15 @@ export interface StudentGovProjectView {
    *  loader-filled so pre-existing view literals still compile. */
   needsCount?: number;
   fatalNeedsCount?: number;
+  /** The intern's recorded demo videos (Presentation Studio ingested takes), surfaced in the Build artifacts
+   *  section so the cockpit shows what they recorded. ADMIN-ONLY (viewerCanVerify): each carries a signed,
+   *  recording-bound STAFF ticket in its fileUrl/thumbnailUrl, so the <video> plays without a session. Withheld
+   *  from an intern (their own takes live in their Project Studio). Optional + loader-filled. */
+  demoVideos?: GovDemoVideo[];
+  /** The assigned intern's enrollment id + display name, ADMIN-ONLY (viewerCanVerify), so the cockpit can open the
+   *  read-only "View as them" portal (getViewAsUrl keys on the enrollment id). Withheld from an intern. Optional. */
+  ownerEnrollmentId?: string | null;
+  ownerName?: string | null;
 }
 
 /** P4: a build-evidence screenshot projected student-safe (no identities; the artifact rows carry none). */
@@ -686,6 +696,24 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
       return { id: p.id, storyId: p.story_id, requirementIds: Array.isArray(p.requirement_ids) ? p.requirement_ids : [], commitSha: p.commit_sha ?? null, caption: p.caption ?? null, capturedAt: p.captured_at ? new Date(p.captured_at).toISOString() : null, status: p.status };
     });
   } catch { /* additive; buildArtifacts stays [] */ }
+
+  // Demo videos + owner: the assigned intern's recorded Presentation Studio takes, surfaced in the Build artifacts
+  // section so the cockpit shows what they recorded (Ali, 17 Nov 2026: "see these videos she created ... make sure
+  // demo videos always end up in this path"). ADMIN-ONLY and identity-ticketed: each fileUrl carries a signed,
+  // recording-bound STAFF ticket minted from the admin's identity, so the <video> plays against the existing
+  // /api/internship-video route without a session. The same owner (enrollment id + name) feeds the read-only
+  // "View as them" link. Withheld from an intern (viewerCanVerify false). Additive + best-effort.
+  if (viewerCanVerify && viewerIdentityId) {
+    try {
+      const { resolveGovContractOwner, listGovDemoVideos } = await import('./govDemoVideos');
+      const owner = await resolveGovContractOwner(deliveryProjectId);
+      if (owner) {
+        view.ownerEnrollmentId = owner.enrollmentId;
+        view.ownerName = owner.name;
+        view.demoVideos = await listGovDemoVideos(owner.enrollmentId, viewerIdentityId);
+      }
+    } catch { /* additive; demoVideos/owner stay undefined */ }
+  }
 
   // P6: the shared proposal (projected to THIS viewer's grant level) + the price-free submission checklist. Built
   // from the SAME response slots the admin workspace uses (deriveResponseSlots + the persisted responses), then run

@@ -615,7 +615,7 @@
     "frontend/src/pages/admin/orchestration/SectionControlTab.tsx": 3,
     "frontend/src/pages/admin/orchestration/builder/BulkConfigPanel.tsx": 1,
     "frontend/src/pages/admin/orchestration/builder/TestSimulationPanel.tsx": 3,
-    "frontend/src/pages/portal/projects/proposalStudio/BuildEvidence.tsx": 2,
+    "frontend/src/pages/portal/projects/proposalStudio/BuildEvidence.tsx": 1,
     "frontend/src/pages/publicV2/homeV2Sections.tsx": 5
   },
   "house-style-emoji": {
