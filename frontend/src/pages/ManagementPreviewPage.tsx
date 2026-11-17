@@ -262,7 +262,7 @@ function ManagementPreviewPage() {
         </div>
 
         {view === 'student' ? (
-          <div style={{ display: 'grid', gap: 'var(--space-6)', maxWidth: 760 }}>
+          <div style={{ display: 'grid', gap: 'var(--space-6)', maxWidth: 760, gridTemplateColumns: 'minmax(0, 1fr)' }}>
             <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>My learning</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Your own free student account</h1><p style={muted}>Your management account includes full student access, so you learn and build alongside your team. This is the experience your people get.</p></div>
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}><span style={{ display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: '50%', background: 'color-mix(in srgb, #5BA63C 16%, white)', color: 'var(--text-strong)', fontWeight: 800 }}>NZ</span><div><div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--fs-h5)', color: 'var(--text-strong)' }}>Welcome back</div><span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: '#5BA63C', padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>Developer · 540 pts</span></div></div>
@@ -276,7 +276,7 @@ function ManagementPreviewPage() {
             <button type="button" style={{ ...pillBtn, justifySelf: 'start' }} onClick={() => setView('company')}>Back to your company view</button>
           </div>
         ) : m ? (
-          <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
             <button type="button" onClick={() => setSelected(null)} style={{ justifySelf: 'start', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-link)', fontWeight: 700, fontSize: 'var(--fs-body-sm)' }}>&larr; Back to your company</button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
               <span style={{ display: 'grid', placeItems: 'center', width: 60, height: 60, borderRadius: '50%', background: `color-mix(in srgb, ${lvlTone(m.rank)} 16%, white)`, color: 'var(--text-strong)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--fs-h5)' }}>{initials(m.name)}</span>
@@ -345,7 +345,7 @@ function ManagementPreviewPage() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          <div style={{ display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
             <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>Your company</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Acme Corp, on the rise in AI</h1><p style={muted}>Where you are, how fast you are moving, and when you reach the next level, from the real data your people earn every day. <a href="#" onClick={(e) => { e.preventDefault(); setView('student'); }} style={{ color: 'var(--text-link)', fontWeight: 600 }}>Your account also includes free student learning &rarr;</a></p></div>
 
             <CompanyMomentumDashboard />
@@ -428,7 +428,7 @@ function ManagementPreviewPage() {
         </div>
       )}
 
-      <style>{`@media (max-width: 860px){ .try-cols { grid-template-columns: 1fr !important; } }`}</style>
+      <style>{`@media (max-width: 860px){ .try-cols { grid-template-columns: minmax(0, 1fr) !important; } }`}</style>
     </div>
   );
 }

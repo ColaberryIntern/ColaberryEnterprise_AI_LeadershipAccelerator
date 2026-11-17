@@ -153,7 +153,7 @@ export default function CompanyMomentumDashboard({ overview }: { overview?: OrgO
         .cmd-eyebrow { font-size: var(--fs-overline); font-weight: 700; letter-spacing: var(--ls-overline); text-transform: uppercase; color: var(--brand-accent); }
         .cmd-title { font-family: var(--font-display); font-weight: 900; font-size: var(--fs-h4); color: var(--text-strong); margin: 0; }
         .cmd-badge { font-size: var(--fs-caption); font-weight: 700; color: #fff; background: #5BA63C; padding: 3px 12px; border-radius: var(--radius-pill); }
-        .cmd-grid { display: grid; gap: var(--space-6); grid-template-columns: minmax(200px, 280px) 1fr; align-items: center; }
+        .cmd-grid { display: grid; gap: var(--space-6); grid-template-columns: minmax(200px, 280px) minmax(0, 1fr); align-items: center; }
         .cmd-score { font-family: var(--font-display); font-weight: 900; font-size: 64px; line-height: 1; color: var(--text-strong); }
         .cmd-up { color: #5BA63C; font-weight: 800; font-size: var(--fs-body); }
         .cmd-svg { display: block; width: 100%; height: auto; min-width: 460px; }
@@ -169,7 +169,7 @@ export default function CompanyMomentumDashboard({ overview }: { overview?: OrgO
         .cmd-lfill { width: 100%; border-radius: var(--radius-sm); background: linear-gradient(180deg, #367895, #5BA63C); }
         .cmd-llabel { font-size: 9px; color: var(--text-subtle); margin-top: 4px; line-height: 1.1; }
         .cmd-lcount { font-size: var(--fs-caption); font-weight: 800; color: var(--text-strong); }
-        @media (max-width: 720px) { .cmd-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 720px) { .cmd-grid { grid-template-columns: minmax(0, 1fr); } }
         @media (prefers-reduced-motion: no-preference) {
           .cmd-actual { stroke-dasharray: var(--cmd-len); stroke-dashoffset: var(--cmd-len); animation: cmdDraw 1300ms var(--ease-emphasized, cubic-bezier(0.16,1,0.3,1)) forwards; }
           .cmd-area { opacity: 0; animation: cmdFade 900ms ease 500ms forwards; }
