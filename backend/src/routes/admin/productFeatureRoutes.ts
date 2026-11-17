@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { requireAdmin } from '../../middlewares/authMiddleware';
+import { requireAdmin, requireSection } from '../../middlewares/authMiddleware';
 import {
   answerFrontDoor,
   catalogCoverage,
@@ -18,12 +18,23 @@ import {
  * — would create a second place the `tried_in_product` field comes from, and the two would
  * disagree the first time a builder changed their mind after using the feature.
  *
- * ## Both are `requireAdmin`, and both sit under a prefix the section gate already maps
+ * ## THE ASK IS `dashboard`; THE BROWSE LIST IS `program`. The first version got this wrong
  *
- * `mgmtSectionGate` is DENY-BY-DEFAULT, so an unmapped prefix reaches a 403 with nothing in the
- * logs explaining why. `/api/admin/agent-domain-*` prefixes are mapped at
- * `mgmtSectionGate.ts:166-178`; this one adds `/api/admin/agent-domain-product-features`, which
- * is NOT covered by those entries, so a row lands with this change. Checked rather than assumed.
+ * Both routes shipped `requireAdmin` under a single `program` row, and that reasoning checked the
+ * section gate without checking the ROLE TABLE. `mgmtSectionGate` is deny-by-default and the row
+ * was correctly placed, so the gate behaved exactly as designed — but **no Agent Factory builder
+ * role carries `program`**. `mgmtRoles.ts` grants it to `curriculum`, `admin` and `owner` only;
+ * `marketing`, `platform` and `product_experience` each hold `dashboard` plus their own department.
+ *
+ * So the front door 403'd for every builder it was built for, and `AddCapabilityFrontDoor` renders
+ * a failed lookup as *"Could not check the catalog just now"* — the deliberate soft fallback, which
+ * meant the breakage looked like a transient hiccup instead of a permanent 403.
+ *
+ * `/ask` now sits on `requireSection('dashboard')`, the same grant the filing route and the dataset
+ * picker use, and gets its own narrower `PATH_SECTION` row placed BEFORE the broad one (first match
+ * in array order wins). The browse list stays `requireAdmin` + `program`: it enumerates the whole
+ * curated catalog across domains, which is a program-wide read, while `/ask` answers one question
+ * about one candidate for one domain.
  */
 
 const router = Router();
@@ -42,7 +53,7 @@ const AskSchema = z.object({
  */
 router.get(
   '/api/admin/agent-domain-product-features/ask',
-  requireAdmin,
+  requireSection('dashboard'),
   (req, res) => {
     const parsed = AskSchema.safeParse(req.query);
     if (!parsed.success) {

@@ -376,3 +376,161 @@ export async function decideChangeRequest(
   );
   return data;
 }
+
+/**
+ * AF11.11 — the limits the tool-request form enforces client-side.
+ *
+ * Mirrors `backend/src/schemas/agentToolRequestSchema.ts`, declared here rather than in the form
+ * for the reason `AGENT_DISPLAY_NAME_MAX` records above: an input whose `maxLength` disagrees with
+ * the server's `.max()` is a control that accepts what the API will refuse.
+ */
+export const TOOL_NAME_MAX = 120;
+export const TOOL_PURPOSE_MAX = 1000;
+export const TOOL_NARRATIVE_MAX = 1000;
+export const TOOL_SIDE_EFFECTS_MAX = 2000;
+export const TOOL_LIST_ITEM_MAX = 300;
+export const TOOL_LIST_MAX_ITEMS = 50;
+export const TOOL_ACTOR_MAX = 254;
+
+/** The enums, mirroring `ensureAgentDomainToolRequestSchema.ts`. */
+export const TOOL_RUN_FREQUENCIES = [
+  'once', 'on_demand', 'per_event', 'hourly', 'daily', 'weekly', 'monthly', 'quarterly',
+] as const;
+export const TOOL_ENVIRONMENTS = ['sandbox', 'production'] as const;
+export const TOOL_PRODUCT_STATES = ['used_by_hand', 'exists_unused', 'not_built'] as const;
+
+/** One named refusal: a stable rule code and a sentence written for the person filing the form. */
+export interface ToolRequestIssue {
+  rule: string;
+  detail: string;
+}
+
+/**
+ * Pull the NAMED issues off a refusal, or `[]` when the error carries none.
+ *
+ * The filing route answers 400 with `{ error, issues: [{ rule, detail }] }`, one entry per field
+ * that is missing or wrong. `errorMessage` above returns only the top-level sentence, which on a
+ * twenty-four-field form is the least useful part of the response: it says the request was
+ * refused without saying which field to go and fix.
+ *
+ * Returning `[]` rather than throwing on a shapeless error is deliberate. A 500, a timeout and a
+ * network failure all reach here, and in each case the form falls back to the single sentence from
+ * `errorMessage`. A caller that had to distinguish them would end up showing nothing when it could
+ * not.
+ */
+export function toolRequestIssues(e: unknown): ToolRequestIssue[] {
+  const raw = (e as { response?: { data?: { issues?: unknown } } })?.response?.data?.issues;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((i) => {
+      const o = i as { rule?: unknown; detail?: unknown; message?: unknown; path?: unknown };
+      // Zod issues carry `message` and `path` instead of `rule` and `detail`. The form renders
+      // both shapes, because a body that fails Zod never reaches the contract and its issues are
+      // the only thing the response carries.
+      const rule = typeof o.rule === 'string' && o.rule
+        ? o.rule
+        : Array.isArray(o.path) ? o.path.map(String).join('.') : '';
+      const detail = typeof o.detail === 'string' && o.detail
+        ? o.detail
+        : typeof o.message === 'string' ? o.message : '';
+      return { rule, detail };
+    })
+    .filter((i) => i.rule !== '' || i.detail !== '');
+}
+
+/** One capability of a domain, as `/agent-domains-mine/:key` projects it. */
+export interface ProjectedCapability {
+  capability_id: string;
+  name: string;
+  classification: string;
+  implementation_state: string;
+  requirement_validation_state: string;
+  starting_autonomy: string;
+  max_permitted_autonomy: string;
+  human_decision: boolean;
+}
+
+/**
+ * The capabilities of one domain you own, for the `capability_id` picker.
+ *
+ * This calls the EXISTING `/api/admin/agent-domains-mine/:domainKey`, which AF12.5 taught to
+ * return `capabilities` — the fix that unblocked Mihret Netsereab's first criterion. No new
+ * endpoint: the route is already `requireSection('dashboard')` and already refuses a domain that
+ * is not the caller's, which is exactly the scope this picker needs.
+ *
+ * `capability_total` is returned alongside because the route takes a `capability_limit`: a picker
+ * showing 50 of 213 must say so rather than implying the domain has 50.
+ */
+export async function fetchMyDomainCapabilities(domainKey: string): Promise<{
+  capabilities: ProjectedCapability[];
+  capabilities_returned: number;
+  capability_total: number;
+}> {
+  const { data } = await api.get<{
+    capabilities: ProjectedCapability[];
+    capabilities_returned: number;
+    capability_total: number;
+  }>(`/api/admin/agent-domains-mine/${encodeURIComponent(domainKey)}`);
+  return {
+    capabilities: data.capabilities ?? [],
+    capabilities_returned: data.capabilities_returned ?? 0,
+    capability_total: data.capability_total ?? 0,
+  };
+}
+
+/**
+ * The people an `acts_on_output` address may name. AF11.11.
+ *
+ * `roster_absent` is carried through rather than flattened into an empty list: the gate refuses an
+ * address that is not on the roster, so a builder looking at an empty picker needs to know the
+ * roster is missing and not that there is nobody to send output to.
+ */
+export async function fetchActorRoster(): Promise<{
+  actors: string[];
+  roster_absent: boolean;
+  note: string;
+}> {
+  const { data } = await api.get<{ actors: string[]; roster_absent: boolean; note: string }>(
+    '/api/admin/agent-domain-actors',
+  );
+  return { actors: data.actors ?? [], roster_absent: Boolean(data.roster_absent), note: data.note ?? '' };
+}
+
+/** One dataset the catalog knows about. */
+export interface CatalogDataset {
+  table_name: string;
+  schema_name: string;
+  column_count: number;
+  columns: string[];
+  status: string;
+  last_scanned: string | null;
+}
+
+/**
+ * Search the dataset catalog for the `read_datasets` picker.
+ *
+ * `catalog_absent` matters for the same reason as `roster_absent`: an unreadable catalog returns
+ * no datasets, and rendering that as "no matches" would send a builder to invent a table name that
+ * the gate then refuses as not catalogued.
+ */
+export async function searchAgentDomainDatasets(q: string, limit?: number): Promise<{
+  datasets: CatalogDataset[];
+  total_matched: number;
+  catalog_size: number;
+  catalog_absent: boolean;
+}> {
+  const { data } = await api.get<{
+    datasets: CatalogDataset[];
+    total_matched: number;
+    catalog_size: number;
+    catalog_absent: boolean;
+  }>('/api/admin/agent-domain-datasets', {
+    params: { ...(q ? { q } : {}), ...(limit ? { limit } : {}) },
+  });
+  return {
+    datasets: data.datasets ?? [],
+    total_matched: data.total_matched ?? 0,
+    catalog_size: data.catalog_size ?? 0,
+    catalog_absent: Boolean(data.catalog_absent),
+  };
+}

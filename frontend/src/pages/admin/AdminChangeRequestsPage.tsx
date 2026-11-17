@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import AddCapabilityFrontDoor from '../../components/admin/agentDetailV2/AddCapabilityFrontDoor';
+import ToolRequestForm from '../../components/admin/toolRequest/ToolRequestForm';
 import {
   CHANGE_REQUEST_DESCRIPTION_MAX,
   CHANGE_REQUEST_TITLE_MAX,
@@ -135,6 +136,15 @@ export default function AdminChangeRequestsPage() {
 
   // Form state.
   const [domainKey, setDomainKey] = useState('');
+  /**
+   * AF11.11. Which of the two things is being asked for.
+   *
+   * Unset until chosen rather than defaulting to `change`. A default would mean the tool path is
+   * only ever found by somebody who already knew it was there, which is the state this page was in
+   * until now: the API has accepted `kind: 'tool'` since AF7.1 and this page never sent it, so
+   * production holds zero tool requests.
+   */
+  const [kind, setKind] = useState<'change' | 'tool' | ''>('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [filing, setFiling] = useState(false);
@@ -238,30 +248,17 @@ export default function AdminChangeRequestsPage() {
 
       {!loading && !error && (
         <>
-          <SectionCard title="Ask for a change">
+          <SectionCard title="Ask for something">
             {domains.length === 0 ? (
               <p className="text-muted small mb-0">
-                A change request is filed against a domain you own, and no domain is assigned to you
-                yet. Ask Kes, then come back.
+                A request is filed against a domain you own, and no domain is assigned to you yet.
+                Ask Kes, then come back.
               </p>
             ) : (
-              <form onSubmit={onFile}>
-                <p className="text-muted small">
-                  Describe what you need changed and why. An approval records a decision; it does
-                  not start the work.
-                </p>
-
-                {/* AF11.9 — THE FRONT DOOR, immediately in front of the form.
-                    A builder arriving to file a request should meet "can the product already do
-                    this?" BEFORE the form, not after it: below the form it would be a footnote
-                    read by somebody who had already decided to ask for a build. It needs a
-                    domain to answer against, so it appears once one is chosen rather than
-                    answering against the wrong product surface. */}
-                {domainKey && (
-                  <div className="mb-3">
-                    <AddCapabilityFrontDoor domainKey={domainKey} />
-                  </div>
-                )}
+              <>
+                {/* The domain comes FIRST, before the choice of what to ask for, because both
+                    paths need it: the front door answers against a domain's product surface and
+                    the tool form reads that domain's capabilities and agent. */}
                 <div className="mb-3">
                   <label className="form-label small fw-medium" htmlFor="cr-domain">Domain</label>
                   <select
@@ -270,7 +267,6 @@ export default function AdminChangeRequestsPage() {
                     style={{ maxWidth: 360 }}
                     value={domainKey}
                     onChange={(e) => setDomainKey(e.target.value)}
-                    required
                   >
                     <option value="">Choose a domain…</option>
                     {domains.map((d) => (
@@ -278,37 +274,107 @@ export default function AdminChangeRequestsPage() {
                     ))}
                   </select>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label small fw-medium" htmlFor="cr-title">What should change</label>
-                  <input
-                    id="cr-title"
-                    className="form-control form-control-sm"
-                    maxLength={CHANGE_REQUEST_TITLE_MAX}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                  />
-                  <div className="form-text">{title.length} of {CHANGE_REQUEST_TITLE_MAX}</div>
-                </div>
-                <div className="mb-3">
-                  <label className="form-label small fw-medium" htmlFor="cr-desc">Why, and anything a reviewer needs</label>
-                  <textarea
-                    id="cr-desc"
-                    className="form-control form-control-sm"
-                    rows={4}
-                    maxLength={CHANGE_REQUEST_DESCRIPTION_MAX}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-                {fileProblem && (
-                  <div className="alert alert-danger small" role="alert">{fileProblem}</div>
+
+                {/* AF11.9 — THE FRONT DOOR, before the choice of what to ask for.
+                    A builder arriving here should meet "can the product already do this?" BEFORE
+                    deciding to ask for a build, not after: below the form it would be a footnote
+                    read by somebody who had already made up their mind. It needs a domain to
+                    answer against, so it appears once one is chosen. */}
+                {domainKey && (
+                  <div className="mb-4">
+                    <AddCapabilityFrontDoor domainKey={domainKey} />
+                  </div>
                 )}
-                {filed && <div className="alert alert-success small" role="alert">{filed}</div>}
-                <button className="btn btn-primary btn-sm" type="submit" disabled={filing || !domainKey}>
-                  {filing ? 'Filing…' : 'File this request'}
-                </button>
-              </form>
+
+                {/* AF11.11 — the two paths, named. The tool path had no door at all before this. */}
+                {domainKey && (
+                  <div className="mb-3">
+                    <span className="form-label small fw-medium d-block">
+                      What are you asking for?
+                    </span>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="request-kind"
+                        id="cr-kind-change"
+                        checked={kind === 'change'}
+                        onChange={() => setKind('change')}
+                      />
+                      <label className="form-check-label small" htmlFor="cr-kind-change">
+                        <span className="fw-medium">A change to the platform.</span>
+                        {' Something about the product should be different. A short ask.'}
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="request-kind"
+                        id="cr-kind-tool"
+                        checked={kind === 'tool'}
+                        onChange={() => setKind('tool')}
+                      />
+                      <label className="form-check-label small" htmlFor="cr-kind-tool">
+                        <span className="fw-medium">A tool for my agent.</span>
+                        {' Your agent should be able to do something it cannot do today. This is '
+                          + 'the scope sheet, and it asks more, because approving it lets an agent '
+                          + 'act on real systems.'}
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {domainKey && kind === 'tool' && (
+                  <ToolRequestForm
+                    domainKey={domainKey}
+                    agentId={domains.find((d) => d.domain_key === domainKey)?.agent_id ?? null}
+                    agentDisplayName={
+                      domains.find((d) => d.domain_key === domainKey)?.agent_display_name ?? null
+                    }
+                    onFiled={(created) => setMine((prev) => [created, ...prev])}
+                  />
+                )}
+
+                {domainKey && kind === 'change' && (
+                  <form onSubmit={onFile}>
+                    <p className="text-muted small">
+                      Describe what you need changed and why. An approval records a decision; it
+                      does not start the work.
+                    </p>
+                    <div className="mb-3">
+                      <label className="form-label small fw-medium" htmlFor="cr-title">What should change</label>
+                      <input
+                        id="cr-title"
+                        className="form-control form-control-sm"
+                        maxLength={CHANGE_REQUEST_TITLE_MAX}
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        required
+                      />
+                      <div className="form-text">{title.length} of {CHANGE_REQUEST_TITLE_MAX}</div>
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label small fw-medium" htmlFor="cr-desc">Why, and anything a reviewer needs</label>
+                      <textarea
+                        id="cr-desc"
+                        className="form-control form-control-sm"
+                        rows={4}
+                        maxLength={CHANGE_REQUEST_DESCRIPTION_MAX}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                      />
+                    </div>
+                    {fileProblem && (
+                      <div className="alert alert-danger small" role="alert">{fileProblem}</div>
+                    )}
+                    {filed && <div className="alert alert-success small" role="alert">{filed}</div>}
+                    <button className="btn btn-primary btn-sm" type="submit" disabled={filing || !domainKey}>
+                      {filing ? 'Filing…' : 'File this request'}
+                    </button>
+                  </form>
+                )}
+              </>
             )}
           </SectionCard>
 

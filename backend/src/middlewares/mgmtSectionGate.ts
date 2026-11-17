@@ -170,15 +170,30 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // DENY-BY-DEFAULT, so an unmapped prefix would 403 with nothing in the response saying why —
   // which, on a picker, reads to the builder as "there are no datasets".
   ['/api/admin/agent-domain-datasets', 'dashboard'],
+  // AF11.11 — the people picker for `acts_on_output`, read by whoever is FILING. Same section as
+  // the dataset picker above and for the same reason: AF11.7 refuses an address that is not on
+  // this roster, so a filer who cannot read the roster cannot resolve the refusal.
+  ['/api/admin/agent-domain-actors', 'dashboard'],
   // AF11.3 — the tool-request review console. `program`, and a hyphen sibling of neither row
   // above (`-tool-requests` shares no `/` boundary with `-change-requests`), so declaration order
   // is free here. Both routes under it additionally carry `requireAdmin`, and the service requires
   // the decider to be a recorded human on the configured approver set: a section grant is what
   // lets the page's data load, never what decides whose tool grant may stand.
   ['/api/admin/agent-domain-tool-requests', 'program'],
-  // AF11.9. The front door: can the product already do this? Read-only and files nothing,
-  // but it describes what the product can do, so it sits with the rest of the programme
-  // surface rather than behind the dashboard section every mgmt role carries.
+  // AF11.9. The front door: can the product already do this?
+  //
+  // THE NARROWER ROW IS FIRST, and that ordering is the fix rather than a style choice.
+  // `pathToSection` returns the FIRST match in array order, so `/ask` placed after the broad row
+  // would never be reached.
+  //
+  // `/ask` is `dashboard` because the builder FILLING a request is the only audience for it, and
+  // no Agent Factory builder role carries `program` — `mgmtRoles.ts` grants that to `curriculum`,
+  // `admin` and `owner` only. The first version mapped the whole prefix to `program`, which 403'd
+  // the front door for every builder it was built for; the component renders a failed lookup as a
+  // soft "could not check just now", so it looked like a hiccup rather than a permanent refusal.
+  ['/api/admin/agent-domain-product-features/ask', 'dashboard'],
+  // The BROWSE list stays `program`: it enumerates the whole curated catalog, which is a
+  // program-wide read, rather than answering one question about one candidate.
   ['/api/admin/agent-domain-product-features', 'program'],
   // AF11.10. The capability board: where every capability is and who is holding it up.
   ['/api/admin/agent-domain-capability-board', 'program'],

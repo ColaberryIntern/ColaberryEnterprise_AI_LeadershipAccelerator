@@ -33,6 +33,18 @@ jest.mock('../../../services/agentDomainApi', () => ({
   ),
 }));
 
+/**
+ * AF11.11. The tool form is covered by its own suite; here it is stubbed so this page's tests stay
+ * about the page. Stubbed rather than left real because the real one fetches a capability list and
+ * an actor roster on mount, which this suite has no reason to describe.
+ */
+jest.mock('../../../components/admin/toolRequest/ToolRequestForm', () => ({
+  __esModule: true,
+  default: ({ domainKey }: { domainKey: string }) => (
+    <div data-testid="tool-request-form-stub">{`tool form for ${domainKey}`}</div>
+  ),
+}));
+
 jest.mock('../../../components/admin/shell', () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
   SectionCard: ({ title, children }: { title?: string; children?: React.ReactNode }) => (
@@ -106,10 +118,37 @@ async function type(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
   });
 }
 
+/**
+ * AF11.11. Pick the change path, which is now a CHOICE rather than the only thing on the page.
+ *
+ * Neither path is pre-selected, deliberately: defaulting to `change` would mean the tool path is
+ * only ever found by somebody who already knew it existed, which is how this page shipped with the
+ * API accepting tool requests and nothing able to send one.
+ */
+async function chooseChange() {
+  const radio = container.querySelector('#cr-kind-change') as HTMLInputElement;
+  await act(async () => { radio.click(); });
+}
+
+/**
+ * The change-request form, found by the field it owns rather than by DOM position.
+ *
+ * `querySelector('form')` is not safe here: `AddCapabilityFrontDoor` renders a form of its own, and
+ * it now sits BEFORE this one. It used to sit inside it, which was a `<form>` nested in a `<form>`
+ * and is not valid HTML. Selecting by position would have quietly started submitting the front
+ * door instead, which is exactly what happened when the two became siblings.
+ */
+function changeForm(): HTMLFormElement {
+  const title = container.querySelector('#cr-title');
+  const form = title?.closest('form');
+  if (!form) throw new Error('the change form is not rendered');
+  return form as HTMLFormElement;
+}
+
 describe('who sees the decision queue', () => {
   it('THE INTERN VIEW: no queue at all when the admin-only read is refused', async () => {
     await render();
-    expect(text()).toContain('Ask for a change');
+    expect(text()).toContain('Ask for something');
     expect(text()).toContain('Your requests');
     // The section heading, the buttons, and the copy must all be absent.
     expect(text()).not.toContain('Decide');
@@ -210,12 +249,13 @@ describe('refusals are rendered in the server’s own words', () => {
       response: { data: { error: 'A title needs at least one letter.' } },
     });
     await render();
+    await chooseChange();
     const input = container.querySelector('#cr-title') as HTMLInputElement;
     await type(input, '...');
     // The text really is in the field before we submit, or the assertion below would pass for the
     // wrong reason - an empty field "retaining" nothing.
     expect((container.querySelector('#cr-title') as HTMLInputElement).value).toBe('...');
-    const form = container.querySelector('form')!;
+    const form = changeForm();
     await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await act(async () => { await Promise.resolve(); });
     expect(text()).toContain('A title needs at least one letter.');
@@ -223,9 +263,75 @@ describe('refusals are rendered in the server’s own words', () => {
   });
 });
 
+describe('AF11.11 — the tool path has a door, and it is not the default', () => {
+  it('OFFERS BOTH, and preselects neither', async () => {
+    await render();
+    const change = container.querySelector('#cr-kind-change') as HTMLInputElement;
+    const tool = container.querySelector('#cr-kind-tool') as HTMLInputElement;
+    expect(change).not.toBeNull();
+    expect(tool).not.toBeNull();
+    // Defaulting to `change` is what kept the tool path invisible: the API has accepted
+    // `kind: 'tool'` since AF7.1 and this page never sent it.
+    expect(change.checked).toBe(false);
+    expect(tool.checked).toBe(false);
+    // And no form is showing yet, so neither path is entered by accident.
+    expect(container.querySelector('#cr-title')).toBeNull();
+    expect(container.querySelector('[data-testid="tool-request-form-stub"]')).toBeNull();
+  });
+
+  it('choosing the tool path shows the scope sheet and NOT the one-line change form', async () => {
+    await render();
+    const tool = container.querySelector('#cr-kind-tool') as HTMLInputElement;
+    await act(async () => { tool.click(); });
+    expect(container.querySelector('[data-testid="tool-request-form-stub"]')).not.toBeNull();
+    expect(container.querySelector('#cr-title')).toBeNull();
+  });
+
+  it('choosing the change path shows the change form and NOT the scope sheet', async () => {
+    await render();
+    await chooseChange();
+    expect(container.querySelector('#cr-title')).not.toBeNull();
+    expect(container.querySelector('[data-testid="tool-request-form-stub"]')).toBeNull();
+  });
+
+  it('hands the tool form the domain, so it reads the right capability list', async () => {
+    await render();
+    const tool = container.querySelector('#cr-kind-tool') as HTMLInputElement;
+    await act(async () => { tool.click(); });
+    expect(text()).toContain('tool form for platform-automation');
+  });
+
+  it('says what the scope sheet is for, so the longer form is not a surprise', async () => {
+    await render();
+    expect(text()).toContain('lets an agent');
+  });
+
+  it('does not nest the front door’s form inside the request form', async () => {
+    await render();
+    await chooseChange();
+    // `AddCapabilityFrontDoor` renders a form, and it used to be rendered INSIDE
+    // `<form onSubmit={onFile}>`. A form nested in a form is not valid HTML, and it also meant
+    // the two submit buttons lived in the same form element.
+    const forms = [...container.querySelectorAll('form')];
+    expect(forms.length).toBeGreaterThanOrEqual(2);
+    for (const form of forms) {
+      expect(form.querySelector('form')).toBeNull();
+    }
+  });
+
+  it('asks for the domain BEFORE the choice, because both paths need one', async () => {
+    mocked.fetchMyDomains.mockResolvedValue({ domains: [] });
+    await render();
+    // With no domain there is nothing to ask against, so neither path is offered.
+    expect(container.querySelector('#cr-kind-tool')).toBeNull();
+    expect(text()).toContain('no domain is assigned to you');
+  });
+});
+
 describe('the limits come from the API module, never guessed in the page', () => {
   it('bounds the title input with the shared constant', async () => {
     await render();
+    await chooseChange();
     const input = container.querySelector('#cr-title') as HTMLInputElement;
     // If the page hardcoded a different number, an intern could type what the server refuses.
     expect(input.getAttribute('maxLength')).toBe(String(api.CHANGE_REQUEST_TITLE_MAX));
