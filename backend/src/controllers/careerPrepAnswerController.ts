@@ -4,7 +4,7 @@ import { PREP_SKILLS } from '../db/ensureCareerPrepSchema';
 import { NotFoundError } from '../services/careerPrep/sessions';
 import { skillSources } from '../services/careerPrep/skillSources';
 import {
-  AnswerRejectedError, deleteAnswer, listSavedAnswers, NotSaveableError, RecordingGoneError, resolveAnswerFile, saveAnswer,
+  AnswerRejectedError, deleteAnswer, listSavedAnswers, NotSaveableError, RecordingGoneError, resolveAnswerFile, saveAnswer, setShowPublic,
 } from '../services/careerPrep/savedAnswers';
 import { logFailure } from '../routes/campusRoutes';
 
@@ -15,6 +15,7 @@ import { logFailure } from '../routes/campusRoutes';
  *   GET    /api/portal/career-prep/answers                              this student's saved Try answers
  *   POST   /api/portal/career-prep/attempts/:attemptId/save             keep a scored answer (within its hour)
  *   DELETE /api/portal/career-prep/attempts/:attemptId/save             delete the kept copy (idempotent)
+ *   PUT    /api/portal/career-prep/attempts/:attemptId/public           { on } show a saved answer on the public profile (R1.2)
  *   GET    /api/portal/career-prep/answer-video/:assetId/:kind?t=       playback, signed for the owner only
  *
  * The enrollment is always the caller's, from the token. An attempt that is not theirs is a 404.
@@ -23,6 +24,7 @@ const SKILL = z.enum(PREP_SKILLS.map((s) => s.key) as [string, ...string[]]);
 const SourcesParams = z.object({ key: SKILL }).strict();
 const SourcesQuery = z.object({ source: z.enum(['video', 'phone_mock', 'real_interview', 'training', 'project']) }).strict();
 const AttemptParams = z.object({ attemptId: z.string().uuid() }).strict();
+const PublicBody = z.object({ on: z.boolean() }).strict();
 const SaveBody = z.object({ question: z.string().trim().min(1).max(600).optional() }).strict();
 
 export async function getSkillSources(req: Request, res: Response): Promise<void> {
@@ -65,6 +67,17 @@ export async function deleteSavedAnswer(req: Request, res: Response): Promise<vo
     if (err instanceof NotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
     logFailure('career_prep_delete_answer_failed', err);
     res.status(500).json({ error: 'Could not delete the answer. Try again.' });
+  }
+}
+
+export async function putShowPublic(req: Request, res: Response): Promise<void> {
+  const p = AttemptParams.safeParse(req.params);
+  const b = PublicBody.safeParse(req.body ?? {});
+  if (!p.success || !b.success) { res.status(400).json({ error: 'Not a valid answer.' }); return; }
+  try { res.json({ answer: await setShowPublic(req.participant!.sub, p.data.attemptId, b.data.on) }); } catch (err) {
+    if (err instanceof NotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
+    logFailure('career_prep_show_public_failed', err);
+    res.status(500).json({ error: 'Could not change this answer. Try again.' });
   }
 }
 

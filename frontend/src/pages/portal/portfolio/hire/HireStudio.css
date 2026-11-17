@@ -147,3 +147,6 @@
 .hs-saved-item .hs-vbox { margin-top: 12px; }
 .hs-saved-q { margin: 10px 0 2px; font-weight: 600; color: var(--strong); overflow-wrap: anywhere; }
 .hs-saved-meta { margin: 0; font-size: 13px; }
+.hs-saved-public { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 14px; font-weight: 600; color: var(--strong); cursor: pointer; }
+.hs-saved-public input { width: 16px; height: 16px; margin: 0; flex: none; }
+.hs-saved-note { margin: 2px 0 0 24px; font-size: 12px; }

@@ -6,8 +6,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import {
-  deleteAnswer, deliveryOf, keepPending, NotSaveableError, PENDING_MS, pendingFile, pendingRecording, playToken, RecordingGoneError,
-  resolveAnswerFile, saveAnswer, sweepPending, verifyPlayToken,
+  deleteAnswer, deliveryOf, keepPending, listSavedAnswers, NotSaveableError, PENDING_MS, pendingFile, pendingRecording, playToken,
+  readPublicAnswers, RecordingGoneError, resolveAnswerFile, resolvePublicAnswerFile, saveAnswer, setShowPublic, sweepPending, verifyPlayToken,
 } from '../savedAnswers';
 import { NotFoundError } from '../sessions';
 
@@ -104,4 +104,45 @@ describe('deleteAnswer', () => {
 it('delivery is the rounded mean of the delivery scores', () => {
   expect(deliveryOf({ scores: [{ score: 80 }, { score: 91 }] })).toBe(86);
   expect(deliveryOf(null)).toBeNull();
+});
+
+describe('public practice answers (R1.2, the second opt-in)', () => {
+  const ID = 'abcdefabcdefabcdefabcdef';
+  const row = { attempt_id: A1, asset_id: ID, question: 'Q?', delivery: 81, seconds: 42, created_at: '2026-11-17T00:00:00Z', show_public: true };
+
+  it('setShowPublic flips only the caller\'s own saved answer, and 404s anything else', async () => {
+    mockQuery.mockResolvedValueOnce([[row], 1]);
+    expect((await setShowPublic('e1', A1, true)).showPublic).toBe(true);
+    const [sql, opts] = mockQuery.mock.calls[0] as [string, { replacements: Record<string, unknown> }];
+    expect(sql).toContain('WHERE attempt_id = :a AND enrollment_id = :e');
+    expect(opts.replacements).toEqual({ on: true, a: A1, e: 'e1' });
+    mockQuery.mockResolvedValueOnce([[], 0]);
+    await expect(setShowPublic('e2', A1, true)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('a saved answer reads as private unless show_public is true', async () => {
+    mockQuery.mockResolvedValueOnce([[{ ...row, show_public: false }, { ...row, attempt_id: 'x', show_public: null }], 2]);
+    expect((await listSavedAnswers('e1')).map((a) => a.showPublic)).toEqual([false, false]);
+  });
+
+  it('the public list carries the question and the public recording only: no score, no attempt id, no token', async () => {
+    mockQuery.mockResolvedValueOnce([[{ asset_id: ID, question: 'Q?', seconds: 42 }], 1]);
+    const list = await readPublicAnswers('e1');
+    expect(list).toEqual([{ question: 'Q?', seconds: 42, streamUrl: `/api/public/hire/practice-answer/${ID}/stream`, posterUrl: `/api/public/hire/practice-answer/${ID}/poster` }]);
+    expect(JSON.stringify(list)).not.toMatch(/delivery|81|\?t=|attempt/);
+    const sql = String(mockQuery.mock.calls[0][0]);
+    expect(sql).toContain('a.show_public = true');
+    expect(sql).toContain("p.status = 'published' AND p.visibility = 'public'");
+  });
+
+  it('public playback needs a known kind, a real asset id and a row passing the rule; it never reads a token', async () => {
+    expect(await resolvePublicAnswerFile('../etc', 'stream')).toBeNull();
+    expect(await resolvePublicAnswerFile(ID, 'captions')).toBeNull();
+    expect(mockQuery).not.toHaveBeenCalled();
+    mockQuery.mockResolvedValueOnce([[], 0]);
+    expect(await resolvePublicAnswerFile(ID, 'stream')).toBeNull();
+    mockQuery.mockResolvedValueOnce([[{ '?column?': 1 }], 1]);
+    expect(await resolvePublicAnswerFile(ID, 'poster', '/root')).toEqual({ path: expect.stringContaining(ID), type: 'image/jpeg' });
+    expect(String(mockQuery.mock.calls[1][0])).toContain("a.show_public = true AND EXISTS (SELECT 1 FROM career_portfolio_pages p");
+  });
 });

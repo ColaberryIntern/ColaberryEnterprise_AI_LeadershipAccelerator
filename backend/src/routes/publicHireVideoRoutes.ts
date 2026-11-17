@@ -23,6 +23,7 @@ import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { isVideoFileKind } from '../services/hire/hireVideoFiles';
 import { resolveVideoFile } from '../services/hire/hireVideoService';
+import { resolvePublicAnswerFile } from '../services/careerPrep/savedAnswers';
 
 async function serve(req: Request, res: Response): Promise<void> {
   const { id, kind } = req.params;
@@ -47,11 +48,36 @@ async function serve(req: Request, res: Response): Promise<void> {
   }
 }
 
+/**
+ * R1.2: a practice answer the student chose to show ("Show on my public profile", off by default). Checked on EVERY
+ * request: saved, switched on, and the owner's page published and public. Anything else is the same 404 as a missing
+ * file. NEVER CACHED, so switching it off or deleting it takes effect at once. No ?t= token is read here: the owner's
+ * signed playback link is a different route.
+ */
+async function servePracticeAnswer(req: Request, res: Response): Promise<void> {
+  const { id, kind } = req.params;
+  try {
+    const file = await resolvePublicAnswerFile(String(id), String(kind));
+    if (!file) { res.status(404).set('Cache-Control', 'no-store').json({ error: 'Not found' }); return; }
+    res.set({ 'Content-Type': file.type, 'Cache-Control': 'no-store', 'Cross-Origin-Resource-Policy': 'cross-origin' });
+    res.sendFile(file.path, { acceptRanges: true, dotfiles: 'deny', headers: { 'Content-Type': file.type } }, (err) => {
+      if (err && !res.headersSent) res.status(404).json({ error: 'Not found' });
+    });
+  } catch (err: unknown) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend', event: 'public_practice_answer_failed',
+      outcome: 'failure', error_class: err instanceof Error ? err.name : 'Error', context: { kind },
+    }));
+    if (!res.headersSent) res.status(500).json({ error: 'Unable to load this just now' });
+  }
+}
+
 /** A factory so each test mounts its own rate-limit store. Playback makes many range requests: generous, still bounded. */
 export function createHireVideoRouter(): Router {
   const router = Router();
   const limiter = rateLimit({ windowMs: 60 * 1000, max: 600, standardHeaders: true, legacyHeaders: false });
   router.get('/api/public/hire/video/:id/:kind', limiter, serve);
+  router.get('/api/public/hire/practice-answer/:id/:kind', limiter, servePracticeAnswer);
   return router;
 }
 
