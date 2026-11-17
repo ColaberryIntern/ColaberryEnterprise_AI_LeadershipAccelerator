@@ -9,12 +9,14 @@ const mockSave = jest.fn();
 const mockDelete = jest.fn();
 const mockList = jest.fn();
 const mockResolve = jest.fn();
+const mockPublic = jest.fn();
 jest.mock('../../services/careerPrep/savedAnswers', () => {
   const actual = jest.requireActual('../../services/careerPrep/savedAnswers');
   return {
     ...actual,
     saveAnswer: (...a: unknown[]) => mockSave(...a), deleteAnswer: (...a: unknown[]) => mockDelete(...a),
     listSavedAnswers: (...a: unknown[]) => mockList(...a), resolveAnswerFile: (...a: unknown[]) => mockResolve(...a),
+    setShowPublic: (...a: unknown[]) => mockPublic(...a),
   };
 });
 
@@ -38,7 +40,7 @@ const sa = () => require('../../services/careerPrep/savedAnswers');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const notFound = () => { const { NotFoundError } = require('../../services/careerPrep/sessions'); return new NotFoundError(); };
 
-beforeEach(() => { mockEnabled.mockReset().mockResolvedValue(true); [mockSources, mockSave, mockDelete, mockList, mockResolve].forEach((m) => m.mockReset()); });
+beforeEach(() => { mockEnabled.mockReset().mockResolvedValue(true); [mockSources, mockSave, mockDelete, mockList, mockResolve, mockPublic].forEach((m) => m.mockReset()); });
 
 describe('GET /skills/:key/sources', () => {
   const url = '/api/portal/career-prep/skills/pace_clarity/sources?source=video';
@@ -99,5 +101,36 @@ describe('GET /answer-video/:assetId/:kind', () => {
     const res = await request(app()).get('/api/portal/career-prep/answer-video/abcdefabcdefabcdefabcdef/stream');
     expect(res.status).toBe(404);
     expect(res.headers['cache-control']).toBe('no-store');
+  });
+});
+
+describe('PUT /attempts/:attemptId/public (R1.2, the second opt-in)', () => {
+  const url = `/api/portal/career-prep/attempts/${A1}/public`;
+  it('401 without a token, 404 with Career Prep off, 403 for view-as', async () => {
+    expect((await request(app()).put(url).send({ on: true })).status).toBe(401);
+    mockEnabled.mockResolvedValueOnce(false);
+    expect((await request(app()).put(url).set('Authorization', token()).send({ on: true })).status).toBe(404);
+    expect((await request(app()).put(url).set('Authorization', token({ read_only: true, impersonated_by: 'a' })).send({ on: true })).status).toBe(403);
+    expect(mockPublic).not.toHaveBeenCalled();
+  });
+  it('flips it for the signed-in student only, either way', async () => {
+    mockPublic.mockResolvedValue({ attemptId: A1, showPublic: true });
+    const res = await request(app()).put(url).set('Authorization', token()).send({ on: true });
+    expect(res.status).toBe(200);
+    expect(res.body.answer.showPublic).toBe(true);
+    expect(mockPublic).toHaveBeenCalledWith('enr-ali', A1, true);
+    await request(app()).put(url).set('Authorization', token()).send({ on: false });
+    expect(mockPublic).toHaveBeenLastCalledWith('enr-ali', A1, false);
+  });
+  it("404s an answer that is not this student's saved answer", async () => {
+    mockPublic.mockRejectedValueOnce(notFound());
+    expect((await request(app()).put(url).set('Authorization', token()).send({ on: true })).status).toBe(404);
+  });
+  it('400s a bad id, a missing or non-boolean on, or an unexpected field', async () => {
+    expect((await request(app()).put('/api/portal/career-prep/attempts/nope/public').set('Authorization', token()).send({ on: true })).status).toBe(400);
+    expect((await request(app()).put(url).set('Authorization', token()).send({})).status).toBe(400);
+    expect((await request(app()).put(url).set('Authorization', token()).send({ on: 'yes' })).status).toBe(400);
+    expect((await request(app()).put(url).set('Authorization', token()).send({ on: true, enrollmentId: 'x' })).status).toBe(400);
+    expect(mockPublic).not.toHaveBeenCalled();
   });
 });

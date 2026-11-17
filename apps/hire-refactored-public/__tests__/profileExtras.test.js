@@ -98,6 +98,34 @@ describe('the profile with and without booking', () => {
   });
 });
 
+describe('Practice answers (Career Prep R1.2, a second opt-in)', () => {
+  const ANS = (n) => ({ question: `Question <${n}>?`, seconds: 42, streamUrl: `/api/public/hire/practice-answer/a${n}/stream`, posterUrl: `/api/public/hire/practice-answer/a${n}/poster` });
+  const render = (hire) => P.renderPortfolio(body(hire), 'ann-lee', [], NOW, API, 'America/Chicago');
+
+  test('each switched-on answer plays from the public route with its question escaped, and no score', () => {
+    const html = X.practiceAnswers([ANS(1)], API);
+    assert.match(html, /Practice answers/);
+    assert.match(html, /src="https:\/\/enterprise\.colaberry\.ai\/api\/public\/hire\/practice-answer\/a1\/stream"/);
+    assert.match(html, /poster="https:\/\/enterprise\.colaberry\.ai\/api\/public\/hire\/practice-answer\/a1\/poster"/);
+    assert.match(html, /Question &lt;1&gt;\?/);
+    assert.match(html, /0:42/);
+    assert.doesNotMatch(html, /Delivery|score/i);
+  });
+
+  test('at most 3, and none (or none playable) renders no card', () => {
+    assert.equal((X.practiceAnswers([ANS(1), ANS(2), ANS(3), ANS(4)], API).match(/<figure/g) || []).length, 3);
+    assert.equal(X.practiceAnswers([], API), '');
+    assert.equal(X.practiceAnswers(undefined, API), '');
+    assert.equal(X.practiceAnswers([{ question: 'Q', streamUrl: 'javascript:alert(1)' }], API), '');
+  });
+
+  test('the profile shows the card only when the API sends switched-on answers', () => {
+    assert.match(render({ practiceAnswers: [ANS(1)] }), /class="card practice"/);
+    assert.doesNotMatch(render({ practiceAnswers: [] }), /class="card practice"/);
+    assert.doesNotMatch(render({}), /class="card practice"/);
+  });
+});
+
 describe('zones', () => {
   test('a known zone has a plain name; anything else falls back to its id, readable', () => {
     assert.equal(X.zoneName('America/Chicago'), 'Central (CT)');

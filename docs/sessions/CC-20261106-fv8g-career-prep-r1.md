@@ -705,3 +705,29 @@ tests/systemV2/career-prep/.
   - Notes: local backend tsc and checkTestTypecheck report only enrichVisitorGeo.ts (maxmind not installed in
     this worktree; not touched here). Under all-worker parallel jest locally, the first test of some Career Prep
     route suites hit the 5 s timeout while importing; with --maxWorkers=4 everything passes.
+
+- [x] Release 1.2: saved practice answers on the public hire profile (CP5.7; Ali's Q1: A, 2026-11-17)
+  - Date: 2026-11-17
+  - Session: CC-20261106-fv8g
+  - What changed: a second opt-in per saved Try answer, "Show on my public profile", UNCHECKED by default, in Hire
+    studio > Video > Saved practice answers (new column prep_saved_answers.show_public BOOLEAN NOT NULL DEFAULT
+    false, added IF NOT EXISTS; member-only, Zod-strict PUT /api/portal/career-prep/attempts/:attemptId/public
+    { on }, 404 for an answer that is not the caller's saved one). An answer is public only while it is saved,
+    switched on, AND the owner's portfolio page is published with visibility 'public': an unlisted or hidden page
+    shows none. GET /api/public/portfolios/:slug?surface=hire carries hire.practiceAnswers (question, length,
+    public stream and poster; never the score, the attempt id or the owner's token; at most 3), and
+    hire.refactored.ai draws them as a "Practice answers" card under "In their words". Public playback is its own
+    route, GET /api/public/hire/practice-answer/:id/:kind, which re-checks the rule on every request and is never
+    cached, so switching off or deleting takes effect at once; it reads no ?t= token. No contact detail is added.
+  - Verification: new backend tests (setShowPublic, readPublicAnswers, resolvePublicAnswerFile, the PUT route, the
+    public route, the hire portfolio block) 14 FAIL on the old source, pass on the new; a Postgres integration
+    suite (savedAnswersPublic.integration) proves default off = 404, another student's flip = 404, on = 200 and
+    no-store, unlisted = 404, off = 404, deleted = 404 (runs in CI's integration tier; no local Postgres here).
+    Frontend: 3 new HireSavedAnswers tests FAIL on the old component, pass now; Career Prep + Portfolio jest 347
+    pass; tsc clean; CI=true build compiles clean. Hire site: 3 new tests FAIL on the old code; node --test 136/136.
+    Browser suite (Edge, built app) 36/36; the new check 11 (1600 and 390) FAILS on the pre-change build (34/36).
+    Screenshots of the switch (1600, 390) and the public card (1440, 390) reviewed: on screen, no sideways scroll.
+  - Notes: the schema guard test now allows exactly one kind of ALTER (ADD COLUMN IF NOT EXISTS on a prep_ table)
+    and pins the list to this one statement. The public card ships with the nginx image (the hire site is built in
+    nginx/Dockerfile). Locally, 13 unrelated backend suites (Reese inventories, timeline, mgmtRbac, ...) fail the
+    same 28 tests on clean main as on this branch; enrichVisitorGeo (maxmind) remains the only local tsc error.

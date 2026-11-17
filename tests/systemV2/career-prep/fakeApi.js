@@ -49,7 +49,9 @@ function makeState(now, opts = {}) {
     attempts: 0,
     finished: false,
     // R1.1: Try answers the student saved (attempt ids), and how long POST /plans takes (to see the busy state).
-    saved: new Set(),
+    saved: new Set(opts.saved || []),
+    // R1.2: saved answers switched on for the public profile (the second opt-in, off by default).
+    shown: new Set(),
     planDelayMs: opts.planDelayMs || 0,
     now,
   };
@@ -171,9 +173,20 @@ function route(state, method, path, query, body) {
   }
   const save = /^\/api\/portal\/career-prep\/attempts\/([^/]+)\/save$/.exec(path);
   if (save && method === 'POST') { state.saved.add(save[1]); return { answer: { attemptId: save[1], question: body.question || null, delivery: 89, seconds: 41, savedAt: new Date(state.now).toISOString(), streamUrl: '/media/none.mp4', posterUrl: '/media/none.jpg' } }; }
-  if (save && method === 'DELETE') { state.saved.delete(save[1]); return { ok: true }; }
-  if (path === `${P}/answers`) return { answers: [...state.saved].map((id) => ({ attemptId: id, question: 'Walk me through a project.', delivery: 89, seconds: 41, savedAt: new Date(state.now).toISOString(), streamUrl: '/media/none.mp4', posterUrl: '/media/none.jpg' })) };
+  if (save && method === 'DELETE') { state.saved.delete(save[1]); state.shown.delete(save[1]); return { ok: true }; }
+  const savedView = (id) => ({ attemptId: id, question: 'Walk me through a project.', delivery: 89, seconds: 41, savedAt: new Date(state.now).toISOString(), streamUrl: '/media/none.mp4', posterUrl: '/media/none.jpg', showPublic: state.shown.has(id) });
+  const pub = /^\/api\/portal\/career-prep\/attempts\/([^/]+)\/public$/.exec(path);
+  if (pub && method === 'PUT') {
+    if (body.on === true) state.shown.add(pub[1]); else state.shown.delete(pub[1]);
+    return { answer: savedView(pub[1]) };
+  }
+  if (path === `${P}/answers`) return { answers: [...state.saved].map(savedView) };
   if (path === '/api/portal/career/hire-interviews') return { ok: true, interviews: [] };
+  // R1.2: the smallest honest career profile, so /portal/portfolio (Hire studio > Video) renders: nothing on record.
+  if (path === '/api/portal/career/profile') {
+    return { state: 'ready', visibility: 'private', identity: null, capabilities: [], artifacts: [], projects: [], github: null, delivery_experience: [],
+      readiness: null, narrative: null, recent_activity: null, publication: { status: 'not_published', note: '' }, degraded: [], generated_at: new Date(state.now).toISOString() };
+  }
   return null; // not a Career Prep call: the caller answers it with an empty 200
 }
 

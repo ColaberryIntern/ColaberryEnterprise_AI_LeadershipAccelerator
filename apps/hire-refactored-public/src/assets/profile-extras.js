@@ -3,6 +3,7 @@
  * (profile upgrade, docs/hire-refactored/profile-upgrade-demo/PROMPT.md §1.4 and §1.5):
  *
  *   inTheirWords(intro, api)       "In their words": intro video, up to 3 answers, Looking for.
+ *   practiceAnswers(list, api)     "Practice answers": Career Prep recordings the candidate chose to show (R1.2).
  *   bookCard(booking, slug, tz)    "Book an interview": the next 3 open times, See all times.
  *
  * Pure markup from `hire.intro` / `hire.booking`, exported for node's test runner. EACH PIECE
@@ -87,6 +88,29 @@
       + '<div class="words' + (vid ? '' : ' one') + '">' + vid + (right ? '<div>' + right + '</div>' : '') + '</div></div>';
   }
 
+  /*
+   * "Practice answers" (Career Prep R1.2): answers the candidate recorded in Career Prep and chose, one by one, to
+   * show here (a second opt-in, off by default). The question asked and the recording; never a score. At most 3.
+   * No answer with a playable stream means no card at all.
+   */
+  function practiceAnswers(list, api) {
+    var items = arr(list).map(function (a) {
+      var src = a && C.mediaUrl(api, a.streamUrl);
+      if (!src) return '';
+      var poster = C.mediaUrl(api, a.posterUrl);
+      var len = C.duration(a.seconds);
+      var q = a.question ? String(a.question) : '';
+      return '<figure class="practice-answer"><div class="video-box"><video controls playsinline preload="none" crossorigin="anonymous"'
+        + (poster ? ' poster="' + esc(poster) + '"' : '')
+        + ' aria-label="' + esc(q ? 'Practice answer to: ' + q : 'Practice answer') + (len ? ', ' + esc(len) : '') + '"><source src="' + esc(src) + '"></video>'
+        + (len ? '<span class="len">' + esc(len) + '</span>' : '') + '</div>'
+        + (q ? '<figcaption>' + esc(q) + '</figcaption>' : '') + '</figure>';
+    }).filter(Boolean).slice(0, 3);
+    if (!items.length) return '';
+    return '<div class="card practice"><div class="label">Practice answers <span class="src">recorded in Career Prep, shared by the candidate</span></div>'
+      + '<div class="practice-grid">' + items.join('') + '</div></div>';
+  }
+
   function scheduleHref(slug, iso) {
     return '/talent/' + encodeURIComponent(slug) + '/schedule/' + (iso ? '?slot=' + encodeURIComponent(iso) : '');
   }
@@ -111,6 +135,6 @@
 
   return {
     viewerZone: viewerZone, isZone: isZone, zoneName: zoneName, slotParts: slotParts, startLabel: startLabel,
-    inTheirWords: inTheirWords, bookable: bookable, bookCard: bookCard, scheduleHref: scheduleHref,
+    inTheirWords: inTheirWords, practiceAnswers: practiceAnswers, bookable: bookable, bookCard: bookCard, scheduleHref: scheduleHref,
   };
 }));

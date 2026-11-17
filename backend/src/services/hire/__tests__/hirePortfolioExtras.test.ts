@@ -9,7 +9,9 @@ jest.mock('../hireTalentIndex', () => ({ loadHireIndex: jest.fn() }));
 jest.mock('../hireStudioSettings', () => ({ readPublicIntro: jest.fn(), readCaseStudyOrder: jest.fn() }));
 jest.mock('../hireInterviews', () => ({ bookingSummary: jest.fn() }));
 jest.mock('../../../models/CaseStudy', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
+jest.mock('../../careerPrep/savedAnswers', () => ({ readPublicAnswers: jest.fn() }));
 
+import { readPublicAnswers } from '../../careerPrep/savedAnswers';
 import { getPublicPortfolioBySlug } from '../../career/careerPortfolioPageService';
 import { loadHireIndex } from '../hireTalentIndex';
 import { readCaseStudyOrder, readPublicIntro } from '../hireStudioSettings';
@@ -33,7 +35,31 @@ beforeEach(() => {
   m(readPublicIntro).mockReset().mockResolvedValue(INTRO);
   m(readCaseStudyOrder).mockReset().mockResolvedValue(['b', 'gone', 'a']);
   m(bookingSummary).mockReset().mockResolvedValue(BOOKING);
+  m(readPublicAnswers).mockReset().mockResolvedValue([]);
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+
+describe('practice answers (R1.2, the second opt-in)', () => {
+  const ANSWER = { question: 'Tell me about a project.', seconds: 42, streamUrl: '/api/public/hire/practice-answer/x/stream', posterUrl: '/api/public/hire/practice-answer/x/poster' };
+  it('a public page carries the answers its candidate switched on, read for the page\'s own enrollment', async () => {
+    m(readPublicAnswers).mockResolvedValue([ANSWER]);
+    const out = await getHirePortfolio('ann-lee');
+    expect(out?.hire.practiceAnswers).toEqual([ANSWER]);
+    expect(readPublicAnswers).toHaveBeenCalledWith(E1);
+  });
+  it('an unlisted page shows none, and does not even read them', async () => {
+    m(loadHireIndex).mockResolvedValue([{ ...ENTRY, page: { ...ENTRY.page, visibility: 'unlisted' } }]);
+    m(readPublicAnswers).mockResolvedValue([ANSWER]);
+    const out = await getHirePortfolio('ann-lee');
+    expect(out?.hire.practiceAnswers).toEqual([]);
+    expect(readPublicAnswers).not.toHaveBeenCalled();
+  });
+  it('a failure to read them leaves the profile as it was (logged, never a 500)', async () => {
+    m(readPublicAnswers).mockRejectedValue(new Error('relation "prep_saved_answers" does not exist'));
+    const out = await getHirePortfolio('ann-lee');
+    expect(out?.hire.practiceAnswers).toEqual([]);
+    expect(out?.hire.intro).toEqual(INTRO);
+  });
 });
 afterEach(() => jest.restoreAllMocks());
 

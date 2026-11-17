@@ -22,7 +22,13 @@ import { NotFoundError } from './sessions';
  *
  * PLAYBACK IS THE OWNER'S ONLY. A <video> cannot send the portal's bearer token, so the authed list mints a
  * signed, expiring `?t=` token per asset (the intro video's draft-preview pattern). A token is minted only in
- * a response to the signed-in owner. Saved answers are NOT on the public hire profile in R1.1.
+ * a response to the signed-in owner.
+ *
+ * PUBLIC IS A SECOND OPT-IN (R1.2, Ali's Q1: A). `show_public` is off by default and flipped per answer by its
+ * owner. An answer is public only while it is saved, switched on, AND its owner's portfolio page is published
+ * with visibility `public` (an unlisted or hidden page shows no practice answers). Public playback is its own
+ * route (/api/public/hire/practice-answer/...) that re-checks all three on EVERY request, so switching off or
+ * deleting takes effect at once, and it never mints or accepts the owner's signed `?t=` token.
  */
 export const PREP_ANSWER_ROOT = path.resolve(process.env.PREP_ANSWER_DIR || path.join(process.cwd(), 'uploads', 'prep-answers'));
 export const PENDING_DIR = path.join(os.tmpdir(), 'prep-attempt-pending');
@@ -109,14 +115,16 @@ export async function resolveAnswerFile(assetId: string, kind: string, token: un
 
 // ── Saved answers ───────────────────────────────────────────────────────────────
 
-export interface SavedAnswer { attemptId: string; question: string | null; delivery: number | null; seconds: number | null; savedAt: string; streamUrl: string; posterUrl: string }
-type SavedRow = { attempt_id: string; asset_id: string; question: string | null; delivery: number | null; seconds: number | null; created_at: string | Date };
+export interface SavedAnswer { attemptId: string; question: string | null; delivery: number | null; seconds: number | null; savedAt: string; streamUrl: string; posterUrl: string; showPublic: boolean }
+type SavedRow = { attempt_id: string; asset_id: string; question: string | null; delivery: number | null; seconds: number | null; created_at: string | Date; show_public?: boolean | null };
 const toView = (r: SavedRow, now: number): SavedAnswer => ({
   attemptId: String(r.attempt_id), question: r.question ?? null, delivery: r.delivery === null ? null : Number(r.delivery),
   seconds: r.seconds === null ? null : Number(r.seconds), savedAt: new Date(r.created_at).toISOString(),
   streamUrl: answerUrl(String(r.asset_id), 'stream', now), posterUrl: answerUrl(String(r.asset_id), 'poster', now),
+  showPublic: r.show_public === true,
 });
-const SELECT_SAVED = 'SELECT attempt_id, asset_id, question, delivery, seconds, created_at FROM prep_saved_answers';
+const SELECT_SAVED = 'SELECT attempt_id, asset_id, question, delivery, seconds, created_at, show_public FROM prep_saved_answers';
+const RETURN_SAVED = 'RETURNING attempt_id, asset_id, question, delivery, seconds, created_at, show_public';
 
 /** Delivery, as the Try card shows it: the mean of the delivery scores, rounded (null when there are none). */
 export function deliveryOf(result: unknown): number | null {
@@ -163,7 +171,7 @@ export async function saveAnswer(enrollmentId: string, attemptId: string, questi
   const [made] = await sequelize.query(
     `INSERT INTO prep_saved_answers (enrollment_id, attempt_id, asset_id, question, delivery, seconds)
      VALUES (:e, :a, :id, :q, :d, :s) ON CONFLICT (attempt_id) DO NOTHING
-     RETURNING attempt_id, asset_id, question, delivery, seconds, created_at`,
+     ${RETURN_SAVED}`,
     { replacements: { e: enrollmentId, a: attemptId, id, q: question, d: deliveryOf(a.result), s: seconds } });
   if (!(made as SavedRow[]).length) {
     // Two clicks raced: the other one won. Keep its copy, drop this one.
@@ -183,4 +191,43 @@ export async function deleteAnswer(enrollmentId: string, attemptId: string, root
     { replacements: { a: attemptId, e: enrollmentId } });
   for (const r of rows as Array<{ asset_id: string }>) await removeAsset(String(r.asset_id), root);
   await fs.promises.rm(pendingFile(attemptId), { force: true }).catch(() => undefined);
+}
+
+// ── Public (R1.2: the second opt-in) ────────────────────────────────────────────
+
+/** Turns "Show on my public profile" on or off for one of the caller's SAVED answers. 404 for anything else. */
+export async function setShowPublic(enrollmentId: string, attemptId: string, on: boolean, now = Date.now()): Promise<SavedAnswer> {
+  const [rows] = await sequelize.query(
+    `UPDATE prep_saved_answers SET show_public = :on WHERE attempt_id = :a AND enrollment_id = :e ${RETURN_SAVED}`,
+    { replacements: { on, a: attemptId, e: enrollmentId } });
+  const r = (rows as SavedRow[])[0];
+  if (!r) throw new NotFoundError();
+  return toView(r, now);
+}
+
+/** What a public page may show: the question asked and the recording. Never the score, the attempt id or a token. */
+export interface PublicPracticeAnswer { question: string | null; seconds: number | null; streamUrl: string; posterUrl: string }
+export const publicAnswerUrl = (assetId: string, kind: 'stream' | 'poster'): string => `/api/public/hire/practice-answer/${assetId}/${kind}`;
+
+/** The rule in ONE place: saved, switched on, and the owner's portfolio page published and `public`. */
+const PUBLIC_RULE = `a.show_public = true AND EXISTS (SELECT 1 FROM career_portfolio_pages p
+  WHERE p.enrollment_id = a.enrollment_id AND p.status = 'published' AND p.visibility = 'public')`;
+
+/** The answers a student switched on, newest first, at most `limit`. Empty when their page is not public. */
+export async function readPublicAnswers(enrollmentId: string, limit = 3): Promise<PublicPracticeAnswer[]> {
+  const [rows] = await sequelize.query(
+    `SELECT a.asset_id, a.question, a.seconds FROM prep_saved_answers a WHERE a.enrollment_id = :e AND ${PUBLIC_RULE}
+      ORDER BY a.created_at DESC LIMIT :n`, { replacements: { e: enrollmentId, n: limit } });
+  return (rows as Array<{ asset_id: string; question: string | null; seconds: number | null }>).map((r) => ({
+    question: r.question ?? null, seconds: r.seconds === null ? null : Number(r.seconds),
+    streamUrl: publicAnswerUrl(String(r.asset_id), 'stream'), posterUrl: publicAnswerUrl(String(r.asset_id), 'poster'),
+  }));
+}
+
+/** The file for a public playback request, or null (404: switched off, deleted, page not public, or never existed). */
+export async function resolvePublicAnswerFile(assetId: string, kind: string, root = PREP_ANSWER_ROOT): Promise<{ path: string; type: string } | null> {
+  if (!isAssetId(assetId) || (kind !== 'stream' && kind !== 'poster')) return null;
+  const [rows] = await sequelize.query(`SELECT 1 FROM prep_saved_answers a WHERE a.asset_id = :id AND ${PUBLIC_RULE}`, { replacements: { id: assetId } });
+  if (!(rows as unknown[]).length) return null;
+  return { path: assetFile(assetId, kind, root), type: kind === 'stream' ? 'video/mp4' : 'image/jpeg' };
 }

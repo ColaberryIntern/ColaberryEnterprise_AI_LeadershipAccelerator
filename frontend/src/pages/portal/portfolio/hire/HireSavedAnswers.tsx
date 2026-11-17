@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { deleteAnswerApi, fetchSavedAnswersApi, type SavedAnswer } from '../../../../components/careerPrep/careerPrepApi';
+import { deleteAnswerApi, fetchSavedAnswersApi, setShowPublicApi, type SavedAnswer } from '../../../../components/careerPrep/careerPrepApi';
 
 /**
  * Career Prep R1.1: "Saved practice answers" in the Hire studio's Video section. The Try answers a student chose to
  * keep in the Career Prep room (an unchecked box they ticked), each playable and deletable (Delete asks first).
- * ONLY THE STUDENT SEES THESE: they are not on the public hire profile (a second opt-in to show one there is a
- * follow-up). Career Prep off, or the list unreadable: the section is not drawn at all.
+ * R1.2 (Ali, Q1: A): each one has a SECOND opt-in, "Show on my public profile", unchecked by default. Only a
+ * switched-on answer reaches the public hire profile, and only while that profile is public; employers see the
+ * question and the video, never the score. Career Prep off, or the list unreadable: the section is not drawn at all.
  */
 const when = (iso: string) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' });
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -23,12 +24,20 @@ export const HireSavedAnswers: React.FC = () => {
     setBusy(id); setProblem(null);
     try { await deleteAnswerApi(id); setAnswers((a) => (a ?? []).filter((x) => x.attemptId !== id)); setConfirm(null); } catch { setProblem('Could not delete that answer. Try again.'); } finally { setBusy(null); }
   };
+  const showPublic = async (id: string, on: boolean) => {
+    setBusy(id); setProblem(null);
+    try {
+      const got = await setShowPublicApi(id, on);
+      setAnswers((a) => (a ?? []).map((x) => (x.attemptId === id ? { ...x, showPublic: got?.showPublic === true } : x)));
+    } catch { setProblem(on ? 'Could not show that answer on your profile. Try again.' : 'Could not hide that answer. Try again.'); } finally { setBusy(null); }
+  };
+  const anyPublic = answers.some((a) => a.showPublic === true);
 
   return (
     <section className="cp-card hs-saved" aria-labelledby="hs-saved-h" data-testid="hs-saved">
       <div className="hs-vhead">
         <h3 className="cp-card-h" id="hs-saved-h">Saved practice answers</h3>
-        <span className="hs-vstatus">Only you can see these</span>
+        <span className="hs-vstatus" data-testid="hs-saved-status">{anyPublic ? 'Some are on your public profile' : 'Only you can see these'}</span>
       </div>
       {problem && <p className="hs-vmsg" role="alert">{problem}</p>}
       {answers.length === 0 ? (
@@ -43,6 +52,12 @@ export const HireSavedAnswers: React.FC = () => {
             </div>
             <p className="hs-saved-q">{a.question ?? 'A practice answer'}</p>
             <p className="cp-muted hs-saved-meta">Saved {when(a.savedAt)}{a.seconds ? ` · ${clock(a.seconds)}` : ''}{a.delivery !== null ? ` · Delivery ${a.delivery}` : ''}</p>
+            <label className="hs-saved-public">
+              <input type="checkbox" checked={a.showPublic === true} disabled={busy === a.attemptId}
+                onChange={(e) => void showPublic(a.attemptId, e.target.checked)} data-testid="hs-saved-public" />
+              <span>Show on my public profile</span>
+            </label>
+            <p className="cp-muted hs-saved-note">Employers see the question and the video, never your score. Shown only while your profile is public.</p>
             <div className="hs-vacts">
               {confirm === a.attemptId ? (
                 <>

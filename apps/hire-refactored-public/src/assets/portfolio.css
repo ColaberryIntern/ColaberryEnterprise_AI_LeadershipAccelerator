@@ -138,6 +138,9 @@ a.sha:hover{text-decoration:underline}
 .video-box{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:var(--bg-sunk);border:1px solid var(--line)}
 .video-box video{display:block;width:100%;height:100%;object-fit:cover;background:var(--bg-sunk)}
 .video-box .len{position:absolute;left:12px;top:10px;font-family:var(--font-mono);font-size:.75rem;color:#fff;background:rgba(12,20,27,.8);padding:2px 8px;border-radius:4px;pointer-events:none}
+.practice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;margin-top:16px}
+.practice-answer{margin:0;min-width:0}
+.practice-answer figcaption{margin-top:8px;font-weight:600;font-size:.92rem;line-height:1.35;overflow-wrap:anywhere}
 .qa{display:flex;flex-direction:column;gap:16px}
 .qa b{display:block;font-size:.95rem}
 .qa p{margin:4px 0 0;color:var(--fg-muted);font-size:.95rem;overflow-wrap:anywhere}
