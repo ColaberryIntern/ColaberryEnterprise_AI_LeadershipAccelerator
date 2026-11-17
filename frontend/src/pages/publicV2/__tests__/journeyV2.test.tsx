@@ -242,10 +242,17 @@ describe('/how-it-works renders the model’s six bands, and keeps the disclosur
     expect((how.match(/<section/g) || []).length).toBe(6);
   });
 
-  it('no longer carries the home rollout grid', () => {
-    // Its own heading, and the sample badge that only it puts on this page.
-    expect(how).not.toContain('cbv2-deptmap');
-    expect(textOf(how)).not.toContain('Department by department.');
+  /*
+     INVERTED 2026-11-16 (page group 2). This asserted the rollout grid was OFF the
+     page, on the belief that the model had no board here. It does: the model draws
+     `.orgwrap` straight under this hero. The board is a <div>, as in the model, so it
+     does not change the six-band count above, and it carries its sample badge.
+  */
+  it('carries the rollout board under the hero, as the model does, badged as sample data', () => {
+    expect(how).toContain('cbv2-orgwrap5');
+    expect(how).toContain('cbv2-deptmap');
+    expect(how.indexOf('cbv2-orgwrap5')).toBeLessThan(how.indexOf('cbv2-demopilot-title'));
+    expect(textOf(how)).toContain('Sample data');
   });
 
   it('still says which stages the platform does and which people do', () => {
