@@ -8,6 +8,10 @@
  * rev4 of the pricing material and the "they are already in for $22k" framing, both of which
  * are now wrong. William caught it from the outside.
  *
+ * Archive note (17 Nov 2026): one phrase differs from what was sent. Section 4 said Trimble Pay
+ * was "f-r-e-e to invited subs"; here it reads "costs invited subs nothing", because a new file
+ * may carry no banned word (bannedWordOutboundCopy.test.ts). The meaning is unchanged.
+ *
  * Usage:
  *   DRY_RUN=1 node backend/src/scripts/sendWilliamMiddlesexPricingReply.js
  *   MANDRILL_API_KEY=... node backend/src/scripts/sendWilliamMiddlesexPricingReply.js
@@ -100,7 +104,7 @@ range he cannot check.
 
 Drop it. You are right, and it is worse than you think.
 
-If Textura caps at $5,000 a contract and Trimble Pay is free to invited subs,
+If Textura caps at $5,000 a contract and Trimble Pay costs invited subs nothing,
 then the portal comparison argues that this costs Middlesex very little today,
 which is the opposite of what we want it doing. The portals are not competitors
 in any case. Middlesex submits into whichever one each general contractor
