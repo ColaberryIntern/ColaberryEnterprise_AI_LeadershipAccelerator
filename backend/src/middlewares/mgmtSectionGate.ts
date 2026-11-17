@@ -176,6 +176,12 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // the decider to be a recorded human on the configured approver set: a section grant is what
   // lets the page's data load, never what decides whose tool grant may stand.
   ['/api/admin/agent-domain-tool-requests', 'program'],
+  // AF11.9. The front door: can the product already do this? Read-only and files nothing,
+  // but it describes what the product can do, so it sits with the rest of the programme
+  // surface rather than behind the dashboard section every mgmt role carries.
+  ['/api/admin/agent-domain-product-features', 'program'],
+  // AF11.10. The capability board: where every capability is and who is holding it up.
+  ['/api/admin/agent-domain-capability-board', 'program'],
   // AF3.5. The grant itself. Classified alongside the review console it follows, so the
   // whole ladder answers the same section rather than one rung 403ing unexplained.
   ['/api/admin/agent-tool-grants', 'program'],

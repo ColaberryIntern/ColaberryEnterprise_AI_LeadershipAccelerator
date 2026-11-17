@@ -27,11 +27,18 @@ import { configuredApprovers } from './approverConfiguration';
 import { loadToolCatalogForMatching } from './toolCatalogForMatching';
 import {
   acceptToolRequestDecision,
+  normalizeAnswer,
   statusAfter,
   type AcceptedDecision,
   type DecisionIssue,
   type ProposedDecision,
 } from './toolRequestDecisionContract';
+import AgentDomainToolRequestPackage from '../../models/AgentDomainToolRequestPackage';
+import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
+import { createDirective } from '../managerDirectiveService';
+
+/** Trim, the same narrowing the contract applies, so the two agree about what blank means. */
+const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 /** Thrown with the whole refusal list, so the console renders all of them at once. */
 export class ToolRequestDecisionRefusedError extends Error {
@@ -103,6 +110,16 @@ export async function decideToolRequest(args: DecideToolRequestArgs): Promise<Re
     });
     if (!row) throw new ToolRequestNotFoundError(id);
 
+    // AF11.8. The options the agent offered, read INSIDE the same locked transaction as the
+    // request, so the list the gate checks against is the list that was on the request when the
+    // decision was taken. Reading it before the lock would leave a window in which the package
+    // was rewritten between the read and the write, and the log would then record a choice of
+    // "option B" against a B that no longer says what Ali read.
+    const pkg = await AgentDomainToolRequestPackage.findByPk(row.id, { transaction });
+    const offeredOptions = Array.isArray(pkg?.options)
+      ? pkg.options.map((o) => ({ key: String(o?.key ?? ''), verb: String(o?.verb ?? '') }))
+      : [];
+
     const verdict = acceptToolRequestDecision({
       proposed,
       decidedBy: email,
@@ -112,6 +129,7 @@ export async function decideToolRequest(args: DecideToolRequestArgs): Promise<Re
       recordedHumans,
       approverSet: configuredApprovers(),
       knownToolNames: catalog.tools.map((t) => t.tool_name),
+      offeredOptions,
     });
     if (!verdict.ok) throw new ToolRequestDecisionRefusedError(verdict.issues);
 
@@ -126,7 +144,46 @@ export async function decideToolRequest(args: DecideToolRequestArgs): Promise<Re
       reason: decision.reason,
       missing_field: decision.missing_field,
       assigned_tool_name: decision.assigned_tool_name,
+      chosen_option: decision.chosen_option,
     }, { transaction });
+
+    // AF11.8 — ALI'S STANDING INSTRUCTIONS, WRITTEN IN THE SAME TRANSACTION AS THE DECISION.
+    //
+    // Ali, 16 Nov 2026: *"when approving the functionality, I should be able to add my details of
+    // how the agent should work and respond."*
+    //
+    // Inside the transaction, which is the opposite of the call the AF11.2 duplicate check makes
+    // a few files away, and deliberately so. That check is ADVICE and losing it costs a reader a
+    // hint; these are CONDITIONS, and an approval whose conditions silently failed to save is an
+    // approval Ali did not give. If the instruction cannot be written, the approval does not
+    // stand either.
+    //
+    // Only on a decision that lets the capability proceed. Attaching behaviour rules to a denial
+    // or a send-back would leave instructions in force for something nobody approved.
+    const instructions = text(proposed.standing_instructions);
+    const letsItProceed = decision.verb === 'approve_to_build'
+      || decision.verb === 'assign_existing_tool';
+    if (instructions && letsItProceed) {
+      const detail = await AgentDomainToolRequestDetail.findByPk(row.id, { transaction });
+      if (!detail?.agent_id) {
+        // Named rather than skipped. Instructions typed against a request whose detail we cannot
+        // read would otherwise disappear between the console and the database.
+        throw new ToolRequestDecisionRefusedError([{
+          rule: 'standing_instructions_have_no_agent',
+          detail: 'This request has no agent on record, so there is nothing to attach your '
+            + 'instructions to. The decision was not recorded.',
+        }]);
+      }
+      await createDirective(
+        detail.agent_id,
+        null,
+        decision.decided_by_identity,
+        instructions,
+        // Scoped to THE CAPABILITY, not the agent: the ticket's words are *"attached to the
+        // capability, not to the ticket or the comment thread."*
+        { capabilityId: detail.capability_id ?? null, transaction },
+      );
+    }
 
     // The parent keeps the governance status. `send_back` leaves it `submitted` on purpose: the
     // request is still live and the intern is expected to edit it.
@@ -178,6 +235,7 @@ export async function loadDecisions(changeRequestId: string): Promise<RecordedDe
     reason: r.reason ?? null,
     missing_field: r.missing_field ?? null,
     assigned_tool_name: r.assigned_tool_name ?? null,
+    chosen_option: normalizeAnswer(r.chosen_option),
     request_status: '',
   }));
 }

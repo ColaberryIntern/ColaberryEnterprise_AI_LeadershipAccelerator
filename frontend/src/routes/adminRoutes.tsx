@@ -66,6 +66,7 @@ const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeReq
 // pasted and bookmarked while they existed and a dead admin link reads as a deleted feature.
 const AdminMayaLegacyRedirect = lazy(() => import('../pages/admin/AdminMayaLegacyRedirect'));
 const AdminToolRequestReviewPage = lazy(() => import('../pages/admin/AdminToolRequestReviewPage'));
+const AdminCapabilityBoardPage = lazy(() => import('../pages/admin/AdminCapabilityBoardPage'));
 const AdminToolsPage = lazy(() => import('../pages/admin/AdminToolsPage'));
 const ApprovalRequestsPage = lazy(() => import('../pages/admin/ApprovalRequestsPage'));
 const EnterpriseIntelligencePage = lazy(() => import('../pages/admin/intelligence/EnterpriseIntelligencePage'));
@@ -288,6 +289,8 @@ const adminRoutes = (
             duplicate candidates do not fit in a list row. Admin-only at the API, so a
             non-admin sees "not for you" rather than a failure. */}
         <Route path="/admin/tool-requests" element={<AdminToolRequestReviewPage />} />
+        {/* AF11.10. Where every capability is, and who is holding it up. */}
+        <Route path="/admin/capability-board" element={<AdminCapabilityBoardPage />} />
         {/* Both now land on her agent workspace. `/admin/outbound-approvals` carries the tab
             through, so the old link still reaches the screen it named rather than Overview. */}
         <Route path="/admin/maya" element={<AdminMayaLegacyRedirect />} />

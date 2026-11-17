@@ -55,6 +55,14 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   `${T}.reason`,
   `${T}.missing_field`,
   `${T}.assigned_tool_name`,
+  // AF11.8. WHICH OF THE OPTIONS THE REQUEST OFFERED was chosen: A, B, C or nothing.
+  //
+  // Nullable, and that is not a hedge. A `deny` is still a decision a human can make and it is
+  // not one of the agent's options — the ticket keeps it distinct from Nothing precisely because
+  // a denial carries a reason and can be appealed. So a decision has a chosen option when it was
+  // made by choosing one, and does not when it was not, and `chk_adtrd_nothing_is_its_own_answer`
+  // below stops the two drifting apart for the one value where they must agree.
+  `${T}.chosen_option`,
 ];
 
 export const REQUIRED_INDEXES: ReadonlyArray<string> = ['idx_adtrd_change_request_id'];
@@ -62,6 +70,9 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = ['idx_adtrd_change_reques
 export const REQUIRED_CHECKS: ReadonlyArray<string> = [
   'chk_adtrd_verb_is_known',
   'chk_adtrd_verb_carries_its_words',
+  // AF11.8
+  'chk_adtrd_chosen_option_is_known',
+  'chk_adtrd_nothing_is_its_own_answer',
 ];
 
 const STATEMENTS: ReadonlyArray<string> = [
@@ -75,9 +86,27 @@ const STATEMENTS: ReadonlyArray<string> = [
      reason TEXT,
      missing_field TEXT,
      assigned_tool_name TEXT,
+     chosen_option TEXT,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      CONSTRAINT chk_adtrd_verb_is_known CHECK (
-       verb IN ('approve_to_build', 'deny', 'assign_existing_tool', 'send_back')
+       verb IN ('approve_to_build', 'deny', 'assign_existing_tool', 'send_back', 'nothing')
+     ),
+     -- AF11.8. The answer space the ticket names: *"make the answer for the human go with option
+     -- A, B, C or Nothing."*
+     CONSTRAINT chk_adtrd_chosen_option_is_known CHECK (
+       chosen_option IS NULL OR chosen_option IN ('A', 'B', 'C', 'nothing')
+     ),
+     -- NOTHING AND ITS VERB MOVE TOGETHER OR NOT AT ALL.
+     --
+     -- The ticket: *"'Nothing' is a first-class answer and means the capability comes off the
+     -- board - it is not the same as deny-with-a-reason, because there is nothing to appeal."*
+     -- A row saying 'verb = 'nothing'' with some other option chosen, or an option of 'nothing'
+     -- recorded under a verb that grants something, would make that sentence unreadable from the
+     -- log. Written both ways round because one implication alone leaves the other open, and
+     -- 'IS DISTINCT FROM' because 'chosen_option' is nullable and '<>' against NULL is NULL.
+     CONSTRAINT chk_adtrd_nothing_is_its_own_answer CHECK (
+       (verb <> 'nothing' OR chosen_option = 'nothing')
+       AND (chosen_option IS DISTINCT FROM 'nothing' OR verb = 'nothing')
      ),
      -- The application refuses these by name so the person gets a sentence; the constraint means
      -- a row that breaks them cannot exist even if some future caller skips the contract. Same
@@ -91,6 +120,53 @@ const STATEMENTS: ReadonlyArray<string> = [
   // "Show me every decision on this request, in order" is the question the console asks.
   `CREATE INDEX IF NOT EXISTS idx_adtrd_change_request_id
      ON agent_domain_tool_request_decisions (change_request_id, decided_at)`,
+  // ----------------------------------------------------------------------------------------
+  // AF11.8. THE ONLY STATEMENTS BELOW THAT DO ANYTHING on an environment that already has this
+  // table, because `CREATE TABLE IF NOT EXISTS` above is a no-op there. The column is in the
+  // CREATE as well, for an environment that has never run this file; the sibling
+  // `ensureAgentDomainToolRequestSchema.ts` records the same trap in its own words.
+  `ALTER TABLE agent_domain_tool_request_decisions
+     ADD COLUMN IF NOT EXISTS chosen_option TEXT`,
+  // WIDENING `chk_adtrd_verb_is_known` MEANS REPLACING IT, because Postgres has no way to alter a
+  // CHECK in place. Dropping and re-adding is safe here for a measured reason rather than a
+  // hopeful one: `agent_domain_tool_request_decisions` held ZERO rows in production on 17 Nov
+  // 2026, and widening a value list cannot invalidate a row in any case. If that is ever untrue,
+  // the ADD fails, the loop logs it, and `assert` fails the boot by name with the constraint
+  // missing, which is the loud failure rather than a silent one.
+  //
+  // DROP IF EXISTS, then ADD, as two statements: the drop must not throw on an environment that
+  // has never had the constraint, and the add must still run there.
+  `ALTER TABLE agent_domain_tool_request_decisions
+     DROP CONSTRAINT IF EXISTS chk_adtrd_verb_is_known`,
+  `ALTER TABLE agent_domain_tool_request_decisions
+     ADD CONSTRAINT chk_adtrd_verb_is_known
+     CHECK (verb IN ('approve_to_build', 'deny', 'assign_existing_tool', 'send_back', 'nothing'))`,
+  // The two new ones are guarded on their own existence, since Postgres has no
+  // `ADD CONSTRAINT IF NOT EXISTS` and a plain ADD throws `duplicate_object` on every boot after
+  // the first, filling the logs with a failure that is actually the success case.
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtrd_chosen_option_is_known'
+     ) THEN
+       ALTER TABLE agent_domain_tool_request_decisions
+         ADD CONSTRAINT chk_adtrd_chosen_option_is_known
+         CHECK (chosen_option IS NULL OR chosen_option IN ('A', 'B', 'C', 'nothing'));
+     END IF;
+   END $$`,
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtrd_nothing_is_its_own_answer'
+     ) THEN
+       ALTER TABLE agent_domain_tool_request_decisions
+         ADD CONSTRAINT chk_adtrd_nothing_is_its_own_answer
+         CHECK (
+           (verb <> 'nothing' OR chosen_option = 'nothing')
+           AND (chosen_option IS DISTINCT FROM 'nothing' OR verb = 'nothing')
+         );
+     END IF;
+   END $$`,
 ];
 
 /** Net-new, so it reverts whole. The parent is deliberately not mentioned here. */

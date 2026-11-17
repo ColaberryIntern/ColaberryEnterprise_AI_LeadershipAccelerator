@@ -40,6 +40,15 @@ export interface ManagerDirectiveAttributes {
   created_by_org_member_id?: string | null;
   created_by_email: string;
   directive_text: string;
+  /**
+   * AF11.8. The capability this instruction belongs to, or null for the whole agent.
+   *
+   * A scoped instruction is in front of the agent ONLY when that capability runs. That is the
+   * property the column exists for, and the one getActiveDirectiveTexts() has to keep: an
+   * instruction about landing-page headlines appearing on an unrelated turn is worse than no
+   * instruction, because it reads as guidance the agent was meant to follow.
+   */
+  capability_id?: string | null;
   status?: ManagerDirectiveStatus;
   revoked_at?: Date | null;
   revoked_by_email?: string | null;
@@ -52,6 +61,7 @@ class ManagerDirective extends Model<ManagerDirectiveAttributes> implements Mana
   declare created_by_org_member_id: string | null;
   declare created_by_email: string;
   declare directive_text: string;
+  declare capability_id: string | null;
   declare status: ManagerDirectiveStatus;
   declare revoked_at: Date | null;
   declare revoked_by_email: string | null;
@@ -65,6 +75,9 @@ ManagerDirective.init(
     created_by_org_member_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'org_members', key: 'id' } },
     created_by_email: { type: DataTypes.STRING(255), allowNull: false },
     directive_text: { type: DataTypes.TEXT, allowNull: false },
+    // Nullable, and null is the meaningful default: every directive written before AF11.8 is
+    // agent-wide, and there were zero of them in production when the column arrived.
+    capability_id: { type: DataTypes.TEXT, allowNull: true },
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'active' },
     revoked_at: { type: DataTypes.DATE, allowNull: true },
     revoked_by_email: { type: DataTypes.STRING(255), allowNull: true },

@@ -278,6 +278,7 @@ describe('the boot registration is WRAPPED, because its assert throws', () => {
       'ensureToolRequestBuildEventSchema.ts',
       'ensureToolRequestDecisionSchema.ts',
       'ensureToolRequestMessageSchema.ts',
+      'ensureToolRequestPackageSchema.ts',
       // Agent Tools Phase 3 added the tenth member, 2026-11-11.
       // `ensureToolRequestBuildEventSchema.ts` records what happened to a request AFTER
       // approval — started building, handed over — and asserts the same way for the same reason

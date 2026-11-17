@@ -49,6 +49,18 @@ jest.mock('../capabilityRecord', () => ({
 // these tests exercise the real ranking rather than a stub that agrees with whatever the service
 // does with it. What gets mocked is the I/O on either side of it: the catalog query and the row
 // write. `toolDuplicateCheck.test.ts` is where the matcher is proved against the real catalog.
+const mockPkgFindAll = jest.fn();
+const mockPkgFindByPk = jest.fn();
+// AF11.8. Every read path now attaches the decision package and computes readiness from it, so
+// the queue tests need the model. Empty by default, which is the state every request in
+// production is in: zero packages exist, so every tool request reads as "nobody has written one".
+jest.mock('../../../models/AgentDomainToolRequestPackage', () => ({
+  __esModule: true,
+  default: {
+    findAll: (...a: unknown[]) => mockPkgFindAll(...a),
+    findByPk: (...a: unknown[]) => mockPkgFindByPk(...a),
+  },
+}));
 jest.mock('../../../models/AgentDomainToolDuplicateCheck', () => ({
   __esModule: true,
   default: {
@@ -213,6 +225,8 @@ beforeEach(() => {
   mockLoadMine.mockResolvedValue([{ domain_key: 'platform-automation', agent_id: AGENT }]);
   mockCreate.mockImplementation(async (vals: Record<string, unknown>) => fakeRow(vals));
   mockDetailFindAll.mockResolvedValue([]);
+  mockPkgFindAll.mockResolvedValue([]);
+  mockPkgFindByPk.mockResolvedValue(null);
   mockDetailFindByPk.mockResolvedValue(null);
   mockCheckFindAll.mockResolvedValue([]);
   mockCheckFindByPk.mockResolvedValue(null);

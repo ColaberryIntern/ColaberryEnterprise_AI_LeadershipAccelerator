@@ -233,6 +233,7 @@ export default function AgentToolRequests({ agentId }: Props) {
         </span>
       </h2>
 
+
       {report.requests.length === 0 ? (
         <p className="adv2-muted" style={{ padding: '0 18px 16px' }}>
           No tool has been requested for this agent. Requests are filed against the agent's domain

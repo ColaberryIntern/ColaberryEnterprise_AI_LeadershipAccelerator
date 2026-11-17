@@ -122,7 +122,9 @@ describe('buildAgentSystemPrompt — manager directive injection (Checkpoint C, 
 
     const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-7', { agentId: 'agent-1' });
 
-    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-1');
+    // AF11.8: the capability is passed through, and is undefined on a DM path like this one,
+    // which is what keeps a capability-scoped instruction off an unrelated turn.
+    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-1', undefined);
     expect(prompt).toContain('MANAGER DIRECTIVES');
     expect(prompt).toContain('Always loop in the manager on financial tickets.');
     expect(prompt).toContain('Never discuss pricing before Tuesday.');
@@ -135,7 +137,7 @@ describe('buildAgentSystemPrompt — manager directive injection (Checkpoint C, 
 
     const prompt = await buildAgentSystemPrompt(CURRICULUM_QA_PERSONA, 'enrollment-8', { agentId: 'agent-2' });
 
-    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-2');
+    expect(mockActiveDirectives).toHaveBeenCalledWith('agent-2', undefined);
     expect(prompt).not.toContain('MANAGER DIRECTIVES');
   });
 
