@@ -34,7 +34,8 @@ describe('screenEventReminderCopy (an AI draft that fails is not sent)', () => {
     expect(screenEventReminderCopy('See you Thursday', ok, JOIN)).toEqual([]);
   });
   it.each([
-    ['a discount', 'Ask about our 50% discount'],
+    ['a discount', 'Ask about our discount tonight'],
+    ['a percentage', 'Save 50% tonight'],
     ['an offer', 'A special offer is waiting'],
     ['early bird', 'Early Bird pricing ends soon'],
     ['free', 'This free session'],
