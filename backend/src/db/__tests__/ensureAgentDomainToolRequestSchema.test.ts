@@ -461,7 +461,7 @@ describe('AF11.7 — the five "should this be built at all" columns', () => {
 
 describe('AF11.7 — the storage half of the routing rule, which is NARROWER than its own enum', () => {
   it('pins a stored row to `not_built`, because this table is the detail of a BUILD request', () => {
-    // `TOOL_PRODUCT_STATES` carries three values because the GATE has to recognise all three in
+    // `TOOL_PRODUCT_STATES` carries three values because the GATE has to recognize all three in
     // order to route two of them away. A row saying "the product already does this" would be a
     // build request for something we already own — the exact thing Ali named on 16 Nov 2026:
     // *"people are proposing things we don't even need."*

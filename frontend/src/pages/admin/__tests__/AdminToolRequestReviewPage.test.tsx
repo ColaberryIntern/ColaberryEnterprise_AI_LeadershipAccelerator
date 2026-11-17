@@ -226,7 +226,7 @@ describe('PROPERTY 1 — all six field groups, on one screen', () => {
   it('AF11.7: flags a request whose feature ALREADY EXISTS, which the gate should have refused', async () => {
     // `used_by_hand` cannot be stored — `chk_adtr_build_request_is_unbuilt` forbids it and the
     // contract refuses it. If one appears on this screen the gate was bypassed, and that is worth
-    // noticing rather than scanning past as another grey row.
+    // noticing rather than scanning past as another gray row.
     mocked.fetchAllChangeRequests.mockResolvedValue([
       REQ({ tool_request: { ...DETAIL, tried_in_product: 'used_by_hand' } }),
     ]);

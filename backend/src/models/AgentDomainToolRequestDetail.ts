@@ -60,7 +60,7 @@ export interface AgentDomainToolRequestDetailAttributes {
   /**
    * Always `not_built` on a stored row — `chk_adtr_build_request_is_unbuilt` enforces it, because
    * this is the detail of a BUILD request. The type carries all three states because the gate has
-   * to recognise all three in order to route the other two away from here.
+   * to recognize all three in order to route the other two away from here.
    */
   tried_in_product: ToolProductState;
   /** What the product cannot do today. The case for building anything at all. */

@@ -2,7 +2,7 @@
  * AF11.7 — the people roster a tool request's named reader is checked against.
  *
  * The property worth testing here is not "it runs a SELECT". It is that **an unreadable roster is
- * reported as absent rather than as empty**, because those two produce opposite behaviour one layer
+ * reported as absent rather than as empty**, because those two produce opposite behavior one layer
  * up: `toolRequestContract.gateToolRequest` turns `roster_absent` into a refusal with a sentence,
  * and would turn a silently-empty list into `acts_on_output_not_a_person` — telling a builder their
  * colleague does not exist when the truth is that we could not look.

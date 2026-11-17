@@ -525,7 +525,7 @@ describe('the catalog vocabulary, so a request and a registered tool are compara
  *
  * The ticket's six acceptance criteria are each a `describe` below, in its words, so a reader can
  * check the ticket against the file rather than against a summary of it. The last one is the one
- * that matters most and it is a REGRESSION TEST FOR A JUDGEMENT rather than for a bug: the
+ * that matters most and it is a REGRESSION TEST FOR A JUDGMENT rather than for a bug: the
  * design-token drift capability passed every field this contract had on 15 Nov and should never
  * have reached seven builders' boards.
  */
@@ -712,7 +712,7 @@ describe('AF11.7 criterion 6 — the design-token drift request, re-filed today,
   /**
    * The capability Ali killed, written out as the request it would have to be.
    *
-   * Measured against main on 16 Nov 2026: 1,571 distinct colours outside the approved palette
+   * Measured against main on 16 Nov 2026: 1,571 distinct colors outside the approved palette
    * across 3,088 styled files, 4,492 unapproved occurrences in all. Every field the contract had
    * before AF11.7 can be answered honestly, which is the finding: **the request path had no
    * question this capability could fail.**
@@ -724,9 +724,9 @@ describe('AF11.7 criterion 6 — the design-token drift request, re-filed today,
   const designTokenDrift = (): ToolRequestDetailInput => ({
     agent_id: AGENT,
     tool_name: 'scan_design_token_drift',
-    purpose: 'Find every colour in the codebase that is not in the approved palette.',
+    purpose: 'Find every color in the codebase that is not in the approved palette.',
     reads: ['Every .tsx, .ts and .css file in the repository'],
-    produces: ['A list of unapproved colour values, grouped by nearest approved colour'],
+    produces: ['A list of unapproved color values, grouped by nearest approved color'],
     read_datasets: [],
     capability_id: A_REAL_CAPABILITY,
     task_unblocked: 'The design-system consistency pass.',
@@ -739,10 +739,10 @@ describe('AF11.7 criterion 6 — the design-token drift request, re-filed today,
     writes: false,
     // Field 3 is answerable, and honestly `not_built` — nothing in the app scans for this.
     tried_in_product: 'not_built',
-    missing_from_product: 'The app has no view that compares a colour against the palette.',
+    missing_from_product: 'The app has no view that compares a color against the palette.',
     // Fields 1 and 2 are where it dies. Nobody was ever named, and no threshold ever existed.
     acts_on_output: '',
-    judged_threshold: 'The agent surfaces colours that are off-palette',
+    judged_threshold: 'The agent surfaces colors that are off-palette',
     judged_measured_from: '',
   });
 
@@ -782,7 +782,7 @@ describe('AF11.7 criterion 6 — the design-token drift request, re-filed today,
     // field 1 blank. Two fields, two refusals, and the one that matters survives.
     const found = rules({
       ...designTokenDrift(),
-      judged_threshold: 'Fewer than 50 new off-palette colours appear per month',
+      judged_threshold: 'Fewer than 50 new off-palette colors appear per month',
       judged_measured_from: 'A count from the scan itself, stored per run',
     });
     expect(found).toEqual(['acts_on_output_missing']);

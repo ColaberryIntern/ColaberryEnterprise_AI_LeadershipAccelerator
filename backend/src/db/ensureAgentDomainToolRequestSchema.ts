@@ -304,7 +304,7 @@ const STATEMENTS: ReadonlyArray<string> = [
   // AF11.7 — THE STORAGE HALF OF THE ROUTING RULE, which is the one constraint in this file that
   // is narrower than its enum.
   //
-  // `TOOL_PRODUCT_STATES` carries three values because the GATE has to recognise all three in order
+  // `TOOL_PRODUCT_STATES` carries three values because the GATE has to recognize all three in order
   // to route them. This table can hold only `not_built`, because this table is the detail of a
   // BUILD request: a row saying "the product already does this" would be a build request for
   // something we already own, which is precisely the thing Ali said was happening

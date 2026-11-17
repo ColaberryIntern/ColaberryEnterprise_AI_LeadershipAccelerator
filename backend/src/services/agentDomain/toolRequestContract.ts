@@ -91,7 +91,7 @@
  * > approve these functionalities because I'm seeing that people are proposing things we don't even
  * > need."*
  *
- * Measured against main on 16 Nov 2026, that capability would list 1,571 distinct colours outside
+ * Measured against main on 16 Nov 2026, that capability would list 1,571 distinct colors outside
  * the approved palette across 3,088 styled files. It passed every field above. It had no named
  * reader, no threshold, and a product feature nobody had tried. Three fields close that, and each
  * one is here because its absence is what let that capability through:
@@ -126,7 +126,7 @@
  * ### The one-tool rule is a RELEASE rule, not a design opinion
  *
  * Ali, 16 Nov 2026: *"The ones early just be one tool task and then after we have a good amount of
- * tools, then we can have task that can use multiple tools."* One job, one judgement, one grant to
+ * tools, then we can have task that can use multiple tools."* One job, one judgment, one grant to
  * unpick if it goes wrong. Several ENDPOINTS of one tool are fine and always were — what is refused
  * is a name that enumerates two tools. The detector is deliberately crude and its boundary is
  * documented at `namesMoreThanOneTool` below, because the catalog's own vocabulary is snake_case
@@ -270,7 +270,7 @@ export interface ToolRequestDetail {
   /**
    * Always `not_built` on an accepted request. The other two states are real answers and the gate
    * refuses them with the route they belong on, so a request that reaches storage has asserted that
-   * the product cannot do this yet. The enum keeps all three because the GATE has to recognise all
+   * the product cannot do this yet. The enum keeps all three because the GATE has to recognize all
    * three in order to route them.
    */
   readonly tried_in_product: ToolProductState;

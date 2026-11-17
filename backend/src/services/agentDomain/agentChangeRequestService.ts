@@ -31,7 +31,7 @@ import {
  * The pure refusal logic lives in `agentChangeRequest.ts`. This module resolves identities, checks
  * ownership, and writes. It deliberately does nothing else: **no build is triggered, scheduled or
  * queued by an approval**, which is the ticket's fourth acceptance criterion and is asserted
- * structurally by `agentChangeRequestNoTrigger.test.ts` rather than left to a reader's judgement.
+ * structurally by `agentChangeRequestNoTrigger.test.ts` rather than left to a reader's judgment.
  *
  * ## Refuse the actor you cannot name
  *
@@ -313,7 +313,7 @@ export interface FileChangeRequestArgs {
    *
    * This is a deliberate narrowing of what AF7.1 accepted. Between AF7.1 and now, a tool request
    * was a title and a description, and approving one did nothing — the service's own words,
-   * unchanged below: *"Nothing is built as a result; the row is the whole effect."* So no behaviour
+   * unchanged below: *"Nothing is built as a result; the row is the whole effect."* So no behavior
    * that worked is being taken away; what is being removed is the ability to file a tool request
    * that the approver cannot act on. No frontend sends `kind` at all today
    * (`frontend/src/services/agentDomainApi.ts` has no such field), so the narrowed contract reaches

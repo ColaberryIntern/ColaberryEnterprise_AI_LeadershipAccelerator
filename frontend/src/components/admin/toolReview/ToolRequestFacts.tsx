@@ -129,7 +129,7 @@ function Value({ field, detail }: { field: string; detail: ToolRequestDetail }) 
 
   if (typeof raw === 'boolean') {
     // `writes: true` is the fact that turns an observing agent into an acting one, so it is the
-    // one value on this screen that carries a colour.
+    // one value on this screen that carries a color.
     const emphasize = field === 'writes' && raw;
     return (
       <span className={emphasize ? 'badge bg-warning text-dark' : 'badge bg-light text-dark'}>
@@ -151,7 +151,7 @@ function Value({ field, detail }: { field: string; detail: ToolRequestDetail }) 
   }
 
   // `tried_in_product` reads as a sentence, and the two states that should never be stored carry a
-  // colour. A request on this screen saying the app can already do the thing means the gate was
+  // color. A request on this screen saying the app can already do the thing means the gate was
   // bypassed, and that is worth noticing rather than scanning past.
   if (field === 'tried_in_product') {
     const word = PRODUCT_STATE_WORDS[String(raw)] ?? String(raw);

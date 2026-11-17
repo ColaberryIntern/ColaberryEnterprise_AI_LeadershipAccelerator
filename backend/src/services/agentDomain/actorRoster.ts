@@ -9,7 +9,7 @@
  * these functionalities because I'm seeing that people are proposing things we don't even need."*
  *
  * Measured against main on 16 Nov 2026, that capability would produce a list of 1,571 distinct
- * colours outside the approved palette across 3,088 styled files. **Nobody was named as acting on
+ * colors outside the approved palette across 3,088 styled files. **Nobody was named as acting on
  * that list.** It reached seven builders because nothing in the request path ever asked, and a list
  * nobody reads is indistinguishable from a list nobody needed.
  *
@@ -53,7 +53,7 @@
  *
  * ## The split, which is the one the rest of this subtree uses
  *
- * The I/O is here and the judgement is in `toolRequestContract.ts`, so every refusal stays testable
+ * The I/O is here and the judgment is in `toolRequestContract.ts`, so every refusal stays testable
  * without a database. `loadActorRoster` **never rejects**: an unreadable roster comes back as
  * `roster_absent: true` and the CALLER decides what that means. The gate turns it into
  * `actor_roster_absent` and REFUSES, because an empty roster that waved a request through would
@@ -69,7 +69,7 @@ export interface ActorRoster {
   /**
    * Every email we hold a record of, as STORED. Lowercasing happens at comparison time rather than
    * here, so the spelling written onto a request is the spelling the record carries and the
-   * approver reads a person rather than a normalised string.
+   * approver reads a person rather than a normalized string.
    */
   readonly emails: ReadonlyArray<string>;
   /**
