@@ -70,12 +70,15 @@ function firstName(full: string): string | null {
 
 /**
  * The Open House subject line. Prospects read it in a crowded inbox, so it leads
- * with WHEN, in their words: "Tomorrow at 6:30 PM CDT" or "Starting in 1 hour".
+ * with WHEN, in their words: "Tomorrow at 6:30 PM CST".
+ *
+ * The late reminder names the clock time, never "in 1 hour": its window opens two
+ * hours out (ONE_HOUR_WINDOW_MAX_HOURS), so "in 1 hour" can be an hour wrong.
  */
 export function openHouseReminderSubject(data: SessionReminderData, urgencyLabel: string): string {
   const time = formatCentralClock(data.sessionDate, data.startTime);
   return data.isOneHour
-    ? 'Starting in 1 hour: the Colaberry Open House'
+    ? `Today at ${time}: the Colaberry Open House starts soon`
     : `${urgencyLabel} at ${time}: the Colaberry Open House`;
 }
 
@@ -96,9 +99,10 @@ export function openHouseReminderSubject(data: SessionReminderData, urgencyLabel
 export function buildOpenHouseReminderHtml(data: SessionReminderData, urgencyLabel: string): string {
   const checkin = sessionCheckinUrl(data.sessionId);
   const name = firstName(data.fullName);
-  const when = `${longSessionDate(data.sessionDate)} at ${formatCentralClock(data.sessionDate, data.startTime)}`;
+  const time = formatCentralClock(data.sessionDate, data.startTime);
+  const when = `${longSessionDate(data.sessionDate)} at ${time}`;
   const opener = data.isOneHour
-    ? 'We start in about an hour, and we are looking forward to seeing you.'
+    ? `We start at ${escapeHtml(time)} today, and we are looking forward to seeing you.`
     : `You are registered for the Colaberry Open House, and we are looking forward to seeing you ${urgencyLabel === 'Today' ? 'today' : 'tomorrow'}.`;
   const fallback = data.meetingLink
     ? `<p class="note">If the button will not load, use the direct Zoom link: <a href="${escapeHtml(data.meetingLink)}">${escapeHtml(data.meetingLink)}</a></p>`
@@ -119,7 +123,7 @@ export function buildOpenHouseReminderHtml(data: SessionReminderData, urgencyLab
   </style>
 </head>
 <body>
-  <h1>${data.isOneHour ? 'The Open House starts in 1 hour' : `See you ${urgencyLabel === 'Today' ? 'today' : 'tomorrow'} at the Open House`}</h1>
+  <h1>${data.isOneHour ? `See you at ${escapeHtml(time)} today` : `See you ${urgencyLabel === 'Today' ? 'today' : 'tomorrow'} at the Open House`}</h1>
 
   <p>Hi${name ? ` ${escapeHtml(name)}` : ''},</p>
 

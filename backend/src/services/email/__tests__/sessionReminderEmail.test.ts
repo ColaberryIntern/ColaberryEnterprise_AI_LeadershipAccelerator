@@ -129,7 +129,13 @@ describe('Open House reminder (OH1, Ali 2026-11-17)', () => {
 
   it('subject leads with when, with no [Accelerator] prefix or session number', () => {
     expect(openHouseReminderSubject(oh(), 'Tomorrow')).toMatch(/^Tomorrow at 6:30 PM C[SD]T: the Colaberry Open House$/);
-    expect(openHouseReminderSubject(oh({ isOneHour: true }), 'Starting in 1 Hour')).toBe('Starting in 1 hour: the Colaberry Open House');
+    expect(openHouseReminderSubject(oh({ isOneHour: true }), 'Starting in 1 Hour')).toMatch(/^Today at 6:30 PM C[SD]T: the Colaberry Open House starts soon$/);
+  });
+
+  it('the late reminder names the clock time, never "in 1 hour" (its window opens two hours out)', () => {
+    const d = oh({ isOneHour: true });
+    expect(openHouseReminderSubject(d, 'Starting in 1 Hour')).not.toMatch(/1 hour|an hour/i);
+    expect(text(buildOpenHouseReminderHtml(d, 'Starting in 1 Hour'))).not.toMatch(/1 hour|an hour/i);
   });
 
   it('escapes the name and the Zoom link', () => {
