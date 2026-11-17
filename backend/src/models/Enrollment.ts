@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import { enrollmentLeadLinkHook } from '../services/marketing/enrollmentLeadResolver';
 
 export interface EnrollmentAttributes {
   id?: string;
@@ -78,6 +79,20 @@ export interface EnrollmentAttributes {
   notifications_paused_at?: Date | string | null;
   /** Why the pause was applied, for the operator who finds it later. */
   notifications_paused_reason?: string | null;
+  /**
+   * R18. The `leads` row this enrollment came from — the edge that closes the acquisition
+   * chain (visitor_sessions -> visitors -> leads -> HERE -> subscriptions).
+   *
+   * NULL means "not linked", which is the honest reading for two different populations: every
+   * row that predates the column, and the 100 of production's 1,436 enrollment emails that have
+   * no `leads` row at all and never will. It does NOT mean organic.
+   *
+   * Stamped at INSERT by `enrollmentLeadLinkHook` and never rewritten afterwards. Deliberately
+   * not accompanied by a copy of the UTM tags: `utmBackfill` never overwrites a tag already on
+   * a lead, so joining through this column yields the same values forever and a snapshot could
+   * only ever disagree with its source. See `db/ensureEnrollmentLeadIdSchema.ts`.
+   */
+  lead_id?: number | null;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -121,6 +136,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare explorer_entered_at: Date | string | null;
   declare notifications_paused_at: Date | string | null;
   declare notifications_paused_reason: string | null;
+  declare lead_id: number | null;
   declare created_at: Date;
 }
 
@@ -321,6 +337,13 @@ Enrollment.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    lead_id: {
+      // R18. Bare INTEGER with no `references` ON PURPOSE: a cross-domain reference
+      // (revenue -> marketing), matching `PageEvent.ts`'s own `lead_id`. Column added
+      // additively by db/ensureEnrollmentLeadIdSchema.ts.
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -330,6 +353,18 @@ Enrollment.init(
     sequelize,
     tableName: 'enrollments',
     timestamps: false,
+    /**
+     * R18. One hook at the single point all seven enrollment-creation paths pass through,
+     * rather than a call added to each of them — see `enrollmentLeadLinkHook`'s header for
+     * why seven call sites is the wrong place for a cross-cutting invariant.
+     *
+     * A named, imported function rather than an inline closure, so it can be tested directly
+     * and so this wiring reads as a reference to a documented contract. Same shape as
+     * `Project.ts`'s `beforeCreate: studentProjectTenantHook`.
+     */
+    hooks: {
+      beforeCreate: enrollmentLeadLinkHook,
+    },
     indexes: [
       { fields: ['status'], name: 'idx_enrollments_status' },
       { fields: ['created_at'], name: 'idx_enrollments_created_at' },
