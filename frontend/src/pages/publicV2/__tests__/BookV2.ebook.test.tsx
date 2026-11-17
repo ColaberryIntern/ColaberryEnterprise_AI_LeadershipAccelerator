@@ -37,18 +37,35 @@ const post = api.post as jest.Mock;
 let host: HTMLDivElement;
 let root: Root;
 
-beforeEach(() => {
-  post.mockReset();
-  host = document.createElement('div');
-  document.body.appendChild(host);
-  root = createRoot(host);
-  act(() => {
+/** What the server says about the PDF: a real PDF, nginx's index.html fallback, or no answer. */
+function serve(kind: 'pdf' | 'html' | 'down'): void {
+  (globalThis as unknown as { fetch: jest.Mock }).fetch = jest.fn(() =>
+    kind === 'down'
+      ? Promise.reject(new Error('offline'))
+      : Promise.resolve({
+          ok: true,
+          headers: { get: () => (kind === 'pdf' ? 'application/pdf' : 'text/html') },
+        }),
+  );
+}
+
+async function mount(): Promise<void> {
+  await act(async () => {
     root.render(
       <MemoryRouter initialEntries={['/book']}>
         <BookV2 />
       </MemoryRouter>,
     );
   });
+}
+
+beforeEach(async () => {
+  post.mockReset();
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  serve('pdf');
+  await mount();
 });
 
 afterEach(() => {
@@ -129,6 +146,26 @@ describe('/book e-book form', () => {
     await submit();
     expect(downloadLink()).toBeNull();
     expect(host.textContent).toContain('That did not send');
+  });
+});
+
+describe('/book before the PDF is on the server', () => {
+  for (const kind of ['html', 'down'] as const) {
+    it(`shows "Coming soon" and no form when the file is ${kind === 'html' ? "nginx's index.html fallback" : 'unreachable'}`, async () => {
+      act(() => root.unmount());
+      root = createRoot(host);
+      serve(kind);
+      await mount();
+      expect(host.textContent).toContain('Coming soon');
+      expect(host.querySelector('#cbv2-book-copy form')).toBeNull();
+      expect(host.querySelector('#bk-email')).toBeNull();
+      expect(host.innerHTML).not.toContain(EBOOK_URL);
+    });
+  }
+
+  it('asks for the file itself, by HEAD', () => {
+    const f = (globalThis as unknown as { fetch: jest.Mock }).fetch;
+    expect(f).toHaveBeenCalledWith(EBOOK_URL, expect.objectContaining({ method: 'HEAD' }));
   });
 });
 

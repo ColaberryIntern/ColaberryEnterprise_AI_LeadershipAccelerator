@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import Icon from '../../components/publicV2/Icon';
@@ -87,6 +87,49 @@ export function ebookLeadPayload(f: EbookFields, pageUrl: string): Record<string
     pageOrigin: pageUrl,
   };
   return { ...toLeadPayload(lead), source: EBOOK_LEAD_SOURCE };
+}
+
+/**
+ * Is the e-book file actually being served? (2026-11-17)
+ *
+ * THE FORM WAS MERGED BEFORE THE PDF EXISTED, and every deploy ships main whole, so the
+ * page asks the server instead of trusting the code. nginx answers a missing file with
+ * the app's index.html and a 200, so "200" proves nothing; only a PDF content type does.
+ * Until the file is there the card says the e-book is coming and shows no form, so no
+ * one gives their details for a download that would fail. Once the PDF is added the
+ * form appears with no code change.
+ */
+export async function ebookIsServed(url: string = EBOOK_URL): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    return res.ok && /application\/pdf/i.test(res.headers.get('content-type') || '');
+  } catch {
+    return false;
+  }
+}
+
+function EbookCard(): React.ReactElement {
+  const [ready, setReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    ebookIsServed().then((ok) => {
+      if (live) setReady(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (ready) return <EbookForm />;
+  return (
+    <div aria-busy={ready === null}>
+      <p className="cbv2-k5">The e-book</p>
+      <h3 className="cbv2-copy5__h">Coming soon</h3>
+      <p>
+        The electronic edition of Trust Before Intelligence will be available here shortly.
+      </p>
+    </div>
+  );
 }
 
 function EbookForm(): React.ReactElement {
@@ -412,7 +455,7 @@ export function BookV2(): React.ReactElement {
             </p>
           </div>
           <div className="cbv2-pc cbv2-copy5" id="cbv2-book-copy">
-            <EbookForm />
+            <EbookCard />
           </div>
         </div>
       </section>
