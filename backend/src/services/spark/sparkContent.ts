@@ -93,3 +93,43 @@ export function answerLines(qs: Question[], answers: Record<string, unknown>): s
 }
 
 export const ALL_QUESTIONS: Question[] = [...SURVEY, ...DAILY];
+
+/**
+ * Game of the Day (Ali, 2026-11-16): one throwback-style arcade game per weekday, 3 tries, best score
+ * wins. These are our own games in classic arcade styles (not copies of any trademarked game). Only
+ * games marked `ready` are played; the rest are added in later batches and join the rotation then.
+ * `maxScore` is a sanity cap on what a browser may report.
+ */
+export interface Game { id: string; name: string; emoji: string; how: string; ready: boolean; maxScore: number }
+export const GAMES: Game[] = [
+  { id: 'blockdrop', name: 'Block Drop', emoji: '🧱', how: 'Fit the falling blocks into full rows. Use the arrow buttons, ⟳ to turn, ▼ to drop.', ready: true, maxScore: 100000 },
+  { id: 'bullseye', name: 'Bullseye Stop', emoji: '🎯', how: 'Stop the light in the gold stripe. 5 rounds, each one faster.', ready: true, maxScore: 500 },
+  { id: 'snake', name: 'Snake Trail', emoji: '🐍', how: 'Eat the dots and grow. Do not hit the wall or yourself. Swipe or use the arrows.', ready: true, maxScore: 5000 },
+  { id: 'bricks', name: 'Brick Breaker', emoji: '🏓', how: 'Slide the paddle to keep the ball up and break every brick.', ready: true, maxScore: 5000 },
+  { id: 'memory', name: 'Memory Match', emoji: '🃏', how: 'Flip two cards at a time and find all 8 pairs. Fast and few misses scores higher.', ready: true, maxScore: 1000 },
+  { id: 'whack', name: 'Pop-Up Whack', emoji: '🔨', how: 'Tap the hearts as they pop up. Skip the 💣. 30 seconds.', ready: true, maxScore: 5000 },
+  { id: 'maze', name: 'Maze Chase', emoji: '👻', how: 'Eat every dot in the maze and dodge the ghosts.', ready: false, maxScore: 10000 },
+  { id: 'swarm', name: 'Space Swarm', emoji: '🚀', how: 'Slide and shoot the swarm before it lands.', ready: false, maxScore: 10000 },
+  { id: 'hopper', name: 'Road Hopper', emoji: '🐸', how: 'Hop across the lanes without getting hit.', ready: false, maxScore: 10000 },
+  { id: 'rocks', name: 'Rock Blaster', emoji: '☄️', how: 'Turn, thrust and blast the rocks into pieces.', ready: false, maxScore: 10000 },
+  { id: 'paddle', name: 'Paddle Duel', emoji: '🏓', how: 'Beat the computer to 7 points.', ready: false, maxScore: 1000 },
+  { id: 'merge', name: 'Number Merge', emoji: '🔢', how: 'Slide tiles so matching numbers merge.', ready: false, maxScore: 100000 },
+  { id: 'mines', name: 'Mine Field', emoji: '💣', how: 'Clear the field without hitting a mine.', ready: false, maxScore: 1000 },
+  { id: 'echo', name: 'Color Echo', emoji: '🎵', how: 'Repeat the color pattern as it grows.', ready: false, maxScore: 1000 },
+  { id: 'stack', name: 'Stack Tower', emoji: '🏗️', how: 'Drop each layer right on top of the last one.', ready: false, maxScore: 1000 },
+  { id: 'shield', name: 'City Shield', emoji: '🛡️', how: 'Tap to stop the falling rockets before they hit the city.', ready: false, maxScore: 10000 },
+  { id: 'landing', name: 'Soft Landing', emoji: '🌙', how: 'Land the craft gently on the pad.', ready: false, maxScore: 1000 },
+  { id: 'bubbles', name: 'Bubble Pop', emoji: '🫧', how: 'Aim and match 3 bubbles of a color.', ready: false, maxScore: 10000 },
+  { id: 'dash', name: 'Desert Dash', emoji: '🏜️', how: 'Tap to jump the cactus and keep running.', ready: false, maxScore: 10000 },
+  { id: 'words', name: 'Word Rush', emoji: '⌨️', how: 'Type the falling words before they land.', ready: false, maxScore: 10000 },
+];
+export const gameForDay = (index: number): Game => { const r = GAMES.filter((g) => g.ready); return r[index % r.length]; };
+
+/** Wager prizes: each about 15 minutes of effort. The winner gets their top pick from their top group. */
+export const WAGER: Record<string, string[]> = {
+  'Sweet 💗': ['15-minute foot rub', 'Coffee or tea made exactly my way, served to me', '15 minutes, no phones, all mine'],
+  'Sexy 🔥': ['15-minute massage, your choice of oil', 'Slow dance in the kitchen to my song', 'You pick my outfit for the weekend date'],
+  'Funny 😂': ['Loser narrates dinner like a nature show', 'Loser wears my pick of silly hat all evening', 'Loser does one chore in a dramatic voice'],
+  'Crafty ✂️': ['A 10-minute portrait of me (any skill level)', 'A playlist made just for me', 'A handwritten love note, hidden somewhere'],
+  'Errand 🛒': ['A store run for my favorite snack', 'Order my favorite dinner tonight', 'You handle one thing on my to-do list'],
+};

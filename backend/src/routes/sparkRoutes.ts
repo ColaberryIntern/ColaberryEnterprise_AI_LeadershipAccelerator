@@ -10,7 +10,15 @@ type Authed = Request & { sparkPerson?: S.Person };
 const fail = (res: Response, e: unknown) => {
   const msg = e instanceof Error ? e.message : String(e);
   console.warn('[Spark] request failed:', msg);
-  res.status(msg === 'not found' ? 404 : 400).json({ error: msg === 'bad image' ? 'That image could not be read. Try a smaller screenshot.' : 'Something went wrong. Try again.' });
+  const SAY: Record<string, string> = {
+    'bad image': 'That image could not be read. Try a smaller picture.',
+    'no tries left': 'No tries left today. Come back tomorrow for a new game.',
+    'finish your tries first': 'Finish your tries (or lock your score) first.',
+    'rank every group': 'Rank all 5 groups first.',
+    'rank your top group': 'Rank the prizes in your top group.',
+    'no game today': 'No game today. Games run on weekdays.',
+  };
+  res.status(msg === 'not found' ? 404 : 400).json({ error: SAY[msg] || 'Something went wrong. Try again.' });
 };
 
 async function needKey(req: Request, res: Response, next: NextFunction) {
@@ -69,6 +77,22 @@ router.post('/api/spark/item/:id/time', needKey, needSession, async (req, res) =
 
 router.post('/api/spark/item/:id/notfit', needKey, needSession, async (req, res) => {
   try { res.json(await S.notFit(me(req), String(req.params.id), req.body?.reason)); } catch (e) { fail(res, e); }
+});
+
+router.post('/api/spark/game/start', needKey, needSession, async (req, res) => {
+  try { res.json(await S.startTry(me(req))); } catch (e) { fail(res, e); }
+});
+
+router.post('/api/spark/game/score', needKey, needSession, async (req, res) => {
+  try { res.json(await S.finishTry(me(req), String(req.body?.tryId || ''), req.body?.score)); } catch (e) { fail(res, e); }
+});
+
+router.post('/api/spark/game/lock', needKey, needSession, async (req, res) => {
+  try { await S.lockScore(me(req)); res.json({ ok: true }); } catch (e) { fail(res, e); }
+});
+
+router.post('/api/spark/wager', needKey, needSession, async (req, res) => {
+  try { res.json(await S.saveWager(me(req), req.body?.groups, req.body?.picks)); } catch (e) { fail(res, e); }
 });
 
 export default router;
