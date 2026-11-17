@@ -24,8 +24,14 @@
     {
       "kind": "screenshot",
       "seconds": 11,
-      "path": "frontend/public/site-v2/shot-hire-talent-profile.png",
-      "caption": "Open a profile and the headline figures come from that engineer's published case studies, not from a skills list they typed in. Names in this walkthrough are replaced with a role."
+      "path": "frontend/public/site-v2/shot-hire-profile-case-studies.png",
+      "caption": "Open a profile and it leads with the engineer's own work. This one has nine published case studies, and the strip underneath steps through them. Names in this walkthrough are replaced with a role."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 11,
+      "path": "frontend/public/site-v2/shot-hire-profile-repo-proof.png",
+      "caption": "Another profile sets its signature case study beside what the engineer's repository proves: each capability with the evidence counted for it, not a skills list they typed in."
     },
     {
       "kind": "screenshot",
