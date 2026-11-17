@@ -1,0 +1,138 @@
+{
+  "$comment": "THE ARTIFACT TYPE CATALOG. Single source of truth. See storyArtifactTypes.ts for why this is a JSON file in git and not 11 rows in artifact_definitions. Add a type by adding an entry here; the tests derive their expectations from this file, so nothing else needs editing to stay honest. file_types are lowercase extensions WITHOUT a dot; [\"*\"] means any extension. evidence_source: 'repo' the git tree is the evidence, 'platform' an upload recorded against the story is the evidence, 'either' both are accepted and the contract entry may name which. requires_github_validation MUST equal (evidence_source === 'repo'); the invariant is asserted by a test rather than trusted.",
+  "version": 1,
+  "types": [
+    {
+      "type": "case_study",
+      "name": "Case study",
+      "file_types": ["html", "pdf"],
+      "evidence_source": "either",
+      "requires_github_validation": false,
+      "requires_screenshot": false,
+      "evaluation_criteria": "A reader outside the project can say what the problem was, what was built, and what changed as a result, without asking the builder a question.",
+      "exists_today": "191 runtime_portfolio_artifacts rows of this kind plus 205 in case_study_artifacts",
+      "handed_over": "Repo plus a published page",
+      "sort_order": 10
+    },
+    {
+      "type": "proposal",
+      "name": "Proposal",
+      "file_types": ["pdf", "docx"],
+      "evidence_source": "either",
+      "requires_github_validation": false,
+      "requires_screenshot": false,
+      "evaluation_criteria": "States the scope, the price and the dates a client would sign against, and every requirement it claims to answer is cited rather than asserted.",
+      "exists_today": "Proposal Studio and the gov build track both already produce these",
+      "handed_over": "Repo plus the client-facing send",
+      "sort_order": 20
+    },
+    {
+      "type": "portfolio",
+      "name": "Portfolio entry",
+      "file_types": ["html"],
+      "evidence_source": "platform",
+      "requires_github_validation": false,
+      "requires_screenshot": false,
+      "evaluation_criteria": "Shows the work to someone deciding whether to hire the builder, and survives being read with no narration.",
+      "exists_today": "runtime_portfolio_artifacts, and the viewer is already built",
+      "handed_over": "Platform page",
+      "sort_order": 30
+    },
+    {
+      "type": "build_artifact",
+      "name": "Build artifact",
+      "file_types": ["*"],
+      "evidence_source": "repo",
+      "requires_github_validation": true,
+      "requires_screenshot": true,
+      "evaluation_criteria": "The thing the story said would exist, in the repo, at the commit that produced it, with a capture showing it running.",
+      "exists_today": "299 rows, 233 of them carrying a commit sha",
+      "handed_over": "Repo, already working",
+      "sort_order": 40
+    },
+    {
+      "type": "analysis_report",
+      "name": "Analysis report",
+      "file_types": ["pdf", "html", "xlsx"],
+      "evidence_source": "repo",
+      "requires_github_validation": true,
+      "requires_screenshot": false,
+      "evaluation_criteria": "A reader who has never seen the project can say what was predicted or measured, how well, and against what baseline.",
+      "exists_today": "Nothing. This is the gap the churn boards show.",
+      "handed_over": "Repo",
+      "sort_order": 50
+    },
+    {
+      "type": "data_workbook",
+      "name": "Data workbook",
+      "file_types": ["xlsx", "csv"],
+      "evidence_source": "repo",
+      "requires_github_validation": true,
+      "requires_screenshot": false,
+      "evaluation_criteria": "Every column is named in a way a stranger can read, and every derived number can be traced to the input it came from.",
+      "exists_today": "The platform viewer already supports both formats",
+      "handed_over": "Repo",
+      "sort_order": 60
+    },
+    {
+      "type": "architecture_decision",
+      "name": "Architecture decision record",
+      "file_types": ["md", "pdf"],
+      "evidence_source": "repo",
+      "requires_github_validation": true,
+      "requires_screenshot": false,
+      "evaluation_criteria": "Names the decision, the options rejected and the reason, so the next person does not reopen it from scratch.",
+      "exists_today": "175 rows",
+      "handed_over": "Repo",
+      "sort_order": 70
+    },
+    {
+      "type": "field_guide",
+      "name": "Field guide",
+      "file_types": ["html"],
+      "evidence_source": "platform",
+      "requires_github_validation": false,
+      "requires_screenshot": false,
+      "evaluation_criteria": "Someone doing the task for the first time can follow it without the author present.",
+      "exists_today": "157 rows",
+      "handed_over": "Platform page",
+      "sort_order": 80
+    },
+    {
+      "type": "prompt_library",
+      "name": "Prompt library",
+      "file_types": ["md", "json"],
+      "evidence_source": "repo",
+      "requires_github_validation": true,
+      "requires_screenshot": false,
+      "evaluation_criteria": "Each prompt says what it is for and what good output looks like, so it can be reused rather than rewritten.",
+      "exists_today": "110 rows",
+      "handed_over": "Repo",
+      "sort_order": 90
+    },
+    {
+      "type": "demo_capture",
+      "name": "Demo capture",
+      "file_types": ["png", "gif", "mp4"],
+      "evidence_source": "platform",
+      "requires_github_validation": false,
+      "requires_screenshot": true,
+      "evaluation_criteria": "Shows the feature actually running, in the deployed demo rather than on the builder's machine.",
+      "exists_today": "The capture work on the gov track produces these but never uploads them",
+      "handed_over": "Platform upload",
+      "sort_order": 100
+    },
+    {
+      "type": "presentation",
+      "name": "Presentation",
+      "file_types": ["pdf", "pptx"],
+      "evidence_source": "either",
+      "requires_github_validation": false,
+      "requires_screenshot": false,
+      "evaluation_criteria": "Stands on its own in the room it was built for, and makes one claim per slide that the artifacts behind it can support.",
+      "exists_today": "1 row",
+      "handed_over": "Repo plus the showcase",
+      "sort_order": 110
+    }
+  ]
+}

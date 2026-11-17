@@ -96,7 +96,7 @@ to the **production platform repo**. Both failures were structural, not personal
 Run several projects in parallel by kicking off step 1 for each config in the background,
 then publishing each as its plan lands.
 
-## The 4 gates (publish is BLOCKED unless all pass)
+## The 4 generator gates (publish is BLOCKED unless all pass)
 
 1. **no-code = 0** - no Bubble/Retool/Zapier/Airtable/minimal-code mentions anywhere.
 2. **shape** - >= 12 stories AND >= 3 releases.
@@ -106,6 +106,46 @@ then publishing each as its plan lands.
 If a gate fails (usually an occasional under-generation), just re-run step 1; do not
 hand-fix the plan. The pipeline's guards (drop-untraceable, deterministic release-split,
 >= 12 floor) make failures rare.
+
+## The artifact contract: what a story HANDS OVER
+
+A story used to stop at "all acceptance scenarios pass", which is a claim about behaviour with
+nothing handed over. That single omission is why a story could be ticked and leave nothing
+behind, and why a board can look finished while nobody can say what exists.
+
+A story may now carry a **contract**: an array of artifacts it must produce, each with a stable
+key, a type, the accepted file types, the path in the builder's repo, and the sentence it will be
+judged by. Author it in the config under `artifacts.by_story.<story id>` (see
+`story_configs/EXAMPLE.json`) or in the generated plan's story itself, where the story's own
+block wins.
+
+**The vocabulary lives in code, not here.** The eleven artifact types, their file types, where
+each is handed over, and the sentence each is judged by are declared once, as data, in
+`backend/src/services/artifacts/storyArtifactTypes.json`, with
+`backend/src/services/artifacts/storyArtifactTypes.ts` as its typed door. Read that file; do not
+restate the catalog in Markdown. A second copy in prose is how two versions of a type start
+disagreeing, and the prose copy is the one with no test behind it.
+
+**Gate 5, as of A0: the contract is schema-checked, not yet required.**
+
+- A story with **no** contract publishes exactly as it did before. Requiring one is the next
+  phase's gate, not this one, because roughly 200 open stories predate the rule.
+- A story with a **malformed** contract is refused and **nothing is published**. The refusal
+  names the story, the key and the field. An unrecognised field is refused rather than ignored:
+  the block ends up in a ticket a person is judged against, so a misspelled `repo_paths` that
+  everything quietly skips would publish a contract that does not say what its author meant.
+- `"artifacts": []` is refused. Absent is not empty. A story with no contract has not declared
+  one; a story declaring zero artifacts is claiming everything is handed over and handing over
+  nothing.
+- A contract aimed at a story id the plan does not contain is refused, because it would otherwise
+  be written, never rendered, and never verified.
+
+The schema has two implementations, one for this publisher
+(`scripts/lib/artifactContract.js`) and one for the platform
+(`backend/src/services/artifacts/storyArtifactContract.ts`), because the publisher is CommonJS
+and the platform is TypeScript. They read the **same** catalog file, so the data cannot diverge,
+and `contractValidatorParity.test.ts` runs both over one fixture corpus and fails by name if the
+logic does.
 
 ## Assignment model
 
