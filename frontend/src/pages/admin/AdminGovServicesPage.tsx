@@ -30,6 +30,8 @@ import { useServiceGap } from '../../components/admin/ourServices/serviceGap/use
 import type { IntakeGapProps } from '../../components/admin/ourServices/IntakeCard';
 import type { IntakeSummaryItem } from '../../services/ourServicesApi';
 import GovDossierPanel, { DOSSIER_ANCHOR, requestDossierOpen } from '../../components/admin/govDossier/GovDossierPanel';
+import CaseStudyFinderSection from '../../components/admin/ourServices/caseStudyFinder/CaseStudyFinderSection';
+import { useCaseStudyFinder } from '../../components/admin/ourServices/caseStudyFinder/useCaseStudyFinder';
 import OurServicesSectionNav, { OUR_SERVICES_SCROLL_MARGIN, type SectionNavItem } from '../../components/admin/ourServices/OurServicesSectionNav';
 
 /** The public page contracting officers see; it reads this catalog live (active services with confirmed proof). */
@@ -59,6 +61,9 @@ export default function AdminGovServicesPage(): React.ReactElement {
   const { summary, offerings } = data;
   // AI Service Gap Detector (GD2): recommendations only; reloads whenever the summary does.
   const gap = useServiceGap(summary?.generatedAt ?? null, data.reload);
+  // Case Study Finder (CF2): its own fetch and polling; proposals only, Build creates a private draft + ticket.
+  const finder = useCaseStudyFinder();
+  const finderCount = finder.state?.result?.proposals.length ?? 0;
   const location = useLocation();
   const [filter, setFilter] = useState<CatalogFilter>('active');
   const [editing, setEditing] = useState<Editing>(null);
@@ -115,12 +120,13 @@ export default function AdminGovServicesPage(): React.ReactElement {
       { id: 'evidence', label: 'Evidence', icon: 'bar-chart-horizontal-line' },
       { id: 'catalog', label: 'Catalog', icon: 'folder-open-line', badge: { text: String(live.length), tone: 'secondary' } },
       { id: 'industries', label: 'Industries', icon: 'grid-line' },
+      { id: 'case-study-finder', label: 'Case study finder', icon: 'search-eye-line', badge: finderCount ? { text: String(finderCount), tone: 'success' } : undefined },
       { id: 'ai-opportunities', label: 'AI opportunities', icon: 'sparkling-2-line' },
       { id: 'intake', label: 'Intake', icon: 'inbox-archive-line', badge: blocked ? { text: `${blocked} blocked`, tone: 'danger' } : undefined },
       { id: 'gaps', label: 'Proposal gaps', icon: 'focus-2-line', badge: gapCount ? { text: String(gapCount), tone: 'secondary' } : undefined },
       dossier,
     ];
-  }, [summary, live.length, blocked, gapCount]);
+  }, [summary, live.length, blocked, gapCount, finderCount]);
 
   // Every case study the page shows (Intake and each service's linked list), so a title click can open the side
   // panel at once with the right title and Inside/Outside kind while the full record loads.
@@ -269,6 +275,13 @@ export default function AdminGovServicesPage(): React.ReactElement {
             subtitle="Confirmed case studies per cell. Darker means more proof; an empty circle means no case study in that industry yet.">
             <ServiceIndustryHeatmap services={live} matrix={summary.industryMatrix} />
           </SectionCard>
+          </div>
+
+          <div id="case-study-finder" tabIndex={-1} style={ANCHOR} className="mb-4">
+            <SectionCard className="mb-0" icon="search-eye-line" title="Case Study Finder"
+              subtitle="Which case study to build next: our proof gaps matched to real business processes in this repo and the connected repos, with what each one would do to our evidence score. Proposals only: Build creates a private draft and a Basecamp ticket, never a publication.">
+              <CaseStudyFinderSection finder={finder} />
+            </SectionCard>
           </div>
 
           <div id="ai-opportunities" tabIndex={-1} style={ANCHOR} className="mb-4">

@@ -20,7 +20,11 @@ describe('case study finder schema', () => {
     expect(all).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS case_study_finder_runs_one_running_idx\s+ON case_study_finder_runs \(tenant_id\) WHERE status = 'running'/);
   });
 
-  it('rolls back by dropping only its own table', () => {
-    expect(CASE_STUDY_FINDER_ROLLBACK).toEqual(['DROP TABLE IF EXISTS case_study_finder_runs']);
+  it('rolls back by dropping only its own tables', () => {
+    expect(CASE_STUDY_FINDER_ROLLBACK).toEqual(['DROP TABLE IF EXISTS case_study_finder_builds', 'DROP TABLE IF EXISTS case_study_finder_runs']);
+  });
+
+  it('a build is unique per proposal, so a second click can never create a second draft', () => {
+    expect(all).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS case_study_finder_builds_proposal_idx\s+ON case_study_finder_builds \(tenant_id, proposal_id\)/);
   });
 });
