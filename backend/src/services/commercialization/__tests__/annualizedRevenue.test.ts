@@ -8,13 +8,18 @@ import {
 } from '../commercializationBoardService';
 
 /**
- * The revenue figure Ram reads, and the first tests it has ever had.
+ * The revenue figure Ram reads, and its first DIRECT tests.
  *
- * That absence is not incidental — it is how the defect below survived. `annualizedRevenueCents`
- * carried a docblock promising it was the ONE place that knows the revenue rule, and
+ * It was not untested: `routes/__tests__/commercializationRoutes.test.ts` covered it through
+ * the HTTP route, and two of those cases had to be rewritten alongside this change because
+ * they encoded the old per-plan multiplier. What was missing is a test of the rule itself,
+ * and that gap is how the defect below survived. `annualizedRevenueCents` carried a docblock
+ * promising it was the ONE place that knows the revenue rule, and
  * `marketing/payingMembersSql.ts` carried a docblock promising the same thing about itself.
- * Both were shipped, neither was tested against the other, and on production 2026-11-16 they
- * disagreed by $26,268 a year: $81,768 here against $55,500 there, a 32% overstatement.
+ * Both were shipped, neither was ever tested against the other, and on production 2026-11-16
+ * they disagreed by $26,268 a year: $81,768 here against $55,500 there, a 32% overstatement.
+ * Route-level coverage could not catch that, because it mocked the very query shape the rule
+ * lives in.
  *
  * The cause, measured on 29 monthly rows marked `active`: 9 whose paid term had already ended
  * with nothing renewing them (the oldest 79 days past), and 2 belonging to staff, one of which

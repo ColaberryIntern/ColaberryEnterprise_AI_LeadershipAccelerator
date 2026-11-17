@@ -207,3 +207,59 @@ this file already states everywhere else ("0" and "I cannot see" must never prin
 and the one `revenueRoomService` follows ("A failure here costs five cards, not the page").
 Both new tests were confirmed to fail against the unguarded version, where the board rejects
 outright.
+
+### Three CI failures, each a real defect this session introduced
+
+Local verification had run only the suites around the changed modules. CI runs everything,
+and found three things that narrow run could not. All three were genuine, none was flaky.
+
+**1. An eager import opened a database connection on module load.**
+`subscriptionService` imported `suspendScheduleForSubscription` at the top of the file.
+`subscriptionScheduleService` constructs the Sequelize instance as a module side effect, so
+merely requiring `subscriptionService` now reached for a database. That broke
+`subscriptionCheckoutGuard.test.ts`, which imports it and does not mock `config/database`:
+
+```
+TypeError: The "url" argument must be of type string. Received undefined
+  at src/config/database.ts:4            new Sequelize(env.databaseUrl)
+  at src/services/subscriptionScheduleService.ts:16
+  at src/services/subscriptionService.ts:13      <- the import added here
+  at src/services/__tests__/subscriptionCheckoutGuard.test.ts:1
+```
+
+`subscriptionScheduleService`'s own header warns about exactly this, in the other direction,
+and I read that warning and checked for a **cycle** — which is not the hazard. The hazard is
+eager module-load side effects. Fixed with a function-scoped `await import()`, so the cost
+lands only on the path that needs it.
+
+**2. The word "free" in outbound copy.**
+`bannedWordOutboundCopy.test.ts` ratchets per file, and `billingHealthCheck.ts` had zero
+occurrences, so a new one fails:
+
+> `services/billing/billingHealthCheck.ts: NEW file with 1 banned-word occurrence(s) in copy.`
+
+The new finding's `detail` read "Either the member has free access or…". That text goes into
+the billing watch email. Rewritten to "unbilled access", which is also the more precise
+phrase — the condition is about billing, not price.
+
+**3. A route test for the revenue figure existed, and I had claimed none did.**
+`routes/__tests__/commercializationRoutes.test.ts` covered `annualizedRevenue` through HTTP.
+Two of its cases asserted the old per-plan shape and failed: `Expected "$62,076", Received
+"$0"`, because the mock returns rows the new query never asks for.
+
+Rewritten rather than deleted. `flags an unrecognized plan instead of silently dropping its
+revenue` guarded a real principle against a mechanism that no longer exists — there is no
+per-plan multiplier to miss a plan — so the principle moved onto the exclusion buckets:
+`names what it excluded instead of quietly reporting a smaller number`. Two cases were added
+for what the route must now prove: that it asks for the SHARED definition, and that a failed
+revenue read costs one tile rather than ten.
+
+**The claim that needed correcting:** `annualizedRevenueCents` was not untested. It had
+indirect route coverage that could not catch this defect, because it mocked the very query
+shape the rule lives in. `membershipFlow` genuinely had none.
+
+Local full-suite run after the fixes: 9 suites fail on this Windows checkout
+(`interviewService` wants `@anthropic-ai/sdk`, the Reese inventory tests compare bytes against
+CRLF-converted files, four `presentation` suites). CI passes all nine and reported exactly the
+three above, so they are environment artifacts and not regressions — confirmed by grepping the
+CI log for each name rather than by assuming.

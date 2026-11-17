@@ -167,7 +167,7 @@ async function checkLapsedWithoutFollowup(): Promise<Finding | null> {
  * row, `current_period_end` IS the next charge date — `advancePeriodForScheduledPayment`
  * moves it forward when a charge lands — so a date that far in the past means the charge
  * did not fire, failed without being recorded, or its webhook never arrived. Each of those
- * is either a member getting free access or money moving that our book does not know about.
+ * is either a member with unbilled access or money moving that our book does not know about.
  *
  * ── WHY THE THRESHOLD IS A WHOLE CADENCE AND NOT A FEW DAYS ──────────────────
  *
@@ -213,7 +213,7 @@ async function checkScheduleStoppedCollecting(): Promise<Finding | null> {
       'For a scheduled row, current_period_end is the next charge date and a successful charge '
       + 'moves it forward. A date more than one cadence in the past means the charge did not '
       + 'fire, failed without being recorded, or its webhook never landed. Either the member '
-      + 'has free access or money is moving that this book cannot see.',
+      + 'has unbilled access or money is moving that this book cannot see.',
     action:
       'Open each schedule in PaySimple and read its charge history. If it is collecting, the '
       + 'webhook path is dropping events. If it is not, the member has been unbilled since the '

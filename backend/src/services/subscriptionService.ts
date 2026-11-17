@@ -8,9 +8,6 @@ import {
   consumeCreditsForSubscription,
 } from './accountCreditService';
 import { retireRedundantExplorerAccounts } from './enrollmentService';
-// Imported in this direction only. `subscriptionScheduleService` deliberately does NOT
-// import this module (it reaches for the pure date helpers instead), so there is no cycle.
-import { suspendScheduleForSubscription } from './subscriptionScheduleService';
 import { MEMBERSHIP_PRICE, ANNUAL_TERM_MONTHS } from './membershipPrice';
 import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 import type { SubscriptionPlan } from '../models/Subscription';
@@ -512,6 +509,19 @@ export async function activateByRef(
 
       const scheduleId = (other as any).paysimple_schedule_id as string | null | undefined;
       if (scheduleId) {
+        // Imported HERE, at call time, not at the top of the file. `subscriptionScheduleService`
+        // constructs the Sequelize instance as a module side effect (it imports
+        // `config/database`), so a top-level import makes merely requiring THIS module open a
+        // database connection. That broke `subscriptionCheckoutGuard.test.ts`, which imports
+        // `subscriptionService` and does not mock `config/database`:
+        // `new Sequelize(env.databaseUrl)` threw "The url argument must be of type string".
+        //
+        // That module's own header warns about exactly this hazard in the other direction —
+        // it reaches for the pure date helpers rather than importing this file, because this
+        // file pulls in the Sequelize models. The hazard is not circularity, which is why
+        // checking for a cycle was not enough: it is eager module-load side effects. A
+        // function-scoped import keeps the cost on the path that actually needs it.
+        const { suspendScheduleForSubscription } = await import('./subscriptionScheduleService');
         const { suspended, error } = await suspendScheduleForSubscription(other.id, scheduleId);
         if (!suspended) {
           // Deliberately left active. Said once, with everything a human needs to act.
