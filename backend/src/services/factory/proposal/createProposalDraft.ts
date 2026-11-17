@@ -9,7 +9,7 @@
  * it in place of the old `no_document` dead-end.
  */
 import { buildOutline, type OutlineSectionInput } from './buildOutline';
-import { parsePlaceholderNeeds } from './placeholderNeeds';
+import { parseDraftNeeds } from './placeholderNeeds';
 import { gapsToNeeds } from './sectionDrafting';
 import type { Grounding } from './proposalGrounding';
 
@@ -53,7 +53,10 @@ export function assembleDraftHtml(
   docKey: string,
 ): string {
   const body = (Array.isArray(sectionHtmls) ? sectionHtmls : []).map((h) => String(h ?? '').trim()).filter(Boolean).join('\n');
-  const have = new Set(parsePlaceholderNeeds(body, docKey).map((n) => n.needKey));
+  // `have` counts BOTH marker families already in the body — atomic [PLACEHOLDER] and grouped [RECORD] — so a grouped
+  // record the drafter already wrote (per the past-performance / key-personnel doc-type guidance) is never duplicated
+  // as an appended field [PLACEHOLDER]. A structured gap is only appended for a genuinely-missing atomic fact.
+  const have = new Set(parseDraftNeeds(body, docKey).map((n) => n.needKey));
   const missing = gapsToNeeds(gaps, docKey).filter((n) => !have.has(n.needKey));
   if (!missing.length) return body;
   const extra = missing.map((n) => `<p>[PLACEHOLDER: ${safeMarker(n.ask)}]</p>`).join('\n');

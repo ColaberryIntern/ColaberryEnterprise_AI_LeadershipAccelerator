@@ -63,10 +63,16 @@ const SECTION_SYSTEM =
   'sections. Open the section body with the exact requirement-reference line given, then follow the section plan ' +
   'if one is provided. CRITICAL no fabrication: use ONLY the specific facts in the grounding; for any specific fact ' +
   'the section needs but the grounding does not contain (a client, metric, date, dollar figure, certification, or ' +
-  'person), write a visible [PLACEHOLDER: what the firm must provide] rather than inventing it. Return STRICT JSON ' +
+  'person), write a visible [PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
+  'EXCEPTION for grouped records: when the missing item is a WHOLE past-performance reference or a WHOLE key person ' +
+  '(not a single field), write ONE grouped marker in the HTML — [RECORD: reference] for a past-performance entry, ' +
+  '[RECORD: personnel] for a person — instead of a [PLACEHOLDER] per field, and do NOT list that record in gaps. A ' +
+  'record is answered as one unit (reference: client, scope, period of performance, outcome; personnel: name, role, ' +
+  'relevant experience) and must never be split into separate field placeholders or gaps. Return STRICT JSON ' +
   '{"html":"<the section, allowed tags only, starting with an <h3> heading>","gaps":[{"question":"...","suggestions":["..."]}]} ' +
-  'where gaps lists each specific fact you placeholdered. Allowed tags: h3, h4, p, ul, ol, li, strong, em, table, ' +
-  'thead, tbody, tr, th, td, blockquote, br. No attributes, no links, no images, no <script>, no <style>.';
+  'where gaps lists each specific FIELD-LEVEL fact you placeholdered (never a [RECORD] marker). Allowed tags: h3, h4, ' +
+  'p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no links, no images, ' +
+  'no <script>, no <style>.';
 
 /** PURE: assemble the {system, user} prompt for drafting one section against its grounding + doc-type template. */
 export function buildSectionDraftPrompt(input: SectionDraftInput): { system: string; user: string } {

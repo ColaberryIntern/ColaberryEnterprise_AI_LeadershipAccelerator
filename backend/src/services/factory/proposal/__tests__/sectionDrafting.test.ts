@@ -15,6 +15,19 @@ describe('docTypeTemplate', () => {
   });
 });
 
+describe('buildSectionDraftPrompt record guidance', () => {
+  it('tells the drafter to emit ONE [RECORD] marker for a whole reference/person and never list it in gaps', () => {
+    const { system } = buildSectionDraftPrompt({
+      docKey: 'past_performance', docTitle: 'Past Performance',
+      section: { heading: 'References', requirementIds: ['R-1'] },
+      grounding: buildGrounding({} as never),
+    });
+    expect(system).toMatch(/\[RECORD: reference\]/);
+    expect(system).toMatch(/\[RECORD: personnel\]/);
+    expect(system).toMatch(/do NOT list that record in gaps/i);
+  });
+});
+
 describe('sectionReferenceLine', () => {
   it('names the requirement(s) the section answers, singular vs plural, empty when none', () => {
     expect(sectionReferenceLine(['R-1'])).toBe('This section responds to requirement R-1.');

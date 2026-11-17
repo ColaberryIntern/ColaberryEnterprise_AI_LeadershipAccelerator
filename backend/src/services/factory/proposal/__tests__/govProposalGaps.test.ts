@@ -1,9 +1,13 @@
 /**
  * groupOpenQuestions + the question-key round-trip (B.3). Pure: group raw open-gap rows into deduplicated questions
  * (one per distinct question text), union the affected docs + suggestions, and encode a URL-safe key the answer route
- * decodes back to the question text (gap resolution matches on that text).
+ * decodes back to the question text (gap resolution matches on that text). Plus: the flat question rail excludes
+ * grouped `record` gaps (those answer via the Needs grouped form, not this kind-blind flat-answer path).
  */
-import { groupOpenQuestions, encodeQuestionKey, decodeQuestionKey } from '../govProposalGaps';
+const queryMock = jest.fn();
+jest.mock('../../../../config/database', () => ({ sequelize: { query: (...a: any[]) => queryMock(...a) } }));
+
+import { groupOpenQuestions, encodeQuestionKey, decodeQuestionKey, listOpenQuestions } from '../govProposalGaps';
 
 describe('groupOpenQuestions', () => {
   it('dedups by question text, unions documents + suggestions, keeps the first why', () => {
@@ -35,5 +39,24 @@ describe('question key round-trip', () => {
   });
   it('decode is total on garbage', () => {
     expect(decodeQuestionKey('')).toBeNull();
+  });
+});
+
+describe('listOpenQuestions excludes grouped record gaps', () => {
+  beforeEach(() => { jest.clearAllMocks(); queryMock.mockResolvedValue([]); });
+
+  it("filters out record-kind gaps in SQL (keeps NULL-need rows) and still groups the rest", async () => {
+    queryMock.mockResolvedValue([{ question: 'What is the DUNS?', why: null, suggestions: [], doc_key: 'reps_certs' }]);
+    const out = await listOpenQuestions('dp-1');
+    const [sql, opts] = queryMock.mock.calls[0];
+    expect(String(sql)).toContain("(need->>'kind') IS DISTINCT FROM 'record'");
+    expect((opts as { bind: unknown[] }).bind).toEqual(['dp-1']);
+    expect(out).toHaveLength(1);
+    expect(out[0].question).toContain('DUNS');
+  });
+
+  it('returns [] for an empty project id without querying', async () => {
+    expect(await listOpenQuestions('')).toEqual([]);
+    expect(queryMock).not.toHaveBeenCalled();
   });
 });
