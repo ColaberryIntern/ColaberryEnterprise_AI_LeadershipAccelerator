@@ -48,6 +48,9 @@ function makeState(now, opts = {}) {
     session: null,
     attempts: 0,
     finished: false,
+    // R1.1: Try answers the student saved (attempt ids), and how long POST /plans takes (to see the busy state).
+    saved: new Set(),
+    planDelayMs: opts.planDelayMs || 0,
     now,
   };
 }
@@ -131,7 +134,7 @@ function route(state, method, path, query, body) {
   }
   if (path === `${P}/plans` && method === 'GET') return { plan: state.plan };
   if (path === `${P}/plans`) {
-    state.plan = { id: 'plan-1', interviewId: body.interviewId, plan: { kind: body.kind, minutes: 11, days: [{ date: centralDay(state.now), segments: segs({ session: null }) }, { date: centralDay(state.now, 1), segments: segs({ session: null }) }] } };
+    state.plan = { id: 'plan-1', interviewId: body.interviewId, ...(body.focusSkill ? { focusSkill: body.focusSkill } : {}), plan: { kind: body.kind, minutes: 11, days: [{ date: centralDay(state.now), segments: segs({ session: null }) }, { date: centralDay(state.now, 1), segments: segs({ session: null }) }] } };
     return state.plan;
   }
   if (path === `${P}/sessions` && method === 'POST') {
@@ -141,7 +144,8 @@ function route(state, method, path, query, body) {
   const attempt = /^\/api\/portal\/career-prep\/sessions\/[^/]+\/attempts(\/[^/]+)?$/.exec(path);
   if (attempt && method === 'POST') { state.attempts += 1; return { attempt: { id: `a${state.attempts}`, status: 'pending', result: null, errorClass: null } }; }
   // The scorer's real shape (attempts.attemptResult): pace, fillers and repetition against their published targets, and its notes.
-  if (attempt) return { attempt: { id: 'a1', status: 'done', errorClass: null, result: { seconds: 41, scores: [
+  // R1.1: a scored attempt says whether its recording is saved, or still saveable (pending).
+  if (attempt) return { attempt: { id: 'a1', status: 'done', errorClass: null, recording: state.saved.has('a1') ? 'saved' : 'pending', result: { seconds: 41, scores: [
     { key: 'pace', label: 'Pace', score: 100, value: '142 wpm', target: '100 to 165 wpm', source: 'Microsoft Speaker Coach: 100 to 165 words a minute' },
     { key: 'fillers', label: 'Filler words', score: 100, value: '1 (1.1%)', target: 'under 3% of words', source: 'Yoodli: fillers under 3% of words' },
     { key: 'repetition', label: 'Repetition', score: 66, value: '8.1%', target: 'under 4% of words', source: 'Yoodli: repetition under 4% of words' },
@@ -154,6 +158,21 @@ function route(state, method, path, query, body) {
     }
     return { session: sessionView(state) };
   }
+  // R1.1: where a skill's number comes from (the server's shape: skillSources.describe), and saved Try answers.
+  const src = /^\/api\/portal\/career-prep\/skills\/([^/]+)\/sources$/.exec(path);
+  if (src) {
+    const at = (d) => new Date(state.now - d * DAY).toISOString();
+    if (query.get('source') !== 'video') return { items: [{ at: at(2), value: 70, kind: 'other', label: 'A lesson quiz' }] };
+    return { items: [
+      { at: at(0), value: 52, kind: 'try_answer', label: 'A Try answer in Career Prep', notKept: true },
+      ...(state.saved.has('a1') ? [{ at: at(0), value: 57, kind: 'try_answer', label: 'Try answer: Walk me through a project.', video: { streamUrl: '/media/none.mp4', posterUrl: '/media/none.jpg' } }] : []),
+      { at: at(3), value: 41, kind: 'intro_video', label: 'Your intro video', link: '/portal/portfolio?tab=hire&section=video' },
+    ] };
+  }
+  const save = /^\/api\/portal\/career-prep\/attempts\/([^/]+)\/save$/.exec(path);
+  if (save && method === 'POST') { state.saved.add(save[1]); return { answer: { attemptId: save[1], question: body.question || null, delivery: 89, seconds: 41, savedAt: new Date(state.now).toISOString(), streamUrl: '/media/none.mp4', posterUrl: '/media/none.jpg' } }; }
+  if (save && method === 'DELETE') { state.saved.delete(save[1]); return { ok: true }; }
+  if (path === `${P}/answers`) return { answers: [...state.saved].map((id) => ({ attemptId: id, question: 'Walk me through a project.', delivery: 89, seconds: 41, savedAt: new Date(state.now).toISOString(), streamUrl: '/media/none.mp4', posterUrl: '/media/none.jpg' })) };
   if (path === '/api/portal/career/hire-interviews') return { ok: true, interviews: [] };
   return null; // not a Career Prep call: the caller answers it with an empty 200
 }
@@ -171,6 +190,7 @@ async function installFakeApi(page, now = Date.now(), opts = {}) {
     const url = new URL(req.url());
     let body = {};
     try { body = req.postDataJSON() || {}; } catch { body = {}; }
+    if (state.planDelayMs && req.method() === 'POST' && url.pathname === '/api/portal/career-prep/plans') await new Promise((ok) => setTimeout(ok, state.planDelayMs));
     const out = route(state, req.method(), url.pathname, url.searchParams, body);
     const payload = out === null ? {} : out;
     sent.push({ path: url.pathname, payload });

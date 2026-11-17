@@ -6,6 +6,7 @@ import { coachingNotes, deliveryScores } from '../hire/hireVideoAnalysis';
 import { writeObservations } from './observationWriter';
 import type { ObservationRow } from './observationAdapters';
 import { NotFoundError } from './sessions';
+import { keepPending, recordingState } from './savedAnswers';
 
 /**
  * Career Prep v27, CP4.4: a recorded "Try" answer (prep_attempts), scored with the same pipeline as the
@@ -16,13 +17,15 @@ import { NotFoundError } from './sessions';
  * content scoring gives levels, and whether levels may ever count toward skill numbers is Ali's open call.
  *
  * RETRY-SAFE: (session_id, client_key) is UNIQUE, so a retried upload returns the same attempt and is not
- * scored twice. Scoring runs in a one-at-a-time in-process queue; the uploaded file is deleted after
- * scoring whether it worked or not. A failure is stored (status failed + error_class) and the student
+ * scored twice. Scoring runs in a one-at-a-time in-process queue. A failed recording is deleted at once; a
+ * scored one waits up to an hour in case the student ticks "Save this answer to my profile" (savedAnswers.ts,
+ * R1.1), then the sweep deletes it. A failure is stored (status failed + error_class) and the student
  * records again. At boot, attempts still pending (their files are gone with the restart) are marked failed.
  * Scores become observations (source video, ref attempt:<id>) only when scoring succeeds.
  */
 export interface AttemptResult { seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[] }
-export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; result: AttemptResult | null; errorClass: string | null }
+/** recording (a scored attempt only): saved to the profile, still saveable (pending, under an hour), or gone. */
+export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; result: AttemptResult | null; errorClass: string | null; recording?: 'saved' | 'pending' | 'gone' }
 type Row = { id: string; status: AttemptView['status']; result: AttemptResult | null; error_class: string | null };
 const view = (r: Row): AttemptView => ({ id: String(r.id), status: r.status, result: r.result ?? null, errorClass: r.error_class ?? null });
 const SKILL_OF: Record<string, string> = { pace: 'pace_clarity', fillers: 'few_fillers' };
@@ -47,7 +50,7 @@ export async function getAttempt(enrollmentId: string, sessionId: string, attemp
     { replacements: { a: attemptId, s: sessionId, e: enrollmentId } });
   const r = (rows as Row[])[0];
   if (!r) throw new NotFoundError();
-  return view(r);
+  return r.status === 'done' ? { ...view(r), recording: await recordingState(String(r.id)) } : view(r);
 }
 
 /**
@@ -101,6 +104,7 @@ export function attemptObservationRows(enrollmentId: string, attemptId: string, 
 export interface ScoreDeps { transcribeCall?: TranscribeCall }
 
 export async function scoreAttempt(attemptId: string, enrollmentId: string, file: string, deps: ScoreDeps = {}): Promise<'done' | 'failed'> {
+  let scored = false;
   try {
     const t = await transcribe(file, deps.transcribeCall);
     // A silent or garbled recording is failed as UnclearAudio BEFORE anything is written (no observations).
@@ -109,6 +113,7 @@ export async function scoreAttempt(attemptId: string, enrollmentId: string, file
     const result = attemptResult(t.words, t.duration);
     await writeObservations(attemptObservationRows(enrollmentId, attemptId, result, new Date()));
     await sequelize.query(`UPDATE prep_attempts SET status = 'done', result = CAST(:r AS JSONB) WHERE id = :a`, { replacements: { r: JSON.stringify(result), a: attemptId } });
+    scored = true;
     return 'done';
   } catch (err) {
     const errorClass = (err as { error_class?: string; name?: string })?.error_class ?? (err as Error)?.name ?? 'UpstreamUnavailable';
@@ -116,7 +121,8 @@ export async function scoreAttempt(attemptId: string, enrollmentId: string, file
     await sequelize.query(`UPDATE prep_attempts SET status = 'failed', error_class = :c WHERE id = :a`, { replacements: { c: String(errorClass).slice(0, 40), a: attemptId } }).catch(() => undefined);
     return 'failed';
   } finally {
-    await fs.promises.rm(file, { force: true }).catch(() => undefined);
+    if (scored) await keepPending(attemptId, file);
+    else await fs.promises.rm(file, { force: true }).catch(() => undefined);
   }
 }
 

@@ -12,6 +12,8 @@ import { currentSession, NotFoundError, startSession, updateSession } from '../s
 import { prepAttemptUpload } from '../config/prepAttemptUpload';
 import { getAttemptStatus, guardUpload, postAttempt } from '../controllers/careerPrepAttemptController';
 import { getReminders, postReminder } from '../controllers/careerPrepReminderController';
+import { deleteSavedAnswer, getSavedAnswers, getSkillSources, postSaveAnswer, serveAnswerVideo } from '../controllers/careerPrepAnswerController';
+import rateLimit from 'express-rate-limit';
 import { sessionRecap, type Recap } from '../services/careerPrep/recap';
 import { DashboardResponse, SummaryResponse } from './careerPrepSchemas';
 import { logFailure, sendValidated } from './campusRoutes';
@@ -208,6 +210,8 @@ export async function getCurrentSession(req: Request, res: Response): Promise<vo
 }
 
 const router = Router();
+// Playback makes many range requests: generous, still bounded.
+const answerVideoLimiter = rateLimit({ windowMs: 60 * 1000, max: 600, standardHeaders: true, legacyHeaders: false });
 router.get('/api/portal/career-prep/flags', requireParticipant, getCareerPrepFlags);
 router.get('/api/portal/career-prep/summary', requireParticipant, requireCareerPrep, getSummary);
 router.get('/api/portal/career-prep/dashboard', requireParticipant, requireCareerPrep, getDashboard);
@@ -221,6 +225,14 @@ router.get('/api/portal/career-prep/sessions/current', requireParticipant, requi
 // CP4.4: a recorded Try answer (multipart, 100 MB; nginx raises its body cap for this path).
 router.post('/api/portal/career-prep/sessions/:id/attempts', requireParticipant, requireCareerPrep, guardUpload(prepAttemptUpload.single('video')), postAttempt);
 router.get('/api/portal/career-prep/sessions/:id/attempts/:attemptId', requireParticipant, requireCareerPrep, getAttemptStatus);
+// R1.1: where a skill's number comes from; Try answers the student chose to keep (save, delete, list, play).
+router.get('/api/portal/career-prep/skills/:key/sources', requireParticipant, requireCareerPrep, getSkillSources);
+router.get('/api/portal/career-prep/answers', requireParticipant, requireCareerPrep, getSavedAnswers);
+router.post('/api/portal/career-prep/attempts/:attemptId/save', requireParticipant, requireCareerPrep, postSaveAnswer);
+router.delete('/api/portal/career-prep/attempts/:attemptId/save', requireParticipant, requireCareerPrep, deleteSavedAnswer);
+// A <video> cannot send the bearer token: playback is authorized by the signed ?t= token that only the owner's
+// authed list (or sources) response carries. Unsigned, expired or unknown = 404.
+router.get('/api/portal/career-prep/answer-video/:assetId/:kind', answerVideoLimiter, serveAnswerVideo);
 // CP4.5: reminders (tonight at 6:00 PM, same time tomorrow).
 router.post('/api/portal/career-prep/reminders', requireParticipant, requireCareerPrep, postReminder);
 router.get('/api/portal/career-prep/reminders', requireParticipant, requireCareerPrep, getReminders);

@@ -3,7 +3,7 @@ import { sequelize } from '../config/database';
 /**
  * Career Prep v27, CP1.2 (kit section P5): the tables every number in the Career Prep room comes from.
  *
- * ADDITIVE ONLY. Eight new tables (prep_attempts added in CP4.4); nothing existing is altered. Every statement is IF NOT EXISTS
+ * ADDITIVE ONLY. Ten new tables (prep_attempts added in CP4.4, prep_reminders in CP4.5, prep_saved_answers in R1.1); nothing existing is altered. Every statement is IF NOT EXISTS
  * or ON CONFLICT DO NOTHING, so this runs on every boot and a re-run is a no-op. The kit says
  * `participant_id`; in this repo a student is an enrollment, so the column is `enrollment_id`.
  *
@@ -135,6 +135,19 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
      UNIQUE (ref, kind)
    )`,
   'CREATE INDEX IF NOT EXISTS prep_reminders_due_idx ON prep_reminders (status, send_at)',
+  // R1.1: a Try answer the student CHOSE to keep (a ticked box after scoring). Every other recording is deleted.
+  // asset_id names its folder under PREP_ANSWER_ROOT (stream.mp4 + poster.jpg); deleting the row deletes the folder.
+  `CREATE TABLE IF NOT EXISTS prep_saved_answers (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
+     attempt_id UUID NOT NULL UNIQUE REFERENCES prep_attempts(id) ON DELETE CASCADE,
+     asset_id VARCHAR(24) NOT NULL UNIQUE,
+     question TEXT,
+     delivery INTEGER CHECK (delivery BETWEEN 0 AND 100),
+     seconds INTEGER,
+     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
+  'CREATE INDEX IF NOT EXISTS prep_saved_answers_enrollment_idx ON prep_saved_answers (enrollment_id, created_at)',
   `CREATE TABLE IF NOT EXISTS prep_readiness_daily (
      enrollment_id UUID NOT NULL REFERENCES enrollments(id) ON DELETE CASCADE,
      interview_id UUID NOT NULL DEFAULT '${NO_INTERVIEW}',
@@ -150,6 +163,7 @@ export const CAREER_PREP_STATEMENTS: readonly string[] = [
 export const CAREER_PREP_ROLLBACK: readonly string[] = [
   'DROP TABLE IF EXISTS prep_reminders',
   'DROP TABLE IF EXISTS prep_readiness_daily',
+  'DROP TABLE IF EXISTS prep_saved_answers',
   'DROP TABLE IF EXISTS prep_attempts',
   'DROP TABLE IF EXISTS prep_sessions',
   'DROP TABLE IF EXISTS prep_plans',

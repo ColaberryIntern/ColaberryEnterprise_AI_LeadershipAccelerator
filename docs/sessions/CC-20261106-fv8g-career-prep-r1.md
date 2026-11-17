@@ -670,3 +670,38 @@ tests/systemV2/career-prep/.
     backend Career Prep 247 pass; frontend tsc clean, Career Prep 193 pass; screenshots at 1600x960 and 390 reviewed
     side by side with L3-5 and L3-7. Remaining differences (data the release does not have): part subtitles,
     "Up 8" versus the previous answer, best-answer stat, tips from your data, two-letter initials.
+
+- [x] Release 1.1: source icons open the evidence, saved Try answers, plan button busy state, new room layout (CP5.6)
+  - Date: 2026-11-16
+  - Session: CC-20261106-fv8g
+  - What changed: from Ali's live test. (1) The source icons sat INSIDE each skill row's plan button, so clicking
+    the video icon built a plan (production shows 7 plans in 4 minutes). Each icon is now its own button beside the
+    row and opens "Where this score comes from": every result behind that skill's number from that source, newest
+    first (GET /api/portal/career-prep/skills/:key/sources, member-only, Zod, 90 days like the score). The intro
+    video links to Portfolio > Hire > Video (new ?section= deep link); a Try answer plays if saved, else "Recording
+    not kept"; a case study links to the case studies. (2) Saved Try answers (Ali: delete by default, a box to
+    save, easy to delete): a scored recording waits up to 1 hour in a pending area (swept at boot and every 10
+    minutes); an UNCHECKED "Save this answer to my profile" on the score card transcodes it (the intro video's
+    rendition) into uploads/prep-answers and records it in the new prep_saved_answers table; unticking, or Delete
+    (with a confirm) in Hire studio > Video > "Saved practice answers", removes row and files. UnclearAudio and
+    failed attempts are never saveable. Playback is signed per asset for the owner only (expiring ?t=), never on
+    the public hire profile (a second opt-in is a follow-up). Privacy line under the camera. (3) Plan buttons are
+    disabled while a plan builds ("Building your plan..."), so a repeat click builds nothing; a plan built for a
+    picked skill says "Focused on <skill>, the skill you picked" (focusSkill now returned by the plans API).
+    (4) The tab strip's up/down arrows: PortfolioPage.css gives every .cp-tabs overflow-x:auto and each tab hung 1px
+    below the strip; the strip line is now an inset shadow, nothing overflows. (5) Cora moved to the RIGHT; her log
+    scrolls between the fixed header and ask box and follows the newest item. (6) New left rail: Your progress /
+    plan / Session, the five getting-hired sheets, and Your scores (readiness or how far from a first score, scored
+    skills lowest first as mini bars, unscored only counted); a rail skill opens Your progress at that skill, never a
+    plan. Under 900px: rail on top (three lowest skills), the panel, Cora below.
+  - Verification: browser suite 34/34 on the new build (Edge, built app); the 14 new checks were run against the
+    pre-R1.1 build first: 13 FAIL (10c showed 3 plan POSTs from repeated clicks; 10h showed the strip 44/43 high),
+    10g at 390 passed there too (no inner chat scroller on a phone before; it fails at 1600 as expected).
+    CI=true build compiles clean. Backend Career Prep + Hire suites 535 pass (13 skipped), incl. new savedAnswers,
+    skillSources and route tests. Frontend tsc clean (control error planted first); Career Prep + Portfolio jest
+    303 pass. Screenshots at 1600 and 390 (room layout, sources panel, save box) reviewed against the room's light
+    design; fixed from them: misaligned skill numbers, a Portfolio .cp-privacy rule restyling the privacy line,
+    and a too-long rail on phones.
+  - Notes: local backend tsc and checkTestTypecheck report only enrichVisitorGeo.ts (maxmind not installed in
+    this worktree; not touched here). Under all-worker parallel jest locally, the first test of some Career Prep
+    route suites hit the 5 s timeout while importing; with --maxWorkers=4 everything passes.

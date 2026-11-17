@@ -16,7 +16,8 @@ import { centralDate } from './readiness';
  * interview is the student's own (else NotYoursError) and leaves out days that are already over.
  * Every function takes the enrollment from the caller (the session token).
  */
-export interface StoredPlan { id: string; interviewId: string; plan: Plan }
+/** focusSkill: the skill the student picked ("Make me a plan for this"), when the plan was built for one. */
+export interface StoredPlan { id: string; interviewId: string; plan: Plan; focusSkill?: string }
 export class NotYoursError extends Error { constructor() { super('interview not found'); this.name = 'NotFoundError'; } }
 export class PastInterviewError extends Error { constructor() { super('interview already started'); this.name = 'ValidationError'; } }
 
@@ -41,7 +42,7 @@ export async function createPlan(enrollmentId: string, input: { interviewId: str
     );
     return String((rows as Array<{ id: string }>)[0].id);
   });
-  return { id, interviewId: iv.id, plan };
+  return { id, interviewId: iv.id, plan, ...(focus ? { focusSkill: focus.key } : {}) };
 }
 
 /** The interview's active plan with days already over left out; NotYoursError for someone else's interview. */
@@ -49,7 +50,7 @@ export async function activePlan(enrollmentId: string, interviewId: string, now 
   const [own] = await sequelize.query('SELECT id FROM career_interviews WHERE id = :i AND enrollment_id = :e', { replacements: { i: interviewId, e: enrollmentId } });
   if (!(own as unknown[]).length) throw new NotYoursError();
   const [rows] = await sequelize.query(
-    `SELECT id, interview_id, kind, minutes, days FROM prep_plans WHERE enrollment_id = :e AND interview_id = :i AND status = 'active'
+    `SELECT id, interview_id, kind, minutes, focus_skill, days FROM prep_plans WHERE enrollment_id = :e AND interview_id = :i AND status = 'active'
       ORDER BY created_at DESC LIMIT 1`,
     { replacements: { e: enrollmentId, i: interviewId } },
   );
@@ -57,5 +58,6 @@ export async function activePlan(enrollmentId: string, interviewId: string, now 
   if (!r) return null;
   const today = centralDate(now);
   const days = (r.days as Plan['days']).filter((d) => d.date >= today).map(({ date, segments }) => ({ date, segments }));
-  return { id: String(r.id), interviewId: String(r.interview_id), plan: { kind: r.kind as PlanKind, minutes: Number(r.minutes), days } };
+  return { id: String(r.id), interviewId: String(r.interview_id), plan: { kind: r.kind as PlanKind, minutes: Number(r.minutes), days },
+    ...(r.focus_skill ? { focusSkill: String(r.focus_skill) } : {}) };
 }

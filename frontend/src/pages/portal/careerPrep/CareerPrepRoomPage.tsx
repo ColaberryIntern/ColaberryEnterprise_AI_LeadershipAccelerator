@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 // CareerPrepFloor BEFORE CareerPrepRoom: the HQ building's CSS order (hq.css, careerPrepFloor.css, then levelTrail.css
 // via the room). The other order is a mini-css-extract "Conflicting order" warning, which fails the CI build.
@@ -15,6 +15,7 @@ import { useSheet, type SheetApi } from '../../../components/careerPrep/useSheet
 import { PageSheet } from '../../../components/careerPrep/PageSheet';
 import { SheetBody } from '../../../components/careerPrep/SheetBodies';
 import { JumpBar } from '../../../components/careerPrep/JumpBar';
+import { RoomRail } from '../../../components/careerPrep/RoomRail';
 import type { PrepInterview } from '../../../components/careerPrep/careerPrepApi';
 import type { JumpItem } from '../../../components/careerPrep/logic/sheets';
 import { useCareerPrepFlag } from '../../../components/careerPrep/careerPrepFlag';
@@ -65,6 +66,14 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
   // The Try frame shows the student's initial while the camera is off (the summary is cached for the floor already).
   const firstName = useCareerPrepSummary()?.firstName;
   const initials = firstName ? firstName.trim().charAt(0).toUpperCase() : undefined;
+  // R1.1: a skill picked in the left rail opens Your progress at that skill (outlined, scrolled to), never a plan.
+  const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!focusKey) return undefined;
+    const t = window.setTimeout(() => setFocusKey(undefined), 2500);
+    return () => window.clearTimeout(t);
+  }, [focusKey]);
+  const showSkill = (key: string) => { setTab('progress'); setFocusKey(undefined); window.setTimeout(() => setFocusKey(key), 0); };
   return (
     <CareerPrepRoom
       anchor={anchor}
@@ -72,6 +81,7 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
       onClose={onClose}
       tab={tab}
       onTabChange={setTab}
+      rail={<RoomRail tab={tab} onTab={setTab} onSheet={sheets.open} dashboard={room.dashboard} anchor={anchor} onSkill={showSkill} />}
       cora={(
         <>
           {room.error && <p role="alert" className="cp-form-problem">{room.error}</p>}
@@ -82,9 +92,9 @@ function Room({ tabs, onClose }: { tabs?: CareerPrepRoomPageProps['tabs']; onClo
       )}
       tabs={{
         progress: tabs?.progress ?? (room.dashboard
-          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} newKeys={newKeys} />
+          ? <ProgressDashboard d={room.dashboard} onAnchor={room.chooseAnchor} onSkill={(s) => room.focusSkill(s.key)} newKeys={newKeys} focusKey={focusKey} planBusy={room.planBusy} />
           : <Pending text="Loading your progress..." />),
-        plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
+        plan: tabs?.plan ?? <PlanView plan={room.plan?.plan ?? null} focusSkill={room.plan?.focusSkill} company={anchor?.company} skillLabels={Object.fromEntries((room.dashboard?.skills ?? []).map((s) => [s.key, s.label]))} onStart={() => setTab('session')} />,
         session: tabs?.session ?? <SessionRunner s={session} type={anchor?.type ?? 'recruiter'} questions={anchor?.questions} hasPlan={!!room.plan} onTab={setTab} initials={initials} />,
       }}
       overlay={<RoomSheets sheets={sheets} prep={room.dashboard?.interviews ?? []} onTab={setTab} onStart={start} />}
