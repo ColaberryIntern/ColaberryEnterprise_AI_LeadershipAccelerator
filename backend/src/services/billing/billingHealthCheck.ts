@@ -43,6 +43,20 @@ const SEVERITY_ORDER: Record<Severity, number> = { act_now: 0, soon: 1, watch: 2
  * exactly that and would have billed Liza Ayele twice a month. The migration is
  * fixed, but the underlying duplicate is still produced by every renewal, so
  * anything new that reads this table can trip on it.
+ *
+ * ── AND SOMETHING DID, FOR TWO MONTHS (found 2026-11-16) ────────────────────
+ *
+ * This check's severity is `watch` and its action reads "no action unless a new job reads
+ * subscriptions". That condition was already false when it was written: `annualizedRevenue`
+ * — the figure on the Commercialization tile, the Revenue Room card and Ram's Revenue Flow
+ * board — summed `amount_cents` over every row with `status = 'active'`, keyed on nothing.
+ * It counted both halves of a duplicate and every row whose term had quietly ended, and
+ * reported $81,768 a year where the collectible rule gives $55,500.
+ *
+ * It now composes the shared `PAYING_MEMBERS_CTE`, which keys on the member, so the premise
+ * of this check's low severity is true again rather than merely assumed. Left at `watch`
+ * deliberately: the duplicate is still produced, and the next reader of this table will be
+ * in exactly the position that caller was. The warning is the point.
  */
 async function checkDuplicateActive(): Promise<Finding | null> {
   const rows = await sequelize.query<{ full_name: string; email: string; n: string; ends: string }>(
@@ -135,6 +149,77 @@ async function checkLapsedWithoutFollowup(): Promise<Finding | null> {
       + 'A member sitting here for two days or more means that path is not running.',
     action: 'Check the renewal reminder job ran today, then confirm these members were mailed.',
     rows: rows.map((r) => `${r.full_name} <${r.email}> due ${r.was_due}, ${r.days}d ago`),
+  };
+}
+
+/**
+ * A standing schedule that has stopped collecting — the gap between the two checks
+ * above and below, which each correctly disclaim it.
+ *
+ * `checkLapsedWithoutFollowup` excludes anyone holding a schedule, because a schedule
+ * IS the follow-up and chasing those members double-charges them. `checkSchedulesMatchBook`
+ * compares schedule IDs between our book and the gateway, so a schedule that exists on
+ * both sides and has simply not charged for two months passes it cleanly. Between them, a
+ * scheduled member whose billing silently stopped is visible to nobody.
+ *
+ * Found live 2026-11-16: four members sat in that gap, three of them 48 days past the date
+ * their schedule was due to charge (schedules 4511898, 4511901, 4511911). For a scheduled
+ * row, `current_period_end` IS the next charge date — `advancePeriodForScheduledPayment`
+ * moves it forward when a charge lands — so a date that far in the past means the charge
+ * did not fire, failed without being recorded, or its webhook never arrived. Each of those
+ * is either a member getting free access or money moving that our book does not know about.
+ *
+ * ── WHY THE THRESHOLD IS A WHOLE CADENCE AND NOT A FEW DAYS ──────────────────
+ *
+ * The 2026-09-01 migration promised members auto-pay would start at their NEXT cycle, not
+ * the one already collected by hand, so a member whose period ended 30 Aug has a schedule
+ * that first fires 30 Sep. For that month they legitimately look exactly like this, and
+ * acting on it means sending a payment link to someone PaySimple is about to charge. That
+ * is the double charge the check above was guarded to prevent, and it is worse than being
+ * late to notice.
+ *
+ * So the bar is one full cadence plus three days of settlement slack. It deliberately
+ * UNDER-reports: a schedule 20 days silent is not flagged until day 33. Catching that
+ * sooner needs the schedule's own next-charge date from the gateway, which this check does
+ * not have.
+ */
+export const SCHEDULE_STOPPED_COLLECTING_SQL = `SELECT DISTINCT ON (s.enrollment_id)
+            e.full_name, e.email, s.paysimple_schedule_id AS schedule_id,
+            s.current_period_end::date::text AS was_due,
+            (CURRENT_DATE - s.current_period_end::date)::text AS days
+       FROM subscriptions s JOIN enrollments e ON e.id = s.enrollment_id
+      WHERE s.status = 'active' AND s.plan <> 'comp'
+        AND s.paysimple_schedule_id IS NOT NULL
+        AND s.current_period_end < now() - (
+              CASE WHEN s.plan = 'annual' THEN INTERVAL '1 year' ELSE INTERVAL '1 month' END
+              + INTERVAL '3 days')
+        AND NOT EXISTS (
+              SELECT 1 FROM subscriptions s2
+               WHERE s2.enrollment_id = s.enrollment_id
+                 AND s2.status = 'active'
+                 AND s2.current_period_end > s.current_period_end)
+      ORDER BY s.enrollment_id, s.current_period_end DESC`;
+
+async function checkScheduleStoppedCollecting(): Promise<Finding | null> {
+  const rows = await sequelize.query<{
+    full_name: string; email: string; schedule_id: string; was_due: string; days: string;
+  }>(SCHEDULE_STOPPED_COLLECTING_SQL, { type: QueryTypes.SELECT });
+  if (!rows.length) return null;
+  return {
+    severity: 'act_now',
+    code: 'schedule_stopped_collecting',
+    headline: `${rows.length} member(s) on auto-pay have not been charged for a full cycle`,
+    detail:
+      'For a scheduled row, current_period_end is the next charge date and a successful charge '
+      + 'moves it forward. A date more than one cadence in the past means the charge did not '
+      + 'fire, failed without being recorded, or its webhook never landed. Either the member '
+      + 'has free access or money is moving that this book cannot see.',
+    action:
+      'Open each schedule in PaySimple and read its charge history. If it is collecting, the '
+      + 'webhook path is dropping events. If it is not, the member has been unbilled since the '
+      + 'date shown. Do NOT send a payment link before checking: a live schedule plus a link '
+      + 'is a double charge.',
+    rows: rows.map((r) => `${r.full_name} <${r.email}> schedule ${r.schedule_id}, due ${r.was_due}, ${r.days}d ago`),
   };
 }
 
@@ -344,6 +429,7 @@ export async function runBillingHealthCheck(
     duplicateActive: () => checkDuplicateActive(),
     pastDueScheduled: () => checkPastDueScheduled(),
     lapsedNoFollowup: () => checkLapsedWithoutFollowup(),
+    scheduleStoppedCollecting: () => checkScheduleStoppedCollecting(),
     reminderAlive: () => checkReminderJobAlive(),
     expiringCards: () => checkExpiringCards(gateway.cardExpiryByEmail ?? new Map()),
     scheduleMatch: () => (gateway.scheduleIds ? checkSchedulesMatchBook(gateway.scheduleIds) : Promise.resolve(null)),

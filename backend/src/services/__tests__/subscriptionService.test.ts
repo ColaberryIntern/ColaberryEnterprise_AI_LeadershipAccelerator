@@ -18,9 +18,15 @@ jest.mock('../../models', () => ({
 jest.mock('../paysimpleService', () => ({ findOrCreateCustomer: jest.fn(), createPaymentLink: jest.fn(), getCustomerById: jest.fn() }));
 jest.mock('../openHouseService', () => ({ isDemoCohortName: (n: string) => /demo|test|sandbox/i.test(n || '') }));
 jest.mock('../enrollmentService', () => ({ retireRedundantExplorerAccounts: jest.fn() }));
+// The real one calls PaySimple and writes SQL. Mocked here so the supersede tests can
+// drive both outcomes — suspended and not — which is the whole point of that branch.
+jest.mock('../subscriptionScheduleService', () => ({
+  suspendScheduleForSubscription: (...a: unknown[]) => mockSuspendSchedule(...a),
+}));
 
 const NOW = Date.UTC(2026, 6, 15, 12);
 const mockRetireExplorer = retireRedundantExplorerAccounts as jest.Mock;
+const mockSuspendSchedule = jest.fn();
 
 describe('subscriptionService', () => {
   beforeEach(() => {
@@ -37,6 +43,8 @@ describe('subscriptionService', () => {
     // supersede scan). Renewal tests override per-case.
     (Subscription.findAll as jest.Mock).mockResolvedValue([]);
     mockRetireExplorer.mockResolvedValue(undefined);
+    // Default: a schedule suspends cleanly. The failure path is driven per-case.
+    mockSuspendSchedule.mockResolvedValue({ suspended: true });
   });
 
   describe('plans + helpers', () => {
@@ -617,19 +625,81 @@ describe('subscriptionService', () => {
       expect(comp.update).not.toHaveBeenCalled();
     });
 
-    it('never supersedes a row that carries a live gateway schedule (would orphan the schedule); logs it instead', async () => {
+    /**
+     * THIS TEST USED TO ASSERT THE OPPOSITE, and it was wrong in a way worth recording.
+     *
+     * It was called "never supersedes a row that carries a live gateway schedule (would
+     * orphan the schedule); logs it instead", and it asserted `scheduled.update` was NOT
+     * called. The danger it was protecting against is real — cancelling our row while
+     * PaySimple still holds the schedule means the member keeps being charged after we
+     * stop counting them. But "logs it instead" was a console.warn on a server nobody
+     * tails, and what it left behind was permanent: two active rows for one member, both
+     * counted as revenue, with no end state that ever resolved.
+     *
+     * Found live 2026-11-16: enrollment acda8718 held two active monthly rows, and
+     * 78f2c3e3's scheduled row was closed BY HAND on 2026-11-06, six weeks after its term
+     * ended, reason "Expired duplicate row holding schedule 45119…". A person was doing
+     * this code's job on a delay measured in weeks.
+     *
+     * The schedule is now taken down first, and the row superseded only once the gateway
+     * has confirmed. The old assertion survives as the next test, where suspension FAILS:
+     * that is the case the skip was really for.
+     */
+    it('suspends the gateway schedule, then supersedes the row it belonged to', async () => {
       const sub = { id: 's-new', status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
       const scheduled = { id: 's-sched', status: 'active', plan: 'monthly', enrollment_id: 'e1', paysimple_schedule_id: '4511911', update: jest.fn() };
       (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
       (Subscription.findAll as jest.Mock).mockResolvedValue([scheduled]);
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'r@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() });
-      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      mockSuspendSchedule.mockResolvedValue({ suspended: true });
 
       await activateByRef('SUB-e1-2', { paymentId: 10, amount: 199 }, NOW);
 
+      // The gateway is dealt with BEFORE our row, never after: the reverse order would
+      // leave a live schedule behind a canceled subscription if the second step threw.
+      expect(mockSuspendSchedule).toHaveBeenCalledWith('s-sched', '4511911');
+      const staleUpdate = scheduled.update.mock.calls[0][0];
+      expect(staleUpdate.status).toBe('canceled');
+      expect(staleUpdate.cancel_reason).toBe('superseded_by_renewal:s-new');
+    });
+
+    it('leaves the row active when the schedule will not suspend, because an orphaned schedule takes money', async () => {
+      const sub = { id: 's-new', status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const scheduled = { id: 's-sched', status: 'active', plan: 'monthly', enrollment_id: 'e1', paysimple_schedule_id: '4511911', update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Subscription.findAll as jest.Mock).mockResolvedValue([scheduled]);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'r@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() });
+      mockSuspendSchedule.mockResolvedValue({ suspended: false, error: 'PaySimple 503' });
+      const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await activateByRef('SUB-e1-2', { paymentId: 10, amount: 199 }, NOW);
+
+      // Of the two bad outcomes, this keeps the one that does not take someone's money:
+      // a double-counted member is a reporting error, an orphaned schedule is a charge.
       expect(scheduled.update).not.toHaveBeenCalled();
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('schedule 4511911'));
-      warn.mockRestore();
+      // At console.error, not warn, and it says the consequence rather than only the fact.
+      const logged = error.mock.calls.map((c) => String(c[0])).join(' ');
+      expect(logged).toContain('schedule 4511911');
+      expect(logged).toContain('PaySimple 503');
+      expect(logged).toContain('double-counted');
+      error.mockRestore();
+    });
+
+    it('still activates the member when suspending the schedule throws', async () => {
+      // The supersede scan is bookkeeping wrapped in try/catch for a reason: the payment
+      // has already cleared. An upstream failure here must never leave a paid member pending.
+      const sub = { id: 's-new', status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const scheduled = { id: 's-sched', status: 'active', plan: 'monthly', enrollment_id: 'e1', paysimple_schedule_id: '4511911', update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Subscription.findAll as jest.Mock).mockResolvedValue([scheduled]);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'r@example.com', cohort_id: 'c-july', enrolled_at: null, update: jest.fn() });
+      mockSuspendSchedule.mockRejectedValue(new Error('socket hang up'));
+      const error = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(activateByRef('SUB-e1-2', { paymentId: 10, amount: 199 }, NOW)).resolves.toBe(sub);
+
+      expect(sub.update.mock.calls[0][0].status).toBe('active');
+      error.mockRestore();
     });
 
     it('does not fail activation when the supersede scan errors or returns nothing usable (best-effort, non-blocking)', async () => {

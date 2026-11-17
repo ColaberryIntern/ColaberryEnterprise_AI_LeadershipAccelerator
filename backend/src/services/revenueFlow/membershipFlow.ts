@@ -161,17 +161,39 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
 
   let signedUp = zero;
   let neverPaid = zero;      // no payment id, ever. the gap.
-  let payingNow = zero;      // active AND has a payment id AND priced
+  let payingNow = zero;      // active AND has a payment id AND the paid period is running
+  let lapsed = zero;         // active AND has a payment id AND the paid period has ENDED
   let comped = zero;         // active comp, $0
   let churned = zero;        // canceled, having paid
   let failed = zero;         // status failed
+
+  // "Today" as an ISO day, needed inside the tally loop below. ISO day strings sort
+  // lexicographically in date order, so comparison needs no Date parsing per row.
+  const todayIso = day(new Date().toISOString()) as string;
 
   for (const s of subs) {
     signedUp = add(signedUp, s.amount_cents);
     const isComp = s.plan === 'comp' || s.amount_cents === 0;
 
     if (s.status === 'active' && isComp) { comped = add(comped, 0); continue; }
-    if (s.status === 'active' && s.has_payment) { payingNow = add(payingNow, s.amount_cents); continue; }
+    if (s.status === 'active' && s.has_payment) {
+      // `status = 'active'` alone was read as "paying" until 2026-11-16, and on this
+      // database that was wrong for 9 of 29 monthly rows — one of them 79 days past its
+      // period end. Nothing in this system cancels a lapse: when a term runs out and no
+      // payment renews it, the row simply stays `active` and nobody is billed. Counting
+      // those as revenue overstated the annualized figure by $26,268 a year.
+      //
+      // They are not churn either — the member never said anything — so they get their
+      // own stage rather than being folded into either neighbour.
+      // A missing current_period_end lands here too. It is a different cause with the same
+      // consequence: no term can be shown to be running, so the row cannot be quoted as
+      // revenue. Zero such rows exist in production today, and the branch is written
+      // anyway so that the first one does not quietly become income.
+      const end = day(s.current_period_end);
+      if (end === null || end < todayIso) { lapsed = add(lapsed, s.amount_cents); continue; }
+      payingNow = add(payingNow, s.amount_cents);
+      continue;
+    }
     if (s.status === 'canceled') {
       if (s.has_payment) churned = add(churned, s.amount_cents);
       else neverPaid = add(neverPaid, s.amount_cents);
@@ -278,13 +300,14 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
   }
 
   // ── FUNNEL ────────────────────────────────────────────────────────────────────────────
-  // Renewals still ahead of today. Compared as ISO day strings, which sort
-  // lexicographically in date order, so no Date parsing is needed per row.
-  const today = day(new Date().toISOString()) as string;
+  // Renewals still ahead of today, using the SAME `todayIso` the paying/lapsed split above
+  // used. It was a second `new Date()` here until 2026-11-16: two clocks read microseconds
+  // apart, which is harmless every day of the year except across a midnight boundary, where
+  // one row could be counted as both lapsed and renewal-ahead. One read, one answer.
   const upcoming = subs.filter((s) => {
     if (s.status !== 'active' || !s.has_payment) return false;
     const end = day(s.current_period_end);
-    return end !== null && end >= today;
+    return end !== null && end >= todayIso;
   });
 
   const funnel: FunnelStage[] = [
@@ -346,12 +369,31 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
       value: money(
         payingNow.cents,
         'The sum of the billed amount on active subscriptions that carry a PaySimple '
-        + 'payment id. This is money, at its own billing cadence rather than annualized.',
+        + 'payment id AND whose paid term is running today. This is money, at its own '
+        + 'billing cadence rather than annualized.',
       ),
       classification: 'member_started',
       definition:
-        'status = active AND paysimple_payment_id IS NOT NULL. The app-origination marker, '
-        + 'which is the same rule the revenue figure uses.',
+        'status = active AND paysimple_payment_id IS NOT NULL AND current_period_end is '
+        + 'still ahead. Counted per ROW; the headline above counts per PERSON, so a member '
+        + 'holding two active rows adds 2 here and 1 there.',
+    },
+    {
+      key: 'lapsed',
+      label: 'Term ran out',
+      count: lapsed.rows,
+      value: money(
+        lapsed.cents,
+        'What these rows were billed for the term that has already ended. NOT current '
+        + 'revenue: nothing has renewed them, so there is nothing to collect today.',
+      ),
+      // Not `member_canceled`: nobody canceled. The row was left behind by a term ending,
+      // which is the honest reading and the reason this stage exists at all.
+      classification: 'member_started',
+      definition:
+        'status = active AND paysimple_payment_id IS NOT NULL AND current_period_end has '
+        + 'passed (or is absent). Nothing in this system cancels a lapse, so a member who '
+        + 'stops paying leaves an active row behind. Neither paying nor churned.',
     },
     {
       key: 'renewal_due',
@@ -391,6 +433,13 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
 
   const caveats = [
     annualizedCaveat,
+    lapsed.rows > 0
+      ? `${lapsed.rows} subscription row(s) are still marked active with their paid term `
+        + `already ended, worth ${formatCents(lapsed.cents)} for the term that lapsed. `
+        + 'Nothing in this system cancels a lapse, so they sit between paying and churned. '
+        + 'They are counted in neither, and a member in this state may renew or may already '
+        + 'be gone — the database cannot tell which.'
+      : null,
     neverPaid.rows > 0
       ? `${neverPaid.rows} of ${signedUp.rows} subscription rows never carried a payment, `
         + `representing ${formatCents(neverPaid.cents)} of plans that were never billable. `
@@ -409,9 +458,11 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
         ? noMoney('Cannot be read', annualizedCaveat ?? 'The annualized figure is unavailable.')
         : money(
           annualized,
-          'Annualized from active subscriptions carrying a paysimple_payment_id, computed by '
-          + 'annualizedRevenueCents() — the same function the Commercialization tile used, so '
-          + 'the two can never disagree. This card absorbs that tile.',
+          'Annualized from the members whose paid term is running today, one row per person, '
+          + 'staff excluded, computed by annualizedRevenueCents() — the same function the '
+          + 'Commercialization tile used, so the two can never disagree. This card absorbs '
+          + 'that tile. The figure reads lower than it did before 2026-11-16 because it no '
+          + 'longer counts terms that have already ended; the caveat says how much.',
         ),
       funnel,
       provenance:
@@ -424,3 +475,4 @@ export async function buildMembershipFlow(windowStart: Date): Promise<Membership
     annualizedCents: annualized,
   };
 }
+
