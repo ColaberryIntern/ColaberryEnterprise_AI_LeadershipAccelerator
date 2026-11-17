@@ -179,6 +179,17 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // is free here. Both routes under it additionally carry `requireAdmin`, and the service requires
   // the decider to be a recorded human on the configured approver set: a section grant is what
   // lets the page's data load, never what decides whose tool grant may stand.
+  // AF11.12 — the AI drafter, read by whoever is FILLING a request.
+  //
+  // THE NARROWER ROW IS FIRST, for the same reason `/ask` is first below: `pathToSection` returns
+  // the FIRST match in array order, so a `/draft` row placed after the broad `program` row would
+  // never be reached and this would 403 for its entire audience while the classification test
+  // stayed green. That is not hypothetical — it is what happened to AF11.9's front door.
+  //
+  // `dashboard`, beside the dataset picker and the actor roster above, because the three are read
+  // by the same person at the same moment: a builder with a half-filled form. No Agent Factory
+  // builder role carries `program`.
+  ['/api/admin/agent-domain-tool-requests/draft', 'dashboard'],
   ['/api/admin/agent-domain-tool-requests', 'program'],
   // AF11.9. The front door: can the product already do this?
   //

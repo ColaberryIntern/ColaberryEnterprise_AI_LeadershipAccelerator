@@ -496,6 +496,42 @@ export async function fetchActorRoster(): Promise<{
   return { actors: data.actors ?? [], roster_absent: Boolean(data.roster_absent), note: data.note ?? '' };
 }
 
+/** What the drafter was able to write against, so the form can say why a field came back blank. */
+export interface DraftGrounding {
+  capabilities: number;
+  datasets: number;
+  actors: number;
+  actor_roster_absent: boolean;
+}
+
+export interface DraftedToolRequest {
+  tool_request: ToolRequestSubmission;
+  title: string;
+  grounded_in: DraftGrounding;
+  note: string;
+}
+
+/**
+ * AF11.12 — ask the AI to fill the request in. Returns a draft; files nothing.
+ *
+ * Two modes, as Ali described them on 17 Nov: pass the builder's own sentence as `intent`, or pass
+ * nothing and let it propose one from the domain's own capabilities.
+ *
+ * The draft is loaded into the form as EDITABLE text and submitted by the ordinary filing route.
+ * There is deliberately no draft-and-file: the step where somebody reads it and changes it is the
+ * reason the feature exists.
+ */
+export async function draftToolRequest(
+  domainKey: string,
+  intent?: string | null,
+): Promise<DraftedToolRequest> {
+  const { data } = await api.post<DraftedToolRequest>(
+    '/api/admin/agent-domain-tool-requests/draft',
+    { domain_key: domainKey, intent: intent ?? null },
+  );
+  return data;
+}
+
 /** One dataset the catalog knows about. */
 export interface CatalogDataset {
   table_name: string;

@@ -242,6 +242,71 @@ export interface ToolRequestDetailInput {
 }
 
 /**
+ * AF11.12 — the same field list, at RUNTIME.
+ *
+ * `ToolRequestDetailInput` is a TypeScript interface and therefore does not exist once this file
+ * is compiled. The drafter needs the field names at runtime to build its prompt, and the thing
+ * that must never happen is a field added to the contract that the drafter does not know about:
+ * the drafter would quietly stop filling it, and the builder would get a refusal about a field
+ * the AI never offered to write.
+ *
+ * So the list is declared once, here, beside the interface it mirrors, and the two are pinned to
+ * each other AT COMPILE TIME by `_everyDetailKeyIsListed` below. A new key on the interface that
+ * is not added here fails `tsc`, which is a stronger guarantee than a test: it cannot be skipped
+ * and it fails in the same change that introduced the drift.
+ */
+export const TOOL_REQUEST_DETAIL_FIELDS = [
+  'agent_id',
+  'tool_name',
+  'purpose',
+  'reads',
+  'produces',
+  'read_datasets',
+  'capability_id',
+  'task_unblocked',
+  'manual_today',
+  'acts_on_output',
+  'judged_threshold',
+  'judged_measured_from',
+  'tried_in_product',
+  'missing_from_product',
+  'needed_by',
+  'run_frequency',
+  'touches',
+  'environment',
+  'inputs',
+  'writes',
+  'side_effects',
+  'reversible',
+  'reversibility_note',
+] as const;
+
+export type ToolRequestDetailField = typeof TOOL_REQUEST_DETAIL_FIELDS[number];
+
+/**
+ * The pin, in both directions. Neither constant is exported and neither exists at runtime.
+ *
+ * `_everyListedKeyIsReal` fails if the array names a field the interface does not have.
+ *
+ * `_detailKeyParity` fails if the interface has a field the array does not name. The obvious
+ * spelling of this check is `const x: Unlisted[] = []`, and **it does not work** — an empty array
+ * is assignable to an array of anything, so the assertion passes no matter what is missing. That
+ * version was written here first, a field was added to the interface as a control, and `tsc`
+ * stayed green: the pin was decoration. `[T] extends [never]` is the non-distributive form that
+ * actually distinguishes "nothing is missing" from "something is", and assigning `true` to it
+ * fails with the missing key named in the error.
+ */
+const _everyListedKeyIsReal: ReadonlyArray<keyof ToolRequestDetailInput> =
+  TOOL_REQUEST_DETAIL_FIELDS;
+type _UnlistedDetailKey = Exclude<keyof ToolRequestDetailInput, ToolRequestDetailField>;
+type _DetailKeyParity = [_UnlistedDetailKey] extends [never]
+  ? true
+  : { ERROR: 'Add this field to TOOL_REQUEST_DETAIL_FIELDS'; missing: _UnlistedDetailKey };
+const _detailKeyParity: _DetailKeyParity = true;
+void _everyListedKeyIsReal;
+void _detailKeyParity;
+
+/**
  * The same thing once the gate has passed it: nothing optional that the gate required.
  *
  * `tool_name`, `reads` and `produces` carry the catalog's own field names on purpose, so a request

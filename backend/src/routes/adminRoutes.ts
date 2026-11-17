@@ -80,6 +80,7 @@ import toolScaffoldRoutes from './admin/toolScaffoldRoutes';
 import toolRequestConversationRoutes from './admin/toolRequestConversationRoutes';
 import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
 import assignExistingToolRoutes from './admin/assignExistingToolRoutes';
+import toolRequestDraftRoutes from './admin/toolRequestDraftRoutes';
 import ticketRoutes from './admin/ticketRoutes';
 import previewRoutes from './admin/previewRoutes';
 import alertRoutes from './admin/alertRoutes';
@@ -359,6 +360,10 @@ router.use(toolScaffoldRoutes);
 router.use(toolRequestConversationRoutes);
 router.use(agentToolGrantRoutes);
 router.use(assignExistingToolRoutes);
+// AF11.12 — the drafter. Mounted beside the rest of the tool-request subtree; its own file
+// because the decision files are pinned by name. Section gate: dashboard, declared before the
+// broad program row.
+router.use(toolRequestDraftRoutes);
 router.use(ticketRoutes);
 router.use(previewRoutes);
 router.use(alertRoutes);
