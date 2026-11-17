@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import type { ServiceOffering } from '../../services/factoryApi';
 import type { EvidenceService } from '../../services/ourServicesApi';
@@ -65,6 +65,7 @@ export default function AdminGovServicesPage(): React.ReactElement {
   const finder = useCaseStudyFinder();
   const finderCount = finder.state?.result?.proposals.length ?? 0;
   const location = useLocation();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<CatalogFilter>('active');
   const [editing, setEditing] = useState<Editing>(null);
   const [saving, setSaving] = useState(false);
@@ -176,6 +177,11 @@ export default function AdminGovServicesPage(): React.ReactElement {
         icon="heart-3-line"
         actions={
           <div className="d-flex gap-2 flex-wrap">
+            {/* Our Services left the sidebar on 2026-11-17 (reached from the Gov Opportunities page), so it needs its
+                own way back. First action, so it reads as the return path. */}
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => navigate('/admin/gov-opportunities')} data-testid="back-to-gov-opps">
+              <i className="ri-arrow-left-line me-1" aria-hidden="true" />Gov Opportunities
+            </button>
             <a className="btn btn-outline-success btn-sm" href={PUBLIC_GOV_PAGE} target="_blank" rel="noopener noreferrer" data-testid="public-gov-link"
               title="The public Government page, where Active services with a confirmed case study show up for contracting officers">
               <i className="ri-government-line me-1" aria-hidden="true" />View public Government page<i className="ri-external-link-line ms-1" aria-hidden="true" /><span className="visually-hidden"> (opens in a new tab)</span>

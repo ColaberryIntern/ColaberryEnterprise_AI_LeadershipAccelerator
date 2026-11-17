@@ -39,11 +39,14 @@ const VIEWS: StudioView[] = ['overview', 'blueprint', 'documents', 'evidence', '
  * reuses the shipped govCockpit panel.
  */
 export default function StudioShell(
-  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification, readOnly = false, proposalAuthoring = false }:
+  { view, projectId, onReload, cockpitApi, studioApi, reviewApi, onReanalyze, reanalyzing = false, bugReportEndpoint, onOpenQualification, onOpenDossier, readOnly = false, proposalAuthoring = false }:
   { view: StudentGovProjectView; projectId: string; onReload: () => void; cockpitApi: GovCockpitApi; studioApi: GovStudioApi; reviewApi?: GovReviewApi; onReanalyze?: () => void; reanalyzing?: boolean; bugReportEndpoint?: string;
     /** ADMIN mount only: open the real Gov Qualification Workspace for a pre-award assessment stage (Snapshot/
      *  Solicitation/Fit/Decide). Absent on the intern mount, so the intern keeps the student-safe StageDetail. */
     onOpenQualification?: (step: string) => void;
+    /** ADMIN mount only: open the tenant company dossier (where "Needs you" answers land, gathered across every bid).
+     *  Forwarded to the agent panel's "Needs you" header. Absent on the intern mount (no admin dossier access). */
+    onOpenDossier?: () => void;
     /** READ-ONLY intern parity mount: the intern sees the SAME cockpit the admin sees, but every mutation control is
      *  disabled. The center panels are wrapped in a disabled <fieldset> (greys out every button/input/select/textarea
      *  inside); the agent panel, the due-date setter and the document drawer take `readOnly` directly. Navigation
@@ -223,7 +226,7 @@ export default function StudioShell(
             Proposal-agent panel. Every other view keeps the agent panel. */}
         {(current === 'snapshot' || current === 'solicitation' || current === 'fit' || current === 'decide' || current === 'outcome')
           ? <QualRail view={view} />
-          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={uiReadOnly} />}
+          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={uiReadOnly} onOpenDossier={onOpenDossier} />}
       </div>
       {drawerDoc && (
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify && !readOnly} readOnly={uiReadOnly} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)
