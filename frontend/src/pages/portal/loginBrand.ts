@@ -40,8 +40,12 @@ export function resolveLoginBrand(search: URLSearchParams, referrer: string): Lo
   return 'enterprise';
 }
 
-/** Where "Back to ..." goes, and what it says, per brand. */
-export const LOGIN_BRAND_BACK: Record<LoginBrand, { href: string; label: string }> = {
-  enterprise: { href: '/', label: 'Back to enterprise.colaberry.ai' },
-  training: { href: 'https://training.colaberry.com', label: 'Back to training.colaberry.com' },
+/**
+ * Where "Back to ..." goes, and the site it names, per brand. On a phone the page shows
+ * only "Back": beside the enterprise lockup the full sentence pushed the page to 448px
+ * on a 390px screen.
+ */
+export const LOGIN_BRAND_BACK: Record<LoginBrand, { href: string; site: string }> = {
+  enterprise: { href: '/', site: 'enterprise.colaberry.ai' },
+  training: { href: 'https://training.colaberry.com', site: 'training.colaberry.com' },
 };

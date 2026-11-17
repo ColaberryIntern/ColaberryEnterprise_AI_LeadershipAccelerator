@@ -101,6 +101,7 @@ function PortalLoginPage() {
   return (
     <div className="cbpl-root" data-brand={brand}>
       <style>{PORTAL_LOGIN_CSS}</style>
+      <style>{'@media (max-width:560px){.cbpl-back-site{display:none}}'}</style>
       {brand === 'enterprise' ? <style>{PORTAL_LOGIN_ENTERPRISE_CSS}</style> : null}
       <span aria-hidden="true" className="cbpl-wash" />
       <Constellation />
@@ -117,9 +118,10 @@ function PortalLoginPage() {
             <img src="/colaberry-logo-transparent.png" alt="Colaberry" className="cbpl-mark" />
           </a>
         )}
-        <a className="cbpl-back" href={back.href}>
+        <a className="cbpl-back" href={back.href} aria-label={`Back to ${back.site}`}>
           <Icon d="M19 12H5M12 19l-7-7 7-7" />
-          {back.label}
+          {/* One span, so the link's flex gap does not open between "Back" and "to". */}
+          <span>Back<span className="cbpl-back-site"> to {back.site}</span></span>
         </a>
       </header>
 
