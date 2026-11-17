@@ -78,6 +78,10 @@ describe('AdminGovServicesPage: the evidence-backed catalog', () => {
     const pub = container.querySelector('[data-testid="public-gov-link"]') as HTMLAnchorElement;
     expect(pub.getAttribute('href')).toBe('/government/');
     expect(pub.getAttribute('target')).toBe('_blank');
+    // Our Services left the sidebar, so the header carries its own way back to Gov Opportunities.
+    const back = container.querySelector('[data-testid="back-to-gov-opps"]') as HTMLButtonElement;
+    expect(back).not.toBeNull();
+    expect(back.textContent).toContain('Gov Opportunities');
   });
 
   it('the catalog filter is client-side over the one summary', async () => {

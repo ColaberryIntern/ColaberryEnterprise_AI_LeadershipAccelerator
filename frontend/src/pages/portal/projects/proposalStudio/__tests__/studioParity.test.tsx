@@ -423,6 +423,20 @@ describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualificat
     expect(present('stage-fit')).toBe(true); // in-studio StageDetail — the intern never reaches the admin workspace
   });
 
+  it('ADMIN mount: the agent panel Needs-you header links to the company dossier (where answers go)', async () => {
+    const opened: string[] = [];
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} onOpenDossier={() => opened.push('dossier')} />);
+    const link = container.querySelector('[data-testid="agent-dossier-link"]') as HTMLButtonElement;
+    expect(link).not.toBeNull();
+    await act(async () => { link.click(); });
+    expect(opened).toEqual(['dossier']);
+  });
+
+  it('INTERN mount (no onOpenDossier): no dossier link — the intern cannot reach the admin dossier page', async () => {
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    expect(container.querySelector('[data-testid="agent-dossier-link"]')).toBeNull();
+  });
+
   it('step 6 (Proposal) is driven by the proposal due date — shows the auto-resolved deadline + countdown', async () => {
     const dated = { ...VIEW, closeDate: '2030-01-15' } as unknown as StudentGovProjectView;
     await render(<StudioShell view={dated} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);

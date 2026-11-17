@@ -81,7 +81,7 @@ const AdminGovContractCockpitPage: React.FC = () => {
         const onOpenQualification = qualKey
           ? (step: string) => navigate(`/admin/gov-qualification?gws=${encodeURIComponent(qualKey)}&tab=${encodeURIComponent(step)}`)
           : undefined;
-        return <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} onOpenQualification={onOpenQualification} />;
+        return <StudioShell view={state.view} projectId={projectId} onReload={load} cockpitApi={adminGovCockpitApi} studioApi={adminGovStudioApi} reviewApi={adminGovReviewApi} onReanalyze={onReanalyze} reanalyzing={reanalyzing} bugReportEndpoint={`/api/admin/gov-contracts/${encodeURIComponent(projectId)}/bug-report`} onOpenQualification={onOpenQualification} onOpenDossier={() => navigate('/admin/gov-services#dossier')} />;
       })()}
     </div>
   );

@@ -17,8 +17,11 @@ const evClass = (k: GovActivityEvent['kind']): string => (k === 'library_answer'
  * routes via the injected studioApi; Ask goes through the injected copilot.
  */
 export default function AgentPanel(
-  { projectId, studioApi, docs, onReload, onNavigate, onAsk, onToast, readOnly = false }:
-  { projectId: string; studioApi: GovStudioApi; docs: GovProposalDocument[]; onReload: () => void; onNavigate: (v: StudioView) => void; onAsk?: (q: string) => Promise<string>; onToast?: (m: string) => void; readOnly?: boolean },
+  { projectId, studioApi, docs, onReload, onNavigate, onAsk, onToast, readOnly = false, onOpenDossier }:
+  { projectId: string; studioApi: GovStudioApi; docs: GovProposalDocument[]; onReload: () => void; onNavigate: (v: StudioView) => void; onAsk?: (q: string) => Promise<string>; onToast?: (m: string) => void; readOnly?: boolean;
+    /** When set, a link under "Needs you" opens the tenant company dossier (where answers land, gathered across every bid).
+     *  Passed only by the admin cockpit — the intern mount omits it (the intern cannot reach the admin dossier page). */
+    onOpenDossier?: () => void },
 ): React.ReactElement {
   const [needs, setNeeds] = useState<GovProjectNeed[]>([]);
   const [activity, setActivity] = useState<GovActivityEvent[]>([]);
@@ -91,6 +94,12 @@ export default function AgentPanel(
 
         <div className="gps-ask" data-testid="agent-needs">
           <h3><span>Needs you</span><span className="gps-num">{needs.length}</span></h3>
+          {onOpenDossier && (
+            <button type="button" className="gps-link gps-muted gps-small" style={{ alignSelf: 'flex-start', marginBottom: 6 }}
+              onClick={onOpenDossier} data-testid="agent-dossier-link">
+              See where answers go in the company dossier
+            </button>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {needs.length === 0 && <div className="gps-muted gps-small">Nothing needs you right now.</div>}
             {top.map((n) => {
