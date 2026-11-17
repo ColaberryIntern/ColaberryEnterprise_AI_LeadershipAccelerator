@@ -93,7 +93,6 @@ export default function DemoVideoGallery({ videos }: { videos: GovDemoVideo[] })
               <b>{open.typeLabel}</b>
               <button type="button" className="gps-btn sm" data-testid="ev-demo-video-close" onClick={() => setOpen(null)}>Close</button>
             </div>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a recorded demo take has no caption track */}
             <video
               data-testid="ev-demo-video-player"
               src={apiUrl(open.fileUrl)}
