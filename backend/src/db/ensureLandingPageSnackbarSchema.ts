@@ -8,8 +8,15 @@ import { sequelize } from '../config/database';
  *                                     unless the page overrides. Defaults ON (see below).
  *   landing_pages.snackbar_enabled    Per-page override: true / false / NULL (follow the brand).
  *   landing_pages.snackbar_config     Zod-validated settings (landingPageSnackbar.ts).
- *   leads.social_proof_opt_in         Set from the signup checkbox. Only opted-in people are ever
- *                                     shown by first name; everyone else is "Someone in <city>".
+ *   leads.social_proof_opt_in         NOTHING WRITES THIS YET. See below.
+ *
+ * NO SIGNUP FORM COLLECTS social_proof_opt_in, SO IT IS `false` ON EVERY ROW. The column exists
+ * and snackbarFeedService reads it, but no form, controller or import ever sets it, and it is
+ * NOT NULL DEFAULT false - so the consent half of the feature was never built. The consequence is
+ * not cosmetic: the bar can only ever say "Someone in <city>", the by-first-name path is dead
+ * code, and a page configured `name_format: 'opted_in_only'` drops every row and shows no bar at
+ * all. Treat that as the known state, not a bug to re-diagnose. Names turn on when a form starts
+ * collecting the consent - the display side already handles it and needs no change (SNACK-2).
  *
  * THE COLUMN DEFAULT IS `true`, AND THAT IS THE WHOLE FEATURE. Ali's ask (2026-11-02) was "this
  * process should be on every Landing page we create moving fwd" - so a brand created tomorrow has

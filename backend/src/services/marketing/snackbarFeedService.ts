@@ -14,6 +14,12 @@ import type { SnackbarConfig } from './landingPageSnackbar';
  * before they reach the response: first name + last initial at most, city at most, never an
  * email, surname, lead id or timestamp precise enough to re-identify someone.
  *
+ * NOBODY IS OPTED IN TODAY, so in production this only ever says "Someone in <city>". `opted_in`
+ * reads leads.social_proof_opt_in, which no signup form writes (see
+ * db/ensureLandingPageSnackbarSchema.ts), so it is `false` on every row and the by-name branch in
+ * composeSignupEvents never runs. The unit tests pass `opted_in: true` rows directly, which is why
+ * that branch is covered by tests and still unreachable through the real query.
+ *
  * Failure: the route catches any error from here, logs it with an error_class, and returns
  * `{ events: [] }`. A broken feed costs the page its snack bar, never the page itself.
  */
@@ -66,6 +72,10 @@ export function composeSignupEvents(rows: SignupRow[], config: SnackbarConfig, n
   for (const row of rows) {
     const city = cleanCity(row.city);
     const { first, initial } = splitName(row.name);
+    // Both lines below are DEAD AGAINST REAL DATA today, on purpose: `opted_in` is false on every
+    // row because no form collects the consent, so `opted_in_only` drops everything and `named` is
+    // never true. Do not "simplify" this to assume names are shown, and do not read an empty bar
+    // on an `opted_in_only` page as a feed bug. The display side is finished; the consent is not.
     if (config.name_format === 'opted_in_only' && !row.opted_in) continue;
     const named = config.name_format !== 'city_only' && row.opted_in && first;
     let title: string;
