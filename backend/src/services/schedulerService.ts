@@ -2446,7 +2446,7 @@ export function startScheduler(): void {
     cron.schedule('0 8 * * *', () => {
       instrumentCronJob('BillingWatch', async () => {
         const { runBillingWatch } = await import('./billing/billingHealthReport');
-        const r = await runBillingWatch({ send: true });
+        const r = await runBillingWatch({ send: true, reconcile: true });
         console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
       }).catch((err) => {
         console.error('[Scheduler] Billing watch error:', err);
