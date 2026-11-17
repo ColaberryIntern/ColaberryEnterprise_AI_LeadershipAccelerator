@@ -45,7 +45,8 @@ describe('ServicesV2 index', () => {
   it('opens on the three services, not a list of five offer names', () => {
     const h = indexHtml();
     const h1 = h.slice(h.indexOf('<h1'), h.indexOf('</h1>'));
-    expect(textOf(h1)).toMatch(/Build\. Guide\. Train\./i);
+    /* each full stop is its own span (the model's accent dot), so close the gap the tag left */
+    expect(textOf(h1).replace(/\s+\./g, '.')).toMatch(/Build\. Guide\. Train\./i);
   });
 
   it('renders all three services', () => {

@@ -1,7 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import Icon from '../../components/publicV2/Icon';
 import { Claim } from '../../components/publicV2/Claim';
+import DepartmentMap from '../../components/publicV2/DepartmentMap';
+import FaqCardsV5 from '../../components/publicV2/FaqCardsV5';
+import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
 import { JOURNEY } from '../../config/v2Journey';
 import { trackEvent } from '../../utils/tracker';
 import { DemoPilotSection } from './homeV2Sections';
@@ -9,96 +13,91 @@ import './journeyV2.css';
 import './howItWorksV2.css';
 
 /**
- * HowItWorksV2 - at /how-it-works.
+ * HowItWorksV2 - at /how-it-works, built to Ali's site model (route "how-it-works").
  *
- * THE ONE PAGE THE v5 SITE MODEL MAKES LONGER. Everywhere else the model cuts;
- * here it adds, because the page answered "what are the stages" and never
- * answered the question a buyer actually asks next: how does this scale past
- * the first process, and how fast does it have to go.
+ * THE MODEL'S ORDER, band for band (2026-11-16, page group 2 of the fidelity rebuild):
+ *   1. the light page hero (crumb, label, title with its accent phrase, two buttons)
+ *   2. the rollout board, dark, full width: the same DepartmentMap the home hero uses
+ *   3. the three steps (shared with Home, labelled "The three steps" here)
+ *   4. your pace: department by department, or company-wide
+ *   5. how engagements grow, with the five stages folded in underneath
+ *   6. questions
+ *   7. the shared closing band
  *
- * So the page now runs: the three steps, the rollout as a picture, the choice
- * between taking it one leader at a time or starting everyone together, how an
- * engagement grows from one process to the whole company, then the five-stage
- * mechanism, then the questions.
+ * THE ROLLOUT BOARD IS BACK. An earlier pass took it off believing the model had no
+ * board on this page. It does: the model draws `.orgwrap` straight under this hero.
+ * It is a <div>, not a <section>, as in the model, so the page still has six bands.
  *
  * THE FIVE STAGES STAY, AND SO DOES THEIR DELIVERY LABEL. The model has no
- * equivalent of this band. It is kept because the C2.2 capability audit found
- * two of the five stages have no platform capability behind them, and each one
- * says so on the page. Both tickets in that group say "never describe roadmap
- * as live", and the cheapest way to comply is to keep saying which stages a
- * person delivers. Dropping the band to match a design comp would quietly
- * retire an honesty the audit put there on purpose.
+ * equivalent. They are kept because the C2.2 capability audit found two of the five
+ * stages have no platform capability behind them, and each one says so on the page.
+ * Matching a design comp is not a reason to retire an honesty the audit put there.
  *
- * THE DEPARTMENT MAP AND THE THREE STEPS ARE SHARED WITH THE HOME PAGE, not
- * copied. The model shows the same two blocks on both, and two copies of a
- * block that must stay consistent is how they stop being consistent.
+ * KEPT BEYOND THE MODEL, also on purpose: the positioning line (VERIFIED, through
+ * <Claim>, the one place it is stated) and the link to /proof under the questions.
+ *
+ * NO DURATION ON THE PACE TRACKS. The model labels the track's end "Month 12". These
+ * bars are shapes, not schedules, so the end reads "Later" and no length is claimed.
  */
 
 const ROUTE = '/how-it-works';
 
-interface Path {
-  readonly tag: string;
-  readonly title: string;
-  readonly body: string;
-  readonly depts: readonly { name: string; from: number }[];
+interface Lane {
+  readonly name: string;
+  /** bars as [left %, width %, green?]: green is a department already automating */
+  readonly bars: readonly (readonly [number, number, boolean])[];
 }
 
-/**
- * The two rollout shapes. `from` is the month-12 bar's start as a percentage of
- * the track: department-by-department staggers, company-wide starts together.
- * These are SHAPES, not schedules -- no duration is claimed anywhere, and the
- * track is labelled by its endpoints rather than by months elapsed.
- */
+interface Path {
+  readonly tag: string;
+  readonly accent: boolean;
+  readonly title: string;
+  readonly body: string;
+  readonly lanes: readonly Lane[];
+  readonly reading: string;
+}
+
+/** The two rollout shapes, with the model's own bar positions. */
 const PATHS: readonly Path[] = [
   {
     tag: 'Path A',
+    accent: false,
     title: 'Department by department',
     body:
       'Start where the ROI is clearest. Prove it, then take the result to the next leader. ' +
       'Each win funds the case for the next.',
-    depts: [
-      { name: 'Finance', from: 0 },
-      { name: 'Operations', from: 22 },
-      { name: 'Support', from: 44 },
-      { name: 'Sales', from: 66 },
+    lanes: [
+      { name: 'Finance', bars: [[0, 34, true]] },
+      { name: 'Operations', bars: [[22, 34, true]] },
+      { name: 'Support', bars: [[46, 30, false]] },
+      { name: 'Sales', bars: [[68, 32, false]] },
     ],
+    reading:
+      'Departments begin one after another, each starting once the one before it is proven.',
   },
   {
     tag: 'Path B',
+    accent: true,
     title: 'Company-wide',
     body:
       'One demo pilot to prove the approach, then every leader starts together, each with ' +
       'their own shortlist and their own processes.',
-    depts: [
-      { name: 'Finance', from: 14 },
-      { name: 'Operations', from: 14 },
-      { name: 'Support', from: 14 },
-      { name: 'Sales', from: 14 },
+    lanes: [
+      { name: 'Finance', bars: [[0, 24, true], [26, 74, false]] },
+      { name: 'Operations', bars: [[26, 74, false]] },
+      { name: 'Support', bars: [[26, 74, false]] },
+      { name: 'Sales', bars: [[26, 74, false]] },
     ],
+    reading:
+      'Departments begin together, after a single demo pilot has proven the approach.',
   },
 ];
 
 const GROWTH: readonly { n: string; title: string; body: string }[] = [
-  {
-    n: '1',
-    title: 'Demo pilot',
-    body: 'One process, automated and running, with the ROI case beside it.',
-  },
-  {
-    n: '2',
-    title: 'First department',
-    body: 'The pilot’s leader gets the rest of their shortlist.',
-  },
-  {
-    n: '3',
-    title: 'Next leaders',
-    body: 'We work with each leader in turn, or with all of them at once.',
-  },
-  {
-    n: '4',
-    title: 'Company-wide',
-    body: 'AI is how the work gets done, and your people can extend it themselves.',
-  },
+  { n: '1', title: 'Demo pilot', body: 'One process, automated and running, with the ROI beside it.' },
+  { n: '2', title: 'First department', body: 'The pilot’s leader gets the rest of their shortlist.' },
+  { n: '3', title: 'Next leaders', body: 'We work with each leader in turn, or all at once.' },
+  { n: '4', title: 'Company-wide', body: 'AI is how the work gets done, and your people can extend it.' },
 ];
 
 const FAQS: readonly { q: string; a: string }[] = [
@@ -106,8 +105,8 @@ const FAQS: readonly { q: string; a: string }[] = [
     q: 'What exactly is a demo pilot?',
     a:
       'One of your real processes, automated with Claude Code and running, with the ROI ' +
-      'case written beside it. It is how you decide whether to go further, on evidence ' +
-      'rather than on a deck.',
+      'case written beside it. It is how you decide whether to go further, on evidence, not ' +
+      'on a deck.',
   },
   {
     q: 'Department by department, or company-wide?',
@@ -139,80 +138,100 @@ export default function HowItWorksV2(): React.ReactElement {
         route={ROUTE}
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-how-title">
+      <section className="cbv2-prhero5" aria-labelledby="cbv2-how-title">
         <div className="cbv2-wrap">
-          <p className="cbv2-breadcrumb">
+          <p className="cbv2-crumb5">
             <Link to="/">Home</Link> / How it works
           </p>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">How it works</p>
-          <h1 id="cbv2-how-title">Find the ROI. Prove it. Roll it out, leader by leader.</h1>
-          <p className="cbv2-pagehero__lede">
-            The same three steps whether you choose Build, Guide or Train, and whether
-            you go department by department or company-wide.
+          <p className="cbv2-k5">How it works</p>
+          <h1 id="cbv2-how-title">
+            Find the ROI. Prove it.{' '}
+            <span className="cbv2-it">Roll it out, leader by leader.</span>
+          </h1>
+          <p className="cbv2-lede">
+            The same three steps whether you choose Build, Guide or Train, and whether you go
+            department by department or company-wide.
           </p>
-          {/*
-              positioning.primary, kept on the page. The v5 model's hero does
-              not carry it and the home h1 no longer does either, so this is now
-              the one place the company's own positioning line is stated. It is
-              VERIFIED in the registry and rendered through <Claim>, so if it is
-              ever withdrawn the line disappears rather than going stale.
-          */}
-          <p className="cbv2-jy__claim">
-            <Claim claimKey="positioning.primary" route={ROUTE} />
-          </p>
-          <p className="cbv2-hiw__cta">
-            <Link className="cbv2-btn cbv2-btn--primary" to="/demo-pilot">
+          <div className="cbv2-btns5">
+            <Link
+              className="cbv2-btn cbv2-btn--primary"
+              to="/demo-pilot?source=how-it-works"
+              onClick={onEnquire}
+              data-track="how_it_works_enquiry"
+            >
               Book a demo pilot
+              <Icon name="arrowRight" size={16} />
             </Link>
-            <Link className="cbv2-btn cbv2-btn--secondary" to="/services">
+            <Link className="cbv2-btn cbv2-btn--line" to="/services">
               See the three services
             </Link>
+          </div>
+          {/*
+              positioning.primary, kept on the page. The model's hero does not carry it
+              and the home h1 no longer does either, so this is the one place the
+              company's own positioning line is stated. VERIFIED in the registry and
+              rendered through <Claim>, so if it is withdrawn the line disappears.
+          */}
+          <p className="cbv2-note5 cbv2-hiw5__claim">
+            <Claim claimKey="positioning.primary" route={ROUTE} />
           </p>
         </div>
       </section>
 
-      {/*
-          THE ROLLOUT BAND CAME OFF THIS PAGE. The model has no equivalent here,
-          and the same grid now sits inside the home hero, where the model does
-          put it. `DepartmentMapSection` is unrouted by this change, not
-          deleted.
-      */}
-
-      <DemoPilotSection />
-
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-paths-title">
+      <div className="cbv2-orgwrap5" aria-label="Illustration: AI moving through a company department by department">
         <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Your pace</p>
-          <h2 id="cbv2-paths-title">Department after department, or company-wide.</h2>
-          <p className="cbv2-lede">
-            The same method either way. The difference is how many leaders we work with at
-            once.
-          </p>
+          <DepartmentMap />
+        </div>
+      </div>
 
-          <div className="cbv2-paths">
+      <DemoPilotSection eyebrow="The three steps" onHowItWorks />
+
+      <section className="cbv2-section cbv2-section--soft cbv2-paths5-sec" aria-labelledby="cbv2-paths-title">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Your pace</p>
+            <h2 id="cbv2-paths-title">
+              Department after department, <span className="cbv2-it">or company-wide.</span>
+            </h2>
+            <p className="cbv2-lede">
+              Same method either way. The difference is how many leaders we work with at once.
+            </p>
+          </div>
+
+          <div className="cbv2-paths5">
             {PATHS.map((p) => (
-              <article className="cbv2-path" key={p.tag}>
-                <p className="cbv2-eyebrow">{p.tag}</p>
+              <article className="cbv2-path5" key={p.tag}>
+                <span className={`cbv2-tag ${p.accent ? 'cbv2-tag--accent' : 'cbv2-tag--navy5'}`}>
+                  {p.tag}
+                </span>
                 <h3>{p.title}</h3>
-                <p className="cbv2-path__body">{p.body}</p>
-                {/* A shape, not a schedule. The bars show whether departments
-                    start staggered or together; no duration is claimed, and the
-                    list below is the accessible reading of the same thing. */}
-                <ul className="cbv2-path__track" aria-hidden="true">
-                  {p.depts.map((d) => (
-                    <li key={d.name}>
-                      <span className="cbv2-path__dept">{d.name}</span>
-                      <span className="cbv2-path__bar">
-                        <span style={{ marginLeft: `${d.from}%`, width: `${100 - d.from}%` }} />
-                      </span>
-                    </li>
+                <p>{p.body}</p>
+                {/* A shape, not a schedule: the bars show staggered or together, and the
+                    sentence after them is the same reading for assistive technology. */}
+                <div className="cbv2-path5__viz" aria-hidden="true">
+                  {p.lanes.map((l) => (
+                    <div className="cbv2-lane5" key={l.name}>
+                      <span>{l.name}</span>
+                      <div className="cbv2-lane5__t">
+                        {l.bars.map(([left, width, green]) => (
+                          <i
+                            key={left}
+                            className={green ? 'is-g' : undefined}
+                            style={{ left: `${left}%`, width: `${width}%` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                </ul>
-                <p className="cbv2-path__legend">
-                  {p.tag === 'Path A'
-                    ? 'Departments begin one after another, each starting once the one before it is proven.'
-                    : 'Departments begin together, after a single demo pilot has proven the approach.'}
-                </p>
+                </div>
+                <div className="cbv2-path5__ax" aria-hidden="true">
+                  <span />
+                  <div>
+                    <span>Demo pilot</span>
+                    <span>Later</span>
+                  </div>
+                </div>
+                <p className="cbv2-sr-only">{p.reading}</p>
               </article>
             ))}
           </div>
@@ -221,32 +240,24 @@ export default function HowItWorksV2(): React.ReactElement {
 
       <section className="cbv2-section" aria-labelledby="cbv2-growth-title">
         <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">How engagements grow</p>
-          <h2 id="cbv2-growth-title">From one process to the whole company.</h2>
-          <ol className="cbv2-pilot">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">How engagements grow</p>
+            <h2 id="cbv2-growth-title">From one process to the whole company.</h2>
+          </div>
+          <ol className="cbv2-journey5">
             {GROWTH.map((g) => (
-              <li className="cbv2-pilot__step" key={g.n}>
-                <span className="cbv2-pilot__n" aria-hidden="true">
-                  {g.n}
-                </span>
-                <div>
-                  <h3 className="cbv2-pilot__title">{g.title}</h3>
-                  <p className="cbv2-pilot__body">{g.body}</p>
-                </div>
+              <li className="cbv2-jn5" key={g.n}>
+                <b aria-hidden="true">{g.n}</b>
+                <h3>{g.title}</h3>
+                <p>{g.body}</p>
               </li>
             ))}
           </ol>
 
           {/*
-              THE FIVE-STAGE MECHANISM, FOLDED IN RATHER THAN RETIRED.
-
-              It was a band of its own, and the model has no equivalent, which
-              took this page to eight bands against the model's six. But it
-              carries the C2.2 disclosure: each stage says whether the platform
-              or a person delivers it, and two of the five are people. That is
-              an audited honesty, and matching a picture is not a reason to
-              retire one. So the band's chrome goes and its content stays, one
-              level down, under the band about how an engagement grows.
+              THE FIVE-STAGE MECHANISM, FOLDED IN RATHER THAN RETIRED. It carries the
+              C2.2 disclosure: each stage says whether the platform or a person delivers
+              it, and two of the five are people.
           */}
           <h3 className="cbv2-jy__sub">
             Inside one engagement: five stages, from a problem you name to software your
@@ -279,19 +290,14 @@ export default function HowItWorksV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-hiw-faq">
+      <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-hiw-faq">
         <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Questions</p>
-          <h2 id="cbv2-hiw-faq">Before you ask.</h2>
-          <dl className="cbv2-faq">
-            {FAQS.map((f) => (
-              <div className="cbv2-faq__item" key={f.q}>
-                <dt>{f.q}</dt>
-                <dd>{f.a}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="cbv2-jy__proof">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Questions</p>
+            <h2 id="cbv2-hiw-faq">Before you ask.</h2>
+          </div>
+          <FaqCardsV5 items={FAQS} />
+          <p className="cbv2-note5">
             Proof is the stage everything else rests on, and it is the one you can test
             before you buy anything.{' '}
             <Link to="/proof" className="cbv2-jy__link">See the published records</Link>.
@@ -299,18 +305,7 @@ export default function HowItWorksV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--inverse" aria-label="Talk to us">
-        <div className="cbv2-wrap cbv2-jy__cta">
-          <Link
-            to="/demo-pilot?source=how-it-works"
-            onClick={onEnquire}
-            className="cbv2-jy__btn"
-            data-track="how_it_works_enquiry"
-          >
-            Book a demo pilot
-          </Link>
-        </div>
-      </section>
+      <ClosingCtaV5 />
     </>
   );
 }

@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import Icon from '../../components/publicV2/Icon';
 import { EnterpriseLead, toLeadPayload } from '../../models/EnterpriseLead';
 import { getUTMParams } from '../../services/utmService';
 import { identifyVisitor } from '../../utils/tracker';
 import api from '../../utils/api';
-import './demoPilotV2.css';
-/* The form pattern (.cbv2-field, .cbv2-fields) is the one /lab already used --
-   reused rather than reinvented, since /lab is the page this one absorbs. */
-import './opportunityLabV2.css';
 
 /**
  * DemoPilotV2 — /demo-pilot. The single conversion page.
@@ -190,17 +187,17 @@ export function DemoPilotV2(): React.ReactElement {
     return (
       <>
         <SeoV2 title="Thank you" description="Your demo pilot request is with an architect." />
-        <section className="cbv2-section" aria-labelledby="cbv2-dp-done">
-          <div className="cbv2-wrap cbv2-wrap--narrow">
-            <p className="cbv2-eyebrow">Thank you</p>
+        <section className="cbv2-prhero5 cbv2-dp5" aria-labelledby="cbv2-dp-done">
+          <div className="cbv2-wrap">
+            <p className="cbv2-k5">Thank you</p>
             <h1 id="cbv2-dp-done">That is with an architect now.</h1>
             <p className="cbv2-lede">
               A person will read it and reply to plan a first conversation. If you would
               rather add anything in the meantime, email{' '}
               <a href="mailto:info@colaberry.com">info@colaberry.com</a>.
             </p>
-            <p style={{ marginTop: 'var(--space-6)' }}>
-              <Link className="cbv2-btn cbv2-btn--secondary" to="/services">
+            <p className="cbv2-btns5">
+              <Link className="cbv2-btn cbv2-btn--line" to="/services">
                 Read about the three services
               </Link>
             </p>
@@ -221,56 +218,55 @@ export function DemoPilotV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-dp-title">
+      {/*
+        LAYOUT IS THE MODEL'S (2026-11-16, page group 3): one light band, the promise and
+        "what happens next" on the left, the form card on the right. The form's data
+        contract is unchanged: same field names, same checks, same consent, same endpoint.
+        The service question is the model's row of chips; they are radio buttons with the
+        same `service` name and values the dropdown had, so the lead message is identical.
+      */}
+      <section className="cbv2-prhero5 cbv2-dp5" aria-labelledby="cbv2-dp-title">
         <div className="cbv2-wrap">
-          <p className="cbv2-breadcrumb">
+          <p className="cbv2-crumb5">
             <Link to="/">Home</Link> / Book a demo pilot
           </p>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Book a demo pilot</p>
-          <h1 id="cbv2-dp-title">See AI run on one of your processes.</h1>
-          <p className="cbv2-pagehero__lede">
-            Tell us about one process and two numbers. An architect will come back to you to
-            plan the demo pilot, for Build or Guide, or to set up Train.
-          </p>
-        </div>
-      </section>
+          <div className="cbv2-dp5__g">
+            <div>
+              <p className="cbv2-k5 cbv2-dp5__k">Book a demo pilot</p>
+              <h1 id="cbv2-dp-title">See AI run on one of your processes.</h1>
+              <p className="cbv2-lede">
+                Tell us about one process and two numbers. An architect will come back to you
+                to plan the demo pilot, for Build or Guide, or to set up Train.
+              </p>
+              <h2 id="cbv2-dp-next" className="cbv2-sr-only">
+                What happens after you send this
+              </h2>
+              <ol className="cbv2-next5" aria-labelledby="cbv2-dp-next">
+                {WHAT_HAPPENS.map((s) => (
+                  <li key={s.n}>
+                    <b aria-hidden="true">{s.n}</b>
+                    <p>
+                      <strong>{s.title}</strong>
+                      <span>{s.body}</span>
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
 
-      <section className="cbv2-section" aria-labelledby="cbv2-dp-next">
-        <div className="cbv2-wrap">
-          <h2 id="cbv2-dp-next" className="cbv2-sr-only">
-            What happens after you send this
-          </h2>
-          <ol className="cbv2-pilot">
-            {WHAT_HAPPENS.map((s) => (
-              <li className="cbv2-pilot__step" key={s.n}>
-                <span className="cbv2-pilot__n" aria-hidden="true">
-                  {s.n}
-                </span>
-                <div>
-                  <h3 className="cbv2-pilot__title">{s.title}</h3>
-                  <p className="cbv2-pilot__body">{s.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-dp-form">
-        <div className="cbv2-wrap cbv2-wrap--narrow">
-          <h2 id="cbv2-dp-form" className="cbv2-sr-only">
-            Book a demo pilot
-          </h2>
-
-          <form className="cbv2-dp-form" onSubmit={submit} noValidate>
-            <div className="cbv2-fields">
-              <div className="cbv2-fields__row">
-                <div className="cbv2-field">
-                  <label className="cbv2-field__label" htmlFor="dp-name">
-                    Your name
-                  </label>
+            <form
+              className="cbv2-fcard5"
+              onSubmit={submit}
+              noValidate
+              aria-labelledby="cbv2-dp-form"
+            >
+              <h2 id="cbv2-dp-form" className="cbv2-sr-only">
+                Book a demo pilot
+              </h2>
+              <div className="cbv2-fgrid5">
+                <div className="cbv2-field5">
+                  <label htmlFor="dp-name">Your name</label>
                   <input
-                    className="cbv2-field__input"
                     id="dp-name"
                     name="fullName"
                     value={form.fullName}
@@ -280,18 +276,14 @@ export function DemoPilotV2(): React.ReactElement {
                     aria-describedby={errors.fullName ? 'dp-name-err' : undefined}
                   />
                   {errors.fullName ? (
-                    <p className="cbv2-field__err" id="dp-name-err">
+                    <p className="cbv2-field5__err" id="dp-name-err">
                       {errors.fullName}
                     </p>
                   ) : null}
                 </div>
-
-                <div className="cbv2-field">
-                  <label className="cbv2-field__label" htmlFor="dp-email">
-                    Work email
-                  </label>
+                <div className="cbv2-field5">
+                  <label htmlFor="dp-email">Work email</label>
                   <input
-                    className="cbv2-field__input"
                     id="dp-email"
                     name="email"
                     type="email"
@@ -302,20 +294,17 @@ export function DemoPilotV2(): React.ReactElement {
                     aria-describedby={errors.email ? 'dp-email-err' : undefined}
                   />
                   {errors.email ? (
-                    <p className="cbv2-field__err" id="dp-email-err">
+                    <p className="cbv2-field5__err" id="dp-email-err">
                       {errors.email}
                     </p>
                   ) : null}
                 </div>
               </div>
 
-              <div className="cbv2-fields__row">
-                <div className="cbv2-field">
-                  <label className="cbv2-field__label" htmlFor="dp-company">
-                    Company
-                  </label>
+              <div className="cbv2-fgrid5">
+                <div className="cbv2-field5">
+                  <label htmlFor="dp-company">Company</label>
                   <input
-                    className="cbv2-field__input"
                     id="dp-company"
                     name="company"
                     value={form.company}
@@ -323,13 +312,9 @@ export function DemoPilotV2(): React.ReactElement {
                     autoComplete="organization"
                   />
                 </div>
-
-                <div className="cbv2-field">
-                  <label className="cbv2-field__label" htmlFor="dp-role">
-                    Your role
-                  </label>
+                <div className="cbv2-field5">
+                  <label htmlFor="dp-role">Your role</label>
                   <input
-                    className="cbv2-field__input"
                     id="dp-role"
                     name="role"
                     value={form.role}
@@ -339,96 +324,89 @@ export function DemoPilotV2(): React.ReactElement {
                 </div>
               </div>
 
-              <div className="cbv2-fields__row">
-                <div className="cbv2-field">
-                  <label className="cbv2-field__label" htmlFor="dp-service">
-                    Which service are you considering? <span className="cbv2-opt">optional</span>
-                  </label>
-                  <select
-                    className="cbv2-field__input"
-                    id="dp-service"
-                    name="service"
-                    value={form.service}
-                    onChange={change}
-                  >
-                    <option value="">Choose one</option>
-                    {SERVICES.map((s) => (
-                      <option key={s} value={s}>
+              <fieldset className="cbv2-field5 cbv2-field5--set">
+                <legend>
+                  Which service are you considering? <small>optional</small>
+                </legend>
+                <div className="cbv2-chips5">
+                  {SERVICES.map((s) => {
+                    const id = `dp-service-${s.toLowerCase().replace(/[^a-z]+/g, '-')}`;
+                    return (
+                      <label key={s} htmlFor={id}>
+                        <input
+                          type="radio"
+                          id={id}
+                          name="service"
+                          value={s}
+                          checked={form.service === s}
+                          onChange={change}
+                        />
                         {s}
-                      </option>
-                    ))}
-                  </select>
+                      </label>
+                    );
+                  })}
                 </div>
+              </fieldset>
 
-                <div className="cbv2-field">
-                  <label className="cbv2-field__label" htmlFor="dp-dept">
-                    Department
-                  </label>
-                  <select
-                    className="cbv2-field__input"
-                    id="dp-dept"
-                    name="department"
-                    value={form.department}
-                    onChange={change}
-                  >
-                    <option value="">Choose one</option>
-                    {DEPARTMENTS.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="cbv2-field5">
+                <label htmlFor="dp-dept">Department</label>
+                <select id="dp-dept" name="department" value={form.department} onChange={change}>
+                  <option value="">Choose one</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="cbv2-field">
-                <label className="cbv2-field__label" htmlFor="dp-process">
-                  The process you would start with
-                </label>
+              <div className="cbv2-field5">
+                <label htmlFor="dp-process">The process you would start with</label>
                 <textarea
-                  className="cbv2-field__input"
                   id="dp-process"
                   name="process"
                   rows={4}
+                  placeholder="What happens today, who does it, and where it hurts."
                   value={form.process}
                   onChange={change}
                   aria-invalid={Boolean(errors.process)}
                   aria-describedby={errors.process ? 'dp-process-err' : undefined}
                 />
                 {errors.process ? (
-                  <p className="cbv2-field__err" id="dp-process-err">
+                  <p className="cbv2-field5__err" id="dp-process-err">
                     {errors.process}
                   </p>
                 ) : null}
               </div>
 
-              <fieldset className="cbv2-figures">
-                <legend className="cbv2-field__label">The two figures</legend>
-                <p className="cbv2-figures__hint">
+              {/* The two figures are one question asked in two boxes, so they stay a real
+                  fieldset; the legend and its hint are drawn as the model's one tinted callout. */}
+              <fieldset className="cbv2-figs5">
+                <legend className="cbv2-fig5">
+                  <span className="cbv2-k5">The two figures</span>
+                </legend>
+                <p className="cbv2-fig5__p">
                   They are how we pick the pilot, and how you will judge it. Rough is fine.
                 </p>
-                <div className="cbv2-fields__row">
-                  <div className="cbv2-field">
-                    <label className="cbv2-field__label" htmlFor="dp-cost">
-                      What it costs today{' '}
-                      <span className="cbv2-opt">people &times; hours</span>
+                <div className="cbv2-fgrid5">
+                  <div className="cbv2-field5">
+                    <label htmlFor="dp-cost">
+                      What it costs today <small>people &times; hours</small>
                     </label>
                     <input
-                      className="cbv2-field__input"
                       id="dp-cost"
                       name="costToday"
+                      placeholder="e.g. 4 people, ~20 hrs/week"
                       value={form.costToday}
                       onChange={change}
                     />
                   </div>
-                  <div className="cbv2-field">
-                    <label className="cbv2-field__label" htmlFor="dp-return">
-                      What AI needs to return
-                    </label>
+                  <div className="cbv2-field5">
+                    <label htmlFor="dp-return">What AI needs to return</label>
                     <input
-                      className="cbv2-field__input"
                       id="dp-return"
                       name="requiredReturn"
+                      placeholder="e.g. hours back, faster close"
                       value={form.requiredReturn}
                       onChange={change}
                     />
@@ -436,7 +414,8 @@ export function DemoPilotV2(): React.ReactElement {
                 </div>
               </fieldset>
 
-              <div className="cbv2-consent">
+              {/* Consent is not in the model and is not optional (see the note at the top). */}
+              <div className="cbv2-consent5">
                 <input
                   type="checkbox"
                   id="dp-consent"
@@ -450,33 +429,32 @@ export function DemoPilotV2(): React.ReactElement {
                   I agree that Colaberry may contact me about this request.
                 </label>
                 {errors.consentContact ? (
-                  <p className="cbv2-field__err" id="dp-consent-err">
+                  <p className="cbv2-field5__err" id="dp-consent-err">
                     {errors.consentContact}
                   </p>
                 ) : null}
               </div>
 
               {serverError ? (
-                <p className="cbv2-field__err" role="alert">
+                <p className="cbv2-field5__err" role="alert">
                   {serverError}
                 </p>
               ) : null}
 
-              <div>
-                <button
-                  className="cbv2-btn cbv2-btn--primary"
-                  type="submit"
-                  disabled={submitting}
-                >
-                  {submitting ? 'Sending…' : 'Book my demo pilot'}
-                </button>
-              </div>
+              <button
+                className="cbv2-btn cbv2-btn--primary cbv2-fcard5__go"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? 'Sending…' : 'Book my demo pilot'}
+                {submitting ? null : <Icon name="arrowRight" size={16} />}
+              </button>
 
-              <p className="cbv2-note">
+              <p className="cbv2-fcard5__note">
                 Prefer email? <a href="mailto:info@colaberry.com">info@colaberry.com</a>
               </p>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </section>
     </>

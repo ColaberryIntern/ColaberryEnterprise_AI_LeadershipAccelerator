@@ -47,7 +47,10 @@
   min-width: 2.2rem;
 }
 
-.cbv2-jy__body h2 {
+/* h3 too: /how-it-works renders the stage names as h3 (under the band's h2), and with
+   only h2 here the delivery label ran into the name with no gap. */
+.cbv2-jy__body h2,
+.cbv2-jy__body h3 {
   font-size: 1.15rem;
   font-weight: 700;
   margin: 0 0 0.35rem;

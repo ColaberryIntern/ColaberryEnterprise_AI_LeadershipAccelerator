@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import HeroPricingV8 from '../../components/publicV2/HeroPricingV8';
 import Icon from '../../components/publicV2/Icon';
+import FaqCardsV5 from '../../components/publicV2/FaqCardsV5';
+import { RingTick } from '../../components/publicV2/ServiceCardsV5';
 import { Claim, canShow } from '../../components/publicV2/Claim';
 import {
   PRICING_TIERS,
@@ -12,10 +14,15 @@ import {
   COMPARE_ROWS,
 } from '../../config/v2Pricing';
 import './pricingV2.css';
-import '../../components/publicV2/heroV8.css';
 
 /**
  * PricingV2 -- the one surface where the full price ladder may render.
+ *
+ * LAYOUT ONLY, 2026-11-16 (page group 3). Ali's pricing decision (W4) is open,
+ * so no price, term, plan name or offer wording changed here. The bands took the
+ * model's shapes: light page hero, the services as the model's dark price cards,
+ * the model's "bring two figures" ask, the shared table, FAQ cards and closing
+ * band. Every service and tier keeps its own words and buttons.
  *
  * REBUILT AROUND BUILD / GUIDE / TRAIN, modeled on
  * `docs/enterprise-site-v4/index.html`. The page used to open on a license
@@ -53,8 +60,8 @@ function PricingV2(): React.ReactElement {
 
       <HeroPricingV8 />
 
-      {/* ===================== THE THREE SERVICES ===================== */}
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-services-title">
+      {/* ============ THE THREE SERVICES: the model's dark price band ============ */}
+      <section className="cbv2-section cbv2-ink5" aria-labelledby="cbv2-services-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Three ways to work with us</p>
@@ -66,43 +73,34 @@ function PricingV2(): React.ReactElement {
             </p>
           </div>
 
-          <div className="cbv2-shapes">
-            {SERVICE_SHAPES.map((s) => (
+          <div className="cbv2-price5">
+            {SERVICE_SHAPES.map((s, i) => (
               <article
-                className={`cbv2-shape cbv2-shape--${s.accent}${s.featured ? ' cbv2-shape--featured' : ''}`}
+                className={`cbv2-pr5${s.featured ? ' cbv2-pr5--hl' : ''}`}
                 key={s.key}
               >
-                <div className="cbv2-shape__head">
-                  <span className="cbv2-icon-tile cbv2-icon-tile--blue">
-                    <Icon name={s.icon} size={20} />
-                  </span>
-                  <span className="cbv2-shape__badge">{s.badge}</span>
-                </div>
-
-                <p className="cbv2-shape__verb">
-                  {s.verb}
-                  <span aria-hidden="true">.</span>
+                <p className="cbv2-k5">
+                  {String(i + 1).padStart(2, '0')} &middot; {s.verb}
                 </p>
-                <h3 className="cbv2-shape__promise">{s.promise}</h3>
-                <p className="cbv2-shape__blurb">{s.blurb}</p>
-
+                <h3>{s.termsLabel}</h3>
                 {/* The shape of the deal, never a figure. Figures live in the ladder below. */}
-                <div className="cbv2-shape__terms">
-                  <p className="cbv2-shape__terms-label">{s.termsLabel}</p>
-                  <p className="cbv2-shape__terms-value">{s.terms}</p>
-                </div>
-
-                <ul className="cbv2-shape__list">
-                  {s.includes.map((i) => (
-                    <li key={i}>
-                      <Icon name="check" size={16} />
-                      <span>{i}</span>
+                <p className="cbv2-pr5__model">{s.terms}</p>
+                <p className="cbv2-pr5__p">
+                  <b>{s.promise}</b> {s.blurb}
+                </p>
+                <ul className="cbv2-pr5__list">
+                  {s.includes.map((x) => (
+                    <li key={x}>
+                      <RingTick />
+                      <span>{x}</span>
                     </li>
                   ))}
                 </ul>
-
+                <p className="cbv2-pr5__row">
+                  <span>{s.badge}</span>
+                </p>
                 <Link
-                  className={`cbv2-btn ${s.featured ? 'cbv2-btn--primary' : 'cbv2-btn--secondary'} cbv2-shape__cta`}
+                  className={`cbv2-btn ${s.featured ? 'cbv2-btn--primary' : 'cbv2-btn--line cbv2-btn--onDark'} cbv2-pr5__btn`}
                   to={s.ctaRoute}
                 >
                   {s.ctaLabel}
@@ -110,35 +108,51 @@ function PricingV2(): React.ReactElement {
               </article>
             ))}
           </div>
+
+          {/* The model's "ask": what to bring to the first call. It asks for the customer's
+              two figures and states none of ours, so it does not touch the open W4 decision. */}
+          <div className="cbv2-ask5">
+            <div>
+              <h3>Bring two figures to the first call.</h3>
+              <p>
+                What the process costs you today in your people&rsquo;s time, and what you need
+                AI to return. That is how we pick the demo pilot, and how you will judge it.
+              </p>
+            </div>
+            <Link className="cbv2-btn cbv2-ask5__btn" to="/demo-pilot">
+              Book a demo pilot
+              <Icon name="arrowRight" size={16} />
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* ======================== SIDE BY SIDE ======================== */}
-      <section
-        className="cbv2-rv cbv2-section cbv2-section--sunken"
-        aria-labelledby="cbv2-compare-title"
-      >
+      <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-compare-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Side by side</p>
             <h2 id="cbv2-compare-title">Which one fits?</h2>
           </div>
 
-          {/* Scrolls inside its own box below ~720px rather than pushing the page sideways. */}
-          <div className="cbv2-compare__scroll">
-            <table className="cbv2-compare">
+          <div className="cbv2-ctable5">
+            <table>
               <caption className="cbv2-sr-only">
-                Build, Guide and Train compared across eight dimensions
+                Build, Guide and Train compared across {COMPARE_ROWS.length} dimensions
               </caption>
+              <colgroup>
+                <col className="cbv2-ctable5__c0" />
+                {SERVICE_SHAPES.map((s) => (
+                  <col key={s.key} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
-                  <th scope="col">Compare</th>
+                  <th scope="col">
+                    <span>Compare</span>
+                  </th>
                   {SERVICE_SHAPES.map((s) => (
-                    <th
-                      scope="col"
-                      key={s.key}
-                      className={s.featured ? 'cbv2-compare__hl' : undefined}
-                    >
+                    <th scope="col" key={s.key}>
                       {s.verb}
                     </th>
                   ))}
@@ -148,9 +162,9 @@ function PricingV2(): React.ReactElement {
                 {COMPARE_ROWS.map((r) => (
                   <tr key={r.label}>
                     <th scope="row">{r.label}</th>
-                    <td>{r.build}</td>
-                    <td className="cbv2-compare__hl">{r.guide}</td>
-                    <td>{r.train}</td>
+                    <td data-col="Build">{r.build}</td>
+                    <td data-col="Guide">{r.guide}</td>
+                    <td data-col="Train">{r.train}</td>
                   </tr>
                 ))}
               </tbody>
@@ -160,7 +174,7 @@ function PricingV2(): React.ReactElement {
       </section>
 
       {/* ============ THE LADDER: FIGURES, GOVERNED BY THE REGISTRY ============ */}
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-tiers-title">
+      <section className="cbv2-section cbv2-tiers5" aria-labelledby="cbv2-tiers-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Inside Train</p>
@@ -212,7 +226,7 @@ function PricingV2(): React.ReactElement {
                 </ul>
 
                 <Link
-                  className={`cbv2-btn ${t.featured ? 'cbv2-btn--primary' : 'cbv2-btn--secondary'} cbv2-tier__cta`}
+                  className={`cbv2-btn ${t.featured ? 'cbv2-btn--primary' : 'cbv2-btn--line'} cbv2-tier__cta`}
                   to={t.ctaRoute}
                 >
                   {t.ctaLabel}
@@ -224,7 +238,7 @@ function PricingV2(): React.ReactElement {
           {/* Build and Guide are delivered through the three services catalogued on
               /services. Naming that relationship here is deliberate: the two pages would
               otherwise appear to disagree about how many things we sell. */}
-          <p className="cbv2-note">
+          <p className="cbv2-note5">
             Build and Guide are priced separately:{' '}
             <Claim claimKey="pricing.services" route={ROUTE} />. {SERVICES_PRICING_NOTE}{' '}
             <Link to="/services">See the three services they are delivered through</Link>.
@@ -233,47 +247,41 @@ function PricingV2(): React.ReactElement {
       </section>
 
       {/* ============================ FAQ ============================ */}
-      <section
-        className="cbv2-rv cbv2-section cbv2-section--sunken"
-        aria-labelledby="cbv2-faq-title"
-      >
-        <div className="cbv2-wrap cbv2-wrap--narrow">
+      <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-faq-title">
+        <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Before you ask</p>
             <h2 id="cbv2-faq-title">The questions people actually have</h2>
           </div>
-          <dl className="cbv2-faq">
-            {PRICING_FAQ.map((f) => (
-              <div className="cbv2-faq__item" key={f.q}>
-                <dt>{f.q}</dt>
-                <dd>{f.a}</dd>
-              </div>
-            ))}
-          </dl>
+          <FaqCardsV5 items={PRICING_FAQ} />
         </div>
       </section>
 
-      {/* ============================ CTA ============================ */}
-      <section
-        className="cbv2-rv cbv2-section cbv2-section--inverse"
-        aria-labelledby="cbv2-pricing-cta"
-      >
-        <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
-          <h2 id="cbv2-pricing-cta">
-            See AI run on one of your processes, before you commit to anything.
+      {/* ============================ CTA ============================
+          The shared closing band's look (`.cbv2-cta5`), with this page's own words and
+          buttons kept while W4 is open: its second button is the page's existing
+          "Create a free account", not the shared band's "Start training". */}
+      <section className="cbv2-cta5" aria-labelledby="cbv2-pricing-cta">
+        <div className="cbv2-wrap">
+          <p className="cbv2-eyebrow cbv2-cta5__k">Start here</p>
+          <h2 id="cbv2-pricing-cta" className="cbv2-cta5__h">
+            See AI run on one of your processes,{' '}
+            <span className="cbv2-it">before you commit to anything.</span>
           </h2>
-          <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
+          <p className="cbv2-cta5__p">
             Bring one process and two numbers: what it costs you today, and what you need it
             to return. That is how we pick the demo pilot, and how you will judge it.
           </p>
-          <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
+          <div className="cbv2-cta5__btns">
             <Link className="cbv2-btn cbv2-btn--primary" to="/contact">
               Book a demo pilot
+              <Icon name="arrowRight" size={16} />
             </Link>
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/try">
+            <Link className="cbv2-btn cbv2-btn--line cbv2-btn--onDark" to="/try">
               Create a free account
             </Link>
           </div>
+          <p className="cbv2-cta5__fine">Build &middot; Guide &middot; Train, with Claude Code</p>
         </div>
       </section>
     </>

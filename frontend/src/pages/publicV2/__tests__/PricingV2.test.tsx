@@ -89,9 +89,9 @@ describe('PricingV2 — Build, Guide and Train', () => {
   it('recommends exactly one service, and marks it by more than colour', () => {
     const featured = SERVICE_SHAPES.filter((s) => s.featured);
     expect(featured).toHaveLength(1);
-    // --featured carries a top rule and a border in CSS, so the recommendation
-    // survives greyscale. Colour alone would not.
-    expect(html()).toContain('cbv2-shape--featured');
+    // The recommended card (the model's `.pr--hl`) carries its own border and a lit
+    // top, so the recommendation survives greyscale. Colour alone would not.
+    expect((html().match(/class="cbv2-pr5 cbv2-pr5--hl"/g) || []).length).toBe(1);
   });
 
   it('carries NO figure inside a service card: shapes are shapes, prices live in the ladder', () => {

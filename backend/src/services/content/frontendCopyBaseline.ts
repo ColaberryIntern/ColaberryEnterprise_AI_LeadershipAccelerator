@@ -68,7 +68,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/config/primaryCta.ts': 1, // the primary CTA label itself, the most-rendered instance on the site
   // 2026-11-15: new file. Train starts on a free account, worded as
   // COMPARE_ROWS already words it on /pricing.
-  'frontend/src/config/v2ServicePages.ts': 2,
+  'frontend/src/config/v2ServicePages.ts': 1, // 2026-11-16: 2 -> 1, Train's FAQ left the page (the model's Train page has none)
   'frontend/src/config/v2Pricing.ts': 8, // 2026-11-14: 9 -> 8, the pricing FAQ was replaced with the Build/Guide/Train six
   'frontend/src/config/v2Platform.ts': 5, // "Free company workspace" as a feature label, value and progress row
   'frontend/src/config/v2Content.ts': 1, // next-step prompt pointing at the workspace
@@ -167,7 +167,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 257; // 2026-11-16: -1 HeroV8 (the proof row went with the rebuilt hero); -1 PublicHeaderV2 ("Start Free" left the nav bar, entry deleted); -2 HomeV2 (the model's closing band replaced "Start free..." and "Open the Free Company Workspace", entry deleted)
+export const FRONTEND_COPY_BASELINE_TOTAL = 256; // 2026-11-16: -1 v2ServicePages (Train's FAQ, which the model does not have); -1 HeroV8 (the proof row went with the rebuilt hero); -1 PublicHeaderV2 ("Start Free" left the nav bar, entry deleted); -2 HomeV2 (the model's closing band replaced "Start free..." and "Open the Free Company Workspace", entry deleted)
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

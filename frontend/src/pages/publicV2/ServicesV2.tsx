@@ -2,19 +2,21 @@ import React from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import Icon from '../../components/publicV2/Icon';
+import ModelGlyph from '../../components/publicV2/ModelGlyph';
+import ServiceCardsV5, { RingTick } from '../../components/publicV2/ServiceCardsV5';
+import ClosingCtaV5 from '../../components/publicV2/ClosingCtaV5';
+import FaqCards from '../../components/publicV2/FaqCardsV5';
 import { Claim } from '../../components/publicV2/Claim';
 import { SERVICE_SHAPES, COMPARE_ROWS } from '../../config/v2Pricing';
-import { SERVICE_PAGES, getServicePage, LEGACY_SERVICE_REDIRECTS } from '../../config/v2ServicePages';
+import type { CompareRow } from '../../config/v2Pricing';
+import {
+  SERVICE_PAGES,
+  getServicePage,
+  LEGACY_SERVICE_REDIRECTS,
+} from '../../config/v2ServicePages';
+import type { ServiceContrastSide, ServicePage } from '../../config/v2ServicePages';
+import ServiceVisualV5 from './ServiceVisualsV5';
 import './servicesV2.css';
-/*
-   The offer-shape cards and the comparison table are shared with /pricing rather
-   than reimplemented here. Importing that page's stylesheet is deliberate: the
-   two pages describe the same three services, and giving each its own copy of
-   `.cbv2-shape*` is how they drift into two different offers. /pricing itself is
-   untouched by this change -- the import adds a stylesheet, it does not alter one.
-*/
-import './pricingV2.css';
-import '../../components/publicV2/heroV8.css';
 
 /**
  * ServicesV2 / ServiceDetailV2 — three services: Build, Guide, Train.
@@ -27,15 +29,22 @@ import '../../components/publicV2/heroV8.css';
  * should do. The v5 site model (docs/enterprise-site-v5/) collapses them, and
  * this is that collapse.
  *
+ * MODEL FIDELITY (2026-11-16). Both pages are now drawn as Ali's site model draws
+ * them, measured part by part (the fidelity audit): the light chooser hero with the
+ * giant "Build. Guide. Train." and the demo-pilot band inside it, the shared service
+ * cards and closing band, the model's comparison table and FAQ cards; and on each
+ * service page the dark hero with its terms card, "what it is / what is included",
+ * the page's own sequence, the contrast pair and the other two services. Styles live
+ * in fidelityV5.css (loaded on every public page), never in a page chunk.
+ *
  * The five old slugs are NOT deleted. `/services/:slug` redirects each of them
  * to the service that absorbed it (LEGACY_SERVICE_REDIRECTS), so inbound links,
  * bookmarks and search results keep working.
  *
  * NO PRICES ANYWHERE, unchanged from before. Services pricing is "scoped on a
  * call" per the 2026-08-07 decision, and a test asserts no currency figure
- * renders on this page or any detail page. That is also why Train's terms read
- * "a free account" here rather than the model's "$0 to get started": same
- * meaning, and it matches what COMPARE_ROWS already says on /pricing.
+ * renders on this page or any detail page. That is why Train's terms and its
+ * comparison cell do not read the model's "$0 to get started".
  */
 
 const ROUTE = '/services';
@@ -69,6 +78,36 @@ const CHOOSER_FAQS: readonly { q: string; a: string }[] = [
   },
 ];
 
+/** The demo pilot's four moves, as the model's band inside the chooser hero lists them. */
+const PILOT_MOVES: readonly { glyph: 'search' | 'bars' | 'terminal' | 'ringCheck'; t: string; s: string }[] = [
+  { glyph: 'search', t: 'We map your processes', s: 'With the leader and the people who run the work.' },
+  { glyph: 'bars', t: 'We rank them by ROI', s: 'What each would return if it were automated.' },
+  { glyph: 'terminal', t: 'We build the best one', s: 'A working Claude Code demo on your real workflow.' },
+  { glyph: 'ringCheck', t: 'You decide what is next', s: 'Scale it, take it to the next leader, or stop.' },
+];
+
+/** Cells the model marks with a ringed tick, by row label and column. */
+const TICKED: Readonly<Record<string, readonly (keyof Omit<CompareRow, 'label'>)[]>> = {
+  'Starts with': ['build', 'guide'],
+  'Finding ROI in your processes': ['build', 'guide'],
+  'Training in Claude Code': ['guide', 'train'],
+};
+const TERMS_ROW = 'Commercial terms';
+
+function compareCell(row: CompareRow, col: keyof Omit<CompareRow, 'label'>): React.ReactNode {
+  const text = row[col];
+  if (row.label === TERMS_ROW) return <strong>{text}</strong>;
+  if ((TICKED[row.label] || []).includes(col)) {
+    return (
+      <>
+        <RingTick />
+        {text}
+      </>
+    );
+  }
+  return text;
+}
+
 
 export function ServicesV2(): React.ReactElement {
   return (
@@ -82,95 +121,108 @@ export function ServicesV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-svc-title">
+      {/*
+          The chooser hero, light, with the demo-pilot band inside it. An earlier pass
+          took the band off this page believing the model had none; the model carries it
+          here, as the first thing under the title, because Build and Guide both begin
+          with a pilot.
+      */}
+      <section className="cbv2-shero5" aria-labelledby="cbv2-svc-title">
         <div className="cbv2-wrap">
-          <p className="cbv2-breadcrumb">
+          <p className="cbv2-crumb5">
             <Link to="/">Home</Link> / Services
           </p>
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Services</p>
-          <h1 id="cbv2-svc-title">Build. Guide. Train.</h1>
-          <p className="cbv2-pagehero__lede">
-            Three ways to move your company to AI with Claude Code. We build you a custom
-            application, we guide your team to automate your workflows, or we train your
-            people, department by department, or company-wide.
-          </p>
-          <p style={{ marginTop: 'var(--space-6)' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/demo-pilot">
-              Book a demo pilot
-            </Link>
-          </p>
-        </div>
-      </section>
+          <p className="cbv2-k5">Services</p>
+          <div className="cbv2-shero5__g">
+            <h1 id="cbv2-svc-title">
+              <span>
+                Build<span className="cbv2-shero5__dot">.</span>
+              </span>{' '}
+              <span>
+                Guide<span className="cbv2-shero5__dot">.</span>
+              </span>{' '}
+              <span>
+                Train<span className="cbv2-shero5__dot">.</span>
+              </span>
+            </h1>
+            <div>
+              <p className="cbv2-shero5__p">
+                Three ways to move your company to AI with Claude Code.{' '}
+                <strong>
+                  We build you a custom application, we guide your team to automate your
+                  workflows, or we train your people
+                </strong>
+                , department by department, or company-wide.
+              </p>
+              <div className="cbv2-btns5" style={{ marginTop: 26 }}>
+                <Link className="cbv2-btn cbv2-btn--primary" to="/demo-pilot">
+                  Book a demo pilot
+                  <Icon name="arrowRight" size={16} />
+                </Link>
+              </div>
+            </div>
+          </div>
 
-      {/*
-          THE DEMO-PILOT BAND CAME OFF THIS PAGE.
-
-          It sat above the three cards so a visitor who did not yet know which
-          service they wanted still had a correct first step. The model has no
-          equivalent band on the chooser, and the fact it carried has not left
-          the page: "Starts with: Demo pilot / Demo pilot / A free account" is a
-          row in the comparison table below, and the closing band the model does
-          have offers the pilot directly.
-      */}
-      <section className="cbv2-section" aria-labelledby="cbv2-three-h">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Choose by what you need</p>
-          <h2 id="cbv2-three-h">Three services. One question each.</h2>
-
-          <div className="cbv2-shapes">
-            {SERVICE_SHAPES.map((s, i) => (
-              <article
-                className={`cbv2-shape${s.featured ? ' cbv2-shape--featured' : ''}`}
-                key={s.key}
-              >
-                <div className="cbv2-shape__head">
-                  <span className="cbv2-shape__badge">
-                    {String(i + 1).padStart(2, '0')} &middot; {s.badge}
+          <div className="cbv2-start5">
+            <div className="cbv2-start5__l">
+              <p className="cbv2-k5">Where Build and Guide begin</p>
+              <h2>The demo pilot.</h2>
+              <p>
+                Before you commit, you see AI running on one of your own processes, with the
+                ROI case beside it.
+              </p>
+            </div>
+            <div className="cbv2-start5__r">
+              {PILOT_MOVES.map((m) => (
+                <div key={m.t}>
+                  <span className="cbv2-start5__ic">
+                    <ModelGlyph name={m.glyph} size={18} />
                   </span>
-                  <h3 className="cbv2-shape__verb">
-                    <Link to={`/services/${s.key}`}>{s.verb}.</Link>
-                  </h3>
+                  <p>
+                    <strong>{m.t}</strong>
+                    <span>{m.s}</span>
+                  </p>
                 </div>
-                <p className="cbv2-shape__promise">{s.promise}</p>
-                <p className="cbv2-shape__blurb">{s.blurb}</p>
-                <div className="cbv2-shape__terms">
-                  <p className="cbv2-shape__terms-label">{s.termsLabel}</p>
-                  <p className="cbv2-shape__terms-value">{s.terms}</p>
-                </div>
-                <ul className="cbv2-shape__list">
-                  {s.includes.map((inc) => (
-                    <li key={inc}>
-                      <span aria-hidden="true">&#10003;</span>
-                      {inc}
-                    </li>
-                  ))}
-                </ul>
-                <p className="cbv2-shape__cta">
-                  <Link
-                    className="cbv2-btn cbv2-btn--primary cbv2-btn--sm"
-                    to={`/services/${s.key}`}
-                  >
-                    See {s.verb}
-                  </Link>
-                </p>
-              </article>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-cmp-h">
+      <section className="cbv2-section cbv2-section--tight-top5" aria-labelledby="cbv2-three-h">
         <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Side by side</p>
-          <h2 id="cbv2-cmp-h">Which one fits?</h2>
-          <div className="cbv2-compare__scroll">
-            <table className="cbv2-compare">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Choose by what you need</p>
+            <h2 id="cbv2-three-h">
+              Three services. <span className="cbv2-it">One question each.</span>
+            </h2>
+          </div>
+          <ServiceCardsV5 />
+        </div>
+      </section>
+
+      <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-cmp-h">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Side by side</p>
+            <h2 id="cbv2-cmp-h">Which one fits?</h2>
+          </div>
+          <div className="cbv2-ctable5">
+            <table>
               <caption className="cbv2-sr-only">
                 The three services compared across {COMPARE_ROWS.length} dimensions.
               </caption>
+              <colgroup>
+                <col className="cbv2-ctable5__c0" />
+                {SERVICE_SHAPES.map((s) => (
+                  <col key={s.key} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
-                  <th scope="col">Compare</th>
+                  <th scope="col">
+                    <span>Compare</span>
+                  </th>
                   {SERVICE_SHAPES.map((s) => (
                     <th scope="col" key={s.key}>
                       {s.verb}
@@ -182,16 +234,16 @@ export function ServicesV2(): React.ReactElement {
                 {COMPARE_ROWS.map((r) => (
                   <tr key={r.label}>
                     <th scope="row">{r.label}</th>
-                    <td>{r.build}</td>
-                    <td>{r.guide}</td>
-                    <td>{r.train}</td>
+                    <td data-col="Build">{compareCell(r, 'build')}</td>
+                    <td data-col="Guide">{compareCell(r, 'guide')}</td>
+                    <td data-col="Train">{compareCell(r, 'train')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <p className="cbv2-note">
+          <p className="cbv2-note5">
             Engagement pricing is <Claim claimKey="pricing.services" route={ROUTE} />, so the
             scope is agreed with a person who can qualify the work, rather than anchored on a
             number before anyone has seen your systems.
@@ -200,63 +252,116 @@ export function ServicesV2(): React.ReactElement {
       </section>
 
       {/*
-          THE CHOOSER'S OWN FAQ, which the model has and this page did not.
-
-          It is not a duplicate of the three service pages' "Before you ask."
-          Those answer questions about one service; these three are the
-          questions a visitor has while still deciding BETWEEN them, which is
-          the only thing this page is for.
+          THE CHOOSER'S OWN FAQ. Not a duplicate of the service pages' "Before you ask":
+          those answer questions about one service; these are the questions a visitor has
+          while still deciding BETWEEN them, which is the only thing this page is for.
       */}
-      <section className="cbv2-section" aria-labelledby="cbv2-svc-faq">
+      <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-svc-faq">
         <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Questions</p>
-          <h2 id="cbv2-svc-faq">Common questions.</h2>
-          <dl className="cbv2-faq">
-            {CHOOSER_FAQS.map((f) => (
-              <div className="cbv2-faq__item" key={f.q}>
-                <dt>{f.q}</dt>
-                <dd>{f.a}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Questions</p>
+            <h2 id="cbv2-svc-faq">Common questions.</h2>
+          </div>
+          <FaqCards items={CHOOSER_FAQS} />
         </div>
       </section>
 
-      {/*
-          THE CLOSING BAND. Every page in the model ends on this one, and the
-          chooser was the page that ended on a pricing footnote instead. It
-          links /demo-pilot directly rather than /contact, which only resolves
-          because a redirect route catches it.
-      */}
-      <section
-        className="cbv2-rv cbv2-section cbv2-section--inverse"
-        aria-labelledby="cbv2-svc-cta"
-      >
-        <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
-          <h2 id="cbv2-svc-cta">
-            See AI run on one of your processes, before you commit to anything.
-          </h2>
-          <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
-            Bring one process and two numbers: what it costs you today, and what you need it
-            to return. We will show you the demo pilot that proves it.
-          </p>
-          <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/demo-pilot">
-              Book a demo pilot
-            </Link>
-            {/*
-              The model labels this one "Start training free". That word is
-              barred on this site by 40 TAC 807.172(d) and the copy ratchet
-              caught it on the way in, which is what the ratchet is for. The
-              destination is the company workspace, so the button says so.
-            */}
-            <Link className="cbv2-btn cbv2-btn--ghost" to="/try">
-              Open a company workspace
-            </Link>
-          </div>
-        </div>
-      </section>
+      <ClosingCtaV5 />
     </>
+  );
+}
+
+/** One side of the contrast pair: a list with marks, or a short note with an action. */
+function ContrastSide({
+  side,
+  yes,
+}: {
+  side: ServiceContrastSide;
+  yes: boolean;
+}): React.ReactElement {
+  return (
+    <div className={yes ? 'cbv2-not5__yes' : 'cbv2-not5__no'}>
+      <p className="cbv2-k5">{side.label}</p>
+      <h3>{side.heading}</h3>
+      {side.items ? (
+        <ul>
+          {side.items.map((n) => (
+            <li key={n}>
+              <ModelGlyph name={yes ? 'ringCheck' : 'ringMinus'} size={18} />
+              {n}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {side.body ? <p className="cbv2-not5__p">{side.body}</p> : null}
+      {side.action ? (
+        <p className="cbv2-not5__act">
+          {yes ? (
+            <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to={side.action.to}>
+              {side.action.label}
+              <Icon name="arrowRight" size={16} />
+            </Link>
+          ) : (
+            <Link className="cbv2-lnk" to={side.action.to}>
+              {side.action.label}
+              <Icon name="arrowRight" size={15} />
+            </Link>
+          )}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ContrastSection({ page }: { page: ServicePage }): React.ReactElement {
+  const yes =
+    page.slug === 'train'
+      ? { ...page.contrastYes, action: { label: page.ctaLabel, to: page.ctaRoute } }
+      : page.contrastYes;
+  return (
+    <section className="cbv2-section" aria-label={`What ${page.verb} is, and is not`}>
+      <div className="cbv2-wrap">
+        <div className="cbv2-not5">
+          <ContrastSide side={page.contrastNo} yes={false} />
+          <ContrastSide side={yes} yes />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The page's own sequence: Build's timeline, Guide's week, Train's twelve weeks. */
+function StepsSection({ page }: { page: ServicePage }): React.ReactElement {
+  const kind = page.slug === 'build' ? 'tl' : page.slug === 'guide' ? 'wk' : 'ph';
+  /* the model highlights one step: Build's demo pilot, Guide's every-day answers, Train's week 12 */
+  const hl = page.slug === 'build' ? 2 : page.slug === 'guide' ? 2 : page.steps.length - 1;
+  return (
+    <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-svcd-steps">
+      <div className="cbv2-wrap">
+        <div className="cbv2-section__head">
+          <p className="cbv2-eyebrow">{page.stepsEyebrow}</p>
+          <h2 id="cbv2-svcd-steps">
+            {page.stepsHeading}
+            {page.stepsAccent ? (
+              <>
+                {' '}
+                <span className="cbv2-it">{page.stepsAccent}</span>
+              </>
+            ) : null}
+          </h2>
+          {page.stepsLede ? <p className="cbv2-lede">{page.stepsLede}</p> : null}
+        </div>
+        <ol className={`cbv2-steps5 cbv2-steps5--${kind}`}>
+          {page.steps.map((st, i) => (
+            <li className={`cbv2-step5${i === hl ? ' cbv2-step5--hl' : ''}`} key={st.n + st.title}>
+              {kind === 'ph' ? <b>{st.n}</b> : <span className="cbv2-step5__k">{st.n}</span>}
+              <h4>{st.title}</h4>
+              <p>{st.body}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
   );
 }
 
@@ -300,164 +405,130 @@ export function ServiceDetailV2(): React.ReactElement {
     <>
       <SeoV2 title={`${page.verb}. ${page.promise}`} description={page.lede} />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-svcd-title">
-        <div className="cbv2-wrap cbv2-pagehero__split">
-          <div>
-            <p className="cbv2-breadcrumb">
-              <Link to="/services">Services</Link> / {page.verb}
-            </p>
-            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{shape.badge}</p>
-            <h1 id="cbv2-svcd-title">{page.verb}.</h1>
-            <p className="cbv2-pagehero__lede">{page.promise}</p>
-            <p style={{ marginTop: 'var(--space-5)' }}>
-              <Link className="cbv2-btn cbv2-btn--primary" to={page.ctaRoute}>
-                {page.ctaLabel}
-              </Link>
-            </p>
-          </div>
-          <figure className="cbv2-svcd__photo">
-            <img
-              src={page.photo.src}
-              alt={page.photo.alt}
-              width={1280}
-              height={960}
-              loading="eager"
-              decoding="async"
-            />
-          </figure>
-        </div>
-      </section>
-
-      {/* The commercial shape, read from SERVICE_SHAPES so it cannot disagree
-          with /pricing. Terms only -- never a figure. */}
-      <section className="cbv2-section" aria-labelledby="cbv2-svcd-what">
+      <section className="cbv2-svhero5" aria-labelledby="cbv2-svcd-title">
         <div className="cbv2-wrap">
-          <div className="cbv2-shape cbv2-shape--wide">
-            <div className="cbv2-shape__terms">
-              <p className="cbv2-shape__terms-label">{shape.termsLabel}</p>
-              <p className="cbv2-shape__terms-value">{shape.terms}</p>
-            </div>
-            <ul className="cbv2-shape__list">
-              {shape.includes.map((inc) => (
-                <li key={inc}>
-                  <span aria-hidden="true">&#10003;</span>
-                  {inc}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div style={{ marginTop: 'var(--space-8)' }}>
-            <p className="cbv2-eyebrow">What it is</p>
-            <h2 id="cbv2-svcd-what">{page.promise}</h2>
-            <p className="cbv2-lede">{page.lede}</p>
-          </div>
-
-          <div className="cbv2-field" style={{ marginTop: 'var(--space-6)' }}>
-            <h3>Choose {page.verb} when</h3>
-            <p>{page.chooseWhen}</p>
-          </div>
-        </div>
-      </section>
-
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-svcd-inc">
-        <div className="cbv2-wrap">
-          <h2 id="cbv2-svcd-inc">What is included</h2>
-          <ul className="cbv2-inclusions">
-            {page.includes.map((inc) => (
-              <li className="cbv2-inclusion" key={inc.title}>
-                <span className="cbv2-icon-tile cbv2-icon-tile--blue">
-                  <Icon name={page.icon} size={20} />
-                </span>
-                <h3>{inc.title}</h3>
-                <p>{inc.body}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <section className="cbv2-section" aria-labelledby="cbv2-svcd-steps">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">{page.stepsEyebrow}</p>
-          <h2 id="cbv2-svcd-steps">{page.stepsHeading}</h2>
-          <ol className="cbv2-pilot">
-            {page.steps.map((st) => (
-              <li className="cbv2-pilot__step" key={st.n + st.title}>
-                <span className="cbv2-pilot__n" aria-hidden="true">
-                  {st.n}
-                </span>
-                <div>
-                  <h3 className="cbv2-pilot__title">{st.title}</h3>
-                  <p className="cbv2-pilot__body">{st.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-svcd-isnot">
-        <div className="cbv2-wrap cbv2-grid cbv2-grid--2">
-          <div className="cbv2-field">
-            <h3 id="cbv2-svcd-isnot">{page.isNotHeading}</h3>
-            <ul className="cbv2-svc__dlv cbv2-svc__dlv--neg">
-              {page.isNot.map((n) => (
-                <li key={n}>
-                  <span aria-hidden="true">&times;</span>
-                  {n}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="cbv2-field">
-            <h3>{page.isHeading}</h3>
-            <ul className="cbv2-svc__dlv">
-              {page.isIt.map((n) => (
-                <li key={n}>
-                  <span aria-hidden="true">&#10003;</span>
-                  {n}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="cbv2-section" aria-labelledby="cbv2-svcd-faq">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow">Questions</p>
-          <h2 id="cbv2-svcd-faq">Before you ask.</h2>
-          <dl className="cbv2-faq">
-            {page.faqs.map((f) => (
-              <div className="cbv2-faq__item" key={f.q}>
-                <dt>{f.q}</dt>
-                <dd>{f.a}</dd>
+          <p className="cbv2-crumb5 cbv2-crumb5--d">
+            <Link to="/services">Services</Link> / {page.verb}
+          </p>
+          <div className="cbv2-svhero5__g">
+            <div>
+              <h1 id="cbv2-svcd-title">
+                {page.verb}
+                <span>.</span>
+              </h1>
+              <p className="cbv2-svhero5__tagline">{page.promise}</p>
+              <p className="cbv2-svhero5__l">{page.heroLede}</p>
+              <div className="cbv2-btns5">
+                <Link className="cbv2-btn cbv2-btn--primary" to={page.ctaRoute}>
+                  {page.ctaLabel}
+                  <Icon name="arrowRight" size={16} />
+                </Link>
+                <Link className="cbv2-btn cbv2-btn--line cbv2-btn--onDark" to={page.secondaryRoute}>
+                  {page.secondaryLabel}
+                </Link>
               </div>
-            ))}
-          </dl>
-
-          <div style={{ marginTop: 'var(--space-8)' }}>
-            <h3>The other two services</h3>
-            <ul className="cbv2-otherservices">
-              {others.map((o) => (
-                <li key={o.slug}>
-                  <Link to={`/services/${o.slug}`}>
-                    <strong>{o.verb}.</strong> {o.promise}
-                  </Link>
-                </li>
-              ))}
-              <li>
-                <Link to="/services">Compare all three side by side</Link>
-              </li>
-            </ul>
+            </div>
+            {/* The commercial shape, read from SERVICE_SHAPES so it cannot disagree with
+                /pricing. Terms only, never a figure. */}
+            <div className="cbv2-svhero5__terms">
+              <p className="cbv2-k5">{shape.termsLabel}</p>
+              <strong>{shape.terms}</strong>
+              <p>{page.termsNote}</p>
+              <ul>
+                {page.heroList.map((n) => (
+                  <li key={n}>
+                    <ModelGlyph name="ringCheck" size={17} />
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <p className="cbv2-note">
-            Pricing for this service is <Claim claimKey="pricing.services" route={ROUTE} />.
+      <section className="cbv2-section cbv2-section--detail5" aria-labelledby="cbv2-svcd-what">
+        <div className="cbv2-wrap">
+          <article className="cbv2-detail5">
+            <div>
+              <p className="cbv2-k5">What it is</p>
+              {/* a paragraph, as in the model: the page's one heading is the hero's h1 */}
+              <p id="cbv2-svcd-what" className="cbv2-detail5__t">
+                {page.promise}
+              </p>
+              <p className="cbv2-detail5__d">{page.lede}</p>
+              <ServiceVisualV5 slug={page.slug} />
+              {page.slug === 'train' ? null : (
+                <div className="cbv2-when5">
+                  <b>Choose {page.verb} when</b>
+                  <p>{page.chooseWhen}</p>
+                </div>
+              )}
+            </div>
+            <div className="cbv2-inc5">
+              <p className="cbv2-k5 cbv2-inc5__k">What is included</p>
+              <ul>
+                {page.includes.map((inc) => (
+                  <li key={inc.title}>
+                    <span className="cbv2-inc5__ic">
+                      <ModelGlyph name={inc.glyph} size={19} />
+                    </span>
+                    <div>
+                      <strong>{inc.title}</strong>
+                      <span>{inc.body}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      {page.contrastFirst ? <ContrastSection page={page} /> : null}
+      <StepsSection page={page} />
+      {page.contrastFirst ? null : <ContrastSection page={page} />}
+
+      {page.faqs.length ? (
+        <section className="cbv2-section cbv2-section--soft" aria-labelledby="cbv2-svcd-faq">
+          <div className="cbv2-wrap">
+            <div className="cbv2-section__head">
+              <p className="cbv2-eyebrow">Questions</p>
+              <h2 id="cbv2-svcd-faq">Before you ask.</h2>
+            </div>
+            <FaqCards items={page.faqs} />
+          </div>
+        </section>
+      ) : null}
+
+      <section className="cbv2-section cbv2-section--others5" aria-labelledby="cbv2-svcd-others">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head cbv2-section__head--tight5">
+            <p className="cbv2-eyebrow" id="cbv2-svcd-others">
+              The other two services
+            </p>
+          </div>
+          <div className="cbv2-othersvc5">
+            {others.map((o) => (
+              <Link key={o.slug} to={`/services/${o.slug}`}>
+                <div>
+                  <strong>{o.verb}.</strong>
+                  <span>{o.short}</span>
+                </div>
+                <ModelGlyph name="arrow" size={22} />
+              </Link>
+            ))}
+          </div>
+          <p className="cbv2-othersvc5__all">
+            <Link className="cbv2-lnk" to="/services">
+              Compare all three side by side
+              <Icon name="arrowRight" size={15} />
+            </Link>
           </p>
         </div>
       </section>
+
+      <ClosingCtaV5 />
     </>
   );
 }
