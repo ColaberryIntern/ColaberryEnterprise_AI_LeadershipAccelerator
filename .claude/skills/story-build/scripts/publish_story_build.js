@@ -9,6 +9,7 @@
 // Usage:  node publish_story_build.js story_configs/<slug>.json
 // Needs:  .bctok (Ali Basecamp token) beside this script; <slug>-deep-plan.json (from gen) beside this script.
 const fs = require('fs'), path = require('path');
+const { validateStoryPlanArtifacts, validateArtifactsConfig } = require('./lib/artifactContract');
 const HERE = __dirname;
 const cfgPath = process.argv[2];
 if (!cfgPath) { console.error('usage: node publish_story_build.js <config.json>'); process.exit(1); }
@@ -34,6 +35,24 @@ const code = (j.match(/react|node|express|postgres|docker/gi) || []).length;
 const pass = nc === 0 && plan.story_count >= 12 && (plan.releases || []).length >= 3 && t.ok === true && code > 10;
 console.log(`[gate] no-code=${nc} stories=${plan.story_count} rel=${(plan.releases||[]).length} trace.ok=${t.ok} code=${code} -> ${pass ? 'PASS' : 'BLOCKED'}`);
 if (!pass) { console.error('BLOCKED: re-run the generator; do not hand-fix the plan.'); process.exit(2); }
+
+// ---- gate 5 (A0): the artifact contract is SCHEMA-CHECKED, not yet required ----
+// A story that declares an `artifacts` block, in the plan or as a config override, must declare
+// a well-formed one: the block ends up in a ticket a person is judged against, so a typo that is
+// silently ignored would publish a contract that does not say what its author meant. A story with
+// NO block still publishes exactly as it did before A0; requiring one is A1's gate, not this one.
+const cfgArtifacts = validateArtifactsConfig(cfg.artifacts);
+const contracts = validateStoryPlanArtifacts(plan.stories || [], (cfg.artifacts || {}).by_story || {});
+contracts.refusals = cfgArtifacts.refusals.concat(contracts.refusals);
+contracts.ok = contracts.ok && cfgArtifacts.ok;
+console.log(`[gate] artifact contracts: ${contracts.storiesWithContract} of ${contracts.storiesTotal} stories declare one, refusals=${contracts.refusals.length}`);
+if (!contracts.ok) {
+  for (const r of contracts.refusals) {
+    console.error(`  REFUSED ${r.code} ${r.storyId ? `story=${r.storyId} ` : ''}${r.key ? `key=${r.key} ` : ''}${r.field ? `at=${r.field} ` : ''}- ${r.message}`);
+  }
+  console.error('BLOCKED: the artifact contract is malformed. Nothing was published. Fix the contract in the config or the plan.');
+  process.exit(4);
+}
 
 // ---- classification + rendering ----
 const HUMAN = ["decide","decision","approve","approval","sign off","sign-off","signoff","stakeholder","interview","credential","api key","budget","hire","legal","compliance","contract","kickoff","kick-off","gather requirement","select a vendor","choose a vendor","provide access"];

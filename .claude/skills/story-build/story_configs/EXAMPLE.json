@@ -43,6 +43,25 @@
   "approver_label": "Ram",
   "approver_mode": "per-release",
 
+  "_artifacts": "THE ARTIFACT CONTRACT (A0). What each story HANDS OVER, so 'done' is a file that exists and not a claim that work happened. Keys of by_story are the plan's story ids. Per story, an array of contract entries. Entry fields: key (stable, citable, e.g. ART-014), name, type (one of the catalog in backend/src/services/artifacts/storyArtifactTypes.json), file_types (optional, may narrow the type's list but never widen it), repo_path (required for types verified from the repo, relative to the repo root), must_contain (optional phrases a reader must find), evaluation_criteria (optional, defaults to the catalog sentence for the type), gates (optional subset of story_complete / release_demo / project_close, default story_complete), evidence_source (optional 'repo' or 'platform', only where the type allows both). The publisher REFUSES to publish a malformed contract; a story with no contract publishes exactly as before. Omit this whole block if the project has no contracts yet.",
+  "artifacts": {
+    "by_story": {
+      "S-014": [
+        {
+          "key": "ART-014",
+          "name": "Churn model evaluation report",
+          "type": "analysis_report",
+          "file_types": ["pdf", "html"],
+          "repo_path": "docs/artifacts/ART-014-churn-evaluation.pdf",
+          "must_contain": ["confusion matrix", "baseline comparison"],
+          "evaluation_criteria": "A reader who has never seen the project can say what was predicted, how well, and against what baseline.",
+          "gates": ["story_complete", "release_demo"]
+        }
+      ]
+    }
+  },
+
+
   "_marketing_co_assignee_id": "Optional. If set, this person is co-assigned on marketing/social/prompt/content tasks (e.g. Sohail 47335940). Omit or null for non-marketing builds.",
   "marketing_co_assignee_id": null,
   "marketing_co_label": "Marketing"

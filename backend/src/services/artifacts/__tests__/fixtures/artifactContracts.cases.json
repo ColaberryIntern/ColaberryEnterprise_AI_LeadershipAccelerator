@@ -1,0 +1,161 @@
+{
+  "$comment": "The shared corpus for the artifact contract schema. Read by storyArtifactContract.test.ts and by contractValidatorParity.test.ts, which runs the TypeScript and the publisher's CommonJS implementation over every case and fails if they disagree. A case with no `artifacts` key is the ABSENT case: undefined, which is accepted with zero artifacts. `expect_codes` is the sorted set of refusal codes; an empty array means the contract is accepted.",
+  "cases": [
+    {
+      "name": "absent contract is accepted with nothing resolved",
+      "story_id": "S-001",
+      "expect_codes": [],
+      "expect_resolved": 0
+    },
+    {
+      "name": "null contract is accepted, the same as absent",
+      "story_id": "S-001",
+      "artifacts": null,
+      "expect_codes": [],
+      "expect_resolved": 0
+    },
+    {
+      "name": "a minimal repo artifact resolves, taking file types and criteria from the catalog",
+      "story_id": "S-002",
+      "artifacts": [
+        { "key": "ART-001", "name": "Churn evaluation", "type": "analysis_report", "repo_path": "docs/artifacts/ART-001.pdf" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 1
+    },
+    {
+      "name": "a platform artifact needs no repo path",
+      "story_id": "S-003",
+      "artifacts": [
+        { "key": "ART-002", "name": "Field guide", "type": "field_guide" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 1
+    },
+    {
+      "name": "an either-type with no path resolves as platform evidence",
+      "story_id": "S-004",
+      "artifacts": [
+        { "key": "ART-003", "name": "Launch deck", "type": "presentation" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 1
+    },
+    {
+      "name": "an either-type with a path resolves as repo evidence",
+      "story_id": "S-005",
+      "artifacts": [
+        { "key": "ART-004", "name": "Launch deck", "type": "presentation", "repo_path": "docs/launch.pdf" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 1
+    },
+    {
+      "name": "a build artifact accepts any extension",
+      "story_id": "S-006",
+      "artifacts": [
+        { "key": "ART-005", "name": "Working importer", "type": "build_artifact", "repo_path": "src/import/run.ts" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 1
+    },
+    {
+      "name": "narrowing the catalog file types is allowed",
+      "story_id": "S-007",
+      "artifacts": [
+        { "key": "ART-006", "name": "Churn evaluation", "type": "analysis_report", "file_types": ["pdf"], "repo_path": "docs/a.pdf" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 1
+    },
+    {
+      "name": "every optional field at once, two artifacts on one story",
+      "story_id": "S-008",
+      "artifacts": [
+        {
+          "key": "ART-007",
+          "name": "Churn evaluation",
+          "type": "analysis_report",
+          "file_types": ["pdf", "html"],
+          "repo_path": "docs/artifacts/ART-007-churn.html",
+          "must_contain": ["confusion matrix", "baseline comparison"],
+          "evaluation_criteria": "A stranger can say what was predicted and against what baseline.",
+          "gates": ["story_complete", "release_demo"],
+          "evidence_source": "repo"
+        },
+        { "key": "ART-008", "name": "Case study", "type": "case_study", "evidence_source": "platform" }
+      ],
+      "expect_codes": [],
+      "expect_resolved": 2
+    },
+
+    { "name": "a contract that is not an array", "story_id": "S-100", "artifacts": { "key": "ART-001" }, "expect_codes": ["contract_not_an_array"], "expect_resolved": 0 },
+    { "name": "an empty contract is refused: absent is not empty", "story_id": "S-101", "artifacts": [], "expect_codes": ["contract_empty"], "expect_resolved": 0 },
+    { "name": "an entry that is not an object", "story_id": "S-102", "artifacts": ["ART-001"], "expect_codes": ["entry_not_an_object"], "expect_resolved": 0 },
+    {
+      "name": "an unrecognized field is refused, not ignored",
+      "story_id": "S-103",
+      "artifacts": [
+        { "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_paths": "docs/a.pdf" }
+      ],
+      "expect_codes": ["repo_path_missing", "unknown_field"],
+      "expect_resolved": 0
+    },
+    { "name": "no key", "story_id": "S-104", "artifacts": [{ "name": "Report", "type": "field_guide" }], "expect_codes": ["key_missing"], "expect_resolved": 0 },
+    { "name": "a malformed key", "story_id": "S-105", "artifacts": [{ "key": "art 1", "name": "Report", "type": "field_guide" }], "expect_codes": ["key_malformed"], "expect_resolved": 0 },
+    {
+      "name": "the same key twice in one contract",
+      "story_id": "S-106",
+      "artifacts": [
+        { "key": "ART-001", "name": "A", "type": "field_guide" },
+        { "key": "ART-001", "name": "B", "type": "field_guide" }
+      ],
+      "expect_codes": ["key_duplicated"],
+      "expect_resolved": 1
+    },
+    { "name": "no name", "story_id": "S-107", "artifacts": [{ "key": "ART-001", "type": "field_guide" }], "expect_codes": ["name_missing"], "expect_resolved": 0 },
+    { "name": "no type", "story_id": "S-108", "artifacts": [{ "key": "ART-001", "name": "Report" }], "expect_codes": ["type_missing"], "expect_resolved": 0 },
+    { "name": "a type outside the catalog", "story_id": "S-109", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "white_paper" }], "expect_codes": ["type_unknown"], "expect_resolved": 0 },
+    { "name": "file_types not an array", "story_id": "S-110", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "file_types": "html" }], "expect_codes": ["file_types_not_an_array"], "expect_resolved": 0 },
+    { "name": "file_types empty would accept nothing", "story_id": "S-111", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "file_types": [] }], "expect_codes": ["file_types_empty"], "expect_resolved": 0 },
+    { "name": "a file type with a dot or uppercase", "story_id": "S-112", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "file_types": [".HTML"] }], "expect_codes": ["file_type_malformed"], "expect_resolved": 0 },
+    { "name": "widening the catalog file types is refused", "story_id": "S-113", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "file_types": ["html", "docx"] }], "expect_codes": ["file_type_not_allowed"], "expect_resolved": 0 },
+    { "name": "a repo-verified type with no path", "story_id": "S-114", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report" }], "expect_codes": ["repo_path_missing"], "expect_resolved": 0 },
+    { "name": "a repo path that is not a string", "story_id": "S-115", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": 7 }], "expect_codes": ["repo_path_not_a_string"], "expect_resolved": 0 },
+    { "name": "an absolute posix repo path", "story_id": "S-116", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": "/docs/a.pdf" }], "expect_codes": ["repo_path_absolute"], "expect_resolved": 0 },
+    { "name": "an absolute windows repo path", "story_id": "S-117", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": "C:/docs/a.pdf" }], "expect_codes": ["repo_path_absolute"], "expect_resolved": 0 },
+    { "name": "a repo path that climbs out of the repo", "story_id": "S-118", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": "docs/../../a.pdf" }], "expect_codes": ["repo_path_escapes"], "expect_resolved": 0 },
+    { "name": "a repo path with no extension cannot be type checked", "story_id": "S-119", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": "docs/report" }], "expect_codes": ["repo_path_no_extension"], "expect_resolved": 0 },
+    { "name": "a dotfile is not an extension", "story_id": "S-120", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": "docs/.pdf" }], "expect_codes": ["repo_path_no_extension"], "expect_resolved": 0 },
+    { "name": "a repo path whose extension the artifact does not accept", "story_id": "S-121", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "repo_path": "docs/a.docx" }], "expect_codes": ["repo_path_extension_not_declared"], "expect_resolved": 0 },
+    { "name": "a repo path on a platform-only type reads nothing", "story_id": "S-122", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "repo_path": "docs/g.html" }], "expect_codes": ["repo_path_on_platform_type"], "expect_resolved": 0 },
+    { "name": "must_contain not an array", "story_id": "S-123", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "must_contain": "matrix" }], "expect_codes": ["must_contain_not_an_array"], "expect_resolved": 0 },
+    { "name": "a blank must_contain entry", "story_id": "S-124", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "must_contain": ["  "] }], "expect_codes": ["must_contain_blank"], "expect_resolved": 0 },
+    { "name": "blank evaluation criteria", "story_id": "S-125", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "evaluation_criteria": "" }], "expect_codes": ["evaluation_criteria_blank"], "expect_resolved": 0 },
+    { "name": "gates not an array", "story_id": "S-126", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "gates": "story_complete" }], "expect_codes": ["gates_not_an_array"], "expect_resolved": 0 },
+    { "name": "gates empty would require the artifact nowhere", "story_id": "S-127", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "gates": [] }], "expect_codes": ["gates_empty"], "expect_resolved": 0 },
+    { "name": "a gate outside the closed set", "story_id": "S-128", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "gates": ["when_ali_asks"] }], "expect_codes": ["gate_unknown"], "expect_resolved": 0 },
+    { "name": "either is not an evidence source for one artifact", "story_id": "S-129", "artifacts": [{ "key": "ART-001", "name": "Deck", "type": "presentation", "evidence_source": "either" }], "expect_codes": ["evidence_source_unknown"], "expect_resolved": 0 },
+    { "name": "repo evidence on a platform-only type", "story_id": "S-130", "artifacts": [{ "key": "ART-001", "name": "G", "type": "field_guide", "evidence_source": "repo" }], "expect_codes": ["evidence_source_not_allowed"], "expect_resolved": 0 },
+    { "name": "platform evidence on a repo-only type", "story_id": "S-131", "artifacts": [{ "key": "ART-001", "name": "Report", "type": "analysis_report", "evidence_source": "platform" }], "expect_codes": ["evidence_source_not_allowed"], "expect_resolved": 0 },
+    {
+      "name": "one good entry beside one bad one: the good one still resolves",
+      "story_id": "S-132",
+      "artifacts": [
+        { "key": "ART-001", "name": "G", "type": "field_guide" },
+        { "key": "ART-002", "name": "Report", "type": "analysis_report" }
+      ],
+      "expect_codes": ["repo_path_missing"],
+      "expect_resolved": 1
+    },
+    {
+      "name": "several refusals on one entry are all reported, not just the first",
+      "story_id": "S-133",
+      "artifacts": [
+        { "key": "nope", "type": "analysis_report", "gates": [] }
+      ],
+      "expect_codes": ["gates_empty", "key_malformed", "name_missing", "repo_path_missing"],
+      "expect_resolved": 0
+    }
+  ]
+}
