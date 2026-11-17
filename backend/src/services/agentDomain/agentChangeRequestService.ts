@@ -13,12 +13,16 @@ import { datasetNames, loadDatasetCatalog } from './datasetCatalog';
 import { actorEmails, loadActorRoster } from './actorRoster';
 import {
   NO_PACKAGE,
+  attachPackage,
   loadPackages,
   projectPackage,
   readinessOf,
   type PackageReadiness,
 } from './toolRequestPackageService';
-import type { ToolRequestPackage } from './toolRequestPackageContract';
+import type {
+  ToolRequestPackage,
+  ToolRequestPackageInput,
+} from './toolRequestPackageContract';
 import {
   duplicateOpenRequest,
   type DuplicateCollision,
@@ -367,6 +371,20 @@ export interface FileChangeRequestArgs {
   title: string;
   description?: string | null;
   /**
+   * AF11.13. The ten-block case for this request, written at the same moment as the request.
+   *
+   * Optional, so every existing caller is unaffected and a request can still be filed bare. When
+   * it IS supplied the request "arrives finished", which is the thing Ali asked for out loud:
+   * *"A request arrives finished. An agent never brings you a question."*
+   *
+   * An INCOMPLETE package is still stored. `attachPackage` records that explicitly: the gate's
+   * issues come back in `readiness` and the work is kept, because refusing the write would force
+   * every agent to compose all ten blocks in one shot. This matters here more than anywhere,
+   * because a DRAFTED package deliberately leaves the simulation blocks empty rather than
+   * inventing a run that never happened.
+   */
+  decisionPackage?: ToolRequestPackageInput | null;
+  /**
    * AF11.1. REQUIRED when `kind` is `tool`, refused otherwise.
    *
    * This is a deliberate narrowing of what AF7.1 accepted. Between AF7.1 and now, a tool request
@@ -565,16 +583,49 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
     }
   }
 
-  // `storedCheck`, not `duplicateCheck`: the caller is told what was STORED, so the response and
-  // the next page load cannot disagree about whether a check exists.
-  // A request filed this second carries no package: the ten blocks are written afterwards, and
-  // the console needs to hear "not ready, nobody has written one" rather than nothing at all.
+  // AF11.13 — the package, written AFTER the transaction and best effort, for exactly the reason
+  // the duplicate check above is: the REQUEST is the thing the builder cannot recreate. Losing a
+  // filed request because its argument failed to save would be the wrong trade, and a package can
+  // be rewritten at any time while the request is still open.
+  //
+  // A failure here leaves `decision_package: null` and `NO_PACKAGE`, which is the honest answer:
+  // the console then says nobody has written one, rather than claiming a package that is not there.
+  let storedPackage: ToolRequestPackage | null = null;
+  let packageReadiness: PackageReadiness = NO_PACKAGE;
+  if (args.decisionPackage) {
+    try {
+      const attached = await attachPackage({
+        sequelize,
+        changeRequestId: created.id,
+        input: args.decisionPackage,
+      });
+      storedPackage = attached.decision_package;
+      packageReadiness = attached.readiness;
+    } catch (err: unknown) {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'tool_request_package_not_stored',
+        outcome: 'failure',
+        error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+        context: {
+          message: err instanceof Error ? err.message : String(err),
+          change_request_id: created.id,
+        },
+      }));
+    }
+  }
+
+  // `storedCheck`, not `duplicateCheck`, and `storedPackage`, not what was sent: the caller is
+  // told what was STORED, so the response and the next page load cannot disagree about whether
+  // either exists.
   return {
     ...project(created),
     tool_request: accepted,
     duplicate_check: storedCheck,
-    decision_package: null,
-    readiness: NO_PACKAGE,
+    decision_package: storedPackage,
+    readiness: packageReadiness,
   };
 }
 

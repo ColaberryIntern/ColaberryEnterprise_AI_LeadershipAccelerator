@@ -334,6 +334,8 @@ export async function fileChangeRequest(input: {
    * be read by the person filling the form.
    */
   tool_request?: ToolRequestSubmission;
+  /** AF11.13. The case for deciding it, filed in the same call so the request arrives finished. */
+  decision_package?: Record<string, unknown>;
 }): Promise<ChangeRequest> {
   const { data } = await api.post('/api/admin/agent-domain-change-requests-mine', input);
   return data;
@@ -506,6 +508,14 @@ export interface DraftGrounding {
 
 export interface DraftedToolRequest {
   tool_request: ToolRequestSubmission;
+  /**
+   * AF11.13 — the ten-block case, drafted with the request and filed with it.
+   *
+   * Deliberately NOT typed field by field here: it is passed through to the filing route
+   * untouched, and a second description of its shape on the client would be a second definition
+   * of a package to keep in agreement with the server's.
+   */
+  decision_package: Record<string, unknown>;
   title: string;
   grounded_in: DraftGrounding;
   note: string;

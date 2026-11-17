@@ -104,6 +104,13 @@ export async function handleDraftToolRequest(req: Request, res: Response): Promi
 
     res.json({
       tool_request: result.detail,
+      /**
+       * AF11.13 — the case for deciding it, drafted at the same time and from the same material.
+       * The three simulation blocks are deliberately absent: they record a run that really
+       * happened, and a drafted one would be fabricated evidence in the block whose whole job is
+       * to be evidence. The readiness check will say so by name, which is correct.
+       */
+      decision_package: result.decisionPackage,
       title: draftTitle(result.detail, CHANGE_REQUEST_TITLE_MAX),
       grounded_in: result.grounded_in,
       /**
@@ -111,7 +118,8 @@ export async function handleDraftToolRequest(req: Request, res: Response): Promi
        * broken. The server is still the only authority on whether this is complete.
        */
       note: 'A draft, not a filing. Read it, change what is wrong, then file it. '
-        + 'It is checked when you file, exactly like one you typed yourself.',
+        + 'It is checked when you file, exactly like one you typed yourself. '
+        + 'The simulated run is left blank on purpose: somebody has to actually run it.',
     });
   } catch (e) {
     const unavailable = e instanceof ToolRequestDraftUnavailableError;

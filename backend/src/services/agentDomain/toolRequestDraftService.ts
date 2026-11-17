@@ -40,14 +40,16 @@ import { actorEmails, loadActorRoster } from './actorRoster';
 import {
   buildDraftMessages,
   normalizeDraft,
+  normalizePackageDraft,
   type DraftContext,
   type DraftMode,
 } from './toolRequestDrafter';
+import { TOOL_REQUEST_VERBS } from './toolRequestDecisionContract';
 import type { ToolRequestDetailInput } from './toolRequestContract';
 
 /** The model that drafts. Small and cheap: this is a first draft a human is about to edit. */
 const DRAFT_MODEL = 'gpt-4o-mini';
-const DRAFT_MAX_TOKENS = 1800;
+const DRAFT_MAX_TOKENS = 3000;
 const DRAFT_TEMPERATURE = 0.6;
 
 let client: OpenAI | null = null;
@@ -75,6 +77,11 @@ export interface DraftToolRequestArgs {
 
 export interface DraftToolRequestResult {
   readonly detail: ToolRequestDetailInput;
+  /**
+   * AF11.13 — the ten-block case, minus the three evidence blocks the drafter must not write.
+   * Filed alongside the request so it "arrives finished".
+   */
+  readonly decisionPackage: Record<string, unknown>;
   /** What the draft was written against, so the form can say why a field was left blank. */
   readonly grounded_in: {
     readonly capabilities: number;
@@ -133,7 +140,12 @@ export async function draftToolRequest(
   }
 
   const { context, actorRosterAbsent } = await loadContext(args);
-  const messages = buildDraftMessages({ mode: args.mode, intent: args.intent, context });
+  const messages = buildDraftMessages({
+    mode: args.mode,
+    intent: args.intent,
+    context,
+    verbs: TOOL_REQUEST_VERBS,
+  });
 
   let content: string | null | undefined;
   try {
@@ -160,9 +172,16 @@ export async function draftToolRequest(
     throw new ToolRequestDraftUnavailableError('The drafter did not return usable JSON.');
   }
 
-  const detail = normalizeDraft(parsed);
+  // Two halves of one object now. A response shaped like the old one -- the detail at the top
+  // level -- is still read correctly, so an older model reply does not come back as an empty draft.
+  const root = (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+    ? parsed as Record<string, unknown>
+    : {};
+  const detail = normalizeDraft(root.tool_request ?? root);
+  const decisionPackage = normalizePackageDraft(root.decision_package);
 
   return {
+    decisionPackage,
     // The agent is authoritative from the caller, never from the model: it was ownership-checked
     // before this ran, and a model-invented id would be refused by the gate as `agent_not_yours`.
     detail: args.agentId ? { ...detail, agent_id: args.agentId } : detail,

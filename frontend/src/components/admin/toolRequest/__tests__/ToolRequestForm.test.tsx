@@ -588,3 +588,61 @@ describe('AF11.12 the AI draft', () => {
       .toBe('kept_by_hand');
   });
 });
+
+/**
+ * AF11.13 — the drafted case travels with the request, so it arrives finished.
+ */
+describe('AF11.13 the decision package rides along', () => {
+  const withPackage = {
+    tool_request: { tool_name: 'call_scan' },
+    decision_package: {
+      executive_summary: 'Three sentences.',
+      problem: 'Two hours a week spent listening back.',
+      options: [{ key: 'A', summary: 'Build it', what_happens: 'x', verb: 'approve_to_build' }],
+    },
+    title: 'call_scan',
+    grounded_in: { capabilities: 1, datasets: 1, actors: 1, actor_roster_absent: false },
+    note: 'A draft, not a filing.',
+  };
+
+  it('files the case in the SAME call as the request', async () => {
+    mockDraft.mockResolvedValue(withPackage);
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    await submit();
+
+    const sent = mockFile.mock.calls[0][0];
+    expect(sent.decision_package).toBeDefined();
+    expect(sent.decision_package.executive_summary).toBe('Three sentences.');
+    // One call. The separate package route is requireAdmin under a prefix mapped to `program`,
+    // which no builder role holds, so a second call could never work for the person filing.
+    expect(mockFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('says on screen that it wrote one, and that the simulation is blank', async () => {
+    mockDraft.mockResolvedValue(withPackage);
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    expect(container.querySelector('[data-testid="draft-package"]')).not.toBeNull();
+    expect(text()).toContain('somebody has to actually run it');
+  });
+
+  it('sends NO decision_package when nothing was drafted', async () => {
+    // A hand-typed request files exactly as it did before this existed.
+    await render();
+    await type('#tr-tool-name', 'typed_by_hand');
+    await submit();
+    expect('decision_package' in mockFile.mock.calls[0][0]).toBe(false);
+  });
+
+  it('does not re-attach a stale package to the next request', async () => {
+    mockDraft.mockResolvedValue(withPackage);
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    await submit();
+    await submit();
+    // The second filing carries nothing: the first one consumed it. Otherwise a builder who
+    // drafted once would silently attach the same argument to everything after it.
+    expect('decision_package' in mockFile.mock.calls[1][0]).toBe(false);
+  });
+});

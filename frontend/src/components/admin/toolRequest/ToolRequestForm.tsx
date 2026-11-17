@@ -212,6 +212,14 @@ export default function ToolRequestForm({
   const [draftProblem, setDraftProblem] = useState('');
   const [draftNote, setDraftNote] = useState('');
   const [grounding, setGrounding] = useState<DraftGrounding | null>(null);
+  /**
+   * AF11.13 — the drafted ten-block case, held until the request is filed and sent with it.
+   *
+   * Held rather than rendered as twenty more inputs: the case is what the APPROVER reads, and
+   * putting it on the filing form would double a form that is already long. The builder edits it
+   * on the request after filing, which is where the review console already shows it.
+   */
+  const [draftedPackage, setDraftedPackage] = useState<Record<string, unknown> | null>(null);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -272,6 +280,9 @@ export default function ToolRequestForm({
     try {
       const d = await draftToolRequest(domainKey, mode === 'from_intent' ? intent : null);
       applyDraft(d.tool_request, d.title);
+      setDraftedPackage(
+        d.decision_package && Object.keys(d.decision_package).length > 0 ? d.decision_package : null,
+      );
       setGrounding(d.grounded_in);
       setDraftNote(d.note);
     } catch (e) {
@@ -389,9 +400,16 @@ export default function ToolRequestForm({
         title: form.title.trim(),
         kind: 'tool',
         tool_request,
+        // AF11.13 — the drafted case travels with the request, so it arrives finished. Absent
+        // when nothing was drafted, which files exactly as before.
+        ...(draftedPackage ? { decision_package: draftedPackage } : {}),
       });
       setForm(EMPTY);
-      setFiled('Filed. Nothing is built yet: somebody will read it and decide.');
+      setDraftedPackage(null);
+      setFiled(draftedPackage
+        ? 'Filed, with its case attached. Nothing is built yet: somebody will read it and decide. '
+          + 'The simulated run is still blank, so it is not in front of anyone until that is done.'
+        : 'Filed. Nothing is built yet: somebody will read it and decide.');
       onFiled(created);
     } catch (err) {
       // The form is NOT cleared. See the header.
@@ -474,6 +492,13 @@ export default function ToolRequestForm({
           What it was able to write against. Shown because a blank `acts_on_output` after a draft
           has two very different causes, and the builder can only act on one of them.
         */}
+        {draftedPackage && (
+          <div className="form-text mt-2" data-testid="draft-package">
+            It also wrote the case for deciding this: the summary, the problem, the options and
+            the recommendation. That goes with the request when you file it. The simulated run is
+            left blank on purpose, because somebody has to actually run it.
+          </div>
+        )}
         {grounding && (
           <div className="form-text mt-1" data-testid="draft-grounding">
             Written against {grounding.capabilities} capabilities, {grounding.datasets} datasets

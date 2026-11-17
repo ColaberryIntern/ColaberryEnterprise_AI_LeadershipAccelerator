@@ -119,6 +119,12 @@ export interface DraftRequestArgs {
   /** The builder's own sentence. Required for `from_intent`, ignored for `suggest`. */
   readonly intent?: string | null;
   readonly context: DraftContext;
+  /**
+   * The decision verbs an option may carry, supplied by the caller rather than written here.
+   * Same rule as the rosters: the vocabulary the gate will check against is the one the prompt
+   * offers, or the drafter confidently produces options the gate then refuses.
+   */
+  readonly verbs?: ReadonlyArray<string>;
 }
 
 export interface ChatMessage {
@@ -168,8 +174,12 @@ export function buildDraftMessages(args: DraftRequestArgs): ChatMessage[] {
     listBlock('Emails you may use for acts_on_output', c.actors,
       'none available, omit acts_on_output'),
     '',
-    'Return a JSON object with these keys, and no others:',
+    'Return a JSON object with exactly two keys: "tool_request" and "decision_package".',
+    '',
+    '"tool_request" has these keys, and no others:',
     fieldBlock(),
+    '',
+    packageBlock(args.verbs ?? []),
   ].join('\n');
 
   return [{ role: 'system', content: SYSTEM }, { role: 'user', content: user }];
@@ -227,6 +237,117 @@ export function normalizeDraft(raw: unknown): ToolRequestDetailInput {
   }
 
   return out as ToolRequestDetailInput;
+}
+
+/**
+ * AF11.13 — THE ONE BLOCK THE DRAFTER MUST NOT WRITE.
+ *
+ * `simulated_action`, `simulated_against` and `simulated_at` are the record of a run that actually
+ * happened against real past data, shown so the result is visible BEFORE a grant exists. A model
+ * asked to fill them in will produce a fluent description of a run nobody performed, and that is
+ * fabricated evidence sitting in the one block whose entire job is to be evidence.
+ *
+ * So the drafter leaves them empty. The package is then legitimately not ready for a human, the
+ * readiness gate says so by name, and somebody has to go and actually run the thing. That refusal
+ * is the feature working, not an edge case to code around.
+ */
+export const BLOCKS_THE_DRAFTER_MUST_NOT_WRITE = [
+  'simulated_action', 'simulated_against', 'simulated_at',
+] as const;
+
+/** What a drafted package may contain: the eight blocks that are argument rather than evidence. */
+const PACKAGE_GUIDE: ReadonlyArray<[string, string]> = [
+  ['executive_summary', 'Three sentences: what is being asked, what it costs, what happens if you say nothing.'],
+  ['problem', 'The problem as a cost being paid TODAY, not as an idea. Name the hours or the misses.'],
+  ['key_findings', 'A list of {finding, source}. Each finding measured, each source saying where the number came from. Never invent a number: if you have none, say what is not known and give the source as the place it would be found.'],
+  ['options', 'At least two real ones, as {key, summary, what_happens, verb}. key is A, B or C. "Do it" and "do not" is not two options. Name the cheap one as cheap.'],
+  ['recommendation', 'The key of one option: A, B or C. Nothing else.'],
+  ['recommendation_reason', 'One sentence saying why that one.'],
+  ['impact', 'What changes if it works, in hours, dollars or risk, and who notices.'],
+  ['risk_can_break', 'A list of what this can break.'],
+  ['risk_cannot_break', 'A list of what it is incapable of breaking. This is what makes the risk bounded rather than vague.'],
+  ['steps_that_follow', 'The ordered steps after a yes, written BEFORE the decision so a yes is a yes to a known sequence.'],
+];
+
+/**
+ * The package half of the prompt.
+ *
+ * Built as a separate block of the same single request rather than a second model call: the
+ * argument should be reasoned from the same material as the request, and two calls would let the
+ * two disagree about what is being asked for.
+ */
+function packageBlock(verbs: ReadonlyArray<string>): string {
+  return [
+    'Also write the case for deciding it, as "decision_package", with these keys:',
+    ...PACKAGE_GUIDE.map(([k, v]) => `- ${k}: ${v}`),
+    '',
+    `The "verb" on each option must be one of: ${verbs.join(', ')}.`,
+    '',
+    'DO NOT write simulated_action, simulated_against or simulated_at. Those record a run that '
+    + 'really happened against real data, and you have not run anything. Leave them out entirely. '
+    + 'A human will run it and fill them in.',
+  ].join('\n');
+}
+
+/**
+ * Coerce a drafted package into the shape the package contract reads, and STRIP the evidence
+ * blocks whatever the model did.
+ *
+ * The prompt tells it not to write them. This enforces it, because a prompt is a request and a
+ * normalizer is a guarantee, and the thing being guaranteed is that no fabricated simulation ever
+ * reaches the row. If the model writes one anyway it is dropped here without comment.
+ */
+export function normalizePackageDraft(raw: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const src = raw as Record<string, unknown>;
+
+  const str = (k: string) => {
+    const v = src[k];
+    if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+  };
+  const strList = (k: string) => {
+    const v = src[k];
+    if (!Array.isArray(v)) return;
+    out[k] = v.filter((x): x is string => typeof x === 'string')
+      .map((x) => x.trim()).filter((x) => x.length > 0);
+  };
+
+  str('executive_summary');
+  str('problem');
+  str('recommendation');
+  str('recommendation_reason');
+  str('impact');
+  strList('risk_can_break');
+  strList('risk_cannot_break');
+  strList('steps_that_follow');
+
+  if (Array.isArray(src.key_findings)) {
+    out.key_findings = src.key_findings
+      .filter((f): f is Record<string, unknown> => Boolean(f) && typeof f === 'object')
+      .map((f) => ({
+        finding: typeof f.finding === 'string' ? f.finding.trim() : '',
+        source: typeof f.source === 'string' ? f.source.trim() : '',
+      }))
+      .filter((f) => f.finding.length > 0);
+  }
+
+  if (Array.isArray(src.options)) {
+    out.options = src.options
+      .filter((o): o is Record<string, unknown> => Boolean(o) && typeof o === 'object')
+      .map((o) => ({
+        key: typeof o.key === 'string' ? o.key.trim().toUpperCase() : '',
+        summary: typeof o.summary === 'string' ? o.summary.trim() : '',
+        what_happens: typeof o.what_happens === 'string' ? o.what_happens.trim() : '',
+        verb: typeof o.verb === 'string' ? o.verb.trim() : '',
+      }))
+      .filter((o) => o.key.length > 0);
+  }
+
+  // The guarantee. Never carried through, no matter what came back.
+  for (const blocked of BLOCKS_THE_DRAFTER_MUST_NOT_WRITE) delete out[blocked];
+
+  return out;
 }
 
 /**

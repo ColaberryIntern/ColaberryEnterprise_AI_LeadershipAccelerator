@@ -10,9 +10,11 @@
  * This catches a field missing from the PROMPT, which is a different drift with the same symptom.
  */
 import {
+  BLOCKS_THE_DRAFTER_MUST_NOT_WRITE,
   buildDraftMessages,
   draftTitle,
   normalizeDraft,
+  normalizePackageDraft,
   type DraftContext,
 } from '../toolRequestDrafter';
 import { TOOL_REQUEST_DETAIL_FIELDS } from '../toolRequestContract';
@@ -156,5 +158,89 @@ describe('draftTitle', () => {
 
   it('never returns empty, because the parent request needs a title', () => {
     expect(draftTitle({}, 140)).toBe('Tool request');
+  });
+});
+
+/**
+ * AF11.13 — the drafter also writes the case for deciding the request.
+ *
+ * The test that matters most here is the fabrication guard. `simulated_action` records a run that
+ * really happened against real data, shown so a result is visible BEFORE a grant exists. A model
+ * asked for it will write a fluent description of a run nobody performed, and that is invented
+ * evidence sitting in the one block whose entire job is to be evidence. The prompt says not to;
+ * the normalizer guarantees it.
+ */
+describe('AF11.13 the decision package', () => {
+  it('asks for every block that is argument', () => {
+    const text = userText({ mode: 'suggest', context: CONTEXT, verbs: ['approve_to_build', 'deny'] });
+    for (const block of [
+      'executive_summary', 'problem', 'key_findings', 'options',
+      'recommendation', 'recommendation_reason', 'impact',
+      'risk_can_break', 'risk_cannot_break', 'steps_that_follow',
+    ]) {
+      expect(text).toContain(block);
+    }
+  });
+
+  it('offers only the verbs it was given', () => {
+    const text = userText({ mode: 'suggest', context: CONTEXT, verbs: ['approve_to_build', 'deny'] });
+    expect(text).toContain('approve_to_build, deny');
+  });
+
+  it('TELLS the model not to write the evidence blocks', () => {
+    const text = userText({ mode: 'suggest', context: CONTEXT, verbs: [] });
+    expect(text).toContain('DO NOT write simulated_action');
+    expect(text).toContain('you have not run anything');
+  });
+
+  it('GUARANTEES it, by stripping them even when the model writes them anyway', () => {
+    // A prompt is a request; a normalizer is a guarantee. This is the guarantee.
+    const out = normalizePackageDraft({
+      executive_summary: 'Three sentences.',
+      simulated_action: 'I ran it against the last 90 days and found 12 bad calls.',
+      simulated_against: 'calls table',
+      simulated_at: '2026-11-17T12:00:00Z',
+    });
+    expect(out.executive_summary).toBe('Three sentences.');
+    expect('simulated_action' in out).toBe(false);
+    expect('simulated_against' in out).toBe(false);
+    expect('simulated_at' in out).toBe(false);
+  });
+
+  it('every blocked block is actually blocked', () => {
+    const raw: Record<string, unknown> = { problem: 'real' };
+    for (const b of BLOCKS_THE_DRAFTER_MUST_NOT_WRITE) raw[b] = 'fabricated';
+    const out = normalizePackageDraft(raw);
+    for (const b of BLOCKS_THE_DRAFTER_MUST_NOT_WRITE) expect(b in out).toBe(false);
+    expect(out.problem).toBe('real');
+  });
+
+  it('keeps findings with their source and drops the ones with no finding', () => {
+    const out = normalizePackageDraft({
+      key_findings: [
+        { finding: '12 of 90 calls flagged', source: 'calls table, 90 days' },
+        { finding: '   ', source: 'nowhere' },
+        'not an object',
+      ],
+    });
+    expect(out.key_findings).toEqual([
+      { finding: '12 of 90 calls flagged', source: 'calls table, 90 days' },
+    ]);
+  });
+
+  it('upper-cases option keys, so A and a are one option', () => {
+    const out = normalizePackageDraft({
+      options: [
+        { key: 'a', summary: 'Build it', what_happens: 'x', verb: 'approve_to_build' },
+        { key: 'B', summary: 'Use what we have', what_happens: 'y', verb: 'assign_existing_tool' },
+      ],
+    });
+    expect((out.options as Array<{ key: string }>).map((o) => o.key)).toEqual(['A', 'B']);
+  });
+
+  it('survives rubbish without inventing a package', () => {
+    expect(normalizePackageDraft(null)).toEqual({});
+    expect(normalizePackageDraft('a string')).toEqual({});
+    expect(normalizePackageDraft([1, 2])).toEqual({});
   });
 });
