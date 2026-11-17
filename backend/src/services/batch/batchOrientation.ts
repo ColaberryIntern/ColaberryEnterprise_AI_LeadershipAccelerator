@@ -3,8 +3,8 @@
  *
  * The monthly batch model (`directives/run-monthly-enrollment-batches.md`) states the rule:
  * orientation is the first Monday of the month AFTER the batch closes, in the batch's own evening
- * slot. November 2026 is the one exception (see FIRST_SESSION_EXCEPTIONS): 12 November, then
- * Thursday 3 December.
+ * slot. No exceptions are in force; FIRST_SESSION_EXCEPTIONS records why the last one was
+ * withdrawn and what any future entry has to clear before it can be added.
  *
  * ── WHY THIS IS COMPUTED AND NOT READ FROM `start_date` ──
  *
@@ -126,19 +126,76 @@ export function formatOrientationDate(date: string): string | null {
 /**
  * One-off first sessions that come BEFORE the convention's orientation, keyed by batch month.
  *
- * Ali, 2026-11-09: the November 2026 batch holds a live session on 12 November. A member who joins
- * on or before 12 November is told 12 November. From the 13th on, the November batch is told
- * Thursday 3 December (Ali moved it off the first Monday, 7 December, so it falls on a Thursday
- * like the 12th). December onward has no entry and follows the first-Monday convention.
+ * ── EMPTY, AND THE EMPTINESS IS THE FIX ──
  *
- * `through` is inclusive: on the 12th itself the 6:30 PM session is still ahead of a member who
- * pays that day, so it is still the right date to give them. `thereafter` is the date given once
- * `through` has passed, and also when the caller has no clock: it is not time-limited, so it can
- * never be stale the way `date` can.
+ * The November 2026 entry read `{ date: '2026-11-12', through: '2026-11-12',
+ * thereafter: '2026-12-03' }`. Ali added it on 2026-11-09 to move that batch off the first
+ * Monday, 7 December, onto a Thursday like the 12th.
+ *
+ * Thursday 3 December is an Open House. The Open House occupies the FIRST and THIRD Thursday of
+ * every month at 6:30 PM CT, and the 3 December one is published on Eventbrite with registrations
+ * already against it, so between the two it was the orientation that had to move. Taiwo found the
+ * clash on 2026-11-16.
+ *
+ * By then 12 November had passed, so `thereafter` was the only value the entry still served, and
+ * no member had ever been given it: `thereafter` only reaches people who join from the 13th on,
+ * and the November batch took its last enrollment on the 11th. Nobody held 3 December, so the
+ * entry was deleted outright instead of re-dated.
+ *
+ * ── WHY DELETING IT FIXES THIS PERMANENTLY RATHER THAN ONCE ──
+ *
+ * With no entry the convention applies, and the first Monday of a month is never a Thursday. An
+ * orientation computed on the convention therefore cannot land on an Open House in any month, by
+ * construction rather than by vigilance. Only an override can reintroduce the collision, which is
+ * precisely what `isOpenHouseCadenceDate` below exists to refuse.
+ *
+ * The mechanism is kept rather than ripped out because the need behind it is real: a batch that
+ * genuinely holds a session ahead of its orientation needs somewhere to say so. Any new entry has
+ * to clear `isOpenHouseCadenceDate` for BOTH its `date` and its `thereafter`, and
+ * `batchOrientation.test.ts` asserts that over every entry in this table, so an entry that
+ * collides fails the build rather than reaching a member.
+ *
+ * `through` is inclusive: on the day of a one-off session the 6:30 PM start is still ahead of a
+ * member who pays that morning, so it is still the right date to give them. `thereafter` is the
+ * date given once `through` has passed, and also when the caller has no clock: it is not
+ * time-limited, so it can never be stale the way `date` can.
  */
-export const FIRST_SESSION_EXCEPTIONS: Readonly<Record<string, { date: string; through: string; thereafter: string }>> = {
-  '2026-11': { date: '2026-11-12', through: '2026-11-12', thereafter: '2026-12-03' },
-};
+export const FIRST_SESSION_EXCEPTIONS: Readonly<Record<string, { date: string; through: string; thereafter: string }>> = {};
+
+/**
+ * Is `date` a first or third Thursday — the slot the Accelerator Open House occupies every month?
+ *
+ * ── WHY A CADENCE AND NOT A LOOKUP ──
+ *
+ * The Open House calendar is not in this database. It lives in CCPP's
+ * `vw_EventBrite_Events_w_Cnt` and is published one Eventbrite page per event, so nothing in this
+ * process can resolve it cheaply, synchronously, or in a unit test. The cadence, though, is fixed
+ * and published: first and third Thursday, 6:30 PM CT.
+ *
+ * A cadence is enough to refuse a colliding date, and refusing is all this needs to do. That is
+ * the lesson of 3 December 2026: orientation lives in this file, the Open House lives in CCPP, and
+ * the class day lives in a `cohorts` column, so no surface can see all three and no collision is
+ * detectable from the data. A check written against the rule is the only one that can run at all.
+ *
+ * Deliberately conservative. It answers the cadence, not Eventbrite, so a one-off Open House moved
+ * to some other Thursday is not caught here. It is a guard against the standing calendar, which is
+ * the thing an override actually collides with.
+ */
+export function isOpenHouseCadenceDate(date: string): boolean {
+  const raw = String(date ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return false;
+  const [year, month, day] = raw.split('-').map(Number);
+  const at = new Date(Date.UTC(year, month - 1, day));
+  // Reject a date that does not exist: Date.UTC rolls 2026-02-31 forward into March rather than
+  // returning NaN, and a rolled date would be judged on the wrong month's Thursdays.
+  if (at.getUTCFullYear() !== year || at.getUTCMonth() !== month - 1 || at.getUTCDate() !== day) {
+    return false;
+  }
+  if (at.getUTCDay() !== 4) return false;
+  // Which Thursday of the month this is: days 1-7 are the 1st, 8-14 the 2nd, and so on.
+  const nth = Math.floor((day - 1) / 7) + 1;
+  return nth === 1 || nth === 3;
+}
 
 /**
  * The date a member should be given as their batch's first live session, as 'YYYY-MM-DD'.
