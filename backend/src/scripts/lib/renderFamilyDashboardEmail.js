@@ -12,6 +12,7 @@
 // Session originator: CC-20260803-p9r4 (reformat pass after Ali's review)
 
 const { renderWeek, renderPhotos, renderThrowbacks, renderSchool, sectionsText } = require('./renderFamilyDashboardSections');
+const { renderSpark } = require('./familySpark');
 
 const C = {
   navy: '#1a365d',
@@ -313,6 +314,7 @@ function renderFamilyDashboardEmail(data) {
   const kit = { C, FONT, esc, chip, sectionOpen, sectionClose, hTitle };
   const body = [
     renderHero(data, d),
+    renderSpark(data, kit),
     renderWeek(data, kit),
     renderSchool(data, kit),
     renderPhotos(data, kit),

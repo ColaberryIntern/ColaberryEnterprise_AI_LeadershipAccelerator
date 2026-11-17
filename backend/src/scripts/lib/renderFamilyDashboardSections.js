@@ -129,6 +129,7 @@ function renderWeek(data, k) {
 
 function sectionsText(data) {
   const lines = [];
+  if (data.spark) lines.push('', `YOUR 2-MINUTE CHECK-IN: ${data.spark.url}`);
   if (data.week) {
     lines.push('', 'THIS WEEK');
     for (const d of data.week.days) {
@@ -157,7 +158,8 @@ function sectionsText(data) {
  */
 function leanData(data) {
   const strip = (m) => (m ? { takenAt: m.takenAt, caption: m.caption, why: m.why, section: m.section, shareUrl: m.shareUrl, duration: m.duration } : m);
-  return { ...data, photos: (data.photos || []).map(strip), throwbacks: (data.throwbacks || []).map(strip), video: strip(data.video) };
+  // The check-in link carries a private key and this copy is filed in Basecamp, so it stays out.
+  return { ...data, photos: (data.photos || []).map(strip), throwbacks: (data.throwbacks || []).map(strip), video: strip(data.video), spark: null };
 }
 
 module.exports = { leanData, renderWeek, renderPhotos, renderThrowbacks, renderSchool, sectionsText };
