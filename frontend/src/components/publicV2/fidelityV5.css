@@ -1804,3 +1804,86 @@
   .cbv2-shell .cbv2-cm5 { grid-template-columns: minmax(0, 1fr) auto; }
   .cbv2-shell .cbv2-cm5 code { display: none; }
 }
+
+/* =========================================================================
+   16. THE BOOK (2026-11-16, page group 3). The hero is Home's dark book band
+   (section 6) with an h1 at the model's size; then the idea cards and the
+   author band. Model: `.sec.book`, `.ideas/.idea`, `.split` + `.pc`.
+   ========================================================================= */
+.cbv2-shell .cbv2-bookpage5__crumb,
+.cbv2-shell .cbv2-bookpage5__crumb a { color: #9DB2CF; }
+.cbv2-shell .cbv2-bookpage5 .cbv2-eyebrow { letter-spacing: 0.14em; }
+.cbv2-shell .cbv2-bookpage5 .cbv2-book__h { font-size: clamp(48px, 6vw, 84px); }
+
+.cbv2-shell .cbv2-ideas5 {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.cbv2-shell .cbv2-idea5 {
+  border-radius: 16px;
+  padding: 32px;
+  background: #fff;
+  border: 1px solid var(--v5-line);
+  font-size: 17px;
+  line-height: 1.6;
+}
+.cbv2-shell .cbv2-idea5__n {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--v5-accent);
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+.cbv2-shell .cbv2-idea5__t {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: var(--v5-ink);
+  margin: 16px 0 10px;
+}
+.cbv2-shell .cbv2-idea5__p { font-size: 15.5px; line-height: 1.6; color: var(--v5-body); margin: 0; }
+.cbv2-shell .cbv2-idea5__then {
+  margin: 18px 0 0;
+  padding-top: 16px;
+  border-top: 1px dashed var(--v5-line2);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--v5-ink);
+}
+.cbv2-shell .cbv2-idea5__then b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--v5-mute);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.cbv2-shell .cbv2-author5__h { margin-top: 18px; }
+.cbv2-shell .cbv2-copy5 { padding: 34px; }
+.cbv2-shell .cbv2-copy5 p.cbv2-k5 { display: inline; font-size: 12px; color: var(--v5-accent-strong); }
+/* The model's line button on the book band is a white hairline, not the on-dark grey. */
+.cbv2-shell .cbv2-bookpage5 .cbv2-btn--line.cbv2-btn--onDark { border-color: rgba(255, 255, 255, 0.35); }
+.cbv2-shell .cbv2-copy5__h {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: var(--v5-ink);
+  margin: 12px 0 10px;
+}
+.cbv2-shell .cbv2-copy5 p.cbv2-copy5__go { margin-top: 18px; }
+
+@media (max-width: 1080px) {
+  .cbv2-shell .cbv2-ideas5 { grid-template-columns: minmax(0, 1fr); }
+}
