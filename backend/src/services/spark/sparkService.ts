@@ -20,10 +20,11 @@ import { QueryTypes } from 'sequelize';
 import { google } from 'googleapis';
 import { sequelize } from '../../config/database';
 import { env } from '../../config/env';
-import { SURVEY, DAILY, Question, dailyFor, answerLines } from './sparkContent';
+import { SURVEY, DAILY, Question, dailyFor, answerLines, GAMES, WAGER, gameForDay } from './sparkContent';
 import {
   Busy, Slot, PlanItem, RawPick, ctNow, mondayOf, weekDates, addDays, candidateSlots, pickWeekdaySlots,
   weekendSlots, pendingDays, weekdayIndex, shapeItem, nextSlot, fitsSlot, prettyDay, prettyTime, toMin, fromMin,
+  isWeekday, prevWeekday, decideWinner, PROGRAM_START,
 } from './sparkLogic';
 
 export type Person = 'ali' | 'addie';
@@ -125,7 +126,7 @@ export async function today(p: Person) {
   const cal = await one('calendar', { person: p, week });
   const partnerCal = await one('calendar', { person: other(p), week });
   const plan = await one('plan', { person: null, week });
-  const lessons = (await rows('lesson', {}, 4)).map((r) => String(r.data.text));
+  const lessons = (await rows('lesson', {}, 12)).filter((r) => !r.data.private).slice(0, 4).map((r) => String(r.data.text));
   return {
     name: PEOPLE[p].name,
     partner: PEOPLE[other(p)].name,
@@ -141,7 +142,98 @@ export async function today(p: Person) {
     daily: pendingDays(now.date, answeredDays).map((d) => ({ day: d, label: prettyDay(d), carried: d !== now.date, questions: dailyFor(weekdayIndex(d)) })),
     plan: plan ? { status: plan.data.status, error: plan.data.status === 'failed' ? 'Planning hit a snag. Tap "Plan our week" to try again.' : null, items: (plan.data.items || []).map(view) } : null,
     learned: lessons,
+    game: await gameState(p, now.date),
+    reveal: await reveal(now.date),
   };
+}
+
+// ---------------------------------------------------------------------------------- game of the day
+
+const TRIES = 3;
+interface Try { id: string; score: number | null; at: string }
+
+async function gameRow(p: Person, day: string): Promise<Row | null> { return one('game', { person: p, day }); }
+
+async function gameState(p: Person, day: string) {
+  if (!isWeekday(day) || day < PROGRAM_START) return null;
+  const game = gameForDay(weekdayIndex(day));
+  const row = await gameRow(p, day);
+  const tries: Try[] = row?.data.tries || [];
+  const done = tries.filter((t) => t.score !== null).map((t) => Number(t.score));
+  const wager = await one('wager', { person: p, day });
+  return {
+    day, game: { id: game.id, name: game.name, emoji: game.emoji, how: game.how },
+    triesLeft: TRIES - tries.length, scores: done, best: done.length ? Math.max(...done) : null,
+    locked: !!row?.data.locked || tries.length >= TRIES,
+    wager: wager ? { prize: String(wager.data.prize) } : null,
+    wagerGroups: wager ? null : WAGER,
+  };
+}
+
+/** Use up one try (so a reload mid-game cannot buy a 4th) and return its id. */
+export async function startTry(p: Person): Promise<{ tryId: string; triesLeft: number }> {
+  const day = ctNow().date;
+  if (!(await gameState(p, day))) throw new Error('no game today');
+  const row = await gameRow(p, day);
+  // gameState() gave the same game; keep its id on the row so a later rotation change cannot rename the day.
+  const data = row?.data || { gameId: gameForDay(weekdayIndex(day)).id, tries: [] };
+  if (data.locked || data.tries.length >= TRIES) throw new Error('no tries left');
+  const t: Try = { id: crypto.randomBytes(8).toString('hex'), score: null, at: new Date().toISOString() };
+  data.tries.push(t);
+  if (row) await update(row.id, data); else await insert('game', p, mondayOf(day), day, data);
+  return { tryId: t.id, triesLeft: TRIES - data.tries.length };
+}
+
+export async function finishTry(p: Person, tryId: string, score: unknown): Promise<{ best: number }> {
+  const day = ctNow().date;
+  const row = await gameRow(p, day);
+  const t: Try | undefined = row?.data.tries?.find((x: Try) => x.id === tryId);
+  if (!row || !t || t.score !== null) throw new Error('not found');
+  const cap = (GAMES.find((g) => g.id === row.data.gameId) || { maxScore: 0 }).maxScore;
+  t.score = Math.max(0, Math.min(cap, Math.round(Number(score) || 0)));
+  await update(row.id, row.data);
+  return { best: Math.max(...row.data.tries.filter((x: Try) => x.score !== null).map((x: Try) => Number(x.score))) };
+}
+
+/** Stop playing early: keeps the best score so far and opens the wager. */
+export async function lockScore(p: Person): Promise<void> {
+  const row = await gameRow(p, ctNow().date);
+  if (row) await update(row.id, { ...row.data, locked: true });
+}
+
+/** The wager: rank the 5 groups, then the prizes in your top group. Your prize if you win = your top pick. */
+export async function saveWager(p: Person, groups: unknown, picks: unknown): Promise<{ prize: string }> {
+  const day = ctNow().date;
+  const st = await gameState(p, day);
+  if (!st || !st.locked) throw new Error('finish your tries first');
+  if (st.wager) return st.wager;
+  const g = Array.isArray(groups) ? groups.map(String).filter((x) => x in WAGER) : [];
+  if (g.length !== Object.keys(WAGER).length) throw new Error('rank every group');
+  const opts = WAGER[g[0]];
+  const pk = Array.isArray(picks) ? picks.map(String).filter((x) => opts.includes(x)) : [];
+  if (!pk.length) throw new Error('rank your top group');
+  await insert('wager', p, mondayOf(day), day, { groups: g, picks: pk, prize: pk[0] });
+  await insert('lesson', p, mondayOf(day), day, { text: `One of you put "${g[0].replace(/\s\S+$/, '')}" prizes first today.`, private: true });
+  return { prize: pk[0] };
+}
+
+/** This morning's reveal: yesterday's (last weekday's) scores, winner and the prize owed. */
+async function reveal(today: string) {
+  const day = prevWeekday(today);
+  if (day < PROGRAM_START) return null;
+  const best = async (p: Person) => {
+    const r = await gameRow(p, day);
+    const s = (r?.data.tries || []).filter((t: Try) => t.score !== null).map((t: Try) => Number(t.score));
+    return s.length ? Math.max(...s) : null;
+  };
+  const a = await best('ali'); const b = await best('addie');
+  const win = decideWinner(a, b);
+  if (!win.length) return null;
+  const prizeOf = async (p: Person) => String((await one('wager', { person: p, day }))?.data.prize || 'Any 15-minute request of your choice');
+  const winners = await Promise.all(win.map(async (w) => { const p: Person = w === 'a' ? 'ali' : 'addie'; return { name: PEOPLE[p].name, prize: await prizeOf(p) }; }));
+  const played = (await gameRow('ali', day)) || (await gameRow('addie', day));
+  const g = GAMES.find((x) => x.id === played?.data.gameId) || gameForDay(weekdayIndex(day));
+  return { day: prettyDay(day), game: `${g.emoji} ${g.name}`, scores: { Ali: a, Addie: b }, winners, tie: win.length === 2 };
 }
 
 function view(i: PlanItem) {
@@ -310,7 +402,8 @@ async function profiles(): Promise<string> {
   for (const [n, p] of [['Partner 1', 'ali'], ['Partner 2', 'addie']] as Array<[string, Person]>) {
     const s = answerLines(SURVEY, await answeredSurvey(p));
     const d = (await rows('daily', { person: p }, 15)).flatMap((r) => answerLines(DAILY, r.data.answers || {}));
-    parts.push(`${n}:\n${[...s, ...d].map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}`);
+    const w = (await rows('wager', { person: p }, 5)).map((r) => `Game prize ranking (${r.day}): groups ${r.data.groups.join(' > ')}; top picks ${r.data.picks.join(' > ')}`);
+    parts.push(`${n}:\n${[...s, ...d, ...w].map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}`);
   }
   return parts.join('\n\n');
 }

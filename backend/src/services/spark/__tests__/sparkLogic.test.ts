@@ -1,7 +1,7 @@
 // Spark Hour scheduling rules (Ali, 2026-11-16): midday hours both are free, 3 weekdays + 1 weekend,
 // change the time but never the choice, and anything missed carries to the next day.
 import * as L from '../sparkLogic';
-import { SURVEY, DAILY, dailyFor } from '../sparkContent';
+import { SURVEY, DAILY, dailyFor, GAMES, WAGER, gameForDay } from '../sparkContent';
 
 const TUE_7AM = { date: '2026-11-17', time: '07:00' };
 const MON = '2026-11-16';
@@ -95,6 +95,32 @@ describe('carry-over', () => {
     expect(L.weekdayIndex('2026-11-23')).toBe(4);
     expect(dailyFor(0).map((q) => q.id)).toEqual(['d001', 'd002', 'd003']);
     expect(dailyFor(1)[0].id).toBe('d004');
+  });
+});
+
+describe('game of the day', () => {
+  test('the winner is the best score; a tie means both; skipping is a loss; nobody played means no winner', () => {
+    expect(L.decideWinner(90, 80)).toEqual(['a']);
+    expect(L.decideWinner(80, 90)).toEqual(['b']);
+    expect(L.decideWinner(80, 80)).toEqual(['a', 'b']);
+    expect(L.decideWinner(0, null)).toEqual(['a']);
+    expect(L.decideWinner(null, 5)).toEqual(['b']);
+    expect(L.decideWinner(null, null)).toEqual([]);
+  });
+  test('Monday reveals Friday', () => {
+    expect(L.prevWeekday('2026-11-23')).toBe('2026-11-20');
+    expect(L.prevWeekday('2026-11-18')).toBe('2026-11-17');
+  });
+  test('only ready games rotate, one per weekday, and every game has a cap', () => {
+    const ready = GAMES.filter((g) => g.ready);
+    expect(GAMES).toHaveLength(20);
+    expect(gameForDay(0).id).toBe(ready[0].id);
+    expect(gameForDay(ready.length).id).toBe(ready[0].id);
+    expect(GAMES.every((g) => g.maxScore > 0)).toBe(true);
+  });
+  test('every wager prize group has options to rank', () => {
+    expect(Object.keys(WAGER)).toHaveLength(5);
+    expect(Object.values(WAGER).every((o) => o.length >= 3)).toBe(true);
   });
 });
 

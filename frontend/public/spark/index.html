@@ -56,10 +56,29 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
 .file input{display:none}
 .pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pick .file{margin-top:10px;padding:14px 8px}
+.win{background:linear-gradient(135deg,#f2a516,#e0446a);color:#fff;border:0}
+.win h2{font-size:22px;margin:4px 0}
+.prize{background:rgba(255,255,255,.2);border-radius:10px;padding:8px 10px;margin-top:8px}
+.tries{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:14px}
+.tdot{width:14px;height:14px;border-radius:50%;background:var(--gold)}
+.tdot.used{background:var(--line)}
+.tries span:last-child{margin-left:8px}
+.gover{position:fixed;inset:0;background:#0b0c16;color:#fff;z-index:20;overflow:auto;padding:14px 12px 30px}
+.gtop{display:flex;justify-content:space-between;align-items:center;font-size:18px}
+.gtop button{background:#2a2e4a;color:#fff;border:0;border-radius:99px;width:36px;height:36px;font-size:16px;cursor:pointer}
+.ghud{text-align:center;font-weight:800;margin:8px 0;color:#f2a516}
+.gpad{display:flex;gap:8px;justify-content:center;margin-top:10px}
+.gpad button{flex:1;max-width:84px;padding:16px 0;font-size:22px;font-weight:800;border:0;border-radius:14px;background:#2a2e4a;color:#fff;touch-action:manipulation}
+.gmem,.gwhack{display:grid;gap:8px;max-width:340px;margin:0 auto}
+.gmem{grid-template-columns:repeat(4,1fr)}.gwhack{grid-template-columns:repeat(3,1fr)}
+.gmem button,.gwhack button{aspect-ratio:1;border:0;border-radius:12px;background:#2a2e4a;color:#fff;font-size:30px;touch-action:manipulation}
+.gmem button.up{background:#5b2a86}
+.gscore{font-size:34px;font-weight:800;text-align:center;color:#f2a516;margin-top:14px}
 </style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
+<script src="games.js"></script>
 <script>
 (function () {
   'use strict';
@@ -88,6 +107,7 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
   // ------------------------------------------------------------------ lock screen
   function lock() {
     session = null; state = null; pin = ''; clearTimeout(idle); clearInterval(poll);
+    document.querySelectorAll('.gover').forEach(function (g) { g.remove(); });
     if (!KEY) { app.innerHTML = '<div class="lock"><h1>Check-in</h1><p class="sub">Open this from the QR code or button in your email.</p></div>'; return; }
     app.innerHTML = '<div class="lock"><h1>Check-in</h1><div class="sub">Who is checking in?</div>' +
       '<div class="who"><button data-w="ali">Ali</button><button data-w="addie">Addie</button></div>' +
@@ -118,8 +138,7 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
   function render() {
     var s = state; clearInterval(poll);
     var h = '<div class="top"><div><h1>Hi ' + esc(s.name) + '</h1><div class="sub">' + esc(s.today) + '</div></div><button id="lockb">🔒 Lock</button></div>';
-    h += planningCard(s) + planCard(s) + surveyCard(s) + dailyCards(s) + learnedCard(s);
-    h += '<div class="card"><h2>🎮 Game of the Day</h2><div class="muted">Throwback arcade games with 3 tries and a wager are coming next.</div></div>';
+    h += revealCard(s) + planningCard(s) + planCard(s) + gameCard(s) + surveyCard(s) + dailyCards(s) + learnedCard(s);
     if (!s.survey && !s.daily.length && !s.planning.needed && s.plan && s.plan.status === 'ready') h = h.replace('</div><button id="lockb">', '<div class="done" style="margin-top:6px">✅ All caught up today</div></div><button id="lockb">');
     app.innerHTML = h;
     document.getElementById('lockb').onclick = lock;
@@ -185,6 +204,85 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
         d.questions.map(function (q) { return qHtml(q, 'd-' + d.day + '-'); }).join('') + '<button class="btn alt" data-saveday="' + d.day + '">Save my answers</button></div>';
     }).join('');
   }
+  // ------------------------------------------------------------------ game, wager, reveal
+  function revealCard(s) {
+    var r = s.reveal; if (!r) return '';
+    var head = r.tie ? '🤝 Tie! You both win' : '🏆 ' + esc(r.winners[0].name) + ' wins';
+    var sc = Object.keys(r.scores).map(function (k) { return esc(k) + ' ' + (r.scores[k] === null ? 'did not play' : r.scores[k]); }).join(' · ');
+    return '<div class="card win"><div class="muted" style="color:#fff">' + esc(r.day) + ' · ' + esc(r.game) + '</div><h2>' + head + '</h2><div>' + sc + '</div>' +
+      r.winners.map(function (w) { return '<div class="prize">🎁 <b>' + esc(w.name) + '\'s prize:</b> ' + esc(w.prize) + '. Due by tonight.</div>'; }).join('') + '</div>';
+  }
+  function gameCard(s) {
+    var g = s.game; if (!g) return '';
+    var dots = ''; for (var i = 0; i < 3; i++) dots += '<span class="tdot' + (i < 3 - g.triesLeft ? ' used' : '') + '"></span>';
+    var h = '<div class="card" id="gamecard"><h2>🎮 Game of the Day: ' + esc(g.game.emoji + ' ' + g.game.name) + '</h2><div class="muted">' + esc(g.game.how) + '</div>' +
+      '<div class="tries">' + dots + '<span>Best today: <b>' + (g.best === null ? '-' : g.best) + '</b></span></div>';
+    if (!g.locked) {
+      h += '<button class="btn" id="play">▶ Play try ' + (4 - g.triesLeft) + ' of 3</button>';
+      if (g.scores.length) h += '<button class="btn ghost" id="lockscore">Keep ' + g.best + ' and stop playing</button>';
+      h += '<div class="muted" style="margin-top:8px">' + esc(s.partner) + '\'s score stays hidden until tomorrow morning.</div>';
+    } else if (!g.wager) {
+      h += '<div class="q" id="wager"><div class="qt">💰 Your wager: if you win, what do you get?</div><div class="muted">Step 1: tap the 5 groups in order, the one you want most first.</div><div id="wgroups">' +
+        Object.keys(g.wagerGroups).map(function (k) { return '<button class="opt" data-g="' + esc(k) + '">' + esc(k) + '</button>'; }).join('') +
+        '</div><div id="wpicks"></div><button class="btn" id="savewager" disabled>Lock in my wager</button></div>';
+    } else {
+      h += '<div class="done">🔒 Wager locked. ' + esc(s.partner) + ' never sees it. Results tomorrow morning.</div>';
+    }
+    return h + '</div>';
+  }
+  function rankable(box, onChange) {
+    var n = 0;
+    box.querySelectorAll('.opt').forEach(function (b) {
+      b.dataset.label = b.textContent;
+      b.onclick = function () {
+        if (b.dataset.r) { n = 0; box.querySelectorAll('.opt').forEach(function (x) { x.classList.remove('sel'); x.textContent = x.dataset.label; delete x.dataset.r; }); onChange([]); return; }
+        n++; b.dataset.r = n; b.classList.add('sel'); b.textContent = n + '. ' + b.dataset.label;
+        onChange([].slice.call(box.querySelectorAll('.opt[data-r]')).sort(function (a, c) { return a.dataset.r - c.dataset.r; }).map(function (x) { return x.dataset.g || x.dataset.label; }));
+      };
+    });
+  }
+  function wireGame() {
+    var g = state.game; if (!g) return;
+    var play = document.getElementById('play');
+    if (play) play.onclick = function () {
+      play.disabled = true;
+      api('POST', '/game/start').then(function (j) { openGame(g.game, j.tryId); }).catch(function (e) { play.disabled = false; toast(e.message); });
+    };
+    var ls = document.getElementById('lockscore');
+    if (ls) ls.onclick = function () { api('POST', '/game/lock').then(load).catch(function (e) { toast(e.message); }); };
+    var wg = document.getElementById('wgroups');
+    if (!wg) return;
+    var groups = [], picks = [], sv = document.getElementById('savewager');
+    rankable(wg, function (order) {
+      groups = order; picks = []; sv.disabled = true;
+      var box = document.getElementById('wpicks');
+      if (order.length < Object.keys(g.wagerGroups).length) { box.innerHTML = ''; return; }
+      box.innerHTML = '<div class="muted" style="margin-top:10px">Step 2: rank the prizes in ' + esc(order[0]) + '. Your #1 is what you get if you win.</div>' +
+        g.wagerGroups[order[0]].map(function (o) { return '<button class="opt">' + esc(o) + '</button>'; }).join('');
+      rankable(box, function (p) { picks = p; sv.disabled = !p.length; });
+    });
+    sv.onclick = function () {
+      sv.disabled = true;
+      api('POST', '/wager', { groups: groups, picks: picks }).then(function () { toast('Wager locked. Good luck!'); load(); }).catch(function (e) { sv.disabled = false; toast(e.message); });
+    };
+  }
+  function openGame(game, tryId) {
+    var ov = document.createElement('div'); ov.className = 'gover';
+    ov.innerHTML = '<div class="gtop"><b>' + esc(game.emoji + ' ' + game.name) + '</b><button id="gquit">✕</button></div><div class="muted" style="color:#c9c3d6;margin:4px 0 8px">' + esc(game.how) + '</div><div id="gstage"></div><div id="gend"></div>';
+    document.body.appendChild(ov);
+    var stop = null, ended = false;
+    function close() { if (stop) stop(); ov.remove(); load(); }
+    document.getElementById('gquit').onclick = function () { if (ended || confirm('Leave now? This try ends with no score.')) close(); };
+    setTimeout(function () {
+      stop = window.SparkGames[game.id](document.getElementById('gstage'), function (score) {
+        ended = true; touch();
+        api('POST', '/game/score', { tryId: tryId, score: score })
+          .then(function (j) { document.getElementById('gend').innerHTML = '<div class="gscore">Score ' + score + '</div><div style="text-align:center">Best today: ' + j.best + '</div><button class="btn" id="gdone">Done</button>'; document.getElementById('gdone').onclick = close; })
+          .catch(function (e) { toast(e.message); close(); });
+      });
+    }, 300);
+  }
+
   function learnedCard(s) {
     if (!s.learned || !s.learned.length) return '';
     return '<div class="card"><h2>💡 What Spark learned</h2><ul class="learn">' + s.learned.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></div>';
@@ -242,6 +340,7 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
         .then(function (j) { toast(j.planning ? 'Spark is planning your week now.' : 'Saved. Spark plans as soon as ' + state.partner + ' is in.'); load(); })
         .catch(function (e) { pd.disabled = false; toast(e.message); });
     };
+    wireGame();
     var pn = document.getElementById('plannow');
     if (pn) pn.onclick = function () { pn.disabled = true; api('POST', '/plan-now').then(function () { toast('Spark is planning your week now.'); load(); }).catch(function (e) { pn.disabled = false; toast(e.message); }); };
     app.querySelectorAll('.ev[data-id]').forEach(function (ev) {

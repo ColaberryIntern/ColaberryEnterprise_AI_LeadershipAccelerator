@@ -186,6 +186,24 @@ export function nextSlot(item: PlanItem, all: PlanItem[], weekdayCands: Slot[], 
 }
 const dayGap = (a: string, b: string) => (Date.parse(a) - Date.parse(b)) / 86400000;
 
+/** The weekday before `day` (Friday for a Monday): whose game is revealed this morning. */
+export function prevWeekday(day: string): string {
+  let d = addDays(day, -1);
+  while (!isWeekday(d)) d = addDays(d, -1);
+  return d;
+}
+
+/**
+ * Who won a day's game. Best score wins; a tie means both win; skipping the day counts as a loss
+ * (so if only one played, they win); nobody played means no winner. Null scores = did not play.
+ */
+export function decideWinner(a: number | null, b: number | null): Array<'a' | 'b'> {
+  if (a === null && b === null) return [];
+  if (b === null || (a !== null && a > b)) return ['a'];
+  if (a === null || b > a) return ['b'];
+  return ['a', 'b'];
+}
+
 /** Does the current activity still fit a new slot (enough room for an outing)? */
 export function fitsSlot(item: PlanItem, slot: Slot): boolean {
   if (item.kind === 'weekend') return true;
