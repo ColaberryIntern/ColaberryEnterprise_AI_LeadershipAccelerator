@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
+import AddCapabilityFrontDoor from '../../components/admin/agentDetailV2/AddCapabilityFrontDoor';
 import {
   CHANGE_REQUEST_DESCRIPTION_MAX,
   CHANGE_REQUEST_TITLE_MAX,
@@ -249,6 +250,18 @@ export default function AdminChangeRequestsPage() {
                   Describe what you need changed and why. An approval records a decision; it does
                   not start the work.
                 </p>
+
+                {/* AF11.9 — THE FRONT DOOR, immediately in front of the form.
+                    A builder arriving to file a request should meet "can the product already do
+                    this?" BEFORE the form, not after it: below the form it would be a footnote
+                    read by somebody who had already decided to ask for a build. It needs a
+                    domain to answer against, so it appears once one is chosen rather than
+                    answering against the wrong product surface. */}
+                {domainKey && (
+                  <div className="mb-3">
+                    <AddCapabilityFrontDoor domainKey={domainKey} />
+                  </div>
+                )}
                 <div className="mb-3">
                   <label className="form-label small fw-medium" htmlFor="cr-domain">Domain</label>
                   <select

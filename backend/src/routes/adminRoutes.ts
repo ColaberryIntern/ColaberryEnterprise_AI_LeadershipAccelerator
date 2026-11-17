@@ -73,6 +73,10 @@ import internVideoRoutes from './admin/internVideoRoutes';
 import agentDisplayNameRoutes from './admin/agentDisplayNameRoutes';
 import agentChangeRequestRoutes from './admin/agentChangeRequestRoutes';
 import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
+import toolRequestPackageRoutes from './admin/toolRequestPackageRoutes';
+import productFeatureRoutes from './admin/productFeatureRoutes';
+import capabilityBoardRoutes from './admin/capabilityBoardRoutes';
+import toolScaffoldRoutes from './admin/toolScaffoldRoutes';
 import toolRequestConversationRoutes from './admin/toolRequestConversationRoutes';
 import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
 import assignExistingToolRoutes from './admin/assignExistingToolRoutes';
@@ -339,6 +343,18 @@ router.use(agentChangeRequestRoutes);
 // these two are `requireAdmin` on both -- settling a tool grant is not something the section
 // every mgmt role carries should reach.
 router.use(toolRequestDecisionRoutes);
+// AF11.8. The ten-block decision package: the argument a request carries before it reaches a
+// human. Sits under the same /agent-domain-tool-requests prefix, so the section gate already
+// covers it.
+router.use(toolRequestPackageRoutes);
+// AF11.9. The builder's front door: can the product already do this? Read-only, files nothing.
+router.use(productFeatureRoutes);
+// AF11.10. The five-column board. Read-only: every column is derived, so there is nothing here
+// that could write a stage.
+router.use(capabilityBoardRoutes);
+// AF11.6. The schema, stub and failing test an approved request emits. A read: it writes no
+// file, registers nothing and deploys nothing.
+router.use(toolScaffoldRoutes);
 // Agent Tools Phase 2: the per-agent request pipeline and the conversation on a request.
 router.use(toolRequestConversationRoutes);
 router.use(agentToolGrantRoutes);

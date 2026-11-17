@@ -65,6 +65,16 @@ export interface BuildAgentSystemPromptOptions {
   /** C88 — omit the learner-context block. For a conversation where the person talking is staff, not a learner (Dara
    * upstairs): the sender's own learner profile is not what the conversation is about and would only mislead. */
   skipLearnerContext?: boolean;
+  /** AF11.8 — the capability about to run, when the caller knows which one it is.
+   *
+   * Supplying it adds Ali's standing instructions FOR THAT CAPABILITY to the directive block,
+   * on top of the agent-wide ones. Omitting it injects the agent-wide ones alone, which is the
+   * correct behaviour for a DM path like Reese's or Dara's: an instruction about landing-page
+   * headlines has no business on a turn that is not drafting a landing page.
+   *
+   * Every caller today omits it, so output is byte-for-byte unchanged until something knows
+   * which capability it is running. */
+  capabilityId?: string | null;
 }
 
 const DEFAULT_CLOSING_LINE =
@@ -115,7 +125,7 @@ export async function buildAgentSystemPrompt(
   parts.push(personaBlock);
 
   if (options?.agentId) {
-    const directives = await getActiveDirectiveTexts(options.agentId);
+    const directives = await getActiveDirectiveTexts(options.agentId, options.capabilityId);
     if (directives.length) parts.push(buildDirectiveBlock(directives));
 
     const memories = await getApprovedMemoryTexts(options.agentId);

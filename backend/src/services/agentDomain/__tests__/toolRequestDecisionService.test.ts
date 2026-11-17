@@ -27,6 +27,10 @@ const mockFindByPk = jest.fn();
 const mockCreate = jest.fn();
 const mockFindAll = jest.fn();
 
+const mockPackageFindByPk = jest.fn();
+const mockDetailFindByPk = jest.fn();
+const mockCreateDirective = jest.fn();
+
 jest.mock('./../recordedHumans', () => ({
   resolveRecordedHumans: (...a: unknown[]) => mockResolve(...a),
 }));
@@ -43,6 +47,23 @@ jest.mock('../../../models/AgentDomainToolRequestDecision', () => ({
     create: (...a: unknown[]) => mockCreate(...a),
     findAll: (...a: unknown[]) => mockFindAll(...a),
   },
+}));
+// AF11.8. The package carries the OPTIONS the decision chooses among, and the service reads it
+// inside the same locked transaction as the request. Mocked to return nothing by default, which
+// is the honest default here: no request in production carries a package yet, and a decision on
+// a package-less request still has to work.
+jest.mock('../../../models/AgentDomainToolRequestPackage', () => ({
+  __esModule: true,
+  default: { findByPk: (...a: unknown[]) => mockPackageFindByPk(...a) },
+}));
+// AF11.8. Ali's standing instructions are attached to the capability on approval, which needs
+// the request's detail row for the agent and the capability.
+jest.mock('../../../models/AgentDomainToolRequestDetail', () => ({
+  __esModule: true,
+  default: { findByPk: (...a: unknown[]) => mockDetailFindByPk(...a) },
+}));
+jest.mock('../../managerDirectiveService', () => ({
+  createDirective: (...a: unknown[]) => mockCreateDirective(...a),
 }));
 
 import { Transaction } from 'sequelize';
@@ -91,6 +112,12 @@ beforeEach(() => {
     ...values,
     decided_at: values.decided_at ?? new Date('2026-11-05T15:00:00Z'),
   }));
+  // AF11.8. No package and no detail by default, which is the state every request in production
+  // is actually in: zero packages exist. A decision on a package-less request still has to work,
+  // and these defaults are what keep the pre-AF11.8 assertions in this file honest.
+  mockPackageFindByPk.mockResolvedValue(null);
+  mockDetailFindByPk.mockResolvedValue(null);
+  mockCreateDirective.mockResolvedValue({ id: 'directive-1' });
 });
 afterEach(() => logSpy.mockRestore());
 

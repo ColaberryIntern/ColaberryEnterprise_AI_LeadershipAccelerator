@@ -40,6 +40,8 @@ export interface AgentDomainToolRequestDecisionAttributes {
   missing_field?: string | null;
   /** Mandatory on `assign_existing_tool`, null otherwise. An intent, not a grant. */
   assigned_tool_name?: string | null;
+  /** AF11.8. Which option the request offered was chosen: `A`, `B`, `C` or `nothing`. */
+  chosen_option?: string | null;
   created_at?: Date;
 }
 
@@ -54,6 +56,7 @@ class AgentDomainToolRequestDecision
   declare reason: string | null;
   declare missing_field: string | null;
   declare assigned_tool_name: string | null;
+  declare chosen_option: string | null;
   declare created_at: Date;
 }
 
@@ -67,6 +70,9 @@ AgentDomainToolRequestDecision.init(
     reason: { type: DataTypes.TEXT, allowNull: true },
     missing_field: { type: DataTypes.TEXT, allowNull: true },
     assigned_tool_name: { type: DataTypes.TEXT, allowNull: true },
+    // Nullable because a `deny` is never one of the agent's options and a request with no
+    // package offers none, so plenty of honest decisions choose nothing at all.
+    chosen_option: { type: DataTypes.TEXT, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   },
   {

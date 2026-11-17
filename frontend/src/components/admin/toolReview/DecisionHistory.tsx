@@ -25,6 +25,9 @@ const VERB_LABEL: Record<ToolRequestVerb, string> = {
   assign_existing_tool: 'Assigned an existing tool',
   send_back: 'Sent back',
   deny: 'Denied',
+  // AF11.8. Deliberately not 'Denied'. A reader of the log has to be able to tell the two
+  // apart afterwards: a denial can be appealed and this cannot.
+  nothing: 'Answered Nothing',
 };
 
 const VERB_BADGE: Record<ToolRequestVerb, string> = {
@@ -32,6 +35,7 @@ const VERB_BADGE: Record<ToolRequestVerb, string> = {
   assign_existing_tool: 'bg-info',
   send_back: 'bg-warning text-dark',
   deny: 'bg-secondary',
+  nothing: 'bg-dark',
 };
 
 function when(iso: string): string {

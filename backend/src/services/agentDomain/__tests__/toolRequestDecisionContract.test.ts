@@ -54,6 +54,9 @@ describe('the four verbs, and only those four', () => {
       deny: { reason: 'The platform already does this through the cron registry.' },
       assign_existing_tool: { assigned_tool_name: 'read_attachments' },
       send_back: { missing_field: 'side_effects' },
+      // AF11.8. Nothing is the one verb that requires no WORDS and does require its own answer:
+      // it is recorded as Nothing or it is not Nothing at all.
+      nothing: { chosen_option: 'nothing' },
     };
     for (const verb of TOOL_REQUEST_VERBS) {
       const out = acceptToolRequestDecision(args({ proposed: { verb, ...complete[verb] } }));
@@ -253,6 +256,10 @@ describe('what a decision does to the request, and what it must never do', () =>
         reason: 'because',
         missing_field: 'purpose',
         assigned_tool_name: 'create_tickets',
+        // AF11.8. Nothing has to be recorded as Nothing, and nothing else may be: supplying the
+        // answer only for that verb is what keeps this loop exercising all five rather than
+        // four plus a refusal.
+        ...(verb === 'nothing' ? { chosen_option: 'nothing' } : {}),
       };
       const out = acceptToolRequestDecision(args({ proposed }));
       expect(out.ok && out.decision.decided_by_identity).toBe(ALI);

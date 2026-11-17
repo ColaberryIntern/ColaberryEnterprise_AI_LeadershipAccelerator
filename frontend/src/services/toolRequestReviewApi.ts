@@ -22,12 +22,20 @@ import api from '../utils/api';
  * what the agent is allowed to do with it is another, with another author.
  */
 
-/** The four verbs. Mirrors `TOOL_REQUEST_VERBS` in the backend contract. */
+/** The five verbs. Mirrors `TOOL_REQUEST_VERBS` in the backend contract. */
 export const TOOL_REQUEST_VERBS = [
   'approve_to_build',
   'deny',
   'assign_existing_tool',
   'send_back',
+  /**
+   * AF11.8. The capability comes off the board, and there is nothing to appeal.
+   *
+   * NOT deny-with-a-reason. A denial says no to a proposal and invites a better one; Nothing
+   * says the capability itself should not exist. It is the one verb that requires no words, and
+   * that asymmetry is the whole difference between them.
+   */
+  'nothing',
 ] as const;
 
 export type ToolRequestVerb = typeof TOOL_REQUEST_VERBS[number];
@@ -51,6 +59,18 @@ export type SendBackField = typeof SEND_BACK_FIELDS[number];
 /** Mirrors `DECISION_REASON_MAX` in `backend/src/schemas/toolRequestDecisionSchema.ts`. */
 export const DECISION_REASON_MAX = 1000;
 
+/**
+ * AF11.8. What a human may answer with, as opposed to what an agent may offer.
+ *
+ * Mirrors `DECISION_ANSWERS` in the backend contract. `nothing` is here and is never in a
+ * package's option list.
+ */
+export const DECISION_ANSWERS = ['A', 'B', 'C', 'nothing'] as const;
+export type DecisionAnswer = typeof DECISION_ANSWERS[number];
+
+/** Mirrors `STANDING_INSTRUCTIONS_MAX` in the backend contract. */
+export const STANDING_INSTRUCTIONS_MAX = 2000;
+
 /** What the console sends. The server's own schema is `.strict()`, so no extra field survives. */
 export interface ProposedToolRequestDecision {
   verb: ToolRequestVerb;
@@ -60,6 +80,20 @@ export interface ProposedToolRequestDecision {
   missing_field?: SendBackField;
   /** Required on `assign_existing_tool`. An intent, not a grant. */
   assigned_tool_name?: string;
+  /**
+   * AF11.8. WHICH of the options the request carried was chosen.
+   *
+   * The verb becomes the CONSEQUENCE of the chosen option rather than something picked in the
+   * console, and the API refuses a decision whose verb disagrees with the option it names.
+   */
+  chosen_option?: DecisionAnswer;
+  /**
+   * AF11.8. Your own rules for how the agent behaves when this capability runs.
+   *
+   * Attached to the CAPABILITY, not to this ticket or a comment, and written in the same
+   * transaction as the decision: an approval whose conditions failed to save is not an approval.
+   */
+  standing_instructions?: string;
 }
 
 /**
@@ -78,6 +112,8 @@ export interface ToolRequestDecision {
   reason: string | null;
   missing_field: string | null;
   assigned_tool_name: string | null;
+  /** AF11.8. The option chosen, or null when the decision was not made by choosing one. */
+  chosen_option?: DecisionAnswer | null;
   request_status: string;
 }
 

@@ -221,6 +221,7 @@ import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAge
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
 import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
+import { ensureToolRequestPackageSchemaGuarded } from './db/ensureToolRequestPackageSchema';
 import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
 import { ensureMayaOutboundApprovalSchemaGuarded } from './db/ensureMayaOutboundApprovalSchema';
@@ -3334,6 +3335,11 @@ async function start(): Promise<void> {
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
   await ensureCapabilityConfirmationSchemaGuarded();
   await ensureToolRequestDecisionSchemaGuarded();
+  // AF11.8. The ten-block decision package a request must carry before it reaches a human.
+  // Same parent, same FK, so it sits with its siblings after the parent is ensured. Guarded for
+  // the reason all of them are: its assert throws, and a schema problem has to be loud in the
+  // logs without taking the backend down with it.
+  await ensureToolRequestPackageSchemaGuarded();
   // Agent Tools Phase 2. The CONVERSATION on a tool request, as distinct from the decision log
   // above: a question and its answer are neither an approval nor a denial, and had nowhere to
   // live. Same parent, same FK, so it sits with its siblings after the parent is ensured.

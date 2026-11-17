@@ -5,6 +5,7 @@ import DecisionPanel from '../../components/admin/toolReview/DecisionPanel';
 import GrantOutcomePanel from '../../components/admin/toolReview/GrantOutcomePanel';
 import DuplicateCandidatesPanel from '../../components/admin/toolReview/DuplicateCandidatesPanel';
 import ToolRequestFacts from '../../components/admin/toolReview/ToolRequestFacts';
+import RequestPackage, { PackageBounced } from '../../components/admin/toolReview/RequestPackage';
 import {
   errorMessage,
   fetchAllChangeRequests,
@@ -288,6 +289,28 @@ export default function AdminToolRequestReviewPage() {
 
             {selected && (
               <>
+                {/* AF11.8 — THE CASE, ABOVE THE FACTS.
+                    The ten blocks are what you are being asked to decide; the six field groups
+                    below are the specification of the thing. Reading the specification first is
+                    how a decision gets made on whether the tool is well described rather than
+                    on whether it is worth building. */}
+                <SectionCard
+                  title="The case for deciding this"
+                  subtitle="The ten blocks an agent has to bring before it asks you for anything"
+                >
+                  {selected.readiness?.ready_for_a_human && selected.decision_package ? (
+                    <RequestPackage pkg={selected.decision_package} />
+                  ) : (
+                    <PackageBounced readiness={selected.readiness ?? {
+                      has_package: false,
+                      ready_for_a_human: false,
+                      bounced_blocks: [],
+                      bounce_reasons: [],
+                    }}
+                    />
+                  )}
+                </SectionCard>
+
                 <SectionCard
                   title={selected.title}
                   subtitle={`${selected.domain_key} · filed by ${selected.requested_by_identity}${selected.requested_at ? ` · ${when(selected.requested_at)}` : ''}`}
@@ -316,6 +339,7 @@ export default function AdminToolRequestReviewPage() {
                       the box ready to be recorded against a request it was never written about. */}
                   <DecisionPanel
                     key={selected.id}
+                    options={selected.decision_package?.options ?? []}
                     check={selected.duplicate_check ?? null}
                     settled={selected.status !== 'submitted'}
                     busy={busy}

@@ -207,16 +207,18 @@ describe('guarded — the boot entry point', () => {
 });
 
 describe('the DDL keeps the rules the application states in words', () => {
-  it('names all four verbs in the verb CHECK and nothing else', () => {
+  it('names all five verbs in the verb CHECK and nothing else', () => {
+    // FIVE since AF11.8 added `nothing`. The count is the point of this test rather than the
+    // list: a sixth value sneaking in here would widen what a decision can be without anybody
+    // touching the contract, and widening the answer space silently is exactly how a console
+    // grows a verb nobody designed.
     const block = createBlock();
-    for (const verb of ['approve_to_build', 'deny', 'assign_existing_tool', 'send_back']) {
+    for (const verb of ['approve_to_build', 'deny', 'assign_existing_tool', 'send_back', 'nothing']) {
       expect(block).toContain(`'${verb}'`);
     }
-    // A fifth value sneaking in here would widen what a decision can be without touching the
-    // contract. Count the quoted values inside the verb CHECK rather than trusting the list above.
     const verbCheck = block.slice(block.indexOf('chk_adtrd_verb_is_known'));
     const inList = verbCheck.slice(0, verbCheck.indexOf(')'));
-    expect((inList.match(/'[a-z_]+'/g) ?? []).length).toBe(4);
+    expect((inList.match(/'[a-z_]+'/g) ?? []).length).toBe(5);
   });
 
   it('requires a reason on a denial, a field on a send-back and a tool on an assignment', () => {

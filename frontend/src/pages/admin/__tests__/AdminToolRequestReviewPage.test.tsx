@@ -705,3 +705,283 @@ describe('who sees this queue', () => {
     expect(text()).toContain('No tool requests');
   });
 });
+
+/**
+ * AF11.8 — the ten-block package on the console, the A/B/C/Nothing answer, and the bounce.
+ *
+ * The ticket's own test case is the one at the bottom: the design-token package has to read as an
+ * easy no. That is a claim about the SCREEN, not about the gate, so it is asserted here rather
+ * than in the contract tests: the recommendation, the simulation and what it was run against all
+ * have to be visible without opening anything.
+ */
+
+/** A complete package: Sarbjit's landing-page capability, argued honestly. */
+const PACKAGE = {
+  executive_summary: 'Sarbjit drafts every campaign page by hand. This asks for a drafter. '
+    + 'Option B grants the builder that already exists.',
+  problem: 'Three hours a week spent drafting pages Sohail then rewrites.',
+  key_findings: [
+    { finding: '3 hours a week spent drafting', source: "Sarbjit's time log, 10 Nov 2026" },
+  ],
+  options: [
+    {
+      key: 'A' as const,
+      summary: 'Build a drafter',
+      what_happens: 'Two weeks of build, then the agent drafts.',
+      verb: 'approve_to_build' as const,
+    },
+    {
+      key: 'B' as const,
+      summary: 'Grant the existing builder',
+      what_happens: 'Usable today, nothing is built.',
+      verb: 'assign_existing_tool' as const,
+    },
+  ],
+  recommendation: 'B' as const,
+  recommendation_reason: 'The endpoints already exist, so a grant costs nothing to build.',
+  impact: 'About 3 hours a week back, and no new blast radius.',
+  risk_can_break: ['A draft published before review'],
+  risk_cannot_break: ['It cannot publish: publish is a separate grant'],
+  simulated_action: 'Ran the drafter over the last 12 briefs.',
+  simulated_against: 'The 12 campaign briefs filed between 1 Sep and 10 Nov 2026',
+  simulated_at: '2026-11-16T09:00:00.000Z',
+  steps_that_follow: ['Grant the tool', 'Draft one real page', 'Report the edit count'],
+};
+
+const READY = {
+  has_package: true, ready_for_a_human: true, bounced_blocks: [], bounce_reasons: [],
+};
+
+const withPackage = (over = {}) => REQ({
+  tool_request: DETAIL,
+  decision_package: PACKAGE,
+  readiness: READY,
+  ...over,
+});
+
+describe('AF11.8 — the case is on the screen, above the specification', () => {
+  it('renders all ten blocks without anything behind a tab', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    const t = text();
+    expect(t).toContain('Sarbjit drafts every campaign page by hand');   // 1 executive summary
+    expect(t).toContain('Three hours a week spent drafting');            // 2 problem
+    expect(t).toContain("Sarbjit's time log, 10 Nov 2026");              // 3 finding + its source
+    expect(t).toContain('Grant the existing builder');                   // 4 options
+    expect(t).toContain('The endpoints already exist');                  // 5 recommendation
+    expect(t).toContain('About 3 hours a week back');                    // 6 impact
+    expect(t).toContain('It cannot publish');                            // 7 the boundary half
+    expect(t).toContain('Ran the drafter over the last 12 briefs');      // 8 simulation
+    expect(t).toContain('Report the edit count');                        // 9 steps
+  });
+
+  it('shows WHAT THE SIMULATION RAN AGAINST, not just that one happened', async () => {
+    // A simulation with no data named is a claim rather than evidence, and the screen is where
+    // that distinction either survives or is lost.
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    expect(text()).toContain('The 12 campaign briefs filed between 1 Sep and 10 Nov 2026');
+  });
+
+  it('marks the recommended option, so the agent\'s own view is not buried', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    const b = container.querySelector('[data-testid="package-option-B"]');
+    expect(b?.textContent).toContain('recommended');
+    const a = container.querySelector('[data-testid="package-option-A"]');
+    expect(a?.textContent).not.toContain('recommended');
+  });
+});
+
+describe('AF11.8 — a request whose package is incomplete does NOT reach Ali', () => {
+  it('shows the bounce and names every outstanding block', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({
+      tool_request: DETAIL,
+      decision_package: { ...PACKAGE, problem: '' },
+      readiness: {
+        has_package: true,
+        ready_for_a_human: false,
+        bounced_blocks: ['problem'],
+        bounce_reasons: [{
+          rule: 'problem_missing',
+          block: 'problem',
+          detail: 'State the problem as a cost being paid right now, not as an idea.',
+        }],
+      },
+    })]);
+    await render();
+    expect(text()).toContain('This has not reached you yet');
+    expect(text()).toContain('State the problem as a cost being paid right now');
+  });
+
+  it('says plainly when nobody has written a package at all', async () => {
+    // Distinct from "one exists and three blocks are thin". The first is not a failure, it is an
+    // agent that has not started.
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({ tool_request: DETAIL })]);
+    await render();
+    expect(text()).toContain('No decision package has been written');
+  });
+
+  it('does NOT render the ten blocks when the package is incomplete', async () => {
+    // The bounce replaces the case rather than sitting above it: half an argument displayed as
+    // an argument is how a decision gets made on an incomplete one.
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({
+      tool_request: DETAIL,
+      decision_package: { ...PACKAGE, problem: '' },
+      readiness: {
+        has_package: true, ready_for_a_human: false,
+        bounced_blocks: ['problem'], bounce_reasons: [],
+      },
+    })]);
+    await render();
+    expect(text()).not.toContain('Ran the drafter over the last 12 briefs');
+  });
+});
+
+describe('AF11.8 — the answer is A, B, C or Nothing', () => {
+  it('offers the options the REQUEST carried, plus Nothing', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    expect(container.querySelector('[data-testid="answer-A"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="answer-B"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="answer-C"]')).toBeNull(); // not offered
+    expect(container.querySelector('[data-testid="answer-nothing"]')).toBeTruthy();
+  });
+
+  it('records the CHOSEN OPTION and the verb that option said it would do', async () => {
+    // The point of AF11.8: the verb is the consequence of the option rather than a separate
+    // pick, and the API refuses a decision where the two disagree.
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    mockedReview.decideToolRequest.mockResolvedValue({
+      change_request_id: 'cr-1', verb: 'approve_to_build', decided_by_identity: 'ali@colaberry.com',
+      decided_at: '2026-11-17T12:00:00Z', reason: null, missing_field: null,
+      assigned_tool_name: null, chosen_option: 'A', request_status: 'approved',
+    });
+    await render();
+    await click(container.querySelector('[data-testid="answer-A"]') ?? undefined);
+    await click(buttons().find((b) => b.textContent?.includes('Record this decision')));
+    expect(mockedReview.decideToolRequest).toHaveBeenCalledWith('cr-tool-1', expect.objectContaining({
+      verb: 'approve_to_build',
+      chosen_option: 'A',
+    }));
+  });
+
+  it('ANSWERING NOTHING carries no reason, which is what makes it not a denial', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    mockedReview.decideToolRequest.mockResolvedValue({
+      change_request_id: 'cr-1', verb: 'nothing', decided_by_identity: 'ali@colaberry.com',
+      decided_at: '2026-11-17T12:00:00Z', reason: null, missing_field: null,
+      assigned_tool_name: null, chosen_option: 'nothing', request_status: 'declined',
+    });
+    await render();
+    await click(container.querySelector('[data-testid="answer-nothing"]') ?? undefined);
+    await click(buttons().find((b) => b.textContent?.includes('Record this decision')));
+    const sent = mockedReview.decideToolRequest.mock.calls[0][1];
+    expect(sent.verb).toBe('nothing');
+    expect(sent.chosen_option).toBe('nothing');
+    expect(sent.reason).toBeUndefined();
+  });
+
+  it('Nothing is submittable immediately: there is nothing to fill in first', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    await click(container.querySelector('[data-testid="answer-nothing"]') ?? undefined);
+    const submit = buttons().find((b) => b.textContent?.includes('Record this decision')) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+  });
+
+  it('a request with NO package keeps the four verbs, so it can still be sent back', async () => {
+    // A package-less request is not a dead end: send-back and deny are decisions about the
+    // request rather than choices among its options.
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({ tool_request: DETAIL })]);
+    await render();
+    expect(container.querySelector('[data-testid="answer-nothing"]')).toBeNull();
+    expect(text()).toContain('Send back');
+    expect(text()).toContain('Approve to build');
+  });
+});
+
+describe("AF11.8 — Ali's standing instructions ride with the capability", () => {
+  it('offers the box on an answer that lets the capability proceed', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    await click(container.querySelector('[data-testid="answer-A"]') ?? undefined);
+    expect(container.querySelector('[data-testid="standing-instructions"]')).toBeTruthy();
+    expect(text()).toMatch(/ride with the CAPABILITY|every time it runs/i);
+  });
+
+  it('does NOT offer it on Nothing, which approves no behaviour to instruct', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    await render();
+    await click(container.querySelector('[data-testid="answer-nothing"]') ?? undefined);
+    expect(container.querySelector('[data-testid="standing-instructions"]')).toBeNull();
+  });
+
+  it('sends what was typed, so a condition cannot be read and then dropped', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([withPackage()]);
+    mockedReview.decideToolRequest.mockResolvedValue({
+      change_request_id: 'cr-1', verb: 'approve_to_build', decided_by_identity: 'ali@colaberry.com',
+      decided_at: '2026-11-17T12:00:00Z', reason: null, missing_field: null,
+      assigned_tool_name: null, chosen_option: 'A', request_status: 'approved',
+    });
+    await render();
+    await click(container.querySelector('[data-testid="answer-A"]') ?? undefined);
+    await type(container.querySelector('[data-testid="standing-instructions"]') as HTMLTextAreaElement, 'Never write a headline longer than eight words.');
+    await click(buttons().find((b) => b.textContent?.includes('Record this decision')));
+    expect(mockedReview.decideToolRequest).toHaveBeenCalledWith('cr-tool-1', expect.objectContaining({
+      standing_instructions: 'Never write a headline longer than eight words.',
+    }));
+  });
+});
+
+describe("AF11.8's own test case: the design-token package reads as an easy no", () => {
+  /**
+   * The ticket: *"The design-token drift capability, rendered in this shape, makes 'Nothing' the
+   * obvious answer... Build the page so that this request reads as an easy no. If it does not,
+   * the shape is not doing its job."*
+   *
+   * So what is asserted is what a reader can SEE: the agent recommends Nothing, the simulation
+   * has already been run, and the finding that makes it obvious is on the page with its source.
+   */
+  const DRIFT = {
+    ...PACKAGE,
+    executive_summary: 'The scanner would list every color outside the approved palette. It has '
+      + 'now been run once over the whole repository. There is nothing left for it to find.',
+    problem: 'Color drift accumulates unnoticed. The cost today is that the palette is advisory.',
+    key_findings: [
+      { finding: '1,571 distinct unapproved colors across 3,088 styled files', source: 'repository scan, main at 8bbcb51, 16 Nov 2026' },
+    ],
+    recommendation: 'nothing' as const,
+    recommendation_reason: 'The one run has produced everything the capability would ever produce.',
+    simulated_action: 'Ran the full scan over the repository and grouped every unapproved color.',
+    simulated_against: 'main at 8bbcb51, every .tsx, .ts and .css file, 16 Nov 2026',
+    steps_that_follow: ['Take the capability off the seven boards that carry it'],
+  };
+
+  it('puts the recommendation of Nothing, and the reason, in front of the reader', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({
+      tool_request: DETAIL, decision_package: DRIFT, readiness: READY,
+    })]);
+    await render();
+    expect(text()).toContain('Nothing: do not build this');
+    expect(text()).toContain('has produced everything the capability would ever produce');
+  });
+
+  it('shows the measured finding WITH its source, so none of it has to be checked elsewhere', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({
+      tool_request: DETAIL, decision_package: DRIFT, readiness: READY,
+    })]);
+    await render();
+    expect(text()).toContain('1,571 distinct unapproved colors across 3,088 styled files');
+    expect(text()).toContain('repository scan, main at 8bbcb51, 16 Nov 2026');
+  });
+
+  it('and Nothing is one click away, with no field to fill in first', async () => {
+    mocked.fetchAllChangeRequests.mockResolvedValue([REQ({
+      tool_request: DETAIL, decision_package: DRIFT, readiness: READY,
+    })]);
+    await render();
+    await click(container.querySelector('[data-testid="answer-nothing"]') ?? undefined);
+    expect((buttons().find((b) => b.textContent?.includes('Record this decision')) as HTMLButtonElement).disabled).toBe(false);
+  });
+});

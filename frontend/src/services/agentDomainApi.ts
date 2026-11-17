@@ -212,6 +212,65 @@ export interface ChangeRequest {
    * was never checked" are different things to tell an approver.
    */
   duplicate_check?: ToolDuplicateCheck | null;
+  /** AF11.8. The ten-block case for deciding this, or null when nobody has written one. */
+  decision_package?: ToolRequestPackage | null;
+  /** AF11.8. Whether this is in front of you at all, and what is outstanding if not. */
+  readiness?: PackageReadiness;
+}
+
+/** AF11.8. The ten blocks a request must carry before it reaches a human. */
+export interface ToolRequestPackage {
+  executive_summary: string;
+  problem: string;
+  key_findings: Array<{ finding: string; source: string }>;
+  /**
+   * Blocks 4 and 10 of the ten: the possible solutions ARE the answer.
+   *
+   * `nothing` is never in here. It is always available to the decider and is never offered by the
+   * agent, because an option the agent has to remember to include is an option it can leave out.
+   */
+  options: Array<{
+    key: 'A' | 'B' | 'C';
+    summary: string;
+    what_happens: string;
+    /**
+     * What choosing this option would do. Never `deny`: declining is already available to
+     * the decider as Nothing, so an option that only declines is not a second solution.
+     */
+    verb: 'approve_to_build' | 'assign_existing_tool' | 'send_back';
+  }>;
+  /** One of the offered options, or `nothing` when the agent has disproved its own capability. */
+  recommendation: 'A' | 'B' | 'C' | 'nothing';
+  recommendation_reason: string;
+  impact: string;
+  risk_can_break: string[];
+  /** The half that makes the other half believable, and the one an approver says yes on. */
+  risk_cannot_break: string[];
+  simulated_action: string;
+  simulated_against: string;
+  /** ISO 8601. A time rather than a sentence, so a stale simulation is visible as one. */
+  simulated_at: string;
+  steps_that_follow: string[];
+}
+
+/** AF11.8. The ten blocks, by the names the API bounces them under. */
+export type PackageBlock =
+  | 'executive_summary' | 'problem' | 'key_findings' | 'possible_solutions'
+  | 'recommendation' | 'possible_impact' | 'risk_assessment' | 'simulated_action'
+  | 'steps_that_follow' | 'the_answer';
+
+/**
+ * AF11.8. Whether a request has reached a human.
+ *
+ * COMPUTED by the API on every read and never stored, so it cannot drift out of agreement with
+ * the package beside it. `has_package` and `ready_for_a_human` are two different facts: "nobody
+ * has written one" is not "one was written and three blocks are thin".
+ */
+export interface PackageReadiness {
+  has_package: boolean;
+  ready_for_a_human: boolean;
+  bounced_blocks: PackageBlock[];
+  bounce_reasons: Array<{ rule: string; detail: string; block: PackageBlock }>;
 }
 
 /**

@@ -1,3 +1,4 @@
+import { Op, type Transaction } from 'sequelize';
 import AiAgent from '../models/AiAgent';
 import ManagerDirective from '../models/ManagerDirective';
 
@@ -31,6 +32,8 @@ export class DirectiveNotFoundError extends Error {
 export interface ManagerDirectiveView {
   id: string;
   directiveText: string;
+  /** AF11.8. The capability this instruction is scoped to, or null for the whole agent. */
+  capabilityId: string | null;
   status: 'active' | 'revoked';
   createdByEmail: string;
   createdByOrgMemberId: string | null;
@@ -43,6 +46,7 @@ function toView(row: ManagerDirective): ManagerDirectiveView {
   return {
     id: row.id,
     directiveText: row.directive_text,
+    capabilityId: row.capability_id ?? null,
     status: row.status,
     createdByEmail: row.created_by_email,
     createdByOrgMemberId: row.created_by_org_member_id,
@@ -66,17 +70,33 @@ export async function createDirective(
   orgMemberId: string | null,
   createdByEmail: string,
   directiveText: string,
+  /**
+   * AF11.8. Optional and trailing, so every caller that predates it is untouched and still writes
+   * an agent-wide directive outside any transaction.
+   *
+   * `capabilityId` scopes the instruction to one capability. `transaction` exists because a tool
+   * approval writes the decision and Ali's standing instructions as ONE act: see
+   * `toolRequestDecisionService.ts` for why that one is not best-effort the way the duplicate
+   * check is.
+   */
+  options: { capabilityId?: string | null; transaction?: Transaction } = {},
 ): Promise<ManagerDirectiveView> {
-  const agent = await AiAgent.findByPk(agentId, { attributes: ['id'] });
+  const { capabilityId, transaction } = options;
+  const agent = await AiAgent.findByPk(agentId, { attributes: ['id'], transaction });
   if (!agent) throw new AgentNotFoundError(agentId);
+
+  const scoped = typeof capabilityId === 'string' && capabilityId.trim().length > 0
+    ? capabilityId.trim()
+    : null;
 
   const row = await ManagerDirective.create({
     agent_id: agentId,
     created_by_org_member_id: orgMemberId,
     created_by_email: createdByEmail,
     directive_text: directiveText,
+    capability_id: scoped,
     status: 'active',
-  });
+  }, { transaction });
   return toView(row);
 }
 
@@ -109,10 +129,35 @@ export async function revokeDirective(directiveId: string, revokedByEmail: strin
  * a DB error returns [] rather than throwing, matching
  * buildAgentSystemPrompt()'s own "never throws — degrades gracefully"
  * contract for the learner-context block it already has. */
-export async function getActiveDirectiveTexts(agentId: string): Promise<string[]> {
+export async function getActiveDirectiveTexts(
+  agentId: string,
+  /**
+   * AF11.8. The capability about to run, when the caller knows it.
+   *
+   * THE RULE, and it is the whole reason the parameter exists: an agent-wide directive
+   * (`capability_id IS NULL`) is always in force, and a capability-scoped one is in force ONLY
+   * when its capability is the one running. Omitting this argument therefore returns agent-wide
+   * directives alone — never every scoped instruction the agent has ever been given.
+   *
+   * Getting that backwards is the failure that would make the column worse than useless:
+   * "never write a headline longer than eight words" is good guidance while drafting a landing
+   * page and is noise the agent will try to obey on a turn that has nothing to do with headlines.
+   * A test pins both halves.
+   */
+  capabilityId?: string | null,
+): Promise<string[]> {
   try {
+    const scoped = typeof capabilityId === 'string' && capabilityId.trim().length > 0
+      ? capabilityId.trim()
+      : null;
     const rows = await ManagerDirective.findAll({
-      where: { agent_id: agentId, status: 'active' },
+      where: {
+        agent_id: agentId,
+        status: 'active',
+        capability_id: scoped === null
+          ? { [Op.is]: null }
+          : { [Op.or]: [{ [Op.is]: null }, { [Op.eq]: scoped }] },
+      },
       order: [['created_at', 'DESC']],
       attributes: ['directive_text'],
     });

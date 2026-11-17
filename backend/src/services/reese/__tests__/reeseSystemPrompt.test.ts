@@ -121,7 +121,7 @@ describe('buildReeseSystemPrompt — manager directive injection (Checkpoint C, 
 
     const prompt = await buildReeseSystemPrompt('enrollment-4');
 
-    expect(mockActiveDirectives).toHaveBeenCalledWith('reese-agent-id');
+    expect(mockActiveDirectives).toHaveBeenCalledWith('reese-agent-id', undefined);
     expect(prompt).toContain('MANAGER DIRECTIVES');
     expect(prompt).toContain('Always suggest a mentor session after the third unresolved question in one thread.');
   });

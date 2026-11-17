@@ -30,7 +30,7 @@
 
 import { humanityCheck } from './promotionIdentity';
 
-/** The four verbs, and nothing else is a decision. */
+/** The verbs, and nothing else is a decision. */
 export const TOOL_REQUEST_VERBS = Object.freeze([
   /** The tool does not exist and should. Leaves the request open until it is usable (AF11.5). */
   'approve_to_build',
@@ -40,7 +40,40 @@ export const TOOL_REQUEST_VERBS = Object.freeze([
   'assign_existing_tool',
   /** Names the field that is missing or too vague, so the loop is specific. */
   'send_back',
+  /**
+   * AF11.8. The capability comes off the board, and there is nothing to appeal.
+   *
+   * Ali, 16 Nov 2026, on the answer space: *"make the answer for the human go with option A, B, C
+   * or Nothing."* The ticket is explicit that this is **not deny-with-a-reason** — a denial says
+   * no to a proposal and invites a better one, where Nothing says the capability itself should
+   * not exist. Collapsing them would lose the only distinction that matters afterwards: whether
+   * anybody should try again.
+   *
+   * It is therefore the one verb that requires no words. `deny` without a reason is still refused
+   * by `chk_adtrd_verb_carries_its_words`, and that asymmetry IS the difference between them.
+   */
+  'nothing',
 ] as const);
+
+/**
+ * What a human may answer with, as opposed to what an agent may offer.
+ *
+ * `nothing` is in here and is never in a package's option list: see
+ * `ensureToolRequestPackageSchema.ts` for why an option the agent has to remember to include is
+ * an option it can leave out.
+ */
+export const DECISION_ANSWERS = Object.freeze(['A', 'B', 'C', 'nothing'] as const);
+export type DecisionAnswer = typeof DECISION_ANSWERS[number];
+
+/**
+ * AF11.8. How long Ali's standing instructions may be.
+ *
+ * They are injected into the assembled system prompt on every run of the capability, beside the
+ * persona, the platform safety rules and whatever context the turn needs, so the bound is about
+ * what fits there rather than what fits in a column. 2000 characters is roughly the worked
+ * example in the ticket twenty times over.
+ */
+export const STANDING_INSTRUCTIONS_MAX = 2000;
 
 export type ToolRequestVerb = typeof TOOL_REQUEST_VERBS[number];
 
@@ -57,7 +90,15 @@ export type DecisionRefusal =
   | 'send_back_field_missing'
   | 'send_back_field_unknown'
   | 'assigned_tool_missing'
-  | 'assigned_tool_unknown';
+  | 'assigned_tool_unknown'
+  // AF11.8 — answering with one of the options the request itself carried
+  | 'chosen_option_unknown'
+  | 'chosen_option_not_offered'
+  | 'chosen_option_verb_mismatch'
+  | 'nothing_needs_its_own_answer'
+  | 'option_chosen_on_a_request_with_no_package'
+  | 'standing_instructions_have_no_agent'
+  | 'standing_instructions_too_long';
 
 export interface DecisionIssue {
   readonly rule: DecisionRefusal;
@@ -81,6 +122,17 @@ export const SEND_BACK_FIELDS: ReadonlyArray<string> = Object.freeze([
 
 export interface ProposedDecision {
   readonly verb?: string | null;
+  /** AF11.8. The option chosen: `A`, `B`, `C`, or `nothing`. */
+  readonly chosen_option?: string | null;
+  /**
+   * AF11.8. Ali's own rules for how the agent should behave when this capability runs.
+   *
+   * Not gated here beyond its length, and that is deliberate: this is the one field on a decision
+   * whose content is the decider's judgement rather than a value a contract can check. The
+   * service attaches it to the CAPABILITY as a manager directive, in the same transaction as the
+   * decision, and refuses the whole decision if it cannot.
+   */
+  readonly standing_instructions?: string | null;
   /** Mandatory on `deny`. */
   readonly reason?: string | null;
   /** Mandatory on `send_back`, and must be one of `SEND_BACK_FIELDS`. */
@@ -95,6 +147,20 @@ export interface AcceptedDecision {
   readonly reason: string | null;
   readonly missing_field: string | null;
   readonly assigned_tool_name: string | null;
+  /**
+   * AF11.8. WHICH of the options the request carried was chosen, or `nothing`.
+   *
+   * `null` when the decision was not made by choosing one. That is not a legacy hole: `deny` is
+   * never an option an agent may offer, so denying is always a decision with no chosen option,
+   * and a request that carries no package has no options to choose from at all.
+   */
+  readonly chosen_option: DecisionAnswer | null;
+}
+
+/** One option a package offered, as the gate needs it: the letter and what it would do. */
+export interface OfferedOption {
+  readonly key: string;
+  readonly verb: string;
 }
 
 export interface GateDecisionArgs {
@@ -116,6 +182,17 @@ export interface GateDecisionArgs {
   readonly approverSet: ReadonlyArray<string>;
   /** Tool names the catalog really has, for `assign_existing_tool`. */
   readonly knownToolNames?: ReadonlyArray<string>;
+  /**
+   * AF11.8. The options the request's own package offered, supplied by the caller from the
+   * package row. Absent or empty means the request carries no package.
+   *
+   * Supplied rather than read, like every other roster here, so the gate stays a pure function of
+   * its inputs. Unlike the other rosters, an EMPTY one is not automatically a refusal: a request
+   * with no package can still be denied or sent back, which are decisions about the request
+   * rather than choices among its options. It only refuses an attempt to CHOOSE A LETTER, because
+   * a letter with no list behind it names nothing.
+   */
+  readonly offeredOptions?: ReadonlyArray<OfferedOption>;
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -245,6 +322,81 @@ export function gateToolRequestDecision(args: GateDecisionArgs): DecisionIssue[]
     }
   }
 
+  // AF11.8 — THE ANSWER IS ONE OF THE OPTIONS THE REQUEST CARRIED ---------------------------
+  //
+  // Ali, 16 Nov 2026: *"make the answer for the human go with option A, B, C or Nothing."* The
+  // verb stops being something chosen in the console and becomes the CONSEQUENCE of a chosen
+  // option. Both are still recorded, because the log has to answer "what was decided" and "what
+  // did that do" separately, and the rules below are what keep the two honest about each other.
+  const chosen = text(proposed.chosen_option);
+  const offered = args.offeredOptions ?? [];
+
+  if (chosen) {
+    if (!(DECISION_ANSWERS as ReadonlyArray<string>).includes(chosen)) {
+      issues.push({
+        rule: 'chosen_option_unknown',
+        detail: `"${chosen}" is not an answer. It has to be one of: ${DECISION_ANSWERS.join(', ')}.`,
+      });
+    } else if (chosen !== 'nothing') {
+      // A letter only means something against a list. No package, no letters.
+      if (offered.length === 0) {
+        issues.push({
+          rule: 'option_chosen_on_a_request_with_no_package',
+          detail: 'This request carries no decision package, so it offers no options to choose '
+            + 'from. It can still be denied or sent back.',
+        });
+      } else {
+        const match = offered.find((o) => text(o.key).toUpperCase() === chosen.toUpperCase());
+        if (!match) {
+          issues.push({
+            rule: 'chosen_option_not_offered',
+            detail: `This request does not offer an option ${chosen}. It offers `
+              + `${offered.map((o) => text(o.key)).join(', ')}.`,
+          });
+        } else if (verbIsKnown && text(match.verb) !== verb) {
+          // THE ONE THAT MATTERS. Choosing option B and recording `approve_to_build` when B said
+          // `assign_existing_tool` would write a log in which Ali approved a build he never
+          // chose. The option is what he read; the verb is only its consequence.
+          issues.push({
+            rule: 'chosen_option_verb_mismatch',
+            detail: `Option ${chosen} is "${text(match.verb)}", but this decision records `
+              + `"${verb}". The verb has to be what the chosen option said it would do.`,
+          });
+        }
+      }
+    }
+  }
+
+  // `nothing` and its answer move together, in both directions. The storage constraint
+  // `chk_adtrd_nothing_is_its_own_answer` enforces the same pair, so a caller that skips this
+  // contract still cannot write a row where they disagree.
+  if (verb === 'nothing' && chosen !== 'nothing') {
+    issues.push({
+      rule: 'nothing_needs_its_own_answer',
+      detail: 'Answering Nothing is recorded as Nothing. It is not a denial and carries no '
+        + 'reason, because there is nothing to appeal.',
+    });
+  }
+  // Length only. The content is Ali's judgement, and the one bound worth keeping is that a
+  // standing instruction has to fit in a system prompt beside everything else that goes there.
+  const standing = text(proposed.standing_instructions);
+  if (standing.length > STANDING_INSTRUCTIONS_MAX) {
+    issues.push({
+      rule: 'standing_instructions_too_long',
+      detail: `Standing instructions can be at most ${STANDING_INSTRUCTIONS_MAX} characters. `
+        + 'They go in front of the agent on every run of this capability, beside everything else '
+        + 'it has to hold.',
+    });
+  }
+
+  if (chosen === 'nothing' && verbIsKnown && verb !== 'nothing') {
+    issues.push({
+      rule: 'nothing_needs_its_own_answer',
+      detail: `Answering Nothing cannot also do "${verb}". Nothing means the capability comes `
+        + 'off the board.',
+    });
+  }
+
   return issues;
 }
 
@@ -274,8 +426,28 @@ export function acceptToolRequestDecision(args: GateDecisionArgs): DecisionVerdi
       assigned_tool_name: verb === 'assign_existing_tool'
         ? text(args.proposed.assigned_tool_name)
         : null,
+      // AF11.8. Normalised to the uppercase letter the package uses, so `a` and `A` are one
+      // answer in the log rather than two. `nothing` stays lowercase because it is a word and
+      // not a label, and the storage constraint spells it that way.
+      chosen_option: normalizeAnswer(args.proposed.chosen_option),
     },
   };
+}
+
+/**
+ * The answer as it gets stored, or null when the decision was not made by choosing one.
+ *
+ * Exported so the console and the tests use the same normalisation the write does. Anything the
+ * gate has already refused cannot reach here, so this is a narrowing rather than a second check.
+ */
+export function normalizeAnswer(value: unknown): DecisionAnswer | null {
+  const v = text(value);
+  if (!v) return null;
+  if (v.toLowerCase() === 'nothing') return 'nothing';
+  const upper = v.toUpperCase();
+  return (DECISION_ANSWERS as ReadonlyArray<string>).includes(upper)
+    ? (upper as DecisionAnswer)
+    : null;
 }
 
 /**
@@ -289,9 +461,22 @@ export function acceptToolRequestDecision(args: GateDecisionArgs): DecisionVerdi
 export function statusAfter(verb: ToolRequestVerb): 'submitted' | 'approved' | 'declined' {
   switch (verb) {
     case 'deny': return 'declined';
+    // AF11.8. Nothing SETTLES the request — the capability comes off the board — so the parent
+    // leaves `submitted`, the same as a denial. What distinguishes the two is not the parent's
+    // status but the decision row: `deny` carries a reason and `nothing` carries none, and
+    // `declined_reason` on the parent stays null here for exactly that reason. A reader asking
+    // "can this be appealed" reads the verb, which is why the verb exists.
+    case 'nothing': return 'declined';
     case 'send_back': return 'submitted';
     case 'approve_to_build':
     case 'assign_existing_tool':
-    default: return 'approved';
+      return 'approved';
+    default:
+      // FAIL CLOSED. This used to be `default: return 'approved'` with the two approving verbs
+      // falling through to it, which meant any verb added later silently APPROVED the request —
+      // and AF11.8 added one. Leaving it `submitted` grants nothing and settles nothing, so a
+      // verb somebody forgets to map here shows up as a request that will not close rather than
+      // as a grant nobody made.
+      return 'submitted';
   }
 }

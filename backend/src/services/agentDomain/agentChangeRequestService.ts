@@ -2,6 +2,7 @@ import { QueryTypes, Transaction, type Sequelize } from 'sequelize';
 import AgentDomainChangeRequest from '../../models/AgentDomainChangeRequest';
 import AgentDomainToolRequestDetail from '../../models/AgentDomainToolRequestDetail';
 import AgentDomainToolDuplicateCheck from '../../models/AgentDomainToolDuplicateCheck';
+import AgentDomainToolRequestPackage from '../../models/AgentDomainToolRequestPackage';
 import { resolveRecordedHumans } from './recordedHumans';
 import { checkForDuplicateTool, type DuplicateCandidate } from './toolDuplicateCheck';
 import { loadToolCatalogForMatching } from './toolCatalogForMatching';
@@ -10,6 +11,14 @@ import type { ChangeRequestKind } from '../../db/ensureAgentDomainChangeRequestS
 import { allCapabilities } from './capabilityRecord';
 import { datasetNames, loadDatasetCatalog } from './datasetCatalog';
 import { actorEmails, loadActorRoster } from './actorRoster';
+import {
+  NO_PACKAGE,
+  loadPackages,
+  projectPackage,
+  readinessOf,
+  type PackageReadiness,
+} from './toolRequestPackageService';
+import type { ToolRequestPackage } from './toolRequestPackageContract';
 import {
   DUPLICATE_OPEN_REQUEST,
   TOOL_REQUEST_DETAIL_MISSING,
@@ -114,6 +123,21 @@ export interface ChangeRequestRow {
    * visible without opening another screen.
    */
   tool_request?: ToolRequestDetail | null;
+  /**
+   * AF11.8. The ten-block case for deciding this request, or `null` when nobody has written one.
+   *
+   * On the same row for the same reason `tool_request` is: the approver reads the argument and
+   * the facts together or the screen has made them open two things to decide one.
+   */
+  decision_package?: ToolRequestPackage | null;
+  /**
+   * AF11.8. Whether this request is in front of a human, and which blocks are outstanding if not.
+   *
+   * COMPUTED on every read, never stored. A `ready` column would be a second source of truth
+   * about something the package beside it already determines, and the first time the two
+   * disagreed the console would be confidently wrong about whether Ali had anything to read.
+   */
+  readiness?: PackageReadiness;
   /**
    * AF11.2. The duplicate-tool check AS IT WAS COMPUTED when the request was filed.
    *
@@ -231,18 +255,38 @@ async function loadDuplicateChecks(ids: string[]): Promise<Map<string, StoredDup
   return new Map(rows.map((r) => [r.change_request_id, projectDuplicateCheck(r)]));
 }
 
-/** Attach each row's detail and stored duplicate check, leaving `null` where there is none. */
+/**
+ * Attach each row's detail, stored duplicate check and AF11.8 decision package, leaving `null`
+ * where there is none.
+ *
+ * READINESS IS COMPUTED HERE, on every read path, which is what makes the bounce real: the console
+ * cannot show Ali a request whose package is incomplete, because every route that returns a
+ * request returns its readiness beside it. There is no `ready` column to drift out of agreement
+ * with the package; see `toolRequestPackageService.ts` for why.
+ *
+ * A CHANGE request gets `NO_PACKAGE` and is never described as bounced. The ten blocks are the
+ * script for asking a human to let an agent act, and a change request is not that.
+ */
 async function withDetails(rows: AgentDomainChangeRequest[]): Promise<ChangeRequestRow[]> {
   const toolIds = rows.filter((r) => r.kind === 'tool').map((r) => r.id);
-  // Two queries for the whole page, not two per row. Sequential rather than concurrent because
-  // the second is cheap and a shared pool under a queue read is not the place to double demand.
+  // Three queries for the whole page, not three per row. Sequential rather than concurrent
+  // because each is cheap and a shared pool under a queue read is not the place to triple demand.
   const details = await loadDetails(toolIds);
   const checks = await loadDuplicateChecks(toolIds);
-  return rows.map((r) => ({
-    ...project(r),
-    tool_request: details.get(r.id) ?? null,
-    duplicate_check: checks.get(r.id) ?? null,
-  }));
+  const packages = await loadPackages(toolIds);
+  // One clock for the whole page, so two rows on one screen cannot disagree about whether a
+  // simulation is dated in the future.
+  const now = new Date();
+  return rows.map((r) => {
+    const decisionPackage = r.kind === 'tool' ? (packages.get(r.id) ?? null) : null;
+    return {
+      ...project(r),
+      tool_request: details.get(r.id) ?? null,
+      duplicate_check: checks.get(r.id) ?? null,
+      decision_package: decisionPackage,
+      readiness: r.kind === 'tool' ? readinessOf(decisionPackage, now) : NO_PACKAGE,
+    };
+  });
 }
 
 function project(r: AgentDomainChangeRequest): ChangeRequestRow {
@@ -508,7 +552,15 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
 
   // `storedCheck`, not `duplicateCheck`: the caller is told what was STORED, so the response and
   // the next page load cannot disagree about whether a check exists.
-  return { ...project(created), tool_request: accepted, duplicate_check: storedCheck };
+  // A request filed this second carries no package: the ten blocks are written afterwards, and
+  // the console needs to hear "not ready, nobody has written one" rather than nothing at all.
+  return {
+    ...project(created),
+    tool_request: accepted,
+    duplicate_check: storedCheck,
+    decision_package: null,
+    readiness: NO_PACKAGE,
+  };
 }
 
 export interface DecideChangeRequestArgs {
@@ -581,10 +633,19 @@ export async function decideChangeRequest(
     const check = row.kind === 'tool'
       ? await AgentDomainToolDuplicateCheck.findByPk(row.id, { transaction })
       : null;
+    // AF11.8 — the package comes back too, read inside the same transaction as the decision for
+    // the reason the detail is: it is the argument the decision was taken against, and a reader
+    // comparing the two afterwards must not be shown a version written since.
+    const pkgRow = row.kind === 'tool'
+      ? await AgentDomainToolRequestPackage.findByPk(row.id, { transaction })
+      : null;
+    const decisionPackage = pkgRow ? projectPackage(pkgRow) : null;
     return {
       ...project(row),
       tool_request: detail ? projectDetail(detail) : null,
       duplicate_check: check ? projectDuplicateCheck(check) : null,
+      decision_package: decisionPackage,
+      readiness: row.kind === 'tool' ? readinessOf(decisionPackage) : NO_PACKAGE,
     };
   });
 }

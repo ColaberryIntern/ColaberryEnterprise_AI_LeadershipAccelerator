@@ -25,6 +25,25 @@ export async function ensureManagerDirectiveSchema(): Promise<void> {
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_manager_directives_agent_status ON manager_directives (agent_id, status, created_at DESC)`,
+    // AF11.8 — Ali's standing instructions, attached to A CAPABILITY rather than to the whole
+    // agent. Ali, 16 Nov 2026: *"when approving the functionality, I should be able to add my
+    // details of how the agent should work and respond."*
+    //
+    // WHY THIS COLUMN AND NOT A NEW TABLE. The hard part of a standing instruction is being in
+    // front of the agent on every turn, and this table already does that: agentSystemPrompt.ts
+    // injects active directives into the assembled prompt, the restrict-only boundary is already
+    // enforced there, and creation and revocation are already attributed to a real email. A
+    // second instructions table would mean two places an agent's standing instructions live and
+    // a merge step in the hot path to decide which wins, which is a second source of truth about
+    // how an agent behaves in production.
+    //
+    // NULL means agent-wide, which is every directive that exists today: production held ZERO
+    // rows on 17 Nov 2026, so nothing is reinterpreted by this column arriving. A non-null value
+    // means the instruction is only in front of the agent when THAT capability runs, which is
+    // what getActiveDirectiveTexts() enforces, and a capability-scoped instruction leaking into
+    // an unrelated turn is the failure that would make this column worse than useless.
+    `ALTER TABLE manager_directives ADD COLUMN IF NOT EXISTS capability_id TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_manager_directives_capability ON manager_directives (agent_id, capability_id, status)`,
   ];
 
   for (const sql of statements) {

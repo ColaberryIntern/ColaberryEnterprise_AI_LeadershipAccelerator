@@ -269,6 +269,9 @@ export const NAV_GROUPS: NavGroup[] = [
     // is the one section every mgmt role holds. Matches the backend PATH_SECTION row for
     // '/api/admin/agent-domain-tool-requests', and both routes behind it also carry requireAdmin.
     { path: '/admin/tool-requests', label: 'Tool Requests', icon: 'tools-line' },
+    // AF11.10. Beside the review console on purpose: the board says what is waiting, the
+    // console is where it gets decided.
+    { path: '/admin/capability-board', label: 'Capability Board', icon: 'layout-column-line' },
     // Maya's go-live console and her outbound queue were two nav entries here on 2026-11-15 and
     // are not any more: both folded into the agent workspace, reachable through Agents -> Maya.
     // Removed rather than repointed at `/admin/agents/<id>`, because `ai_agents.id` is
