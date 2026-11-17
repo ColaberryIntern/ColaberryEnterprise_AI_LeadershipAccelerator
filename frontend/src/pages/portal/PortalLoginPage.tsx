@@ -4,6 +4,14 @@ import portalApi from '../../utils/portalApi';
 import { safeNextPath } from '../../utils/safeNextPath';
 import { mailApp, GMAIL_HREF, OUTLOOK_HREF } from './mailApp';
 import { PORTAL_LOGIN_CSS } from './portalLoginStyles';
+import { PORTAL_LOGIN_ENTERPRISE_CSS } from './portalLoginEnterpriseStyles';
+import { resolveLoginBrand, LOGIN_BRAND_BACK } from './loginBrand';
+import EnterpriseLockup from '../../components/publicV2/EnterpriseLockup';
+
+// TWO LOOKS, ONE PAGE (Ali, 2026-11-17). Training students reach this page from the
+// training site's Log In button and keep the red-and-green Training look below, which is
+// Aleem's design unchanged; everyone else gets the Colaberry Enterprise look, a token
+// theme over the same layout. See loginBrand.ts for how a visitor is recognised.
 
 // Participant Portal sign-in (magic-link request), rebuilt to Aleem's design of
 // 5 November 2026 (UX Team, "Re-Design Screens Colaberry Platforms"). Built from the
@@ -35,6 +43,11 @@ function PortalLoginPage() {
   const [resent, setResent] = useState(false);
   const [error, setError] = useState('');
   const [searchParams] = useSearchParams();
+  // Resolved once, so a re-render after the send cannot flip the brand mid-flow.
+  const [brand] = useState(() =>
+    resolveLoginBrand(searchParams, typeof document !== 'undefined' ? document.referrer : ''),
+  );
+  const back = LOGIN_BRAND_BACK[brand];
 
   const sent = sentTo !== '';
 
@@ -86,28 +99,27 @@ function PortalLoginPage() {
   const app = mailApp(sentTo);
 
   return (
-    <div className="cbpl-root">
+    <div className="cbpl-root" data-brand={brand}>
       <style>{PORTAL_LOGIN_CSS}</style>
+      {brand === 'enterprise' ? <style>{PORTAL_LOGIN_ENTERPRISE_CSS}</style> : null}
       <span aria-hidden="true" className="cbpl-wash" />
       <Constellation />
 
       <header className="cbpl-header">
-        <a className="cbpl-brand" href="https://colaberry.com">
-          {/* THE FULL LOCKUP, not the bare mark. `colaberry-icon.png` is the glyph on its
-              own, which left the first screen a learner sees carrying an unlabelled bike
-              where Aleem's design has the wordmark. Caught by looking at the deployed
-              page rather than in the diff. */}
-          <img src="/colaberry-logo-transparent.png" alt="Colaberry" className="cbpl-mark" />
-          <span className="cbpl-rule" aria-hidden="true" />
-          <span className="cbpl-brandtext">
-            Enterprise AI Leadership
-            <br />
-            Accelerator
-          </span>
-        </a>
-        <a className="cbpl-back" href="https://colaberry.com">
+        {brand === 'enterprise' ? (
+          <a className="cbpl-brand" href="/" aria-label="Colaberry Enterprise, home">
+            <EnterpriseLockup />
+          </a>
+        ) : (
+          <a className="cbpl-brand" href="https://training.colaberry.com">
+            {/* THE FULL LOCKUP, not the bare mark: the red-and-green Training wordmark,
+                as the training site's own header shows it, with no enterprise label. */}
+            <img src="/colaberry-logo-transparent.png" alt="Colaberry" className="cbpl-mark" />
+          </a>
+        )}
+        <a className="cbpl-back" href={back.href}>
           <Icon d="M19 12H5M12 19l-7-7 7-7" />
-          Back to colaberry.com
+          {back.label}
         </a>
       </header>
 
@@ -313,9 +325,11 @@ function PortalLoginPage() {
 
       <footer className="cbpl-footer">
         <div className="cbpl-footer-in">
-          <span>&copy; Colaberry Inc. &middot; Enterprise AI Leadership Accelerator</span>
+          <span>
+            &copy; Colaberry Inc.{brand === 'enterprise' ? <> &middot; Colaberry Enterprise</> : null}
+          </span>
           <span className="cbpl-footer-links">
-            <a href="https://colaberry.com/privacy">Privacy</a>
+            <a href={brand === 'enterprise' ? '/privacy' : 'https://colaberry.com/privacy'}>Privacy</a>
             <a href="https://colaberry.com/terms">Terms</a>
           </span>
         </div>
