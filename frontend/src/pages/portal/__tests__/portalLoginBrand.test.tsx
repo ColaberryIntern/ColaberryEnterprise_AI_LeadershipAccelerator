@@ -97,7 +97,11 @@ describe('/portal/login: one sign-in for both', () => {
   it('scopes every enterprise rule to the enterprise root', () => {
     const css = fs.readFileSync(path.join(__dirname, '..', 'portalLoginEnterpriseStyles.ts'), 'utf8');
     const body = css.slice(css.indexOf('`') + 1, css.lastIndexOf('`'));
-    const selectors = body.replace(/@font-face\{[^}]*\}/, '').match(/[^{}]+(?=\{)/g) || [];
+    const rules = body
+      .replace(/\$\{[^}]*\}/g, 'URL')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/@font-face\{[^}]*\}/, '');
+    const selectors = rules.match(/[^{}]+(?=\{)/g) || [];
     expect(selectors.length).toBeGreaterThan(4);
     for (const s of selectors) expect(s.trim()).toMatch(/^\.cbpl-root/);
   });
