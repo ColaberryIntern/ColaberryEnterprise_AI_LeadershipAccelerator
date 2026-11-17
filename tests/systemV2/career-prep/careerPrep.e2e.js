@@ -299,6 +299,158 @@ async function flowDesign(browser) {
   return errors;
 }
 
+/**
+ * R1.1 (Ali's live test, 2026-11-16): the source icon opens the evidence (never a plan); the intro video link; the plan
+ * buttons wait while a plan is built; saving a Try answer is an unchecked box, and unticking deletes it; Cora on the
+ * right follows the newest message; the left rail navigates and shows the scores; the tab strip never scrolls.
+ * Each check runs in its own page, so one that cannot even start (an older build) is recorded as FAILED with the reason,
+ * and the others still run.
+ */
+async function unit(browser, errors, name, opts, fn) {
+  const { ctx, page, errors: e } = await newPage(browser, opts);
+  page.setDefaultTimeout(8000);
+  const plans = [];
+  page.on('request', (r) => { if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/portal/career-prep/plans') plans.push(r.postDataJSON() || {}); });
+  try {
+    const [ok, detail] = await fn(page, plans);
+    check(name, ok, detail);
+  } catch (err) {
+    check(name, false, `could not run: ${String(err && err.message).split('\n')[0].slice(0, 160)}`);
+  }
+  errors.push(...e);
+  await ctx.close();
+}
+
+async function flowR11(browser) {
+  const errors = [];
+  for (const [w, h] of [[1600, 960], [390, 844]]) {
+    const vp = { viewport: { width: w, height: h } };
+    const wide = w > 900;
+    await unit(browser, errors, `10e ${w}: ${wide ? 'three columns: rail on the left, the tabs in the middle, Cora on the RIGHT' : 'stacked: the rail on top, the panel, then Cora below'}`, vp, async (page) => {
+      await page.goto(`${BASE}/portal/career/room`);
+      await page.waitForSelector(tid('cp-dashboard'));
+      const cols = await page.evaluate(() => {
+        const r = (s) => document.querySelector(s).getBoundingClientRect();
+        const rail = r('[data-testid="cp-rail"]'); const mid = r('.cp-tabs-col'); const cora = r('[data-testid="cp-cora-col"]');
+        return { rail: [Math.round(rail.left), Math.round(rail.top)], mid: [Math.round(mid.left), Math.round(mid.top), Math.round(mid.bottom)], cora: [Math.round(cora.left), Math.round(cora.top)] };
+      });
+      await shot(page, `j_room_layout_${w}`);
+      return [wide ? cols.rail[0] < cols.mid[0] && cols.mid[0] < cols.cora[0] && cols.rail[1] === cols.cora[1]
+        : cols.rail[1] < cols.mid[1] && cols.mid[2] <= cols.cora[1] + 1, JSON.stringify(cols)];
+    });
+    await unit(browser, errors, `10f ${w}: the rail navigates (3 tabs, 5 pages), shows readiness and every scored skill lowest first, and a skill opens Your progress at that skill (no plan)`, vp, async (page, plans) => {
+      await page.goto(`${BASE}/portal/career/room`);
+      await page.waitForSelector(tid('cp-dashboard'));
+      await page.click(tid('cp-rail-tab-plan'));
+      await page.waitForSelector(tid('cp-panel-plan'));
+      const rail = await page.evaluate(() => ({
+        tabs: document.querySelectorAll('[data-testid^="cp-rail-tab-"]').length, sheets: document.querySelectorAll('[data-testid^="cp-rail-sheet-"]').length,
+        on: document.querySelector('[data-testid="cp-rail-tab-plan"]').getAttribute('aria-current'),
+        ready: ((document.querySelector('[data-testid="cp-rail-readiness"] b') || {}).textContent || ''),
+        skills: [...document.querySelectorAll('.cp-rail-skill-v')].map((n) => Number(n.textContent)),
+      }));
+      // The lowest skill (on a phone the rail shows only the three lowest).
+      await page.click(tid('cp-rail-skill-pace_clarity'));
+      await page.waitForSelector(`${tid('cp-skrow-pace_clarity')}.is-focus`);
+      await page.click(tid('cp-rail-sheet-offers'));
+      await page.waitForSelector(tid('cp-sheet-offers'));
+      const sheet = new URL(page.url()).hash;
+      return [rail.tabs === 3 && rail.sheets === 5 && rail.on === 'page' && rail.ready === '64' && rail.skills.length === 9 && rail.skills.every((v, i, a) => i === 0 || a[i - 1] <= v)
+        && plans.length === 0 && sheet === '#offers', JSON.stringify({ ...rail, plans: plans.length, sheet })];
+    });
+    await unit(browser, errors, `10a ${w}: the video icon opens "Where this score comes from" on top of the room (no plan built, no nested buttons), with the intro video and a "not kept" Try answer`, vp, async (page, plans) => {
+      await page.goto(`${BASE}/portal/career/room`);
+      await page.waitForSelector(tid('cp-dashboard'));
+      // The old build drew the icon INSIDE the plan button: clicking it is what built Ali's plans.
+      const icon = (await page.$(tid('cp-src-pace_clarity-video'))) || (await page.$(`${tid('cp-skill-pace_clarity')} .cp-srcs i`));
+      await icon.click();
+      await page.waitForSelector(tid('cp-srcitem-intro_video'));
+      const panel = await page.evaluate(() => {
+        const p = document.querySelector('[data-testid="cp-srcpanel"]').getBoundingClientRect();
+        const link = document.querySelector('[data-testid="cp-srcitem-link"]');
+        const hit = document.elementFromPoint(p.left + p.width / 2, p.top + 10);
+        return { onScreen: p.left >= 0 && p.right <= innerWidth && p.top >= 0, onTop: !!hit && !!hit.closest('[data-testid="cp-srcpanel"]'),
+          notKept: !!document.querySelector('[data-testid="cp-srcitem-notkept"]'), href: link && link.getAttribute('href'), nested: document.querySelectorAll('button button').length };
+      });
+      await shot(page, `h_sources_panel_${w}`);
+      return [panel.onScreen && panel.onTop && panel.notKept && panel.href === '/portal/portfolio?tab=hire&section=video' && panel.nested === 0 && plans.length === 0, JSON.stringify({ ...panel, plans: plans.length })];
+    });
+    await unit(browser, errors, `10b ${w}: Esc closes the sources panel and leaves the room open; "Watch your intro video" opens Portfolio > Hire > Video`, vp, async (page) => {
+      await page.goto(`${BASE}/portal/career/room`);
+      await page.waitForSelector(tid('cp-dashboard'));
+      await page.click(tid('cp-src-pace_clarity-video'));
+      await page.waitForSelector(tid('cp-srcpanel'));
+      await page.keyboard.press('Escape');
+      await page.waitForSelector(tid('cp-srcpanel'), { state: 'detached' });
+      const stillRoom = !!(await page.$(tid('cp-room')));
+      await page.click(tid('cp-src-pace_clarity-video'));
+      await page.click(tid('cp-srcitem-link'));
+      await page.waitForURL((u) => u.pathname === '/portal/portfolio');
+      const url = new URL(page.url());
+      return [stillRoom && url.searchParams.get('tab') === 'hire' && url.searchParams.get('section') === 'video', `${stillRoom ? 'room stayed' : 'room closed'}, ${url.pathname}${url.search}`];
+    });
+    await unit(browser, errors, `10g ${w}: after picks that add messages, Cora's newest item is in view in the chat (it follows the newest)`, vp, async (page) => {
+      await page.goto(`${BASE}/portal/career/room`);
+      await page.click(tid('cp-card-i1'));
+      await page.click('[data-testid="cp-card-plan:days"]');
+      await page.waitForSelector(tid('cp-card-start'));
+      // Back to Your progress (the plan opened Your plan), so the long dashboard is what the student is looking at.
+      await page.click('#cp-tab-progress');
+      await page.waitForTimeout(150);
+      const follow = await page.evaluate(() => {
+        const log = document.querySelector('[data-testid="cp-log"]'); const col = document.querySelector('[data-testid="cp-cora-col"]');
+        const last = log.lastElementChild.getBoundingClientRect(); const box = log.getBoundingClientRect(); const c = col.getBoundingClientRect();
+        // Visible inside the chat: the log and its column (on a phone the column sits below the panel, off screen until scrolled to).
+        const top = Math.max(box.top, c.top); const bottom = Math.min(box.bottom, c.bottom);
+        return { inView: last.top >= top - 1 && last.bottom <= bottom + 1, last: [Math.round(last.top), Math.round(last.bottom)], view: [Math.round(top), Math.round(bottom)] };
+      });
+      return [follow.inView, JSON.stringify(follow)];
+    });
+    await unit(browser, errors, `10d ${w}: the scored Try card has an UNCHECKED "Save this answer to my profile"; ticking saves it with the question, unticking deletes it; the privacy line says so`, vp, async (page) => {
+      const calls = [];
+      page.on('request', (r) => { const p = new URL(r.url()).pathname; if (/\/attempts\/[^/]+\/save$/.test(p)) calls.push(`${r.method()} ${r.method() === 'POST' ? (r.postDataJSON() || {}).question || '' : ''}`); });
+      await page.goto(`${BASE}/portal/career/room`);
+      await page.click(tid('cp-card-i1'));
+      await page.click('[data-testid="cp-card-plan:days"]');
+      await page.click(tid('cp-card-start'));
+      await page.click(tid('cp-session-next'));
+      await page.click(tid('cp-record'));
+      await page.click(tid('cp-stop'));
+      await page.waitForSelector(tid('cp-try-result'));
+      await page.waitForSelector(tid('cp-save-check'));
+      const first = await page.evaluate(() => ({ checked: document.querySelector('[data-testid="cp-save-check"]').checked, privacy: (document.querySelector('[data-testid="cp-privacy"]') || {}).textContent || '' }));
+      await page.click(tid('cp-save-check'));
+      await page.waitForSelector(`${tid('cp-save')}[data-state="saved"]`);
+      await page.evaluate(() => document.querySelector('[data-testid="cp-save"]').scrollIntoView({ block: 'center' }));
+      await shot(page, `i_save_box_${w}`);
+      await page.click(tid('cp-save-check'));
+      await page.waitForSelector(`${tid('cp-save')}[data-state="deleted"]`);
+      return [first.checked === false && /deleted after scoring unless you choose to save it/.test(first.privacy) && calls.length === 2 && /^POST \S/.test(calls[0]) && calls[1].startsWith('DELETE'),
+        JSON.stringify({ ...first, calls })];
+    });
+  }
+  // A plan takes 1.5 s to build: the buttons wait (a repeat click builds nothing), then Your plan names the picked skill.
+  await unit(browser, errors, '10c while a plan builds every plan button waits ("Building your plan..."), a repeat click builds nothing, and Your plan names the picked skill',
+    { viewport: { width: 1600, height: 960 }, api: { planDelayMs: 1500 } }, async (page, plans) => {
+      await page.goto(`${BASE}/portal/career/room?anchor=i1`);
+      await page.waitForSelector(tid('cp-dashboard'));
+      const btn = (await page.$(tid('cp-read-plan-pace_clarity'))) || (await page.$('.cp-read li:first-child button'));
+      await btn.click();
+      await page.waitForTimeout(200);
+      const busy = await page.evaluate(() => {
+        const b = document.querySelector('.cp-read li:first-child button');
+        return { text: b.textContent, disabled: [...document.querySelectorAll('.cp-read button, [data-testid^="cp-skill-"]')].every((x) => x.disabled) };
+      });
+      await page.click('.cp-read li:first-child button', { force: true, timeout: 1000 }).catch(() => undefined);
+      await page.click(tid('cp-skill-few_fillers'), { force: true, timeout: 1000 }).catch(() => undefined);
+      await page.waitForTimeout(2500);
+      const focus = await page.evaluate(() => (document.querySelector('[data-testid="cp-plan-focus"]') || {}).textContent || null);
+      return [busy.text === 'Building your plan...' && busy.disabled && plans.length === 1 && plans[0].focusSkill === 'pace_clarity' && focus === 'Focused on Pace and clarity, the skill you picked.',
+        JSON.stringify({ ...busy, posts: plans.length, focus })];
+    });
+  return errors;
+}
+
 async function flowAnchors(browser) {
   const { ctx, page, errors } = await newPage(browser);
   await page.goto(`${BASE}/portal/career/room`);
@@ -406,6 +558,23 @@ async function layout(browser) {
     }
   }
   check('layout: no horizontal scroll, no tooltip off screen, every room heading at 4.5:1 (room 1600/1440/390 light+dark, floor 1440/390)', bad.length === 0, bad.join('; '));
+  // R1.1: the tab strip never scrolls (Ali saw up/down arrows on it). Production had PortfolioPage.css loaded (its global
+  // .cp-tabs has overflow-x:auto), so measure with it on: no overflow either way, at every width.
+  const portfolioCss = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'pages', 'portal', 'portfolio', 'PortfolioPage.css'), 'utf8');
+  const strip = [];
+  for (const [w, h] of sizes) {
+    const { ctx, page } = await newPage(browser, { viewport: { width: w, height: h } });
+    await page.goto(`${BASE}/portal/career/room`);
+    await page.waitForSelector(tid('cp-dashboard'));
+    await page.addStyleTag({ content: portfolioCss });
+    for (const tab of ['progress', 'plan', 'session']) {
+      await page.click(`#cp-tab-${tab}`);
+      const m = await page.$eval('.cp-tabs', (el) => ({ sh: el.scrollHeight, ch: el.clientHeight, sw: el.scrollWidth, cw: el.clientWidth }));
+      if (m.sh > m.ch || m.sw > m.cw) strip.push(`${w} ${tab}: ${m.sh}/${m.ch} high, ${m.sw}/${m.cw} wide`);
+    }
+    await ctx.close();
+  }
+  check('10h the tab strip never overflows or scrolls (1600/1440/390, PortfolioPage.css loaded)', strip.length === 0, strip.join('; '));
 }
 
 (async () => {
@@ -417,6 +586,7 @@ async function layout(browser) {
     errs.push(...await flowAnchors(browser));
     errs.push(...await flowSheets(browser));
     errs.push(...await flowDesign(browser));
+    errs.push(...await flowR11(browser));
     const frameErrs = await flowIframe(browser);
     check('8 zero console errors in every flow, and inside a sandboxed iframe', errs.length === 0 && frameErrs.length === 0, [...errs, ...frameErrs].slice(0, 3).join(' | '));
     await layout(browser);

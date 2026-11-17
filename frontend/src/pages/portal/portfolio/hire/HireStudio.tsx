@@ -5,7 +5,8 @@ import {
   fetchAvailability, fetchCaseStudyOrder, fetchHireInterviews, fetchHireIntro,
   type CaseStudyOrder, type HireInterview, type HireIntro, type InterviewAvailability,
 } from '../../../../services/hireStudioApi';
-import { checklist, SECTIONS, strength, timesDone, type Loaded, type StudioSection } from './hireStudioModel';
+import { checklist, initialSection, SECTIONS, strength, timesDone, type Loaded, type StudioSection } from './hireStudioModel';
+import { HireSavedAnswers } from './HireSavedAnswers';
 import HireOverview from './HireOverview';
 import HireAboutYou from './HireAboutYou';
 import HireInterviewTimes from './HireInterviewTimes';
@@ -33,7 +34,7 @@ interface Props {
 const pending = <T,>(): Loaded<T> => ({ value: null, failed: false });
 
 const HireStudio: React.FC<Props> = ({ profile, onJumpTab }) => {
-  const [section, setSection] = useState<StudioSection>('overview');
+  const [section, setSection] = useState<StudioSection>(() => initialSection(window.location.search));
   const [intro, setIntro] = useState<Loaded<HireIntro>>(pending);
   const [availability, setAvailability] = useState<Loaded<InterviewAvailability>>(pending);
   const [order, setOrder] = useState<Loaded<CaseStudyOrder>>(pending);
@@ -112,7 +113,10 @@ const HireStudio: React.FC<Props> = ({ profile, onJumpTab }) => {
               onChanged={(next) => setInterviews({ value: next, failed: false })} onRetry={load} />
           )}
           {section === 'video' && (
-            <HireIntroVideo onChanged={(video) => intro.value && setIntro({ value: { ...intro.value, video }, failed: false })} />
+            <>
+              <HireIntroVideo onChanged={(video) => intro.value && setIntro({ value: { ...intro.value, video }, failed: false })} />
+              <HireSavedAnswers />
+            </>
           )}
           {section === 'about' && (
             <HireAboutYou loaded={intro} onSaved={(v) => setIntro({ value: v, failed: false })} onRetry={load} />

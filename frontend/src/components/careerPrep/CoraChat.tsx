@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { layerOpen } from './useEscapeLayer';
 import { OptionCards, type OptionCard } from './OptionCards';
 
@@ -8,6 +8,10 @@ import { OptionCards, type OptionCard } from './OptionCards';
  * a newer set arrives, older unanswered ones go quiet. A picked card echoes as the student's bubble.
  * Below: four suggestion chips and the ask box. The log itself is state owned by the caller
  * (useCareerPrep), so this component only draws it and reports what the student did.
+ *
+ * R1.1 (Ali: "I have to constantly scroll"): the log is its own scroll area between the header and the ask box
+ * (both stay put), and it FOLLOWS THE NEWEST item: whenever a message, a card set, the form or "thinking" arrives,
+ * it scrolls to the bottom. Focus still moves to a new Cora message for screen readers, without scrolling the page.
  */
 export type ChatItem =
   | { id: string; kind: 'cora'; text: string }
@@ -38,10 +42,17 @@ export interface CoraChatProps {
 export function CoraChat({ log, busy = false, onPick, onAsk, children }: CoraChatProps): React.ReactElement {
   const [text, setText] = useState('');
   const latest = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const live = liveCardsId(log);
   const lastCoraId = [...log].reverse().find((i) => i.kind === 'cora')?.id;
   // A new Cora message takes focus, unless a sheet or the jump bar is open over the room (it keeps focus).
-  useEffect(() => { if (!layerOpen()) latest.current?.focus(); }, [lastCoraId]);
+  useEffect(() => { if (!layerOpen()) latest.current?.focus({ preventScroll: true }); }, [lastCoraId]);
+  const lastId = log.length ? log[log.length - 1].id : null;
+  const hasForm = !!children;
+  useLayoutEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lastId, log.length, busy, hasForm]);
   const send = (t: string) => { const v = t.trim(); if (!v || busy) return; onAsk(v); setText(''); };
 
   return (
@@ -49,7 +60,7 @@ export function CoraChat({ log, busy = false, onPick, onAsk, children }: CoraCha
       <div className="cp-chat-head"><span className="cp-av" aria-hidden="true">CO</span>
         <span><b>Cora · your interview coach</b>
           <small><span className="cp-dot" aria-hidden="true" />Reads your videos, interviews, training and projects</small></span></div>
-      <div className="cp-log" aria-live="polite" data-testid="cp-log">
+      <div className="cp-log" aria-live="polite" data-testid="cp-log" ref={logRef}>
         {log.map((it) => {
           if (it.kind === 'cora') return <div key={it.id} className="cp-m"><span className="cp-av" aria-hidden="true">CO</span><div className="cp-msg cora" tabIndex={-1} ref={it.id === lastCoraId ? latest : undefined}>{it.text}</div></div>;
           if (it.kind === 'me') return <div key={it.id} className="cp-msg me">{it.text}</div>;

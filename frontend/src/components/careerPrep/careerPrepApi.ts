@@ -58,7 +58,8 @@ export async function askCoraApi(message: string, interviewId?: string): Promise
 
 export interface PrepSegment { kind: 'warmup' | 'learn' | 'try' | 'pressure' | 'cooldown' | 'rehearsal'; title: string; minutes: number; targetSkill?: string }
 export interface PrepPlan { kind: 'days' | 'tonight' | 'full' | 'custom'; minutes: number; days: Array<{ date: string; segments: PrepSegment[] }> }
-export interface StoredPlan { id: string; interviewId: string; plan: PrepPlan }
+/** focusSkill: the skill the student picked ("Make me a plan for this"), when the plan was built for one. */
+export interface StoredPlan { id: string; interviewId: string; plan: PrepPlan; focusSkill?: string }
 
 export async function postPlan(body: { interviewId: string; kind: PrepPlan['kind']; minutes?: 10 | 20 | 45; focusSkill?: string }): Promise<StoredPlan> {
   return (await portalApi.post(`${BASE}/plans`, body)).data;
@@ -70,7 +71,8 @@ export async function fetchActivePlan(interviewId: string): Promise<StoredPlan |
 
 export interface SessionSegment extends PrepSegment { state: 'pending' | 'done' }
 export interface PrepSessionView { id: string; planId: string; status: 'running' | 'paused' | 'finished' | 'ended' | 'abandoned'; startedAt: string; secondsActive: number; segments: SessionSegment[] }
-export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; errorClass: string | null;
+/** recording (R1.1, a scored attempt): saved to the profile, still saveable for up to an hour, or gone. */
+export interface AttemptView { id: string; status: 'pending' | 'done' | 'failed'; errorClass: string | null; recording?: 'saved' | 'pending' | 'gone';
   result: { seconds: number; scores: Array<{ key: string; label: string; score: number; value: string; target: string; source: string }>; notes: string[] } | null }
 
 export async function startSessionApi(planId: string): Promise<{ session: PrepSessionView; resumed: boolean }> {
@@ -118,4 +120,26 @@ export async function uploadAttemptApi(sessionId: string, segmentIndex: number, 
 
 export async function fetchAttemptApi(sessionId: string, attemptId: string): Promise<AttemptView> {
   return (await portalApi.get(`${BASE}/sessions/${encodeURIComponent(sessionId)}/attempts/${encodeURIComponent(attemptId)}`)).data.attempt;
+}
+
+/** R1.1: what each result behind one skill's number was (from one source), newest first. */
+export type PrepSourceKey = keyof PrepDashboard['sources'];
+export interface PrepSourceItem {
+  at: string; value: number; kind: 'intro_video' | 'try_answer' | 'case_study' | 'other'; label: string;
+  link?: string; video?: { streamUrl: string; posterUrl: string }; notKept?: boolean;
+}
+export async function fetchSkillSourcesApi(skill: string, source: PrepSourceKey): Promise<PrepSourceItem[]> {
+  return (await portalApi.get(`${BASE}/skills/${encodeURIComponent(skill)}/sources`, { params: { source } })).data.items;
+}
+
+/** R1.1: a Try answer the student chose to keep. Playback URLs are signed for the owner and expire. */
+export interface SavedAnswer { attemptId: string; question: string | null; delivery: number | null; seconds: number | null; savedAt: string; streamUrl: string; posterUrl: string }
+export async function saveAnswerApi(attemptId: string, question?: string): Promise<SavedAnswer> {
+  return (await portalApi.post(`${BASE}/attempts/${encodeURIComponent(attemptId)}/save`, question ? { question: question.slice(0, 600) } : {})).data.answer;
+}
+export async function deleteAnswerApi(attemptId: string): Promise<void> {
+  await portalApi.delete(`${BASE}/attempts/${encodeURIComponent(attemptId)}/save`);
+}
+export async function fetchSavedAnswersApi(): Promise<SavedAnswer[]> {
+  return (await portalApi.get(`${BASE}/answers`)).data.answers;
 }

@@ -1,6 +1,7 @@
-import React from 'react';
-import type { PrepDashboard, PrepInterview, PrepSkill } from './careerPrepApi';
+import React, { useEffect, useRef, useState } from 'react';
+import type { PrepDashboard, PrepInterview, PrepSkill, PrepSourceKey } from './careerPrepApi';
 import { LineTrend, ProgressRing, WeeklyBars } from './charts/PrepCharts';
+import { SOURCE_WORDS, SourcesPanel } from './SourcesPanel';
 
 /**
  * Career Prep v27 (CP3.5): Your progress, laid out as the design's dashboard (shot L3-7): the readiness hero (number,
@@ -95,38 +96,63 @@ function Interviews({ list, onAnchor }: { list: PrepInterview[]; onAnchor: (id: 
   );
 }
 
-function SkillRow({ s, onSkill, isNew }: { s: PrepSkill; onSkill: (s: PrepSkill) => void; isNew: boolean }): React.ReactElement {
-  const srcs = <span className="cp-srcs" aria-hidden="true">{s.sources.map((k) => <i key={k} className={SRC.get(k)?.icon ?? 'ri-checkbox-blank-circle-line'} title={SRC.get(k)?.word ?? k} />)}</span>;
+/** How a source icon names itself to a screen reader: "Pace and clarity: 3 video results" when the skill has one source. */
+export function sourceButtonLabel(s: PrepSkill, k: string): string {
+  const w = SOURCE_WORDS[k as PrepSourceKey] ?? { one: 'result', many: 'results' };
+  if (s.sources.length === 1) return `${s.label}: ${s.count} ${s.count === 1 ? w.one : w.many}`;
+  return `${s.label}: the ${w.many} behind this score`;
+}
+
+/** R1.1: the plan button covers the name, bar and number; each source icon is its OWN button beside it (never nested). */
+interface RowProps { s: PrepSkill; onSkill: (s: PrepSkill) => void; onSource: (s: PrepSkill, k: PrepSourceKey) => void; isNew: boolean; focused: boolean; busy: boolean }
+function SkillRow({ s, onSkill, onSource, isNew, focused, busy }: RowProps): React.ReactElement {
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => { if (focused) ref.current?.scrollIntoView?.({ block: 'center' }); }, [focused]);
+  const srcs = (
+    <span className="cp-srcs">{s.sources.map((k) => (
+      <button key={k} type="button" className="cp-srcbtn" onClick={() => onSource(s, k as PrepSourceKey)} aria-label={sourceButtonLabel(s, k)}
+        title={sourceButtonLabel(s, k)} data-testid={`cp-src-${s.key}-${k}`}><i className={SRC.get(k)?.icon ?? 'ri-checkbox-blank-circle-line'} aria-hidden="true" /></button>
+    ))}</span>
+  );
   const name = <span className="cp-skill-name">{s.label}{isNew && <span className="cp-new" data-testid={`cp-new-${s.key}`}> New</span>}</span>;
+  const cls = `cp-skrow${isNew ? ' is-new' : ''}${focused ? ' is-focus' : ''}`;
+  const planLabel = `${s.label}: make me a plan for this`;
   if (s.score === undefined) {
     return (
-      <li><button type="button" className="cp-rowbtn is-unscored" onClick={() => onSkill(s)} data-testid={`cp-skill-${s.key}`}>
-        {name}<span className="cp-skill-empty"><span className="cp-bar is-empty" aria-hidden="true" />
-          <span className="cp-skill-none">not enough practice yet{s.count > 0 ? ` · ${Math.min(s.count, RESULTS_PER_SKILL)} of ${RESULTS_PER_SKILL}` : ''}</span></span>{srcs}
-      </button></li>
+      <li className={cls} ref={ref} data-testid={`cp-skrow-${s.key}`}>
+        <button type="button" className="cp-rowbtn is-unscored" onClick={() => onSkill(s)} disabled={busy} aria-label={planLabel} data-testid={`cp-skill-${s.key}`}>
+          {name}<span className="cp-skill-empty"><span className="cp-bar is-empty" aria-hidden="true" />
+            <span className="cp-skill-none">not enough practice yet{s.count > 0 ? ` · ${Math.min(s.count, RESULTS_PER_SKILL)} of ${RESULTS_PER_SKILL}` : ''}</span></span>
+        </button>{srcs}
+      </li>
     );
   }
   return (
-    <li><button type="button" className={`cp-rowbtn${isNew ? ' is-new' : ''}`} onClick={() => onSkill(s)} data-testid={`cp-skill-${s.key}`}>
-      {name}<span className="cp-bar" aria-hidden="true"><span className="cp-bar-fill" style={{ width: `${s.score}%` }} /></span>
-      <span className="cp-skill-v">{s.score}</span><span>{s.change30 !== undefined && <Change value={s.change30} />}{s.change30 !== undefined && s.change30 !== 0 && <span className="visually-hidden"> in 30 days</span>}</span>{srcs}
-    </button></li>
+    <li className={cls} ref={ref} data-testid={`cp-skrow-${s.key}`}>
+      <button type="button" className="cp-rowbtn" onClick={() => onSkill(s)} disabled={busy} aria-label={`${planLabel} (score ${s.score})`} data-testid={`cp-skill-${s.key}`}>
+        {name}<span className="cp-bar" aria-hidden="true"><span className="cp-bar-fill" style={{ width: `${s.score}%` }} /></span>
+        <span className="cp-skill-v">{s.score}</span><span>{s.change30 !== undefined && <Change value={s.change30} />}{s.change30 !== undefined && s.change30 !== 0 && <span className="visually-hidden"> in 30 days</span>}</span>
+      </button>{srcs}
+    </li>
   );
 }
 
-function Skills({ skills, onSkill, newKeys = [] }: { skills: PrepSkill[]; onSkill: (s: PrepSkill) => void; newKeys?: string[] }): React.ReactElement {
+interface PlanProps { onSkill: (s: PrepSkill) => void; planBusy?: boolean }
+function Skills({ skills, onSkill, onSource, newKeys = [], focusKey, planBusy = false }: PlanProps & { skills: PrepSkill[]; onSource: RowProps['onSource']; newKeys?: string[]; focusKey?: string }): React.ReactElement {
   return (
     <section className="cp-dash-card" aria-labelledby="cp-sk-h">
       <h3 id="cp-sk-h">Your skills, from every source</h3>
-      <p className="cp-subline">Lowest first. Pick one to ask Cora for a plan. The arrows are the change over 30 days.</p>
+      <p className="cp-subline">Lowest first. Pick one to ask Cora for a plan; an icon shows where its score comes from. The arrows are the change over 30 days.</p>
       {skills.length === 0 ? <p className="cp-muted">No skill has any practice yet.</p> : (
-        <ul className="cp-skills" data-testid="cp-skills">{skills.map((s) => <SkillRow key={s.key} s={s} onSkill={onSkill} isNew={newKeys.includes(s.key)} />)}</ul>
+        <ul className="cp-skills" data-testid="cp-skills">{skills.map((s) => (
+          <SkillRow key={s.key} s={s} onSkill={onSkill} onSource={onSource} isNew={newKeys.includes(s.key)} focused={focusKey === s.key} busy={planBusy} />
+        ))}</ul>
       )}
     </section>
   );
 }
 
-function CoraRead({ skills, onSkill }: { skills: PrepSkill[]; onSkill: (s: PrepSkill) => void }): React.ReactElement | null {
+function CoraRead({ skills, onSkill, planBusy = false, building }: PlanProps & { skills: PrepSkill[]; building: string | null }): React.ReactElement | null {
   const read = coraRead(skills);
   if (!read.length) return null;
   return (
@@ -136,7 +162,8 @@ function CoraRead({ skills, onSkill }: { skills: PrepSkill[]; onSkill: (s: PrepS
       <ol className="cp-read">{read.map((s) => (
         <li key={s.key}><b>{s.label}</b>
           <small>{s.score} · from {s.count} {s.count === 1 ? 'result' : 'results'} ({s.sources.map((k) => SRC.get(k)?.word ?? k).join(', ')})</small>
-          <button type="button" className="cp-ghost sm" onClick={() => onSkill(s)}>Make me a plan for this</button></li>
+          <button type="button" className="cp-ghost sm" onClick={() => onSkill(s)} disabled={planBusy} aria-busy={planBusy && building === s.key}
+            data-testid={`cp-read-plan-${s.key}`}>{planBusy && building === s.key ? 'Building your plan...' : 'Make me a plan for this'}</button></li>
       ))}</ol>
     </section>
   );
@@ -166,19 +193,30 @@ function Practice({ d }: { d: PrepDashboard }): React.ReactElement {
   );
 }
 
-/** `newKeys`: skills the session just finished changed (CP4.5), marked New. */
-export function ProgressDashboard({ d, onAnchor, onSkill, newKeys }: { d: PrepDashboard; onAnchor: (id: string) => void; onSkill: (s: PrepSkill) => void; newKeys?: string[] }): React.ReactElement {
+/**
+ * `newKeys`: skills the session just finished changed (CP4.5), marked New. `focusKey` (R1.1): a skill picked in the
+ * left rail, scrolled to and outlined. `planBusy`: a plan is being built; every plan button waits (no repeat clicks),
+ * and the one that was clicked in Cora's read says so.
+ */
+export function ProgressDashboard({ d, onAnchor, onSkill, newKeys, focusKey, planBusy = false }: {
+  d: PrepDashboard; onAnchor: (id: string) => void; onSkill: (s: PrepSkill) => void; newKeys?: string[]; focusKey?: string; planBusy?: boolean;
+}): React.ReactElement {
   const read = coraRead(d.skills).length > 0;
+  const [panel, setPanel] = useState<{ skill: PrepSkill; source: PrepSourceKey } | null>(null);
+  const [building, setBuilding] = useState<string | null>(null);
+  useEffect(() => { if (!planBusy) setBuilding(null); }, [planBusy]);
+  const plan = (s: PrepSkill) => { if (planBusy) return; setBuilding(s.key); onSkill(s); };
   return (
     <div className="cp-dash" data-testid="cp-dashboard">
+      {panel && <SourcesPanel skill={panel.skill} source={panel.source} onClose={() => setPanel(null)} />}
       <section className="cp-dash-card cp-rhero" aria-label="Interview readiness">
         <ReadinessNumber d={d} />
         <Trend d={d} />
         <Interviews list={d.interviews} onAnchor={onAnchor} />
       </section>
       <div className={read ? 'cp-grid2 wide' : 'cp-dash'}>
-        <Skills skills={d.skills} onSkill={onSkill} newKeys={newKeys} />
-        <CoraRead skills={d.skills} onSkill={onSkill} />
+        <Skills skills={d.skills} onSkill={plan} onSource={(skill, source) => setPanel({ skill, source })} newKeys={newKeys} focusKey={focusKey} planBusy={planBusy} />
+        <CoraRead skills={d.skills} onSkill={plan} planBusy={planBusy} building={building} />
       </div>
       <div className="cp-grid2">
         <Sources sources={d.sources} />

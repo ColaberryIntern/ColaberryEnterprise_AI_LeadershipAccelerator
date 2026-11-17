@@ -40,8 +40,9 @@ export function planTitle(days: PrepPlan['days'], company?: string): string {
   return `${mins} minutes${company ? ` for ${company}` : ' of practice'}`;
 }
 
-export function PlanView({ plan, company, skillLabels = {}, onStart, now }: {
-  plan: PrepPlan | null; company?: string; skillLabels?: Record<string, string>; onStart: () => void; now?: Date;
+/** focusSkill (R1.1): the skill the student picked; the headline then names it instead of "your weakest skills". */
+export function PlanView({ plan, company, skillLabels = {}, onStart, now, focusSkill }: {
+  plan: PrepPlan | null; company?: string; skillLabels?: Record<string, string>; onStart: () => void; now?: Date; focusSkill?: string;
 }): React.ReactElement {
   if (!plan) return <p className="cp-pending">Pick a plan with Cora and it appears here.</p>;
   const today = centralToday(now);
@@ -55,7 +56,8 @@ export function PlanView({ plan, company, skillLabels = {}, onStart, now }: {
         <div>
           <h3>Your plan{company ? ` · for ${company}` : ''}</h3>
           <p className="cp-plan-title">{planTitle(days, company)}</p>
-          {targeted.length > 0 && <p>Built from your weakest skills: {targeted.map((k) => skillLabels[k] ?? k).join(', ')}.</p>}
+          {focusSkill ? <p data-testid="cp-plan-focus">Focused on {skillLabels[focusSkill] ?? focusSkill}, the skill you picked.</p>
+            : targeted.length > 0 && <p>Built from your weakest skills: {targeted.map((k) => skillLabels[k] ?? k).join(', ')}.</p>}
         </div>
         {hasToday && <button type="button" className="cp-send" onClick={onStart} data-testid="cp-start-today"><i className="ri-play-fill" aria-hidden="true" />Start today&apos;s session</button>}
       </div>

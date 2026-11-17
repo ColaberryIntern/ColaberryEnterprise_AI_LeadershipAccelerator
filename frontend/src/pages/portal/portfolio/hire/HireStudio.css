@@ -140,3 +140,10 @@
 
 /* Secondary buttons and button-styled links read as buttons inside the studio. */
 .hs-body .cp-btn:not(.cp-btn-primary) { background: var(--sunken); color: var(--body); border: 1px solid var(--border-sub); min-height: 44px; display: inline-flex; align-items: center; }
+
+/* Career Prep R1.1: saved practice answers (only the student sees them). */
+.hs-saved { margin-top: 16px; }
+.hs-saved-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.hs-saved-item .hs-vbox { margin-top: 12px; }
+.hs-saved-q { margin: 10px 0 2px; font-weight: 600; color: var(--strong); overflow-wrap: anywhere; }
+.hs-saved-meta { margin: 0; font-size: 13px; }

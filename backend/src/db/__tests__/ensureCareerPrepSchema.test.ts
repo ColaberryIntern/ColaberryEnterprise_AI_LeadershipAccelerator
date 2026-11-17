@@ -8,7 +8,7 @@ const created = CAREER_PREP_STATEMENTS.map((s) => /CREATE TABLE IF NOT EXISTS (\
 
 describe('ensureCareerPrepSchema (statements)', () => {
   it('creates exactly the seven P5 tables plus prep_attempts (CP4.4) and prep_reminders (CP4.5)', () => {
-    expect(created.sort()).toEqual(['career_interviews', 'prep_attempts', 'prep_observations', 'prep_plans', 'prep_readiness_daily', 'prep_reminders', 'prep_sessions', 'prep_skill_sources', 'prep_skills']);
+    expect(created.sort()).toEqual(['career_interviews', 'prep_attempts', 'prep_observations', 'prep_plans', 'prep_readiness_daily', 'prep_reminders', 'prep_saved_answers', 'prep_sessions', 'prep_skill_sources', 'prep_skills']);
   });
 
   it('is additive and re-runnable: every statement is IF NOT EXISTS or ON CONFLICT DO NOTHING, and none ALTERs or DROPs', () => {

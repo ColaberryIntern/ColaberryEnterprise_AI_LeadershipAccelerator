@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTryRecorder } from './useTryRecorder';
+import { deleteAnswerApi, saveAnswerApi, type AttemptView } from './careerPrepApi';
 import { deliveryScore, elapsedClock, headline, whatToFix, whereWell, type AttemptResultView } from './logic/tryFeedback';
 
 /**
@@ -32,7 +33,50 @@ function useElapsed(since: number | null): number {
   return since === null ? 0 : Math.max(0, (now - since) / 1000);
 }
 
-function Result({ r, scoredIn, onAgain }: { r: AttemptResultView; scoredIn: number | null; onAgain: () => void }): React.ReactElement {
+type SaveState = 'off' | 'busy' | 'saved' | 'gone' | 'deleted';
+const initialSave = (a: AttemptView): SaveState => (a.recording === 'saved' ? 'saved' : a.recording === 'gone' ? 'gone' : 'off');
+const status = (e: unknown) => (e as { response?: { status?: number } })?.response?.status;
+
+/**
+ * R1.1 (Ali: "They have to check something to save and can easily delete"): an UNCHECKED box. Ticking it keeps this
+ * answer's recording on the student's profile (Hire studio, Video, "Saved practice answers"); unticking deletes the kept
+ * copy. Unsaved recordings are deleted an hour after scoring, so after that the box says the recording is gone.
+ */
+export function SaveAnswerBox({ attempt, question }: { attempt: AttemptView; question: string }): React.ReactElement {
+  const [state, setState] = useState<SaveState>(initialSave(attempt));
+  const [problem, setProblem] = useState<string | null>(null);
+  const toggle = async (on: boolean) => {
+    setProblem(null);
+    const was = state;
+    setState('busy');
+    try {
+      if (on) { await saveAnswerApi(attempt.id, question); setState('saved'); } else { await deleteAnswerApi(attempt.id); setState('deleted'); }
+    } catch (e) {
+      if (on && status(e) === 410) { setState('gone'); return; }
+      setState(was);
+      setProblem(on ? 'Could not save this answer. Try again.' : 'Could not delete this answer. Try again.');
+    }
+  };
+  const disabled = state === 'busy' || state === 'gone' || state === 'deleted';
+  return (
+    <div className="cp-save" data-testid="cp-save" data-state={state}>
+      <label className="cp-save-box">
+        <input type="checkbox" checked={state === 'saved'} disabled={disabled} onChange={(e) => { void toggle(e.target.checked); }} data-testid="cp-save-check" />
+        <span>Save this answer to my profile</span>
+      </label>
+      <small className="cp-faint" aria-live="polite" data-testid="cp-save-note">
+        {state === 'saved' && 'Saved. Only you can see it, in Portfolio, Hire, Video. Untick to delete it.'}
+        {state === 'busy' && 'One moment...'}
+        {state === 'off' && 'Not saved: this recording is deleted within an hour.'}
+        {state === 'gone' && 'This recording is gone: unsaved answers are deleted an hour after scoring.'}
+        {state === 'deleted' && 'Deleted. The recording is gone.'}
+      </small>
+      {problem && <p role="alert" className="cp-form-problem">{problem}</p>}
+    </div>
+  );
+}
+
+function Result({ r, scoredIn, onAgain, attempt, question }: { r: AttemptResultView; scoredIn: number | null; onAgain: () => void; attempt: AttemptView; question: string }): React.ReactElement {
   const score = deliveryScore(r);
   const well = whereWell(r);
   const fix = whatToFix(r);
@@ -54,6 +98,7 @@ function Result({ r, scoredIn, onAgain }: { r: AttemptResultView; scoredIn: numb
         <ul>{r.scores.map((s) => <li key={s.key}><b>{s.label}</b>: {s.value} (target {s.target}) · <small>{s.source}</small></li>)}</ul>
         {r.notes.length > 0 && <ul>{r.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
       </details>
+      <SaveAnswerBox attempt={attempt} question={question} />
       <div className="cp-form-actions" style={{ marginTop: 8 }}><button type="button" className="cp-ghost sm" onClick={onAgain}>Try again</button></div>
     </div>
   );
@@ -73,13 +118,14 @@ export function TryRecorder({ sessionId, segmentIndex, prompt, initials }: { ses
         {r.phase === 'recording' && <span className="cp-rec" data-testid="cp-rec"><i aria-hidden="true" />Recording {elapsedClock(elapsed)}</span>}
         {busy && <span className="cp-cam-status" aria-live="polite">{r.phase === 'uploading' ? 'Uploading your answer...' : 'Scoring your answer...'}</span>}
       </div>
+      <p className="cp-try-privacy cp-faint" data-testid="cp-privacy">Your recording is deleted after scoring unless you choose to save it to your profile.</p>
       <div className="cp-form-actions">
         {r.phase === 'ready' && <button type="button" className="cp-send" onClick={r.record} data-testid="cp-record"><i className="ri-record-circle-line" aria-hidden="true" />Record</button>}
         {r.phase === 'recording' && <button type="button" className="cp-send" onClick={r.stop} data-testid="cp-stop"><i className="ri-stop-fill" aria-hidden="true" />Stop, and score it</button>}
         {r.phase === 'unsent' && <button type="button" className="cp-send" onClick={r.resend} data-testid="cp-resend">Send again</button>}
         {(r.phase === 'failed' || r.phase === 'unsent') && <button type="button" className="cp-ghost" onClick={r.reset} data-testid="cp-rerecord">Record again</button>}
       </div>
-      {r.phase === 'done' && r.attempt?.result && <Result r={r.attempt.result} scoredIn={r.scoredIn} onAgain={r.reset} />}
+      {r.phase === 'done' && r.attempt?.result && <Result r={r.attempt.result} scoredIn={r.scoredIn} onAgain={r.reset} attempt={r.attempt} question={prompt} />}
       {r.problem && <p role="alert" className="cp-form-problem">{r.problem}</p>}
     </div>
   );

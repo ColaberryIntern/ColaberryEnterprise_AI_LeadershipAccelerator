@@ -48,10 +48,10 @@ describeIfDb('career prep schema against Postgres', () => {
     expect((await one<{ n: number }>('SELECT COUNT(*)::int AS n FROM prep_skills')).n).toBe(9);
   });
 
-  it('creates all nine tables (ensure swallows statement errors, so prove none was skipped)', async () => {
+  it('creates all ten tables (ensure swallows statement errors, so prove none was skipped)', async () => {
     const n = await one<{ n: number }>(`SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_name IN
-      ('career_interviews','prep_skills','prep_skill_sources','prep_observations','prep_plans','prep_sessions','prep_readiness_daily','prep_attempts','prep_reminders')`);
-    expect(n.n).toBe(9);
+      ('career_interviews','prep_skills','prep_skill_sources','prep_observations','prep_plans','prep_sessions','prep_readiness_daily','prep_attempts','prep_reminders','prep_saved_answers')`);
+    expect(n.n).toBe(10);
   });
 
   it('links one Hire interview to at most one career interview', async () => {

@@ -8,8 +8,9 @@ import './careerPrepRoom.css';
 
 /**
  * Career Prep v27 (CP3.1): the room, full screen over the Career Prep floor. Top bar: "‹ Floor n",
- * the level trail (hidden under 900px), the anchor pill, nothing else. Left: Cora. Right: three tabs,
- * Your progress (default), Your plan, Session. Back and Esc close it and return focus to whatever
+ * the level trail (hidden under 900px), the anchor pill, nothing else. Below it, three columns (R1.1, Ali 2026-11-16):
+ * the left rail (navigation and your scores, RoomRail), the three tabs in the middle (Your progress (default), Your
+ * plan, Session), and Cora on the RIGHT. Under 900px they stack: the rail, the tab panel, then Cora. Back and Esc close it and return focus to whatever
  * opened it; Esc inside a text field (the ask box) does not. The room is Refactored.ai inside a
  * Colaberry campus, drawn LIGHT as in the design (shots L3-1..L3-7) whatever the OS theme: its palette is defined
  * on .cp-room in careerPrepRoom.css, not taken from the page theme.
@@ -31,11 +32,13 @@ export interface CareerPrepRoomProps {
   onTabChange?: (t: RoomTab) => void;
   /** CP4.6: layers drawn INSIDE the room (the open sheet, the jump bar), so they stack above it and share its theme. */
   overlay?: React.ReactNode;
+  /** R1.1: the left rail (navigation and your scores). */
+  rail?: React.ReactNode;
 }
 
 const isTextField = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable);
 
-export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, initialTab = 'progress', tab: controlled, onTabChange, overlay }: CareerPrepRoomProps): React.ReactElement {
+export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, initialTab = 'progress', tab: controlled, onTabChange, overlay, rail }: CareerPrepRoomProps): React.ReactElement {
   const [own, setOwn] = useState<RoomTab>(initialTab);
   const tab = controlled ?? own;
   const setTab = (t: RoomTab) => { setOwn(t); onTabChange?.(t); };
@@ -67,8 +70,8 @@ export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, in
         <LevelTrail step={3} floorNum={floorNum} />
         <AnchorPill anchor={anchor} onChange={onChangeAnchor} />
       </header>
-      <div className="cp-room-body">
-        <section className="cp-cora-col" aria-label="Cora, your interview coach" tabIndex={-1} ref={coraRef} data-testid="cp-cora-col">{cora}</section>
+      <div className={`cp-room-body${rail ? ' has-rail' : ''}`}>
+        {rail && <nav className="cp-rail-col" aria-label="Career Prep: pages and your scores" data-testid="cp-rail">{rail}</nav>}
         <section className="cp-tabs-col">
           <div className="cp-tabs" role="tablist" aria-label="Career Prep">
             {TABS.map((t) => (
@@ -78,6 +81,7 @@ export function CareerPrepRoom({ anchor, onChangeAnchor, onClose, cora, tabs, in
           </div>
           <div className="cp-panel" role="tabpanel" id={`cp-panel-${tab}`} aria-labelledby={`cp-tab-${tab}`} data-testid={`cp-panel-${tab}`}>{tabs[tab]}</div>
         </section>
+        <section className="cp-cora-col" aria-label="Cora, your interview coach" tabIndex={-1} ref={coraRef} data-testid="cp-cora-col">{cora}</section>
       </div>
       {overlay}
     </div>

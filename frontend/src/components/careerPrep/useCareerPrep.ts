@@ -22,6 +22,8 @@ export interface CareerPrepRoomState {
   cancelForm: () => void; changeAnchor: () => void; chooseAnchor: (id: string) => void; focusSkill: (key: string) => void;
   /** CP4.5: Cora says something outside a pick (the recap), and the dashboard reloads quietly. */
   say: (...items: ChatItem[]) => void; reload: () => Promise<void>;
+  /** R1.1: a plan is being built (the plan buttons wait, so a repeat click builds nothing). */
+  planBusy: boolean;
 }
 
 export function useCareerPrep(initialAnchorId: string | null = null, hooks: RoomHooks = {}): CareerPrepRoomState {
@@ -55,7 +57,7 @@ export function useCareerPrep(initialAnchorId: string | null = null, hooks: Room
   return {
     dashboard: flow.dashboard, anchorId: flow.anchorId, plan: planner.plan, log, busy: flow.busy || planner.busy || asking, form, error, pick, ask, submitForm,
     cancelForm: () => setForm(null), changeAnchor: () => flow.askWhich(false), chooseAnchor: (id) => { void flow.anchorOn(id); },
-    focusSkill: (key) => { void planner.makePlan('custom', { minutes: 10, focusSkill: key }); },
-    say: push, reload: flow.reload,
+    focusSkill: (key) => { if (!planner.busy) void planner.makePlan('custom', { minutes: 10, focusSkill: key }); },
+    say: push, reload: flow.reload, planBusy: planner.busy,
   };
 }

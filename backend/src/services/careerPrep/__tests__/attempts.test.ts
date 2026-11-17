@@ -10,6 +10,7 @@ import os from 'os';
 import path from 'path';
 import { attemptResult, createAttempt, failStaleAttempts, getAttempt, scoreAttempt, unclearAudio } from '../attempts';
 import { NotFoundError } from '../sessions';
+import { pendingFile } from '../savedAnswers';
 
 /** A real answer: 60 words over 30 s with 3 "um"s: 120 wpm, 5% fillers. */
 const ANSWER = ('At my last job I built an assistant um that read every support ticket and drafted a reply for the agent. ' +
@@ -84,6 +85,17 @@ describe('scoreAttempt', () => {
     expect(fs.existsSync(f)).toBe(false);
   });
 
+  it('R1.1: a SCORED recording moves to the pending area (kept up to an hour, in case the student saves it)', async () => {
+    mockTranscribe.mockResolvedValue({ words, duration: 30, text: '', language: 'en' });
+    const id = '44444444-4444-4444-8444-444444444444';
+    const f = file();
+    expect(await scoreAttempt(id, 'e1', f)).toBe('done');
+    expect(fs.existsSync(f)).toBe(false);
+    const kept = pendingFile(id);
+    expect(fs.existsSync(kept)).toBe(true);
+    fs.rmSync(kept, { force: true });
+  });
+
   it('an unclear recording is failed as UnclearAudio, writes NO observations, stores no result, and deletes the file', async () => {
     mockTranscribe.mockResolvedValue({ words: timed(Array.from({ length: 69 }, () => "i'm"), 60 / 371), duration: 25, text: '', language: 'en' });
     const f = file();
@@ -109,6 +121,14 @@ describe('reads and the boot sweep', () => {
     mockQuery.mockResolvedValueOnce([[], 0]);
     await expect(getAttempt('e2', 's1', 'a1')).rejects.toBeInstanceOf(NotFoundError);
     expect(mockQuery.mock.calls[0][1].replacements).toEqual({ a: 'a1', s: 's1', e: 'e2' });
+  });
+  it('R1.1: a scored attempt says whether its recording is saved, still saveable, or gone', async () => {
+    mockQuery.mockResolvedValueOnce([[{ id: 'a1', status: 'done', result: null, error_class: null }], 1]).mockResolvedValueOnce([[{ '?column?': 1 }], 1]);
+    expect((await getAttempt('e1', 's1', 'a1')).recording).toBe('saved');
+    mockQuery.mockResolvedValueOnce([[{ id: '55555555-5555-4555-8555-555555555555', status: 'done', result: null, error_class: null }], 1]).mockResolvedValueOnce([[], 0]);
+    expect((await getAttempt('e1', 's1', 'a1')).recording).toBe('gone');
+    mockQuery.mockResolvedValueOnce([[{ id: 'a1', status: 'failed', result: null, error_class: 'UnclearAudio' }], 1]);
+    expect((await getAttempt('e1', 's1', 'a1')).recording).toBeUndefined();
   });
   it('marks attempts left pending by a restart as failed', async () => {
     mockQuery.mockResolvedValueOnce([[{ id: 'a1' }, { id: 'a2' }], 2]);

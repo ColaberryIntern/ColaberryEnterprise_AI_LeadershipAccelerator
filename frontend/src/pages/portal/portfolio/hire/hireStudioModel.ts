@@ -19,6 +19,12 @@ export const SECTIONS: ReadonlyArray<{ key: StudioSection; label: string }> = [
   { key: 'cases', label: 'Case studies' },
 ];
 
+/** R1.1: the section a URL names (?section=video, with ?tab=hire), or the overview. Career Prep links the intro video here. */
+export function initialSection(search: string): StudioSection {
+  const want = new URLSearchParams(search).get('section');
+  return SECTIONS.some((s) => s.key === want) ? (want as StudioSection) : 'overview';
+}
+
 export interface ChecklistItem {
   key: string;
   title: string;
