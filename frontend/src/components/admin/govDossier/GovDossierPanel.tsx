@@ -17,6 +17,11 @@ import {
  * The old /admin/gov-dossier route redirects there.
  */
 export const DOSSIER_ANCHOR = 'dossier';
+/** Fired by the Our Services section nav so the collapsed dossier opens before the page scrolls to it. */
+export const DOSSIER_OPEN_EVENT = 'gov-dossier:open';
+export function requestDossierOpen(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(DOSSIER_OPEN_EVENT));
+}
 
 type AddState = { kind: DossierKind } | null;
 const CAT_LABEL = new Map(FACT_CATEGORIES.map((c) => [c.id, c.label]));
@@ -44,6 +49,12 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!embedded || typeof window === 'undefined') return undefined;
+    const openIt = (): void => setOpen(true);
+    window.addEventListener(DOSSIER_OPEN_EVENT, openIt);
+    return () => window.removeEventListener(DOSSIER_OPEN_EVENT, openIt);
+  }, [embedded]);
   // A client-side redirect to #dossier does not scroll by itself; bring the section into view once it has rendered.
   useEffect(() => {
     if (!embedded || loading || typeof window === 'undefined' || window.location.hash !== `#${DOSSIER_ANCHOR}`) return;
@@ -92,7 +103,7 @@ export default function GovDossierPanel({ embedded = false }: { embedded?: boole
   const subtitle = 'The reusable proof the proposal agent draws on. Only approved items are used; hunt it once here and every bid reuses it.';
 
   return (
-    <div id={embedded ? DOSSIER_ANCHOR : undefined} data-testid="gov-dossier">
+    <div id={embedded ? DOSSIER_ANCHOR : undefined} data-testid="gov-dossier" style={embedded ? { scrollMarginTop: 72 } : undefined}>
       {embedded ? (
         <SectionCard className="mb-4" title="Gov company dossier" icon="archive-2-line" subtitle={subtitle}
           actions={

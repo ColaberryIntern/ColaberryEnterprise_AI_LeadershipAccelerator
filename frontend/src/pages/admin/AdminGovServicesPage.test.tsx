@@ -139,6 +139,30 @@ describe('AdminGovServicesPage: the evidence-backed catalog', () => {
     expect(text).toContain('no services yet'); // proven % and average have nothing to divide by
   });
 
+  it('a sticky section bar at the top jumps to every section, the dossier included', async () => {
+    await renderPage();
+    const nav = container.querySelector('[data-testid="our-services-nav"]') as HTMLElement;
+    expect(nav.className).toContain('sticky-top');
+    // The bar comes before the first section, so it is reachable without scrolling.
+    expect(nav.compareDocumentPosition(container.querySelector('#overview')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const ids = Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    expect(ids).toEqual(['#overview', '#evidence', '#catalog', '#industries', '#ai-opportunities', '#intake', '#gaps', '#dossier']);
+    for (const href of ids) expect(container.querySelector(href!)).not.toBeNull(); // no dead pill
+    expect(nav.querySelector('[data-testid="section-nav-intake"]')?.textContent).toContain('1 blocked');
+    // The dossier is collapsed by default; its pill opens it before scrolling there.
+    expect(container.querySelector('#gov-dossier-body')).toBeNull();
+    await click(nav.querySelector('[data-testid="section-nav-dossier"]')!);
+    expect(container.querySelector('#gov-dossier-body')).not.toBeNull();
+    expect(nav.querySelector('[data-testid="section-nav-dossier"]')?.getAttribute('aria-current')).toBe('location');
+  });
+
+  it('with no summary the bar offers only the dossier, never a dead link', async () => {
+    (ourServicesApi.getEvidenceSummary as jest.Mock).mockRejectedValue(new Error('down'));
+    await renderPage();
+    const hrefs = Array.from(container.querySelectorAll('[data-testid="our-services-nav"] a')).map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(['#dossier']);
+  });
+
   it('a failed summary shows an error and no evidence numbers', async () => {
     (ourServicesApi.getEvidenceSummary as jest.Mock).mockRejectedValue({ response: { data: { error: 'The government contracts workspace is not configured.' } } });
     await renderPage();
