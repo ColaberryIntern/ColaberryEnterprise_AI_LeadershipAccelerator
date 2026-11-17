@@ -16,13 +16,22 @@ const AGENT = { domainKey: 'curriculum', title: 'Curriculum, Learning & Content'
 const CARDS = { gov: [GOV], agents: [AGENT] } as unknown as NavSubCards;
 const ALL = () => true;
 const interns = (hq: ReturnType<typeof buildHq>) => hq.floors.find((f) => f.label === 'Interns')!;
+const govContracts = (hq: ReturnType<typeof buildHq>) => hq.floors.find((f) => f.label === 'Gov Contracts')!;
 
 describe('the building shows the sidebar sub-lists, for the same person', () => {
-  it('the Interns floor has the Interns room, then each Gov Contract and each Agent, opening their admin pages', () => {
+  it('the Interns floor has the Interns room, then each Agent, opening their admin pages', () => {
+    // Gov Contracts moved to its OWN top-level group on 2026-11-17, so its contracts are no longer
+    // on the Interns floor — only the Agents sub-list is (see the Gov Contracts floor below).
     const rooms = interns(buildHq(ALL, true, 'staff', undefined, undefined, undefined, CARDS)).rooms;
-    expect(rooms.map((r) => r.label)).toEqual(['Interns', 'Statewide Victim-Centered', 'Curriculum, Learning & Content']);
+    expect(rooms.map((r) => r.label)).toEqual(['Interns', 'Curriculum, Learning & Content']);
+    expect(rooms[1]).toMatchObject({ path: '/admin/internship/agent/curriculum', section: 'agents', open: true });
+  });
+
+  it('the Gov Contracts floor leads with Gov Opportunities, then each Gov Contract, opening their admin pages', () => {
+    const rooms = govContracts(buildHq(ALL, true, 'staff', undefined, undefined, undefined, CARDS)).rooms;
+    expect(rooms.map((r) => r.label)).toEqual(['Gov Opportunities', 'Statewide Victim-Centered']);
+    expect(rooms[0]).toMatchObject({ path: '/admin/gov-opportunities', section: 'program' });
     expect(rooms[1]).toMatchObject({ path: '/admin/internship/gov-contract/11111111-2222-4333-8444-555555555555', section: 'gov_contracts', open: true, newTab: true });
-    expect(rooms[2]).toMatchObject({ path: '/admin/internship/agent/curriculum', section: 'agents', open: true });
   });
   it('a sub-list whose section the person does not hold is not shown (the sidebar does not show it either)', () => {
     const rooms = interns(buildHq((s) => s === 'internship', true, 'staff', undefined, undefined, undefined, CARDS)).rooms;

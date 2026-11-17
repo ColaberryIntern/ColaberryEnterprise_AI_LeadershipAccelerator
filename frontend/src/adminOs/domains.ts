@@ -184,6 +184,11 @@ export const DOMAINS: readonly DomainDef[] = [
       '/admin/automation',
       '/admin/agent-orphans',
       '/admin/knowledge-ops',
+      // Our Services (the gov offering catalog + company dossier) left the sidebar on 2026-11-17 and
+      // became an UNLISTED_PATH_SECTIONS orphan on 'program'. domains.test.ts requires every such orphan
+      // to have a domain that holds its section: Operations already holds 'program' (via /admin/orchestration
+      // and /admin/brain), and this is delivery/Project-Factory-adjacent work, so it lands here.
+      '/admin/gov-services',
     ],
   },
 ];

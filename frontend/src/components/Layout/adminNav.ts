@@ -163,18 +163,39 @@ export const NAV_GROUPS: NavGroup[] = [
   //
   // The "Interns" group. Its link opens the Interns hub (the application queue + the Agents tab,
   // which stays gated INSIDE the page by `agents` so Admissions — who holds only `internship` —
-  // never sees it). Gov Contracts is NO LONGER a page tab: it is a nested, expandable sub-node
-  // rendered dynamically under this group by AdminLayout (one per-contract sub-item, gated
-  // `gov_contracts`, so Admissions never sees it), each opening the contract's read-only cockpit at
-  // /admin/internship/gov-contract/:deliveryProjectId — the same view the assigned intern sees.
+  // never sees it). The Agents sub-list is a nested, expandable node rendered dynamically under this
+  // group by AdminLayout (one per agent domain, gated `agents`, so Admissions never sees it).
+  // Gov Contracts USED to be a second sub-list here; as of 2026-11-17 it is its own top-level group
+  // (see "Gov Contracts" below), per Ali: "remove Gov Contracts from under the interns section into
+  // its own group ... Gov Contracts should be its own group separated from everything else."
   { label: 'Interns', section: 'internship', links: [
     { path: '/admin/internship', label: 'Interns', icon: 'user-follow-line' },
   ], subLists: [
-    // C92: each pursuit with a build and an active intern; each agent domain (the sidebar and the building read these)
-    { source: 'gov', label: 'Gov Contracts', section: 'gov_contracts', icon: 'government-line',
-      paths: [/^\/admin\/internship\/gov-contract\/[A-Za-z0-9-]{1,64}$/] },
+    // C92: each agent domain (the sidebar and the building read these)
     { source: 'agents', label: 'Agents', section: 'agents', icon: 'robot-2-line',
       paths: [/^\/admin\/agents\/[A-Za-z0-9_-]{1,64}$/, /^\/admin\/internship\/agent\/[A-Za-z0-9_-]{1,64}$/] },
+  ]},
+  // Gov Contracts — its own top-level group as of 2026-11-17 (Ali: "remove Gov Contracts from under
+  // the interns section into its own group ... Gov Contracts should be its own group separated from
+  // everything else"). It leads with Gov Opportunities (the Opportunity Pulse pipeline), from which
+  // "Our Services" is now reached — that link was removed from the sidebar and lives on the Gov
+  // Opportunities page — then the live per-contract sub-list of pursuits being worked.
+  //
+  // SECTION is 'program' to match the backend: Gov Opportunities is served by /api/admin/factory/*,
+  // which mgmtSectionGate maps to 'program', so nav visibility and API access agree by construction
+  // (the same reason this link carried 'program' when it sat in the Program group). The Contracts
+  // sub-list keeps its OWN 'gov_contracts' section (owner/Kes), gated independently of the group: a
+  // holder of 'gov_contracts' but not 'program' still sees the group, kept alive by the sub-list
+  // alone (visibleNavGroups), with the contracts and no Gov Opportunities link.
+  //
+  // Gov Qualification stays INTAKE-ONLY with no sidebar item (reached from the Opportunities "Qualify"
+  // flow + the gov-pursuit-morning ZIP routine); its /admin/gov-qualification route stays registered.
+  { label: 'Gov Contracts', section: 'program', links: [
+    { path: '/admin/gov-opportunities', label: 'Gov Opportunities', icon: 'government-line', section: 'program' },
+  ], subLists: [
+    // C92: each pursuit with a build and an active intern (the sidebar and the Campus HQ building read these).
+    { source: 'gov', label: 'Contracts', section: 'gov_contracts', icon: 'government-line',
+      paths: [/^\/admin\/internship\/gov-contract\/[A-Za-z0-9-]{1,64}$/] },
   ]},
   // Career Prep v27 (CP2.1): one floor, three names in the campus tower (students: Career Prep; partners: Hiring; staff:
   // Placement). Release 1 ships one staff page, each student's prep, read-only; the kit's queue, inboxes, bookings and
@@ -263,18 +284,11 @@ export const NAV_GROUPS: NavGroup[] = [
     // AI Project Factory Command Center (Phase 3). A delivery contract is program-domain work; the
     // backend mgmtSectionGate maps /api/admin/factory to 'program', so the nav and the API agree.
     { path: '/admin/factory', label: 'Project Factory', icon: 'node-tree' },
-    // Gov-contract entry page (Phase 5 slice 1): best-fit proposals -> start -> the Command Center.
-    // Same 'program' section as /admin/factory (backend mgmtSectionGate covers /api/admin/factory/*).
-    { path: '/admin/gov-opportunities', label: 'Gov Opportunities', icon: 'government-line' },
-    // Gov Qualification workspace is INTAKE-ONLY: no standalone sidebar item (it is reached from the Opportunities
-    // "Qualify" flow + the gov-pursuit-morning ZIP routine). Its /admin/gov-qualification route stays registered so
-    // those entry points keep working; only the left-nav link is removed (per Ali, the duplicate post-award viewing of
-    // steps 1-5 now lives on the assigned Gov Contract view's stage panels).
-    // Our Services: Colaberry's own offering catalog, matched (advisory) against opportunities. Same 'program'
-    // section (backend mgmtSectionGate covers /api/admin/factory/services).
-    { path: '/admin/gov-services', label: 'Our Services', icon: 'service-line' },
-    // Gov Company Dossier is no longer its own tab (16 Nov 2026): it is a section of Our Services
-    // (/admin/gov-services#dossier); /admin/gov-dossier redirects there.
+    // The gov-contract surfaces (Gov Opportunities + the live per-contract sub-list) moved to their own
+    // top-level "Gov Contracts" group on 2026-11-17. Our Services left the sidebar entirely and is now a
+    // link on the Gov Opportunities page — its /admin/gov-services route stays live, classified in
+    // UNLISTED_PATH_SECTIONS so ProtectedRoute still resolves its 'program' section (and the Gov Company
+    // Dossier still lives under it at /admin/gov-services#dossier; /admin/gov-dossier redirects there).
   ]},
   { label: 'Intelligence', section: 'intelligence', links: [
     { path: '/admin/ceo', label: 'CEO Command', icon: 'vip-crown-line' },
@@ -413,6 +427,12 @@ export const UNLISTED_PATH_SECTIONS: ReadonlyArray<readonly [string, string]> = 
   // in the same pass — curriculum configuration, authored by the people who
   // author the curriculum. Its route stays live and its section is unchanged.
   ['/admin/cape-settings', 'program'],
+  // Our Services (Colaberry's offering catalog, matched advisory against opportunities) left the sidebar
+  // on 2026-11-17 and is now reached only from a link on the Gov Opportunities page. Its route stays live;
+  // classified here so sectionForPath still returns 'program' (backend mgmtSectionGate covers
+  // /api/admin/factory/services) and ProtectedRoute does not bounce a scoped identity off it. The Gov
+  // Company Dossier sits under it at /admin/gov-services#dossier (/admin/gov-dossier redirects there).
+  ['/admin/gov-services', 'program'],
 ];
 
 /**

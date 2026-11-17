@@ -181,6 +181,19 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
     ? <span className="badge rounded-pill d-inline-flex align-items-center gap-1 bg-success-subtle text-success-emphasis"><i className="ri-broadcast-line" aria-hidden="true" />Live from Opportunity Pulse</span>
     : <span className="badge rounded-pill d-inline-flex align-items-center gap-1 bg-warning-subtle text-warning-emphasis"><i className="ri-archive-line" aria-hidden="true" />Snapshot{feed?.snapshotDate ? ` · ${feed.snapshotDate}` : ''}</span>;
 
+  // Our Services left the left-nav on 2026-11-17 and is reached from here now (adminNav.ts). Always shown,
+  // since this is navigation, not a feed-dependent pill; it opens the offering catalog that opportunities
+  // are matched against (and the Gov Company Dossier section under it).
+  const headerActions = (
+    <div className="d-inline-flex align-items-center gap-2">
+      <button type="button" className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1"
+        onClick={() => navigate('/admin/gov-services')}>
+        <i className="ri-service-line" aria-hidden="true" />Our Services
+      </button>
+      {feed ? livePill : null}
+    </div>
+  );
+
   const itCount = candidates.filter(isIT).length;
   const consultingCount = candidates.filter((o) => !isIT(o) && isConsulting(o)).length;
 
@@ -190,7 +203,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
         title="Government Opportunities"
         subtitle="Discovered by Opportunity Pulse · each candidate needs qualification before it becomes a pursuit"
         icon="government-line"
-        actions={feed ? livePill : undefined}
+        actions={headerActions}
       />
 
       {/* ── Summary ─────────────────────────────────────────────────────────── */}
@@ -309,7 +322,7 @@ export default function AdminGovOpportunitiesPage(): React.ReactElement {
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <div className="small text-secondary">
               Showing <strong>{shown.length}</strong> of <strong>{totalAvailable}</strong> from the feed
-              {assignedCount > 0 && <> · <strong>{assignedCount}</strong> assigned to interns (see Interns &gt; Gov Contracts)</>}
+              {assignedCount > 0 && <> · <strong>{assignedCount}</strong> assigned to interns (see Gov Contracts)</>}
             </div>
           </div>
 
