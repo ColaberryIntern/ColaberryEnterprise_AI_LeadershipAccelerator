@@ -186,7 +186,7 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
   it('says how many left the list because they are assigned to interns, and where they went', async () => {
     (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ opportunities: [goodFit], source: 'live', snapshotDate: null, snapshotReason: null, totalAvailable: 50, dismissedCount: 0, assignedCount: 2 });
     await renderPage();
-    expect(container.textContent ?? '').toMatch(/2\s*assigned to interns \(see Interns > Gov Contracts\)/);
+    expect(container.textContent ?? '').toMatch(/2\s*assigned to interns \(see Gov Contracts\)/);
   });
 
   it('shows no assigned note when nothing is assigned, or when the field is absent', async () => {
@@ -365,7 +365,7 @@ describe('AdminGovOpportunitiesPage — dashboard redesign (honesty rails preser
     it('says how many were assigned and where they went', async () => {
       (factoryApi.listGovOpportunities as jest.Mock).mockResolvedValue({ ...staged, assignedCount: 2 });
       await renderPage();
-      expect(container.textContent ?? '').toMatch(/2\s*assigned to interns \(see Interns > Gov Contracts\)/);
+      expect(container.textContent ?? '').toMatch(/2\s*assigned to interns \(see Gov Contracts\)/);
     });
 
     it('a stage of flagged goes to the flagged section, never the candidates table', async () => {
