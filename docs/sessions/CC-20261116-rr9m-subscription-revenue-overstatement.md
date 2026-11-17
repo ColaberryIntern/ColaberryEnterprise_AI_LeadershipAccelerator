@@ -190,3 +190,20 @@ $1,788 still beats monthly even under the most generous reading the data permits
   duplicate this PR handles keeps being produced rather than prevented.
 - **Campaign attribution is untouched.** Nothing records that a subscription changed plan
   because a campaign asked, which is the next piece of work on this stream.
+
+### A regression this change would have introduced, caught before merge
+
+`getCommercializationBoard` assembles with `Promise.all(TILE_DEFINITIONS.map(resolve))` and
+no catch, and `resolve` awaited `annualizedRevenue()` unguarded. An exception in that one
+tile rejects the whole thing: all ten tiles vanish, not one number.
+
+Survivable while the figure read `subscriptions` alone. Moving it onto `PAYING_MEMBERS_CTE`
+added joins to `enrollments` and `community_members`, so the blast radius of a missing table
+went from one number to the entire page — a fragility this change would have made materially
+more likely to fire.
+
+Now guarded: a failure degrades that tile to `unmeasurable` and says why, which is the rule
+this file already states everywhere else ("0" and "I cannot see" must never print the same)
+and the one `revenueRoomService` follows ("A failure here costs five cards, not the page").
+Both new tests were confirmed to fail against the unguarded version, where the board rejects
+outright.

@@ -226,8 +226,26 @@ async function resolve(def: TileDefinition): Promise<CommercializationTile> {
   const base: CommercializationTile = { ...def, value: null };
 
   if (def.key === 'annualized_revenue') {
-    const { value, caveat } = await annualizedRevenue();
-    return { ...base, value, caveat };
+    // Guarded because `getCommercializationBoard` assembles with an unguarded
+    // `Promise.all`, so a throw here used to take all ten tiles down, not one.
+    // That was survivable while this query read `subscriptions` alone. It stopped being
+    // survivable on 2026-11-16, when the figure moved onto the shared PAYING_MEMBERS_CTE
+    // and picked up joins to `enrollments` and `community_members` — two more tables that
+    // can be absent, each of which would have blanked the whole board.
+    //
+    // The rule this file already applies everywhere else: "0" and "I cannot see" must
+    // never print the same. A failure degrades this tile to `unmeasurable` and says why.
+    try {
+      const { value, caveat } = await annualizedRevenue();
+      return { ...base, value, caveat };
+    } catch (err: any) {
+      return {
+        ...base,
+        status: 'unmeasurable' as TileStatus,
+        sourceTable: null,
+        caveat: `The revenue figure could not be read, so no number is shown: ${err?.message}`,
+      };
+    }
   }
 
   if (def.key === 'active_pilots') {

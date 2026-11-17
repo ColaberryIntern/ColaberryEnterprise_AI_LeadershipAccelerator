@@ -3,7 +3,9 @@ jest.mock('../../../config/database', () => ({
   sequelize: { query: (...a: unknown[]) => m.query(...a) },
 }));
 
-import { annualizedRevenue, annualizedRevenueCents } from '../commercializationBoardService';
+import {
+  annualizedRevenue, annualizedRevenueCents, getCommercializationBoard,
+} from '../commercializationBoardService';
 
 /**
  * The revenue figure Ram reads, and the first tests it has ever had.
@@ -138,5 +140,49 @@ describe('annualizedRevenue (the formatted tile)', () => {
     await annualizedRevenue();
 
     expect(m.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The board assembles with an unguarded `Promise.all`, so an exception in any one tile
+ * rejects the whole thing and all ten tiles vanish.
+ *
+ * That was survivable while this figure read `subscriptions` alone. Moving it onto the
+ * shared PAYING_MEMBERS_CTE added joins to `enrollments` and `community_members` — two
+ * more tables that can be absent — so the blast radius of a missing table went from one
+ * number to the entire page. Caught while reviewing that change rather than in production.
+ */
+describe('a failed revenue read costs one tile, not the board', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('degrades the revenue tile to unmeasurable instead of rejecting', async () => {
+    m.query.mockImplementation((sql: string) => (
+      String(sql).includes('paying AS (')
+        ? Promise.reject(new Error('relation "community_members" does not exist'))
+        : Promise.resolve([{ n: 0 }])
+    ));
+
+    const board = await getCommercializationBoard();
+
+    const tile = board.tiles.find((t) => t.key === 'annualized_revenue');
+    expect(tile).toBeDefined();
+    expect(tile!.status).toBe('unmeasurable');
+    // "0" and "I cannot see" must never print the same — this file's own rule.
+    expect(tile!.value).toBeNull();
+    expect(tile!.caveat).toContain('community_members');
+  });
+
+  it('still returns every other tile when the revenue read fails', async () => {
+    m.query.mockImplementation((sql: string) => (
+      String(sql).includes('paying AS (')
+        ? Promise.reject(new Error('boom'))
+        : Promise.resolve([{ n: 0 }])
+    ));
+
+    const board = await getCommercializationBoard();
+
+    // The whole point: a broken number must not blank the nine tiles beside it.
+    expect(board.tiles.length).toBeGreaterThan(1);
+    expect(board.asOf).toBeTruthy();
   });
 });
