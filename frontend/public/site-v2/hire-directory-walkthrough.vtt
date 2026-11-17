@@ -1,0 +1,57 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:08.680
+Employers see plenty of claims about AI engineers and very little proof. This directory puts the proof first.
+
+2
+00:00:09.800 --> 00:00:19.630
+This is the live directory. A person appears here only once a case study about work they built is approved and published. No case study, no listing.
+
+3
+00:00:20.700 --> 00:00:32.880
+The page says how a listing is earned, in four steps: real work in a real repository, checked against its criteria, written up as a reviewed case study, and only then listed.
+
+4
+00:00:34.000 --> 00:00:44.580
+Open a profile and the headline figures come from that engineer's published case studies, not from a skills list they typed in. Names in this walkthrough are replaced with a role.
+
+5
+00:00:45.700 --> 00:00:54.570
+Every claim on the profile leads to a published case study like this one: the problem, what was built, how it works, and what it measured.
+
+6
+00:00:55.700 --> 00:01:07.740
+The rule is enforced where the data leaves. A project without a published case study, and the commits from its repository, never leave the server, so there is nothing to find in the page source.
+
+7
+00:01:08.800 --> 00:01:17.240
+An employer who wants to talk asks for an introduction, and the Colaberry team makes it. Candidates' contact details are never shown.
+
+8
+00:01:18.300 --> 00:01:26.670
+Booking is the candidate's switch. While it is off, the schedule page says so plainly and offers the introduction instead.
+
+9
+00:01:27.800 --> 00:01:40.390
+With booking on, the page offers only open times in the candidate's zone. Each request is decided under a lock, then waits for the candidate to accept, suggest another time or decline.
+
+10
+00:01:41.500 --> 00:01:52.240
+Candidates can record an intro video in the browser. The coach measures pace, filler words and voice against published targets, and the face is not analyzed.
+
+11
+00:01:53.300 --> 00:02:06.180
+Six of six listed engineers have a published case study behind them. Twenty of twenty eight modules have a test file of their own name. All sixteen commits name an AI coding assistant as co-author.
+
+12
+00:02:07.300 --> 00:02:17.710
+Before a fix on fourteen November most visits to the site landed in a catch-all category, and today none do. No listed engineer has switched booking on yet.
+
+13
+00:02:19.300 --> 00:02:26.830
+No interview has been booked, so whether a listing leads to a hire is still unmeasured. The record says so plainly.
+
+14
+00:02:28.300 --> 00:02:36.280
+The directory cannot list anyone without a published case study, and an employer's request waits for the candidate to decide.

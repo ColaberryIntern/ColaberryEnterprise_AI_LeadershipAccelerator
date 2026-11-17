@@ -1,0 +1,105 @@
+{
+  "slug": "nobody-is-listed-until-they-have-shipped",
+  "output": "hire-directory-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Nobody Is Listed Until They Have Shipped",
+      "subtitle": "hire.refactored.ai, the Hire module, read at commit 24b94f6",
+      "caption": "Employers see plenty of claims about AI engineers and very little proof. This directory puts the proof first."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "frontend/public/site-v2/shot-hire-directory-gate.png",
+      "caption": "This is the live directory. A person appears here only once a case study about work they built is approved and published. No case study, no listing."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 10,
+      "path": "frontend/public/site-v2/shot-hire-how-listing-works.png",
+      "caption": "The page says how a listing is earned, in four steps: real work in a real repository, checked against its criteria, written up as a reviewed case study, and only then listed."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 11,
+      "path": "frontend/public/site-v2/shot-hire-talent-profile.png",
+      "caption": "Open a profile and the headline figures come from that engineer's published case studies, not from a skills list they typed in. Names in this walkthrough are replaced with a role."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 10,
+      "path": "frontend/public/site-v2/shot-hire-published-case-study.png",
+      "caption": "Every claim on the profile leads to a published case study like this one: the problem, what was built, how it works, and what it measured."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Work is shown only as published case studies.",
+      "subtitle": "Unproven projects are stripped at the server, not hidden on the page.",
+      "caption": "The rule is enforced where the data leaves. A project without a published case study, and the commits from its repository, never leave the server, so there is nothing to find in the page source."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "frontend/public/site-v2/shot-hire-intro-request.png",
+      "caption": "An employer who wants to talk asks for an introduction, and the Colaberry team makes it. Candidates' contact details are never shown."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 9,
+      "path": "frontend/public/site-v2/shot-hire-booking-off.png",
+      "caption": "Booking is the candidate's switch. While it is off, the schedule page says so plainly and offers the introduction instead."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "The candidate decides, one request per time.",
+      "subtitle": "Open times in the candidate's own zone, decided under a lock.",
+      "caption": "With booking on, the page offers only open times in the candidate's zone. Each request is decided under a lock, then waits for the candidate to accept, suggest another time or decline."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "Coach the voice, never read the face.",
+      "subtitle": "Pace, filler words and voice, against published targets.",
+      "caption": "Candidates can record an intro video in the browser. The coach measures pace, filler words and voice against published targets, and the face is not analyzed."
+    },
+    {
+      "kind": "cards",
+      "seconds": 13,
+      "accent_index": 0,
+      "rows": [
+        ["6 of 6", "listed engineers have a published case study"],
+        ["20 of 28", "Hire modules have a test file of their own name"],
+        ["16 of 16", "commits name an AI coding assistant as co-author"]
+      ],
+      "caption": "Six of six listed engineers have a published case study behind them. Twenty of twenty eight modules have a test file of their own name. All sixteen commits name an AI coding assistant as co-author."
+    },
+    {
+      "kind": "cards",
+      "seconds": 12,
+      "accent_index": 0,
+      "rows": [
+        ["0 of 2,693", "Hire site events left uncategorized, after a fix on 14 November"],
+        ["0 of 6", "listed engineers take bookings yet"]
+      ],
+      "caption": "Before a fix on fourteen November most visits to the site landed in a catch-all category, and today none do. No listed engineer has switched booking on yet."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "What this record cannot show yet.",
+      "subtitle": "Whether a listing leads to a hire.",
+      "caption": "No interview has been booked, so whether a listing leads to a hire is still unmeasured. The record says so plainly."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "Proof before the profile. The decision with the candidate.",
+      "subtitle": "Colaberry platform team",
+      "caption": "The directory cannot list anyone without a published case study, and an employer's request waits for the candidate to decide."
+    }
+  ]
+}
