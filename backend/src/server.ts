@@ -28,6 +28,7 @@ import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
+import sparkRoutes from './routes/sparkRoutes';
 import trackedLinkRedirectRoutes from './routes/trackedLinkRedirectRoutes';
 import openclawShortLinkRoutes from './routes/openclawShortLinkRoutes';
 import mediaFetchRoutes from './routes/mediaFetchRoutes';
@@ -297,6 +298,7 @@ app.use(publicPortfolioRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
+app.use(sparkRoutes); // Spark Hour: Ali + Addie's private check-in (key + 4-digit code), /api/spark/*
 // Marketing Operations - the public tracked-link redirect, GET /r/:shortCode.
 //
 // Mounted HERE, beside the QR redirect and after leadRoutes, because routers registered

@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Check-in</title>
+<style>
+:root{--bg:#fbf7f4;--card:#fff;--ink:#1f1a24;--muted:#6b6272;--line:#ece4e0;--rose:#e0446a;--plum:#5b2a86;--plum-soft:#efe6f8;--teal:#0f8b8d;--gold:#f2a516;--gold-soft:#fff3d6;--navy:#1d3557;--green:#2a9d55;--green-soft:#e1f4e7;--opt:#faf7f8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15121a;--card:#201b27;--ink:#f3eef6;--muted:#b2a8bb;--line:#352d3f;--plum-soft:#2c1d3d;--gold-soft:#3a2d0f;--green-soft:#12301d;--opt:#2a2333}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:18px 16px 60px}
+h1{font-size:24px;margin:6px 0 2px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:0 0 14px}
+.card h2{font-size:18px;margin:0 0 4px}
+.badge{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:800;color:#fff;background:var(--gold);margin-left:6px;vertical-align:2px}
+.muted{color:var(--muted);font-size:14px}
+button{font:inherit}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:13px;font-weight:800;color:#fff;background:var(--rose);cursor:pointer;margin-top:10px}
+.btn.alt{background:var(--navy)}.btn.ghost{background:var(--plum-soft);color:var(--plum)}
+.btn:disabled{opacity:.5}
+.q{background:var(--opt);border-radius:14px;padding:12px;margin:10px 0}
+.qt{font-weight:800;font-size:15px;margin-bottom:8px}
+.opt{display:block;width:100%;text-align:left;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px 12px;margin:6px 0;cursor:pointer;font-size:15px}
+.opt.sel{border-color:var(--plum);background:var(--plum-soft)}
+textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px;font:inherit;font-size:15px;min-height:70px;background:var(--card);color:var(--ink)}
+.lock{text-align:center;padding-top:30px}
+.who{display:flex;gap:10px;justify-content:center;margin:16px 0}
+.who button{border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:10px 24px;font-weight:800;cursor:pointer}
+.who button.sel{border-color:var(--rose);color:var(--rose)}
+.dots{display:flex;justify-content:center;gap:12px;margin:18px 0}
+.dots b{width:16px;height:16px;border-radius:50%;border:2px solid var(--ink)}
+.dots b.f{background:var(--ink)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:0 auto}
+.pad button{font-size:24px;font-weight:700;padding:14px 0;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.err{color:#c0392b;font-weight:700;min-height:22px;margin-top:10px}
+.ev{border-radius:16px;padding:14px;margin:10px 0;color:#fff}
+.ev .t{font-size:13px;opacity:.95;font-weight:700}
+.ev b.title{display:block;font-size:18px;margin:2px 0 6px}
+.ev .why{background:rgba(255,255,255,.18);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:14px}
+.ev .row{display:flex;gap:8px;margin-top:10px}
+.ev .row button{flex:1;border:0;border-radius:10px;padding:10px;font-weight:800;cursor:pointer;background:#fff;color:#1f1a24;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{border:0;border-radius:99px;padding:8px 12px;background:#fff;color:#1f1a24;font-weight:700;font-size:13px;cursor:pointer}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#1f1a24;color:#fff;border-radius:12px;padding:12px 16px;font-weight:700;max-width:92%;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:9}
+.spin{display:inline-block;width:16px;height:16px;border:3px solid var(--line);border-top-color:var(--rose);border-radius:50%;animation:s 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+.top{display:flex;justify-content:space-between;align-items:center}
+.top button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 14px;font-weight:700;cursor:pointer}
+.done{background:var(--green-soft);border-radius:12px;padding:12px;text-align:center;font-weight:800}
+.learn li{margin:4px 0;font-size:14px}
+.file{display:block;border:3px dashed var(--line);border-radius:14px;padding:18px;text-align:center;cursor:pointer;margin-top:10px}
+.file input{display:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  var KEY = params.get('k') || '';
+  // Keep the private key out of the address bar and history once it is read.
+  if (KEY) history.replaceState(null, '', location.pathname);
+  var session = null, who = 'ali', pin = '', state = null, idle = null, poll = null;
+  var app = document.getElementById('app');
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+
+  function api(method, path, body) {
+    var h = { 'x-spark-key': KEY, 'Content-Type': 'application/json' };
+    if (session) h['x-spark-session'] = session;
+    return fetch('/api/spark' + path, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (r.status === 401 && path !== '/unlock') { lock(); throw new Error('locked'); } if (!r.ok) throw new Error(j.error || 'Something went wrong.'); return j; }); });
+  }
+  function toast(msg) {
+    document.querySelectorAll('.toast').forEach(function (x) { x.remove(); });
+    var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 4200);
+  }
+  function touch() { clearTimeout(idle); idle = setTimeout(lock, 5 * 60 * 1000); }
+  ['click', 'keydown', 'touchstart'].forEach(function (e) { document.addEventListener(e, function () { if (session) touch(); }, { passive: true }); });
+
+  // ------------------------------------------------------------------ lock screen
+  function lock() {
+    session = null; state = null; pin = ''; clearTimeout(idle); clearInterval(poll);
+    if (!KEY) { app.innerHTML = '<div class="lock"><h1>Check-in</h1><p class="sub">Open this from the QR code or button in your email.</p></div>'; return; }
+    app.innerHTML = '<div class="lock"><h1>Check-in</h1><div class="sub">Who is checking in?</div>' +
+      '<div class="who"><button data-w="ali">Ali</button><button data-w="addie">Addie</button></div>' +
+      '<div class="sub">Last 4 digits of your phone number</div><div class="dots" id="dots"><b></b><b></b><b></b><b></b></div>' +
+      '<div class="pad" id="pad"></div><div class="err" id="err"></div></div>';
+    app.querySelectorAll('.who button').forEach(function (b) {
+      b.classList.toggle('sel', b.dataset.w === who);
+      b.onclick = function () { who = b.dataset.w; app.querySelectorAll('.who button').forEach(function (x) { x.classList.toggle('sel', x === b); }); };
+    });
+    var pad = document.getElementById('pad');
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].forEach(function (k) {
+      var b = document.createElement('button'); b.textContent = k; if (!k) b.style.visibility = 'hidden';
+      b.onclick = function () { if (k === '⌫') pin = pin.slice(0, -1); else if (pin.length < 4) pin += k; dots(); if (pin.length === 4) tryPin(); };
+      pad.appendChild(b);
+    });
+  }
+  function dots() { var d = document.getElementById('dots'); if (d) [].forEach.call(d.children, function (x, i) { x.classList.toggle('f', i < pin.length); }); }
+  function tryPin() {
+    var p = pin; pin = '';
+    api('POST', '/unlock', { who: who, pin: p }).then(function (j) { session = j.session; touch(); load(); })
+      .catch(function (e) { dots(); var el = document.getElementById('err'); if (el) el.textContent = e.message; });
+  }
+
+  // ------------------------------------------------------------------ hub
+  function load() {
+    return api('GET', '/today').then(function (s) { state = s; render(); }).catch(function (e) { if (e.message !== 'locked') toast(e.message); });
+  }
+  function render() {
+    var s = state; clearInterval(poll);
+    var h = '<div class="top"><div><h1>Hi ' + esc(s.name) + '</h1><div class="sub">' + esc(s.today) + '</div></div><button id="lockb">🔒 Lock</button></div>';
+    h += planningCard(s) + planCard(s) + surveyCard(s) + dailyCards(s) + learnedCard(s);
+    h += '<div class="card"><h2>🎮 Game of the Day</h2><div class="muted">Throwback arcade games with 3 tries and a wager are coming next.</div></div>';
+    if (!s.survey && !s.daily.length && !s.planning.needed && s.plan && s.plan.status === 'ready') h = h.replace('</div><button id="lockb">', '<div class="done" style="margin-top:6px">✅ All caught up today</div></div><button id="lockb">');
+    app.innerHTML = h;
+    document.getElementById('lockb').onclick = lock;
+    wire();
+    if (s.plan && s.plan.status === 'planning') poll = setInterval(load, 6000);
+  }
+
+  function planningCard(s) {
+    var p = s.planning;
+    if (!p.needed) return '';
+    var carried = p.carried ? '<span class="badge">carried over</span>' : '';
+    var intro = p.autoCalendar
+      ? 'Your work calendar is read automatically. Add a screenshot only if you have another calendar (or a busy time that is not on it).'
+      : 'Take a screenshot of your work calendar for this week and add it here. Add more than one if your week does not fit on one screen.';
+    return '<div class="card" id="planning"><h2>📸 Plan this week' + carried + '</h2><div class="muted">' + intro + '</div>' +
+      '<label class="file"><input type="file" id="shot" accept="image/*" multiple><b>📷 Add calendar screenshot</b><div class="muted" id="shotmsg">' + (p.shots ? p.shots + ' added' : 'Tap to choose') + '</div></label>' +
+      '<div class="q"><div class="qt">Anything not on the calendar this week?</div><textarea id="note" placeholder="Example: Creed has a half day Friday"></textarea></div>' +
+      '<button class="btn" id="plandone">I\'m done, plan our week</button></div>';
+  }
+
+  var PLACE = { home: '🏠 At home', out: '🚗 Out' };
+  var COLORS = ['#e0446a', '#0f8b8d', '#f2a516', '#5b2a86'];
+  function planCard(s) {
+    if (!s.plan) {
+      if (!s.planning.needed && !s.planning.partnerDone) return '<div class="card"><h2>📅 This week\'s Sparks</h2><div class="muted">Spark plans as soon as ' + esc(s.partner) + ' is in too.</div><button class="btn ghost" id="plannow">Plan now without ' + esc(s.partner) + '\'s calendar</button></div>';
+      return '';
+    }
+    if (s.plan.status === 'planning') return '<div class="card"><h2>📅 This week\'s Sparks</h2><div class="muted"><span class="spin"></span>Spark is reading your calendars and planning. About a minute.</div></div>';
+    if (s.plan.status === 'failed') return '<div class="card"><h2>📅 This week\'s Sparks</h2><div class="muted">' + esc(s.plan.error) + '</div><button class="btn" id="plannow">Plan our week</button></div>';
+    var h = '<div class="card"><h2>📅 This week\'s Sparks</h2><div class="muted">Spark picks what. You can change when.</div>';
+    s.plan.items.forEach(function (i, n) {
+      var c = i.kind === 'weekend' ? '#5b2a86' : COLORS[n % 3];
+      var where = PLACE[i.place] + (i.venue ? ' · ' + esc(i.venue) : '') + (i.driveMinutes ? ' · ' + i.driveMinutes + ' min drive' : '');
+      h += '<div class="ev" style="background:' + c + (c === '#f2a516' ? ';color:#1f1a24' : '') + '" data-id="' + esc(i.id) + '">' +
+        '<div class="t">' + (i.kind === 'weekend' ? '💜 Weekend date · ' : '') + esc(i.day) + ' · ' + esc(i.time) + '</div>' +
+        '<b class="title">' + esc(i.emoji) + ' ' + esc(i.title) + '</b><div style="font-size:14px">' + where + '</div>' +
+        '<div style="font-size:14px;margin-top:6px">' + esc(i.plan) + '</div><div class="why"><b>Why:</b> ' + esc(i.why) + '</div>' +
+        '<div class="row"><button data-act="time">🔁 Change the time</button><button data-act="notfit">✋ Not a fit</button></div><div class="chips" hidden></div></div>';
+    });
+    return h + '</div>';
+  }
+
+  function qHtml(q, prefix) {
+    var id = prefix + q.id;
+    if (q.type === 'open') return '<div class="q"><div class="qt">' + esc(q.text) + '</div><textarea data-q="' + esc(q.id) + '" id="' + id + '"></textarea></div>';
+    var hint = q.type === 'rank' ? '<div class="muted">Tap in order, favorite first. Tap again to reset.</div>' : '';
+    return '<div class="q" data-q="' + esc(q.id) + '" data-type="' + q.type + '"><div class="qt">' + esc(q.text) + '</div>' + hint +
+      q.options.map(function (o) { return '<button class="opt" data-v="' + esc(o) + '">' + esc(o) + '</button>'; }).join('') + '</div>';
+  }
+  var PAGE = 4;
+  function surveyCard(s) {
+    if (!s.survey) return '';
+    var qs = s.survey.questions.slice(0, PAGE);
+    return '<div class="card" id="survey"><h2>💬 Get to know you <span class="muted">' + s.survey.answered + ' of ' + s.survey.total + ' done</span></h2>' +
+      '<div class="muted">Only you see your answers, and only until you save. Skip any you want to come back to.</div>' +
+      qs.map(function (q) { return qHtml(q, 's-'); }).join('') + '<button class="btn" id="savesurvey">Save these</button></div>';
+  }
+  function dailyCards(s) {
+    return s.daily.map(function (d) {
+      return '<div class="card daily" data-day="' + d.day + '"><h2>❓ ' + (d.carried ? esc(d.label) + '\'s questions<span class="badge">carried over</span>' : 'Today\'s 3 questions') + '</h2>' +
+        d.questions.map(function (q) { return qHtml(q, 'd-' + d.day + '-'); }).join('') + '<button class="btn alt" data-saveday="' + d.day + '">Save my answers</button></div>';
+    }).join('');
+  }
+  function learnedCard(s) {
+    if (!s.learned || !s.learned.length) return '';
+    return '<div class="card"><h2>💡 What Spark learned</h2><ul class="learn">' + s.learned.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul></div>';
+  }
+
+  // ------------------------------------------------------------------ wiring
+  function collect(root) {
+    var out = {};
+    root.querySelectorAll('.q[data-q]').forEach(function (q) {
+      var sel = [].slice.call(q.querySelectorAll('.opt.sel'));
+      if (q.dataset.type === 'rank') { if (sel.length) out[q.dataset.q] = sel.sort(function (a, b) { return a.dataset.r - b.dataset.r; }).map(function (b) { return b.dataset.v; }); }
+      else if (sel.length) out[q.dataset.q] = sel[0].dataset.v;
+    });
+    root.querySelectorAll('textarea[data-q]').forEach(function (t) { if (t.value.trim()) out[t.dataset.q] = t.value.trim(); });
+    return out;
+  }
+  function savedThen(el, msg) {
+    el.innerHTML = '<div class="done">✅ ' + msg + '</div><div class="muted" style="text-align:center;margin-top:8px">Your answers are gone from this screen.</div>';
+    setTimeout(load, 1600);
+  }
+  function wire() {
+    app.querySelectorAll('.q[data-type]').forEach(function (q) {
+      var rank = q.dataset.type === 'rank', n = 0;
+      q.querySelectorAll('.opt').forEach(function (b) {
+        b.onclick = function () {
+          if (!rank) { q.querySelectorAll('.opt').forEach(function (x) { x.classList.remove('sel'); }); b.classList.add('sel'); return; }
+          if (b.classList.contains('sel')) { n = 0; q.querySelectorAll('.opt').forEach(function (x) { x.classList.remove('sel'); x.textContent = x.dataset.v; delete x.dataset.r; }); return; }
+          n++; b.dataset.r = n; b.classList.add('sel'); b.textContent = n + '. ' + b.dataset.v;
+        };
+      });
+    });
+    var sv = document.getElementById('savesurvey');
+    if (sv) sv.onclick = function () {
+      var card = document.getElementById('survey'); var a = collect(card);
+      if (!Object.keys(a).length) return toast('Answer at least one first.');
+      sv.disabled = true;
+      api('POST', '/survey', { answers: a }).then(function (j) { savedThen(card, 'Saved ' + j.saved); }).catch(function (e) { sv.disabled = false; toast(e.message); });
+    };
+    app.querySelectorAll('[data-saveday]').forEach(function (b) {
+      b.onclick = function () {
+        var card = b.closest('.daily'); var a = collect(card);
+        if (!Object.keys(a).length) return toast('Answer at least one first.');
+        b.disabled = true;
+        api('POST', '/daily', { day: b.dataset.saveday, answers: a }).then(function () { savedThen(card, 'Saved'); }).catch(function (e) { b.disabled = false; toast(e.message); });
+      };
+    });
+    var shot = document.getElementById('shot');
+    if (shot) shot.onchange = function () { uploadAll([].slice.call(shot.files)); shot.value = ''; };
+    var pd = document.getElementById('plandone');
+    if (pd) pd.onclick = function () {
+      pd.disabled = true;
+      api('POST', '/calendar/done', { note: (document.getElementById('note') || {}).value || '' })
+        .then(function (j) { toast(j.planning ? 'Spark is planning your week now.' : 'Saved. Spark plans as soon as ' + state.partner + ' is in.'); load(); })
+        .catch(function (e) { pd.disabled = false; toast(e.message); });
+    };
+    var pn = document.getElementById('plannow');
+    if (pn) pn.onclick = function () { pn.disabled = true; api('POST', '/plan-now').then(function () { toast('Spark is planning your week now.'); load(); }).catch(function (e) { pn.disabled = false; toast(e.message); }); };
+    app.querySelectorAll('.ev[data-id]').forEach(function (ev) {
+      ev.querySelectorAll('[data-act]').forEach(function (b) {
+        b.onclick = function () {
+          var chips = ev.querySelector('.chips'); chips.hidden = false;
+          chips.innerHTML = '<div style="width:100%;font-size:13px;font-weight:700">Quick, why? This teaches Spark.</div>' + state.reasons.map(function (r) { return '<button>' + esc(r) + '</button>'; }).join('');
+          chips.querySelectorAll('button').forEach(function (c) {
+            c.onclick = function () {
+              chips.innerHTML = '<div style="font-size:14px"><span class="spin"></span>Spark is finding ' + (b.dataset.act === 'time' ? 'a new time' : 'something new') + '…</div>';
+              api('POST', '/item/' + encodeURIComponent(ev.dataset.id) + '/' + b.dataset.act, { reason: c.textContent })
+                .then(function (j) { toast(j.message); load(); }).catch(function (e) { toast(e.message); load(); });
+            };
+          });
+        };
+      });
+    });
+  }
+
+  // Shrink each screenshot so it fits the upload limit, then let Spark read it.
+  function shrink(file) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image(); var url = URL.createObjectURL(file);
+      img.onload = function () {
+        var scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        var q = 0.85, d = c.toDataURL('image/jpeg', q);
+        while (d.length > 900000 && q > 0.3) { q -= 0.15; d = c.toDataURL('image/jpeg', q); }
+        resolve(d);
+      };
+      img.onerror = function () { reject(new Error('That file is not an image.')); };
+      img.src = url;
+    });
+  }
+  function uploadAll(files) {
+    var msg = document.getElementById('shotmsg'); var total = 0, i = 0;
+    function next() {
+      if (i >= files.length) { if (msg) msg.textContent = '✅ Read ' + total + ' busy times from ' + files.length + ' screenshot' + (files.length > 1 ? 's' : ''); return; }
+      var f = files[i++]; if (msg) msg.innerHTML = '<span class="spin"></span>Reading screenshot ' + i + ' of ' + files.length + '…';
+      shrink(f).then(function (d) { return api('POST', '/calendar/image', { image: d }); })
+        .then(function (j) { total += j.blocks; next(); })
+        .catch(function (e) { toast(e.message); next(); });
+    }
+    next();
+  }
+
+  lock();
+})();
+</script>
+</body>
+</html>

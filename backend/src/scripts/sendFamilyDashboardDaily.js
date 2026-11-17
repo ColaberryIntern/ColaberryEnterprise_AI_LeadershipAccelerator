@@ -29,6 +29,7 @@ const { compileFamilyDashboardData } = require(path.resolve(__dirname, './lib/fa
 const { renderFamilyDashboardHtml } = require(path.resolve(__dirname, './lib/renderFamilyDashboardHtml'));
 const { renderFamilyDashboardEmail, renderFamilyDashboardEmailText } = require(path.resolve(__dirname, './lib/renderFamilyDashboardEmail'));
 const { leanData } = require(path.resolve(__dirname, './lib/renderFamilyDashboardSections'));
+const { compileSparkCard } = require(path.resolve(__dirname, './lib/familySpark'));
 const { compileFamilyPhotos, commitPicks } = require(path.resolve(__dirname, './lib/familyPhotoFeed'));
 const { compileSchoolNews } = require(path.resolve(__dirname, './lib/familySchoolNews'));
 const { compileFamilyWeek } = require(path.resolve(__dirname, './lib/familyCalendarFeed'));
@@ -139,6 +140,7 @@ async function run() {
       ...data.photos.map((p, i) => ({ filename: `family-photo-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
       ...(data.video ? [{ filename: `family-video-${data.video.takenAt.slice(0, 10)}.gif`, content: data.video.buf, contentType: 'image/gif', cid: data.video.cid, contentDisposition: 'inline' }] : []),
       ...data.throwbacks.map((p, i) => ({ filename: `throwback-${p.takenAt.slice(0, 10)}-${i + 1}.jpg`, content: p.buf, contentType: 'image/jpeg', cid: p.cid, contentDisposition: 'inline' })),
+      ...(data.spark ? [{ filename: 'check-in-qr.png', content: data.spark.buf, contentType: 'image/png', cid: data.spark.cid, contentDisposition: 'inline' }] : []),
     ],
     vaultAttachments: [{
       filename: `family-dashboard-${TODAY}.html`,
@@ -205,6 +207,12 @@ async function compileNewsletterFeeds(data) {
   } catch (e) {
     console.error(`[Family Dashboard] photo feed failed (${e.name}): ${e.message}`);
     data.sources.push({ name: 'Phone camera roll (OneDrive)', status: 'broken', detail: e.message.slice(0, 120) });
+  }
+  data.spark = null;
+  try {
+    data.spark = await compileSparkCard(); // null when Spark is not set up on this host
+  } catch (e) {
+    console.error(`[Family Dashboard] Spark card failed (${e.name}): ${e.message}`); // the email goes without it
   }
   data.kpis.sourcesConnected = data.sources.filter((s) => s.status === 'live').length;
   data.kpis.sourcesTotal = data.sources.length;
