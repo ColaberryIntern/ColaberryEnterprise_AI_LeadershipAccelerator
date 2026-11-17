@@ -210,7 +210,7 @@ export async function readScreenshot(p: Person, dataUrl: string): Promise<{ bloc
   const out = await chat([
     { role: 'system', content: 'You read calendar screenshots. Return only JSON.' },
     { role: 'user', content: [
-      { type: 'text', text: `This is a screenshot of a person's calendar for the week of ${prettyDay(week)}. The dates this week are: ${dates}. List every block of time that is busy (meetings, appointments, any event), using the dates shown in the screenshot. Use 24-hour local times. Ignore all-day banners. Reply as {"readable": true|false, "busy": [{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"}], "note": "one short sentence on what you saw"}.` },
+      { type: 'text', text: `This is a screenshot, or a phone photo of a computer screen, showing a person's calendar for the week of ${prettyDay(week)}. The dates this week are: ${dates}. List every block of time that is busy (meetings, appointments, any event), using the dates shown in the screenshot. Use 24-hour local times. Ignore all-day banners. A photo may be tilted, glared or partly cut off: read what you can and never guess a block you cannot see. Reply as {"readable": true|false, "busy": [{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"}], "note": "one short sentence on what you saw"}.` },
       { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
     ] },
   ], 0);

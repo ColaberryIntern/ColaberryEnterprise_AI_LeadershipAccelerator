@@ -54,6 +54,8 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
 .learn li{margin:4px 0;font-size:14px}
 .file{display:block;border:3px dashed var(--line);border-radius:14px;padding:18px;text-align:center;cursor:pointer;margin-top:10px}
 .file input{display:none}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick .file{margin-top:10px;padding:14px 8px}
 </style>
 </head>
 <body>
@@ -131,9 +133,11 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
     var carried = p.carried ? '<span class="badge">carried over</span>' : '';
     var intro = p.autoCalendar
       ? 'Your work calendar is read automatically. Add a screenshot only if you have another calendar (or a busy time that is not on it).'
-      : 'Take a screenshot of your work calendar for this week and add it here. Add more than one if your week does not fit on one screen.';
+      : 'Take a picture of your work calendar for this week (point your camera at your computer screen), or add a screenshot. Add more than one if your week does not fit on one screen.';
     return '<div class="card" id="planning"><h2>📸 Plan this week' + carried + '</h2><div class="muted">' + intro + '</div>' +
-      '<label class="file"><input type="file" id="shot" accept="image/*" multiple><b>📷 Add calendar screenshot</b><div class="muted" id="shotmsg">' + (p.shots ? p.shots + ' added' : 'Tap to choose') + '</div></label>' +
+      '<div class="pick"><label class="file"><input type="file" id="cam" accept="image/*" capture="environment"><b>📷 Take a photo</b><div class="muted">Opens your camera</div></label>' +
+      '<label class="file"><input type="file" id="shot" accept="image/*" multiple><b>🖼️ Choose a screenshot</b><div class="muted">From your photos</div></label></div>' +
+      '<div class="muted" id="shotmsg" style="text-align:center;margin-top:8px">' + (p.shots ? '✅ ' + p.shots + ' added so far. Add more, or tap I\'m done.' : '') + '</div>' +
       '<div class="q"><div class="qt">Anything not on the calendar this week?</div><textarea id="note" placeholder="Example: Creed has a half day Friday"></textarea></div>' +
       '<button class="btn" id="plandone">I\'m done, plan our week</button></div>';
   }
@@ -227,8 +231,10 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
         api('POST', '/daily', { day: b.dataset.saveday, answers: a }).then(function () { savedThen(card, 'Saved'); }).catch(function (e) { b.disabled = false; toast(e.message); });
       };
     });
-    var shot = document.getElementById('shot');
-    if (shot) shot.onchange = function () { uploadAll([].slice.call(shot.files)); shot.value = ''; };
+    ['shot', 'cam'].forEach(function (id) {
+      var inp = document.getElementById(id);
+      if (inp) inp.onchange = function () { uploadAll([].slice.call(inp.files)); inp.value = ''; };
+    });
     var pd = document.getElementById('plandone');
     if (pd) pd.onclick = function () {
       pd.disabled = true;
@@ -274,7 +280,10 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
   function uploadAll(files) {
     var msg = document.getElementById('shotmsg'); var total = 0, i = 0;
     function next() {
-      if (i >= files.length) { if (msg) msg.textContent = '✅ Read ' + total + ' busy times from ' + files.length + ' screenshot' + (files.length > 1 ? 's' : ''); return; }
+      if (i >= files.length) {
+        if (msg) msg.textContent = total ? '✅ Read ' + total + ' busy times. Add another picture, or tap I\'m done.' : '⚠️ No meetings could be read. Try a closer, straighter picture, or tap I\'m done if your week is open.';
+        return;
+      }
       var f = files[i++]; if (msg) msg.innerHTML = '<span class="spin"></span>Reading screenshot ' + i + ' of ' + files.length + '…';
       shrink(f).then(function (d) { return api('POST', '/calendar/image', { image: d }); })
         .then(function (j) { total += j.blocks; next(); })
