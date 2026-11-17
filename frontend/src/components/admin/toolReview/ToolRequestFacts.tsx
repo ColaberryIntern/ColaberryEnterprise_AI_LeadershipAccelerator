@@ -30,9 +30,16 @@ const LABELS: Record<string, string> = {
   capability_id: 'Capability',
   task_unblocked: 'Task it unblocks',
   manual_today: 'Done by hand today',
+  acts_on_output: 'Who acts on the output',
+  judged_threshold: 'The number it is judged by',
+  judged_measured_from: 'Measured from',
+  tried_in_product: 'Tried in the app',
+  missing_from_product: 'What the app cannot do',
   needed_by: 'Needed by',
   run_frequency: 'How often it runs',
   touches: 'Systems it touches',
+  environment: 'Environment',
+  read_datasets: 'Datasets it reads',
   inputs: 'Inputs',
   writes: 'Writes anywhere',
   side_effects: 'Side effects',
@@ -43,18 +50,50 @@ const LABELS: Record<string, string> = {
 type Group = { key: string; heading: string; question: string; fields: string[] };
 
 /**
- * The six groups, in the order the contract names them: *"who, what, what for, when, where and
- * how."* The question under each heading is there because "WHERE" alone does not tell an
- * approver what they are being asked to judge.
+ * The groups, in the order the contract names them: *"who, what, what for, when, where and how"* —
+ * plus the two the contract gained afterwards. The question under each heading is there because
+ * "WHERE" alone does not tell an approver what they are being asked to judge.
+ *
+ * ## `worth_building` IS FIRST, which is the one ordering decision in this file
+ *
+ * AF11.7 added three required fields that answer **whether this should be built at all**: who acts
+ * on the output, what number judges it, and what the product cannot already do. Those decide the
+ * request before the blast radius matters, so reading them last would be reading them after the
+ * decision had effectively been made. Ali, 16 Nov 2026: *"I need to approve these functionalities
+ * because I'm seeing that people are proposing things we don't even need."* This group is that
+ * sentence's place on the screen.
+ *
+ * ## `which_data` exists because two REQUIRED fields were invisible here
+ *
+ * `environment` and `read_datasets` have been required by the API since the dataset-scope change
+ * and appeared in no group, so the console could not show them and the approver was deciding a
+ * production grant without seeing that it was one. Found while adding the AF11.7 group: the panel
+ * is `GROUPS`-driven, so a field absent from this list is absent from the page, silently and
+ * without a failing test.
  */
 export const GROUPS: Group[] = [
+  { key: 'worth_building', heading: 'Worth building', question: 'Who reads it, what number judges it, and what the app cannot already do', fields: ['acts_on_output', 'judged_threshold', 'judged_measured_from', 'tried_in_product', 'missing_from_product'] },
   { key: 'who', heading: 'Who', question: 'Which agent is asking, in whose domain', fields: ['agent_id', 'domain_key'] },
   { key: 'what', heading: 'What', question: 'The tool, and what it would read and produce', fields: ['tool_name', 'purpose', 'reads', 'produces'] },
   { key: 'what_for', heading: 'What for', question: 'The capability it serves, and what is manual today', fields: ['capability_id', 'task_unblocked', 'manual_today'] },
   { key: 'when', heading: 'When', question: 'By when, and how often it would run', fields: ['needed_by', 'run_frequency'] },
   { key: 'where', heading: 'Where', question: 'The blast radius — this is the thing being approved', fields: ['touches'] },
+  { key: 'which_data', heading: 'Which data', question: 'Sandbox or production, and which datasets a grant would be written against', fields: ['environment', 'read_datasets'] },
   { key: 'how', heading: 'How', question: 'What it writes, what it changes, and whether that can be undone', fields: ['inputs', 'writes', 'side_effects', 'reversible', 'reversibility_note'] },
 ];
+
+/**
+ * The three `tried_in_product` states as a sentence rather than a token.
+ *
+ * `not_built` is the only one a stored request can carry, so in practice this renders one string.
+ * The other two are here because the value comes off the wire: a request that somehow carries one
+ * should read as the anomaly it is, not as a raw enum the reader has to decode.
+ */
+const PRODUCT_STATE_WORDS: Record<string, string> = {
+  not_built: 'The app cannot do this',
+  used_by_hand: 'Already in the app, and used: this should be a grant',
+  exists_unused: 'Already in the app, not yet tried',
+};
 
 function Value({ field, detail }: { field: string; detail: ToolRequestDetail }) {
   const raw = (detail as unknown as Record<string, unknown>)[field];
@@ -111,8 +150,27 @@ function Value({ field, detail }: { field: string; detail: ToolRequestDetail }) 
     );
   }
 
+  // `tried_in_product` reads as a sentence, and the two states that should never be stored carry a
+  // colour. A request on this screen saying the app can already do the thing means the gate was
+  // bypassed, and that is worth noticing rather than scanning past.
+  if (field === 'tried_in_product') {
+    const word = PRODUCT_STATE_WORDS[String(raw)] ?? String(raw);
+    const wrongPlace = String(raw) === 'used_by_hand' || String(raw) === 'exists_unused';
+    return wrongPlace
+      ? <span className="badge bg-warning text-dark">{word}</span>
+      : <>{word}</>;
+  }
+
+  // The environment is the input to Ali's grant-width rule, so `production` is not a neutral word
+  // on this screen: it is the difference between a wide grant and a narrow one.
+  if (field === 'environment') {
+    return String(raw) === 'production'
+      ? <span className="badge bg-warning text-dark">production</span>
+      : <span className="badge bg-light text-dark">sandbox</span>;
+  }
+
   const monospace = field === 'agent_id' || field === 'domain_key'
-    || field === 'capability_id' || field === 'tool_name';
+    || field === 'capability_id' || field === 'tool_name' || field === 'acts_on_output';
   return monospace ? <code className="small">{String(raw)}</code> : <>{String(raw)}</>;
 }
 

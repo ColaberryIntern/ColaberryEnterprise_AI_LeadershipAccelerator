@@ -79,12 +79,67 @@
  *
  * Both tables this change touches were EMPTY in production when it was written — zero tool request
  * details, zero grants — so a newly required field refuses no request anybody has filed.
+ *
+ * ## AF11.7 — the three questions this contract did not ask, and the one-tool rule
+ *
+ * Everything above answers *who, what, what for, when, where and how*. It does not answer **whether
+ * the thing should be built at all**, and that is the gap Ali named on 16 Nov 2026, looking at the
+ * design-token drift capability sitting live on seven builders' boards:
+ *
+ * > *"what good is judging 50 colors and why are we judging them - are we replacing them? What's
+ * > the goal here - it's not clearly defined... That sounds like a waste of time. Also I need to
+ * > approve these functionalities because I'm seeing that people are proposing things we don't even
+ * > need."*
+ *
+ * Measured against main on 16 Nov 2026, that capability would list 1,571 distinct colours outside
+ * the approved palette across 3,088 styled files. It passed every field above. It had no named
+ * reader, no threshold, and a product feature nobody had tried. Three fields close that, and each
+ * one is here because its absence is what let that capability through:
+ *
+ *   1. **`acts_on_output`** — the PERSON, resolved against a roster the caller supplies.
+ *      `task_unblocked` already names the work, and work can sit unowned forever. See
+ *      `actorRoster.ts` for why free text and roles are both refused.
+ *
+ *   2. **`judged_threshold` and `judged_measured_from`** — a number, and the thing the system
+ *      ALREADY records that will produce it. Ali's worked example for the landing-page capability:
+ *      *"a draft is good if Sohail publishes it with fewer than three edits, target 7 of the next
+ *      10"* — measurable from the revision count `landingPageRoutes.ts` already stores.
+ *
+ *   3. **`tried_in_product`** — has the builder done this by hand, in the product? Three states, and
+ *      the state decides the PATH rather than annotating it. Only `not_built` is a build request;
+ *      the other two are refused here with the route they belong on.
+ *
+ * ### Why `tried_in_product` refuses rather than records
+ *
+ * Sarbjit's "draft a landing page from a brief" is the worked case and it is `used_by_hand`:
+ * `backend/src/routes/admin/landingPageRoutes.ts` already exposes eight endpoints — create,
+ * suggest-name, revise, patch, preview, publish, unpublish, list. **AF11.2's duplicate check does
+ * not catch it**, because that check compares a request against REGISTERED TOOLS and this
+ * capability exists as a product feature no agent has been granted. So the one check that looks
+ * like it would have caught the most expensive mistake in the request path — paying to build
+ * something we already own — structurally cannot.
+ *
+ * A field that merely recorded the answer would leave the routing to whoever read it. Refusing
+ * means a request for a feature that exists cannot reach the build queue at all, and the refusal
+ * carries the route: AF11.4's assign-existing-tool path for a grant, or the product itself.
+ *
+ * ### The one-tool rule is a RELEASE rule, not a design opinion
+ *
+ * Ali, 16 Nov 2026: *"The ones early just be one tool task and then after we have a good amount of
+ * tools, then we can have task that can use multiple tools."* One job, one judgement, one grant to
+ * unpick if it goes wrong. Several ENDPOINTS of one tool are fine and always were — what is refused
+ * is a name that enumerates two tools. The detector is deliberately crude and its boundary is
+ * documented at `namesMoreThanOneTool` below, because the catalog's own vocabulary is snake_case
+ * (`read_learner_context`, `flag_curriculum_content_gaps`) and a separator with SPACES around it is
+ * not part of it.
  */
 
 import {
   TOOL_ENVIRONMENTS,
+  TOOL_PRODUCT_STATES,
   TOOL_RUN_FREQUENCIES,
   type ToolEnvironment,
+  type ToolProductState,
   type ToolRunFrequency,
 } from '../../db/ensureAgentDomainToolRequestSchema';
 
@@ -107,9 +162,24 @@ export type ToolRequestRefusal =
   // WHAT
   | 'tool_name_missing'
   | 'purpose_missing'
+  | 'more_than_one_tool'
   | 'reads_undeclared'
   | 'produces_undeclared'
   | 'reads_and_produces_both_empty'
+  // WHO ACTS ON IT — AF11.7, field 1
+  | 'acts_on_output_missing'
+  | 'actor_roster_absent'
+  | 'acts_on_output_not_a_person'
+  // HOW IT WILL BE JUDGED — AF11.7, field 2
+  | 'judged_threshold_missing'
+  | 'judged_threshold_has_no_number'
+  | 'judged_measured_from_missing'
+  // ALREADY DONE BY HAND — AF11.7, field 3. The last two are ROUTES, not faults.
+  | 'tried_in_product_missing'
+  | 'tried_in_product_unknown'
+  | 'feature_exists_request_a_grant'
+  | 'feature_exists_use_it_first'
+  | 'missing_from_product_missing'
   // WHICH DATA
   | 'read_datasets_undeclared'
   | 'dataset_roster_absent'
@@ -153,6 +223,13 @@ export interface ToolRequestDetailInput {
   readonly capability_id?: string | null;
   readonly task_unblocked?: string | null;
   readonly manual_today?: string | null;
+  // AF11.7. `acts_on_output` is an EMAIL, which is the identity currency every other table in this
+  // subtree already uses. A second spelling of a person is a second thing to keep in agreement.
+  readonly acts_on_output?: string | null;
+  readonly judged_threshold?: string | null;
+  readonly judged_measured_from?: string | null;
+  readonly tried_in_product?: string | null;
+  readonly missing_from_product?: string | null;
   readonly needed_by?: string | null;
   readonly run_frequency?: string | null;
   readonly touches?: ReadonlyArray<string>;
@@ -183,6 +260,21 @@ export interface ToolRequestDetail {
   readonly capability_id: string;
   readonly task_unblocked: string;
   readonly manual_today: string;
+  /**
+   * AF11.7. The email of the person who will act on this tool's output, in the ROSTER's spelling
+   * rather than the one that was typed — so the approver reads a record rather than a guess at one.
+   */
+  readonly acts_on_output: string;
+  readonly judged_threshold: string;
+  readonly judged_measured_from: string;
+  /**
+   * Always `not_built` on an accepted request. The other two states are real answers and the gate
+   * refuses them with the route they belong on, so a request that reaches storage has asserted that
+   * the product cannot do this yet. The enum keeps all three because the GATE has to recognise all
+   * three in order to route them.
+   */
+  readonly tried_in_product: ToolProductState;
+  readonly missing_from_product: string;
   readonly needed_by: string;
   readonly run_frequency: ToolRunFrequency;
   readonly touches: ReadonlyArray<string>;
@@ -240,6 +332,15 @@ export interface GateToolRequestArgs {
    * request for a tool that reads no database is never blocked by the catalog being unavailable.
    */
   readonly knownDatasets: ReadonlyArray<string>;
+  /**
+   * AF11.7. Emails from `actorRoster.loadActorRoster` — 50 `admin_users` plus 37 `org_members` in
+   * production on 16 Nov 2026.
+   *
+   * Empty is `actor_roster_absent` and refuses, the position all four rosters take here. Unlike
+   * `knownDatasets` this roster is consulted WHENEVER a name is given, because every request must
+   * name somebody: there is no honest version of a tool whose output nobody reads.
+   */
+  readonly knownActorEmails: ReadonlyArray<string>;
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -252,6 +353,86 @@ function isCalendarDay(v: string): boolean {
   if (!ISO_DAY.test(v)) return false;
   const parsed = new Date(`${v}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === v;
+}
+
+/**
+ * Number words, so a threshold written the way people write it is not refused.
+ *
+ * Ali's own worked example is *"fewer than three edits, target 7 of the next 10"* — one quantity
+ * spelled and two in digits. A digits-only check would have refused the first half of the sentence
+ * that defines what this field is for.
+ *
+ * `all`, `every` and `always` are DELIBERATELY ABSENT. They are quantifiers, not quantities, and
+ * including them would wave through *"accurate all of the time"* — which is the shape of the
+ * non-answer this rule exists to catch, wearing a number word.
+ */
+const NUMBER_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'fifteen', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy',
+  'eighty', 'ninety', 'hundred', 'thousand', 'half', 'none',
+] as const;
+
+/**
+ * Does this read as a threshold rather than an adjective?
+ *
+ * ## What this check actually proves, stated rather than implied
+ *
+ * It proves a QUANTITY is present and that the sentence says more than the quantity. That is
+ * NECESSARY and it is not SUFFICIENT: *"it reads 5 tables"* contains a number and is not a
+ * threshold, and no regex is going to tell the difference. The claim this function makes is the
+ * narrow one, and the approver still reads the sentence.
+ *
+ * Why that is worth shipping anyway: the failure it closes is the one that actually happened.
+ * *"The output is accurate"* is what a field like this collects when nothing stops it, and it is
+ * what the design-token capability offered — a sentence that cannot be wrong, which is the same as
+ * a sentence that cannot be checked. A field that refuses every answer containing no number
+ * refuses that whole class, and the residue is a wrong threshold rather than no threshold, which is
+ * a thing a reader can argue with.
+ *
+ * The three-word floor is what stops `"7"` and `"10%"` passing. A bare number names a quantity
+ * without naming what is counted, so it is the same non-answer in the opposite direction.
+ */
+export function readsAsAThreshold(value: string): boolean {
+  const v = value.trim();
+  if (v.length === 0) return false;
+  if (v.split(/\s+/).filter((w) => w.length > 0).length < 3) return false;
+  if (/\d/.test(v)) return true;
+  const words = v.toLowerCase().match(/[a-z]+/g) ?? [];
+  return words.some((w) => (NUMBER_WORDS as ReadonlyArray<string>).includes(w));
+}
+
+/**
+ * Does this name more than one tool?
+ *
+ * ## The boundary, which is the whole design of this function
+ *
+ * Every separator below requires SPACES around it, or is a punctuation mark the catalog's vocabulary
+ * never uses. The catalog is snake_case verb-object — `read_learner_context`,
+ * `flag_curriculum_content_gaps`, `close_workforce_tickets_on_recovery` — so:
+ *
+ *   - `search_and_replace` PASSES. The `and` is inside an identifier, not between two names.
+ *   - `"draft a page and publish it"` is REFUSED. Two verbs, two tools, one field.
+ *   - `"create, revise, publish"` is REFUSED on the comma before the words matter.
+ *
+ * ## Why a crude detector is the right call here, and what it costs
+ *
+ * This is a RELEASE rule with a one-line fix, not a correctness rule. The honest failure mode is a
+ * false positive on a legitimate single-tool name containing a spaced `and` — *"read and write the
+ * feed"* would be refused, and arguably that is one tool. The cost of that is a rename; the cost of
+ * a false negative is a multi-tool capability built in a release that cannot grant or revoke it as
+ * one thing. The refusal sentence therefore says explicitly that several ENDPOINTS of one tool are
+ * fine, so somebody who hit the false positive knows to rename rather than to split their request.
+ *
+ * Applied to `tool_name` ONLY, never to `purpose`. A purpose is prose and is supposed to mention
+ * the other things a tool sits next to.
+ */
+export function namesMoreThanOneTool(toolName: string): boolean {
+  const n = toolName.trim();
+  if (n.length === 0) return false;
+  // Punctuation that enumerates. None of these appear in a catalog tool name.
+  if (/[,;/+&]/.test(n)) return true;
+  // Conjunctions, only when they stand as their own word.
+  return /\s(and|plus|then|also|as\s+well\s+as)\s/i.test(n);
 }
 
 /**
@@ -285,7 +466,19 @@ export function gateToolRequest(args: GateToolRequestArgs): ToolRequestIssue[] {
   }
 
   // WHAT --------------------------------------------------------------------------------------
-  if (!text(d.tool_name)) add('tool_name_missing', 'A tool request has to name the tool.');
+  const toolName = text(d.tool_name);
+  if (!toolName) {
+    add('tool_name_missing', 'A tool request has to name the tool.');
+  } else if (namesMoreThanOneTool(toolName)) {
+    // THIS RELEASE ONLY, and the sentence says so, because a rule with no reason reads as a bug.
+    add(
+      'more_than_one_tool',
+      'Name one tool. This release builds one tool per capability, so that a grant can be given '
+      + 'or taken back as one thing. Several endpoints of the SAME tool are fine. If that is what '
+      + 'this is, give it a single name. A second tool goes on its own request, and both can be '
+      + 'open at once.',
+    );
+  }
   if (!text(d.purpose)) {
     add('purpose_missing', 'Say in one sentence what this tool is for.');
   }
@@ -353,6 +546,101 @@ export function gateToolRequest(args: GateToolRequestArgs): ToolRequestIssue[] {
   }
   if (!text(d.manual_today)) {
     add('manual_today_missing', 'Say what you do by hand today instead of this tool.');
+  }
+
+  // WHO ACTS ON IT — AF11.7, field 1. The question that was never asked ------------------------
+  //
+  // Judged here, beside `task_unblocked`, because the two are the pair that is easy to confuse:
+  // one names the work, the other names the human. A reader who has just answered the first is in
+  // the right frame to notice they have not answered the second.
+  const actsOn = text(d.acts_on_output);
+  if (!actsOn) {
+    add(
+      'acts_on_output_missing',
+      'Name the person who will act on what this tool produces. '
+      + 'Not a team and not a role, but a person, because a list nobody reads is a list nobody needed.',
+    );
+  } else if (args.knownActorEmails.length === 0) {
+    add(
+      'actor_roster_absent',
+      'We could not read the list of people, so we could not check that name. '
+      + 'Nothing is wrong with your request; try again shortly.',
+    );
+  } else if (!args.knownActorEmails.some((e) => e.toLowerCase() === actsOn.toLowerCase())) {
+    add(
+      'acts_on_output_not_a_person',
+      `We have no record of ${actsOn}. Pick the person from the list rather than typing them, `
+      + 'so the name is somebody we can actually reach.',
+    );
+  }
+
+  // HOW IT WILL BE JUDGED — AF11.7, field 2 ---------------------------------------------------
+  const threshold = text(d.judged_threshold);
+  if (!threshold) {
+    add(
+      'judged_threshold_missing',
+      'Say what number would make this tool a success. '
+      + 'For example: "a draft is good if it publishes with fewer than three edits, '
+      + '7 of the next 10 times."',
+    );
+  } else if (!readsAsAThreshold(threshold)) {
+    add(
+      'judged_threshold_has_no_number',
+      'That has no number in it, so nobody could ever say whether it was met. '
+      + '"The output is accurate" is not a threshold. Give a count, a rate or a share, '
+      + 'and say what it counts.',
+    );
+  }
+  if (!text(d.judged_measured_from)) {
+    add(
+      'judged_measured_from_missing',
+      'Say what the system already records that would produce that number. '
+      + 'If nothing records it today, say that, because a threshold nobody can measure is worth knowing '
+      + 'about before the tool is built, not after.',
+    );
+  }
+
+  // ALREADY DONE BY HAND — AF11.7, field 3. The state decides the PATH -------------------------
+  //
+  // The two "feature exists" answers are refusals rather than annotations, and the refusal carries
+  // the route. See the header for why: AF11.2's duplicate check compares against REGISTERED TOOLS,
+  // so a capability the product already has but no agent has been granted passes it untouched.
+  // That is the most expensive mistake available in this path — paying to build something we own —
+  // and nothing else in the contract can see it.
+  const tried = text(d.tried_in_product);
+  if (!tried) {
+    add(
+      'tried_in_product_missing',
+      'Say whether you have already done this by hand in the app: '
+      + 'you have used the feature, the feature is there and you have not, or it does not exist.',
+    );
+  } else if (!TOOL_PRODUCT_STATES.some((s) => s === tried)) {
+    add(
+      'tried_in_product_unknown',
+      `Whether you have done this by hand has to be one of: ${TOOL_PRODUCT_STATES.join(', ')}.`,
+    );
+  } else if (tried === 'used_by_hand') {
+    add(
+      'feature_exists_request_a_grant',
+      'You have said the app can already do this and you have used it. Then nothing needs '
+      + 'building: the agent needs permission to use what is there. Ask for the grant instead, '
+      + 'which is a different and much shorter request.',
+    );
+  } else if (tried === 'exists_unused') {
+    add(
+      'feature_exists_use_it_first',
+      'You have said the app can already do this but you have not used it yet. Go and do the job '
+      + 'by hand first. Either it works the way you need, and this is a grant rather than a build, '
+      + 'or it does not, and you will be able to say exactly what is missing, which is the part '
+      + 'that makes a build request worth approving.',
+    );
+  } else if (!text(d.missing_from_product)) {
+    // Reached only on `not_built`, which is the one state that can be filed.
+    add(
+      'missing_from_product_missing',
+      'Say what the app cannot do today. This is the whole case for building something, '
+      + 'and it is what the person building it works from.',
+    );
   }
 
   // WHEN --------------------------------------------------------------------------------------
@@ -448,6 +736,14 @@ export function acceptToolRequest(args: GateToolRequestArgs): AcceptedToolReques
 
   const d = args.detail;
   const writes = d.writes === true;
+  // AF11.7. The ROSTER's spelling, not the typed one. The gate compared case-insensitively, so
+  // `Sohail@Colaberry.com` passed; storing that would put a spelling on the record that no people
+  // row carries, and the next reader would have two spellings of one person to reconcile. The
+  // lookup cannot miss here, because the gate already refused every value that is not on the
+  // roster — `?? text(...)` is there so a future caller that reorders the two cannot write a blank.
+  const typedActor = text(d.acts_on_output);
+  const rosterActor = args.knownActorEmails
+    .find((e) => e.toLowerCase() === typedActor.toLowerCase()) ?? typedActor;
   return {
     ok: true,
     detail: {
@@ -461,6 +757,13 @@ export function acceptToolRequest(args: GateToolRequestArgs): AcceptedToolReques
       capability_id: text(d.capability_id),
       task_unblocked: text(d.task_unblocked),
       manual_today: text(d.manual_today),
+      acts_on_output: rosterActor,
+      judged_threshold: text(d.judged_threshold),
+      judged_measured_from: text(d.judged_measured_from),
+      // Only `not_built` survives the gate, so the cast asserts what the gate established rather
+      // than guessing. The two other states are refusals above, with their routes.
+      tried_in_product: text(d.tried_in_product) as ToolProductState,
+      missing_from_product: text(d.missing_from_product),
       needed_by: text(d.needed_by),
       run_frequency: text(d.run_frequency) as ToolRunFrequency,
       touches: list(d.touches) ?? [],

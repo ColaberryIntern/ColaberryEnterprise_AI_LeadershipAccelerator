@@ -70,6 +70,15 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   `${T}.capability_id`,
   `${T}.task_unblocked`,
   `${T}.manual_today`,
+  // WHETHER IT SHOULD BE BUILT AT ALL — AF11.7. The three questions the first six groups do not
+  // ask: who reads the output, what number decides it worked, and whether the product can already
+  // do this. See `services/agentDomain/toolRequestContract.ts` for the capability that passed all
+  // eighteen fields above and should never have been started.
+  `${T}.acts_on_output`,
+  `${T}.judged_threshold`,
+  `${T}.judged_measured_from`,
+  `${T}.tried_in_product`,
+  `${T}.missing_from_product`,
   // WHEN
   `${T}.needed_by`,
   `${T}.run_frequency`,
@@ -121,6 +130,29 @@ export type ToolRunFrequency = typeof TOOL_RUN_FREQUENCIES[number];
 export const TOOL_ENVIRONMENTS = ['sandbox', 'production'] as const;
 export type ToolEnvironment = typeof TOOL_ENVIRONMENTS[number];
 
+/**
+ * HAS THE BUILDER ALREADY DONE THIS BY HAND, IN THE PRODUCT — AF11.7.
+ *
+ * Three states, and the state decides the PATH rather than annotating it. Ali, 16 Nov 2026, on
+ * what has to happen before a request is written: *"1st sarbjit would need to create a landing page
+ * in the app to see how it works and make sure she can build it how she wants. If that
+ * functionality does not exists, she has to put the request in."*
+ *
+ *   - `used_by_hand`   the feature is there and the builder has used it. Nothing to build; the
+ *                      agent needs a GRANT. Refused here, routed to the assign-existing-tool path.
+ *   - `exists_unused`  the feature is there and the builder has not tried it. Refused, and sent to
+ *                      go and use it, because the answer to "is this worth building" is downstream
+ *                      of actually trying the thing that exists.
+ *   - `not_built`      the product cannot do this. The only state that is a build request.
+ *
+ * Why an ENUM and not a boolean: "have you tried it" and "does it exist" are two questions, and a
+ * single boolean would collapse the two refusals into one, losing the route that makes each
+ * refusal actionable. The states are also the reason `missing_from_product` can be `NOT NULL` —
+ * see `chk_adtr_build_request_is_unbuilt` below.
+ */
+export const TOOL_PRODUCT_STATES = ['used_by_hand', 'exists_unused', 'not_built'] as const;
+export type ToolProductState = typeof TOOL_PRODUCT_STATES[number];
+
 export const REQUIRED_INDEXES: ReadonlyArray<string> = [
   'idx_adtr_tool_name',
   'idx_adtr_capability_id',
@@ -138,6 +170,7 @@ export const REQUIRED_INDEXES: ReadonlyArray<string> = [
 export const REQUIRED_CHECKS: ReadonlyArray<string> = [
   'chk_adtr_write_declares_effects',
   'chk_adtr_environment_known',
+  'chk_adtr_build_request_is_unbuilt',
 ];
 
 /**
@@ -167,6 +200,11 @@ const STATEMENTS: ReadonlyArray<string> = [
      capability_id TEXT NOT NULL,
      task_unblocked TEXT NOT NULL,
      manual_today TEXT NOT NULL,
+     acts_on_output TEXT NOT NULL,
+     judged_threshold TEXT NOT NULL,
+     judged_measured_from TEXT NOT NULL,
+     tried_in_product TEXT NOT NULL,
+     missing_from_product TEXT NOT NULL,
      needed_by DATE NOT NULL,
      run_frequency TEXT NOT NULL,
      touches JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -183,6 +221,9 @@ const STATEMENTS: ReadonlyArray<string> = [
      ),
      CONSTRAINT chk_adtr_environment_known CHECK (
        environment IN ('sandbox', 'production')
+     ),
+     CONSTRAINT chk_adtr_build_request_is_unbuilt CHECK (
+       tried_in_product = 'not_built'
      )
    )`,
   // THREE STATEMENTS, not a column in the CREATE above, because `CREATE TABLE IF NOT EXISTS` is a
@@ -211,6 +252,42 @@ const STATEMENTS: ReadonlyArray<string> = [
      ADD COLUMN IF NOT EXISTS read_datasets JSONB NOT NULL DEFAULT '[]'::jsonb`,
   `ALTER TABLE agent_domain_tool_request_details
      ALTER COLUMN environment SET NOT NULL`,
+  // AF11.7 — the five columns of the "should this be built at all" group, added the same way
+  // `environment` was and for the same measured reason: `CREATE TABLE IF NOT EXISTS` above is a
+  // NO-OP against the table already sitting in production, so a column that exists only in the
+  // CREATE would ship green and be absent on every environment that has ever run this file.
+  //
+  // NO DEFAULTS, deliberately, on any of the five. A default is the easy way to make an ALTER
+  // succeed on a populated table and the wrong one here: every pre-existing row would silently
+  // claim an answer nobody gave, and a request that reads as answered is worse than one that
+  // reads as blank. The whole point of this group is that the question WAS asked.
+  //
+  // Measured in production on 16 Nov 2026: `agent_domain_tool_request_details` holds ZERO rows,
+  // and `agent_domain_change_requests` holds one row of kind `change` and none of kind `tool`. So
+  // every `SET NOT NULL` below applies cleanly and no filed request is refused retroactively. If
+  // that is ever untrue, `SET NOT NULL` fails, the loop logs it, and
+  // `assertAgentDomainToolRequestSchema` fails the boot BY NAME — the loud failure this file is
+  // built around, not an outage: the backend survives a failed assert.
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS acts_on_output TEXT`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS judged_threshold TEXT`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS judged_measured_from TEXT`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS tried_in_product TEXT`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS missing_from_product TEXT`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN acts_on_output SET NOT NULL`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN judged_threshold SET NOT NULL`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN judged_measured_from SET NOT NULL`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN tried_in_product SET NOT NULL`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN missing_from_product SET NOT NULL`,
   // Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, so the existence check is explicit. A plain
   // ADD would throw `duplicate_object` on every boot after the first and fill the logs with a
   // failure that is actually the success case.
@@ -222,6 +299,36 @@ const STATEMENTS: ReadonlyArray<string> = [
        ALTER TABLE agent_domain_tool_request_details
          ADD CONSTRAINT chk_adtr_environment_known
          CHECK (environment IN ('sandbox', 'production'));
+     END IF;
+   END $$`,
+  // AF11.7 — THE STORAGE HALF OF THE ROUTING RULE, which is the one constraint in this file that
+  // is narrower than its enum.
+  //
+  // `TOOL_PRODUCT_STATES` carries three values because the GATE has to recognise all three in order
+  // to route them. This table can hold only `not_built`, because this table is the detail of a
+  // BUILD request: a row saying "the product already does this" would be a build request for
+  // something we already own, which is precisely the thing Ali said was happening
+  // (*"people are proposing things we don't even need"*).
+  //
+  // `toolRequestContract.ts` refuses the other two states with a sentence and a route, so the
+  // person filing gets help rather than a constraint violation. This makes it IMPOSSIBLE for a
+  // future caller that skips the contract — the failure mode `chk_adtr_write_declares_effects` and
+  // `chk_adtr_environment_known` were both written against — to put one in the queue anyway.
+  //
+  // It is also what lets `missing_from_product` be plain `NOT NULL` rather than a conditional
+  // pairing check: if the only storable state is `not_built`, the gap is always required.
+  //
+  // THE COST, stated rather than discovered later: if a later release routes GRANT requests through
+  // this same table, this constraint is the thing that has to change first, and it will fail loudly
+  // on the first insert rather than silently accepting a row no reader expects.
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint WHERE conname = 'chk_adtr_build_request_is_unbuilt'
+     ) THEN
+       ALTER TABLE agent_domain_tool_request_details
+         ADD CONSTRAINT chk_adtr_build_request_is_unbuilt
+         CHECK (tried_in_product = 'not_built');
      END IF;
    END $$`,
   `CREATE INDEX IF NOT EXISTS idx_adtr_tool_name
@@ -319,14 +426,28 @@ export async function assertAgentDomainToolRequestSchema(): Promise<void> {
     // an environment where the add worked and the SET NOT NULL did not, leaving a column that
     // accepts the blank the contract refuses — a schema check that resolves identically whether or
     // not the invariant it names actually holds.
+    // AF11.7 adds five more columns through the same add-then-SET-NOT-NULL pair, so the list is
+    // named here rather than `environment` being special-cased. A new required column whose
+    // `SET NOT NULL` silently failed would otherwise pass this assert and then accept the blank
+    // the contract refuses.
+    const mustNotBeNullable = [
+      'environment',
+      'acts_on_output',
+      'judged_threshold',
+      'judged_measured_from',
+      'tried_in_product',
+      'missing_from_product',
+    ];
     const nullable = await readNames(
       `SELECT column_name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ANY($names)
-          AND column_name = 'environment' AND is_nullable = 'YES'`,
+          AND is_nullable = 'YES'`,
       REQUIRED_TABLES,
     );
-    if (nullable.includes('environment')) {
-      problems.push('column agent_domain_tool_request_details.environment is still nullable');
+    for (const col of mustNotBeNullable) {
+      if (nullable.includes(col)) {
+        problems.push(`column agent_domain_tool_request_details.${col} is still nullable`);
+      }
     }
   }
 

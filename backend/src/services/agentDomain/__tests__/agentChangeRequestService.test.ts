@@ -142,10 +142,28 @@ let catalogRows: unknown[] = [
   { table_name: 'cron_registry', schema_name: 'public', column_count: 6, semantic_types: { id: 'identifier' }, status: 'scanned', last_scanned: null },
 ];
 
+/**
+ * AF11.7. The PEOPLE ROSTER, answered by SQL for the same reason the two above are.
+ *
+ * `loadActorRoster` runs its own `SELECT` over `admin_users` and `org_members` at filing time, and
+ * it is a DIFFERENT query from the humanity check in `resolveRecordedHumans` even though both read
+ * the same two tables: that one asks whether ONE email is on record, this one asks for the whole
+ * list. The blanket answer below would satisfy it by accident with a single bogus address, so it is
+ * matched on `COALESCE(om.email, e.email)` — the fragment only the roster query carries — and
+ * answered with addresses `toolDetail()` can actually name. Otherwise the suite would be testing
+ * the mock: every tool filing would refuse with `acts_on_output_not_a_person` and the spine
+ * assertions below would never run.
+ */
+let actorRows: unknown[] = [
+  { email: 'sohail@colaberry.com' },
+  { email: 'ali@colaberry.com' },
+];
+
 /** A recorded person: the roster query returns a row. */
 const recorded = () => mockQuery.mockImplementation((sql: string) => {
   if (/dataset_registry/.test(sql)) return Promise.resolve(catalogRows);
   if (/agent_domain_tool_request_details/.test(sql)) return Promise.resolve(openRequests);
+  if (/COALESCE\(om\.email, e\.email\)/.test(sql)) return Promise.resolve(actorRows);
   return Promise.resolve([{ email: 'whatever-the-stored-casing-is' }]);
 });
 /** Nobody on record: the roster query returns nothing. */
@@ -169,6 +187,13 @@ const toolDetail = (over: Record<string, unknown> = {}) => ({
   capability_id: 'platform.read_cron_registry',
   task_unblocked: 'STORY-002, the scheduled-job audit.',
   manual_today: 'I ssh in and read the crontab.',
+  // AF11.7. The three answers that decide whether this gets built at all. `acts_on_output` has to
+  // be an address `actorRows` above carries, because the roster is what decides this field.
+  acts_on_output: 'sohail@colaberry.com',
+  judged_threshold: 'Sohail finds at least 9 of the 10 listed jobs are really scheduled.',
+  judged_measured_from: 'The job rows already stored in cron_registry.',
+  tried_in_product: 'not_built' as const,
+  missing_from_product: 'No screen in the app shows what is scheduled; you have to ssh in.',
   needed_by: '2026-11-30',
   run_frequency: 'daily' as const,
   touches: ['The production cron registry (read only)'],

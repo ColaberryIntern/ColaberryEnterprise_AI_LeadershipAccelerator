@@ -9,6 +9,7 @@ import { loadMyDomains, resolveOwnerIdentityIds } from './agentDomainProvisioned
 import type { ChangeRequestKind } from '../../db/ensureAgentDomainChangeRequestSchema';
 import { allCapabilities } from './capabilityRecord';
 import { datasetNames, loadDatasetCatalog } from './datasetCatalog';
+import { actorEmails, loadActorRoster } from './actorRoster';
 import {
   DUPLICATE_OPEN_REQUEST,
   TOOL_REQUEST_DETAIL_MISSING,
@@ -168,6 +169,13 @@ function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {
     capability_id: d.capability_id,
     task_unblocked: d.task_unblocked,
     manual_today: d.manual_today,
+    // AF11.7. The three answers the approver is actually weighing: who reads it, what number
+    // decides it, and what the product cannot do today.
+    acts_on_output: d.acts_on_output,
+    judged_threshold: d.judged_threshold,
+    judged_measured_from: d.judged_measured_from,
+    tried_in_product: d.tried_in_product,
+    missing_from_product: d.missing_from_product,
     // `DATEONLY` already comes back as `YYYY-MM-DD`; `String()` rather than a `Date` round trip,
     // which is what would let a timezone move a needed-by date a day either way.
     needed_by: String(d.needed_by),
@@ -361,12 +369,17 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
     // filing into a 500. It is awaited before the gate rather than inside it because the gate is a
     // function of its inputs, which is what lets every refusal in it be tested without a database.
     const datasetCatalog = await loadDatasetCatalog(sequelize);
+    // AF11.7 — the fourth roster, read here for the same reason as the other three. `loadActorRoster`
+    // cannot reject, so an unreadable people table becomes `actor_roster_absent` with a sentence
+    // rather than a 500 that teaches a builder the form is broken.
+    const actorRoster = await loadActorRoster(sequelize);
 
     const verdict = acceptToolRequest({
       detail: args.toolRequest,
       domainKey,
       knownCapabilityIds: allCapabilities().map((c) => c.capability_id),
       knownDatasets: datasetNames(datasetCatalog),
+      knownActorEmails: actorEmails(actorRoster),
       // Only the agents of domains this person owns. A null `agent_id` means the domain has no
       // employee yet, which is a real state and cannot be the agent a tool is requested for.
       ownedAgentIds: mine.map((d) => d.agent_id).filter((id): id is string => Boolean(id)),
