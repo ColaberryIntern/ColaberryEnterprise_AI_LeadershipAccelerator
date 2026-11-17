@@ -25,7 +25,9 @@
  * someone PaySimple is about to charge. That is a double charge, which is worse
  * than the silence this check was built to catch.
  */
-import { MILESTONES, milestonesFor, LAPSED_WITHOUT_FOLLOWUP_SQL } from '../billingHealthCheck';
+import {
+  MILESTONES, milestonesFor, LAPSED_WITHOUT_FOLLOWUP_SQL, SCHEDULE_STOPPED_COLLECTING_SQL,
+} from '../billingHealthCheck';
 
 describe('the lapsed check leaves auto-pay members alone', () => {
   it('excludes anyone on a standing schedule', () => {
@@ -46,6 +48,57 @@ describe('the lapsed check leaves auto-pay members alone', () => {
     // Manual renewal leaves the old row active too. Dropping this would flag
     // every renewing member as lapsed.
     expect(LAPSED_WITHOUT_FOLLOWUP_SQL).toContain('s2.current_period_end > s.current_period_end');
+  });
+});
+
+/**
+ * The exclusion above leaves a hole, and this is the check that fills it.
+ *
+ * A scheduled member is skipped by the lapsed check (the schedule is the follow-up) and
+ * passes the schedule/book match (the ID exists on both sides), so a schedule that has
+ * simply stopped charging was visible to no check at all. Four real members were in that
+ * state on 2026-11-16, three of them 48 days past the date their schedule was due to fire.
+ */
+describe('a schedule that stopped collecting is caught by something', () => {
+  it('looks only at rows that actually hold a schedule', () => {
+    // The mirror image of the lapsed check's predicate. Between the two, every active
+    // row past its date is the business of exactly one check.
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain('s.paysimple_schedule_id IS NOT NULL');
+  });
+
+  it('waits a full cadence plus settlement slack before saying anything', () => {
+    // Firing earlier re-creates the double-charge this file's autopay guard exists to
+    // prevent: the 2026-09-01 migration left members legitimately looking like this for
+    // one cycle, because auto-pay was promised from their NEXT boundary.
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain("INTERVAL '1 year'");
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain("INTERVAL '1 month'");
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain("INTERVAL '3 days'");
+  });
+
+  it('uses each plan\'s own cadence rather than one interval for both', () => {
+    // A year of silence on an annual schedule is one missed charge; a month of silence on
+    // a monthly one is also one missed charge. A single threshold gets one of them wrong.
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toMatch(/CASE WHEN s\.plan = 'annual'/);
+  });
+
+  it('ignores a member who has already renewed into a later period', () => {
+    // Same reason as the lapsed check: a manual renewal leaves the old row behind, and the
+    // old row holding a dead schedule is not a member who stopped being charged.
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain('s2.current_period_end > s.current_period_end');
+  });
+
+  it('reports one row per member, not one per subscription', () => {
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain('DISTINCT ON (s.enrollment_id)');
+  });
+
+  it('carries the schedule id, because the action is to open it at the gateway', () => {
+    // A finding that says "someone stopped paying" without the schedule id makes the
+    // reader go and find it. The id is the whole lead.
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain('s.paysimple_schedule_id AS schedule_id');
+  });
+
+  it('leaves comp seats alone', () => {
+    expect(SCHEDULE_STOPPED_COLLECTING_SQL).toContain("s.plan <> 'comp'");
   });
 });
 

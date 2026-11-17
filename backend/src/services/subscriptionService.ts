@@ -476,9 +476,25 @@ export async function activateByRef(
   // the run-rate double-counted them, and the reminder job read the stale row as
   // "lapsed 25 days" for someone who had just paid. Only one paid row may be
   // active per enrollment; the earlier ones are superseded by this payment.
-  // Comp rows are left alone (a comp does not replace a paid seat and vice versa),
-  // and a row that already carries a gateway schedule is not superseded blindly:
-  // that would orphan a live schedule, so it is logged for a human instead.
+  // Comp rows are left alone (a comp does not replace a paid seat and vice versa).
+  //
+  // A row holding a live gateway schedule used to be SKIPPED here with a console.warn
+  // reading "left both active for review". The skip was right about the danger and wrong
+  // about the remedy. Cancelling our row while PaySimple still holds the schedule orphans
+  // it — the member keeps getting drawn after we have stopped counting them — so the old
+  // code refused. But "review" was a log line on a server nobody tails, and the outcome
+  // it left behind was permanent: two active rows for one member, both counted as revenue,
+  // forever. Found live 2026-11-16: enrollment acda8718 carried two active monthly rows,
+  // and 78f2c3e3's scheduled row was finally closed BY HAND on 2026-11-06, six weeks after
+  // its period ended, with the reason "Expired duplicate row holding schedule 45119…".
+  // A human was doing this function's job, slowly.
+  //
+  // So the schedule is taken down FIRST and the row superseded only once the gateway has
+  // confirmed it. `suspendScheduleForSubscription` calls PaySimple, clears our column, and
+  // is loud on failure. If it fails, the row stays active on purpose: a double-counted
+  // member is a reporting error, while an orphaned schedule is money leaving someone's
+  // account. Of the two, keep the one that does not take money.
+  //
   // Never fail an activation over the supersede bookkeeping: the payment cleared
   // and the member is in. A miss here shows up as a duplicate active row, which
   // the next activation or a human can clean up; a thrown error here would
@@ -490,10 +506,30 @@ export async function activateByRef(
     const others = Array.isArray(rows) ? rows : [];
     for (const other of others) {
       if (other.plan === 'comp') continue;
-      if ((other as any).paysimple_schedule_id) {
-        console.warn(`[Subscription] enrollment ${sub.enrollment_id}: new activation ${sub.id} alongside scheduled row ${other.id} (schedule ${(other as any).paysimple_schedule_id}); left both active for review`);
-        continue;
+
+      const scheduleId = (other as any).paysimple_schedule_id as string | null | undefined;
+      if (scheduleId) {
+        // Imported HERE, at call time, not at the top of the file. `subscriptionScheduleService`
+        // constructs the Sequelize instance as a module side effect (it imports
+        // `config/database`), so a top-level import makes merely requiring THIS module open a
+        // database connection. That broke `subscriptionCheckoutGuard.test.ts`, which imports
+        // `subscriptionService` and does not mock `config/database`:
+        // `new Sequelize(env.databaseUrl)` threw "The url argument must be of type string".
+        //
+        // That module's own header warns about exactly this hazard in the other direction —
+        // it reaches for the pure date helpers rather than importing this file, because this
+        // file pulls in the Sequelize models. The hazard is not circularity, which is why
+        // checking for a cycle was not enough: it is eager module-load side effects. A
+        // function-scoped import keeps the cost on the path that actually needs it.
+        const { suspendScheduleForSubscription } = await import('./subscriptionScheduleService');
+        const { suspended, error } = await suspendScheduleForSubscription(other.id, scheduleId);
+        if (!suspended) {
+          // Deliberately left active. Said once, with everything a human needs to act.
+          console.error(`[Subscription] enrollment ${sub.enrollment_id}: activation ${sub.id} landed alongside scheduled row ${other.id} (schedule ${scheduleId}) and the schedule could not be suspended (${error || 'unknown error'}); left it active so the gateway is not orphaned, so this member is double-counted until the schedule is dealt with`);
+          continue;
+        }
       }
+
       await other.update({ status: 'canceled', canceled_at: now, cancel_reason: `superseded_by_renewal:${sub.id}`, updated_at: now });
     }
   } catch (err: any) {

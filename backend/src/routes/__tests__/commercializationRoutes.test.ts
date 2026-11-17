@@ -26,10 +26,28 @@ import commercializationRoutes from '../admin/commercializationRoutes';
  */
 interface Opts { replacements?: { name?: string } }
 
+/**
+ * The revenue row shape, which changed on 2026-11-16.
+ *
+ * It used to be one row per plan (`{ plan, cents }`) that the service multiplied by a
+ * per-plan table. The figure now composes `PAYING_MEMBERS_CTE` — the shared definition the
+ * marketing surfaces already used — and comes back as ONE row: the total plus a count per
+ * exclusion bucket. The old shape disagreed with that CTE by $26,268 a year on production.
+ */
+interface RevenueRow {
+  cents: string; people: string; lapsed: string; no_period: string; staff: string; duplicate: string;
+}
+
+function revenueRow(over: Partial<RevenueRow> = {}): RevenueRow {
+  return {
+    cents: '6207600', people: '30', lapsed: '0', no_period: '0', staff: '0', duplicate: '0', ...over,
+  };
+}
+
 function mockDb(opts: {
   presentTables: string[];
   counts?: Record<string, number>;
-  subscriptionRows?: Array<{ plan: string; cents: string }>;
+  revenue?: RevenueRow[];
 }) {
   const counts = opts.counts ?? {};
   m.query.mockImplementation((sql: string, o: Opts) => {
@@ -37,8 +55,9 @@ function mockDb(opts: {
       const name = o?.replacements?.name ?? '';
       return Promise.resolve([{ n: opts.presentTables.includes(name) ? 1 : 0 }]);
     }
-    if (sql.includes('FROM subscriptions') && sql.includes('GROUP BY')) {
-      return Promise.resolve(opts.subscriptionRows ?? []);
+    // The revenue query is now identifiable by the shared CTE rather than by GROUP BY.
+    if (sql.includes('paying AS (')) {
+      return Promise.resolve(opts.revenue ?? [revenueRow()]);
     }
     const table = /FROM (\w+)/.exec(sql)?.[1] ?? '';
     return Promise.resolve([{ n: counts[table] ?? 0 }]);
@@ -71,39 +90,80 @@ describe('GET /api/admin/commercialization/board', () => {
     expect(res.status).not.toBe(404);
   });
 
-  it('annualizes monthly and annual plans on their own cadences', async () => {
-    mockDb({
-      presentTables: ALL_TABLES,
-      subscriptionRows: [
-        { plan: 'monthly', cents: '457700' },   // $4,577/mo -> $54,924/yr
-        { plan: 'annual', cents: '715200' },    // $7,152/yr  -> $7,152/yr
-      ],
-    });
+  it('serves the annualized figure the shared revenue rule produced', async () => {
+    mockDb({ presentTables: ALL_TABLES, revenue: [revenueRow({ cents: '6207600' })] });
 
     const res = await request(app()).get('/api/admin/commercialization/board');
     const revenue = res.body.data.tiles.find((t: { key: string }) => t.key === 'annualized_revenue');
 
     expect(revenue.status).toBe('live');
     expect(revenue.value).toBe('$62,076');
+    // No caveat when every active paying row was collectible. Silence is a claim here, so
+    // it must not be manufactured — see the exclusion cases below.
     expect(revenue.caveat).toBeUndefined();
   });
 
-  it('flags an unrecognized plan instead of silently dropping its revenue', async () => {
-    // Silently excluding a plan would understate revenue with nothing in the output
-    // to show it happened — the quiet failure this board exists to prevent.
+  it('asks the database for the SHARED definition, not a local one', async () => {
+    // This test exists because the two disagreed for two months. The route-level proof that
+    // they cannot drift again is that the query carries the marketing CTE and the period
+    // check, rather than this service re-deriving the rule.
+    mockDb({ presentTables: ALL_TABLES });
+
+    await request(app()).get('/api/admin/commercialization/board');
+
+    const sql = m.query.mock.calls.map((c) => String(c[0])).find((s) => s.includes('paying AS ('));
+    expect(sql).toBeDefined();
+    expect(sql).toContain('current_period_end >= now()');
+    expect(sql).toContain('DISTINCT ON');
+  });
+
+  /**
+   * This replaces 'flags an unrecognized plan instead of silently dropping its revenue'.
+   *
+   * That test guarded a real principle — a quiet exclusion is the failure this board exists
+   * to prevent — against a mechanism that no longer exists: there is no per-plan multiplier
+   * table to miss a plan, because the CTE resolves every plan to a monthly-equivalent MRR
+   * and admits only `annual` and `monthly`. The principle is now carried by the exclusion
+   * buckets, so it is asserted against those instead of deleted with the mechanism.
+   */
+  it('names what it excluded instead of quietly reporting a smaller number', async () => {
     mockDb({
       presentTables: ALL_TABLES,
-      subscriptionRows: [
-        { plan: 'monthly', cents: '100000' },
-        { plan: 'quarterly', cents: '900000' },
-      ],
+      revenue: [revenueRow({ cents: '4298400', people: '18', lapsed: '8', staff: '3' })],
     });
 
     const res = await request(app()).get('/api/admin/commercialization/board');
     const revenue = res.body.data.tiles.find((t: { key: string }) => t.key === 'annualized_revenue');
 
-    expect(revenue.value).toBe('$12,000');
-    expect(revenue.caveat).toContain('quarterly');
+    expect(revenue.value).toBe('$42,984');
+    expect(revenue.caveat).toContain('18 paying member(s)');
+    expect(revenue.caveat).toContain('8 active row(s)');
+    expect(revenue.caveat).toContain('3 staff row(s)');
+  });
+
+  it('degrades the revenue tile alone when its query fails, keeping the other nine', async () => {
+    // The board assembles with an unguarded Promise.all, so an exception here used to blank
+    // all ten tiles. The query now joins `enrollments` and `community_members`, which are two
+    // more tables that can be absent.
+    m.query.mockImplementation((sql: string, o: Opts) => {
+      if (sql.includes('information_schema.tables')) {
+        const name = o?.replacements?.name ?? '';
+        return Promise.resolve([{ n: ALL_TABLES.includes(name) ? 1 : 0 }]);
+      }
+      if (sql.includes('paying AS (')) {
+        return Promise.reject(new Error('relation "community_members" does not exist'));
+      }
+      return Promise.resolve([{ n: 0 }]);
+    });
+
+    const res = await request(app()).get('/api/admin/commercialization/board');
+    const revenue = res.body.data.tiles.find((t: { key: string }) => t.key === 'annualized_revenue');
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.tiles).toHaveLength(10);
+    expect(revenue.status).toBe('unmeasurable');
+    expect(revenue.value).toBeNull();
+    expect(revenue.caveat).toContain('community_members');
   });
 
   it('reports a measured zero when the table is present and empty', async () => {
