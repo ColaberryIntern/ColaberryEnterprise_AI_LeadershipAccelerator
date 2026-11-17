@@ -367,11 +367,68 @@ export const TOOL_REQUEST_ON_A_CHANGE: ToolRequestIssue = {
   detail: 'Those tool details belong on a tool request, not on a change request.',
 };
 
+/**
+ * AF11.15 — WHAT COUNTS AS A DUPLICATE, stated rather than implied.
+ *
+ * The rule existed and its boundary did not. `duplicate_open_request` has been a named refusal
+ * since AF11.2 and the scope lived only in the shape of one SQL predicate, which meant the first
+ * builder to hit it would get a sentence nobody could explain.
+ *
+ * **The scope is: the same REQUESTER, with a SUBMITTED request, for the same AGENT, naming the
+ * same TOOL (compared case-insensitively).** All four parts, and the absence of a fifth.
+ *
+ * Why these four and not others:
+ *
+ *   - **Requester**, because two builders independently wanting the same tool is the signal AF11.4
+ *     exists to serve: the second one is assigned the tool the first one got, rather than refused.
+ *     Scoping across people would turn a good outcome into an error.
+ *   - **Submitted only.** A decided request is history. Refusing against it would mean a tool that
+ *     was declined once could never be asked for again, which is not a rule anybody chose.
+ *   - **Agent**, because the same tool on two different agents is two different grants with two
+ *     different blast radii.
+ *   - **Tool name**, case-insensitively, because `Call_Scan` and `call_scan` are one tool.
+ *
+ * **CAPABILITY IS DELIBERATELY NOT IN THE SCOPE, and that is the open question.** Ali told the
+ * builders on 17 Nov that several requests at once is expected: *"You could be sending 3 tasks
+ * through the process, or 5 tasks through the process, because they each have this approval
+ * process."* So five open requests from one builder is normal. What the code cannot answer is
+ * whether five open requests against one CAPABILITY is also normal, or is exactly the thing this
+ * check should catch. Widening it is a product decision, not a refactor, so the scope stays where
+ * it has always been and lives in one named constant that a single edit moves.
+ */
+export const DUPLICATE_SCOPE = ['requester', 'status_submitted', 'agent_id', 'tool_name'] as const;
+
+/** The refusal when we cannot describe the collision, which should be rare. */
 export const DUPLICATE_OPEN_REQUEST: ToolRequestIssue = {
   rule: 'duplicate_open_request',
   detail: 'You already have a request open for that tool on that agent. '
     + 'It is waiting to be decided rather than lost.',
 };
+
+/** The open request a new one collided with, as much of it as the caller could read. */
+export interface DuplicateCollision {
+  readonly title: string | null;
+  readonly requested_at: string | null;
+}
+
+/**
+ * The same refusal, naming the request it collided with.
+ *
+ * A refusal that says "you already have one open" and cannot say WHICH one sends somebody to go
+ * and look through their own list to find it. The rule code is unchanged, so the form's rule-to-
+ * field map and every existing test keep working; only the sentence gets longer.
+ */
+export function duplicateOpenRequest(collision: DuplicateCollision): ToolRequestIssue {
+  const title = (collision.title || '').trim();
+  if (!title) return DUPLICATE_OPEN_REQUEST;
+  const when = (collision.requested_at || '').slice(0, 10);
+  return {
+    rule: 'duplicate_open_request',
+    detail: `You already have a request open for that tool on that agent: "${title}"`
+      + `${when ? `, filed ${when}` : ''}. It is waiting to be decided rather than lost, so `
+      + 'add to that one rather than filing a second.',
+  };
+}
 
 export interface GateToolRequestArgs {
   readonly detail: ToolRequestDetailInput;

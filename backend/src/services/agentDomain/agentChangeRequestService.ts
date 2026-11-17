@@ -20,7 +20,8 @@ import {
 } from './toolRequestPackageService';
 import type { ToolRequestPackage } from './toolRequestPackageContract';
 import {
-  DUPLICATE_OPEN_REQUEST,
+  duplicateOpenRequest,
+  type DuplicateCollision,
   TOOL_REQUEST_DETAIL_MISSING,
   TOOL_REQUEST_ON_A_CHANGE,
   acceptToolRequest,
@@ -324,24 +325,37 @@ function project(r: AgentDomainChangeRequest): ChangeRequestRow {
  *
  * `lower()` on the tool name because `read_feed` and `Read_Feed` are the same ask, and a
  * near-duplicate that slips through is worse than none: it teaches the approver to stop reading.
+ *
+ * AF11.15 — it returns the COLLIDING REQUEST rather than a boolean, so the refusal can name it.
+ * "You already have one open" that cannot say which one sends somebody to go and search their own
+ * list for it. The predicate is unchanged; only what it selects is. The four clauses below ARE the
+ * duplicate scope, and `DUPLICATE_SCOPE` in the contract states them in prose beside the reason
+ * each one is there.
  */
-async function hasOpenRequestFor(
+async function findOpenRequestFor(
   sequelize: Sequelize,
   requester: string,
   detail: ToolRequestDetail,
-): Promise<boolean> {
-  const rows = await sequelize.query<{ id: string }>(
-    `SELECT r.id AS id
+): Promise<DuplicateCollision | null> {
+  const rows = await sequelize.query<{ title: string | null; requested_at: string | null }>(
+    `SELECT r.title AS title, r.requested_at AS requested_at
        FROM agent_domain_tool_request_details d
        JOIN agent_domain_change_requests r ON r.id = d.change_request_id
       WHERE r.requested_by_identity = $1
         AND r.status = 'submitted'
         AND d.agent_id = $2
         AND lower(d.tool_name) = lower($3)
+      ORDER BY r.requested_at ASC
       LIMIT 1`,
     { bind: [requester, detail.agent_id, detail.tool_name], type: QueryTypes.SELECT },
   );
-  return rows.length > 0;
+  if (rows.length === 0) return null;
+  return {
+    title: rows[0].title ?? null,
+    // Normalized to a string here rather than at the call site: the driver can hand back a Date
+    // or a string depending on the column type, and the contract formats a string.
+    requested_at: rows[0].requested_at ? String(rows[0].requested_at) : null,
+  };
 }
 
 export interface FileChangeRequestArgs {
@@ -431,8 +445,9 @@ export async function fileChangeRequest(args: FileChangeRequestArgs): Promise<Ch
     if (!verdict.ok) throw new ToolRequestRefusedError(verdict.issues);
     accepted = verdict.detail;
 
-    if (await hasOpenRequestFor(sequelize, recorded[0], accepted)) {
-      throw new ToolRequestRefusedError([DUPLICATE_OPEN_REQUEST]);
+    const collision = await findOpenRequestFor(sequelize, recorded[0], accepted);
+    if (collision) {
+      throw new ToolRequestRefusedError([duplicateOpenRequest(collision)]);
     }
   }
 
