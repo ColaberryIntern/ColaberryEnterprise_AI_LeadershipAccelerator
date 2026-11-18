@@ -30,6 +30,30 @@ the five most complete approved, published records, field by field. Run it at th
 turn the gaps into the plan, after every task, and before any report to Ali. A build with a
 GAP, a THIN list or a failed record check is not done, and Ali is never the one who finds it.
 
+**Day one, the same turn the draft is created: screens, cover concepts, video (§8, §8c, §8f).**
+Since 2026-11-18 (Ali: "pictures are now gone - no video and I didn't get to pick hero pick even
+though you talked about it. Fix and harden so the video is not missed anymore. Also pictures ...
+it's been missed in every single 1st try"). Every first try deferred the media until "after the
+narrative", then ran out of turn and reported a record with no screens, no video and no cover pick.
+So the media starts BEFORE the narrative, in the turn §2 creates the draft:
+
+1. **App screens.** Run `node scripts/case-study-screens/captureAppScreens.js --check`. If it exits 3, run
+   `--login` in the background at once. It opens an Edge window for Ali to sign in, which takes one
+   minute. Make it the FIRST line of the message to Ali, not a request buried at the end. Then write a
+   spec of 3 to 6 screens that show the work, capture them with `--spec`, and look at every PNG yourself
+   (§8 "check every frame for people"). Never ask Ali to take screenshots by hand. Never stop at "the
+   screens are behind a login".
+2. **Cover concepts.** Write three concepts, generate them (scripts/case-study-thumbnails, steps 1 to 3)
+   and open the review page with `Start-Process`. Never mention the pick without the page being open in
+   front of Ali.
+3. **Video.** Build a first cut of the walkthrough from title and cards slides as soon as the metrics
+   exist, then rebuild it when the screens land. A record never reaches Ali without one.
+
+`completeness-audit.js` has a named record check for each of these: real screens of the software (at
+least 3), a video with captions and a poster, and a cover equal to the video poster. A record with any
+of them failing is INCOMPLETE however many fields are ok. The ONLY acceptable reason for no app screens
+is that the work has no interface. Record that with `--accept=record.appScreens:"<why>"`.
+
 **Start section 8 (images) FIRST.** Dispatch an agent to find or produce the real
 images before anything else begins — it takes longer than the rest and a case study
 without pictures reads as unfinished however good its evidence is.
@@ -510,6 +534,14 @@ story draws the flow, the Mermaid drawing folds under "View technical proof".
 ---
 
 ## 8. Images — start this FIRST, in parallel, and do not finish without them
+
+> **The logged-in app is not a reason to skip it.** `scripts/case-study-screens/captureAppScreens.js`
+> signs in once through a visible Edge window (`--login`; the session is saved to
+> `scripts/.ali_admin_jwt.txt`, which is git-ignored), then captures a spec of screens headless and
+> redacts them. It replaces every email address and phone number, replaces literal names you pass in
+> `redactText`, and paints over `mask` selectors. It refuses to write a screen that still shows a
+> contact detail. Names cannot be found by a pattern: pass them in, mask their cells, and look at every
+> capture. Day one, before the narrative (see the top of this skill).
 
 **This is not a checklist item at the end. It is a workstream that begins before the
 narrative and runs alongside it, because finding or making the right image takes
