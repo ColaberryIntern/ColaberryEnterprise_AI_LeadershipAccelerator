@@ -81,10 +81,11 @@ describe('the countdown campaign definition', () => {
       else expect(s.ai_instructions).toBeFalsy();
     }
   });
-  it('has the emails, one call and one text (Ali: voice calls, and texts through the GHL field)', () => {
+  it('has the emails and one text, and NO call step (Ali: "We request, Cora schedules")', () => {
     expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'email')).toHaveLength(3);
-    expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'voice')).toHaveLength(1);
     expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'sms')).toHaveLength(1);
+    // The app must not start Synthflow calls outside Cora's 75-second slot pool.
+    expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'voice')).toHaveLength(0);
   });
 
   // Each step must fire INSIDE the window the scheduler enforces with these settings,
