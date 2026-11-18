@@ -485,6 +485,13 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
       scheduledFor = new Date(now.getTime() + step.delay_days * 24 * 60 * 60 * 1000);
     }
 
+    // OH1m: stagger calls. With voice_dial_spacing_seconds set on the campaign, a voice
+    // step is stamped at least that far from the campaign's other pending calls.
+    if (channel === 'voice' && campaignId) {
+      const { applyVoiceDialSpacing } = await import('./voice/voiceDialPolicy');
+      scheduledFor = await applyVoiceDialSpacing(campaignId, scheduledFor);
+    }
+
     // Replace template variables in text content (fallback content)
     const replaceVars = (text: string) =>
       text
@@ -543,6 +550,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
           event_when: openHouseEvent.when_label,
           event_join_url: openHouseEvent.join_url,
           minutes_before_event: step.minutes_before_event ?? null,
+          brain_piece: step.brain_piece ?? null,
         } : {}),
       },
     } as any);
@@ -610,7 +618,12 @@ export async function scheduleNextStep(completedAction: any): Promise<any | null
 
   // Compute gap: difference between consecutive delay_days values
   const gapDays = (nextStep.delay_days || 0) - (currentStep.delay_days || 0);
-  const scheduledFor = new Date(Date.now() + Math.max(gapDays, 0) * 24 * 60 * 60 * 1000);
+  let scheduledFor = new Date(Date.now() + Math.max(gapDays, 0) * 24 * 60 * 60 * 1000);
+  // OH1m: stagger calls by the campaign's voice_dial_spacing_seconds (see enrollLeadInSequence).
+  if (channel === 'voice' && completedAction.campaign_id) {
+    const { applyVoiceDialSpacing } = await import('./voice/voiceDialPolicy');
+    scheduledFor = await applyVoiceDialSpacing(completedAction.campaign_id, scheduledFor);
+  }
 
   // Replace template variables
   const replaceVars = (text: string) =>

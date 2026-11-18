@@ -25,6 +25,15 @@ import {
   isSafeToAdvertise,
 } from './draftCopyGuards';
 import { draftSkipReason, selectStepIndex } from './draftEligibility';
+import {
+  EXPLORER_MAYA_PROMPT,
+  allowBrainLinks,
+  brainPickHeld,
+  chooseBrainPick,
+  renderBrainPickBlock,
+  type BrainGather,
+  type BrainPickRecord,
+} from '../explorerBrainPick';
 
 /**
  * Explorer Growth OS — render ONE decision into a draft.
@@ -104,6 +113,18 @@ export interface DraftRenderDeps {
     decisionId: string,
     previousScheduledEmailId: string,
   ) => Promise<{ id: string; supersededId: string | null }>;
+  /**
+   * OH1j: this person's earlier brain picks on OTHER decisions, newest first, shadow drafts
+   * included. Drives the 72-hour cadence, the rotation and the exclusion of items already given.
+   */
+  loadBrainHistory: (leadId: number, excludeDecisionId: string) => Promise<BrainPickRecord[]>;
+  /** OH1j: one shelf of the shared content brain (openHouseBrain.gatherBrainPiece), read live. */
+  gatherBrainPiece: BrainGather;
+  /**
+   * OH1j: the Open House takes precedence. Checked here as well as by the Governor's hard
+   * stop, because a countdown can start between the Governor's run and this one.
+   */
+  inOpenHouseCountdown: (leadId: number) => Promise<boolean>;
 }
 
 /** How this render differs from the nightly one. */
@@ -125,6 +146,23 @@ export interface RenderOptions {
      */
      brief?: string;
   };
+}
+
+/**
+ * OH1j: Maya never sells to an Explorer (Ali). The prompt drops the sales rules; this refuses a draft
+ * that pushes a call anyway: a strategy-call / booking / alumni landing link, the advisory tool, or
+ * an ask to book or schedule a call. Exported for its tests.
+ */
+const SALES_PUSH: Array<[RegExp, string]> = [
+  [/\/ai-architect\b/i, 'strategy-call booking link'],
+  [/alumni-ai-champion/i, 'alumni landing link'],
+  [/advisor\.colaberry\.ai/i, 'advisory tool link'],
+  [/\b(book|schedule|grab|set up)\s+(a|your|an)\s+(\w+\s+){0,2}(call|meeting)\b/i, 'asks them to book a call'],
+  [/\bstrategy call\b/i, 'mentions a strategy call'],
+];
+export function salesPushIssues(html: string): string[] {
+  const text = html || '';
+  return SALES_PUSH.filter(([re]) => re.test(text)).map(([, label]) => `sales push: ${label}`);
 }
 
 /** A skip, phrased as an outcome so the batch never has to special-case it. */
@@ -211,13 +249,15 @@ export type DraftPlan =
       step: SequenceStep;
       toEmail: string;
       totalSteps: number;
+      /** OH1j: earlier brain picks on other decisions, newest first. */
+      brainHistory: BrainPickRecord[];
     }
   | { ok: false; reason: NonNullable<DraftOutcome['reason']> };
 
 /** The read-only half of the deps — enough to plan, not enough to spend money. */
 export type DraftPlanDeps = Pick<
   DraftRenderDeps,
-  'loadSequenceSteps' | 'countPriorDrafted' | 'loadRecipientEmail'
+  'loadSequenceSteps' | 'countPriorDrafted' | 'loadRecipientEmail' | 'loadBrainHistory' | 'inOpenHouseCountdown'
 >;
 
 /**
@@ -240,6 +280,18 @@ export async function planDecisionDraft(
   const leadId = decision.lead_id as number;
   const campaignId = decision.selected_campaign_id as string;
 
+  // OH1j: the Open House first, then one brain pick per 72 hours (shadow picks included).
+  // Both unreadable answers hold the draft: an unknown is not permission to write again.
+  const countdownLive = await deps.inOpenHouseCountdown(leadId).catch(() => true);
+  if (countdownLive) return { ok: false, reason: 'open_house_countdown' };
+  let brainHistory: BrainPickRecord[];
+  try {
+    brainHistory = await deps.loadBrainHistory(leadId, decision.id);
+  } catch {
+    return { ok: false, reason: 'brain_cadence' };
+  }
+  if (brainPickHeld(decision.decision_date, brainHistory).held) return { ok: false, reason: 'brain_cadence' };
+
   const steps = await deps.loadSequenceSteps(campaignId);
   const stepIndex = selectStepIndex(
     await deps.countPriorDrafted(decision.enrollment_id, campaignId, decision.decision_date),
@@ -258,6 +310,7 @@ export async function planDecisionDraft(
     step: steps[stepIndex],
     toEmail,
     totalSteps: steps.length,
+    brainHistory,
   };
 }
 
@@ -286,7 +339,16 @@ export async function renderDecisionDraft(
 
   const plan = await planDecisionDraft(planFrom, deps);
   if (!plan.ok) return skipped(decision, plan.reason);
-  const { leadId, campaignId, stepIndex, step, toEmail, totalSteps } = plan;
+  const { leadId, campaignId, stepIndex, step, toEmail, totalSteps, brainHistory } = plan;
+
+  // OH1j: the one piece of the shared brain this email is written around. Never throws: a
+  // shelf that fails is passed over, and no shelf at all means no piece (never an invented one).
+  const brainPick = await chooseBrainPick(decision, brainHistory, deps.gatherBrainPiece, {
+    email: toEmail,
+    leadId,
+    enrollmentId: decision.enrollment_id,
+  });
+  const brainBlock = renderBrainPickBlock(brainPick);
 
   const briefLine = regenerate?.brief?.trim()
     ? `\n\nTHIS IS A REVISION. The reviewer asked for: ${regenerate.brief.trim()}`
@@ -339,6 +401,13 @@ export async function renderDecisionDraft(
       groundedInstructions = `${instructions}\n\n${grounding.result.block}`;
     }
 
+    // OH1j: the brain piece, after the knowledge block and before the copy rule (which stays
+    // last). Not part of `instructions`, so the corpus is searched on what the step is about,
+    // not on a builder's name. Omitted entirely when there is no piece.
+    if (brainBlock !== '') {
+      groundedInstructions = `${groundedInstructions}\n\n${brainBlock}`;
+    }
+
     // LAST, AND DELIBERATELY NOT PART OF `instructions`.
     //
     // `instructions` is what the grounding query above is built from — the step goal plus
@@ -369,10 +438,15 @@ export async function renderDecisionDraft(
         step_goal: step.step_goal ?? context.campaign.stepGoal,
         step_number: stepIndex + 1,
         total_steps: totalSteps,
+        // OH1j: written as Maya (never sells, never the banned word, never a price).
+        system_prompt: EXPLORER_MAYA_PROMPT,
       },
       tone: step.ai_tone,
       brandVoice,
       compositeContext: context,
+      // OH1j: Maya's rules replace the general sales rules (no CTA, no booking link, no cohort line).
+      persona: 'maya_explorer',
+      allowed_links: brainPick.allowedLinks,
     });
   } catch (err: any) {
     return {
@@ -415,9 +489,15 @@ export async function renderDecisionDraft(
   const copyIssues = [
     ...bannedCopyIssues(linkFixed.html),
     ...emailLinkIssues(linkFixed.html, baseUrl),
+    // OH1j: Maya never sells to an Explorer. The prompt says so; this is the wall behind it.
+    ...salesPushIssues(linkFixed.html),
   ];
   const body = linkFixed.html;
-  const issues = [...verdict.issues, ...copyIssues];
+  // OH1j: the piece's own links (a builder's case study, a fact's public source) are not on
+  // the validator's two-host list; exactly those, and nothing else, are let through.
+  const verdictIssues = allowBrainLinks(verdict.issues, brainPick.allowedLinks);
+  const verdictValid = verdict.valid || (verdict.issues.length > 0 && verdictIssues.length === 0);
+  const issues = [...verdictIssues, ...copyIssues];
   // A relative link is REPAIRED, not refused: there is exactly one correct absolute form and
   // guessing is not involved. A banned word is refused, because the compliant rewrite is a
   // judgement about meaning that no function should make silently.
@@ -428,7 +508,7 @@ export async function renderDecisionDraft(
           `absolutised ${linkFixed.rewritten} relative link(s) against ${baseUrl}`,
         ]
       : verdict.autoFixed;
-  const valid = verdict.valid && copyIssues.length === 0;
+  const valid = verdictValid && copyIssues.length === 0;
 
   const status = valid ? EXPLORER_DRAFT_STATUS : EXPLORER_DRAFT_REJECTED_STATUS;
   const persistInput: PersistDraftInput = (
@@ -493,6 +573,16 @@ export async function renderDecisionDraft(
         revision: regenerate
           ? { of: regenerate.previousScheduledEmailId, brief: regenerate.brief?.trim() || null }
           : null,
+        // OH1j: which shelf this email was built from, read back by the cadence, the rotation
+        // and the item exclusion (loadBrainHistory, governor/brainCadence). `empty` = no
+        // shelf had anything verified, so the email was written without a piece.
+        brain_pick: {
+          piece: brainPick.piece,
+          item_id: brainPick.itemId,
+          empty: brainPick.empty,
+          allowed_links: brainPick.allowedLinks,
+        },
+        sender_persona: 'maya',
         model: generated.model,
         tokens_used: generated.tokens_used,
       },

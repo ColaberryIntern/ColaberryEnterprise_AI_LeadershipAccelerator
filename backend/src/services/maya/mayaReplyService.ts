@@ -10,6 +10,7 @@ import { guardLinks } from './mayaLinkGuard';
 import { resolveMayaMode } from './mayaPromotion';
 import { classifyNonAuthoritativeTopic } from './mayaTopicGuard';
 import { governedTopicReply, person360Block, withAiDisclosure } from './mayaDmGovernance';
+import { mayaMemoryBlock } from './mayaMemory';
 
 /**
  * C121 — the ONLY place a Maya-authored portal DM is produced. Ali, 2026-11-06: "I think we should probably put Maya in
@@ -180,12 +181,15 @@ export async function maybeTriggerMayaReply(roomId: string, senderEnrollmentId: 
     if (topic) {
       body = (await governedTopicReply(topic, senderEnrollmentId, { dryRun: !live })).text;
     } else {
-      const [base, person] = await Promise.all([
+      // OH1g: the one memory - what she and this person said on email, calls and the site chat. The room's own
+      // history is already the message list below, so room_messages is not repeated in the block.
+      const [base, person, memory] = await Promise.all([
         buildMayaPortalSystemPrompt(senderEnrollmentId, triggering?.content ?? ''),
         person360Block(senderEnrollmentId),
+        mayaMemoryBlock({ enrollmentId: senderEnrollmentId }, { excludeSources: ['room_messages'], limit: 20, maxChars: 3000 }),
       ]);
       const messages: ChatMessage[] = [
-        { role: 'system', content: [base, person].filter(Boolean).join('\n\n') },
+        { role: 'system', content: [base, person, memory].filter(Boolean).join('\n\n') },
         ...ordered.map((m) => ({ role: (m.enrollment_id === mayaEnrollmentId ? 'assistant' : 'user') as 'assistant' | 'user', content: m.content })),
       ];
       body = await modelReply(roomId, messages, live, senderEnrollmentId);

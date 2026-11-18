@@ -49,6 +49,9 @@ export const MAYA_HANDLER_MODULES: ReadonlyArray<string> = Object.freeze([
   'services/mayaEnablement.ts',
   'services/mayaTools/**',
   'services/maya/**',
+  // OH1i/OH1h: Maya's content shelves (approved facts and build prompts). Reachable from the
+  // reply drafter through the brain; reads only, names no gated provider.
+  'services/mayaBrain/**',
 ]);
 
 /** The provider symbols that may appear in exactly one module, the delivery seam. */

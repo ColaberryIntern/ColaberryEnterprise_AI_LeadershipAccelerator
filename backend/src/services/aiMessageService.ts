@@ -15,6 +15,14 @@ export type AIChannel = 'email' | 'sms' | 'voice';
 export interface GenerateMessageParams {
   channel: AIChannel;
   ai_instructions: string;
+  /**
+   * OH1j: 'maya_explorer' = an Explorer Growth email written as Maya. Replaces the general sales
+   * rules (CTA, strategy-call booking link, team sign-off) and drops the booking links and cohort
+   * line from the user prompt, the way `eventContext` does for the Open House countdown.
+   */
+  persona?: 'maya_explorer';
+  /** OH1j: with persona 'maya_explorer', the extra links this email may carry (its brain piece's links). */
+  allowed_links?: string[];
   lead: {
     name: string;
     company?: string;
@@ -84,6 +92,15 @@ export interface GenerateMessageParams {
     step_goal?: string;
     /** OH1d: the platform Today page, the one other link a step may use. */
     portal_url?: string;
+    /** OH1f: this email's one piece from the content brain (openHouseBrain.gatherBrainPiece), a labelled block. */
+    content_piece?: string;
+    /** OH1f: the links that piece carries (a builder's public case study, the Events schedule). */
+    extra_links?: string[];
+    /**
+     * OH1g: the one memory (maya/mayaMemory.formatTimelineForPrompt) - what Maya and this person said on every
+     * channel. When present it replaces the "what we already sent" list, which only knew this campaign's emails.
+     */
+    memory_timeline?: string;
   };
   /**
    * Who this message is sent AS.
@@ -230,6 +247,27 @@ CRITICAL: Always address the lead by their actual name from the LEAD PROFILE bel
     ? `\n\nBRAND VOICE (published rule set v${brand.rulesVersion}; follow it over any general style preference):\n${voiceParts.join('\n')}`
     : '';
 
+  // OH1j: an Explorer Growth email written as Maya. The general rules below push a CTA, a
+  // strategy-call booking link and a team sign-off; Maya to an Explorer does none of that.
+  if (params.persona === 'maya_explorer' && !params.eventContext) {
+    const links = ['https://enterprise.colaberry.ai', ...(params.allowed_links || [])];
+    const emailFormat = channel === 'email'
+      ? `OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
+{"subject": "...", "body": "..."}
+The "body" must be HTML using <p> and <a> tags only. 80-160 words. Do NOT add a sign-off name or signature: Maya's signature is added automatically.`
+      : channelInstructions[channel];
+    return `${campaignPrompt || defaultPersona}${voiceBlock}
+
+${emailFormat}
+
+MAYA EXPLORER RULES (these override everything else):
+- You are helping someone explore at their own pace. You are NOT selling.
+- NEVER ask them to book a call, schedule a strategy call, or talk to admissions. NEVER mention a cohort, a start date, seats, price, cost, tuition, a discount, an offer or a deadline, or say that anything costs nothing or comes at no charge.
+- The ONLY links allowed are these, exactly as written: ${links.join(' , ')}
+- Never invent facts about the program, outcomes, salaries or jobs. Never invent facts about the person.
+- Warm, short, human. Written by Maya. No emojis, no hashtags, no exclamation-mark pile-ups.`;
+  }
+
   // OH1: an Open House countdown replaces the sales rules below with event rules.
   // The general rules push booking a strategy call and quote the cohort; a reminder
   // for an event someone already registered for must do neither.
@@ -247,9 +285,16 @@ ${emailFormat}
 OPEN HOUSE REMINDER RULES (these override everything else):
 - This person registered for: ${ev.title}, ${ev.when}. You are reminding them and helping them get there. You are NOT selling.
 - The Join link is required, exactly: ${ev.join_url}
-  It signs them in and checks them in. Include it once, as a link.${ev.portal_url ? `
-- The ONLY other link allowed is the platform Today page, exactly: ${ev.portal_url}, and only when the step invites them back to the platform.` : `
-- No other links of any kind.`}
+  It signs them in and checks them in. Include it once, as a link.${(() => {
+    const extra = [...(ev.portal_url ? [ev.portal_url] : []), ...(ev.extra_links || [])];
+    return extra.length > 0
+      ? `
+- The ONLY other links allowed are these, exactly as written, and only the ones THIS email's content piece calls for: ${extra.join(' , ')}`
+      : `
+- No other links of any kind.`;
+  })()}
+- The Open House is the center of every message. Whatever else the email talks about (their progress, a builder's story, a live event), tie it back to why the Open House is worth their hour.
+- Each email in this countdown has ONE job and ONE content piece, and they are different on purpose. Never re-say what an earlier email said: not its opening, not its description of the Open House, not its ask. If an earlier email already explained what the Open House is, do not explain it again.
 - NEVER mention price, cost, tuition, a discount, an offer, a deal, an early bird, a scholarship, seats, deadlines to buy, or say that anything costs nothing or comes at no charge. Any offer is shared live at the Open House only.
 - NEVER ask them to book a call. NEVER mention a cohort start date.
 - Never invent facts about the program, outcomes, salaries or jobs. Never invent facts about the person.
@@ -310,19 +355,37 @@ export function buildEventUserPrompt(params: GenerateMessageParams): string {
     parts.push(`- On the platform: ${ev.platform_activity}`);
   }
   const prev = params.compositeContext?.previousMessages || [];
-  if (prev.length > 0) {
+  if (ev.memory_timeline && ev.memory_timeline.trim()) {
+    // OH1g: every channel, both directions, so a question they asked by email or in the campus IM is answered
+    // rather than ignored. The repetition check on the earlier countdown bodies still runs after the draft.
+    parts.push('');
+    parts.push(ev.memory_timeline.trim());
+    parts.push('(Build on this; never repeat an earlier email. If they asked something, answer it.)');
+  } else if (prev.length > 0) {
     parts.push('');
     parts.push('WHAT WE ALREADY SENT THEM (build on it, never repeat it)');
+    // OH1f: long enough to see what was actually said (240 characters was little more than
+    // the greeting, which is how five drafts each re-explained the Open House).
     for (const m of prev.slice(0, 5)) {
-      const preview = (m.bodyPreview || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+      const preview = (m.bodyPreview || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 900);
       parts.push(`- ${m.sentAt} (${m.channel}): "${m.subject}"${preview ? `: ${preview}` : ''}`);
     }
+  }
+  if (ev.content_piece && ev.content_piece.trim()) {
+    parts.push('');
+    parts.push("THIS EMAIL'S CONTENT PIECE (from the content brain: verified, live; build the email around it, framed by the Open House)");
+    parts.push(ev.content_piece.trim());
   }
   parts.push('');
   if (ev.step_goal) parts.push(`THIS MESSAGE'S JOB: ${ev.step_goal}`);
   parts.push(`STEP INSTRUCTIONS: ${params.ai_instructions}`);
   if (params.tone) parts.push(`TONE: ${params.tone}`);
   return parts.join('\n');
+}
+
+/** Exported for tests only (OH1j asserts the final user prompt for a Maya Explorer draft). */
+export function buildUserPromptForTests(params: GenerateMessageParams): string {
+  return buildUserPrompt(params);
 }
 
 function buildUserPrompt(params: GenerateMessageParams): string {
@@ -364,16 +427,23 @@ function buildUserPrompt(params: GenerateMessageParams): string {
       parts.push('');
     }
 
+    // OH1j: Maya to an Explorer gets no booking/landing links and no cohort line (see buildSystemPrompt).
+    const mayaExplorer = params.persona === 'maya_explorer';
     parts.push('ALLOWED URLs (use ONLY these - NEVER invent a URL):');
-    parts.push(`- Booking/Strategy call: ${compositeContext.allowedUrls.booking}`);
-    parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
-    parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
-    if (compositeContext.allowedUrls.advisoryTool) {
-      parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (5-minute AI org design tool, no card needed - use as low-friction alternative when booking feels too aggressive)`);
+    if (mayaExplorer) {
+      parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
+      for (const l of params.allowed_links || []) parts.push(`- ${l}`);
+    } else {
+      parts.push(`- Booking/Strategy call: ${compositeContext.allowedUrls.booking}`);
+      parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
+      parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
+      if (compositeContext.allowedUrls.advisoryTool) {
+        parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (5-minute AI org design tool, no card needed - use as low-friction alternative when booking feels too aggressive)`);
+      }
     }
     parts.push('');
 
-    if (compositeContext.cohort) {
+    if (compositeContext.cohort && !mayaExplorer) {
       parts.push(`COHORT: ${compositeContext.cohort.name} | Starts ${compositeContext.cohort.startDate} (${compositeContext.cohort.daysUntilStart} days away) | ${compositeContext.cohort.seatsRemaining} seats remaining`);
       parts.push('');
     }

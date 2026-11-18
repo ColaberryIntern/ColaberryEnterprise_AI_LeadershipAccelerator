@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
+import { getExplorerControls } from '../../services/explorerGrowth/explorerControlsService';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   getContentHandler,
@@ -104,6 +105,16 @@ router.get(`${BASE}/content`, getContentHandler);
 
 // Eligibility
 router.get(`${BASE}/eligibility/:enrollmentId`, getEligibilityHandler);
+
+// OH1k: one front door - every switch that decides what reaches a learner, read only.
+router.get(`${BASE}/controls`, async (_req: Request, res: Response) => {
+  try {
+    res.json(await getExplorerControls());
+  } catch (err: any) {
+    console.error(`[ExplorerGrowth] controls read failed: ${err?.message}`);
+    res.status(500).json({ error: 'Unable to read the controls' });
+  }
+});
 
 // The writes. Registered last so the read surface above stays readable as a block, and so a
 // reviewer scanning this file sees the reads end before they begin. These two are the only

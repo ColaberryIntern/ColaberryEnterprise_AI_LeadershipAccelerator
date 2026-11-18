@@ -15,6 +15,7 @@ import { recordReplyClassification } from '../services/growthJourney/replyClassi
 import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sendInboundAutoReply } from '../services/inbound/inboundAutoReply';
+import { mirrorToGhlInBackground } from '../services/ghlMirrorService';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -266,7 +267,9 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
     // signature fail, since Mandrill signs against the exact URL it posted to. Derive this
     // route's own URL instead (append '/inbound' to the outbound base when the override is
     // set; otherwise reconstruct per-request exactly like the outbound handler's fallback).
-    const webhookKey = env.mandrillWebhookKey || '';
+    // OH1h: the inbound webhook has its own signing key (MANDRILL_INBOUND_WEBHOOK_KEY); the
+    // outbound tracking key is only the fallback when the inbound one is not configured.
+    const webhookKey = env.mandrillInboundWebhookKey || env.mandrillWebhookKey || '';
     if (webhookKey) {
       const signature = req.headers['x-mandrill-signature'] as string || '';
       const inboundWebhookUrl = env.mandrillWebhookUrl
@@ -372,6 +375,9 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
           campaign_id: campaignId,
         },
       });
+
+      // OH1l: GHL mirror note (setting ghl_mirror_enabled, default off). Fire-and-forget.
+      mirrorToGhlInBackground({ event: 'reply_received', lead, subject, body });
 
       // Record interaction outcome
       await InteractionOutcome.create({
@@ -504,6 +510,31 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
             message: String(routeErr?.message ?? '').slice(0, 200),
           }),
         );
+      }
+
+      // OH1h: a reply to a MAYA campaign is Maya's to answer - drafted from the one memory into the review queue
+      // (sent at once only when maya_email_autoreply_enabled is on, never for an Explorer). The generic auto-reply
+      // below never runs for it. Never throws; a non-Maya campaign returns handled=false and nothing changes.
+      try {
+        const { maybeDraftMayaReply } = await import('../services/maya/mayaReplyDraftService');
+        const maya = await maybeDraftMayaReply({
+          leadId: lead.id,
+          fromEmail,
+          leadName: (lead as any).name ?? null,
+          subject,
+          body,
+          messageId: msg.headers?.['Message-Id'] ?? msg.headers?.['message-id'] ?? null,
+          inReplyTo: inReplyTo ?? null,
+          campaignId,
+          explorer: explorerHandled,
+        });
+        if (maya.handled) {
+          console.log(`[MandrillInbound] Maya reply for lead ${lead.id}: ${maya.outcome}`);
+          processed++;
+          continue;
+        }
+      } catch (mayaErr: any) {
+        console.warn(`[MandrillInbound] Maya reply draft failed for lead ${lead.id}: ${mayaErr?.message}`);
       }
 
       // Auto-reply: generate an AI response and send it back

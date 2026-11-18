@@ -20,10 +20,16 @@ async function emitFailureEvent(params: Parameters<typeof import('./aiEventServi
   }
 }
 
+/**
+ * 'open_house' (OH1m) is the Open House countdown call on our own agent
+ * (SYNTHFLOW_OPEN_HOUSE_AGENT_ID). It has NO fallback: unset means the call is refused.
+ */
+export type VoiceCallType = 'welcome' | 'interest' | 'callback' | 'internship_interview' | 'project_discovery' | 'open_house';
+
 interface VoiceCallParams {
   name: string;
   phone: string;
-  callType: 'welcome' | 'interest' | 'callback' | 'internship_interview' | 'project_discovery';
+  callType: VoiceCallType;
   /**
    * Which brand is calling. Absent means the Colaberry bootcamp agents, which is what
    * every existing caller means and why this is optional rather than required.
@@ -51,6 +57,27 @@ interface SynthflowResponse {
   success: boolean;
   data?: any;
   error?: string;
+  /** OH1m: on a refused dial, Synthflow's HTTP status and its raw response body. */
+  status?: number;
+  rawBody?: string;
+}
+
+/**
+ * Read a response body as text first, then try JSON. Synthflow's error pages are not always
+ * JSON, and `response.json()` on an HTML error threw away the only evidence of why a dial
+ * was refused. Falls back to json() for fetch-likes that have no text().
+ */
+async function readBody(response: any): Promise<{ raw: string; data: any }> {
+  if (typeof response?.text === 'function') {
+    const raw = String(await response.text());
+    try {
+      return { raw, data: raw.trim() ? JSON.parse(raw) : {} };
+    } catch {
+      return { raw, data: null };
+    }
+  }
+  const data = await response.json();
+  return { raw: JSON.stringify(data ?? null), data };
 }
 
 /**
@@ -72,7 +99,14 @@ interface SynthflowResponse {
  * charity for help, spoken to as a sales lead. So an unconfigured slot returns empty and the
  * caller skips deterministically rather than dialling with somebody else's voice.
  */
-export function resolveAgentId(params: { callType: 'welcome' | 'interest' | 'callback' | 'internship_interview' | 'project_discovery'; brandSlug?: string }): string {
+export function resolveAgentId(params: { callType: VoiceCallType; brandSlug?: string }): string {
+  /*
+   * OH1m: the Open House countdown call, on our own agent. FIRST and with NO FALLBACK:
+   * a registrant expecting a friendly "see you at the Open House" must never reach an
+   * agent carrying a sales or callback script. Unset returns '' and triggerVoiceCall
+   * refuses the call with an error naming the missing variable.
+   */
+  if (params.callType === 'open_house') return env.synthflowOpenHouseAgentId || '';
   /*
    * Project discovery. FIRST, for the same reason the internship slot is first:
    * a student expecting to be asked about the system they are building must never
@@ -166,6 +200,13 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   }
 
   const agentId = resolveAgentId({ callType: params.callType, brandSlug: params.brandSlug });
+
+  if (!agentId && params.callType === 'open_house') {
+    // Refused, not skipped: the countdown step records the error instead of claiming a call.
+    const error = 'SYNTHFLOW_OPEN_HOUSE_AGENT_ID is not set: refusing to place an Open House call on any other agent';
+    console.warn(`[Synthflow] ${error}`);
+    return { success: false, error, data: { skipped: true, reason: 'no_open_house_agent_id' } };
+  }
 
   if (!agentId) {
     console.warn(`[Synthflow] No agent ID configured for ${params.callType}. Skipping.`);
@@ -293,22 +334,28 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
       signal: AbortSignal.timeout(15000),
     });
 
-    const data = await response.json();
+    // OH1m: text first, then JSON, so a non-JSON error body is kept rather than thrown away.
+    const { raw, data } = await readBody(response);
 
     if (!response.ok) {
-      console.error('[Synthflow] API error:', response.status, redactForLogs(JSON.stringify(data)));
+      console.error('[Synthflow] API error:', response.status, redactForLogs(raw).slice(0, 500));
       emitFailureEvent({
         event_type: 'synthflow_call_failed',
         outcome: 'failure',
         external_system: 'synthflow',
-        error_class: classifyError({ status: response.status, message: JSON.stringify(data) }),
-        metadata: { message: redactForLogs(JSON.stringify(data)).slice(0, 200) },
+        error_class: classifyError({ status: response.status, message: raw }),
+        metadata: { message: redactForLogs(raw).slice(0, 200) },
       });
-      return { success: false, error: JSON.stringify(data) };
+      return {
+        success: false,
+        error: `Synthflow HTTP ${response.status}: ${raw.slice(0, 500)}`,
+        status: response.status,
+        rawBody: raw.slice(0, 2000),
+      };
     }
 
     // Extract call_id from Synthflow response (varies by API version)
-    const d = data as Record<string, any>;
+    const d = (data && typeof data === 'object' ? data : {}) as Record<string, any>;
     const callId = d.call_id || d.id || d._id || d.data?.call_id || d.data?.id || null;
     if (!callId) {
       console.warn('[Synthflow] call_id is null after extraction. Full response:', redactForLogs(JSON.stringify(d)));

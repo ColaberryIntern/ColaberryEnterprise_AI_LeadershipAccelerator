@@ -489,6 +489,24 @@ function params<T extends object>(q: T): Record<string, string> {
   return out;
 }
 
+/** OH1k: every switch that decides what reaches a learner. `null` = could not be read (never a guessed "off"). */
+export interface ExplorerControls {
+  killSwitch: { active: boolean | null; readable: boolean };
+  countdown: { campaignId: string | null; status: string | null; adminUrl: string | null; readable: boolean };
+  switches: {
+    mayaEmailAutoReply: boolean | null;
+    ghlMirror: boolean | null;
+    voiceCalls: boolean;
+    openHouseAgentConfigured: boolean;
+  };
+  shelves: Record<string, { servable: number; draft: number }> | null;
+}
+
+export async function getControls(): Promise<ExplorerControls> {
+  const { data } = await api.get<ExplorerControls>(`${BASE}/controls`);
+  return data;
+}
+
 export async function getSummary(): Promise<ExplorerSummary> {
   const { data } = await api.get<ExplorerSummary>(`${BASE}/summary`);
   return data;
