@@ -43,7 +43,9 @@
 .brief{margin:0 0 40px;padding:22px 24px;background:var(--bg-elevated);border:1px solid var(--line);border-radius:var(--r)}
 .brief h2{margin:0 0 16px;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
 .brief ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px}
-.brief li{display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:4px;align-items:start;padding-top:12px;border-top:3px solid var(--accent);min-width:0}
+/* align-content:start: every li stretches to the tallest beat in its row, and without it the
+   spare height went to the label's row, dropping the text below its label (18 Nov 2026). */
+.brief li{display:grid;grid-template-columns:auto 1fr;column-gap:10px;row-gap:4px;align-items:start;align-content:start;padding-top:12px;border-top:3px solid var(--accent);min-width:0}
 .brief .n{grid-row:1/span 2;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-contrast);font-weight:700;font-size:.85rem}
 .brief b{color:var(--fg);line-height:1.3}
 .brief p{margin:0;font-size:.92rem;line-height:1.5;color:var(--fg-muted)}

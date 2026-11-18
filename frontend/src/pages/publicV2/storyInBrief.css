@@ -8,8 +8,14 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.cbv2-brief__title {
+/* Three classes, because `.cbv2-section > .cbv2-wrap > h2` (cinematicV2.css) gives every
+   section heading display scale and outranks a single class: the band printed its label
+   at 41px in the display face (measured live, 18 Nov 2026). It is a caption, not a title. */
+.cbv2-brief > .cbv2-wrap > .cbv2-brief__title {
   margin: 0 0 var(--space-5);
+  font-family: inherit;
+  line-height: 1.3;
+  text-wrap: wrap;
   font-size: var(--fs-caption);
   font-weight: var(--fw-bold);
   letter-spacing: 0.08em;
