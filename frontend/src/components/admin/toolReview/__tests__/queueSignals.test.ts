@@ -15,7 +15,7 @@ import {
   suggestedStep,
   topDuplicate,
   PACKAGE_BLOCKS,
-} from '../decideOverview';
+} from '../queueSignals';
 import type {
   ChangeRequest,
   PackageReadiness,

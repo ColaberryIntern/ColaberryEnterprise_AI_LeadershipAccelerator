@@ -5,11 +5,20 @@ import DecisionPanel from '../../components/admin/toolReview/DecisionPanel';
 import GrantOutcomePanel from '../../components/admin/toolReview/GrantOutcomePanel';
 import DuplicateCandidatesPanel from '../../components/admin/toolReview/DuplicateCandidatesPanel';
 import ToolRequestFacts from '../../components/admin/toolReview/ToolRequestFacts';
+import DecideOverview from '../../components/admin/toolReview/DecideOverview';
+import QueueCard from '../../components/admin/toolReview/QueueCard';
+import TaskPanel from '../../components/admin/toolReview/TaskPanel';
+import InstructionsInForce from '../../components/admin/toolReview/InstructionsInForce';
+import AgentDashboardWalkthrough, { DECIDER_STEPS } from '../../components/admin/agentDashboard/AgentDashboardWalkthrough';
+import ReportAProblem from './marketing/bugReport/ReportAProblem';
+import { decideOrder } from '../../components/admin/toolReview/queueSignals';
 import RequestPackage, { PackageBounced } from '../../components/admin/toolReview/RequestPackage';
 import {
   errorMessage,
+  fetchAgentDomainTasks,
   fetchAllChangeRequests,
   type ChangeRequest,
+  type GroupedTask,
 } from '../../services/agentDomainApi';
 import {
   assignExistingTool,
@@ -52,6 +61,20 @@ import {
  * decided the agent may act more freely — so a grant here routinely ends with the agent holding
  * the tool and still unable to use it, which the outcome panel reports rather than hides.
  *
+ * ## AF12.3 — the overview, and why the detail did not change
+ *
+ * Ali, 17 Nov 2026, looking at the OTHER screen: *"When the request comes in make sure I can see
+ * an overview and click on it to get the highly formatted details... Conditional formatting,
+ * icons, emojis, visuals etc to help me decide what the next step should be and allow me to add my
+ * own input like it says in the desc instead of just approving like the old design."*
+ *
+ * The screenshot behind that sentence was `/admin/change-requests`, which does have only Approve
+ * and Decline. The highly formatted detail he was asking for is this page and he had never seen
+ * it, because nothing in the product linked here from the queue he was working out of. So the
+ * detail below is unchanged on purpose and the work was on the way IN: a queue of plain text rows
+ * became an overview with the three facts that decide whether to open a request at all, the five
+ * verbs were taken off the other screen, and the two pages now point at each other.
+ *
  * ## A 403 is not an error here
  *
  * The queue is admin-only at the API. A non-admin who reaches this route sees "not for you" rather
@@ -74,6 +97,13 @@ const STATUS_BADGE: Record<ChangeRequest['status'], string> = {
 
 export default function AdminToolRequestReviewPage() {
   const [queue, setQueue] = useState<ChangeRequest[] | null>(null);
+  /**
+   * AF12.1. Null until the task read answers, which is NOT the same as no tasks: `TaskPanel`
+   * renders those two differently, because a failed lookup shown as "no task" would invite a
+   * decision made without the siblings it needed.
+   */
+  const [tasks, setTasks] = useState<GroupedTask[] | null>(null);
+  const [taskProblem, setTaskProblem] = useState('');
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -109,6 +139,19 @@ export default function AdminToolRequestReviewPage() {
         // would otherwise render a list beside "choose a request" and no way to read the record.
         const open = tools.find((r) => r.status === 'submitted') ?? tools[0];
         if (open) setSelectedId(open.id);
+
+        // AF12.1. Its own try, and a failure here must not fail the page: the queue and the
+        // detail are readable without the grouping, and losing the whole console because one
+        // projection was unavailable would be a worse outcome than deciding one tool at a time.
+        try {
+          const t = await fetchAgentDomainTasks();
+          if (alive) setTasks(t.tasks);
+        } catch (e) {
+          if (alive) {
+            setTasks([]);
+            setTaskProblem(errorMessage(e, 'Could not read which task these tools belong to.'));
+          }
+        }
       } catch (e) {
         if (!alive) return;
         const status = (e as { response?: { status?: number } })?.response?.status;
@@ -148,6 +191,17 @@ export default function AdminToolRequestReviewPage() {
   }, [selectedId, loadHistory]);
 
   const selected = (queue ?? []).find((r) => r.id === selectedId) ?? null;
+
+  /**
+   * Which task a request belongs to, found in the list already loaded rather than by asking the
+   * server again with `?request_id=`.
+   *
+   * The endpoint accepts that parameter and this page deliberately does not use it: resolving the
+   * siblings in a second call would let the panel disagree with the overview beside it, which is
+   * exactly the kind of drift the grouping was centralised to prevent.
+   */
+  const taskOf = (id: string): GroupedTask | null =>
+    (tasks ?? []).find((t) => t.tools.some((x) => x.request_id === id)) ?? null;
 
   /**
    * AF11.4 — carry out an assignment that has just been recorded.
@@ -249,32 +303,36 @@ export default function AdminToolRequestReviewPage() {
       )}
 
       {!loading && !forbidden && queue && queue.length > 0 && (
-        <div className="row g-3">
+        <>
+          {/* AF12.3 — THE OVERVIEW, above everything, because the first question is not
+              "which request" but "how many of these can I act on at all". */}
+          <SectionCard
+            title="Where the queue stands"
+            subtitle="What is waiting, what can actually be decided, and what each one needs next"
+          >
+            <DecideOverview requests={queue} tasks={tasks} />
+          </SectionCard>
+
+          {/* The decider's walkthrough. Five steps, pointing at real elements on this page. */}
+          <AgentDashboardWalkthrough audience="decider" steps={DECIDER_STEPS} />
+
+          <div className="row g-3">
           <div className="col-12 col-xl-4">
-            <SectionCard title="The queue" subtitle={`${queue.length} tool request${queue.length === 1 ? '' : 's'}`}>
-              <div className="list-group list-group-flush">
-                {queue.map((r) => (
-                  <button
-                    type="button"
+            <SectionCard
+              title="The queue"
+              subtitle={`${queue.length} tool request${queue.length === 1 ? '' : 's'}, oldest waiting first`}
+            >
+              {/* Oldest waiting first, settled after. The API returns newest first, which put the
+                  request most needing a decision at the bottom of the page. */}
+              <div data-testid="queue-cards">
+                {[...queue].sort(decideOrder).map((r) => (
+                  <QueueCard
                     key={r.id}
-                    className={`list-group-item list-group-item-action${r.id === selectedId ? ' active' : ''}`}
-                    aria-current={r.id === selectedId}
-                    onClick={() => setSelectedId(r.id)}
-                  >
-                    <div className="d-flex gap-2 align-items-start">
-                      <span className={`badge ${r.id === selectedId ? 'bg-light text-dark' : STATUS_BADGE[r.status]}`}>
-                        {r.status}
-                      </span>
-                      <span className="flex-grow-1 text-start">
-                        <span className="d-block fw-semibold small">{r.title}</span>
-                        <span className={`d-block small ${r.id === selectedId ? '' : 'text-muted'}`}>
-                          {r.tool_request ? r.tool_request.tool_name : 'no details stored'}
-                          {' · '}
-                          {r.requested_by_identity}
-                        </span>
-                      </span>
-                    </div>
-                  </button>
+                    request={r}
+                    task={taskOf(r.id)}
+                    selected={r.id === selectedId}
+                    onOpen={() => setSelectedId(r.id)}
+                  />
                 ))}
               </div>
             </SectionCard>
@@ -311,6 +369,20 @@ export default function AdminToolRequestReviewPage() {
                   )}
                 </SectionCard>
 
+                {/* AF12.1 — THE TASK, before the specification of one tool.
+                    Deciding tool 2 of 3 without seeing the other two is deciding blind, and this
+                    is the only place it is visible before the decision rather than after it. */}
+                <SectionCard
+                  title="The task this tool is part of"
+                  subtitle="A task often needs several tools, and they are decided together or they are decided blind"
+                >
+                  <TaskPanel
+                    task={taskOf(selected.id)}
+                    requestId={selected.id}
+                    problem={taskProblem || undefined}
+                  />
+                </SectionCard>
+
                 <SectionCard
                   title={selected.title}
                   subtitle={`${selected.domain_key} · filed by ${selected.requested_by_identity}${selected.requested_at ? ` · ${when(selected.requested_at)}` : ''}`}
@@ -333,6 +405,15 @@ export default function AdminToolRequestReviewPage() {
                 </SectionCard>
 
                 <SectionCard title="Your decision">
+                  {/* AF11.14's first screen. The instruction box below APPENDS to a log, so a
+                      decider typing into it without seeing what is already recorded is adding to
+                      rules they cannot read. The record has had an API since AF11.14 and nothing
+                      has ever displayed it. */}
+                  <InstructionsInForce
+                    agentId={selected.tool_request?.agent_id ?? null}
+                    capabilityId={selected.tool_request?.capability_id ?? null}
+                  />
+
                   {/* KEYED ON THE REQUEST, so the panel remounts when the selection changes.
                       Without it the panel keeps its own verb and reason across requests: choose
                       one, type a denial reason, switch to another, and that reason is still in
@@ -379,7 +460,17 @@ export default function AdminToolRequestReviewPage() {
               </>
             )}
           </div>
-        </div>
+          </div>
+
+          {/* AF12.1 — the reporter, on the console as well as the hub. The person deciding hits a
+              broken screen as often as the person filing, and a decision abandoned because a panel
+              would not load is the kind of thing that never gets reported at all. */}
+          <ReportAProblem
+            brandLabel={selected?.domain_key ?? null}
+            endpoint="/api/admin/agent-domain/bug-report"
+            extra={{ area: 'tool-request-review', requestId: selectedId || null }}
+          />
+        </>
       )}
     </>
   );

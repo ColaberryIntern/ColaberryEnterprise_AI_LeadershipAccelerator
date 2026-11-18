@@ -696,3 +696,44 @@ export async function fetchAgentDomainTasks(requestId?: string): Promise<AgentDo
     ...(data.focus ? { focus: data.focus } : {}),
   };
 }
+
+/**
+ * AF11.14 — the standing instructions already in force on one capability.
+ *
+ * `state` is three values and never two. A cleared instruction and one that was never set look
+ * identical in the text and are different facts about a production agent: one says somebody
+ * decided there should be no rules, the other says nobody has thought about it.
+ */
+export interface CapabilityInstructions {
+  agent_id: string;
+  capability_id: string;
+  instructions: string | null;
+  state: 'never_set' | 'cleared' | 'in_force';
+  set_by_identity: string | null;
+  set_at: string | null;
+  note: string;
+  history: Array<{
+    instructions: string;
+    set_by_identity: string;
+    set_at: string;
+    cleared: boolean;
+  }>;
+}
+
+/**
+ * Read what is already in force before adding to it.
+ *
+ * The decision panel's instruction box writes a NEW record — the table is a log and nothing is
+ * ever replaced — so a decider typing into it without seeing what is already there is appending
+ * to rules they cannot read. This is the record's first screen; it has had an API since AF11.14
+ * and nothing has ever displayed it.
+ */
+export async function fetchCapabilityInstructions(
+  agentId: string,
+  capabilityId: string,
+): Promise<CapabilityInstructions> {
+  const { data } = await api.get<CapabilityInstructions>(
+    `/api/admin/agents/${encodeURIComponent(agentId)}/capabilities/${encodeURIComponent(capabilityId)}/instructions`,
+  );
+  return data;
+}

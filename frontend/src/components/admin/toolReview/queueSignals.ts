@@ -1,5 +1,5 @@
 /**
- * decideOverview — the arithmetic behind the decide console's overview. PURE.
+ * queueSignals — the arithmetic behind the decide console's overview. PURE.
  *
  * Ali, 17 Nov 2026: *"When the request comes in make sure I can see an overview and click on it to
  * get the highly formatted details... Conditional formatting, icons, emojis, visuals etc to help

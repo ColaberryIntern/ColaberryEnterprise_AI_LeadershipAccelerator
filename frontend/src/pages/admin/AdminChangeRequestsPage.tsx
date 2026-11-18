@@ -223,6 +223,18 @@ export default function AdminChangeRequestsPage() {
     }
   }
 
+  /**
+   * The queue, split by what KIND of thing is being asked for.
+   *
+   * Two buttons are the right answer for a change request and the wrong one for a tool grant, and
+   * the server agrees: the five verbs are refused on a change request and `decideChangeRequest`'s
+   * approve/decline is not how a tool request should be settled. Splitting it here means neither
+   * is offered the other's control.
+   */
+  const waiting = (queue ?? []).filter((r) => r.status === 'submitted');
+  const toolWaiting = waiting.filter((r) => r.kind === 'tool');
+  const changeWaiting = waiting.filter((r) => r.kind !== 'tool');
+
   return (
     <>
       <PageHeader title="Change Requests" />
@@ -392,15 +404,52 @@ export default function AdminChangeRequestsPage() {
               <p className="text-muted small">
                 Approving records that you approved it, and when. It does not start any work.
               </p>
+
+              {/* AF12.3 — TOOL REQUESTS LEAVE THIS QUEUE.
+                  Ali, 17 Nov 2026, with a screenshot of this very list: *"allow me to add my own
+                  input like it says in the desc instead of just approving like the old design."*
+
+                  The old design is these two buttons, and the five verbs, the ten-block package,
+                  the duplicate check and the instruction box have existed on `/admin/tool-requests`
+                  since AF11.3 — he had never seen them, because nothing in the product led here
+                  from there. A tool request offered Approve and Decline on this screen got settled
+                  from a title, and the server refuses the five verbs on a change request anyway,
+                  so one of these two queues was always going to be the wrong place to answer from.
+
+                  They are LINKED rather than hidden: a count with no way through would be the same
+                  dead end in a politer form. */}
+              {toolWaiting.length > 0 && (
+                <div className="alert alert-info small" role="status" data-testid="tool-requests-elsewhere">
+                  <div className="fw-semibold">
+                    <i className="ri-tools-line me-1" aria-hidden="true" />
+                    {toolWaiting.length === 1
+                      ? 'One tool request is waiting, and it is decided on its own screen.'
+                      : `${toolWaiting.length} tool requests are waiting, and they are decided on their own screen.`}
+                  </div>
+                  <div>
+                    A tool grant is the moment an agent stops observing and starts acting, so it
+                    gets the ten-block case, the duplicate check, five answers rather than two, and
+                    a box for your own instructions. None of that fits a row with two buttons.
+                  </div>
+                  <a className="btn btn-sm btn-primary mt-2" href="/admin/tool-requests">
+                    Open the tool request console
+                  </a>
+                </div>
+              )}
+
               {decideProblem && (
                 <div className="alert alert-danger small" role="alert">{decideProblem}</div>
               )}
-              {queue.filter((r) => r.status === 'submitted').length === 0 ? (
-                <p className="text-muted small mb-0">Nothing is waiting on a decision.</p>
+              {changeWaiting.length === 0 ? (
+                <p className="text-muted small mb-0">
+                  {toolWaiting.length > 0
+                    ? 'No change requests are waiting. The tool requests above are decided on their own screen.'
+                    : 'Nothing is waiting on a decision.'}
+                </p>
               ) : (
                 // Oldest first: the server orders requested_at DESC, which put the request most
                 // needing a decision at the bottom of the page.
-                queue.filter((r) => r.status === 'submitted').slice().sort(oldestFirst).map((r) => (
+                changeWaiting.slice().sort(oldestFirst).map((r) => (
                   <RequestRow key={r.id} r={r}>
                     <div className="d-flex flex-column gap-2" style={{ minWidth: 220 }}>
                       <div className="d-flex gap-2">
