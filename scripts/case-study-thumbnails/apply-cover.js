@@ -81,6 +81,7 @@ function stop(msg, code = 2) { console.log(`STOP: ${msg}`); process.exit(code); 
   const overrides = require('/app/dist/services/caseStudy/caseStudySnapshotOverrides');
   const store = require('/app/dist/services/caseStudy/caseStudySnapshotStore');
   const gate = require('/app/dist/services/caseStudy/caseStudyPublishGate');
+  const { serviceLinkGateFacts } = require('/app/dist/services/caseStudy/caseStudyServiceLinkGateFacts');
   const sections = require('/app/dist/services/caseStudy/caseStudyPublicSections');
   const review = require('/app/dist/services/caseStudy/caseStudyAdminReview');
   const pub = require('/app/dist/services/caseStudy/caseStudyPublicationService');
@@ -161,7 +162,9 @@ function stop(msg, code = 2) { console.log(`STOP: ${msg}`); process.exit(code); 
   const provenance = { ...(snap.provenance || {}), ...(application ? application.entries : {}) };
   const asApproved = { id: 'composed', version: snap.version + 1, status: 'approved', approvedBy: ACTOR, approvedAt: new Date().toISOString(), content: composed, provenance };
   for (const surfaceKey of (live.length ? live : SURFACES)) {
-    const d = gate.evaluateCaseStudyPublishGate({ surfaceKey, caseStudy: record, snapshot: asApproved });
+    // The pure gate needs the record's service-link facts passed in; without them every record reads as
+    // `no_confirmed_service_link`, even one whose link is confirmed (CF3, 17 Nov 2026).
+    const d = gate.evaluateCaseStudyPublishGate({ surfaceKey, caseStudy: record, snapshot: asApproved, serviceLinks: await serviceLinkGateFacts(ID) });
     const rest = (d.blockers || []).filter((b) => !RESTING.has(b.code));
     console.log(`gate ${surfaceKey}: ${rest.length ? 'BLOCKED ' + JSON.stringify(rest.map((b) => [b.code, b.field])) : 'clean'}`);
     if (rest.length) stop('a blocker other than approval itself');
