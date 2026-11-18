@@ -619,6 +619,10 @@ export interface DatasetDetail {
   columns: DatasetColumn[];
   row_count: number | null;
   relationships: DatasetRelationship[];
+  /** How many joins the table declares in total. `enrollments` declares 133; the list is capped. */
+  relationship_count: number;
+  /** TRUE when the join list is shorter than `relationship_count`. */
+  relationships_incomplete: boolean;
   /** TRUE when fewer column names came back than the table has. Say so rather than hide it. */
   columns_incomplete: boolean;
 }

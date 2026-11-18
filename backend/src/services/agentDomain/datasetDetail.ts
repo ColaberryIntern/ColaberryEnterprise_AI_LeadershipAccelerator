@@ -84,6 +84,18 @@ export interface DatasetDetail {
   readonly row_count: number | null;
   readonly relationships: ReadonlyArray<DatasetRelationship>;
   /**
+   * How many joins the table declares in total, which is not the length of the list above.
+   *
+   * Added 2026-11-18 after an audit against real data: `enrollments` declares **133** and the
+   * panel was showing 40 with nothing to say the other 93 existed. That is the same mistake
+   * `columns_incomplete` was written to prevent, made one field along, and it is worse here
+   * because a decider reading "joins to 40 tables" would reasonably conclude that is the whole
+   * blast radius of a read grant.
+   */
+  readonly relationship_count: number;
+  /** TRUE when `relationships` is shorter than `relationship_count`. */
+  readonly relationships_incomplete: boolean;
+  /**
    * TRUE when `columns` is shorter than `column_count` — fewer names than the table has.
    *
    * It covers both ways that happens, which is why it is defined on the LIST rather than on the
@@ -184,12 +196,15 @@ export function shapeDatasetDetail(row: DatasetDetailRow): DatasetDetail {
   // catalog, for the same reason: reporting 0 columns for a scanned table reads as "empty table".
   const columnCount = declared && declared > 0 ? declared : names.length;
 
-  const relationships = Array.isArray(row.relationships)
+  // Readable joins are counted BEFORE the cap, so the count is what the table declares rather
+  // than what happened to fit. Unreadable entries are excluded from both, because claiming a
+  // join nobody can name would be its own kind of lie.
+  const readableJoins = Array.isArray(row.relationships)
     ? row.relationships
       .map(relationshipOf)
       .filter((r): r is DatasetRelationship => r !== null)
-      .slice(0, MAX_DETAIL_RELATIONSHIPS)
     : [];
+  const relationships = readableJoins.slice(0, MAX_DETAIL_RELATIONSHIPS);
 
   return {
     table_name: String(row.table_name).trim(),
@@ -200,6 +215,8 @@ export function shapeDatasetDetail(row: DatasetDetailRow): DatasetDetail {
     columns,
     row_count: countOrNull(row.row_count),
     relationships,
+    relationship_count: readableJoins.length,
+    relationships_incomplete: relationships.length < readableJoins.length,
     columns_incomplete: columns.length < columnCount,
   };
 }
