@@ -72,6 +72,15 @@ export interface SpendAllocation {
   totalCents: number;
   daysCovered: number;
   windowDays: number;
+  /**
+   * The FIRST day in the window that carries spend, and the last.
+   *
+   * Both are needed to tell a gap from a window that is simply longer than the campaign.
+   * `daysCovered < windowDays` says nothing on its own: a 30-day campaign viewed in a
+   * 90-day window has 60 uncovered days and no missing data. A gap is an uncovered day
+   * BETWEEN these two dates, which is the only case where spend is actually understated.
+   */
+  firstDayRecorded: string | null;
   lastDayRecorded: string | null;
 }
 
@@ -186,6 +195,8 @@ export function allocateSpend(facts: SpendFact[], windowStart: string, windowEnd
     totalCents: campaigns.reduce((t, c) => t + c.spendCents, 0),
     daysCovered: coveredDays.size,
     windowDays: windowSet.size,
+    // Sorted once; ISO dates sort lexically, so first and last are the ends of the run.
+    firstDayRecorded: Array.from(coveredDays).sort()[0] ?? null,
     lastDayRecorded: Array.from(coveredDays).sort().pop() ?? null,
   };
 }

@@ -72,6 +72,32 @@ export function profitTakeaway(d: AdProfitability): string {
   return parts.join(' ');
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * Days inside the campaign's own run that carry NO spend. This is the only honest
+ * definition of a gap, and it is NOT `windowDays - daysCovered`.
+ *
+ * The old test was `daysCovered < windowDays - staleDays - 1`, which fires whenever the
+ * window is longer than the campaign ran. Measured on production 2026-11-17: Meta spend
+ * runs 19 Oct to 17 Nov with every one of those 30 days recorded and ZERO missing, yet
+ * the 90-day view printed "Days with ads running and nothing recorded make the ads look
+ * cheaper than they were" on every load. That sentence is a claim about missing records,
+ * so making it when none are missing teaches the reader to discount the one number on
+ * the page that is solid.
+ *
+ * Days before the first ad ever ran are not a gap. Days after the last recorded day are
+ * staleness, which the warning above already covers on its own terms.
+ */
+export function missingSpendDays(c: AdProfitability['coverage']): number {
+  if (!c.firstDayRecorded || !c.lastDayRecorded) return 0;
+  const from = Date.parse(`${c.firstDayRecorded}T00:00:00Z`);
+  const to = Date.parse(`${c.lastDayRecorded}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return 0;
+  const span = Math.round((to - from) / DAY_MS) + 1;
+  return Math.max(0, span - c.daysCovered);
+}
+
 /** Warnings that change how much to trust the numbers, most serious first. */
 export function coverageWarnings(d: AdProfitability): string[] {
   const out: string[] = [];
@@ -79,8 +105,9 @@ export function coverageWarnings(d: AdProfitability): string[] {
   if (c.lastDayRecorded && c.staleDays != null && c.staleDays > 1) {
     out.push(`Spend is recorded only through ${c.lastDayRecorded}. The ${c.staleDays} days since have no spend, so cost is understated and return overstated.`);
   }
-  if (c.daysCovered > 0 && c.daysCovered < c.windowDays - (c.staleDays ?? 0) - 1) {
-    out.push(`Spend covers ${c.daysCovered} of ${c.windowDays} days in this window. Days with ads running and nothing recorded make the ads look cheaper than they were.`);
+  const missing = missingSpendDays(c);
+  if (missing > 0) {
+    out.push(`${missing} ${missing === 1 ? 'day' : 'days'} between ${c.firstDayRecorded} and ${c.lastDayRecorded} carry no spend, although the ads were running either side, so the ads look cheaper than they were.`);
   }
   if (d.windowDays < 60 && d.totals.spend > 0) {
     out.push('Explorers take weeks to start paying, so a short window understates the return. Judge a campaign on 90 days.');

@@ -46,7 +46,28 @@ describe('allocateSpend', () => {
     const a = allocateSpend([fact({ periodStart: '2026-10-01', periodEnd: '2026-10-10' })], '2026-10-01', '2026-10-31');
     expect(a.daysCovered).toBe(10);
     expect(a.windowDays).toBe(31);
+    expect(a.firstDayRecorded).toBe('2026-10-01');
     expect(a.lastDayRecorded).toBe('2026-10-10');
+  });
+
+  // Both ends of the run are reported so a reader can tell a HOLE from a window that is
+  // merely longer than the campaign. Here the run is 1-5 Oct with 3 Oct missing: the span
+  // is 5 days and only 4 carry spend, which is the one case where spend is understated.
+  it('names both ends of the run, so a hole inside it can be told from a short campaign', () => {
+    const a = allocateSpend([
+      fact({ periodStart: '2026-10-01', periodEnd: '2026-10-02' }),
+      fact({ periodStart: '2026-10-04', periodEnd: '2026-10-05' }),
+    ], '2026-10-01', '2026-10-31');
+    expect(a.firstDayRecorded).toBe('2026-10-01');
+    expect(a.lastDayRecorded).toBe('2026-10-05');
+    expect(a.daysCovered).toBe(4);
+  });
+
+  it('reports both ends as null when the window holds no spend at all', () => {
+    const a = allocateSpend([fact({ periodStart: '2026-09-01', periodEnd: '2026-09-02' })], '2026-10-01', '2026-10-31');
+    expect(a.daysCovered).toBe(0);
+    expect(a.firstDayRecorded).toBeNull();
+    expect(a.lastDayRecorded).toBeNull();
   });
 
   it('steps calendar days across DST and month ends', () => {
