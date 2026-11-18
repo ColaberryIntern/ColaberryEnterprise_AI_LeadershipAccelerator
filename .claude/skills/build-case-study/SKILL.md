@@ -1,6 +1,6 @@
 ---
 name: build-case-study
-description: Author a real, evidence-backed record in the Case Study OS — discovery, path scope, whole-section overrides, commit-pinned evidence, metrics with denominators, and the publish gate. Use for any new or rewritten case study.
+description: Author a real, evidence-backed record in the Case Study OS — discovery, path scope, whole-section overrides, commit-pinned evidence, metrics with denominators, and the publish gate — run as a loop-architect loop that does not end until a completeness audit against the 5 most complete approved, published records is clean (§12). Use for any new or rewritten case study.
 ---
 
 # build-case-study
@@ -20,6 +20,15 @@ not an option: author it after the evidence and the metrics, from the record onl
 draws the flow and charts the figures the record already verifies; it introduces no
 number. A record with no verified outcome still draws how its system works and shows no
 figures; the band says so in words.
+
+**The build is a loop, and it ends on a clean completeness audit, not on a feeling (§12).**
+Since 2026-11-17 (Ali: "Every time it goes through it needs me to correct it and tell it to
+look at the skill and make sure all fields are accounted for ... add the loop architect inside
+it so it compares it to 5 other approved case studies to ensure it has all the parts"), every
+build runs under `/loop-architect`, and `scripts/completeness-audit.js` compares the draft with
+the five most complete approved, published records, field by field. Run it at the START to
+turn the gaps into the plan, after every task, and before any report to Ali. A build with a
+GAP, a THIN list or a failed record check is not done, and Ali is never the one who finds it.
 
 **Start section 8 (images) FIRST.** Dispatch an agent to find or produce the real
 images before anything else begins — it takes longer than the rest and a case study
@@ -119,9 +128,19 @@ applyHumanOverride({ path: 'situation.narrative', ... })   // ✗ FAILS
 applyHumanOverride({ path: 'situation', value: {...} })     // ✓ creates the section
 ```
 
-Set the complete object: `identity`, `taxonomy`, `situation`, `architecture`,
-`buildTimeline`, `measurement`, `heroMetrics`, `roadmap`, `contributors`, `artifacts`,
-plus the three partner-assessment sections in §3a: `deployment`, `engagement`, `governance`.
+Set the complete object: `identity`, `taxonomy` (with `departments`), `situation`,
+`architecture`, `buildTimeline`, `measurement`, `heroMetrics`, `roadmap`, `contributors`,
+`artifacts`, `repositories`, `walkthroughVideo`, `visualStory`, `builder`, `decisions`,
+`closing` and `surfaceVariants`. That is every field of `CaseStudySnapshotContent`; the
+completeness audit (§12) checks them against published records, so a forgotten one is
+reported, not discovered by Ali.
+
+**§3a's `deployment`, `engagement` and `governance` are NOT snapshot fields** (checked
+2026-11-17: absent from `CaseStudySnapshotContent` in `backend/src/types/caseStudy.ts`, and
+from all 19 published records). `applyHumanOverride` cannot store them. Until the type gains
+them, put their substance where the record keeps it: deployment in `architecture.narrative`
+and `roadmap`, engagement in `identity.engagementWindow` and `situation`, governance in
+`decisions` and the metric limitations.
 
 **`heroMetrics` is its own section.** Marking a metric `isHeadline: true` inside
 `measurement` does **not** populate it once measurement has been overridden. Set both.
@@ -1679,14 +1698,99 @@ in the second half is a rule with a half-life.
 - Regression: other records unchanged, public index count, `/case-studies` and
   `/demo-day` redirects.
 
+- **The completeness audit (§12) exits 0**, or every remaining row is ACCEPTED with a reason
+  you repeat in the report. Paste its verdict line.
+
 **Report denominators, never impressions.** Not "the detail page renders" but:
 sections authored X of X · candidates investigated X of X · metrics verified X of X ·
 **metrics that compare X of X (§5a)** · metrics computed by a collector X of X ·
 shaped metrics with plain language X of X · artifacts X · images X · timeline entries X ·
 prefixes X · walkthrough video X seconds, cues loading on X of 3 surfaces ·
-**visual story: cards X, charts X, steps X, enabled on X surfaces, gate rule 20 clean (§8d)**.
+**visual story: cards X, charts X, steps X, enabled on X surfaces, gate rule 20 clean (§8d)** ·
+**completeness audit: gaps X, thin X, accepted X (each with its reason), record checks failed X,
+against references <the five slugs> (§12)**.
 
 **Never say complete, production-ready or published without evidence for each claim.**
+
+---
+
+## 12. The completeness loop: loop-architect inside the skill
+
+**Why.** The skill lists what a record needs in prose, and prose is skimmed. The published
+records are the ground truth of what a finished record carries. Every build until 2026-11-17
+reached Ali with something missing: no video, no screenshots, no surface variants, or a field
+the skill named but the author skipped. Ali had to send it back with "look at the skill". The
+loop moves that check from Ali to a script and a grader.
+
+### The audit
+
+The command is `scripts/completeness-audit.js`. Its pure logic is in `scripts/completenessCore.js`,
+and its tests are in `scripts/completenessCore.test.js`; run them with
+`node --test .claude/skills/build-case-study/scripts/`. The audit is read-only and runs inside
+`accelerator-backend`:
+
+```bash
+ssh root@95.216.199.47 "mkdir -p /tmp/csaudit && docker exec accelerator-backend mkdir -p /tmp/csaudit"
+scp completenessCore.js completeness-audit.js root@95.216.199.47:/tmp/csaudit/
+ssh root@95.216.199.47 "docker cp /tmp/csaudit/completenessCore.js accelerator-backend:/tmp/csaudit/ && docker cp /tmp/csaudit/completeness-audit.js accelerator-backend:/tmp/csaudit/ && docker exec -w /app accelerator-backend node /tmp/csaudit/completeness-audit.js <caseStudyId> --surfaces=enterprise,hire"
+```
+
+- **References:** the 5 most complete records that are live on some surface (live means
+  approved). They are ranked by fields present, then surfaces, then recency, and the record
+  under audit is never one of them. The audit prints their slugs; open one when a gap is
+  unclear and copy its shape.
+- **GAP:** a field that at least 3 of the 5 carry and the draft does not. The audit reads
+  depth 1 and 2 of the snapshot, plus derived checks that a key alone cannot show: open
+  images, a cover that is an artifact, a video with captions, metrics with all three plain
+  answers, metrics with limitations, and decisions pinned to evidence.
+- **THIN:** a list shorter than every reference's. For example, a visual story on 1 surface
+  when every reference has at least 2.
+- **Record checks:**
+  - A confirmed service link.
+  - For a Colaberry-team record, a `project_id`, so Hire can list it.
+  - The cover is a picked `photo` artifact (§8f).
+  - The pure gate passes on each surface, given the service-link AND hire facts. Never use
+    the bare gate, which reports false blockers.
+  - The story review raises no warnings.
+- **`--accept=<path>:"<reason>"`:** for a field a person has ruled not applicable to this
+  record. An example is no `surfaceVariants.training` on a record that must never reach the
+  training site.
+  - Accepting a field accepts its children.
+  - On a role-only record, `builder.displayName` is accepted automatically (gate rule 5).
+  - Each acceptance is printed with its reason, and the reason goes in the report. It is
+    never a way to finish sooner.
+- **Exit codes:** 0 complete, 2 something to fix, 1 error.
+
+### The loop
+
+Run the build under `/loop-architect` (`.claude/skills/loop-architect/SKILL.md`). The run
+directory is `.loop-architect/runs/<timestamp>-case-study-<slug>/`. Its phases map onto this
+skill like this:
+
+| loop-architect | in this skill |
+|---|---|
+| A. Discover | §0 preflight, §1 path scope |
+| C/D. Contract and plan | §2 creates the draft. Then **run the audit on the empty draft**: every GAP and THIN row and every failed record check becomes a task in `plan.md`, beside §4 to §8g. Nothing the references carry can be left out of the plan. |
+| E. Plan audit | `loop-plan-auditor` must score 18 of 20 or better, and the plan must name a task for every audit row |
+| F. Execute | One section or asset per task. After each task, re-run the audit. `loop-task-verifier` grades the task using the audit output and the gate as its fresh evidence. A task passes only if its rows turned `ok` and nothing else regressed. |
+| G. Quality gate | The audit exits 0 (or its remaining rows are ACCEPTED with reasons), plus the §8b rendered-page check and the §11 list |
+| H/I. Deploy and verify | Assets deploy through `deploy-prod.sh`, then `loop-production-verifier` reads the live surfaces |
+| J. Handoff | The §11 report, with the audit verdict pasted in |
+
+The limits are loop-architect's: 3 attempts per task, and 3 cycles of the audit with no
+progress. If the same row is still a GAP after 3 cycles, stop. Show the row and why it cannot
+be filled, and ask Ali one lettered question. Never accept it on his behalf.
+
+**Run the audit before every report to Ali.** If you are about to say a record is ready for
+review and you have not pasted a verdict line from this session, you have not checked.
+
+### What it does not judge
+
+The audit checks that the parts exist and that no list is thinner than every reference's. It
+cannot tell a good decision card from a bad one, or a truthful metric from a convenient one,
+so §5, §8e, the story rubric and Ali's review still apply. It also does not run the
+foundation facts of a linked student project: run `evaluateCaseStudyPublication` once that
+snapshot is approved.
 
 ---
 
