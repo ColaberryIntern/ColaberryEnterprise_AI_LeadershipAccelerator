@@ -108,18 +108,97 @@ one.** 41 enrollment rows share an email with another row. Every file now carrie
 numbers; the conclusion is unchanged, and "zero match more than one" was computed per email and
 was never affected.
 
+## The production run (2026-11-17 evening, after Ali merged)
+
+PR #4158 merged as `beef464be` at 9:05 PM Central. It was the LAST of four merges inside three
+minutes, which is the only reason an image exists for it: the `Build images` runs for the two
+commits before it were both cancelled by the next merge, exactly as the known failure says. Had
+#4158 been anywhere but last in that train, a deploy would have reported success while serving
+pre-merge code.
+
+Deployed with `scripts/deploy-prod.sh` in registry mode. Both images matched
+`sha-beef464be...`, containers came up, backend answered after 25s. The deploy also carried
+three other tabs' merges (#4160, #4161, #4162), because a deploy deploys main.
+
+### A unit error in this session's own gate, caught before the write
+
+The approved gate was "execute only if the dry run reports 1,299 would be linked / 96 with no
+lead row". Those are DISTINCT EMAIL counts. The script iterates enrollment **rows**, so it could
+never have printed them, and the gate would have "failed" on arithmetic rather than on anything
+being wrong.
+
+Re-measured read-only BEFORE running anything, so the gate stayed real:
+
+| Units | Examined | Would link | No lead row |
+|---|---|---|---|
+| Rows (what the script prints) | 1,437 | 1,337 | 100 |
+| Distinct emails (previously reported) | 1,396 | 1,300 | 96 |
+
+The distinct-email figures also moved by one overnight (1,395/1,299 the day before): one new
+enrollment arrived carrying an email that matches exactly one lead. The book is live; a measured
+figure is true at a timestamp, not permanently.
+
+Note what this says about the earlier "correction" in this file: 1,436/1,336/100 was right as a
+ROW count and wrong only in its label. Both numbers were correct in their own units all along.
+
+### Schema, then the dry run, then the write
+
+```
+column: lead_id integer nullable=YES
+index: idx_enrollments_lead_id
+[DB] enrollments.lead_id ensured          (no SchemaInvariantViolation in the boot log)
+dist/scripts/backfillEnrollmentLeadId.js  present in the deployed image
+
+DRY RUN  1437 examined: 1337 would be linked, 100 with no lead row, 0 with no email, 0 failed
+EXECUTE  1437 examined: 1337 linked,          100 with no lead row, 0 with no email, 0 failed
+```
+
+The dry run matched the prediction to the row. Three proofs after the write, which a row count
+alone does not give:
+
+```
+enrollments with lead_id set: 1337    still NULL: 100    NULL rows that match a lead: 0
+paying members: 26, with lead_id: 26, without: 0
+second run: 100 examined, 0 would be linked  (writes nothing)
+```
+
+`NULL rows that match a lead: 0` is the strongest of the three: nothing linkable was left behind,
+so the 100 remaining NULLs are enrollments with genuinely no `leads` row, not a coverage failure.
+The second run proves idempotency by behaviour rather than by argument.
+
+### One collateral effect, checked before writing 1,337 rows
+
+A backfill bumps `updated_at` on every row it touches. The only code in the repo that reads
+`Enrollment.updated_at` with recency logic is `studentSuccessAgent.ts`, which flags an active
+enrollment as "No activity in 7+ days" - and nothing calls it. `StudentAssessment.ts:23` already
+records it as "dead code checking a non-existent Enrollment" field, and `reeseSignalService.ts`
+deliberately does not reuse it. So the bump silences nothing live. Worth noting that the same dead
+agent reads `e.lead_id`, a field that did not exist until today.
+
 ## Not verified
 
-- No enrollment has been created in production with this code deployed, so the hook itself has
-  run only against its unit callers (a Sequelize instance with `set`, a plain object, a failing
-  lookup, a no-match and a blank email). The resolver it calls is verified against production;
-  the `beforeCreate` wiring that invokes it is not.
-- The backfill has not been run anywhere. Its dry run on production is the first thing to do
-  after deploy, and `--execute` needs Ali's word because it writes.
+- **The `beforeCreate` hook has still never fired in production.** No enrollment has been created
+  since the deploy: the last one in the book is 2026-11-18 00:24 UTC, about two and a half hours
+  before the backend was recreated. The resolver it calls is verified against production data and
+  the wiring is verified by unit test, but the two together are not. The first real signup settles
+  it; until then this is the one open claim. The check:
+
+  ```sql
+  SELECT count(*) AS created_since_deploy, count(lead_id) AS with_lead_id
+    FROM enrollments WHERE created_at > '2026-11-18 02:07:00+00'::timestamptz;
+  ```
+
+  They must be equal for any row whose email is already a lead, and
+  `grep enrollment_lead_linked` in the backend log is the hook saying so itself.
+- A link is still not an attribution. 1,337 enrollments now know which lead they came from;
+  whether that lead carries a campaign is a separate and much emptier question, because
+  repo-wide UTM coverage is 5.5%.
 
 ## Owed
 
-- A Basecamp ticket. This is R18 on list 10470892344 and no ticket exists.
+- A Basecamp ticket. This is R18 on list 10470892344 and no ticket exists. The list runs R1-R17,
+  so R18 is the next rung and "R19" (this tab's own label for the work) is not a real ticket
+  number anywhere.
 - The channel-truth panel (Phase A option A) is still unbuilt: the numbers above exist and Ram
   cannot read them in the product.
 - The $1,194 of failed charges and the 5 abandoned ad checkouts belong to the billing tab.
