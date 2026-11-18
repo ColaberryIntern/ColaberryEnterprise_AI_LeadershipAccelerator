@@ -15,6 +15,14 @@ export type AIChannel = 'email' | 'sms' | 'voice';
 export interface GenerateMessageParams {
   channel: AIChannel;
   ai_instructions: string;
+  /**
+   * OH1j: 'maya_explorer' = an Explorer Growth email written as Maya. Replaces the general sales
+   * rules (CTA, strategy-call booking link, team sign-off) and drops the booking links and cohort
+   * line from the user prompt, the way `eventContext` does for the Open House countdown.
+   */
+  persona?: 'maya_explorer';
+  /** OH1j: with persona 'maya_explorer', the extra links this email may carry (its brain piece's links). */
+  allowed_links?: string[];
   lead: {
     name: string;
     company?: string;
@@ -239,6 +247,27 @@ CRITICAL: Always address the lead by their actual name from the LEAD PROFILE bel
     ? `\n\nBRAND VOICE (published rule set v${brand.rulesVersion}; follow it over any general style preference):\n${voiceParts.join('\n')}`
     : '';
 
+  // OH1j: an Explorer Growth email written as Maya. The general rules below push a CTA, a
+  // strategy-call booking link and a team sign-off; Maya to an Explorer does none of that.
+  if (params.persona === 'maya_explorer' && !params.eventContext) {
+    const links = ['https://enterprise.colaberry.ai', ...(params.allowed_links || [])];
+    const emailFormat = channel === 'email'
+      ? `OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
+{"subject": "...", "body": "..."}
+The "body" must be HTML using <p> and <a> tags only. 80-160 words. Do NOT add a sign-off name or signature: Maya's signature is added automatically.`
+      : channelInstructions[channel];
+    return `${campaignPrompt || defaultPersona}${voiceBlock}
+
+${emailFormat}
+
+MAYA EXPLORER RULES (these override everything else):
+- You are helping someone explore at their own pace. You are NOT selling.
+- NEVER ask them to book a call, schedule a strategy call, or talk to admissions. NEVER mention a cohort, a start date, seats, price, cost, tuition, a discount, an offer or a deadline, or say that anything costs nothing or comes at no charge.
+- The ONLY links allowed are these, exactly as written: ${links.join(' , ')}
+- Never invent facts about the program, outcomes, salaries or jobs. Never invent facts about the person.
+- Warm, short, human. Written by Maya. No emojis, no hashtags, no exclamation-mark pile-ups.`;
+  }
+
   // OH1: an Open House countdown replaces the sales rules below with event rules.
   // The general rules push booking a strategy call and quote the cohort; a reminder
   // for an event someone already registered for must do neither.
@@ -354,6 +383,11 @@ export function buildEventUserPrompt(params: GenerateMessageParams): string {
   return parts.join('\n');
 }
 
+/** Exported for tests only (OH1j asserts the final user prompt for a Maya Explorer draft). */
+export function buildUserPromptForTests(params: GenerateMessageParams): string {
+  return buildUserPrompt(params);
+}
+
 function buildUserPrompt(params: GenerateMessageParams): string {
   if (params.eventContext) return buildEventUserPrompt(params);
   const { lead, conversationHistory, campaignContext, cohortContext, ai_instructions, tone, context_notes, compositeContext } = params;
@@ -393,16 +427,23 @@ function buildUserPrompt(params: GenerateMessageParams): string {
       parts.push('');
     }
 
+    // OH1j: Maya to an Explorer gets no booking/landing links and no cohort line (see buildSystemPrompt).
+    const mayaExplorer = params.persona === 'maya_explorer';
     parts.push('ALLOWED URLs (use ONLY these - NEVER invent a URL):');
-    parts.push(`- Booking/Strategy call: ${compositeContext.allowedUrls.booking}`);
-    parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
-    parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
-    if (compositeContext.allowedUrls.advisoryTool) {
-      parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (5-minute AI org design tool, no card needed - use as low-friction alternative when booking feels too aggressive)`);
+    if (mayaExplorer) {
+      parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
+      for (const l of params.allowed_links || []) parts.push(`- ${l}`);
+    } else {
+      parts.push(`- Booking/Strategy call: ${compositeContext.allowedUrls.booking}`);
+      parts.push(`- Landing page: ${compositeContext.allowedUrls.landingPage}`);
+      parts.push(`- Main site: ${compositeContext.allowedUrls.mainSite}`);
+      if (compositeContext.allowedUrls.advisoryTool) {
+        parts.push(`- AI Workforce Designer: ${compositeContext.allowedUrls.advisoryTool} (5-minute AI org design tool, no card needed - use as low-friction alternative when booking feels too aggressive)`);
+      }
     }
     parts.push('');
 
-    if (compositeContext.cohort) {
+    if (compositeContext.cohort && !mayaExplorer) {
       parts.push(`COHORT: ${compositeContext.cohort.name} | Starts ${compositeContext.cohort.startDate} (${compositeContext.cohort.daysUntilStart} days away) | ${compositeContext.cohort.seatsRemaining} seats remaining`);
       parts.push('');
     }

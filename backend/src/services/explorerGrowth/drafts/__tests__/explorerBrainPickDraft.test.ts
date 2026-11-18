@@ -112,6 +112,25 @@ describe('the draft is written as Maya around one brain piece', () => {
     expect(h.committed[0].input.status).toBe(EXPLORER_DRAFT_STATUS);
   });
 
+  it('asks for the Maya rules, not the sales rules, and passes the piece links', async () => {
+    const h = harness();
+    await renderDecisionDraft(decision(), h.deps);
+    expect(h.generatedWith[0].persona).toBe('maya_explorer');
+    expect(h.generatedWith[0].allowed_links).toEqual([SPOTLIGHT_URL]);
+  });
+
+  it.each([
+    ['the strategy-call booking link', '<p>Book here: https://enterprise.colaberry.ai/ai-architect</p>'],
+    ['an ask to book a call', '<p>Want to schedule a quick call with our team?</p>'],
+    ['a strategy call', '<p>A strategy call is the best next step.</p>'],
+  ])('rejects a draft that pushes a sale: %s', async (_label, body) => {
+    const h = harness({}, body);
+    const out = await renderDecisionDraft(decision(), h.deps);
+    expect(out.status).toBe('rejected');
+    expect((out.issues || []).some((i: string) => i.startsWith('sales push:'))).toBe(true);
+    expect(h.committed[0].input.status).toBe(EXPLORER_DRAFT_REJECTED_STATUS);
+  });
+
   it('still rejects any other unknown link', async () => {
     const h = harness({}, `<p><a href="${SPOTLIGHT_URL}">story</a> and <a href="https://evil.example.com/x">this</a></p>`);
     const out = await renderDecisionDraft(decision(), h.deps);

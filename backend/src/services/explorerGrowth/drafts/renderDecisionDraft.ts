@@ -148,6 +148,23 @@ export interface RenderOptions {
   };
 }
 
+/**
+ * OH1j: Maya never sells to an Explorer (Ali). The prompt drops the sales rules; this refuses a draft
+ * that pushes a call anyway: a strategy-call / booking / alumni landing link, the advisory tool, or
+ * an ask to book or schedule a call. Exported for its tests.
+ */
+const SALES_PUSH: Array<[RegExp, string]> = [
+  [/\/ai-architect\b/i, 'strategy-call booking link'],
+  [/alumni-ai-champion/i, 'alumni landing link'],
+  [/advisor\.colaberry\.ai/i, 'advisory tool link'],
+  [/\b(book|schedule|grab|set up)\s+(a|your|an)\s+(\w+\s+){0,2}(call|meeting)\b/i, 'asks them to book a call'],
+  [/\bstrategy call\b/i, 'mentions a strategy call'],
+];
+export function salesPushIssues(html: string): string[] {
+  const text = html || '';
+  return SALES_PUSH.filter(([re]) => re.test(text)).map(([, label]) => `sales push: ${label}`);
+}
+
 /** A skip, phrased as an outcome so the batch never has to special-case it. */
 function skipped(
   decision: DraftableDecision,
@@ -427,6 +444,9 @@ export async function renderDecisionDraft(
       tone: step.ai_tone,
       brandVoice,
       compositeContext: context,
+      // OH1j: Maya's rules replace the general sales rules (no CTA, no booking link, no cohort line).
+      persona: 'maya_explorer',
+      allowed_links: brainPick.allowedLinks,
     });
   } catch (err: any) {
     return {
@@ -469,6 +489,8 @@ export async function renderDecisionDraft(
   const copyIssues = [
     ...bannedCopyIssues(linkFixed.html),
     ...emailLinkIssues(linkFixed.html, baseUrl),
+    // OH1j: Maya never sells to an Explorer. The prompt says so; this is the wall behind it.
+    ...salesPushIssues(linkFixed.html),
   ];
   const body = linkFixed.html;
   // OH1j: the piece's own links (a builder's case study, a fact's public source) are not on
