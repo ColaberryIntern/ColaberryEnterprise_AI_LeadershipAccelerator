@@ -262,7 +262,7 @@ function StoriesV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-stories-title">
+      <section className="cbv2-pagehero cbv2-pagehero--page" aria-labelledby="cbv2-stories-title">
         <div className="cbv2-wrap">
           <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{masthead.eyebrow}</p>
           <h1 id="cbv2-stories-title">{masthead.title}</h1>

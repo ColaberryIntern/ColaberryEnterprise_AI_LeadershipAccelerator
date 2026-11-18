@@ -250,7 +250,7 @@ describe('the taxonomy endpoint', () => {
     const res = await request(app).get('/api/public/case-study-taxonomy');
     expect(res.status).toBe(200);
     expect(res.body.facets).toEqual({
-      capabilities: [], industries: [], stack: [], programs: [],
+      capabilities: [], industries: [], departments: [], stack: [], programs: [],
       builtBy: [], verificationClasses: [],
     });
   });

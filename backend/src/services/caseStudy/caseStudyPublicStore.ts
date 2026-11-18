@@ -110,6 +110,8 @@ function toCandidate(
     publicationStatus: str(publication.status) as CaseStudyPublicationStatus,
     hasApprovedSnapshot: true,
     industry: normalizeFacetSlug(taxonomy?.industry ?? study.industry) || null,
+    // W10: published snapshot only. The record has no department column, so there is no fallback to make.
+    departments: normalizeFacetList(taxonomy?.departments),
     primaryCapability:
       normalizeFacetSlug(taxonomy?.primaryCapability ?? study.primary_capability) || null,
     capabilities: normalizeFacetList(taxonomy?.capabilities),

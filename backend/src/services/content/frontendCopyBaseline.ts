@@ -98,7 +98,6 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
   'frontend/src/pages/HomePage.tsx': 23,
   'frontend/src/pages/InstructorPage.tsx': 4,
   'frontend/src/pages/LeaderboardPage.tsx': 2,
-  'frontend/src/pages/ManagementPreviewPage.tsx': 18,
   'frontend/src/pages/PilotAITeamPage.tsx': 6,
   'frontend/src/pages/PilotExclusivePage.tsx': 4,
   'frontend/src/pages/PilotZeroRiskPage.tsx': 1,
@@ -167,7 +166,7 @@ export const FRONTEND_COPY_BASELINE: Readonly<Record<string, number>> = {
  * Your Open House Seat" and "costs nothing to attend". Same scope as 275; this is the ratchet
  * turning, not a re-base.
  */
-export const FRONTEND_COPY_BASELINE_TOTAL = 256; // 2026-11-16: -1 v2ServicePages (Train's FAQ, which the model does not have); -1 HeroV8 (the proof row went with the rebuilt hero); -1 PublicHeaderV2 ("Start Free" left the nav bar, entry deleted); -2 HomeV2 (the model's closing band replaced "Start free..." and "Open the Free Company Workspace", entry deleted)
+export const FRONTEND_COPY_BASELINE_TOTAL = 238; // 2026-11-17: -18 ManagementPreviewPage (W21: /try in Enterprise branding says "free" nowhere, entry deleted). 2026-11-16: -1 v2ServicePages (Train's FAQ, which the model does not have); -1 HeroV8 (the proof row went with the rebuilt hero); -1 PublicHeaderV2 ("Start Free" left the nav bar, entry deleted); -2 HomeV2 (the model's closing band replaced "Start free..." and "Open the Free Company Workspace", entry deleted)
 
 /**
  * The scope the baseline was measured over. Anything outside it is NOT covered, and the

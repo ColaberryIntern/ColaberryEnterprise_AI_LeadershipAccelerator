@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getParticipantToken, isReadOnlyParticipantSession } from '../../utils/participantToken';
+import type { CampusNavMode } from './campusSettings';
 
 /**
  * Client for the Colaberry Campus endpoints. C1 has one: whether the campus is
@@ -22,7 +23,8 @@ import { getParticipantToken, isReadOnlyParticipantSession } from '../../utils/p
  */
 export const CAMPUS_FLAGS_TIMEOUT_MS = 10_000;
 
-export interface CampusFlags { campus: boolean }
+/** W22: `defaultNav` is the menu to start in when the browser holds no choice ('classic' for a business account). */
+export interface CampusFlags { campus: boolean; defaultNav?: CampusNavMode }
 
 export async function fetchCampusFlags(): Promise<CampusFlags> {
   const token = getParticipantToken();
@@ -33,7 +35,8 @@ export async function fetchCampusFlags(): Promise<CampusFlags> {
       timeout: CAMPUS_FLAGS_TIMEOUT_MS,
     });
     const campus = !!data && typeof data === 'object' && (data as { campus?: unknown }).campus === true;
-    return { campus };
+    const nav = campus ? (data as { default_nav?: unknown }).default_nav : undefined;
+    return nav === 'classic' || nav === 'campus' ? { campus, defaultNav: nav } : { campus };
   } catch {
     return { campus: false };
   }

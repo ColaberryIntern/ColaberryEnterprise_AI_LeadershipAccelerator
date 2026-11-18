@@ -30,6 +30,7 @@ import './caseStudy.css';
 export type CaseStudyFilterField =
   | 'capability'
   | 'industry'
+  | 'department'
   | 'stack'
   | 'program'
   | 'deliverable'

@@ -14,6 +14,7 @@ import { mayPreviewAudiences } from '../services/campus/campusAudienceSwitch';
 import { roomBuildingFor } from '../services/campus/campusRoomBuilding';
 import { HQ_PATH } from '../services/campus/hqPath';
 import { myProgressRoute } from './campusMyProgressRoute';
+import { isOrgManager } from '../services/portalSettingsService';
 
 /**
  * Colaberry Campus learner endpoints (Basecamp C1 onward). Mounted with the
@@ -30,7 +31,13 @@ import { myProgressRoute } from './campusMyProgressRoute';
  * learner sees the navigation that learner sees.
  */
 
-export const CampusFlagsResponse = z.object({ campus: z.boolean() }).strict();
+/**
+ * W22 (Ali, 2026-11-17): "business accounts should start in the old format mode and not use the campus."
+ * `default_nav` is the menu a person starts in when they have not chosen one themselves. It is sent only for a
+ * business (org manager) account, as 'classic'; learners get no key and keep the campus. The client applies it
+ * only when the browser holds no stored choice, so a person who picked a view keeps it.
+ */
+export const CampusFlagsResponse = z.object({ campus: z.boolean(), default_nav: z.enum(['campus', 'classic']).optional() }).strict();
 export type CampusFlagsResponse = z.infer<typeof CampusFlagsResponse>;
 
 /**
@@ -55,8 +62,19 @@ export function logFailure(event: string, err: unknown): void {
 
 // C1's per-enrollment pilot rule lives in services/campus/campusPilot.ts (shared with the Game Room routes, C10).
 
-export function getCampusFlags(req: Request, res: Response): void {
-  sendValidated(res, CampusFlagsResponse, { campus: campusOnFor(req) }, 'campus_flags');
+export async function getCampusFlags(req: Request, res: Response): Promise<void> {
+  const campus = campusOnFor(req);
+  const body: CampusFlagsResponse = { campus };
+  const sub = req.participant?.sub;
+  if (campus && sub) {
+    // A failed lookup must never cost the learner the campus flag: log it and answer without a default.
+    try {
+      if (await isOrgManager(sub)) body.default_nav = 'classic';
+    } catch (err) {
+      logFailure('campus_flags_org_lookup', err);
+    }
+  }
+  sendValidated(res, CampusFlagsResponse, body, 'campus_flags');
 }
 
 // ---- C4: presence by building ----

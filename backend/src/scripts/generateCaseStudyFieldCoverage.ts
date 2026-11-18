@@ -57,6 +57,15 @@ const D = (o: Partial<Entry> & { disposition: Disposition }): Entry => ({
  * hand-completed list is the failure mode this whole file exists to prevent.
  */
 const AUTHORED: Record<string, Entry> = {
+  /* ── W10 department tag (2026-11-17) ───────────────────────────────────── */
+  'CaseStudyTaxonomy.departments': D({
+    disposition: 'human_approved', aiMayInfer: false, approvalRequired: true,
+    authoring: 'admin narrative panel (department picker, override taxonomy.departments)',
+    sourcePriority: 'human override only',
+    indexHome: '/proof Department filter and the header Proof menu', detailHome: '—',
+    emptyBehaviour: 'absent: the study sits in no department bucket; never inferred',
+    test: 'caseStudyDepartments.test.ts',
+  }),
   /* ── identity ─────────────────────────────────────────────────────────── */
   'CaseStudyIdentitySection.slug': D({
     disposition: 'deterministic', aiMayInfer: false, approvalRequired: false,

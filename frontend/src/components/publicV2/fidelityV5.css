@@ -68,8 +68,11 @@
    check found it (Ali, 2026-11-16: "something is off about the services page"). */
 .cbv2-shell .cbv2-wrap { max-width: 1200px; padding-inline: 28px; }
 .cbv2-shell .cbv2-h8__inner,
-.cbv2-shell .cbv2-h8__verbs,
-.cbv2-shell .cbv2-h8__rollout { max-width: 1200px; padding-inline: 28px; }
+.cbv2-shell .cbv2-h8__verbs { max-width: 1200px; padding-inline: 28px; }
+/* W20 (Ali, 2026-11-17: "the banner should go all the way across like Trust before
+   intelligence"). The rollout band was in the group above, which capped the BAND at 1200px and
+   boxed the black ground. The band runs edge to edge (heroV8.css); its content keeps the width. */
+.cbv2-shell .cbv2-h8__rollout > * { max-width: 1200px; padding-inline: 28px; }
 @media (min-width: 901px) {
   .cbv2-shell .cbv2-h8__inner { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 56px; }
 }
@@ -2250,4 +2253,26 @@
 @media (max-width: 1080px) {
   .cbv2-shell .cbv2-price5 { grid-template-columns: minmax(0, 1fr); }
   .cbv2-shell .cbv2-ask5 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* =========================================================================
+   W18 - ONE TITLE SIZE ON EVERY PAGE (Ali, 2026-11-17: "The titles are different sizes. We need
+   more consistency.") Live before this block the page titles ran 31px to 170px: Train 170,
+   Services 144, home / How it works / Platform / Pricing 96, Book 84, Demo pilot 76, Proof,
+   Stories and Privacy 46. Every page hero title now uses the home scale. This block sits LAST
+   in the file and unconditioned, so it also replaces the per-hero sizes inside the 820px media
+   blocks above (same specificity, later rule). Story detail titles (.cbv2-pagehero without
+   --page) are long sentences and keep their own size.
+   ========================================================================= */
+.cbv2-shell .cbv2-h8__h1,
+.cbv2-shell .cbv2-shero5 h1,
+.cbv2-shell .cbv2-svhero5 h1,
+.cbv2-shell .cbv2-prhero5 h1,
+.cbv2-shell .cbv2-dp5 h1,
+.cbv2-shell .cbv2-phero5 h1,
+.cbv2-shell .cbv2-bookpage5 .cbv2-book__h,
+.cbv2-shell .cbv2-pagehero--page h1 {
+  font-size: clamp(46px, 7vw, 96px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
 }

@@ -39,6 +39,7 @@ import CaseStudySyncRun from '../../models/CaseStudySyncRun';
 import CaseStudyEvidence from '../../models/CaseStudyEvidence';
 import { validateVisualStory, visualStoryContextFromContent } from './caseStudyVisualStoryValidate';
 import { ensureTraceId } from '../../utils/requestContext';
+import { DEPARTMENTS_OVERRIDE_PATH, departmentsOverrideProblem } from './caseStudyDepartments';
 import { hashCanonical } from '../../utils/canonicalHash';
 import { applyOverrides } from './caseStudySnapshotOverrides';
 import { persistCaseStudySnapshot } from './caseStudySnapshotStore';
@@ -232,6 +233,11 @@ function requireSnapshot(row: CaseStudySnapshot | null, caseStudyId: string): Ca
  */
 export async function applyHumanOverride(input: unknown): Promise<ApplyOverrideResult> {
   const data = validate(overrideSchema, input, 'override request');
+  // W10: the department tag is a closed vocabulary; refuse anything else before a snapshot is written.
+  if (data.path === DEPARTMENTS_OVERRIDE_PATH) {
+    const problem = departmentsOverrideProblem(data.value);
+    if (problem) throw new CaseStudyAdminError('ValidationError', `Malformed override request: value: ${problem}`, { path: data.path });
+  }
   const correlationId = ensureTraceId(data.correlationId);
   await loadCaseStudyRow(data.caseStudyId);
 

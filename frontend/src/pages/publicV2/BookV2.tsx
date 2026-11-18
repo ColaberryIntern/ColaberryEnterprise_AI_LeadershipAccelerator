@@ -375,7 +375,6 @@ export function BookV2(): React.ReactElement {
             <p className="cbv2-crumb5 cbv2-bookpage5__crumb">
               <Link to="/">Home</Link> / The book
             </p>
-            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">The book behind the method</p>
             <h1 id="cbv2-book-title" className="cbv2-book__h cbv2-bookpage5__h">
               Trust before <span className="cbv2-it">intelligence.</span>
             </h1>

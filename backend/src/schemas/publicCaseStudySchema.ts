@@ -81,6 +81,7 @@ const enumList = (values: [string, ...string[]]) =>
 export const PublicCaseStudyListQuery = z.object({
   capability: freeList,
   industry: freeList,
+  department: freeList,
   stack: freeList,
   program: freeList,
   deliverable: freeList,
@@ -135,6 +136,7 @@ export function toPublicFilterInput(q: PublicCaseStudyListQueryInput): CaseStudy
   return {
     capability: q.capability,
     industry: q.industry,
+    department: q.department,
     stack: q.stack,
     program: q.program,
     deliverable: q.deliverable,

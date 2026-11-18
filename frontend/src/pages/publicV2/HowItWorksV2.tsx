@@ -143,7 +143,6 @@ export default function HowItWorksV2(): React.ReactElement {
           <p className="cbv2-crumb5">
             <Link to="/">Home</Link> / How it works
           </p>
-          <p className="cbv2-k5">How it works</p>
           <h1 id="cbv2-how-title">
             Find the ROI. Prove it.{' '}
             <span className="cbv2-it">Roll it out, leader by leader.</span>

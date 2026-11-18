@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import './portal/today/TodayShell.css';
 import CompanyMomentumDashboard from '../components/capability/CompanyMomentumDashboard';
 import { registerOrg, persistParticipantSession } from '../services/orgApi';
+import EnterpriseLockup from '../components/publicV2/EnterpriseLockup';
+import { MANAGEMENT_PREVIEW_ENTERPRISE_CSS } from './managementPreviewEnterpriseStyles';
 
 /**
- * ManagementPreviewPage (/try) — free preview of the enterprise MANAGEMENT
+ * ManagementPreviewPage (/try) — preview of the enterprise MANAGEMENT
  * experience, shaped to the REAL metric schema the platform captures. One extra
  * "Your company" tab above "Your day". Company view = momentum dashboard + a team
  * accomplishments feed (real event types) + roster; click a person to drill into
@@ -150,7 +152,7 @@ function ManagementPreviewPage() {
     return () => io.disconnect();
   }, []);
 
-  // "Make this real" — the free-account registration modal. On success it stores
+  // "Make this real" — the account registration modal. On success it stores
   // the returned participant JWT under the SAME key the portal uses and hands off
   // to the real, authed /portal/company page.
   const [showReg, setShowReg] = useState(false);
@@ -211,9 +213,10 @@ function ManagementPreviewPage() {
   const m = selected ? TEAM.find((x) => x.name === selected) ?? null : null;
 
   return (
-    <div className="te-shell">
+    <div className="te-shell" data-brand="enterprise">
+      <style>{MANAGEMENT_PREVIEW_ENTERPRISE_CSS}</style>
       <header className="te-top">
-        <div className="te-brand te-brand--site"><img className="te-mark" src="/colaberry-horizontal.png" alt="Colaberry" width={436} height={102} /><span>Forward Deployed AI Engineer Accelerator</span></div>
+        <div className="te-brand"><a href="/" aria-label="Colaberry Enterprise home" style={{ textDecoration: 'none' }}><EnterpriseLockup /></a></div>
         <div className="te-top-right">
           <div className="te-rail">
             <span className="te-cd class" title="Next class"><span className="ic">{Ic.class}</span><span className="tx"><span className="lbl">Next class</span><span className="when mono">3d 11h</span></span></span>
@@ -237,10 +240,10 @@ function ManagementPreviewPage() {
 
       <main className="te-main">
         <div ref={bannerRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)', background: 'var(--surface-brand-subtle)', border: 'var(--border-1) solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', marginBottom: 'var(--space-6)' }}>
-          <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-body)' }}><strong>Free preview with sample data</strong>, shaped to the real metrics we capture. Your free account gives you both the learner experience and this management dashboard, no credit card. Create it to fill this with your team&rsquo;s live progress.</span>
+          <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-body)' }}><strong>Preview with sample data</strong>, shaped to the real metrics we capture. Your account gives you both the learner experience and this management dashboard, no credit card. Create it to fill this with your team&rsquo;s live progress.</span>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button type="button" onClick={openReg} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real">Make this real: create your free account</button>
-            <a href="#invite" style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send free test invites</a>
+            <button type="button" onClick={openReg} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real">Make this real: create your account</button>
+            <a href="#invite" style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send test invites</a>
           </div>
         </div>
 
@@ -251,19 +254,19 @@ function ManagementPreviewPage() {
         >
           <span className="te-trybar__star" aria-hidden="true">&#9733;</span>
           <span className="te-trybar__tx">
-            <span className="te-trybar__k">Your free account &middot; preview</span>
-            <span className="te-trybar__t">Make this real: create your free account</span>
+            <span className="te-trybar__k">Your account &middot; preview</span>
+            <span className="te-trybar__t">Make this real: create your account</span>
           </span>
           <span className="te-trybar__chip">no card</span>
           <div className="te-trybar__b">
-            <button type="button" onClick={openReg} tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real_pinned">Make this real: create your free account</button>
-            <a href="#invite" tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send free test invites</a>
+            <button type="button" onClick={openReg} tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)' }} data-track="try_make_real_pinned">Make this real: create your account</button>
+            <a href="#invite" tabIndex={pinned ? 0 : -1} style={{ ...pillBtn, padding: 'var(--space-2) var(--space-4)', textDecoration: 'none', background: 'var(--surface-subtle)', color: 'var(--text-body)' }}>Send test invites</a>
           </div>
         </div>
 
         {view === 'student' ? (
           <div style={{ display: 'grid', gap: 'var(--space-6)', maxWidth: 760, gridTemplateColumns: 'minmax(0, 1fr)' }}>
-            <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>My learning</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Your own free student account</h1><p style={muted}>Your management account includes full student access, so you learn and build alongside your team. This is the experience your people get.</p></div>
+            <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>My learning</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Your own student account</h1><p style={muted}>Your management account includes full student access, so you learn and build alongside your team. This is the experience your people get.</p></div>
             <div style={card}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}><span style={{ display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: '50%', background: 'color-mix(in srgb, #5BA63C 16%, white)', color: 'var(--text-strong)', fontWeight: 800 }}>NZ</span><div><div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'var(--fs-h5)', color: 'var(--text-strong)' }}>Welcome back</div><span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: '#5BA63C', padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>Developer · 540 pts</span></div></div>
               <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>Engineer Readiness · 44% (Evidence 1/3 · Implementation 0/1 · Attendance 1/1)</div>
@@ -346,7 +349,7 @@ function ManagementPreviewPage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'minmax(0, 1fr)' }}>
-            <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>Your company</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Acme Corp, on the rise in AI</h1><p style={muted}>Where you are, how fast you are moving, and when you reach the next level, from the real data your people earn every day. <a href="#" onClick={(e) => { e.preventDefault(); setView('student'); }} style={{ color: 'var(--text-link)', fontWeight: 600 }}>Your account also includes free student learning &rarr;</a></p></div>
+            <div><div style={{ ...sub, color: 'var(--brand-accent)' }}>Your company</div><h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>Acme Corp, on the rise in AI</h1><p style={muted}>Where you are, how fast you are moving, and when you reach the next level, from the real data your people earn every day. <a href="#" onClick={(e) => { e.preventDefault(); setView('student'); }} style={{ color: 'var(--text-link)', fontWeight: 600 }}>Your account also includes student learning &rarr;</a></p></div>
 
             <CompanyMomentumDashboard />
 
@@ -390,14 +393,14 @@ function ManagementPreviewPage() {
             </div>
 
             <div id="invite" style={{ ...card, borderTop: '4px solid #5BA63C' }}>
-              <h2 style={h2}>Send free test invites to your employees</h2>
-              <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Send free test invites so your team can try it too. Their progress appears on your dashboard as they go. Tag their team so it shows up in your reporting.</p>
+              <h2 style={h2}>Send test invites to your employees</h2>
+              <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Send test invites so your team can try it too. Their progress appears on your dashboard as they go. Tag their team so it shows up in your reporting.</p>
               <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: invites.length ? 'var(--space-5)' : 0 }}>
                 <input style={{ ...inputStyle, flex: 2, minWidth: 200 }} type="email" placeholder="teammate@company.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addInvite(); }} />
                 <input style={{ ...inputStyle, flex: 1, minWidth: 140 }} type="text" placeholder="Team / department (optional)" value={team} onChange={(e) => setTeam(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addInvite(); }} />
-                <button style={pillBtn} onClick={addInvite} data-track="try_invite_add">Send free test invite</button>
+                <button style={pillBtn} onClick={addInvite} data-track="try_invite_add">Send test invite</button>
               </div>
-              {invites.length > 0 && (<div><div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 'var(--space-2)' }}>{invites.length} invited · free member accounts</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>{invites.map((i) => (<span key={i.email} style={{ fontSize: 'var(--fs-caption)', background: 'var(--surface-green-subtle)', color: 'var(--status-success)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 600 }}>{i.email} · {i.team}</span>))}</div></div>)}
+              {invites.length > 0 && (<div><div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 'var(--space-2)' }}>{invites.length} invited · member accounts</div><div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>{invites.map((i) => (<span key={i.email} style={{ fontSize: 'var(--fs-caption)', background: 'var(--surface-green-subtle)', color: 'var(--status-success)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 600 }}>{i.email} · {i.team}</span>))}</div></div>)}
               <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: 'var(--border-1) solid var(--border-subtle)', display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'baseline' }}>
                 <a href="/pricing" data-track="try_activate_licenses" style={{ color: 'var(--text-link)', fontWeight: 700, fontSize: 'var(--fs-body-sm)', textDecoration: 'none' }}>Activate licenses for instant access &rarr;</a>
                 <span style={{ ...muted, fontSize: 'var(--fs-caption)' }}>only when you are ready</span>
@@ -408,12 +411,12 @@ function ManagementPreviewPage() {
       </main>
 
       {showReg && (
-        <div role="dialog" aria-modal="true" aria-label="Create your free account"
+        <div role="dialog" aria-modal="true" aria-label="Create your account"
           onClick={() => { if (!regBusy) setShowReg(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 'var(--space-4)' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...card, width: 'min(460px, 100%)', boxShadow: 'var(--shadow-lg)' }}>
-            <h2 style={{ ...h2, fontSize: 'var(--fs-h3)' }}>Create your free account</h2>
-            <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>A free management account with your own student learning included. No credit card.</p>
+            <h2 style={{ ...h2, fontSize: 'var(--fs-h3)' }}>Create your account</h2>
+            <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>A management account with your own student learning included. No credit card.</p>
             <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
               <input style={inputStyle} placeholder="Your name" value={regName} disabled={regBusy} autoFocus onChange={(e) => setRegName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitReg(); }} />
               <input style={inputStyle} placeholder="Company (optional)" value={regCompany} disabled={regBusy} onChange={(e) => setRegCompany(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitReg(); }} />
@@ -422,7 +425,7 @@ function ManagementPreviewPage() {
             {regErr && <div style={{ color: 'var(--status-danger, #C20E1E)', fontSize: 'var(--fs-caption)', fontWeight: 700, marginTop: 'var(--space-3)' }}>{regErr}</div>}
             <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-5)', justifyContent: 'flex-end' }}>
               <button type="button" style={{ ...pillBtn, background: 'var(--surface-subtle)', color: 'var(--text-body)' }} onClick={() => setShowReg(false)} disabled={regBusy}>Cancel</button>
-              <button type="button" style={{ ...pillBtn, opacity: regBusy ? 0.7 : 1 }} onClick={submitReg} disabled={regBusy} data-track="try_register_submit">{regBusy ? 'Creating…' : 'Create free account'}</button>
+              <button type="button" style={{ ...pillBtn, opacity: regBusy ? 0.7 : 1 }} onClick={submitReg} disabled={regBusy} data-track="try_register_submit">{regBusy ? 'Creating…' : 'Create account'}</button>
             </div>
           </div>
         </div>

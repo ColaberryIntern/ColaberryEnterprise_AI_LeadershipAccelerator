@@ -1387,6 +1387,20 @@
       "disposition": "human_approved",
       "rule": "human-vocabulary"
     },
+    "CaseStudyTaxonomy.departments": {
+      "authoring": "admin narrative panel (department picker, override taxonomy.departments)",
+      "sourcePriority": "human override only",
+      "aiMayInfer": false,
+      "approvalRequired": true,
+      "indexHome": "/proof Department filter and the header Proof menu",
+      "detailHome": "—",
+      "publicBehaviour": "projected as-is",
+      "emptyBehaviour": "absent: the study sits in no department bucket; never inferred",
+      "privacy": "public",
+      "test": "caseStudyDepartments.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyTaxonomy.industry": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",

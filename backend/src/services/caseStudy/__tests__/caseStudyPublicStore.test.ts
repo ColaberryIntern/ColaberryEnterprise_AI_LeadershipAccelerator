@@ -117,6 +117,19 @@ describe('the candidate it builds', () => {
     expect(record.candidate.projectStatus).toBe('shipped');
   });
 
+  it('W10: reads department tags from the published snapshot, as canonical slugs', async () => {
+    const base = internalSnapshotContent();
+    seedPublishedRecord({ content: { ...base, taxonomy: { ...base.taxonomy, departments: ['Finance', 'IT Data'] } } });
+    const [record] = await store.loadSurfacePublications('enterprise');
+    expect(record.candidate.departments).toEqual(['finance', 'it-data']);
+  });
+
+  it('W10: an untagged study carries no departments', async () => {
+    seedPublishedRecord();
+    const [record] = await store.loadSurfacePublications('enterprise');
+    expect(record.candidate.departments).toEqual([]);
+  });
+
   it('marks an archived record archived from either signal', async () => {
     seedPublishedRecord({ study: { archived_at: new Date('2026-08-23T00:00:00.000Z') } });
     const [a] = await store.loadSurfacePublications('enterprise');

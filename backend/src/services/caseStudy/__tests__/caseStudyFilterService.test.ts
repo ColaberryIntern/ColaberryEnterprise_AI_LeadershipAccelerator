@@ -297,7 +297,7 @@ describe('pagination', () => {
 describe('taxonomy and ledger are derived, never hardcoded', () => {
   it('an empty surface yields empty facets and a zero ledger', () => {
     expect(buildCaseStudyTaxonomy([])).toEqual({
-      capabilities: [], industries: [], stack: [], programs: [],
+      capabilities: [], industries: [], departments: [], stack: [], programs: [],
       builtBy: [], verificationClasses: [],
     });
     expect(buildCaseStudyLedger([]))

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { departmentLabel } from '../../services/caseStudyDepartments';
 import { fetchCaseStudyTaxonomy } from '../../services/caseStudyApi';
 import type { PublicCaseStudyTaxonomyResponse } from '../../services/caseStudyPublicTypes';
 
@@ -89,11 +90,11 @@ export const publishedTotal = (t: TaxonomyLike): number =>
 export function buildProofMenu(taxonomy: TaxonomyLike | null): NavMenu {
   const industries = taxonomy ? [...taxonomy.facets.industries].filter((f) => f.count > 0) : [];
   const departments = taxonomy?.facets.departments?.filter((f) => f.count > 0) ?? [];
-  const facetLinks = (key: string, list: readonly Facet[]): NavMenuLink[] =>
+  const facetLinks = (key: string, list: readonly Facet[], label: (f: Facet) => string = (f) => facetTitle(f.label || f.slug)): NavMenuLink[] =>
     [...list]
       .sort((a, b) => b.count - a.count || a.slug.localeCompare(b.slug))
       .map((f) => ({
-        label: facetTitle(f.label || f.slug),
+        label: label(f),
         to: `/proof?${key}=${encodeURIComponent(f.slug)}`,
         count: f.count,
       }));
@@ -103,7 +104,7 @@ export function buildProofMenu(taxonomy: TaxonomyLike | null): NavMenu {
     groups: [
       { heading: 'Case studies by industry', links: facetLinks('industry', industries) },
       departments.length > 0
-        ? { heading: 'By department', links: facetLinks('department', departments) }
+        ? { heading: 'By department', links: facetLinks('department', departments, (f) => departmentLabel(f.slug)) }
         : {
             heading: 'By department',
             links: [],

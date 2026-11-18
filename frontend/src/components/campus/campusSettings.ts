@@ -100,6 +100,28 @@ export function readCampusSettings(): CampusSettings {
   };
 }
 
+/** The nav the learner CHOSE, or null when this browser holds no choice (or storage cannot be read). W22. */
+export function readStoredNav(): CampusNavMode | null {
+  try {
+    const raw = window.localStorage.getItem(CAMPUS_SETTINGS_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Record<string, unknown> | null;
+    return p && (p.nav === 'classic' || p.nav === 'campus') ? p.nav : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * W22 (Ali, 2026-11-17): "business accounts should start in the old format mode and not use the campus."
+ * The nav to adopt when the flags arrive: the server's default for this account, but only when the campus is on
+ * and the browser holds no choice of its own. A choice the person made always wins. null = keep what is in state.
+ */
+export function startingNav(storedNav: CampusNavMode | null, flags: { campus: boolean; defaultNav?: CampusNavMode }): CampusNavMode | null {
+  if (!flags.campus || storedNav !== null || !flags.defaultNav) return null;
+  return flags.defaultNav;
+}
+
 /** Persist settings. Returns false when storage refused the write (the in-memory value still applies). */
 export function writeCampusSettings(s: CampusSettings): boolean {
   try {
