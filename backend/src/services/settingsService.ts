@@ -48,6 +48,9 @@ const DEFAULTS: Record<string, any> = {
   ai_maya_visitor_delay_seconds: 3,
   // GoHighLevel CRM
   ghl_enabled: false,
+  // OH1l: one note on the GHL contact per Maya email sent, reply received and call finished.
+  // OFF by default: while false, ghlMirrorService makes no GHL call at all.
+  ghl_mirror_enabled: false,
   ghl_api_key: '',
   ghl_location_id: 'JFWwp8q7l6T12NWTIOKG',
   // Group key -> GHL sub-account. Open-house and training-site signups belong in

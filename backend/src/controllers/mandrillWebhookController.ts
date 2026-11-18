@@ -15,6 +15,7 @@ import { recordReplyClassification } from '../services/growthJourney/replyClassi
 import { recordReplyHandoff } from '../services/growthJourney/replyHandoffHook';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sendInboundAutoReply } from '../services/inbound/inboundAutoReply';
+import { mirrorToGhlInBackground } from '../services/ghlMirrorService';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -372,6 +373,9 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
           campaign_id: campaignId,
         },
       });
+
+      // OH1l: GHL mirror note (setting ghl_mirror_enabled, default off). Fire-and-forget.
+      mirrorToGhlInBackground({ event: 'reply_received', lead, subject, body });
 
       // Record interaction outcome
       await InteractionOutcome.create({

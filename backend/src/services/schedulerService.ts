@@ -71,6 +71,7 @@ import {
   getCampaignSettingsFromRecord,
 } from './campaignSendWindow';
 import { voiceCallTypeForAction, voicePauseMs, dialFailureRecord } from './voice/voiceDialPolicy';
+import { mirrorToGhlInBackground } from './ghlMirrorService';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -1354,6 +1355,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       ai_generated: action.ai_generated || false,
     },
   });
+
+  // OH1l: GHL mirror note (setting ghl_mirror_enabled, default off). Fire-and-forget.
+  mirrorToGhlInBackground({ event: 'email_sent', leadId: action.lead_id, subject: action.subject, body: html });
 
   // Record interaction outcome for ICP intelligence
   await recordActionOutcome(action, 'sent');
