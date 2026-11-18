@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Open House Loop</title>
+<meta name="description" content="How a weekly funnel report names one move, hands Claude Code the prompt that makes it, and grades it the following Wednesday.">
+<style>
+:root{
+  --navy:#17325c; --navy2:#22508a; --ink:#1a202c; --muted:#5a6578; --line:#e2e8f0; --bg:#f4f6fa; --card:#fff;
+  --gold:#c9932b; --goldbg:#fff8e8; --green:#2f855a; --greenbg:#e6f4ec; --red:#c53030; --redbg:#fdecec;
+  --amber:#b7791f; --amberbg:#fdf3e1; --blue:#2b6cb0; --bluebg:#e8f0fb; --grey:#718096; --greybg:#edf1f6;
+  --r:14px; --shadow:0 1px 2px #0000000d,0 6px 20px #17325c14;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ink:#e8edf5; --muted:#a3afc2; --line:#2c3a52; --bg:#0e1626; --card:#16213a; --goldbg:#2d2614; --greenbg:#13301f; --redbg:#3a1717;
+  --amberbg:#33270f; --bluebg:#142a4a; --greybg:#1f2a40; --shadow:0 1px 2px #0006;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Segoe UI",Roboto,system-ui,sans-serif}
+a{color:var(--blue)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+header.hero{background:linear-gradient(135deg,#132a4f,#2a5d9c);color:#fff;padding:44px 0 36px}
+.hero .kicker{font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.8}
+.hero h1{font-size:clamp(28px,4.6vw,44px);line-height:1.12;margin:.25em 0 .35em}
+.hero p{max-width:760px;font-size:18px;opacity:.92;margin:0}
+.delta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:26px}
+.delta div{background:#ffffff1a;border:1px solid #ffffff33;border-radius:12px;padding:12px 14px}
+.delta b{display:block;font-size:26px}
+.delta span{font-size:13px;opacity:.85}
+.delta i{font-style:normal;opacity:.7}
+section.block{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);margin:22px 0;padding:26px}
+h2{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 18px}
+/* the loop */
+.loop{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;position:relative}
+.step{all:unset;box-sizing:border-box;cursor:pointer;border:2px solid var(--line);border-radius:12px;padding:14px;background:var(--card);display:flex;flex-direction:column;gap:6px;transition:.15s}
+.step:hover{border-color:var(--navy2)}
+.step[aria-selected="true"]{border-color:var(--gold);background:var(--goldbg)}
+.step .n{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:700}
+.step[aria-selected="true"] .n{background:var(--gold)}
+.step b{font-size:15px;line-height:1.3}
+.step small{color:var(--muted);font-size:13px}
+.step:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.back{margin:10px 0 0;color:var(--muted);font-size:14px;text-align:center}
+.detail{display:grid;grid-template-columns:1fr 1.15fr;gap:22px;margin-top:18px;align-items:start}
+.detail h3{margin:0 0 8px;font-size:20px}
+.detail ul{padding-left:20px;margin:8px 0}
+.detail img{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.cap{font-size:13px;color:var(--muted);margin-top:6px}
+code{background:var(--greybg);padding:1px 6px;border-radius:6px;font-size:.9em}
+.formula{background:var(--goldbg);border:1px solid var(--gold);border-radius:10px;padding:10px 14px;font-size:15px;margin:10px 0}
+/* funnel map */
+.stages{display:flex;gap:6px;flex-wrap:wrap}
+.stage{all:unset;box-sizing:border-box;cursor:pointer;flex:1 1 0;min-width:88px;border-radius:10px;padding:10px;border:2px solid transparent;text-align:center}
+.stage .v{font-size:22px;font-weight:700;display:block}
+.stage .l{font-size:12.5px;line-height:1.25;display:block}
+.stage .p{font-size:12px;display:block;margin-top:2px;opacity:.85}
+.good{background:var(--greenbg);color:var(--green)} .bad{background:var(--redbg);color:var(--red)} .ok{background:var(--amberbg);color:var(--amber)} .none{background:var(--greybg);color:var(--grey)}
+.stage[aria-pressed="true"]{border-color:var(--navy)}
+.stage:focus-visible{outline:3px solid var(--blue)}
+.mapout{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.chip{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px;background:var(--card)}
+.chip:hover,.chip[aria-pressed="true"]{border-color:var(--navy2);background:var(--bluebg)}
+.chip:focus-visible{outline:3px solid var(--blue)}
+/* timeline */
+.tl{list-style:none;margin:0;padding:0;border-left:3px solid var(--line);margin-left:8px}
+.tl li{position:relative;padding:0 0 4px 18px}
+.tl li::before{content:"";position:absolute;left:-9px;top:14px;width:15px;height:15px;border-radius:50%;background:var(--k,var(--grey));border:3px solid var(--card)}
+.tl button{all:unset;cursor:pointer;display:block;width:100%;padding:8px 10px;border-radius:10px}
+.tl button:hover,.tl button[aria-expanded="true"]{background:var(--greybg)}
+.tl button:focus-visible{outline:3px solid var(--blue)}
+.tl .d{font-size:13px;color:var(--muted)}
+.tl .k{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--k)}
+.tl .t{display:block;font-weight:600}
+.tl .body{display:none;padding:2px 10px 12px;color:var(--muted);font-size:15px}
+.tl li.open .body{display:block}
+.tl li.future .t{font-style:italic}
+/* editions */
+table.eds{width:100%;border-collapse:collapse;font-size:15px;min-width:720px}
+.eds th{text-align:left;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:2px solid var(--line);padding:8px}
+.eds td{padding:10px 8px;border-bottom:1px solid var(--line)}
+.eds tr:last-child td{background:var(--goldbg)}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-weight:600;font-size:13.5px}
+/* hypotheses */
+.hyp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.hyp div{border-radius:12px;padding:14px;border:1px solid var(--line)}
+.hyp b{display:block;font-size:24px}
+.hyp .tag{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;margin-bottom:6px}
+.hyp p{margin:4px 0 0;font-size:14px;color:var(--muted)}
+/* embedded report */
+.framebar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+iframe{width:100%;height:760px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.foot{color:var(--muted);font-size:13px;text-align:center;padding:10px 0 40px}
+@media (max-width:860px){
+  .loop{grid-template-columns:1fr 1fr}
+  .detail,.mapout{grid-template-columns:1fr}
+  .hyp,.delta{grid-template-columns:1fr 1fr}
+  iframe{height:620px}
+  section.block{padding:18px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Open House funnel · Colaberry · how it works</div>
+    <h1>The report names one move. Claude Code makes it. Next Wednesday the report grades it.</h1>
+    <p>Most funnel reports describe last week. This one ends in a decision, hands an AI engineer the prompt that carries it out, and keeps a ledger, so every report knows what was tried and whether it worked.</p>
+    <p style="font-size:14px;margin-top:22px;opacity:.85">The first edition with a starred move (11 Nov, about 23 hours after launch) → the Wednesday edition (a full week to 18 Nov):</p>
+    <div class="delta" aria-label="First starred edition compared with this week" style="margin-top:10px">
+      <div><b>59 → 343</b><span>visitors from the ads</span></div>
+      <div><b>16 → 89</b><span>Open House sign-ups</span></div>
+      <div><b>40% → 80.5%</b><span>of new accounts went in</span></div>
+      <div><b>2 → 31</b><span>pressed play on the welcome video</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="block" aria-labelledby="h-ed">
+    <h2 id="h-ed">Four editions in eight days: the star follows the numbers</h2>
+    <p class="sub">Each edition re-scored every move from scratch. The star is the top score that Claude Code can build. Windows grow from launch until they reach a full week.</p>
+    <div style="overflow-x:auto"><table class="eds">
+      <thead><tr><th>Edition</th><th>Window</th><th>Visitors</th><th>Sign-ups</th><th>Went in</th><th>Pressed play</th><th>★ Starred move (score)</th></tr></thead>
+      <tbody>
+        <tr><td>Wed 11 Nov, 2:09 PM</td><td>23 h from launch</td><td>59</td><td>16</td><td><span class="pill ok">40%</span></td><td><span class="pill bad">2 of 6</span></td><td>Make play obvious (5.6)</td></tr>
+        <tr><td>Thu 12 Nov, 6:37 AM</td><td>39 h</td><td>82</td><td>19</td><td><span class="pill ok">41.2%</span></td><td><span class="pill bad">3 of 7</span></td><td><b>Fix the landing page's first phone screen (5.94)</b>; play second (5.2)</td></tr>
+        <tr><td>Sun 15 Nov, 3:07 PM</td><td>4.5 days</td><td>218</td><td>49</td><td><span class="pill ok">67.4%</span></td><td><span class="pill bad">12 of 31</span></td><td>Make play obvious (25.6)</td></tr>
+        <tr><td>Wed 18 Nov, 8:00 AM</td><td>7 days</td><td>343</td><td>89</td><td><span class="pill good">80.5%</span></td><td><span class="pill bad">31 of 66</span></td><td>Make play obvious (43.6)</td></tr>
+      </tbody>
+    </table></div>
+    <p class="cap">On 12 Nov the sign-up rate was on target, so the scoring halves moves at the top of the funnel. That week the landing page's bounce still outscored play by a hair. As more people reached the video, play pulled ahead and stayed there. The editions were emailed on 12, 15 and 18 Nov; the Wednesday 8 AM send is the scheduled one.</p>
+  </section>
+
+  <section class="block" aria-labelledby="h-loop">
+    <h2 id="h-loop">The weekly loop</h2>
+    <p class="sub">Five steps, every Wednesday. Pick a step.</p>
+    <div class="loop" role="tablist" aria-label="The five steps of the loop" id="loop"></div>
+    <p class="back">↻ Step 5 feeds step 1: the graded result is part of the next report.</p>
+    <div class="detail" id="loopDetail" role="tabpanel" aria-live="polite"></div>
+  </section>
+
+  <section class="block" aria-labelledby="h-map">
+    <h2 id="h-map">Where each part of the report sits on the visitor's path</h2>
+    <p class="sub">This week's numbers, from the ad to the first win. Green on target, amber watch, red below target, grey too few to judge or no target. Pick a step to see which parts of the report speak to it.</p>
+    <div class="stages" id="stages"></div>
+    <div class="mapout" id="mapout" aria-live="polite"></div>
+  </section>
+
+  <section class="block" aria-labelledby="h-hyp">
+    <h2 id="h-hyp">Every move carries a test, and the report grades it</h2>
+    <p class="sub">The four hypotheses in the ledger, graded against this week's numbers (11 to 18 Nov).</p>
+    <div class="hyp" id="hyp"></div>
+  </section>
+
+  <section class="block" aria-labelledby="h-tl">
+    <h2 id="h-tl">The ledger: how we got here</h2>
+    <p class="sub">Every decision, build, measurement, correction and change of direction, appended and never rewritten. The report renders this file as its timeline. Pick an entry.</p>
+    <div class="chips" id="kinds" role="group" aria-label="Filter by kind"></div>
+    <ol class="tl" id="tl"></ol>
+  </section>
+
+  <section class="block" aria-labelledby="h-rep">
+    <h2 id="h-rep">The real report, this week</h2>
+    <p class="sub">The attachment as it went out on 18 Nov, with two staff names replaced by their roles. It counts people and never names them. Use the buttons, or scroll inside it.</p>
+    <div class="framebar" id="framebar"></div>
+    <iframe id="report" title="Open House funnel weekly report, week of 18 Nov 2026" src="open-house-weekly-report.html" loading="lazy"></iframe>
+  </section>
+  <p class="foot">Numbers are from the 18 Nov 2026 edition (2026-11-11 08:00 to 2026-11-18 08:00 CT). Targets are starting assumptions, reset after four weeks of data.</p>
+</main>
+
+<script>
+(function(){
+  var V='?v=1118';
+  var STEPS=[
+    {t:'The report runs', s:'Wed 8:00 AM CT, from main', img:'shot-openhouse-email-top.png', cap:'The email edition: three headline numbers, then the starred move.',
+     h:'Every Wednesday the report rebuilds itself from main',
+     p:['A scheduled job pulls this week’s code from <code>origin/main</code>, so a merged change to the ledger or the scoring reaches the next email without a deploy.','It follows every person from a Facebook or Instagram ad to the first win: 343 visitors this week, counted, never named.','One computed view feeds the email, the full report and the prompt, so the three cannot disagree. A second run the same week does not send again; a failure emails an alert instead of going quiet.']},
+    {t:'It stars one move', s:'the greatest impact this week', img:'shot-openhouse-star.png', cap:'The starred move leads the report, with the score that chose it and the three runners-up.',
+     h:'The report starts with the next best action, not a chart',
+     p:['Every candidate move in the playbook is scored the same way:'],
+     f:'people short of target × closeness to the first win × confidence in the sample × can Claude Code build it',
+     p2:['This week: 31 of 66 pressed play against an 80% target, about 21.8 people short. 21.8 × 2 × 1 × 1 = <b>43.6</b>. Next in line scored 26.46.','A move still inside its measurement window is never starred again. A move a person must make by hand wins only if it scores 1.5 times the best one Claude Code can build.']},
+    {t:'It hands over the prompt', s:'ONE_MOVE_PROMPT.md, attached', img:'shot-openhouse-prompt.png', cap:'The attached prompt: prove it is still the move, then the numbers behind it.',
+     h:'The email carries the build instructions, not just the advice',
+     p:['<code>ONE_MOVE_PROMPT.md</code> is written for Claude Code. In inbox zero, Ali says “make the Open House move” and Claude Code runs it exactly, without re-deriving anything from the email.','Step 0 stops a stale build: if the ledger already holds this recommendation, or a newer report starred something else, it stops and says so.','It carries the house rules: tests ship with the change, judge it on a 390 × 844 phone screen first, open a pull request, and never merge it.']},
+    {t:'Claude Code builds it', s:'ticket, change, pull request, ledger', img:'shot-openhouse-ledger-step.png', cap:'Step 4 of the prompt: the same pull request appends a build entry and a hypothesis to the ledger.',
+     h:'The build writes its own entry into the story',
+     p:['Claude Code files the ticket before the first commit, makes the change, and opens the pull request for a person to review and merge.','In the same pull request it appends two ledger entries: the build, with the date it is measured until, and a hypothesis with a numeric test, here <code>play ≥ 50%</code>.','Nothing is edited or deleted. A change of mind is a new <code>retraction</code> or <code>pivot</code> entry that names the one it supersedes.']},
+    {t:'Next week grades it', s:'the hypothesis board', img:'shot-openhouse-hypotheses.png', cap:'The hypothesis board: each test graded against the live numbers, every week.',
+     h:'The following Wednesday, the report says whether it worked',
+     p:['The hypothesis board grades every open test against the new numbers. The C121 button was tested at “at least 70% of new accounts go in”: before it, 0 of 5; this week, 66 of 82 (80.5%).','If the evidence goes the other way, nobody quietly undoes it. A retraction entry goes in, and the report shows the change of direction.','So the report gets more useful every week: it knows what was tried, why, and what happened.']}
+  ];
+  var loop=document.getElementById('loop'), det=document.getElementById('loopDetail');
+  function showStep(i){
+    [].forEach.call(loop.children,function(b,j){b.setAttribute('aria-selected',j===i?'true':'false');b.tabIndex=j===i?0:-1;});
+    var s=STEPS[i], html='<div><h3>'+s.h+'</h3>'+(s.p||[]).map(function(x){return '<p>'+x+'</p>';}).join('')+(s.f?'<div class="formula">'+s.f+'</div>':'')+(s.p2||[]).map(function(x){return '<p>'+x+'</p>';}).join('')+'</div>'+
+      '<figure style="margin:0"><img src="'+s.img+V+'" alt="'+s.cap+'"><figcaption class="cap">'+s.cap+'</figcaption></figure>';
+    det.innerHTML=html;
+  }
+  STEPS.forEach(function(s,i){
+    var b=document.createElement('button'); b.className='step'; b.setAttribute('role','tab');
+    b.innerHTML='<span class="n">'+(i+1)+'</span><b>'+s.t+'</b><small>'+s.s+'</small>';
+    b.onclick=function(){showStep(i);};
+    b.onkeydown=function(e){if(e.key==='ArrowRight'||e.key==='ArrowLeft'){var k=(i+(e.key==='ArrowRight'?1:4))%5;showStep(k);loop.children[k].focus();}};
+    loop.appendChild(b);
+  });
+  showStep(1);
+
+  var SECTION_LABEL={'sec-star':'The starred move','sec-tour':'Tour: the 10 numbers','sec-overview':'Every step against target','sec-insights':'What the data says','sec-people':'Every person','sec-funnel':'The funnel','sec-flow':'How everyone flowed','sec-tree':'The decision tree','sec-forks':'Every fork','sec-source':'Where they come from','sec-page':'On the landing page','sec-account':'Inside the account','sec-days':'Day by day','sec-email':'The welcome email','sec-hyp':'Hypothesis board','sec-story':'Decision timeline','sec-blind':'What we cannot see yet'};
+  var STAGES=[
+    {l:'Visited the landing page',v:343,p:'from the ads',c:'none',sec:['sec-source','sec-people','sec-days'],img:'shot-openhouse-source.png',n:'93.9% are on a phone. Direct / untagged converts 38.5% of its visitors; Instagram 21.6%.'},
+    {l:'Clicked “Save my seat”',v:106,p:'30.9% · target 25%',c:'good',sec:['sec-page','sec-forks'],img:'shot-openhouse-page.png',n:'57.1% left before a quarter of the page. The median visit lasts 29 seconds, so the first phone screen does the whole job.'},
+    {l:'Signed up for the Open House',v:89,p:'84% · target 70%',c:'good',sec:['sec-funnel','sec-tree'],img:'shot-openhouse-funnel.png',n:'25.9% of visitors signed up against a 20% target: the Open House pivot of 10 Nov is holding.'},
+    {l:'Got a new account',v:82,p:'92.1%',c:'none',sec:['sec-funnel','sec-email'],img:'shot-openhouse-funnel.png',n:'The sign-up form creates the account and sends the welcome email in one step.'},
+    {l:'Entered the account',v:66,p:'80.5% · target 70%',c:'good',sec:['sec-account','sec-hyp'],img:'shot-openhouse-account.png',n:'All 66 came in by the C121 Access button; the email link brought in 0. Before the button: 0 of 5.'},
+    {l:'Pressed play',v:31,p:'47% · target 80%',c:'bad',sec:['sec-star','sec-tour','sec-account'],img:'shot-openhouse-star.png',n:'The biggest gap close to the first win, so it is this week’s starred move.'},
+    {l:'Watched 75%+',v:23,p:'74.2% · target 50%',c:'good',sec:['sec-account','sec-flow'],img:'shot-openhouse-flow.png',n:'Once people press play, most finish: quitters mostly leave between 30 and 60 seconds.'},
+    {l:'Collected the credit',v:17,p:'73.9% · target 90%',c:'ok',sec:['sec-insights','sec-story'],img:'shot-openhouse-insights.png',n:'Across all 43 learners who earned it, 88.4% collected: the weekly figure is a small sample.'},
+    {l:'Took the Quick check',v:4,p:'23.5% · target 70%',c:'bad',sec:['sec-overview','sec-tree'],img:'shot-openhouse-tree.png',n:'Second-biggest gap. Opening the Quick check the moment the credit is collected is third in line.'},
+    {l:'Scored 5 of 5',v:4,p:'100% · too few',c:'none',sec:['sec-overview','sec-blind'],img:'shot-openhouse-blindspots.png',n:'Four people is too few to judge, so the report keeps it grey rather than green.'}
+  ];
+  var stages=document.getElementById('stages'), mapout=document.getElementById('mapout');
+  function showStage(i){
+    [].forEach.call(stages.children,function(b,j){b.setAttribute('aria-pressed',j===i?'true':'false');});
+    var s=STAGES[i];
+    mapout.innerHTML='<div><h3 style="margin:0 0 6px">'+s.l+': '+s.v+'</h3><p>'+s.n+'</p><p class="cap" style="margin-bottom:4px">Read it in the report:</p><div class="chips">'+
+      s.sec.map(function(id){return '<button class="chip" data-sec="'+id+'">'+SECTION_LABEL[id]+' ↓</button>';}).join('')+'</div></div>'+
+      '<figure style="margin:0"><img src="'+s.img+V+'" alt="'+SECTION_LABEL[s.sec[0]]+' in the weekly report" style="width:100%;border-radius:10px;border:1px solid var(--line)"></figure>';
+  }
+  STAGES.forEach(function(s,i){
+    var b=document.createElement('button'); b.className='stage '+s.c; b.setAttribute('aria-pressed','false');
+    b.innerHTML='<span class="v">'+s.v+'</span><span class="l">'+s.l+'</span><span class="p">'+s.p+'</span>';
+    b.onclick=function(){showStage(i);}; stages.appendChild(b);
+  });
+  showStage(5);
+
+  var HYP=[
+    {t:'Open House seat converts ≥ 20% of visitors',v:'25.9%',st:'Holding',c:'good',p:'89 of 343. Set on 10 Nov, the day the landing page switched to the Open House.'},
+    {t:'With the button, ≥ 70% of new accounts go in',v:'80.5%',st:'Holding',c:'good',p:'66 of 82. Before the C121 button: 0 of 5.'},
+    {t:'The avatar video gets ≥ 20% of players to 75%',v:'74.2%',st:'Holding',c:'good',p:'23 of 31. The old video: 7 of 51 sign-ups finished.'},
+    {t:'Make play obvious: ≥ 50% press play',v:'47%',st:'Proposed',c:'none',p:'31 of 66 is the baseline. Graded once the starred move ships.'}
+  ];
+  document.getElementById('hyp').innerHTML=HYP.map(function(h){return '<div><span class="tag '+h.c+'">'+h.st+'</span><b>'+h.v+'</b><strong style="font-size:15px">'+h.t+'</strong><p>'+h.p+'</p></div>';}).join('');
+
+  var KC={decision:'var(--navy2)',pivot:'#805ad5',build:'var(--green)',measurement:'var(--blue)',correction:'var(--amber)',hypothesis:'var(--gold)',star:'var(--red)',next:'var(--grey)'};
+  var TL=[
+    ['2026-10-29','decision','Round 11 opens: an ad visitor’s first win is the goal','The paid-ad funnel is judged by one thing: does a stranger from an ad reach a first win, the welcome video and its Quick check?',null],
+    ['2026-11-09','build','C118: a 109-second avatar welcome video replaces the program video','Self-hosted, the first assignment for every Explorer who had not finished it (804 learners), with a Quick check rewritten from its transcript.','sec-story'],
+    ['2026-11-09','hypothesis','The avatar video gets at least 20% of players to watch 75%','Baseline with the old video: 7 of 51 new sign-ups finished (14%). This week: 23 of 31 (74.2%).','sec-hyp'],
+    ['2026-11-10','measurement','C119: the player records exactly where a learner leaves the video','Closing the tab now sends a final watch beat. Before this, a quit under 15 seconds left no trace.','sec-account'],
+    ['2026-11-10','pivot','The landing page promotes the Open House; the sign-up creates the account','Visitors save a seat at the live Open House, and that one form also creates their $0 account. Every number in the report starts here.','sec-funnel'],
+    ['2026-11-10','hypothesis','An Open House seat converts at least 20% of landing page visitors','This week: 89 of 343 (25.9%).','sec-hyp'],
+    ['2026-11-11','measurement','C120: the funnel tested end to end, with a rerunnable step report','The real numbers showed the leak: 5 sign-ups, 5 accounts, 5 welcome emails, 0 people entered. The welcome email was landing in Gmail’s Updates tab.','sec-funnel'],
+    ['2026-11-11','build','C121: an Access your account button signs a new sign-up straight in','Skip the trip to the inbox; the email stays as the way back.','sec-account'],
+    ['2026-11-11','hypothesis','With the button, at least 70% of new accounts go in','Before the button: 0 of 5. This week: 66 of 82 (80.5%).','sec-hyp'],
+    ['2026-11-11','measurement','C123: a weekly report follows every person through every fork','First edition: 53 visitors, 14 sign-ups, 13 new accounts, 4 entered, 0 pressed play.','sec-flow'],
+    ['2026-11-11','correction','“Finished the video” now means watched 75%; collecting the credit is its own step','A learner who watched 97% and never clicked had shown as not finishing. Both numbers are now shown.','sec-overview'],
+    ['2026-11-11','decision','C124: one starred move a week, emailed Wednesdays at 8 AM CT','The report names the single move with the greatest impact and attaches a prompt that makes it. Every move made goes into this ledger with the test it must pass.','sec-star'],
+    ['2026-11-12','measurement','Collecting the credit runs at 88.4% across all 43 learners who earned it','The 12 Nov edition starred a three-person figure (67%). Measured across everyone, the step is close to target: the weekly number was small-sample noise, and the ledger says so.','sec-insights'],
+    ['2026-11-18','star','★ This week’s move: make pressing play the obvious next step','31 of 66 pressed play against an 80% target. Score 43.6. Claude Code can build it from the attached prompt.','sec-star'],
+    ['2026-11-25','next','Next Wednesday: the report grades play ≥ 50%','If the move ships, its build and hypothesis entries are in the ledger, it is not starred again while it is measured, and the board grades it against the new week.','sec-hyp']
+  ];
+  var tl=document.getElementById('tl'), kinds=document.getElementById('kinds'), filter=null;
+  function renderTL(){
+    tl.innerHTML='';
+    TL.forEach(function(e,i){
+      if(filter&&e[1]!==filter)return;
+      var li=document.createElement('li'); li.style.setProperty('--k',KC[e[1]]); if(e[1]==='next')li.className='future';
+      var b=document.createElement('button'); b.setAttribute('aria-expanded','false');
+      b.innerHTML='<span class="d">'+e[0]+'</span> · <span class="k">'+(e[1]==='star'?'starred move':e[1]==='next'?'planned':e[1])+'</span><span class="t">'+e[2]+'</span>';
+      var body=document.createElement('div'); body.className='body';
+      body.innerHTML='<p style="margin:4px 0 8px">'+e[3]+'</p>'+(e[4]?'<button class="chip" data-sec="'+e[4]+'">See it in the report: '+SECTION_LABEL[e[4]]+' ↓</button>':'');
+      b.onclick=function(){var o=li.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');};
+      li.appendChild(b); li.appendChild(body); tl.appendChild(li);
+    });
+  }
+  [['all','All'],['decision','Decisions'],['pivot','Pivots'],['build','Builds'],['measurement','Measurements'],['correction','Corrections'],['hypothesis','Hypotheses']].forEach(function(k){
+    var c=document.createElement('button'); c.className='chip'; c.textContent=k[1]; c.setAttribute('aria-pressed',k[0]==='all'?'true':'false');
+    c.onclick=function(){filter=k[0]==='all'?null:k[0];[].forEach.call(kinds.children,function(x){x.setAttribute('aria-pressed',x===c?'true':'false');});renderTL();};
+    kinds.appendChild(c);
+  });
+  renderTL();
+
+  var frame=document.getElementById('report'), bar=document.getElementById('framebar');
+  ['sec-star','sec-tour','sec-overview','sec-funnel','sec-flow','sec-tree','sec-forks','sec-page','sec-account','sec-hyp','sec-story','sec-blind'].forEach(function(id){
+    var c=document.createElement('button'); c.className='chip'; c.dataset.sec=id; c.textContent=SECTION_LABEL[id]; bar.appendChild(c);
+  });
+  function jump(id){
+    frame.scrollIntoView({behavior:'smooth',block:'start'});
+    try{var d=frame.contentDocument, el=d&&d.getElementById(id); if(el){el.scrollIntoView({behavior:'smooth',block:'start'});return;}}catch(e){}
+    frame.src='open-house-weekly-report.html#'+id;
+  }
+  document.addEventListener('click',function(e){var t=e.target.closest('[data-sec]'); if(t){e.preventDefault(); jump(t.dataset.sec);}});
+})();
+</script>
+</body>
+</html>

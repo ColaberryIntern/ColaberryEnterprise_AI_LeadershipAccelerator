@@ -11,6 +11,7 @@ export const CASE_STUDY_DEPARTMENTS: readonly { readonly slug: string; readonly 
   { slug: 'operations', label: 'Operations' },
   { slug: 'customer-service', label: 'Customer service' },
   { slug: 'sales', label: 'Sales' },
+  { slug: 'marketing', label: 'Marketing' },
   { slug: 'hr', label: 'HR' },
   { slug: 'it-data', label: 'IT & Data' },
 ];
