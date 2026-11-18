@@ -34,6 +34,10 @@ import Project from '../../../models/Project';
 import StudentTask from '../../../models/StudentTask';
 import GitHubConnection from '../../../models/GitHubConnection';
 import { getPublishedPlan } from '../planStore';
+import {
+  verifyStoryArtifacts,
+  type StoryArtifactVerificationResult,
+} from '../../artifacts/storyArtifactVerification';
 import { markTaskVerifiedComplete } from '../../projects/projectWriteService';
 import { recordEvidence } from '../../progression/evidenceEngine';
 import { recomputeForEnrollment } from '../../progression/competencyEngine';
@@ -156,6 +160,15 @@ export interface BuildVerificationSummary {
    * between "you have done nothing" and "your work is on `feature/x`".
    */
   unmerged_branches: string[];
+  /**
+   * Phase A2: what each story's artifact contract handed over at this commit.
+   *
+   * Null when the check is switched off, which is the default, and when no story in the plan
+   * declares a contract. REPORT ONLY: nothing in here changes a story's state, its criteria or
+   * its XP. It is attached to the summary so the first weekly cycle can measure what it would
+   * have refused before anything refuses it.
+   */
+  story_artifacts: StoryArtifactVerificationResult | null;
 }
 
 export interface VerifyOptions {
@@ -200,6 +213,7 @@ function failure(
     window_truncated: false,
     branch_read: null,
     unmerged_branches: [],
+    story_artifacts: null,
   };
 }
 
@@ -570,6 +584,43 @@ export async function verifyBuildFromRepo(
   // summary the sync response hands back still says "0 verified" for a build
   // whose stories the platform is holding at verified — the same defect one
   // layer up, and the number a student actually looks at after pressing Sync.
+  /**
+   * Phase A2, report only. Rides on this pass: the plan, the commits and the tree are already in
+   * hand, so it adds no GitHub request. NEVER THROWS by its own contract, and it is awaited
+   * rather than fired off so the rows it writes are in before the summary that reports them.
+   */
+  let storyArtifacts: StoryArtifactVerificationResult | null = null;
+  try {
+    const result = await verifyStoryArtifacts({
+      projectId,
+      stories: (stored.plan?.stories ?? []) as Array<{ id?: string; artifacts?: unknown }>,
+      treeEntries: inputs.treeEntries,
+      headCommitSha: inputs.commits.length ? inputs.commits[0].sha : null,
+      planVersion: stored.version,
+    });
+    storyArtifacts = result.mode === 'off' && result.stories_with_contract === 0 ? null : result;
+    if (storyArtifacts && storyArtifacts.mode !== 'off') {
+      log('story_artifact_check_completed', opts.correlationId, 'success', {
+        projectId,
+        mode: storyArtifacts.mode,
+        stories_with_contract: storyArtifacts.stories_with_contract,
+        satisfied: storyArtifacts.satisfied_total,
+        outstanding: storyArtifacts.outstanding_total,
+        tree_unreadable: storyArtifacts.tree_unreadable,
+        rows_inserted: storyArtifacts.reports.reduce((n, r) => n + r.rows_inserted, 0),
+        note: 'report only: no story state, criterion or XP was changed by this check',
+      });
+    }
+  } catch (err: any) {
+    // It is documented never to throw. If it does, that is a defect in it, and a defect there
+    // must not cost a student the verification this run already reached.
+    log('story_artifact_check_failed', opts.correlationId, 'partial', {
+      projectId, error: err?.message || String(err),
+      note: 'verification stands; the artifact check records nothing this run',
+    });
+    storyArtifacts = null;
+  }
+
   const summary: BuildVerificationSummary = {
     project_id: projectId,
     ok: true,
@@ -592,6 +643,7 @@ export async function verifyBuildFromRepo(
     window_truncated: inputs.window_truncated,
     branch_read: inputs.branch_read,
     unmerged_branches: inputs.unmerged_branches,
+    story_artifacts: storyArtifacts,
   };
 
   /**

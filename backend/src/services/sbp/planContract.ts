@@ -206,6 +206,21 @@ export interface PlanStory {
    * `StoryReferences` for why absence is never read as a negative.
    */
   references?: StoryReferences;
+  /**
+   * What this story HANDS OVER: the artifact contract from phase A0.
+   *
+   * Typed as `unknown` on purpose, which is narrower than it looks. Nothing re-validates a
+   * stored plan on read (see `workspace` above for the same house pattern), so a plan's
+   * `artifacts` block may be anything at all, including malformed. Declaring it as a resolved
+   * type here would be a claim this file cannot keep. Every reader therefore puts it through
+   * `validateArtifactContract` from `services/artifacts/storyArtifactContract`, which takes
+   * `unknown` by design and returns either resolved artifacts or named refusals.
+   *
+   * ABSENT on every plan generated before phase A2, which today is all of them: the contract is
+   * authored in the story config beside the publisher, and nothing yet writes it back here.
+   * Absence means "this story declared nothing", never "this story hands nothing over".
+   */
+  artifacts?: unknown;
 }
 
 /**
