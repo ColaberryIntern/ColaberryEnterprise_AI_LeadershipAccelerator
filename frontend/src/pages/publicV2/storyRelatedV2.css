@@ -40,6 +40,11 @@
   padding-top: var(--space-6);
   border-top: var(--border-1) solid var(--border-subtle);
 }
+/* The page-level band around the column: the space below keeps the last row of
+   cards off the site footer. */
+.cbv2-story__related-band {
+  padding-bottom: var(--space-16);
+}
 .cbv2-related__list {
   display: grid;
   /* CAPPED, NOT STRETCHED. With `1fr` a row holding one or two items lets each

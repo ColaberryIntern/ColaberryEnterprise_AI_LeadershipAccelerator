@@ -79,37 +79,49 @@ export function StoryRelated({ currentSlug }: StoryRelatedProps) {
   if (linkable.length === 0) return null;
 
   return (
-    <section className="cbv2-story__related" id="related" aria-labelledby="related-heading">
-      <h2 className="cbv2-story__band-title" id="related-heading">Keep reading</h2>
-      <ul className="cbv2-related__list">
-        {linkable.map(({ record, href }) => (
-          <li className="cbv2-related__item" key={record.slug}>
-            <Link className="cbv2-related__link" to={href}>
-              {record.heroImageUrl ? (
-                <img
-                  className="cbv2-related__media"
-                  src={record.heroImageUrl}
-                  /* Decorative: the title sits in the same link, so announcing
-                     both would read the record's name twice. */
-                  alt=""
-                  loading="lazy"
-                />
-              ) : null}
-              <span className="cbv2-related__body">
-                {record.primaryCapability ? (
-                  <span className="cbv2-related__meta">{record.primaryCapability}</span>
+    /* The band is mounted by the PAGE, outside the article's sections, so it needs
+       its own `cbv2-wrap`: without one the heading and cards sat flush against the
+       left edge of the viewport while every band above them sat in the centered
+       column (Ali, 2026-11-17: "Footer is off"). */
+    <section className="cbv2-story__related-band" id="related" aria-labelledby="related-heading">
+      <div className="cbv2-wrap cbv2-story__related">
+        <h2 className="cbv2-story__band-title" id="related-heading">Keep reading</h2>
+        <ul className="cbv2-related__list">
+          {linkable.map(({ record, href }) => (
+            <li className="cbv2-related__item" key={record.slug}>
+              <Link className="cbv2-related__link" to={href}>
+                {record.heroImageUrl ? (
+                  <img
+                    className="cbv2-related__media"
+                    src={record.heroImageUrl}
+                    /* Decorative: the title sits in the same link, so announcing
+                       both would read the record's name twice. */
+                    alt=""
+                    loading="lazy"
+                  />
                 ) : null}
-                <span className="cbv2-related__title">{record.title}</span>
-                {record.standfirst ? (
-                  <span className="cbv2-related__note">{record.standfirst}</span>
-                ) : null}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+                <span className="cbv2-related__body">
+                  {record.primaryCapability ? (
+                    <span className="cbv2-related__meta">{capabilityLabel(record.primaryCapability)}</span>
+                  ) : null}
+                  <span className="cbv2-related__title">{record.title}</span>
+                  {record.standfirst ? (
+                    <span className="cbv2-related__note">{record.standfirst}</span>
+                  ) : null}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
+}
+
+/** Some records store their capability as a slug ("operational-ai-call-intent-routing").
+ *  A slug is shown as words; anything else is shown as written. */
+export function capabilityLabel(value: string): string {
+  return /^[a-z0-9]+(-[a-z0-9]+)+$/.test(value) ? value.replace(/-/g, ' ') : value;
 }
 
 export default StoryRelated;
