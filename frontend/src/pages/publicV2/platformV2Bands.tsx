@@ -33,7 +33,6 @@ export function PlatformHeroV5(): React.ReactElement {
         <p className="cbv2-crumb5 cbv2-crumb5--d">
           <Link to="/">Home</Link> / Platform
         </p>
-        <p className="cbv2-k5">The platform</p>
         <h1 id="cbv2-plat-title">
           See your company move to AI,{' '}
           <span className="cbv2-it">department by department.</span>

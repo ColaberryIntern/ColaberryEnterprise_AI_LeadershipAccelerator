@@ -132,7 +132,6 @@ export function ServicesV2(): React.ReactElement {
           <p className="cbv2-crumb5">
             <Link to="/">Home</Link> / Services
           </p>
-          <p className="cbv2-k5">Services</p>
           <div className="cbv2-shero5__g">
             <h1 id="cbv2-svc-title">
               <span>

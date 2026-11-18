@@ -25,7 +25,6 @@ export default function HeroPricingV8(): React.ReactElement {
         <p className="cbv2-crumb5">
           <Link to="/">Home</Link> / Pricing
         </p>
-        <p className="cbv2-k5">Pricing</p>
 
         <h1 id="cbv2-pricing-title">
           Three services. <span className="cbv2-it">Simple terms for each.</span>
