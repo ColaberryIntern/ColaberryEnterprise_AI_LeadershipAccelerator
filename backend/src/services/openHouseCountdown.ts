@@ -71,6 +71,20 @@ const BANNED: Array<[RegExp, string]> = [
 ];
 
 /**
+ * OH1e: rewrite the harmless idioms the model keeps writing despite the prompt, BEFORE the
+ * screen. Measured on prod (20 drafts, Nov 18): 9 of 10 rejections were "feel ___ to bring
+ * your questions" and 1 was "what we offer". Neither advertises anything, but the ban on the
+ * word is absolute, so a warm, personal draft was being thrown away for the plain fallback.
+ * Only these exact phrases are rewritten; anything else still fails the screen.
+ */
+export function softenIdioms(text: string): string {
+  return (text || '')
+    .replace(/\bFeel free to\b/g, "You're welcome to")
+    .replace(/\bfeel free to\b/gi, "you're welcome to")
+    .replace(/\bwhat we offer\b/gi, 'what we do');
+}
+
+/**
  * Every problem with an AI-written Open House reminder; empty when it may be sent.
  * Checked on the subject and the body. The body must carry the event's own Join
  * link and no other web link except the main site.

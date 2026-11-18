@@ -27,7 +27,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import {
   OPEN_HOUSE_COUNTDOWN_KEY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy,
-  fallbackReminderBody, fallbackReminderSms, PORTAL_TODAY_URL,
+  fallbackReminderBody, fallbackReminderSms, PORTAL_TODAY_URL, softenIdioms,
 } from '../services/openHouseCountdown';
 import type { SequenceStep } from '../models/FollowUpSequence';
 
@@ -380,6 +380,8 @@ async function main(): Promise<void> {
               person_profile: profile, step_goal: step.step_goal, portal_url: PORTAL_TODAY_URL,
             },
           } as any);
+          r.subject = softenIdioms(r.subject || '');
+          r.body = softenIdioms(r.body || '');
           const problems = screenEventReminderCopy(r.subject || '', r.body || '', ev.join_url);
           html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px"><b>${label(step.minutes_before_event!)}:</b> ${esc(r.subject || step.subject)}
             <span style="margin-left:8px;padding:2px 8px;border-radius:10px;background:${problems.length ? '#fbe9e7;color:#b3261e' : '#e6f4ec;color:#1f7a4d'}">${problems.length ? 'REJECTED: ' + esc(problems.join('; ')) : 'passes the screen'}</span>
