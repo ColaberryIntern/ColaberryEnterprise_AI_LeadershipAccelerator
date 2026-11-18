@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Middlesex Hosting Decision</title>
+<!--
+  Guided walkthrough for Ram: the facts behind S0 (where the Middlesex AIA pilot is hosted) and the
+  one approval it needs. Basecamp ticket 10508457955, project 49361096. Built 18 Nov 2026.
+  Prices were read from render.com/pricing on 16 Nov 2026 (see MIDDLESEX_S0_HOSTING_DECISION_2026-11-16).
+  Deliberately carries no demo URL and no pricing-briefing URL.
+-->
+<style>
+  :root {
+    --ink:#14213d; --muted:#5b6475; --bg:#eef1f6; --card:#ffffff; --line:#dde2ea;
+    --navy:#13294b; --cherry:#b0132e;
+    --ok:#1f7a35; --okbg:#dcf3e2; --warn:#b26a00; --warnbg:#fde9c8; --bad:#b3261e; --badbg:#fbdad6;
+    --ask:#6b3fa0; --askbg:#ece2f8; --gray:#7a8394; --graybg:#e8ebf0;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  header { background:var(--navy); color:#fff; padding:18px 16px 16px; }
+  header .in { max-width:1180px; margin:0 auto; display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:22px; letter-spacing:.2px; }
+  header .sub { opacity:.75; font-size:13px; margin-top:2px; }
+  .btn { border:0; border-radius:10px; padding:11px 18px; font:700 15px/1 inherit; cursor:pointer; font-family:inherit; }
+  .btn.go { background:#fff; color:var(--navy); }
+  .btn.go:hover { background:#dfe7f5; }
+  main { max-width:1180px; margin:0 auto; padding:16px; display:grid; gap:14px;
+    grid-template-columns:repeat(12, 1fr); }
+  .panel { background:var(--card); border-radius:16px; padding:16px; grid-column:span 12;
+    box-shadow:0 1px 2px rgba(20,33,61,.06); min-width:0; }
+  .panel h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  .s6 { grid-column:span 6; } .s4 { grid-column:span 4; } .s8 { grid-column:span 8; }
+  @media (max-width:860px) { .s6, .s4, .s8 { grid-column:span 12; } }
+
+  /* hero */
+  #hero { background:var(--askbg); border:3px solid var(--ask); display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  #hero .big { font-size:30px; font-weight:800; line-height:1.15; flex:1 1 380px; }
+  #hero .big small { display:block; font-size:15px; font-weight:600; color:var(--ask); margin-bottom:4px; text-transform:uppercase; letter-spacing:1px; }
+  .price { background:var(--ask); color:#fff; border-radius:14px; padding:14px 20px; text-align:center; }
+  .price b { font-size:34px; display:block; line-height:1; }
+  .price span { font-size:13px; opacity:.9; }
+  .due { background:var(--bad); color:#fff; border-radius:999px; padding:6px 14px; font-weight:800; font-size:13px; white-space:nowrap; }
+
+  /* chain */
+  .chain { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .node { border-radius:10px; padding:9px 11px; font-weight:800; font-size:14px; text-align:center; min-width:46px; }
+  .n-ask { background:var(--ask); color:#fff; font-size:16px; padding:12px 14px; }
+  .n-warn { background:var(--warnbg); color:var(--warn); border:2px solid var(--warn); }
+  .n-flag { background:var(--navy); color:#fff; }
+  .arrow { color:var(--muted); font-weight:800; }
+  .caption { color:var(--muted); font-size:13px; margin-top:10px; }
+  .three { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; font-weight:700; }
+  .pc { background:var(--graybg); border-radius:8px; padding:6px 10px; font-size:13px; }
+
+  /* boxes */
+  .versus { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:520px) { .versus { grid-template-columns:1fr; } }
+  .box { border-radius:14px; padding:12px; }
+  .box h3 { margin:0 0 8px; font-size:16px; }
+  .box.bad { background:var(--badbg); border:3px solid var(--bad); }
+  .box.ok { background:var(--okbg); border:3px solid var(--ok); }
+  .tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .tag { background:#fff; border-radius:8px; padding:5px 9px; font-size:13px; font-weight:600; }
+  .tag.hot { background:var(--bad); color:#fff; }
+  .tag.good { background:var(--ok); color:#fff; }
+  .stamp { margin-top:10px; font-weight:800; font-size:13px; }
+  .box.bad .stamp { color:var(--bad); } .box.ok .stamp { color:var(--ok); }
+
+  /* options */
+  .opts { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+  @media (max-width:860px) { .opts { grid-template-columns:repeat(2, 1fr); } }
+  @media (max-width:420px) { .opts { grid-template-columns:1fr; } }
+  .opt { border-radius:14px; padding:12px; border:3px solid transparent; }
+  .opt .nm { font-weight:800; font-size:16px; }
+  .opt .cost { font-size:22px; font-weight:800; margin:4px 0; }
+  .opt .why { font-size:13px; }
+  .opt .chip { display:inline-block; color:#fff; border-radius:999px; padding:3px 10px; font-size:11px; font-weight:800; letter-spacing:.6px; margin-bottom:6px; }
+  .o-ok { background:var(--okbg); border-color:var(--ok); } .o-ok .chip { background:var(--ok); }
+  .o-warn { background:var(--warnbg); } .o-warn .chip { background:var(--warn); }
+  .o-bad { background:var(--badbg); } .o-bad .chip { background:var(--bad); }
+  .o-gray { background:var(--graybg); } .o-gray .chip { background:var(--gray); }
+
+  /* cost */
+  .bar { display:flex; height:46px; border-radius:10px; overflow:hidden; }
+  .bar div { display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:14px; }
+  .legend { display:grid; grid-template-columns:1fr auto; gap:4px 12px; margin-top:10px; font-size:14px; }
+  .legend i { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:7px; vertical-align:-1px; }
+  .total { display:flex; gap:12px; margin-top:12px; }
+  .total div { flex:1; background:var(--navy); color:#fff; border-radius:12px; padding:10px; text-align:center; }
+  .total b { display:block; font-size:24px; }
+  .total span { font-size:12px; opacity:.8; }
+
+  /* safety */
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tile { background:var(--okbg); border-radius:12px; padding:10px; font-weight:700; font-size:14px; }
+  .tile b { display:block; font-size:22px; color:var(--ok); }
+  .tile.must { background:var(--askbg); grid-column:span 2; }
+  .tile.must b { color:var(--ask); font-size:16px; }
+
+  /* timeline */
+  .track { display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; position:relative; }
+  @media (max-width:760px) { .track { grid-template-columns:1fr; } }
+  .stop { border-radius:12px; padding:10px; background:var(--graybg); position:relative; }
+  .stop .d { font-weight:800; font-size:13px; color:var(--muted); }
+  .stop .w { font-weight:800; font-size:15px; margin-top:2px; }
+  .stop .x { font-size:12px; color:var(--muted); margin-top:3px; }
+  .stop.now { background:var(--ask); color:#fff; } .stop.now .d, .stop.now .x { color:#fff; opacity:.9; }
+  .stop.go { background:var(--navy); color:#fff; } .stop.go .d, .stop.go .x { color:#fff; opacity:.85; }
+  .stop.hol { background:var(--warnbg); }
+  .pin { position:absolute; top:-10px; right:8px; background:var(--cherry); color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:999px; letter-spacing:.5px; }
+
+  /* ownership */
+  .own { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .own div { border-radius:12px; padding:12px; color:#fff; }
+  .own b { display:block; font-size:20px; }
+  .own span { font-size:13px; opacity:.9; }
+
+  /* slip */
+  #slip { background:var(--warnbg); border:3px solid var(--warn); }
+  #slip .big { font-size:18px; font-weight:800; color:var(--warn); }
+
+  /* decision */
+  #decision { background:var(--ask); color:#fff; }
+  #decision h2 { color:#fff; opacity:.8; }
+  #decision .big { font-size:28px; font-weight:800; margin-bottom:12px; }
+  .checks { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+  @media (max-width:760px) { .checks { grid-template-columns:1fr; } }
+  .checks div { background:rgba(255,255,255,.15); border-radius:12px; padding:12px; font-weight:700; }
+  .checks div::before { content:"\2713"; display:inline-block; background:#fff; color:var(--ask); border-radius:50%;
+    width:24px; height:24px; text-align:center; line-height:24px; margin-right:8px; font-weight:900; }
+  .reply { margin-top:14px; background:#fff; color:var(--ask); display:inline-block; border-radius:12px; padding:10px 18px; font-size:20px; font-weight:900; letter-spacing:1px; }
+  svg text { font-family:"Segoe UI", system-ui, sans-serif; }
+
+  /* ---------- the guided tour ---------- */
+  #blocker { position:fixed; inset:0; z-index:50; display:none; }
+  #spot { position:fixed; z-index:51; border-radius:18px; pointer-events:none; display:none;
+    box-shadow:0 0 0 4px rgba(255,255,255,.95), 0 0 0 9999px rgba(8,12,26,.80);
+    transition:top .4s ease, left .4s ease, width .4s ease, height .4s ease; }
+  #spot.center { box-shadow:0 0 0 9999px rgba(8,12,26,.86); }
+  #card { position:fixed; z-index:52; width:min(380px, calc(100vw - 32px)); background:#fff; color:var(--ink);
+    border-radius:16px; padding:16px 16px 12px; box-shadow:0 18px 50px rgba(0,0,0,.35); display:none;
+    transition:top .4s ease, left .4s ease; }
+  #card .k { font-size:11px; font-weight:800; letter-spacing:1px; color:var(--ask); text-transform:uppercase; }
+  #card h3 { margin:4px 0 6px; font-size:19px; line-height:1.2; }
+  #card p { margin:0 0 10px; font-size:14.5px; color:#2b3550; }
+  #card .fact { display:inline-block; background:var(--askbg); color:var(--ask); font-weight:800; border-radius:8px; padding:4px 9px; font-size:13px; margin-bottom:10px; }
+  .nav { display:flex; align-items:center; gap:8px; }
+  .dots { display:flex; gap:4px; flex:1; flex-wrap:wrap; }
+  .dots i { width:7px; height:7px; border-radius:50%; background:#cfd5e0; }
+  .dots i.on { background:var(--ask); width:18px; border-radius:4px; }
+  .nav .btn { padding:9px 14px; font-size:14px; }
+  .b-next { background:var(--ask); color:#fff; } .b-back { background:var(--graybg); color:var(--ink); }
+  .b-x { background:none; color:var(--muted); padding:9px 6px !important; }
+  @media (max-width:640px) { #card { left:16px !important; right:16px; bottom:16px; top:auto !important; width:auto; } }
+</style>
+</head>
+<body>
+
+<header><div class="in">
+  <div>
+    <h1>Middlesex pilot: where it's hosted</h1>
+    <div class="sub">For Ram · S0 · Wed 18 Nov 2026 · 2 minutes</div>
+  </div>
+  <button class="btn go" id="start">&#9654; Start the walkthrough</button>
+</div></header>
+
+<main>
+  <section class="panel" id="hero">
+    <div class="big"><small>Your approval</small>Render Pro for the Middlesex pilot</div>
+    <div class="price"><b>$52.50</b><span>a month · $630 a year</span></div>
+    <div class="due">DUE TODAY</div>
+  </section>
+
+  <section class="panel s8" id="why">
+    <h2>Why it can't wait</h2>
+    <div class="chain">
+      <div class="node n-ask">S0</div><span class="arrow">&rarr;</span>
+      <div class="node n-warn">S1</div><div class="node n-warn">S2</div><div class="node n-warn">S3</div>
+      <div class="node n-warn">S4</div><div class="node n-warn">S5</div><div class="node n-warn">S6</div>
+      <div class="node n-warn">S7</div><div class="node n-warn">R4</div>
+      <span class="arrow">&rarr;</span><div class="node n-flag">&#9873; 8 Dec pilot</div>
+    </div>
+    <div class="three"><span class="pc">PM</span><span class="pc">PM</span><span class="pc">Jamie</span>
+      <span class="arrow">&rarr;</span><span class="pc" style="background:var(--okbg);color:var(--ok)">one shared database</span></div>
+    <div class="caption">Today's prototype keeps everything in one browser, so it can't run a pilot with three people in it.</div>
+  </section>
+
+  <section class="panel s4" id="safety">
+    <h2>If something breaks</h2>
+    <div class="tiles">
+      <div class="tile"><b>7 days</b>point-in-time restore</div>
+      <div class="tile"><b>Nightly</b>copy kept off Render</div>
+      <div class="tile"><b>SOC 2</b>Type II vendor</div>
+      <div class="tile"><b>Own</b>backups &amp; deploys</div>
+      <div class="tile must"><b>Done only when a restore has been run once, and timed</b></div>
+    </div>
+  </section>
+
+  <section class="panel" id="versus">
+    <h2>Why not our own server</h2>
+    <div class="versus">
+      <div class="box bad"><h3>&#10007; The shared Hetzner box</h3>
+        <div class="tags"><span class="tag">Accelerator</span><span class="tag">Every agent</span>
+          <span class="tag">All our databases</span><span class="tag hot">+ Middlesex contract values</span></div>
+        <div class="stamp">Two deploys already collided (Cloudflare 521). Fails a client security review.</div></div>
+      <div class="box ok"><h3>&#10003; Render, Middlesex only</h3>
+        <div class="tags"><span class="tag good">AIA app</span><span class="tag good">Its own Postgres</span>
+          <span class="tag good">Its own backups</span><span class="tag good">Its own deploys</span></div>
+        <div class="stamp">Nothing else of ours lives there.</div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="options">
+    <h2>The options</h2>
+    <div class="opts">
+      <div class="opt o-ok"><span class="chip">RECOMMENDED</span><div class="nm">Render Pro</div><div class="cost">$52.50/mo</div>
+        <div class="why">One vendor, one bill. 7-day restore.</div></div>
+      <div class="opt o-warn"><span class="chip">CHEAPER, RISKIER</span><div class="nm">Render Hobby</div><div class="cost">$27.50/mo</div>
+        <div class="why">Only a 3-day restore. Billing errors surface later than that.</div></div>
+      <div class="opt o-warn"><span class="chip">NO</span><div class="nm">Fly.io + Neon</div><div class="cost">similar</div>
+        <div class="why">Two vendors, two bills, one builder.</div></div>
+      <div class="opt o-warn"><span class="chip">NO</span><div class="nm">Railway</div><div class="cost">similar</div>
+        <div class="why">Backups on Pro only, and its SOC 2 status is unclear.</div></div>
+      <div class="opt o-bad"><span class="chip">NO</span><div class="nm">Hetzner box</div><div class="cost">$0 extra</div>
+        <div class="why">Client data on our shared server.</div></div>
+      <div class="opt o-gray"><span class="chip">LATER</span><div class="nm">AWS</div><div class="cost">varies</div>
+        <div class="why">When a client asks for a security review.</div></div>
+    </div>
+  </section>
+
+  <section class="panel s6" id="cost">
+    <h2>What the $52.50 is</h2>
+    <div class="bar">
+      <div style="width:47.6%;background:#13294b">$25</div>
+      <div style="width:13.3%;background:#3d6fb6">$7</div>
+      <div style="width:36.2%;background:#6b3fa0">$19</div>
+      <div style="width:2.9%;background:#b0132e"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:#13294b"></i>Pro workspace (7-day restore)</span><b>$25.00</b>
+      <span><i style="background:#3d6fb6"></i>Web service, 0.5 CPU / 512 MB</span><b>$7.00</b>
+      <span><i style="background:#6b3fa0"></i>Postgres, 0.5 CPU / 1 GB</span><b>$19.00</b>
+      <span><i style="background:#b0132e"></i>Storage, 5 GB × $0.30</span><b>$1.50</b>
+    </div>
+    <div class="total"><div><b>$52.50</b><span>per month</span></div><div><b>$630</b><span>per year</span></div>
+      <div style="background:var(--ok)"><b>Company card</b><span>not tied to one person</span></div></div>
+    <div class="caption">Prices from render.com/pricing, read 16 Nov 2026.</div>
+  </section>
+
+  <section class="panel s6" id="arch">
+    <h2>How it runs</h2>
+    <svg viewBox="0 0 560 300" width="100%" role="img" aria-label="Deployment diagram">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#5b6475"/></marker></defs>
+      <rect x="10" y="20" width="150" height="58" rx="12" fill="#e8ebf0"/>
+      <text x="85" y="45" text-anchor="middle" font-size="14" font-weight="800" fill="#14213d">2 PMs + Jamie</text>
+      <text x="85" y="64" text-anchor="middle" font-size="12" fill="#5b6475">browser, any machine</text>
+
+      <rect x="10" y="190" width="150" height="70" rx="12" fill="#13294b"/>
+      <text x="85" y="218" text-anchor="middle" font-size="14" font-weight="800" fill="#fff">Own repo</text>
+      <text x="85" y="238" text-anchor="middle" font-size="12" fill="#c9d3e6">Colaberry-owned</text>
+
+      <rect x="215" y="20" width="150" height="70" rx="12" fill="#dcf3e2" stroke="#1f7a35" stroke-width="3"/>
+      <text x="290" y="49" text-anchor="middle" font-size="14" font-weight="800" fill="#1f7a35">Render app</text>
+      <text x="290" y="69" text-anchor="middle" font-size="12" fill="#1f7a35">web service</text>
+
+      <rect x="215" y="190" width="150" height="70" rx="12" fill="#dcf3e2" stroke="#1f7a35" stroke-width="3"/>
+      <text x="290" y="219" text-anchor="middle" font-size="14" font-weight="800" fill="#1f7a35">Render Postgres</text>
+      <text x="290" y="239" text-anchor="middle" font-size="12" fill="#1f7a35">7-day restore</text>
+
+      <rect x="410" y="20" width="140" height="70" rx="12" fill="#ece2f8" stroke="#6b3fa0" stroke-width="3"/>
+      <text x="480" y="49" text-anchor="middle" font-size="14" font-weight="800" fill="#6b3fa0">Enterprise</text>
+      <text x="480" y="69" text-anchor="middle" font-size="12" fill="#6b3fa0">deploy · status · health</text>
+
+      <rect x="410" y="190" width="140" height="70" rx="12" fill="#fde9c8"/>
+      <text x="480" y="219" text-anchor="middle" font-size="14" font-weight="800" fill="#b26a00">Nightly copy</text>
+      <text x="480" y="239" text-anchor="middle" font-size="12" fill="#b26a00">kept off Render</text>
+
+      <line x1="160" y1="50" x2="212" y2="50" stroke="#5b6475" stroke-width="2.5" marker-end="url(#a)"/>
+      <line x1="160" y1="210" x2="230" y2="94" stroke="#5b6475" stroke-width="2.5" marker-end="url(#a)"/>
+      <text x="85" y="176" text-anchor="middle" font-size="12" font-weight="700" fill="#14213d">merge = deploy &#8599;</text>
+      <line x1="290" y1="92" x2="290" y2="186" stroke="#5b6475" stroke-width="2.5" marker-end="url(#a)" marker-start="url(#a)"/>
+      <line x1="407" y1="55" x2="368" y2="55" stroke="#6b3fa0" stroke-width="2.5" stroke-dasharray="5 4" marker-end="url(#a)" marker-start="url(#a)"/>
+      <line x1="368" y1="225" x2="407" y2="225" stroke="#b26a00" stroke-width="2.5" marker-end="url(#a)"/>
+      <text x="290" y="288" text-anchor="middle" font-size="12" fill="#5b6475">Enterprise controls it but holds none of its code. Tickets stay on Basecamp.</text>
+    </svg>
+  </section>
+
+  <section class="panel" id="timeline">
+    <h2>What a yes today unlocks</h2>
+    <div class="track">
+      <div class="stop now"><span class="pin">YOU ARE HERE</span><div class="d">Wed 18 Nov</div><div class="w">S0 approved</div><div class="x">you + Ali</div></div>
+      <div class="stop"><div class="d">Thu 19 – Fri 20</div><div class="w">S1 + S2</div><div class="x">host up, restore tested, schema</div></div>
+      <div class="stop hol"><div class="d">Mon 23 – Wed 25</div><div class="w">S3 + S4</div><div class="x">jobs loaded, PM screen · Thanksgiving week</div></div>
+      <div class="stop"><div class="d">Mon 30 – Thu 3</div><div class="w">S5 + S6</div><div class="x">G702/G703 export, PM sees own jobs</div></div>
+      <div class="stop"><div class="d">Fri 4 Dec</div><div class="w">S7 dry run</div><div class="x">November, line by line</div></div>
+      <div class="stop go"><div class="d">Tue 8 Dec</div><div class="w">&#9873; Pilot live</div><div class="x">PMs' December run</div></div>
+    </div>
+  </section>
+
+  <section class="panel s8" id="own">
+    <h2>Who owns what</h2>
+    <div class="own">
+      <div style="background:var(--navy)"><b>Code: Colaberry</b><span>One multi-company app, as you set on 28 Oct</span></div>
+      <div style="background:var(--ok)"><b>Data: Middlesex</b><span>Every req exports to Excel and PDF (S5)</span></div>
+    </div>
+    <div class="caption">Jamie was told on 26 Oct that she'd own a repo. Ali tells her about the change himself, by phone on Tue 24 Nov, before any proposal reaches her.</div>
+  </section>
+
+  <section class="panel s4" id="slip">
+    <h2>If it slips</h2>
+    <div class="big">Build on October's numbers</div>
+    <div class="caption" style="color:var(--ink)">8 Dec holds, and the dry run isn't cut. Jamie was already offered this on 16 Nov.</div>
+  </section>
+
+  <section class="panel" id="decision">
+    <h2>The one decision</h2>
+    <div class="big">Approve, and the build starts tomorrow</div>
+    <div class="checks">
+      <div>Render as a new paid vendor</div>
+      <div>$52.50 a month on the company card</div>
+      <div>Its own Colaberry repo, not our server</div>
+    </div>
+    <div class="reply">Reply on WhatsApp: APPROVE</div>
+  </section>
+</main>
+
+<div id="blocker"></div>
+<div id="spot"></div>
+<div id="card" role="dialog" aria-live="polite">
+  <div class="k" id="ck"></div>
+  <h3 id="ct"></h3>
+  <div class="fact" id="cf"></div>
+  <p id="cb"></p>
+  <div class="nav">
+    <div class="dots" id="dots"></div>
+    <button class="btn b-x" id="bx" title="Exit (Esc)">Exit</button>
+    <button class="btn b-back" id="bb">Back</button>
+    <button class="btn b-next" id="bn">Next</button>
+  </div>
+</div>
+
+<script>
+const STEPS = [
+  { sel:null, k:'2-minute walkthrough', t:'Ram, one decision today', f:'Where the Middlesex pilot runs',
+    b:'Click Next, or use the arrow keys. Each step lights up one picture.' },
+  { sel:'#hero', k:'The ask', t:'Approve Render Pro', f:'$52.50 / month',
+    b:'A managed app host with its own database, for the Middlesex pilot. It’s a new paid vendor, so it needs you.' },
+  { sel:'#why', k:'Why now', t:'Everything waits on this', f:'7 tickets blocked',
+    b:'Two PMs and Jamie need one shared database. The build (S1 to S7, plus R4) can’t start until there’s a host.' },
+  { sel:'#versus', k:'The tempting shortcut', t:'Not our own server', f:'Client data stays separate',
+    b:'Our Hetzner box runs everything we have, and two deploys there already collided. A client’s contract values shouldn’t sit next to it.' },
+  { sel:'#options', k:'What we looked at', t:'Six options, one clear pick', f:'Render Pro',
+    b:'Hobby saves $25, but a 3-day restore is shorter than the time it takes a billing error to surface.' },
+  { sel:'#cost', k:'The money', t:'$630 a year, all in', f:'Company card',
+    b:'Four lines. The Pro workspace is what buys the 7-day restore and the SOC 2 vendor.' },
+  { sel:'#arch', k:'How it runs', t:'Own repo, merge = deploy', f:'Enterprise is the control panel',
+    b:'Enterprise triggers deploys and watches health. It holds none of the product’s code, so a client security review covers one small codebase.' },
+  { sel:'#safety', k:'If something breaks', t:'Two layers of backup', f:'Restore tested before go-live',
+    b:'S1 isn’t done until a restore has actually been run once and timed.' },
+  { sel:'#timeline', k:'The calendar', t:'A yes today keeps 8 Dec', f:'Thanksgiving is inside it',
+    b:'S7 runs November’s requisitions through the platform before any PM touches it.' },
+  { sel:'#own', k:'Ownership', t:'Your 28 Oct direction', f:'Code ours, data theirs',
+    b:'Jamie hears about the change from Ali by phone, separately from pricing.' },
+  { sel:'#slip', k:'Fallback', t:'If we don’t decide today', f:'Date holds, scope shrinks',
+    b:'We build on October’s numbers, so the pilot still starts 8 Dec.' },
+  { sel:'#decision', k:'Your call', t:'Reply APPROVE', f:'Three things in one yes',
+    b:'Or tell Ali what you’d change. Hobby instead of Pro is the only real alternative.' },
+];
+let i = -1;
+const $ = (id) => document.getElementById(id);
+const spot = $('spot'), card = $('card'), blocker = $('blocker');
+$('dots').innerHTML = STEPS.map(() => '<i></i>').join('');
+
+function place() {
+  const s = STEPS[i]; if (!s) return;
+  const mobile = innerWidth <= 640;
+  if (!s.sel) {
+    spot.className = 'center';
+    Object.assign(spot.style, { top: innerHeight/2+'px', left: innerWidth/2+'px', width:'0px', height:'0px' });
+    if (!mobile) { card.style.left = (innerWidth - card.offsetWidth)/2 + 'px'; card.style.top = (innerHeight - card.offsetHeight)/2 + 'px'; }
+    return;
+  }
+  spot.className = '';
+  const r = document.querySelector(s.sel).getBoundingClientRect(), pad = 8;
+  Object.assign(spot.style, { top:(r.top-pad)+'px', left:(r.left-pad)+'px', width:(r.width+pad*2)+'px', height:(r.height+pad*2)+'px' });
+  if (mobile) return;
+  const cw = card.offsetWidth, ch = card.offsetHeight, g = 18;
+  let top, left;
+  if (innerHeight - r.bottom > ch + g + 10) { top = r.bottom + g; left = r.left; }
+  else if (r.top > ch + g + 10) { top = r.top - ch - g; left = r.left; }
+  else if (innerWidth - r.right > cw + g) { top = r.top; left = r.right + g; }
+  else if (r.left > cw + g) { top = r.top; left = r.left - cw - g; }
+  else { top = innerHeight - ch - 16; left = innerWidth - cw - 16; }
+  card.style.left = Math.max(16, Math.min(left, innerWidth - cw - 16)) + 'px';
+  card.style.top = Math.max(16, Math.min(top, innerHeight - ch - 16)) + 'px';
+}
+function show(n) {
+  i = Math.max(0, Math.min(n, STEPS.length - 1));
+  const s = STEPS[i];
+  $('ck').textContent = `Step ${i+1} of ${STEPS.length} · ${s.k}`;
+  $('ct').textContent = s.t; $('cf').textContent = s.f; $('cb').textContent = s.b;
+  $('bb').style.visibility = i ? 'visible' : 'hidden';
+  $('bn').textContent = i === STEPS.length - 1 ? 'Done' : 'Next';
+  [...$('dots').children].forEach((d, k) => d.className = k === i ? 'on' : '');
+  spot.style.display = blocker.style.display = card.style.display = 'block';
+  if (s.sel) {
+    const el = document.querySelector(s.sel), r = el.getBoundingClientRect();
+    const mobile = innerWidth <= 640, room = mobile ? innerHeight - card.offsetHeight - 40 : innerHeight;
+    const y = scrollY + r.top - Math.max(20, (room - r.height) / 2);
+    scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+  }
+  place(); setTimeout(place, 450); setTimeout(place, 800);
+}
+function end() { spot.style.display = blocker.style.display = card.style.display = 'none'; i = -1; }
+$('start').onclick = () => show(0);
+$('bn').onclick = () => i === STEPS.length - 1 ? end() : show(i + 1);
+$('bb').onclick = () => show(i - 1);
+$('bx').onclick = end;
+blocker.onclick = () => show(i + 1 < STEPS.length ? i + 1 : i);
+addEventListener('keydown', (e) => {
+  if (i < 0) return;
+  if (e.key === 'ArrowRight' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); i === STEPS.length - 1 ? end() : show(i + 1); }
+  if (e.key === 'ArrowLeft') show(i - 1);
+  if (e.key === 'Escape') end();
+});
+addEventListener('resize', place);
+addEventListener('scroll', place, { passive: true });
+window.__tour = { show, end, steps: STEPS.length };
+setTimeout(() => show(0), 400);
+</script>
+</body>
+</html>
