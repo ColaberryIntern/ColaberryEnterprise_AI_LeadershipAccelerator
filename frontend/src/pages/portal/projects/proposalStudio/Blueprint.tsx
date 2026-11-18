@@ -42,9 +42,10 @@ export default function Blueprint(
         <div className="gps-act"><button className="gps-btn agent" data-testid="bp-reanalyze" disabled={reanalyzing} onClick={onReanalyze}>{reanalyzing ? <><span className="gps-spin" /> Analyzing</> : 'Re-analyze ZIP'}</button></div></div>
 
       <div className="gps-panel"><h3>Solicitation package <span className="gps-tag ok">stored</span></h3>
+        <p className="gps-small gps-muted" style={{ margin: '0 0 8px' }}>The {bp.sourceFiles.length} file{bp.sourceFiles.length === 1 ? '' : 's'} the buyer published. The agent reads these to build the rules below. They are the input, not the documents we submit.</p>
         <div className="gps-log" data-testid="bp-log">
           {bp.sourceFiles.map((f) => (<div key={f}><span className="ok">✓</span> {f}</div>))}
-          <div className="ok">{view.requirementCounts.total} requirements · {bp.scoring.factors.length} evaluation factors · {bp.rules.length} submission rules · {(view.proposalDocuments ?? []).length} documents</div>
+          <div className="ok">{view.requirementCounts.total} requirements · {bp.scoring.factors.length} evaluation factors · {bp.rules.length} submission rules · {(view.proposalDocuments ?? []).length} documents to produce</div>
         </div>
       </div>
 
@@ -84,8 +85,8 @@ export default function Blueprint(
         {texasLoaded && <p className="gps-small gps-muted" style={{ margin: '8px 0 0' }}>The same rules switch on for other buyers; the engine keys on the detected jurisdiction and buyer type.</p>}
       </div>
 
-      <div className="gps-panel"><h3>Required documents</h3>
-        <p className="gps-small gps-muted" style={{ margin: '0 0 8px' }}>Named by the solicitation, plus standard forms and our additions that help the score.</p>
+      <div className="gps-panel"><h3>Required documents <span className="gps-tag">{(view.proposalDocuments ?? []).length} to produce</span></h3>
+        <p className="gps-small gps-muted" style={{ margin: '0 0 8px' }}>The documents we write and submit, shaped by the solicitation: named by it, plus standard forms and our additions that help the score. This is the Document set. It is not the {bp.sourceFiles.length} solicitation file{bp.sourceFiles.length === 1 ? '' : 's'} above, which are what the buyer gave us to read.</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(view.proposalDocuments ?? []).map((d) => (<span className={`gps-tag ${docTypeMeta(d).tagClass}`} key={d.key} onClick={() => onToast?.(`${d.title} — ${docTypeMeta(d).how.toLowerCase()}.`)} style={{ cursor: 'default' }}>{d.title}</span>))}
         </div>

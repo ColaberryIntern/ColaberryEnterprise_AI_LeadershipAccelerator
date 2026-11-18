@@ -17,6 +17,7 @@ import './studio.css';
 import Blueprint from './Blueprint';
 import DocumentSet from './DocumentSet';
 import { useBuildProgress } from './buildProgress';
+import BuildMeter from './BuildMeter';
 import BuildEvidence from './BuildEvidence';
 import DraftVersions from './DraftVersions';
 import ReviewGatesView from './ReviewGatesView';
@@ -95,10 +96,15 @@ export default function StudioShell(
   const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
   const drawerDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
 
-  // Live build feedback: while a document build is running (or was just kicked), re-pull the projection on an interval
-  // so the rows, readiness and agent feed advance on their own. notifyBuildKicked is handed to the Build buttons so
-  // the moment a build is requested the UI starts polling, instead of showing nothing until a manual refresh.
-  const { anyBuildRunning, runningCount, notifyBuildKicked, buildPulse } = useBuildProgress(view, onReload);
+  // Live build feedback: while a document build is running (or was just kicked), watch a cheap progress signal (the
+  // latest activity event) and re-pull the projection ONLY when the agent actually advances - so the screen updates on
+  // real news (a document started, a Need created, a document finished), not on a timer. notifyBuildKicked is handed to
+  // the Build buttons so polling starts the moment a build is requested, instead of showing nothing until a refresh.
+  const buildSignature = useCallback(
+    () => studioApi.listActivity(projectId, 1).then((ev) => (ev[0] ? `${ev[0].at}|${ev[0].summary}` : '')).catch(() => null),
+    [studioApi, projectId],
+  );
+  const { anyBuildRunning, runningCount, notifyBuildKicked, buildPulse } = useBuildProgress(view, onReload, buildSignature);
 
   // READ-ONLY intern cockpit: the qualification steps (Snapshot/Solicitation/Fit/Decide) render the REAL admin
   // Qualification Workspace INLINE (embedded, read-only) — the same content the admin sees, not the StageDetail
@@ -221,10 +227,7 @@ export default function StudioShell(
       </div>
       {anyBuildRunning && (
         <div className="gps-gut">
-          <div className="gps-building-bar" role="status" aria-live="polite" data-testid="building-bar">
-            <span className="gps-building-dot" aria-hidden="true" />
-            <span>The agent is building {runningCount} document{runningCount === 1 ? '' : 's'}. This updates on its own, so you do not need to refresh.</span>
-          </div>
+          <BuildMeter view={view} runningCount={runningCount} />
         </div>
       )}
       <div className="gps-shell gps-gut">

@@ -1,7 +1,7 @@
-import { shouldKeepPolling, runningDocCount, BUILD_KICK_GRACE_MS } from '../buildProgress';
+import { shouldKeepPolling, runningDocCount, builtDocCount, buildableDocs, BUILD_KICK_GRACE_MS } from '../buildProgress';
 import type { StudentGovProjectView } from '../../../../../services/govProjectPortalApi';
 
-const view = (docs: Array<{ cycle?: { status?: string } }>): StudentGovProjectView =>
+const view = (docs: Array<{ key?: string; superseded?: boolean; latest?: unknown; cycle?: { status?: string } }>): StudentGovProjectView =>
   ({ proposalDocuments: docs } as unknown as StudentGovProjectView);
 
 describe('buildProgress.shouldKeepPolling', () => {
@@ -28,5 +28,21 @@ describe('buildProgress.runningDocCount', () => {
   });
   it('is zero (not a throw) when there are no documents', () => {
     expect(runningDocCount({} as StudentGovProjectView)).toBe(0);
+  });
+});
+
+describe('buildProgress build-count helpers (the meter)', () => {
+  it('buildableDocs drops the price sheet and superseded rows', () => {
+    const v = view([{ key: 'technical' }, { key: 'pricing' }, { key: 'old', superseded: true }, { key: 'past_perf' }]);
+    expect(buildableDocs(v).map((d: any) => d.key)).toEqual(['technical', 'past_perf']);
+  });
+  it('builtDocCount counts drafted docs that are not mid-build, so the meter moves as each one completes', () => {
+    const v = view([
+      { key: 'technical', latest: { version: 1 }, cycle: { status: 'passed' } }, // built
+      { key: 'past_perf', latest: { version: 1 }, cycle: { status: 'running' } }, // still building -> not counted
+      { key: 'mgmt' }, // not started -> not counted
+      { key: 'pricing', latest: { version: 1 } }, // excluded (price sheet)
+    ]);
+    expect(builtDocCount(v)).toBe(1);
   });
 });

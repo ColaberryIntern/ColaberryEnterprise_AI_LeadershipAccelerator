@@ -4,11 +4,17 @@ import type { StudioView } from './StageRail';
 import { agentHeaderState } from './agentState';
 import { needControl, needKindLabel, submissionFor } from './needsHelpers';
 
+// A build mostly happens within one day, so a repeated date ("Nov 18") tells you nothing. Show the time of day; only
+// prefix the date when the event is not from today.
 const shortTime = (iso: string): string => {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const t = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return sameDay ? t : `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${t}`;
 };
-const evClass = (k: GovActivityEvent['kind']): string => (k === 'library_answer' ? 'ok' : k === 'gate' || k === 'blueprint' ? 'h' : '');
+const evClass = (k: GovActivityEvent['kind']): string => (k === 'library_answer' ? 'ok' : k === 'gate' || k === 'blueprint' || k === 'need' ? 'h' : '');
 
 /**
  * AgentPanel — the persistent right column (v3, T16). A live header state (Building / Judging / Revising / Reading
@@ -35,12 +41,16 @@ export default function AgentPanel(
   const [answer, setAnswer] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const pollRef = useRef<number | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(() => {
     studioApi.listNeeds(projectId).then((g) => setNeeds(g.needs)).catch(() => setNeeds([]));
     studioApi.listActivity(projectId, 50).then(setActivity).catch(() => setActivity([]));
   }, [projectId, studioApi]);
   useEffect(() => { load(); }, [load, refreshKey]);
+  // The feed is newest-first, so as lines stream in keep the top (newest) in view - the "it is moving" cue, without
+  // the rest of the page re-rendering.
+  useEffect(() => { try { logRef.current?.scrollTo({ top: 0, behavior: 'smooth' }); } catch { /* jsdom has no scrollTo */ } }, [activity]);
 
   // Poll the active review run (the first doc whose cycle is running) for its live phase message.
   const activeRunId = docs.find((d) => d.cycle?.status === 'running')?.cycle?.runId ?? null;
@@ -88,7 +98,7 @@ export default function AgentPanel(
         </header>
         {run?.lastMessage && state !== 'Idle' && state !== 'Waiting on you' && <div className="gps-small gps-muted" style={{ padding: '0 2px 6px' }}>{run.lastMessage}</div>}
 
-        <div className="gps-ag-log" aria-live="polite" data-testid="agent-log">
+        <div className="gps-ag-log" aria-live="polite" data-testid="agent-log" ref={logRef}>
           {activity.length === 0 && <div className="gps-ev"><div><div className="gps-t">&nbsp;</div><span className="gps-muted">No activity yet. It fills as the agent drafts, checks and you answer needs.</span></div></div>}
           {activity.map((e, i) => (
             <div className={`gps-ev ${evClass(e.kind)}`} key={i}><div><div className="gps-t">{shortTime(e.at)}</div>{e.summary}</div></div>
