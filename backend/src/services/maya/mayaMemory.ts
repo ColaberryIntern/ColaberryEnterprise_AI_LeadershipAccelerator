@@ -127,7 +127,7 @@ function defaultDeps(): MayaMemoryDeps {
       return sequelize.query<ChatRow>(
         `SELECT m.id, m.role, m.content, m.timestamp AS at
            FROM chat_messages m JOIN chat_conversations c ON c.id = m.conversation_id
-          WHERE (${conds.join(' OR ')}) AND m.role IN ('user', 'assistant')
+          WHERE (${conds.join(' OR ')}) AND m.role IN ('visitor', 'user', 'assistant')
             AND (:since::timestamptz IS NULL OR m.timestamp >= :since::timestamptz)
           ORDER BY m.timestamp DESC LIMIT :limit`,
         { type: QueryTypes.SELECT, replacements },
@@ -182,7 +182,7 @@ function fromComm(r: CommLogRow): MemoryTurn | null {
 function fromChat(r: ChatRow): MemoryTurn | null {
   const text = cleanText(r.content);
   if (!text) return null;
-  const inbound = r.role === 'user';
+  const inbound = r.role === 'visitor' || r.role === 'user'; // chatService stores the person's messages as 'visitor'
   return {
     at: toDate(r.at), channel: 'chat', direction: inbound ? 'inbound' : 'outbound', author: inbound ? 'Them' : 'Maya',
     subject: null, text, sourceTable: 'chat_messages', sourceId: String(r.id),

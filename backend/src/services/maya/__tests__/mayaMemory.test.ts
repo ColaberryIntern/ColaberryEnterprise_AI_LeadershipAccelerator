@@ -22,7 +22,7 @@ function deps(over: Partial<MayaMemoryDeps> = {}): MayaMemoryDeps & { warnings: 
       { id: 'c3', channel: 'voice', direction: 'outbound', subject: null, body: 'PROMPT TEXT', transcript: 'Maya: Hi Sam. Sam: Hi!', created_at: T('2026-11-17T15:00:00Z') },
     ]),
     chatMessages: jest.fn(async () => [
-      { id: 'm1', role: 'user', content: 'What do people build?', at: T('2026-11-14T10:00:00Z') },
+      { id: 'm1', role: 'visitor', content: 'What do people build?', at: T('2026-11-14T10:00:00Z') },
       { id: 'm2', role: 'assistant', content: 'Agents that run real work.', at: T('2026-11-14T10:00:05Z') },
     ]),
     roomMessages: jest.fn(async () => [
@@ -42,6 +42,12 @@ describe('getMayaTimeline', () => {
     // a call is remembered by what was said (the transcript), not by the prompt that started it
     expect(turns[4].text).toBe('Maya: Hi Sam. Sam: Hi!');
     expect(turns[5]).toMatchObject({ direction: 'inbound', sourceTable: 'room_messages' });
+  });
+
+  it("keeps what the person typed in website chat (chatService stores it as role 'visitor')", async () => {
+    const turns = await getMayaTimeline({ leadId: 7 }, {}, deps());
+    expect(turns[0]).toMatchObject({ sourceId: 'm1', direction: 'inbound', author: 'Them', text: 'What do people build?' });
+    expect(turns[1]).toMatchObject({ sourceId: 'm2', direction: 'outbound' });
   });
 
   it('de-duplicates the same words mirrored twice within two minutes, and the same row twice', async () => {
