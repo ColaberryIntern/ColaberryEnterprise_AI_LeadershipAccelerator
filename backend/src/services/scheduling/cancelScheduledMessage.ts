@@ -74,6 +74,9 @@ export type CancellationReason =
   | 'cohort_already_started'
   // OH1: an Open House countdown step still pending when the Open House has begun
   | 'event_already_started'
+  // OH1m: an Open House countdown call reached while ENABLE_VOICE_CALLS is off. Cancelled,
+  // never marked sent, so nothing claims a call happened.
+  | 'voice_disabled'
   // Campaign lifecycle
   | 'campaign_archived'
   | 'campaign_paused'
