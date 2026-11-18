@@ -12,7 +12,7 @@ import type {
 const identity = (over: Partial<CareerIdentity> = {}): CareerIdentity => ({
   full_name: 'Jane Doe',
   email: 'jane@example.com',
-  title: 'AI Systems Architect',
+  title: 'Forward Deployed AI Engineer',
   company: 'Acme',
   linkedin_url: 'https://linkedin.com/in/janedoe',
   avatar_data_url: null,

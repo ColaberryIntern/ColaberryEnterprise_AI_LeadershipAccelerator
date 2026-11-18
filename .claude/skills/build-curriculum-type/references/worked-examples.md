@@ -57,7 +57,7 @@ Emit exactly these four parts in order:
   1. <p> one/two-sentence welcome naming the week's big idea </p>
   2. <p><strong>What you'll cover</strong></p> then a <ul> of 3–6 short <li> — when a THIS WEEK'S
      ACTIVITIES list is provided above, draw items from it; otherwise use the learning objectives
-  3. <p><strong>Why it matters</strong></p> then <p> tie the week to the AI Systems Architect path </p>
+  3. <p><strong>Why it matters</strong></p> then <p> tie the week to the Forward Deployed AI Engineer path </p>
   4. <p><strong>By the end of this week you'll be able to…</strong></p> then a <ul> of 2–3 <li>
      capability statements from student outcomes or success criteria
 Every opening tag must have a matching closing tag.

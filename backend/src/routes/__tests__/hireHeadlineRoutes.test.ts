@@ -43,16 +43,16 @@ describe('auth, through the real router', () => {
 
 describe('decisions', () => {
   it('lists the pending drafts', async () => {
-    list.mockResolvedValue([{ enrollmentId: EID, name: 'Ann', slug: 'ann', live: 'Analyst', draft: 'AI Systems Architect', updatedAt: '2026-11-13T00:00:00.000Z' }]);
+    list.mockResolvedValue([{ enrollmentId: EID, name: 'Ann', slug: 'ann', live: 'Analyst', draft: 'Forward Deployed AI Engineer', updatedAt: '2026-11-13T00:00:00.000Z' }]);
     const res = await request(asAdmin()).get('/drafts');
     expect(res.status).toBe(200);
-    expect(res.body.drafts[0].draft).toBe('AI Systems Architect');
+    expect(res.body.drafts[0].draft).toBe('Forward Deployed AI Engineer');
   });
 
   it('approves the reviewed text, recording who did it', async () => {
-    const res = await request(asAdmin()).post(`/drafts/${EID}`).send({ decision: 'approve', draft: ' AI Systems Architect ' });
+    const res = await request(asAdmin()).post(`/drafts/${EID}`).send({ decision: 'approve', draft: ' Forward Deployed AI Engineer ' });
     expect(res.status).toBe(200);
-    expect(decide).toHaveBeenCalledWith(EID, 'approve', 'AI Systems Architect', 'ali@colaberry.com');
+    expect(decide).toHaveBeenCalledWith(EID, 'approve', 'Forward Deployed AI Engineer', 'ali@colaberry.com');
   });
 
   it('answers 400 for a bad id, an unknown decision, a missing or oversized draft, or an extra field', async () => {

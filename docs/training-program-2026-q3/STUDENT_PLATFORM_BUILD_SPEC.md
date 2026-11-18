@@ -1,4 +1,4 @@
-# AI Systems Architect Accelerator - Student Platform Build Spec
+# Forward Deployed AI Engineer Accelerator - Student Platform Build Spec
 
 **Date:** 2026-06-10 · **Author:** Claude Code (for Ali) · **Session:** CC-20260610-q4d7
 **Status:** Ready to convert into Basecamp tasks for Kes (build) + Aleem (design).

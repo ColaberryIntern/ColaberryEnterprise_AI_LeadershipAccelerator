@@ -374,7 +374,7 @@ ${internSections}
   const sigHtml = `<table cellpadding="0" cellspacing="0" border="0" style="font-family:arial;font-size:14px;color:#2d3748;border-left:3px solid #1a365d;padding-left:14px;margin-top:24px">
 <tr><td>
 <div style="font-weight:700;font-size:16px;color:#1a365d">Ali Muwwakkil</div>
-<div style="color:#2b6cb0;font-weight:600">Managing Director / AI Systems Architect</div>
+<div style="color:#2b6cb0;font-weight:600">Managing Director / Forward Deployed AI Engineer</div>
 <div style="color:#718096">Colaberry Inc.</div>
 </td></tr></table>`;
 

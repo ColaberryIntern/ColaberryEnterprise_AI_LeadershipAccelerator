@@ -188,6 +188,7 @@ import { ensureRefactoredDeliverySchema } from './db/ensureRefactoredDeliverySch
 import { ensureCareerPublicationSchema } from './db/ensureCareerPublicationSchema';
 import { ensureHireInterviewSchema } from './db/ensureHireInterviewSchema';
 import { ensureCareerPrepSchema } from './db/ensureCareerPrepSchema';
+import { ensureProgramRenameFdae } from './db/ensureProgramRenameFdae';
 import { startCareerPrep } from './services/careerPrep/boot';
 import { startHireVideoCoach } from './services/hire/hireVideoCoach';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
@@ -224,6 +225,7 @@ import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMes
 import { ensureToolRequestPackageSchemaGuarded } from './db/ensureToolRequestPackageSchema';
 import { ensureToolRequestBuildEventSchemaGuarded } from './db/ensureToolRequestBuildEventSchema';
 import { ensureAgentToolGrantSchemaGuarded } from './db/ensureAgentToolGrantSchema';
+import { ensureCapabilityInstructionSchemaGuarded } from './db/ensureCapabilityInstructionSchema';
 import { ensureMayaOutboundApprovalSchemaGuarded } from './db/ensureMayaOutboundApprovalSchema';
 import { ensurePageEventVisitorIndexGuarded } from './db/ensurePageEventVisitorIndex';
 
@@ -2744,6 +2746,9 @@ async function start(): Promise<void> {
   await ensureHireInterviewSchema();
   // Career Prep v27 (CP1.2): seven new tables + the 9-skill seed. Additive, idempotent.
   await ensureCareerPrepSchema();
+  // Program rename (2026-11-17): "AI Systems Architect Accelerator" -> "Forward Deployed AI Engineer
+  // Accelerator" in forward-facing rows only, backed up first. No-op once converged; never throws.
+  await ensureProgramRenameFdae();
   await startCareerPrep();
   // Intro-video coaching (OpenAI): registers the transport and re-queues any video whose coaching
   // never landed. Not awaited past the sweep's query; the queue runs in the background.
@@ -3358,6 +3363,9 @@ async function start(): Promise<void> {
   // table is absent and the seed then leaves `tools_granted` untouched for that boot, which is
   // the safe direction: a boot of staleness rather than a reverted grant.
   await ensureAgentToolGrantSchemaGuarded();
+  // AF11.14 — somewhere for standing instructions to live. Guarded: a problem here is loud in
+  // the log and never stops the backend binding its port.
+  await ensureCapabilityInstructionSchemaGuarded();
   // Maya's outbound approval queue.
   //
   // At BOOT rather than lazily on first enqueue, and that is the whole reason this is here.

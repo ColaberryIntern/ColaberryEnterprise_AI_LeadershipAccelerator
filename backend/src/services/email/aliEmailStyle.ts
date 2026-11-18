@@ -28,7 +28,7 @@
 /** Plain-text signature (reference_email_signature). The Gmail executor sends text/plain. */
 export const ALI_SIGNATURE_TEXT = [
   'Ali Muwwakkil',
-  'Managing Director / AI Systems Architect',
+  'Managing Director / Forward Deployed AI Engineer',
   'Colaberry Inc.',
   '',
   '200 Chisholm Place, Suite 200, Plano, TX 75075',
@@ -40,7 +40,8 @@ export const STYLE_KIT_URL = 'https://3.basecamp.com/3945211/buckets/7463955/tod
 
 /** Markers that mean a branded signature is already present in a body. */
 const SIGNATURE_MARKERS = [
-  /Managing Director\s*\/\s*AI Systems Architect/i,
+  // Both titles: bodies drafted before the 2026-11-17 program rename carry the old one.
+  /Managing Director\s*\/\s*(?:Forward Deployed AI Engineer|AI Systems Architect)/i,
   /200 Chisholm Place/i,
   /enterprise\.colaberry\.ai/i,
 ];

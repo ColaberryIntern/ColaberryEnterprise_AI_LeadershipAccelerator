@@ -11,7 +11,7 @@ import { env } from '../config/env';
  *
  *   1. Engagement — the `student_points_events` score + daily streak.
  *   2. Skill XP   — the learning / builder / community XP streams (progression).
- *   3. Readiness  — Architect Readiness %, current Builder level, and the
+ *   3. Readiness  — Engineer Readiness %, current Builder level, and the
  *                   explicit remaining gaps to the next level.
  *   4. Milestones — the program checklist behind the build ladder
  *                   (docs/POINTS_LADDER_DECISIONS.md): curriculum, projects,

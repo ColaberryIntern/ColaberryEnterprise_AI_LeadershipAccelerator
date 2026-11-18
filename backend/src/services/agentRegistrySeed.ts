@@ -2661,7 +2661,7 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     schedule: '',
     category: 'student_success',
     description:
-      'Reese — the student\'s dedicated AI Systems Architect mentor, reachable via ' +
+      'Reese — the student\'s dedicated Forward Deployed AI Engineer mentor, reachable via ' +
       'a real, persistent direct-message thread (same DM system as the rest of the ' +
       'portal). Phase 1 is 100% reactive: Reese only ever replies to an inbound ' +
       'student message, never initiates contact. Every exchange is backed by a ' +

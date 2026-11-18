@@ -1,4 +1,4 @@
-# Working Assumptions Log — AI Systems Architect Accelerator
+# Working Assumptions Log — Forward Deployed AI Engineer Accelerator
 
 **Locked:** 2026-05-30 (CC-20260530-execute)
 **Status:** Working assumptions. Override by replying with corrections; downstream work proceeds on these defaults until you do.
@@ -9,9 +9,9 @@ This file lets every piece of downstream work — code, marketing, sales, legal 
 
 ## A1. Brand name
 
-**LOCKED:** AI Systems Architect Accelerator (with co-brand "Powered by Anthropic + Claude Code" once Partner Network status is confirmed).
+**LOCKED:** Forward Deployed AI Engineer Accelerator (with co-brand "Powered by Anthropic + Claude Code" once Partner Network status is confirmed).
 
-**Alternatives considered:** Claude Systems Architect Program / Enterprise AI Architect Accelerator / AI Workforce Architect Program / AI Operations Architect Certification Path / Applied AI Systems Engineering Program.
+**Alternatives considered:** Claude Systems Architect Program / Enterprise Forward Deployed AI Engineer Accelerator / AI Workforce Architect Program / AI Operations Architect Certification Path / Applied AI Systems Engineering Program.
 
 **If you override:**
 - Landing page slugs change (currently planning `/intensive/build-your-ai-foundation`, etc., under the `aisystemsarchitect.colaberry.com` or `enterprise.colaberry.com/architect` path).

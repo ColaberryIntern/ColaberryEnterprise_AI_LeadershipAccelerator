@@ -46,7 +46,7 @@ async function jsonCall(workflow: string, system: string, user: string, model = 
 export async function generateComponent(description: string, recipeId?: string, model = DEFAULT_MODEL) {
   const recipe = resolveRecipe(recipeId);
   const system =
-    'You are an expert AI curriculum architect for an AI Systems Architect Accelerator. ' +
+    'You are an expert AI curriculum architect for a Forward Deployed AI Engineer Accelerator. ' +
     'Design a complete, reusable AI learning Component. Return STRICT json only.';
   const user =
     `Design an AI Component for this request: "${description}".\n` +

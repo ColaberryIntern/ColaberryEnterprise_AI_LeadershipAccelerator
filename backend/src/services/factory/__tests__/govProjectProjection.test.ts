@@ -34,6 +34,11 @@ jest.mock('../../../models/GitHubConnection', () => ({ __esModule: true, default
 jest.mock('../proposal/govProposalGaps', () => ({ openGapCountsByDoc: jest.fn().mockResolvedValue(new Map()) }));
 jest.mock('../proposal/govProposalReviewStore', () => ({ listVersionsByIds: jest.fn().mockResolvedValue(new Map()), listGatesForDocs: jest.fn().mockResolvedValue(new Map()) }));
 jest.mock('../proposal/govProposalReviewRunStore', () => ({ latestRunsForDocs: jest.fn().mockResolvedValue(new Map()) }));
+// Demo-video pickup: the loader resolves the contract owner and lists their ingested takes. Mocked so the pickup
+// CONTRACT can be asserted without a DB. Default is "no owner" (beforeEach) so the other loader tests are unchanged.
+const resolveGovContractOwner = jest.fn();
+const listGovDemoVideos = jest.fn();
+jest.mock('../govDemoVideos', () => ({ resolveGovContractOwner: (...a: any[]) => resolveGovContractOwner(...a), listGovDemoVideos: (...a: any[]) => listGovDemoVideos(...a) }));
 const plain = (v: any) => ({ get: () => ({ ...v }) });
 
 import { toStudentGovProjectView, getStudentGovProjectView, toStudentSubmissionChecklist, assembleProposalDocuments, toStudentMeetings, toStudentVetting, toStudentOpportunitySummary, type ProposalDocSummarySource } from '../govProjectProjection';
@@ -158,7 +163,7 @@ describe('toStudentSubmissionChecklist (pure) — PRICE-FREE', () => {
 });
 
 describe('getStudentGovProjectView (loader) — only a non-archived government project', () => {
-  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); ghcFindOne.mockResolvedValue(null); });
+  beforeEach(() => { jest.clearAllMocks(); ctFindAll.mockResolvedValue(trackRows); crFindAll.mockResolvedValue(reqRows); evFindAll.mockResolvedValue([]); asFindAll.mockResolvedValue([]); gprFindAll.mockResolvedValue([]); gpsgFindOne.mockResolvedValue(null); gqFindOne.mockResolvedValue(null); gpbFindOne.mockResolvedValue(null); gpdFindOrCreate.mockResolvedValue([{ get: () => ({}), update: jest.fn() }, true]); gpdFindAll.mockResolvedValue([]); loadAiVettingView.mockResolvedValue(null); ghcFindOne.mockResolvedValue(null); resolveGovContractOwner.mockResolvedValue(null); listGovDemoVideos.mockResolvedValue([]); });
 
   it('returns the view for a government_public_sector project', async () => {
     dpFindByPk.mockResolvedValue(projectRow);
@@ -409,6 +414,40 @@ describe('getStudentGovProjectView (loader) — only a non-archived government p
     expect(v!.proposal.canComment).toBe(false);                 // view is read-only
     expect(v!.proposal.responses.map((r) => r.requirementId)).toEqual(['REQ-1', 'REQ-2']); // no responses yet, slots unanswered
     expect(v!.proposal.responses.every((r) => r.status === 'unanswered')).toBe(true);
+  });
+
+  // ── Demo-video pickup (Ali, 17 Nov 2026: "make sure that when they get there, they will be picked up") ──────────
+  // A recorded demo must surface in the admin cockpit the moment it is an ingested presentation_recording for the
+  // contract owner's enrollment. The loader resolves the owner and lists their takes; the one latent silent-failure
+  // was gating that on the admin's platform identity resolving, so these lock the contract.
+  it('PICKUP: surfaces the owner demo videos for an admin EVEN WHEN the viewer identity is null', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    resolveGovContractOwner.mockResolvedValue({ enrollmentId: 'enr-aki', name: 'Aki Wam' });
+    listGovDemoVideos.mockResolvedValue([{ recordingId: 'rec-1', typeLabel: 'Working-System Demo', storyId: 'PREP-2', durationSeconds: 64, recordedAt: '2026-11-17T00:00:00.000Z', fileUrl: '/api/internship-video/rec-1/file?t=TICKET', thumbnailUrl: '/api/internship-video/rec-1/thumbnail?t=TICKET' }]);
+    // viewerCanVerify=true, viewerIdentityId=null — resolveGovProjectActor failed to resolve the admin, but pickup
+    // must still happen: the identity is only a ticket audit label, never the playback authority.
+    const v = await getStudentGovProjectView('dp-1', true, null);
+    expect(resolveGovContractOwner).toHaveBeenCalledWith('dp-1');
+    expect(listGovDemoVideos).toHaveBeenCalledWith('enr-aki', 'gov-cockpit'); // stable fallback label so the ticket still mints
+    expect(v!.demoVideos!.map((x) => x.recordingId)).toEqual(['rec-1']);
+    expect(v!.ownerEnrollmentId).toBe('enr-aki');
+    expect(v!.ownerName).toBe('Aki Wam');
+  });
+
+  it('PICKUP: threads the real admin identity through as the ticket audit label when it resolves', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    resolveGovContractOwner.mockResolvedValue({ enrollmentId: 'enr-aki', name: 'Aki Wam' });
+    await getStudentGovProjectView('dp-1', true, 'admin-identity-1');
+    expect(listGovDemoVideos).toHaveBeenCalledWith('enr-aki', 'admin-identity-1');
+  });
+
+  it('PICKUP: an intern (viewerCanVerify=false) never triggers the owner/video lookup', async () => {
+    dpFindByPk.mockResolvedValue(projectRow);
+    const v = await getStudentGovProjectView('dp-1', false, 'intern-1');
+    expect(resolveGovContractOwner).not.toHaveBeenCalled();
+    expect(listGovDemoVideos).not.toHaveBeenCalled();
+    expect(v!.demoVideos).toBeUndefined();
+    expect(v!.ownerEnrollmentId).toBeUndefined();
   });
 });
 

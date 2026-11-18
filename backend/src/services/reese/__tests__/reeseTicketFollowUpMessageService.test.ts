@@ -18,7 +18,7 @@ jest.mock('../resolveStudentDisplayName', () => ({ resolveStudentDisplayName: je
 // mocks. Mocking the module directly (rather than chasing each transitive
 // dependency) severs every path at once; the exact prose doesn't matter to
 // these tests, only that a real string flows through.
-jest.mock('../reeseSystemPrompt', () => ({ REESE_PERSONA_BLOCK: 'You are Reese, the student\'s dedicated AI Systems Architect mentor.' }));
+jest.mock('../reeseSystemPrompt', () => ({ REESE_PERSONA_BLOCK: 'You are Reese, the student\'s dedicated Forward Deployed AI Engineer mentor.' }));
 
 import RoomMessage from '../../../models/RoomMessage';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';

@@ -38,7 +38,7 @@ const UPSTREAMS = [
   },
   {
     list: 'Marketing',
-    content: 'Draft viral video concepts for AI Systems Architect Accelerator',
+    content: 'Draft viral video concepts for Forward Deployed AI Engineer Accelerator',
     owner: 'cb',
     due: '2026-06-11',
     objective: 'Produce 3 viral video concepts Aleem can take into production by 2026-06-12.',
@@ -92,7 +92,7 @@ const UPSTREAMS = [
     owner: 'cb',
     due: '2026-07-07',
     objective: 'Produce the Capstone evaluation rubric Ali approves 2026-07-08 (LOCKED A12 provisional: 5 dimensions x 0-4 points = 20 max, pass at 12, honors at 17).',
-    deliverable: 'PDF rubric document: each dimension defined, scoring criteria per point level, examples of pass / honors, tie to Architect Readiness Score.',
+    deliverable: 'PDF rubric document: each dimension defined, scoring criteria per point level, examples of pass / honors, tie to Engineer Readiness Score.',
     dod: 'Rubric attached under the approval task 9946498300. Ali approves or revises.',
     briefs: ['swati-curriculum-twc', 'kes-ai-systems', 'ali-decisions'],
   },

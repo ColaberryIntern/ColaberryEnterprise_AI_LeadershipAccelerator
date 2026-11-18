@@ -119,7 +119,7 @@ describe('PlatformV2 — labelling and claims', () => {
     const text = textOf(html());
     [
       'Claude Code partner',
-      'Certified Anthropic AI Systems Architect',
+      'Certified Anthropic Forward Deployed AI Engineer',
       '5,000+',
       '10,000+',
       '$100M',

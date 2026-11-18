@@ -39,6 +39,9 @@ import AiAgent from '../../models/AiAgent';
 import AgentDomainToolGrant from '../../models/AgentDomainToolGrant';
 import { allCapabilities } from '../agentDomain/capabilityRecord';
 import type { CapabilityRecord } from '../agentDomain/capabilityRecord';
+import { sequelize } from '../../config/database';
+import { loadInstructionsInForce } from '../agentDomain/capabilityInstructionService';
+import { isCleared } from '../agentDomain/capabilityInstructionContract';
 
 /** One tool, seen from all three sources at once. */
 export interface ToolGovernanceRow {
@@ -58,6 +61,18 @@ export interface ToolGovernanceRow {
   capabilityRequiresThisTool: boolean | null;
   approvedByIdentity: string | null;
   approvedAt: string | null;
+  /**
+   * AF11.14 — Ali's standing instructions for the capability this grant serves.
+   *
+   * THE GRANT IS WHAT THE AGENT IS HANDED. A rule that is not here is not in what the agent
+   * received, so it is not a rule the agent can be held to. Three states, never two:
+   * `null` means nobody ever set any; `cleared` means somebody removed them, and we can say who;
+   * text means that text is in force.
+   */
+  standingInstructions: string | null;
+  standingInstructionsState: 'never_set' | 'cleared' | 'in_force';
+  standingInstructionsSetBy: string | null;
+  standingInstructionsSetAt: string | null;
   /** Plain-English problems with this row. Empty means this tool is fully accounted for. */
   findings: string[];
 }
@@ -131,6 +146,15 @@ export async function buildAgentToolGovernance(
   // The union, so a grant with no holding is as visible as a holding with no grant.
   const everyToolName = Array.from(new Set([...held, ...grantByTool.keys()])).sort();
 
+  // AF11.14 — one query for every capability these grants cite, rather than one per row.
+  // An unreadable table comes back as an EMPTY map, so the page still renders and the rows
+  // simply report that nobody set any. That is a decoration failing, not a governance report
+  // failing, and the two should not have the same blast radius.
+  const citedCapabilityIds = grants
+    .map((g) => (g as unknown as { capability_id?: string | null }).capability_id)
+    .filter((c): c is string => typeof c === 'string' && c.trim().length > 0);
+  const instructions = await loadInstructionsInForce(sequelize, agentId, citedCapabilityIds);
+
   const rows: ToolGovernanceRow[] = everyToolName.map((toolName) => {
     const grant = grantByTool.get(toolName) ?? null;
     const isHeld = held.includes(toolName);
@@ -142,6 +166,7 @@ export async function buildAgentToolGovernance(
 
     const capabilityId = g?.capability_id ?? null;
     const capability = capabilityId ? capabilities.get(capabilityId) ?? null : null;
+    const entry = capabilityId ? instructions.get(capabilityId) ?? null : null;
 
     let capabilityRequiresThisTool: boolean | null = null;
     if (capability) {
@@ -183,6 +208,10 @@ export async function buildAgentToolGovernance(
       capabilityRequiresThisTool,
       approvedByIdentity: g?.approved_by_identity ?? null,
       approvedAt: g?.approved_at ? new Date(g.approved_at).toISOString() : null,
+      standingInstructions: entry && !isCleared(entry) ? entry.instructions : null,
+      standingInstructionsState: entry === null ? 'never_set' : (isCleared(entry) ? 'cleared' : 'in_force'),
+      standingInstructionsSetBy: entry?.set_by_identity ?? null,
+      standingInstructionsSetAt: entry?.created_at ?? null,
       findings,
     };
   });

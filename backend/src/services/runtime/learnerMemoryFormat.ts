@@ -36,7 +36,7 @@ const strList = (v: any, max: number, n = 80): string[] =>
 /** PURE — the distillation prompt (system + user). The model returns STRICT json. */
 export function buildDistillMessages(inputs: DistillInputs): { system: string; user: string } {
   const system =
-    'You maintain an evolving profile of a student in an AI Systems Architect Accelerator so their AI mentor gets ' +
+    'You maintain an evolving profile of a student in a Forward Deployed AI Engineer Accelerator so their AI mentor gets ' +
     'to know them over time. Given their PRIOR profile and RECENT activity, return an UPDATED profile as STRICT json. ' +
     'Capture what PERSISTS — recurring misconceptions, durable strengths, their real goal, their current knowledge ' +
     'frontier — not one-off noise. Be specific and concise. Never invent facts not supported by the activity.';

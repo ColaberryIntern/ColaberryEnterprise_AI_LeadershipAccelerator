@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Apply the 5/7/9/10 rubric pattern to BC todo 9946497986 ("Set up daily
-// automated dashboard update") on AI Systems Architect Accelerator
+// automated dashboard update") on Forward Deployed AI Engineer Accelerator
 // (project 47502609). Ali asked CB: "How does the rubric work and how can
 // we use that to measure what is produced in this ticket." Answer in
 // concrete form: 3 dimensions (Accuracy / Automation / Data Integration)

@@ -37,7 +37,7 @@ const CODE = SOURCE
 const EVENT = {
   announced: true,
   event_id: '2004289439668',
-  name: 'Colaberry AI Systems Architect Accelerator Open House',
+  name: 'Colaberry Forward Deployed AI Engineer Accelerator Open House',
   starts_at: '2026-11-20T00:30:00.000Z',
   ends_at: '2026-11-20T01:30:00.000Z',
   timezone: 'America/Chicago',

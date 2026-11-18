@@ -8,7 +8,7 @@
    Analytics holds (code U5306), student protections, and honest
    disclosure values.
    EXCLUDED ON PURPOSE (internal / in-flux, do NOT publish):
-   any claim about the AI Systems Architect Accelerator's own TWC
+   any claim about the Forward Deployed AI Engineer Accelerator's own TWC
    status, the exemption-determination request, the membership-as-
    tuition legal argument, counsel/ownership, and internal dates or
    document references. The AI Accelerator is NOT stated to be
@@ -29,7 +29,7 @@ window.COMPLIANCE_DATA = {
     { category:"credentials", tags:["accredited","regulated","twc","coa","u5306"],
       q:"Is Colaberry a regulated school?",
       a:"Yes. Colaberry operates as a regulated Texas career school. The Colaberry School of Data Analytics holds a Texas Workforce Commission Certificate of Approval, school code U5306, first approved in 2018 and renewed since. Colaberry is an established institution, not a pop-up bootcamp.",
-      detail:"The Certificate of Approval covers the data analytics school and its programs; it is the foundation of credibility the AI Systems Architect Accelerator is built on." },
+      detail:"The Certificate of Approval covers the data analytics school and its programs; it is the foundation of credibility the Forward Deployed AI Engineer Accelerator is built on." },
     { category:"credentials", tags:["who regulates","texas workforce commission","oversight"],
       q:"Who regulates career schools like Colaberry in Texas?",
       a:"The Texas Workforce Commission, through its Career Schools and Colleges program, oversees licensed career schools in Texas, including reporting and student-protection requirements. Colaberry's data analytics school is approved under that framework." },
@@ -37,7 +37,7 @@ window.COMPLIANCE_DATA = {
     // track-record
     { category:"track-record", tags:["track record","1000","hires","2012","proof"],
       q:"What is Colaberry's track record?",
-      a:"Colaberry has recorded 1,000+ hires since 2012. That track record, built over more than a decade, is the foundation the AI Systems Architect Accelerator stands on, not a single new course." },
+      a:"Colaberry has recorded 1,000+ hires since 2012. That track record, built over more than a decade, is the foundation the Forward Deployed AI Engineer Accelerator stands on, not a single new course." },
     { category:"track-record", tags:["how long","since 2012","established"],
       q:"How long has Colaberry been operating?",
       a:"Since 2012. Over more than a decade Colaberry has built and run career programs and the regulated data analytics school behind them." },

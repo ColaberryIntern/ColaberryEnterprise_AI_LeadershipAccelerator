@@ -19,7 +19,7 @@
  * gone wrong:
  *
  * 1. BOTH MESSAGES LEAD WITH MENTOR. Reese's locked persona is the student's
- *    AI Systems Architect mentor, and that is what the intros say. Admissions
+ *    Forward Deployed AI Engineer mentor, and that is what the intros say. Admissions
  *    is mentioned in the account intro only as something Reese can also help
  *    with, so a new arrival with a billing or cohort question knows to ask —
  *    without the greeting contradicting the persona a student meets later.
@@ -149,7 +149,7 @@ function opener(firstName: string): string {
  */
 export function accountWelcomeMessage(firstName: string): string {
   return (
-    `${opener(firstName)}, your AI Systems Architect mentor at Colaberry.\n\n` +
+    `${opener(firstName)}, your Forward Deployed AI Engineer mentor at Colaberry.\n\n` +
     'This thread is yours. Ask me anything as you look around — what to try ' +
     "first, whether a class is the right fit, how enrolment and admissions " +
     'work, or anything technical you get stuck on.\n\n' +

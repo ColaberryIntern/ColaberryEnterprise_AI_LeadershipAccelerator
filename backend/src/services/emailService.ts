@@ -2923,7 +2923,7 @@ export async function sendInterviewResult(data: InterviewResultEmailData): Promi
   <h3 style="color:#1e293b">Feedback</h3>
   <p style="color:#374151;line-height:1.6">${data.feedback}</p>
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · AI Systems Architect Accelerator</p>
+  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · Forward Deployed AI Engineer Accelerator</p>
 </body></html>`;
 
   const info = await guardedSendMail({

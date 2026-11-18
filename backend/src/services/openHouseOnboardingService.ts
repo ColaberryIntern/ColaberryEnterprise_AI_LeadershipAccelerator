@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { dedupeAttendees, RawEventbriteAttendee } from '../utils/eventbriteSanitize';
 import { createExplorerEnrollment } from './enrollmentService';
 
-// Eventbrite event id for the AI Systems Architect Accelerator Open House.
+// Eventbrite event id for the Forward Deployed AI Engineer Accelerator Open House.
 export const OPEN_HOUSE_EVENT_ID = '1992498063344';
 
 // CCPP already runs a live Eventbrite -> CCPP pipeline: every registrant lands

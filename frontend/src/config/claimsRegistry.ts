@@ -186,7 +186,7 @@ export const CLAIMS: readonly Claim[] = [
   },
   {
     key: 'credential.cca',
-    publicWording: 'Certified Anthropic AI Systems Architect',
+    publicWording: 'Certified Anthropic Forward Deployed AI Engineer',
     verification: 'DO_NOT_PUBLISH',
     capability: 'partial',
     evidenceSource:

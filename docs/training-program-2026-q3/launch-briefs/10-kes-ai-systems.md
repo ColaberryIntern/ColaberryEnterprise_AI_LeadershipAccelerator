@@ -68,7 +68,7 @@ Wraps every Anthropic Skilljar course with pre/during/post Colaberry context.
 
 - **Lands at:** `backend/src/services/githubIntegrationService.ts` (new). OAuth flow + webhook receiver.
 - **Captures:** Repo creation, commits/day, PRs, stars, contribution graph. Writes to new `student_github_activity` table.
-- **Feeds:** Portfolio Agent + the AI Architect Readiness Score.
+- **Feeds:** Portfolio Agent + the Forward Deployed AI Engineer Readiness Score.
 - **ETA: end of Week 2, 2026-06-20.**
 
 ### Architect Portfolio Dashboard
@@ -76,7 +76,7 @@ Wraps every Anthropic Skilljar course with pre/during/post Colaberry context.
 Replaces the generic portal home for enrolled students.
 
 - **Lands at:** `frontend/src/pages/portal/ArchitectDashboard.tsx`. Backend: `backend/src/routes/portal/architectRoutes.ts`.
-- **Components:** AI Architect Readiness Score / GitHub activity / Anthropic Skilljar progress / Colaberry lab progress / Current week's artifacts / Build Log feed / Project Story.
+- **Components:** Forward Deployed AI Engineer Readiness Score / GitHub activity / Anthropic Skilljar progress / Colaberry lab progress / Current week's artifacts / Build Log feed / Project Story.
 - **ETA: end of Week 3, 2026-06-27.**
 
 ### CCPP integration (student progress + cert tracking)

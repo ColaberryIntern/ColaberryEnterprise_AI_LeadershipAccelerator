@@ -148,7 +148,7 @@ This makes prior experience visible without letting a keyword-filled resume manu
 
 - Create ten zero-valued provisional skill states.
 - Place the learner in **Foundation mode**.
-- Start with "What is AI?", "How generative AI works," "What AI can and cannot do," "Prompt vs AI system," and "What an AI Systems Architect builds."
+- Start with "What is AI?", "How generative AI works," "What AI can and cannot do," "Prompt vs AI system," and "What a Forward Deployed AI Engineer builds."
 - No penalty or warning language; the experience simply starts from first principles.
 
 ### If a resume/LinkedIn PDF is uploaded

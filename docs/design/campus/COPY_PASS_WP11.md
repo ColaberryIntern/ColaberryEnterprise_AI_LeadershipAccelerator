@@ -68,7 +68,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 1213 | SUPERSEDED | People and plan | Rail container aria; round 3 rail sections carry their own labels ("In <building>", "Help desk"). |
 | 1218 | SUPERSEDED | Back into the building · Esc | Bottom dock: the design itself hides it (CSS 909); replaced by the location bar (gap 4.13, round 3 §2.4). |
 | 1223 | SUPERSEDED | , tap a building on the map, or press Esc to go back out. | Page hint replaced by the location bar coach mark: "You’re still on campus. Step outside goes back into the room; Campus map takes you to the map." (CampusLocat |
-| 1244 | NOT_BUILT | Join the AI Systems Architect Accelerator | In-campus signup sheet not built (gap A4.7 PARTIAL, X4 MISSING); enroll CTAs go to the real enroll/paywall route. No DECISIONS row. |
+| 1244 | NOT_BUILT | Join the Forward Deployed AI Engineer Accelerator | In-campus signup sheet not built (gap A4.7 PARTIAL, X4 MISSING); enroll CTAs go to the real enroll/paywall route. No DECISIONS row. |
 | 1245 | NOT_BUILT | Everything you did as an Explorer comes with you. Takes about two minutes. | Signup sheet (gap A4.7/X4). |
 | 1247 | NOT_BUILT | 🌱 Explorer · you now | Signup sheet comparison column (gap A4.7/X4). |
 | 1247 | NOT_BUILT | ✓ Intro AI course | Signup sheet comparison column (gap A4.7/X4). |
@@ -106,7 +106,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 1286 | INVENTED | Each invite carries a seat code. When they enroll with it, the seat is already paid and they show up on your dashboard. | Claims each invite carries a seat code and the seat is paid; inviteMembers (POST /api/portal/org/invites) sends emails+team only, no seat codes. Unsupported fac |
 | 1290 | INVENTED | Or share a code directly | Shareable seat codes do not exist (no seat codes on the org API); design lists invented codes. |
 | 1339 | INVENTED | The campus is open. 10 classmates are already inside. | Count "10 classmates" invented; build uses the real presence count: "The campus is open. {here} classmates are already inside." (CampusGate.tsx:90). |
-| 1344 | INVENTED | Cohort · July 2026 | Invented cohort date "July 2026"; build ID card shows "AI Systems Architect Accelerator" and leaves unknown facts off (CampusGate.tsx:15-16, 117). Gap A1.15. |
+| 1344 | INVENTED | Cohort · July 2026 | Invented cohort date "July 2026"; build ID card shows "Forward Deployed AI Engineer Accelerator" and leaves unknown facts off (CampusGate.tsx:15-16, 117). Gap A1.15. |
 | 1361 | SUPERSEDED | Cherry Cruiser | C46 (Ali, 2026-10-25, "I think it should be walking"): no rides; Cherry Cruiser became the Gold Architect jacket (backend/src/services/campus/campusUnlocks.ts:8 |
 | 1379 | INVENTED | Elaine Porter | Invented sample sponsor name. |
 | 1380 | INVENTED | Morgan Hale | Invented sample staff name. |
@@ -130,7 +130,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 1407 | INVENTED | Builds in progress | Sponsor KPI tile label; values (11 / 4) invented; no KPI tiles built |
 | 1407 | INVENTED | Builds shipped | Sponsor KPI tile label; values (11 / 4) invented; no KPI tiles built |
 | 1408 | INVENTED | Where they get certified | Implies certification is granted on campus; Cert Prep prepares (knowledge checks are not certification), build says "Where they get certification-ready" |
-| 1408 | SUPERSEDED | Short knowledge checks verify each skill on the AI Systems Architect path, then practice exams prepare them for certification. | tourSteps.ts:7-10 header: no counts, dates, times, progress figures; copy written from what the page really does (gap row 1.2 DELIBERATE); "verify each skill on |
+| 1408 | SUPERSEDED | Short knowledge checks verify each skill on the Forward Deployed AI Engineer path, then practice exams prepare them for certification. | tourSteps.ts:7-10 header: no counts, dates, times, progress figures; copy written from what the page really does (gap row 1.2 DELIBERATE); "verify each skill on |
 | 1408 | INVENTED | Skills verified this month | Sponsor KPI tile label with invented value (9); no KPI tiles built |
 | 1409 | SUPERSEDED | Live rooms, peers from other companies, and AI staff on duty 24/7 — Reese for mentoring, Dara for curriculum — so nobody gets stuck alone. | C87 (Ali 2026-10-29, backend campusStaffDesks.ts:55): Dara is upstairs for staff, learners go through Reese; "peers from other companies" unverifiable |
 | 1409 | INVENTED | Active this week | Sponsor KPI tile label with invented value (12 of 15, 24/7 tile); no KPI tiles built |
@@ -204,7 +204,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 1432 | SUPERSEDED | Members ship real, working AI tools on a sprint board. You can walk a sample project in demo mode. | C91 (tourSteps.ts:6-7): studio is no longer an Explorer stop; also no sprint board in the portal |
 | 1432 | SUPERSEDED | Click around a real sprint board | C91 (tourSteps.ts:6-7): studio is no longer an Explorer stop; also no sprint board in the portal |
 | 1432 | SUPERSEDED | See how tickets, reviews and releases work | C91 (tourSteps.ts:6-7): studio is no longer an Explorer stop; also no sprint board in the portal |
-| 1433 | SUPERSEDED | Practice exams and a study track mapped to the AI Systems Architect certification. | C91: testing is no longer an Explorer stop |
+| 1433 | SUPERSEDED | Practice exams and a study track mapped to the Forward Deployed AI Engineer certification. | C91: testing is no longer an Explorer stop |
 | 1433 | SUPERSEDED | Members-only — the box below shows exactly what enrolling unlocks here. | C91: testing is no longer an Explorer stop |
 | 1434 | SUPERSEDED | A portfolio employers can verify | C91: gallery is no longer an Explorer stop |
 | 1434 | SUPERSEDED | Members' class work and builds become a professional portfolio automatically. | C91: gallery is no longer an Explorer stop |
@@ -235,7 +235,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 1467 | NOT_BUILT | See what's due this week | Static Assignments now-row; Happening-here rows are real-data only (campusArrival.ts header; campusFacts.ts factsAt; gap row 1.7 DELIBERATE) |
 | 1469 | SUPERSEDED | Project blueprint | /portal/project/blueprint banned (campusMap.ts:12-14) |
 | 1470 | SUPERSEDED | Events, open houses & demos | C62: events moved to the Meeting Rooms; Events Hall sub is 'Colaberry Live broadcasts' |
-| 1472 | INVENTED | AI Systems Architect Accelerator Open House | Sample event/date; build shows the real next event (campusFacts.ts ev row) |
+| 1472 | INVENTED | Forward Deployed AI Engineer Accelerator Open House | Sample event/date; build shows the real next event (campusFacts.ts ev row) |
 | 1472 | INVENTED | Oct 29 · 6:30 PM CDT · in 15d | Sample event/date; build shows the real next event (campusFacts.ts ev row) |
 | 1473 | SUPERSEDED | See events & RSVP | C62 (campusMap.ts:89-90): primary is the events list, said plainly |
 | 1477 | INVENTED | +10 pts · about 10 min | Points/minutes sample |
@@ -487,7 +487,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 2454 | SUPERSEDED | Three quick, classic-style games. Scores go on the leaderboard. Breaks are capped at 15 minutes a day so they stay breaks — and games never cost or earn learnin | The Game Room has five games now (C-rounds); build page sub: "Five quick games, fifteen minutes a day. Your break resets at midnight Central, and games never ch |
 | 2457 | NOT_BUILT | A sample project you can click around. Building for real is for enrolled members. | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
 | 2457 | NOT_BUILT | Enroll to build → | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
-| 2459 | NOT_BUILT | A live look at the AI Systems Architect Accelerator. Meet instructors, see real builds and ask anything. | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
+| 2459 | NOT_BUILT | A live look at the Forward Deployed AI Engineer Accelerator. Meet instructors, see real builds and ask anything. | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
 | 2462 | NOT_BUILT | Build and learn | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
 | 2462 | NOT_BUILT | Your builds live here — every project you ship, as lists and tasks in the same feed you see across the platform. | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
 | 2464 | INVENTED | Your next step · PropertyPulse AI | Page mock-up content with invented data. Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page cont |
@@ -500,7 +500,7 @@ confidence, Explorers see it too); the urgent card detail (the design's line dro
 | 2467 | NOT_BUILT | Start a new build | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
 | 2470 | NOT_BUILT | What is due, what is in review, and what you have shipped. | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
 | 2472 | NOT_BUILT | Turn an idea into releases, stories and tasks before you write a line of code. | Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page contents", outside components/campus). |
-| 2474 | INVENTED | All 12 weeks of the AI Systems Architect Accelerator. You're in Week 5. | Page mock-up content with invented data. Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page cont |
+| 2474 | INVENTED | All 12 weeks of the Forward Deployed AI Engineer Accelerator. You're in Week 5. | Page mock-up content with invented data. Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page cont |
 | 2475 | INVENTED | Deploy & ops, governance, capstone, Demo Day | Page mock-up content with invented data. Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page cont |
 | 2476 | INVENTED | Guides, templates and worked examples you can lift straight into your builds. | Page mock-up content with invented data. Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page cont |
 | 2477 | INVENTED | Prompt patterns | Page mock-up content with invented data. Portal page bodies are mock-ups; the build opens the real portal page for each route (gap analysis section 5 "Page cont |

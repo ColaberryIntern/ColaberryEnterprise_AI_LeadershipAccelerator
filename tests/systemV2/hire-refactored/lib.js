@@ -62,7 +62,7 @@ function serve() {
 
 /* ---------------------------------------------------------------- fixtures --- */
 const person = (slug, name, over = {}) => ({
-  slug, name, avatarUrl: null, role: 'AI Systems Architect', track: 'architect', headline: null,
+  slug, name, avatarUrl: null, role: 'Forward Deployed AI Engineer', track: 'architect', headline: null,
   location: 'Dallas, TX', cohort: 'July 2026', availability: null, caseStudyCount: 1, verifiedCommitCount: 4,
   capabilities: [{ name: 'Agent Skills', proven: true }],
   signature: { slug: `${slug}-case`, title: `${name}'s claims triage`, industry: 'Insurance', heroMetric: null },
@@ -75,7 +75,7 @@ const directory = (talent) => ({
 const portfolio = (slug, name) => ({
   ok: true,
   portfolio: {
-    identity: { full_name: name, headline: 'AI Systems Architect', cohort_name: 'July 2026', avatar_data_url: null, linkedin_url: null, location: 'Dallas, TX', github_url: null },
+    identity: { full_name: name, headline: 'Forward Deployed AI Engineer', cohort_name: 'July 2026', avatar_data_url: null, linkedin_url: null, location: 'Dallas, TX', github_url: null },
     about: ['Ships agent workflows.'], stats: { files_committed: 412 }, capabilities: [{ name: 'Agent Skills', count: 3, proven: true }],
     projects: [{ title: 'Claims Triage', organization: 'Acme', industry: 'Insurance', case_study_slug: `${slug}-case` }, { title: 'Intake Router', organization: 'Acme', industry: null, case_study_slug: null }],
     verified_commits: [{ story_id: 's1', title: 'Flags late claims', commit_sha_short: 'abc1234', committed_at: null, criteria_passed: 3, criteria_total: 3, commit_url: 'https://github.com/x/y/commit/abc1234' }],
@@ -92,7 +92,7 @@ const caseStudy = (slug, builderSlug, builderName) => ({
   caseStudy: {
     slug, title: `${builderName}'s claims triage`, standfirst: 'Late claims surface first.', industry: 'Insurance',
     heroMetrics: [{ label: 'queues merged', valueDisplay: '3', unit: null }],
-    builder: { name: builderName, roleTitle: 'AI Systems Architect', photoUrl: null },
+    builder: { name: builderName, roleTitle: 'Forward Deployed AI Engineer', photoUrl: null },
     repositories: [{ label: 'x/y', url: 'https://github.com/x/y', role: 'primary' }], contributors: [], artifacts: [], decisions: [], roadmap: [], timeline: [],
   },
   builderPortfolioSlug: builderSlug,

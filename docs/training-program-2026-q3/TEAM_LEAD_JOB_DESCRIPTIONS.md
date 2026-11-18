@@ -9,7 +9,7 @@ All four roles are **contract / fractional for the launch sprint** (May 30 → J
 
 ## 1. Website Team Lead
 
-**Title:** Website Team Lead — AI Systems Architect Accelerator launch
+**Title:** Website Team Lead — Forward Deployed AI Engineer Accelerator launch
 **Engagement:** Full-time contract through Jul 10, 2026. Option to extend.
 **Reports to:** Ali Muwwakkil, Managing Director, Colaberry Inc.
 **Stack:** React (CRA) + TypeScript frontend, Node + Express + TypeScript backend, PostgreSQL, Sequelize, Docker. Existing platform at `enterprise.colaberry.com`.
@@ -50,7 +50,7 @@ Email ali@colaberry.com with: (1) one paragraph on a learning platform or e-comm
 
 ## 2. Marketing Team Lead
 
-**Title:** Marketing Team Lead — AI Systems Architect Accelerator launch
+**Title:** Marketing Team Lead — Forward Deployed AI Engineer Accelerator launch
 **Engagement:** Part-time contract (~20 hr/week) through Jul 10, 2026.
 **Reports to:** Ali Muwwakkil.
 
@@ -168,7 +168,7 @@ Email ali@colaberry.com with: (1) one paragraph on a recent close, (2) your typi
 
 1. **Post directly** to LinkedIn / Indeed / your network — they're ready to go as-is.
 2. **Edit the compensation lines** before posting publicly (currently say "TBD" — fill in or remove).
-3. **Forward to your network** with a one-liner: "We're launching the AI Systems Architect Accelerator in 41 days. I need a Website Lead, Marketing Lead, AI Dev, and a part-time SDR. Pass this along."
+3. **Forward to your network** with a one-liner: "We're launching the Forward Deployed AI Engineer Accelerator in 41 days. I need a Website Lead, Marketing Lead, AI Dev, and a part-time SDR. Pass this along."
 4. **Track applicants** in a new Basecamp todo under the training tracker (9945833396) or a Google Sheet.
 
 I can draft outreach DM templates for cold contacting candidates if you tell me which of the four roles is hardest to fill.

@@ -1216,7 +1216,7 @@ Four classes of fact, never mixed and never upgraded by generation:
 
 | Class | Example | Where it may appear |
 |---|---|---|
-| user-confirmed biography | "joined as an intern; hired; now an AI Systems Architect" | `builder.intro`, `builder.progression`, standfirst; ONLY with the person's name released by consent |
+| user-confirmed biography | "joined as an intern; hired; now a Forward Deployed AI Engineer" | `builder.intro`, `builder.progression`, standfirst; ONLY with the person's name released by consent |
 | repository-supported contribution | "built the detection query, the panel, the replay job" | `builder.contribution`, `builder.skills[].evidence`; stands under the role title without a name |
 | internally measured outcome | "586 of 604 resolved" | metrics, cards, decision figures |
 | personal reflection, quotation | anything the person felt or said | NOT on the record until the person supplies it and permits it; there is no field for it |

@@ -1,6 +1,6 @@
 # Architect Mindset — The Architect Time Machine
 
-A new **Curriculum Type** for the AI Systems Architect Accelerator. A 13-part weekly interactive
+A new **Curriculum Type** for the Forward Deployed AI Engineer Accelerator. A 13-part weekly interactive
 simulation (Week 0 intro/demo + Weeks 1-12) that exposes students to architectural lessons that
 traditionally took years of projects, incidents, and organizational responsibility to learn.
 

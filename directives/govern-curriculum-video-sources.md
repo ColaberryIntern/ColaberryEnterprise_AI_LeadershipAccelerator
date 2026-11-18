@@ -1,6 +1,6 @@
 # Directive — Govern Curriculum Video Sources
 
-**Status:** active · **Policy owner:** Swati Raman (curriculum) · **Implementation owner:** Ali Muwwakkil · **Decided:** 2026-08-24 · **System:** AI Systems Architect Accelerator curriculum (`enterprise.colaberry.ai`)
+**Status:** active · **Policy owner:** Swati Raman (curriculum) · **Implementation owner:** Ali Muwwakkil · **Decided:** 2026-08-24 · **System:** Forward Deployed AI Engineer Accelerator curriculum (`enterprise.colaberry.ai`)
 
 ## Purpose
 Curriculum video cards link to third-party YouTube content we do not control. Roughly two in five week-assigned video cards (31 of 73 audited on 2026-08-24) sit on personal or small individual channels, which can be deleted, made private, renamed, or have embedding switched off at any moment with no notice and no recourse. This directive records the standing sourcing policy and the procedure for replacing a video once it dies, so the decision is not re-litigated per incident and so no replacement reaches students unreviewed.

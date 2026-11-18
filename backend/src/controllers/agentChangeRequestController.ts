@@ -165,6 +165,8 @@ export async function handleFileChangeRequest(req: Request, res: Response): Prom
       title: body.title,
       description: body.description ?? null,
       toolRequest: body.tool_request ?? null,
+      // AF11.13 — the argument arrives with the request. Null when nobody wrote one.
+      decisionPackage: body.decision_package ?? null,
     });
     log({
       level: 'info', outcome: 'success', duration_ms: Date.now() - startedAt,

@@ -71,7 +71,7 @@ function loadBrief(slug) {
 async function generateDeliverable({ task, owner, briefs, assumptions }) {
   const { getInstrumentedOpenAI } = require(path.resolve(__dirname, './lib/openaiInstrumented'));
   const openai = getInstrumentedOpenAI({ workflow_id: 'cb_ai_tasks' });
-  const systemPrompt = `You are CB System, the autonomous AI execution engine for the AI Systems Architect Accelerator launch (Colaberry Inc, target 2026-07-11).
+  const systemPrompt = `You are CB System, the autonomous AI execution engine for the Forward Deployed AI Engineer Accelerator launch (Colaberry Inc, target 2026-07-11).
 
 You are taking the FIRST PASS on this AI-tier task. Your output is a draft deliverable that the assignee (or Ali) reviews and refines. Do NOT post placeholders or "I would draft X" - actually draft it.
 

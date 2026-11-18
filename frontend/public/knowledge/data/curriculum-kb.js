@@ -1,6 +1,6 @@
 /* ============================================================
    Colaberry Knowledge Base - Curriculum & Training domain data
-   AI Systems Architect Accelerator, 12 weeks / 4 intensives.
+   Forward Deployed AI Engineer Accelerator, 12 weeks / 4 intensives.
    Grounded in Ali-confirmed program facts (Open House 2026-07-16,
    Cohort 1 kickoff 2026-07-23, $149/$199 membership, Anthropic
    Architect certification) and the Design E curriculum outline.
@@ -22,7 +22,7 @@ window.CURRICULUM_DATA = {
   qa: [
     // overview
     { category:"overview", tags:["what","overview","12 weeks","project based"],
-      q:"What is the AI Systems Architect Accelerator curriculum?",
+      q:"What is the Forward Deployed AI Engineer Accelerator curriculum?",
       a:"It is a 12-week, project-based program that moves you from AI consumer to AI builder, powered by Anthropic and Claude Code. You learn by building real systems rather than watching lectures, and the work is organized into four intensives that each end in something you have actually shipped." },
     { category:"overview", tags:["philosophy","approach","learn build deploy"],
       q:"What is the teaching philosophy?",

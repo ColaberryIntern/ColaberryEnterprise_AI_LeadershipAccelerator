@@ -17,7 +17,7 @@
 
 const SIGNATURE_LINES = [
   'Ali Muwwakkil',
-  'Managing Director / AI Systems Architect',
+  'Managing Director / Forward Deployed AI Engineer',
   'Colaberry Inc.',
   '200 Chisholm Place, Suite 200, Plano, TX 75075',
   'ali@colaberry.com | enterprise.colaberry.ai',

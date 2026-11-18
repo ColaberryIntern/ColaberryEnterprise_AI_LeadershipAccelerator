@@ -163,7 +163,7 @@ async function generateText(
   const res = await client.chat.completions.create({
     model, temperature: 0.6, max_tokens: 1600, response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: `${blueprintText ? blueprintText + '\n\n' : ''}You write a course video card for an AI Systems Architect student. Return STRICT json.` },
+      { role: 'system', content: `${blueprintText ? blueprintText + '\n\n' : ''}You write a course video card for a Forward Deployed AI Engineer student. Return STRICT json.` },
       { role: 'user', content: `${args.title ? `Card title: "${args.title}". ` : ''}${args.videoTitle ? `The chosen video is "${args.videoTitle}". ` : ''}\n${resolved}\n\nReturn json with keys: ${wantTitle ? 'title (a concise, specific card title for this video, e.g. "Video: <topic>"), ' : ''}subtitle (string, short), description (string, 1-2 sentences on what the video covers), estimated_time (integer: your best estimate of the video length in whole MINUTES), points (object { "learning": int, "builder": int, "community": int } — XP to award: learning is the main driver for a watch-and-learn video (typically 10-25), builder is 0 unless it prompts hands-on building, community is 0 unless it sparks discussion), summary (string), body_html (clean self-contained HTML lesson notes, no scripts), questions (string[]), reflection (string).` },
     ],
   });

@@ -33,7 +33,7 @@ window.PRODUCT_DATA = {
     // membership
     { category:"membership", tags:["membership","what is","full program","included"],
       q:"What is the Colaberry AI Membership?",
-      a:"It is the product that gives you the full AI Systems Architect Accelerator: all four intensives, certification prep, the full-time internship, and a guided portfolio, with no separate course fees. The membership is the program." },
+      a:"It is the product that gives you the full Forward Deployed AI Engineer Accelerator: all four intensives, certification prep, the full-time internship, and a guided portfolio, with no separate course fees. The membership is the program." },
     { category:"membership", tags:["pricing","plans","founding","149","199"],
       q:"What are the plans and pricing?",
       a:"Membership is $149 a month billed annually, the founding rate that locks for the life of your membership. The Founding Cohort is the first cohort at the locked founding rate." },

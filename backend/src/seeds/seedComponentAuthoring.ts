@@ -69,7 +69,7 @@ const AI_THUMBNAILS: Record<string, AuthoredFields> = Object.fromEntries(
 // questions (rendered as a 1–5 agreement scale by the survey form) + one open
 // prompt, grounded in the week the card sits on.
 const SURVEY_GENERATION_PROMPT = [
-  'You write the Week Feedback Survey for the AI Systems Architect Accelerator: a short weekly check-in a participant fills out at the end of the week so we can understand their experience, how well they are learning, and what to improve. The WEEK CONTEXT block above gives this week\'s topic, focus, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground the questions in it; keep them specific to this week where natural.',
+  'You write the Week Feedback Survey for the Forward Deployed AI Engineer Accelerator: a short weekly check-in a participant fills out at the end of the week so we can understand their experience, how well they are learning, and what to improve. The WEEK CONTEXT block above gives this week\'s topic, focus, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground the questions in it; keep them specific to this week where natural.',
   '',
   'title: "Week " then the week number from the WEEK CONTEXT, then " Feedback — ", then the week\'s topic in Title Case (capitalize each significant word; keep acronyms like AI, API, MCP as-is). Example: "Week 1 Feedback — Claude Code Foundations + Workspace".',
   '',
@@ -81,7 +81,7 @@ const SURVEY_GENERATION_PROMPT = [
   '  1. Clarity — "This week\'s material was clear and well explained."',
   '  2. Pace — "The pace of this week worked well for me."',
   '  3. Confidence on objectives — a statement that I can now do the week\'s main objective/competency (name it from the WEEK CONTEXT).',
-  '  4. Relevance — "What I learned this week is relevant to becoming an AI Systems Architect."',
+  '  4. Relevance — "What I learned this week is relevant to becoming a Forward Deployed AI Engineer."',
   '  5. Hands-on — "The hands-on activities helped me actually learn, not just watch."',
   '  6. Support — "When I got stuck, I could get the help or guidance I needed."',
   '  7. Workload — "The amount of work this week was manageable."',
@@ -107,7 +107,7 @@ const SURVEY_GENERATION_PROMPT = [
 // so the content carries NO <style>/<nav>/<script>/<svg>/<img>. Visuals are REQUIRED here
 // (Ali 2026-07-18): a prose-only reading is unacceptable. Certified in Experience Studio.
 const SELF_STUDY_GENERATION_PROMPT = [
-  'You write the Self Study reading for the AI Systems Architect Accelerator: the "read before class" material a participant reads, at their own pace, before the week\'s live session. The WEEK CONTEXT block above gives this week\'s topic, purpose, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground every word in it and invent nothing it does not support. Generalize to whatever this week\'s topic is; never hard-code a specific week\'s subject matter.',
+  'You write the Self Study reading for the Forward Deployed AI Engineer Accelerator: the "read before class" material a participant reads, at their own pace, before the week\'s live session. The WEEK CONTEXT block above gives this week\'s topic, purpose, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground every word in it and invent nothing it does not support. Generalize to whatever this week\'s topic is; never hard-code a specific week\'s subject matter.',
   '',
   'AUDIENCE & VOICE. Write for a learner with little or no prior background. Warm, plain-English, encouraging. No hype. No emoji. Define every piece of jargon in plain words the first time it appears. Self-study: nothing is graded, tested, or timed.',
   '',
@@ -143,7 +143,7 @@ const SELF_STUDY_GENERATION_PROMPT = [
 // competency-aware); these prompts only frame the card's title/summary. The
 // interactive assessment is code-driven (AssessmentPanel).
 const KNOWLEDGE_CHECK_GENERATION_PROMPT = [
-  'You write the framing for a quick Knowledge Check at the START of a week in the AI Systems Architect Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
+  'You write the framing for a quick Knowledge Check at the START of a week in the Forward Deployed AI Engineer Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
   'title: the word "Knowledge Check", a space, an em dash, a space, then the week\'s topic from the WEEK CONTEXT.',
   'summary: one sentence — a quick, low-stakes check of what the student knows coming into this week; no pressure, and they see the correct answers right away.',
   'body_html: one short <p> saying this sets their starting point for the section, to be compared against the end-of-week Evaluation.',
@@ -151,7 +151,7 @@ const KNOWLEDGE_CHECK_GENERATION_PROMPT = [
 ].join('\n');
 
 const EVALUATION_GENERATION_PROMPT = [
-  'You write the framing for the end-of-section Evaluation in the AI Systems Architect Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
+  'You write the framing for the end-of-section Evaluation in the Forward Deployed AI Engineer Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
   'title: the word "Evaluation", a space, an em dash, a space, then the week\'s topic from the WEEK CONTEXT.',
   'summary: one sentence — the graded check that measures how far the student has come this section; 70% or higher to pass and earn points.',
   'body_html: one short <p> noting this is scored, needs 70% to pass, can be retried, and shows growth since the entry Knowledge Check.',
@@ -168,7 +168,7 @@ const EVALUATION_GENERATION_PROMPT = [
 // preview welcome); weeks 1+ generate live from this prompt and reset when the
 // week's curriculum changes.
 const ANNOUNCEMENT_GENERATION_PROMPT = [
-  'You write the weekly Announcement for the AI Systems Architect Accelerator: the warm, friendly kickoff AND the MAP of everything the student will do this week. The WEEK CONTEXT above gives the week topic, objectives, outcomes, and level. THIS WEEK\'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item\'s phase in brackets. Ground everything in both; invent nothing.',
+  'You write the weekly Announcement for the Forward Deployed AI Engineer Accelerator: the warm, friendly kickoff AND the MAP of everything the student will do this week. The WEEK CONTEXT above gives the week topic, objectives, outcomes, and level. THIS WEEK\'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item\'s phase in brackets. Ground everything in both; invent nothing.',
   '',
   'VOICE: warm, encouraging, human, playful. Lots of friendly emoji. Plain English, no jargon, no hype.',
   'TITLE: exactly the words "This Week", then a space, an em dash, a space, then the week\'s topic EXACTLY as written in the WEEK CONTEXT above — copy it verbatim; do NOT paraphrase, shorten, or invent a different topic. Example: "This Week — Claude Code Foundations + Workspace".',
@@ -212,14 +212,14 @@ const ANNOUNCEMENT_GENERATION_PROMPT = [
   '  Then, for EACH phase that has activities, in the journey order Prep, Learn, Practice, Build, Reflect, Share: <div class="awp"><h2><span>{phase emoji} {Phase name}</span><span class="st">{that phase\'s total minutes from the Phase totals line}</span></h2><div class="awg"> one card per activity in that phase: <div class="awk"><span class="i">{activity emoji}</span><span><b>{the activity\'s REAL title}</b><span class="d">{a short friendly phrase, max ~12 words, on what the student does}</span><span class="tm">⏱️ {that activity\'s minutes} min</span></span></div> </div></div>',
   '  <div class="awb"><h2>🖥️ Your Workspace + AI Mentor</h2><p>opening any lesson takes them into their Workspace, where they meet their personal AI Mentor Agent (who coaches, never just hands answers), alongside the community and their progress.</p></div>',
   '  <div class="awb"><h2>💬 Join the conversation</h2><p>warmly encourage a comment; remind them it is visible to the whole community and a great way to connect with fellow learners.</p></div>',
-  '  <div class="awy"><h2>🎯 Why it matters</h2><p>one or two friendly sentences tying this week to becoming an AI Systems Architect, from the student outcomes / success criteria.</p></div>',
+  '  <div class="awy"><h2>🎯 Why it matters</h2><p>one or two friendly sentences tying this week to becoming a Forward Deployed AI Engineer, from the student outcomes / success criteria.</p></div>',
   '',
   'COVER EVERY activity from THIS WEEK\'S ACTIVITIES — do not skip, merge, or invent any; only omit pure system cards (badges/streaks/milestones). This is the full curriculum map for the week, not a teaser. Phase emojis: 🔥 Prep, 📚 Learn, 🧪 Practice, 🏗️ Build, 🪞 Reflect, 🤝 Share. Activity emoji by type: 📖 self study/reading, ✅ knowledge check/quiz/evaluation, 🎬 video, 👥 live class, 🔎 deep dive, 🎓 skills course, 🧪 prompt lab, 🏗️ implementation/build, 🔁 github sync, 📦 artifact, 🪞 reflection, 📝 survey, 🤝 community/discussion.',
   'Every opening tag has a matching closing tag; the CSS must be valid. Set questions to [] and reflection to "".',
   'completion: "Marked complete when the participant opens and reads the weekly announcement."',
 ].join('\n');
 
-const SETUP_LAB_GENERATION_PROMPT = `You author a "Setup Lab" for the AI Systems Architect Accelerator — a short, hands-on "get unblocked" lab that helps a NON-TECHNICAL business executive get ONE technical thing working, with Claude Code doing the heavy lifting. Ground the tone, the example, and the "why now" in the WEEK CONTEXT above, and refer to the week by its section TITLE, never by number. Invent no technical claim the WEEK CONTEXT and the topic below do not support; accuracy beats completeness.
+const SETUP_LAB_GENERATION_PROMPT = `You author a "Setup Lab" for the Forward Deployed AI Engineer Accelerator — a short, hands-on "get unblocked" lab that helps a NON-TECHNICAL business executive get ONE technical thing working, with Claude Code doing the heavy lifting. Ground the tone, the example, and the "why now" in the WEEK CONTEXT above, and refer to the week by its section TITLE, never by number. Invent no technical claim the WEEK CONTEXT and the topic below do not support; accuracy beats completeness.
 
 The ONE thing the student must get working in this lab is: {{setup_topic}}.
 {{setup_context}}
@@ -249,7 +249,7 @@ Set the rest explicitly: questions = [], reflection = "", discussion_prompt = ""
 // program, a custom cohort week). It pins the SAME <style> and the SAME data
 // attributes the authored cards emit, so a generated studio renders through
 // ClaudeStudioRender identically instead of falling back to raw HTML.
-const CLAUDE_STUDIO_GENERATION_PROMPT = `You author a "Claude Studio" for the AI Systems Architect Accelerator — the weekly studio where a business technologist uses CLAUDE.AI (conversations, Projects, and Artifacts) to think, research, decide, and communicate. It is deliberately NOT Claude Code: nothing here is built in a terminal, and no code is written. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by its number. Invent no claim the WEEK CONTEXT does not support.
+const CLAUDE_STUDIO_GENERATION_PROMPT = `You author a "Claude Studio" for the Forward Deployed AI Engineer Accelerator — the weekly studio where a business technologist uses CLAUDE.AI (conversations, Projects, and Artifacts) to think, research, decide, and communicate. It is deliberately NOT Claude Code: nothing here is built in a terminal, and no code is written. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by its number. Invent no claim the WEEK CONTEXT does not support.
 
 Every Claude Studio runs the same four-stage loop, in this order:
   1. explore  — Explore in Claude: frame the problem, question assumptions, reason conversationally
@@ -290,7 +290,7 @@ Prompts must be paste-ready and specific to the week's topic, with bracketed pla
 
 Voice: direct, calm, professional. No hype, no emojis. Em dash only in the title. Set questions as [], github_task as null, evaluation_criteria as the five rubric dimensions, reflection as the free-response prompt, discussion_prompt as "", completion as "Marked complete when the participant submits their Artifact link and reflection."`;
 
-const PROMPT_LAB_GENERATION_PROMPT = `You author a "Prompt Lab" for the AI Systems Architect Accelerator — a catalog of hands-on PRACTICE PROMPTS a NON-TECHNICAL business executive pastes into Claude Code to practice this week by building small real things. Use ALL of the context above: the WEEK CONTEXT (the week's topic + objectives), THIS WEEK'S ACTIVITIES (the roster — especially the Deep Dive and the Anthropic course named there), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+const PROMPT_LAB_GENERATION_PROMPT = `You author a "Prompt Lab" for the Forward Deployed AI Engineer Accelerator — a catalog of hands-on PRACTICE PROMPTS a NON-TECHNICAL business executive pastes into Claude Code to practice this week by building small real things. Use ALL of the context above: the WEEK CONTEXT (the week's topic + objectives), THIS WEEK'S ACTIVITIES (the roster — especially the Deep Dive and the Anthropic course named there), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
 
 Ground the catalog in that context:
 - Include at least one or two prompts that have the student BUILD one of the documents/artifacts named in WHAT STUDENTS BUILD THIS WEEK or covered by this week's Deep Dive.
@@ -313,7 +313,7 @@ Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening 
 
 Voice: warm, confident, encouraging, plain English; make a non-technical executive feel these are doable. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete when the participant copies a prompt, builds it in Claude Code, and submits what they made."`;
 
-const BUILD_ARTIFACTS_GENERATION_PROMPT = `You author a "Build Artifact(s) Lab" for the AI Systems Architect Accelerator — a build station where a NON-TECHNICAL business executive picks ONE artifact and runs a paste-ready prompt in Claude Code to build it ON THEIR OWN PROJECT: a significant, portfolio-grade deliverable (~5+ minutes of work, Deep-Dive quality, something they would be proud of). Use ALL the context above — the WEEK CONTEXT (topic + objectives), THIS WEEK'S ACTIVITIES (the Deep Dive + the Anthropic course), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+const BUILD_ARTIFACTS_GENERATION_PROMPT = `You author a "Build Artifact(s) Lab" for the Forward Deployed AI Engineer Accelerator — a build station where a NON-TECHNICAL business executive picks ONE artifact and runs a paste-ready prompt in Claude Code to build it ON THEIR OWN PROJECT: a significant, portfolio-grade deliverable (~5+ minutes of work, Deep-Dive quality, something they would be proud of). Use ALL the context above — the WEEK CONTEXT (topic + objectives), THIS WEEK'S ACTIVITIES (the Deep Dive + the Anthropic course), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
 
 Produce EXACTLY 5 artifacts the student could build this section — grounded in the week's deliverables, Deep Dive, and topic. Each is a substantial, real deliverable (a document, module, package, framework, or diagram), never a toy.
 
@@ -359,7 +359,7 @@ interface IntelPromptConfig {
 const intelGenerationPrompt = (c: IntelPromptConfig): string => {
   const f = INTEL_FORMATS[c.slug];
   return [
-    `You write ${c.role} for the AI Systems Architect Accelerator — a continuously-updated intelligence card that keeps enterprise AI architects current. Executive voice: clear, calm, authoritative (Bloomberg meets Salesforce). No hype, no marketing language.`,
+    `You write ${c.role} for the Forward Deployed AI Engineer Accelerator — a continuously-updated intelligence card that keeps enterprise AI architects current. Executive voice: clear, calm, authoritative (Bloomberg meets Salesforce). No hype, no marketing language.`,
     '',
     'DATA SOURCE — read this first. An ITEM may be provided through variables:',
     '  ITEM title: {{item_title}} | source: {{item_source}} | url: {{item_url}} | date: {{item_date}} | excerpt: {{item_excerpt}}',
@@ -548,7 +548,7 @@ const intelAuthoring = (o: {
 // (data/architectMindsetScenario.ts — the null-blueprint free-preview tier); this
 // prompt is for the Weeks 1-12 generator, which produces the same structured
 // scenario JSON against the injected WEEK CONTEXT and caches it on the card.
-const ARCHITECT_MINDSET_GENERATION_PROMPT = `You author one weekly scenario for "The Architect Time Machine", a cinematic decision simulation in the AI Systems Architect Accelerator. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Assume architecture has no single correct answer; reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon.
+const ARCHITECT_MINDSET_GENERATION_PROMPT = `You author one weekly scenario for "The Architect Time Machine", a cinematic decision simulation in the Forward Deployed AI Engineer Accelerator. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Assume architecture has no single correct answer; reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon.
 
 Return STRICT json matching this shape (an AmScenario): {
   "version": string, "week": number, "baseline": false,
@@ -578,7 +578,7 @@ Multiple-choice options must be plausible professional instincts, never one-obvi
 // prompt only frames the card (a neutral title + one sentence) — the ritual UI is
 // code, not generated content, so the prompt must NOT name a specific ritual.
 const PEER_WINS_GENERATION_PROMPT = [
-  "You author the end-of-week Community card for the AI Systems Architect Accelerator — a share-with-your-cohort moment a NON-TECHNICAL business executive reaches AFTER finishing this week's section.",
+  "You author the end-of-week Community card for the Forward Deployed AI Engineer Accelerator — a share-with-your-cohort moment a NON-TECHNICAL business executive reaches AFTER finishing this week's section.",
   'The card renders a LIVE weekly ritual (a guided composer + the cohort wall) whose exact prompt is set in code per week — you do NOT write it. Your only job is a short, inviting title + one framing sentence.',
   'Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Invent no technical claim the context does not support.',
   'Produce ONLY these two, and set every other output key empty:',
@@ -598,7 +598,7 @@ const PEER_WINS_GENERATION_PROMPT = [
 // commits) are NOT injected yet — fills are class-wide/illustrative until the
 // cross-card student-history binding + bespoke renderer land (see the build spec).
 const REFLECTION_GENERATION_PROMPT = [
-  "You write the weekly Reflection for the AI Systems Architect Accelerator: the week-CLOSER that reflects the WHOLE week back to the student — what they did, what moved, what to carry forward. The WEEK CONTEXT above gives the week topic, objectives, competencies, and level. THIS WEEK'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item's phase in brackets and its minutes. Ground everything in both; invent nothing; cover the whole week.",
+  "You write the weekly Reflection for the Forward Deployed AI Engineer Accelerator: the week-CLOSER that reflects the WHOLE week back to the student — what they did, what moved, what to carry forward. The WEEK CONTEXT above gives the week topic, objectives, competencies, and level. THIS WEEK'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item's phase in brackets and its minutes. Ground everything in both; invent nothing; cover the whole week.",
   '',
   'VOICE: calm, warm, authoritative — an executive coach speaking in second person ("you"), past tense ("this week you…"). No hype, minimal emoji.',
   'TITLE: exactly the words "Your Week in Review", a space, an em dash, a space, then the week topic EXACTLY as written in the WEEK CONTEXT — copy it verbatim. Example: "Your Week in Review — Claude Code Foundations + Workspace".',
@@ -630,7 +630,7 @@ const REFLECTION_GENERATION_PROMPT = [
   '</style>',
   '',
   'THEN the content, using ONLY these classes — no other classes, no inline styles, no <script>, no <img>:',
-  '  <p class="e">Week {N from WEEK CONTEXT} · {week topic}</p><h1>a warm past-tense headline naming what they accomplished this week</h1><p class="sub">one grounding sentence tying the week\'s work to becoming an AI Systems Architect</p>',
+  '  <p class="e">Week {N from WEEK CONTEXT} · {week topic}</p><h1>a warm past-tense headline naming what they accomplished this week</h1><p class="sub">one grounding sentence tying the week\'s work to becoming a Forward Deployed AI Engineer</p>',
   '  three tiles from THIS WEEK\'S ACTIVITIES header: <div class="st"><span><b>{N} activities</b></span><span><b>{total time, e.g. ~7.7 hrs}</b> invested</span><span><b>{level from WEEK CONTEXT}</b> level</span></div>',
   '  <p class="l">What you did this week</p>',
   '  Then for EACH phase that has activities, in journey order Prep, Learn, Practice, Build, Reflect, Share: <p class="p">{Phase name} · {count}</p><div class="b"> one row per activity in that phase: <div class="i"><span class="g">{activity emoji}</span><span class="t">{the activity\'s real title — the words AFTER the colon on its THIS WEEK\'S ACTIVITIES line, verbatim}</span><span class="m">{that activity\'s minutes}m</span></div> </div>',

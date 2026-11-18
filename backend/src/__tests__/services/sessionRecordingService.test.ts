@@ -478,7 +478,7 @@ describe('ingestRecordingForBooking — general Room bookings (the "+ Book a ses
 describe('ingestRecordingForRoom — always-open persistent video Rooms (found live 2026-08-05: a cohort\'s real class room is one of these)', () => {
   const alwaysOpenRoom = {
     id: 'room-always-open-1',
-    name: 'July 2026 - AI Systems Architect',
+    name: 'July 2026 - Forward Deployed AI Engineer',
     is_video: true,
     always_open: true,
     meeting_link: 'https://colaberry.zoom.us/j/89581408269?pwd=abc.1',

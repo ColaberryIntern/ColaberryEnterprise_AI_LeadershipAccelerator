@@ -103,6 +103,73 @@ export function fallbackReminderBody(firstName: string | null, event: Pick<OpenH
   ].join('\n');
 }
 
+/**
+ * The countdown TEXT. Deterministic (not AI-written): the general SMS prompt caps a text
+ * at 160 characters and the Join link alone is ~95, and a fixed text cannot drift into an
+ * offer. Plain text; it is written into the GHL `cory_sms_composed` field, and GHL's own
+ * workflow on that field sends it (Ali: texts go out by updating a GHL field).
+ */
+export function fallbackReminderSms(firstName: string | null, event: Pick<OpenHouseEventForLead, 'when_label' | 'join_url'>): string {
+  const hi = firstName ? `Hi ${firstName}, ` : 'Hi, ';
+  const clock = (event.when_label.split(' at ')[1] || '').trim();
+  const when = clock ? `starts at ${clock} today` : `starts soon (${event.when_label})`;
+  return `${hi}it's Maya at Colaberry. The Open House ${when}, and we're looking forward to seeing you. Join here: ${event.join_url}`;
+}
+
+/**
+ * What Maya's voice agent is told on a countdown call (Ali, 2026-11-17): "Our AI can
+ * make those phone calls, relate to what they are doing, but not try to sell. Just help
+ * and bring up the Open House event they registered and how we are really looking fwd
+ * to seeing you. Then ... if they happen to say they are ready to sign up now, or give
+ * some buying intent signals, then they should go on Rose's list to call."
+ *
+ * Deterministic on purpose: a call prompt is instructions to an agent, not copy, so it
+ * is authored here and pinned by tests rather than written by a second model.
+ */
+export function countdownCallScript(
+  firstName: string | null,
+  event: Pick<OpenHouseEventForLead, 'title' | 'when_label'>,
+  platformActivity: string,
+): string {
+  const who = firstName ? firstName : 'the person';
+  return [
+    `You are Maya, Director of Admissions at Colaberry, making a short, friendly call to ${who}.`,
+    `${who} registered for the ${event.title}, ${event.when_label}. It is a live online session.`,
+    platformActivity ? `What they have done on the Colaberry platform so far (true, from our records): ${platformActivity}` : 'We have no record of platform activity for them yet.',
+    '',
+    'YOUR GOAL: help them, and make them feel expected tonight. You are NOT selling.',
+    '1. Say who you are and that you are calling because they registered for the Open House.',
+    '2. If they have done something on the platform, mention it naturally and ask how it is going. If they are stuck, help briefly.',
+    '3. Tell them we are really looking forward to seeing them, and that the Join link is in their email from Maya. It signs them in and checks them in.',
+    '4. Ask if there is a question they want answered live at the Open House.',
+    '5. Thank them and end the call. Aim for under two minutes.',
+    '',
+    'RULES:',
+    '- Do not discuss pricing, payment, discounts, offers or enrollment terms. If they ask, say those are covered live at the Open House, and that an admissions advisor will follow up with them personally.',
+    '- If they say they are ready to enroll now, or ask how to sign up, thank them, say an admissions advisor will call them, and note it clearly before ending the call.',
+    '- Never invent facts about the program, jobs or salaries. Never pressure.',
+    '- If they ask not to be called, apologize, confirm they will not be called again, and end the call.',
+    '- If you reach voicemail: one short message that you are looking forward to seeing them at the Open House and the Join link is in their email. No other details.',
+  ].join('\n');
+}
+
+/**
+ * True only when this lead may be called or texted: a phone on file AND a current
+ * express consent record for that channel. A countdown call or text is scheduled only
+ * for these people, so the queue never fills with sends the consent gate would block.
+ * (The scheduler's consent gate still runs again at send time.)
+ */
+export async function mayContactByPhone(channel: 'voice' | 'sms', leadId: number, phone: string | null | undefined): Promise<boolean> {
+  if (!phone || !String(phone).trim()) return false;
+  try {
+    const { evaluateConsent } = await import('./consentService');
+    const d = await evaluateConsent({ channel, leadId, phone });
+    return d.verdict === 'allow';
+  } catch {
+    return false; // fail closed: no consent answer, no call or text
+  }
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

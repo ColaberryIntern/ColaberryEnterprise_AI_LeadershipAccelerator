@@ -119,7 +119,7 @@ export function ccppRowToOpenHouseInfo(row: CcppOpenHouseRow): OpenHouseEventInf
 }
 
 /**
- * The next upcoming, live "AI Systems Architect Accelerator Open House" event,
+ * The next upcoming, live "Forward Deployed AI Engineer Accelerator Open House" event,
  * read straight from the CCPP Eventbrite mirror (`vw_EventBrite_Events_w_Cnt`).
  * Cached for 5 minutes. Returns `{ announced: false }` when there is no upcoming
  * live Open House, so the marketing card can fall back to "New date announced soon".

@@ -1,12 +1,12 @@
 /**
  * seedAcceleratorCurriculum.ts
  *
- * Creates the 12-week AI Systems Architect Accelerator cohort in the dev DB
+ * Creates the 12-week Forward Deployed AI Engineer Accelerator cohort in the dev DB
  * so the full portal UX (Skilljar CTAs, CCA-F link, week progression) can be
  * tested locally without touching production.
  *
  * What it does:
- *   1. findOrCreate cohort "AI Systems Architect — July 2026 (dev)"
+ *   1. findOrCreate cohort "Forward Deployed AI Engineer — July 2026 (dev)"
  *   2. findOrCreate 12 CurriculumModule rows (W1–W12, Appendix A titles)
  *   3. Create 3 CurriculumLesson rows per module if none exist
  *   4. findOrCreate Enrollment for kes@localdev.test
@@ -31,7 +31,7 @@ import CurriculumLesson from '../models/CurriculumLesson';
 import Enrollment from '../models/Enrollment';
 import { initializeParticipantCurriculum } from '../services/curriculumService';
 
-const COHORT_NAME = 'AI Systems Architect — July 2026 (dev)';
+const COHORT_NAME = 'Forward Deployed AI Engineer — July 2026 (dev)';
 const KES_EMAIL   = 'kes@localdev.test';
 const PORT        = process.env.FRONTEND_PORT || '9999';
 
@@ -262,7 +262,7 @@ async function run(): Promise<void> {
       full_name:               'Kes Delele (dev)',
       email:                   KES_EMAIL,
       company:                 'Colaberry',
-      title:                   'AI Systems Architect',
+      title:                   'Forward Deployed AI Engineer',
       cohort_id:               cohort.id,
       payment_status:          'paid',
       payment_method:          'invoice',

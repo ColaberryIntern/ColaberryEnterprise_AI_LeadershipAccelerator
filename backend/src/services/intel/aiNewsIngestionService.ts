@@ -38,7 +38,7 @@ import { decideBootAction } from './aiNewsBootDecision';
 
 export const NEWS_TYPE_SLUG = 'ai_news_flash';
 
-/** The canonical program these cards attach to (AI Systems Architect Accelerator). */
+/** The canonical program these cards attach to (Forward Deployed AI Engineer Accelerator). */
 const INTEL_PROGRAM_ID = process.env.INTEL_PROGRAM_ID || '92b98a72-8681-4f04-8ba1-16a18334cd0b';
 
 /** Free, no-key AI-lab feeds. Override with AI_NEWS_FEEDS="Source|url,Source|url". */

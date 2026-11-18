@@ -53,7 +53,7 @@ const DECISIONS = [
     title: 'Lock the training program brand name',
     deadline: 'Jun 6',
     why: 'Locks landing-page URLs, Stripe product naming, Partner Network co-branding ask. Changing post-launch is expensive.',
-    recommendation: 'AI Systems Architect Accelerator (research final pick).',
+    recommendation: 'Forward Deployed AI Engineer Accelerator (research final pick).',
     actions: ['Reply on the training BC todo (9945833396) with your name choice'],
   },
   {

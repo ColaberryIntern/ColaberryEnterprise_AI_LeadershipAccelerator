@@ -112,6 +112,6 @@ export function renderClassOutline(spec: KitSpec): string {
   <div class="formula">Learn it Monday. Build it Thursday. Prove it by Friday.</div>
   <div class="flow"><b>Class flow:</b> ${flow}</div>
   ${blocks}
-  <div class="foot">Class outline · generated from the Class Kit · AI Systems Architect Accelerator</div>
+  <div class="foot">Class outline · generated from the Class Kit · Forward Deployed AI Engineer Accelerator</div>
 </div></body></html>`;
 }

@@ -380,7 +380,7 @@ function CapstoneRecordPage() {
       )}
 
       <footer style={{ marginTop: 52, paddingTop: 16, borderTop: `1px solid ${LINE}`, fontSize: 12.5, color: MUTED }}>
-        Built in the Colaberry AI Systems Architect Accelerator. Every link above is pinned
+        Built in the Colaberry Forward Deployed AI Engineer Accelerator. Every link above is pinned
         to the commit the work was written in.
       </footer>
     </div>

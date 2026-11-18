@@ -86,7 +86,7 @@ function buildPrompt(artifactType: ShowcaseArtifactType, project: Project): { sy
     project.automation_goal ? `Automation goal: ${project.automation_goal}` : null,
   ].filter(Boolean).join('\n') || 'No project details provided yet — draft a generic but plausible AI systems project showcase.';
 
-  const system = `You draft a "${ARTIFACT_LABELS[artifactType]}" showcase artifact for a student's AI Systems Architect Accelerator project. Return STRICT json.`;
+  const system = `You draft a "${ARTIFACT_LABELS[artifactType]}" showcase artifact for a student's Forward Deployed AI Engineer Accelerator project. Return STRICT json.`;
 
   const shapes: Record<ShowcaseArtifactType, string> = {
     demo_video: 'json with keys: title, duration_estimate_seconds (number), scenes (array of { narration, on_screen_action })',

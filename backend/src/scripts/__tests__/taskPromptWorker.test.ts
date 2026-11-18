@@ -43,7 +43,7 @@ describe('buildPrompt', () => {
   const task = {
     title: 'Implement escalation rules in dashboard',
     url: 'https://app.basecamp.com/3945211/buckets/47502609/todos/9946497989',
-    project: 'AI Systems Architect Accelerator',
+    project: 'Forward Deployed AI Engineer Accelerator',
     list: 'Launch Readiness Dashboard',
     due: '2026-06-04',
     summary: 'Add escalation rules to the launch readiness dashboard.',

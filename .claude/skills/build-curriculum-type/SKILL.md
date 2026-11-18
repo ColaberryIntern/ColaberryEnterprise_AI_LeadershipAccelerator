@@ -263,7 +263,7 @@ data-URI. There are **three** thumbnail surfaces — see [render-surface.md](ref
 Template fallback: `POST /api/admin/components/:slug/thumbnail {source:'template'}`.
 
 **E. Preview against a REAL week.** `POST /api/admin/components/:slug/preview {variables, model,
-program_id, week}`. Program "AI Systems Architect Accelerator" = `92b98a72-8681-4f04-8ba1-16a18334cd0b`
+program_id, week}`. Program "Forward Deployed AI Engineer Accelerator" = `92b98a72-8681-4f04-8ba1-16a18334cd0b`
 (Week 1 = "Claude Code Foundations + Workspace"). **Read the render in the drawer's shape**, not
 as a page. Weak? `POST .../:slug/codesign` for ranked patches, apply, re-preview (≤3 passes).
 Note: preview caps at 1800 tokens; the persisted student path (`cardContentService`) uses 3200

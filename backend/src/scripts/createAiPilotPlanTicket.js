@@ -44,7 +44,7 @@ const PLAN_HTML =
   '<code>docs/AI_ROI_PILOT_EMAIL_SEQUENCE.md</code>.</p>' +
   '<p><strong>Funnel.</strong> Apollo list &rarr; cold email &rarr; 20-min fit call &rarr; pilot signed &rarr; ' +
   'ROI win &rarr; continuation deal. The number that matters is pilot-to-continuation (target 60%+).</p>' +
-  '<p><strong>Scale.</strong> AI Systems Architect + MyDay structure run several pilots at once on a templated ' +
+  '<p><strong>Scale.</strong> Forward Deployed AI Engineer + MyDay structure run several pilots at once on a templated ' +
   'engine; document a delivery playbook; migrate training-program people into delivery and adjacent lanes ' +
   '(e.g. Gov Contracts).</p>' +
   '<p><em>Full plan: docs/AI_ROI_PILOT_GTM_STRATEGY.md</em></p>' +

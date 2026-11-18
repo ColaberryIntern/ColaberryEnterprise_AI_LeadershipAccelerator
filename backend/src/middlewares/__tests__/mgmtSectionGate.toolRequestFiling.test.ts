@@ -47,6 +47,9 @@ const FILING_FLOW_PATHS = [
   // The three pickers.
   '/api/admin/agent-domain-datasets',
   '/api/admin/agent-domain-actors',
+  // AF11.12, the AI drafter. Read from the same half-filled form as the pickers above, and it
+  // sits UNDER the `program` prefix, which is exactly the shape that broke the front door.
+  '/api/admin/agent-domain-tool-requests/draft',
 ];
 
 describe('THE REAL ASSERTION: a builder can reach every step of filing', () => {
@@ -94,6 +97,29 @@ describe('the front door, which is the one that regressed', () => {
     // calls `pathToSection` with one.
     expect(pathToSection('/api/admin/agent-domain-product-features/asking')).toBe('program');
     expect(pathToSection('/api/admin/agent-domain-product-features/coverage')).toBe('program');
+  });
+});
+
+describe('AF11.12 the drafter, which sits under the program prefix', () => {
+  it('puts /draft on dashboard, the section builders actually hold', () => {
+    expect(pathToSection('/api/admin/agent-domain-tool-requests/draft')).toBe('dashboard');
+  });
+
+  it('ORDERING: the narrow row wins over the broad program row above it', () => {
+    // `pathToSection` returns the FIRST match in array order. `/draft` declared after
+    // `/api/admin/agent-domain-tool-requests` would never be reached, and the route would 403 for
+    // its entire audience while every classification test stayed green — which is precisely how
+    // AF11.9 shipped. Asserting both in one test so the pair cannot drift apart.
+    expect(pathToSection('/api/admin/agent-domain-tool-requests/draft')).toBe('dashboard');
+    expect(pathToSection('/api/admin/agent-domain-tool-requests')).toBe('program');
+  });
+
+  it('does not let the /draft row swallow a sibling under the same prefix', () => {
+    // A request id lives directly under this prefix, so a row that captured anything starting
+    // with `/draft` would hand a builder somebody else's request.
+    expect(pathToSection('/api/admin/agent-domain-tool-requests/drafts')).toBe('program');
+    expect(pathToSection('/api/admin/agent-domain-tool-requests/abc-123')).toBe('program');
+    expect(pathToSection('/api/admin/agent-domain-tool-requests/abc-123/messages')).toBe('program');
   });
 });
 

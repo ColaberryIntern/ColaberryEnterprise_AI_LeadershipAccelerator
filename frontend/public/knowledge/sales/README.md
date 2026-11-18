@@ -13,7 +13,7 @@ An offline-capable, searchable sales-enablement hub for admissions reps (Roselen
 - **Rep training** · 5-minute prep, talk track, three prospect angles, Cory practice prompts.
 
 ## Canonical facts (confirmed by Ali 2026-06-25)
-$149/mo annual founding rate · $199/mo monthly · 40 founding seats · Open House **Thu Jul 16** → kickoff **Thu Jul 23, 2026** · public name "AI Systems Architect Accelerator" · "Anthropic Architect certification".
+$149/mo annual founding rate · $199/mo monthly · 40 founding seats · Open House **Thu Jul 16** → kickoff **Thu Jul 23, 2026** · public name "Forward Deployed AI Engineer Accelerator" · "Anthropic Architect certification".
 **Open item:** refund/cancellation terms are drafted and pending Ali's final approval (flagged throughout).
 
 ## Where it lives

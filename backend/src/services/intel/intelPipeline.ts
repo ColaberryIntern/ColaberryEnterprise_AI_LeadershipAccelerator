@@ -56,7 +56,7 @@ export {
 } from './intelRegistry';
 export type { IntelSourceConfig, NormalizedIntelItem, IntelRunResult } from './intelRegistry';
 
-/** The canonical program these cards attach to (AI Systems Architect Accelerator). */
+/** The canonical program these cards attach to (Forward Deployed AI Engineer Accelerator). */
 const INTEL_PROGRAM_ID = process.env.INTEL_PROGRAM_ID || '92b98a72-8681-4f04-8ba1-16a18334cd0b';
 
 /**

@@ -22,7 +22,7 @@ const findByPkCourse = CoraKbCourse.findByPk as jest.Mock;
 const findOneCohort = CoraKbCohort.findOne as jest.Mock;
 const findAllEntries = CoraKbEntry.findAll as jest.Mock;
 
-const mockCourse: any = { id: 'course-1', name: 'AI Systems Architect Accelerator', slug: 'ai-architect' };
+const mockCourse: any = { id: 'course-1', name: 'Forward Deployed AI Engineer Accelerator', slug: 'ai-architect' };
 const mockCohort: any = {
   id: 'cohort-1', course_id: 'course-1', name: 'Founding Cohort', cohort_number: 1,
   start_date: 'July 23, 2026', end_date: null, price_annual: 149, price_monthly: 199,

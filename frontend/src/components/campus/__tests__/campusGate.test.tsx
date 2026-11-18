@@ -42,7 +42,7 @@ describe('the gate', () => {
   it('a member: the accelerator arch, greeting by name, classmates inside, streak, ID card with level and points', () => {
     render({});
     for (const id of ['cm-gate', 'cm-gate-arch-text', 'cm-gate-logo', 'cm-gate-greeting', 'cm-gate-sub', 'cm-gate-id', 'cm-gate-enter', 'cm-gate-tour']) expect(q(`[data-testid="${id}"]`)).not.toBeNull();
-    expect(q('[data-testid="cm-gate-arch-text"]')!.textContent).toBe('Colaberry · AI Systems Architect Accelerator');
+    expect(q('[data-testid="cm-gate-arch-text"]')!.textContent).toBe('Colaberry · Forward Deployed AI Engineer Accelerator');
     expect(q('[data-testid="cm-gate-greeting"]')!.textContent).toMatch(/, Ali\.$/);
     expect(q('[data-testid="cm-gate-sub"]')!.textContent).toBe('The campus is open. 10 classmates are already inside.');
     expect(q('[data-testid="cm-gate-streak"]')!.textContent).toBe('🔥3-day streak'); // already claimed today: nothing to tap in for

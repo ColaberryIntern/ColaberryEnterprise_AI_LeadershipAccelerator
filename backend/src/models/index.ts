@@ -1530,7 +1530,7 @@ export {
   // Anthropic Intelligence Layer (L1 + L2)
   AnthropicContentRegistry,
   AnthropicChangeEvent,
-  // AI Systems Architect Accelerator
+  // Forward Deployed AI Engineer Accelerator
   ProjectDna,
   StudentGithubActivity,
   ArchitectEvaluation,

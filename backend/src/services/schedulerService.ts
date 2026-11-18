@@ -373,7 +373,7 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
     // OH1: the AI draft of a countdown email must pass the screen (no price, offer,
     // discount or "free"; the Join link present; no other links). A draft that fails
     // is NOT sent: the step keeps its safe fallback body, and the reason is recorded.
-    if (eventCountdown && channel === 'email') {
+    if (eventCountdown && (channel === 'email' || channel === 'sms')) {
       const { screenEventReminderCopy } = await import('./openHouseCountdown');
       const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url);
       if (problems.length > 0) {
@@ -697,10 +697,14 @@ async function processScheduledActions(): Promise<void> {
       }
     }
 
-    // Pacing: spread emails evenly across the send window
+    // Pacing: spread emails evenly across the send window.
+    // OH1: an Open House countdown email or text is exempt. It is timed to the event,
+    // and spreading "today's" sends to the end of the window would land them after the
+    // Open House has started (where they are cancelled). Calls stay paced.
     const maxPerCycle = await calculatePacedLimit(campaignId, campaignSettings);
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);
-    if (campaignProcessed[campaignId] >= maxPerCycle) {
+    const pacingExempt = !!action.metadata?.event_countdown && channel !== 'voice';
+    if (!pacingExempt && campaignProcessed[campaignId] >= maxPerCycle) {
       // Reset back to pending so it can be picked up next cycle (don't leave stuck in processing)
       await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
       continue;
@@ -1327,7 +1331,20 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
   // Use AI-generated body as the voice prompt if AI generated, otherwise use stored voice_prompt template
   let prompt: string | undefined;
 
-  if (action.ai_generated && action.body) {
+  // OH1: an Open House countdown call. Maya's agent is told about the EVENT and what the
+  // person has done on the platform, and nothing to sell: no cohort, no seats, no price.
+  const countdownCall = !!action.metadata?.event_countdown;
+  if (countdownCall) {
+    const { countdownCallScript } = await import('./openHouseCountdown');
+    const { describePlatformActivity } = await import('./openHouseCountdownContext');
+    const activity = lead?.email ? await describePlatformActivity(lead.email).catch(() => '') : '';
+    const first = (lead?.name || '').trim().split(/\s+/)[0] || '';
+    prompt = countdownCallScript(
+      first && !first.includes('@') ? first : null,
+      { title: String(action.metadata?.event_title || 'Colaberry Open House'), when_label: String(action.metadata?.event_when || '') },
+      activity,
+    );
+  } else if (action.ai_generated && action.body) {
     // AI already generated the voice prompt instructions
     prompt = action.body;
   } else {
@@ -1349,10 +1366,15 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     }
   }
 
-  const nextCohort = await getNextCohort();
+  const nextCohort = countdownCall ? null : await getNextCohort();
   const conversationHistory = await buildConversationHistory(action.lead_id);
 
-  const context = {
+  const context = countdownCall ? {
+    lead_name: name,
+    lead_email: lead?.email || undefined,
+    conversation_history: conversationHistory,
+    step_goal: 'Help them and make them feel expected at the Open House. Do not sell.',
+  } : {
     lead_name: name,
     lead_company: lead?.company || undefined,
     lead_title: lead?.title || undefined,
@@ -1411,7 +1433,8 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
       provider: 'synthflow',
       provider_message_id: result.data?.call_id || result.data?.id || null,
       provider_response: result.data,
-      metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
+      // event_countdown tells the Synthflow webhook not to send its sales follow-up text.
+      metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false, ...(countdownCall ? { event_countdown: true } : {}) },
     }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
 
     console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
@@ -1460,6 +1483,9 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
     const result = await sendSmsViaGhl(ghlContactId, action.body || '');
     if (!result.success) {
       console.warn(`[Scheduler] GHL SMS failed for lead ${action.lead_id}: ${result.error}`);
+      // OH1: a text GHL never received was being recorded as sent. Throw, so the
+      // scheduler's retry/fail path records the truth.
+      throw new Error(`GHL SMS field update failed: ${result.error || 'unknown error'}`);
     }
     await addContactNote(
       ghlContactId,
@@ -1648,7 +1674,7 @@ function wrapEmailHtml(
   const senderEmail = tracking?.senderEmail || env.emailFrom;
   // OH1: Maya signs her campaign mail with her own title (the same one the
   // admissions-document email uses).
-  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / AI Systems Architect'
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / Forward Deployed AI Engineer'
     : senderEmail === 'maya@colaberry.com' ? 'Director of Admissions' : '';
   const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
@@ -2514,7 +2540,7 @@ export function startScheduler(): void {
     cron.schedule('0 8 * * *', () => {
       instrumentCronJob('BillingWatch', async () => {
         const { runBillingWatch } = await import('./billing/billingHealthReport');
-        const r = await runBillingWatch({ send: true });
+        const r = await runBillingWatch({ send: true, reconcile: true });
         console.log(`[Scheduler] BillingWatch: needsAttention=${r.needsAttention} sent=${r.sent}`);
       }).catch((err) => {
         console.error('[Scheduler] Billing watch error:', err);

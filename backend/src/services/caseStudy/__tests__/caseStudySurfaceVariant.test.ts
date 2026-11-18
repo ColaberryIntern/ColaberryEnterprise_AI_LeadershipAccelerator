@@ -23,8 +23,8 @@ const input = (content: CaseStudySnapshotContent, surfaceKey: CaseStudySurfaceKe
 });
 
 const builder: CaseStudyBuilderProfile = {
-  displayName: 'Jordan Unconsented', roleTitle: 'AI Systems Architect', organization: 'Colaberry', initials: 'J',
-  intro: ['Jordan joined as an intern and was hired.'], progression: ['Intern', 'Hired', 'AI Systems Architect'],
+  displayName: 'Jordan Unconsented', roleTitle: 'Forward Deployed AI Engineer', organization: 'Colaberry', initials: 'J',
+  intro: ['Jordan joined as an intern and was hired.'], progression: ['Intern', 'Hired', 'Forward Deployed AI Engineer'],
   contribution: 'Built the forecasting agent.', skills: [{ label: 'Workflow design', evidence: 'The extractor feeds the agent.' }],
   profileUrl: 'https://example.com/jordan', photoUrl: 'javascript:alert(1)',
   provenance: { source: 'user_confirmed', confirmedAt: '2026-09-16', note: 'confirmed by ali@colaberry.com' },
@@ -129,7 +129,7 @@ describe('a training variant', () => {
     const training = projectPublicDetail(input(content, 'training'));
     expect(training.contributors[0]).toEqual({ displayMode: 'role_only', role: 'Lead engineer', kind: 'colaberry_team' });
     expect(training.builder).toEqual({
-      name: null, roleTitle: 'AI Systems Architect', organization: 'Colaberry', initials: 'J', intro: [], progression: [],
+      name: null, roleTitle: 'Forward Deployed AI Engineer', organization: 'Colaberry', initials: 'J', intro: [], progression: [],
       contribution: 'Built the forecasting agent.', skills: [{ label: 'Workflow design', evidence: 'The extractor feeds the agent.' }],
       profileUrl: null, photoUrl: null, provenance: { source: 'user_confirmed', confirmedAt: '2026-09-16' },
     });
@@ -143,7 +143,7 @@ describe('a training variant', () => {
     expect(training.contributors[0]).toEqual({ displayMode: 'named', displayName: 'Jordan Unconsented', role: 'Lead engineer', kind: 'colaberry_team' });
     expect(training.builder?.name).toBe('Jordan Unconsented');
     expect(training.builder?.intro).toEqual(['Jordan joined as an intern and was hired.']);
-    expect(training.builder?.progression).toEqual(['Intern', 'Hired', 'AI Systems Architect']);
+    expect(training.builder?.progression).toEqual(['Intern', 'Hired', 'Forward Deployed AI Engineer']);
     expect(training.builder?.profileUrl).toBe('https://example.com/jordan');
     // A javascript: photo link is not a URL the page may use, consent or not.
     expect(training.builder?.photoUrl).toBeNull();

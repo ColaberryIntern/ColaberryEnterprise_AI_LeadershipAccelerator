@@ -20,7 +20,7 @@ import { SampleBadge } from './Claim';
  */
 
 const LEAD = [
-  { l: 'Average architect readiness', v: '63%', f: 'avg_readiness' },
+  { l: 'Average engineer readiness', v: '63%', f: 'avg_readiness' },
   { l: 'Where everyone sits, ranks 0–8', v: '9 levels', f: 'level_distribution' },
   { l: 'Builder XP by week', v: '412', f: 'builder_xp_by_week' },
   { l: 'Evidence shipped this week', v: '37', f: 'evidence_this_week' },
@@ -29,7 +29,7 @@ const LEAD = [
 
 const TEAM = [
   { l: 'Today’s next action', v: 'STORY-014' },
-  { l: 'Architect readiness', v: '82 of 100' },
+  { l: 'Engineer readiness', v: '82 of 100' },
   { l: 'Build streak', v: '17 days' },
   { l: 'Verified from commit', v: 'STORY-013' },
   { l: 'Next live session', v: 'in the same feed' },

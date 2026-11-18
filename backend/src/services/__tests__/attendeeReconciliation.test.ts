@@ -37,7 +37,7 @@ const mockRoster = getEventAttendeeEmails as jest.MockedFunction<typeof getEvent
 const EVENT = {
   announced: true,
   event_id: '2004289439668',
-  name: 'Colaberry AI Systems Architect Accelerator Open House',
+  name: 'Colaberry Forward Deployed AI Engineer Accelerator Open House',
   starts_at: '2026-11-20T00:30:00.000Z',
   rsvp_url: 'https://www.eventbrite.com/e/x-tickets-2004289439668',
 };

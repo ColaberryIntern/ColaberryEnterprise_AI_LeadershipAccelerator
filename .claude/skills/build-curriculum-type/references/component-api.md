@@ -144,7 +144,7 @@ Every `updateComponent` snapshots the pre-edit state into `component_versions` a
 is present):
 
 ```
-WEEK CONTEXT — this content is part of Week {week} of the AI Systems Architect Accelerator: "{title}".
+WEEK CONTEXT — this content is part of Week {week} of the Forward Deployed AI Engineer Accelerator: "{title}".
 Week focus: {purpose}
 Topics & competencies covered this week: {competencies}.
 Learning objectives: {learning_objectives}.

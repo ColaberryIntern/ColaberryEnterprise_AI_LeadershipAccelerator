@@ -27,7 +27,7 @@
 export function troubleshootingPrompt(storyLabel?: string): string {
   const story = (storyLabel || '').trim() || 'my current story';
   return [
-    `I am a student on the Colaberry AI Systems Architect Accelerator, working on ${story}.`,
+    `I am a student on the Colaberry Forward Deployed AI Engineer Accelerator, working on ${story}.`,
     'Something in my own code is not working and I would like your help fixing it.',
     '',
     'What I was trying to do:',

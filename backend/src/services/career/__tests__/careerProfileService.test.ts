@@ -31,7 +31,7 @@ const deliveryAdapter = adapters.deliveryAdapter as unknown as jest.Mock;
 const IDENTITY: CareerIdentity = {
   full_name: 'Jane Doe',
   email: 'jane@example.com',
-  title: 'AI Systems Architect',
+  title: 'Forward Deployed AI Engineer',
   company: 'Acme',
   linkedin_url: null,
   avatar_data_url: null,
@@ -164,7 +164,7 @@ describe('getCareerProfile — failure-first', () => {
 describe('composeNarrative — AI claim safety (plan §57)', () => {
   it('uses the learner\'s own title and marks its source', () => {
     const n = composeNarrative(IDENTITY, [CAP], [ART], []);
-    expect(n.headline).toBe('AI Systems Architect');
+    expect(n.headline).toBe('Forward Deployed AI Engineer');
     expect(n.headline_source).toBe('profile_title');
   });
 

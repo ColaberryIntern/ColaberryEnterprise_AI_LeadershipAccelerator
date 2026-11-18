@@ -34,7 +34,7 @@ const HTML_SIGNATURE = [
   '<table cellpadding="0" cellspacing="0" border="0" style="font-family: arial, sans-serif; font-size: 14px; color: #2d3748; border-left: 3px solid #1a365d; padding-left: 14px; margin-top: 20px;">',
   '  <tr><td>',
   '    <div style="font-weight: 700; font-size: 16px; color: #1a365d;">Ali Muwwakkil</div>',
-  '    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / AI Systems Architect</div>',
+  '    <div style="color: #2b6cb0; font-weight: 600;">Managing Director / Forward Deployed AI Engineer</div>',
   '    <div style="color: #718096;">Colaberry Inc.</div>',
   '    <div style="margin-top: 10px; color: #2d3748;">200 Chisholm Place, Suite 200, Plano, TX 75075</div>',
   '    <div style="color: #2d3748;"><a href="mailto:ali@colaberry.com" style="color: #2b6cb0; text-decoration: none;">ali@colaberry.com</a> &nbsp; <a href="https://enterprise.colaberry.ai" style="color: #2b6cb0; text-decoration: none;">enterprise.colaberry.ai</a></div>',
@@ -42,7 +42,7 @@ const HTML_SIGNATURE = [
   '</table>',
 ].join('\n');
 
-const PLAIN_SIGNATURE = '\n\nAli Muwwakkil\nManaging Director / AI Systems Architect\nColaberry Inc.\n\n200 Chisholm Place, Suite 200, Plano, TX 75075\nali@colaberry.com  |  enterprise.colaberry.ai';
+const PLAIN_SIGNATURE = '\n\nAli Muwwakkil\nManaging Director / Forward Deployed AI Engineer\nColaberry Inc.\n\n200 Chisholm Place, Suite 200, Plano, TX 75075\nali@colaberry.com  |  enterprise.colaberry.ai';
 
 const CAN_DO = [
   'See every lead in the shared queue (list plus detail with engagement history)',

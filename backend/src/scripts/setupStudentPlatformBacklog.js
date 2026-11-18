@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Create the "Student Platform Build" todolist in the AI Systems Architect
+ * Create the "Student Platform Build" todolist in the Forward Deployed AI Engineer
  * Accelerator project (Basecamp 47502609), derived from STUDENT_PLATFORM_BUILD_SPEC.md.
  *
  * Structure: one todolist -> a group per epic (+ Decisions + Design groups).
@@ -90,7 +90,7 @@ const GROUPS = [
     name: 'Design (Aleem) - mockups, Ali approves each',
     todos: [
       { c: 'Design: Student home / Command Center dashboard', who: ALEEM, due: D.design,
-        what: 'The most important screen: Today\'s One Priority + next-action queue + AI Architect Readiness score + current-week status + build-log feed.', build: 'Extends existing CoryHome.tsx. Enterprise executive tone (baseline-ui).', ref: 'BUILD_SPEC Section 9 #1', done: 'Figma mockup approved by Aleem + Ali.' },
+        what: 'The most important screen: Today\'s One Priority + next-action queue + Forward Deployed AI Engineer Readiness score + current-week status + build-log feed.', build: 'Extends existing CoryHome.tsx. Enterprise executive tone (baseline-ui).', ref: 'BUILD_SPEC Section 9 #1', done: 'Figma mockup approved by Aleem + Ali.' },
       { c: 'Design: Project builder flow (idea -> 10 questions -> requirements -> tasks)', who: ALEEM, due: D.design,
         what: 'The wizard a student uses to turn a raw idea into a requirements doc + task list.', build: 'Extends ProjectDnaWizard.tsx.', ref: 'BUILD_SPEC Section 9 #2 + Section 5', done: 'Mockup approved.' },
       { c: 'Design: Community feed + post composer (Skool-style)', who: ALEEM, due: D.design,
@@ -182,7 +182,7 @@ const GROUPS = [
       { c: 'Build: Tier-B showcase-artifact slots + AI drafting (demo / explainer / podcast / PPT / infographic)', who: KES_CB, due: D.e5b,
         what: 'Flexible showcase-artifact slots the system scaffolds; AI drafts each.', ref: 'BUILD_SPEC Section 5', done: 'Showcase slots exist; AI can draft each artifact type.' },
       { c: 'Build: Public shareable portfolio + readiness score wiring', who: KES, due: D.e5b,
-        what: 'A public, shareable portfolio page wired to the AI Architect Readiness score.', ref: 'BUILD_SPEC Section 6.D', done: 'Portfolio is shareable + shows readiness; tested.' },
+        what: 'A public, shareable portfolio page wired to the Forward Deployed AI Engineer Readiness score.', ref: 'BUILD_SPEC Section 6.D', done: 'Portfolio is shareable + shows readiness; tested.' },
       { c: 'GATE: Portfolio page design approved (Aleem + Ali)', who: ALI_ALEEM, due: D.appr, what: 'Design gate for the portfolio page.', done: 'Design approved.' },
       { c: 'APPROVE (Ali): sign off Portfolio + Artifacts', who: ALI, due: D.e5ok, what: 'Ali reviews + signs off the portfolio.', done: 'Ali has signed off Epic 5.' },
     ],

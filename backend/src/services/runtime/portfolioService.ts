@@ -26,7 +26,7 @@ export async function generateArtifact(enrollmentId: string, card: CardCtx, work
   let content: any = { work: (work || '').slice(0, 4000), kind };
 
   try {
-    const system = 'You convert a student\'s completed activity into a polished, employer-facing portfolio artifact for an AI Systems Architect. Return STRICT json.';
+    const system = 'You convert a student\'s completed activity into a polished, employer-facing portfolio artifact for a Forward Deployed AI Engineer. Return STRICT json.';
     const user = `Activity: "${card.title}" (${card.type}). Artifact kind: ${kind}.\nStudent work / notes:\n"""${(work || '').slice(0, 3000)}"""\n` +
       `Return json { "title": string, "summary": string (2 sentences, employer-facing), "sections": [{"heading": string, "body": string}], "skills_demonstrated": string[] }.`;
     const r = await chatJson('runtime_portfolio', system, user, undefined, 1400);

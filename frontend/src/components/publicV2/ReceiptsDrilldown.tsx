@@ -46,7 +46,7 @@ const LEVELS: Level[] = [
     k: 'Organization',
     who: 'Northwind Logistics',
     v: '63%',
-    sub: 'average architect readiness across everyone enrolled',
+    sub: 'average engineer readiness across everyone enrolled',
     rows: [
       { l: 'Members enrolled', r: '35' },
       { l: 'Evidence shipped this week', r: '37', note: '▲ 6' },

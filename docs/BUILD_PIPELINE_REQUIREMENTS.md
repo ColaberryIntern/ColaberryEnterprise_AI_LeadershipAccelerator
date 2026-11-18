@@ -20,7 +20,7 @@
 
 The **Student Build Pipeline (SBP)** turns a student's plain-language idea into a governed, buildable project: a versioned requirements document, a set of releases, a set of vertical-slice stories, and — for each story — a Claude Code prompt detailed enough that the student's own Claude Code session can execute it against their workspace repo with the requirements in hand.
 
-**Primary actor:** an enrolled student in the AI Systems Architect Accelerator.
+**Primary actor:** an enrolled student in the Forward Deployed AI Engineer Accelerator.
 **Design load:** 20 concurrent build starts sustained, 50 peak. Cohorts start together; the load is bursty by nature.
 **Trust posture:** a student may only ever read or write their own project. Generation is untrusted-input-in, structured-output-out.
 

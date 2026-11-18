@@ -79,8 +79,28 @@ ${(f.rows ?? []).length ? `<ul style="margin:8px 0 0;padding-left:18px;color:#4a
 }
 
 export async function runBillingWatch(
-  opts: { send?: boolean } = {},
+  opts: { send?: boolean; reconcile?: boolean } = {},
 ): Promise<{ needsAttention: boolean; sent: boolean; subject?: string; result: HealthResult }> {
+  // Ask PaySimple for declines the webhook never delivered BEFORE reading the book,
+  // so a decline found today shows up in today's report as past_due. A failure here
+  // must not cost the rest of the watch: it is logged and the checks still run.
+  if (opts.reconcile) {
+    try {
+      const { reconcileDeclinedScheduledCharges } = await import('./declinedChargeReconcile');
+      const rec = await reconcileDeclinedScheduledCharges({ execute: true });
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'info', service: 'billing-watch',
+        event: 'decline_reconcile_finished', outcome: 'success',
+        context: { lapsed: rec.rows.length, marked: rec.rows.filter((r) => r.marked).length, errors: rec.rows.filter((r) => r.error).length },
+      }));
+    } catch (err: any) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'error', service: 'billing-watch',
+        event: 'decline_reconcile_failed', outcome: 'failure',
+        error_class: err?.errorClass ?? 'UpstreamError', context: { message: err?.message },
+      }));
+    }
+  }
   const gateway = await getPaySimpleGatewayState();
   const result = await runBillingHealthCheck(gateway);
 

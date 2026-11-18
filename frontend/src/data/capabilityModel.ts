@@ -88,7 +88,7 @@ export const ILLUSTRATIVE_DASHBOARD: {
 export interface EcosystemPillar { icon: string; name: string; desc: string; }
 export const ECOSYSTEM_PILLARS: EcosystemPillar[] = [
   { icon: 'ri-graduation-cap-line', name: 'Learn, self-paced', desc: 'Structured, self-paced paths your people take on their own time. No cohort to wait for, start any day.' },
-  { icon: 'ri-medal-2-line', name: 'Get certified', desc: 'Work toward the Certified Anthropic AI Systems Architect credential (CCA-F). A credential that says they can ship.' },
+  { icon: 'ri-medal-2-line', name: 'Get certified', desc: 'Work toward the Certified Anthropic Forward Deployed AI Engineer credential (CCA-F). A credential that says they can ship.' },
   { icon: 'ri-tools-line', name: 'Build real projects', desc: 'Every path ends in a deployed AI build on your own workflows, guided end to end, not toy exercises.' },
   { icon: 'ri-team-line', name: 'Join the architect network', desc: 'A living network of AI Architects across companies and phases. Learn from people ahead of you and beside you.' },
   { icon: 'ri-live-line', name: 'Weekly live events', desc: 'Office hours, build sessions, and guest architects every week. Show up when you can, catch the replay when you cannot.' },

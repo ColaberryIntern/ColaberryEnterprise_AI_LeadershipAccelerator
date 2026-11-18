@@ -21,12 +21,12 @@ beforeEach(() => {
 
 describe('listHeadlineDrafts', () => {
   it('shows only drafts that differ from the live headline, oldest first', async () => {
-    q.mockResolvedValueOnce([[{ enrollment_id: EID, full_name: 'Ann Lee', title: 'Analyst', slug: 'ann-lee', approved_title: 'Data Analyst', headline_draft: ' AI Systems Architect ', updated_at: '2026-11-13T10:00:00Z' }]]);
+    q.mockResolvedValueOnce([[{ enrollment_id: EID, full_name: 'Ann Lee', title: 'Analyst', slug: 'ann-lee', approved_title: 'Data Analyst', headline_draft: ' Forward Deployed AI Engineer ', updated_at: '2026-11-13T10:00:00Z' }]]);
     const out = await listHeadlineDrafts();
     const sql = q.mock.calls[0][0] as string;
     expect(sql).toMatch(/IS DISTINCT FROM COALESCE\(p\.approved_identity->>'title', e\.title\)/);
     expect(sql).toMatch(/ORDER BY i\.updated_at ASC/);
-    expect(out).toEqual([{ enrollmentId: EID, name: 'Ann Lee', slug: 'ann-lee', live: 'Data Analyst', draft: 'AI Systems Architect', updatedAt: '2026-11-13T10:00:00.000Z' }]);
+    expect(out).toEqual([{ enrollmentId: EID, name: 'Ann Lee', slug: 'ann-lee', live: 'Data Analyst', draft: 'Forward Deployed AI Engineer', updatedAt: '2026-11-13T10:00:00.000Z' }]);
   });
 
   it('falls back to the profile title as "live" when the page was never approved', () => {
@@ -37,13 +37,13 @@ describe('listHeadlineDrafts', () => {
 describe('decideHeadline', () => {
   it('approve: clears the draft only if unchanged, then writes the profile title and the frozen headline, all in one transaction', async () => {
     q.mockResolvedValueOnce([[{ enrollment_id: EID }]]).mockResolvedValue([[]]);
-    await decideHeadline(EID, 'approve', ' AI Systems Architect ', 'ali@colaberry.com');
+    await decideHeadline(EID, 'approve', ' Forward Deployed AI Engineer ', 'ali@colaberry.com');
     expect(q).toHaveBeenCalledTimes(3);
     expect(q.mock.calls[0][0]).toMatch(/SET headline_draft = NULL[\s\S]*WHERE enrollment_id = \$1 AND btrim\(headline_draft\) = \$2/);
     expect(q.mock.calls[1][0]).toMatch(/UPDATE enrollments SET title = \$2 WHERE id = \$1/);
     expect(q.mock.calls[2][0]).toMatch(/jsonb_set\(approved_identity, '\{title\}'/);
     for (const [, opts] of q.mock.calls) {
-      expect(opts.bind).toEqual([EID, 'AI Systems Architect']);
+      expect(opts.bind).toEqual([EID, 'Forward Deployed AI Engineer']);
       expect(opts.transaction).toBe('TX');
     }
   });

@@ -30,7 +30,7 @@ const sqlMock: any = require('mssql');
  */
 const row = (over: Partial<CcppOpenHouseRow> = {}): CcppOpenHouseRow => ({
   EventId: '2004289439668',
-  Name: 'Colaberry AI Systems Architect Accelerator Open House',
+  Name: 'Colaberry Forward Deployed AI Engineer Accelerator Open House',
   StartDate: new Date('2026-11-19T18:30:00Z'),
   EndDate: new Date('2026-11-19T19:30:00Z'),
   Status: 'live',

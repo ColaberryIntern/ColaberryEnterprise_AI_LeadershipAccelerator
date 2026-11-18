@@ -92,7 +92,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
   // The prototype's arch per entrance (renderGate): learners, visitors, staff and partners each have their own; Workplace names say Colaberry Works.
   const house = p.workplace ? 'Colaberry Works' : 'Colaberry';
   const arch = explorer ? `${house} · Visitor entrance` : p.audience === 'staff' ? 'Colaberry · Staff entrance' : p.audience === 'business' ? `${house} · Partner entrance`
-    : p.workplace ? 'Colaberry Works · HQ Lobby' : 'Colaberry · AI Systems Architect Accelerator';
+    : p.workplace ? 'Colaberry Works · HQ Lobby' : 'Colaberry · Forward Deployed AI Engineer Accelerator';
   return (
     <div className={`cm-gate${opening ? ' is-opening' : ''}${done ? ' is-done' : ''}${p.workplace ? ' is-work' : ''}${p.reduceMotion ? ' is-reduced' : ''}`} role="dialog" aria-modal="true"
       aria-labelledby="cm-gate-greeting" data-testid="cm-gate"
@@ -115,7 +115,7 @@ export default function CampusGate(p: GateProps): React.ReactElement {
             <div className="ph" aria-hidden="true">{p.photo ? <img src={p.photo} alt="" data-testid="cm-gate-photo" /> : (p.initials || '·')}</div>
             <div>
               <b>{p.fullName || (explorer ? 'Explorer' : 'Welcome')}</b>
-              <small>{explorer ? 'Explorer · visitor pass' : partner ? (p.team?.company ?? 'Partner account') : staff ? 'Program staff · Colaberry' : 'AI Systems Architect Accelerator'}</small>
+              <small>{explorer ? 'Explorer · visitor pass' : partner ? (p.team?.company ?? 'Partner account') : staff ? 'Program staff · Colaberry' : 'Forward Deployed AI Engineer Accelerator'}</small>
               {explorer && <small>No card needed</small>}
               {staff && <span className="tier">STAFF</span>}
               {partner && <span className="tier">Business partner</span>}

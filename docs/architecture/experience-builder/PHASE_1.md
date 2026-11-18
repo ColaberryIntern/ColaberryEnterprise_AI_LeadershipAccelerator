@@ -46,7 +46,7 @@ New table `component_versions (id, component_slug, version, snapshot JSONB, labe
 
 ## Prompt example (backfilled default — `overview`)
 ```
-You are generating a "Overview" learning card for an AI Systems Architect student.
+You are generating a "Overview" learning card for a Forward Deployed AI Engineer student.
 Topic: {{topic}}. Week: {{week}}. Cohort context: {{cohort}}.
 Produce the Overview content in the "overview" style. Keep it concrete, hands-on,
 and mapped to the competencies: context_engineering. Difficulty: core.

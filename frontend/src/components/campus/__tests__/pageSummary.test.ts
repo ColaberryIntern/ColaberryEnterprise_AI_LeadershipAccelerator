@@ -21,7 +21,7 @@ describe('Classroom', () => {
     expect(s.card).toBe('/portal/runtime/c1');
     expect(s.doorName).toBe('Week 1');
     expect(s.sideTop!.title).toBe('Your status');
-    expect(s.sideTop!.rows.map((r) => [r.label, r.value])).toEqual([['Level', 'AI Enabled II'], ['Architect readiness', '25%'], ['Builder XP', '53'], ['Learning XP', '115'], ['Community XP', '11']]);
+    expect(s.sideTop!.rows.map((r) => [r.label, r.value])).toEqual([['Level', 'AI Enabled II'], ['Engineer readiness', '25%'], ['Builder XP', '53'], ['Learning XP', '115'], ['Community XP', '11']]);
   });
 
   it('all caught up: no Next step, no workstation (the room shows the plan step or a plain sign)', () => {

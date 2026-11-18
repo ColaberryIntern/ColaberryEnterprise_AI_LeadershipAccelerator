@@ -143,7 +143,7 @@ function PortalFreeSignupPage() {
           <span className="cbfs-badge">Preview access</span>
           <h1 className="cbfs-title">Start for $0</h1>
           <p className="cbfs-text">
-            Create an account to explore the AI Systems Architect Accelerator, RSVP to the next open house,
+            Create an account to explore the Forward Deployed AI Engineer Accelerator, RSVP to the next open house,
             and see your project take shape. No card needed.
           </p>
         </div>

@@ -70,12 +70,12 @@ const ExplorerPreviewBanner: React.FC<Props> = (p) => {
       ) : next ? (
         <>
           <h2 style={STYLE.h2}>Your next lesson is ready</h2>
-          <p style={STYLE.p}>Up next: <b>{next.title}</b>. Enroll in the AI Systems Architect Accelerator any time to unlock all 12 weeks, the live build classes and your certification.</p>
+          <p style={STYLE.p}>Up next: <b>{next.title}</b>. Enroll in the Forward Deployed AI Engineer Accelerator any time to unlock all 12 weeks, the live build classes and your certification.</p>
         </>
       ) : (
         <>
           <h2 style={STYLE.h2}>You&rsquo;re exploring AI, no card needed</h2>
-          <p style={STYLE.p}>Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live build classes, the community, and your certification.</p>
+          <p style={STYLE.p}>Enroll in the Forward Deployed AI Engineer Accelerator to unlock all 12 weeks, the live build classes, the community, and your certification.</p>
         </>
       )}
       <p style={STYLE.scroll} data-testid="te-banner-scroll-hint">

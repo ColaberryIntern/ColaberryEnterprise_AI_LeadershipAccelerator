@@ -342,8 +342,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       });
     }
 
-    // Send post-call SMS summary with CTA (fire-and-forget)
-    if (callCompleted && transcript && commLog.lead_id) {
+    // Send post-call SMS summary with CTA (fire-and-forget).
+    // OH1: never after an Open House countdown call. That text pushes "book a strategy
+    // call", and the countdown call is help-not-sell (Ali, 2026-11-17).
+    if (callCompleted && transcript && commLog.lead_id && !commMeta.event_countdown) {
       sendPostCallSms(commLog.lead_id, transcript, call_id).catch((err: any) => {
         console.warn('[Synthflow Webhook] Post-call SMS failed:', err.message);
       });

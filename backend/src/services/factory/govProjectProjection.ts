@@ -703,14 +703,20 @@ export async function getStudentGovProjectView(deliveryProjectId: string, viewer
   // recording-bound STAFF ticket minted from the admin's identity, so the <video> plays against the existing
   // /api/internship-video route without a session. The same owner (enrollment id + name) feeds the read-only
   // "View as them" link. Withheld from an intern (viewerCanVerify false). Additive + best-effort.
-  if (viewerCanVerify && viewerIdentityId) {
+  if (viewerCanVerify) {
     try {
       const { resolveGovContractOwner, listGovDemoVideos } = await import('./govDemoVideos');
       const owner = await resolveGovContractOwner(deliveryProjectId);
       if (owner) {
         view.ownerEnrollmentId = owner.enrollmentId;
         view.ownerName = owner.name;
-        view.demoVideos = await listGovDemoVideos(owner.enrollmentId, viewerIdentityId);
+        // PICKUP MUST NOT DEPEND ON A RESOLVABLE ADMIN IDENTITY. The ticket's staffIdentity is only an audit
+        // label — the stream route (internVideoStreamRoutes) authorizes on the signed, recording-bound STAFF
+        // ticket and the recording id, never on this string. resolveGovProjectActor returns null (so this arg is
+        // null) whenever the admin's login email has no PlatformIdentity row, which would otherwise SILENTLY skip
+        // the whole loader and hide a landed recording. So load regardless of identity, with a stable fallback
+        // label. (An intern never reaches here: viewerCanVerify is false for them.)
+        view.demoVideos = await listGovDemoVideos(owner.enrollmentId, viewerIdentityId ?? 'gov-cockpit');
       }
     } catch { /* additive; demoVideos/owner stay undefined */ }
   }

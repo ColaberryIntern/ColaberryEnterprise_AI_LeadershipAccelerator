@@ -37,7 +37,7 @@ export function classroomSummary(feed: ClassroomFeed): PageSummary {
     next: card ? { kicker: `Your next step · ${card.student_label}`, points: sumCardPoints(card.points), title: card.title, sub: card.subtitle ?? null, cta: 'Open' } : null,
     sideTop: prog ? { title: 'Your status', rows: [
       { label: 'Level', value: prog.band?.rungName ?? titleCase(prog.level.slug) },
-      { label: 'Architect readiness', value: `${readiness}%`, pct: readiness },
+      { label: 'Engineer readiness', value: `${readiness}%`, pct: readiness },
       { label: 'Builder XP', value: String(prog.xp.builder) },
       { label: 'Learning XP', value: String(prog.xp.learning) },
       { label: 'Community XP', value: String(prog.xp.community) },

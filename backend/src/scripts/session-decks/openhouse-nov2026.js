@@ -320,7 +320,7 @@ const TEACH = [
   {
     segment: 'program', eyebrow: '🗺️ The 12 weeks',
     title: 'Twelve weeks, four intensives, one system you build from scratch',
-    body: 'The AI Systems Architect Accelerator is a twelve-week, project-based program powered by Anthropic and Claude Code. You arrive with an idea and leave with a deployed AI system. Every week has an Architecture Day where you learn how the system should be designed, and a Build Day where you build it, live, with your instructor.',
+    body: 'The Forward Deployed AI Engineer Accelerator is a twelve-week, project-based program powered by Anthropic and Claude Code. You arrive with an idea and leave with a deployed AI system. Every week has an Architecture Day where you learn how the system should be designed, and a Build Day where you build it, live, with your instructor.',
     bullets: [
       'Weeks 1–3 · Build Your AI Foundation',
       'Weeks 4–6 · Create Your AI Team (agents)',

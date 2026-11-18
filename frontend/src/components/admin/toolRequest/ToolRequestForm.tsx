@@ -12,12 +12,14 @@ import {
   TOOL_PURPOSE_MAX,
   TOOL_RUN_FREQUENCIES,
   TOOL_SIDE_EFFECTS_MAX,
+  draftToolRequest,
   errorMessage,
   fetchActorRoster,
   fetchMyDomainCapabilities,
   fileChangeRequest,
   toolRequestIssues,
   type ChangeRequest,
+  type DraftGrounding,
   type ProjectedCapability,
   type ToolRequestIssue,
   type ToolRequestSubmission,
@@ -202,8 +204,93 @@ export default function ToolRequestForm({
   const [actors, setActors] = useState<string[]>([]);
   const [rosterAbsent, setRosterAbsent] = useState(false);
 
+  // AF11.12 — the drafter. Separate problem state from `problem`, because a drafter that is
+  // unreachable must not render as "could not file that request": the form is still fillable by
+  // hand and saying otherwise would stop somebody who could have carried on.
+  const [intent, setIntent] = useState('');
+  const [drafting, setDrafting] = useState<'' | 'from_intent' | 'suggest'>('');
+  const [draftProblem, setDraftProblem] = useState('');
+  const [draftNote, setDraftNote] = useState('');
+  const [grounding, setGrounding] = useState<DraftGrounding | null>(null);
+  /**
+   * AF11.13 — the drafted ten-block case, held until the request is filed and sent with it.
+   *
+   * Held rather than rendered as twenty more inputs: the case is what the APPROVER reads, and
+   * putting it on the filing form would double a form that is already long. The builder edits it
+   * on the request after filing, which is where the review console already shows it.
+   */
+  const [draftedPackage, setDraftedPackage] = useState<Record<string, unknown> | null>(null);
+
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  /**
+   * Load a draft into the fields.
+   *
+   * Every value is written through the SAME `FormState` the typed version uses, so from here on
+   * there is no such thing as a drafted request: there is a form with text in it. A field the
+   * drafter omitted is left exactly as it was rather than blanked, because a second draft should
+   * not silently discard something already corrected by hand.
+   */
+  function applyDraft(detail: ToolRequestSubmission, title: string) {
+    setForm((prev) => {
+      const str = (v: string | null | undefined, fallback: string) =>
+        (typeof v === 'string' && v.trim() ? v : fallback);
+      const list = (v: ReadonlyArray<string> | undefined, fallback: string[]) =>
+        (Array.isArray(v) ? [...v] : fallback);
+      const bool = (v: boolean | null | undefined, fallback: boolean | null) =>
+        (typeof v === 'boolean' ? v : fallback);
+      return {
+        ...prev,
+        title: title.trim() || prev.title,
+        tool_name: str(detail.tool_name, prev.tool_name),
+        purpose: str(detail.purpose, prev.purpose),
+        reads: list(detail.reads, prev.reads),
+        produces: list(detail.produces, prev.produces),
+        read_datasets: list(detail.read_datasets, prev.read_datasets),
+        capability_id: str(detail.capability_id, prev.capability_id),
+        task_unblocked: str(detail.task_unblocked, prev.task_unblocked),
+        manual_today: str(detail.manual_today, prev.manual_today),
+        acts_on_output: str(detail.acts_on_output, prev.acts_on_output),
+        judged_threshold: str(detail.judged_threshold, prev.judged_threshold),
+        judged_measured_from: str(detail.judged_measured_from, prev.judged_measured_from),
+        tried_in_product: str(detail.tried_in_product, prev.tried_in_product),
+        missing_from_product: str(detail.missing_from_product, prev.missing_from_product),
+        needed_by: str(detail.needed_by, prev.needed_by),
+        run_frequency: str(detail.run_frequency, prev.run_frequency),
+        touches: list(detail.touches, prev.touches),
+        environment: str(detail.environment, prev.environment),
+        inputs: list(detail.inputs, prev.inputs),
+        writes: bool(detail.writes, prev.writes),
+        side_effects: str(detail.side_effects, prev.side_effects),
+        reversible: bool(detail.reversible, prev.reversible),
+        reversibility_note: str(detail.reversibility_note, prev.reversibility_note),
+      };
+    });
+  }
+
+  async function onDraft(mode: 'from_intent' | 'suggest') {
+    setDraftProblem('');
+    setDraftNote('');
+    // Clearing the previous refusals too: they were about the previous text, and leaving them
+    // under fields the drafter has just rewritten would point at the wrong thing.
+    setIssues([]);
+    setProblem('');
+    setDrafting(mode);
+    try {
+      const d = await draftToolRequest(domainKey, mode === 'from_intent' ? intent : null);
+      applyDraft(d.tool_request, d.title);
+      setDraftedPackage(
+        d.decision_package && Object.keys(d.decision_package).length > 0 ? d.decision_package : null,
+      );
+      setGrounding(d.grounded_in);
+      setDraftNote(d.note);
+    } catch (e) {
+      setDraftProblem(errorMessage(e, 'Could not draft that just now. You can still fill it in.'));
+    } finally {
+      setDrafting('');
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -313,9 +400,16 @@ export default function ToolRequestForm({
         title: form.title.trim(),
         kind: 'tool',
         tool_request,
+        // AF11.13 — the drafted case travels with the request, so it arrives finished. Absent
+        // when nothing was drafted, which files exactly as before.
+        ...(draftedPackage ? { decision_package: draftedPackage } : {}),
       });
       setForm(EMPTY);
-      setFiled('Filed. Nothing is built yet: somebody will read it and decide.');
+      setDraftedPackage(null);
+      setFiled(draftedPackage
+        ? 'Filed, with its case attached. Nothing is built yet: somebody will read it and decide. '
+          + 'The simulated run is still blank, so it is not in front of anyone until that is done.'
+        : 'Filed. Nothing is built yet: somebody will read it and decide.');
       onFiled(created);
     } catch (err) {
       // The form is NOT cleared. See the header.
@@ -342,6 +436,78 @@ export default function ToolRequestForm({
         This is the scope sheet. It asks more than a change request does because approving it lets
         an agent act on real systems. Nothing is built by filing it.
       </p>
+
+      {/*
+        AF11.12 — the drafter.
+        Above the fields rather than beside the submit button, because its job is to save somebody
+        the blank page, and a control that does that is useless once they have filled it in.
+      */}
+      <div className="border rounded p-3 mb-4 bg-light" data-testid="tool-request-drafter">
+        <div className="fw-semibold small mb-1">Let the AI write the first draft</div>
+        <div className="form-text mb-2">
+          Say what you want the tool to do and it fills this in. Read it, change what is wrong,
+          then file it. You are not expected to come up with every field yourself.
+        </div>
+        <div className="d-flex gap-2 flex-wrap align-items-start">
+          <input
+            className="form-control form-control-sm"
+            style={{ maxWidth: 420 }}
+            id="tr-intent"
+            aria-label="What do you want the tool to do"
+            placeholder="e.g. scan last week's calls and tell me which ones went badly"
+            value={intent}
+            maxLength={2000}
+            disabled={drafting !== ''}
+            onChange={(e) => setIntent(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            data-testid="draft-from-intent"
+            disabled={drafting !== '' || intent.trim().length === 0}
+            onClick={() => onDraft('from_intent')}
+          >
+            {drafting === 'from_intent' ? 'Drafting…' : 'Draft this for me'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-secondary btn-sm"
+            data-testid="draft-suggest"
+            disabled={drafting !== ''}
+            onClick={() => onDraft('suggest')}
+          >
+            {drafting === 'suggest' ? 'Thinking…' : 'Suggest one for me'}
+          </button>
+        </div>
+
+        {draftProblem && (
+          <div className="alert alert-warning small mt-2 mb-0" role="alert" data-testid="draft-problem">
+            {draftProblem}
+          </div>
+        )}
+        {draftNote && (
+          <div className="form-text mt-2" data-testid="draft-note">{draftNote}</div>
+        )}
+        {/*
+          What it was able to write against. Shown because a blank `acts_on_output` after a draft
+          has two very different causes, and the builder can only act on one of them.
+        */}
+        {draftedPackage && (
+          <div className="form-text mt-2" data-testid="draft-package">
+            It also wrote the case for deciding this: the summary, the problem, the options and
+            the recommendation. That goes with the request when you file it. The simulated run is
+            left blank on purpose, because somebody has to actually run it.
+          </div>
+        )}
+        {grounding && (
+          <div className="form-text mt-1" data-testid="draft-grounding">
+            Written against {grounding.capabilities} capabilities, {grounding.datasets} datasets
+            {grounding.actor_roster_absent
+              ? ', and no people list, so it left the person who acts on the output blank.'
+              : ` and ${grounding.actors} people.`}
+          </div>
+        )}
+      </div>
 
       {/* Unmapped refusals, and the ones about the request rather than a field. */}
       {byField.__form && byField.__form.length > 0 && (

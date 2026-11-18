@@ -380,7 +380,7 @@ function SignupV2(): React.ReactElement {
             <img
               className="cbv2-shot"
               src="/site-v2/shot-hero-dashboard.png"
-              alt="The organization readiness dashboard as it opens: average architect readiness, builder XP, evidence shipped and evaluations passed for a sample company."
+              alt="The organization readiness dashboard as it opens: average engineer readiness, builder XP, evidence shipped and evaluations passed for a sample company."
               loading="lazy"
               decoding="async"
             />

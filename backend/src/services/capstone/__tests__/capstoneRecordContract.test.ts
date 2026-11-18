@@ -30,7 +30,7 @@ const record = (over: Partial<CapstoneRecord> = {}): CapstoneRecord => ({
   schema_version: 1,
   identity: {
     full_name: 'Dana Okoye',
-    headline: 'AI Systems Architect',
+    headline: 'Forward Deployed AI Engineer',
     cohort_name: 'Cohort - July 2026',
     repo_url: 'https://github.com/dana/architect-workspace',
     demo_url: 'https://youtu.be/abc',

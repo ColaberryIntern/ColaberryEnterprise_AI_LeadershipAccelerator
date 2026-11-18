@@ -1,5 +1,5 @@
 /**
- * communityRituals — the 12 weekly Community Rituals for the AI Systems Architect
+ * communityRituals — the 12 weekly Community Rituals for the Forward Deployed AI Engineer
  * Accelerator. The end-of-week `community_discussion` card rotates: each week runs
  * a different social ritual, tied to what students just built, always tagged with
  * the week. Cohort Wins (Week 5) is one of the twelve.
@@ -260,7 +260,7 @@ export const RITUALS: Record<number, RitualConfig> = {
   },
   12: {
     key: 'architect_manifesto', week: 12, name: 'Architect Manifesto', icon: '🎓', accent: GREEN, category: 'Wins',
-    ask: "You're an AI Systems Architect now. What did you build, who have you become, and what's your commitment for what's next?",
+    ask: "You're a Forward Deployed AI Engineer now. What did you build, who have you become, and what's your commitment for what's next?",
     lead: 'The finale. Capstone, identity, and a commitment for what comes next, all on one wall.',
     postCta: 'Post my manifesto 🎉',
     fields: [

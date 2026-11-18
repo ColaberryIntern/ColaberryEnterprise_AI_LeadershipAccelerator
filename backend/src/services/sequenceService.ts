@@ -447,6 +447,15 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     let scheduledFor: Date;
     if (isEventTMinus) {
       if (!openHouseEvent || step.minutes_before_event == null) continue;
+      // A countdown call or text goes only to someone with a phone and express consent
+      // for that channel (TCPA). Everyone else gets the emails only.
+      if (channel === 'voice' || channel === 'sms') {
+        const { mayContactByPhone } = await import('./openHouseCountdown');
+        if (!(await mayContactByPhone(channel, leadId, lead.phone))) {
+          console.log(`[Sequence] Event countdown: no ${channel} consent or phone for lead ${leadId}, skipping step ${i + 1}`);
+          continue;
+        }
+      }
       const { eventStepTime } = await import('./openHouseCountdown');
       const at = eventStepTime(openHouseEvent.starts_at, step.minutes_before_event, now);
       if (!at) {
@@ -494,10 +503,13 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
     );
     // OH1: an event-countdown email always carries a safe, true fallback body with the
     // Join link, so a failed or rejected AI draft never leaves it empty.
-    if (isEventTMinus && openHouseEvent && channel === 'email') {
-      const { fallbackReminderBody } = await import('./openHouseCountdown');
+    if (isEventTMinus && openHouseEvent && (channel === 'email' || channel === 'sms')) {
+      const { fallbackReminderBody, fallbackReminderSms } = await import('./openHouseCountdown');
       const first = (lead.name || '').trim().split(/\s+/)[0] || '';
-      body = fallbackReminderBody(first && !first.includes('@') ? first : null, openHouseEvent, step.minutes_before_event ?? 0);
+      const firstName = first && !first.includes('@') ? first : null;
+      body = channel === 'sms'
+        ? fallbackReminderSms(firstName, openHouseEvent)
+        : fallbackReminderBody(firstName, openHouseEvent, step.minutes_before_event ?? 0);
     }
 
     const action = await ScheduledEmail.create({

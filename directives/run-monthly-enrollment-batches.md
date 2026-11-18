@@ -1,7 +1,7 @@
 # Run monthly enrollment batches
 
 **Status:** active from 2026-11-05. Decided by Ali Muwwakkil with Taiwo on 2026-11-05.
-This supersedes fixed-start cohorts for the AI Systems Architect Accelerator.
+This supersedes fixed-start cohorts for the Forward Deployed AI Engineer Accelerator.
 
 ## Purpose
 
@@ -40,7 +40,7 @@ Nothing in this model asks a member to wait for a date before beginning.
 | The month being opened | The calendar. One batch per month, no exceptions. |
 | `cohorts` row for that month | Created ahead of time by the batch-rollover step below. |
 | Orientation slot | First **Monday** of the following month, 18:30-20:00 America/Chicago - the slot the November 2026 cohort already used, so it is the one members expect. |
-| `program_id` | `92b98a72-8681-4f04-8ba1-16a18334cd0b` (AI Systems Architect Accelerator), the value the July and November 2026 cohorts carry. |
+| `program_id` | `92b98a72-8681-4f04-8ba1-16a18334cd0b` (Forward Deployed AI Engineer Accelerator), the value the July and November 2026 cohorts carry. |
 | WhatsApp group | Created by Jackie. Not automated; there is no WhatsApp integration in this repo. |
 | Production DB access | `ssh root@95.216.199.47`, then `docker exec accelerator-backend node <script>`. |
 

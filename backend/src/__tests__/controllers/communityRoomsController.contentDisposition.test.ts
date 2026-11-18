@@ -3,7 +3,7 @@ import { contentDispositionHeader } from '../../controllers/communityRoomsContro
 
 /**
  * contentDispositionHeader — found live 2026-08-05: a recording titled
- * "July 2026 - AI Systems Architect — recording" (em-dash) crashed the
+ * "July 2026 - Forward Deployed AI Engineer — recording" (em-dash) crashed the
  * download route with Node's ERR_INVALID_CHAR, because HTTP header values
  * must be Latin-1 and the raw title was interpolated straight into
  * Content-Disposition. Session/room titles routinely carry em-dashes and
@@ -21,10 +21,10 @@ function assertValidHeaderValue(value: string): void {
 
 describe('contentDispositionHeader', () => {
   it('produces a header Node accepts for a title containing an em-dash and middle-dot', () => {
-    const header = contentDispositionHeader('July 2026 - AI Systems Architect — recording');
+    const header = contentDispositionHeader('July 2026 - Forward Deployed AI Engineer — recording');
     assertValidHeaderValue(header);
-    expect(header).toContain('filename="July 2026 - AI Systems Architect _ recording"');
-    expect(header).toContain("filename*=UTF-8''July%202026%20-%20AI%20Systems%20Architect%20%E2%80%94%20recording");
+    expect(header).toContain('filename="July 2026 - Forward Deployed AI Engineer _ recording"');
+    expect(header).toContain("filename*=UTF-8''July%202026%20-%20Forward%20Deployed%20AI%20Engineer%20%E2%80%94%20recording");
   });
 
   it('produces a header Node accepts for a title with emoji and accented characters', () => {

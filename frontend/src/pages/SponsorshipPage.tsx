@@ -115,7 +115,7 @@ const HOW_IT_WORKS: Step[] = [
   {
     n: '05',
     title: 'They get certified',
-    body: 'Builders earn the Certified Anthropic AI Systems Architect credential and join a standing network of architects across companies and phases.',
+    body: 'Builders earn the Certified Anthropic Forward Deployed AI Engineer credential and join a standing network of architects across companies and phases.',
   },
 ];
 
@@ -138,7 +138,7 @@ const WHAT_YOU_GET: Feature[] = [
   {
     icon: '\u{1F393}',
     title: 'A credential and a network',
-    body: 'Graduates earn the Certified Anthropic AI Systems Architect credential and stay in a network of architects across companies and phases.',
+    body: 'Graduates earn the Certified Anthropic Forward Deployed AI Engineer credential and stay in a network of architects across companies and phases.',
   },
 ];
 
@@ -447,7 +447,7 @@ function SponsorshipPage() {
               badge="Certification and network"
               tone="green"
               title="A credential your people earn, and a network they keep"
-              lead="Graduates earn the Certified Anthropic AI Systems Architect credential, CCA-F prep, a defensible signal of who can build. They join a standing network of architects across companies and phases, where capability compounds long after any course ends."
+              lead="Graduates earn the Certified Anthropic Forward Deployed AI Engineer credential, CCA-F prep, a defensible signal of who can build. They join a standing network of architects across companies and phases, where capability compounds long after any course ends."
             />
             <ArchitectNetwork />
           </div>

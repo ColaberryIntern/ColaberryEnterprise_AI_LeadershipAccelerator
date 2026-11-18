@@ -12,7 +12,7 @@ import {
 
 const OLD_QUESTIONS = [{ question: 'What is generative AI primarily used for?', options: ['a', 'b', 'c', 'd'], correct_index: 0 }];
 const YOUTUBE_VIDEO = { url: 'https://www.youtube.com/watch?v=cCFr2qc5ME8', poster: 'https://i.ytimg.com/vi/cCFr2qc5ME8/hqdefault.jpg', presenter: 'Colaberry School Of Data & AI', duration_seconds: 213 };
-const OLD_TITLE = 'Video: AI Systems Architect Accelerator | Start Your Learning Journey';
+const OLD_TITLE = 'Video: Forward Deployed AI Engineer Accelerator | Start Your Learning Journey';
 
 function prodCards(): [CardState, CardState, CardState] {
   return [

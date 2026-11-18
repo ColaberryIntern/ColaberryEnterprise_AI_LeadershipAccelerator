@@ -48,7 +48,7 @@ const arr = (v: any): string[] => (Array.isArray(v) ? v.map((x) => String(x)).fi
  */
 export function buildBlueprintPromptText(bp: BlueprintContextFields): string {
   const lines: string[] = [
-    `WEEK CONTEXT — this content is part of Week ${bp.week} of the AI Systems Architect Accelerator: "${bp.title}".`,
+    `WEEK CONTEXT — this content is part of Week ${bp.week} of the Forward Deployed AI Engineer Accelerator: "${bp.title}".`,
   ];
   if (bp.purpose) lines.push(`Week focus: ${bp.purpose}`);
   if (bp.competencies.length) lines.push(`Topics & competencies covered this week: ${bp.competencies.join(', ')}.`);

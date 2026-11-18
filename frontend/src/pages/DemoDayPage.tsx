@@ -372,10 +372,10 @@ function DemoDayPage() {
           <div className="cbdd-cred">
             <div className="seal" aria-hidden>🏅</div>
             <div className="ct">
-              <h3>Every finalist earns the Certified Anthropic AI Systems Architect path.</h3>
+              <h3>Every finalist earns the Certified Anthropic Forward Deployed AI Engineer path.</h3>
               <p>
                 Crossing the Demo Day stage is the capstone of the 12-week program. Winners and finalists
-                graduate as Certified Anthropic AI Systems Architects (CCA-F prep) — proof they can design and
+                graduate as Certified Anthropic Forward Deployed AI Engineers (CCA-F prep) — proof they can design and
                 ship production AI in Anthropic-partner hands, not just talk about it.
               </p>
             </div>
@@ -402,7 +402,7 @@ function DemoDayPage() {
               title="Five minutes to show what you shipped."
               body={[
                 'Each finalist gets the room: peers, mentors, and the sponsoring employers who funded their seat. No slideware — a working build, a live demo, and the story of the real problem it solves.',
-                'It is the moment the 12-week program pays off. The people who present here trained hands-on with Claude Code and graduate on the Certified Anthropic AI Systems Architect path.',
+                'It is the moment the 12-week program pays off. The people who present here trained hands-on with Claude Code and graduate on the Certified Anthropic Forward Deployed AI Engineer path.',
               ]}
               caption="Season 2 finals — capstone presentations, live online."
               side="right"

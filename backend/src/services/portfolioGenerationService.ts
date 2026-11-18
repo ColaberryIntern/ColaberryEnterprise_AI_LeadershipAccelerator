@@ -350,7 +350,7 @@ function buildReadme(metadata: ProjectMetadata, portfolio: PortfolioStructure): 
   if (metadata.industry) lines.push(`**Industry:** ${metadata.industry}`);
   lines.push(`**Project Stage:** ${metadata.project_stage}`);
   if (portfolio.average_score != null) lines.push(`**Average Artifact Score:** ${portfolio.average_score}%`);
-  if (portfolio.readiness_score != null) lines.push(`**AI Architect Readiness Score:** ${portfolio.readiness_score}/100`);
+  if (portfolio.readiness_score != null) lines.push(`**Forward Deployed AI Engineer Readiness Score:** ${portfolio.readiness_score}/100`);
   lines.push('');
 
   if (metadata.primary_business_problem) {

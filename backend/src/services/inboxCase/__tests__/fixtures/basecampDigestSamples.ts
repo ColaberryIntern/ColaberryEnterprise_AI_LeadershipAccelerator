@@ -13,7 +13,7 @@
 
 export const DIGEST_SAMPLE_12A = `These to-dos are due…\r
 \r
-From: AI Systems Architect Accelerator ---\r
+From: Forward Deployed AI Engineer Accelerator ---\r
 \r
 Website - enterprise.colaberry.ai\r
 ▢ Final review and approval of enterprise.colaberry.ai • Due: Jul 10 • Assigned to: Ali M. \r
@@ -52,7 +52,7 @@ https://app.basecamp.com/3945211/my/assignments\r
 
 export const DIGEST_SAMPLE_12B = `These to-dos are due…\r
 \r
-From: AI Systems Architect Accelerator ---\r
+From: Forward Deployed AI Engineer Accelerator ---\r
 \r
 Student Platform Build\r
 ▢ Rebrand Student Platform as Powered by Refactored AI • Due: Jul 13 • Assigned to: Ali M. \r
@@ -97,7 +97,7 @@ https://app.basecamp.com/3945211/my/assignments\r
 // project, the real structural stress test for the parser.
 export const DIGEST_SAMPLE_42 = `These to-dos are due…\r
 \r
-From: AI Systems Architect Accelerator ---\r
+From: Forward Deployed AI Engineer Accelerator ---\r
 \r
 Student Platform Build: Epic 4 - Community + Gamification [Kes + Aleem]\r
 ▢ 🧍 APPROVE (Ali): sign off Community + Gamification • Due: Jul 16 • Assigned to: Ali M. \r

@@ -9,7 +9,7 @@ window.HUB_DATA = {
 
   // Always-injected facts for the assistant (kept tight).
   core: [
-    "Program public name: AI Systems Architect Accelerator, powered by Anthropic + Claude Code.",
+    "Program public name: Forward Deployed AI Engineer Accelerator, powered by Anthropic + Claude Code.",
     "Tagline: Learn With Claude. Build Through Colaberry. Deploy In The Real World.",
     "It is a 12-week program that moves working professionals, career changers, builders, and technical professionals from AI consumer to AI builder.",
     "Journey: Weeks 1-3 Build Your AI Foundation, Weeks 4-6 Create Your AI Team, Weeks 7-9 Connect AI To The Real World, Weeks 10-12 Design AI That Scales.",
@@ -44,7 +44,7 @@ window.HUB_DATA = {
     // ---------- campaign ----------
     { id:"cmp1", category:"campaign", doc:"campaign-brief.html", tags:["goal","objective","why"],
       q:"What is this campaign and what is the single goal?",
-      a:"It is the marketing push for the AI Systems Architect Accelerator. The single goal is to generate free registrations for the Open House on July 16, then convert attendees into the Founding Cohort. Every post and email drives to the Open House." },
+      a:"It is the marketing push for the Forward Deployed AI Engineer Accelerator. The single goal is to generate free registrations for the Open House on July 16, then convert attendees into the Founding Cohort. Every post and email drives to the Open House." },
     { id:"cmp2", category:"campaign", doc:"campaign-brief.html", tags:["funnel","flow","stages"],
       q:"What is the funnel?",
       a:"Alumni, dropouts, and prospects see awareness content on social and email, register for the free Open House on July 16, attend (where pricing is revealed), and enroll in the Founding Cohort, which kicks off July 23." },
@@ -178,7 +178,7 @@ window.HUB_DATA = {
 
     // ---------- program ----------
     { id:"prg1", category:"program", doc:"program-fact-sheet.html", tags:["what is it","program","overview"],
-      q:"What is the AI Systems Architect Accelerator?",
+      q:"What is the Forward Deployed AI Engineer Accelerator?",
       a:"A 12-week, implementation-focused program that moves people from AI consumer to AI builder. You learn with Claude and modern AI agents, build real systems, and finish with a deployed system, a portfolio, and the Anthropic Architect certification." },
     { id:"prg2", category:"program", doc:"program-fact-sheet.html", tags:["who is it for","audience","prerequisites"],
       q:"Who is it for?",

@@ -133,7 +133,7 @@ const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initia
     composerApi.courses().then((cs) => {
       if (cancelled) return;
       setCourses(cs);
-      const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+      const def = cs.find((c) => /forward deployed|architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
       setCourseId((cur) => cur || def?.id || '');
     }).catch(() => {});
     return () => { cancelled = true; };

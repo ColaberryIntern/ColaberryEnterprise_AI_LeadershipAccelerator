@@ -25,7 +25,10 @@ import * as dns from 'dns/promises';
 import * as fs from 'fs';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { OPEN_HOUSE_COUNTDOWN_KEY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy, fallbackReminderBody } from '../services/openHouseCountdown';
+import {
+  OPEN_HOUSE_COUNTDOWN_KEY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy,
+  fallbackReminderBody, fallbackReminderSms, countdownCallScript,
+} from '../services/openHouseCountdown';
 import type { SequenceStep } from '../models/FollowUpSequence';
 
 const MAYA_EMAIL = 'maya@colaberry.com';
@@ -34,7 +37,7 @@ const EMAIL_DOMAIN = 'colaberry.com';
 const SEQUENCE_NAME = 'Open House Countdown (Maya)';
 const CAMPAIGN_NAME = 'Open House Countdown (Maya)';
 
-export const MAYA_SYSTEM_PROMPT = `You are Maya, Director of Admissions at Colaberry. You write to people who registered for a Colaberry Open House, a live online session about the AI Systems Architect Accelerator.
+export const MAYA_SYSTEM_PROMPT = `You are Maya, Director of Admissions at Colaberry. You write to people who registered for a Colaberry Open House, a live online session about the Forward Deployed AI Engineer Accelerator.
 
 Your job in these emails is to help them show up: remind them warmly, make it easy to join, and make them feel expected. You are not selling. Any offer is shared live at the Open House, never in email.
 
@@ -63,16 +66,63 @@ export const COUNTDOWN_STEPS: SequenceStep[] = [
     ai_tone: 'friendly, brief',
   },
   {
+    // Day of, noon CT for a 6:30 PM Open House. Only people with a phone AND express
+    // voice consent are scheduled. The script is countdownCallScript (help, not sell).
     delay_days: 0,
-    minutes_before_event: 60,
-    channel: 'email',
-    subject: 'Starting soon: the Colaberry Open House',
+    minutes_before_event: 390,
+    channel: 'voice',
+    voice_agent_type: 'interest',
+    subject: 'Maya calls ahead of the Open House',
     body_template: '',
-    step_goal: 'Get them into the room',
-    ai_instructions: 'It starts in about an hour. Two or three sentences only: we start soon, here is the Join link, keep your phone handy for the polls. Name the start time.',
+    step_goal: 'Help them, relate to what they are doing on the platform, make them feel expected. No selling.',
+  },
+  {
+    // Day of, 2:30 PM CT. Four hours out, not one: the scheduler sends at most about 120
+    // per campaign per hour, so a whole list due one hour out would still be going out
+    // after the Open House began.
+    delay_days: 0,
+    minutes_before_event: 240,
+    channel: 'email',
+    subject: 'Today: the Colaberry Open House',
+    body_template: '',
+    step_goal: 'Get them into the room tonight',
+    ai_instructions: 'It is today, a few hours from now. Two or three sentences only: it is today at the start time (name it), here is the Join link, and keep your phone handy for the live polls.',
     ai_tone: 'warm, very brief',
   },
+  {
+    // Day of, 5:30 PM CT. A text to people with express SMS consent, through GHL.
+    // Fixed copy (fallbackReminderSms), so no ai_instructions.
+    delay_days: 0,
+    minutes_before_event: 60,
+    channel: 'sms',
+    subject: 'Open House starts in an hour (text)',
+    body_template: '',
+    step_goal: 'Get them into the room',
+  },
 ];
+
+/** Campaign settings. The key names are the ones the scheduler reads (campaignSendWindow.ts). */
+export const COUNTDOWN_SETTINGS = {
+  campaign_key: OPEN_HOUSE_COUNTDOWN_KEY,
+  agent_name: 'Maya',
+  sender_name: MAYA_NAME,
+  sender_email: MAYA_EMAIL,
+  stop_rule: { max_unsubscribe_rate_pct: 2, max_bounce_rate_pct: 5, note: 'Pause if either is crossed in any 24 hours.' },
+  max_leads_per_cycle: 100,
+  // The default 120 s between sends would make ~170 emails take hours.
+  delay_between_sends: 0,
+  // Email and text: 8 AM to 9 PM Central, every day (the default stops at 5 PM, before the Open House).
+  send_timezone: 'America/Chicago',
+  send_time_start: '08:00',
+  send_time_end: '21:00',
+  send_active_days: [0, 1, 2, 3, 4, 5, 6],
+  // Calls: 10 AM to 5 PM Central, weekdays.
+  call_timezone: 'America/Chicago',
+  call_time_start: '10:00',
+  call_time_end: '17:00',
+  call_active_days: [1, 2, 3, 4, 5],
+  max_daily_calls: 75,
+};
 
 const arg = (name: string): string | null => {
   const i = process.argv.indexOf(name);
@@ -144,7 +194,7 @@ async function main(): Promise<void> {
   // 3. The sequence
   let seq = await one<{ id: string }>(`SELECT id FROM follow_up_sequences WHERE name = :n LIMIT 1`, { n: SEQUENCE_NAME });
   if (!seq) {
-    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} emails: T-2 days, T-1 day, T-1 hour)`);
+    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: email T-2 days, email T-1 day, call day-of noon, email day-of 2:30 PM, text T-1 hour)`);
     if (apply) {
       seq = await one<{ id: string }>(
         `INSERT INTO follow_up_sequences (id, name, description, steps, is_active, tenant_id, created_at, updated_at)
@@ -161,16 +211,7 @@ async function main(): Promise<void> {
   if (!campaign) {
     log(`campaign: create "${CAMPAIGN_NAME}" as a draft, Maya as sender, submitted for approval`);
     if (apply && seq && profile) {
-      const settings = {
-        campaign_key: OPEN_HOUSE_COUNTDOWN_KEY,
-        agent_name: 'Maya',
-        sender_name: MAYA_NAME,
-        sender_email: MAYA_EMAIL,
-        stop_rule: { max_unsubscribe_rate_pct: 2, max_bounce_rate_pct: 5, note: 'Pause if either is crossed in any 24 hours.' },
-        max_leads_per_cycle: 100,
-        send_window_start: 8,
-        send_window_end: 21,
-      };
+      const settings = COUNTDOWN_SETTINGS;
       const row = await one<{ id: string }>(
         `INSERT INTO campaigns (id, name, description, type, status, sequence_id, ai_system_prompt, settings, channel_config, channel, objective,
                                 destination_path, tracking_link, approval_status, sender_profile_id, tenant_id, brand_id, funnel_stage, created_by, created_at, updated_at)
@@ -178,8 +219,9 @@ async function main(): Promise<void> {
                  'Get Open House registrants into the room', '/open-house', 'https://enterprise.colaberry.ai/open-house?utm_source=maya&utm_campaign=open_house_countdown',
                  'draft', :profile, :tenant, :brand, 'consideration', 'OH1 script', NOW(), NOW())
          RETURNING id`,
-        { name: CAMPAIGN_NAME, desc: 'Every Open House registrant is enrolled at sign-up. Maya sends three reminders timed back from their Open House. No price, offer or discount (Ali, 2026-11-17).',
-          seq: seq.id, prompt: MAYA_SYSTEM_PROMPT, settings: JSON.stringify(settings), cc: JSON.stringify({ email: { enabled: true, daily_limit: 500 } }),
+        { name: CAMPAIGN_NAME, desc: 'Every Open House registrant is enrolled at sign-up. Maya emails them (T-2 days, T-1 day, day-of), calls the ones with call consent at noon on the day (help, not sell), and texts the ones with text consent an hour before, through GHL. No price, offer or discount (Ali, 2026-11-17).',
+          seq: seq.id, prompt: MAYA_SYSTEM_PROMPT, settings: JSON.stringify(settings),
+          cc: JSON.stringify({ email: { enabled: true, daily_limit: 500 }, voice: { enabled: true, daily_limit: 75 }, sms: { enabled: true, daily_limit: 250 } }),
           profile: profile.id, tenant: domainRow.tenant_id, brand: domainRow.brand_id });
       if (row) {
         await sequelize.query(
@@ -193,7 +235,12 @@ async function main(): Promise<void> {
       }
     }
   } else {
-    log(`campaign: exists ${campaign.id} (${campaign.status})`);
+    log(`campaign: exists ${campaign.id} (${campaign.status}), settings refreshed (sign-offs kept)`);
+    if (apply) {
+      await sequelize.query(
+        `UPDATE campaigns SET settings = COALESCE(settings, '{}'::jsonb) || CAST(:s AS jsonb), updated_at = NOW() WHERE id = :id`,
+        { replacements: { s: JSON.stringify(COUNTDOWN_SETTINGS), id: campaign.id } });
+    }
   }
 
   // Registrants of upcoming Open Houses, queued (no sends while it is a draft).
@@ -238,7 +285,18 @@ async function main(): Promise<void> {
       const activity = await describePlatformActivity(p.email).catch(() => '');
       const masked = p.email.replace(/^(.).*(@.*)$/, '$1***$2');
       html += `<h2 style="border-top:2px solid #1a365d;padding-top:10px">${esc(masked)}</h2><p><i>${esc(activity || 'no platform activity recorded')}</i></p>`;
+      const firstName = (p.name || '').trim().split(/\s+/)[0] || null;
       for (const step of COUNTDOWN_STEPS) {
+        if (step.channel === 'voice') {
+          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px;background:#f7f9fc"><b>Call, day of at noon</b> (only if they gave call permission): what Maya's voice agent is told
+            <pre style="white-space:pre-wrap;font-family:inherit">${esc(countdownCallScript(firstName, ev, activity))}</pre></div>`;
+          continue;
+        }
+        if (step.channel === 'sms') {
+          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px;background:#f7f9fc"><b>Text, 1 hour before</b> (only if they gave text permission; sent through GHL)
+            <p>${esc(fallbackReminderSms(firstName, ev))}</p></div>`;
+          continue;
+        }
         try {
           const r = await generateMessage({
             channel: 'email', ai_instructions: step.ai_instructions!, tone: step.ai_tone,
@@ -247,7 +305,7 @@ async function main(): Promise<void> {
             eventContext: { title: ev.title, when: ev.when_label, join_url: ev.join_url, minutes_before: step.minutes_before_event!, platform_activity: activity },
           } as any);
           const problems = screenEventReminderCopy(r.subject || '', r.body || '', ev.join_url);
-          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px"><b>T-${step.minutes_before_event! >= 1440 ? step.minutes_before_event! / 1440 + ' day(s)' : step.minutes_before_event! / 60 + ' hour'}:</b> ${esc(r.subject || step.subject)}
+          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px"><b>T-${step.minutes_before_event! >= 1440 ? step.minutes_before_event! / 1440 + ' day(s)' : step.minutes_before_event! / 60 + ' hours'}:</b> ${esc(r.subject || step.subject)}
             <span style="margin-left:8px;padding:2px 8px;border-radius:10px;background:${problems.length ? '#fbe9e7;color:#b3261e' : '#e6f4ec;color:#1f7a4d'}">${problems.length ? 'REJECTED: ' + esc(problems.join('; ')) : 'passes the screen'}</span>
             <div style="margin-top:8px">${problems.length ? fallbackReminderBody((p.name || '').split(' ')[0] || null, ev, step.minutes_before_event!) + '<p style="color:#888">(fallback shown, since the AI draft was rejected)</p>' : r.body}</div>
             <div style="color:#555;margin-top:6px;border-left:3px solid #1a365d;padding-left:10px"><b>${MAYA_NAME}</b><br>Director of Admissions<br>Colaberry Inc.</div></div>`;

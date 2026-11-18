@@ -33,7 +33,7 @@ One row per program offered by Colaberry.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | |
-| `name` | VARCHAR(200) | e.g. "AI Systems Architect Accelerator" |
+| `name` | VARCHAR(200) | e.g. "Forward Deployed AI Engineer Accelerator" |
 | `slug` | VARCHAR(100) UNIQUE | e.g. "ai-architect" |
 | `description` | TEXT | |
 | `is_active` | BOOLEAN | Hide retired courses from admin UI |
@@ -133,7 +133,7 @@ Answer templates may embed merge tags. At resolution time (Cora query, Synthflow
 | `{{cohort.seats_remaining}}` | Remaining seats | 12 |
 | `{{cohort.enrollment_url}}` | Enrollment page URL | enterprise.colaberry.ai |
 | `{{cohort.waitlist_url}}` | Waitlist page URL | enterprise.colaberry.ai/waitlist |
-| `{{course.name}}` | Course full name | AI Systems Architect Accelerator |
+| `{{course.name}}` | Course full name | Forward Deployed AI Engineer Accelerator |
 | `{{course.slug}}` | Course slug | ai-architect |
 
 ### 3.2 Fallback behavior

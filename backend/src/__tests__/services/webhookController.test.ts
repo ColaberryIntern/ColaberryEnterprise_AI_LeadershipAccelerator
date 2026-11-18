@@ -626,7 +626,7 @@ describe('handleZoomWebhook', () => {
     (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
     (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
     (RoomBooking.findOne as jest.Mock).mockResolvedValue(null);
-    const room = { id: 'room-always-open-1', name: 'July 2026 - AI Systems Architect', meeting_link: 'https://colaberry.zoom.us/j/89581408269' };
+    const room = { id: 'room-always-open-1', name: 'July 2026 - Forward Deployed AI Engineer', meeting_link: 'https://colaberry.zoom.us/j/89581408269' };
     (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(room);
     (ingestRecordingForRoom as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r3' });
 
@@ -636,7 +636,7 @@ describe('handleZoomWebhook', () => {
         object: {
           id: 89581408269,
           uuid: 'instance-uuid-xyz',
-          topic: 'Colaberry Rooms — July 2026 - AI Systems Architect',
+          topic: 'Colaberry Rooms — July 2026 - Forward Deployed AI Engineer',
           recording_files: [{ file_type: 'MP4', file_size: 1200, download_url: 'https://zoom.us/rec/room' }],
         },
       },

@@ -35,7 +35,7 @@ Ticket: https://app.basecamp.com/3945211/buckets/47502609/todos/9946497986
 You are a Claude Code agent in the Colaberry Enterprise AI Leadership Accelerator repo (Node/Express/TS).
 
 TICKET "Set up daily automated dashboard update": https://app.basecamp.com/3945211/buckets/47502609/todos/9946497986
-(project: AI Systems Architect Accelerator; list: "Launch Readiness Dashboard")
+(project: Forward Deployed AI Engineer Accelerator; list: "Launch Readiness Dashboard")
 
 STEP 0 - real spec: the ticket body is a generic placeholder. Read its comment thread + the linked
 briefs in the project Vault (05-cb-pmo-contract.md, 19-ali-decisions.md) for what the Launch Readiness

@@ -160,7 +160,7 @@ const PathPage: React.FC = () => {
         <>
       <div className="te-page-h">
         <div className="crumb">The Spine</div>
-        <h1>Your path to AI Systems Architect</h1>
+        <h1>Your path to Forward Deployed AI Engineer</h1>
         <div className="sub">
           Four intensives are the spine. Your project, internship, and certification run as
           parallel lanes that schedule around the fixed 12-week training.

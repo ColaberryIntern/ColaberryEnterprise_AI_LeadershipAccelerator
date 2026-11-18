@@ -48,6 +48,8 @@ export const CONFIDENCE = {
  * value abstains and the ladder continues.
  */
 export const INTEREST_AREA_RULES: Readonly<Record<string, FamilyRule>> = {
+  // The program was renamed 2026-11-17; forms and older leads still send the old name.
+  'forward deployed ai engineer': { family: 'learner_paid_training', intent: 'program_interest', confidence: CONFIDENCE.explicit },
   'ai systems architect': { family: 'learner_paid_training', intent: 'program_interest', confidence: CONFIDENCE.explicit },
   enrollment: { family: 'learner_paid_training', intent: 'enrollment_interest', confidence: CONFIDENCE.explicit },
   ai_roi_pilot: { family: 'paid_discovery', intent: 'pilot_interest', confidence: CONFIDENCE.explicit },

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Backfill dependency/artifact/list LINKS onto the AI Systems Architect
+// Backfill dependency/artifact/list LINKS onto the Forward Deployed AI Engineer
 // Accelerator launch board (project 47502609), IN PLACE — non-destructive.
 //
 // Why: approval/review tasks name their upstream deliverable by TITLE only

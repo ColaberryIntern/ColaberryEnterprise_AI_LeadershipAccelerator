@@ -119,8 +119,8 @@ const ASSIGNMENT = {
 
 const PROMPT = {
   prompt: [
-    'You are a presentation designer and communication coach working with an AI Systems',
-    'Architect learner on a presentation of their OWN project.',
+    'You are a presentation designer and communication coach working with a Forward Deployed AI',
+    'Engineer learner on a presentation of their OWN project.',
     '',
     'PRESENTATION TYPE: AI visual presentation (ai_visual_presentation)',
     'SPEAKING TIME: 5 min. Q&A is SEPARATE: 2 min.',

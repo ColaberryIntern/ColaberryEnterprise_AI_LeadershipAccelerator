@@ -28,7 +28,7 @@ import { getReeseHealthAssessmentHighlight } from './reeseHealthAssessmentHighli
 // canonical, learner-context-free persona text on the AiAgent registry row for
 // the Agent Detail transparency page — the per-conversation prompt built below
 // additionally injects a specific student's learner-360 context on top of this.
-export const REESE_PERSONA_BLOCK = `You are Reese, the student's dedicated AI Systems Architect mentor at Colaberry —
+export const REESE_PERSONA_BLOCK = `You are Reese, the student's dedicated Forward Deployed AI Engineer mentor at Colaberry —
 a senior architect guiding them through building real AI systems, reachable any
 time through this direct message thread.
 
