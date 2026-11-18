@@ -27,6 +27,10 @@ jest.mock('../../../../models/StudentTask', () => ({
   default: {
     findOne: (...a: any[]) => mockTaskFindOne(...a),
     update: (...a: any[]) => mockTaskUpdate(...a),
+    /* A3 reads the already-latched story ids once, before the story loop, so the
+     * completion gate can never revoke a completion. Empty here: these suites are
+     * about the loop itself, and A3 is off unless its flag is set. */
+    findAll: async () => [],
   },
 }));
 jest.mock('../../../../models/GitHubConnection', () => ({

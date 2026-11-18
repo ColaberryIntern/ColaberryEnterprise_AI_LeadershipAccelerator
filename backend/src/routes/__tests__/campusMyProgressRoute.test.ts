@@ -110,4 +110,16 @@ it('privacy is a contract: a background carrying phone, location or full_name fa
     expect(res.status).toBe(500);
     expect(JSON.stringify(res.body)).not.toMatch(/555|Dallas|Jordan/);
   }
+
+  /*
+   * Let the handler's trailing `console.error` land BEFORE this suite tears down.
+   *
+   * `await get(...)` resolves when the response is sent, and the contract-violation log happens
+   * after that. This is the last test in the file, so under load the log arrived after teardown
+   * and jest failed the suite with "Cannot log after tests are done" rather than on any
+   * assertion: the three expects above all passed. It failed two of three CI runs on an
+   * unrelated branch whose only contribution was making the worker pool busier, and passed on a
+   * re-run with no change, which is what a timing-dependent leak looks like.
+   */
+  await new Promise((resolve) => setImmediate(resolve));
 });

@@ -42,8 +42,35 @@ import {
   type ArtifactTreeEntry,
 } from './storyArtifactMatch';
 import { recordStoryArtifacts } from './storyArtifactVerificationStore';
+import { buildCelebration, type Celebration } from './storyCelebration';
+import { decideStoryCompletion, type CompletionDecision } from './storyCompletionGate';
+import { recordStoryCelebration } from './storyCompletionStore';
+import { SATISFYING_VERDICTS } from './storyArtifactMatch';
 
 export type StoryArtifactVerificationMode = 'off' | 'report_only';
+
+/**
+ * Phase A3's own flag, separate from A2's, because it does strictly more.
+ *
+ *   off        nothing. The default.
+ *   celebrate  the gate is computed and a celebration is recorded on the transition, and
+ *              completion is NOT withheld. Measures what would have been held back.
+ *   enforce    additionally, a story whose contract is not satisfied does not complete.
+ *
+ * Two steps rather than one because `enforce` withholds XP and a board state a person reads, and
+ * `celebrate` produces exactly the data needed to judge whether enforcing is safe. The A2 phase
+ * made the same split for the same reason.
+ */
+export type StoryCompletionMode = 'off' | 'celebrate' | 'enforce';
+
+export function storyCompletionMode(
+  env: Record<string, string | undefined> = process.env,
+): StoryCompletionMode {
+  const v = env.STORY_COMPLETION_GATE;
+  if (v === 'enforce') return 'enforce';
+  if (v === 'celebrate') return 'celebrate';
+  return 'off';
+}
 
 /** The flag. Absent or unrecognized means `off`: this never switches itself on. */
 export function storyArtifactMode(
@@ -60,6 +87,12 @@ export interface StoryWithMaybeContract {
 
 export interface StoryArtifactReport {
   story_id: string;
+  /** A3: may this story complete, and is this the transition? Null when A3 is off. */
+  completion: CompletionDecision | null;
+  /** A3: the sentence recorded, when the transition fired. Null otherwise. */
+  celebration: Celebration | null;
+  /** A3: 1 when the celebration was genuinely recorded for the first time. */
+  celebration_rows: number;
   /** Keys recorded as handed over at this commit. */
   satisfied: string[];
   /** Keys looked for in the repository and not accepted. This is what a person still owes. */
@@ -76,6 +109,14 @@ export interface StoryArtifactReport {
 
 export interface StoryArtifactVerificationResult {
   mode: StoryArtifactVerificationMode;
+  /** A3's mode, reported separately because it is a separate flag. */
+  completion_mode: StoryCompletionMode;
+  /**
+   * Story ids this phase would NOT let complete, because their contract is not satisfied.
+   * Populated in `celebrate` as well as `enforce`, so the first cycle measures what enforcing
+   * would have held back without holding anything back.
+   */
+  held: string[];
   /** The commit the match was made against, or null when none was readable. */
   commit_sha: string | null;
   /** Stories that declared a contract. */
@@ -91,6 +132,8 @@ export interface StoryArtifactVerificationResult {
 
 const EMPTY = (mode: StoryArtifactVerificationMode): StoryArtifactVerificationResult => ({
   mode,
+  completion_mode: 'off',
+  held: [],
   commit_sha: null,
   stories_with_contract: 0,
   satisfied_total: 0,
@@ -113,12 +156,19 @@ export async function verifyStoryArtifacts(args: {
   headCommitSha: string | null;
   planVersion: number | null;
   mode?: StoryArtifactVerificationMode;
+  /** A3. */
+  completionMode?: StoryCompletionMode;
+  /** Story ids ALREADY latched complete, so the gate can never revoke one. */
+  completedStoryIds?: ReadonlySet<string>;
 }): Promise<StoryArtifactVerificationResult> {
   const mode = args.mode ?? storyArtifactMode();
-  if (mode === 'off') return EMPTY(mode);
+  const completionMode = args.completionMode ?? storyCompletionMode();
+  const alreadyDone = args.completedStoryIds ?? new Set<string>();
+  if (mode === 'off') return { ...EMPTY(mode), completion_mode: completionMode };
 
   const tree = artifactTreeFrom(args.treeEntries ? [...args.treeEntries] : null);
   const out = EMPTY(mode);
+  out.completion_mode = completionMode;
   out.commit_sha = args.headCommitSha ?? null;
   out.tree_unreadable = tree === null;
 
@@ -135,6 +185,9 @@ export async function verifyStoryArtifacts(args: {
     if (!validated.ok) {
       out.reports.push({
         story_id: storyId,
+        completion: null,
+        celebration: null,
+        celebration_rows: 0,
         satisfied: [],
         outstanding: [],
         unverifiable: [],
@@ -161,10 +214,50 @@ export async function verifyStoryArtifacts(args: {
       inserted = outcome.inserted;
     }
 
+    /*
+     * A3. The decision is always computed when A3 is on, in `celebrate` as well as `enforce`, so
+     * the first cycle can measure what enforcing would have held back. Only the CALLER acts on
+     * it, and only in `enforce`.
+     */
+    let completion: CompletionDecision | null = null;
+    let celebration: Celebration | null = null;
+    let celebrationRows = 0;
+    if (completionMode !== 'off') {
+      completion = decideStoryCompletion({
+        alreadyComplete: alreadyDone.has(storyId),
+        artifactCount: resolved.length,
+        match: summary,
+      });
+      if (!completion.may_complete) out.held.push(storyId);
+
+      /*
+       * The celebration is COMPUTED here and deliberately NOT written here.
+       *
+       * This function runs BEFORE the story loop, because the loop needs the decision in order to
+       * gate the latch. But a story completes only when its acceptance criteria pass AND its
+       * artifacts are in place, and the acceptance half is judged in that loop. Writing the
+       * celebration here would congratulate someone whose scenarios then failed.
+       *
+       * So the caller writes it, after the latch, through `fireStoryCelebration`. Computing it
+       * here keeps the contract and the names in one place; firing it there keeps it honest.
+       */
+      if (completion.is_transition && completion.verdict === 'artifacts_satisfied') {
+        const names: Record<string, string> = {};
+        for (const a of resolved) names[a.key] = a.name;
+        celebration = buildCelebration(
+          summary.matches.filter((m) => SATISFYING_VERDICTS.indexOf(m.verdict) !== -1),
+          names,
+        );
+      }
+    }
+
     out.satisfied_total += summary.satisfied.length;
     out.outstanding_total += summary.outstanding.length;
     out.reports.push({
       story_id: storyId,
+      completion,
+      celebration,
+      celebration_rows: celebrationRows,
       satisfied: summary.satisfied,
       outstanding: summary.outstanding,
       unverifiable: summary.unverifiable,
@@ -175,4 +268,31 @@ export async function verifyStoryArtifacts(args: {
   }
 
   return out;
+}
+
+
+/**
+ * Write the celebration a story earned, once the caller has confirmed the story genuinely
+ * completed: acceptance criteria AND artifacts.
+ *
+ * Separate from `verifyStoryArtifacts` on purpose, because that function runs before the
+ * acceptance half is known. NEVER THROWS: `recordStoryCelebration` classifies every expected
+ * state, and a celebration that could not be written must not cost a student the completion that
+ * earned it.
+ */
+export async function fireStoryCelebration(args: {
+  projectId: string;
+  storyId: string;
+  commitSha: string | null;
+  planVersion: number | null;
+  celebration: Celebration;
+}): Promise<number> {
+  const rec = await recordStoryCelebration({
+    projectId: args.projectId,
+    storyId: args.storyId,
+    commitSha: args.commitSha,
+    planVersion: args.planVersion,
+    celebration: args.celebration,
+  });
+  return rec.inserted;
 }
