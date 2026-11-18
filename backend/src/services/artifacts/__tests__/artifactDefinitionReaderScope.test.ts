@@ -136,7 +136,7 @@ describe('artifact_definitions reader scope (gates the catalog seed)', () => {
    * Only the line number, which nothing depends on, is allowed to move. The failure message still
    * prints the lines, so a reader can navigate.
    */
-  const byFile = (kind: string): Record<string, number> => {
+  const byFile = (kind: Scope): Record<string, number> => {
     const out: Record<string, number> = {};
     for (const r of refs(kind)) {
       const file = r.replace(/:\d+$/, '');
