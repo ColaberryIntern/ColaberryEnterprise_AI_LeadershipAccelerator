@@ -4,11 +4,14 @@ import {
   ANY_FILE_TYPE,
   ARTIFACT_CATALOG_VERSION,
   CATALOG_ARTIFACT_ROLE,
+  MEASURED_PRODUCTION_KINDS,
+  PRODUCTION_KIND_ALIASES,
   acceptsAnyFileType,
   allowsEvidenceSource,
   artifactType,
   artifactTypeNames,
   artifactTypes,
+  catalogTypeForProductionKind,
   isKnownArtifactType,
 } from '../storyArtifactTypes';
 
@@ -29,13 +32,16 @@ import {
 const CATALOG_FILE = path.resolve(__dirname, '../storyArtifactTypes.json');
 
 describe('the artifact type catalog', () => {
-  it('is the eleven types the plan named, with the three first-class ones present', () => {
-    expect(artifactTypes()).toHaveLength(11);
+  it('is the twelve types the catalog now declares, with the three first-class ones present', () => {
+    expect(artifactTypes()).toHaveLength(12);
     for (const named of ['case_study', 'proposal', 'portfolio']) {
       expect(isKnownArtifactType(named)).toBe(true);
     }
     expect(isKnownArtifactType('white_paper')).toBe(false);
-    expect(ARTIFACT_CATALOG_VERSION).toBe(1);
+    // Bumped to 2 when claude_studio was added on 2026-11-18. Pinned on purpose: the version
+    // moving is how a reader of a stored contract knows the vocabulary changed under it, so it
+    // should never move as a side effect of an edit nobody meant to make.
+    expect(ARTIFACT_CATALOG_VERSION).toBe(2);
   });
 
   it('has a unique type name and a unique sort order per entry', () => {
@@ -120,7 +126,7 @@ describe('the accessors', () => {
 
     const list = artifactTypes();
     list.splice(0, list.length);
-    expect(artifactTypes()).toHaveLength(11);
+    expect(artifactTypes()).toHaveLength(12);
   });
 
   it('names every type for an error message', () => {
@@ -147,7 +153,7 @@ describe('the catalog file itself', () => {
     const raw = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf8'));
     expect(typeof raw.version).toBe('number');
     expect(Array.isArray(raw.types)).toBe(true);
-    expect(raw.types).toHaveLength(11);
+    expect(raw.types).toHaveLength(12);
   });
 
   it('carries no field the typed door does not expose', () => {
@@ -167,5 +173,73 @@ describe('the catalog file itself', () => {
     expect(CATALOG_ARTIFACT_ROLE).toBe('catalog_type');
     // The model's own default is 'output'; the seeder's discriminator must not collide with it.
     expect(CATALOG_ARTIFACT_ROLE).not.toBe('output');
+  });
+});
+
+describe('the catalog knows every kind production actually produces', () => {
+  /*
+   * THE DIRECTION THIS SUITE WAS MISSING.
+   *
+   * Every test above checks that a DECLARED type is well formed. None of them could notice a kind
+   * that exists in production and has no type at all, which is the same one-way check this
+   * workstream keeps finding elsewhere, here in its own test. Measured on 2026-11-18, two of the
+   * eight kinds in `runtime_portfolio_artifacts` had no type: claude_studio, now a type, and
+   * architecture_doc, now an explicit alias with its reason written down.
+   */
+
+  it('has a measured kind list that is not empty and says when it was taken', () => {
+    // The control. An empty list would make every assertion below pass vacuously.
+    expect(MEASURED_PRODUCTION_KINDS.kinds.length).toBeGreaterThan(5);
+    expect(MEASURED_PRODUCTION_KINDS.measured_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(MEASURED_PRODUCTION_KINDS.table).toBe('runtime_portfolio_artifacts');
+  });
+
+  it('maps every measured production kind to a catalog type', () => {
+    const unmapped = MEASURED_PRODUCTION_KINDS.kinds
+      .filter((k) => catalogTypeForProductionKind(k) === undefined);
+    expect(unmapped).toEqual([]);
+  });
+
+  it('never aliases onto a type that does not exist', () => {
+    for (const a of PRODUCTION_KIND_ALIASES) {
+      expect(isKnownArtifactType(a.maps_to)).toBe(true);
+    }
+  });
+
+  it('requires a REASON on every alias, long enough to be one', () => {
+    // An alias without a reason is a silent reclassification of somebody's work.
+    for (const a of PRODUCTION_KIND_ALIASES) {
+      expect(a.reason.length).toBeGreaterThan(80);
+      expect(a.reason).toMatch(/\d{4}-\d{2}-\d{2}/);
+    }
+  });
+
+  it('never aliases a kind that is already a type, which would make the answer ambiguous', () => {
+    for (const a of PRODUCTION_KIND_ALIASES) {
+      expect(isKnownArtifactType(a.kind)).toBe(false);
+    }
+  });
+
+  it('returns undefined for a kind nothing claims, rather than guessing', () => {
+    // Undefined is a real answer: the page renders it as unclassified. An artifact filed under a
+    // type nobody chose is worse than one visibly unfiled.
+    for (const unknown of ['not_a_kind', '', 'BUILD_ARTIFACT', 'claude studio']) {
+      expect(catalogTypeForProductionKind(unknown)).toBeUndefined();
+    }
+    // And both directions: the real ones resolve.
+    expect(catalogTypeForProductionKind('build_artifact')).toBe('build_artifact');
+    expect(catalogTypeForProductionKind('architecture_doc')).toBe('field_guide');
+    expect(catalogTypeForProductionKind('claude_studio')).toBe('claude_studio');
+  });
+
+  it('declares claude_studio as a platform type that owes no repository path', () => {
+    const t = artifactType('claude_studio')!;
+    expect(t).toBeDefined();
+    expect(t.evidence_source).toBe('platform');
+    // The invariant the whole catalog holds: repo evidence and github validation move together.
+    expect(t.requires_github_validation).toBe(false);
+    expect(t.evaluation_criteria.length).toBeGreaterThan(40);
+    // Its measured provenance is recorded, not asserted as a round number.
+    expect(t.exists_today).toMatch(/71 rows/);
   });
 });
