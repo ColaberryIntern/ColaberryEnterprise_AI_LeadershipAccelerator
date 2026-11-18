@@ -109,6 +109,8 @@ export interface CaseStudyFilterCandidate {
   /** The pinned `published_snapshot_id` resolved to an actually-approved row. */
   readonly hasApprovedSnapshot: boolean;
   readonly industry: string | null;
+  /** W10: department slugs from the published snapshot. Optional so older candidate fixtures stay valid. */
+  readonly departments?: readonly string[];
   readonly primaryCapability: string | null;
   readonly capabilities: readonly string[];
   readonly stack: readonly string[];
@@ -238,6 +240,7 @@ export function matchesCaseStudyFilters(
     ...(candidate.primaryCapability ? [candidate.primaryCapability] : []),
   ])) return false;
   if (!anyOf(filters.industry, candidate.industry ? [candidate.industry] : [])) return false;
+  if (!anyOf(filters.department, candidate.departments ?? [])) return false;
   if (!anyOf(filters.stack, candidate.stack)) return false;
   if (!anyOf(filters.program, candidate.programKey ? [candidate.programKey] : [])) return false;
   if (!anyOf(filters.deliverable, candidate.deliverables)) return false;
@@ -364,6 +367,7 @@ export function buildCaseStudyTaxonomy(
       ...c.capabilities, ...(c.primaryCapability ? [c.primaryCapability] : []),
     ]),
     industries: countFacets(candidates, (c) => (c.industry ? [c.industry] : [])),
+    departments: countFacets(candidates, (c) => c.departments ?? []),
     stack: countFacets(candidates, (c) => c.stack),
     programs: countFacets(candidates, (c) => (c.programKey ? [c.programKey] : [])),
     builtBy: countKeyed<CaseStudyBuiltByType>(candidates, (c) => c.builtBy),

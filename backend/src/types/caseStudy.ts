@@ -665,6 +665,8 @@ export interface CaseStudyTaxonomy {
   readonly builtByType?: CaseStudyBuiltByType;
   readonly deliverables: readonly string[];
   readonly projectStatus?: CaseStudyRoadmapStatus;
+  /** W10: department slugs (caseStudyDepartments.ts). Absent, never empty, on a study nobody has tagged. */
+  readonly departments?: readonly string[];
 }
 
 /**

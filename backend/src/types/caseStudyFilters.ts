@@ -48,6 +48,8 @@ export interface CaseStudyFilterInput {
   readonly surface?: CaseStudySurfaceKey;
   readonly capability?: readonly string[];
   readonly industry?: readonly string[];
+  /** W10: `?department=` - OR within the axis, AND with the others. */
+  readonly department?: readonly string[];
   readonly stack?: readonly string[];
   readonly program?: readonly string[];
   readonly builtBy?: readonly CaseStudyBuiltByType[];

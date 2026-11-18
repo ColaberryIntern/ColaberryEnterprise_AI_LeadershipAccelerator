@@ -674,6 +674,8 @@ export const FORBIDDEN_PUBLIC_KEYS = [
 export interface PublicCaseStudyTaxonomyFacets {
   readonly capabilities: readonly PublicCaseStudyFacet[];
   readonly industries: readonly PublicCaseStudyFacet[];
+  /** W10: counted from published records only, like industries. Optional for older fixtures; the builder always sets it. */
+  readonly departments?: readonly PublicCaseStudyFacet[];
   readonly stack: readonly PublicCaseStudyFacet[];
   readonly programs: readonly PublicCaseStudyFacet[];
   readonly builtBy: readonly { readonly slug: CaseStudyBuiltByType; readonly count: number }[];
