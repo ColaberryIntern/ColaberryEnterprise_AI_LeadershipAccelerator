@@ -47,7 +47,7 @@ export const MANAGEMENT_PREVIEW_ENTERPRISE_CSS = `
 /* The enterprise lockup, sized as on the public header (publicV2.css .cbv2-lockup). */
 .te-shell[data-brand="enterprise"] .cbv2-lockup{ display:inline-flex; align-items:center; gap:10px; color:var(--strong, #171717); white-space:nowrap; text-decoration:none; }
 .te-shell[data-brand="enterprise"] .cbv2-lockup__mark{ width:28px; height:28px; flex:0 0 auto; display:block; color:#2E6A86; }
-.te-shell[data-brand="enterprise"] .cbv2-lockup__word{ font-family:'Roboto', system-ui, sans-serif; font-size:19px; font-weight:700; letter-spacing:-0.01em; line-height:1; }
+.te-shell[data-brand="enterprise"] .cbv2-lockup__word{ font-family:'Roboto', system-ui, sans-serif; font-size:19px; font-weight:700; letter-spacing:-0.01em; line-height:1; color:var(--strong, #1A1A1A); }
 .te-shell[data-brand="enterprise"] .cbv2-lockup__tag{
   font-family:'Roboto', system-ui, sans-serif; font-size:10px; font-weight:700; letter-spacing:0.16em;
   text-transform:uppercase; line-height:1; color:#2E6A86; border:1px solid currentColor; border-radius:4px; padding:3px 6px;
