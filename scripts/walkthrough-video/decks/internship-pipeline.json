@@ -1,0 +1,87 @@
+{
+  "slug": "the-ai-recommends-a-person-admits",
+  "output": "internship-pipeline-walkthrough.mp4",
+  "slides": [
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The AI Recommends, a Person Admits",
+      "subtitle": "Colaberry's AI internship pipeline, read at commit 59720e2",
+      "caption": "Colaberry's AI internship used to start with an email to two inboxes. This is the pipeline that replaced it."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "One portal, application to cohort.",
+      "subtitle": "Consents, interview, decision, documents, payment, membership.",
+      "caption": "An applicant records their consents, answers one question bank by web form or by an AI phone call, and a reviewer decides. Then come the offer documents, a payment step and a place in the internship cohort."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 11,
+      "path": "frontend/public/site-v2/shot-internship-applications.png",
+      "caption": "This is the reviewer's queue. Applicants' names and contact details are hidden in this walkthrough."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 12,
+      "path": "frontend/public/site-v2/shot-internship-decide.png",
+      "caption": "The Decide panel puts requirement checks, computed straight from the answers, beside an AI recommendation. The AI never scores or ranks. Only the reviewer can admit."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "Only a reviewer can admit.",
+      "subtitle": "No override flag exists in the transition table.",
+      "caption": "Every step is a transition in one table that names who may take it. Admission belongs to the reviewer alone, and there is no switch that lets the system do it."
+    },
+    {
+      "kind": "title",
+      "seconds": 11,
+      "title": "A model's guess is never an answer.",
+      "subtitle": "Phone answers wait for the applicant to confirm them.",
+      "caption": "Answers pulled from a phone interview are stored as needing follow-up, and only the applicant's own confirmation turns them into answers."
+    },
+    {
+      "kind": "screenshot",
+      "seconds": 11,
+      "path": "frontend/public/site-v2/shot-internship-console.png",
+      "caption": "Once admitted, each intern is tracked in one console. Unknown is shown as unknown, never as zero, and nudges come from a fixed set of templates."
+    },
+    {
+      "kind": "cards",
+      "seconds": 13,
+      "accent_index": 0,
+      "rows": [
+        ["8 of 8", "admission decisions made by a reviewer"],
+        ["2 of 3", "AI-flagged applicants the reviewer still approved"],
+        ["42 of 42", "signed documents verified"]
+      ],
+      "caption": "On live traffic, all eight admission decisions were made by a reviewer. The reviewer approved two of the three applicants the AI flagged for a closer look, and all forty two signed documents were verified."
+    },
+    {
+      "kind": "cards",
+      "seconds": 11,
+      "accent_index": 0,
+      "rows": [
+        ["0", "duplicate memberships across 14 active interns"],
+        ["94 commits", "9 Sep to 14 Nov 2026"]
+      ],
+      "caption": "Fourteen interns are active with no duplicate memberships. The pipeline was built in ninety four commits over ten weeks."
+    },
+    {
+      "kind": "title",
+      "seconds": 10,
+      "title": "What this record cannot show yet.",
+      "subtitle": "Whether an intern was hired.",
+      "caption": "Nothing in the platform records whether an intern was hired, so placement is still unmeasured. The record says so plainly."
+    },
+    {
+      "kind": "title",
+      "seconds": 9,
+      "title": "The AI interviews. A person admits.",
+      "subtitle": "Built by Ali Muwwakkil, Colaberry",
+      "caption": "The AI does the work that scales, and a person keeps every admission. That is the part worth copying."
+    }
+  ]
+}
