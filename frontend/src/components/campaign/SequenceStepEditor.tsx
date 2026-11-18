@@ -5,6 +5,8 @@ type CampaignChannel = 'email' | 'voice' | 'sms';
 export interface SequenceStep {
   delay_days: number;
   minutes_before_call?: number | null;
+  /** OH1d: event countdowns (e.g. the Open House) are timed back from the event. */
+  minutes_before_event?: number | null;
   days_before_cohort_start?: number | null;
   channel: CampaignChannel;
   subject: string;

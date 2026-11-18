@@ -78,6 +78,12 @@ export interface GenerateMessageParams {
     join_url: string;
     minutes_before: number;
     platform_activity?: string;
+    /** OH1d: the person's 360 profile, rendered in labelled sections (openHouseProfile.renderPersonProfile). */
+    person_profile?: string;
+    /** OH1d: what this step is for, so each message has one job. */
+    step_goal?: string;
+    /** OH1d: the platform Today page, the one other link a step may use. */
+    portal_url?: string;
   };
   /**
    * Who this message is sent AS.
@@ -232,7 +238,7 @@ CRITICAL: Always address the lead by their actual name from the LEAD PROFILE bel
     const emailFormat = channel === 'email'
       ? `OUTPUT FORMAT — respond with ONLY valid JSON, no markdown fences:
 {"subject": "...", "body": "..."}
-The "body" must be HTML using <p> and <a> tags only. 80-160 words. Do NOT add a sign-off name or signature: Maya's signature is added automatically.`
+The "body" must be HTML using <p> and <a> tags only. Follow the step's word range (default 80-160 words). Do NOT add a sign-off name or signature: Maya's signature is added automatically.`
       : channelInstructions[channel];
     return `${campaignPrompt || defaultPersona}${voiceBlock}
 
@@ -240,8 +246,10 @@ ${emailFormat}
 
 OPEN HOUSE REMINDER RULES (these override everything else):
 - This person registered for: ${ev.title}, ${ev.when}. You are reminding them and helping them get there. You are NOT selling.
-- The ONLY link you may include is the Join link, exactly: ${ev.join_url}
-  It signs them in and checks them in. Include it once, as a link.
+- The Join link is required, exactly: ${ev.join_url}
+  It signs them in and checks them in. Include it once, as a link.${ev.portal_url ? `
+- The ONLY other link allowed is the platform Today page, exactly: ${ev.portal_url}, and only when the step invites them back to the platform.` : `
+- No other links of any kind.`}
 - NEVER mention price, cost, tuition, a discount, an offer, a deal, an early bird, a scholarship, seats, deadlines to buy, or say that anything costs nothing or comes at no charge. Any offer is shared live at the Open House only.
 - NEVER ask them to book a call. NEVER mention a cohort start date.
 - Never invent facts about the program, outcomes, salaries or jobs. Never invent facts about the person.
@@ -284,21 +292,34 @@ ALUMNI MESSAGING RULES:
 export function buildEventUserPrompt(params: GenerateMessageParams): string {
   const ev = params.eventContext!;
   const first = (params.lead.name || '').trim().split(/\s+/)[0] || '';
+  const when = ev.minutes_before >= 1440
+    ? `${Math.round(ev.minutes_before / 1440)} day(s)`
+    : `${Math.max(1, Math.round(ev.minutes_before / 60))} hour(s)`;
   const parts: string[] = [];
-  parts.push('VERIFIED FACTS (use ONLY these; never invent):');
-  parts.push(`- Person's first name: ${first && !first.includes('@') ? first : '(unknown: greet with "Hi there")'}`);
-  parts.push(`- Event: ${ev.title}`);
-  parts.push(`- When: ${ev.when}`);
-  parts.push(`- Join link (the only link allowed): ${ev.join_url}`);
-  parts.push(`- This message goes out about ${ev.minutes_before >= 1440 ? `${Math.round(ev.minutes_before / 1440)} day(s)` : `${Math.max(1, Math.round(ev.minutes_before / 60))} hour(s)`} before it starts.`);
-  if (ev.platform_activity) parts.push(`- On the platform: ${ev.platform_activity}`);
+  parts.push('THE EVENT');
+  parts.push(`- ${ev.title}, ${ev.when}`);
+  parts.push(`- Join link (required): ${ev.join_url}`);
+  if (ev.portal_url) parts.push(`- Platform Today page (optional, only if this step invites them back): ${ev.portal_url}`);
+  parts.push(`- This message goes out about ${when} before it starts.`);
+  parts.push('');
+  parts.push('THE PERSON (their profile: verified facts only, use them as the system prompt describes; never invent)');
+  parts.push(`- First name: ${first && !first.includes('@') ? first : '(unknown: greet with "Hi there")'}`);
+  if (ev.person_profile && ev.person_profile.trim()) {
+    parts.push(ev.person_profile.trim());
+  } else if (ev.platform_activity) {
+    parts.push(`- On the platform: ${ev.platform_activity}`);
+  }
   const prev = params.compositeContext?.previousMessages || [];
   if (prev.length > 0) {
     parts.push('');
-    parts.push('ALREADY SENT TO THEM (do not repeat these):');
-    for (const m of prev.slice(0, 5)) parts.push(`- ${m.sentAt}: "${m.subject}"`);
+    parts.push('WHAT WE ALREADY SENT THEM (build on it, never repeat it)');
+    for (const m of prev.slice(0, 5)) {
+      const preview = (m.bodyPreview || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+      parts.push(`- ${m.sentAt} (${m.channel}): "${m.subject}"${preview ? `: ${preview}` : ''}`);
+    }
   }
   parts.push('');
+  if (ev.step_goal) parts.push(`THIS MESSAGE'S JOB: ${ev.step_goal}`);
   parts.push(`STEP INSTRUCTIONS: ${params.ai_instructions}`);
   if (params.tone) parts.push(`TONE: ${params.tone}`);
   return parts.join('\n');

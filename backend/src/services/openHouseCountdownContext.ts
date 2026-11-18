@@ -74,6 +74,10 @@ export function sourceLabel(raw: unknown): string | null {
   if (/tiktok/.test(s)) return 'TikTok';
   if (/eventbrite/.test(s)) return 'Eventbrite';
   if (/referr?al|alumni/.test(s)) return 'a referral';
+  // OH1d: the two most common Open House sources. `myfreeaiclass` is the ad sign-up page's
+  // tracking code; its raw value must never reach a message (it contains a banned word).
+  if (/myfreeaiclass|ai[-_ ]?class/.test(s)) return 'our AI class sign-up page';
+  if (/open[-_ ]?house/.test(s)) return 'the Open House sign-up page';
   return null;
 }
 

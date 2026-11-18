@@ -21,11 +21,16 @@ const formatTiming = (step: any): string => {
   if (step.days_before_cohort_start != null) {
     return `T-${step.days_before_cohort_start}d`;
   }
-  if (step.minutes_before_call) {
-    const mins = step.minutes_before_call;
-    if (mins >= 1440) return `T-${mins / 1440}d`;
-    if (mins >= 60) return `T-${mins / 60}h`;
-    return `T-${mins}min`;
+  // OH1: an event countdown (minutes_before_event, e.g. the Open House) is timed back from
+  // the event exactly like an appointment countdown. Without this branch every step read
+  // "Day 0", which looked like everything would go out the day after sign-up.
+  const before = step.minutes_before_call || step.minutes_before_event;
+  if (before) {
+    const mins = before;
+    const suffix = step.minutes_before_event && !step.minutes_before_call ? ' before the event' : '';
+    if (mins >= 1440) return `T-${+(mins / 1440).toFixed(1)}d${suffix}`;
+    if (mins >= 60) return `T-${+(mins / 60).toFixed(1)}h${suffix}`;
+    return `T-${mins}min${suffix}`;
   }
   return step.delay_days ? `Day ${step.delay_days}` : 'Day 0';
 };
@@ -266,7 +271,7 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
   // ── Render ──────────────────────────────────────────────────────
 
   const isCountdown = steps.length > 0 && (
-    steps.every((s: any) => s.minutes_before_call) ||
+    steps.every((s: any) => s.minutes_before_call || s.minutes_before_event) ||
     steps.some((s: any) => s.days_before_cohort_start != null)
   );
 
@@ -431,7 +436,7 @@ export default function StrategyPromptsTab({ campaignId, campaign, headers, onRe
         const sortedSteps = isCountdown
           ? isCohortCountdown
             ? [...steps].sort((a, b) => (b.days_before_cohort_start || 0) - (a.days_before_cohort_start || 0))
-            : [...steps].sort((a, b) => (b.minutes_before_call || 0) - (a.minutes_before_call || 0))
+            : [...steps].sort((a, b) => (b.minutes_before_call || b.minutes_before_event || 0) - (a.minutes_before_call || a.minutes_before_event || 0))
           : [...steps].sort((a, b) => (a.delay_days || 0) - (b.delay_days || 0));
         const campaignDuration = isCountdown
           ? null

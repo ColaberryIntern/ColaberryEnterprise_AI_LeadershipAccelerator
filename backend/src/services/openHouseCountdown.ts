@@ -26,6 +26,9 @@ import { meaningfulHistory } from './openHouseCountdownContext';
 
 export const OPEN_HOUSE_COUNTDOWN_KEY = 'open_house_countdown';
 
+/** The platform Today page: the one link besides the event's Join link a countdown message may carry. */
+export const PORTAL_TODAY_URL = 'https://enterprise.colaberry.ai/portal/today';
+
 export interface OpenHouseEventForLead {
   session_id: string;
   event_id: string;
@@ -81,6 +84,8 @@ export function screenEventReminderCopy(subject: string, body: string, joinUrl: 
   for (const u of urls) {
     const clean = u.replace(/[.,;:!?]+$/, '');
     if (clean === joinUrl || clean === 'https://enterprise.colaberry.ai' || clean === 'https://enterprise.colaberry.ai/') continue;
+    // OH1d: the platform Today page, which a momentum step may invite them back to.
+    if (clean === PORTAL_TODAY_URL) continue;
     problems.push(`links somewhere else (${clean.slice(0, 60)})`);
   }
   return problems;
