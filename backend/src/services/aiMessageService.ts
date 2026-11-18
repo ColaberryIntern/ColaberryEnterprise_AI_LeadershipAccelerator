@@ -88,6 +88,11 @@ export interface GenerateMessageParams {
     content_piece?: string;
     /** OH1f: the links that piece carries (a builder's public case study, the Events schedule). */
     extra_links?: string[];
+    /**
+     * OH1g: the one memory (maya/mayaMemory.formatTimelineForPrompt) - what Maya and this person said on every
+     * channel. When present it replaces the "what we already sent" list, which only knew this campaign's emails.
+     */
+    memory_timeline?: string;
   };
   /**
    * Who this message is sent AS.
@@ -321,7 +326,13 @@ export function buildEventUserPrompt(params: GenerateMessageParams): string {
     parts.push(`- On the platform: ${ev.platform_activity}`);
   }
   const prev = params.compositeContext?.previousMessages || [];
-  if (prev.length > 0) {
+  if (ev.memory_timeline && ev.memory_timeline.trim()) {
+    // OH1g: every channel, both directions, so a question they asked by email or in the campus IM is answered
+    // rather than ignored. The repetition check on the earlier countdown bodies still runs after the draft.
+    parts.push('');
+    parts.push(ev.memory_timeline.trim());
+    parts.push('(Build on this; never repeat an earlier email. If they asked something, answer it.)');
+  } else if (prev.length > 0) {
     parts.push('');
     parts.push('WHAT WE ALREADY SENT THEM (build on it, never repeat it)');
     // OH1f: long enough to see what was actually said (240 characters was little more than

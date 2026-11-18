@@ -31,6 +31,7 @@ import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
 import { logCommunication } from './communicationLogService';
+import { mayaMemoryBlock } from './maya/mayaMemory';
 import { buildUnsubscribeUrl } from './unsubscribeTokenService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
@@ -389,6 +390,9 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       portal_url: brainPiece ? undefined : (await import('./openHouseCountdown')).PORTAL_TODAY_URL,
       content_piece: brainPiece?.block || undefined,
       extra_links: brainPiece?.allowedLinks || [],
+      // OH1g: the one memory (every channel, both directions) replaces the countdown-only view in the prompt;
+      // `earlierCountdown` above still feeds the repetition check on the full bodies. Never throws ('' = none).
+      memory_timeline: (await mayaMemoryBlock({ leadId: Number(lead.id) }, { limit: 20, maxChars: 3500 })) || undefined,
     } : undefined;
     if (eventCountdown && compositeContext?.allowedUrls) {
       compositeContext.allowedUrls = {
@@ -1413,12 +1417,15 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     const { gatherCallFacts } = await import('./openHouseCountdownContext');
     const facts = lead?.email ? await gatherCallFacts(lead.email, action.lead_id).catch(() => null) : null;
     const history = await buildConversationHistory(action.lead_id).catch(() => '');
+    // OH1g: the one memory is the call's history; the activity-log history stays the fallback.
+    const memory = await mayaMemoryBlock({ leadId: action.lead_id }, { limit: 15, maxChars: 2500 });
     const first = (lead?.name || '').trim().split(/\s+/)[0] || '';
     prompt = countdownCallBrief({
       firstName: first && !first.includes('@') ? first : null,
       event: { title: String(action.metadata?.event_title || 'Colaberry Open House'), when_label: String(action.metadata?.event_when || '') },
       facts,
       history,
+      memory,
     });
   } else if (action.ai_generated && action.body) {
     // AI already generated the voice prompt instructions
