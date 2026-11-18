@@ -51,9 +51,13 @@ interface PublisherValidator {
   validateArtifactContract: (raw: unknown, ctx?: { storyId?: string }) => {
     ok: boolean; artifacts: unknown[]; refusals: { code: string }[];
   };
-  validateStoryPlanArtifacts: (stories: unknown[], overrides?: Record<string, unknown>) => {
+  validateStoryPlanArtifacts: (
+    stories: unknown[],
+    overrides?: Record<string, unknown>,
+    opts?: { requireContract?: boolean },
+  ) => {
     ok: boolean; byStory: unknown; refusals: unknown[];
-    storiesWithContract: number; storiesTotal: number;
+    storiesWithContract: number; storiesMissingContract: (string | null)[]; storiesTotal: number;
   };
 }
 
@@ -116,7 +120,31 @@ describe('publisher and platform contract validators agree', () => {
     expect(alt.refusals).toEqual(ts.refusals);
     expect(alt.byStory).toEqual(ts.byStory);
     expect(alt.storiesWithContract).toBe(ts.storiesWithContract);
+    expect(alt.storiesMissingContract).toEqual(ts.storiesMissingContract);
     expect(alt.storiesTotal).toBe(ts.storiesTotal);
+  });
+
+  // A1 made a missing contract a refusal on the publisher side. The platform keeps the lenient
+  // default because it reads boards that predate the rule, so the two sides are only in step if
+  // they agree in BOTH modes. Checking one mode would let the hard gate drift unnoticed.
+  it('agree on a required contract, and on the lenient default, in both directions', () => {
+    const stories = [
+      { id: 'S-001' },
+      { id: 'S-002', artifacts: [{ key: 'ART-001', name: 'G', type: 'field_guide' }] },
+      { title: 'a story with no id at all' },
+    ];
+    for (const opts of [undefined, { requireContract: false }, { requireContract: true }]) {
+      const ts = tsValidatePlan(stories, {}, opts);
+      const alt = publisher().validateStoryPlanArtifacts(stories, {}, opts);
+      const mode = JSON.stringify(opts);
+      expect([mode, alt.ok]).toEqual([mode, ts.ok]);
+      expect([mode, alt.refusals]).toEqual([mode, ts.refusals]);
+      expect([mode, alt.storiesMissingContract]).toEqual([mode, ts.storiesMissingContract]);
+      expect([mode, alt.byStory]).toEqual([mode, ts.byStory]);
+    }
+    // The control: the two modes must actually differ, or the loop above proves nothing.
+    expect(tsValidatePlan(stories, {}, { requireContract: true }).ok).toBe(false);
+    expect(tsValidatePlan(stories, {}).ok).toBe(true);
   });
 
   it('agree on the extension reader', () => {

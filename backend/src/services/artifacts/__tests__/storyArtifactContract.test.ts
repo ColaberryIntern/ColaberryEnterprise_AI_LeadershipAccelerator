@@ -211,9 +211,11 @@ describe('the corpus covers every refusal the schema can produce', () => {
         exercised.add(code.code);
       }
     }
-    // override_story_unknown is plan-level, so it cannot appear in a single-story corpus; it is
-    // covered by the plan suite above.
+    // Two codes are plan-level, so neither can appear in a single-story corpus. Both are covered
+    // by the plan suite above: `override_story_unknown` by the dead-override test, and
+    // `story_missing_contract` by the required-contract test.
     exercised.add('override_story_unknown');
+    exercised.add('story_missing_contract');
     expect(declared.filter((d) => !exercised.has(d))).toEqual([]);
   });
 });

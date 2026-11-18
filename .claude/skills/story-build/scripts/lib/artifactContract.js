@@ -304,10 +304,12 @@ function validateArtifactContract(raw, ctx) {
 }
 
 /** Validate every story's contract plus the config's by_story overrides. Mirrors the TS module. */
-function validateStoryPlanArtifacts(stories, byStoryOverrides) {
+function validateStoryPlanArtifacts(stories, byStoryOverrides, opts) {
   const overrides = byStoryOverrides || {};
+  const requireContract = !!(opts && opts.requireContract);
   const byStory = {};
   const refusals = [];
+  const missing = [];
   let withContract = 0;
   const storyIds = new Set();
 
@@ -317,7 +319,20 @@ function validateStoryPlanArtifacts(stories, byStoryOverrides) {
     const raw = story.artifacts !== undefined
       ? story.artifacts
       : (storyId ? overrides[storyId] : undefined);
-    if (raw === undefined || raw === null) continue;
+    if (raw === undefined || raw === null) {
+      missing.push(storyId || null);
+      if (requireContract) {
+        refusals.push({
+          code: 'story_missing_contract',
+          message: 'this story declares no artifact contract, so nothing it hands over is named '
+            + 'and "done" would be a claim that work happened rather than something that exists. '
+            + 'Add an entry under artifacts.by_story for it, or in the story itself.',
+          storyId: storyId,
+          field: storyId ? `artifacts.by_story.${storyId}` : 'artifacts.by_story',
+        });
+      }
+      continue;
+    }
     withContract += 1;
     const result = validateArtifactContract(raw, { storyId });
     refusals.push.apply(refusals, result.refusals);
@@ -341,6 +356,7 @@ function validateStoryPlanArtifacts(stories, byStoryOverrides) {
     byStory,
     refusals,
     storiesWithContract: withContract,
+    storiesMissingContract: missing,
     storiesTotal: (stories || []).length,
   };
 }
@@ -384,6 +400,7 @@ module.exports = {
   validateArtifactsConfig,
   ARTIFACT_GATES,
   ARTIFACT_KEY_PATTERN,
+  artifactTypeNames: typeNames,
   CATALOG_PATH,
   pathExtension,
   validateArtifactContract,
