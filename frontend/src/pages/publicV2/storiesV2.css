@@ -25,39 +25,22 @@
 
 /* ------------------------------------------------------------- masthead --- */
 
-/* The ledger sits in the dark masthead, so its type has to invert. The counts
-   themselves come from the API on every response; nothing here supplies one.
-
-   THE BACKGROUND MUST INVERT TOO, and forgetting it is why this shipped broken.
-   `.cbv2-cs-ledger__item` carries `background: var(--surface-subtle)` from
-   caseStudy.css. This masthead is a DARK ISLAND INSIDE A LIGHT-THEME PAGE, so
-   that token still resolves to its light value (--neutral-50, #F8F8F7) even
-   though .cbv2-pagehero paints --surface-inverse behind it. Inverting only the
-   type therefore put white text on a near-white tile: measured 1.06:1, against
-   the 3:1 WCAG AA needs for large text. The figures were invisible.
-
-   `transparent` rather than a dark fill, because there is no token for "subtle
-   surface on an inverse background" and a raw rgba() would be a second palette
-   by another name - which caseStudyTokens.test.ts bans outright. The hero shows
-   through and --border-strong still describes the tile.
-
-   THIS IS THE SECOND TIME. servicesV2.css:24-26 records the same dark-on-dark
-   defect at 1.03:1 during prototype review, on headings rather than tiles. The
-   shape recurs because inverting a component on a dark surface means overriding
-   every colour-bearing property it inherits, and `background` is the one that
-   looks fine in review: the markup is right, the tokens are all valid, and the
-   DOM probe passes. Only a rendered pixel disagrees.
-
-   NOT CATCHABLE BY THE TOKEN TEST, which is why the guard lives elsewhere. Every
-   token here is real and correctly spelled; it is the COMBINATION that fails.
-   The regression guard is the computed-contrast assertion in
-   tests/systemV2/caseStudyPublic.e2e.js, which is what found it. */
-.cbv2-stories__ledger { margin-top: var(--space-12); }
-.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__value { color: var(--text-on-inverse); }
-.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__label { color: var(--text-on-inverse); }
-.cbv2-pagehero .cbv2-stories__ledger .cbv2-cs-ledger__item {
-  background: transparent;
-  border-color: var(--border-strong);
+/* W26: the light hero the other pages use, a little tighter so the case
+   studies start sooner. Ledger tiles keep their caseStudy.css look on white. */
+.cbv2-shell .cbv2-prhero5.cbv2-stories__hero { padding: var(--space-16) 0 var(--space-8); }
+.cbv2-stories__ledger { margin-top: var(--space-8); }
+/* Two by two on a phone rather than four stacked tiles. */
+.cbv2-stories__ledger.cbv2-cs-ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+@media (min-width: 48rem) {
+  .cbv2-stories__ledger.cbv2-cs-ledger { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* The results follow the hero closely: the shared 128px section gap is for
+   bands that start a new topic, and this one continues the hero. */
+.cbv2-shell .cbv2-section.cbv2-stories__section { padding-top: var(--space-8); }
+.cbv2-stories__ledger-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-body-sm);
+  color: var(--text-muted);
 }
 
 /* --------------------------------------------------------------- layout --- */
@@ -74,9 +57,15 @@
 
 @media (min-width: 64rem) {
   .cbv2-stories__layout { grid-template-columns: minmax(0, 18rem) minmax(0, 1fr); }
-  /* Sticky only where there is room for it; on a short viewport it would trap
-     the results behind a panel that never scrolls away. */
-  .cbv2-stories__aside { position: sticky; top: var(--space-20); }
+  /* Sticky, and scrolls inside itself when taller than the screen, so no
+     filter is ever out of reach (W26). */
+  .cbv2-stories__aside {
+    position: sticky;
+    top: var(--space-20);
+    max-height: calc(100vh - var(--space-20) - var(--space-8));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 .cbv2-stories__aside { display: grid; gap: var(--space-4); min-width: 0; }
@@ -242,7 +231,7 @@
    count it moves.
    ========================================================================== */
 
-.cbv2-stories__search { display: grid; gap: var(--space-2); margin-bottom: var(--space-5); }
+.cbv2-stories__search { display: grid; gap: var(--space-2); margin-bottom: 0; }
 
 .cbv2-stories__search-label {
   font-size: var(--fs-overline);
@@ -278,156 +267,48 @@
   color: var(--text-muted);
 }
 
-/* ============================================================= word cloud ===
-   The same facets as the sidebar, weighted by count and COLOURED BY FIELD.
-
-   COLOUR IS INFORMATION HERE, NOT DECORATION. The cloud mixes three
-   vocabularies - what the work does, what it was built with, and whose industry
-   it was for - and a reader scanning needs to tell them apart without reading
-   every word. That is the whole job the hue is doing, which is why the panel
-   prints a key: an unexplained colour is decoration wearing information's
-   clothes.
-
-   THE HUES COME FROM `--chart-*`, the categorical palette, because distinguishing
-   categories is precisely what that family exists for. Deliberately NOT the
-   semantic ramps - `--amber-500` is commented "warning - UI feedback only" in the
-   token file, and an industry that reads as a warning is worse than one that
-   reads as grey.
-
-   EVERY TINT IS DERIVED FROM ONE HUE BY THE SAME FORMULA. Each field sets
-   `--cloud-hue` and nothing below it changes, so adding a fourth field is one
-   declaration rather than a new block - and the three chips cannot drift into
-   three slightly different shapes.
+/* ========================================================= active filters ===
+   W26: what is selected, above the results; each chip removes one value.
    ========================================================================== */
 
-.cbv2-stories__cloud {
-  margin-bottom: var(--space-8);
-  padding: var(--space-6);
-  background: var(--surface-card);
-  border: var(--border-1) solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-}
-
-.cbv2-stories__cloud-head {
+.cbv2-stories__active {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-6);
-  margin-bottom: var(--space-5);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
 }
-
-.cbv2-stories__cloud-title { margin: 0 0 var(--space-1); font-size: var(--fs-body-lg); }
-.cbv2-stories__cloud-hint { margin: 0; font-size: var(--fs-body-sm); color: var(--text-muted); }
-
-/* ------------------------------------------------------------------ key --- */
-
-.cbv2-stories__cloud-key {
+.cbv2-stories__active-label {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--text-strong);
+}
+.cbv2-stories__active-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2);
+  list-style: none;
   margin: 0;
   padding: 0;
-  list-style: none;
 }
-
-.cbv2-stories__cloud-key-item {
+.cbv2-stories__chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--fs-body-sm);
-  color: var(--text-muted);
-}
-
-.cbv2-stories__cloud-swatch {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: var(--radius-sm);
-  background: var(--cloud-hue);
-}
-
-/* ---------------------------------------------------------------- terms --- */
-
-.cbv2-stories__cloud-terms {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2) var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* The hue, set once per field. Everything else reads it.
-   VIOLET FOR INDUSTRY, NOT TEAL. `--chart-6` was the first choice and sat too
-   close to the stack blue to separate at a glance - which is the one job the
-   colour has here. `--chart-5` is far enough from both green and blue that a
-   reader can sort the cloud without reading it. */
-.cbv2-stories__cloud-key-item[data-field='capability'],
-.cbv2-stories__cloud-term[data-field='capability'] { --cloud-hue: var(--chart-3); }
-.cbv2-stories__cloud-key-item[data-field='stack'],
-.cbv2-stories__cloud-term[data-field='stack'] { --cloud-hue: var(--chart-1); }
-.cbv2-stories__cloud-key-item[data-field='industry'],
-.cbv2-stories__cloud-term[data-field='industry'] { --cloud-hue: var(--chart-5); }
-/* A field with no mapping still renders, in the page's own ink rather than
-   inheriting whichever hue happened to be declared last. */
-.cbv2-stories__cloud-term { --cloud-hue: var(--text-muted); }
-
-/* Font size is set inline from the count. Everything else is fixed here, so a
-   heavier term reads as more prominent WITHOUT becoming a different kind of
-   object - one control, varying only in weight. */
-.cbv2-stories__cloud-term {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-1);
+  min-height: var(--target-min);
   padding: var(--space-1) var(--space-3);
-  font-family: inherit;
-  font-weight: var(--fw-medium);
-  line-height: 1.35;
-  /* 82% hue on the page's ink: enough colour to read as its category, dark
-     enough to stay text rather than becoming a coloured label. */
-  color: color-mix(in srgb, var(--cloud-hue) 82%, var(--text-strong));
-  background: color-mix(in srgb, var(--cloud-hue) 9%, var(--surface-card));
-  border: var(--border-1) solid color-mix(in srgb, var(--cloud-hue) 28%, var(--surface-card));
+  border: var(--border-1) solid var(--brand-accent);
   border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cbv2-stories__cloud-term { transition: none; }
-}
-
-.cbv2-stories__cloud-term:hover {
-  background: color-mix(in srgb, var(--cloud-hue) 18%, var(--surface-card));
-  border-color: color-mix(in srgb, var(--cloud-hue) 45%, var(--surface-card));
-}
-
-.cbv2-stories__cloud-term:focus-visible {
-  outline: var(--border-2) solid var(--text-strong);
-  outline-offset: 2px;
-}
-
-/* SELECTED IS NOT SIGNALLED BY COLOUR ALONE. The chip fills, the label goes to
-   the inverse ink AND the button carries aria-pressed - so the state survives a
-   reader who cannot separate a tint from a fill. The 1px lift is the only motion
-   on the control and it is removed under prefers-reduced-motion above. */
-.cbv2-stories__cloud-term[data-on='true'] {
-  color: var(--text-on-inverse);
-  background: var(--cloud-hue);
-  border-color: var(--cloud-hue);
-  font-weight: var(--fw-bold);
-  transform: translateY(-1px);
-}
-
-/* The weight, said in words, for anyone who cannot use size as information.
-   Never below the body-sm floor, because it is the accessible form of the
-   signal rather than a footnote to it. */
-.cbv2-stories__cloud-count {
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: inherit;
   font-size: var(--fs-body-sm);
-  font-weight: var(--fw-regular);
-  color: color-mix(in srgb, var(--cloud-hue) 55%, var(--text-muted));
+  cursor: pointer;
+  overflow-wrap: anywhere;
 }
-.cbv2-stories__cloud-term[data-on='true'] .cbv2-stories__cloud-count {
-  color: var(--text-on-inverse);
-}
+.cbv2-stories__chip:hover { background: var(--surface-subtle); }
+.cbv2-stories__chip:focus-visible { outline: var(--border-2) solid var(--brand-accent); outline-offset: var(--border-2); }
+.cbv2-stories__chip-legend { color: var(--text-muted); }
+.cbv2-stories__chip-x { font-weight: var(--fw-bold); color: var(--brand-accent); }
+
+/* While a new filter loads, the previous cards stay (no jump) but dim. */
+.cbv2-stories__main[aria-busy='true'] .cbv2-stories__results { opacity: 0.55; }

@@ -641,6 +641,10 @@ export interface PublicCaseStudyListResponse {
   readonly total: number;
   readonly hasMore: boolean;
   readonly ledger: CaseStudyLedgerCounts;
+  /** W26: the four figures for what this query matches. Optional: older servers omit it. */
+  readonly matchLedger?: CaseStudyLedgerCounts;
+  /** W26: facet counts narrowed to this query (each axis over the other axes' matches). */
+  readonly facets?: PublicCaseStudyTaxonomyFacets;
 }
 
 export interface PublicCaseStudyDetailResponse {

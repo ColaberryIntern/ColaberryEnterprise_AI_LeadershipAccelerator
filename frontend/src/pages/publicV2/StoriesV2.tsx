@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import CaseStudyCard from '../../components/caseStudy/CaseStudyCard';
-import CaseStudyFilters from '../../components/caseStudy/CaseStudyFilters';
 import type { CaseStudyFilterField } from '../../components/caseStudy/CaseStudyFilters';
 import CaseStudyLedger from '../../components/caseStudy/CaseStudyLedger';
 import { caseStudyDetailPath, resolveCaseStudySurfaceProfile } from '../../config/caseStudySurfaces';
@@ -17,6 +16,7 @@ import {
   toggleCaseStudyFacet,
 } from '../../services/caseStudyApi';
 import type {
+  PublicCaseStudyListResponse,
   PublicCaseStudySummary,
   PublicCaseStudyTaxonomyFacets,
 } from '../../services/caseStudyPublicTypes';
@@ -25,7 +25,8 @@ import StoriesStandardBand from './StoriesStandardBand';
 import StoriesCta from './StoriesCta';
 import StoriesFilterAside from './StoriesFilterAside';
 import StoriesSearch from './StoriesSearch';
-import StoriesWordCloud from './StoriesWordCloud';
+import StoriesActiveFilters from './StoriesActiveFilters';
+import { VISIBLE_PER_GROUP, activeFilterChips, narrowGroups, splitTitle } from './storiesFilterModel';
 import {
   MASTHEAD_FALLBACK,
   WIDE_VIEWPORT,
@@ -41,19 +42,12 @@ import './storiesV2.css';
 /**
  * StoriesV2 - the Enterprise public index at `/stories` (spec sections 22, 26).
  *
- * WHAT CHANGED. It used to render `config/v2Stories.ts` - six worked examples,
- * honestly badged, but typed into a source file. Section 26 requires that out of
- * the production data path: the module is now a dev/test fixture, this file does
- * not import it, and `storiesV2Contract.test.ts` greps `src/` to keep it so.
+ * The old `config/v2Stories.ts` examples are a dev/test fixture only (section
+ * 26); this file does not import it and `storiesV2Contract.test.ts` keeps it so.
  *
- * FOUR STATES, FOUR SENTENCES. Loading, failed, empty and populated are
- * different situations. The one that costs money to confuse is failed-versus-
- * empty: the admin leads page caught a failed fetch, left its rows at `[]`, and
- * told an operator "No leads yet" against 24,244 real rows. `caseStudyApi`
- * throws on every failure rather than returning an empty list, so a failure
- * cannot reach the empty branch even by accident. And empty is itself two
- * situations - filters that exclude everything, and a library with nothing in it
- * - which `emptyStateFor()` decides from the unfiltered ledger.
+ * FOUR STATES, FOUR SENTENCES. Loading, failed, empty and populated differ;
+ * `caseStudyApi` throws on failure so a failed fetch never reads as "none", and
+ * `emptyStateFor()` tells "no match" from "empty library" by the ledger.
  *
  * THE URL IS THE ONLY PLACE FILTER STATE LIVES. No mirrored `useState` for the
  * facets, so reload, back and forward are correct by construction rather than by
@@ -109,6 +103,9 @@ function StoriesV2(): React.ReactElement {
   const [facets, setFacets] = useState<PublicCaseStudyTaxonomyFacets | null>(null);
   const [facetsFailed, setFacetsFailed] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  /* W26: the last response that landed, held while a new filter loads so the
+     panel, figures and cards stay put instead of jumping on every click. */
+  const [lastReady, setLastReady] = useState<PublicCaseStudyListResponse | null>(null);
   const wide = useWideViewport();
 
   /**
@@ -152,6 +149,7 @@ function StoriesV2(): React.ReactElement {
       .then((data) => {
         if (!live) return;
         setIndex({ status: 'ready', data });
+        setLastReady(data);
         const pending = pendingFilterEvent.current;
         pendingFilterEvent.current = null;
         if (pending) {
@@ -210,24 +208,25 @@ function StoriesV2(): React.ReactElement {
     commit(EMPTY_CASE_STUDY_FILTERS);
   }, [commit]);
 
-  const ready = index.status === 'ready' ? index.data : null;
+  const ready = index.status === 'ready' ? index.data : (index.status === 'loading' ? lastReady : null);
+  const refreshing = index.status === 'loading' && lastReady !== null;
   const items: readonly PublicCaseStudySummary[] = ready ? ready.items : [];
   const profile = resolveCaseStudySurfaceProfile(ready ? ready.surface.key : null);
   const masthead = ready ? ready.surface.hero : MASTHEAD_FALLBACK;
-  const groups = useMemo(() => filterGroupsFrom(facets), [facets]);
+  /* W26: counts narrowed to this query when the server sends them; the
+     library-wide taxonomy before the first response (or from an older server). */
+  const liveFacets = ready?.facets ?? facets;
+  const groups = useMemo(() => narrowGroups(filterGroupsFrom(liveFacets), filters), [liveFacets, filters]);
+  const chips = useMemo(() => activeFilterChips(groups, filters), [groups, filters]);
   const empty = ready ? emptyStateFor(items, ready.ledger) : null;
-  const withheld = hiddenVerificationCount(facets);
+  const withheld = hiddenVerificationCount(liveFacets);
+  const [titleHead, titleTail] = splitTitle(masthead.title);
 
   /**
    * Card clicks, by delegation.
    *
-   * One handler on the list rather than a prop on every card, because the card
-   * component is surface-neutral and takes no click handler. It is an OBSERVER,
-   * not a control: no role, no tabindex, nothing focusable is created here. The
-   * real control is the card's own `<a>`, which is why the handler returns early
-   * unless the click originated inside one - a click on the card's whitespace
-   * navigates nowhere and must not be recorded as if it had. Keyboard activation
-   * dispatches a click from the anchor too, so this covers it.
+   * One observer on the list (the card takes no click handler); it records
+   * only clicks that came from a card's own `<a>`, keyboard included.
    */
   const onResultsClick = useCallback(
     (event: React.MouseEvent<HTMLUListElement>): void => {
@@ -262,41 +261,46 @@ function StoriesV2(): React.ReactElement {
         }
       />
 
-      <section className="cbv2-pagehero cbv2-pagehero--page" aria-labelledby="cbv2-stories-title">
+      {/* W26: the light hero every other page uses (crumb, two-tone title);
+          the four figures follow the filters below. */}
+      <section className="cbv2-prhero5 cbv2-stories__hero" aria-labelledby="cbv2-stories-title">
         <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">{masthead.eyebrow}</p>
-          <h1 id="cbv2-stories-title">{masthead.title}</h1>
-          <p className="cbv2-pagehero__lede">{masthead.description}</p>
-          {/* No ledger until the counts exist. A placeholder figure here would be
-              the one invented number on a page about not inventing them. */}
+          <p className="cbv2-crumb5">
+            <Link to="/">Home</Link> / Proof
+          </p>
+          <h1 id="cbv2-stories-title">
+            {titleHead}
+            {titleTail ? (
+              <>
+                {' '}
+                <span className="cbv2-it">{titleTail}</span>
+              </>
+            ) : null}
+          </h1>
+          <p className="cbv2-lede">{masthead.description}</p>
+          {/* No ledger until the counts exist (no invented placeholder figure). */}
           {ready ? (
-            <CaseStudyLedger
-              className="cbv2-stories__ledger"
-              ledger={ready.ledger}
-              labels={profile.ledgerLabels}
-            />
+            <>
+              <CaseStudyLedger
+                className="cbv2-stories__ledger"
+                ledger={ready.matchLedger ?? ready.ledger}
+                labels={profile.ledgerLabels}
+              />
+              {hasActiveCaseStudyFilters(filters) && ready.matchLedger ? (
+                <p className="cbv2-stories__ledger-note" data-testid="stories-ledger-note">
+                  These figures follow your filters.
+                </p>
+              ) : null}
+            </>
           ) : null}
         </div>
       </section>
 
-      {/* The vocabulary before the cards that use it - see `StoriesStandardBand`. */}
-      <StoriesStandardBand />
-
-      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-stories-results-title">
+      <section className="cbv2-rv cbv2-section cbv2-stories__section" aria-labelledby="cbv2-stories-results-title">
         <div className="cbv2-wrap cbv2-stories">
           <h2 className="cbv2-cs-sr-only" id="cbv2-stories-results-title">
             Published projects
           </h2>
-
-          {/* Above the split, because it describes the LIBRARY rather than the
-              current result set - and because a reader who does not yet know the
-              vocabulary cannot use a grouped sidebar well. Same filter state as
-              the sidebar; clicking a word is clicking its checkbox. */}
-          <StoriesWordCloud
-            groups={groups}
-            selected={(field, value) => (filters[field] as readonly string[]).includes(value)}
-            onToggle={onToggleFacet}
-          />
 
           <div className="cbv2-stories__layout">
             <StoriesFilterAside
@@ -306,9 +310,10 @@ function StoriesV2(): React.ReactElement {
               openByDefault={wide}
               facetsFailed={facetsFailed}
               withheld={withheld}
+              visibleLimit={VISIBLE_PER_GROUP}
             />
 
-            <div className="cbv2-stories__main">
+            <div className="cbv2-stories__main" aria-busy={refreshing}>
               {/* Directly above the count it moves, so cause and effect are one
                   glance apart. */}
               <StoriesSearch value={filters.q} onCommit={onSearch} />
@@ -323,19 +328,11 @@ function StoriesV2(): React.ReactElement {
                 >
                   {countSentence(index)}
                 </p>
-                {hasActiveCaseStudyFilters(filters) ? (
-                  <button
-                    type="button"
-                    className="cbv2-btn cbv2-btn--ghost cbv2-btn--sm"
-                    onClick={onClearFilters}
-                    data-testid="stories-clear-filters"
-                  >
-                    Clear all filters
-                  </button>
-                ) : null}
               </div>
 
-              {index.status === 'loading' ? (
+              <StoriesActiveFilters chips={chips} onRemove={onToggleFacet} onClear={onClearFilters} />
+
+              {index.status === 'loading' && !refreshing ? (
                 <p className="cbv2-stories__state" data-testid="stories-loading">
                   Loading published project records.
                 </p>
@@ -388,6 +385,10 @@ function StoriesV2(): React.ReactElement {
           </div>
         </div>
       </section>
+
+      {/* W26: after the cards, so a visitor reaches the case studies without
+          scrolling past it. Each card still badges its own class in words. */}
+      <StoriesStandardBand />
 
       <StoriesCta />
     </>
