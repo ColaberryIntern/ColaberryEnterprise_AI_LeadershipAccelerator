@@ -179,7 +179,6 @@ import agentFactoryRoutes from './admin/agentFactoryRoutes';
 import certPrepAdminRoutes from './admin/certPrepAdminRoutes';
 import certificationAdminRoutes from './admin/certificationAdminRoutes';
 import checklistRoutes from './admin/checklistRoutes';
-import colaberryTvAdminRoutes from './admin/colaberryTvAdminRoutes';
 
 const router = Router();
 
@@ -505,6 +504,5 @@ router.use(certPrepAdminRoutes);
 router.use(certificationAdminRoutes);
 router.use(checklistRoutes);
 // Campus v20 (C134): the Colaberry TV playlist; requireSection('campaigns') per route, PATH_SECTION maps it to campaigns.
-router.use(colaberryTvAdminRoutes);
 
 export default router;

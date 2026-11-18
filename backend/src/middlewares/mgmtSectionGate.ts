@@ -95,7 +95,6 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // deliberate - an always-readable registry is still campaigns data.
   ['/api/admin/growth-journey', 'campaigns'],
   // Campus v20 (C134): the Colaberry TV playlist on Colaberry Now. Marketing content, so campaigns.
-  ['/api/admin/colaberry-tv', 'campaigns'],
   ['/api/admin/sources', 'lead_ingestion'], ['/api/admin/ingest-logs', 'lead_ingestion'],
   ['/api/admin/routing-rules', 'lead_ingestion'], ['/api/admin/autonomous', 'lead_ingestion'],
   // The admissions operating surface: stats, conversations, the knowledge base, operations,

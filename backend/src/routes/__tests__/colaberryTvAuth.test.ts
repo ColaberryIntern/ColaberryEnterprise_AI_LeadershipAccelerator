@@ -1,9 +1,14 @@
-// Campus v20 N3 (C134): the auth layer of both Colaberry TV routers, driven through real Express + the real middlewares.
-// The portal routes need a participant token (401 without one); the admin routes need an admin token whose sections include
-// 'campaigns' (401 without a token, 403 for a scoped role without campaigns). The service is mocked; colaberryTvRoutes.test covers it.
+// Campus v20 N3 (C134): the auth layer of the Colaberry TV router, driven through real Express + the real middlewares.
+//
+// TV-2 removed the five /manage routes and the whole /api/admin/colaberry-tv router, so the cases that
+// drove them are gone. Rather than just delete them, the removal is ASSERTED: each dead path must now be
+// a 404, not a 401 or 403. A deleted test proves nothing; a 404 proves the route is not mounted. If one
+// of them were ever remounted without its gate, these fail instead of quietly passing.
+//
+// The surviving live route is the learner's GET, which still needs a participant token.
 jest.mock('../../middlewares/authFailureLog', () => ({ logAuthFailure: jest.fn(), describeCaller: () => ({ forwarded_for: null, user_agent: null }) }));
-const mockListAll = jest.fn();
-jest.mock('../../services/colaberryTv/tvService', () => ({ listAll: () => mockListAll(), listForViewer: jest.fn().mockResolvedValue([]) }));
+const mockListForViewer = jest.fn();
+jest.mock('../../services/colaberryTv/tvService', () => ({ listForViewer: (...a: unknown[]) => mockListForViewer(...a) }));
 jest.mock('../../services/campus/campusAudience', () => ({ campusAudienceFor: jest.fn().mockResolvedValue('member') }));
 jest.mock('../../services/access/mgmtBridgeService', () => ({ getMgmtStatus: jest.fn().mockResolvedValue({ is_mgmt: false, role: null, label: null, sections: [] }) }));
 
@@ -19,67 +24,62 @@ function app(): express.Express {
   const prev = process.env.CAMPUS_ENABLED;
   process.env.CAMPUS_ENABLED = 'all';
   let portal: express.Router = express.Router();
-  let admin: express.Router = express.Router();
   jest.isolateModules(() => {
     portal = require('../colaberryTvRoutes').default as express.Router;
-    admin = require('../admin/colaberryTvAdminRoutes').default as express.Router;
   });
   if (prev === undefined) delete process.env.CAMPUS_ENABLED; else process.env.CAMPUS_ENABLED = prev;
   const a = express();
   a.use(express.json());
   a.use(portal);
-  a.use(admin);
   return a;
 }
 
-const PORTAL: Array<[string, string]> = [
-  ['get', '/api/portal/colaberry-tv'], ['get', '/api/portal/colaberry-tv/manage'], ['post', '/api/portal/colaberry-tv/manage'],
-  ['put', '/api/portal/colaberry-tv/manage/order'], ['patch', `/api/portal/colaberry-tv/manage/${ID}`], ['delete', `/api/portal/colaberry-tv/manage/${ID}`],
-];
-const ADMIN: Array<[string, string]> = [
-  ['get', '/api/admin/colaberry-tv'], ['post', '/api/admin/colaberry-tv'], ['put', '/api/admin/colaberry-tv/order'],
-  ['patch', `/api/admin/colaberry-tv/${ID}`], ['delete', `/api/admin/colaberry-tv/${ID}`],
+/** Every path TV-2 removed. None of these may answer anything but 404. */
+const REMOVED: Array<[string, string]> = [
+  ['get', '/api/portal/colaberry-tv/manage'], ['post', '/api/portal/colaberry-tv/manage'],
+  ['put', '/api/portal/colaberry-tv/manage/order'], ['patch', `/api/portal/colaberry-tv/manage/${ID}`],
+  ['delete', `/api/portal/colaberry-tv/manage/${ID}`],
 ];
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
-beforeEach(() => { mockListAll.mockReset(); mockListAll.mockResolvedValue([]); });
+beforeEach(() => { mockListForViewer.mockReset(); mockListForViewer.mockResolvedValue([]); });
 
-describe('portal routes', () => {
-  it.each(PORTAL)('%s %s is 401 without a token and reads nothing', async (m, url) => {
-    const r = await request(app())[m as Method](url);
+describe('the live learner route', () => {
+  it('GET /api/portal/colaberry-tv is 401 without a token and reads nothing', async () => {
+    const r = await request(app()).get('/api/portal/colaberry-tv');
     expect(r.status).toBe(401);
-    expect(mockListAll).not.toHaveBeenCalled();
+    expect(mockListForViewer).not.toHaveBeenCalled();
   });
-  it.each(PORTAL.slice(1))('%s %s is 403 for a participant without campaigns (an explorer)', async (m, url) => {
+
+  it('answers a participant, which is the case the 404s below must not have broken', async () => {
+    // The point of pairing this with the removals: a trim that took the live route out too would
+    // show up here as a 404, not as a silently smaller suite.
     const t = jwt.sign({ sub: 'enr-7', email: 'ada@example.test', cohort_id: 'coh-1', role: 'participant' }, SECRET);
-    const r = await request(app())[m as Method](url).set('Authorization', `Bearer ${t}`).send({});
-    expect(r.status).toBe(403);
-    expect(mockListAll).not.toHaveBeenCalled();
-  });
-  it('a read-only view-as token cannot write', async () => {
-    const t = jwt.sign({ sub: 'enr-7', email: 'ada@example.test', cohort_id: 'coh-1', role: 'participant', read_only: true }, SECRET);
-    expect((await request(app()).post('/api/portal/colaberry-tv/manage').set('Authorization', `Bearer ${t}`).send({ url: 'x' })).status).toBe(403);
+    const r = await request(app()).get('/api/portal/colaberry-tv').set('Authorization', `Bearer ${t}`);
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ videos: [], can_manage: false });
+    expect(mockListForViewer).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('admin routes', () => {
-  it.each(ADMIN)('%s %s is 401 without a token', async (m, url) => {
-    expect((await request(app())[m as Method](url)).status).toBe(401);
-    expect(mockListAll).not.toHaveBeenCalled();
+describe('the manage surface TV-2 removed', () => {
+  it.each(REMOVED)('%s %s is GONE (404), not merely unauthorised', async (m, url) => {
+    // 401/403 here would mean the route still exists behind a gate. 404 means it does not exist.
+    const r = await request(app())[m as Method](url).send({});
+    expect(r.status).toBe(404);
   });
-  it.each(ADMIN)('%s %s is 403 for a scoped role without campaigns', async (m, url) => {
-    const t = jwt.sign({ sub: 'enr-8', email: 'cur@example.test', role: 'admin', mgmt_role: 'curriculum' }, SECRET);
-    expect((await request(app())[m as Method](url).set('Authorization', `Bearer ${t}`).send({})).status).toBe(403);
-    expect(mockListAll).not.toHaveBeenCalled();
-  });
-  it('a participant token is not an admin token', async () => {
+
+  it.each(REMOVED)('%s %s is 404 even WITH a valid participant token', async (m, url) => {
+    // The stronger form: an authenticated staff-shaped caller cannot reach it either, so the
+    // removal is the route being absent rather than the gate refusing.
     const t = jwt.sign({ sub: 'enr-7', email: 'ada@example.test', cohort_id: 'coh-1', role: 'participant' }, SECRET);
-    expect((await request(app()).get('/api/admin/colaberry-tv').set('Authorization', `Bearer ${t}`)).status).toBe(403);
+    const r = await request(app())[m as Method](url).set('Authorization', `Bearer ${t}`).send({});
+    expect(r.status).toBe(404);
   });
-  it('a full admin reaches the playlist', async () => {
-    const t = jwt.sign({ sub: 'adm-1', email: 'Ops@Example.test', role: 'admin' }, SECRET);
-    const r = await request(app()).get('/api/admin/colaberry-tv').set('Authorization', `Bearer ${t}`);
-    expect(r.status).toBe(200);
-    expect(r.body).toEqual({ videos: [] });
+
+  it('the admin router is gone from the tree entirely', () => {
+    // It was mounted by adminRoutes.ts and is deleted, so requiring it must throw rather than
+    // resolve to a stale build artefact.
+    expect(() => require('../admin/colaberryTvAdminRoutes')).toThrow();
   });
 });
