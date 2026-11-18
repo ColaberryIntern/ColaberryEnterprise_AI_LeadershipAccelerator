@@ -935,9 +935,18 @@ body.mapmode .mapbtn{color:#8CC5DE}
 @media (prefers-reduced-motion:reduce){.sc{animation:none}.sc__art svg{transition:none}}
 </style>
 
+<!-- W23 (Ali, 2026-11-17): the page title at the size every other page uses. It used to sit
+     in the catalog toolbar at 31px; it now heads the page above the one-screen catalog,
+     with the same HOME / X breadcrumb the rest of the site shows. -->
+<section class="ghero" aria-labelledby="gv-title">
+  <div class="wrap">
+    <p class="crumb"><a href="/">Home</a> / Government</p>
+    <h1 id="gv-title">Government services, <span class="it">backed by documented work.</span></h1>
+  </div>
+</section>
+
 <section class="gx" id="gv-services" aria-label="Government services and case studies">
   <div class="wrap gx-strip">
-    <h1>Government services, <span class="it">backed by documented work.</span></h1>
     <div class="gx-facts" aria-label="Capability statement at a glance">
       <div class="gx-fact" data-field="mostFrequent(naics)"><small>Primary NAICS</small><b id="cap-naics">–</b></div>
       <!-- UEI and CAGE REMOVED, NOT FILLED IN.
@@ -1550,6 +1559,12 @@ body.mapmode [data-field]{outline-color:var(--accent)!important}
 body.mapmode [data-field]::after{background:var(--accent)!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 @media (max-width:980px){.gx-strip h1{font-size:25px!important}.cta h2{font-size:31px!important}}
+/* W23: one page-title size across the site (home scale, as fidelityV5.css). */
+.ghero{padding:72px 0 8px;background:var(--bg)}
+.ghero .crumb{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin:0 0 22px}
+.ghero .crumb a{color:inherit;text-decoration:none}
+.ghero h1{font-size:clamp(46px,7vw,96px)!important;line-height:1.04!important;letter-spacing:-.035em!important;max-width:1100px;margin:0}
+.gx-strip{justify-content:flex-end}
 </style>
 </main>
 <footer><div class="wrap">

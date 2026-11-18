@@ -52,3 +52,21 @@ describe('W18: one title size on every page', () => {
     expect(src('StoryDetailArticle.tsx')).not.toContain('cbv2-pagehero--page');
   });
 });
+
+describe('W23: the Government page title uses the same scale', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', '..', '..', '..', 'public', 'government', 'index.html'), 'utf8');
+  it('heads the page in a .ghero with the breadcrumb, not inside the catalog toolbar', () => {
+    const hero = html.slice(html.indexOf('<section class="ghero"'), html.indexOf('<section class="gx"'));
+    expect(hero).toContain('<p class="crumb"><a href="/">Home</a> / Government</p>');
+    expect(hero).toMatch(/<h1 id="gv-title">/);
+    const strip = html.slice(html.indexOf('<div class="wrap gx-strip">'), html.indexOf('<div class="wrap gx-find">'));
+    expect(strip).not.toContain('<h1');
+    expect((html.match(/<h1[\s>]/g) || []).length).toBe(1);
+  });
+  it('sizes it at the home scale, in the last style block so nothing overrides it', () => {
+    // After the design-system block's own !important title sizes, so it is the rule that applies.
+    const rule = html.indexOf('.ghero h1{font-size:clamp(46px,7vw,96px)!important;');
+    expect(rule).toBeGreaterThan(-1);
+    expect(rule).toBeGreaterThan(html.lastIndexOf('.gx-strip h1{font-size:25px!important}'));
+  });
+});
