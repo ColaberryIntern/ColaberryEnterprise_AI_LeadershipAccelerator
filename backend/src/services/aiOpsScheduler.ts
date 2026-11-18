@@ -581,6 +581,25 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   // switch inside runDueJobs itself, checked before any claim and again before any
   // external action. With every provider in handoff mode today a tick mints handoff
   // packages for an operator; it publishes nothing to a network.
+  // THE CADENCE FLOOR (phase A2b). Re-verifies the projects with the oldest verification pass,
+  // so a project whose GitHub webhook has stopped firing is still looked at. The live cadence is
+  // per commit and this does not compete with it: the sweep picks the STALEST first, so a project
+  // pushing normally is never chosen while a silent one waits, and a healthy cohort makes this do
+  // almost nothing.
+  //
+  // OFF BY DEFAULT, and its middle mode writes nothing. `verifyBuildFromRepo` latches stories
+  // verified and awards XP, and 34 projects with open stories have never been verified at all, so
+  // an unguarded first run would fire a burst of awards across dormant projects. See
+  // `verificationSweepService` for the three modes and why.
+  {
+    agentName: 'StoryVerificationSweep',
+    hardcodedSchedule: '*/15 * * * *',
+    dynamicImport: async () => {
+      const { runVerificationSweep } = await import('./sbp/verification/verificationSweepService');
+      await runVerificationSweep();
+    },
+    label: 'Story verification sweep, the cadence floor (every 15 minutes)',
+  },
   {
     agentName: 'MarketingPublishingWorker',
     hardcodedSchedule: '* * * * *',

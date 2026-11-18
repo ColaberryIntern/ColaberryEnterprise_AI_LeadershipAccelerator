@@ -5,6 +5,7 @@ import VariableDefinition from '../models/VariableDefinition';
 import SessionGate from '../models/SessionGate';
 import { runIntegrityCheck } from './curriculumManagerService';
 import { getBackfillStatus } from './backfillService';
+import { buildSilenceReport, silenceFinding } from './sbp/verification/buildSilenceReport';
 
 interface Finding {
   severity: 'critical' | 'warning' | 'info';
@@ -149,6 +150,28 @@ export async function generateHealthReport(): Promise<HealthReport> {
     }
   } catch (err: any) {
     findings.push({ severity: 'info', category: 'Backfill', message: `Backfill status unavailable: ${err.message}` });
+  }
+
+  // 5. Build sync silence (phase A2b): which build projects have stopped reporting at all.
+  //
+  // Here because this is the report a person actually reads, through orchestrationHealthAgent.
+  // The RULE lives in `buildSilenceReport`, which also decides what is worth naming: measured on
+  // 2026-11-18, the plain 14-day rule names 28 of 43 projects, so the finding carries the ratio
+  // and the bands and names only the projects that have NEVER delivered a webhook. A finding that
+  // lists 28 projects every run is noise, and noise gets tuned out.
+  //
+  // Fails soft, and a failure is reported AS a failure rather than as silence: "we could not find
+  // out" must never render identically to "all is well".
+  try {
+    const silence = await buildSilenceReport();
+    const finding = silenceFinding(silence);
+    if (finding) findings.push(finding);
+  } catch (err: any) {
+    findings.push({
+      severity: 'warning',
+      category: 'Build sync',
+      message: `Build silence check unavailable: ${err.message}`,
+    });
   }
 
   // Determine overall status
