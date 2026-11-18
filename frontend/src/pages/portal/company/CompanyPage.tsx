@@ -89,7 +89,7 @@ const CompanyPage: React.FC = () => {
       await inviteMembers({ emails: [e], team: team.trim() || undefined });
       setInvited((prev) => [...prev.filter((i) => i.email !== e), { email: e, team: team.trim() || 'Unassigned' }]);
       setEmail(''); setTeam('');
-      setInviteMsg({ ok: true, text: `Free invite sent to ${e}.` });
+      setInviteMsg({ ok: true, text: `Invite sent to ${e}.` });
       void load(); // pull the new member into the rollup + roster
     } catch {
       setInviteMsg({ ok: false, text: 'Could not send that invite. Please try again.' });
@@ -108,7 +108,7 @@ const CompanyPage: React.FC = () => {
         <div style={{ ...card, maxWidth: 560, margin: 'var(--space-8) auto', textAlign: 'center' }}>
           <h2 style={h2}>We couldn&rsquo;t load your company view</h2>
           <p style={{ ...muted, margin: 'var(--space-3) 0 var(--space-5)' }}>
-            This page is for organization managers. If you just created a free management account, try again in a moment.
+            This page is for organization managers. If you just created a management account, try again in a moment.
             Otherwise you can explore the sample company view.
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -152,7 +152,7 @@ const CompanyPage: React.FC = () => {
           <h1 style={{ ...h2, fontSize: 'var(--fs-h2)', fontWeight: 900 }}>{orgName}, on the rise in AI</h1>
           <p style={muted}>
             Where you are, how fast you are moving, and when you reach the next level, from the real data your people earn every day.{' '}
-            <a href="/portal/today" style={{ color: 'var(--text-link)', fontWeight: 600 }}>Your account also includes free student learning &rarr;</a>
+            <a href="/portal/today" style={{ color: 'var(--text-link)', fontWeight: 600 }}>Your account also includes student learning &rarr;</a>
           </p>
         </div>
 
@@ -194,7 +194,7 @@ const CompanyPage: React.FC = () => {
             <h2 style={h2}>Where your team sits</h2>
             <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Builder level, Engineer Readiness, and Builder-XP velocity. Click anyone to drill in.</p>
             {roster.length === 0 ? (
-              <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)' }}>No members yet. Send your first free invite below.</div>
+              <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)' }}>No members yet. Send your first invite below.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 {roster.map((mm) => (
@@ -217,17 +217,17 @@ const CompanyPage: React.FC = () => {
 
         {/* Invite panel */}
         <div id="invite" style={{ ...card, borderTop: '4px solid #5BA63C' }}>
-          <h2 style={h2}>Send free test invites to your employees</h2>
-          <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Send free test invites so your team can try it too. Their progress appears on your dashboard as they go. Tag their team so it shows up in your reporting.</p>
+          <h2 style={h2}>Send test invites to your employees</h2>
+          <p style={{ ...muted, marginBottom: 'var(--space-4)' }}>Send test invites so your team can try it too. Their progress appears on your dashboard as they go. Tag their team so it shows up in your reporting.</p>
           <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: invited.length || inviteMsg ? 'var(--space-4)' : 0 }}>
             <input style={{ ...inputStyle, flex: 2, minWidth: 200 }} type="email" placeholder="teammate@company.com" value={email} disabled={sending} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitInvite(); }} />
             <input style={{ ...inputStyle, flex: 1, minWidth: 140 }} type="text" placeholder="Team / department (optional)" value={team} disabled={sending} onChange={(e) => setTeam(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submitInvite(); }} />
-            <button style={{ ...pillBtn, opacity: sending ? 0.7 : 1 }} onClick={submitInvite} disabled={sending} data-track="company_invite_add">{sending ? 'Sending…' : 'Send free test invite'}</button>
+            <button style={{ ...pillBtn, opacity: sending ? 0.7 : 1 }} onClick={submitInvite} disabled={sending} data-track="company_invite_add">{sending ? 'Sending…' : 'Send test invite'}</button>
           </div>
           {inviteMsg && <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: inviteMsg.ok ? 'var(--status-success)' : 'var(--status-danger, #C20E1E)', marginBottom: invited.length ? 'var(--space-3)' : 0 }}>{inviteMsg.text}</div>}
           {invited.length > 0 && (
             <div>
-              <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 'var(--space-2)' }}>{invited.length} invited this session · free member accounts</div>
+              <div style={{ fontSize: 'var(--fs-caption)', fontWeight: 700, color: 'var(--text-strong)', marginBottom: 'var(--space-2)' }}>{invited.length} invited this session · member accounts</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>{invited.map((i) => (<span key={i.email} style={{ fontSize: 'var(--fs-caption)', background: 'var(--surface-green-subtle)', color: 'var(--status-success)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 600 }}>{i.email} · {i.team}</span>))}</div>
             </div>
           )}
