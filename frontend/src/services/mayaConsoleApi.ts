@@ -106,6 +106,8 @@ export interface MayaOutboundDetail extends MayaOutboundSummary {
   decision_note: string | null;
   delivered_at: string | null;
   failure_reason: string | null;
+  /** OH1o: an Explorer Growth email's brain snapshot (what the brain passed), when it has one. */
+  explorer_snapshot?: import('./explorerGrowthApi').BrainSnapshot;
 }
 
 export interface MayaOutboundDecision {

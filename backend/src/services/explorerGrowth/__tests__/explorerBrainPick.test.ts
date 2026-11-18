@@ -80,21 +80,24 @@ describe('rotation: never the same kind twice in a row', () => {
     expect(p.piece).toBe('build_prompt');
   });
 
-  it('walks the whole rotation over successive picks, with no repeat in a row', async () => {
+  it('walks the whole rotation over successive picks, never repeating a shelf from the last two emails', async () => {
     const s = fullShelves();
     const history: BrainPickRecord[] = [];
     const seen: BrainPiece[] = [];
     for (let i = 0; i < 8; i++) {
+      // OH1o: the Monday week-ahead email is switched off here; it has its own tests.
       const p = await chooseBrainPick(decision({ decision_date: `2026-11-${String(1 + i * 3).padStart(2, '0')}` }), history, async (piece, seed, person) => {
         // Items are unique per call so exclusion never empties a shelf here.
         const r = await s.gather(piece, seed, person);
         return r && r.itemId ? { ...r, itemId: `${piece}-${i}` } : r;
-      });
+      }, {}, { weekAhead: false });
       if (seen.length) expect(p.piece).not.toBe(seen[seen.length - 1]);
+      if (seen.length > 1) expect(p.piece).not.toBe(seen[seen.length - 2]);
       seen.push(p.piece);
       history.unshift(pick(p.piece, `2026-11-${String(1 + i * 3).padStart(2, '0')}`, p.itemId));
     }
-    expect(new Set(seen.slice(0, 4))).toEqual(new Set(NURTURE_ROTATION));
+    // OH1o: live_event joined the rotation (five shelves).
+    expect(new Set(seen.slice(0, NURTURE_ROTATION.length))).toEqual(new Set(NURTURE_ROTATION));
   });
 
   it('a lesson decision right after a their_progress pick rotates instead of repeating it', async () => {

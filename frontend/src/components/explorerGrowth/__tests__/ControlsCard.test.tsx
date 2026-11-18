@@ -14,7 +14,7 @@ import type { ExplorerControls } from '../../../services/explorerGrowthApi';
 const base: ExplorerControls = {
   killSwitch: { active: false, readable: true },
   countdown: { campaignId: 'c1', status: 'active', adminUrl: '/admin/campaigns/c1', readable: true },
-  switches: { mayaEmailAutoReply: false, ghlMirror: false, voiceCalls: false, openHouseAgentConfigured: false },
+  switches: { explorerGrowthSend: false, mayaEmailAutoReply: false, ghlMirror: false, voiceCalls: false, openHouseAgentConfigured: false },
   shelves: { ai_fact: { servable: 0, draft: 2 }, build_prompt: { servable: 1, draft: 3 } },
 };
 
@@ -34,8 +34,15 @@ describe('ControlsBody (OH1k: one front door)', () => {
     const el = show(base);
     const link = Array.from(el.querySelectorAll('a')).find((a) => /open its campaign/i.test(a.textContent || ''));
     expect(link?.getAttribute('href')).toBe('/admin/campaigns/c1');
-    expect(count(el, 'off')).toBe(4); // kill switch + three switches
+    expect(count(el, 'off')).toBe(5); // kill switch + four switches (OH1o added Explorer Growth sending)
     expect(el.textContent).toContain('build prompt 1 live, 3 awaiting approval');
+    expect(el.textContent).toContain('Explorer Growth sends as Maya (after your approval)');
+  });
+  it('OH1o: an older server without the Explorer send switch shows it unreadable, never off', () => {
+    const { explorerGrowthSend, ...older } = base.switches;
+    void explorerGrowthSend;
+    const el = show({ ...base, switches: older });
+    expect(count(el, 'unreadable')).toBe(1);
   });
   it('never shows an unreadable value as off', () => {
     const el = show({ ...base, killSwitch: { active: null, readable: false }, switches: { ...base.switches, ghlMirror: null } });

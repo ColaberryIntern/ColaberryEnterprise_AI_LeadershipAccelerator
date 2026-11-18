@@ -43,11 +43,13 @@ import { isPublicSourceUrl, isServable } from './mayaBrain/mayaBrainItems';
 
 export type BrainPiece =
   | 'their_progress' | 'builder_spotlight' | 'day_of'
-  | 'live_event' | 'community_pulse' | 'ai_fact' | 'build_prompt' | 'weekly_progress';
+  | 'live_event' | 'community_pulse' | 'ai_fact' | 'build_prompt' | 'weekly_progress'
+  | 'week_ahead';
 
 export const BRAIN_PIECES: readonly BrainPiece[] = [
   'their_progress', 'builder_spotlight', 'day_of',
   'live_event', 'community_pulse', 'ai_fact', 'build_prompt', 'weekly_progress',
+  'week_ahead',
 ];
 
 export const PORTAL_EVENTS_URL = 'https://enterprise.colaberry.ai/portal/events';
@@ -60,7 +62,11 @@ export interface BrainPieceResult {
   block: string;
   /** Links this email may carry beyond the Join link (the copy screen allows exactly these). */
   allowedLinks: string[];
-  /** The maya_brain_items row used (ai_fact / build_prompt), so a caller never sends it twice. */
+  /**
+   * The item used, so a caller never sends it to the same person twice: the maya_brain_items row
+   * (ai_fact / build_prompt), and OH1o `builder:<case study>`, `event:<title>@<date>`,
+   * `community:<theme>:<week>`, `week_ahead:<week>`.
+   */
   itemId?: string;
 }
 
@@ -143,6 +149,8 @@ export function seedIndex(seed: string, size: number): number {
 }
 
 export interface SpotlightFacts {
+  /** OH1o: `builder:<case study slug>`, the item id that keeps one person from meeting the same builder twice. */
+  id?: string;
   name: string;
   role: string | null;
   title: string;
@@ -174,7 +182,7 @@ export function renderSpotlight(s: SpotlightFacts | null, ev: LiveEventFacts | n
     lines.push(`- The Events schedule: ${PORTAL_EVENTS_URL}`);
     allowedLinks.push(PORTAL_EVENTS_URL);
   }
-  return { piece: 'builder_spotlight', block: lines.join('\n'), allowedLinks };
+  return { piece: 'builder_spotlight', block: lines.join('\n'), allowedLinks, ...(s?.id ? { itemId: s.id } : {}) };
 }
 
 const isOpenHouse = (title: string) => /open\s*house/i.test(title || '');
@@ -185,19 +193,19 @@ function whenLabel(d: Date): string {
   }).format(d) + ' CT';
 }
 
-async function readSpotlight(seed: string): Promise<SpotlightFacts | null> {
-  try {
-    const { parseHireTalentQuery } = await import('./hire/hireTalentQuery');
-    const { getHireTalentDirectory } = await import('./hire/hireTalentDirectory');
-    const parsed = parseHireTalentQuery({});
-    if (!parsed.ok) return null;
-    const dir = await getHireTalentDirectory(parsed.query);
-    const pool = [...dir.spotlight, ...dir.talent].filter((c, i, all) =>
-      c.signature && all.findIndex((x) => x.slug === c.slug) === i);
-    if (pool.length === 0) return null;
-    const c = pool[seedIndex(seed, pool.length)];
+/** OH1o: every builder with a public case study on hire.refactored.ai (the whole shelf, for the Brain tab too). */
+export async function readSpotlightPool(): Promise<SpotlightFacts[]> {
+  const { parseHireTalentQuery } = await import('./hire/hireTalentQuery');
+  const { getHireTalentDirectory } = await import('./hire/hireTalentDirectory');
+  const parsed = parseHireTalentQuery({});
+  if (!parsed.ok) return [];
+  const dir = await getHireTalentDirectory(parsed.query);
+  const pool = [...dir.spotlight, ...dir.talent].filter((c, i, all) =>
+    c.signature && all.findIndex((x) => x.slug === c.slug) === i);
+  return pool.map((c) => {
     const sig = c.signature!;
     return {
+      id: `builder:${sig.slug}`,
       name: c.name,
       role: c.role,
       title: sig.title,
@@ -205,6 +213,22 @@ async function readSpotlight(seed: string): Promise<SpotlightFacts | null> {
       metric: sig.heroMetric ? `${sig.heroMetric.value} ${sig.heroMetric.label}`.trim() : null,
       url: `${HIRE_BASE_URL}/case-studies/${sig.slug}`,
     };
+  });
+}
+
+/**
+ * One builder for this seed. OH1o: a builder this person already met (excludeIds) is never offered
+ * again, so the rotation walks the whole directory instead of the seed always landing on one profile.
+ */
+export function pickSpotlight(pool: readonly SpotlightFacts[], seed: string, excludeIds: readonly string[] = []): SpotlightFacts | null {
+  const open = pool.filter((s) => !s.id || !excludeIds.includes(s.id));
+  if (open.length === 0) return null;
+  return open[seedIndex(seed, open.length)];
+}
+
+async function readSpotlight(seed: string, excludeIds: string[] = []): Promise<SpotlightFacts | null> {
+  try {
+    return pickSpotlight(await readSpotlightPool(), seed, excludeIds);
   } catch (err: any) {
     console.warn(`[OpenHouseBrain] spotlight unavailable: ${err?.message}`);
     return null;
@@ -222,21 +246,77 @@ export interface UpcomingEvent {
   description: string | null;
 }
 
-/** Next live events (not the Open House), up to three, the first one touted (pure). */
-export function renderLiveEvents(events: UpcomingEvent[], now: Date = new Date()): BrainPieceResult {
+/** OH1o: the item id of one event, so a person is not touted the same event twice. */
+export function eventItemId(e: Pick<UpcomingEvent, 'title' | 'starts_at'>): string {
+  return `event:${String(e.title).trim().toLowerCase().replace(/\s+/g, '-').slice(0, 80)}@${new Date(e.starts_at).toISOString().slice(0, 10)}`;
+}
+
+/**
+ * Next live events (not the Open House), up to three, the first one touted (pure). OH1o: an event
+ * this person was already touted (excludeIds) is not touted again; if every upcoming event was, the
+ * shelf is empty for them.
+ */
+export function renderLiveEvents(events: UpcomingEvent[], now: Date = new Date(), excludeIds: readonly string[] = []): BrainPieceResult {
   const live = (events || [])
     .filter((e) => e && e.title && !isOpenHouse(e.title))
     .filter((e) => { const t = new Date(e.starts_at).getTime(); return Number.isFinite(t) && t > now.getTime(); })
-    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
-    .slice(0, 3);
-  if (live.length === 0) return { piece: 'live_event', block: '', allowedLinks: [] };
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+  const fresh = live.filter((e) => !excludeIds.includes(eventItemId(e)));
+  if (fresh.length === 0) return { piece: 'live_event', block: '', allowedLinks: [] };
+  const shown = [fresh[0], ...live.filter((e) => e !== fresh[0])].slice(0, 3);
   const lines = ['LIVE EVENTS ON THE EVENTS SCHEDULE (learning is self-paced; these are the live moments - tout the first one)'];
-  for (const e of live) {
+  for (const e of shown) {
     const desc = String(e.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
     lines.push(`- ${e.title}, ${whenLabel(new Date(e.starts_at))}${desc ? `: ${desc}` : ''}`);
   }
   lines.push(`- They add it to their calendar from the Events schedule: ${PORTAL_EVENTS_URL}`);
-  return { piece: 'live_event', block: lines.join('\n'), allowedLinks: [PORTAL_EVENTS_URL] };
+  return { piece: 'live_event', block: lines.join('\n'), allowedLinks: [PORTAL_EVENTS_URL], itemId: eventItemId(fresh[0]) };
+}
+
+/** End of the current week (next Monday 00:00 in Central), as an instant. */
+export function endOfWeekCentral(now: Date = new Date()): Date {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(now).reduce<Record<string, string>>((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
+  const daysLeft = 7 - Math.max(0, dow);
+  // Noon UTC on the Central calendar date, then forward: safely inside the same Central day.
+  const base = Date.parse(`${parts.year}-${parts.month}-${parts.day}T12:00:00Z`);
+  const monday = new Date(base + daysLeft * 86_400_000);
+  // Central midnight is 05:00 or 06:00 UTC; 06:00 errs on including Sunday evening events.
+  return new Date(`${monday.toISOString().slice(0, 10)}T06:00:00Z`);
+}
+
+/** The Monday-based week key (YYYY-MM-DD of that Monday) of a Central calendar date. */
+export function centralWeekKey(now: Date = new Date()): string {
+  const end = endOfWeekCentral(now);
+  return new Date(end.getTime() - 7 * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * OH1o (Ali, F): "plan your week". Everything on the real schedule from now to the end of this
+ * week (Open Houses included, since they are part of the week), with the Events link, and an ask to
+ * suggest one plan from THEIR progress. Empty week = empty block, so the shelf is skipped (pure).
+ */
+export function renderWeekAhead(events: UpcomingEvent[], todayUrl: string, now: Date = new Date()): BrainPieceResult {
+  const end = endOfWeekCentral(now).getTime();
+  const week = (events || [])
+    .filter((e) => e && e.title)
+    .filter((e) => { const t = new Date(e.starts_at).getTime(); return Number.isFinite(t) && t > now.getTime() && t < end; })
+    .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+    .slice(0, 6);
+  if (week.length === 0) return { piece: 'week_ahead', block: '', allowedLinks: [] };
+  const lines = [
+    'PLAN YOUR WEEK (the first email of their week: an outlook on what is live THIS week, from the real',
+    'Events schedule, then ONE suggested plan for their week built from their own progress in WHO THEY ARE.',
+    'List only these events, exactly as written; never add one)',
+  ];
+  for (const e of week) {
+    const desc = String(e.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
+    lines.push(`- ${e.title}, ${whenLabel(new Date(e.starts_at))}${desc ? `: ${desc}` : ''}`);
+  }
+  lines.push(`- Every event, with its Join link on the day: ${PORTAL_EVENTS_URL}`);
+  lines.push(`- Their own next step lives on their Today page: ${todayUrl}`);
+  return { piece: 'week_ahead', block: lines.join('\n'), allowedLinks: [PORTAL_EVENTS_URL, todayUrl], itemId: `week_ahead:${centralWeekKey(now)}` };
 }
 
 /** A community post as the brain may see it: no body, no author, by construction. */
@@ -259,16 +339,34 @@ function ritualLabel(key: string): string {
   return RITUAL_LABELS[key] || key.split(/[_\s]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 }
 
-/** Themes and counts from the cohort's last 14 days; never a quote, never a name (pure). */
-export function renderCommunityPulse(posts: PulsePost[], minLikes = PULSE_MIN_LIKES): BrainPieceResult {
+/** OH1o: the community themes of the last 14 days, largest first (the shelf's inventory too). */
+export function communityThemes(posts: PulsePost[], minLikes = PULSE_MIN_LIKES): Array<{ label: string; count: number }> {
   const kept = (posts || []).filter((p) => p && (p.ritual || Number(p.like_count) >= minLikes));
-  if (kept.length === 0) return { piece: 'community_pulse', block: '', allowedLinks: [] };
   const counts = new Map<string, number>();
   for (const p of kept) {
     const label = p.ritual ? ritualLabel(p.ritual) : `${p.category || 'General'} posts`;
     counts.set(label, (counts.get(label) || 0) + 1);
   }
-  const themes = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
+}
+
+/** The item id of one featured theme in one week. */
+export function communityItemId(label: string, now: Date = new Date()): string {
+  return `community:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}:${centralWeekKey(now)}`;
+}
+
+/**
+ * Themes and counts from the cohort's last 14 days; never a quote, never a name (pure). OH1o: ONE
+ * theme is featured per email, the largest this person was not already featured this week
+ * (excludeIds), so two community emails to one person talk about different things.
+ */
+export function renderCommunityPulse(posts: PulsePost[], minLikes = PULSE_MIN_LIKES, excludeIds: readonly string[] = [], now: Date = new Date()): BrainPieceResult {
+  const kept = (posts || []).filter((p) => p && (p.ritual || Number(p.like_count) >= minLikes));
+  if (kept.length === 0) return { piece: 'community_pulse', block: '', allowedLinks: [] };
+  const themeList = communityThemes(posts, minLikes);
+  const featured = themeList.find((t) => !excludeIds.includes(communityItemId(t.label, now)));
+  if (!featured) return { piece: 'community_pulse', block: '', allowedLinks: [] };
+  const themes = themeList.map((t) => [t.label, t.count] as [string, number]);
   const top = [...kept].filter((p) => Number(p.like_count) > 0).sort((a, b) => b.like_count - a.like_count).slice(0, 3);
   const lines = [
     'WHAT THE COHORT IS POSTING (private community, last 14 days: speak only in themes and counts;',
@@ -280,7 +378,8 @@ export function renderCommunityPulse(posts: PulsePost[], minLikes = PULSE_MIN_LI
     lines.push('- Most liked: ' + top.map((p) =>
       `${p.ritual ? ritualLabel(p.ritual) : p.category || 'a post'}${p.week != null ? ` (week ${p.week})` : ''}`).join('; '));
   }
-  return { piece: 'community_pulse', block: lines.join('\n'), allowedLinks: [] };
+  lines.push(`- FEATURE THIS THEME IN THIS EMAIL (and only this one): ${featured.label} (${featured.count})`);
+  return { piece: 'community_pulse', block: lines.join('\n'), allowedLinks: [], itemId: communityItemId(featured.label, now) };
 }
 
 /** One approved AI fact, with its source (pure). */
@@ -357,7 +456,7 @@ export interface BrainPerson {
 
 /** Every live reader, injectable. Each must resolve (degrade to empty) rather than throw; gatherBrainPiece guards anyway. */
 export interface BrainDeps {
-  spotlight: (seed: string) => Promise<SpotlightFacts | null>;
+  spotlight: (seed: string, excludeIds?: string[]) => Promise<SpotlightFacts | null>;
   upcomingEvents: (days: number) => Promise<UpcomingEvent[]>;
   communityPosts: (days: number) => Promise<PulsePost[]>;
   servableItems: (kind: BrainItemKind, excludeIds: string[]) => Promise<BrainItem[]>;
@@ -473,18 +572,26 @@ export async function gatherBrainPiece(
   if (piece === 'their_progress') {
     return { piece, block: '', allowedLinks: [await deps.todayUrl()] };
   }
+  const exclude = person.excludeItemIds ?? [];
   if (piece === 'builder_spotlight') {
-    const [s, ev] = await Promise.all([safe('spotlight', () => deps.spotlight(seed), null), nextLiveEvent(deps, 14)]);
+    const [s, ev] = await Promise.all([safe('spotlight', () => deps.spotlight(seed, exclude), null), nextLiveEvent(deps, 14)]);
+    // Re-checked whatever the reader returned: a builder this person already met is never offered.
+    if (s?.id && exclude.includes(s.id)) return renderSpotlight(null, ev);
     return renderSpotlight(s, ev);
   }
   if (piece === 'live_event') {
-    return renderLiveEvents(await safe('events', () => deps.upcomingEvents(14), [] as UpcomingEvent[]));
+    return renderLiveEvents(await safe('events', () => deps.upcomingEvents(14), [] as UpcomingEvent[]), new Date(), exclude);
   }
   if (piece === 'community_pulse') {
-    return renderCommunityPulse(await safe('community', () => deps.communityPosts(14), [] as PulsePost[]));
+    return renderCommunityPulse(await safe('community', () => deps.communityPosts(14), [] as PulsePost[]), PULSE_MIN_LIKES, exclude);
+  }
+  if (piece === 'week_ahead') {
+    const [events, todayUrl] = await Promise.all([safe('events', () => deps.upcomingEvents(8), [] as UpcomingEvent[]), deps.todayUrl()]);
+    const res = renderWeekAhead(events, todayUrl);
+    if (res.itemId && exclude.includes(res.itemId)) return { piece, block: '', allowedLinks: [] };
+    return res;
   }
   if (piece === 'ai_fact' || piece === 'build_prompt') {
-    const exclude = person.excludeItemIds ?? [];
     // Re-gated here, whatever the reader returned: approved, unexpired, sourced / test-built.
     const items = (await safe(piece, () => deps.servableItems(piece, exclude), [] as BrainItem[]))
       .filter((i) => i && i.kind === piece && !exclude.includes(i.id) && isServable(i));
@@ -502,4 +609,54 @@ export async function gatherBrainPiece(
     return renderWeeklyProgress({ ...facts, nextEvent: ev }, todayUrl);
   }
   return { piece, block: '', allowedLinks: [] };
+}
+
+/* ------------------------------------------------------------------ */
+/* OH1o (G): the inventory - everything each shelf can choose from     */
+/* ------------------------------------------------------------------ */
+
+export interface BrainInventory {
+  builders: SpotlightFacts[];
+  events: Array<{ id: string; title: string; when: string; openHouse: boolean }>;
+  communityThemes: Array<{ id: string; label: string; count: number }>;
+  aiFacts: Array<{ id: string; title: string; source: string | null; expires_at: Date | string | null }>;
+  buildPrompts: Array<{ id: string; title: string; source: string | null; expires_at: Date | string | null }>;
+  weekAhead: { id: string | null; block: string };
+  /** Which readers failed (shown as such, never as an empty shelf). */
+  unavailable: string[];
+}
+
+/**
+ * Read every shelf in full, for the Brain tab: "I need a place to control the brain and see what all
+ * it has to choose from" (Ali, 2026-11-18). Each reader fails on its own and is named in `unavailable`.
+ */
+export async function readBrainInventory(depsIn: Partial<BrainDeps> & { spotlightPool?: () => Promise<SpotlightFacts[]> } = {}): Promise<BrainInventory> {
+  const deps: BrainDeps = { ...DEFAULT_DEPS, ...depsIn };
+  const unavailable: string[] = [];
+  const guard = async <T>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+    try { return await fn(); } catch { unavailable.push(name); return fallback; }
+  };
+  const [builders, events, posts, facts, prompts, todayUrl] = await Promise.all([
+    guard('builders', () => (depsIn.spotlightPool ?? readSpotlightPool)(), [] as SpotlightFacts[]),
+    guard('events', () => deps.upcomingEvents(14), [] as UpcomingEvent[]),
+    guard('community', () => deps.communityPosts(14), [] as PulsePost[]),
+    guard('ai_facts', () => deps.servableItems('ai_fact', []), [] as BrainItem[]),
+    guard('build_prompts', () => deps.servableItems('build_prompt', []), [] as BrainItem[]),
+    guard('today_url', () => deps.todayUrl(), PORTAL_EVENTS_URL),
+  ]);
+  const now = new Date();
+  const week = renderWeekAhead(events, todayUrl, now);
+  const item = (i: BrainItem) => ({ id: i.id, title: i.title, source: i.source_label || i.source_url || null, expires_at: i.expires_at ?? null });
+  return {
+    builders,
+    events: events
+      .filter((e) => new Date(e.starts_at).getTime() > now.getTime())
+      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+      .map((e) => ({ id: eventItemId(e), title: e.title, when: whenLabel(new Date(e.starts_at)), openHouse: isOpenHouse(e.title) })),
+    communityThemes: communityThemes(posts).map((t) => ({ ...t, id: communityItemId(t.label, now) })),
+    aiFacts: facts.filter((i) => isServable(i)).map(item),
+    buildPrompts: prompts.filter((i) => isServable(i)).map(item),
+    weekAhead: { id: week.itemId ?? null, block: week.block },
+    unavailable,
+  };
 }

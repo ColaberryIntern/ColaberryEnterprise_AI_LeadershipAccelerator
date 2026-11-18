@@ -24,7 +24,8 @@ describe('getExplorerControls', () => {
       campaignId: '45c68da0-4a07-4f10-a38a-a5920fda213c', status: 'draft',
       adminUrl: '/admin/campaigns/45c68da0-4a07-4f10-a38a-a5920fda213c', readable: true,
     });
-    expect(c.switches).toEqual({ mayaEmailAutoReply: false, ghlMirror: false, voiceCalls: false, openHouseAgentConfigured: false });
+    // OH1o: Explorer Growth sending (via Outbound approvals) is a switch too, OFF.
+    expect(c.switches).toEqual({ explorerGrowthSend: false, mayaEmailAutoReply: false, ghlMirror: false, voiceCalls: false, openHouseAgentConfigured: false });
     expect(c.shelves?.build_prompt).toEqual({ servable: 1, draft: 3 });
   });
   it('reads a string "true" kill switch as active', async () => {

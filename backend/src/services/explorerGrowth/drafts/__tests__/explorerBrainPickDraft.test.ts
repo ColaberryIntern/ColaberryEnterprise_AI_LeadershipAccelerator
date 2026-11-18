@@ -135,7 +135,8 @@ describe('the draft is written as Maya around one brain piece', () => {
     const h = harness({}, `<p><a href="${SPOTLIGHT_URL}">story</a> and <a href="https://evil.example.com/x">this</a></p>`);
     const out = await renderDecisionDraft(decision(), h.deps);
     expect(out.status).toBe('rejected');
-    expect(out.issues).toEqual(['Unknown URL found: https://evil.example.com/x']);
+    // OH1o: refused by the validator and by the shared campaign link screen.
+    expect(out.issues).toEqual(['Unknown URL found: https://evil.example.com/x', 'links somewhere else (https://evil.example.com/x)']);
     expect(h.committed[0].input.status).toBe(EXPLORER_DRAFT_REJECTED_STATUS);
   });
 

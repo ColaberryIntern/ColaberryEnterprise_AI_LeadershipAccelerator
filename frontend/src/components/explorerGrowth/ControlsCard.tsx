@@ -18,6 +18,8 @@ function onOff(v: boolean | null): { label: string; tone: 'neutral' | 'danger' |
 export function ControlsBody({ c }: { c: ExplorerControls }) {
   const kill = c.killSwitch.readable ? onOff(c.killSwitch.active) : onOff(null);
   const rows: Array<[string, { label: string; tone: 'neutral' | 'danger' | 'warning' }, string]> = [
+    // OH1o: Explorer Growth emails go to Outbound approvals; a person approves each one.
+    ['Explorer Growth sends as Maya (after your approval)', onOff(c.switches.explorerGrowthSend ?? null), 'Off: Explorer drafts stay shadow drafts. On: passing drafts wait in Outbound approvals, and each leaves only when a person approves it.'],
     ['Maya answers email replies on her own', onOff(c.switches.mayaEmailAutoReply), 'Off: replies wait in the outbound approvals queue for a person.'],
     ['GHL mirror (notes for emails, replies, calls)', onOff(c.switches.ghlMirror), 'Off: nothing is written to GHL contacts.'],
     ['Countdown calls', onOff(c.switches.voiceCalls), c.switches.openHouseAgentConfigured ? 'Open House agent is configured.' : 'Open House agent id is not set, so calls would refuse.'],

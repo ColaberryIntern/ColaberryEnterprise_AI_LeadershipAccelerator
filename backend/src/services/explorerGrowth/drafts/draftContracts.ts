@@ -184,6 +184,8 @@ export interface DraftOutcome {
    * current".
    */
   superseded_scheduled_email_id?: string | null;
+  /** OH1o: the Outbound approvals row this draft was queued as, when Explorer sending is on. */
+  outbound_approval_id?: string | null;
 }
 
 export interface DraftRenderResult {

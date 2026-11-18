@@ -121,14 +121,16 @@ export function evaluateContact(
   // OH1j: the brain cadence. Email only, because a brain pick is an email; absent (undefined)
   // means the caller does not track brain picks (the Growth Journey strategies), and null
   // means this person has never had one.
+  // OH1o: the cadence is a brain rule; the floor is 24 hours whatever the rule says.
+  const minHours = Math.max(24, Number.isFinite(input.brainPickMinHours) ? Number(input.brainPickMinHours) : BRAIN_PICK_MIN_HOURS);
   if (
     candidate.channel === 'email' &&
     typeof input.hoursSinceLastBrainPick === 'number' &&
-    !(input.hoursSinceLastBrainPick >= BRAIN_PICK_MIN_HOURS)
+    !(input.hoursSinceLastBrainPick >= minHours)
   ) {
     return {
       allowed: false,
-      reason: `brain_cadence (${Math.floor(input.hoursSinceLastBrainPick)}h < ${BRAIN_PICK_MIN_HOURS}h)`,
+      reason: `brain_cadence (${Math.floor(input.hoursSinceLastBrainPick)}h < ${minHours}h)`,
     };
   }
 

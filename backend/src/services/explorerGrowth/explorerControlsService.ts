@@ -21,6 +21,8 @@ export interface ExplorerControls {
   killSwitch: { active: boolean | null; readable: boolean };
   countdown: { campaignId: string | null; status: string | null; adminUrl: string | null; readable: boolean };
   switches: {
+    /** OH1o: passing Explorer drafts go to Outbound approvals (a person approves each one). */
+    explorerGrowthSend: boolean | null;
     mayaEmailAutoReply: boolean | null;
     ghlMirror: boolean | null;
     voiceCalls: boolean;
@@ -54,12 +56,13 @@ async function settle<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } |
 }
 
 export async function getExplorerControls(deps: ControlsDeps = defaultDeps()): Promise<ExplorerControls> {
-  const [kill, countdown, autoReply, mirror, shelves] = await Promise.all([
+  const [kill, countdown, autoReply, mirror, shelves, explorerSend] = await Promise.all([
     settle(() => deps.getSetting('system_kill_switch')),
     settle(() => deps.findCountdown()),
     settle(() => deps.getSetting('maya_email_autoreply_enabled')),
     settle(() => deps.getSetting('ghl_mirror_enabled')),
     settle(() => deps.shelfCounts()),
+    settle(() => deps.getSetting('explorer_growth_send_enabled')),
   ]);
   const c = countdown.ok ? countdown.value : null;
   return {
@@ -71,6 +74,7 @@ export async function getExplorerControls(deps: ControlsDeps = defaultDeps()): P
       readable: countdown.ok,
     },
     switches: {
+      explorerGrowthSend: explorerSend.ok ? truthy(explorerSend.value) : null,
       mayaEmailAutoReply: autoReply.ok ? truthy(autoReply.value) : null,
       ghlMirror: mirror.ok ? truthy(mirror.value) : null,
       voiceCalls: deps.voiceEnabled,

@@ -4,6 +4,7 @@ import { classInstant } from './acceleratorService';
 import { formatCentralClock } from './centralDate';
 import { sessionCheckinUrl, longSessionDate } from './email/sessionReminderEmail';
 import { meaningfulHistory } from './openHouseCountdownContext';
+import { REPETITION_LIMIT, repetitionScore } from './openHouseBrain';
 
 /**
  * OH1 (Ali, 2026-11-17): the Open House countdown is a CAMPAIGN, sent by Maya.
@@ -90,21 +91,101 @@ export function softenIdioms(text: string): string {
  * link and no other web link except the main site.
  */
 export function screenEventReminderCopy(subject: string, body: string, joinUrl: string, extraAllowed: string[] = []): string[] {
+  // OH1o: the countdown and Explorer Growth run the SAME screen (Ali, 2026-11-18: "same validation as
+  // campaigns"). This is the countdown's call into it, unchanged in what it returns: no idiom rewrite
+  // (the scheduler softens before it calls), the Join link required, no repetition input (the
+  // countdown checks repetition against the full earlier bodies itself).
+  return screenMayaCopy({ subject, body, requireLink: joinUrl || '', allowedLinks: extraAllowed }).problems;
+}
+
+export interface MayaCopyScreenInput {
+  subject: string;
+  body: string;
+  /** A link the body MUST carry (the countdown's Join link). Empty string = required but absent. */
+  requireLink?: string;
+  /** Extra links allowed exactly as written (a brain piece's links). The main site and Today page are always allowed. */
+  allowedLinks?: readonly string[];
+  /** Links allowed by prefix (Explorer Growth: its own lesson pages on enterprise.colaberry.ai). */
+  allowedPrefixes?: readonly string[];
+  /** Earlier emails to this person, full text: a draft that re-says one is refused. */
+  earlier?: ReadonlyArray<{ subject?: string | null; body: string }>;
+  /** Extra phrases from the brain rules (never-say), additive to BANNED. */
+  extraNeverSay?: readonly string[];
+  /** Rewrite the harmless idioms (softenIdioms) before screening. The returned copy is the rewritten one. */
+  soften?: boolean;
+}
+
+export interface MayaCopyScreenResult {
+  subject: string;
+  body: string;
+  problems: string[];
+  /** Share of the draft's phrases already in an earlier email (0..1). */
+  overlap: number;
+}
+
+function plainWords(s: string): string[] {
+  return String(s || '').replace(/<[^>]+>/g, ' ').replace(/https?:\/\/\S+/g, ' ').toLowerCase()
+    .replace(/[^a-z0-9' ]+/g, ' ').split(/\s+/).filter(Boolean);
+}
+
+/** The opening of an email: its first 8 words after the greeting line ("Hi Aaron,"). */
+export function openingOf(body: string): string {
+  const w = plainWords(body);
+  const start = w.length > 2 && /^(hi|hello|hey|dear)$/.test(w[0]) ? 2 : 0;
+  return w.slice(start, start + 8).join(' ');
+}
+
+/** Two subjects say the same thing: equal after normalizing, or 80% of the words shared. */
+export function subjectsRepeat(a: string, b: string): boolean {
+  const wa = plainWords(a).filter((x) => x !== 're'); const wb = plainWords(b).filter((x) => x !== 're');
+  if (!wa.length || !wb.length) return false;
+  if (wa.join(' ') === wb.join(' ')) return true;
+  const sa = new Set(wa); const sb = new Set(wb);
+  let shared = 0; for (const x of sa) if (sb.has(x)) shared++;
+  return shared / Math.max(sa.size, sb.size) >= 0.8;
+}
+
+/**
+ * OH1o: THE copy screen for every message Maya writes to a person, shared by the Open House
+ * countdown (screenEventReminderCopy) and Explorer Growth (renderDecisionDraft). In order:
+ * the banned words (BANNED, incl. the no-cost word), the required link, the link allowlist,
+ * the never-say phrases, and - when earlier emails are given - repetition of the body
+ * (4-word phrases, REPETITION_LIMIT), the subject and the opening.
+ */
+export function screenMayaCopy(input: MayaCopyScreenInput): MayaCopyScreenResult {
+  const subject = input.soften ? softenIdioms(input.subject || '') : (input.subject || '');
+  const body = input.soften ? softenIdioms(input.body || '') : (input.body || '');
   const problems: string[] = [];
-  const text = `${subject || ''}\n${body || ''}`;
+  const text = `${subject}\n${body}`;
   for (const [re, label] of BANNED) if (re.test(text)) problems.push(`mentions ${label}`);
-  if (!joinUrl || !(body || '').includes(joinUrl)) problems.push('missing the Join link');
-  const urls = (body || '').match(/https?:\/\/[^\s"'<>)]+/g) || [];
+  if (input.requireLink !== undefined && (!input.requireLink || !body.includes(input.requireLink))) problems.push('missing the Join link');
+  const allowed = input.allowedLinks ?? [];
+  const prefixes = input.allowedPrefixes ?? [];
+  const urls = body.match(/https?:\/\/[^\s"'<>)]+/g) || [];
   for (const u of urls) {
     const clean = u.replace(/[.,;:!?]+$/, '');
-    if (clean === joinUrl || clean === 'https://enterprise.colaberry.ai' || clean === 'https://enterprise.colaberry.ai/') continue;
+    if ((input.requireLink && clean === input.requireLink) || clean === 'https://enterprise.colaberry.ai' || clean === 'https://enterprise.colaberry.ai/') continue;
     // OH1d: the platform Today page, which a momentum step may invite them back to.
     if (clean === PORTAL_TODAY_URL) continue;
     // OH1f: the links of this email's own brain piece (a builder's public case study, the Events schedule).
-    if (extraAllowed.includes(clean)) continue;
+    if (allowed.includes(clean)) continue;
+    if (prefixes.some((p) => clean.startsWith(p))) continue;
     problems.push(`links somewhere else (${clean.slice(0, 60)})`);
   }
-  return problems;
+  for (const p of input.extraNeverSay ?? []) {
+    const esc = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(^|[^A-Za-z0-9])${esc}($|[^A-Za-z0-9])`, 'i').test(text.replace(/<[^>]+>/g, ' '))) problems.push(`never-say: "${p}"`);
+  }
+  let overlap = 0;
+  const earlier = (input.earlier ?? []).filter((e) => e && typeof e.body === 'string');
+  if (earlier.length) {
+    overlap = repetitionScore(body, earlier.map((e) => e.body));
+    if (overlap > REPETITION_LIMIT) problems.push(`repeats an earlier email (${Math.round(overlap * 100)}% of its phrases)`);
+    if (earlier.some((e) => e.subject && subjectsRepeat(subject, e.subject))) problems.push('reuses an earlier subject line');
+    const open = openingOf(body);
+    if (open.split(' ').length >= 5 && earlier.some((e) => openingOf(e.body) === open)) problems.push('opens the same way as an earlier email');
+  }
+  return { subject, body, problems, overlap };
 }
 
 /**

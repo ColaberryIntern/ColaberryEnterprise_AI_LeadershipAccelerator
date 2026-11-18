@@ -12,6 +12,7 @@ import DecisionsTab from '../../components/explorerGrowth/DecisionsTab';
 import ShadowTab from '../../components/explorerGrowth/ShadowTab';
 import ContentTab from '../../components/explorerGrowth/ContentTab';
 import SettingsTab from '../../components/explorerGrowth/SettingsTab';
+import BrainTab from '../../components/explorerGrowth/BrainTab';
 import { getSummary } from '../../services/explorerGrowthApi';
 
 /**
@@ -35,7 +36,7 @@ import { getSummary } from '../../services/explorerGrowthApi';
  * that is not coming.
  */
 
-type TabKey = 'overview' | 'campus' | 'journey' | 'decisions' | 'shadow' | 'content' | 'settings';
+type TabKey = 'overview' | 'campus' | 'journey' | 'decisions' | 'shadow' | 'content' | 'brain' | 'settings';
 
 /**
  * SHADOW LEADS, as of Phase 2.
@@ -60,6 +61,8 @@ export const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'journey', label: 'Journey', icon: 'route-line' },
   { key: 'decisions', label: 'Decisions', icon: 'git-branch-line' },
   { key: 'content', label: 'Content supply', icon: 'book-open-line' },
+  // OH1o: the brain's rules, everything it can choose from, and a sample (Ali, 2026-11-18).
+  { key: 'brain', label: 'Brain', icon: 'brain-line' },
   { key: 'settings', label: 'Settings', icon: 'settings-3-line' },
 ];
 
@@ -220,6 +223,7 @@ export default function ExplorerGrowthPage() {
       {tab === 'decisions' && <DecisionsTab />}
       {tab === 'shadow' && <ShadowTab />}
       {tab === 'content' && <ContentTab />}
+      {tab === 'brain' && <BrainTab />}
       {/* The whole state, not `summary.data` — the tab must be able to tell
           loading from empty from failed, like every other tab here. */}
       {tab === 'settings' && <SettingsTab state={summary} />}

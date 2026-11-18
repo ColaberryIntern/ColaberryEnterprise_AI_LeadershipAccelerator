@@ -816,7 +816,8 @@ describe('the copy guards on the generated body', () => {
     expect(h.committed[0].input.status).toBe(EXPLORER_DRAFT_REJECTED_STATUS);
     const meta = h.committed[0].input.metadata as any;
     expect(meta.quality_gate.valid).toBe(false);
-    expect(meta.quality_gate.copy_issues).toHaveLength(1);
+    // OH1o: refused twice over - by the shared campaign screen (screenMayaCopy) and by the Explorer guard.
+    expect(meta.quality_gate.copy_issues).toEqual(['mentions a no-cost claim', expect.stringContaining('tac-807-172-d-free')]);
   });
 
   it('REPAIRS a relative link rather than refusing it, and records the repair', async () => {
@@ -887,8 +888,10 @@ describe('the copy guards on the generated body', () => {
 
     const out = await renderDecisionDraft(decision(), h.deps);
 
-    expect(out.issues).toHaveLength(2);
+    // OH1o: the validator's issue, the shared campaign screen's, and the Explorer guard's.
+    expect(out.issues).toHaveLength(3);
     expect(out.issues.join(' ')).toContain('November 12');
+    expect(out.issues.join(' ')).toContain('mentions a no-cost claim');
     expect(out.issues.join(' ')).toContain('tac-807-172-d-free');
   });
 });
