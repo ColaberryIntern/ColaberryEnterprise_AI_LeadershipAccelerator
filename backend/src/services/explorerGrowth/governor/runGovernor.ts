@@ -14,6 +14,7 @@ import { isFreePreviewTier } from '../../access/contentEntitlement';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
 import { isHumanOwned } from './humanOwnership';
 import { isInOpenHouseCountdown } from './openHouseHold';
+import { governorKillSwitch } from './killSwitch';
 import { hoursSinceLastBrainPick } from './brainCadence';
 
 /**
@@ -123,12 +124,14 @@ async function runOne(
     email: profile.email_normalized ?? null,
   });
 
-  const [history, humanOwned, openHouseCountdown, hoursSinceBrainPick] = await Promise.all([
+  const [history, humanOwned, openHouseCountdown, hoursSinceBrainPick, killSwitch] = await Promise.all([
     contactHistory(enrollmentId, asOf),
     isHumanOwned(enrollmentId),
     isInOpenHouseCountdown(profile.lead_id ?? null),
     // OH1j: one brain pick per person per 72 h, shadow picks included (contactPolicy BRAIN_PICK_MIN_HOURS).
     hoursSinceLastBrainPick(profile.lead_id ?? null, asOf.toISOString().slice(0, 10)),
+    // OH1k: the one global kill switch, read strictly (unreadable = on).
+    governorKillSwitch(),
   ]);
 
   const ctx: GovernorContext = {
@@ -161,7 +164,7 @@ async function runOne(
         `${contactability.email?.reason ?? ''} ${contactability.sms?.reason ?? ''}`,
       ),
       consentRevoked: false,
-      killSwitch: false,
+      killSwitch, // OH1k: system_kill_switch, the same switch that stops every send (was hard-coded false)
       campaignInactive: false,
       humanOwned, // M35 / M5: an accepted admissions handoff pauses the AI for this learner
       openHouseCountdown, // OH1f: the Open House countdown is live for this learner and takes precedence
