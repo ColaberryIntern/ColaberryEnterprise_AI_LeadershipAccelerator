@@ -1,0 +1,45 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:07.880
+Colaberry's AI internship used to start with an email to two inboxes. This is the pipeline that replaced it.
+
+2
+00:00:09.500 --> 00:00:23.320
+An applicant records their consents, answers one question bank by web form or by an AI phone call, and a reviewer decides. Then come the offer documents, a payment step and a place in the internship cohort.
+
+3
+00:00:24.400 --> 00:00:30.850
+This is the reviewer's queue. Applicants' names and contact details are hidden in this walkthrough.
+
+4
+00:00:35.400 --> 00:00:47.130
+The Decide panel puts requirement checks, computed straight from the answers, beside an AI recommendation. The AI never scores or ranks. Only the reviewer can admit.
+
+5
+00:00:48.200 --> 00:00:58.700
+Every step is a transition in one table that names who may take it. Admission belongs to the reviewer alone, and there is no switch that lets the system do it.
+
+6
+00:00:59.800 --> 00:01:08.550
+Answers pulled from a phone interview are stored as needing follow-up, and only the applicant's own confirmation turns them into answers.
+
+7
+00:01:10.800 --> 00:01:21.690
+Once admitted, each intern is tracked in one console. Unknown is shown as unknown, never as zero, and nudges come from a fixed set of templates.
+
+8
+00:01:22.800 --> 00:01:35.730
+On live traffic, all eight admission decisions were made by a reviewer. The reviewer approved two of the three applicants the AI flagged for a closer look, and all forty two signed documents were verified.
+
+9
+00:01:36.800 --> 00:01:44.570
+Fourteen interns are active with no duplicate memberships. The pipeline was built in ninety four commits over ten weeks.
+
+10
+00:01:47.800 --> 00:01:55.880
+Nothing in the platform records whether an intern was hired, so placement is still unmeasured. The record says so plainly.
+
+11
+00:01:57.800 --> 00:02:04.610
+The AI does the work that scales, and a person keeps every admission. That is the part worth copying.
