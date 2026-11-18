@@ -38,6 +38,35 @@ describe('normalizeWithFieldMap', () => {
     expect(out.metadata.random_utm).toBe('foo');
   });
 
+  /**
+   * R22: `utm_medium` is a lead COLUMN, so it must not land in the metadata bag.
+   *
+   * Before R22 it was absent from `KNOWN_LEAD_FIELDS`, and the two tests above show what that
+   * meant in practice: an unknown destination is routed into `metadata`, and the direct-name pass
+   * only copies listed keys. So an inbound medium ended up either in a JSON bag nothing reports
+   * on, or nowhere — while `leads.utm_medium` sat empty and the signup form packed the value into
+   * `utm_source` as `fb|paid` to get it through at all. The first assertion is the fix; the second
+   * is the one that fails if the field is ever quietly demoted back to metadata.
+   */
+  it('carries utm_medium onto the lead as a column, not into the metadata bag', () => {
+    const out = normalizeWithFieldMap(
+      { email: 'x@y.com', utm_source: 'fb', utm_medium: 'paid', utm_campaign: 'nov' },
+      { /* direct-name pass only: these keys are named exactly as the lead fields are */ },
+    );
+    expect(out).toMatchObject({ utm_source: 'fb', utm_medium: 'paid', utm_campaign: 'nov' });
+    expect(out.metadata).not.toHaveProperty('utm_medium');
+  });
+
+  it('accepts the camelCase alias, like the other two utm fields', () => {
+    const out = normalizeWithFieldMap({ email: 'x@y.com', utmMedium: 'organic' }, {});
+    expect(out.utm_medium).toBe('organic');
+  });
+
+  it('defaults utm_medium to empty rather than undefined, matching utm_source beside it', () => {
+    const out = normalizeWithFieldMap({ email: 'x@y.com' }, {});
+    expect(out.utm_medium).toBe('');
+  });
+
   it('coerces boolean-like values', () => {
     const out = normalizeWithFieldMap(
       { consent: 'true', evaluating: 1, sponsor: 'yes' },

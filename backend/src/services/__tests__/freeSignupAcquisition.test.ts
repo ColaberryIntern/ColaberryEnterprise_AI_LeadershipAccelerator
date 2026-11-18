@@ -73,6 +73,12 @@ const acquisition = {
   source_id: SOURCE_ID,
   entry_point_id: ENTRY_POINT_ID,
   utm_source: 'newsletter',
+  // R22. Adding it HERE rather than as a new test is the point: the two checks below iterate this
+  // fixture, so the field is now covered by "every field the service writes is a real Lead
+  // attribute" and by "the real Lead model retains every value the service writes". The second one
+  // is what would have caught this gap originally — the medium reached `captureGuestAsLead` and
+  // Sequelize dropped it in silence, which is the exact failure mode that comment warns about.
+  utm_medium: 'paid',
   utm_campaign: 'oct',
   utm_content: '52708445138434',
   utm_term: '52708443249434',
@@ -178,7 +184,7 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
     return len;
   };
 
-  it.each(['source', 'form_type', 'utm_source', 'utm_campaign', 'utm_content', 'utm_term'])(
+  it.each(['source', 'form_type', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'])(
     '%s caps at exactly the width the column declares',
     (field) => {
       const width = stringWidth(field);

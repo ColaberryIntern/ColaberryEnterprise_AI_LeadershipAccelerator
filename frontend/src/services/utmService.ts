@@ -82,10 +82,6 @@ export function getUTMParams(): UTMParams {
 }
 
 /**
- * Return backend-compatible UTM fields for form payloads.
- * Matches the toLeadPayload pattern: utm_medium is piped into utm_source.
- */
-/**
  * Build the advisor.colaberry.ai URL preserving UTM params from current page.
  */
 export function getAdvisoryUrl(path: string = '/advisory/'): string {
@@ -121,19 +117,43 @@ export function getDemoWalkthroughUrl(scenario: string): string {
   }
 }
 
+/**
+ * The UTM fields a lead form posts. `utm_medium` travels as ITSELF.
+ *
+ * ── R22: THE `source|medium` CONVENTION ENDS HERE ─────────────────────────────────────
+ *
+ * This used to return `utm_source: 'fb|paid'` — the source and the medium concatenated into one
+ * string — because `leads` had no `utm_medium` column and that was the only way the medium
+ * survived the trip. C10.4 added the column (`db/ensureLeadAttributionColumns.ts`) precisely so
+ * that "NEW rows can carry a medium as a value rather than as half of a string", and R22 is the
+ * write side it was added for.
+ *
+ * WHAT THE PIPE COST, measured on production 2026-11-18: 135 leads carry a packed `utm_source`,
+ * and because `fb` and `fb|paid` are different group keys, one Facebook channel reports as two
+ * lines — 385 Facebook leads split into 315 + 70, and 196 Instagram into 132 + 64. The packed
+ * shape also misses `PLACEMENT_FOR_SOURCE`, so its spend resolves to null and its
+ * cost-per-signup renders blank, which reads as missing data rather than as a bug. 129 of those
+ * 135 rows ALSO carry the correct `utm_medium` alongside, so the pipe was not even preserving
+ * anything the row did not already hold.
+ *
+ * `adSpend/utmSource.ts` keeps splitting the packed shape on read, and must: it is what makes the
+ * rows already stored legible. It is no longer compensating for what this function emits.
+ *
+ * Every receiving route accepts the separate key: `/api/leads` (v1LeadSchema already declared
+ * `utm_medium`), `/api/create-free-account`, `/api/calendar/book` and `/api/sponsor/redeem`. None
+ * of the four is `.strict()`, so no body shape is being widened past what the server will take.
+ */
 export function getUTMPayloadFields(): {
   utm_source?: string;
+  utm_medium?: string;
   utm_campaign?: string;
   page_url: string;
 } {
   const { utmSource, utmCampaign, utmMedium } = getUTMParams();
 
-  const source = utmMedium
-    ? `${utmSource || 'direct'}|${utmMedium}`
-    : utmSource || undefined;
-
   return {
-    utm_source: source,
+    utm_source: utmSource || undefined,
+    utm_medium: utmMedium || undefined,
     utm_campaign: utmCampaign || undefined,
     page_url: window.location.href,
   };
@@ -156,6 +176,8 @@ function utmFromCurrentUrl(): UTMParams | null {
 
 export interface SignupAcquisitionFields {
   utm_source?: string;
+  /** R22: its own key, not the half of `utm_source` after a pipe. */
+  utm_medium?: string;
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
@@ -168,8 +190,13 @@ const PAGE_URL_MAX = 500;
 
 /**
  * C94: the acquisition keys for POST /api/portal/free-signup, which the signup page never sent, so every ad signup
- * was recorded as a plain `free_signup` with no source. Same `source|medium` convention as getUTMPayloadFields, plus
- * utm_content (which ad) and utm_term (which placement).
+ * was recorded as a plain `free_signup` with no source. Carries utm_content (which ad) and utm_term (which
+ * placement) as well.
+ *
+ * R22: `utm_medium` is sent as its OWN key here too, not packed into `utm_source` as `fb|paid`. This is the
+ * function that produced every packed row on production — 134 of the 135, all since 2026-11-03, which is when
+ * C104 started reading the ad URL on the signup page. The server side of that key had to ship in the same
+ * change: this route is `.strict()`, so `utm_medium` 400s the signup until `portalFreeSignupSchema` declares it.
  *
  * The route is `.strict()` and validates each value, so this returns ONLY keys that hold a value the server will
  * accept: an empty value is omitted (absent means "not known"), an over-long value is omitted rather than truncated
@@ -185,13 +212,13 @@ export function getSignupAcquisitionFields(): SignupAcquisitionFields {
   const fromUrl = utmFromCurrentUrl();
   const stored = getUTMParams();
   const { utmSource, utmMedium, utmCampaign, utmContent, utmTerm } = fromUrl ?? stored;
-  const source = utmMedium ? `${utmSource || 'direct'}|${utmMedium}` : utmSource || undefined;
   const out: SignupAcquisitionFields = {};
   const put = (key: Exclude<keyof SignupAcquisitionFields, 'page_url'>, v: string | undefined) => {
     const s = (v || '').trim();
     if (s && s.length <= UTM_MAX) out[key] = s;
   };
-  put('utm_source', source);
+  put('utm_source', utmSource);
+  put('utm_medium', utmMedium);
   put('utm_campaign', utmCampaign);
   put('utm_content', utmContent);
   put('utm_term', utmTerm);

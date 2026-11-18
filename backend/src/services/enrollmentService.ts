@@ -335,6 +335,8 @@ export async function createExplorerEnrollment(input: {
   order_id?: string;
   source?: string;
   utm_source?: string;
+  /** R22: paid / organic / email, carried as itself rather than appended to `utm_source`. */
+  utm_medium?: string;
   utm_campaign?: string;
   page_url?: string;
 }): Promise<{ enrollment: Enrollment; created: boolean; cohort_id: string }> {
@@ -441,6 +443,7 @@ export async function createExplorerEnrollment(input: {
         form_type: 'open_house',
         status: 'new',
         utm_source: input.utm_source,
+        utm_medium: input.utm_medium,
         utm_campaign: input.utm_campaign,
         page_url: input.page_url,
       } as any,
