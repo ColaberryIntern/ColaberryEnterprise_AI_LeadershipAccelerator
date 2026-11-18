@@ -4,12 +4,14 @@
 // to-do list to Basecamp: per-release groups, each story a to-do with the AI/Human
 // split, assigned to the builder (optionally co-assigned to a marketing specialist),
 // plus milestone approval gates for an approver, plus 5 linked Docs & Files.
-// Refuses to publish unless all four gates pass. Guards that the token is Ali first.
+// Refuses to publish unless all five gates pass: the four plan gates, plus the artifact contract
+// (every story must say what it hands over, and say it well-formed). Guards the token is Ali first.
 //
 // Usage:  node publish_story_build.js story_configs/<slug>.json
 // Needs:  .bctok (Ali Basecamp token) beside this script; <slug>-deep-plan.json (from gen) beside this script.
 const fs = require('fs'), path = require('path');
 const { validateStoryPlanArtifacts, validateArtifactsConfig } = require('./lib/artifactContract');
+const { artifactsHtml, contractSkeleton, escapeHtml, loopStopHtml } = require('./lib/artifactBody');
 const HERE = __dirname;
 const cfgPath = process.argv[2];
 if (!cfgPath) { console.error('usage: node publish_story_build.js <config.json>'); process.exit(1); }
@@ -36,21 +38,33 @@ const pass = nc === 0 && plan.story_count >= 12 && (plan.releases || []).length 
 console.log(`[gate] no-code=${nc} stories=${plan.story_count} rel=${(plan.releases||[]).length} trace.ok=${t.ok} code=${code} -> ${pass ? 'PASS' : 'BLOCKED'}`);
 if (!pass) { console.error('BLOCKED: re-run the generator; do not hand-fix the plan.'); process.exit(2); }
 
-// ---- gate 5 (A0): the artifact contract is SCHEMA-CHECKED, not yet required ----
-// A story that declares an `artifacts` block, in the plan or as a config override, must declare
-// a well-formed one: the block ends up in a ticket a person is judged against, so a typo that is
-// silently ignored would publish a contract that does not say what its author meant. A story with
-// NO block still publishes exactly as it did before A0; requiring one is A1's gate, not this one.
+// ---- gate 5 (A0 schema-checked it; A1 REQUIRES it) ----
+// A0 refused a MALFORMED contract and let a story with no contract through, because roughly 200
+// open stories predated the rule. A1 closes that: a story with no artifact key cannot be
+// published at all. Not discouraged, impossible. Nothing already on a board is re-validated, so
+// this gate costs the legacy stories nothing; it only stops a NEW story being published with
+// nothing named to hand over, which is the whole failure this workstream exists to end.
+//
+// The refusal prints a paste-ready `by_story` skeleton for the stories that are missing one.
+// That skeleton deliberately CANNOT validate as pasted: its `type` is a CHOOSE_ONE_OF
+// placeholder the schema refuses by name. A skeleton that validated on paste would recreate the
+// same problem one level up, a contract nobody thought about.
 const cfgArtifacts = validateArtifactsConfig(cfg.artifacts);
-const contracts = validateStoryPlanArtifacts(plan.stories || [], (cfg.artifacts || {}).by_story || {});
+const contracts = validateStoryPlanArtifacts(plan.stories || [], (cfg.artifacts || {}).by_story || {}, { requireContract: true });
 contracts.refusals = cfgArtifacts.refusals.concat(contracts.refusals);
 contracts.ok = contracts.ok && cfgArtifacts.ok;
-console.log(`[gate] artifact contracts: ${contracts.storiesWithContract} of ${contracts.storiesTotal} stories declare one, refusals=${contracts.refusals.length}`);
+console.log(`[gate] artifact contracts: ${contracts.storiesWithContract} of ${contracts.storiesTotal} stories declare one, missing=${contracts.storiesMissingContract.length}, refusals=${contracts.refusals.length}`);
 if (!contracts.ok) {
   for (const r of contracts.refusals) {
     console.error(`  REFUSED ${r.code} ${r.storyId ? `story=${r.storyId} ` : ''}${r.key ? `key=${r.key} ` : ''}${r.field ? `at=${r.field} ` : ''}- ${r.message}`);
   }
-  console.error('BLOCKED: the artifact contract is malformed. Nothing was published. Fix the contract in the config or the plan.');
+  const named = contracts.storiesMissingContract.filter(Boolean);
+  if (named.length) {
+    console.error(`\nEvery story must say what it hands over. ${named.length} do not. Start from this,`);
+    console.error('and replace every placeholder: pasted unedited it is refused again, by design.\n');
+    console.error(contractSkeleton(named));
+  }
+  console.error('\nBLOCKED: the artifact contract is missing or malformed. Nothing was published.');
   process.exit(4);
 }
 
@@ -60,11 +74,12 @@ const classify = s => { const x = `${s.title||''} ${s.narrative||''} ${s.build||
 const MKTG = /(content|social|post|campaign|email|brand|prompt|audience|engagement|personaliz|segment|template|publish|market|schedul|caption|hashtag|creative|copy|newsletter)/i;
 const isMktg = s => !!MKT_CO && MKTG.test(`${s.title||''} ${s.narrative||''} ${s.build||''}`);
 const AI = '🤖', HU = '🧑';           // robot / person
-const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = escapeHtml;   // one escaper, shared with the artifact body renderer: two identical
+                          // copies of an escaper is how one of them comes to be the lenient one.
 function mdHtml(md){const o=[];for(const line of String(md||'').split('\n')){const l=line.replace(/\s+$/,'');if(!l){o.push('<br>');continue;}const m=l.match(/^(#{1,4})\s+(.*)/);if(m){o.push(`<h${Math.min(m[1].length,3)}>${esc(m[2])}</h${Math.min(m[1].length,3)}>`);continue;}const ls=l.replace(/^\s+/,'');if(ls.startsWith('- ')||ls.startsWith('* ')){o.push(`<li>${esc(ls.slice(2))}</li>`);continue;}o.push(`<div>${esc(l).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</div>`);}return o.join('');}
 const sliceStr = sl => !sl ? '' : (typeof sl === 'object' ? [sl.command, sl.event, sl.read_model].filter(Boolean).join(' -> ') : String(sl));
 function gherkin(acc){const it=(acc||[]).map(a=>{const sh=a.trust?'🛡 ':'';const c=[];if(a.given)c.push(`<em>Given</em> ${esc(a.given)}`);if(a.when)c.push(`<em>When</em> ${esc(a.when)}`);c.push(`<em>Then</em> ${esc(a.then)}`);return `<li>${sh}<strong>${esc(a.scenario)}</strong> - ${c.join('; ')}</li>`;});return it.length?`<ul>${it.join('')}</ul>`:'';}
-function storyHtml(s, docLinks, kind, mktg) {
+function storyHtml(s, docLinks, kind, mktg, artifacts) {
   const emoji = kind === 'ai' ? AI : HU, tag = kind === 'ai' ? '[AI]' : '[Human]';
   const kl = kind === 'ai' ? 'AI-buildable: the AI drafts it (Claude Code), you review and approve' : 'Human task: you own this one';
   const rows = [`<div><strong>${emoji} ${tag}</strong> ${kl}${mktg ? ` &nbsp; <strong>[${esc(MKT_LABEL)}]</strong> co-assigned (accounts, prompts, content)` : ''}</div>`,
@@ -74,7 +89,14 @@ function storyHtml(s, docLinks, kind, mktg) {
   rows.push('<div><strong>Acceptance (Gherkin = demo script + loop stop):</strong></div>', gherkin(s.acceptance));
   if (s.build) rows.push(`<div><strong>Build (Claude Code):</strong> ${esc(s.build)}</div>`);
   if (s.vibe) rows.push(`<div><strong>Vibe-code it:</strong> <em>${esc(s.vibe)}</em></div>`);
-  if (s.trust) rows.push(`<div><strong>Trust (TBI):</strong> ${esc(s.trust)} &nbsp; <strong>Loop stop:</strong> all acceptance scenarios pass.</div>`);
+  if (s.trust) rows.push(`<div><strong>Trust (TBI):</strong> ${esc(s.trust)}</div>`);
+  // A1: what this story HANDS OVER, then the loop stop.
+  // The loop stop used to live inside the trust line above, so a story with no `trust` field
+  // showed no stop condition at all. The one sentence that tells a builder when to stop was the
+  // easiest thing on the ticket to lose. It is now rendered for every story.
+  const ah = artifactsHtml(artifacts);
+  if (ah) rows.push(ah);
+  rows.push(loopStopHtml(artifacts));
   if (docLinks) rows.push(docLinks);
   return rows.join('');
 }
@@ -157,7 +179,7 @@ async function resolveTarget() {
       relEnd[r.key] = dueOf[sid] || relEnd[r.key];
       const content = (`${kind==='ai'?AI:HU} ${sid} - ${s.title||''}${s.owner_agent?'  ['+s.owner_agent+']':''}`).slice(0, 230);
       const assignees = mktg ? [BUILDER, MKT_CO] : [BUILDER];
-      await post(`${BC}/buckets/${bucket}/todolists/${g.id}/todos.json`, { content, description: storyHtml(s, docLinks, kind, mktg), due_on: dueOf[sid], assignee_ids: assignees });
+      await post(`${BC}/buckets/${bucket}/todolists/${g.id}/todos.json`, { content, description: storyHtml(s, docLinks, kind, mktg, contracts.byStory[sid]), due_on: dueOf[sid], assignee_ids: assignees });
       created++;
     }
   }

@@ -75,7 +75,8 @@ export type ContractRefusalCode =
   | 'gate_unknown'
   | 'evidence_source_unknown'
   | 'evidence_source_not_allowed'
-  | 'override_story_unknown';
+  | 'override_story_unknown'
+  | 'story_missing_contract';
 
 export interface ContractRefusal {
   code: ContractRefusalCode;
@@ -473,6 +474,12 @@ export function validateArtifactContract(
 export interface StoryLikeForContract {
   id?: string;
   artifacts?: unknown;
+  /**
+   * A real plan story carries a title, a narrative, acceptance scenarios and more. Only the two
+   * fields above are read here, but without this the interface type-rejects the very objects it
+   * is documented to take: an excess-property check refuses a story literal that has a title.
+   */
+  [key: string]: unknown;
 }
 
 export interface PlanContractValidation {
@@ -480,9 +487,25 @@ export interface PlanContractValidation {
   /** Resolved contracts by story id, for the stories that had one and passed. */
   byStory: Record<string, ResolvedArtifact[]>;
   refusals: ContractRefusal[];
-  /** Stories carrying a contract. A0 reports this; A1 turns "0 of N" into a refusal. */
+  /** Stories carrying a contract. A0 reported this; A1 turns a story without one into a refusal. */
   storiesWithContract: number;
+  /**
+   * The id of every story that declared no contract, in plan order, with `null` for a story that
+   * has no id to name. Always populated, whether or not a contract is required, so a caller can
+   * report the gap before it enforces it: A1's publisher prints a paste-ready skeleton from this.
+   */
+  storiesMissingContract: (string | null)[];
   storiesTotal: number;
+}
+
+/** Options for {@link validateStoryPlanArtifacts}. */
+export interface PlanContractOptions {
+  /**
+   * When true, a story with NO contract is a refusal (`story_missing_contract`) rather than a
+   * story that publishes as it did before A0. The publisher passes true as of A1; the platform
+   * reads contracts off boards that predate the rule, so its default stays false.
+   */
+  requireContract?: boolean;
 }
 
 /**
@@ -496,9 +519,12 @@ export interface PlanContractValidation {
 export function validateStoryPlanArtifacts(
   stories: ReadonlyArray<StoryLikeForContract>,
   byStoryOverrides: Record<string, unknown> = {},
+  opts: PlanContractOptions = {},
 ): PlanContractValidation {
+  const requireContract = opts.requireContract === true;
   const byStory: Record<string, ResolvedArtifact[]> = {};
   const refusals: ContractRefusal[] = [];
+  const missing: (string | null)[] = [];
   let withContract = 0;
 
   const overrideKeys = new Set(Object.keys(byStoryOverrides));
@@ -510,7 +536,20 @@ export function validateStoryPlanArtifacts(
     const raw = story.artifacts !== undefined
       ? story.artifacts
       : (storyId ? byStoryOverrides[storyId] : undefined);
-    if (raw === undefined || raw === null) continue;
+    if (raw === undefined || raw === null) {
+      missing.push(storyId || null);
+      if (requireContract) {
+        refusals.push({
+          code: 'story_missing_contract',
+          message: 'this story declares no artifact contract, so nothing it hands over is named '
+            + 'and "done" would be a claim that work happened rather than something that exists. '
+            + 'Add an entry under artifacts.by_story for it, or in the story itself.',
+          storyId,
+          field: storyId ? `artifacts.by_story.${storyId}` : 'artifacts.by_story',
+        });
+      }
+      continue;
+    }
     withContract += 1;
     const result = validateArtifactContract(raw, { storyId });
     refusals.push(...result.refusals);
@@ -536,6 +575,7 @@ export function validateStoryPlanArtifacts(
     byStory,
     refusals,
     storiesWithContract: withContract,
+    storiesMissingContract: missing,
     storiesTotal: stories.length,
   };
 }

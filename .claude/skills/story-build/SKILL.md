@@ -126,10 +126,16 @@ each is handed over, and the sentence each is judged by are declared once, as da
 restate the catalog in Markdown. A second copy in prose is how two versions of a type start
 disagreeing, and the prose copy is the one with no test behind it.
 
-**Gate 5, as of A0: the contract is schema-checked, not yet required.**
+**Gate 5, as of A1: a story with no artifact key cannot be published at all.** Not discouraged,
+impossible. Nothing already on a board is re-validated, so this costs the roughly 200 stories
+that predate the rule nothing; it only stops a NEW story being published with nothing named to
+hand over.
 
-- A story with **no** contract publishes exactly as it did before. Requiring one is the next
-  phase's gate, not this one, because roughly 200 open stories predate the rule.
+- A story with **no** contract is refused. The refusal prints a paste-ready `by_story` skeleton
+  for exactly the stories that need one. That skeleton **cannot validate as pasted**: its `type`
+  is a `CHOOSE_ONE_OF` placeholder the schema refuses by name. A skeleton that validated on paste
+  would recreate this whole problem one level up, as a declared contract nobody thought about.
+  Story ids come from the generated plan, so contracts are authored after the generator runs.
 - A story with a **malformed** contract is refused and **nothing is published**. The refusal
   names the story, the key and the field. An unrecognised field is refused rather than ignored:
   the block ends up in a ticket a person is judged against, so a misspelled `repo_paths` that
@@ -139,6 +145,19 @@ disagreeing, and the prose copy is the one with no test behind it.
   nothing.
 - A contract aimed at a story id the plan does not contain is refused, because it would otherwise
   be written, never rendered, and never verified.
+
+**What the builder sees, as of A1.** The contract is rendered into the to-do body: for each
+artifact, the key, the name, the type, whether it is handed over in the repo (with the exact
+path) or on the platform, the accepted file types, anything it must contain, whether a capture is
+owed, the one sentence it will be judged by, and which gate it is owed at. The renderer lives in
+`scripts/lib/artifactBody.js` so it can be tested without running the publisher, and
+`storyArtifactBody.test.ts` holds its field list against the real resolved shape, so a field
+added to the contract fails a test until the ticket shows it.
+
+The **loop stop** changed with it. It used to read "all acceptance scenarios pass" and, worse, was
+rendered inside the trust line, so a story with no `trust` field showed no stop condition at all.
+It is now rendered for every story, and where there is a contract it reads "all acceptance
+scenarios pass AND every artifact key is present", naming the keys.
 
 The schema has two implementations, one for this publisher
 (`scripts/lib/artifactContract.js`) and one for the platform
