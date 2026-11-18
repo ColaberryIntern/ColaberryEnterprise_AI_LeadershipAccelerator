@@ -16,7 +16,7 @@ jest.mock('../../../models/LiveSession', () => ({ __esModule: true, default: { f
 import { sequelize } from '../../../config/database';
 import LiveSession from '../../../models/LiveSession';
 import { allocatableHostEmails } from '../../zoom/zoomHostRegistry';
-import { reserveSlot, releaseSlot, nextAvailableFrom, collidingClassWindows } from '../presentationCapacityService';
+import { reserveSlot, releaseSlot, nextAvailableFrom, collidingClassWindows, eligiblePracticeHosts } from '../presentationCapacityService';
 
 const q = sequelize.query as unknown as jest.Mock;
 const sessions = (LiveSession as unknown as { findAll: jest.Mock }).findAll;
@@ -95,6 +95,62 @@ describe('which pool it draws from', () => {
       expect(call[0]).not.toBe('room');
       expect(call[0]).not.toBeUndefined();
     }
+  });
+});
+
+describe('eligiblePracticeHosts — the host a rehearsal may take has no always-open room', () => {
+  it('drops a host that backs an always-open room, keeps a clean one', () => {
+    const blocked = new Set(['program.103@colaberry.com']);
+    expect(
+      eligiblePracticeHosts(['program.103@colaberry.com', 'practice.1@colaberry.com'], blocked),
+    ).toEqual(['practice.1@colaberry.com']);
+  });
+
+  it('matches case-insensitively and ignores blank entries', () => {
+    const blocked = new Set(['host@x.com']);
+    expect(eligiblePracticeHosts(['HOST@x.com', '', 'ok@x.com'], blocked)).toEqual(['ok@x.com']);
+  });
+
+  it('is empty-safe and leaves a clean pool untouched', () => {
+    expect(eligiblePracticeHosts([], new Set())).toEqual([]);
+    expect(eligiblePracticeHosts(['a@b.com'], new Set())).toEqual(['a@b.com']);
+  });
+});
+
+describe('practice pool excludes always-open-room hosts', () => {
+  it('reserves on a registered host that has no always-open room', async () => {
+    hostPool.mockResolvedValue(['practice.1@colaberry.com']);
+    q.mockResolvedValueOnce([[], {}]);                   // hostsWithAlwaysOpenRoom: none blocked
+    q.mockResolvedValueOnce([[{ id: 'res-ok' }], {}]);   // the reservation insert
+    const r = await reserveSlot(req());
+    expect(r).toMatchObject({ ok: true, reservationId: 'res-ok', hostEmail: 'practice.1@colaberry.com' });
+    expect(insertCall()[1].replacements.host).toBe('practice.1@colaberry.com');
+  });
+
+  it('refuses AND records a durable denial when every registered host backs an always-open room', async () => {
+    // This is the misconfiguration the feature must not paper over: taking a colliding
+    // host or the single ZOOM_HOST_EMAIL is the exact "host has another meeting" fault.
+    hostPool.mockResolvedValue(['program.103@colaberry.com']);
+    q.mockResolvedValueOnce([[{ host: 'program.103@colaberry.com' }], {}]); // all blocked
+
+    const r = await reserveSlot(req({ assignmentId: 'asg-1', attemptId: 'att-1' }));
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toBe('taken');
+    expect(r.nextAvailable).toBeNull();
+    expect(r.message).toMatch(/no practice room is available/i);
+
+    // Recorded durably as a 'denied' row, with the reason, so an operator can see it.
+    const denial = q.mock.calls.find((c: any[]) =>
+      /INSERT INTO presentation_slot_reservations/.test(String(c[0])) && /'denied'/.test(String(c[0])));
+    expect(denial).toBeTruthy();
+    expect(String(denial![1].replacements.reason)).toBe('no_eligible_host');
+
+    // And it never tried to HOLD a slot on the colliding host.
+    const held = q.mock.calls.find((c: any[]) =>
+      /INSERT INTO presentation_slot_reservations/.test(String(c[0])) && /'held'/.test(String(c[0])));
+    expect(held).toBeFalsy();
   });
 });
 

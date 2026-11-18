@@ -37,16 +37,57 @@ export type SlotResult =
   | { ok: false; reason: 'taken' | 'class_window' | 'in_the_past'; nextAvailable: Date | null; message: string };
 
 /**
- * Lazy, for the same reason as db() — the registry touches the ORM too.
+ * The registered practice hosts a rehearsal may actually take, and whether the registry
+ * was empty to begin with.
  *
  * The purpose comes from the registry's own constant rather than a literal here: it is
  * a join key against the `purpose` column, and a spelling that matches no row returns
  * an empty pool, which this file reads as capacity one. A silent demotion to the old
  * single-host behaviour is the hardest kind of regression to notice.
+ *
+ * THE EXCLUSION THAT COMPLETES THE PURPOSE SPLIT. commit b585174b2 partitioned the host
+ * pool so a rehearsal could not take a live room's host, but a host registered to serve
+ * rehearsals can still CARRY an always-open room, and then it collides exactly as before
+ * — the room keeps a permanent meeting, so the host is busy whenever anyone is in it and
+ * the student meets "the host has another meeting in progress" mid-call. This reads the
+ * room table and drops any such host, so a rehearsal only ever lands on a host with no
+ * always-open room.
+ *
+ * `registryEmpty` stays distinct from "every host was excluded". An empty registry is
+ * the normal pre-setup state and must behave as the single-host platform did before this
+ * feature (capacity one, the configured default). Every host being excluded is a
+ * misconfiguration the caller must REFUSE, not paper over by taking a colliding host.
  */
-async function allocatableHosts(): Promise<string[]> {
+async function practicePool(): Promise<{ hosts: string[]; registryEmpty: boolean }> {
   const { allocatableHostEmails, PRACTICE_HOST_PURPOSE } = await import('../zoom/zoomHostRegistry');
-  return allocatableHostEmails(PRACTICE_HOST_PURPOSE);
+  const registered = await allocatableHostEmails(PRACTICE_HOST_PURPOSE);
+  if (registered.length === 0) return { hosts: [], registryEmpty: true };
+  const blocked = await hostsWithAlwaysOpenRoom();
+  return { hosts: eligiblePracticeHosts(registered, blocked), registryEmpty: false };
+}
+
+/**
+ * The registered hosts a rehearsal may take: those with no always-open room.
+ *
+ * Pure and exported for the reason `crossPurposeHosts` is pure — the judgement is the
+ * part worth testing, and folding it into the SQL join would make it unreachable without
+ * a database. Matching is case-insensitive: a Zoom host email is compared across two
+ * tables that share no collation rule.
+ */
+export function eligiblePracticeHosts(registered: string[], withAlwaysOpenRoom: ReadonlySet<string>): string[] {
+  return registered.filter((h) => h && !withAlwaysOpenRoom.has(h.trim().toLowerCase()));
+}
+
+/** Lowercased host emails that back at least one always-open room. */
+async function hostsWithAlwaysOpenRoom(): Promise<Set<string>> {
+  const sequelize = await db();
+  const [rows] = await sequelize.query(
+    `SELECT DISTINCT lower(trim(metadata->>'zoom_host_email')) AS host
+       FROM community_rooms
+      WHERE always_open = TRUE
+        AND NULLIF(trim(metadata->>'zoom_host_email'), '') IS NOT NULL`,
+  ) as [Array<{ host: string | null }>, unknown];
+  return new Set((rows || []).map((r) => (r.host || '').trim()).filter(Boolean));
 }
 
 /** Lazy so importing this module never constructs the ORM. */
@@ -127,8 +168,14 @@ export function saturatedIntervals(
   return out;
 }
 
-/** The earliest free start time at or after `from`, or null if none within the horizon. */
-export async function nextAvailableFrom(from: Date, durationMinutes: number, horizonHours = 48): Promise<Date | null> {
+/**
+ * The earliest free start time at or after `from`, or null if none within the horizon.
+ *
+ * `knownCapacity` lets a caller that has ALREADY resolved the eligible pool pass the
+ * count in, so the host-busy refusal path does not re-query the room table a second time
+ * for a number it just computed. Omitted, the capacity is resolved here.
+ */
+export async function nextAvailableFrom(from: Date, durationMinutes: number, horizonHours = 48, knownCapacity?: number): Promise<Date | null> {
   const sequelize = await db();
   const horizonEnd = new Date(from.getTime() + horizonHours * 3600000);
 
@@ -140,10 +187,10 @@ export async function nextAvailableFrom(from: Date, durationMinutes: number, hor
     { replacements: { from, horizon: horizonEnd } },
   ) as [Array<{ s: string; e: string }>, unknown];
 
-  // How many rehearsals can genuinely run at once. No registered hosts means the
-  // configured default and nothing else — capacity one, exactly as before.
-  const hosts = await allocatableHosts();
-  const capacity = Math.max(1, hosts.length);
+  // How many rehearsals can genuinely run at once: the hosts with no always-open room.
+  // No registered hosts means the configured default and nothing else — capacity one,
+  // exactly as before. A caller that already resolved the pool passes the count in.
+  const capacity = knownCapacity ?? Math.max(1, (await practicePool()).hosts.length);
 
   const classes = await collidingClassWindows(from, horizonEnd);
   const blocks = [
@@ -190,10 +237,24 @@ export async function reserveSlot(req: SlotRequest): Promise<SlotResult> {
   // free and both take it. Attempting the insert per host makes Postgres the
   // arbiter, which is the only participant that can decide atomically.
   //
+  const { hosts, registryEmpty } = await practicePool();
+
+  // Registry configured, but every host carries an always-open room: there is no host a
+  // rehearsal can take without colliding with a live room. Refuse honestly and RECORD it
+  // — a run of these is the signal that practice needs its own dedicated host, and the
+  // alternatives (a colliding host, or the single ZOOM_HOST_EMAIL that also runs classes)
+  // are the exact "host has another meeting" fault this change exists to end.
+  if (!registryEmpty && hosts.length === 0) {
+    await recordCapacityDenial({ req, startAt, endAt, reason: 'no_eligible_host', eligibleHosts: 0 });
+    return {
+      ok: false, reason: 'taken', nextAvailable: null,
+      message: 'No practice room is available right now. The team has been notified; please try again shortly.',
+    };
+  }
+
   // An empty registry yields [''] — the single pseudo-host every pre-existing row
   // uses — so with nothing registered this behaves exactly as it did before.
-  const hosts = await allocatableHosts();
-  const candidates = hosts.length ? hosts : [''];
+  const candidates = registryEmpty ? [''] : hosts;
 
   let sawConflict = false;
   for (const host of candidates) {
@@ -227,9 +288,12 @@ export async function reserveSlot(req: SlotRequest): Promise<SlotResult> {
   }
 
   // Every host was busy. Only now is the answer "taken", and it still has to offer
-  // a real alternative rather than a dead end.
+  // a real alternative rather than a dead end. Recorded for the same reason as the
+  // no-eligible-host case: a cluster of these is how capacity pressure shows up before
+  // a student emails about it.
   if (sawConflict) {
-    const next = await nextAvailableFrom(endAt, durationMinutes);
+    const next = await nextAvailableFrom(endAt, durationMinutes, 48, candidates.length);
+    await recordCapacityDenial({ req, startAt, endAt, reason: 'all_hosts_busy', eligibleHosts: candidates.length });
     return {
       ok: false, reason: 'taken', nextAvailable: next,
       message: next
@@ -239,6 +303,68 @@ export async function reserveSlot(req: SlotRequest): Promise<SlotResult> {
   }
   // Unreachable: the loop either returns, throws, or records a conflict.
   throw Object.assign(new Error('slot reservation reached no outcome'), { error_class: 'InvariantViolation' });
+}
+
+/**
+ * Records a practice request the platform could not serve — durably and queryably — so
+ * an operator can SEE when capacity starts to bite instead of hearing it from a student.
+ *
+ * Stored as a row in presentation_slot_reservations with state 'denied' rather than a
+ * table of its own: it is the same subject (a practice slot that did not happen), it
+ * needs no new schema, and 'denied' never participates in the overlap constraint, which
+ * is partial on state = 'held'. The reason lands in released_reason. The partial index
+ * `presentation_slot_denied` keeps "how often has this happened lately" a cheap query.
+ *
+ * NEVER throws. A refusal must not turn into a 500 because the bookkeeping write failed;
+ * the student still gets their honest "no room" answer either way. The structured log
+ * line is emitted first, so the signal survives even if the insert is the thing that
+ * fails.
+ */
+async function recordCapacityDenial(input: {
+  req: SlotRequest;
+  startAt: Date;
+  endAt: Date;
+  reason: 'no_eligible_host' | 'all_hosts_busy';
+  eligibleHosts: number;
+}): Promise<void> {
+  const { req, startAt, endAt, reason, eligibleHosts } = input;
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'warn',
+    service: 'presentation-capacity',
+    event: 'practice_capacity_denied',
+    outcome: 'failure',
+    context: {
+      enrollment_id: req.enrollmentId,
+      assignment_id: req.assignmentId ?? null,
+      attempt_id: req.attemptId ?? null,
+      reason,
+      eligible_hosts: eligibleHosts,
+      slot_start: startAt.toISOString(),
+      slot_end: endAt.toISOString(),
+    },
+  }));
+  try {
+    const sequelize = await db();
+    await sequelize.query(
+      `INSERT INTO presentation_slot_reservations
+         (enrollment_id, attempt_id, assignment_id, slot, mode, state, host_email, released_reason, released_at)
+       VALUES (:eid, :aid, :asg, tstzrange(:s, :e, '[)'), :mode, 'denied', '', :reason, NOW())`,
+      {
+        replacements: {
+          eid: req.enrollmentId,
+          aid: req.attemptId ?? null,
+          asg: req.assignmentId ?? null,
+          s: startAt,
+          e: endAt,
+          mode: req.mode || 'practice_solo',
+          reason,
+        },
+      },
+    );
+  } catch (err: any) {
+    console.warn('[presentation-capacity] denial record skipped:', err?.message);
+  }
 }
 
 /**
