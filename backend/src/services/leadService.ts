@@ -668,7 +668,10 @@ export async function createLeadAdmin(data: {
     // The only thing that can create a phone grant is an affirmative act by its
     // owner, recorded with the words they were shown.
     phone_consent: false,
+    // No UTM of any kind: an admin typing somebody in by hand is not a click, and an invented
+    // channel here would show up as acquisition the marketing reports never earned.
     utm_source: '',
+    utm_medium: '',
     utm_campaign: '',
     page_url: '',
     corporate_sponsorship_interest: false,
