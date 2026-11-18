@@ -7,6 +7,7 @@
  */
 import {
   MAX_DETAIL_COLUMNS,
+  MAX_DETAIL_RELATIONSHIPS,
   shapeDatasetDetail,
   type DatasetDetailRow,
 } from '../datasetDetail';
@@ -72,7 +73,8 @@ describe('what must never come back', () => {
     const d = shapeDatasetDetail(row());
     expect(Object.keys(d).sort()).toEqual([
       'column_count', 'columns', 'columns_incomplete', 'last_scanned',
-      'relationships', 'row_count', 'schema_name', 'status', 'table_name',
+      'relationship_count', 'relationships', 'relationships_incomplete',
+      'row_count', 'schema_name', 'status', 'table_name',
     ]);
   });
 
@@ -116,6 +118,31 @@ describe('what must never come back', () => {
     const select = source.slice(source.indexOf('`SELECT'), source.indexOf('LIMIT 1'));
     expect(select).not.toContain('profile_summary');
     expect(select).toContain('semantic_types');
+  });
+
+  it('says how many joins the table DECLARES, not how many fitted', () => {
+    // Found by auditing real data on 2026-11-18: `enrollments` declares 133 joins and the panel
+    // showed 40 with nothing to say the other 93 existed. A decider reading "joins to 40 tables"
+    // would reasonably conclude that is the whole blast radius of a read grant.
+    const many = Array.from({ length: 133 }, (_, i) => ({ to_table: `t${i}` }));
+    const d = shapeDatasetDetail(row({ relationships: many as never }));
+    expect(d.relationship_count).toBe(133);
+    expect(d.relationships).toHaveLength(MAX_DETAIL_RELATIONSHIPS);
+    expect(d.relationships_incomplete).toBe(true);
+  });
+
+  it('is not "incomplete" when every declared join fits', () => {
+    const d = shapeDatasetDetail(row());
+    expect(d.relationship_count).toBe(1);
+    expect(d.relationships_incomplete).toBe(false);
+  });
+
+  it('counts only joins it can actually name, so an unreadable entry inflates nothing', () => {
+    const d = shapeDatasetDetail(row({
+      relationships: [{ to_table: 'students' }, {}, 'nonsense', { note: 'x' }] as never,
+    }));
+    expect(d.relationship_count).toBe(1);
+    expect(d.relationships_incomplete).toBe(false);
   });
 
   it('bounds the column list so one wide table cannot return hundreds', () => {

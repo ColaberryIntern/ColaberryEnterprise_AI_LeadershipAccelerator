@@ -242,7 +242,11 @@ export default function DatasetDetailPanel({
 
             {detail.relationships.length > 0 && (
               <div className="mt-2">
-                <div className="small fw-medium">Joins to</div>
+                <div className="small fw-medium">
+                  {detail.relationships_incomplete
+                    ? `Joins to ${detail.relationship_count} tables, showing ${detail.relationships.length}`
+                    : `Joins to ${detail.relationship_count} table${detail.relationship_count === 1 ? '' : 's'}`}
+                </div>
                 <div className="d-flex flex-wrap gap-1 mt-1">
                   {detail.relationships.map((r) => (
                     <span
@@ -254,9 +258,12 @@ export default function DatasetDetailPanel({
                     </span>
                   ))}
                 </div>
-                <div className="form-text">
+                <div className="form-text" data-testid="dataset-joins-note">
                   A tool that reads this table can follow these joins only if it is also granted
                   them. They are listed so you can see what sits next to it.
+                  {detail.relationships_incomplete
+                    ? ` This table is heavily connected: ${detail.relationship_count} declared joins, of which ${detail.relationships.length} are shown. Treat the list as a sample, not the blast radius.`
+                    : ''}
                 </div>
               </div>
             )}

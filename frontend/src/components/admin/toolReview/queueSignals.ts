@@ -297,7 +297,13 @@ export function suggestedStep(r: ChangeRequest, now: Date = new Date()): Suggest
     return {
       verb: 'assign_existing_tool',
       label: 'Check whether an existing tool does this',
-      because: `${dup.tool_name} matched above the threshold. If it is the same thing, assign it rather than building a second one.`,
+      // The SCORE is in the sentence, because the threshold is low enough for one shared word to
+      // trip it. Measured 2026-11-18 against the first real requests: a weekly enrollment count
+      // matched `flag_certification_readiness` at 0.2068 against a 0.2 threshold, on the single
+      // word "enrollment". Showing the number lets a marginal match read as marginal instead of
+      // sending somebody to compare two unrelated tools. The threshold itself belongs to the
+      // duplicate checker, not to this suggestion, so it is reported and not overridden here.
+      because: `${dup.tool_name} matched at ${dup.score.toFixed(2)} against a ${(r.duplicate_check?.threshold ?? 0.5).toFixed(2)} threshold. If it is the same thing, assign it rather than building a second one; a score near the threshold is often one shared word.`,
       tone: 'attention',
       icon: 'git-merge-line',
     };
