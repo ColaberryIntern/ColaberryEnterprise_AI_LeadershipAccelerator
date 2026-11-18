@@ -33,7 +33,11 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
   const j = cur.journey, e = cur.engagement;
   const srcGrade = (r) => M.grade('signup', r.signups, r.visitors, targets);
 
-  const hero = `<header class="hero"><div class="wrap"><h1>🎯 Open House Funnel: Weekly Report</h1>
+  const heat = P.HM.buildHeat(cur, P.HM.loadGeometry(snap));
+
+  const hero = `<header class="hero"><div class="wrap">
+    <div class="brandbar"><img src="${X.B.LOGO.onDark}" alt="${esc(X.B.LOGO.alt)}" height="30"/><span class="wm">${esc(X.B.WORDMARK)}</span></div>
+    <h1>🎯 Open House Funnel: Weekly Report</h1>
     <div class="sub">From ad click to the first win, every person, every fork. Facebook and Instagram ads → landing page → Open House sign-up → account → welcome video → Quick check → the Open House itself.</div>
     <div class="chips"><span class="chip">📅 ${esc(cur.from_ct)} → ${esc(cur.to_ct)} CT (${cur.hours} h)</span>
     <span class="chip">${prev ? `↔️ compared with ${esc(prev.from_ct)} → ${esc(prev.to_ct)}` : '🚀 launch week: no earlier week to compare'}</span>
@@ -59,6 +63,8 @@ function buildHtml(snap, targets = defaultTargets, shots = [], entries = S.load(
     section('📣 Where they come from', 'Visitors by ad source and device, with each one\'s sign-up rate (pill color = against the sign-up target).',
       `<div class="grid2"><div class="panel"><h3>By ad source</h3>${X.breakdownSvg(cur.by_source, srcGrade)}</div>
        <div class="panel"><h3>By device</h3>${X.breakdownSvg(cur.by_device, srcGrade)}</div></div>`, 'sec-source'),
+    section('🔥 The landing page, heat mapped', 'How far down the page people actually get, and where every recorded click lands. The page drawn to scale, shaded by how many people had that part of it on screen.',
+      P.heatPanel(heat), 'sec-heat'),
     section('📜 On the landing page', `Median visit ${cur.median_visit_s ?? 'n/a'} seconds.`,
       `<div class="grid2"><div class="panel"><h3>How far down they read</h3>${X.scrollSvg(cur.scroll, cur.visitors)}</div>
        <div class="panel"><h3>What they did</h3>${X.donutSvg([

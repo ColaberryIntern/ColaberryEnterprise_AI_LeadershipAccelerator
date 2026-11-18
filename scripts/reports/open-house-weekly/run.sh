@@ -61,12 +61,30 @@ if [ "$mandrill" = 1 ]; then
 fi
 docker exec accelerator-db rm -f "$recipients"
 
+# C125: measure the landing page's own geometry, so the heat map can place recorded clicks on
+# the elements they name. THIS RUNS ON THE HOST, NOT IN A CONTAINER: the browser lives here
+# (Playwright's cached Chromium under ~/.cache/ms-playwright) and neither container has one.
+#
+# Best effort by design. A browser failure must cost the report one panel's precision, never the
+# run, so a failure here leaves `geometry` null and lib/heatmap.js falls back to the committed
+# measurement and labels the panel with its age.
+geom=/tmp/open-house-weekly/geometry.json
+rm -f "$geom"
+if ! REPO_ROOT="${REPO_ROOT:-/opt/colaberry-accelerator}" node "$here/measurePage.js" "$geom" >/dev/null 2>"$out/geom.err"; then
+  echo "WARN landing page measurement failed; the heat map will use the committed geometry" >&2
+  head -3 "$out/geom.err" >&2 || true
+  rm -f "$geom"
+fi
+rm -f "$out/geom.err"
+
 # Merge and render inside accelerator-backend (it has node; the renderer has no dependencies).
 docker exec accelerator-backend rm -rf "$work"
 docker cp "$here" "accelerator-backend:$work"
 docker cp "$out/db.json" "accelerator-backend:$work/db.json"
+[ -f "$geom" ] && docker cp "$geom" "accelerator-backend:$work/geometry.json"
 docker exec accelerator-backend node -e "
   const fs = require('fs'); const s = JSON.parse(fs.readFileSync('$work/db.json', 'utf8')); s.email = $email;
+  try { s.geometry = JSON.parse(fs.readFileSync('$work/geometry.json', 'utf8')); } catch (e) { s.geometry = null; }
   fs.writeFileSync('$work/snapshot.json', JSON.stringify(s, null, 2));"
 docker exec accelerator-backend node "$work/render.js" "$work/snapshot.json" "$work/report.html"
 docker cp "accelerator-backend:$work/snapshot.json" "$out/snapshot.json"
