@@ -136,6 +136,12 @@ export interface ConnectorStatus {
   redirect_uri: string | null;
   /** What the platform itself requires - review, audits, cost. */
   requirements: string;
+  /**
+   * What the person signing in must already have, or null when anyone may. Rendered beside the
+   * Connect button rather than inside the collapsed detail, because the platform refuses an
+   * unauthorized signer at its own screen and no callback ever reaches us to explain it.
+   */
+  access_note: string | null;
 }
 
 export async function listConnectors(): Promise<ConnectorStatus[]> {

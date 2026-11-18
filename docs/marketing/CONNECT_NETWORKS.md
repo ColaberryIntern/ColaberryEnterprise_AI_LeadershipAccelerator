@@ -48,7 +48,37 @@ Each network produces an ID and a secret. Either:
   holds `SOCIAL_CREDENTIAL_MASTER_KEY`), then restart the backend.
 
 Never paste a secret into Basecamp, email, chat or a screenshot. After the restart, the Brands
-page's **Connect a network** list shows the network as **Ready to connect**.
+page's **Connect a network** list shows the network as **Ready to connect** - or, for a network
+that also restricts *who* may sign in, as **Set up on the server**, with the restriction stated
+beside the button. See the next section.
+
+---
+
+## "Set up on the server" is not "you can connect"
+
+Credentials being in place is a fact about the server. It says nothing about whether the person
+reading the screen is allowed to use them.
+
+Facebook and Instagram are the case that matters today. Our Meta app is not open to the public,
+so **only someone holding a role on the app can connect it**. Facebook enforces that at its own
+sign-in screen, *before* sending the browser back to us, which means:
+
+- no callback reaches our server,
+- no error code exists for us to classify,
+- and the product gets no later moment in which to explain what went wrong.
+
+That is why the restriction is printed above the collapsed setup detail as **"Before you press
+Connect"**, rather than being reported after a failure. There is no failure path to report it on.
+Sohail pressed Connect three times on 13 Nov 2026 against a row reading "Ready to connect" and
+learned nothing from any of the three attempts (BUG-7).
+
+To give someone access: Ali adds them at `developers.facebook.com` under **App roles**, and the
+person then **accepts the invitation** at `developers.facebook.com/requests` before retrying.
+Being added is not enough on its own; the invitation has to be accepted.
+
+A network with no such restriction reports `access_note: null` and keeps saying "Ready to
+connect". If you add a network that restricts who may sign in, set `accessNote` on its connector
+and the page will surface it with no further work.
 
 ---
 
