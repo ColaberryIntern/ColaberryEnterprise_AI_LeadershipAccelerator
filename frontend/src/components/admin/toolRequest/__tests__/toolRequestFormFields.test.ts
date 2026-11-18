@@ -39,6 +39,8 @@ const EVERY_RULE = [
   'production_reads_unscoped',
   'capability_missing', 'capability_roster_absent', 'capability_not_found',
   'task_unblocked_missing', 'manual_today_missing',
+  // AF12.1. The key that groups the several tools one task needs.
+  'task_key_missing', 'task_key_malformed',
   'needed_by_missing', 'needed_by_not_a_date', 'run_frequency_missing', 'run_frequency_unknown',
   'touches_missing', 'environment_missing', 'environment_unknown',
   'inputs_undeclared', 'writes_undeclared', 'side_effects_missing', 'reversibility_undeclared',
@@ -47,10 +49,10 @@ const EVERY_RULE = [
 const issue = (rule: string, detail = 'A sentence.') => ({ rule, detail });
 
 describe('THE COMPLETENESS GATE: every refusal the contract can return is accounted for', () => {
-  it('maps or routes all 44 of them, with nothing falling through', () => {
+  it('maps or routes all 46 of them, with nothing falling through', () => {
     const unaccounted = EVERY_RULE.filter((r) => !(r in RULE_FIELD) && !(r in ROUTE_RULES));
     expect(unaccounted).toEqual([]);
-    expect(EVERY_RULE).toHaveLength(44);
+    expect(EVERY_RULE).toHaveLength(46);
   });
 
   it('and names no rule the contract does not have, so the map cannot rot', () => {

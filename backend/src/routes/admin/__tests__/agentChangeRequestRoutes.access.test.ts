@@ -47,6 +47,8 @@ const QUEUE = '/api/admin/agent-domain-change-requests';
 const DATASETS = '/api/admin/agent-domain-datasets';
 /** AF11.11. The people picker for `acts_on_output`, read while filling the same form. */
 const ACTORS = '/api/admin/agent-domain-actors';
+/** AF12.1. The queue grouped into tasks, admin-only like the queue it projects. */
+const TASKS = '/api/admin/agent-domain-tasks';
 const DECIDE = '/api/admin/agent-domain-change-requests/11111111-2222-4333-8444-555555555555/decide';
 
 function tokenFor(mgmtRole: string | null, role = 'staff'): string {
@@ -90,13 +92,18 @@ beforeEach(() => {
 });
 
 describe('every route carries its own guard', () => {
-  it('POSITIVE CONTROL: the router registers six routes, so the enumeration is not empty', () => {
+  it('POSITIVE CONTROL: the router registers eight routes, so the enumeration is not empty', () => {
     const routes = registeredRoutes();
-    expect(routes).toHaveLength(6);
+    expect(routes).toHaveLength(8);
     expect(routes.map((r) => `${r.methods[0]} ${r.path}`).sort()).toEqual([
       `get ${QUEUE}`,
       `get ${MINE}`,
       `get ${DATASETS}`,
+      // AF12.2. The dataset drill-in, on the same grant as the list it opens from.
+      `get ${DATASETS}/:tableName`,
+      // AF12.1. The queue grouped into tasks, on the DECIDING grant, because it carries every
+      // builder's requests across every domain.
+      `get ${TASKS}`,
       // AF11.11. This control caught the route being added, which is what it is for.
       `get ${ACTORS}`,
       `post ${QUEUE}/:id/decide`,
@@ -114,21 +121,23 @@ describe('every route carries its own guard', () => {
    * total count is compared against the number of registered routes, so a route ADDED without a
    * guard also fails here — the thing the per-file lint cannot see.
    */
-  it('exactly four requireSection(dashboard) and exactly two requireAdmin, matching the route count', () => {
+  it('exactly five requireSection(dashboard) and exactly three requireAdmin, matching the route count', () => {
     const src = routerCode();
     const sections = [...src.matchAll(/requireSection\(\s*'([a-z_]+)'\s*\)/g)].map((m) => m[1]);
     const admins = [...src.matchAll(/\brequireAdmin\b/g)].length;
-    // FOUR now: filing, the intern's own list, and the TWO pickers they read while filling the
-    // form — the dataset picker and, since AF11.11, the people picker behind `acts_on_output`.
+    // FIVE now: filing, the intern's own list, the TWO pickers they read while filling the form
+    // (the dataset picker and, since AF11.11, the people picker behind `acts_on_output`), and
+    // since AF12.2 the dataset DRILL-IN those pickers open.
     //
-    // Both pickers deliberately sit on the FILING grant rather than the deciding one. Behind
-    // `requireAdmin` the only people who could see either list would be the ones who never fill
-    // in the form, which would make `read_datasets_not_catalogued` and
+    // All three read-side routes deliberately sit on the FILING grant rather than the deciding
+    // one. Behind `requireAdmin` the only people who could see any of those lists would be the
+    // ones who never fill in the form, which would make `read_datasets_not_catalogued` and
     // `acts_on_output_not_a_person` refusals with no way out.
-    expect(sections).toEqual(['dashboard', 'dashboard', 'dashboard', 'dashboard']);
-    // One import mention plus two usages.
-    expect(admins).toBe(3);
-    expect(sections.length + 2).toBe(registeredRoutes().length);
+    expect(sections).toEqual(['dashboard', 'dashboard', 'dashboard', 'dashboard', 'dashboard']);
+    // One import mention plus THREE usages: the queue, the decide POST, and since AF12.1 the
+    // task projection, which carries every builder's queue and must not be widened.
+    expect(admins).toBe(4);
+    expect(sections.length + 3).toBe(registeredRoutes().length);
   });
 
   it('puts the dataset picker on the FILING grant, never on the deciding one', () => {

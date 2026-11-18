@@ -115,7 +115,7 @@ export default function DecideOverview({
         />
         <Tile
           label="Oldest waiting"
-
+          value={s.oldest_waiting_days === null ? 'none' : `${s.oldest_waiting_days}d`}
           tone={s.oldest_waiting_days === null
             ? 'unknown'
             : s.oldest_waiting_days >= 5 ? 'hazard' : s.oldest_waiting_days >= 2 ? 'attention' : 'ready'}

@@ -58,6 +58,7 @@ function complete(over: Partial<ToolRequestDetailInput> = {}): ToolRequestDetail
     produces: ['A ranked list of posts worth a reply'],
     capability_id: A_REAL_CAPABILITY,
     task_unblocked: 'STORY-004, the daily signal triage pass.',
+    task_key: 'daily_signal_triage',
     manual_today: 'I open Skool and scroll the feed every morning.',
     // AF11.7 — the three answers that decide whether this gets built at all.
     acts_on_output: 'sohail@colaberry.com',
@@ -119,6 +120,9 @@ describe('every required field, named one at a time', () => {
     ['produces', 'produces_undeclared'],
     ['capability_id', 'capability_missing'],
     ['task_unblocked', 'task_unblocked_missing'],
+    // AF12.1. In this table rather than a block of its own, which is the point the table's own
+    // comment makes: a required field with no row here is visible as an omission.
+    ['task_key', 'task_key_missing'],
     ['manual_today', 'manual_today_missing'],
     ['needed_by', 'needed_by_missing'],
     ['run_frequency', 'run_frequency_missing'],
@@ -730,6 +734,7 @@ describe('AF11.7 criterion 6 — the design-token drift request, re-filed today,
     read_datasets: [],
     capability_id: A_REAL_CAPABILITY,
     task_unblocked: 'The design-system consistency pass.',
+    task_key: 'design_system_consistency_pass',
     manual_today: 'Nobody does this by hand; the drift accumulates unnoticed.',
     needed_by: '2026-11-30',
     run_frequency: 'daily',
@@ -851,5 +856,54 @@ describe('AF11.7 — the person has to be on the roster, and the roster is the c
     expect(verdict.detail.judged_measured_from).toBe('interaction_outcomes reply timestamps');
     expect(verdict.detail.missing_from_product).toBe('No feed view exists.');
     expect(verdict.detail.tried_in_product).toBe('not_built');
+  });
+});
+
+/**
+ * AF12.1 — the task key, which is what makes "a task uses several tools" expressible at all.
+ *
+ * Ali, 17 Nov 2026: *"I think we need to do a better job of differentiating between a task and a
+ * tool. They can be the same, but they can also be different and you have a task that uses
+ * multiple tools."*
+ *
+ * The shape is checked in the gate rather than in the zod schema because the key is a grouping
+ * IDENTITY: two requests either land in the same group or they do not, and a key that differs by a
+ * capital letter or a trailing underscore would split one task into two on the decide screen while
+ * looking identical to the person who typed it.
+ */
+describe('the task key', () => {
+  it('accepts a plain lowercase key: the positive control', () => {
+    expect(rules(complete({ task_key: 'weekly_unpaid_explorer_report' }))).toEqual([]);
+  });
+
+  it('accepts a capitalised key, and lowercases it, so capitalisation cannot split a task', () => {
+    expect(rules(complete({ task_key: 'Weekly_Unpaid_Explorer_Report' }))).toEqual([]);
+    const accepted = acceptToolRequest({
+      detail: complete({ task_key: 'Weekly_Unpaid_Explorer_Report' }),
+      domainKey: DOMAIN,
+      knownCapabilityIds: CAPABILITY_IDS,
+      ownedAgentIds: [AGENT],
+      knownDatasets: KNOWN_DATASETS,
+      knownActorEmails: KNOWN_ACTORS,
+    });
+    expect(accepted.ok).toBe(true);
+    if (accepted.ok) expect(accepted.detail.task_key).toBe('weekly_unpaid_explorer_report');
+  });
+
+  it('refuses a key with a space, because that is two words pretending to be an identity', () => {
+    expect(rules(complete({ task_key: 'weekly report' }))).toContain('task_key_malformed');
+  });
+
+  it('refuses a one-character key, which groups nothing', () => {
+    expect(rules(complete({ task_key: 'x' }))).toContain('task_key_malformed');
+  });
+
+  it('refuses a trailing underscore, so a typo does not become a second task', () => {
+    expect(rules(complete({ task_key: 'weekly_report_' }))).toContain('task_key_malformed');
+  });
+
+  it('says WHY it wants one, because the reason is the teaching', () => {
+    const issue = gate(complete({ task_key: '' })).find((i) => i.rule === 'task_key_missing');
+    expect(issue?.detail ?? '').toContain('the same one on every tool the task needs');
   });
 });

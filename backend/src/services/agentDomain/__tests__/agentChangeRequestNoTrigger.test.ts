@@ -173,6 +173,18 @@ describe('nothing outside the change-request module reaches into the service', (
     // listing cannot violate it, and the assertion below checks the import rather than taking
     // this comment's word for it.
     path.join('routes', 'admin', 'mayaGoLiveRoutes.ts'),
+    // THE FIFTH IMPORTER, 2026-11-17, allowed on the same grounds as the fourth and checked the
+    // same way.
+    //
+    // `controllers/agentDomainTaskController.ts` imports `listAllChangeRequests` and nothing
+    // else, to group the queue into the TASKS its tool requests serve (AF12.1). It is a
+    // PROJECTION of rows the controller beside it already returns: no decision control, no write,
+    // and `groupIntoTasks` is a pure function over the rows it is handed.
+    //
+    // The rule this pin protects is "nothing is built as a result of an approval". Reshaping a
+    // list cannot violate it, and the assertion below checks the import rather than taking this
+    // comment's word for it.
+    path.join('controllers', 'agentDomainTaskController.ts'),
   ];
 
   function tsFilesUnder(dir: string, acc: string[] = []): string[] {
@@ -185,10 +197,27 @@ describe('nothing outside the change-request module reaches into the service', (
     return acc;
   }
 
+  /**
+   * The file's text with TYPE-ONLY imports removed.
+   *
+   * Tightened 2026-11-17, and it makes the rule sharper rather than looser. `import type { X }`
+   * compiles to nothing: it cannot call `decideChangeRequest`, cannot reach a database and cannot
+   * start a build, so it is not a way into the service and spending an allowlist slot on one
+   * would dilute a list whose whole value is that every entry had to be argued for.
+   *
+   * `taskGrouping.ts` is the case that forced the question. It imports `ChangeRequestRow` as a
+   * type and nothing else; the rows themselves are handed to it by a caller. A value import of
+   * anything from the service still counts, which is the property that matters.
+   */
+  function withoutTypeOnlyImports(code: string): string {
+    return code.replace(/import\s+type\s*\{[^}]*\}\s*from\s*'[^']*';?/g, '');
+  }
+
   it('only the controller imports it, plus its own tests', () => {
     const importers = tsFilesUnder(BACKEND_SRC)
       .filter((f) => !f.includes('__tests__'))
-      .filter((f) => /from\s+'[^']*agentChangeRequestService'/.test(fs.readFileSync(f, 'utf8')))
+      .filter((f) => /from\s+'[^']*agentChangeRequestService'/
+        .test(withoutTypeOnlyImports(fs.readFileSync(f, 'utf8'))))
       .map((f) => path.relative(BACKEND_SRC, f));
 
     // POSITIVE CONTROL: the controller really does import it, so an empty list would mean the
@@ -196,6 +225,18 @@ describe('nothing outside the change-request module reaches into the service', (
     expect(importers.length).toBeGreaterThan(0);
     for (const imp of importers) {
       expect(ALLOWED.some((a) => imp.endsWith(a))).toBe(true);
+    }
+  });
+
+  it('the task projection imports the LISTING function and nothing that decides', () => {
+    // The check the fifth allowlist entry promises. The same shape as the Maya one below, because
+    // the same claim is being made and a claim checked for one caller and trusted for another is
+    // the weaker of the two.
+    const file = path.join(BACKEND_SRC, 'controllers', 'agentDomainTaskController.ts');
+    const code = codeOf(file);
+    expect(code).toMatch(/import\s*\{\s*listAllChangeRequests\s*\}\s*from/);
+    for (const forbidden of ['decideChangeRequest', 'fileChangeRequest', 'acceptToolGrant', 'recordToolGrant']) {
+      expect(code).not.toContain(forbidden);
     }
   });
 
