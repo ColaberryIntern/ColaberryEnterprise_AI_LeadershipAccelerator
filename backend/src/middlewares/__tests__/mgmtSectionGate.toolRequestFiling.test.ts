@@ -160,3 +160,50 @@ describe('the people picker', () => {
     expect(pathToSection('/api/admin/agent-domain-actors')).toBe('dashboard');
   });
 });
+
+/**
+ * AF12.1 — "Report a problem" on the agent pages.
+ *
+ * The instructions going out to the seven builders tell them that a screen which looks wrong is
+ * more likely our bug than their mistake, and to say so straight away. The button that sentence
+ * refers to is useless if it 403s for them, and the obvious implementation (point it at the
+ * Marketing endpoint) does exactly that.
+ */
+describe('the builders’ Report a problem', () => {
+  it('is reachable by every builder role', () => {
+    const path = '/api/admin/agent-domain/bug-report';
+    expect(pathToSection(path)).toBe('dashboard');
+    for (const role of BUILDER_ROLES) {
+      expect({ role, can: roleCanAccessSection(role, pathToSection(path)!) })
+        .toEqual({ role, can: true });
+    }
+  });
+
+  it('and the Marketing one, which it would have been tempting to reuse, reaches only ONE of them', () => {
+    // The whole reason the separate route exists, measured rather than assumed. `marketing` is
+    // the one builder role that also carries `campaigns`, so Sarbjit could have used the
+    // Marketing reporter and the other six would have been refused. A button that works for one
+    // person in seven is worse than no button, because the six who are refused conclude it is
+    // them rather than us.
+    const marketing = '/api/admin/marketing/bug-report';
+    expect(pathToSection(marketing)).toBe('campaigns');
+
+    const reach = Object.fromEntries(
+      BUILDER_ROLES.map((role) => [role, roleCanAccessSection(role, pathToSection(marketing)!)]),
+    );
+    expect(reach).toEqual({
+      marketing: true,
+      platform: false,
+      lead_intake: false,
+      internship_review: false,
+      revenue: false,
+      product_experience: false,
+    });
+  });
+
+  it('is not swallowed by, and does not swallow, the agent-domains rows', () => {
+    expect(pathToSection('/api/admin/agent-domain/bug-report')).toBe('dashboard');
+    expect(pathToSection('/api/admin/agent-domains')).toBe('program');
+    expect(pathToSection('/api/admin/agent-domain-tool-requests')).toBe('program');
+  });
+});
