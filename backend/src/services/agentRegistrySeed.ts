@@ -3275,6 +3275,31 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     ],
   },
   {
+    agent_name: 'StoryVerificationSweep',
+    agent_type: 'scheduled_processor',
+    module: 'sbp/verification',
+    source_file: 'backend/src/services/sbp/verification/verificationSweepService.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'reporting',
+    // Seeded ENABLED, on the same reasoning as DeptCampaignPerformanceAgent rather than
+    // MarketingPublishingWorker: there is no blast radius to hold for review, because the
+    // sweep's OWN flag is the gate and it defaults to off. With STORY_VERIFICATION_SWEEP
+    // unset, a tick returns before it queries anything at all, so this row exists to make
+    // the job TRACKABLE rather than to switch it on. Its middle mode, report_only, selects
+    // a batch and logs it without calling the verifier.
+    enabled: true,
+    description:
+      'The cadence FLOOR for build verification. Picks the projects most overdue a look, '
+      + 'oldest verification pass first with never-verified ahead of everything, and '
+      + 're-verifies them. It does not replace the per-commit GitHub push webhook and does '
+      + 'not compete with it: picking the stalest means a project pushing normally is never '
+      + 'chosen while a silent one waits, and a 6 hour cooldown keeps the push path winning. '
+      + 'Ordering reads verification_json checked_at, NOT student_tasks.updated_at, which a '
+      + 'bulk write stomped (93 rows share one value). Three modes, default OFF; report_only '
+      + 'writes nothing. Bounded per tick, so one tick cannot become a stampede. No LLM.',
+  },
+  {
     agent_name: 'MarketingPublishingWorker',
     agent_type: 'scheduled_processor',
     module: 'publishing',

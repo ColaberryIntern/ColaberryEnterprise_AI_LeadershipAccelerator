@@ -121,35 +121,71 @@ describe('artifact_definitions reader scope (gates the catalog seed)', () => {
     expect(refs('scoped').length).toBeGreaterThan(10);
   });
 
+  /**
+   * COUNTED PER FILE, not pinned to a line.
+   *
+   * The first version of these two tests asserted `file:line`. That broke the moment an unrelated
+   * edit added an import to `healthReportService.ts`, which moved its reader from line 49 to 50
+   * and reported the shift as reader drift. A false drift report on a gate like this is worse than
+   * no gate: the next person reads a red suite about twenty readers and learns to re-run it with
+   * updated numbers.
+   *
+   * Counting per file keeps every bit of the signal that matters. A NEW unscoped reader in a file
+   * already listed still fails, because its count goes up; a new unscoped reader in a new file
+   * still fails, because the key appears; and scoping one still fails, because the count drops.
+   * Only the line number, which nothing depends on, is allowed to move. The failure message still
+   * prints the lines, so a reader can navigate.
+   */
+  const byFile = (kind: string): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const r of refs(kind)) {
+      const file = r.replace(/:\d+$/, '');
+      out[file] = (out[file] || 0) + 1;
+    }
+    return out;
+  };
+
   it('has exactly these readers with NO where clause', () => {
-    expect(refs('unscoped')).toEqual([
-      'services/analyticsService.ts:320',
-      'services/analyticsService.ts:383',
-      'services/artifactCompilerService.ts:215',
-      'services/artifactCompilerService.ts:75',
-      'services/artifactGraphService.ts:91',
-      'services/curriculumGraphService.ts:163',
-      'services/curriculumGraphService.ts:208',
-      'services/curriculumGraphService.ts:273',
-      'services/curriculumManagerService.ts:67',
-      'services/deepReconciliationService.ts:274',
-      'services/healthReportService.ts:49',
-      'services/projectProgressService.ts:179',
-    ]);
+    expect({ sites: refs('unscoped').length, byFile: byFile('unscoped') }).toEqual({
+      sites: 12,
+      byFile: {
+        'services/analyticsService.ts': 2,
+        'services/artifactCompilerService.ts': 2,
+        'services/artifactGraphService.ts': 1,
+        'services/curriculumGraphService.ts': 3,
+        'services/curriculumManagerService.ts': 1,
+        'services/deepReconciliationService.ts': 1,
+        'services/healthReportService.ts': 1,
+        'services/projectProgressService.ts': 1,
+      },
+    });
   });
 
-  it('has exactly these readers whose where clause cannot be read from source', () => {
-    expect(refs('where_opaque')).toEqual([
-      'services/agents/orchestrationAutoRepairAgent.ts:157',
-      'services/agents/promptMonitorAgent.ts:126',
-      'services/artifactGraphService.ts:69',
-      'services/artifactService.ts:13',
-      'services/artifactService.ts:163',
-      'services/guidedExecution/guidedExecutionService.ts:68',
-      'services/nextAction/nextActionService.ts:194',
-      'services/projectExportService.ts:59',
-    ]);
+  it('still names the exact sites in its own output, for whoever has to go and look', () => {
+    // Not an assertion about line numbers, a check that the inventory is still navigable: every
+    // reported site carries a file AND a line, so the count above can be acted on.
+    for (const r of [...refs('unscoped'), ...refs('where_opaque')]) {
+      expect(r).toMatch(/^services\/[\w/.-]+\.ts:\d+$/);
+    }
   });
+
+
+
+  it('has exactly these readers whose where clause cannot be read from source', () => {
+    expect({ sites: refs('where_opaque').length, byFile: byFile('where_opaque') }).toEqual({
+      sites: 8,
+      byFile: {
+        'services/agents/orchestrationAutoRepairAgent.ts': 1,
+        'services/agents/promptMonitorAgent.ts': 1,
+        'services/artifactGraphService.ts': 1,
+        'services/artifactService.ts': 2,
+        'services/guidedExecution/guidedExecutionService.ts': 1,
+        'services/nextAction/nextActionService.ts': 1,
+        'services/projectExportService.ts': 1,
+      },
+    });
+  });
+
 
   it('agrees with CURRICULUM_READERS_SCOPED, in both directions', () => {
     const blockers = [...refs('unscoped'), ...refs('where_opaque')];
