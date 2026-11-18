@@ -36,7 +36,7 @@ function PrivacyV2(): React.ReactElement {
         route={ROUTE}
       />
 
-      <section className="cbv2-pagehero" aria-labelledby="cbv2-priv-title">
+      <section className="cbv2-pagehero cbv2-pagehero--page" aria-labelledby="cbv2-priv-title">
         <div className="cbv2-wrap">
           <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Data</p>
           <h1 id="cbv2-priv-title">What this site collects</h1>
