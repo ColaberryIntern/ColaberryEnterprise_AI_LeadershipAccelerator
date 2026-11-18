@@ -350,8 +350,10 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       ? await sequelize.query<{ subject: string; body: string; sent_at: Date }>(
           `SELECT subject, body, COALESCE(sent_at, updated_at) AS sent_at FROM scheduled_emails
             WHERE lead_id = :leadId AND campaign_id = :campaignId AND status = 'sent' AND channel = 'email'
+              AND (metadata->>'event_starts_at') = :startsAt
               AND id <> :id ORDER BY COALESCE(sent_at, updated_at)`,
-          { replacements: { leadId: action.lead_id, campaignId: action.campaign_id, id: action.id }, type: QueryTypes.SELECT },
+          // Same Open House only: a second registration must not count the first event's emails.
+          { replacements: { leadId: action.lead_id, campaignId: action.campaign_id, id: action.id, startsAt: String(action.metadata?.event_starts_at || '') }, type: QueryTypes.SELECT },
         ).catch(() => [])
       : [];
     if (action.metadata?.event_countdown && earlierCountdown.length > 0) {
@@ -871,9 +873,15 @@ async function processScheduledActions(): Promise<void> {
               AND status IN ('pending', 'processing', 'sent')
               AND COALESCE(sent_at, scheduled_for) BETWEEN NOW() - INTERVAL '24 hours' AND NOW() + INTERVAL '24 hours'`,
           { replacements: { leadId: action.lead_id }, type: QueryTypes.SELECT },
-        ).catch(() => [] as { at: Date }[]);
+        ).catch((err: any) => {
+          console.warn(`[Scheduler] Open House precedence read failed for lead ${action.lead_id}: ${err?.message}`);
+          return null;
+        });
         const { countdownYieldUntil } = await import('./openHouseBrain');
-        const until = countdownYieldUntil(near.map((r) => new Date(r.at)));
+        // Fail closed: an unreadable answer is not permission to send. Try again in an hour.
+        const until = near === null
+          ? new Date(Date.now() + 60 * 60 * 1000)
+          : countdownYieldUntil(near.map((r) => new Date(r.at)));
         if (until) {
           await action.update({ status: 'pending', scheduled_for: until, processing_started_at: null, processor_id: null } as any);
           console.log(`[Scheduler] Open House precedence: lead ${action.lead_id} has a countdown touch within 24h, action ${action.id} deferred to ${until.toISOString()}`);
