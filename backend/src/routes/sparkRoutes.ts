@@ -92,7 +92,7 @@ router.post('/api/spark/game/lock', needKey, needSession, async (req, res) => {
 });
 
 router.post('/api/spark/wager', needKey, needSession, async (req, res) => {
-  try { res.json(await S.saveWager(me(req), req.body?.groups, req.body?.picks)); } catch (e) { fail(res, e); }
+  try { res.json(await S.saveWager(me(req), req.body?.groups)); } catch (e) { fail(res, e); }
 });
 
 export default router;

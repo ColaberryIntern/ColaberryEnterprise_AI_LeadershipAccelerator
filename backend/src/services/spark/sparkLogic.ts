@@ -16,6 +16,13 @@ export interface Slot { date: string; start: string; maxEnd: string }
 export const PROGRAM_START = '2026-11-17';
 export const MIDDAY_FROM = '10:00';
 export const MIDDAY_TO = '15:30';
+// Evenings count too: Addie's work calendar fills 9 to 5 every weekday, which left the week with only
+// the weekend date (Ali, 2026-11-18: "should be 2-3 during the week and one on the weekend").
+export const EVENING_FROM = '17:30';
+export const EVENING_TO = '21:30';
+const EVENING_ANCHOR = 19 * 60;
+const EVENING_PENALTY = 60; // midday still wins when it is open
+export const MIN_WEEKDAY = 2;
 export const HOME_MINUTES = 60;
 export const OUT_MINUTES = 90;
 export const WEEKEND_MINUTES = 180;
@@ -79,18 +86,21 @@ export function isAhead(date: string, start: string, now: { date: string; time: 
   return date === now.date && toMin(start) >= toMin(now.time) + 90;
 }
 
-/** Every possible start (30-minute steps) on the given dates where an hour fits, closest to noon first. */
+/** Every possible start (30-minute steps) on the given dates where an hour fits: midday (closest to noon) first, then evenings. */
 export function candidateSlots(dates: string[], busy: Busy[], now: { date: string; time: string }): Slot[] {
   const out: Array<Slot & { score: number }> = [];
+  const windows: Array<[string, string, number, number]> = [[MIDDAY_FROM, MIDDAY_TO, NOON, 0], [EVENING_FROM, EVENING_TO, EVENING_ANCHOR, EVENING_PENALTY]];
   for (const date of dates) {
     if (!isWeekday(date)) continue;
-    for (const [s, e] of freeWindows(date, busy)) {
-      for (let t = Math.ceil(s / STEP) * STEP; t + HOME_MINUTES <= e; t += STEP) {
-        const start = fromMin(t);
-        if (!isAhead(date, start, now)) continue;
-        const maxEnd = Math.min(e, t + OUT_MINUTES);
-        // Prefer the middle of the day, and a little room for an outing.
-        out.push({ date, start, maxEnd: fromMin(maxEnd), score: Math.abs(t + 30 - NOON) - (maxEnd - t >= OUT_MINUTES ? 15 : 0) });
+    for (const [from, to, anchor, penalty] of windows) {
+      for (const [s, e] of freeWindows(date, busy, from, to)) {
+        for (let t = Math.ceil(s / STEP) * STEP; t + HOME_MINUTES <= e; t += STEP) {
+          const start = fromMin(t);
+          if (!isAhead(date, start, now)) continue;
+          const maxEnd = Math.min(e, t + OUT_MINUTES);
+          // Prefer the middle of the window, and a little room for an outing.
+          out.push({ date, start, maxEnd: fromMin(maxEnd), score: penalty + Math.abs(t + 30 - anchor) - (maxEnd - t >= OUT_MINUTES ? 15 : 0) });
+        }
       }
     }
   }

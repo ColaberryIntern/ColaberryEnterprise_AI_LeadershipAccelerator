@@ -11,8 +11,8 @@
  * hashes and were seeded on the server, never committed.
  *
  * The planner: busy time = each person's calendar screenshot (read by a vision model) + Ali's Google
- * work calendar (free/busy) + timed events on the family calendar. It finds midday hours where both
- * are free, picks 3 weekdays + 1 weekend slot, and asks the model for activities that fit both
+ * work calendar (free/busy) + timed events on the family calendar. It finds midday or evening hours
+ * where both are free, picks 3 weekdays + 1 weekend slot, and asks the model for activities that fit both
  * people's answers, each with a stated "why". The code, not the model, enforces the time limits.
  */
 import crypto from 'crypto';
@@ -165,7 +165,7 @@ async function gameState(p: Person, day: string) {
     day, game: { id: game.id, name: game.name, emoji: game.emoji, how: game.how },
     triesLeft: TRIES - tries.length, scores: done, best: done.length ? Math.max(...done) : null,
     locked: !!row?.data.locked || tries.length >= TRIES,
-    wager: wager ? { prize: String(wager.data.prize) } : null,
+    wager: wager ? { locked: true } : null, // the prize stays a surprise until the reveal
     wagerGroups: wager ? null : WAGER,
   };
 }
@@ -201,20 +201,46 @@ export async function lockScore(p: Person): Promise<void> {
   if (row) await update(row.id, { ...row.data, locked: true });
 }
 
-/** The wager: rank the 5 groups, then the prizes in your top group. Your prize if you win = your top pick. */
-export async function saveWager(p: Person, groups: unknown, picks: unknown): Promise<{ prize: string }> {
+/**
+ * The 15-minute prize, chosen by Spark from this person's own answers and their group ranking (Ali,
+ * 2026-11-18: "you should pick the prize for the 15 minutes based on our answers"). The partner owes it.
+ */
+async function pickPrize(p: Person, groups: string[]): Promise<{ prize: string; why: string }> {
+  const top = groups.find((g) => g in WAGER) || 'Sweet 💗';
+  const fallback = { prize: WAGER[top][0], why: `From the group you ranked first (${top.replace(/\s\S+$/, '')}).` };
+  try {
+    const out = await chat([
+      { role: 'system', content: `You choose a 15-minute game prize for one partner in a married couple. The other partner gives it to them tonight or tomorrow, at home or nearby, with no planning and little or no cost. Make it specific to this person's answers (a concrete action, not a category), warm or playful; flirty is fine, explicit is not. No em dashes. Phrase the prize as what they receive, a short noun phrase that reads after "Your prize:" (for example "A 15-minute back rub with the lavender lotion"). Reply only in JSON: {"prize": "under 90 characters", "why": "1 sentence, citing their answers, written to them as you"}` },
+      { role: 'user', content: `Their answers:\n${(await personLines(p)).map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}\n\nPrize groups they ranked today, favorite first: ${groups.length ? groups.join(' > ') : 'not ranked'}.\nExamples of the kind of prize in their top group: ${WAGER[top].join('; ')}.\nPick one prize from their top group's spirit that fits them best.` },
+    ], 0.8);
+    const clean = (s: unknown, n: number) => String(s || '').replace(/\s+/g, ' ').replace(/ ?[—–] ?/g, ', ').trim().slice(0, n);
+    const prize = clean(out.prize, 110);
+    return prize ? { prize, why: clean(out.why, 220) } : fallback;
+  } catch (e: any) { console.warn('[Spark] prize pick failed, using the list:', e.message); return fallback; }
+}
+
+/** The wager: rank the 5 groups secretly. Spark picks the exact prize from your answers; you see it only if you win. */
+export async function saveWager(p: Person, groups: unknown): Promise<{ ok: true }> {
   const day = ctNow().date;
   const st = await gameState(p, day);
   if (!st || !st.locked) throw new Error('finish your tries first');
-  if (st.wager) return st.wager;
+  if (st.wager) return { ok: true };
   const g = Array.isArray(groups) ? groups.map(String).filter((x) => x in WAGER) : [];
   if (g.length !== Object.keys(WAGER).length) throw new Error('rank every group');
-  const opts = WAGER[g[0]];
-  const pk = Array.isArray(picks) ? picks.map(String).filter((x) => opts.includes(x)) : [];
-  if (!pk.length) throw new Error('rank your top group');
-  await insert('wager', p, mondayOf(day), day, { groups: g, picks: pk, prize: pk[0] });
+  const { prize, why } = await pickPrize(p, g);
+  await insert('wager', p, mondayOf(day), day, { groups: g, picks: [], prize, why });
   await insert('lesson', p, mondayOf(day), day, { text: `One of you put "${g[0].replace(/\s\S+$/, '')}" prizes first today.`, private: true });
-  return { prize: pk[0] };
+  return { ok: true };
+}
+
+/** The winner's prize for a day: their wager's, or (when they skipped the wager) one Spark picks now and keeps. */
+async function prizeFor(p: Person, day: string): Promise<{ prize: string; why: string | null }> {
+  const w = await one('wager', { person: p, day });
+  if (w?.data.prize) return { prize: String(w.data.prize), why: w.data.why ? String(w.data.why) : null };
+  const recent = (await rows('wager', { person: p }, 5)).find((r) => (r.data.groups || []).length);
+  const { prize, why } = await pickPrize(p, recent ? recent.data.groups : []);
+  await insert('wager', p, mondayOf(day), day, { groups: [], picks: [], prize, why, auto: true });
+  return { prize, why };
 }
 
 /** This morning's reveal: yesterday's (last weekday's) scores, winner and the prize owed. */
@@ -229,8 +255,8 @@ async function reveal(today: string) {
   const a = await best('ali'); const b = await best('addie');
   const win = decideWinner(a, b);
   if (!win.length) return null;
-  const prizeOf = async (p: Person) => String((await one('wager', { person: p, day }))?.data.prize || 'Any 15-minute request of your choice');
-  const winners = await Promise.all(win.map(async (w) => { const p: Person = w === 'a' ? 'ali' : 'addie'; return { name: PEOPLE[p].name, prize: await prizeOf(p) }; }));
+  const winners: Array<{ name: string; prize: string }> = []; // never the prize's why: it quotes the winner's answers
+  for (const w of win) { const p: Person = w === 'a' ? 'ali' : 'addie'; winners.push({ name: PEOPLE[p].name, prize: (await prizeFor(p, day)).prize }); }
   const played = (await gameRow('ali', day)) || (await gameRow('addie', day));
   const g = GAMES.find((x) => x.id === played?.data.gameId) || gameForDay(weekdayIndex(day));
   return { day: prettyDay(day), game: `${g.emoji} ${g.name}`, scores: { Ali: a, Addie: b }, winners, tie: win.length === 2 };
@@ -322,7 +348,7 @@ export async function finishPlanning(p: Person, note: string, force = false): Pr
   const data = { ...(row?.data || { busy: [], shots: 0 }), done: true, note: String(note || '').slice(0, 600) };
   if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
   const partner = await one('calendar', { person: other(p), week });
-  if (partner?.data.done || force) { void planWeek(week).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
+  if (partner?.data.done || force) { void planWeek(week, { fill: true }).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
   return { planning: false };
 }
 
@@ -397,13 +423,19 @@ async function syncEvent(i: PlanItem): Promise<void> {
 
 // ---------------------------------------------------------------------------------- planning
 
+/** One person's survey answers, recent daily answers and prize rankings, as plain lines. */
+async function personLines(p: Person): Promise<string[]> {
+  const s = answerLines(SURVEY, await answeredSurvey(p));
+  const d = (await rows('daily', { person: p }, 15)).flatMap((r) => answerLines(DAILY, r.data.answers || {}));
+  const w = (await rows('wager', { person: p }, 5)).filter((r) => (r.data.groups || []).length)
+    .map((r) => `Game prize ranking (${r.day}): groups ${r.data.groups.join(' > ')}`);
+  return [...s, ...d, ...w];
+}
+
 async function profiles(): Promise<string> {
   const parts: string[] = [];
   for (const [n, p] of [['Partner 1', 'ali'], ['Partner 2', 'addie']] as Array<[string, Person]>) {
-    const s = answerLines(SURVEY, await answeredSurvey(p));
-    const d = (await rows('daily', { person: p }, 15)).flatMap((r) => answerLines(DAILY, r.data.answers || {}));
-    const w = (await rows('wager', { person: p }, 5)).map((r) => `Game prize ranking (${r.day}): groups ${r.data.groups.join(' > ')}; top picks ${r.data.picks.join(' > ')}`);
-    parts.push(`${n}:\n${[...s, ...d, ...w].map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}`);
+    parts.push(`${n}:\n${(await personLines(p)).map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}`);
   }
   return parts.join('\n\n');
 }
@@ -417,7 +449,7 @@ async function history(): Promise<{ past: string[]; lessons: string[] }> {
 
 const RULES = `You plan "Spark Hour" dates for a married couple (Partner 1 and Partner 2) who live in ${HOME_AREA}, with a young son.
 Rules:
-- Weekday Sparks happen in the middle of a workday. "home" = about 60 minutes at the house. "out" = 90 minutes total INCLUDING the drive both ways, so a drive of at most 20 minutes each way, and only well-known, long-standing places that are reliably open at that time.
+- Weekday Sparks happen at the slot's time: a midday break or a weekday evening. An evening Spark must still work with a young son at home (after bedtime, or something he can be near), unless it is an outing. "home" = about 60 minutes at the house. "out" = 90 minutes total INCLUDING the drive both ways, so a drive of at most 20 minutes each way, and only well-known, long-standing places that are reliably open at that time.
 - The weekend date can be morning, afternoon or evening, 2 to 3 hours, at most 1.5 hours' drive each way.
 - Match what BOTH partners said. When they differ, find the overlap or alternate. Be creative and specific: a concrete plan, not a category. Give each Spark one playful prompt, question or small dare to do during it.
 - "why" must cite their answers WITHOUT revealing who said what: say "one of you", never "Partner 1/2". Say "you both" ONLY when both partners' answers actually say it.
@@ -439,20 +471,32 @@ const FALLBACK: RawPick[] = [
   { place: 'home', title: 'Song swap and story', emoji: '🎧', plan: 'Each picks three songs that mean something; play them and tell the story behind each one.', why: 'Music and memories, with no planning needed.' },
 ];
 
-export async function planWeek(week: string): Promise<void> {
+/**
+ * Plan the week. With `fill`, a week that is already planned keeps every Spark it has and only adds
+ * the weekday ones it is missing (up to 3) in the time still ahead, plus a weekend date if it has none.
+ */
+export async function planWeek(week: string, opts: { fill?: boolean } = {}): Promise<{ added: number }> {
   const existing = await one('plan', { person: null, week });
-  if (existing && ['planning', 'ready'].includes(existing.data.status)) return;
+  if (existing?.data.status === 'planning') return { added: 0 };
+  if (!opts.fill && existing?.data.status === 'ready') return { added: 0 };
+  const keep: PlanItem[] = opts.fill && existing?.data.status === 'ready' ? existing.data.items || [] : [];
+  const before = existing?.data || {};
   const id = existing ? existing.id : await insert('plan', null, week, null, { status: 'planning' });
-  if (existing) await update(id, { status: 'planning' });
+  if (existing) await update(id, { ...before, status: 'planning' });
   try {
     const now = ctNow();
     const { busy, notes, missing } = await weekBusy(week);
-    const wk = pickWeekdaySlots(candidateSlots(weekDates(week), busy, now), 3);
-    const we = weekendSlots(week, busy, now).slice(0, 1);
+    const keptDays = new Set(keep.filter((i) => i.kind === 'weekday').map((i) => i.date));
+    const needWeekdays = 3 - keptDays.size;
+    const wk = needWeekdays > 0 ? pickWeekdaySlots(candidateSlots(weekDates(week), busy, now).filter((s) => !keptDays.has(s.date)), needWeekdays) : [];
+    const we = keep.some((i) => i.kind === 'weekend') ? [] : weekendSlots(week, busy, now).slice(0, 1);
+    const taken = new Set(keep.map((i) => i.id));
+    const freeId = (prefix: string) => { let k = 1; while (taken.has(`${week}-${prefix}${k}`)) k++; taken.add(`${week}-${prefix}${k}`); return `${prefix}${k}`; };
     const slots: Array<{ id: string; kind: 'weekday' | 'weekend'; slot: Slot }> = [
-      ...wk.map((s, n) => ({ id: `S${n + 1}`, kind: 'weekday' as const, slot: s })),
-      ...we.map((s) => ({ id: 'W1', kind: 'weekend' as const, slot: s })),
+      ...wk.map((s) => ({ id: freeId('S'), kind: 'weekday' as const, slot: s })),
+      ...we.map((s) => ({ id: freeId('W'), kind: 'weekend' as const, slot: s })),
     ];
+    if (!slots.length) { await update(id, { ...before, status: 'ready', items: keep, busy, missing }); return { added: 0 }; }
     const { past, lessons } = await history();
     let out: any = {};
     try {
@@ -463,16 +507,21 @@ export async function planWeek(week: string): Promise<void> {
     } catch (e: any) { console.warn('[Spark] model plan failed, using fallbacks:', e.message); }
     const picks: any[] = Array.isArray(out.items) ? out.items : [];
     const items: PlanItem[] = [];
+    const used = new Set(past.map((t) => t.toLowerCase()));
+    const spare = FALLBACK.filter((f) => !used.has(String(f.title).toLowerCase()));
     slots.forEach((s, n) => {
       const raw = picks.find((x) => x && x.slot === s.id);
-      const item = (raw && shapeItem(`${week}-${s.id}`, s.kind, s.slot, raw)) || shapeItem(`${week}-${s.id}`, s.kind, s.slot, FALLBACK[n % FALLBACK.length]);
+      const item = (raw && shapeItem(`${week}-${s.id}`, s.kind, s.slot, raw)) || shapeItem(`${week}-${s.id}`, s.kind, s.slot, (spare.length ? spare : FALLBACK)[n % (spare.length || FALLBACK.length)]);
       if (item) items.push(item);
     });
     for (const i of items) await syncEvent(i);
     for (const i of items) await insert('reason', null, week, i.date, { text: `Picked "${i.title}" for ${prettyDay(i.date)}: ${i.why}` });
-    await update(id, { status: 'ready', items, busy, missing, plannedAt: new Date().toISOString() });
+    const all = [...keep, ...items].sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+    await update(id, { status: 'ready', items: all, busy, missing, plannedAt: new Date().toISOString() });
+    return { added: items.length };
   } catch (e: any) {
-    await update(id, { status: 'failed', error: String(e.message).slice(0, 300) });
+    // A fill that fails must not lose the Sparks the week already had.
+    await update(id, keep.length ? { ...before, status: 'ready' } : { status: 'failed', error: String(e.message).slice(0, 300) });
     throw e;
   }
 }
