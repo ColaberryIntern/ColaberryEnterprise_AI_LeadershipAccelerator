@@ -19,7 +19,7 @@ import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import type { BuildingId } from './campusMap';
 import { CHOW_ROUTE } from './campusMap';
 import { openOrderSheet } from './chow/OrderSheet';
-import { CampusSettings, CampusSettingsView, readCampusSettings, writeCampusSettings } from './campusSettings';
+import { CampusSettings, CampusSettingsView, readCampusSettings, readStoredNav, startingNav, writeCampusSettings } from './campusSettings';
 import { useEffectiveReduceMotion } from './useEffectiveReduceMotion';
 import './campusTokens.css'; // C11: contrast tokens on :root; the provider wraps every portal route, so every campus surface has them
 
@@ -171,7 +171,14 @@ export function CampusProvider({ children }: { children?: React.ReactNode }): Re
   useEffect(() => {
     if (!isAuthenticated) { setEnabled(false); setReady(true); return undefined; }
     let alive = true;
-    fetchCampusFlags().then((f) => { if (alive) { setEnabled(f.campus); setReady(true); } });
+    fetchCampusFlags().then((f) => {
+      if (!alive) return;
+      // W22: a business account with no stored choice starts in the classic menu. Set in the same update as `ready`, so
+      // the first-visit campus landing (useCampusLanding) never sees it active. Not written to storage: it is a default.
+      const nav = startingNav(readStoredNav(), f);
+      if (nav) setStored((prev) => (prev.nav === nav ? prev : { ...prev, nav }));
+      setEnabled(f.campus); setReady(true);
+    });
     return () => { alive = false; };
   }, [isAuthenticated]);
 

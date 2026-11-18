@@ -21,7 +21,9 @@ describe('public pages use the model measure', () => {
   });
 
   it('keeps the home hero on the same column as every other band', () => {
-    expect(flat).toMatch(/\.cbv2-shell \.cbv2-h8__inner, \.cbv2-shell \.cbv2-h8__verbs, \.cbv2-shell \.cbv2-h8__rollout \{ max-width: 1200px; padding-inline: 28px; \}/);
+    expect(flat).toMatch(/\.cbv2-shell \.cbv2-h8__inner, \.cbv2-shell \.cbv2-h8__verbs \{ max-width: 1200px; padding-inline: 28px; \}/);
+    // W20 (Ali, 2026-11-17): the rollout BAND runs edge to edge; its content keeps the column.
+    expect(flat).toContain('.cbv2-shell .cbv2-h8__rollout > * { max-width: 1200px; padding-inline: 28px; }');
     expect(flat).toMatch(/\.cbv2-shell \.cbv2-h8__inner \{ grid-template-columns: minmax\(0, 1\.15fr\) minmax\(0, 0\.85fr\); gap: 56px; \}/);
   });
 
