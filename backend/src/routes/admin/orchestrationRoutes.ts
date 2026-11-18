@@ -54,6 +54,7 @@ import { scanFrontendApiCalls } from '../../utils/linkScanner';
 import { getSystemStatus, createSnapshot, listSnapshots, rollbackToSnapshot } from '../../services/managementService';
 import * as analytics from '../../services/analyticsService';
 import { generateHealthReport } from '../../services/healthReportService';
+import { buildSilenceReport, listQuietProjects } from '../../services/sbp/verification/buildSilenceReport';
 import OrchestrationHealth from '../../models/OrchestrationHealth';
 import AiAgent from '../../models/AiAgent';
 import { Op } from 'sequelize';
@@ -798,6 +799,20 @@ router.get('/api/admin/orchestration/health-report', requireAdmin, async (_req, 
   try {
     const report = await generateHealthReport();
     res.json(report);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * The FULL list of build projects that have stopped reporting (phase A2b).
+ *
+ * The health report deliberately names only the projects that have NEVER delivered a webhook,
+ * because the plain 14-day rule names 28 of 43 and a finding that long is noise. The rest of the
+ * list is not hidden, it is here, for whoever is going to work it.
+ */
+router.get('/api/admin/orchestration/build-silence', requireAdmin, async (_req, res) => {
+  try {
+    const [report, quiet] = await Promise.all([buildSilenceReport(), listQuietProjects()]);
+    res.json({ ...report, quiet_projects: quiet });
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
