@@ -76,6 +76,9 @@ const RESTING = new Set(['case_study_not_approved', 'snapshot_not_approved']);
   const pick = (latest.content.identity || {}).heroImageUrl;
   add('the cover is the concept Ali picked (§8f), and the video poster matches it', !!pick && wv.posterUrl === pick, pick ? (wv.posterUrl === pick ? 'cover = poster' : 'poster differs from cover') : 'no cover yet: generate three concepts and open the picker on day one');
 
+  const reserved = core.mermaidReservedIds((latest.content.architecture || {}).diagramSource);
+  add('the architecture diagram parses: no node named after a Mermaid keyword', reserved.length === 0, reserved.length ? `rename node(s): ${reserved.join(', ')}` : 'clean');
+
   // The real gate, with service-link facts (the bare gate reports every record as unlinked).
   const gate = require(`${D}/services/caseStudy/caseStudyPublishGate`);
   const store = require(`${D}/services/caseStudy/caseStudyPublicationStore`);

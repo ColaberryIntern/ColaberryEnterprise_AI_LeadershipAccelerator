@@ -89,6 +89,28 @@ async function login(base) {
   console.log(`[login] saved; valid until ${new Date(jwtExp(token)).toISOString()}`);
 }
 
+/**
+ * One regex for every name to hide: whole words, any case ("OBI, ANAMELECHI" is caught by "Obi" and
+ * "Anamelechi"), longest first so a full name is replaced before its parts. Null when there are none.
+ */
+function nameRegexSource(names) {
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const uniq = [...new Set(names.map((x) => x.trim()).filter((x) => x.length > 1))].sort((a, b) => b.length - a.length);
+  return uniq.length ? `(?<![\\p{L}\\p{N}])(?:${uniq.map(esc).join('|')})(?![\\p{L}\\p{N}])` : null;
+}
+
+/**
+ * A name field's value and its parts. Commas and periods are allowed, because some accounts store the
+ * name as "LAST, FIRST. M" (that form leaked on 2026-11-18 when only letters, spaces and hyphens passed).
+ */
+function namePartsOf(value) {
+  const n = String(value || '').trim();
+  if (!/^[\p{L}' .,-]{2,60}$/u.test(n)) return [];
+  return [n, ...n.split(/[\s,.]+/).filter((p) => p.length > 2)];
+}
+
+const isPersonLike = (x) => /^\p{Lu}[\p{L}'.,-]*(\s+\p{Lu}[\p{L}'.,-]*){1,3}$/u.test(String(x || '').trim());
+
 /** Person names from admin API endpoints: every string field whose key ends in "name". */
 async function namesFrom(base, token, endpoints) {
   const out = new Set();
@@ -96,13 +118,10 @@ async function namesFrom(base, token, endpoints) {
     if (Array.isArray(v)) return v.forEach((x) => walk(x, k));
     if (v && typeof v === 'object') return Object.entries(v).forEach(([kk, vv]) => walk(vv, kk));
     // A bare `name` key also holds project and agent names on some endpoints, so it counts only when the
-    // value looks like a person: two to four capitalized words, letters only.
-    const personLike = (x) => /^\p{Lu}[\p{L}'.-]*(\s+\p{Lu}[\p{L}'.-]*){1,3}$/u.test(x);
+    // value looks like a person: two to four capitalized words, letters only (a comma allowed, for "LAST, FIRST").
+    const personLike = isPersonLike;
     const nameKey = /^(full|first|last|display|student|intern|applicant|preferred)_?name$/i.test(k || '') || (/^name$/i.test(k || '') && typeof v === 'string' && personLike(v.trim()));
-    if (typeof v === 'string' && nameKey && /^[\p{L}' .-]{2,60}$/u.test(v.trim())) {
-      const n = v.trim(); out.add(n);
-      for (const part of n.split(/\s+/)) if (part.length > 2) out.add(part);
-    }
+    if (typeof v === 'string' && nameKey) namePartsOf(v).forEach((x) => out.add(x));
   };
   for (const e of endpoints || []) {
     const r = await fetch(base + e, { headers: { Authorization: `Bearer ${token}` } });
@@ -134,26 +153,29 @@ async function capture(specFile, outDir) {
       if (st.wait) await page.waitForTimeout(st.wait);
     }
     await page.waitForTimeout(s.settle || 1500);
-    await page.evaluate(({ extra, emailSrc, phoneSrc }) => {
+    const keep = new Set((s.keepWords || []).map((x) => x.toLowerCase()));
+    const names = [...(s.redactText || []), ...(await namesFrom(base, token, s.redactNamesFrom))].filter((x) => x && !keep.has(x.toLowerCase()));
+    const nameSrc = nameRegexSource(names);
+    await page.evaluate(({ nameSrc, emailSrc, phoneSrc }) => {
       const email = new RegExp(emailSrc, 'gi'); const phone = new RegExp(phoneSrc, 'g');
-      const lits = extra.filter(Boolean).sort((a, b) => b.length - a.length);
+      const name = nameSrc ? new RegExp(nameSrc, 'giu') : null;
       const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
       for (const n of nodes) {
         let v = n.nodeValue;
         v = v.replace(email, 'name@example.com').replace(phone, '(555) 010-0000');
-        for (const l of lits) v = v.split(l).join('[redacted]');
+        if (name) v = v.replace(name, '[redacted]');
         n.nodeValue = v;
       }
       for (const el of document.querySelectorAll('input,textarea')) {
         el.value = String(el.value || '').replace(email, 'name@example.com').replace(phone, '(555) 010-0000');
       }
-    }, { extra: [...(s.redactText || []), ...(await namesFrom(base, token, s.redactNamesFrom))].filter((x) => !(s.keepWords || []).includes(x)), emailSrc: EMAIL.source, phoneSrc: PHONE.source });
-    const left = await page.evaluate(({ emailSrc, phoneSrc }) => {
+    }, { nameSrc, emailSrc: EMAIL.source, phoneSrc: PHONE.source });
+    const left = await page.evaluate(({ nameSrc, emailSrc, phoneSrc }) => {
       const t = document.body.innerText;
-      return [...(t.match(new RegExp(emailSrc, 'gi')) || []), ...(t.match(new RegExp(phoneSrc, 'g')) || [])].filter((x) => x !== 'name@example.com' && x !== '(555) 010-0000');
-    }, { emailSrc: EMAIL.source, phoneSrc: PHONE.source });
-    if (left.length) { console.error(`[${s.name}] NOT WRITTEN: ${left.length} contact detail(s) still visible after redaction`); leaked += 1; await ctx.close(); continue; }
+      return [...(t.match(new RegExp(emailSrc, 'gi')) || []), ...(t.match(new RegExp(phoneSrc, 'g')) || []), ...(nameSrc ? t.match(new RegExp(nameSrc, 'giu')) || [] : [])].filter((x) => x !== 'name@example.com' && x !== '(555) 010-0000');
+    }, { nameSrc, emailSrc: EMAIL.source, phoneSrc: PHONE.source });
+    if (left.length) { console.error(`[${s.name}] NOT WRITTEN: ${left.length} contact detail(s) or known name(s) still visible after redaction`); leaked += 1; await ctx.close(); continue; }
     const file = path.join(outDir, `${s.name}.png`);
     const opts = { path: file, mask: (s.mask || []).map((m) => page.locator(m)), maskColor: '#c8ced8' };
     if (s.clip) await page.locator(s.clip).first().screenshot(opts);
@@ -168,7 +190,7 @@ async function capture(specFile, outDir) {
   if (leaked) process.exit(4);
 }
 
-module.exports = { EMAIL, PHONE };
+module.exports = { EMAIL, PHONE, nameRegexSource, namePartsOf, isPersonLike };
 if (require.main === module) (async () => {
   const a = process.argv.slice(2);
   const val = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : null; };

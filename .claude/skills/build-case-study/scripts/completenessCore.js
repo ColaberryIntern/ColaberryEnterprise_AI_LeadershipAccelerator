@@ -109,4 +109,21 @@ function formatReport(result, refSlugs = []) {
   return lines.join('\n');
 }
 
-module.exports = { present, presenceProfile, selectReferences, compareToReferences, formatReport };
+
+// Words Mermaid's flowchart grammar reserves. Used as a node id they break the parse, and Mermaid 11
+// then prints "Syntax error in text" at the bottom of the page (a node named `call`, 2026-11-18).
+const MERMAID_RESERVED = ['call', 'click', 'end', 'style', 'class', 'classDef', 'linkStyle', 'subgraph', 'graph', 'flowchart', 'default', 'interpolate', 'direction', 'href'];
+
+/** Node ids in a Mermaid flowchart that are reserved words. Labels in quotes or brackets are ignored. */
+function mermaidReservedIds(src) {
+  const bare = String(src || '').replace(/"[^"]*"/g, '""').replace(/\|[^|]*\|/g, ' ');
+  const found = new Set();
+  for (const line of bare.split('\n').slice(1)) {
+    for (const m of line.matchAll(/(?:^|-->|---|==>|-\.->|&)\s*([A-Za-z_][\w-]*)/g)) {
+      if (MERMAID_RESERVED.includes(m[1])) found.add(m[1]);
+    }
+  }
+  return [...found];
+}
+
+module.exports = { present, presenceProfile, selectReferences, compareToReferences, formatReport, mermaidReservedIds };
