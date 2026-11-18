@@ -220,3 +220,38 @@ export function fitsSlot(item: PlanItem, slot: Slot): boolean {
   const room = toMin(slot.maxEnd) - toMin(slot.start);
   return item.place === 'home' ? room >= HOME_MINUTES : room >= OUT_MINUTES;
 }
+
+// ---------------------------------------------------------------------------------- what was read from a calendar photo
+
+/** One day's busy time as merged ranges (overlapping or touching blocks joined), in time order. */
+export function mergeBusy(blocks: Busy[], date: string): Array<[number, number]> {
+  const b = blocks.filter((x) => x.date === date).map((x) => [toMin(x.start), toMin(x.end)] as [number, number]).filter(([s, e]) => e > s).sort((x, y) => x[0] - y[0]);
+  const out: Array<[number, number]> = [];
+  for (const [s, e] of b) {
+    const last = out[out.length - 1];
+    if (last && s <= last[1]) last[1] = Math.max(last[1], e); else out.push([s, e]);
+  }
+  return out;
+}
+
+/**
+ * Does a day's read look like the calendar's hour grid rather than real meetings? The first real read
+ * (Addie, 2026-11-17) came back as identical back-to-back one-hour blocks from 9 to 5 on every weekday.
+ * Flag a day when 6 or more distinct blocks are each exactly one hour on the hour and chain into one run
+ * of 6 hours or more.
+ */
+export function looksLikeGrid(blocks: Busy[], date: string): boolean {
+  const seen = new Set<string>();
+  const hours = blocks.filter((x) => x.date === date).filter((x) => {
+    const k = `${x.start}-${x.end}`; if (seen.has(k)) return false; seen.add(k);
+    return toMin(x.end) - toMin(x.start) === 60 && x.start.endsWith(':00');
+  });
+  if (hours.length < 6) return false;
+  return mergeBusy(hours, date).some(([s, e]) => e - s >= 360);
+}
+
+/** Drop every block on `date` that overlaps [start, end): "that is wrong, I am open then". */
+export function removeRange(blocks: Busy[], date: string, start: string, end: string): Busy[] {
+  const s = toMin(start); const e = toMin(end);
+  return blocks.filter((x) => !(x.date === date && toMin(x.start) < e && toMin(x.end) > s));
+}
