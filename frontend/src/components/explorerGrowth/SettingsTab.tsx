@@ -2,6 +2,7 @@ import React from 'react';
 import SectionCard from '../admin/shell/SectionCard';
 import StatusBadge from '../admin/shell/StatusBadge';
 import AsyncPanel, { type AsyncState } from './AsyncPanel';
+import ControlsCard from './ControlsCard';
 import type { ExplorerSummary } from '../../services/explorerGrowthApi';
 
 /**
@@ -67,6 +68,9 @@ export function Body({ summary }: { summary: ExplorerSummary }) {
 
   return (
     <div className="row g-3">
+      <div className="col-12">
+        <ControlsCard />
+      </div>
       <div className="col-12 col-xl-6">
         <SectionCard title="Operating mode" icon="toggle-line">
           <>
@@ -111,9 +115,9 @@ export function Body({ summary }: { summary: ExplorerSummary }) {
               approval rather than a control that ships with a page.
             </li>
             <li>
-              <strong>Pause / kill switch</strong> — absent because the backend route does not
-              exist. A switch that looks like it stops the system, and does not, is worse than
-              none.
+              <strong>Kill switch</strong> — now shown, read only, in the Controls card. It is the
+              one global switch (<code>system_kill_switch</code>): it stops every send, the Open
+              House countdown included, and the governor treats it as a hard stop.
             </li>
             <li>
               <strong>Recalculate</strong> — absent for the same reason.
