@@ -18,11 +18,13 @@
 const mockFile = jest.fn();
 const mockCaps = jest.fn();
 const mockActors = jest.fn();
+const mockDraft = jest.fn();
 
 jest.mock('../../../../services/agentDomainApi', () => ({
   fileChangeRequest: (...a: unknown[]) => mockFile(...a),
   fetchMyDomainCapabilities: (...a: unknown[]) => mockCaps(...a),
   fetchActorRoster: (...a: unknown[]) => mockActors(...a),
+  draftToolRequest: (...a: unknown[]) => mockDraft(...a),
   searchAgentDomainDatasets: jest.fn().mockResolvedValue({
     datasets: [], total_matched: 0, catalog_size: 10, catalog_absent: false,
   }),
@@ -81,6 +83,19 @@ beforeEach(() => {
     note: 'The people we hold a record of.',
   });
   mockFile.mockResolvedValue({ id: 'cr-new', kind: 'tool', title: 'x' });
+  mockDraft.mockResolvedValue({
+    tool_request: {
+      tool_name: 'call_scan',
+      purpose: 'Flag calls that went badly',
+      reads: ['calls'],
+      produces: [],
+      inputs: [],
+      writes: false,
+    },
+    title: 'call_scan: Flag calls that went badly',
+    grounded_in: { capabilities: 1, datasets: 2, actors: 2, actor_roster_absent: false },
+    note: 'A draft, not a filing.',
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -483,5 +498,151 @@ describe('what the form promises', () => {
     await render();
     await submit();
     expect(mockFile).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * AF11.12 — the drafter.
+ *
+ * The property that matters is that a draft is a SUGGESTION: it lands in the fields, it does not
+ * file anything, and the request it eventually produces goes through the same gate as one typed
+ * by hand. A draft-and-file shortcut would remove the step the feature exists for.
+ */
+describe('AF11.12 the AI draft', () => {
+  it('fills the fields in and files NOTHING', async () => {
+    await render();
+    await type('#tr-intent', 'flag calls that went badly');
+    await click('[data-testid="draft-from-intent"]');
+
+    expect(mockDraft).toHaveBeenCalledWith('marketing', 'flag calls that went badly');
+    // The whole point: nothing was submitted.
+    expect(mockFile).not.toHaveBeenCalled();
+    expect((container.querySelector('#tr-tool-name') as HTMLInputElement).value)
+      .toBe('call_scan');
+  });
+
+  it('the drafted text is EDITABLE, and what is filed is what is on screen', async () => {
+    await render();
+    await type('#tr-intent', 'flag bad calls');
+    await click('[data-testid="draft-from-intent"]');
+    await type('#tr-tool-name', 'call_scan_v2');
+    await submit();
+
+    const sent = mockFile.mock.calls[0][0];
+    expect(sent.tool_request.tool_name).toBe('call_scan_v2');
+    // Still an ordinary tool request through the ordinary route.
+    expect(sent.kind).toBe('tool');
+  });
+
+  it('"Suggest one for me" needs no sentence and sends none', async () => {
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    expect(mockDraft).toHaveBeenCalledWith('marketing', null);
+  });
+
+  it('cannot draft from an intent until something is typed', async () => {
+    await render();
+    const btn = container.querySelector('[data-testid="draft-from-intent"]') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('an unreachable drafter does not read as a broken form', async () => {
+    // The form is still fillable by hand, so this must not render as "could not file that
+    // request". Telling somebody the form is broken stops a person who could have carried on.
+    mockDraft.mockRejectedValue({ response: { data: { error: 'The drafter could not be reached.' } } });
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    expect(text()).toContain('The drafter could not be reached.');
+    expect(container.querySelector('[data-testid="draft-problem"]')).not.toBeNull();
+    // And the fields are untouched, not blanked.
+    expect((container.querySelector('#tr-tool-name') as HTMLInputElement).value).toBe('');
+  });
+
+  it('says what the draft was written against, so a blank field has a reason', async () => {
+    mockDraft.mockResolvedValue({
+      tool_request: { tool_name: 'call_scan' },
+      title: 'call_scan',
+      grounded_in: { capabilities: 1, datasets: 0, actors: 0, actor_roster_absent: true },
+      note: 'A draft, not a filing.',
+    });
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    // An absent roster is why `acts_on_output` came back blank. Without this the builder reads
+    // the empty field as the AI having nothing to say.
+    expect(text()).toContain('no people list');
+  });
+
+  it('does not blank a field the second draft left out', async () => {
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    await type('#tr-tool-name', 'kept_by_hand');
+    // A draft that mentions nothing must not discard work already corrected by hand.
+    mockDraft.mockResolvedValue({
+      tool_request: {},
+      title: '',
+      grounded_in: { capabilities: 1, datasets: 1, actors: 1, actor_roster_absent: false },
+      note: 'A draft, not a filing.',
+    });
+    await click('[data-testid="draft-suggest"]');
+    expect((container.querySelector('#tr-tool-name') as HTMLInputElement).value)
+      .toBe('kept_by_hand');
+  });
+});
+
+/**
+ * AF11.13 — the drafted case travels with the request, so it arrives finished.
+ */
+describe('AF11.13 the decision package rides along', () => {
+  const withPackage = {
+    tool_request: { tool_name: 'call_scan' },
+    decision_package: {
+      executive_summary: 'Three sentences.',
+      problem: 'Two hours a week spent listening back.',
+      options: [{ key: 'A', summary: 'Build it', what_happens: 'x', verb: 'approve_to_build' }],
+    },
+    title: 'call_scan',
+    grounded_in: { capabilities: 1, datasets: 1, actors: 1, actor_roster_absent: false },
+    note: 'A draft, not a filing.',
+  };
+
+  it('files the case in the SAME call as the request', async () => {
+    mockDraft.mockResolvedValue(withPackage);
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    await submit();
+
+    const sent = mockFile.mock.calls[0][0];
+    expect(sent.decision_package).toBeDefined();
+    expect(sent.decision_package.executive_summary).toBe('Three sentences.');
+    // One call. The separate package route is requireAdmin under a prefix mapped to `program`,
+    // which no builder role holds, so a second call could never work for the person filing.
+    expect(mockFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('says on screen that it wrote one, and that the simulation is blank', async () => {
+    mockDraft.mockResolvedValue(withPackage);
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    expect(container.querySelector('[data-testid="draft-package"]')).not.toBeNull();
+    expect(text()).toContain('somebody has to actually run it');
+  });
+
+  it('sends NO decision_package when nothing was drafted', async () => {
+    // A hand-typed request files exactly as it did before this existed.
+    await render();
+    await type('#tr-tool-name', 'typed_by_hand');
+    await submit();
+    expect('decision_package' in mockFile.mock.calls[0][0]).toBe(false);
+  });
+
+  it('does not re-attach a stale package to the next request', async () => {
+    mockDraft.mockResolvedValue(withPackage);
+    await render();
+    await click('[data-testid="draft-suggest"]');
+    await submit();
+    await submit();
+    // The second filing carries nothing: the first one consumed it. Otherwise a builder who
+    // drafted once would silently attach the same argument to everything after it.
+    expect('decision_package' in mockFile.mock.calls[1][0]).toBe(false);
   });
 });

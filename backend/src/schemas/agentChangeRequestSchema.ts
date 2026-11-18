@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ToolRequestPackagePayloadSchema } from './toolRequestPackageSchema';
 import { ToolRequestPayloadSchema } from './agentToolRequestSchema';
 
 /**
@@ -57,6 +58,16 @@ export const FileChangeRequestSchema = z.object({
    * details", which is the sentence the intern has to act on.
    */
   tool_request: ToolRequestPayloadSchema.optional(),
+  /**
+   * AF11.13. The ten-block case, filed WITH the request rather than after it.
+   *
+   * Optional, so every existing caller is unaffected. It is here rather than only on the separate
+   * PUT because that route is `requireAdmin` under a prefix mapped to `program`, and no Agent
+   * Factory builder role carries `program` — so the person writing the request could never attach
+   * its argument. "A request arrives finished" has to mean it arrives finished, in one call, from
+   * the person filing it.
+   */
+  decision_package: ToolRequestPackagePayloadSchema.optional(),
 }).strict();
 
 export type FileChangeRequestInput = z.infer<typeof FileChangeRequestSchema>;
