@@ -35,7 +35,14 @@ export interface AdProfitability {
   unspentSignups: number;
   /** People who filled in a form in the window but were already paying before it. Not counted as ad signups. */
   existingCustomers: number;
-  coverage: { daysCovered: number; windowDays: number; lastDayRecorded: string | null; staleDays: number | null };
+  coverage: {
+    daysCovered: number;
+    windowDays: number;
+    /** First day in the window carrying spend. With `lastDayRecorded`, tells a gap from a short campaign. */
+    firstDayRecorded: string | null;
+    lastDayRecorded: string | null;
+    staleDays: number | null;
+  };
   paybackTargetMonths: number;
   sync: SyncStatus;
 }
@@ -130,7 +137,13 @@ export async function getAdProfitability(days: number, nowMs: number = Date.now(
 
   return {
     windowDays: days, windowStart, windowEnd, rows, totals, unspentSignups, existingCustomers,
-    coverage: { daysCovered: allocation.daysCovered, windowDays: allocation.windowDays, lastDayRecorded: allocation.lastDayRecorded, staleDays },
+    coverage: {
+      daysCovered: allocation.daysCovered,
+      windowDays: allocation.windowDays,
+      firstDayRecorded: allocation.firstDayRecorded,
+      lastDayRecorded: allocation.lastDayRecorded,
+      staleDays,
+    },
     paybackTargetMonths: PAYBACK_TARGET_MONTHS,
     sync,
   };

@@ -72,7 +72,14 @@ export interface AdProfitability {
   unspentSignups: number;
   /** Already paying before they filled in the form; not counted as ad signups. */
   existingCustomers: number;
-  coverage: { daysCovered: number; windowDays: number; lastDayRecorded: string | null; staleDays: number | null };
+  coverage: {
+    daysCovered: number;
+    windowDays: number;
+    /** First day in the window carrying spend. With `lastDayRecorded`, tells a gap from a short campaign. */
+    firstDayRecorded: string | null;
+    lastDayRecorded: string | null;
+    staleDays: number | null;
+  };
   paybackTargetMonths: number;
   sync: MetaSyncStatus;
 }

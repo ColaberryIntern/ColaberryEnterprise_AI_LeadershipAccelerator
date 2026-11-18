@@ -1,4 +1,4 @@
-import { coverageWarnings, monthsLabel, profitTakeaway, roasLabel, usd, verdictLabel } from '../adProfitabilityFormat';
+import { coverageWarnings, missingSpendDays, monthsLabel, profitTakeaway, roasLabel, usd, verdictLabel } from '../adProfitabilityFormat';
 import type { AdProfitability, ProfitTotals } from '../../../../../services/adSpendApi';
 
 const totals = (over: Partial<ProfitTotals> = {}): ProfitTotals => ({
@@ -7,7 +7,9 @@ const totals = (over: Partial<ProfitTotals> = {}): ProfitTotals => ({
 });
 const report = (over: Partial<AdProfitability> = {}): AdProfitability => ({
   windowDays: 90, windowStart: '2026-08-05', windowEnd: '2026-11-02', rows: [], totals: totals(), unspentSignups: 0, existingCustomers: 0,
-  coverage: { daysCovered: 90, windowDays: 90, lastDayRecorded: '2026-11-01', staleDays: 0 },
+  coverage: {
+    daysCovered: 90, windowDays: 90, firstDayRecorded: '2026-08-05', lastDayRecorded: '2026-11-01', staleDays: 0,
+  },
   paybackTargetMonths: 12, sync: { meta: { configured: false, accountId: null, reason: 'x' }, lastSync: null }, ...over,
 });
 
@@ -36,10 +38,59 @@ describe('ad profitability wording', () => {
   });
 
   it('warns when spend stops short of yesterday, or a window is too short to judge', () => {
-    const w = coverageWarnings(report({ windowDays: 30, coverage: { daysCovered: 20, windowDays: 30, lastDayRecorded: '2026-10-25', staleDays: 7 } }));
+    const w = coverageWarnings(report({
+      windowDays: 30,
+      coverage: {
+        daysCovered: 20, windowDays: 30, firstDayRecorded: '2026-10-06', lastDayRecorded: '2026-10-25', staleDays: 7,
+      },
+    }));
     expect(w[0]).toMatch(/recorded only through 2026-10-25/);
     expect(w.some((x) => /Judge a campaign on 90 days/.test(x))).toBe(true);
     expect(coverageWarnings(report())).toEqual([]);
+  });
+
+  // THE REGRESSION. Production on 2026-11-17: Meta spend ran 19 Oct to 17 Nov, all 30 days
+  // recorded, nothing missing - and the 90-day view still told Ali the ads looked cheaper
+  // than they were. The old test compared daysCovered against the whole window, so a window
+  // longer than the campaign was indistinguishable from missing data.
+  it('does not claim missing spend when the campaign simply ran for part of the window', () => {
+    const shortCampaignInLongWindow = report({
+      windowDays: 90,
+      coverage: {
+        daysCovered: 30, windowDays: 90, firstDayRecorded: '2026-10-19', lastDayRecorded: '2026-11-17', staleDays: 0,
+      },
+    });
+    expect(missingSpendDays(shortCampaignInLongWindow.coverage)).toBe(0);
+    expect(coverageWarnings(shortCampaignInLongWindow)).toEqual([]);
+  });
+
+  it('still names a real hole inside the run, and counts only the days actually missing', () => {
+    // 19 Oct to 17 Nov is a 30-day span; 26 days carry spend, so 4 days inside it do not.
+    const gappy = report({
+      windowDays: 90,
+      coverage: {
+        daysCovered: 26, windowDays: 90, firstDayRecorded: '2026-10-19', lastDayRecorded: '2026-11-17', staleDays: 0,
+      },
+    });
+    expect(missingSpendDays(gappy.coverage)).toBe(4);
+    const w = coverageWarnings(gappy);
+    expect(w).toHaveLength(1);
+    expect(w[0]).toBe(
+      '4 days between 2026-10-19 and 2026-11-17 carry no spend, although the ads were '
+      + 'running either side, so the ads look cheaper than they were.',
+    );
+  });
+
+  it('says "day" not "days" for a single missing day, and stays silent with nothing recorded', () => {
+    expect(coverageWarnings(report({
+      coverage: {
+        daysCovered: 29, windowDays: 90, firstDayRecorded: '2026-10-19', lastDayRecorded: '2026-11-17', staleDays: 0,
+      },
+    }))[0]).toMatch(/^1 day between /);
+    // No spend at all is not a gap: there is no run to have a hole in.
+    expect(missingSpendDays({
+      daysCovered: 0, windowDays: 90, firstDayRecorded: null, lastDayRecorded: null, staleDays: null,
+    })).toBe(0);
   });
 
   it('tells a mistyped campaign id apart from a campaign nobody paid for', () => {
