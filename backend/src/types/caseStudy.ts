@@ -468,12 +468,32 @@ export interface CaseStudyMetricEntry {
   readonly collected?: CaseStudyMetricCollection;
 }
 
+/** One beat of `identity.storyInBrief`: a short label ("Before") and one or two plain sentences. */
+export interface CaseStudyStoryBeat {
+  readonly label: string;
+  readonly text: string;
+}
+
 /** Hero identity: who, what, and under which consent settings. */
 export interface CaseStudyIdentitySection {
   readonly slug: string;
   readonly title: string;
   /** One-sentence standfirst under the title. */
   readonly standfirst?: string;
+  /**
+   * THE STORY IN BRIEF: three to five short labeled beats printed as a band at the top
+   * of the page, so a reader learns what happened before the body begins. Ali,
+   * 2026-11-18: "the story is so shortened I can't even tell what the story is ...
+   * sometimes the opening paragraph does a good job explaining and sometimes it
+   * doesn't." The standfirst is one sentence and the situation opens on the problem;
+   * neither is guaranteed to carry the whole arc. This field is the arc, told plainly:
+   * where it started, what was built, what happened, why it matters.
+   *
+   * Same discipline as the standfirst: every beat is claim-scanned at publish time, so a
+   * figure in a beat must be on the record. Absent means no band is drawn; nothing is
+   * derived from other sections, because a derived arc is the opening paragraph again.
+   */
+  readonly storyInBrief?: readonly CaseStudyStoryBeat[];
   readonly summary?: string;
   readonly organizationDisplayName?: string;
   readonly organizationIdentityMode: CaseStudyOrganizationIdentityMode;

@@ -5,6 +5,7 @@ import CaseStudyVerificationBadge from '../../components/caseStudy/CaseStudyVeri
 import { heroFacts, heroMetricsFor, visibleSections } from './storyDetailV2Model';
 import StoryHeroActions from './StoryHeroActions';
 import StoryContextStrip from './StoryContextStrip';
+import StoryInBrief from './StoryInBrief';
 import StoryVisualStory from './StoryVisualStory';
 import { StoryHeroFigure } from './StoryHeroFigure';
 import StorySectionList from './StorySectionList';
@@ -207,6 +208,10 @@ export function StoryDetailArticle({
           />
         </div>
       </section>
+
+      {/* The story in brief: the whole arc in a few labeled beats, first thing under
+          the masthead, so a reader knows what happened before the body begins. */}
+      <StoryInBrief beats={record.storyInBrief ?? []} />
 
       <StoryContextStrip
         indicators={indicators}

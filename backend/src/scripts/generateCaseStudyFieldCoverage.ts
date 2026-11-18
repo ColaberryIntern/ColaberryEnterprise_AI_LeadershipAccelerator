@@ -83,6 +83,22 @@ const AUTHORED: Record<string, Entry> = {
     indexHome: 'card blurb', detailHome: 'masthead standfirst',
     emptyBehaviour: 'card falls back to summary; readiness −2',
   }),
+  /* ── story in brief (Ali, 2026-11-18) ─────────────────────────────────── */
+  'CaseStudyIdentitySection.storyInBrief': D({
+    disposition: 'human_approved', aiMayInfer: true, approvalRequired: true,
+    authoring: 'human override identity.storyInBrief (3 to 5 {label, text} beats); AI draft permitted, human approval required',
+    indexHome: '—', detailHome: '"The story in brief" band under the masthead (Enterprise) and under the outcome tiles (Hire)',
+    publicBehaviour: 'all or nothing: the whole usable set of beats is projected, or none; every beat is claim-scanned',
+    emptyBehaviour: 'band hides; never derived from other sections; the completeness audit fails the record',
+    test: 'caseStudyStoryInBrief.test.ts',
+  }),
+  'PublicCaseStudyDetail.storyInBrief': D({
+    disposition: 'deterministic', aiMayInfer: false, approvalRequired: false,
+    authoring: 'projected from identity.storyInBrief by projectStoryInBrief',
+    indexHome: '—', detailHome: '"The story in brief" band',
+    emptyBehaviour: 'empty list; the band hides',
+    test: 'caseStudyStoryInBrief.test.ts',
+  }),
   'CaseStudyIdentitySection.summary': D({
     disposition: 'human_approved', aiMayInfer: true,
     indexHome: 'card blurb fallback', detailHome: 'SEO description',

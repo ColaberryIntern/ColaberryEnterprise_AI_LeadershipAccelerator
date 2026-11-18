@@ -76,6 +76,13 @@ const RESTING = new Set(['case_study_not_approved', 'snapshot_not_approved']);
   const pick = (latest.content.identity || {}).heroImageUrl;
   add('the cover is the concept Ali picked (§8f), and the video poster matches it', !!pick && wv.posterUrl === pick, pick ? (wv.posterUrl === pick ? 'cover = poster' : 'poster differs from cover') : 'no cover yet: generate three concepts and open the picker on day one');
 
+  // The story in brief (Ali, 2026-11-18: "sometimes the opening paragraph does a good job explaining and
+  // sometimes it doesn't"). 3 to 5 labeled beats at identity.storyInBrief; the band under the masthead.
+  let briefProblem;
+  try { briefProblem = require(`${D}/services/caseStudy/caseStudyStoryInBrief`).storyInBriefProblem((latest.content.identity || {}).storyInBrief); }
+  catch (e) { const b = (latest.content.identity || {}).storyInBrief; briefProblem = Array.isArray(b) && b.length >= 3 && b.length <= 5 ? null : 'no story in brief (server predates the field)'; }
+  add('the story in brief tells the whole arc in 3 to 5 beats (identity.storyInBrief)', briefProblem === null, briefProblem || `${latest.content.identity.storyInBrief.length} beats`);
+
   const reserved = core.mermaidReservedIds((latest.content.architecture || {}).diagramSource);
   add('the architecture diagram parses: no node named after a Mermaid keyword', reserved.length === 0, reserved.length ? `rename node(s): ${reserved.join(', ')}` : 'clean');
 

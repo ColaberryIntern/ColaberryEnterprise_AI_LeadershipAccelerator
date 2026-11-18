@@ -61,6 +61,11 @@ export const DETAIL_FIXTURE: PublicCaseStudyDetail = {
   slug: SUMMARY_FIXTURE.slug,
   title: SUMMARY_FIXTURE.title,
   standfirst: SUMMARY_FIXTURE.standfirst,
+  storyInBrief: [
+    { label: 'Before', text: 'Claims sat in one queue.' },
+    { label: 'What we built', text: 'A triage that flags late claims.' },
+    { label: 'What happened', text: 'Late claims surface first.' },
+  ],
   organizationLabel: SUMMARY_FIXTURE.organizationLabel,
   industry: SUMMARY_FIXTURE.industry,
   primaryCapability: SUMMARY_FIXTURE.primaryCapability,

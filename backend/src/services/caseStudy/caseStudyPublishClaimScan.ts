@@ -66,6 +66,10 @@ export function collectNarrative(content: CaseStudySnapshotContent): readonly Te
     if (has(value)) out.push({ path, label, value: text(value) });
   };
   push('identity.standfirst', 'the standfirst', content.identity?.standfirst);
+  arr((content.identity as { storyInBrief?: readonly unknown[] } | undefined)?.storyInBrief).forEach((b: any, i: number) => {
+    push(`identity.storyInBrief[${i}].label`, 'the story in brief', b?.label);
+    push(`identity.storyInBrief[${i}].text`, 'the story in brief', b?.text);
+  });
   push('identity.summary', 'the summary', content.identity?.summary);
   arr(content.situation?.narrative).forEach((s, i) => push(`situation.narrative[${i}]`, 'the situation narrative', s));
   arr(content.situation?.constraints).forEach((s, i) => push(`situation.constraints[${i}]`, 'a stated constraint', s));

@@ -37,6 +37,8 @@
     if (!res.ok || !S.isPayload(res.body)) return false;
     var body = res.body;
     doc.getElementById('hire-hero-host').innerHTML = S.hero(body);
+    var brief = doc.getElementById('brief-host');
+    if (brief) brief.innerHTML = S.storyInBrief(body);
     doc.getElementById('outcomes-host').innerHTML = S.outcomes(body);
     doc.getElementById('hire-card-host').innerHTML = S.hireCard(body);
     upgradeBuilder(body);
