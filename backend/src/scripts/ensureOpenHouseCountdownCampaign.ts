@@ -65,18 +65,11 @@ export const COUNTDOWN_STEPS: SequenceStep[] = [
     ai_instructions: 'One day out. A short reminder that the Open House is tomorrow, with the day and time. Give the Join link and say it signs them in and checks them in. Suggest they put it on their calendar and bring their questions. Do not repeat the previous email.',
     ai_tone: 'friendly, brief',
   },
-  {
-    // Day of, noon CT for a 6:30 PM Open House. Only people with a phone AND express
-    // voice consent are scheduled. The agent gets countdownCallBrief, built at dial time for
-    // that person (purpose, everything we know about them, the event), and runs the call.
-    delay_days: 0,
-    minutes_before_event: 390,
-    channel: 'voice',
-    voice_agent_type: 'interest',
-    subject: 'Maya calls ahead of the Open House',
-    body_template: '',
-    step_goal: 'Help them, relate to what they are doing on the platform, make them feel expected. No selling.',
-  },
+  // NO CALL STEP (Ali, 2026-11-17: "We request, Cora schedules"). The app must not start
+  // Synthflow calls itself: Cora owns the one 75-second slot pool, and calls started outside it
+  // bring back the silent record drops in Kes's note (call_spacing_note_for_ali.md). The
+  // per-person brief (countdownCallBrief) is kept: it is what we will hand Cora when we
+  // REQUEST the call, once Cora exposes a request endpoint.
   {
     // Day of, 2:30 PM CT. Four hours out, not one: the scheduler sends at most about 120
     // per campaign per hour, so a whole list due one hour out would still be going out
@@ -195,7 +188,7 @@ async function main(): Promise<void> {
   // 3. The sequence
   let seq = await one<{ id: string }>(`SELECT id FROM follow_up_sequences WHERE name = :n LIMIT 1`, { n: SEQUENCE_NAME });
   if (!seq) {
-    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: email T-2 days, email T-1 day, call day-of noon, email day-of 2:30 PM, text T-1 hour)`);
+    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: email T-2 days, email T-1 day, email day-of 2:30 PM, text T-1 hour)`);
     if (apply) {
       seq = await one<{ id: string }>(
         `INSERT INTO follow_up_sequences (id, name, description, steps, is_active, tenant_id, created_at, updated_at)
@@ -220,9 +213,9 @@ async function main(): Promise<void> {
                  'Get Open House registrants into the room', '/open-house', 'https://enterprise.colaberry.ai/open-house?utm_source=maya&utm_campaign=open_house_countdown',
                  'draft', :profile, :tenant, :brand, 'consideration', 'OH1 script', NOW(), NOW())
          RETURNING id`,
-        { name: CAMPAIGN_NAME, desc: 'Every Open House registrant is enrolled at sign-up. Maya emails them (T-2 days, T-1 day, day-of), calls the ones with call consent at noon on the day (help, not sell), and texts the ones with text consent an hour before, through GHL. No price, offer or discount (Ali, 2026-11-17).',
+        { name: CAMPAIGN_NAME, desc: 'Every Open House registrant is enrolled at sign-up. Maya emails them (T-2 days, T-1 day, day-of) and texts the ones with text consent an hour before, through GHL. Calls will be requested from the Cora scheduler, not placed here. No price, offer or discount (Ali, 2026-11-17).',
           seq: seq.id, prompt: MAYA_SYSTEM_PROMPT, settings: JSON.stringify(settings),
-          cc: JSON.stringify({ email: { enabled: true, daily_limit: 500 }, voice: { enabled: true, daily_limit: 75 }, sms: { enabled: true, daily_limit: 250 } }),
+          cc: JSON.stringify({ email: { enabled: true, daily_limit: 500 }, sms: { enabled: true, daily_limit: 250 } }),
           profile: profile.id, tenant: domainRow.tenant_id, brand: domainRow.brand_id });
       if (row) {
         await sequelize.query(
