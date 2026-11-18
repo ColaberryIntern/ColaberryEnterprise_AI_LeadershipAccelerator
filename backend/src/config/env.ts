@@ -117,6 +117,12 @@ export const env = {
    * and fails closed without it.
    */
   synthflowProjectDiscoveryAgentId: process.env.SYNTHFLOW_PROJECT_DISCOVERY_AGENT_ID || '',
+  /*
+   * OH1m: Maya's own Open House agent, used ONLY for Open House countdown calls
+   * (callType 'open_house'). No fallback to any other agent: unset means the
+   * countdown call is refused with an error naming this variable.
+   */
+  synthflowOpenHouseAgentId: process.env.SYNTHFLOW_OPEN_HOUSE_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',

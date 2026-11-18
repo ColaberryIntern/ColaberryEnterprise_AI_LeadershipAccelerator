@@ -174,6 +174,9 @@ export const COUNTDOWN_SETTINGS = {
   call_time_end: '17:00',
   call_active_days: [1, 2, 3, 4, 5],
   max_daily_calls: 75,
+  // OH1m: at least 75 s between countdown calls (stamped at scheduling, paused at dial time).
+  // There is no voice step in COUNTDOWN_STEPS; this only takes effect if one is added.
+  voice_dial_spacing_seconds: 75,
 };
 
 const arg = (name: string): string | null => {

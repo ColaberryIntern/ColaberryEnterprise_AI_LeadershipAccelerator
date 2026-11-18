@@ -69,6 +69,7 @@ import {
   isWithinCallSchedule,
   getCampaignSettingsFromRecord,
 } from './campaignSendWindow';
+import { voiceCallTypeForAction, voicePauseMs, dialFailureRecord } from './voice/voiceDialPolicy';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -990,6 +991,12 @@ async function processScheduledActions(): Promise<void> {
       if (delayMs > 5000 && delayMs <= 180000) {
         await new Promise((r) => setTimeout(r, delayMs));
       }
+
+      // OH1m: voice-only dial spacing (voice_dial_spacing_seconds), after a call that went out.
+      const voicePause = voicePauseMs(channel, campaignSettings, action as any, 5000 + (delayMs > 5000 && delayMs <= 180000 ? delayMs : 0));
+      if (voicePause > 0) {
+        await new Promise((r) => setTimeout(r, voicePause));
+      }
     } catch (error: any) {
       console.error(`[Scheduler] Failed to process action ${action.id} (${channel}):`, error.message);
 
@@ -1370,6 +1377,13 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
 }
 
 async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
+  // OH1m: a countdown call while voice is off is CANCELLED (reason voice_disabled), not
+  // marked sent: "sent" would claim a call that never happened.
+  if (!env.enableVoiceCalls && action.metadata?.event_countdown) {
+    console.log(`[Scheduler] Voice calls disabled. Cancelling countdown call ${action.id} (voice_disabled).`);
+    await cancelScheduledMessage(action, 'voice_disabled');
+    return;
+  }
   if (!env.enableVoiceCalls) {
     console.log('[Scheduler] Voice calls disabled. Marking as skipped.');
     await action.update({
@@ -1399,7 +1413,8 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
 
   const lead = await Lead.findByPk(action.lead_id);
   const name = lead?.name || 'there';
-  const callType = (action.voice_agent_type === 'welcome' ? 'welcome' : 'interest') as 'welcome' | 'interest';
+  // OH1m: a countdown call goes to our own Open House agent ('open_house'), never another.
+  const callType = voiceCallTypeForAction(action as any);
 
   // Use AI-generated body as the voice prompt if AI generated, otherwise use stored voice_prompt template
   let prompt: string | undefined;
@@ -1520,9 +1535,16 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
       (err) => console.error('[Scheduler] Pipeline advance failed:', err.message)
     );
   } else {
+    // OH1m: keep Synthflow's status and raw body on the step, so a refused dial says why.
+    await action.update({
+      metadata: { ...(action.metadata || {}), last_dial_error: dialFailureRecord(result) },
+    } as any).catch((err: any) => console.warn('[Scheduler] Could not record dial error:', err.message));
     throw new Error(result.error || 'Voice call failed');
   }
 }
+
+/** Test seam (OH1m): the voice step handler, exercised with its dependencies mocked. */
+export { processVoiceAction as __processVoiceActionForTests };
 
 async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
   const phone = action.to_phone;
