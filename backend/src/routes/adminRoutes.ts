@@ -76,6 +76,7 @@ import toolRequestDecisionRoutes from './admin/toolRequestDecisionRoutes';
 import toolRequestPackageRoutes from './admin/toolRequestPackageRoutes';
 import productFeatureRoutes from './admin/productFeatureRoutes';
 import capabilityBoardRoutes from './admin/capabilityBoardRoutes';
+import capabilityConfirmationRoutes from './admin/capabilityConfirmationRoutes';
 import toolScaffoldRoutes from './admin/toolScaffoldRoutes';
 import toolRequestConversationRoutes from './admin/toolRequestConversationRoutes';
 import agentToolGrantRoutes from './admin/agentToolGrantRoutes';
@@ -354,6 +355,10 @@ router.use(productFeatureRoutes);
 // AF11.10. The five-column board. Read-only: every column is derived, so there is nothing here
 // that could write a stage.
 router.use(capabilityBoardRoutes);
+// AF11.0. The confirmation step's door. The service, contract, model and table all shipped with
+// AF11.0; nothing ever called the service, so the table stayed empty and every tool grant was
+// refused `capability_not_confirmed`. One insert, no grant, no agent touched.
+router.use(capabilityConfirmationRoutes);
 // AF11.6. The schema, stub and failing test an approved request emits. A read: it writes no
 // file, registers nothing and deploys nothing.
 router.use(toolScaffoldRoutes);
