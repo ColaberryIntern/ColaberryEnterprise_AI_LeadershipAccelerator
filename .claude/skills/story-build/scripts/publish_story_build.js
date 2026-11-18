@@ -55,8 +55,15 @@ contracts.refusals = cfgArtifacts.refusals.concat(contracts.refusals);
 contracts.ok = contracts.ok && cfgArtifacts.ok;
 console.log(`[gate] artifact contracts: ${contracts.storiesWithContract} of ${contracts.storiesTotal} stories declare one, missing=${contracts.storiesMissingContract.length}, refusals=${contracts.refusals.length}`);
 if (!contracts.ok) {
-  for (const r of contracts.refusals) {
+  // A missing contract is reported once, naming every story, rather than as one identical
+  // paragraph per story: on a twelve-story plan that repetition buries the skeleton underneath
+  // it, which is the part a person can act on.
+  const absent = contracts.refusals.filter(r => r.code === 'story_missing_contract');
+  for (const r of contracts.refusals.filter(r => r.code !== 'story_missing_contract')) {
     console.error(`  REFUSED ${r.code} ${r.storyId ? `story=${r.storyId} ` : ''}${r.key ? `key=${r.key} ` : ''}${r.field ? `at=${r.field} ` : ''}- ${r.message}`);
+  }
+  if (absent.length) {
+    console.error(`  REFUSED story_missing_contract x${absent.length} - these stories declare nothing to hand over, so "done" would be a claim that work happened rather than something that exists: ${absent.map(r => r.storyId || '(a story with no id)').join(', ')}`);
   }
   const named = contracts.storiesMissingContract.filter(Boolean);
   if (named.length) {
@@ -86,7 +93,7 @@ function storyHtml(s, docLinks, kind, mktg, artifacts) {
     `<div><strong>Story:</strong> ${esc(s.narrative)}</div>`,
     `<div><strong>Fulfills:</strong> ${(s.fulfills||[]).map(f=>`<code>${esc(f)}</code>`).join(' ')||'-'} &nbsp;·&nbsp; <strong>Owner agent:</strong> ${esc(s.owner_agent||'-')}</div>`];
   const sl = sliceStr(s.slice); if (sl) rows.push(`<div><strong>Slice:</strong> <code>${esc(sl)}</code></div>`);
-  rows.push('<div><strong>Acceptance (Gherkin = demo script + loop stop):</strong></div>', gherkin(s.acceptance));
+  rows.push('<div><strong>Acceptance (Gherkin = the demo script):</strong></div>', gherkin(s.acceptance));
   if (s.build) rows.push(`<div><strong>Build (Claude Code):</strong> ${esc(s.build)}</div>`);
   if (s.vibe) rows.push(`<div><strong>Vibe-code it:</strong> <em>${esc(s.vibe)}</em></div>`);
   if (s.trust) rows.push(`<div><strong>Trust (TBI):</strong> ${esc(s.trust)}</div>`);
