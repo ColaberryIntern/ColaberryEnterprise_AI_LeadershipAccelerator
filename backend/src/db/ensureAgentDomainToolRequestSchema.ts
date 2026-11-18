@@ -69,6 +69,8 @@ export const REQUIRED_COLUMNS: ReadonlyArray<string> = [
   // WHAT FOR
   `${T}.capability_id`,
   `${T}.task_unblocked`,
+  // AF12.1. The slug that groups the several tools one task needs.
+  `${T}.task_key`,
   `${T}.manual_today`,
   // WHETHER IT SHOULD BE BUILT AT ALL — AF11.7. The three questions the first six groups do not
   // ask: who reads the output, what number decides it worked, and whether the product can already
@@ -199,6 +201,7 @@ const STATEMENTS: ReadonlyArray<string> = [
      read_datasets JSONB NOT NULL DEFAULT '[]'::jsonb,
      capability_id TEXT NOT NULL,
      task_unblocked TEXT NOT NULL,
+     task_key TEXT NOT NULL,
      manual_today TEXT NOT NULL,
      acts_on_output TEXT NOT NULL,
      judged_threshold TEXT NOT NULL,
@@ -278,6 +281,18 @@ const STATEMENTS: ReadonlyArray<string> = [
      ADD COLUMN IF NOT EXISTS tried_in_product TEXT`,
   `ALTER TABLE agent_domain_tool_request_details
      ADD COLUMN IF NOT EXISTS missing_from_product TEXT`,
+  // AF12.1. Added and backfilled before SET NOT NULL. The backfill is the tool name, because a
+  // tool that never declared a task is a task of exactly one tool, which is true and groups
+  // correctly. There are zero rows today, so in practice this touches nothing.
+  `ALTER TABLE agent_domain_tool_request_details
+     ADD COLUMN IF NOT EXISTS task_key TEXT`,
+  `UPDATE agent_domain_tool_request_details
+      SET task_key = lower(tool_name)
+    WHERE task_key IS NULL OR btrim(task_key) = ''`,
+  `ALTER TABLE agent_domain_tool_request_details
+     ALTER COLUMN task_key SET NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_adtrd_task_key
+     ON agent_domain_tool_request_details (domain_key, task_key)`,
   `ALTER TABLE agent_domain_tool_request_details
      ALTER COLUMN acts_on_output SET NOT NULL`,
   `ALTER TABLE agent_domain_tool_request_details

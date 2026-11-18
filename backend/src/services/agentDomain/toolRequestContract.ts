@@ -190,6 +190,8 @@ export type ToolRequestRefusal =
   | 'capability_roster_absent'
   | 'capability_not_found'
   | 'task_unblocked_missing'
+  | 'task_key_missing'
+  | 'task_key_malformed'
   | 'manual_today_missing'
   // WHEN
   | 'needed_by_missing'
@@ -222,6 +224,28 @@ export interface ToolRequestDetailInput {
   readonly read_datasets?: ReadonlyArray<string>;
   readonly capability_id?: string | null;
   readonly task_unblocked?: string | null;
+  /**
+   * AF12.1 — the key that lets several tool requests belong to ONE task.
+   *
+   * Ali, 17 Nov 2026: *"we need to do a better job of differentiating between a task and a tool.
+   * They can be the same, but they can also be different and you have a task that uses multiple
+   * tools."*
+   *
+   * `task_unblocked` is the task in prose and it cannot group anything: two builders describing
+   * the same work in different sentences produce two unrelated rows, and the decision screen can
+   * only ever show one request at a time. That is the failure this field exists to end, because
+   * deciding tool 2 of 3 without seeing the other two is deciding blind.
+   *
+   * It is REQUIRED rather than optional. An optional grouping key is absent exactly when the work
+   * is big enough to need it: the builder in a hurry skips it, and the request that most needed
+   * its siblings shown arrives alone. There are zero tool request rows today, so requiring it
+   * costs no migration.
+   *
+   * It is a slug the BUILDER chooses, not one derived from `task_unblocked`. A derived key changes
+   * whenever the prose is reworded, which would silently split a task in half between the first
+   * tool and the second.
+   */
+  readonly task_key?: string | null;
   readonly manual_today?: string | null;
   // AF11.7. `acts_on_output` is an EMAIL, which is the identity currency every other table in this
   // subtree already uses. A second spelling of a person is a second thing to keep in agreement.
@@ -264,6 +288,7 @@ export const TOOL_REQUEST_DETAIL_FIELDS = [
   'read_datasets',
   'capability_id',
   'task_unblocked',
+  'task_key',
   'manual_today',
   'acts_on_output',
   'judged_threshold',
@@ -324,6 +349,8 @@ export interface ToolRequestDetail {
   readonly read_datasets: ReadonlyArray<string>;
   readonly capability_id: string;
   readonly task_unblocked: string;
+  /** AF12.1. The slug that groups this tool with the other tools of the same task. */
+  readonly task_key: string;
   readonly manual_today: string;
   /**
    * AF11.7. The email of the person who will act on this tool's output, in the ROSTER's spelling
@@ -666,6 +693,26 @@ export function gateToolRequest(args: GateToolRequestArgs): ToolRequestIssue[] {
   if (!text(d.task_unblocked)) {
     add('task_unblocked_missing', 'Say which piece of work this tool unblocks.');
   }
+
+  // THE TASK KEY — AF12.1. Checked here, immediately after the task in prose, because the two are
+  // the same answer in two forms and a reader who has just written the sentence is in the right
+  // frame to name it. The refusal says WHY grouping matters rather than just demanding a field:
+  // a builder who does not know a task can need three tools will read "task key" as bureaucracy.
+  const taskKey = text(d.task_key).toLowerCase();
+  if (!taskKey) {
+    add(
+      'task_key_missing',
+      'Give this task a short key, the same one on every tool the task needs. '
+      + 'A task often needs several tools, and the key is what lets them be decided together '
+      + 'instead of one at a time with the others invisible.',
+    );
+  } else if (!/^[a-z0-9][a-z0-9_]{1,46}[a-z0-9]$/.test(taskKey)) {
+    add(
+      'task_key_malformed',
+      'A task key is 3 to 48 characters of lowercase letters, numbers and underscores, '
+      + `starting and ending with a letter or number. "${taskKey}" is not.`,
+    );
+  }
   if (!text(d.manual_today)) {
     add('manual_today_missing', 'Say what you do by hand today instead of this tool.');
   }
@@ -878,6 +925,7 @@ export function acceptToolRequest(args: GateToolRequestArgs): AcceptedToolReques
       read_datasets: list(d.read_datasets) ?? [],
       capability_id: text(d.capability_id),
       task_unblocked: text(d.task_unblocked),
+      task_key: text(d.task_key).toLowerCase(),
       manual_today: text(d.manual_today),
       acts_on_output: rosterActor,
       judged_threshold: text(d.judged_threshold),

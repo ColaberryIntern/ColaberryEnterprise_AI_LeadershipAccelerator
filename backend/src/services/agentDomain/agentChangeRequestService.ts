@@ -197,6 +197,7 @@ function projectDetail(d: AgentDomainToolRequestDetail): ToolRequestDetail {
     read_datasets: strings(d.read_datasets),
     capability_id: d.capability_id,
     task_unblocked: d.task_unblocked,
+    task_key: d.task_key,
     manual_today: d.manual_today,
     // AF11.7. The three answers the approver is actually weighing: who reads it, what number
     // decides it, and what the product cannot do today.

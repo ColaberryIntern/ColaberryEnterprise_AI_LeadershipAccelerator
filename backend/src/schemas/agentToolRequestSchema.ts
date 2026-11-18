@@ -84,6 +84,9 @@ export const ToolRequestPayloadSchema = z.object({
   task_unblocked: z.string().trim()
     .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
     .optional(),
+  // AF12.1. Bounded and lowercased here; SHAPE is judged by the contract, not by zod, so the
+  // builder gets one refusal in the contract's voice rather than a schema error about a regex.
+  task_key: z.string().trim().toLowerCase().max(48).optional(),
   manual_today: z.string().trim()
     .max(TOOL_NARRATIVE_MAX, `That can be at most ${TOOL_NARRATIVE_MAX} characters.`)
     .optional(),
