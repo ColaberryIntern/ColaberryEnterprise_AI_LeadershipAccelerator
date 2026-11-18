@@ -9,6 +9,8 @@ export interface GovCompanyPersonnelAttributes {
   name: string;
   role: string | null;
   resume_html: string | null;
+  /** Subject the person's experience is about (reporting, recruiting, ...); null = universally eligible. */
+  subject?: string | null;
   approved: boolean;
   approved_by_identity_id?: string | null;
   created_at?: Date;
@@ -21,6 +23,7 @@ class GovCompanyPersonnel extends Model<GovCompanyPersonnelAttributes> implement
   declare name: string;
   declare role: string | null;
   declare resume_html: string | null;
+  declare subject: string | null;
   declare approved: boolean;
   declare approved_by_identity_id: string | null;
   declare created_at: Date;
@@ -34,6 +37,7 @@ GovCompanyPersonnel.init(
     name: { type: DataTypes.TEXT, allowNull: false },
     role: { type: DataTypes.TEXT, allowNull: true },
     resume_html: { type: DataTypes.TEXT, allowNull: true },
+    subject: { type: DataTypes.TEXT, allowNull: true },
     approved: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     approved_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

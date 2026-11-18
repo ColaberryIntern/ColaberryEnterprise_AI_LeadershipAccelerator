@@ -86,9 +86,56 @@ export interface DossierNeed {
   projects: DossierNeedProject[];
 }
 
-/** Every open need across the tenant's bids, deduped by key, each tagged with the bids that ask it. Read-only. */
-export async function getDossierNeeds(): Promise<{ needs: DossierNeed[] }> {
-  const { data } = await api.get<{ needs: DossierNeed[] }>(NEEDS);
+/** A concept inside a group card (a fact group lists several; a record group is one). */
+export interface NeedGroupConcept { conceptId: string; label: string; asks: string[]; needKeys: string[] }
+/** One (group, subject) slot: the collapsed, fillable unit the restructured Needs view renders. */
+export interface NeedGroupCard {
+  groupSlug: string;
+  groupLabel: string;
+  groupKind: 'fact' | 'reference' | 'personnel';
+  subject: string;
+  subjectLabel: string;
+  blocking: 'fatal' | 'score';
+  projects: DossierNeedProject[];
+  bidCount: number;
+  concepts: NeedGroupConcept[];
+  needKeys: string[];
+}
+
+/** Every open need across the tenant's bids: the flat deduped list AND the (group, subject) cards. Read-only. */
+export async function getDossierNeeds(): Promise<{ needs: DossierNeed[]; groups: NeedGroupCard[] }> {
+  const { data } = await api.get<{ needs: DossierNeed[]; groups: NeedGroupCard[] }>(NEEDS);
+  return { needs: data?.needs ?? [], groups: data?.groups ?? [] };
+}
+
+/** Fill one group card in a single action: resolve every open need under this (group, subject) across every bid. A
+ *  record group sends `record`; a fact group sends `values` keyed by conceptId. Returns the refreshed group cards. */
+export async function fillNeedGroup(input: { groupSlug: string; subject: string; record?: Record<string, string>; values?: Record<string, string> }): Promise<{ ok: boolean; resolved: number; groups: NeedGroupCard[] }> {
+  const { data } = await api.post<{ ok: boolean; resolved: number; groups: NeedGroupCard[] }>(`${NEEDS}/fill`, input);
+  return data;
+}
+
+// ── Requirement taxonomy (CC-20261117-q8k3): the growable groups ─────────────────────────────────────────────────
+const CATEGORIES = '/api/admin/factory/dossier/categories';
+
+export interface RequirementCategory {
+  slug: string; label: string; kind: 'fact' | 'reference' | 'personnel'; subject: string | null;
+  status: 'active' | 'pending'; source: 'seed' | 'ai' | 'admin'; confidence?: number | null; exampleAsk?: string | null;
+}
+
+export async function getCategories(): Promise<{ active: RequirementCategory[]; pending: RequirementCategory[] }> {
+  const { data } = await api.get<{ active: RequirementCategory[]; pending: RequirementCategory[] }>(CATEGORIES);
+  return { active: data?.active ?? [], pending: data?.pending ?? [] };
+}
+
+/** Ask the classifier to propose groups for the currently ungrouped needs (bounded, admin-reviewed before use). */
+export async function suggestCategories(): Promise<{ ok: boolean; scanned: number; proposed: number; pending: RequirementCategory[] }> {
+  const { data } = await api.post<{ ok: boolean; scanned: number; proposed: number; pending: RequirementCategory[] }>(`${CATEGORIES}/suggest`, {});
+  return data;
+}
+
+export async function activateCategory(slug: string): Promise<{ ok: boolean; slug: string }> {
+  const { data } = await api.post<{ ok: boolean; slug: string }>(`${CATEGORIES}/${encodeURIComponent(slug)}/activate`, {});
   return data;
 }
 

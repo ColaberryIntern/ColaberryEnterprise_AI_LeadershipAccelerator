@@ -9,10 +9,12 @@
  */
 import type { ProposalBlueprint, BlueprintRule } from './proposalBlueprintTypes';
 
-/** A human-approved past-performance reference. The client name is REAL and assertable (a human entered and approved it). */
-export interface GroundingReference { client: string; scope?: string | null; contractValue?: string | null; dates?: string | null; contact?: string | null }
+/** A human-approved past-performance reference. The client name is REAL and assertable (a human entered and approved it).
+ *  `subject` is what the reference is ABOUT (reporting, recruiting, ...); the drafter may cite it only for a matching
+ *  requirement, so a recruiting reference never surfaces in a reporting proposal. null/general = universally eligible. */
+export interface GroundingReference { client: string; scope?: string | null; contractValue?: string | null; dates?: string | null; contact?: string | null; subject?: string | null }
 /** A human-approved key person. Name and role are assertable; summary is a short plain-text résumé digest. */
-export interface GroundingPersonnel { name: string; role?: string | null; summary?: string | null }
+export interface GroundingPersonnel { name: string; role?: string | null; summary?: string | null; subject?: string | null }
 /** A confirmed, non-archived case study used as a proof point. ANONYMIZED by design — carries NO real client name. */
 export interface GroundingCaseStudy { title: string; industry?: string | null; year?: number | null; capability?: string | null; metricLabel?: string | null; metricValue?: string | null; metricVerified?: boolean }
 
@@ -88,10 +90,13 @@ export function groundingToPromptText(g: Grounding): string {
   else lines.push('No approved company facts are available — insert a [PLACEHOLDER: …] for any specific fact rather than inventing one.');
   const references = g.references ?? [];
   if (references.length) {
-    lines.push('Approved past-performance references (human-approved; you MAY name the client and cite these):');
+    const tagged = references.some((r) => r.subject && r.subject !== 'general');
+    lines.push('Approved past-performance references (human-approved; you MAY name the client and cite these):'
+      + (tagged ? ' Each is tagged with a SUBJECT in brackets. Cite a reference ONLY in a requirement whose topic matches that subject; never use a reference tagged for a different subject (a recruiting reference must not appear in a reporting section).' : ''));
     for (const r of references) {
+      const subj = r.subject && r.subject !== 'general' ? ` [subject: ${r.subject}]` : '';
       const parts = [r.scope ? r.scope : null, r.contractValue ? `value ${r.contractValue}` : null, r.dates ? r.dates : null, r.contact ? `contact ${r.contact}` : null].filter(Boolean).join('; ');
-      lines.push(`- ${r.client}${parts ? ` — ${parts}` : ''}`);
+      lines.push(`- ${r.client}${subj}${parts ? ` — ${parts}` : ''}`);
     }
   }
   const personnel = g.personnel ?? [];

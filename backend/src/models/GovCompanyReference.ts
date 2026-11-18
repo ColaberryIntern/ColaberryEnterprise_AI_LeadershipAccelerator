@@ -13,6 +13,8 @@ export interface GovCompanyReferenceAttributes {
   contract_value: string | null;
   dates: string | null;
   scope: string | null;
+  /** Subject the reference is about (reporting, recruiting, ...); null = universally eligible. */
+  subject?: string | null;
   approved: boolean;
   approved_by_identity_id?: string | null;
   created_at?: Date;
@@ -29,6 +31,7 @@ class GovCompanyReference extends Model<GovCompanyReferenceAttributes> implement
   declare contract_value: string | null;
   declare dates: string | null;
   declare scope: string | null;
+  declare subject: string | null;
   declare approved: boolean;
   declare approved_by_identity_id: string | null;
   declare created_at: Date;
@@ -46,6 +49,7 @@ GovCompanyReference.init(
     contract_value: { type: DataTypes.TEXT, allowNull: true },
     dates: { type: DataTypes.TEXT, allowNull: true },
     scope: { type: DataTypes.TEXT, allowNull: true },
+    subject: { type: DataTypes.TEXT, allowNull: true },
     approved: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     approved_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

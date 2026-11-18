@@ -7,6 +7,18 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import { parseDraftNeeds } from './placeholderNeeds';
+import { canonicalizeNeed, deriveSubject } from './needGrouping';
+
+/** Best-effort subject context for a bid: the delivery project's name usually encodes its domain
+ *  (e.g. "Online Learning Management System" -> training). Used to tag a need's subject at draft time. */
+async function projectSubjectContext(deliveryProjectId: string): Promise<string> {
+  try {
+    const rows = await sequelize.query<{ name: string }>(
+      'SELECT name FROM delivery_projects WHERE id = $1', { bind: [deliveryProjectId], type: QueryTypes.SELECT },
+    );
+    return rows[0]?.name ?? '';
+  } catch { return ''; }
+}
 
 /** Open-gap count per `doc_key` for a project (resolution='open'), in ONE query. Backs the projection summary. */
 export async function openGapCountsByDoc(deliveryProjectId: string): Promise<Map<string, number>> {
@@ -88,8 +100,16 @@ export async function reconcilePlaceholderGaps(
       { bind: [deliveryProjectId, docKey], type: QueryTypes.SELECT },
     );
     const haveKeys = new Set(existing.map((e) => e.need_key));
+    // Subject context for this bid, fetched once: its domain tags every record/fact born here so a reporting
+    // reference is never interchangeable with a recruiting one. Deterministic; the AI classifier refines the tail.
+    const projectName = needs.some((n) => !haveKeys.has(n.needKey)) ? await projectSubjectContext(deliveryProjectId) : '';
     for (const n of needs) {
       if (haveKeys.has(n.needKey)) continue;
+      // Tag the need with its semantic group + subject before persisting (optional fields on the `need` JSONB).
+      const match = canonicalizeNeed(n.need);
+      n.need.groupSlug = match.groupSlug;
+      n.need.conceptId = match.conceptId;
+      n.need.subject = deriveSubject(`${projectName} ${n.need.usedIn[0]?.sectionKey ?? ''} ${n.ask}`);
       await sequelize.query(
         `INSERT INTO gov_proposal_document_gaps
            (delivery_project_id, doc_key, section_key, question, why, suggestions, resolution, need, need_key)

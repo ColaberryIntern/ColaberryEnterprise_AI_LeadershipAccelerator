@@ -26,6 +26,9 @@ import {
 import {
   ingestSourceDocument, listCompanyDocuments, approveSourceDocument, deleteSourceDocument,
 } from '../../services/factory/proposal/govProposalSources';
+import {
+  listRequirementCategories, listPendingCategories, proposeCategory, activateCategory,
+} from '../../services/factory/proposal/govRequirementCategories';
 
 const router = Router();
 
@@ -60,6 +63,25 @@ function log(level: 'error' | 'warn' | 'info', event: string, context: Record<st
 async function tenantId(): Promise<string | null> {
   try { const c = await lookupGovContractsContainer(); return c?.tenant?.id ?? null; }
   catch (err) { log('error', 'gov_dossier_scope_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) }); return null; }
+}
+
+/** The tenant + its gov delivery projects (bids) in one place, shared by the needs read and the group fill. */
+async function govDeliveryProjects(): Promise<{ tenantId: string; projects: Array<{ projectId: string; projectName: string }> } | null> {
+  let container: Awaited<ReturnType<typeof lookupGovContractsContainer>> = null;
+  try { container = await lookupGovContractsContainer(); }
+  catch (err) { log('error', 'gov_dossier_scope_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) }); return null; }
+  if (!container) return null;
+  const rows = await sequelize.query<{ id: string; name: string }>(
+    'SELECT id, name FROM delivery_projects WHERE tenant_id = $1 AND engagement_id = $2',
+    { bind: [container.tenant.id, container.engagement.id], type: QueryTypes.SELECT },
+  );
+  return { tenantId: container.tenant.id, projects: rows.map((p) => ({ projectId: p.id, projectName: p.name })) };
+}
+
+/** The acting admin's email (audit + approver identity on resolve); the dossier is admin-gated, so canApprove is true. */
+function adminEmail(req: Request): string | undefined {
+  const admin = (req as unknown as { admin?: { email?: string } }).admin;
+  return typeof admin?.email === 'string' ? admin.email : undefined;
 }
 
 const factBody = z.object({
@@ -109,21 +131,138 @@ router.get('/api/admin/factory/dossier/library', requireSection('program'), asyn
  * answer-once propagation then clears it from the others. Scoped to the gov engagement's delivery projects.
  */
 router.get('/api/admin/factory/dossier/needs', requireSection('program'), async (_req: Request, res: Response) => {
-  let container: Awaited<ReturnType<typeof lookupGovContractsContainer>> = null;
-  try { container = await lookupGovContractsContainer(); }
-  catch (err) { log('error', 'gov_dossier_needs_scope_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) }); }
-  if (!container) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  const ctx = await govDeliveryProjects();
+  if (!ctx) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
   try {
-    const projects = await sequelize.query<{ id: string; name: string }>(
-      'SELECT id, name FROM delivery_projects WHERE tenant_id = $1 AND engagement_id = $2',
-      { bind: [container.tenant.id, container.engagement.id], type: QueryTypes.SELECT },
-    );
-    const { collectTenantNeeds } = await import('../../services/factory/proposal/tenantNeeds');
-    const needs = await collectTenantNeeds(projects.map((p) => ({ projectId: p.id, projectName: p.name })));
-    res.json({ needs });
+    const { collectTenantNeeds, groupTenantNeeds } = await import('../../services/factory/proposal/tenantNeeds');
+    const needs = await collectTenantNeeds(ctx.projects);
+    // `groups` folds the deduped needs into (group, subject) cards (the restructured view); `needs` stays for the
+    // existing flat list and the current tests. Grouping is computed on read, so no backfill is required.
+    res.json({ needs, groups: groupTenantNeeds(needs) });
   } catch (err) {
     log('error', 'gov_dossier_needs_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
     res.status(500).json({ error: 'Could not load the needs across contracts.' });
+  }
+});
+
+const fillBody = z.object({
+  groupSlug: z.string().trim().min(1).max(60),
+  subject: z.string().trim().min(1).max(60),
+  record: z.record(z.string(), z.string().max(8000)).optional(),
+  values: z.record(z.string(), z.string().max(8000)).optional(),
+});
+
+/**
+ * POST fill one group card in a single action: resolve every open need under this (group, subject) across every bid.
+ * A RECORD group writes ONE reference/person (answer-once propagation clears its twins on sibling bids); a FACT group
+ * resolves each concept's value. Admin-gated, so the answer lands APPROVED. Reuses resolveProjectNeed end to end.
+ */
+router.post('/api/admin/factory/dossier/needs/fill', requireSection('program'), async (req: Request, res: Response) => {
+  const b = fillBody.safeParse(req.body ?? {});
+  if (!b.success) { res.status(400).json({ error: 'A fill needs a groupSlug, a subject, and a record or values.' }); return; }
+  const ctx = await govDeliveryProjects();
+  if (!ctx) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const { collectTenantNeeds, groupTenantNeeds, needSubject } = await import('../../services/factory/proposal/tenantNeeds');
+    const { canonicalizeNeed } = await import('../../services/factory/proposal/needGrouping');
+    const { resolveProjectNeed } = await import('../../services/factory/proposal/resolveProjectNeed');
+    const needs = await collectTenantNeeds(ctx.projects);
+    const target = needs.filter((n) => canonicalizeNeed(n).groupSlug === b.data.groupSlug && needSubject(n) === b.data.subject);
+    const actor = { email: adminEmail(req), canApprove: true };
+    let resolved = 0;
+
+    const isRecord = target.some((n) => n.kind === 'record');
+    if (isRecord) {
+      if (!b.data.record) { res.status(400).json({ error: 'This group is a record; send a `record` object.' }); return; }
+      const n = target.find((t) => t.kind === 'record');
+      if (n) {
+        for (const p of n.projects) {
+          try { const r = await resolveProjectNeed(p.projectId, n.key, { record: b.data.record } as any, actor); if (r.status === 200) resolved += 1; } catch { /* idempotent; a sibling is already closed by propagation */ }
+        }
+      }
+    } else {
+      for (const n of target) {
+        const value = b.data.values?.[canonicalizeNeed(n).conceptId];
+        if (!value) continue;
+        for (const p of n.projects) {
+          try { const r = await resolveProjectNeed(p.projectId, n.key, { value } as any, actor); if (r.status === 200) resolved += 1; } catch { /* idempotent */ }
+        }
+      }
+    }
+
+    log('info', 'gov_dossier_group_fill', { groupSlug: b.data.groupSlug, subject: b.data.subject, resolved });
+    const groups = groupTenantNeeds(await collectTenantNeeds(ctx.projects));
+    res.json({ ok: true, resolved, groups });
+  } catch (err) {
+    log('error', 'gov_dossier_fill_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not fill that group.' });
+  }
+});
+
+/** GET the effective taxonomy (built-in groups + activated tenant categories) and the pending (AI-proposed) ones. */
+router.get('/api/admin/factory/dossier/categories', requireSection('program'), async (_req: Request, res: Response) => {
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const [active, pending] = await Promise.all([listRequirementCategories(tid), listPendingCategories(tid)]);
+    res.json({ active, pending });
+  } catch (err) {
+    log('error', 'gov_dossier_categories_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not load the categories.' });
+  }
+});
+
+/**
+ * POST suggest categories: run the AI classifier over the tenant's currently UNGROUPED needs and propose a category
+ * for any new kind of demand (pending admin review). Bounded per call to cap cost; fail-soft per ask. This is how the
+ * taxonomy GROWS without an engineer.
+ */
+router.post('/api/admin/factory/dossier/categories/suggest', requireSection('program'), async (_req: Request, res: Response) => {
+  const ctx = await govDeliveryProjects();
+  if (!ctx) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const { collectTenantNeeds } = await import('../../services/factory/proposal/tenantNeeds');
+    const { canonicalizeNeed } = await import('../../services/factory/proposal/needGrouping');
+    const { classifyNeedAsk } = await import('../../services/factory/proposal/needClassifier');
+    const needs = await collectTenantNeeds(ctx.projects);
+    const asks: string[] = [];
+    const seen = new Set<string>();
+    for (const n of needs) {
+      if (canonicalizeNeed(n).groupSlug !== 'general') continue;
+      const key = (n.ask || '').toLowerCase().trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key); asks.push(n.ask);
+      if (asks.length >= 15) break; // cost cap
+    }
+    let proposedCount = 0;
+    for (const ask of asks) {
+      const c = await classifyNeedAsk(ask);
+      if (c.newCategory) {
+        const r = await proposeCategory(ctx.tenantId, { slug: c.newCategory.slug, label: c.newCategory.label, kind: c.newCategory.kind, subject: c.subject, source: 'ai', confidence: c.confidence, exampleAsk: ask });
+        if (r.created) proposedCount += 1;
+      }
+    }
+    const pending = await listPendingCategories(ctx.tenantId);
+    log('info', 'gov_dossier_categories_suggest', { scanned: asks.length, proposed: proposedCount });
+    res.json({ ok: true, scanned: asks.length, proposed: proposedCount, pending });
+  } catch (err) {
+    log('error', 'gov_dossier_categories_suggest_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not suggest categories.' });
+  }
+});
+
+/** POST activate a pending category so it joins the effective taxonomy. */
+router.post('/api/admin/factory/dossier/categories/:slug/activate', requireSection('program'), async (req: Request, res: Response) => {
+  const slug = String(req.params.slug || '').trim();
+  if (!slug) { res.status(400).json({ error: 'A category slug is required.' }); return; }
+  const tid = await tenantId();
+  if (!tid) { res.status(503).json({ error: 'The government contracts workspace is not configured.' }); return; }
+  try {
+    const r = await activateCategory(tid, slug);
+    res.json({ ok: r.ok, slug });
+  } catch (err) {
+    log('error', 'gov_dossier_category_activate_failed', { message: String((err as Error)?.message ?? err).slice(0, 200) });
+    res.status(500).json({ error: 'Could not activate that category.' });
   }
 });
 

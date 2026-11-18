@@ -111,7 +111,7 @@ export async function resolveProjectNeed(
         const { addCompanyFact } = await import('./govCompanyLibrary');
         await addCompanyFact(
           q.tenant_id,
-          { key: cleanFactKey(routed.key, need.ask), value: String((routed.payload as { value?: unknown }).value ?? summary), source: 'answered in proposal studio', category: 'general', approved: routed.status === 'approved' },
+          { key: cleanFactKey(routed.key, need.ask), value: String((routed.payload as { value?: unknown }).value ?? summary), source: 'answered in proposal studio', category: 'general', subject: need.subject ?? null, approved: routed.status === 'approved' },
           null,
         );
       }
@@ -132,12 +132,12 @@ export async function resolveProjectNeed(
         const approved = routed.status === 'approved';
         if (rt === 'reference') {
           const { addCompanyReference } = await import('./govCompanyLibrary');
-          await addCompanyReference(q.tenant_id, { ...rec, approved }, null);
+          await addCompanyReference(q.tenant_id, { ...rec, subject: need.subject ?? null, approved }, null);
         } else if (rt === 'personnel') {
           const { addCompanyPersonnel } = await import('./govCompanyLibrary');
           await addCompanyPersonnel(
             q.tenant_id,
-            { name: String(rec.name ?? ''), role: (rec.role as string) ?? null, resumeHtml: (rec.resumeHtml as string) ?? null, approved },
+            { name: String(rec.name ?? ''), role: (rec.role as string) ?? null, resumeHtml: (rec.resumeHtml as string) ?? null, subject: need.subject ?? null, approved },
             null,
           );
         }
