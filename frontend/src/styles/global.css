@@ -827,3 +827,20 @@ a:hover {
 
 .ceo-progress-ring-bg { stroke: rgba(255,255,255,0.08); }
 .ceo-progress-ring-fill { transition: stroke-dashoffset 1s ease; }
+
+/*
+ * AF12.1 — the agent dashboard walkthrough's pointer.
+ *
+ * An outline rather than a backdrop: a dimming overlay would have to swallow clicks to look
+ * right, and the walkthrough's whole premise is that the page stays usable while it is open.
+ * `outline` is used instead of `border` so nothing reflows when a step points at a card.
+ */
+.agent-walkthrough-highlight {
+  outline: 3px solid var(--color-primary-light, #C20E1E);
+  outline-offset: 3px;
+  border-radius: 8px;
+  transition: outline-color 0.15s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-walkthrough-highlight { transition: none; }
+}

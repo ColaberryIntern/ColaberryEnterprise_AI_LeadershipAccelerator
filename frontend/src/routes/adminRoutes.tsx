@@ -59,6 +59,7 @@ const AdminMyDomainPage = lazy(() => import('../pages/admin/AdminMyDomainPage'))
 const AdminAllDomainsPage = lazy(() => import('../pages/admin/AdminAllDomainsPage'));
 // AF4.2 - file a change request, and (for an admin) decide one.
 const AdminChangeRequestsPage = lazy(() => import('../pages/admin/AdminChangeRequestsPage'));
+const AgentDashboardPage = lazy(() => import('../pages/admin/AgentDashboardPage'));
 // Maya's go-live console and her outbound queue were two standalone pages for a few hours on
 // 2026-11-15, then folded into the agent workspace, which already had an enable control, a
 // Tools & access tab and an email queue. Ali: "I'm curious as to why you didn't integrate into
@@ -279,6 +280,15 @@ const adminRoutes = (
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}
         <Route path="/admin/ops-center" element={<Navigate to="/admin/workforce" replace />} />
         <Route path="/admin/workforce" element={<WorkforceOSPage />} />
+        {/*
+          AF12.1. The one nav entry that replaced four. Ali asked for My Domain, Change
+          Requests, Tool Requests and the Capability Board to leave the left navigation and
+          live inside the agent dashboard. Taken to zero entries it would have stranded the
+          seven builders: the Agents sub-list sits on section `agents`, which no builder role
+          carries. This carries `dashboard`, which every mgmt role holds, and the four pages
+          below keep their routes so existing bookmarks and deep links still work.
+        */}
+        <Route path="/admin/agent-dashboard" element={<AgentDashboardPage />} />
         <Route path="/admin/my-domain" element={<AdminMyDomainPage />} />
         {/* AF4.2. Everyone who can open it may file and see their own; the decision queue
             renders only when the admin-only API returns it, so the page cannot drift out of
