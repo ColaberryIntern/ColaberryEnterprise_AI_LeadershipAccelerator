@@ -42,6 +42,25 @@ describe('picking the week', () => {
     expect(p.map((s) => s.date)).toEqual(['2026-11-17', '2026-11-19', '2026-11-20']);
     expect(p.every((s) => s.start === '11:30' || s.start === '12:00')).toBe(true);
   });
+  test('a 9-to-5 work calendar still gets 3 weekday Sparks, in the evening (Ali, 2026-11-18)', () => {
+    const work: L.Busy[] = L.weekDates(MON).filter(L.isWeekday).map((date) => ({ date, start: '08:00', end: '17:00' }));
+    work.push({ date: '2026-11-20', start: '18:00', end: '19:00' }); // Friday dinner plans
+    const p = L.pickWeekdaySlots(L.candidateSlots(L.weekDates(MON), work, TUE_7AM), 3);
+    expect(p.length).toBe(3);
+    expect(p.every((s) => L.toMin(s.start) >= L.toMin(L.EVENING_FROM))).toBe(true);
+    const fri = L.candidateSlots(['2026-11-20'], work, TUE_7AM);
+    expect(fri.every((s) => L.toMin(s.start) >= L.toMin('19:00'))).toBe(true);
+  });
+  test('midday still wins over the evening when it is open', () => {
+    const c = L.candidateSlots(['2026-11-18'], [], TUE_7AM);
+    expect(L.toMin(c[0].start)).toBeLessThan(L.toMin(L.MIDDAY_TO));
+    expect(c.some((s) => s.start === '19:00')).toBe(true);
+  });
+  test('mid-week: only the days still ahead count', () => {
+    const work: L.Busy[] = L.weekDates(MON).filter(L.isWeekday).map((date) => ({ date, start: '08:00', end: '17:00' }));
+    const p = L.pickWeekdaySlots(L.candidateSlots(L.weekDates(MON), work, { date: '2026-11-18', time: '06:37' }), 3);
+    expect(p.map((s) => s.date)).toEqual(['2026-11-18', '2026-11-19', '2026-11-20']);
+  });
   test('one weekend option that is not busy', () => {
     const w = L.weekendSlots(MON, [{ date: '2026-11-21', start: '18:00', end: '22:00' }], TUE_7AM);
     expect(w[0]).toEqual({ date: '2026-11-21', start: '10:00', maxEnd: '13:00' });

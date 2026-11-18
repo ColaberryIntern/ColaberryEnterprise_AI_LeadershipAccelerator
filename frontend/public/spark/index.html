@@ -222,9 +222,9 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
       if (g.scores.length) h += '<button class="btn ghost" id="lockscore">Keep ' + g.best + ' and stop playing</button>';
       h += '<div class="muted" style="margin-top:8px">' + esc(s.partner) + '\'s score stays hidden until tomorrow morning.</div>';
     } else if (!g.wager) {
-      h += '<div class="q" id="wager"><div class="qt">💰 Your wager: if you win, what do you get?</div><div class="muted">Step 1: tap the 5 groups in order, the one you want most first.</div><div id="wgroups">' +
+      h += '<div class="q" id="wager"><div class="qt">💰 Your wager: if you win, what kind of prize?</div><div class="muted">Tap the 5 groups in order, the one you want most first. Spark picks your exact 15-minute prize from your answers. You see it tomorrow morning if you win.</div><div id="wgroups">' +
         Object.keys(g.wagerGroups).map(function (k) { return '<button class="opt" data-g="' + esc(k) + '">' + esc(k) + '</button>'; }).join('') +
-        '</div><div id="wpicks"></div><button class="btn" id="savewager" disabled>Lock in my wager</button></div>';
+        '</div><button class="btn" id="savewager" disabled>Lock in my wager</button></div>';
     } else {
       h += '<div class="done">🔒 Wager locked. ' + esc(s.partner) + ' never sees it. Results tomorrow morning.</div>';
     }
@@ -252,18 +252,11 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
     if (ls) ls.onclick = function () { api('POST', '/game/lock').then(load).catch(function (e) { toast(e.message); }); };
     var wg = document.getElementById('wgroups');
     if (!wg) return;
-    var groups = [], picks = [], sv = document.getElementById('savewager');
-    rankable(wg, function (order) {
-      groups = order; picks = []; sv.disabled = true;
-      var box = document.getElementById('wpicks');
-      if (order.length < Object.keys(g.wagerGroups).length) { box.innerHTML = ''; return; }
-      box.innerHTML = '<div class="muted" style="margin-top:10px">Step 2: rank the prizes in ' + esc(order[0]) + '. Your #1 is what you get if you win.</div>' +
-        g.wagerGroups[order[0]].map(function (o) { return '<button class="opt">' + esc(o) + '</button>'; }).join('');
-      rankable(box, function (p) { picks = p; sv.disabled = !p.length; });
-    });
+    var groups = [], sv = document.getElementById('savewager');
+    rankable(wg, function (order) { groups = order; sv.disabled = order.length < Object.keys(g.wagerGroups).length; });
     sv.onclick = function () {
-      sv.disabled = true;
-      api('POST', '/wager', { groups: groups, picks: picks }).then(function () { toast('Wager locked. Good luck!'); load(); }).catch(function (e) { sv.disabled = false; toast(e.message); });
+      sv.disabled = true; sv.textContent = 'Spark is picking your prize…';
+      api('POST', '/wager', { groups: groups }).then(function () { toast('Wager locked. Good luck!'); load(); }).catch(function (e) { sv.disabled = false; sv.textContent = 'Lock in my wager'; toast(e.message); });
     };
   }
   function openGame(game, tryId) {
