@@ -21,6 +21,23 @@
  * caught by it without anybody remembering to extend this file.
  */
 
+/**
+ * THIS LINE IS LOAD-BEARING, and `tsconfig.test.json` is the only thing that shows it.
+ *
+ * This file reaches `leadService` through `require`, not `import`, because the mocks below must be
+ * installed before the module loads. With no top-level import or export, TypeScript treats the
+ * file as a SCRIPT rather than a module, so its top-level `const`s land in the global scope — and
+ * `createLeadBypassPhone.test.ts` declares `mockFindOne`, `mockFindAll`, `mockCreate` and
+ * `createLead` at top level too, for the same reason. Eight TS2451 "cannot redeclare" errors
+ * resulted, four reported against each file.
+ *
+ * Jest never sees them: each suite gets its own module registry, so both files pass at runtime. It
+ * is `tsc -p tsconfig.test.json` that compiles them together, which is exactly what the
+ * `Test-file typecheck` CI gate runs. `export {}` makes this file a module and gives its names
+ * their own scope.
+ */
+export {};
+
 const mockFindOne = jest.fn();
 const mockFindAll = jest.fn();
 const mockCreate = jest.fn();
