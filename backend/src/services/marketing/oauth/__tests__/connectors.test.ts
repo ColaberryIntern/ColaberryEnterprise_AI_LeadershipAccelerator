@@ -313,4 +313,37 @@ describe('the registry the Brands page reads', () => {
   it('every generic network states what the platform itself requires', () => {
     for (const c of GENERIC_CONNECTORS) expect(c.requirements.length).toBeGreaterThan(40);
   });
+
+  // BUG-7. Facebook refuses an unauthorized signer at its own screen, so no callback reaches us
+  // and there is no failure path on which to explain the rule. It has to be stated up front, and
+  // it has to be separate from the server setup text, which is written for a different reader.
+  it('Meta states the person-level precondition, with both places the operator has to go', () => {
+    const meta = connectorStatuses({ ...BASE, META_APP_ID: 'a', META_APP_SECRET: 'b' } as NodeJS.ProcessEnv)
+      .find((c) => c.key === 'meta')!;
+    expect(meta.access_note).toContain('role on our Meta app');
+    expect(meta.access_note).toContain('App roles');
+    expect(meta.access_note).toContain('developers.facebook.com/requests');
+  });
+
+  it('the role rule lives in exactly one place, so the server text no longer buries it', () => {
+    const meta = connectorStatuses({ ...BASE, META_APP_ID: 'a', META_APP_SECRET: 'b' } as NodeJS.ProcessEnv)
+      .find((c) => c.key === 'meta')!;
+    expect(meta.requirements).not.toContain('admins or testers');
+    expect(meta.requirements).not.toContain('only people with a role');
+  });
+
+  it('a network with no person-level precondition reports null, not an empty string', () => {
+    const s = connectorStatuses(BASE);
+    // Null and '' would render identically today but mean different things: "anyone may sign in"
+    // versus "nobody wrote the rule down". The page is allowed to treat them differently later.
+    expect(s.find((c) => c.key === 'linkedin')!.access_note).toBeNull();
+    expect(s.find((c) => c.key === 'tiktok')!.access_note).toBeNull();
+  });
+
+  it('an access note is carried through even when the server is NOT configured', () => {
+    // The note is about the person, so it does not depend on the credentials being in place.
+    const meta = connectorStatuses(BASE).find((c) => c.key === 'meta')!;
+    expect(meta.configured).toBe(false);
+    expect(meta.access_note).toContain('role on our Meta app');
+  });
 });

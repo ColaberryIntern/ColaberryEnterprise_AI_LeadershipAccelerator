@@ -92,12 +92,28 @@ export const metaConnector: Connector = {
   usesPkce: false,
   cancelErrors: ['access_denied'],
   requirements:
-    'Needs a Meta developer app (Business type) with Facebook Login for Business. Until Meta grants '
-    + 'Advanced Access, only people with a role on the app can connect - add Ali, Sohail and Aleem as '
-    + 'app admins or testers. With Facebook Login for Business, create a login configuration (User access '
-    + 'token, the permissions below) and set META_LOGIN_CONFIG_ID to its id. Instagram must be a Business '
-    + 'or Creator account linked to a Facebook Page. '
-    + 'Instagram allows 100 API posts per account per 24 hours.',
+    'Needs a Meta developer app (Business type) with Facebook Login for Business. Create a login '
+    + 'configuration (User access token, the permissions below) and set META_LOGIN_CONFIG_ID to its id. '
+    + 'Instagram must be a Business or Creator account linked to a Facebook Page. '
+    + 'Instagram allows 100 API posts per account per 24 hours. '
+    + 'Who is allowed to sign in is a separate matter: see the note beside the Connect button.',
+
+  /*
+   * Facebook refuses an unauthorized signer at ITS OWN screen, before any redirect back to us, so
+   * no callback arrives and no error code reaches our code to classify. Three attempts by Sohail on
+   * 2026-11-13 produced zero callbacks and taught him nothing. The precondition therefore has to be
+   * stated before the click; there is no failure path to explain it on. BUG-7.
+   *
+   * It deliberately does not claim why any particular attempt failed. On 2026-11-17 Sohail's
+   * screenshot read "App not active", which is about the app rather than the signer, so the role is
+   * a necessary condition and not provably the only one. This text says what is always true.
+   */
+  accessNote:
+    'Only someone with a role on our Meta app can connect Facebook or Instagram. The app is not open '
+    + 'to the public, so this is permanent, not a setup step that will go away. Ali adds people at '
+    + 'developers.facebook.com under App roles, and the person must then accept the invitation at '
+    + 'developers.facebook.com/requests before trying again. Without a role, Facebook refuses on its '
+    + 'own sign-in screen and sends back no reason we can show you here.',
 
   config: (env) => readConfig('meta', 'META_APP_ID', 'META_APP_SECRET', env),
 

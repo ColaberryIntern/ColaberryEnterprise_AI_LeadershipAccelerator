@@ -43,6 +43,12 @@ export interface ConnectorStatus {
   /** The exact URL to register with the platform, or null when the base URL is unknown. */
   redirect_uri: string | null;
   requirements: string;
+  /**
+   * What the person signing in must already have, or null when anyone who can reach the brand may
+   * sign in. Null rather than an empty string, so the page can tell "no precondition" apart from
+   * "a precondition nobody wrote down".
+   */
+  access_note: string | null;
 }
 
 const LINKEDIN_ENV = ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET', 'LINKEDIN_REDIRECT_URI'];
@@ -64,6 +70,8 @@ export function connectorStatuses(env: NodeJS.ProcessEnv = process.env): Connect
     missing_env: unset(LINKEDIN_ENV, env),
     redirect_uri: env.LINKEDIN_REDIRECT_URI?.trim() || null,
     requirements: 'Live. Tokens last 60 days and LinkedIn issues no refresh token to this app, so reconnect before the date shown on the account.',
+    // Anyone who can reach the brand can sign in with their own LinkedIn profile.
+    access_note: null,
   };
 
   const generic = GENERIC_CONNECTORS.map((c): ConnectorStatus => {
@@ -78,6 +86,7 @@ export function connectorStatuses(env: NodeJS.ProcessEnv = process.env): Connect
       missing_env: missing,
       redirect_uri: redirect,
       requirements: c.requirements,
+      access_note: c.accessNote ?? null,
     };
   });
 

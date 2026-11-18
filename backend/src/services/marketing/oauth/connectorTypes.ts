@@ -83,6 +83,19 @@ export interface Connector {
    * on the Brands page next to the button, so nobody discovers a platform rule by being refused.
    */
   requirements: string;
+  /**
+   * What the PERSON signing in must already have, as distinct from what the server needs.
+   *
+   * Shown UNCOLLAPSED beside the Connect button, because it is the one precondition an operator
+   * cannot discover any other way: the platform refuses an unauthorized signer at its own screen,
+   * before any redirect back to us, so no callback arrives and nothing on our side ever sees an
+   * error to explain afterwards. If this is hidden, the product says "Ready to connect" and then
+   * hands the operator the platform's wording with no way to act on it.
+   *
+   * State only what is true of EVERY attempt. Never describe a specific failure we did not
+   * observe. Omit it for a network where anyone who can reach the brand can simply sign in.
+   */
+  accessNote?: string;
   config(env: NodeJS.ProcessEnv): ConnectorConfig | null;
   authorizeUrl(cfg: ConnectorConfig, state: string, pkceChallenge: string | null): string;
   exchangeCode(input: {

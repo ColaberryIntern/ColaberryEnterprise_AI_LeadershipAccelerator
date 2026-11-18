@@ -13,6 +13,17 @@ import type { ConnectorKey, ConnectorStatus } from '../../../services/channelAcc
  * and closed by default so a fully configured server shows six quiet rows, not six paragraphs.
  * It names env var NAMES and the redirect URL to register - never a value - and the platform's
  * own requirements (review, audits, cost), so nobody learns a platform rule by being refused.
+ *
+ * ONE THING IS DELIBERATELY NOT IN THAT COLLAPSED DETAIL: `access_note`, which says who is
+ * allowed to sign in. It sits open, above the detail, because the rest of the detail is for
+ * whoever sets the server up, while this is for the person about to press the button, and they
+ * are usually not the same person. Collapsing it is what produced BUG-7: the row read "Ready to
+ * connect", Sohail pressed Connect three times on 13 Nov, and Facebook refused him at its own
+ * screen. Nothing came back to us, so the product had no later moment to explain it in.
+ *
+ * For the same reason a network carrying an access note says "Set up on the server" rather than
+ * "Ready to connect". Configured means the server has its credentials; it has never meant that
+ * the person reading the screen is allowed to use them.
  */
 
 export interface ConnectNetworksProps {
@@ -48,8 +59,12 @@ export default function ConnectNetworks({ connectors, error, blockedReason, busy
             <div className="d-flex align-items-center gap-3 flex-wrap">
               <span className="fw-medium" style={{ minWidth: '12rem' }}>{c.label}</span>
               {c.configured
-                ? <span className="small text-success">Ready to connect</span>
-                : <span className="small text-muted">Not set up yet</span>}
+                ? (
+                  <span className="small text-success" data-testid={`connector-state-${c.key}`}>
+                    {c.access_note ? 'Set up on the server' : 'Ready to connect'}
+                  </span>
+                )
+                : <span className="small text-muted" data-testid={`connector-state-${c.key}`}>Not set up yet</span>}
               {(() => {
                 const existing = c.providers.map((p) => connectedByProvider?.get(p)).find(Boolean);
                 return existing
@@ -70,6 +85,15 @@ export default function ConnectNetworks({ connectors, error, blockedReason, busy
                 )}
               </span>
             </div>
+            {c.access_note && (
+              <div
+                className="small mt-2 ps-2 border-start border-3 border-warning"
+                data-testid={`connector-access-${c.key}`}
+              >
+                <span className="fw-semibold">Before you press Connect: </span>
+                {c.access_note}
+              </div>
+            )}
             <details className="mt-1" data-testid={`connector-setup-${c.key}`}>
               <summary className="small text-muted">{c.configured ? 'Platform rules' : 'What it needs'}</summary>
               <div className="small mt-2 d-grid gap-2">

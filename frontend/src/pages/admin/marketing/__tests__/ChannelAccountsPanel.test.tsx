@@ -35,9 +35,9 @@ function account(over: Partial<ChannelAccount> = {}): ChannelAccount {
 }
 
 const CONNECTORS: ConnectorStatus[] = [
-  { key: 'linkedin', label: 'LinkedIn (personal profile)', providers: ['linkedin_member'], configured: true, missing_env: [], redirect_uri: 'https://www.refactored.ai/api/marketing/linkedin/callback', requirements: 'Live. Tokens last 60 days and must be reconnected before they lapse.' },
-  { key: 'meta', label: 'Facebook & Instagram', providers: ['meta_facebook_page', 'meta_instagram'], configured: true, missing_env: [], redirect_uri: 'https://www.refactored.ai/api/marketing/oauth/meta/callback', requirements: 'Needs a Meta developer app; until Advanced Access, only app-role users can connect.' },
-  { key: 'tiktok', label: 'TikTok', providers: ['tiktok'], configured: false, missing_env: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET'], redirect_uri: 'https://www.refactored.ai/api/marketing/oauth/tiktok/callback', requirements: 'Until TikTok audits the app, everything it posts is private.' },
+  { key: 'linkedin', label: 'LinkedIn (personal profile)', providers: ['linkedin_member'], configured: true, missing_env: [], redirect_uri: 'https://www.refactored.ai/api/marketing/linkedin/callback', requirements: 'Live. Tokens last 60 days and must be reconnected before they lapse.', access_note: null },
+  { key: 'meta', label: 'Facebook & Instagram', providers: ['meta_facebook_page', 'meta_instagram'], configured: true, missing_env: [], redirect_uri: 'https://www.refactored.ai/api/marketing/oauth/meta/callback', requirements: 'Needs a Meta developer app with Facebook Login for Business.', access_note: 'Only someone with a role on our Meta app can connect Facebook or Instagram.' },
+  { key: 'tiktok', label: 'TikTok', providers: ['tiktok'], configured: false, missing_env: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET'], redirect_uri: 'https://www.refactored.ai/api/marketing/oauth/tiktok/callback', requirements: 'Until TikTok audits the app, everything it posts is private.', access_note: null },
 ];
 
 function render(props: Partial<React.ComponentProps<typeof ChannelAccountsPanel>> = {}) {
