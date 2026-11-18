@@ -68,7 +68,23 @@ const MODEL_EMITTED = {
 const SERVER_POPULATED = {
   requirement: [] as const,
   release: [] as const,
-  story: ['references'] as const,
+  story: [
+    'references',
+    /**
+     * `artifacts` is the artifact contract from phase A0: what the story HANDS OVER. Here rather
+     * than in MODEL_EMITTED, deliberately, and not as a placeholder.
+     *
+     * The schema must not declare it today, because a model asked for an artifact contract would
+     * invent the repo paths and the keys, and the keys are what a person is later judged against
+     * and what the repository verification matches on. Today the contract is authored by a human
+     * in the story config beside the publisher, and gate 5 there refuses a malformed one.
+     *
+     * Moving it to MODEL_EMITTED is a real future step, not a cleanup: it means the generator
+     * PROPOSES a contract that a builder then refines. That belongs with the generator, which
+     * lives in the AI Project Architect repository, so it cannot be done from here.
+     */
+    'artifacts',
+  ] as const,
   plan: ['agents'] as const,
 };
 
