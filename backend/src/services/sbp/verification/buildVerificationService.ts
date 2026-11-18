@@ -340,6 +340,71 @@ export async function verifyBuildFromRepo(
 
   const decision = decideBuild(specs, parsed.ok ? parsed.file : null, inputs.commits, tree);
   const checkedAt = new Date().toISOString();
+  /**
+   * Phases A2 and A3, BEFORE the story loop, because the loop needs A3's decision in order to
+   * gate the latch. Rides on this pass: the plan, the commits and the tree are already in hand,
+   * so it adds no GitHub request.
+   *
+   * A2 is report only. A3 has its own flag, default off: `celebrate` records a celebration on the
+   * transition and withholds nothing, `enforce` additionally stops a story completing while its
+   * contract is unsatisfied. The celebration is COMPUTED there and written below, after the
+   * acceptance half is known, because a story completes only when both halves hold.
+   *
+   * NEVER THROWS by its own contract, and awaited rather than fired off.
+   */
+  const alreadyLatched = new Set<string>(
+    (await StudentTask.findAll({
+      where: { project_id: projectId },
+      attributes: ['story_id', 'verified_at'],
+    }))
+      .filter((t: any) => t.verified_at)
+      .map((t: any) => String(t.story_id)),
+  );
+
+  let storyArtifacts: StoryArtifactVerificationResult | null = null;
+  try {
+    const result = await verifyStoryArtifacts({
+      projectId,
+      stories: (stored.plan?.stories ?? []) as Array<{ id?: string; artifacts?: unknown }>,
+      treeEntries: inputs.treeEntries,
+      headCommitSha: inputs.commits.length ? inputs.commits[0].sha : null,
+      planVersion: stored.version,
+      completedStoryIds: alreadyLatched,
+    });
+    storyArtifacts = result.mode === 'off' && result.stories_with_contract === 0 ? null : result;
+    if (storyArtifacts && storyArtifacts.mode !== 'off') {
+      log('story_artifact_check_completed', opts.correlationId, 'success', {
+        projectId,
+        mode: storyArtifacts.mode,
+        completion_mode: storyArtifacts.completion_mode,
+        stories_with_contract: storyArtifacts.stories_with_contract,
+        satisfied: storyArtifacts.satisfied_total,
+        outstanding: storyArtifacts.outstanding_total,
+        held: storyArtifacts.held,
+        tree_unreadable: storyArtifacts.tree_unreadable,
+        rows_inserted: storyArtifacts.reports.reduce((n, r) => n + r.rows_inserted, 0),
+        note: storyArtifacts.completion_mode === 'enforce'
+          ? 'ENFORCING: a story whose contract is unsatisfied does not complete on this run'
+          : 'no story state, criterion or XP was changed by this check',
+      });
+    }
+  } catch (err: any) {
+    // It is documented never to throw. A defect there must not cost a student the verification
+    // this run already reached, and must never silently become an enforcement.
+    log('story_artifact_check_failed', opts.correlationId, 'partial', {
+      projectId, error: err?.message || String(err),
+      note: 'verification stands; the artifact check records nothing and gates nothing this run',
+    });
+    storyArtifacts = null;
+  }
+
+  /** A3's report for one story, or null when A3 is off or the story declared no contract. */
+  const artifactGateFor = (storyId: string) => {
+    if (!storyArtifacts || storyArtifacts.completion_mode === 'off') return null;
+    const r = storyArtifacts.reports.find((x) => x.story_id === storyId);
+    return r && r.completion ? r : null;
+  };
+
 
   /**
    * FIX 4 — the mismatch signal reaches a human.
@@ -472,11 +537,76 @@ export async function verifyBuildFromRepo(
     // wrote itself.
     if (verdict.state !== 'verified' || !verdict.commit_sha) continue;
 
+    /*
+     * PHASE A3, THE ONLY LINE IN THIS SERVICE THAT WITHHOLDS ANYTHING.
+     *
+     * The acceptance criteria passed. Does the artifact contract permit completion? Only in
+     * `enforce` mode is the answer acted on; in `celebrate` it is measured and reported and this
+     * branch is never taken. A story with no contract returns null and is untouched, which is why
+     * switching the flag on cannot freeze the roughly 200 stories that predate the rule, nor the
+     * 67 published plans that carry no contract today.
+     *
+     * It can only ever withhold a completion that has not happened yet: a story already latched
+     * comes back `already_complete` with `may_complete` true, so nothing earned is revoked.
+     */
+    const gate = artifactGateFor(verdict.story_id);
+    if (gate && gate.completion && storyArtifacts
+        && storyArtifacts.completion_mode === 'enforce' && !gate.completion.may_complete) {
+      log('story_artifact_gate_held', opts.correlationId, 'partial', {
+        projectId,
+        storyId: verdict.story_id,
+        verdict: gate.completion.verdict,
+        outstanding: gate.completion.outstanding,
+        reason: gate.completion.reason,
+        note: 'acceptance passed; the artifact contract is not satisfied, so the story stays open',
+      });
+      continue;
+    }
+
     await markTaskVerifiedComplete(projectId, verdict.story_id, {
       source: VERIFIER_SOURCE,
       ref: verdict.commit_sha,
       correlation_id: opts.correlationId ?? null,
     });
+
+    /*
+     * PHASE A3's CELEBRATION, fired here and nowhere else.
+     *
+     * After the latch, because a story completes only when its acceptance criteria pass AND its
+     * artifacts are in place, and this is the first point where both are known. The sentence was
+     * computed before the loop, where the contract and the artifact names live.
+     *
+     * It fires at most once for the life of a story: `gate.celebration` is non-null only on the
+     * transition, and the row is refused by a unique index on (project, story) with no commit in
+     * it, so a re-sync, a force-push and two concurrent syncs all land on the same key.
+     *
+     * Fail-soft. A celebration that cannot be written must never cost a student the completion
+     * that earned it, so this is logged and the loop carries on.
+     */
+    if (gate && gate.celebration) {
+      try {
+        const { fireStoryCelebration } = await import('../../artifacts/storyArtifactVerification');
+        const fired = await fireStoryCelebration({
+          projectId,
+          storyId: verdict.story_id,
+          commitSha: verdict.commit_sha,
+          planVersion: stored.version,
+          celebration: gate.celebration,
+        });
+        log('story_celebration_fired', opts.correlationId, fired ? 'success' : 'partial', {
+          projectId,
+          storyId: verdict.story_id,
+          rows: fired,
+          headline: gate.celebration.headline,
+          note: fired ? 'first time for this story' : 'already fired; nothing written',
+        });
+      } catch (err: any) {
+        log('story_celebration_failed', opts.correlationId, 'partial', {
+          projectId, storyId: verdict.story_id, error: err?.message || String(err),
+          note: 'the completion stands; only the celebration was lost',
+        });
+      }
+    }
 
     if (wasVerified || !enrollmentId) continue;
 
@@ -584,43 +714,6 @@ export async function verifyBuildFromRepo(
   // summary the sync response hands back still says "0 verified" for a build
   // whose stories the platform is holding at verified — the same defect one
   // layer up, and the number a student actually looks at after pressing Sync.
-  /**
-   * Phase A2, report only. Rides on this pass: the plan, the commits and the tree are already in
-   * hand, so it adds no GitHub request. NEVER THROWS by its own contract, and it is awaited
-   * rather than fired off so the rows it writes are in before the summary that reports them.
-   */
-  let storyArtifacts: StoryArtifactVerificationResult | null = null;
-  try {
-    const result = await verifyStoryArtifacts({
-      projectId,
-      stories: (stored.plan?.stories ?? []) as Array<{ id?: string; artifacts?: unknown }>,
-      treeEntries: inputs.treeEntries,
-      headCommitSha: inputs.commits.length ? inputs.commits[0].sha : null,
-      planVersion: stored.version,
-    });
-    storyArtifacts = result.mode === 'off' && result.stories_with_contract === 0 ? null : result;
-    if (storyArtifacts && storyArtifacts.mode !== 'off') {
-      log('story_artifact_check_completed', opts.correlationId, 'success', {
-        projectId,
-        mode: storyArtifacts.mode,
-        stories_with_contract: storyArtifacts.stories_with_contract,
-        satisfied: storyArtifacts.satisfied_total,
-        outstanding: storyArtifacts.outstanding_total,
-        tree_unreadable: storyArtifacts.tree_unreadable,
-        rows_inserted: storyArtifacts.reports.reduce((n, r) => n + r.rows_inserted, 0),
-        note: 'report only: no story state, criterion or XP was changed by this check',
-      });
-    }
-  } catch (err: any) {
-    // It is documented never to throw. If it does, that is a defect in it, and a defect there
-    // must not cost a student the verification this run already reached.
-    log('story_artifact_check_failed', opts.correlationId, 'partial', {
-      projectId, error: err?.message || String(err),
-      note: 'verification stands; the artifact check records nothing this run',
-    });
-    storyArtifacts = null;
-  }
-
   const summary: BuildVerificationSummary = {
     project_id: projectId,
     ok: true,
