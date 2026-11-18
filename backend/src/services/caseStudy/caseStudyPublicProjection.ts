@@ -41,6 +41,7 @@
  * mode left that reaches the caller.
  */
 
+import { projectStoryInBrief } from './caseStudyStoryInBrief';
 import { getCaseStudySurfaceProfile, normalizeFacetList, normalizeFacetSlug } from './caseStudyFilterService';
 import { projectBuilder, projectDecisions, resolveSurfaceContent } from './caseStudySurfaceVariant';
 import {
@@ -237,6 +238,7 @@ export function projectPublicDetail(input: PublicProjectionInput): PublicCaseStu
     slug: input.slug,
     title: c.title,
     standfirst,
+    storyInBrief: projectStoryInBrief(content?.identity?.storyInBrief),
     organizationLabel: c.organizationLabel,
     industry: c.industry,
     primaryCapability: c.primaryCapability,

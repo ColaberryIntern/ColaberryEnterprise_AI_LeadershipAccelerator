@@ -78,6 +78,18 @@
       + chip + '</div></section>';
   }
 
+  /* The story in brief (Ali, 2026-11-18: "a small format at the top that tells the story of
+     what happened"). The server sends the record's whole usable set of 3 to 5 beats or none,
+     so an empty list draws nothing and the page reads as before. */
+  function storyInBrief(body) {
+    var beats = arr(body.caseStudy.storyInBrief).filter(function (b) { return b && b.label && b.text; });
+    if (!beats.length) return '';
+    return '<section class="brief" aria-labelledby="brief-title"><h2 id="brief-title">The story in brief</h2><ol>'
+      + beats.map(function (b, i) {
+        return '<li><span class="n" aria-hidden="true">' + (i + 1) + '</span><b>' + esc(b.label) + '</b><p>' + esc(b.text) + '</p></li>';
+      }).join('') + '</ol></section>';
+  }
+
   /* A tile's figure. The unit is appended ONLY to a bare number ("448" + "tests"). A display
      value that is already a phrase carries its own noun, so appending printed "6m14s, failure
      to healthy seconds" and "1 of 6 sources live sources" (Quincy, 2026-11-11). The enterprise
@@ -123,6 +135,6 @@
 
   return {
     isPayload: isPayload, slugFromPath: slugFromPath, builderOf: builderOf,
-    personFromPortfolio: personFromPortfolio, hero: hero, outcomes: outcomes, hireCard: hireCard,
+    personFromPortfolio: personFromPortfolio, hero: hero, storyInBrief: storyInBrief, outcomes: outcomes, hireCard: hireCard,
   };
 }));

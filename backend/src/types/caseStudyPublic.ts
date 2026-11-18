@@ -481,12 +481,23 @@ export interface PublicCaseStudySummary {
   readonly heroImageUrl: string | null;
 }
 
+/** One beat of the story in brief. */
+export interface PublicCaseStudyStoryBeat {
+  readonly label: string;
+  readonly text: string;
+}
+
 /** One page at `/stories/:slug`. Empty arrays and nulls mean "hide the section". */
 export interface PublicCaseStudyDetail {
   readonly surfaceKey: CaseStudySurfaceKey;
   readonly slug: string;
   readonly title: string;
   readonly standfirst: string | null;
+  /**
+   * The story in brief: 3 to 5 labeled beats drawn as a band at the top of the page.
+   * Empty means the record carries none (or an unusable one) and no band is drawn.
+   */
+  readonly storyInBrief: readonly PublicCaseStudyStoryBeat[];
   readonly organizationLabel: string | null;
   readonly industry: string | null;
   readonly primaryCapability: string | null;
@@ -585,6 +596,7 @@ const PUBLIC_DETAIL_KEY_MAP: Record<keyof PublicCaseStudyDetail, true> = {
   slug: true,
   title: true,
   standfirst: true,
+  storyInBrief: true,
   organizationLabel: true,
   industry: true,
   primaryCapability: true,

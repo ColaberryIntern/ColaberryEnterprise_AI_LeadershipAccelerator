@@ -171,3 +171,20 @@ describe('the intro form', () => {
     for (const name of ['talentSlug', 'name', 'email', 'company', 'role', 'message']) assert.match(intro, new RegExp('name="' + name + '"'));
   });
 });
+
+describe('the story in brief (Ali, 2026-11-18)', () => {
+  const beats = [
+    { label: 'Before', text: 'Read once, trusted for months.' },
+    { label: 'What we built', text: 'A weekly report that names one move.' },
+    { label: 'What happened', text: 'Each edition grades the last <move>.' },
+  ];
+  test('draws every beat, numbered, escaped', () => {
+    const html = S.storyInBrief({ ...body(), caseStudy: { ...body().caseStudy, storyInBrief: beats } });
+    assert.match(html, /The story in brief/);
+    assert.equal((html.match(/<li>/g) || []).length, 3);
+    assert.match(html, /&lt;move&gt;/);
+  });
+  test('draws nothing for a record without beats', () => {
+    assert.equal(S.storyInBrief(body()), '');
+  });
+});

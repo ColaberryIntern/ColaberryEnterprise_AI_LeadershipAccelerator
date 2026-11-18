@@ -512,12 +512,24 @@ export interface PublicCaseStudySummary {
   readonly heroImageUrl: string | null;
 }
 
+/** One beat of the story in brief. */
+export interface PublicCaseStudyStoryBeat {
+  readonly label: string;
+  readonly text: string;
+}
+
 /** One detail page. Empty arrays and nulls mean "hide the section". */
 export interface PublicCaseStudyDetail {
   readonly surfaceKey: CaseStudySurfaceKey;
   readonly slug: string;
   readonly title: string;
   readonly standfirst: string | null;
+  /**
+   * The story in brief: 3 to 5 labeled beats drawn as a band under the masthead.
+   * Empty when the record carries none. Optional so a payload from a server that
+   * predates the field still type-checks and simply draws no band.
+   */
+  readonly storyInBrief?: readonly PublicCaseStudyStoryBeat[];
   readonly organizationLabel: string | null;
   readonly industry: string | null;
   readonly primaryCapability: string | null;

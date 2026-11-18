@@ -1317,6 +1317,22 @@ one or two figures that carry it, and the gaps stated as gaps. Every statement o
 record. Do not write "the gaps made the next priorities clear" when the roadmap marks
 them "not pursued". No CTA language; the profile's CTA follows it.
 
+### The story in brief (required, added 2026-11-18)
+
+Ali: "the story is so shortened I can't even tell what the story is. Can we create a small
+format at the top that tells the story of what happened ... Sometimes the opening paragraph
+does a good job explaining and sometimes it doesn't." So every record carries
+`identity.storyInBrief`: **3 to 5 beats**, each `{ label, text }`, drawn as "The story in
+brief" directly under the masthead on Enterprise and under the outcome tiles on Hire.
+
+- Labels are a few words (32 characters at most). The default arc is **Before**, **What we
+  built**, **What happened**, **Why it matters**; a fifth beat ("What's next") is allowed.
+- Each text is one or two plain sentences (240 characters at most), readable by someone
+  who reads nothing else on the page. Name the business problem, not the code.
+- Every figure in a beat must be on the record: beats are claim-scanned like the standfirst.
+- All or nothing: one bad beat drops the band, and the audit's record check
+  `the story in brief tells the whole arc` fails. Nothing is ever derived from other sections.
+
 ### One introduction
 
 The standfirst introduces the person once (name, the shortest true progression). The
