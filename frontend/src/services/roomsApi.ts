@@ -416,9 +416,26 @@ export async function downloadRoomResource(roomId: string, resource: { id: strin
  * looked broken. Same trap downloadRoomResource() above already documents.
  *
  * The tab is opened synchronously, before any await, so it is still inside the
- * click gesture and does not trip the popup blocker; the blob URL is swapped in
- * once the authenticated fetch resolves.
+ * click gesture and does not trip the popup blocker; the real URL is swapped in
+ * once the authenticated call resolves.
+ *
+ * WHY THIS NO LONGER FETCHES A BLOB. Case 1 used to be handled by pulling the
+ * whole file into memory with `responseType: 'blob'` and handing the tab a blob
+ * URL. That is fine for a 2 MB PDF and ruinous for a recording. The November 12
+ * class is 830 MB: nothing played until all of it had downloaded, there was no
+ * progress indication and no seeking, and 82 students in that cohort were left
+ * looking at a blank tab. A student reported it on 2026-11-18.
+ *
+ * Instead we ask the server for a short-lived signed URL and let the browser
+ * stream it natively — Range requests, a seek bar, playback from the first
+ * bytes. The server has always honored Range (res.sendFile); the blob threw
+ * that away. See backend services/communityRooms/resourcePlaybackToken.ts.
  */
+function absolutePortalUrl(p: string): string {
+  const base = (portalApi.defaults?.baseURL || '').replace(/\/+$/, '');
+  return base ? `${base}${p}` : new URL(p, window.location.origin).toString();
+}
+
 export async function openSessionRecording(recordingUrl: string, title?: string | null): Promise<void> {
   if (/^https?:\/\//i.test(recordingUrl)) {
     window.open(recordingUrl, '_blank', 'noopener,noreferrer');
@@ -427,6 +444,26 @@ export async function openSessionRecording(recordingUrl: string, title?: string 
 
   const tab = window.open('', '_blank');
   try {
+    const playbackPath = recordingUrl.replace(/\/download(\?.*)?$/, '/playback');
+    let streamUrl: string | null = null;
+    if (playbackPath !== recordingUrl) {
+      try {
+        const res = await portalApi.get(playbackPath);
+        if (res.data?.url) streamUrl = absolutePortalUrl(res.data.url as string);
+      } catch {
+        // Older backend without /playback, or the mint was refused. Fall through
+        // to the blob path so the button degrades instead of dying — this is the
+        // only reason the slow path still exists.
+        streamUrl = null;
+      }
+    }
+
+    if (streamUrl) {
+      if (tab) tab.location.href = streamUrl;
+      else window.open(streamUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     const res = await portalApi.get(recordingUrl, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data as Blob);
     if (tab) {
@@ -440,7 +477,11 @@ export async function openSessionRecording(recordingUrl: string, title?: string 
       a.click();
       a.remove();
     }
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    // Was 60s, which killed the URL under a viewer who was still watching: any
+    // reload of that tab after the first minute landed on a dead blob. An hour
+    // outlasts the longest recording we hold (2h57m is the outlier; this path is
+    // now only a fallback), and the page unloading frees it regardless.
+    setTimeout(() => URL.revokeObjectURL(url), 3_600_000);
   } catch (err) {
     tab?.close();
     throw err;
