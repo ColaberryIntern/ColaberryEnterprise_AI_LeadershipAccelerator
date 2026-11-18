@@ -48,6 +48,7 @@ jest.mock('../campaignContextService', () => ({
   formatCampaignContextForPrompt: jest.fn(() => ''),
 }));
 jest.mock('../../models', () => ({ Lead: { findByPk: jest.fn(async () => null) } }));
+jest.mock('../maya/mayaMemory', () => ({ mayaMemoryBlock: jest.fn(async () => '') }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { buildMayaSystemPrompt } = require('../admissionsMayaService');

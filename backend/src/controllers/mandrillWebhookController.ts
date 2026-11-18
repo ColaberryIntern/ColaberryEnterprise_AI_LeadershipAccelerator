@@ -506,6 +506,31 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         );
       }
 
+      // OH1h: a reply to a MAYA campaign is Maya's to answer - drafted from the one memory into the review queue
+      // (sent at once only when maya_email_autoreply_enabled is on, never for an Explorer). The generic auto-reply
+      // below never runs for it. Never throws; a non-Maya campaign returns handled=false and nothing changes.
+      try {
+        const { maybeDraftMayaReply } = await import('../services/maya/mayaReplyDraftService');
+        const maya = await maybeDraftMayaReply({
+          leadId: lead.id,
+          fromEmail,
+          leadName: (lead as any).name ?? null,
+          subject,
+          body,
+          messageId: msg.headers?.['Message-Id'] ?? msg.headers?.['message-id'] ?? null,
+          inReplyTo: inReplyTo ?? null,
+          campaignId,
+          explorer: explorerHandled,
+        });
+        if (maya.handled) {
+          console.log(`[MandrillInbound] Maya reply for lead ${lead.id}: ${maya.outcome}`);
+          processed++;
+          continue;
+        }
+      } catch (mayaErr: any) {
+        console.warn(`[MandrillInbound] Maya reply draft failed for lead ${lead.id}: ${mayaErr?.message}`);
+      }
+
       // Auto-reply: generate an AI response and send it back
       try {
         if (explorerHandled) {

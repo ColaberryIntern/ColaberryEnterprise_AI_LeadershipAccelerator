@@ -56,7 +56,7 @@ export function eventStepTime(startsAt: Date, minutesBefore: number, now: Date):
  * about discounts in the communication. That is Open House offer only." Plus the
  * standing rule never to say "free" (TWC, 40 TAC 807.172(d)).
  */
-const BANNED: Array<[RegExp, string]> = [
+export const BANNED: Array<[RegExp, string]> = [
   [/discount/i, 'discount'],
   [/\boffers?\b/i, 'offer'],
   [/early[\s-]?bird/i, 'early bird'],
@@ -175,10 +175,16 @@ export function countdownCallBrief(input: {
   event: Pick<OpenHouseEventForLead, 'title' | 'when_label'>;
   facts: import('./openHouseCountdownContext').CallFacts | null;
   history?: string;
+  /**
+   * OH1g: the one memory (maya/mayaMemory.formatTimelineForPrompt), every channel and both directions. When present
+   * it is the history section; the activity-log `history` is the fallback for a person with no timeline yet.
+   */
+  memory?: string;
 }): string {
   const who = input.firstName || 'them';
   const f = input.facts;
-  const history = meaningfulHistory(input.history || '');
+  const memory = (input.memory || '').trim();
+  const history = memory ? '' : meaningfulHistory(input.history || '');
   const person: string[] = [];
   if (f) {
     if (f.signed_up_on) person.push(`Created their Colaberry account on ${f.signed_up_on}${f.signup_source ? ` (came in through ${f.signup_source})` : ''}.`);
@@ -209,6 +215,7 @@ export function countdownCallBrief(input: {
     'THE OPEN HOUSE',
     `- ${input.event.title}, ${input.event.when_label}. Online. A walk through the program and what people build in it, live questions and answers, and quick polls on their phone.`,
     '- Their Join link is in the email from Maya. It signs them in and checks them in. If they cannot find it, tell them to reply to that email or check spam.',
+    ...(memory ? ['', memory.slice(0, 2500), '(Do not repeat it; build on it. If they asked something, answer it or say someone will follow up.)'] : []),
     ...(history ? ['', 'WHAT WE HAVE ALREADY SAID TO EACH OTHER (do not repeat it; build on it)', history.slice(0, 1500)] : []),
     '',
     'LET THE CONVERSATION FLOW',
