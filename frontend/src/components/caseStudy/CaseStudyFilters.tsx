@@ -64,6 +64,12 @@ export interface CaseStudyFiltersProps {
   /** Keeps input ids unique when two filter sets share a page. */
   idPrefix?: string;
   className?: string;
+  /**
+   * W26: options shown per group before a "Show all" button. A long group (the
+   * capability list runs past a hundred) otherwise pushes the results a page
+   * down. Selected options always show, so a choice can never be hidden.
+   */
+  visibleLimit?: number;
 }
 
 const selectedIn = (value: CaseStudyFilterState, field: CaseStudyFilterField): readonly string[] =>
@@ -76,7 +82,9 @@ export function CaseStudyFilters({
   openByDefault = true,
   idPrefix = 'cs-filter',
   className,
+  visibleLimit,
 }: CaseStudyFiltersProps): React.ReactElement | null {
+  const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set());
   const usable = groups.filter((group) => group.options.length > 0);
   // An empty facet menu is worse than none: it advertises filters that cannot
   // match anything. The zero-data state belongs to the page.
@@ -86,6 +94,11 @@ export function CaseStudyFilters({
     <div className={`cbv2-cs-filters${className ? ` ${className}` : ''}`}>
       {usable.map((group) => {
         const selected = selectedIn(value, group.field);
+        const limited = visibleLimit !== undefined && !expanded.has(group.field)
+          && group.options.length > visibleLimit;
+        const shown = limited
+          ? group.options.filter((option, i) => i < (visibleLimit as number) || selected.includes(option.value))
+          : group.options;
         return (
           <details className="cbv2-cs-filters__group" key={group.field} open={openByDefault}>
             <summary className="cbv2-cs-filters__summary">
@@ -95,7 +108,7 @@ export function CaseStudyFilters({
               </span>
             </summary>
             <ul className="cbv2-cs-filters__options">
-              {group.options.map((option) => {
+              {shown.map((option) => {
                 const id = `${idPrefix}-${group.field}-${option.value}`;
                 return (
                   <li key={option.value}>
@@ -118,6 +131,20 @@ export function CaseStudyFilters({
                 );
               })}
             </ul>
+            {visibleLimit !== undefined && group.options.length > visibleLimit ? (
+              <button
+                type="button"
+                className="cbv2-cs-filters__more"
+                aria-expanded={!limited}
+                onClick={() => setExpanded((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(group.field)) next.delete(group.field); else next.add(group.field);
+                  return next;
+                })}
+              >
+                {limited ? `Show all ${group.options.length}` : 'Show fewer'}
+              </button>
+            ) : null}
           </details>
         );
       })}

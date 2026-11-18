@@ -30,6 +30,8 @@ export interface StoriesFilterAsideProps {
   facetsFailed: boolean;
   /** How many records the default verification filter is holding back. */
   withheld: number;
+  /** W26: options per group before "Show all". */
+  visibleLimit?: number;
 }
 
 export function StoriesFilterAside({
@@ -39,6 +41,7 @@ export function StoriesFilterAside({
   openByDefault,
   facetsFailed,
   withheld,
+  visibleLimit,
 }: StoriesFilterAsideProps): React.ReactElement {
   return (
     <aside
@@ -52,6 +55,7 @@ export function StoriesFilterAside({
         onToggle={onToggle}
         openByDefault={openByDefault}
         idPrefix="stories-filter"
+        visibleLimit={visibleLimit}
       />
       {facetsFailed ? (
         <p className="cbv2-stories__note" data-testid="stories-facets-note">

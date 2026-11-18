@@ -903,3 +903,18 @@
     transition-duration: 0.01ms;
   }
 }
+
+/* W26: "Show all N" under a long facet group. A real button, tied to the group. */
+.cbv2-cs-filters__more {
+  margin: 0 var(--space-4) var(--space-4);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-bold);
+  color: var(--brand-accent);
+  text-decoration: underline;
+  text-underline-offset: var(--border-2);
+  cursor: pointer;
+}

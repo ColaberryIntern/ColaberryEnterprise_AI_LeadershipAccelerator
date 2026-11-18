@@ -52,6 +52,7 @@ import {
   runCaseStudyQuery,
   sanitizeFiltersForAudience,
 } from '../services/caseStudy/caseStudyFilterService';
+import { buildContextualTaxonomy, buildMatchLedger } from '../services/caseStudy/caseStudyContextualFacets';
 import { projectPublicDetail, projectPublicSummary } from '../services/caseStudy/caseStudyPublicProjection';
 import { matchesSearch, searchTerms } from '../services/caseStudy/caseStudySearch';
 import { surfaceView } from '../services/caseStudy/caseStudySurfaceView';
@@ -173,6 +174,10 @@ export interface PublicCaseStudyListResponse {
   readonly total: number;
   readonly hasMore: boolean;
   readonly ledger: CaseStudyLedger;
+  /** W26: the same four figures for what this query matches (all pages, search included). */
+  readonly matchLedger: CaseStudyLedger;
+  /** W26: facet counts for this query; each axis counted over the records matching the other axes. */
+  readonly facets: PublicCaseStudyTaxonomyFacets;
 }
 
 export interface PublicCaseStudyDetailResponse {
@@ -345,6 +350,10 @@ async function respondWithList(
        * consistently. The result count above the cards is what moves.
        */
       ledger: buildCaseStudyLedger(allVisible.map((r) => r.candidate)),
+      /* W26: what DOES move. `ledger` stays the library (it decides "empty
+         library" vs "no match"); these two follow the search and the facets. */
+      matchLedger: buildMatchLedger(visible.map((r) => r.candidate), filters),
+      facets: buildContextualTaxonomy(visible.map((r) => r.candidate), filters),
     };
     log(event, 'success', correlationId, { surface: surfaceKey, returned: body.items.length });
     res.json(body);
