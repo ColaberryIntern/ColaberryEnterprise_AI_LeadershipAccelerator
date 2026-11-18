@@ -134,6 +134,19 @@ describe('Government menu', () => {
     });
   });
 
+  it('W27: sends a service with no case study to "Also in our catalog", not an empty filter', () => {
+    const m = buildGovMenu({
+      families: ['Consulting'],
+      services: [
+        { slug: 'p', name: 'Proposal Support', family: 'Consulting', caseStudies: 0 },
+        { slug: 'r', name: 'Readiness Review', family: 'Consulting', caseStudies: 2 },
+      ],
+    });
+    expect(m.groups[0].links.map((l) => l.to)).toEqual([
+      '/government/#gv-prep', '/government/?family=Consulting#gv-services',
+    ]);
+  });
+
   it('degrades to the page and its sections when the catalog failed', () => {
     const m = buildGovMenu(null);
     expect(m.groups).toEqual([]);
