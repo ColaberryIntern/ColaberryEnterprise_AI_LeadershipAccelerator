@@ -37,6 +37,7 @@
  * `status = 'draft'`.
  */
 import type { ProjectKind, AdminIdentity } from './lifecycleStatus';
+import type { CoverageSource } from './blueprintStoredCoverage';
 import type { ManifestRefs, RefOrigin } from './adapters/manifestRefs';
 import type {
   FactoryRequirementLike, FactorySourceBlockLike, FactoryTaskLike,
@@ -63,11 +64,20 @@ function log(fields: Record<string, unknown>): void {
  * NOT `import type { FactoryProject }`. The compose route's Zod schema is deliberately shallow
  * (`project: z.record(z.string(), z.unknown())`) because each collection has a validator owning
  * its deep contract, so what arrives here is unverified at the type level whatever it is declared
- * as. A structural shape states exactly the five fields this module reads and lets every one be
+ * as. A structural shape states exactly the five fields this BODY carries and lets every one be
  * absent, which is the honest description of a `Record<string, unknown>` that has been cast.
  */
 export interface ComposedProjectLike {
   requirements?: ReadonlyArray<FactoryRequirementLike> | null;
+  /**
+   * DECLARED, AND DELIBERATELY NOT READ AS EVIDENCE. L7.6 blocker B2.
+   *
+   * These two are the halves of the SOURCE_COVERAGE rule, and a gate cannot measure them from
+   * the request it is gating. They stay on the type because the route really does send them and
+   * `composeBlueprint` really does validate them - but the manifest's coverage is read from
+   * `contract_process_documents` by `blueprintStoredCoverage`, never from here. Reading either
+   * field below this line as evidence would reopen B2.
+   */
   source_blocks?: ReadonlyArray<FactorySourceBlockLike> | null;
   tasks?: ReadonlyArray<FactoryTaskLike> | null;
   processes?: ReadonlyArray<{ id: string }> | null;
@@ -110,6 +120,25 @@ function originFor(kind: ProjectKind): RefOrigin {
 }
 
 /**
+ * The ref set plus WHERE its coverage measurement came from.
+ *
+ * Carried out of `buildRefs` rather than re-derived at the log line, because the two unmeasurable
+ * cases are indistinguishable from the refs alone: a project with no decomposition and a database
+ * that could not be read both produce `coverage.uncitedRequirementBlocks === null`. An operator
+ * asking why a project is still blocked at `requirements_ready` needs those apart - one is a
+ * project state, the other is an outage.
+ */
+interface BuiltRefs {
+  refs: ManifestRefs;
+  coverageSource: CoverageSource | 'student_plan_no_source_block_layer';
+}
+
+const withSource = (
+  coverageSource: BuiltRefs['coverageSource'],
+  refs: ManifestRefs,
+): BuiltRefs => ({ refs, coverageSource });
+
+/**
  * Build the ref set with the adapter that matches the project's identity space.
  *
  * ## Why both adapters, when the body is Factory-shaped for both kinds
@@ -130,19 +159,20 @@ function originFor(kind: ProjectKind): RefOrigin {
  *
  * ## What each kind gets, and the one asymmetry
  *
- * The delivery path passes `source_blocks` and `tasks`, so `coverage.uncitedRequirementBlocks` is
- * genuinely MEASURED. The student path cannot: SBP has no source-block or business-task layer, so
+ * The delivery path measures `coverage.uncitedRequirementBlocks` from the STORED decomposition
+ * document (see `blueprintStoredCoverage`, L7.6 blocker B2) rather than from the request body.
+ * The student path cannot measure it at all: SBP has no source-block or business-task layer, so
  * that adapter records `[]` - vacuously clean, documented as a limitation in
  * docs/project-lifecycle/backbone-adoption.md rather than presented as a passed check.
  */
-async function buildRefs(input: PersistComposedInput): Promise<ManifestRefs> {
+async function buildRefs(input: PersistComposedInput): Promise<BuiltRefs> {
   const p = input.project;
   const requirements = Array.isArray(p.requirements) ? p.requirements : [];
   const rev = input.documentVersion ?? null;
 
   if (input.kind === 'student') {
     const { sbpToManifestRefs } = await import('./adapters/sbpAdapter');
-    return sbpToManifestRefs({
+    return withSource('student_plan_no_source_block_layer', sbpToManifestRefs({
       projectId: input.projectId,
       planVersion: rev,
       // `ContractRequirement` to `SbpRequirementLike`. `source_document` carries the provenance on
@@ -153,23 +183,35 @@ async function buildRefs(input: PersistComposedInput): Promise<ManifestRefs> {
         source: r.source_document ?? null,
         human_confirmed: r.human_confirmed ?? null,
       })),
-    });
+    }));
   }
 
+  // THE COVERAGE RULE'S TWO HALVES COME FROM THE STORED DOCUMENT, NOT THE BODY. L7.6 blocker B2.
+  //
+  // `source_blocks` and `tasks` are the two collections the SOURCE_COVERAGE rule relates, and
+  // both used to be read off `input.project` - the unvalidated HTTP body. An explicitly empty
+  // `source_blocks: []` was then honoured as a measurement, which satisfied
+  // `source_block_uncited` at `requirements_ready` for a project whose stored document holds
+  // uncited requirement blocks. `blueprintStoredCoverage` reads both from
+  // `contract_process_documents` instead, and omits `sourceBlocks` when there is no document to
+  // read - so the prerequisite keeps blocking rather than passing on the caller's word.
+  //
+  // The body's own `source_blocks` and `tasks` are now IGNORED here. They are still validated by
+  // `composeBlueprint`, which is where a caller's proposal belongs; what gets filed as evidence
+  // is what the system stored.
+  const { storedCoverageInputs } = await import('./blueprintStoredCoverage');
+  const coverage = await storedCoverageInputs(input.projectId, input.correlationId);
+
   const { factoryToManifestRefs } = await import('./adapters/factoryAdapter');
-  return factoryToManifestRefs({
+  return withSource(coverage.source, factoryToManifestRefs({
     deliveryProjectId: input.projectId,
     documentVersion: rev,
     requirements,
-    // PASSED ONLY WHEN PRESENT. `factoryToManifestRefs` distinguishes an absent `sourceBlocks`
-    // (coverage unmeasurable, recorded `null`, prerequisite keeps blocking) from an empty one
-    // (measured: no blocks, so none uncited). Passing `[]` for a body that omitted the field
-    // would launder the first into the second.
-    ...(Array.isArray(p.source_blocks) ? { sourceBlocks: p.source_blocks } : {}),
-    tasks: Array.isArray(p.tasks) ? p.tasks : [],
+    ...(coverage.sourceBlocks === undefined ? {} : { sourceBlocks: coverage.sourceBlocks }),
+    tasks: coverage.tasks,
     processes: Array.isArray(p.processes) ? p.processes : [],
     assignments: Array.isArray(p.assignments) ? p.assignments : [],
-  });
+  }));
 }
 
 /**
@@ -198,7 +240,7 @@ export async function persistComposedBlueprint(
   // caller is told so rather than receiving a 200 that quietly wrote nothing.
   if (!row) return { persisted: false, reason: 'no_lifecycle_row' };
 
-  const refs = await buildRefs(input);
+  const { refs, coverageSource } = await buildRefs(input);
 
   // DECLINED RATHER THAN WRITTEN. A manifest with no sources measures `requirementCount: 0`, which
   // is a MEASURED zero and refuses `requirements_ready` with `no_requirements`. Writing it would
@@ -237,6 +279,10 @@ export async function persistComposedBlueprint(
     // where an operator asks why a project is still blocked at `requirements_ready`.
     coverage_measured: Array.isArray(refs.coverage.uncitedRequirementBlocks),
     uncited_requirement_blocks: refs.coverage.uncitedRequirementBlocks?.length ?? null,
+    // WHERE the coverage came from, which `coverage_measured: false` alone cannot say. L7.6 B2:
+    // since this is now read from the stored document, "not measured" has two very different
+    // causes and an operator should not have to guess which.
+    coverage_source: coverageSource,
   });
 
   return {
