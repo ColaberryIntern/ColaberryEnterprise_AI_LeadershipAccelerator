@@ -91,6 +91,23 @@ export interface FreeSignupInput {
   phoneConsent?: boolean;
 
   /**
+   * Permission to be NAMED in the recent-signup notices a landing page shows.
+   *
+   * THE ODD ONE OUT HERE, and worth the paragraph. The other two consents authorise a SEND and
+   * are stored as `consent_records` with the wording attached. This authorises a DISPLAY, which
+   * `ConsentChannel` (voice | sms | email) has no room for, so it is written to the Lead column
+   * `social_proof_opt_in` and the wording lives in `SOCIAL_PROOF_CONSENT_TEXT`.
+   *
+   * It is still kept OUT of `acquisition` even though it IS a Lead column, because everything in
+   * that object is evidence of where somebody came from and this is a permission.
+   *
+   * Absent or false writes `false`. Never inferred from `marketingOptIn`: agreeing to be emailed
+   * is not agreeing to be named on a public page, and the whole point of the separate
+   * `PHONE_CONSENT_TEXT` above is that one tick cannot stand in for another.
+   */
+  socialProofOptIn?: boolean;
+
+  /**
    * Which `lead_sources` row this DOOR is, as a slug.
    *
    * The door names itself and the server resolves the slug to a tenant and brand
@@ -180,6 +197,7 @@ async function captureGuestAsLead(
   resolvedSourceId: string | null,
   consentContact: boolean,
   phone: string | null,
+  socialProofOptIn: boolean,
 ): Promise<number | null> {
   try {
     const [lead] = await Lead.findOrCreate({
@@ -199,6 +217,15 @@ async function captureGuestAsLead(
         // returning person's new consent is recorded on the brand relationship
         // instead, which is the row the send gate actually reads.
         consent_contact: consentContact,
+        // Permission to be shown BY NAME in the recent-signup notices, as opposed to the
+        // "Someone in <city>" every row gets anyway.
+        //
+        // In `defaults` ONLY, like `consent_contact` beside it, and here that is not a
+        // compromise: the snack bar selects on `leads.created_at` inside a rolling window, so a
+        // returning person's lead row - which keeps its ORIGINAL created_at - is outside the
+        // window no matter what this says. There is no case where failing to update it costs
+        // somebody the naming they just agreed to.
+        social_proof_opt_in: socialProofOptIn,
         // The number, when they gave one. Stored whether or not they ticked the call box: it is
         // still useful for support and for somebody who later asks to be called, and the
         // permission to USE it lives in consent records rather than in the presence of a value.
@@ -347,6 +374,9 @@ export async function createFreeAccount(input: FreeSignupInput): Promise<FreeSig
     context?.sourceId ?? null,
     consented,
     phone,
+    // `=== true` rather than truthiness, and deliberately NOT `consented`: the email tick says
+    // "Email me about Colaberry courses", which is not agreement to appear by name on a page.
+    input.socialProofOptIn === true,
   );
 
   /**

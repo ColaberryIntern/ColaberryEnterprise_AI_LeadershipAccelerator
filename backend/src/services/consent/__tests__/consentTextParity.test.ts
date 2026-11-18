@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../captureSignupConsent';
+import {
+  SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT, SOCIAL_PROOF_CONSENT_TEXT,
+} from '../captureSignupConsent';
 
 /**
  * The wording shown at signup must be the wording recorded as consent.
@@ -114,5 +116,58 @@ describe('phone consent wording, backend and frontend', () => {
   it('names calls and texts, so the record says what was agreed to', () => {
     expect(PHONE_CONSENT_TEXT.toLowerCase()).toContain('call');
     expect(PHONE_CONSENT_TEXT.toLowerCase()).toContain('text');
+  });
+});
+
+/**
+ * The social-proof grant (SNACK-2), and the one here that is guarded by NOTHING ELSE AT ALL.
+ *
+ * The other two back a `consent_records` row that stores the wording alongside the grant, so
+ * even if the form drifted, the record would still say what the person was shown. This one has
+ * no such row - `ConsentChannel` is voice | sms | email and this authorises a display, not a
+ * send - so the grant is a bare boolean in `leads.social_proof_opt_in`. A boolean carries no
+ * wording. The sentence on the page is therefore the ENTIRE evidence of what was agreed to, and
+ * this test is the only thing that pins it.
+ */
+describe('social-proof consent wording, backend and frontend', () => {
+  const frontend = () => readFrontendConsentText(
+    fs.readFileSync(FRONTEND_CONSENT, 'utf8'), 'SOCIAL_PROOF_CONSENT_TEXT',
+  );
+
+  it('extracts the literal from the frontend module', () => {
+    // Fail on the instrument before trusting it, exactly as above.
+    expect(frontend()).not.toBeNull();
+    expect((frontend() as string).length).toBeGreaterThan(20);
+  });
+
+  it('IS IDENTICAL to the wording the column stands for', () => {
+    expect(frontend()).toBe(SOCIAL_PROOF_CONSENT_TEXT);
+  });
+
+  it('is neither of the other two, which is why it is a separate permission', () => {
+    expect(SOCIAL_PROOF_CONSENT_TEXT).not.toBe(SIGNUP_CONSENT_TEXT);
+    expect(SOCIAL_PROOF_CONSENT_TEXT).not.toBe(PHONE_CONSENT_TEXT);
+  });
+
+  /**
+   * It must describe WHAT APPEARS, because the reader cannot picture "social proof" and the bar
+   * renders a real person. `composeSignupEvents` builds "<First> <I>. from <City>", so the
+   * sentence has to cover the name and the city or it is consent to something unseen.
+   */
+  it('names what actually gets shown', () => {
+    const t = SOCIAL_PROOF_CONSENT_TEXT.toLowerCase();
+    expect(t).toContain('first name');
+    expect(t).toContain('city');
+    expect(t).toMatch(/initial/);
+  });
+
+  it('does not use the advertising word this project may not use', () => {
+    // TWC 807.172(d), same as above: this renders on a public page.
+    expect(SOCIAL_PROOF_CONSENT_TEXT).not.toMatch(/free/i);
+  });
+
+  it('is a plain literal, so the evidence is reproducible without running the app', () => {
+    expect(frontend()).not.toContain('${');
+    expect(SOCIAL_PROOF_CONSENT_TEXT).not.toContain('${');
   });
 });

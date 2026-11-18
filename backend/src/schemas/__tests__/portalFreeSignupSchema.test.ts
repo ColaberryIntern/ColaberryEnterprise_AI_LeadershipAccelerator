@@ -194,4 +194,46 @@ describe('T204 — the schema at the unauthenticated boundary', () => {
     expect(r.data.full_name).toBe('Maya');
     expect(r.data.source).toBe('cpn_landing');
   });
+
+  /**
+   * `social_proof_opt_in` (SNACK-2). A DISPLAY permission, which is why it is on this schema at
+   * all rather than reaching `captureSignupConsent` like the other two.
+   *
+   * The case that matters is the third one. This object is `.strict()`, so before the field was
+   * added here the key was not ignored - it REJECTED THE WHOLE SIGNUP. That is why the page sends
+   * it only when ticked, and why this suite pins the shape rather than trusting the ordering.
+   */
+  it('accepts the consent as a boolean', () => {
+    const r = portalFreeSignupSchema.safeParse({
+      full_name: 'Maya', email: 'maya@example.com', social_proof_opt_in: true,
+    });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.social_proof_opt_in).toBe(true);
+  });
+
+  it('leaves it UNDEFINED when absent, rather than inventing a false', () => {
+    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'maya@example.com' });
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.data.social_proof_opt_in).toBeUndefined();
+  });
+
+  it.each([
+    ['the string "on"', 'on'],
+    ['the string "true"', 'true'],
+    ['the number 1', 1],
+  ])('rejects %s: one place decides what a tick is, and it is not this one', (_l, value) => {
+    expect(portalFreeSignupSchema.safeParse({
+      full_name: 'Maya', email: 'maya@example.com', social_proof_opt_in: value,
+    }).success).toBe(false);
+  });
+
+  it('CONTROL: an unknown key is still rejected, so the acceptance above is the field and not a loosened schema', () => {
+    // Without this, adding the field by accidentally dropping `.strict()` would make every
+    // assertion above pass while the endpoint silently widened.
+    expect(portalFreeSignupSchema.safeParse({
+      full_name: 'Maya', email: 'maya@example.com', social_proof_opt_out: true,
+    }).success).toBe(false);
+  });
 });

@@ -64,9 +64,18 @@ async function mount() {
   await act(async () => { root.render(<PortalFreeSignupPage />); });
 }
 
-/** One field per act(), which is what React 18 wants. */
+/**
+ * One field per act(), which is what React 18 wants.
+ *
+ * BY ID, NOT BY INDEX. This used to destructure `[nameEl, emailEl] = inputs()`, and the guard
+ * below existed solely to stop a new field above them silently retargeting all 22 tests in this
+ * file. SNACK-2 added a checkbox under the name field and the guard fired exactly as designed, so
+ * the coupling it was guarding is gone rather than re-pinned: the ids are what the page actually
+ * promises, and a renamed id now fails here loudly instead of typing an email into a checkbox.
+ */
 async function fillAndSubmit(name = 'Dana Okoro', email = 'dana@example.com') {
-  const [nameEl, emailEl] = inputs();
+  const nameEl = container.querySelector<HTMLInputElement>('#cbfs-name')!;
+  const emailEl = container.querySelector<HTMLInputElement>('#cbfs-email')!;
   await act(async () => { type(nameEl, name); });
   await act(async () => { type(emailEl, email); });
   await act(async () => { submitButton().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
@@ -253,28 +262,35 @@ describe('marketing consent', () => {
     });
   });
 
-  it('does not disturb the name and email fields it sits beside', async () => {
-    // `fillAndSubmit` destructures `[nameEl, emailEl] = inputs()`, so a field inserted ABOVE
-    // them would silently retarget every other test in this file. This guard caught exactly
-    // that when the optional phone field was added: it failed with "Expected checkbox,
-    // Received tel", which is the guard working rather than the change being wrong.
+  it('leaves every field reachable by its own id, which is what the harness now uses', async () => {
+    // WHAT THIS GUARDS CHANGED, deliberately. It used to pin name and email at indexes 0 and 1
+    // because `fillAndSubmit` destructured exactly those two; it fired when the optional phone
+    // field was added ("Expected checkbox, Received tel") and again when the marketing checkbox
+    // moved up. SNACK-2 inserted a checkbox under the NAME field - the consent belongs beside the
+    // thing it is about, the same rule that moved the marketing box - which breaks that
+    // invariant for the third time.
     //
-    // The phone CONSENT checkbox is deliberately absent here - it renders only once a number
-    // has been typed.
-    //
-    // ORDER CHANGED 2026-10-29, and this guard fired exactly as its author predicted, just with
-    // the operands swapped. The marketing checkbox was MOVED UP to sit directly under the email
-    // field: at the bottom of the form it was read, if at all, after attention had already moved
-    // to the submit button, and 59 of 347 free_signup leads in thirty days ticked it. What this
-    // guard actually protects is name and email staying at indexes 0 and 1, because
-    // `fillAndSubmit` destructures exactly those two. A checkbox arriving at index 2 leaves that
-    // intact, and the other 21 tests in this file passing unchanged is the evidence for it.
+    // So the harness now selects by id and this guards the ids instead. That is a weaker claim
+    // about layout and a stronger one about the contract: a renamed or removed id breaks the
+    // page's own labels and its tests together, where a reordered field no longer breaks
+    // anything.
     await mount();
-    const [first, second, third, fourth] = inputs();
-    expect(first.type).toBe('text');
-    expect(second.type).toBe('email');
-    expect(third.type).toBe('checkbox');
-    expect(fourth.type).toBe('tel');
+    for (const id of ['cbfs-name', 'cbfs-email', 'cbfs-social-proof', 'cbfs-consent', 'cbfs-phone']) {
+      expect(container.querySelector(`#${id}`)).toBeTruthy();
+    }
+    expect(container.querySelector<HTMLInputElement>('#cbfs-name')!.type).toBe('text');
+    expect(container.querySelector<HTMLInputElement>('#cbfs-email')!.type).toBe('email');
+    expect(container.querySelector<HTMLInputElement>('#cbfs-phone')!.type).toBe('tel');
+  });
+
+  it('CONTROL: the consent checkbox really does precede the email field', async () => {
+    // The placement is the point of SNACK-2's UI change, so it is asserted rather than assumed -
+    // and asserted by DOM position, which is the thing a reader actually experiences.
+    await mount();
+    const box = container.querySelector('#cbfs-social-proof')!;
+    const email = container.querySelector('#cbfs-email')!;
+    // eslint-disable-next-line no-bitwise
+    expect(box.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

@@ -281,8 +281,14 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
     // written to a Lead column by `captureGuestAsLead`, and consent is not one. Leaving it in that
     // object would have Sequelize silently drop it. `phone` IS a column, but it travels with the
     // consent it depends on rather than as acquisition evidence.
+    // `social_proof_opt_in` comes out of the spread for the SAME reason the two consents above
+    // do, but not for the same cause. It IS a Lead column, so Sequelize would not drop it - it
+    // would write it, from an object whose every other key is acquisition evidence. Permission to
+    // be named on a public page is not evidence of where somebody came from, and the next person
+    // adding a field to `acquisition` should not have to notice that one of them is a consent.
     const {
-      full_name, email, marketing_opt_in, phone, phone_consent, ...acquisition
+      full_name, email, marketing_opt_in, phone, phone_consent, social_proof_opt_in,
+      ...acquisition
     } = parsed.data;
 
     // 'learner': this is the public free-AI signup, so the account joins the
@@ -305,6 +311,9 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
       marketingOptIn: marketing_opt_in,
       phone,
       phoneConsent: phone_consent === true,
+      // `=== true` so an absent field is a plain `false` rather than `undefined`. The column is
+      // `NOT NULL`, and the two must not be allowed to mean different things on the way in.
+      socialProofOptIn: social_proof_opt_in === true,
       sourceSlug: 'training',
       requestMeta: {
         ipAddress: req.ip ?? null,

@@ -238,3 +238,73 @@ describe('no slug supplied, which is the other four callers', () => {
     expect(leadDefaults().source_id).toBe(explicit);
   });
 });
+
+/**
+ * SNACK-2: permission to be NAMED in the recent-signup notices.
+ *
+ * Unlike the two consents above, this one has no `consent_records` row - it authorises a display,
+ * not a send - so `leads.social_proof_opt_in` IS the record, and these assertions are the only
+ * thing standing between the column and the default it had for its whole life. It was
+ * `false` on every row in production because nothing wrote it.
+ */
+describe('social-proof consent', () => {
+  it('writes TRUE to the lead when the box was ticked', async () => {
+    await createFreeAccount({ ...BASE, sourceSlug: 'training', socialProofOptIn: true });
+    expect(leadDefaults().social_proof_opt_in).toBe(true);
+  });
+
+  it('writes FALSE when the box was left alone', async () => {
+    await createFreeAccount({ ...BASE, sourceSlug: 'training', socialProofOptIn: false });
+    expect(leadDefaults().social_proof_opt_in).toBe(false);
+  });
+
+  it('writes FALSE when the field is absent, never undefined into a NOT NULL column', async () => {
+    await createFreeAccount({ ...BASE, sourceSlug: 'training' });
+    expect(leadDefaults().social_proof_opt_in).toBe(false);
+  });
+
+  /**
+   * THE ASSERTION THIS SUITE IS FOR. Agreeing to be emailed is not agreeing to be named on a
+   * public page. If these two were ever wired to the same input, every opted-in emailer would
+   * start appearing by first name on a landing page without having asked to.
+   */
+  it('is NOT inferred from the email consent', async () => {
+    await createFreeAccount({ ...BASE, marketingOptIn: true, sourceSlug: 'training' });
+    expect(leadDefaults().consent_contact).toBe(true);
+    expect(leadDefaults().social_proof_opt_in).toBe(false);
+  });
+
+  it('and the email consent is not inferred from it either', async () => {
+    await createFreeAccount({ ...BASE, sourceSlug: 'training', socialProofOptIn: true });
+    expect(leadDefaults().social_proof_opt_in).toBe(true);
+    expect(leadDefaults().consent_contact).toBe(false);
+  });
+
+  /**
+   * The display permission must never be laundered into a CONTACT one.
+   *
+   * The first version of this asserted `captureSignupConsent` was not called at all, and CI was
+   * right to reject it: the service calls that helper unconditionally and the helper's own
+   * `isAffirmative` gate decides whether anything is written ("an absent or false checkbox
+   * writes NOTHING"). So "not called" was never the true statement. What matters, and what is
+   * asserted now, is the ARGUMENT - ticking the naming box must leave `marketingOptIn` falsy, or
+   * a permission to be displayed would mint a permission to send.
+   */
+  it('never passes the naming tick off as marketing consent', async () => {
+    await createFreeAccount({ ...BASE, sourceSlug: 'training', socialProofOptIn: true });
+
+    expect(captureSignupConsent).toHaveBeenCalledTimes(1);
+    const arg = captureSignupConsent.mock.calls[0][0] as { marketingOptIn?: unknown };
+    expect(arg.marketingOptIn).toBeFalsy();
+    expect(arg.marketingOptIn).not.toBe(true);
+  });
+
+  it('and carries no trace of it into the consent record either', async () => {
+    await createFreeAccount({ ...BASE, sourceSlug: 'training', socialProofOptIn: true });
+
+    // `consent_records` is keyed on email/sms/voice and every row in it reads as permission to
+    // SEND. Nothing about the naming grant may appear there.
+    expect(JSON.stringify(captureSignupConsent.mock.calls[0][0]))
+      .not.toMatch(/socialProof|social_proof/i);
+  });
+});
