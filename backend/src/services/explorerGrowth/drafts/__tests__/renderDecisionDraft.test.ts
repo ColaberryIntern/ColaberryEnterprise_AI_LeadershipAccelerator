@@ -147,6 +147,12 @@ function harness(over: Partial<DraftRenderDeps> = {}): Harness {
       recommitted.push({ input, decisionId, previousId });
       return { id: 'se-v2', supersededId: previousId };
     },
+    // OH1j: no earlier brain picks, every shelf empty, no countdown live, so every
+    // pre-existing test keeps asserting the behavior it was written for. The brain tests live
+    // in explorerBrainPickDraft.test.ts.
+    loadBrainHistory: async () => [],
+    gatherBrainPiece: async () => null,
+    inOpenHouseCountdown: async () => false,
     ...over,
   };
   return { deps, committed, recommitted, generatedWith };

@@ -159,7 +159,11 @@ export type DraftSkipReason =
   | 'no_sequence_steps'
   | 'no_recipient_email'
   | 'cap_reached'
-  | 'generation_failed';
+  | 'generation_failed'
+  /** OH1j: this person had a brain pick (shadow included) less than BRAIN_PICK_MIN_HOURS ago. */
+  | 'brain_cadence'
+  /** OH1j: their Open House countdown is live; the Open House takes precedence. */
+  | 'open_house_countdown';
 
 /** One decision's outcome. `drafted` and `rejected` both persisted a row. */
 export interface DraftOutcome {

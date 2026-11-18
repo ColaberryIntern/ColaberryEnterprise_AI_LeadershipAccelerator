@@ -14,6 +14,7 @@ import { isFreePreviewTier } from '../../access/contentEntitlement';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
 import { isHumanOwned } from './humanOwnership';
 import { isInOpenHouseCountdown } from './openHouseHold';
+import { hoursSinceLastBrainPick } from './brainCadence';
 
 /**
  * Explorer Growth OS — Governor batch runner. Plan §9; EPIC 4 T005.
@@ -122,10 +123,12 @@ async function runOne(
     email: profile.email_normalized ?? null,
   });
 
-  const [history, humanOwned, openHouseCountdown] = await Promise.all([
+  const [history, humanOwned, openHouseCountdown, hoursSinceBrainPick] = await Promise.all([
     contactHistory(enrollmentId, asOf),
     isHumanOwned(enrollmentId),
     isInOpenHouseCountdown(profile.lead_id ?? null),
+    // OH1j: one brain pick per person per 72 h, shadow picks included (contactPolicy BRAIN_PICK_MIN_HOURS).
+    hoursSinceLastBrainPick(profile.lead_id ?? null, asOf.toISOString().slice(0, 10)),
   ]);
 
   const ctx: GovernorContext = {
@@ -179,6 +182,7 @@ async function runOne(
         hasRecord: ch?.reason ? ch.reason !== 'can_spam_opt_out' : false,
       },
       ...history,
+      hoursSinceLastBrainPick: hoursSinceBrainPick,
     };
   };
 
