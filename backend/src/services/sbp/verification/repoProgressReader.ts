@@ -78,6 +78,14 @@ export interface RepoReadTarget {
   branch?: string | null;
 }
 
+/** One blob of the repository tree, as GitHub's tree API already returns it. */
+export interface TreeBlob {
+  path: string;
+  /** The git blob sha: content identity, carried by the tree response at no extra cost. */
+  sha: string;
+  size: number | null;
+}
+
 export interface VerificationInputs {
   /** Raw file contents, or null when the repo does not have it. */
   progressRaw: string | null;
@@ -96,6 +104,14 @@ export interface VerificationInputs {
    * criterionPaths.RepoTreeContext.
    */
   treePaths: Set<string> | null;
+  /**
+   * The same blobs with their git sha and byte size, or NULL on the same terms as `treePaths`.
+   *
+   * A separate field rather than a richer `treePaths`, deliberately: `criterionPaths` reads
+   * `treePaths` to decide whether a student keeps a criterion, and changing the type it consumes
+   * to add a field nothing there needs would put that path inside phase A2's blast radius.
+   */
+  treeEntries: TreeBlob[] | null;
   /** True when GitHub told us it truncated the tree — see readTreePaths. */
   tree_truncated: boolean;
   /**
@@ -362,6 +378,7 @@ export async function readVerificationInputs(
     commits_scanned: rawCommits.length,
     window_truncated: truncated,
     treePaths: tree.paths,
+    treeEntries: tree.entries,
     tree_truncated: tree.truncated,
     branch_read: branch,
     unmerged_branches,
@@ -399,7 +416,7 @@ async function readTreePaths(
   token: string,
   fetchImpl: typeof fetch,
   correlationId?: string,
-): Promise<{ paths: Set<string> | null; truncated: boolean }> {
+): Promise<{ paths: Set<string> | null; entries: TreeBlob[] | null; truncated: boolean }> {
   const { owner, repo } = target;
   const ref = target.branch?.trim() || 'HEAD';
   try {
@@ -411,7 +428,7 @@ async function readTreePaths(
     // 404 is a real answer for a repo with no commits on the branch yet. It is
     // NOT "the repo has no files we should credit" — there is nothing to compare
     // against, so it degrades like any other unread tree.
-    if (res.status === 404 || !res.body) return { paths: null, truncated: false };
+    if (res.status === 404 || !res.body) return { paths: null, entries: null, truncated: false };
 
     const body = res.body as { tree?: unknown; truncated?: unknown };
     const truncated = body.truncated === true;
@@ -419,24 +436,37 @@ async function readTreePaths(
       log('sbp_verification_tree_truncated', correlationId, 'partial', {
         owner, repo, note: 'tree too large to prove absence; path checks skipped for this run',
       });
-      return { paths: null, truncated: true };
+      return { paths: null, entries: null, truncated: true };
     }
 
     const entries = Array.isArray(body.tree) ? (body.tree as Array<Record<string, unknown>>) : [];
     const paths = new Set<string>();
+    /**
+     * The sha and the size cost nothing extra. GitHub's tree response carries both on every blob,
+     * this reader used to discard them, which left the artifact verification in phase A2 with no
+     * content identity to record short of fetching every file one by one. Keeping them costs no
+     * additional request.
+     */
+    const blobs: TreeBlob[] = [];
     for (const e of entries) {
       if (e?.type !== 'blob') continue;
       const p = typeof e.path === 'string' ? e.path : '';
-      if (p) paths.add(p);
+      if (!p) continue;
+      paths.add(p);
+      blobs.push({
+        path: p,
+        sha: typeof e.sha === 'string' ? e.sha : '',
+        size: typeof e.size === 'number' ? e.size : null,
+      });
     }
-    return { paths, truncated: false };
+    return { paths, entries: blobs, truncated: false };
   } catch (err: unknown) {
     log('sbp_verification_tree_read_failed', correlationId, 'partial', {
       owner, repo,
       error_class: err instanceof RepoReadError ? err.error_class : 'UpstreamError',
       note: 'path checks skipped for this run; no criterion was failed for a file we could not look for',
     });
-    return { paths: null, truncated: false };
+    return { paths: null, entries: null, truncated: false };
   }
 }
 
