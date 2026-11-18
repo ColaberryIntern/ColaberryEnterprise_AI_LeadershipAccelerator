@@ -5,6 +5,7 @@ import RevenueFlowDashboard from '../../components/admin/revenueFlow/RevenueFlow
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 // C8.6 — hypothesis health. It came across with the Commercialization tiles in R13.
 import HypothesisHealthPanel from '../../components/admin/commercialization/HypothesisHealthPanel';
+import ChannelTruthPanel from '../../components/admin/revenueRoom/ChannelTruthPanel';
 import {
   ORDER,
   STATUS,
@@ -420,6 +421,11 @@ export default function AdminRevenueRoomPage() {
               </div>
             ))}
           </div>
+
+          {/* R19 - which channels produced the members who pay. Placed ABOVE the hypothesis
+              panel because it is about revenue that exists rather than revenue that is bet on,
+              and it fetches its own data so a failure costs this panel and not the page. */}
+          <ChannelTruthPanel />
 
           {/* Moved here with the tiles it belongs to, rather than left on a page that no
               longer exists. R13. */}

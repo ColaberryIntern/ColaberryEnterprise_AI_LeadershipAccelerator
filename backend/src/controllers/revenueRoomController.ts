@@ -16,6 +16,7 @@ import {
   DrilldownNotFound,
   getDrilldown,
 } from '../services/revenueRoom/revenueRoomDrilldown';
+import { getChannelTruth } from '../services/revenueRoom/channelTruthService';
 
 export async function handleGetRevenueRoomBoard(
   _req: Request,
@@ -39,6 +40,38 @@ export async function handleGetRevenueRoomBoard(
     res.status(500).json({
       success: false,
       error: 'Could not build the Revenue Room board.',
+    });
+  }
+}
+
+/**
+ * R19 - where the people who pay us came from, by acquisition channel.
+ *
+ * A literal path segment, NOT a child of /revenue-room/, so it can never be shadowed by the
+ * parameterized `:cardKey` drill-down above it. Same reason `revenue-flow/bid-value` is spelled
+ * out in the router.
+ */
+export async function handleGetChannelTruth(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    res.json({ success: true, data: await getChannelTruth() });
+  } catch (error) {
+    const err = error as Error;
+    // Same rule as the board above: this panel's empty states MEAN something, so a failure
+    // must never reach the page looking like a channel that produced nobody.
+    console.error(JSON.stringify({
+      level: 'error',
+      service: 'revenue-room',
+      event: 'channel_truth_failed',
+      error_class: err.name || 'UnknownError',
+      outcome: 'failure',
+      message: err.message,
+    }));
+    res.status(500).json({
+      success: false,
+      error: 'Could not build the acquisition channel panel.',
     });
   }
 }
