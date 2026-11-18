@@ -67,6 +67,7 @@ POST /api/v1/request-callback           requireServiceClient('enterprise_crm')  
 POST /api/v1/open-house/register        requireServiceClient('enterprise_crm')   WRITE
 GET  /api/v1/enrollments/lookup         requireServiceClient('enterprise_crm')
 GET  /api/v1/explorer-growth/outreach   requireServiceClient('cora')
+POST /api/v1/explorer-growth/contact-activity  requireServiceClient('cora')   WRITE - forward-only
 GET  /api/v1/open-house/event           (public, cached)
 GET  /api/v1/events                     (public - already public on Eventbrite)
 GET  /api/v1/knowledge/sales            (public - the frontend falls back to a bundle)
@@ -75,7 +76,7 @@ GET  /api/v1/knowledge/sales            (public - the frontend falls back to a b
 | Client | Variable | Held by |
 |---|---|---|
 | `enterprise_crm` | `ENTERPRISE_CRM_TOKEN` | training.colaberry.com (Sai's Cloud Run), Repo2Reputation |
-| `cora` | `CORA_SERVICE_TOKEN` | the Cora recap engine, read-only |
+| `cora` | `CORA_SERVICE_TOKEN` | the Cora recap engine. Reads the queue; since 2026-11-17 also writes `last_contacted_at` forward, and nothing else |
 
 ### `GET /api/v1/explorer-growth/outreach` — the paging contract
 
@@ -108,6 +109,49 @@ So: **a read-only consumer never gets `enterprise_crm`.** Add it as its own clie
 `docker-compose.production.yml`, and the value on the host. `requireServiceClient` is a factory,
 so it must be CALLED; the old `requireServiceToken` was passed directly and is gone, which makes
 a stale call site a compile error rather than a route that hangs.
+
+### `POST /api/v1/explorer-growth/contact-activity` - the return leg
+
+The queue above is only safe to act on because of this route. Cora tags the people in the feed
+in GoHighLevel and Rose calls them; until 2026-11-17 nothing came back, so
+`explorer_journey_profiles.last_contacted_at` was set on **0 of 1080 profiles**, the seven-day
+suppression in `reachOutCandidate` had no input, and the same ~119 people would have been
+re-tagged every night for ever.
+
+```json
+{ "source": "ghl-rose-calls",
+  "rows": [ { "ghl_contact_id": "abc123", "last_connected_call_at": "2026-11-17T21:04:00Z" } ] }
+```
+
+```json
+{ "source": "ghl-rose-calls", "received": 2, "matched": 2, "unmatched": 0,
+  "written": 2, "unchanged": 0, "rejected_future": 0, "unmatched_ghl_contact_ids": [] }
+```
+
+**`matched` and `unmatched` count CONTACT IDS; `written` and `unchanged` count PROFILES.** They
+are different units on purpose: production holds one `ghl_contact_id` attached to two leads, so
+one row sent can move two profiles.
+
+Four rules worth knowing before you call it:
+
+- **CONNECTED CALLS ONLY.** The column means contacted, not attempted. A no-answer must stay out
+  of the payload or it suppresses somebody nobody spoke to.
+- **FORWARD-ONLY, which is the idempotency.** A timestamp is written only when it is strictly
+  newer than the stored one. Replaying a file writes nothing, and a stale file cannot drag a
+  contact time backwards and return that person to the queue early. There is no dedupe table
+  because monotonicity makes one unnecessary.
+- **AN OFFSET IS REQUIRED.** `2026-11-17T21:04:00` with no `Z` is a **400**, not an assumed UTC.
+  The assumption is invisible and wrong by six hours in Central, which is enough to move someone
+  across the seven-day window.
+- **FUTURE TIMESTAMPS ARE REFUSED** beyond five minutes of clock skew, and counted in
+  `rejected_future`. A far-future value would suppress that person permanently, because
+  `last_contacted_at < NOW() - 7 days` could never become true again.
+
+**THERE ARE TWO COLUMNS NAMED `last_contacted_at`.** This route writes
+`explorer_journey_profiles.last_contacted_at`, the learner-side one, which is what the
+suppression reads. `leads.last_contacted_at` is CRM-side, is not read by the queue at all, and is
+where the incoming `ghl_contact_id` would naturally lead you - writing there succeeds and changes
+nothing.
 
 `request-callback` will not actually dial unless `ENABLE_VOICE_CALLS=true` and test mode is off.
 

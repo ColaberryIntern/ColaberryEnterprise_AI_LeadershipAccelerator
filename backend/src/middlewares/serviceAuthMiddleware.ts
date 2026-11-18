@@ -49,8 +49,16 @@ export type ServiceClient = 'enterprise_crm' | 'cora';
  * value is never copied into a second place that could outlive a rotation.
  *
  * `enterprise_crm` is the original shared credential, provisioned 2026-06-10 and held by
- * training.colaberry.com (Sai's Cloud Run) and Repo2Reputation. `cora` is the Cora recap engine
- * on its own host, which reads the Explorer call queue and writes nothing here.
+ * training.colaberry.com (Sai's Cloud Run) and Repo2Reputation.
+ *
+ * `cora` is the Cora recap engine on its own host. It was provisioned 2026-11-05 as a read-only
+ * client, and this comment said so until 2026-11-17, when it gained exactly one write:
+ * `POST /api/v1/explorer-growth/contact-activity`, which moves
+ * `explorer_journey_profiles.last_contacted_at` FORWARD so the call queue stops handing Rose
+ * people she has already spoken to. The write is monotonic and column-scoped by construction -
+ * it cannot move a timestamp backwards, clear one, create or delete a row, or reach any other
+ * column - so the blast radius of a leaked cora token is still far short of the sending and
+ * dialing that `enterprise_crm` opens. The two clients remain correctly separated.
  */
 const CLIENT_TOKENS: Record<ServiceClient, () => string> = {
   enterprise_crm: () => env.enterpriseCrmToken,

@@ -304,10 +304,46 @@ describe('the route is guarded, and reads only', () => {
     expect(ROUTES).toContain("router.post('/api/v1/leads'");
   });
 
-  it('registers no mutating verb for this path', () => {
-    for (const verb of ['post', 'put', 'patch', 'delete']) {
-      expect(ROUTES).not.toContain(`router.${verb}('/api/v1/explorer-growth`);
+  /**
+   * Until 2026-11-17 this asserted that NO mutating verb existed under
+   * `/api/v1/explorer-growth`, and that was true: the feed was a one-way read.
+   *
+   * It stopped being true on purpose. Cora tags the people in this feed in GoHighLevel, and
+   * nothing came back, so `explorer_journey_profiles.last_contacted_at` stayed empty (0 of 1080
+   * profiles, measured that day), the seven-day suppression in `reachOutCandidate` had no input,
+   * and the same ~119 people would have been re-tagged every night for ever. The fix is the
+   * return leg, `POST .../contact-activity`.
+   *
+   * The assertion is therefore an ALLOWLIST rather than a ban, which keeps the protection that
+   * mattered: a SECOND write appearing under this prefix still fails this test, and whoever adds
+   * it has to come here and say so. Deleting the test outright would have thrown that away.
+   */
+  const ALLOWED_EXPLORER_GROWTH_WRITES = ["router.post('/api/v1/explorer-growth/contact-activity'"];
+
+  it('registers no mutating verb for this path beyond the one allowed write', () => {
+    const mutating = ROUTES.split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^router\.(post|put|patch|delete)\('\/api\/v1\/explorer-growth/.test(l));
+
+    expect(mutating).toHaveLength(ALLOWED_EXPLORER_GROWTH_WRITES.length);
+    for (const line of mutating) {
+      expect(ALLOWED_EXPLORER_GROWTH_WRITES.some((allowed) => line.startsWith(allowed))).toBe(true);
     }
+  });
+
+  it('CONTROL: the matcher above really does find a mutating route, so the count is not vacuous', () => {
+    // Without this, a typo in the regex would make `mutating` empty, the length check would fail
+    // loudly - but a typo that ALSO matched nothing in the allowlist would pass at length 0.
+    const mutating = ROUTES.split('\n').filter((l) => /router\.post\('\/api\/v1\/explorer-growth/.test(l));
+    expect(mutating.length).toBeGreaterThan(0);
+  });
+
+  it('the one allowed write is still scoped to cora ALONE, not to enterprise_crm', () => {
+    // It is a write now, so this matters more than it did for the read, not less.
+    const line = ROUTES.split('\n').find((l) => l.includes("router.post('/api/v1/explorer-growth/contact-activity'")) ?? '';
+    expect(line).toContain("requireServiceClient('cora')");
+    expect(line).not.toContain('enterprise_crm');
+    expect(line).toContain('v1RateLimiter');
   });
 
   it('the controller names no mailer and writes nothing', () => {

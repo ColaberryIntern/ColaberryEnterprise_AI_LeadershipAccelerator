@@ -8,6 +8,7 @@ import { handleGetSalesKb } from '../controllers/publicKbController';
 import { handleGetPublicEventsList } from '../controllers/publicEventsController';
 import { lookupEnrollment } from '../controllers/v1EnrollmentLookupController';
 import { getOutreachFeed } from '../controllers/v1OutreachController';
+import { postContactActivity } from '../controllers/v1ContactActivityController';
 
 // Generous limit: 300 req/min absorbs bursty training-site traffic while blocking abuse.
 const v1RateLimiter = rateLimit({
@@ -76,5 +77,18 @@ router.get('/api/v1/enrollments/lookup', v1RateLimiter, requireServiceClient('en
 // that does. Until CORA_SERVICE_TOKEN is set on the host this route answers 401 to everybody,
 // which is the correct state for a route whose only consumer has not been provisioned.
 router.get('/api/v1/explorer-growth/outreach', v1RateLimiter, requireServiceClient('cora'), getOutreachFeed);
+// The return leg of that queue, and the reason the queue is safe to act on at all.
+//
+// Cora tags Explorers in GoHighLevel from the feed above. Rose calls them. Until this route
+// nothing came back, so explorer_journey_profiles.last_contacted_at stayed empty (0 of 1080
+// profiles on 2026-11-17), the seven-day suppression in reachOutCandidate had no input, and the
+// same people would be re-tagged every night for ever.
+//
+// THIS MAKES 'cora' A WRITER, which it was not when it was provisioned on 2026-11-05. The write
+// is deliberately the narrowest one that solves the problem: it moves last_contacted_at FORWARD
+// on an existing profile and does nothing else. It cannot move a timestamp backwards, cannot
+// clear one, cannot create or delete a row, and cannot touch another column. So a leaked cora
+// token still cannot send anything, dial anyone, or make a person unreachable.
+router.post('/api/v1/explorer-growth/contact-activity', v1RateLimiter, requireServiceClient('cora'), postContactActivity);
 
 export default router;
