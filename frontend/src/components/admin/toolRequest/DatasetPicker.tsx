@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { searchAgentDomainDatasets, type CatalogDataset } from '../../../services/agentDomainApi';
+import DatasetDetailPanel from './DatasetDetailPanel';
 
 /**
  * AF11.11 — the `read_datasets` picker.
@@ -17,6 +18,18 @@ import { searchAgentDomainDatasets, type CatalogDataset } from '../../../service
  * builder no such table exists, and the next thing they do is type the name by hand and get
  * refused for a reason that is not their fault. `datasetCatalog.ts` keeps the same distinction on
  * the server for the same reason.
+ *
+ * ## AF12.2 — you can look at a table before choosing it
+ *
+ * Ali, 17 Nov 2026: *"If we are picking datasets we need to be able to see the data when we click
+ * on it."* Each row carries a second control that opens `DatasetDetailPanel` with that table's
+ * shape, and so does each chosen chip, because the table you most want to check is often one you
+ * already picked.
+ *
+ * It is a separate control rather than the row's own click. The row's click is this component's
+ * whole job, and taking it over would mean somebody who wanted to look at a table had chosen it,
+ * or had un-chosen one they had. One panel is open at a time: two open panels on a list this
+ * short is scrolling for no gain.
  */
 
 export default function DatasetPicker({
@@ -34,6 +47,8 @@ export default function DatasetPicker({
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
+  /** The one table whose shape is open, if any. */
+  const [inspecting, setInspecting] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -75,6 +90,16 @@ export default function DatasetPicker({
           {selected.map((name) => (
             <span key={name} className="badge bg-light text-dark border d-inline-flex align-items-center">
               <code className="small">{name}</code>
+              <button
+                type="button"
+                className="btn btn-sm btn-link p-0 ms-2 text-decoration-none"
+                onClick={() => setInspecting(inspecting === name ? '' : name)}
+                aria-label={`Look at ${name}`}
+                title="Look at this table"
+                data-testid={`inspect-chip-${name}`}
+              >
+                <i className="ri-eye-line" aria-hidden="true" />
+              </button>
               <button
                 type="button"
                 className="btn btn-sm btn-link p-0 ms-2 text-decoration-none"
@@ -121,22 +146,46 @@ export default function DatasetPicker({
       {!absent && results.length > 0 && (
         <div className="list-group list-group-flush mt-2" style={{ maxHeight: 220, overflowY: 'auto' }}>
           {results.map((d) => (
-            <button
-              type="button"
+            <div
               key={`${d.schema_name}.${d.table_name}`}
-              className={`list-group-item list-group-item-action py-1 ${selected.includes(d.table_name) ? 'active' : ''}`}
-              disabled={disabled}
-              onClick={() => toggle(d.table_name)}
+              className={`list-group-item py-1 d-flex align-items-center gap-2 ${selected.includes(d.table_name) ? 'active' : ''}`}
             >
-              <code className="small">{d.table_name}</code>
-              <span className={selected.includes(d.table_name) ? 'small ms-2' : 'text-muted small ms-2'}>
-                {`${d.column_count} columns`}
-                {d.last_scanned ? `, scanned ${d.last_scanned}` : ', never scanned'}
-              </span>
-            </button>
+              {/* Choosing. The whole row, as before, so the target stays big. */}
+              <button
+                type="button"
+                className="btn btn-sm btn-link p-0 text-start flex-grow-1 text-decoration-none"
+                style={{ color: 'inherit' }}
+                disabled={disabled}
+                onClick={() => toggle(d.table_name)}
+              >
+                <code className="small">{d.table_name}</code>
+                <span className={selected.includes(d.table_name) ? 'small ms-2' : 'text-muted small ms-2'}>
+                  {`${d.column_count} columns`}
+                  {d.last_scanned ? `, scanned ${d.last_scanned}` : ', never scanned'}
+                </span>
+              </button>
+              {/* Looking. Never disabled by `disabled`: that prop stops the form being EDITED,
+                  and reading what a table looks like is not an edit. A builder reviewing a
+                  submitted request should still be able to check what it named. */}
+              <button
+                type="button"
+                className={`btn btn-sm ${selected.includes(d.table_name) ? 'btn-light' : 'btn-outline-secondary'} py-0 px-1`}
+                onClick={() => setInspecting(inspecting === d.table_name ? '' : d.table_name)}
+                aria-label={`Look at ${d.table_name}`}
+                aria-expanded={inspecting === d.table_name}
+                title="Look at this table"
+                data-testid={`inspect-${d.table_name}`}
+              >
+                <i className="ri-eye-line" aria-hidden="true" />
+              </button>
+            </div>
           ))}
         </div>
       )}
+      {inspecting && (
+        <DatasetDetailPanel tableName={inspecting} onClose={() => setInspecting('')} />
+      )}
+
       {busy && <div className="form-text">Searching…</div>}
     </div>
   );

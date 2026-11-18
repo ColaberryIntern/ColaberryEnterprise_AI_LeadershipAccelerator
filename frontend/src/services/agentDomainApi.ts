@@ -135,6 +135,15 @@ export interface ToolRequestDetail {
   produces: string[];
   capability_id: string;
   task_unblocked: string;
+  /**
+   * AF12.1. The short key shared by every tool the SAME TASK needs.
+   *
+   * Ali, 17 Nov 2026: *"you have a task that uses multiple tools."* Chosen by the builder rather
+   * than derived, because only they know that reading a table, reading another system and writing
+   * the report are three grants serving one piece of work. The API requires it and refuses a
+   * malformed one, so a form that cannot send it cannot file a request at all.
+   */
+  task_key: string;
   manual_today: string;
   /**
    * AF11.7. The email of the person who will act on the output, in the people record's own
@@ -578,5 +587,112 @@ export async function searchAgentDomainDatasets(q: string, limit?: number): Prom
     total_matched: data.total_matched ?? 0,
     catalog_size: data.catalog_size ?? 0,
     catalog_absent: Boolean(data.catalog_absent),
+  };
+}
+
+/** One column of a dataset: a name and the KIND of thing it holds. Never a value. */
+export interface DatasetColumn {
+  name: string;
+  semantic_type: string | null;
+}
+
+/** A join a dataset declares. Names only. */
+export interface DatasetRelationship {
+  to_table: string;
+  from_column: string | null;
+  to_column: string | null;
+}
+
+/**
+ * One dataset's shape — what the drill-in shows when a builder clicks a table in the picker.
+ *
+ * `row_count` and `last_scanned` are nullable and must never be rendered as 0 or as today. "We do
+ * not know how big this is" and "this table is empty" lead to opposite decisions about a read
+ * grant, and a zero standing in for the first would quietly argue that reading it is harmless.
+ */
+export interface DatasetDetail {
+  table_name: string;
+  schema_name: string;
+  status: string;
+  last_scanned: string | null;
+  column_count: number;
+  columns: DatasetColumn[];
+  row_count: number | null;
+  relationships: DatasetRelationship[];
+  /** TRUE when fewer column names came back than the table has. Say so rather than hide it. */
+  columns_incomplete: boolean;
+}
+
+/**
+ * Read one dataset's shape. AF12.2.
+ *
+ * A 404 means the name is not in the catalog, which is a real answer and the one worth showing:
+ * it is also the reason `read_datasets_not_catalogued` would refuse the request later. The caller
+ * distinguishes it from a failure, so `null` is returned for "not catalogued" and anything else
+ * throws.
+ */
+export async function fetchDatasetDetail(tableName: string): Promise<DatasetDetail | null> {
+  try {
+    const { data } = await api.get<{ dataset: DatasetDetail }>(
+      `/api/admin/agent-domain-datasets/${encodeURIComponent(tableName)}`,
+    );
+    return data.dataset ?? null;
+  } catch (e) {
+    if ((e as { response?: { status?: number } })?.response?.status === 404) return null;
+    throw e;
+  }
+}
+
+/** Where one tool of a task stands. Deliberately not the word "granted". */
+export type ToolState = 'waiting_on_a_decision' | 'approved_to_build' | 'declined' | 'withdrawn';
+
+export interface TaskTool {
+  request_id: string;
+  tool_name: string;
+  title: string;
+  state: ToolState;
+  requested_at: string | null;
+  ready_to_decide: boolean;
+  not_ready_because: string[];
+}
+
+export interface GroupedTask {
+  task_key: string;
+  domain_key: string;
+  task_label: string;
+  other_labels: string[];
+  tools: TaskTool[];
+  waiting_on_a_decision: number;
+  approved_to_build: number;
+  every_tool_decided: boolean;
+}
+
+export interface AgentDomainTasks {
+  tasks: GroupedTask[];
+  ungrouped: ChangeRequest[];
+  ungrouped_count: number;
+  /** Present only when a `requestId` was asked for. */
+  focus?: {
+    request_id: string;
+    task: GroupedTask | null;
+    siblings: TaskTool[];
+  };
+}
+
+/**
+ * Read the queue grouped into tasks. AF12.1.
+ *
+ * Grouped on the server, in the one place the rule lives, rather than in a second copy here that
+ * would agree with it until somebody changed one of them.
+ */
+export async function fetchAgentDomainTasks(requestId?: string): Promise<AgentDomainTasks> {
+  const { data } = await api.get<AgentDomainTasks>('/api/admin/agent-domain-tasks', {
+    params: requestId ? { request_id: requestId } : undefined,
+  });
+  return {
+    tasks: data.tasks ?? [],
+    ungrouped: data.ungrouped ?? [],
+    ungrouped_count: data.ungrouped_count ?? 0,
+    ...(data.focus ? { focus: data.focus } : {}),
   };
 }
