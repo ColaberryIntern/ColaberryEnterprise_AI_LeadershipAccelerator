@@ -37,6 +37,19 @@ const MERMAID_CDN =
 
 type RenderState = 'loading' | 'ready' | 'error';
 
+/**
+ * Removes the temporary elements mermaid.render() appends to <body> (`d<id>` wrapping `<id>`), which it
+ * leaves behind when a render fails. Exported for the test.
+ */
+export function removeMermaidLeftovers(diagramId: string): void {
+  const svgId = `${diagramId}-svg`;
+  for (const elId of [`d${svgId}`, svgId]) {
+    const el = document.getElementById(elId);
+    if (el && el.parentElement === document.body) el.remove();
+    else if (el && el.parentElement && el.parentElement.id === `d${svgId}`) el.parentElement.remove();
+  }
+}
+
 /** Serializes mermaid.render() calls across every diagram on the page (see the effect below). */
 let renderQueue: Promise<void> = Promise.resolve();
 
@@ -82,7 +95,18 @@ function MermaidDiagram({ chart, caption, id }: MermaidDiagramProps): React.Reac
             theme: 'base',
             themeVariables: THEME_VARIABLES,
           });
-          return (await mermaid.render(`${diagramId}-svg`, chart)) as { svg: string };
+          // Parse first: a chart that will not parse never reaches render(). Mermaid 11's render()
+          // lays out in a temporary element appended to <body> and, on a syntax error, leaves its
+          // "Syntax error in text / mermaid version ..." graphic there, at the very bottom of the page,
+          // outside this component (a case study with a node named `call`, a Mermaid keyword, did that
+          // on 2026-11-18). The cleanup below removes anything render() left behind if it throws anyway.
+          if (typeof mermaid.parse === 'function') await mermaid.parse(chart);
+          try {
+            return (await mermaid.render(`${diagramId}-svg`, chart)) as { svg: string };
+          } catch (err) {
+            removeMermaidLeftovers(diagramId);
+            throw err;
+          }
         });
         renderQueue = run.then(() => undefined, () => undefined);
         const out = await run;
@@ -97,6 +121,7 @@ function MermaidDiagram({ chart, caption, id }: MermaidDiagramProps): React.Reac
         // Offline / CSP-blocked CDN / invalid chart syntax all land here.
         // We intentionally do not surface the raw error to the UI; the
         // fallback card is the user-facing recovery path.
+        removeMermaidLeftovers(diagramId);
         if (!cancelled) {
           if (containerRef.current) containerRef.current.innerHTML = '';
           setState('error');

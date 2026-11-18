@@ -66,3 +66,21 @@ test('references: the record itself is excluded and the most complete come first
   const refs = selectReferences(rows, 'self', 5);
   assert.deepEqual(refs.map((r) => r.caseStudyId), ['rich', 'thin']);
 });
+
+test('a diagram node named after a Mermaid keyword is found; labels that say the word are not', () => {
+  const { mermaidReservedIds } = require('./completenessCore');
+  const bad = [
+    'flowchart LR',
+    '  call["AI phone interview"]',
+    '  bank -->|"only the unanswered"| call',
+    '  call --> confirm',
+  ].join('\n');
+  assert.deepEqual(mermaidReservedIds(bad), ['call']);
+  const ok = [
+    'flowchart LR',
+    '  phone["Make the call"]',
+    '  bank -->|"call them"| phone',
+  ].join('\n');
+  assert.deepEqual(mermaidReservedIds(ok), []);
+  assert.deepEqual(mermaidReservedIds(''), []);
+});
