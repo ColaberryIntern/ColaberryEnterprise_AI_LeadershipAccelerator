@@ -1127,7 +1127,9 @@ var pub=S.filter(function(x){return x.caseStudies>0}), prep=S.filter(function(x)
 /* FROM THE DATA. This was ['All','AI','Data','IT','Staffing']. Production
    holds six category values - Consulting and Training as well - so a
    hardcoded four silently hid four services from the filter. */
-var FAM=GOV_FAMILIES, st={q:'',fam:'All',ind:''};
+/* W27: only families the grid can show. A family whose services all lack a case
+   study (Consulting today) gave a chip that emptied the grid. */
+var FAM=GOV_FAMILIES.filter(function(f){return f==='All'||pub.some(function(x){return x.family===f})}), st={q:'',fam:'All',ind:''};
 var ARROW='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>', CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M8 12.3l2.7 2.7L16.2 9.5"/></svg>', XI='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>', EXT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>', LOCK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function uniq(a){return a.filter(function(v,i){return a.indexOf(v)===i})}
@@ -1680,8 +1682,10 @@ if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es
     var html = cat.families.filter(function (fam) { return cat.services.some(function (x) { return x.family === fam; }); })
       .map(function (fam) {
         var href = '/government/?family=' + encodeURIComponent(fam) + '#gv-services';
+        /* W27: a service with no case study is not in the filtered grid; send it
+           to "Also in our catalog", where it is shown (mirrors govServiceHref). */
         return grp(fam, cat.services.filter(function (x) { return x.family === fam; })
-          .map(function (x) { return link(x.name, href); }).join(''));
+          .map(function (x) { return link(x.name, x.caseStudies === 0 ? '#gv-prep' : href); }).join(''));
       }).join('');
     nav.querySelector('[data-gn="gov-groups"]').innerHTML = html;
     nav.querySelector('[data-gn="gov-all"]').innerHTML = 'All ' + cat.services.length + ' government services &rarr;';
