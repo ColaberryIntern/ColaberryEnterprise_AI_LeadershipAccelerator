@@ -31,15 +31,11 @@ import type { GroupedTask, TaskTool, ToolState } from '../../../services/agentDo
  * `taskGrouping.ts` on the server exactly.
  */
 
-const STATE: Record<ToolState, { label: string; cls: string; icon: string; emoji: string }> = {
-  waiting_on_a_decision: {
-    label: 'waiting on you', cls: 'bg-warning text-dark', icon: 'time-line', emoji: '🟡',
-  },
-  approved_to_build: {
-    label: 'approved to build', cls: 'bg-success', icon: 'checkbox-circle-line', emoji: '🟢',
-  },
-  declined: { label: 'declined', cls: 'bg-secondary', icon: 'close-circle-line', emoji: '⚪' },
-  withdrawn: { label: 'withdrawn', cls: 'bg-light text-dark border', icon: 'corner-up-left-line', emoji: '⚪' },
+const STATE: Record<ToolState, { label: string; cls: string; icon: string }> = {
+  waiting_on_a_decision: { label: 'waiting on you', cls: 'bg-warning text-dark', icon: 'time-line' },
+  approved_to_build: { label: 'approved to build', cls: 'bg-success', icon: 'checkbox-circle-line' },
+  declined: { label: 'declined', cls: 'bg-secondary', icon: 'close-circle-line' },
+  withdrawn: { label: 'withdrawn', cls: 'bg-light text-dark border', icon: 'corner-up-left-line' },
 };
 
 function ToolRow({ tool, isThisOne }: { tool: TaskTool; isThisOne: boolean }) {
@@ -50,7 +46,7 @@ function ToolRow({ tool, isThisOne }: { tool: TaskTool; isThisOne: boolean }) {
       data-testid={`task-tool-${tool.request_id}`}
     >
       <span className={`badge ${s.cls}`}>
-        <span aria-hidden="true">{s.emoji}</span>{' '}
+        <i className={`ri-${s.icon} me-1`} aria-hidden="true" />
         {s.label}
       </span>
       <span className="flex-grow-1 small">

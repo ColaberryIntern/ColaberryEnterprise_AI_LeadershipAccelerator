@@ -125,10 +125,10 @@ describe('the tiles', () => {
     expect(need('kpi-blocked').textContent).toBe('2');
   });
 
-  it('shows an em dash rather than a zero when nothing is waiting', () => {
+  it('says "none" rather than a zero when nothing is waiting', () => {
     // A 0 in "oldest waiting" would read as "something arrived today".
     draw(<DecideOverview requests={[req({ status: 'approved' })]} tasks={[]} now={NOW} />);
-    expect(need('kpi-oldest').textContent).toBe('—');
+    expect(need('kpi-oldest').textContent).toBe('none');
   });
 
   it('counts a production write that cannot be undone as needing care', () => {

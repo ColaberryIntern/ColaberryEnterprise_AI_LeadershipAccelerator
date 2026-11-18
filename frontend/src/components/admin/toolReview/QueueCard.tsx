@@ -7,7 +7,7 @@ import {
   riskOf,
   suggestedStep,
   TONE_CLASS,
-  type Tone,
+  TONE_ICON,
 } from './queueSignals';
 
 /**
@@ -30,19 +30,16 @@ import {
  * send-back writes itself. A meter that moved on anything softer than that would be decoration
  * wearing the clothes of evidence.
  *
- * ## Emoji, sparingly, and never alone
+ * ## Icons rather than emoji, which is what Ali's ask actually needed
  *
- * Ali asked for emoji. Each one sits beside a word and an icon that already say the same thing, so
- * it is never the only carrier of meaning: a screen reader, a monochrome print and a viewer whose
- * font lacks the glyph all still read the card. That is the same rule the tone colors follow.
+ * He asked for *"icons, emojis, visuals"*, meaning a card readable at a glance. The repo's
+ * `frontendTypographyLint` gate refuses emoji in product copy and names the supported alternative:
+ * an icon component. That gate is right, and the emoji would have carried nothing anyway — every
+ * one sat beside a word and an icon already saying the same thing, which is the rule that kept
+ * them from being the sole carrier of meaning in the first place. So the glance comes from the
+ * icon, the tone color and the word together, and a reader using a screen reader, a monochrome
+ * print or a font without the glyph gets the same card.
  */
-
-const STATE_EMOJI: Record<Tone, string> = {
-  ready: '🟢',
-  attention: '🟡',
-  hazard: '🔴',
-  unknown: '⚪',
-};
 
 export default function QueueCard({
   request,
@@ -115,7 +112,7 @@ export default function QueueCard({
         {/* THE RISK STRIP. What approving it would let the agent do, before anybody opens it. */}
         <div className="d-flex flex-wrap gap-1 mt-2">
           <span className={`badge ${TONE_CLASS[risk.tone]}`} title="What approving this would let the agent do">
-            <span aria-hidden="true">{STATE_EMOJI[risk.tone]}</span>{' '}
+            <i className={`ri-${TONE_ICON[risk.tone]} me-1`} aria-hidden="true" />
             {risk.label}
           </span>
           {risk.chips.map((c) => (
@@ -135,7 +132,7 @@ export default function QueueCard({
             <span className="fw-medium">{task.task_label}</span>
             {task.tools.length > 1 && (
               <span className="text-muted">
-                {` — ${task.tools.length} tools, ${task.waiting_on_a_decision} still waiting`}
+                {`, ${task.tools.length} tools, ${task.waiting_on_a_decision} still waiting`}
               </span>
             )}
           </div>

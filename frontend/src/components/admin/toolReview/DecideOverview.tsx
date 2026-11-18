@@ -35,7 +35,7 @@ import {
  *
  * ## The colors mean something
  *
- * Green ready, amber attention, red hazard, gray unknown — the same four tones as the rows below,
+ * Green ready, amber attention, red hazard, gray unknown: the same four tones as the rows below,
  * from the same `TONE_CLASS` map, so a thing is never drawn one way here and another way there.
  * Nothing is colored for emphasis.
  */
@@ -115,7 +115,7 @@ export default function DecideOverview({
         />
         <Tile
           label="Oldest waiting"
-          value={s.oldest_waiting_days === null ? '—' : `${s.oldest_waiting_days}d`}
+
           tone={s.oldest_waiting_days === null
             ? 'unknown'
             : s.oldest_waiting_days >= 5 ? 'hazard' : s.oldest_waiting_days >= 2 ? 'attention' : 'ready'}
@@ -180,7 +180,7 @@ export default function DecideOverview({
               <li key={`${t.domain_key}::${t.task_key}`}>
                 {t.task_label}
                 <span className="text-muted">
-                  {` — ${t.approved_to_build} approved, ${t.waiting_on_a_decision} waiting`}
+                  {`, ${t.approved_to_build} approved, ${t.waiting_on_a_decision} waiting`}
                 </span>
               </li>
             ))}
