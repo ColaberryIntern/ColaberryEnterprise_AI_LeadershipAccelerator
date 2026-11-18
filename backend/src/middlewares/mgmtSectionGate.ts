@@ -208,6 +208,10 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/agent-domain-product-features', 'program'],
   // AF11.10. The capability board: where every capability is and who is holding it up.
   ['/api/admin/agent-domain-capability-board', 'program'],
+  // AF11.0. Recording that a Super Admin confirmed a capability by hand. `program`, matching the
+  // board it is read from and the grant it unblocks, so the ladder answers one section rather
+  // than 403ing on the middle rung. Distinct from the board prefix at the '/' boundary.
+  ['/api/admin/agent-domain-capability-confirmations', 'program'],
   // AF3.5. The grant itself. Classified alongside the review console it follows, so the
   // whole ladder answers the same section rather than one rung 403ing unexplained.
   ['/api/admin/agent-tool-grants', 'program'],
