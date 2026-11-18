@@ -52,6 +52,12 @@ export function validateGeneratedMessage(
   const issues: string[] = [];
   const autoFixed: string[] = [];
   let cleaned = content;
+  // OH1n: a caller may hand a PARTIAL context (the countdown sampler, or the scheduler when the
+  // context graph build failed but earlier countdown emails exist). Each rule below that needs a
+  // missing part is skipped instead of throwing, which used to turn every draft into a fallback.
+  const campaign = context?.campaign;
+  const bookingUrl = context?.allowedUrls?.booking;
+  const previous = context?.previousMessages || [];
 
   // 1. URL Validation — every URL must be from allowed domains
   const urlPattern = /https?:\/\/[^\s"'<>)]+/gi;
@@ -61,8 +67,8 @@ export function validateGeneratedMessage(
     if (!isAllowed) {
       // Check if it's a banned pattern
       const isBanned = BANNED_PATTERNS.some(p => p.test(url));
-      if (isBanned) {
-        cleaned = cleaned.replace(url, context.allowedUrls.booking);
+      if (isBanned && bookingUrl) {
+        cleaned = cleaned.replace(url, bookingUrl);
         autoFixed.push(`Replaced hallucinated URL: ${url.substring(0, 60)}`);
       } else {
         issues.push(`Unknown URL found: ${url.substring(0, 80)}`);
@@ -72,14 +78,14 @@ export function validateGeneratedMessage(
 
   // 2. Sender identity — no "Agent Cory AI" or wrong sender
   for (const pattern of BANNED_SIGNOFFS) {
-    if (pattern.test(cleaned)) {
-      cleaned = cleaned.replace(pattern, context.campaign.senderName);
-      autoFixed.push(`Replaced banned sign-off with ${context.campaign.senderName}`);
+    if (campaign?.senderName && pattern.test(cleaned)) {
+      cleaned = cleaned.replace(pattern, campaign.senderName);
+      autoFixed.push(`Replaced banned sign-off with ${campaign.senderName}`);
     }
   }
 
   // 3. Ali mention check — cold campaigns should NOT mention Ali
-  if (context.campaign.type.includes('cold') && /\bAli\b/i.test(cleaned)) {
+  if ((campaign?.type || '').includes('cold') && /\bAli\b/i.test(cleaned)) {
     issues.push('Cold campaign message mentions Ali (cold prospects do not know him)');
     // Don't auto-fix — might be legitimate if the prompt explicitly says to
   }
@@ -108,15 +114,15 @@ export function validateGeneratedMessage(
   }
 
   // 7. Booking link check — if step goal mentions booking, verify link is present
-  const stepGoal = (context.campaign.stepGoal || '').toLowerCase();
-  if ((stepGoal.includes('book') || stepGoal.includes('schedule') || stepGoal.includes('strategy call'))
-    && !cleaned.includes(context.allowedUrls.booking)) {
+  const stepGoal = (campaign?.stepGoal || '').toLowerCase();
+  if (bookingUrl && (stepGoal.includes('book') || stepGoal.includes('schedule') || stepGoal.includes('strategy call'))
+    && !cleaned.includes(bookingUrl)) {
     // Auto-inject booking link at the end
     if (channel === 'email') {
-      cleaned += `\n\n<p><a href="${context.allowedUrls.booking}">Book Your Strategy Call</a></p>`;
+      cleaned += `\n\n<p><a href="${bookingUrl}">Book Your Strategy Call</a></p>`;
     } else if (channel === 'sms') {
       // Don't inject if it would exceed 160 chars
-      const link = ' ' + context.allowedUrls.booking;
+      const link = ' ' + bookingUrl;
       if (cleaned.length + link.length <= 160) {
         cleaned += link;
       }
@@ -125,7 +131,7 @@ export function validateGeneratedMessage(
   }
 
   // 8. Rebook campaign tone check
-  if (context.campaign.type === 'warm_nurture' && context.engagement.bookingAttempts > 0) {
+  if (campaign?.type === 'warm_nurture' && (context?.engagement?.bookingAttempts || 0) > 0) {
     if (!/apolog|sorry|inconvenience|mistake|fixed/i.test(cleaned)) {
       issues.push('Rebook campaign message missing apology language');
     }
@@ -143,13 +149,13 @@ export function validateGeneratedMessage(
   // output. An invented cohort date is the most confident thing a fluent
   // generator produces, and it reaches a person unless something reads the
   // generated text and checks it against resolved facts.
-  if (context.explorer) {
+  if (context?.explorer) {
     issues.push(...explorerFactIssues(cleaned, context.explorer));
   }
 
   // 10. Previous message duplication check
-  if (context.previousMessages.length > 0) {
-    const lastBody = context.previousMessages[0].bodyPreview.toLowerCase();
+  if (previous.length > 0) {
+    const lastBody = (previous[0].bodyPreview || '').toLowerCase();
     const currentBody = cleaned.toLowerCase().replace(/<[^>]+>/g, '');
     // Simple word overlap check
     const lastWords = new Set(lastBody.split(/\s+/).filter(w => w.length > 4));
@@ -202,7 +208,9 @@ export function validateSubjectLine(
   let cleaned = subject;
 
   // Only flag false familiarity on first contact (0 emails sent, 0 replies)
-  const isFirstContact = context.engagement.emailsSent <= 1 && context.engagement.repliesReceived === 0;
+  // OH1n: a partial context has no engagement; skip the first-contact rule rather than throw.
+  const isFirstContact = !!context?.engagement
+    && context.engagement.emailsSent <= 1 && context.engagement.repliesReceived === 0;
 
   if (isFirstContact) {
     for (const pattern of FALSE_FAMILIARITY_PATTERNS) {
@@ -216,7 +224,7 @@ export function validateSubjectLine(
           .trim();
         // If nothing useful remains, generate a generic subject
         if (cleaned.length < 10) {
-          const company = context.lead.company || 'Your Organization';
+          const company = context?.lead?.company || 'Your Organization';
           cleaned = `AI Transformation Opportunities for ${company}`;
         }
         autoFixed.push(`Rewrote false-familiarity subject for first contact`);

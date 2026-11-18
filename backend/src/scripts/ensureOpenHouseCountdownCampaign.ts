@@ -204,6 +204,32 @@ async function one<T extends object>(sql: string, replacements: Record<string, u
   return (rows[0] as T) ?? null;
 }
 
+/**
+ * OH1n: the composite context the sampler hands generateMessage, built the way schedulerService
+ * builds it for a countdown step: contextGraphService (read-only), then the event's Join link as
+ * every allowed URL. With no lead or a failed build it returns a partial context with the links
+ * only, which the validator tolerates (that is the scheduler's fallback case too).
+ */
+export async function sampleCompositeContext(
+  leadId: number | null | undefined,
+  campaignId: string | undefined,
+  stepIndex: number,
+  joinUrl: string,
+  build: (leadId: number, campaignId: string, stepIndex: number) => Promise<any> = async (l, c, s) =>
+    (await import('../services/contextGraphService')).buildCompositeContext(l, c, s),
+): Promise<Record<string, any>> {
+  let ctx: Record<string, any> = {};
+  if (leadId && campaignId) {
+    try {
+      ctx = (await build(Number(leadId), campaignId, stepIndex)) || {};
+    } catch (err: any) {
+      console.warn(`[drafts] context graph build failed for lead ${leadId}: ${err?.message}`);
+    }
+  }
+  ctx.allowedUrls = { booking: joinUrl, landingPage: joinUrl, mainSite: 'https://enterprise.colaberry.ai' };
+  return ctx;
+}
+
 async function main(): Promise<void> {
   const apply = has('--apply');
   const log = (s: string) => console.log(`${apply ? '' : '[dry run] '}${s}`);
@@ -368,17 +394,20 @@ async function main(): Promise<void> {
       // scheduler does in production. (Before, each step was written blind to the others, which
       // is part of why the sample read as the same email five times.)
       const sent: Array<{ subject: string; body: string; label: string }> = [];
-      for (const step of COUNTDOWN_STEPS) {
+      for (const [stepIndex, step] of COUNTDOWN_STEPS.entries()) {
         if (step.channel !== 'email') continue;
         try {
           const piece = await gatherBrainPiece(step.brain_piece, String(p.lead_id ?? p.email));
+          // OH1n: the same context the scheduler builds (contextGraphService, read-only), with the
+          // countdown's link override and the earlier drafts as previous messages. Before, the
+          // sampler passed only previousMessages and the validator crashed on every step.
+          const composite: any = await sampleCompositeContext(p.lead_id, campaign?.id, stepIndex, ev.join_url);
+          composite.previousMessages = sent.map((m) => ({ channel: 'email', subject: m.subject, bodyPreview: m.body, sentAt: m.label }));
           const r = await generateMessage({
             channel: 'email', ai_instructions: step.ai_instructions!, tone: step.ai_tone,
             lead: { name: p.name || '' } as any,
             campaignContext: { type: 'behavioral_trigger', name: CAMPAIGN_NAME, system_prompt: MAYA_SYSTEM_PROMPT },
-            compositeContext: {
-              previousMessages: sent.map((m) => ({ channel: 'email', subject: m.subject, bodyPreview: m.body, sentAt: m.label })),
-            },
+            compositeContext: composite,
             eventContext: {
               title: ev.title, when: ev.when_label, join_url: ev.join_url, minutes_before: step.minutes_before_event!,
               person_profile: profile, step_goal: step.step_goal,
