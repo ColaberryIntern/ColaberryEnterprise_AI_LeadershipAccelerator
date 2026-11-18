@@ -211,7 +211,7 @@ async function main(): Promise<void> {
                                 destination_path, tracking_link, approval_status, sender_profile_id, tenant_id, brand_id, funnel_stage, created_by, created_at, updated_at)
          VALUES (gen_random_uuid(), :name, :desc, 'behavioral_trigger', 'draft', :seq, :prompt, CAST(:settings AS jsonb), CAST(:cc AS jsonb), 'email',
                  'Get Open House registrants into the room', '/open-house', 'https://enterprise.colaberry.ai/open-house?utm_source=maya&utm_campaign=open_house_countdown',
-                 'draft', :profile, :tenant, :brand, 'consideration', 'OH1 script', NOW(), NOW())
+                 'draft', :profile, :tenant, :brand, 'consideration', NULL, NOW(), NOW())
          RETURNING id`,
         { name: CAMPAIGN_NAME, desc: 'Every Open House registrant is enrolled at sign-up. Maya emails them (T-2 days, T-1 day, day-of) and texts the ones with text consent an hour before, through GHL. Calls will be requested from the Cora scheduler, not placed here. No price, offer or discount (Ali, 2026-11-17).',
           seq: seq.id, prompt: MAYA_SYSTEM_PROMPT, settings: JSON.stringify(settings),
