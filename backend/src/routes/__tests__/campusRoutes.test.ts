@@ -27,6 +27,9 @@ jest.mock('../../services/campus/campusTourHandoff', () => ({ requestTourHandoff
 // C28: where a room lives (it reads the room models); mocked so the router stays cheap to load
 let mockRoomArea: string | null = null;
 jest.mock('../../services/campus/campusRoomBuilding', () => ({ roomBuildingFor: async () => mockRoomArea }));
+// W22: whether this enrollment runs a company (business account). Mocked: the flags route asks it per request.
+const mockIsOrgManager = jest.fn(async (_id: string) => false);
+jest.mock('../../services/portalSettingsService', () => ({ isOrgManager: (id: string) => mockIsOrgManager(id) }));
 
 import express from 'express';
 import request from 'supertest';
@@ -103,6 +106,39 @@ describe('GET /api/portal/campus/flags', () => {
     const res = await request(app).get(URL).set('Authorization', `Bearer ${token({ read_only: true, impersonated_by: 'admin-1' })}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ campus: true });
+  });
+
+  describe('W22: business accounts start in the classic menu', () => {
+    beforeEach(() => { mockIsOrgManager.mockReset(); mockIsOrgManager.mockResolvedValue(false); });
+
+    it('adds default_nav classic for an org manager when the campus is on', async () => {
+      mockIsOrgManager.mockResolvedValue(true);
+      const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(URL).set('Authorization', `Bearer ${token({ sub: 'mgr-1' })}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ campus: true, default_nav: 'classic' });
+      expect(mockIsOrgManager).toHaveBeenCalledWith('mgr-1');
+    });
+
+    it('sends no default for a learner, who keeps the campus', async () => {
+      const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(URL).set('Authorization', `Bearer ${token()}`);
+      expect(res.body).toEqual({ campus: true });
+    });
+
+    it('does not ask when the campus is off', async () => {
+      mockIsOrgManager.mockResolvedValue(true);
+      const res = await request(buildApp()).get(URL).set('Authorization', `Bearer ${token()}`);
+      expect(res.body).toEqual({ campus: false });
+      expect(mockIsOrgManager).not.toHaveBeenCalled();
+    });
+
+    it('a failed lookup still answers 200 with the campus flag and no default', async () => {
+      mockIsOrgManager.mockRejectedValue(new Error('db down'));
+      const err = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const res = await request(buildApp({ CAMPUS_ENABLED: 'all' })).get(URL).set('Authorization', `Bearer ${token()}`);
+      err.mockRestore();
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ campus: true });
+    });
   });
 
   it('refuses writes: the route is GET only', async () => {
