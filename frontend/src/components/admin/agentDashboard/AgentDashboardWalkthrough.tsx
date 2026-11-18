@@ -74,33 +74,49 @@ export const BUILDER_STEPS: ReadonlyArray<WalkStep> = [
   },
 ];
 
+/**
+ * The decider's five, and a correction worth recording.
+ *
+ * These targets were originally the HUB's cards — `hub-card-tool-requests` and `hub-card-tasks` —
+ * written before there was anywhere else to point. The walkthrough is mounted on the decide
+ * console, where neither of those elements exists, so two of the five steps would have rendered
+ * "This step is about something that is not on this page right now": the tour telling the reader
+ * it cannot find the thing it is about, on the page it exists to explain.
+ *
+ * That the component says so rather than outlining empty space is why the mistake was findable at
+ * all. The targets below are the console's own elements, and the three steps that previously had
+ * no target have one now, because every one of them is about something that is on the screen.
+ */
 export const DECIDER_STEPS: ReadonlyArray<WalkStep> = [
   {
-    title: 'The queue tells you what is waiting',
-    why: 'A request that is not ready for a human is held back by name, so the queue is what you can actually act on rather than everything that exists.',
-    you: 'Open the one at the top.',
-    target: 'hub-card-tool-requests',
+    title: 'Two numbers before any request',
+    why: 'Ready to decide and held back are different piles. A request whose decision package has holes in it is in the queue and cannot be acted on, so the count of what exists is not the count of your work.',
+    you: 'Read those two tiles. If held back is the bigger number, your afternoon is send-backs rather than decisions.',
+    target: 'decide-overview',
   },
   {
     title: 'Read the readiness meter before the prose',
-    why: 'It names the fields nobody has answered. A request missing the number that judges it cannot be approved into anything checkable later.',
-    you: 'If fields are missing, send it back naming them. That is faster for both of you than approving and discovering later.',
+    why: 'Ten blocks, and the meter names the ones nobody has answered. A request missing the number that judges it cannot be approved into anything checkable later.',
+    you: 'If blocks are missing, send it back naming them. That is faster for both of you than approving and discovering later.',
+    target: 'queue-cards',
   },
   {
     title: 'You have five answers, not two',
     why: 'Approve to build, assign an existing tool, send back, deny, or nothing. "Nothing" takes the capability off the board and is not a denial: a denial invites a better proposal.',
-    you: 'Pick the verb that matches what you actually mean.',
+    you: 'Pick the one that matches what you actually mean. Nothing here is preselected for you.',
+    target: 'decision-verbs',
   },
   {
     title: 'Your instruction travels with the grant',
-    why: 'What you type at decision time reaches the agent. A rule written in a comment somewhere else is not a rule the agent received.',
+    why: 'What you type at decision time reaches the agent. A rule written in a comment somewhere else is not a rule the agent received. Anything already in force is shown above the box, because the record is a log and you are adding to it.',
     you: 'Write how this agent should work and respond, in the box, at the moment you decide.',
+    target: 'standing-instructions',
   },
   {
     title: 'A task is decided as a task',
-    why: 'Deciding tool 2 of 3 without seeing the other two is deciding blind, so the siblings are shown beside the request.',
+    why: 'Deciding tool 2 of 3 without seeing the other two is deciding blind: approve the read, deny the write, and the agent holds a permission for work it cannot finish.',
     you: 'Check what else the task needs before approving the first piece of it.',
-    target: 'hub-card-tasks',
+    target: 'task-panel',
   },
 ];
 

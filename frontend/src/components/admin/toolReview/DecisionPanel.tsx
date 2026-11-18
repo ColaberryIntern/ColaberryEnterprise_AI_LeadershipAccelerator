@@ -209,7 +209,7 @@ export default function DecisionPanel(props: Props) {
           back or refuse it when there is. Nothing is omitted here because it is an ANSWER rather
           than a verb to pick: offering it twice would make the page look like it has two of
           them. */}
-      <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Decision">
+      <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Decision" data-testid="decision-verbs">
         {(Object.keys(VERB_LABEL) as ToolRequestVerb[])
           .filter((v) => !(answerDriven && (v === 'nothing' || v === 'approve_to_build' || v === 'assign_existing_tool')))
           .map((v) => (
