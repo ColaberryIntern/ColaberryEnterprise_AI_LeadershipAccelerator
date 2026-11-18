@@ -223,6 +223,19 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   }
   actualPhone = dialPhone;
 
+  // OH1: the last brake on EVERY outbound call, whichever path it came from: call hours
+  // (10 AM - 8 PM Central), at most 2 dials per number per 24h, fail closed. Staff alert
+  // numbers are exempt. See voice/voiceDialGuard.ts for why this lives here.
+  // Unit tests exercise triggerVoiceCall without a database; the guard has its own tests.
+  if (process.env.NODE_ENV !== 'test' || process.env.VOICE_DIAL_GUARD_IN_TESTS === '1') {
+    const { checkDialGuard } = await import('./voice/voiceDialGuard');
+    const guard = await checkDialGuard(actualPhone);
+    if (!guard.ok) {
+      console.warn(`[Synthflow] Dial guard refused ${redactForLogs(actualPhone)}: ${guard.reason}`);
+      return { success: true, data: { skipped: true, reason: guard.reason } };
+    }
+  }
+
   // Build custom_variables array per Synthflow V2 API docs
   const customVariables: { key: string; value: string }[] = [];
 
@@ -251,7 +264,9 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   // setting left every AI Flotation call at `sent` forever - three out of three, no
   // transcript, no completion, nothing extracted - because nobody had set it there.
   if (env.synthflowWebhookUrl) {
-    requestBody.external_webhook_url = env.synthflowWebhookUrl;
+    requestBody.external_webhook_url = env.synthflowWebhookToken && !/[?&]token=/.test(env.synthflowWebhookUrl)
+      ? `${env.synthflowWebhookUrl}${env.synthflowWebhookUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(env.synthflowWebhookToken)}`
+      : env.synthflowWebhookUrl;
   }
 
   if (params.prompt) {
@@ -299,6 +314,10 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
       console.warn('[Synthflow] call_id is null after extraction. Full response:', redactForLogs(JSON.stringify(d)));
     }
     console.log(`[Synthflow] ${params.callType} call initiated for ${redactForLogs(params.name)}. call_id: ${callId}. Response keys: ${Object.keys(d).join(',')}`);
+    if (process.env.NODE_ENV !== 'test' || process.env.VOICE_DIAL_GUARD_IN_TESTS === '1') {
+      const { recordDial } = await import('./voice/voiceDialGuard');
+      await recordDial(actualPhone, params.callType, callId ? String(callId) : null);
+    }
     return { success: true, data: { ...d, call_id: callId } };
   } catch (error: any) {
     console.error('[Synthflow] Request failed:', error.message);

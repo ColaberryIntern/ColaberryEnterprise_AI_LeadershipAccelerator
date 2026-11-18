@@ -77,8 +77,23 @@ export async function runEnrollmentAutomation(enrollment: EnrollmentData): Promi
     }
   }
 
-  // Voice call — dynamic prompt with enrollment context
+  // Voice call — dynamic prompt with enrollment context.
+  // OH1 security audit (2026-11-17): this fired from the payment webhook with NO consent
+  // check. It now dials only with a current express voice consent for that number or lead
+  // (the same ledger the campaign gate reads). Fail closed: no answer, no call.
+  let voiceConsented = false;
   if (enrollment.phone) {
+    try {
+      const { evaluateConsent } = await import('./consentService');
+      const lead = enrollment.email ? await Lead.findOne({ where: { email: enrollment.email } as any }) : null;
+      const d = await evaluateConsent({ channel: 'voice', leadId: lead ? Number((lead as any).id) : null, phone: enrollment.phone });
+      voiceConsented = d.verdict === 'allow';
+      if (!voiceConsented) console.log(`[Automation] Welcome call withheld for enrollment ${enrollment.id}: no voice consent (${d.reason})`);
+    } catch (err: any) {
+      console.warn(`[Automation] Welcome call withheld for enrollment ${enrollment.id}: consent check failed (${err?.message})`);
+    }
+  }
+  if (enrollment.phone && voiceConsented) {
     try {
       const voicePrompt = await generateMessage({
         channel: 'voice',

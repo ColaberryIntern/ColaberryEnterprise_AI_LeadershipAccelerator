@@ -11,6 +11,7 @@ import { completeFlotationCall } from '../services/delivery/flotationCallComplet
 import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
+import { webhookTokenOk } from '../services/voice/synthflowWebhookAuth';
 import { getTestOverrides } from '../services/settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
 
@@ -20,6 +21,11 @@ import { redactForLogs } from '../utils/piiRedaction';
  * Updates the CommunicationLog with transcript and call metadata.
  */
 export async function handleSynthflowCallComplete(req: Request, res: Response): Promise<void> {
+  if (!webhookTokenOk(env.synthflowWebhookToken, req.query?.token)) {
+    console.warn('[Synthflow Webhook] Rejected: missing or wrong token');
+    res.status(401).json({ error: 'unauthorized' });
+    return;
+  }
   try {
     // Log raw payload to diagnose Synthflow's field names
     console.log('[Synthflow Webhook] Raw payload:', redactForLogs(JSON.stringify(req.body)).slice(0, 2000));
@@ -51,7 +57,13 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       where: { provider_message_id: call_id, provider: 'synthflow' },
     });
 
-    // Fallback: match by recent pending voice call (covers null call_id scenarios)
+    // Fallback: match by recent pending voice call (covers null call_id scenarios).
+    // OH1 security audit (2026-11-17): this route is unauthenticated, and the fallback
+    // used to hand ANY unknown call_id the most recent pending call, so a forged post
+    // could attach a fake transcript to a real person's call (and trigger texts and lead
+    // changes from it). It now only matches a call we placed that never got an id
+    // (provider_message_id IS NULL), the case the fallback exists for. A forger would
+    // need a real Synthflow call id, which is never exposed.
     if (!commLog) {
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
       commLog = await CommunicationLog.findOne({
@@ -59,6 +71,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
           provider: 'synthflow',
           channel: 'voice',
           status: 'pending',
+          provider_message_id: { [Op.is]: null as any },
           created_at: { [Op.gte]: tenMinAgo },
         },
         order: [['created_at', 'DESC']],
@@ -342,8 +355,10 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
       });
     }
 
-    // Send post-call SMS summary with CTA (fire-and-forget)
-    if (callCompleted && transcript && commLog.lead_id) {
+    // Send post-call SMS summary with CTA (fire-and-forget).
+    // OH1: never after an Open House countdown call. That text pushes "book a strategy
+    // call", and the countdown call is help-not-sell (Ali, 2026-11-17).
+    if (callCompleted && transcript && commLog.lead_id && !commMeta.event_countdown) {
       sendPostCallSms(commLog.lead_id, transcript, call_id).catch((err: any) => {
         console.warn('[Synthflow Webhook] Post-call SMS failed:', err.message);
       });

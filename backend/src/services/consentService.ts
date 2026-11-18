@@ -260,6 +260,13 @@ export async function assertConsentForSend(input: ConsentDecisionInput): Promise
 
     return { mode, enforced, verdict: decision.verdict, reason: decision.reason, basis: decision.basis };
   } catch (err: any) {
+    // OH1 security audit (2026-11-17): a CALL or TEXT needs express consent by law (TCPA),
+    // so under enforcement an unreadable ledger blocks it rather than letting it through.
+    // Email keeps failing open: a database blip must not stop ordinary mail.
+    if (mode === 'enforce' && (input.channel === 'voice' || input.channel === 'sms')) {
+      console.error(`[consentService] gate error on ${input.channel} — failing CLOSED:`, err?.message);
+      return { mode, enforced: true, verdict: 'block', reason: 'consent_check_error', basis: 'none' };
+    }
     console.error('[consentService] gate error — failing OPEN:', err?.message);
     return { mode, enforced: false, verdict: 'allow', reason: 'consent_check_error', basis: 'none' };
   }

@@ -143,13 +143,31 @@ describe('assertConsentForSend gate (mode-aware, shadow-first, fail-open)', () =
     expect(mockEmit).not.toHaveBeenCalled();
   });
 
-  it('FAILS OPEN: a consent-system error never blocks a live send', async () => {
+  it('FAILS OPEN for email: a consent-system error never blocks ordinary mail', async () => {
     mockSetting.mockResolvedValue('enforce');
     findOne.mockRejectedValue(new Error('db down'));
-    const r = await assertConsentForSend({ channel: 'voice', leadId: 1, phone: '9725551234' });
+    const r = await assertConsentForSend({ channel: 'email', leadId: 1, email: 'a@b.com' });
     expect(r.enforced).toBe(false);
     expect(r.verdict).toBe('allow');
     expect(r.reason).toBe('consent_check_error');
+  });
+
+  // OH1 security audit (2026-11-17): a call or text needs express consent (TCPA). Under
+  // enforcement an unreadable ledger now blocks it instead of letting it through.
+  it.each(['voice', 'sms'] as const)('FAILS CLOSED for %s under enforcement', async (channel) => {
+    mockSetting.mockResolvedValue('enforce');
+    findOne.mockRejectedValue(new Error('db down'));
+    const r = await assertConsentForSend({ channel, leadId: 1, phone: '9725551234' });
+    expect(r.enforced).toBe(true);
+    expect(r.verdict).toBe('block');
+    expect(r.reason).toBe('consent_check_error');
+  });
+
+  it('still fails open for voice in shadow mode (nothing is enforced there)', async () => {
+    mockSetting.mockResolvedValue('shadow');
+    findOne.mockRejectedValue(new Error('db down'));
+    const r = await assertConsentForSend({ channel: 'voice', leadId: 1, phone: '9725551234' });
+    expect(r.verdict).toBe('allow');
   });
 
   it('getConsentMode defaults to shadow for unknown/blank values', async () => {

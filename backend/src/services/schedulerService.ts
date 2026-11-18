@@ -327,6 +327,31 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       contextNotes = `${contextNotes ? contextNotes + '\n' : ''}ORIGINAL CAMPAIGN TYPE: ${metaOrigType}`;
     }
 
+    // OH1: an Open House countdown step is written from the EVENT, not the sales
+    // pipeline. No cohort or seats (nothing to sell), and the only link allowed is the
+    // event's own Join link. What the person has been doing on the platform is added so
+    // Maya can relate to it (Ali, 2026-11-17: "relate to what they are doing, but not try
+    // to sell").
+    const eventCountdown = action.metadata?.event_countdown ? {
+      title: String(action.metadata.event_title || 'Colaberry Open House'),
+      when: String(action.metadata.event_when || ''),
+      join_url: String(action.metadata.event_join_url || ''),
+      minutes_before: Number(action.metadata.minutes_before_event ?? 0),
+      platform_activity: await (async () => {
+        try {
+          const { describePlatformActivity } = await import('./openHouseCountdownContext');
+          return await describePlatformActivity(lead.email);
+        } catch { return ''; }
+      })(),
+    } : undefined;
+    if (eventCountdown && compositeContext?.allowedUrls) {
+      compositeContext.allowedUrls = {
+        booking: eventCountdown.join_url,
+        landingPage: eventCountdown.join_url,
+        mainSite: 'https://enterprise.colaberry.ai',
+      };
+    }
+
     const result = await generateMessage({
       channel: channel as 'email' | 'sms' | 'voice',
       ai_instructions: action.ai_instructions,
@@ -335,14 +360,31 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       lead: leadData as any,
       conversationHistory,
       campaignContext,
-      cohortContext: nextCohort ? {
+      cohortContext: nextCohort && !eventCountdown ? {
         name: nextCohort.name,
         start_date: nextCohort.start_date,
         seats_remaining: nextCohort.seats_remaining,
       } : undefined,
-      appointmentContext,
+      appointmentContext: eventCountdown ? undefined : appointmentContext,
       compositeContext,
+      eventContext: eventCountdown,
     });
+
+    // OH1: the AI draft of a countdown email must pass the screen (no price, offer,
+    // discount or "free"; the Join link present; no other links). A draft that fails
+    // is NOT sent: the step keeps its safe fallback body, and the reason is recorded.
+    if (eventCountdown && (channel === 'email' || channel === 'sms')) {
+      const { screenEventReminderCopy } = await import('./openHouseCountdown');
+      const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url);
+      if (problems.length > 0) {
+        await action.update({
+          metadata: { ...(action.metadata || {}), ai_rejected: problems, ai_model: result.model },
+        } as any);
+        await action.reload();
+        console.warn(`[Scheduler] Countdown AI draft rejected for action ${action.id}: ${problems.join('; ')}. Sending the fallback.`);
+        return false;
+      }
+    }
 
     // Update the action with AI-generated content
     const updates: Record<string, any> = {
@@ -623,6 +665,16 @@ async function processScheduledActions(): Promise<void> {
       continue;
     }
 
+    // OH1: an Open House countdown step is never sent once the Open House has begun.
+    // It can still be pending past its time (pacing, the send window, a busy queue),
+    // and "See you tomorrow" arriving after the event is worse than silence.
+    if (action.metadata?.event_countdown && action.metadata?.event_starts_at
+      && Date.now() >= new Date(action.metadata.event_starts_at).getTime()) {
+      await cancelScheduledMessage(action, 'event_already_started');
+      console.log(`[Scheduler] Cancelled countdown step ${action.id}: the Open House has started`);
+      continue;
+    }
+
     // Guard: skip payment_readiness actions if enrollment is already paid
     if (cachedCampaign && cachedCampaign.type === 'payment_readiness' && action.to_email) {
       const paidEnrollment = await Enrollment.findOne({
@@ -645,10 +697,14 @@ async function processScheduledActions(): Promise<void> {
       }
     }
 
-    // Pacing: spread emails evenly across the send window
+    // Pacing: spread emails evenly across the send window.
+    // OH1: an Open House countdown email or text is exempt. It is timed to the event,
+    // and spreading "today's" sends to the end of the window would land them after the
+    // Open House has started (where they are cancelled). Calls stay paced.
     const maxPerCycle = await calculatePacedLimit(campaignId, campaignSettings);
     campaignProcessed[campaignId] = (campaignProcessed[campaignId] || 0);
-    if (campaignProcessed[campaignId] >= maxPerCycle) {
+    const pacingExempt = !!action.metadata?.event_countdown && channel !== 'voice';
+    if (!pacingExempt && campaignProcessed[campaignId] >= maxPerCycle) {
       // Reset back to pending so it can be picked up next cycle (don't leave stuck in processing)
       await action.update({ status: 'pending', processing_started_at: null, processor_id: null } as any);
       continue;
@@ -746,7 +802,12 @@ async function processScheduledActions(): Promise<void> {
 
       // Cross-campaign daily cap: max 1 outbound communication per lead per 24h (all channels)
       // Exception: if the lead REPLIED today, we can continue the conversation
-      {
+      // Exception (OH1): an Open House countdown step. The person asked for this event,
+      // the steps are already spaced by the sequence, and the cap's "try again tomorrow"
+      // would land a "starts soon" note after the Open House. The day here is the
+      // database's (UTC) day, so a 6:30 PM CT and a 5:30 PM CT step the next day fall on
+      // the same UTC date and the second would always be pushed past the event.
+      if (!action.metadata?.event_countdown) {
         const [capCheck] = await sequelize.query(
           `SELECT
             (SELECT COUNT(*) FROM communication_logs WHERE lead_id = :leadId AND direction = 'outbound' AND created_at::date = CURRENT_DATE) as outbound_today,
@@ -1270,7 +1331,23 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
   // Use AI-generated body as the voice prompt if AI generated, otherwise use stored voice_prompt template
   let prompt: string | undefined;
 
-  if (action.ai_generated && action.body) {
+  // OH1: an Open House countdown call. Maya's agent gets a BRIEF built at dial time for
+  // THIS person: the purpose, everything we know about them, the event and our history
+  // with them, then it runs the conversation. Nothing to sell: no cohort, seats or price.
+  const countdownCall = !!action.metadata?.event_countdown;
+  if (countdownCall) {
+    const { countdownCallBrief } = await import('./openHouseCountdown');
+    const { gatherCallFacts } = await import('./openHouseCountdownContext');
+    const facts = lead?.email ? await gatherCallFacts(lead.email, action.lead_id).catch(() => null) : null;
+    const history = await buildConversationHistory(action.lead_id).catch(() => '');
+    const first = (lead?.name || '').trim().split(/\s+/)[0] || '';
+    prompt = countdownCallBrief({
+      firstName: first && !first.includes('@') ? first : null,
+      event: { title: String(action.metadata?.event_title || 'Colaberry Open House'), when_label: String(action.metadata?.event_when || '') },
+      facts,
+      history,
+    });
+  } else if (action.ai_generated && action.body) {
     // AI already generated the voice prompt instructions
     prompt = action.body;
   } else {
@@ -1292,10 +1369,15 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     }
   }
 
-  const nextCohort = await getNextCohort();
+  const nextCohort = countdownCall ? null : await getNextCohort();
   const conversationHistory = await buildConversationHistory(action.lead_id);
 
-  const context = {
+  const context = countdownCall ? {
+    lead_name: name,
+    lead_email: lead?.email || undefined,
+    conversation_history: conversationHistory,
+    step_goal: 'Help them and make them feel expected at the Open House. Do not sell.',
+  } : {
     lead_name: name,
     lead_company: lead?.company || undefined,
     lead_title: lead?.title || undefined,
@@ -1354,7 +1436,8 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
       provider: 'synthflow',
       provider_message_id: result.data?.call_id || result.data?.id || null,
       provider_response: result.data,
-      metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false },
+      // event_countdown tells the Synthflow webhook not to send its sales follow-up text.
+      metadata: { scheduled_email_id: action.id, step_index: action.step_index, ai_generated: action.ai_generated || false, ...(countdownCall ? { event_countdown: true } : {}) },
     }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
 
     console.log(`[Scheduler] Voice call initiated for ${phone}: ${action.subject} (AI: ${action.ai_generated || false})`);
@@ -1403,6 +1486,9 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
     const result = await sendSmsViaGhl(ghlContactId, action.body || '');
     if (!result.success) {
       console.warn(`[Scheduler] GHL SMS failed for lead ${action.lead_id}: ${result.error}`);
+      // OH1: a text GHL never received was being recorded as sent. Throw, so the
+      // scheduler's retry/fail path records the truth.
+      throw new Error(`GHL SMS field update failed: ${result.error || 'unknown error'}`);
     }
     await addContactNote(
       ghlContactId,
@@ -1589,13 +1675,24 @@ function wrapEmailHtml(
 ): string {
   const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
   const senderEmail = tracking?.senderEmail || env.emailFrom;
-  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / Forward Deployed AI Engineer' : '';
+  // OH1: Maya signs her campaign mail with her own title (the same one the
+  // admissions-document email uses).
+  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / Forward Deployed AI Engineer'
+    : senderEmail === 'maya@colaberry.com' ? 'Director of Admissions' : '';
   const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
 
   // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
   // and inject a styled button after the body so it's visually prominent rather than buried inline.
   let primaryCtaButton = '';
-  const ctaMatch = body.match(/https?:\/\/enterprise\.colaberry\.ai\/(pilot\/[a-z0-9-]+|partners|demo|contact|executive-overview|ai-architect|enroll|ai-workforce-designer)(?:\?[^\s"<>]*)?/i);
+  // OH1: an Open House countdown email's Join link (the portal check-in) gets the button.
+  const joinMatch = body.match(/https?:\/\/enterprise\.colaberry\.ai\/portal\/class-checkin\/[0-9a-f-]{36}/i);
+  const ctaMatch = joinMatch ? null : body.match(/https?:\/\/enterprise\.colaberry\.ai\/(pilot\/[a-z0-9-]+|partners|demo|contact|executive-overview|ai-architect|enroll|ai-workforce-designer)(?:\?[^\s"<>]*)?/i);
+  if (joinMatch) {
+    primaryCtaButton = `
+  <div style="text-align: center; margin: 28px 0;">
+    <a href="${joinMatch[0]}" class="cta" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">Join the Open House &rarr;</a>
+  </div>`;
+  }
   if (ctaMatch) {
     const ctaUrl = ctaMatch[0];
     const slug = ctaMatch[1];
@@ -2844,6 +2941,17 @@ export function startScheduler(): void {
     const eventId = openHouseEventIdOf(session);
     if (!eventId) return; // unreachable from the call site; kept so this is safe alone
 
+    // OH1 (Ali, 2026-11-17): the Open House countdown is a Maya campaign. Once it is
+    // live it owns the reminders, and this sweep stands down so nobody gets two. While
+    // the campaign is not live (not set up, awaiting approval, paused) this sweep is the
+    // safety net, and it sends the Open House email, never the class template.
+    try {
+      const { isOpenHouseCountdownLive } = await import('./openHouseCountdown');
+      if (await isOpenHouseCountdownLive()) return;
+    } catch (err: any) {
+      console.error(`[Scheduler] Open House ${eventId}: countdown campaign check failed, sending the plain reminder:`, err.message);
+    }
+
     const startsAt = classInstant(session.session_date, session.start_time);
     if (!startsAt || Number.isNaN(startsAt.getTime())) {
       console.error(`[Scheduler] Open House ${session.id}: unreadable start, sending nothing`);
@@ -2889,6 +2997,7 @@ export function startScheduler(): void {
           meetingLink: session.meeting_link || null,
           materialsJson: session.materials_json || null,
           isOneHour: window === '1h',
+          isOpenHouse: true,
         });
         // Stamped immediately after the send, per recipient, so an interrupted
         // sweep re-sends at most the one in flight rather than the whole list.
@@ -3290,6 +3399,26 @@ export function startScheduler(): void {
           if (!lead.phone) {
             console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot (no phone — email-only lead)`);
             continue;
+          }
+
+          // OH1 security audit (2026-11-17): this path dialed cold-outreach leads with NO
+          // consent check and no off switch of its own; only ENABLE_VOICE_CALLS=false had
+          // kept it silent. Turning calls on for the Open House campaign would have started
+          // it. It now dials only when (a) the system setting hot_lead_voice_enabled is
+          // 'true' (absent = off) and (b) the same send gate as every campaign (consent,
+          // suppression, kill switch) allows a voice call to this lead. The lead is still
+          // marked hot above; only the call is withheld.
+          {
+            const voiceOn = String(await settingsSvc.getSetting('hot_lead_voice_enabled') || '').replace(/"/g, '') === 'true';
+            if (!voiceOn) {
+              console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot; call withheld (hot_lead_voice_enabled is off)`);
+              continue;
+            }
+            const gate = await evaluateSend({ leadId: lead.lead_id, channel: 'voice' as SendChannel, toPhone: lead.phone, source: 'scheduler' });
+            if (!gate.allowed) {
+              console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot; call blocked by send gate (${gate.blockedReason})`);
+              continue;
+            }
           }
 
           // Skip if Ali emailed this lead in the last 48 hours (Maya/Ali coordination)

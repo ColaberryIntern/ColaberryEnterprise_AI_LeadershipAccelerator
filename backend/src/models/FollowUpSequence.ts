@@ -6,6 +6,8 @@ export interface SequenceStep {
   delay_days: number;
   minutes_before_call?: number;
   days_before_cohort_start?: number;
+  /** OH1: minutes before the start of the Open House the lead registered for (openHouseCountdown.ts). */
+  minutes_before_event?: number;
   channel: CampaignChannel;
   subject: string;
   body_template: string;

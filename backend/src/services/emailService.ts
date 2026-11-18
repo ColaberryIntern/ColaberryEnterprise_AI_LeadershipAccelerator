@@ -9,7 +9,7 @@ import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
 import { sessionDayLabel } from './centralDate';
-import { SessionReminderData, buildSessionReminderHtml } from './email/sessionReminderEmail';
+import { SessionReminderData, buildSessionReminderHtml, openHouseReminderSubject } from './email/sessionReminderEmail';
 import { buildPortalAccessEmailHtml } from './email/portalAccessEmail';
 // Same shape as the two imports above: a template that owns its own layout and
 // copy, kept out of this file so neither can inherit a change meant for the other.
@@ -1786,9 +1786,13 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
   const sessionLabel = Number.isInteger(data.sessionNumber) && data.sessionNumber > 0
     ? `Session ${data.sessionNumber} - `
     : '';
+  // OH1: an Open House goes to prospects, so it gets its own subject line (no
+  // "[Accelerator]" prefix, no session number). See openHouseReminderSubject.
   const r = await resolveEmailRecipient(
     data.to,
-    `[Accelerator] ${urgency}: ${sessionLabel}${data.sessionTitle}`
+    data.isOpenHouse
+      ? openHouseReminderSubject(data, urgency)
+      : `[Accelerator] ${urgency}: ${sessionLabel}${data.sessionTitle}`
   );
   const html = buildSessionReminderHtml(data, urgency);
 
