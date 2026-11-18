@@ -162,6 +162,10 @@ export const env = {
 
   // Mandrill
   mandrillWebhookKey: process.env.MANDRILL_WEBHOOK_KEY || '',
+  // OH1h: Mandrill signs each webhook with ITS OWN key. The inbound (reply) webhook's key differs
+  // from the outbound tracking webhook's, which is why every reply since July 29 was rejected 401.
+  // Unset = the inbound route falls back to MANDRILL_WEBHOOK_KEY (the old behavior).
+  mandrillInboundWebhookKey: process.env.MANDRILL_INBOUND_WEBHOOK_KEY || '',
   mandrillWebhookUrl: process.env.MANDRILL_WEBHOOK_URL || '',
   mandrillApiKey: process.env.MANDRILL_API_KEY || '',
   mandrillInboundDomain: process.env.MANDRILL_INBOUND_DOMAIN || 'reply.colaberry.ai',

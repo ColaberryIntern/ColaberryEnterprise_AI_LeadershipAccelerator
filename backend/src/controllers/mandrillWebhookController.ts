@@ -267,7 +267,9 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
     // signature fail, since Mandrill signs against the exact URL it posted to. Derive this
     // route's own URL instead (append '/inbound' to the outbound base when the override is
     // set; otherwise reconstruct per-request exactly like the outbound handler's fallback).
-    const webhookKey = env.mandrillWebhookKey || '';
+    // OH1h: the inbound webhook has its own signing key (MANDRILL_INBOUND_WEBHOOK_KEY); the
+    // outbound tracking key is only the fallback when the inbound one is not configured.
+    const webhookKey = env.mandrillInboundWebhookKey || env.mandrillWebhookKey || '';
     if (webhookKey) {
       const signature = req.headers['x-mandrill-signature'] as string || '';
       const inboundWebhookUrl = env.mandrillWebhookUrl
