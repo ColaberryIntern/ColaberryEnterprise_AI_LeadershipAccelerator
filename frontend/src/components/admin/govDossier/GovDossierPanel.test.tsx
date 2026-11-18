@@ -40,6 +40,16 @@ const refGroup = {
   needKeys: ['reference:1'],
 };
 
+const factGroup = {
+  groupSlug: 'solicitation', groupLabel: 'Solicitation facts (client, dates, contacts)', groupKind: 'fact' as const,
+  subject: 'general', subjectLabel: 'General', blocking: 'fatal' as const,
+  projects: [{ projectId: 'p1', projectName: 'Online LMS' }],
+  bidCount: 1,
+  // label is the junk the drafter produced ("Status"); asks[0] is the real question the Fill form should show.
+  concepts: [{ conceptId: 'due_date', label: 'Status', asks: ['What is the due date for the submission?'], needKeys: ['fact:due_date'], why: 'The section cannot pass until it is answered.', sourceQuote: 'Proposals are due by 2026-12-11.' }],
+  needKeys: ['fact:due_date'],
+};
+
 const lib = (over: Partial<DossierLibrary> = {}): DossierLibrary => ({
   facts: [{ id: 'f1', key: 'UEI', value: 'ABC123', source: null, category: 'registrations', approved: false }],
   references: [{ id: 'r1', client: 'City of Plano', scope: 'Permitting', contractValue: '$1.2M', dates: '2023-2025', contact: 'Jane Roe', phone: null, email: null, approved: true }],
@@ -118,6 +128,19 @@ describe('GovDossierPanel (standalone)', () => {
     expect(dossierApi.fillNeedGroup).toHaveBeenCalledWith(expect.objectContaining({
       groupSlug: 'past_performance', subject: 'reporting', record: expect.objectContaining({ client: 'City Reporting Dashboard' }),
     }));
+  });
+
+  it('a fact group Fill shows the real question and why, not just the terse label', async () => {
+    (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [], groups: [factGroup] });
+    await renderPage();
+    const fill = container.querySelector('[data-testid="group-fill"]') as HTMLButtonElement;
+    await act(async () => { fill.click(); });
+    await settle();
+    const modal = container.querySelector('[data-testid="group-fill-modal"]')!;
+    expect(modal.textContent).toContain('What is the due date for the submission?'); // the real question, not "Status"
+    expect(modal.textContent).toContain('The section cannot pass'); // the why, explaining what/why
+    expect(modal.textContent).toContain('Proposals are due by'); // the source quote
+    expect(container.querySelector('[data-testid="fill-due_date"]')).not.toBeNull();
   });
 
   it('suggests groups for ungrouped questions and lets the admin activate a proposal', async () => {

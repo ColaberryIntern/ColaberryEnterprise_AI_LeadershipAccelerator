@@ -16,6 +16,7 @@ import QualRail from './QualRail';
 import './studio.css';
 import Blueprint from './Blueprint';
 import DocumentSet from './DocumentSet';
+import { useBuildProgress } from './buildProgress';
 import BuildEvidence from './BuildEvidence';
 import DraftVersions from './DraftVersions';
 import ReviewGatesView from './ReviewGatesView';
@@ -94,6 +95,11 @@ export default function StudioShell(
   const docs = useMemo(() => view.proposalDocuments ?? [], [view.proposalDocuments]);
   const drawerDoc = openDocKey ? docs.find((d) => d.key === openDocKey) ?? null : null;
 
+  // Live build feedback: while a document build is running (or was just kicked), re-pull the projection on an interval
+  // so the rows, readiness and agent feed advance on their own. notifyBuildKicked is handed to the Build buttons so
+  // the moment a build is requested the UI starts polling, instead of showing nothing until a manual refresh.
+  const { anyBuildRunning, runningCount, notifyBuildKicked, buildPulse } = useBuildProgress(view, onReload);
+
   // READ-ONLY intern cockpit: the qualification steps (Snapshot/Solicitation/Fit/Decide) render the REAL admin
   // Qualification Workspace INLINE (embedded, read-only) — the same content the admin sees, not the StageDetail
   // subset — fed by the participant (award-stripped) qualification endpoints. The admin mount never reaches this
@@ -158,13 +164,13 @@ export default function StudioShell(
   let center: React.ReactNode;
   switch (current) {
     case 'overview':
-      center = <WhereWeAre view={view} onNavigate={navTo} studioApi={studioApi} onReload={onReload} onToast={toast} />;
+      center = <WhereWeAre view={view} onNavigate={navTo} studioApi={studioApi} onReload={onReload} onToast={toast} onBuildKicked={notifyBuildKicked} />;
       break;
     case 'blueprint':
       center = <Blueprint view={view} onReanalyze={onReanalyze} reanalyzing={reanalyzing} onToast={toast} />;
       break;
     case 'documents':
-      center = <DocumentSet view={view} projectId={projectId} docs={docs} studioApi={studioApi} onOpen={openDoc} onReload={onReload} onToast={toast} />;
+      center = <DocumentSet view={view} projectId={projectId} docs={docs} studioApi={studioApi} onOpen={openDoc} onReload={onReload} onToast={toast} onBuildKicked={notifyBuildKicked} />;
       break;
     case 'evidence':
       center = <BuildEvidence view={view} projectId={projectId} reviewApi={reviewApi} studioApi={studioApi} onReload={onReload} onToast={toast} readOnly={readOnly} />;
@@ -213,6 +219,14 @@ export default function StudioShell(
       <div className="gps-gut" style={{ paddingTop: 12 }}>
         <StepBar steps={stepBarSteps} statuses={stepState.statuses} frontier={stepState.frontier} onStep={onStep} />
       </div>
+      {anyBuildRunning && (
+        <div className="gps-gut">
+          <div className="gps-building-bar" role="status" aria-live="polite" data-testid="building-bar">
+            <span className="gps-building-dot" aria-hidden="true" />
+            <span>The agent is building {runningCount} document{runningCount === 1 ? '' : 's'}. This updates on its own, so you do not need to refresh.</span>
+          </div>
+        </div>
+      )}
       <div className="gps-shell gps-gut">
         <StageRail view={view} current={current} onNavigate={go} />
         {/* READ-ONLY: a disabled <fieldset> greys out and blocks every form control in the center panels at once
@@ -226,7 +240,7 @@ export default function StudioShell(
             Proposal-agent panel. Every other view keeps the agent panel. */}
         {(current === 'snapshot' || current === 'solicitation' || current === 'fit' || current === 'decide' || current === 'outcome')
           ? <QualRail view={view} />
-          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={uiReadOnly} onOpenDossier={onOpenDossier} />}
+          : <AgentPanel projectId={projectId} studioApi={studioApi} docs={docs} onReload={onReload} onNavigate={go} onAsk={(q) => cockpitApi.askCopilot(projectId, q).then((a) => a.answer)} onToast={toast} readOnly={uiReadOnly} onOpenDossier={onOpenDossier} refreshKey={buildPulse} />}
       </div>
       {drawerDoc && (
         gck(<ProposalDocumentDrawer doc={drawerDoc} projectId={projectId} canVerify={view.viewerCanVerify && !readOnly} readOnly={uiReadOnly} onReload={onReload} onClose={() => setOpenDocKey(null)} api={cockpitApi} />)

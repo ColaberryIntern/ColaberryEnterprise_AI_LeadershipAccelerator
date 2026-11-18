@@ -11,8 +11,10 @@ import { docStageLabel, libraryPickerItems, anyNotStarted, type LibraryItem } fr
  * record the signed copy.
  */
 export default function DocumentSet(
-  { view, projectId, docs, studioApi, onOpen, onReload, onToast }:
-  { view: StudentGovProjectView; projectId: string; docs: GovProposalDocument[]; studioApi: GovStudioApi; onOpen: (d: GovProposalDocument) => void; onReload: () => void; onToast?: (m: string) => void },
+  { view, projectId, docs, studioApi, onOpen, onReload, onToast, onBuildKicked }:
+  { view: StudentGovProjectView; projectId: string; docs: GovProposalDocument[]; studioApi: GovStudioApi; onOpen: (d: GovProposalDocument) => void; onReload: () => void; onToast?: (m: string) => void;
+    /** Starts the shell's live build poller the instant a build is requested, so the rows advance without a refresh. */
+    onBuildKicked?: () => void },
 ): React.ReactElement {
   const [picker, setPicker] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -21,15 +23,19 @@ export default function DocumentSet(
 
   const buildAllDocs = useCallback(async () => {
     setBuildingAll(true);
-    try { const r = await studioApi.buildAll(projectId); onToast?.(r.enqueued.length ? `Building ${r.enqueued.length} document${r.enqueued.length === 1 ? '' : 's'}…` : 'Nothing to build right now.'); onReload(); }
+    try { const r = await studioApi.buildAll(projectId); onBuildKicked?.(); onToast?.(r.enqueued.length ? `Building ${r.enqueued.length} document${r.enqueued.length === 1 ? '' : 's'}…` : 'Nothing to build right now.'); onReload(); }
     catch { onToast?.('Could not start Build all.'); } finally { setBuildingAll(false); }
-  }, [studioApi, projectId, onReload, onToast]);
+  }, [studioApi, projectId, onReload, onToast, onBuildKicked]);
 
   const buildIt = useCallback(async (d: GovProposalDocument) => {
     setBusy(d.key);
-    try { await studioApi.startReviewCycle(projectId, d.key); onToast?.(`Building ${d.title}…`); onReload(); }
-    catch { onToast?.('Could not start building that document.'); } finally { setBusy(null); }
-  }, [studioApi, projectId, onReload, onToast]);
+    // Start the poller first so the row shows motion whether the cycle starts cleanly or was already running (a 409):
+    // either way the poll re-pulls and the row reflects the real state, instead of silently sitting still.
+    onBuildKicked?.();
+    try { await studioApi.startReviewCycle(projectId, d.key); onToast?.(`Building ${d.title}…`); }
+    catch { onToast?.('That document may already be building. Refreshing its status.'); }
+    finally { onReload(); setBusy(null); }
+  }, [studioApi, projectId, onReload, onToast, onBuildKicked]);
 
   const pickItem = useCallback((item: LibraryItem) => {
     setPicker(false);
@@ -82,7 +88,7 @@ export default function DocumentSet(
               <tr className="gps-click" key={d.key} data-testid="docs-row" data-key={d.key} data-stage={docStageLabel(d)} onClick={() => (d.key === 'pricing' ? onToast?.('Price proposal — admin only, sealed separate file.') : onOpen(d))}>
                 <td><b>{d.title}</b>{d.fileName ? <div className="gps-small gps-mono gps-muted">{d.fileName}</div> : null}{d.key === 'pricing' ? <div className="gps-small gps-muted">Hidden from interns</div> : null}{d.superseded ? <div className="gps-small" style={{ color: 'var(--gps-warn)' }}>No longer required</div> : null}</td>
                 <td><span className={`gps-tag ${meta.tagClass}`}>{meta.label}</span></td>
-                <td>{notStarted ? <button className="gps-btn sm primary" data-testid="docs-build-it" disabled={busy === d.key} onClick={(e) => { e.stopPropagation(); buildIt(d); }}>Build it</button> : d.latest?.passes ? <span className="gps-tag ok">Passed</span> : <span className="gps-tag">{docStageLabel(d)}</span>}</td>
+                <td>{d.cycle?.status === 'running' ? <span className="gps-tag agent" data-testid="docs-building">Building…</span> : notStarted ? <button className="gps-btn sm primary" data-testid="docs-build-it" disabled={busy === d.key} onClick={(e) => { e.stopPropagation(); buildIt(d); }}>{busy === d.key ? 'Starting…' : 'Build it'}</button> : d.latest?.passes ? <span className="gps-tag ok">Passed</span> : <span className="gps-tag">{docStageLabel(d)}</span>}</td>
                 <td className="gps-num">{needs > 0 ? <span data-testid="docs-needs" className={`gps-tag ${fatalNeeds ? 'bad' : 'warn'}`}>{needs} from you</span> : <span className="gps-muted">—</span>}</td>
                 <td className="gps-num">{d.pageLimit != null ? <span style={{ color: over ? 'var(--gps-bad)' : 'inherit' }}>{d.latest?.pageCount ?? 0}/{d.pageLimit}</span> : '—'}</td>
                 <td className="gps-num">{d.requirementIds.length}</td>

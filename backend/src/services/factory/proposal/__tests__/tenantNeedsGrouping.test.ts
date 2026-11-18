@@ -54,6 +54,15 @@ describe('groupTenantNeeds', () => {
     expect(cards[0].blocking).toBe('fatal');
   });
 
+  it('carries the first need why and source quote onto the concept (for the Fill form helper)', () => {
+    const needs: TenantNeed[] = [
+      need({ key: 'fact:due_date', ask: 'What is the due date for the submission?', why: 'The section cannot pass until it is answered.', source: { quote: 'Proposals are due by 2026-12-11.', file: 'rfp.pdf' }, projects: [{ projectId: 'A', projectName: 'A' }] }),
+    ];
+    const concept = groupTenantNeeds(needs).find((c) => c.groupSlug === 'solicitation')!.concepts.find((c) => c.conceptId === 'due_date')!;
+    expect(concept.why).toMatch(/cannot pass/);
+    expect(concept.sourceQuote).toMatch(/due by/);
+  });
+
   it('is empty-safe', () => {
     expect(groupTenantNeeds([])).toEqual([]);
     expect(groupTenantNeeds(undefined as unknown as TenantNeed[])).toEqual([]);

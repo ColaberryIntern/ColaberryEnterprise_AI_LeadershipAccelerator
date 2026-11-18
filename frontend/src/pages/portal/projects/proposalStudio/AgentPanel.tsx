@@ -17,11 +17,14 @@ const evClass = (k: GovActivityEvent['kind']): string => (k === 'library_answer'
  * routes via the injected studioApi; Ask goes through the injected copilot.
  */
 export default function AgentPanel(
-  { projectId, studioApi, docs, onReload, onNavigate, onAsk, onToast, readOnly = false, onOpenDossier }:
+  { projectId, studioApi, docs, onReload, onNavigate, onAsk, onToast, readOnly = false, onOpenDossier, refreshKey = 0 }:
   { projectId: string; studioApi: GovStudioApi; docs: GovProposalDocument[]; onReload: () => void; onNavigate: (v: StudioView) => void; onAsk?: (q: string) => Promise<string>; onToast?: (m: string) => void; readOnly?: boolean;
     /** When set, a link under "Needs you" opens the tenant company dossier (where answers land, gathered across every bid).
      *  Passed only by the admin cockpit — the intern mount omits it (the intern cannot reach the admin dossier page). */
-    onOpenDossier?: () => void },
+    onOpenDossier?: () => void;
+    /** Bumped by the shell's build poller on every tick; the activity feed and needs refetch when it changes, so the
+     *  feed is live during a build instead of frozen at its load-once snapshot. */
+    refreshKey?: number },
 ): React.ReactElement {
   const [needs, setNeeds] = useState<GovProjectNeed[]>([]);
   const [activity, setActivity] = useState<GovActivityEvent[]>([]);
@@ -37,7 +40,7 @@ export default function AgentPanel(
     studioApi.listNeeds(projectId).then((g) => setNeeds(g.needs)).catch(() => setNeeds([]));
     studioApi.listActivity(projectId, 50).then(setActivity).catch(() => setActivity([]));
   }, [projectId, studioApi]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   // Poll the active review run (the first doc whose cycle is running) for its live phase message.
   const activeRunId = docs.find((d) => d.cycle?.status === 'running')?.cycle?.runId ?? null;

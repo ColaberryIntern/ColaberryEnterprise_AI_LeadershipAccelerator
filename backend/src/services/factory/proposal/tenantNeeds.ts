@@ -57,7 +57,16 @@ export function mergeTenantNeeds(perProject: ProjectNeeds[]): TenantNeed[] {
 // project names") collapse into one past_performance card; a reporting slot and a recruiting slot are SEPARATE
 // cards of the same group, so references stay non-interchangeable. Pure over the merged TenantNeed[].
 
-export interface NeedGroupConcept { conceptId: string; label: string; asks: string[]; needKeys: string[] }
+export interface NeedGroupConcept {
+  conceptId: string;
+  label: string;
+  asks: string[];
+  needKeys: string[];
+  /** The first need's "why it matters" and a supporting source quote, so the Fill form can explain each field
+   *  instead of showing only a terse label. Optional; present when the underlying need carried them. */
+  why?: string;
+  sourceQuote?: string;
+}
 export interface NeedGroupCard {
   groupSlug: string;
   groupLabel: string;
@@ -116,6 +125,8 @@ export function groupTenantNeeds(needs: TenantNeed[]): NeedGroupCard[] {
     if (!concept) { concept = { conceptId: match.conceptId, label: match.label, asks: [], needKeys: [] }; card.concepts.push(concept); }
     if (n.ask && !concept.asks.includes(n.ask)) concept.asks.push(n.ask);
     if (!concept.needKeys.includes(n.key)) concept.needKeys.push(n.key);
+    if (!concept.why && typeof n.why === 'string' && n.why.trim()) concept.why = n.why.trim();
+    if (!concept.sourceQuote && n.source && typeof n.source.quote === 'string' && n.source.quote.trim()) concept.sourceQuote = n.source.quote.trim();
   }
   const cards = [...byCard.values()];
   for (const c of cards) c.bidCount = c.projects.length;
