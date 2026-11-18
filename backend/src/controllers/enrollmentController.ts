@@ -169,6 +169,9 @@ export async function handleCreateFreeAccount(
       phone: data.phone,
       source: 'Free signup (/enroll)',
       utm_source: typeof req.body.utm_source === 'string' ? req.body.utm_source : undefined,
+      // R22: read alongside the other two. `createFreeAccountSchema` is not `.strict()` and does
+      // not declare the UTM keys, so these are taken off the raw body exactly as before.
+      utm_medium: typeof req.body.utm_medium === 'string' ? req.body.utm_medium : undefined,
       utm_campaign: typeof req.body.utm_campaign === 'string' ? req.body.utm_campaign : undefined,
       page_url: typeof req.body.page_url === 'string' ? req.body.page_url : undefined,
     });

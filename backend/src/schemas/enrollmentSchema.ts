@@ -162,6 +162,11 @@ export const portalFreeSignupSchema = z.object({
   source_id: z.string().trim().uuid().optional(),          // Lead.source_id   UUID
   entry_point_id: z.string().trim().uuid().optional(),     // Lead.entry_point_id UUID
   utm_source: z.string().trim().max(255).optional(),       // Lead.utm_source  STRING(255)
+  // R22: the key this route REFUSED. `.strict()` meant the signup page could not send a medium
+  // even though `Lead.utm_medium` has existed since C10.4, which is exactly why the frontend
+  // packed it into `utm_source` as `fb|paid` instead. Declaring it here is what lets that stop.
+  // Shipping the frontend half without this line would 400 every ad signup.
+  utm_medium: z.string().trim().max(255).optional(),       // Lead.utm_medium  STRING(255)
   utm_campaign: z.string().trim().max(255).optional(),     // Lead.utm_campaign STRING(255)
   utm_content: z.string().trim().max(255).optional(),      // Lead.utm_content STRING(255), C94: which ad
   utm_term: z.string().trim().max(255).optional(),         // Lead.utm_term    STRING(255), C94: which placement

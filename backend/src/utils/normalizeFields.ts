@@ -20,6 +20,10 @@ export const KNOWN_LEAD_FIELDS = new Set<string>([
   'form_type',
   'consent_contact',
   'utm_source',
+  // R22: without this entry the normalizer DROPPED the medium. `field_map` routes an unknown
+  // destination into the `metadata` bag, and the direct-name pass only copies keys listed here, so
+  // `utm_medium` on an inbound body landed nowhere on the lead even though the column exists.
+  'utm_medium',
   'utm_campaign',
   'page_url',
   'corporate_sponsorship_interest',
@@ -46,6 +50,7 @@ export interface NormalizedLead {
   form_type: string;
   consent_contact: boolean;
   utm_source: string;
+  utm_medium: string;
   utm_campaign: string;
   page_url: string;
   corporate_sponsorship_interest: boolean;
@@ -102,6 +107,7 @@ export function normalizeWithFieldMap(
     form_type: 'ingest',
     consent_contact: false,
     utm_source: '',
+    utm_medium: '',
     utm_campaign: '',
     page_url: '',
     corporate_sponsorship_interest: false,
@@ -149,6 +155,7 @@ export function normalizeWithFieldMap(
     role: ['job_role'],
     page_url: ['url', 'page'],
     utm_source: ['utmSource'],
+    utm_medium: ['utmMedium'],
     utm_campaign: ['utmCampaign'],
     message: ['note', 'notes', 'comments'],
   };

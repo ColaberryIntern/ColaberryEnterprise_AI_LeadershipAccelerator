@@ -145,6 +145,9 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
       form_type: normalized.form_type,
       consent_contact: normalized.consent_contact,
       utm_source: normalized.utm_source,
+      // R22: the medium, now that `normalizeFields` keeps it. Sequelize silently drops a key that
+      // is not a model attribute, so the absence here was invisible rather than noisy.
+      utm_medium: normalized.utm_medium,
       utm_campaign: normalized.utm_campaign,
       page_url: normalized.page_url,
       corporate_sponsorship_interest: normalized.corporate_sponsorship_interest,
@@ -240,6 +243,7 @@ export async function handleIngest(req: IngestRequest): Promise<IngestResult> {
         entry_slug: entry.slug,
         raw_payload_id: raw.id,
         utm_source: normalized.utm_source || null,
+        utm_medium: normalized.utm_medium || null,
         utm_campaign: normalized.utm_campaign || null,
         referrer: normalized.metadata?.referrer || null,
         is_duplicate: isDuplicate,

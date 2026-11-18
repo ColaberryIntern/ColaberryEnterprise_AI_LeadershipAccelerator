@@ -106,6 +106,15 @@ export const leadSchema = z.object({
    */
   phone_consent: z.boolean().optional().default(false),
   utm_source: z.string().max(255).optional().default(''),
+  /**
+   * R22: paid / organic / email. THE CHOKEPOINT for this whole change.
+   *
+   * `LeadInput` is `z.infer<typeof leadSchema>`, and `createLead` writes an explicit field list
+   * to `Lead.create`. A key absent from either one is dropped in silence, so every caller that
+   * now passes a medium — ingest, the sponsor form, POST /api/leads — depended on this line and
+   * the matching one in `createLead` existing before any of it could land.
+   */
+  utm_medium: z.string().max(255).optional().default(''),
   utm_campaign: z.string().max(255).optional().default(''),
   page_url: z.string().max(500).optional().default(''),
   corporate_sponsorship_interest: z.boolean().optional().default(false),
@@ -229,6 +238,7 @@ export async function createLead(data: LeadInput) {
     form_type: data.form_type,
     consent_contact: data.consent_contact,
     utm_source: data.utm_source,
+    utm_medium: data.utm_medium,
     utm_campaign: data.utm_campaign,
     page_url: data.page_url,
     corporate_sponsorship_interest: data.corporate_sponsorship_interest,
@@ -658,7 +668,10 @@ export async function createLeadAdmin(data: {
     // The only thing that can create a phone grant is an affirmative act by its
     // owner, recorded with the words they were shown.
     phone_consent: false,
+    // No UTM of any kind: an admin typing somebody in by hand is not a click, and an invented
+    // channel here would show up as acquisition the marketing reports never earned.
     utm_source: '',
+    utm_medium: '',
     utm_campaign: '',
     page_url: '',
     corporate_sponsorship_interest: false,

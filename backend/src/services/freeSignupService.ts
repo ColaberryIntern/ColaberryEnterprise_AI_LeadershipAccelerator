@@ -59,6 +59,8 @@ export interface FreeSignupInput {
     source_id?: string;
     entry_point_id?: string;
     utm_source?: string;
+    /** R22: paid / organic / email, as a value of its own. See `captureGuestAsLead`. */
+    utm_medium?: string;
     utm_campaign?: string;
     utm_content?: string;
     utm_term?: string;
@@ -251,6 +253,10 @@ async function captureGuestAsLead(
         // C94: which ad and which placement, so an ad signup's source is recorded here, not rebuilt later.
         utm_content: acquisition?.utm_content ?? null,
         utm_term: acquisition?.utm_term ?? null,
+        // R22: paid / organic / email. C94 wrote the two columns it added and left this one out, and
+        // C10.4 then added the column while its writers stayed unchanged — so the medium arrived at
+        // this exact line and had nowhere to go. That is the gap the `fb|paid` convention was filling.
+        utm_medium: acquisition?.utm_medium ?? null,
         page_url: acquisition?.page_url ?? null,
         // No `referrer`: `Lead` has no such column, so writing it was a key
         // Sequelize silently dropped. Preserving a referrer needs a column and

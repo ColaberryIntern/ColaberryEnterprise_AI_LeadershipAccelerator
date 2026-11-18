@@ -79,7 +79,7 @@ function PortalFreeSignupPage() {
         // (`NOT NULL DEFAULT false`), so nothing is lost by omitting it.
         ...(socialProofOptIn ? { social_proof_opt_in: true } : {}),
       };
-      // C94: the ad that brought them (source|medium, campaign, ad, placement, page). Only keys with a value the
+      // C94: the ad that brought them (source, medium, campaign, ad, placement, page). Only keys with a value the
       // strict route accepts are present. If the server still answers 400 (a backend older than this page, or a
       // value it rejects), sign them up once more WITHOUT the tracking keys: attribution must never cost a signup.
       // A 400 that was about the person (a bad email) fails the retry the same way and shows the same message.
