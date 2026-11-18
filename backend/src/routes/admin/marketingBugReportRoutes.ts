@@ -53,7 +53,13 @@ const CapturedRequest = z.object({
   count: z.number().optional(),
 });
 
-const BugReportSchema = z.object({
+/**
+ * Exported for the agent-domain reporter, which posts the same shape to its own gated route.
+ * The SCHEMA is shared; the handler deliberately is not. This file's handler has an incident
+ * history (three reports accepted and silently dropped on 2026-11-11) and the fixes for that
+ * live inside it, so it is reused rather than refactored.
+ */
+export const BugReportSchema = z.object({
   summary: z.string().trim().min(5).max(160),
   whatHappened: z.string().trim().min(10).max(5000),
   whatExpected: z.string().trim().max(5000).optional(),
@@ -87,7 +93,7 @@ export function parseRecipients(value: unknown): string[] {
     .filter((s) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s));
 }
 
-async function recipients(): Promise<string[]> {
+export async function recipients(): Promise<string[]> {
   const dedicated = await getSetting('marketing_bug_report_emails').catch(() => null);
   const fromDedicated = parseRecipients(dedicated);
   if (fromDedicated.length > 0) return fromDedicated;

@@ -160,3 +160,116 @@ describe('the people picker', () => {
     expect(pathToSection('/api/admin/agent-domain-actors')).toBe('dashboard');
   });
 });
+
+/**
+ * AF12.1 — "Report a problem" on the agent pages.
+ *
+ * The instructions going out to the seven builders tell them that a screen which looks wrong is
+ * more likely our bug than their mistake, and to say so straight away. The button that sentence
+ * refers to is useless if it 403s for them, and the obvious implementation (point it at the
+ * Marketing endpoint) does exactly that.
+ */
+describe('the builders’ Report a problem', () => {
+  it('is reachable by every builder role', () => {
+    const path = '/api/admin/agent-domain/bug-report';
+    expect(pathToSection(path)).toBe('dashboard');
+    for (const role of BUILDER_ROLES) {
+      expect({ role, can: roleCanAccessSection(role, pathToSection(path)!) })
+        .toEqual({ role, can: true });
+    }
+  });
+
+  it('and the Marketing one, which it would have been tempting to reuse, reaches only ONE of them', () => {
+    // The whole reason the separate route exists, measured rather than assumed. `marketing` is
+    // the one builder role that also carries `campaigns`, so Sarbjit could have used the
+    // Marketing reporter and the other six would have been refused. A button that works for one
+    // person in seven is worse than no button, because the six who are refused conclude it is
+    // them rather than us.
+    const marketing = '/api/admin/marketing/bug-report';
+    expect(pathToSection(marketing)).toBe('campaigns');
+
+    const reach = Object.fromEntries(
+      BUILDER_ROLES.map((role) => [role, roleCanAccessSection(role, pathToSection(marketing)!)]),
+    );
+    expect(reach).toEqual({
+      marketing: true,
+      platform: false,
+      lead_intake: false,
+      internship_review: false,
+      revenue: false,
+      product_experience: false,
+    });
+  });
+
+  it('is not swallowed by, and does not swallow, the agent-domains rows', () => {
+    expect(pathToSection('/api/admin/agent-domain/bug-report')).toBe('dashboard');
+    expect(pathToSection('/api/admin/agent-domains')).toBe('program');
+    expect(pathToSection('/api/admin/agent-domain-tool-requests')).toBe('program');
+  });
+});
+
+/**
+ * AF12.2 — the dataset drill-in, and AF12.1's task projection.
+ *
+ * Two new paths, pulling in opposite directions, and getting either one wrong is the AF11.9
+ * failure again. The drill-in is read by the BUILDER filling in the form, so a `program`
+ * classification would make it a dead end for all seven of them. The task projection carries
+ * every builder's requests across every domain, so a `dashboard` classification would hand one
+ * builder another builder's queue.
+ *
+ * Both are therefore asserted by ROLE rather than by classification, in the direction each one
+ * has to hold.
+ */
+describe('the dataset drill-in', () => {
+  const path = '/api/admin/agent-domain-datasets/enrollments';
+
+  it('is reachable by every builder role, because the builder is who clicks it', () => {
+    expect(pathToSection(path)).toBe('dashboard');
+    for (const role of BUILDER_ROLES) {
+      expect({ role, can: roleCanAccessSection(role, pathToSection(path)!) })
+        .toEqual({ role, can: true });
+    }
+  });
+
+  it('resolves through the LIST row, with no row of its own', () => {
+    // The point of the assertion: `matchesPrefix` matches on a `/` boundary, so the drill-in
+    // inherits the list's section. If that ever stops being true this test fails rather than the
+    // seven builders discovering it.
+    expect(pathToSection(path)).toBe(pathToSection('/api/admin/agent-domain-datasets'));
+  });
+
+  it('a table name with a dot still resolves, because schema-qualified names exist', () => {
+    expect(pathToSection('/api/admin/agent-domain-datasets/public.enrollments')).toBe('dashboard');
+  });
+});
+
+describe('the task projection', () => {
+  const path = '/api/admin/agent-domain-tasks';
+
+  it('carries the same section as the queue it projects, NOT the filing routes', () => {
+    expect(pathToSection(path)).toBe('program');
+    expect(pathToSection(path)).toBe(pathToSection('/api/admin/agent-domain-change-requests'));
+  });
+
+  it('is reachable by NO builder role, which is the point', () => {
+    // Grouping rows must not widen who can read them. This is the one new path in this change
+    // that is deliberately closed to builders, and it is asserted so that a later "make it
+    // reachable" convenience has to argue with a test.
+    const reach = Object.fromEntries(
+      BUILDER_ROLES.map((role) => [role, roleCanAccessSection(role, pathToSection(path)!)]),
+    );
+    expect(reach).toEqual({
+      marketing: false,
+      platform: false,
+      lead_intake: false,
+      internship_review: false,
+      revenue: false,
+      product_experience: false,
+    });
+  });
+
+  it('is a distinct prefix from the -mine filing row and from agent-domains', () => {
+    expect(pathToSection('/api/admin/agent-domain-change-requests-mine')).toBe('dashboard');
+    expect(pathToSection('/api/admin/agent-domains')).toBe('program');
+  });
+});

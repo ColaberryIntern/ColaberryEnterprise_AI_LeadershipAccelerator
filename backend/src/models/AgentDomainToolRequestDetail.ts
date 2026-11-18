@@ -47,6 +47,7 @@ export interface AgentDomainToolRequestDetailAttributes {
   produces: string[];
   capability_id: string;
   task_unblocked: string;
+  task_key: string;
   manual_today: string;
   /**
    * AF11.7. The email of the person who will act on the output, in the people record's own
@@ -91,6 +92,8 @@ class AgentDomainToolRequestDetail extends Model<AgentDomainToolRequestDetailAtt
   declare produces: string[];
   declare capability_id: string;
   declare task_unblocked: string;
+  /** AF12.1. Groups the several tools one task needs. */
+  declare task_key: string;
   declare manual_today: string;
   declare acts_on_output: string;
   declare judged_threshold: string;
@@ -122,6 +125,7 @@ AgentDomainToolRequestDetail.init(
     produces: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     capability_id: { type: DataTypes.TEXT, allowNull: false },
     task_unblocked: { type: DataTypes.TEXT, allowNull: false },
+    task_key: { type: DataTypes.TEXT, allowNull: false },
     manual_today: { type: DataTypes.TEXT, allowNull: false },
     acts_on_output: { type: DataTypes.TEXT, allowNull: false },
     judged_threshold: { type: DataTypes.TEXT, allowNull: false },

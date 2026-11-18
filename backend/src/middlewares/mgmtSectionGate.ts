@@ -188,6 +188,13 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // `dashboard`, beside the dataset picker and the actor roster above, because the three are read
   // by the same person at the same moment: a builder with a half-filled form. No Agent Factory
   // builder role carries `program`.
+  // AF12.1. The builders' own "Report a problem". On `dashboard` because that is what a
+  // builder role actually carries: the Marketing reporter sits under `campaigns`, which none
+  // of the seven can reach, so pointing them at it would have failed for everyone it is for.
+  ['/api/admin/agent-domain/bug-report', 'dashboard'],
+  // AF12.1 — the queue grouped into tasks. A projection of the admin-only queue two rows above,
+  // so it carries the same section: grouping rows must not make them reachable to more people.
+  ['/api/admin/agent-domain-tasks', 'program'],
   ['/api/admin/agent-domain-tool-requests/draft', 'dashboard'],
   ['/api/admin/agent-domain-tool-requests', 'program'],
   // AF11.9. The front door: can the product already do this?

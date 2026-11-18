@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { requireAdmin, requireSection } from '../../middlewares/authMiddleware';
-import { handleSearchDatasetCatalog } from '../../controllers/datasetCatalogController';
+import { handleGetDatasetDetail, handleSearchDatasetCatalog } from '../../controllers/datasetCatalogController';
 import { handleListAgentDomainActors } from '../../controllers/agentDomainActorController';
+import { handleListAgentDomainTasks } from '../../controllers/agentDomainTaskController';
 import {
   handleDecideChangeRequest,
   handleFileChangeRequest,
@@ -86,6 +87,39 @@ router.get(
   '/api/admin/agent-domain-datasets',
   requireSection('dashboard'),
   handleSearchDatasetCatalog,
+);
+
+/**
+ * GET one dataset's shape — the drill-in behind a click in the picker. AF12.2.
+ *
+ * Ali, 17 Nov 2026: *"If we are picking datasets we need to be able to see the data when we click
+ * on it."* Same section as the list above it, for the same reason: this is read by the person
+ * filling in the form, not by the person deciding it.
+ *
+ * `mgmtSectionGate` needs no new row. `matchesPrefix` matches on a `/` boundary, so
+ * `/api/admin/agent-domain-datasets/enrollments` resolves through the row already classifying the
+ * list — verified by reading that map rather than assumed from the shape of the URL.
+ *
+ * It returns the SHAPE of a table and never a row of it; `datasetDetail.ts` carries the boundary
+ * and the reasoning, and the test beside it asserts that a sampled value cannot get through.
+ */
+router.get(
+  '/api/admin/agent-domain-datasets/:tableName',
+  requireSection('dashboard'),
+  handleGetDatasetDetail,
+);
+
+/**
+ * GET the queue grouped into TASKS. AF12.1.
+ *
+ * `requireAdmin`, matching the queue this projects rather than the filing routes above: it carries
+ * every builder's requests across every domain, and a projection must not widen what it projects.
+ * Optional `?request_id=` also returns that one request's task and its sibling tools.
+ */
+router.get(
+  '/api/admin/agent-domain-tasks',
+  requireAdmin,
+  handleListAgentDomainTasks,
 );
 
 /**

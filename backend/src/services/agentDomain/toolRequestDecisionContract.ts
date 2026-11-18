@@ -114,7 +114,7 @@ export interface DecisionIssue {
  */
 export const SEND_BACK_FIELDS: ReadonlyArray<string> = Object.freeze([
   'tool_name', 'purpose', 'reads', 'produces',
-  'capability_id', 'task_unblocked', 'manual_today',
+  'capability_id', 'task_unblocked', 'task_key', 'manual_today',
   'needed_by', 'run_frequency',
   'touches', 'inputs',
   'writes', 'side_effects', 'reversible', 'reversibility_note',

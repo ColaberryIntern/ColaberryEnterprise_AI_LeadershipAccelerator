@@ -198,6 +198,7 @@ const toolDetail = (over: Record<string, unknown> = {}) => ({
   produces: ['A list of scheduled jobs'],
   capability_id: 'platform.read_cron_registry',
   task_unblocked: 'STORY-002, the scheduled-job audit.',
+  task_key: 'scheduled_job_audit',
   manual_today: 'I ssh in and read the crontab.',
   // AF11.7. The three answers that decide whether this gets built at all. `acts_on_output` has to
   // be an address `actorRows` above carries, because the roster is what decides this field.

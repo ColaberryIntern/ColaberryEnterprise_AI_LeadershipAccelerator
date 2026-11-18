@@ -85,6 +85,9 @@ const FIELD_GUIDE: Record<ToolRequestDetailField, string> = {
   read_datasets: 'Catalogued dataset names it reads, chosen ONLY from the list supplied. Empty is a valid answer and is the right one when it reads nothing relational.',
   capability_id: 'The capability this serves, chosen ONLY from the list supplied.',
   task_unblocked: 'The specific task that becomes possible, stated concretely.',
+  task_key: 'A short lowercase slug naming that task, 3 to 48 characters, letters numbers and '
+    + 'underscores. The SAME key goes on every tool this task needs, so one task of three tools '
+    + 'is three requests sharing one key.',
   manual_today: 'How this is done today by hand, including roughly how long it takes.',
   acts_on_output: 'The email of the person who acts on the output. Chosen ONLY from the actor list supplied.',
   judged_threshold: 'The number that decides whether this worked.',
@@ -186,7 +189,7 @@ export function buildDraftMessages(args: DraftRequestArgs): ChatMessage[] {
 }
 
 const STRING_FIELDS = new Set<ToolRequestDetailField>([
-  'agent_id', 'tool_name', 'purpose', 'capability_id', 'task_unblocked', 'manual_today',
+  'agent_id', 'tool_name', 'purpose', 'capability_id', 'task_unblocked', 'task_key', 'manual_today',
   'acts_on_output', 'judged_threshold', 'judged_measured_from', 'tried_in_product',
   'missing_from_product', 'needed_by', 'run_frequency', 'environment', 'side_effects',
   'reversibility_note',

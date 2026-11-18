@@ -31,7 +31,11 @@ export const FORM_GROUPS = [
   },
   { key: 'who', heading: 'Who', question: 'Which agent is asking, in whose domain', fields: ['agent_id'] },
   { key: 'what', heading: 'What', question: 'The tool, and what it would read and produce', fields: ['tool_name', 'purpose', 'reads', 'produces'] },
-  { key: 'what_for', heading: 'What for', question: 'The capability it serves, and what is manual today', fields: ['capability_id', 'task_unblocked', 'manual_today'] },
+  // AF12.1 — the three words are named in the question, because this is the group where a
+  // builder most often collapses them. A CAPABILITY is the standing thing the agent can do, a
+  // TASK is the piece of work being taken off somebody's hands, and a TOOL is one of possibly
+  // several things the task needs.
+  { key: 'what_for', heading: 'What for', question: 'The capability it serves, the task it is part of, and what is manual today', fields: ['capability_id', 'task_unblocked', 'task_key', 'manual_today'] },
   { key: 'when', heading: 'When', question: 'By when, and how often it would run', fields: ['needed_by', 'run_frequency'] },
   { key: 'where', heading: 'Where', question: 'The blast radius, which is the thing being approved', fields: ['touches'] },
   { key: 'which_data', heading: 'Which data', question: 'Sandbox or production, and which datasets a grant would be written against', fields: ['environment', 'read_datasets'] },
@@ -84,6 +88,8 @@ export const RULE_FIELD: Record<string, string> = {
   capability_roster_absent: 'capability_id',
   capability_not_found: 'capability_id',
   task_unblocked_missing: 'task_unblocked',
+  task_key_missing: 'task_key',
+  task_key_malformed: 'task_key',
   manual_today_missing: 'manual_today',
   // WHEN
   needed_by_missing: 'needed_by',

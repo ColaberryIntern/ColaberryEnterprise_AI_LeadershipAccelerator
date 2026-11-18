@@ -102,6 +102,7 @@ interface FormState {
   read_datasets: string[];
   capability_id: string;
   task_unblocked: string;
+  task_key: string;
   manual_today: string;
   acts_on_output: string;
   judged_threshold: string;
@@ -129,6 +130,7 @@ const EMPTY: FormState = {
   read_datasets: [],
   capability_id: '',
   task_unblocked: '',
+  task_key: '',
   manual_today: '',
   acts_on_output: '',
   judged_threshold: '',
@@ -250,6 +252,7 @@ export default function ToolRequestForm({
         read_datasets: list(detail.read_datasets, prev.read_datasets),
         capability_id: str(detail.capability_id, prev.capability_id),
         task_unblocked: str(detail.task_unblocked, prev.task_unblocked),
+        task_key: str(detail.task_key, prev.task_key),
         manual_today: str(detail.manual_today, prev.manual_today),
         acts_on_output: str(detail.acts_on_output, prev.acts_on_output),
         judged_threshold: str(detail.judged_threshold, prev.judged_threshold),
@@ -347,6 +350,7 @@ export default function ToolRequestForm({
       inputs: cleanList(form.inputs),
       capability_id: form.capability_id.trim(),
       task_unblocked: form.task_unblocked.trim(),
+      task_key: form.task_key.trim().toLowerCase(),
       manual_today: form.manual_today.trim(),
       acts_on_output: form.acts_on_output.trim(),
       judged_threshold: form.judged_threshold.trim(),
@@ -792,6 +796,37 @@ export default function ToolRequestForm({
             onChange={(e) => set('task_unblocked', e.target.value)}
           />
           <FieldIssues issues={byField.task_unblocked} />
+        </div>
+
+        {/* AF12.1 — THE TASK KEY.
+            Ali, 17 Nov 2026: *"I think we need to do a better job of differentiating between a
+            task and a tool. They can be the same, but they can also be different and you have a
+            task that uses multiple tools."*
+
+            This field is the whole mechanism for that distinction. Without it the console can
+            only ever show one request at a time, so deciding tool 2 of 3 happens with the other
+            two invisible. The help text teaches the difference by asking for it, which is the
+            only place a builder reliably reads an explanation. */}
+        <div className="mb-3">
+          <label className="form-label small fw-medium" htmlFor="tr-task-key">
+            Task key
+          </label>
+          <input
+            id="tr-task-key"
+            className="form-control form-control-sm"
+            style={{ maxWidth: 360 }}
+            maxLength={48}
+            value={form.task_key}
+            placeholder="weekly_unpaid_explorer_report"
+            onChange={(e) => set('task_key', e.target.value)}
+          />
+          <div className="form-text">
+            A short name for the PIECE OF WORK, lowercase with underscores. If this task needs
+            more than one tool, give every one of those requests the same key: that is what lets
+            them be decided together instead of one at a time with the others invisible. A task
+            that needs exactly one tool still gets a key.
+          </div>
+          <FieldIssues issues={byField.task_key} />
         </div>
 
         <div className="mb-3">
