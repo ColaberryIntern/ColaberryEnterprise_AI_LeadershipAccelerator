@@ -1,0 +1,146 @@
+{
+  "scrollHeight": 7478,
+  "clientHeight": 844,
+  "scrollable": 6634,
+  "bands": [
+    {
+      "index": 0,
+      "type": "hero",
+      "eyebrow": "OPEN HOUSE",
+      "heading": "Sign up for our open house and start learning AI for $0",
+      "top_px": 58,
+      "height_px": 1269,
+      "depth_from": 0.9,
+      "depth_to": 20
+    },
+    {
+      "index": 1,
+      "type": "text",
+      "eyebrow": "THE FUTURE IS NOW",
+      "heading": "AI is no longer just a future skill",
+      "top_px": 1328,
+      "height_px": 883,
+      "depth_from": 20,
+      "depth_to": 33.3
+    },
+    {
+      "index": 2,
+      "type": "bullets",
+      "eyebrow": "EXPLORE MORE",
+      "heading": "Learn AI beyond basic prompts",
+      "top_px": 2211,
+      "height_px": 1056,
+      "depth_from": 33.3,
+      "depth_to": 49.2
+    },
+    {
+      "index": 3,
+      "type": "bullets",
+      "eyebrow": "WHO THIS IS FOR",
+      "heading": "Built for people who want to start using AI practically",
+      "top_px": 3267,
+      "height_px": 707,
+      "depth_from": 49.2,
+      "depth_to": 59.9
+    },
+    {
+      "index": 4,
+      "type": "text",
+      "eyebrow": "OUR APPROACH",
+      "heading": "We don't just teach AI. We help you build with it.",
+      "top_px": 3974,
+      "height_px": 669,
+      "depth_from": 59.9,
+      "depth_to": 70
+    },
+    {
+      "index": 5,
+      "type": "bullets",
+      "eyebrow": "LEARNING PATH",
+      "heading": "Your learning path with Colaberry",
+      "top_px": 4643,
+      "height_px": 806,
+      "depth_from": 70,
+      "depth_to": 82.1
+    },
+    {
+      "index": 6,
+      "type": "bullets",
+      "eyebrow": "YOUR LEARNING JOURNEY",
+      "heading": "Your AI learning journey starts immediately",
+      "top_px": 5449,
+      "height_px": 1111,
+      "depth_from": 82.1,
+      "depth_to": 98.9
+    },
+    {
+      "index": 7,
+      "type": "text",
+      "eyebrow": "GOING FURTHER",
+      "heading": "Ready to go further?",
+      "top_px": 6560,
+      "height_px": 446,
+      "depth_from": 98.9,
+      "depth_to": 105.6
+    },
+    {
+      "index": 8,
+      "type": "cta",
+      "eyebrow": "SAVE YOUR SEAT",
+      "heading": "Join our next open house",
+      "top_px": 7006,
+      "height_px": 366,
+      "depth_from": 105.6,
+      "depth_to": 111.1
+    }
+  ],
+  "targets": [
+    {
+      "event_type": "cta_click",
+      "data_track": "Save my seat",
+      "element_text": "Save my seat→",
+      "element_tag": "a",
+      "href": "/open-house",
+      "depth": 0.2,
+      "top_px": 11,
+      "sticky": true
+    },
+    {
+      "event_type": "cta_click",
+      "data_track": "Save my seat",
+      "element_text": "Save my seat→",
+      "element_tag": "a",
+      "href": "/open-house",
+      "depth": 7.9,
+      "top_px": 527,
+      "sticky": false
+    },
+    {
+      "event_type": "cta_click",
+      "data_track": "Save my seat",
+      "element_text": "Save my seat→",
+      "element_tag": "a",
+      "href": "/open-house",
+      "depth": 109.2,
+      "top_px": 7244,
+      "sticky": false
+    },
+    {
+      "event_type": "click",
+      "data_track": null,
+      "element_text": "",
+      "element_tag": "a",
+      "href": "/",
+      "depth": 0.2,
+      "top_px": 14,
+      "sticky": true
+    }
+  ],
+  "title": "AI learning Platform for beginners and Professionals",
+  "measured_at": "2026-11-18T16:39:54.540Z",
+  "url": "https://www.refactored.ai/lp/colaberry-training/ai-learning-platform",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  }
+}
