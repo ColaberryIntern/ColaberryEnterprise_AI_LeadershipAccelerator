@@ -39,8 +39,16 @@ jest.mock('../../../services/factory/proposal/govCompanyLibrary', () => ({
 }));
 const dbQuery = jest.fn();
 const collectTenantNeeds = jest.fn();
+const resolveProjectNeed = jest.fn();
+const classifyNeedAsk = jest.fn();
 jest.mock('../../../config/database', () => ({ sequelize: { query: (...a: any[]) => dbQuery(...a) } }));
-jest.mock('../../../services/factory/proposal/tenantNeeds', () => ({ collectTenantNeeds: (...a: any[]) => collectTenantNeeds(...a) }));
+jest.mock('../../../services/factory/proposal/tenantNeeds', () => ({
+  // groupTenantNeeds + needSubject are pure (over needGrouping), so keep them real; only the collector is mocked.
+  ...jest.requireActual('../../../services/factory/proposal/tenantNeeds'),
+  collectTenantNeeds: (...a: any[]) => collectTenantNeeds(...a),
+}));
+jest.mock('../../../services/factory/proposal/resolveProjectNeed', () => ({ resolveProjectNeed: (...a: any[]) => resolveProjectNeed(...a) }));
+jest.mock('../../../services/factory/proposal/needClassifier', () => ({ classifyNeedAsk: (...a: any[]) => classifyNeedAsk(...a) }));
 
 import express, { type Express } from 'express';
 import request from 'supertest';
@@ -208,5 +216,87 @@ describe('GET dossier needs (Needs across contracts)', () => {
     collectTenantNeeds.mockRejectedValue(new Error('db down'));
     const res = await request(app).get('/api/admin/factory/dossier/needs');
     expect(res.status).toBe(500);
+  });
+});
+
+describe('POST dossier needs fill (group fill)', () => {
+  beforeEach(() => {
+    lookupContainer.mockResolvedValue({ tenant: { id: TENANT }, engagement: { id: 'e1' } });
+    dbQuery.mockResolvedValue([{ id: 'p1', name: 'Harris County' }, { id: 'p2', name: 'Dallas ISD' }]);
+    resolveProjectNeed.mockResolvedValue({ status: 200, body: {} });
+  });
+
+  it('fills a fact group by resolving each concept value across the bids that ask it', async () => {
+    collectTenantNeeds.mockResolvedValue([
+      { key: 'fact:due_date', kind: 'fact', ask: 'What is the due date for the submission?', blocking: 'fatal', projects: [{ projectId: 'p1', projectName: 'Harris County' }] },
+      { key: 'fact:client', kind: 'fact', ask: 'client name', blocking: 'score', projects: [{ projectId: 'p2', projectName: 'Dallas ISD' }] },
+    ]);
+    const res = await request(app).post('/api/admin/factory/dossier/needs/fill')
+      .send({ groupSlug: 'solicitation', subject: 'general', values: { due_date: '2026-12-11', client: 'City of Dallas' } });
+    expect(res.status).toBe(200);
+    expect(resolveProjectNeed).toHaveBeenCalledWith('p1', 'fact:due_date', { value: '2026-12-11' }, expect.objectContaining({ canApprove: true }));
+    expect(resolveProjectNeed).toHaveBeenCalledWith('p2', 'fact:client', { value: 'City of Dallas' }, expect.anything());
+    expect(res.body.resolved).toBe(2);
+  });
+
+  it('fills a record group with one reference (propagation clears its twins)', async () => {
+    collectTenantNeeds.mockResolvedValue([
+      { key: 'reference:slot1', kind: 'record', recordType: 'reference', ask: 'Add a past-performance reference', subject: 'reporting', blocking: 'fatal', projects: [{ projectId: 'p1', projectName: 'Harris' }, { projectId: 'p2', projectName: 'Dallas' }] },
+    ]);
+    const res = await request(app).post('/api/admin/factory/dossier/needs/fill')
+      .send({ groupSlug: 'past_performance', subject: 'reporting', record: { client: 'City Reporting', scope: 'BI dashboard' } });
+    expect(res.status).toBe(200);
+    expect(resolveProjectNeed).toHaveBeenCalledWith('p1', 'reference:slot1', { record: { client: 'City Reporting', scope: 'BI dashboard' } }, expect.anything());
+  });
+
+  it('400s when a record group is filled without a record object', async () => {
+    collectTenantNeeds.mockResolvedValue([
+      { key: 'reference:slot1', kind: 'record', recordType: 'reference', ask: 'Add a past-performance reference', subject: 'reporting', blocking: 'fatal', projects: [{ projectId: 'p1', projectName: 'Harris' }] },
+    ]);
+    const res = await request(app).post('/api/admin/factory/dossier/needs/fill')
+      .send({ groupSlug: 'past_performance', subject: 'reporting', values: {} });
+    expect(res.status).toBe(400);
+    expect(resolveProjectNeed).not.toHaveBeenCalled();
+  });
+
+  it('400s on a malformed body', async () => {
+    const res = await request(app).post('/api/admin/factory/dossier/needs/fill').send({ subject: 'general' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('dossier categories', () => {
+  beforeEach(() => { lookupContainer.mockResolvedValue({ tenant: { id: TENANT }, engagement: { id: 'e1' } }); });
+
+  it('GET returns the built-in groups plus pending tenant categories', async () => {
+    dbQuery
+      .mockResolvedValueOnce([]) // active tenant rows (listRequirementCategories)
+      .mockResolvedValueOnce([{ slug: 'cmmc', label: 'CMMC attestation', kind: 'fact', subject: 'security', status: 'pending', source: 'ai', confidence: 0.8, example_ask: 'provide your CMMC level' }]); // pending
+    const res = await request(app).get('/api/admin/factory/dossier/categories');
+    expect(res.status).toBe(200);
+    expect(res.body.active.map((c: any) => c.slug)).toContain('past_performance');
+    expect(res.body.pending).toHaveLength(1);
+    expect(res.body.pending[0].slug).toBe('cmmc');
+  });
+
+  it('suggest classifies ungrouped needs and proposes a new category', async () => {
+    dbQuery.mockImplementation((sql: string) => {
+      if (/FROM delivery_projects/.test(sql)) return Promise.resolve([{ id: 'p1', name: 'X' }]);
+      if (/INSERT INTO gov_requirement_categories/.test(sql)) return Promise.resolve([[], 1]);
+      return Promise.resolve([]); // pending list
+    });
+    collectTenantNeeds.mockResolvedValue([{ key: 'fact:weird', kind: 'fact', ask: 'Provide your CMMC level', blocking: 'score', projects: [{ projectId: 'p1', projectName: 'X' }] }]);
+    classifyNeedAsk.mockResolvedValue({ groupSlug: 'cmmc', subject: 'security', confidence: 0.8, newCategory: { slug: 'cmmc', label: 'CMMC attestation', kind: 'fact' } });
+    const res = await request(app).post('/api/admin/factory/dossier/categories/suggest').send({});
+    expect(res.status).toBe(200);
+    expect(classifyNeedAsk).toHaveBeenCalledWith('Provide your CMMC level');
+    expect(res.body.proposed).toBe(1);
+  });
+
+  it('activate issues a scoped update', async () => {
+    dbQuery.mockResolvedValue([[], 1]);
+    const res = await request(app).post('/api/admin/factory/dossier/categories/cmmc/activate').send({});
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
   });
 });

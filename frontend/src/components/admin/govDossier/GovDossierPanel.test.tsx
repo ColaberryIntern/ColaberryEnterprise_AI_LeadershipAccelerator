@@ -17,7 +17,28 @@ jest.mock('../../../services/adminGovDossierApi', () => ({
   approveCompanyDoc: jest.fn(),
   deleteCompanyDoc: jest.fn(),
   getDossierNeeds: jest.fn(),
+  fillNeedGroup: jest.fn(),
+  getCategories: jest.fn(),
+  suggestCategories: jest.fn(),
+  activateCategory: jest.fn(),
 }));
+
+/** Set a controlled input/textarea value the way React's synthetic onChange expects (native setter + input event). */
+function typeInto(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')!.set!;
+  setter.call(el, value);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+const refGroup = {
+  groupSlug: 'past_performance', groupLabel: 'Past projects and references', groupKind: 'reference' as const,
+  subject: 'reporting', subjectLabel: 'Reporting and analytics', blocking: 'fatal' as const,
+  projects: [{ projectId: 'p1', projectName: 'Harris County' }, { projectId: 'p2', projectName: 'Dallas ISD' }],
+  bidCount: 2,
+  concepts: [{ conceptId: 'past_performance', label: 'Past projects and references', asks: ['Add a past-performance reference'], needKeys: ['reference:1'] }],
+  needKeys: ['reference:1'],
+};
 
 const lib = (over: Partial<DossierLibrary> = {}): DossierLibrary => ({
   facts: [{ id: 'f1', key: 'UEI', value: 'ABC123', source: null, category: 'registrations', approved: false }],
@@ -40,7 +61,8 @@ beforeEach(() => {
   (dossierApi.approveDossierItem as jest.Mock).mockResolvedValue({ ok: true, id: 'f1', approved: true });
   (dossierApi.listCompanyDocs as jest.Mock).mockResolvedValue({ documents: [{ id: 'd1', name: 'capability.pdf', status: 'ready', approved: false, chunkCount: 4, embeddedCount: 4, truncated: false, createdAt: null }] });
   (dossierApi.approveCompanyDoc as jest.Mock).mockResolvedValue({ ok: true, id: 'd1', approved: true });
-  (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [] });
+  (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [], groups: [] });
+  (dossierApi.getCategories as jest.Mock).mockResolvedValue({ active: [], pending: [] });
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); jest.clearAllMocks(); });
 
@@ -66,18 +88,52 @@ describe('GovDossierPanel (standalone)', () => {
     expect(dossierApi.getDossier).toHaveBeenCalledTimes(2); // initial load + reload after approve
   });
 
-  it('lists the open needs across contracts, grouping a record need as a Reference with its bids', async () => {
-    (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [
-      { key: 'reference:1', kind: 'record', ask: 'Add a past-performance reference', why: 'The section cannot pass without one.', blocking: 'fatal', recordType: 'reference', projects: [{ projectId: 'p1', projectName: 'Harris County' }, { projectId: 'p2', projectName: 'Dallas ISD' }] },
-    ] });
+  it('folds the open needs into a group card: a Reference, its subject, its bids, and a Fill action', async () => {
+    (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [], groups: [refGroup] });
     await renderPage();
-    const rows = container.querySelectorAll('[data-testid="dossier-need-row"]');
+    const rows = container.querySelectorAll('[data-testid="need-group-row"]');
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain('Reference');
-    expect(rows[0].textContent).toContain('Add a past-performance reference');
+    expect(rows[0].textContent).toContain('Past projects and references');
+    expect(rows[0].textContent).toContain('Reporting and analytics'); // subject chip - not interchangeable
     expect(rows[0].textContent).toContain('Harris County');
     expect(rows[0].textContent).toContain('Dallas ISD');
     expect(rows[0].textContent).toContain('2 bids');
+    expect(container.querySelector('[data-testid="group-fill"]')).not.toBeNull();
+  });
+
+  it('fills a reference group as one record for every bid at once, tagged with its subject', async () => {
+    (dossierApi.getDossierNeeds as jest.Mock).mockResolvedValue({ needs: [], groups: [refGroup] });
+    (dossierApi.fillNeedGroup as jest.Mock).mockResolvedValue({ ok: true, resolved: 2, groups: [] });
+    await renderPage();
+    const fill = container.querySelector('[data-testid="group-fill"]') as HTMLButtonElement;
+    await act(async () => { fill.click(); });
+    await settle();
+    expect(container.querySelector('[data-testid="group-fill-modal"]')).not.toBeNull();
+    const client = container.querySelector('[data-testid="fill-client"]') as HTMLInputElement;
+    await act(async () => { typeInto(client, 'City Reporting Dashboard'); });
+    const save = container.querySelector('[data-testid="group-fill-save"]') as HTMLButtonElement;
+    await act(async () => { save.click(); });
+    await settle();
+    expect(dossierApi.fillNeedGroup).toHaveBeenCalledWith(expect.objectContaining({
+      groupSlug: 'past_performance', subject: 'reporting', record: expect.objectContaining({ client: 'City Reporting Dashboard' }),
+    }));
+  });
+
+  it('suggests groups for ungrouped questions and lets the admin activate a proposal', async () => {
+    (dossierApi.suggestCategories as jest.Mock).mockResolvedValue({ ok: true, scanned: 3, proposed: 1, pending: [{ slug: 'cmmc', label: 'CMMC attestation', kind: 'fact', subject: 'security', status: 'pending', source: 'ai', confidence: 0.8, exampleAsk: 'provide your CMMC level' }] });
+    (dossierApi.activateCategory as jest.Mock).mockResolvedValue({ ok: true, slug: 'cmmc' });
+    await renderPage();
+    const suggest = container.querySelector('[data-testid="suggest-groups"]') as HTMLButtonElement;
+    await act(async () => { suggest.click(); });
+    await settle();
+    expect(dossierApi.suggestCategories).toHaveBeenCalled();
+    const pending = container.querySelector('[data-testid="pending-categories"]')!;
+    expect(pending.textContent).toContain('CMMC attestation');
+    const activateBtn = Array.from(pending.querySelectorAll('button')).find((b) => b.textContent === 'Activate') as HTMLButtonElement;
+    await act(async () => { activateBtn.click(); });
+    await settle();
+    expect(dossierApi.activateCategory).toHaveBeenCalledWith('cmmc');
   });
 
   it('lists company documents with an upload control', async () => {

@@ -26,9 +26,9 @@ async function factKeyForQuestion(deliveryProjectId: string, question: string): 
 }
 
 export interface CompanyLibraryView {
-  facts: Array<{ id: string; key: string; value: string; source: string | null; category: string | null; approved: boolean }>;
-  references: Array<{ id: string; client: string; scope: string | null; contractValue: string | null; dates: string | null; contact: string | null; phone: string | null; email: string | null; approved: boolean }>;
-  personnel: Array<{ id: string; name: string; role: string | null; resumeHtml: string | null; approved: boolean }>;
+  facts: Array<{ id: string; key: string; value: string; source: string | null; category: string | null; subject: string | null; approved: boolean }>;
+  references: Array<{ id: string; client: string; scope: string | null; contractValue: string | null; dates: string | null; contact: string | null; phone: string | null; email: string | null; subject: string | null; approved: boolean }>;
+  personnel: Array<{ id: string; name: string; role: string | null; resumeHtml: string | null; subject: string | null; approved: boolean }>;
 }
 
 export async function listCompanyLibrary(tenantId: string): Promise<CompanyLibraryView> {
@@ -39,9 +39,9 @@ export async function listCompanyLibrary(tenantId: string): Promise<CompanyLibra
   ]);
   const p = (r: any) => r.get({ plain: true });
   return {
-    facts: facts.map(p).map((f: any) => ({ id: f.id, key: f.key, value: f.value, source: f.source ?? null, category: f.category ?? null, approved: !!f.approved })),
-    references: refs.map(p).map((r: any) => ({ id: r.id, client: r.client, scope: r.scope ?? null, contractValue: r.contract_value ?? null, dates: r.dates ?? null, contact: r.contact ?? null, phone: r.phone ?? null, email: r.email ?? null, approved: !!r.approved })),
-    personnel: people.map(p).map((r: any) => ({ id: r.id, name: r.name, role: r.role ?? null, resumeHtml: r.resume_html ?? null, approved: !!r.approved })),
+    facts: facts.map(p).map((f: any) => ({ id: f.id, key: f.key, value: f.value, source: f.source ?? null, category: f.category ?? null, subject: f.subject ?? null, approved: !!f.approved })),
+    references: refs.map(p).map((r: any) => ({ id: r.id, client: r.client, scope: r.scope ?? null, contractValue: r.contract_value ?? null, dates: r.dates ?? null, contact: r.contact ?? null, phone: r.phone ?? null, email: r.email ?? null, subject: r.subject ?? null, approved: !!r.approved })),
+    personnel: people.map(p).map((r: any) => ({ id: r.id, name: r.name, role: r.role ?? null, resumeHtml: r.resume_html ?? null, subject: r.subject ?? null, approved: !!r.approved })),
   };
 }
 
@@ -59,27 +59,28 @@ export function resumeDigest(html: string | null | undefined, cap = 400): string
   return text.length > cap ? text.slice(0, cap - 1).trimEnd() + '…' : text;
 }
 
-/** Approved past-performance references — real, named clients the drafter MAY cite. Approved rows only. */
-export async function approvedReferences(tenantId: string): Promise<Array<{ client: string; scope: string | null; contractValue: string | null; dates: string | null; contact: string | null }>> {
+/** Approved past-performance references — real, named clients the drafter MAY cite. Approved rows only. Each
+ *  carries its `subject` so the grounder can keep a recruiting reference out of a reporting proposal. */
+export async function approvedReferences(tenantId: string): Promise<Array<{ client: string; scope: string | null; contractValue: string | null; dates: string | null; contact: string | null; subject: string | null }>> {
   const rows: any[] = await GovCompanyReference.findAll({ where: { tenant_id: tenantId, approved: true }, order: [['updated_at', 'DESC']] });
   return rows.map((row) => {
     const r = row.get({ plain: true });
     const contact = [r.contact, r.phone, r.email].filter((x: unknown) => typeof x === 'string' && x).join(', ') || null;
-    return { client: String(r.client ?? ''), scope: r.scope ?? null, contractValue: r.contract_value ?? null, dates: r.dates ?? null, contact };
+    return { client: String(r.client ?? ''), scope: r.scope ?? null, contractValue: r.contract_value ?? null, dates: r.dates ?? null, contact, subject: r.subject ?? null };
   }).filter((r: { client: string }) => r.client.trim() !== '');
 }
 
 /** Approved key personnel the drafter MAY name and describe. Approved rows only; résumé reduced to a short digest. */
-export async function approvedPersonnel(tenantId: string): Promise<Array<{ name: string; role: string | null; summary: string | null }>> {
+export async function approvedPersonnel(tenantId: string): Promise<Array<{ name: string; role: string | null; summary: string | null; subject: string | null }>> {
   const rows: any[] = await GovCompanyPersonnel.findAll({ where: { tenant_id: tenantId, approved: true }, order: [['updated_at', 'DESC']] });
   return rows.map((row) => {
     const p = row.get({ plain: true });
-    return { name: String(p.name ?? ''), role: p.role ?? null, summary: resumeDigest(p.resume_html) };
+    return { name: String(p.name ?? ''), role: p.role ?? null, summary: resumeDigest(p.resume_html), subject: p.subject ?? null };
   }).filter((p: { name: string }) => p.name.trim() !== '');
 }
 
-export async function addCompanyFact(tenantId: string, input: { key: string; value: string; source?: string | null; category?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
-  const row: any = await GovCompanyFact.create({ tenant_id: tenantId, key: input.key, value: input.value, source: input.source ?? null, category: input.category ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
+export async function addCompanyFact(tenantId: string, input: { key: string; value: string; source?: string | null; category?: string | null; subject?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
+  const row: any = await GovCompanyFact.create({ tenant_id: tenantId, key: input.key, value: input.value, source: input.source ?? null, category: input.category ?? null, subject: input.subject ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
   return row.id;
 }
 export async function approveCompanyFact(tenantId: string, id: string, identityId: string | null): Promise<void> {
@@ -105,11 +106,11 @@ export async function approveCompanyPersonnel(tenantId: string, id: string, iden
   await GovCompanyPersonnel.update({ approved: true, approved_by_identity_id: identityId, updated_at: new Date() } as any, { where: { id, tenant_id: tenantId } });
 }
 export async function addCompanyReference(tenantId: string, input: Record<string, unknown>, identityId: string | null): Promise<string> {
-  const row: any = await GovCompanyReference.create({ tenant_id: tenantId, client: String(input.client ?? ''), contact: (input.contact as string) ?? null, phone: (input.phone as string) ?? null, email: (input.email as string) ?? null, contract_value: (input.contractValue as string) ?? null, dates: (input.dates as string) ?? null, scope: (input.scope as string) ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
+  const row: any = await GovCompanyReference.create({ tenant_id: tenantId, client: String(input.client ?? ''), contact: (input.contact as string) ?? null, phone: (input.phone as string) ?? null, email: (input.email as string) ?? null, contract_value: (input.contractValue as string) ?? null, dates: (input.dates as string) ?? null, scope: (input.scope as string) ?? null, subject: (input.subject as string) ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
   return row.id;
 }
-export async function addCompanyPersonnel(tenantId: string, input: { name: string; role?: string | null; resumeHtml?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
-  const row: any = await GovCompanyPersonnel.create({ tenant_id: tenantId, name: input.name, role: input.role ?? null, resume_html: input.resumeHtml ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
+export async function addCompanyPersonnel(tenantId: string, input: { name: string; role?: string | null; resumeHtml?: string | null; subject?: string | null; approved?: boolean }, identityId: string | null): Promise<string> {
+  const row: any = await GovCompanyPersonnel.create({ tenant_id: tenantId, name: input.name, role: input.role ?? null, resume_html: input.resumeHtml ?? null, subject: input.subject ?? null, approved: !!input.approved, approved_by_identity_id: input.approved ? identityId : null } as any);
   return row.id;
 }
 

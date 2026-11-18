@@ -3,7 +3,9 @@ import { PageHeader, SectionCard } from '../shell';
 import {
   getDossier, addDossierItem, approveDossierItem, updateDossierFact, FACT_CATEGORIES,
   listCompanyDocs, uploadCompanyDoc, approveCompanyDoc, deleteCompanyDoc, getDossierNeeds,
-  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc, type DossierFact, type FactEdit, type DossierNeed,
+  fillNeedGroup, getCategories, suggestCategories, activateCategory,
+  type DossierLibrary, type DossierKind, type NewItem, type CompanyDoc, type DossierFact, type FactEdit,
+  type NeedGroupCard, type RequirementCategory,
 } from '../../../services/adminGovDossierApi';
 
 /**
@@ -265,55 +267,190 @@ function EditFactModal({ fact, onCancel, onSave }: { fact: DossierFact; onCancel
 }
 
 /**
- * NeedsAcrossContractsSection - the tenant-wide "Questions across your contracts" surface (spec decision #2). Every
- * open need across every gov bid, deduped by canonical key, each tagged with the bids that ask it. Read-only here: a
- * person answers it in that bid's Proposal Studio, and answer-once propagation then clears it from the others. Shows
- * grouped record needs as "Reference" / "Key person" so past-performance reads as one record, not scattered fields.
+ * NeedsAcrossContractsSection - the restructured "Questions across your contracts" surface. Every open need across
+ * every gov bid is folded into (group, subject) cards: the near-duplicate asks collapse into one card, grouped the
+ * same way the library below is, and a card carries one Fill form that resolves every bid that asked it at once.
+ * Subject keeps records apart, so a reporting reference is never used to answer a recruiting requirement. When a new
+ * kind of demand shows up, "Suggest groups" proposes a new category for the admin to activate.
  */
-function NeedsAcrossContractsSection(): React.ReactElement {
-  const [needs, setNeeds] = useState<DossierNeed[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+function groupKindTag(kind: NeedGroupCard['groupKind']): string {
+  return kind === 'reference' ? 'Reference' : kind === 'personnel' ? 'Key person' : 'Facts';
+}
 
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      try {
-        const r = await getDossierNeeds();
-        if (live) { setNeeds(r?.needs ?? []); setErr(null); }
-      } catch {
-        if (live) { setNeeds([]); setErr('Could not load the questions across your contracts.'); }
-      }
-    })();
-    return () => { live = false; };
+function NeedsAcrossContractsSection(): React.ReactElement {
+  const [groups, setGroups] = useState<NeedGroupCard[] | null>(null);
+  const [pending, setPending] = useState<RequirementCategory[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [filling, setFilling] = useState<NeedGroupCard | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [busySlug, setBusySlug] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { const r = await getDossierNeeds(); setGroups(r.groups); setErr(null); }
+    catch { setGroups([]); setErr('Could not load the questions across your contracts.'); }
+  }, []);
+  const loadCats = useCallback(async () => {
+    try { const r = await getCategories(); setPending(r.pending); } catch { /* best-effort; the proposed-groups list is optional */ }
+  }, []);
+  useEffect(() => { void load(); void loadCats(); }, [load, loadCats]);
+
+  const onFilled = useCallback((newGroups: NeedGroupCard[]) => {
+    setGroups(newGroups); setFilling(null);
+    setNotice('Saved. That answer cleared the question on every bid that asked it.');
   }, []);
 
-  const kindTag = (n: DossierNeed): string =>
-    n.kind === 'record' ? (n.recordType === 'personnel' ? 'Key person' : 'Reference') : n.kind;
+  const suggest = useCallback(async () => {
+    setSuggesting(true);
+    try {
+      const r = await suggestCategories();
+      setPending(r.pending);
+      setNotice(r.proposed > 0 ? `Proposed ${r.proposed} new group${r.proposed === 1 ? '' : 's'} for your review below.` : 'No new groups needed. The open questions all fit an existing group.');
+    } catch { setErr('Could not suggest groups right now.'); }
+    finally { setSuggesting(false); }
+  }, []);
+
+  const activate = useCallback(async (slug: string) => {
+    setBusySlug(slug);
+    try { await activateCategory(slug); await loadCats(); await load(); setNotice('Group activated.'); }
+    catch { setErr('Could not activate that group.'); }
+    finally { setBusySlug(null); }
+  }, [loadCats, load]);
 
   return (
     <SectionCard className="mb-4" title="Questions across your contracts" icon="question-answer-line"
-      subtitle="Everything the proposal agent still needs a person to answer, gathered across every bid. Answer one in that bid's Proposal Studio and it clears from the others.">
+      subtitle="Everything the proposal agent still needs, grouped so you fill one form per group. Answering clears it from every bid that asked, and a reporting reference never lands on a recruiting bid.">
       {err && <div className="alert alert-warning py-2" role="alert">{err}</div>}
-      {needs === null ? (
+      {notice && <div className="alert alert-success d-flex justify-content-between align-items-center py-2" role="status"><span>{notice}</span><button type="button" className="btn-close" aria-label="Dismiss" onClick={() => setNotice(null)} /></div>}
+      {groups === null ? (
         <p className="text-secondary mb-0" role="status">Loading questions...</p>
-      ) : needs.length === 0 ? (
+      ) : groups.length === 0 ? (
         <p className="text-secondary mb-0">Nothing open right now. Every question your bids raised has been answered.</p>
       ) : (
-        <ul className="list-group" data-testid="dossier-needs">
-          {needs.map((n) => (
-            <li key={n.key} className="list-group-item d-flex justify-content-between align-items-start gap-2" data-testid="dossier-need-row">
+        <ul className="list-group" data-testid="dossier-need-groups">
+          {groups.map((g) => (
+            <li key={`${g.groupSlug}:${g.subject}`} className="list-group-item d-flex justify-content-between align-items-start gap-2" data-testid="need-group-row">
               <span>
-                <span className={`badge rounded-pill me-2 ${n.blocking === 'fatal' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{kindTag(n)}</span>
-                <strong>{n.ask}</strong>
-                {n.why ? <div className="small text-secondary">{n.why}</div> : null}
-                <div className="small text-secondary">Asked on: {n.projects.map((p) => p.projectName).filter(Boolean).join(', ')}</div>
+                <span className={`badge rounded-pill me-2 ${g.blocking === 'fatal' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{groupKindTag(g.groupKind)}</span>
+                <strong>{g.groupLabel}</strong>
+                {g.subject && g.subject !== 'general' ? <span className="badge rounded-pill bg-info-subtle text-info-emphasis ms-2" data-testid="group-subject">{g.subjectLabel}</span> : null}
+                <div className="small text-secondary">{g.concepts.map((c) => c.label).join(', ')}</div>
+                <div className="small text-secondary">Asked on: {g.projects.map((p) => p.projectName).filter(Boolean).join(', ')}</div>
               </span>
-              <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis flex-shrink-0">{n.projects.length} {n.projects.length === 1 ? 'bid' : 'bids'}</span>
+              <span className="d-flex align-items-center gap-2 flex-shrink-0">
+                <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">{g.bidCount} {g.bidCount === 1 ? 'bid' : 'bids'}</span>
+                <button type="button" className="btn btn-primary btn-sm" data-testid="group-fill" onClick={() => setFilling(g)}>Fill</button>
+              </span>
             </li>
           ))}
         </ul>
       )}
+
+      {pending.length > 0 && (
+        <div className="mt-3" data-testid="pending-categories">
+          <h6 className="text-secondary small text-uppercase">New groups proposed for your review</h6>
+          <ul className="list-group">
+            {pending.map((c) => (
+              <li key={c.slug} className="list-group-item d-flex justify-content-between align-items-center gap-2">
+                <span>
+                  <strong>{c.label}</strong>
+                  {c.subject ? <span className="small text-secondary ms-2">{c.subject}</span> : null}
+                  {c.exampleAsk ? <div className="small text-secondary">For example: {c.exampleAsk}</div> : null}
+                </span>
+                <button type="button" className="btn btn-outline-success btn-sm" disabled={busySlug === c.slug} onClick={() => void activate(c.slug)}>Activate</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <button type="button" className="btn btn-outline-secondary btn-sm" data-testid="suggest-groups" disabled={suggesting} onClick={() => void suggest()}>
+          {suggesting ? 'Looking...' : 'Suggest groups for ungrouped questions'}
+        </button>
+      </div>
+
+      {filling && <GroupFillModal group={filling} onCancel={() => setFilling(null)} onFilled={onFilled} onError={() => setErr('Could not save that. Try again.')} />}
     </SectionCard>
+  );
+}
+
+/**
+ * GroupFillModal - one form per group card. A reference/personnel group collects the record as a unit; a fact group
+ * collects a value per concept. Submitting resolves every open need under this (group, subject) across every bid.
+ */
+function GroupFillModal({ group, onCancel, onFilled, onError }: { group: NeedGroupCard; onCancel: () => void; onFilled: (g: NeedGroupCard[]) => void; onError: () => void }): React.ReactElement {
+  const isReference = group.groupKind === 'reference';
+  const isPersonnel = group.groupKind === 'personnel';
+  const isRecord = isReference || isPersonnel;
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const valid = isReference ? !!(form.client && form.client.trim())
+    : isPersonnel ? !!(form.name && form.name.trim())
+    : group.concepts.some((c) => (form[c.conceptId] || '').trim());
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const payload = isRecord
+        ? { groupSlug: group.groupSlug, subject: group.subject, record: form }
+        : { groupSlug: group.groupSlug, subject: group.subject, values: form };
+      const r = await fillNeedGroup(payload);
+      onFilled(r.groups);
+    } catch { onError(); setSaving(false); }
+  };
+
+  const subjectNote = group.subject && group.subject !== 'general'
+    ? <p className="small text-info-emphasis">This is for the {group.subjectLabel} requirement. It will not be used to answer a different subject.</p>
+    : null;
+
+  return (
+    <div className="modal d-block" tabIndex={-1} role="dialog" style={{ background: 'rgba(0,0,0,0.4)' }} data-testid="group-fill-modal">
+      <div className="modal-dialog modal-dialog-centered" role="document">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">{group.groupLabel}</h5>
+            <button type="button" className="btn-close" aria-label="Close" onClick={onCancel} />
+          </div>
+          <div className="modal-body">
+            {subjectNote}
+            <p className="small text-secondary">Answering here saves it to the dossier and clears this question from every bid that asked it: {group.projects.map((p) => p.projectName).filter(Boolean).join(', ')}.</p>
+            {isReference && (<>
+              <label className="form-label">Client</label>
+              <input className="form-control mb-2" data-testid="fill-client" placeholder="e.g. City of Plano" value={form.client ?? ''} onChange={set('client')} />
+              <label className="form-label">Scope</label>
+              <textarea className="form-control mb-2" rows={2} value={form.scope ?? ''} onChange={set('scope')} />
+              <div className="row g-2">
+                <div className="col"><label className="form-label">Contract value</label><input className="form-control" value={form.contractValue ?? ''} onChange={set('contractValue')} /></div>
+                <div className="col"><label className="form-label">Dates</label><input className="form-control" placeholder="2023-2025" value={form.dates ?? ''} onChange={set('dates')} /></div>
+              </div>
+              <label className="form-label mt-2">Contact</label>
+              <input className="form-control" value={form.contact ?? ''} onChange={set('contact')} />
+            </>)}
+            {isPersonnel && (<>
+              <label className="form-label">Name</label>
+              <input className="form-control mb-2" data-testid="fill-name" placeholder="e.g. Ada Lovelace" value={form.name ?? ''} onChange={set('name')} />
+              <label className="form-label">Role</label>
+              <input className="form-control mb-2" value={form.role ?? ''} onChange={set('role')} />
+              <label className="form-label">Bio</label>
+              <textarea className="form-control" rows={4} value={form.resumeHtml ?? ''} onChange={set('resumeHtml')} />
+            </>)}
+            {!isRecord && group.concepts.map((c) => (
+              <div key={c.conceptId} className="mb-2">
+                <label className="form-label">{c.label}</label>
+                <input className="form-control" data-testid={`fill-${c.conceptId}`} value={form[c.conceptId] ?? ''} onChange={set(c.conceptId)} />
+              </div>
+            ))}
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>
+            <button type="button" className="btn btn-primary" data-testid="group-fill-save" disabled={!valid || saving} onClick={() => void submit()}>{saving ? 'Saving...' : 'Save for every bid'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

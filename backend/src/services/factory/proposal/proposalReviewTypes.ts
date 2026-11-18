@@ -38,6 +38,16 @@ export interface HumanNeed {
    *  every existing need literal and fixture stays valid — the grouped sources set them. */
   recordType?: RecordType;
   recordFields?: string[];
+  /** Semantic grouping layer (CC-20261117-q8k3). Set at draft time and used to fold needs into the dossier's
+   *  groups and to keep records from being interchangeable. All optional and serialized in the `need` JSONB, so
+   *  every pre-existing need stays valid and groups lazily (recomputed on read when absent).
+   *  - `groupSlug`  : the taxonomy group this need folds into (past_performance, registrations, solicitation, ...).
+   *  - `conceptId`  : the canonical concept within the group, so near-duplicate phrasings collapse to one.
+   *  - `subject`    : what the requirement is ABOUT (reporting, recruiting, ...); a reporting reference must not
+   *                   satisfy a recruiting requirement. 'general' when subject-agnostic. */
+  groupSlug?: string;
+  conceptId?: string;
+  subject?: string;
 }
 
 /** A finding from a check. `fatal` blocks export whatever the score (over page limit, price leak, missing required

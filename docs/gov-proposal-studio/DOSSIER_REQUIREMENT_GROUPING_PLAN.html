@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gov Dossier Grouping Plan</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1c2433; --muted:#5b6880; --line:#e4e8f1;
+    --navy:#1f3a68; --navy-soft:#eaf0fb; --accent:#2b6cb0; --accent-soft:#e8f1fb;
+    --amber:#b7791f; --amber-soft:#fdf3e2; --green:#2f855a; --green-soft:#e7f4ec;
+    --red:#c0392b; --red-soft:#fbeceb; --purple:#6b46c1; --purple-soft:#efeafb;
+    --shadow:0 1px 2px rgba(23,37,64,.06),0 6px 18px rgba(23,37,64,.07);
+    --radius:14px; --radius-sm:9px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 16px 80px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  h1{font-size:30px;line-height:1.18;margin:.3em 0 .25em;letter-spacing:-.01em}
+  h2{font-size:20px;margin:0 0 4px;letter-spacing:-.005em}
+  h3{font-size:15px;margin:0 0 4px}
+  p{margin:.4em 0}
+  .sub{color:var(--muted)}
+  .hero{background:linear-gradient(135deg,#1f3a68,#2b4f86);color:#fff;border-radius:var(--radius);padding:30px 30px 28px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .hero .eyebrow{color:#aecbff}
+  .hero h1{color:#fff;max-width:20ch}
+  .hero .lead{font-size:17px;color:#e4edfb;max-width:62ch;margin-top:10px}
+  .meta{margin-top:18px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#eaf2ff;border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600}
+  section{margin-top:34px}
+  .section-head{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+  .section-head .n{font-size:13px;font-weight:800;color:#fff;background:var(--navy);width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:760px){.g2,.g3{grid-template-columns:1fr}}
+
+  /* before / after */
+  .ba{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:stretch}
+  @media(max-width:760px){.ba{grid-template-columns:1fr}}
+  .ba .arrow{align-self:center;font-size:26px;color:var(--accent);font-weight:800}
+  @media(max-width:760px){.ba .arrow{transform:rotate(90deg);justify-self:center}}
+  .panel{border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;background:#fbfcfe}
+  .panel.bad{border-color:#f0d2cd;background:#fdf6f5}
+  .panel.good{border-color:#cfe6d8;background:#f4fbf6}
+  .panel .tag{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .panel.bad .tag{color:var(--red)}
+  .panel.good .tag{color:var(--green)}
+  .chip{display:inline-block;background:#fff;border:1px solid var(--line);border-radius:7px;padding:4px 9px;margin:3px 3px 0 0;font-size:12.5px;color:#48526a}
+  .chip.dup{border-color:#eccfca;color:#9a4136;background:#fdf1ef}
+  .brace{font-size:11px;color:var(--red);font-weight:700;margin-top:8px}
+  .groupcard{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:8px}
+  .groupcard .lhs{display:flex;align-items:center;gap:9px;min-width:0}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:var(--accent)}
+  .groupcard small{color:var(--muted)}
+  .bidbadge{font-size:11px;font-weight:700;color:var(--amber);background:var(--amber-soft);border-radius:999px;padding:2px 9px;white-space:nowrap}
+  .fillbtn{font-size:12px;font-weight:700;color:#fff;background:var(--accent);border:0;border-radius:7px;padding:5px 12px;white-space:nowrap}
+  .groupcard.ghost{border-style:dashed;border-color:#c7b9ea;background:#faf8ff}
+  .groupcard.ghost .dot{background:var(--purple)}
+
+  /* root causes */
+  .cause{border-left:3px solid var(--red);padding:2px 0 2px 14px;margin-bottom:16px}
+  .cause h3{color:var(--ink)}
+  .cause code{background:#eef1f7;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px;color:#36405a}
+  .cause .fix{color:var(--green);font-weight:600}
+
+  /* engine flow */
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:stretch}
+  @media(max-width:760px){.flow{grid-template-columns:1fr}}
+  .step{background:#fbfcff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px;position:relative}
+  .step .k{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+  .step h3{margin-top:4px}
+  .step p{font-size:13px;color:var(--muted);margin:.3em 0 0}
+  .step .after{content:"";position:absolute;right:-8px;top:50%;color:var(--accent);font-weight:800}
+  .tagrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .mini{font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px}
+  .mini.det{background:var(--navy-soft);color:var(--navy)}
+  .mini.ai{background:var(--purple-soft);color:var(--purple)}
+  .mini.new{background:var(--green-soft);color:var(--green)}
+
+  /* phases */
+  .phase{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;padding:16px 0;border-top:1px solid var(--line)}
+  .phase:first-child{border-top:0}
+  .pnum{width:40px;height:40px;border-radius:10px;background:var(--navy);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .phase h3{font-size:16px}
+  .phase .pr{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 9px;margin-left:8px}
+  .phase ul{margin:.45em 0 0;padding-left:18px;color:#41506a}
+  .phase li{margin:2px 0;font-size:13.5px}
+  .reuse{font-size:12.5px;color:var(--green);margin-top:6px}
+  .reuse b{color:var(--green)}
+
+  .callout{background:var(--navy-soft);border:1px solid #d3e0f6;border-radius:var(--radius-sm);padding:14px 16px;color:#2a3b5c}
+  .callout b{color:var(--navy)}
+  .files{font-size:12.5px;color:var(--muted);line-height:1.9}
+  .files code{background:#eef1f7;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:#36405a}
+  footer{margin-top:40px;color:var(--muted);font-size:12.5px;text-align:center}
+  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff;margin-left:auto}
+  .toggle button{border:0;background:transparent;padding:6px 14px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
+  .toggle button.on{background:var(--navy);color:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div class="eyebrow">Gov Company Dossier &middot; Needs restructure</div>
+    <h1>From 100+ scattered asks to a handful of fillable groups</h1>
+    <p class="lead">The dossier today lists every unanswered placeholder as its own row, so the same question appears a dozen times under slightly different wording. This plan adds a semantic grouping layer that reads what each ask actually wants, folds it into the same category and record groups the library already uses at the bottom, and grows new groups on its own when a new kind of information shows up. Ram fills one form per group, and the answer propagates to every bid that asked.</p>
+    <div class="meta">
+      <span class="pill">Repo: acc-gov-ui</span>
+      <span class="pill">Surface: /admin/gov-services#dossier</span>
+      <span class="pill">Status: plan for sign-off</span>
+      <span class="pill">Reuses the record + propagation rails already live</span>
+    </div>
+  </div>
+
+  <!-- 1. BEFORE / AFTER -->
+  <section>
+    <div class="section-head"><span class="n">1</span><div><h2>What changes, at a glance</h2><p class="sub">Same data, read and presented as groups instead of loose fields.</p></div></div>
+    <div class="card">
+      <div class="ba">
+        <div class="panel bad">
+          <div class="tag">Today &middot; flat list</div>
+          <p style="margin:.5em 0;font-weight:600">"Questions across your contracts" &mdash; one row per placeholder</p>
+          <div>
+            <span class="chip dup">project name 1</span>
+            <span class="chip dup">project name 2</span>
+            <span class="chip dup">project name 3</span>
+            <span class="chip dup">specific project name and details</span>
+            <span class="chip dup">What are the specific project names?</span>
+          </div>
+          <div class="brace">&#8627; 5 rows, 1 real question &mdash; and this repeats for client, due date, contact, pricing...</div>
+          <div style="margin-top:10px">
+            <span class="chip">client name</span><span class="chip">contact details</span><span class="chip">due date</span><span class="chip">email address</span><span class="chip">brief description</span><span class="chip">+ 90 more</span>
+          </div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="panel good">
+          <div class="tag">Target &middot; grouped and fillable</div>
+          <p style="margin:.5em 0;font-weight:600">One card per group, mirroring the library below</p>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>Past projects &amp; references</strong><br><small>name, scope, value, dates, contact</small></div></div><span class="bidbadge">7 bids</span><button class="fillbtn">Fill</button></div>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>Solicitation facts</strong><br><small>client, due date, contact</small></div></div><span class="bidbadge">4 bids</span><button class="fillbtn">Fill</button></div>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>Registrations</strong><br><small>SAM, UEI, CAGE, DUNS</small></div></div><span class="bidbadge">3 bids</span><button class="fillbtn">Fill</button></div>
+          <div class="groupcard ghost"><div class="lhs"><span class="dot"></span><div><strong>Cybersecurity attestation</strong><br><small>new group, created automatically</small></div></div><span class="bidbadge">1 bid</span><button class="fillbtn">Review</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. ROOT CAUSES -->
+  <section>
+    <div class="section-head"><span class="n">2</span><div><h2>Why it looks like this today</h2><p class="sub">Four causes, each in one place in the code.</p></div></div>
+    <div class="card">
+      <div class="cause">
+        <h3>1. Deduplication is literal, not semantic</h3>
+        <p><code>mergeTenantNeeds</code> dedupes only by an exact <code>need.key</code>, and that key is just the drafter's placeholder label, title-cased (<code>cleanFactKey</code>). "project name 1" and "specific project names" produce different keys, so they never merge into one row.</p>
+      </div>
+      <div class="cause">
+        <h3>2. Needs are not folded into the library's groups</h3>
+        <p>The needs section renders a flat <code>&lt;ul&gt;</code>. Only <em>record</em>-kind needs get a "Reference" / "Key person" tag. Plain fact-needs are never bucketed into the <code>FACT_CATEGORIES</code> the library below is grouped by, so the top and bottom of the page use two different structures.</p>
+      </div>
+      <div class="cause">
+        <h3>3. The taxonomy is a hardcoded array</h3>
+        <p><code>FACT_CATEGORIES</code> is a fixed 7-item list in the frontend. It cannot grow, so anything that does not fit lands in "General". A brand-new kind of RFP demand has nowhere of its own to go.</p>
+      </div>
+      <div class="cause">
+        <h3>4. Filling is one ask at a time</h3>
+        <p>Each need is answered individually inside a single bid's Proposal Studio. There is no "fill this whole group for this company once" path, which is exactly what bulk entry by Ram needs.</p>
+      </div>
+      <p class="reuse" style="margin-top:4px"><b>Already solved and reused:</b> the grouped <code>record</code> kind (one reference = client+scope+value+dates+contact as a unit), the tenant-wide needs union, and answer-once propagation across bids all exist and are live. This plan routes many atomic needs into those existing rails rather than rebuilding them.</p>
+    </div>
+  </section>
+
+  <!-- 3. THE ENGINE -->
+  <section>
+    <div class="section-head"><span class="n">3</span><div style="flex:1"><h2>How it gets smart, and grows</h2><p class="sub">Every incoming ask runs through one classifier before it ever reaches the screen.</p></div></div>
+    <div class="card">
+      <div class="flow">
+        <div class="step">
+          <div class="k">Raw ask</div>
+          <h3>A placeholder the drafter could not fill</h3>
+          <p>"What are the specific project names and details that align with on-premises deployments?"</p>
+        </div>
+        <div class="step">
+          <div class="k">Normalize</div>
+          <h3>Map to a canonical requirement</h3>
+          <p>Resolve the ask to a stable concept and label, so every phrasing of the same thing collapses to one.</p>
+          <div class="tagrow">
+            <span class="mini det">deterministic alias map</span>
+            <span class="mini ai">AI classifier for the long tail</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="k">Place</div>
+          <h3>File by group and by subject</h3>
+          <p>Two tags: which group it belongs to, and what it is about (reporting, recruiting, data work). The subject is what stops records being swapped between unrelated requirements. If nothing fits, propose a new group.</p>
+          <div class="tagrow">
+            <span class="mini det">subject tag</span>
+            <span class="mini new">new group, pending approval</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="k">Show</div>
+          <h3>One card, every bid that asked</h3>
+          <p>The group card carries a bid count and a single Fill form. Answering it resolves every atomic need mapped to it, across all bids.</p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:16px">
+        <b>Trust before intelligence.</b> The classifier's mapping and any new category it proposes are shown with a confidence level and stay <b>pending an admin's confirmation</b> before they shape the drafter. The AI never silently invents a category or an answer; it proposes, a person approves, exactly like the dossier's existing approve-before-use gate. A deterministic alias map handles the recurring asks with no model call at all, so the common case is fast, free of AI cost, and auditable.
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. NOT INTERCHANGEABLE -->
+  <section>
+    <div class="section-head"><span class="n">4</span><div><h2>Same group, not interchangeable</h2><p class="sub">A reference only answers a requirement it is actually relevant to.</p></div></div>
+    <div class="card">
+      <p>Two past-performance references both live in the "Past projects &amp; references" group, but they are not swappable. A requirement asking for reporting experience must not be answered with a recruiting project. So beyond its group, every requirement and every record carries a second tag: <b>what it is about</b>. The group decides the shape of the answer; the subject decides which record is allowed to fill it.</p>
+      <div class="ba" style="margin-top:14px">
+        <div class="panel">
+          <div class="tag" style="color:var(--navy)">The requirement asks</div>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>Past performance, reporting</strong><br><small>"3 references for BI and reporting work"</small></div></div><span class="mini det">reporting</span></div>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>Past performance, recruiting</strong><br><small>"references for staffing and recruiting"</small></div></div><span class="mini det">recruiting</span></div>
+        </div>
+        <div class="arrow">&rarr;</div>
+        <div class="panel good">
+          <div class="tag">Matched by subject, never mixed</div>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>State reporting dashboard, City of X</strong><br><small>tagged reporting</small></div></div><span class="mini new">to the reporting req</span></div>
+          <div class="groupcard"><div class="lhs"><span class="dot"></span><div><strong>Statewide recruiting portal, Agency Y</strong><br><small>tagged recruiting</small></div></div><span class="mini new">to the recruiting req</span></div>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:16px"><b>What this fixes today:</b> right now every approved reference is handed to the drafter for every bid with no relevance filter, so a recruiting project can surface in a reporting proposal. Giving each record a capability tag (case studies already carry one) and matching it to the requirement's subject closes that. Answer-once reuse then means <b>answer once per subject</b>: a reporting reference clears the reporting need on every bid that asks for reporting, and leaves the recruiting needs untouched.</div>
+    </div>
+  </section>
+
+  <!-- 5. BUILD LADDER -->
+  <section>
+    <div class="section-head"><span class="n">5</span><div><h2>The build, phase by phase</h2><p class="sub">Each phase is one PR, independently shippable. Ali merges; deploy is backend plus nginx.</p></div></div>
+    <div class="card">
+      <div class="phase">
+        <div class="pnum">0</div>
+        <div>
+          <h3>Taxonomy becomes data<span class="pr">PR 0</span></h3>
+          <ul>
+            <li>Move <code>FACT_CATEGORIES</code> into a tenant-scoped <code>gov_requirement_categories</code> table, seeded with today's 7 categories plus the reference and personnel record groups.</li>
+            <li>Both the library and the needs surface read the taxonomy from one source. No behavior change yet, just the seam that lets it grow.</li>
+          </ul>
+          <p class="reuse"><b>Reuses:</b> the existing fact category column; DDL proven in <code>accelerator_dev1</code> inside a rolled-back transaction first.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">1</div>
+        <div>
+          <h3>Canonical normalizer, deterministic core<span class="pr">PR 1</span></h3>
+          <ul>
+            <li>A pure <code>canonicalizeNeed(ask, key)</code> with an alias table for the recurring asks: project name and details, client, due date, contact, past performance, pricing, certifications, registrations.</li>
+            <li><code>mergeTenantNeeds</code> dedupes by canonical id instead of raw key. This alone collapses the 100+ to the true distinct set.</li>
+          </ul>
+          <p class="reuse"><b>Reuses:</b> the tenant needs union. Pure and fully unit-tested, no AI, no migration.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">2</div>
+        <div>
+          <h3>AI classifier for the long tail, adaptive categories<span class="pr">PR 2</span></h3>
+          <ul>
+            <li>Asks that match no alias go to a classifier that maps to the nearest canonical and category with a confidence, or proposes a new category.</li>
+            <li>It also tags each requirement and record with a <b>subject</b> (reporting, recruiting, data work), so references stop being interchangeable. The drafter then cites a reference only when its subject matches the requirement, instead of offering every approved reference to every bid.</li>
+            <li>Results are cached per distinct label (classify once) and land as <b>pending</b> taxonomy rows an admin confirms. This is the "gets smarter and grows" behavior.</li>
+          </ul>
+          <p class="reuse"><b>Reuses:</b> the dossier approve-before-use gate and the grounding allow-list, so nothing unapproved reaches the drafter.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">3</div>
+        <div>
+          <h3>Grouped needs UI and the group fill form<span class="pr">PR 3</span></h3>
+          <ul>
+            <li>Render needs grouped by category and record, one card per group with a bid count, matching the library's look below. Where a group spans subjects, the card splits by subject (reporting, recruiting) so each is filled on its own.</li>
+            <li>One Fill form per group collects the record and its subject at once, and resolves every atomic need mapped to that group <b>and subject</b>, across every bid asking for it.</li>
+          </ul>
+          <p class="reuse"><b>Reuses:</b> the grouped record form, <code>resolveProjectNeed</code>, and answer-once propagation. This is Ram's bulk-entry path.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="pnum">4</div>
+        <div>
+          <h3>Reclassify the live backlog<span class="pr">PR 4</span></h3>
+          <ul>
+            <li>Run the normalizer over the open gaps already on the live tenant so the current 100+ collapse into the clean grouped view on day one.</li>
+            <li>Non-destructive: it only tags open needs with their canonical group; it never edits or deletes an answer.</li>
+          </ul>
+          <p class="reuse"><b>Reuses:</b> the Phase 1 and 2 classifier, run once as a backfill script.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. WHAT RAM GETS -->
+  <section>
+    <div class="section-head"><span class="n">6</span><div><h2>What this gives Ram</h2></div></div>
+    <div class="grid g3">
+      <div class="card"><h3>A short list, not a wall</h3><p class="sub">Roughly 8 to 12 group cards instead of 100-plus rows. Each says how many bids need it, most-shared first.</p></div>
+      <div class="card"><h3>Fill once per subject</h3><p class="sub">One form per group. The answer becomes a reusable fact or record and clears that question off every bid asking for the same thing, and only those, so a reporting reference never lands on a recruiting bid.</p></div>
+      <div class="card"><h3>It keeps up with new RFPs</h3><p class="sub">When a solicitation asks for something genuinely new, a new group appears for his review instead of the question hiding in "General".</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h3 style="margin-bottom:8px">Where this lives in the code</h3>
+      <div class="files">
+        Needs union and dedup &middot; <code>backend/src/services/factory/proposal/tenantNeeds.ts</code><br>
+        Key cleaner &middot; <code>backend/src/services/factory/proposal/proposalFactKey.ts</code><br>
+        Resolve + propagation + record rails &middot; <code>backend/src/services/factory/proposal/resolveProjectNeed.ts</code><br>
+        Dossier API + categories &middot; <code>backend/src/routes/admin/govCompanyDossierRoutes.ts</code>, <code>frontend/src/services/adminGovDossierApi.ts</code><br>
+        Dossier UI (needs + library sections) &middot; <code>frontend/src/components/admin/govDossier/GovDossierPanel.tsx</code><br>
+        Prior spec this extends &middot; <code>docs/gov-proposal-studio/GROUPED_NEEDS_AND_CROSS_PROJECT_SPEC.md</code>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Plan for the Gov Company Dossier needs restructure &middot; acc-gov-ui &middot; prepared for Ali's sign-off
+  </footer>
+
+</div>
+</body>
+</html>

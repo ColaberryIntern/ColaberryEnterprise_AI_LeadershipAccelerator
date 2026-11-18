@@ -36,7 +36,7 @@ describe('approvedReferences', () => {
       plain({ client: '', scope: 'x', contract_value: null, dates: null, contact: null, phone: null, email: null }),
     ]);
     const out = await approvedReferences('t1');
-    expect(out).toEqual([{ client: 'City of Plano', scope: 'Permitting', contractValue: '$1.2M', dates: '2023-2025', contact: 'Jane Roe, 555-1212' }]);
+    expect(out).toEqual([{ client: 'City of Plano', scope: 'Permitting', contractValue: '$1.2M', dates: '2023-2025', contact: 'Jane Roe, 555-1212', subject: null }]);
     expect(refFindAll).toHaveBeenCalledWith(expect.objectContaining({ where: { tenant_id: 't1', approved: true } }));
   });
 });
@@ -45,7 +45,7 @@ describe('approvedPersonnel', () => {
   it('returns approved personnel with the résumé reduced to a plain-text digest', async () => {
     personFindAll.mockResolvedValue([plain({ name: 'Ada Lovelace', role: 'Technical Lead', resume_html: '<p>10y <b>data</b> engineering</p>' })]);
     const out = await approvedPersonnel('t1');
-    expect(out).toEqual([{ name: 'Ada Lovelace', role: 'Technical Lead', summary: '10y data engineering' }]);
+    expect(out).toEqual([{ name: 'Ada Lovelace', role: 'Technical Lead', summary: '10y data engineering', subject: null }]);
     expect(personFindAll).toHaveBeenCalledWith(expect.objectContaining({ where: { tenant_id: 't1', approved: true } }));
   });
 });

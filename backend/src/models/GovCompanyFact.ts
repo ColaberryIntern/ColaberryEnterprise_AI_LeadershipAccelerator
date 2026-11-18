@@ -11,6 +11,8 @@ export interface GovCompanyFactAttributes {
   source: string | null;
   /** Dossier grouping bucket (registrations, reps_certs, …); null for ungrouped/legacy facts. */
   category?: string | null;
+  /** Subject the fact is about (reporting, recruiting, ...); null for subject-agnostic facts. */
+  subject?: string | null;
   approved: boolean;
   approved_by_identity_id?: string | null;
   created_at?: Date;
@@ -24,6 +26,7 @@ class GovCompanyFact extends Model<GovCompanyFactAttributes> implements GovCompa
   declare value: string;
   declare source: string | null;
   declare category: string | null;
+  declare subject: string | null;
   declare approved: boolean;
   declare approved_by_identity_id: string | null;
   declare created_at: Date;
@@ -38,6 +41,7 @@ GovCompanyFact.init(
     value: { type: DataTypes.TEXT, allowNull: false },
     source: { type: DataTypes.TEXT, allowNull: true },
     category: { type: DataTypes.TEXT, allowNull: true },
+    subject: { type: DataTypes.TEXT, allowNull: true },
     approved: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     approved_by_identity_id: { type: DataTypes.UUID, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
