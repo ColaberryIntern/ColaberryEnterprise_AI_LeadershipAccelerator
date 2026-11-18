@@ -217,6 +217,40 @@ def slide_screenshot(path, cap):
     return img
 
 
+def clip_geometry(src_w, src_h):
+    """Where a recorded clip sits: the same bounds and centring as a screenshot slide."""
+    max_w, max_h = (1560, 700) if BURN_CAPTIONS else (1720, 950)
+    scale = min(max_w / src_w, max_h / src_h)
+    w, h = int(src_w * scale) // 2 * 2, int(src_h * scale) // 2 * 2
+    return (W - w) // 2, max(40, (H - h) // 2), w, h
+
+
+def clip_layer(src_w, src_h, cap):
+    """
+    The still part of a `clip` slide: background, the white card, the caption. The recording
+    is overlaid into the card by ffmpeg, so a clip and a screenshot look like the same video.
+
+    WHY A CLIP KIND. Ali, 18 Nov 2026: "show the person going through the tour" - a
+    screenshot of a product cannot show it being used. A clip is a real recording of the
+    real page (a browser screencast with a visible cursor), cut by start time; it is never
+    generated, and it is held on its last frame if the narration runs longer than the cut.
+    """
+    img = background().convert("RGBA")
+    x, top, w, h = clip_geometry(src_w, src_h)
+    pad = 20
+    rounded_card(img, [x - pad, top - pad, x + w + pad, top + h + pad], 20)
+    caption(img, cap)
+    return img
+
+
+def probe_size(path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                          "stream=width,height", "-of", "csv=p=0", path],
+                         capture_output=True, text=True).stdout.strip()
+    w, h = out.split(",")[:2]
+    return int(w), int(h)
+
+
 def slide_diagram(path, phases, cap):
     """
     The pipeline chart, large enough to read, beside the phase names.
@@ -355,6 +389,26 @@ def main():
                 "-framerate", f"{len(frames)}/{dur}",
                 "-i", os.path.join(fdir, "%03d.png"),
             ] + (["-i", voice] if has_voice else []) + (afilter if has_voice else []) + [
+                "-t", str(dur), "-r", str(FPS),
+                "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+                "-pix_fmt", "yuv420p",
+            ] + (acodec if has_voice else []) + [seg])
+        elif s["kind"] == "clip":
+            # A cut of a real screen recording: `path`, from `start` seconds, for the segment's
+            # duration, held on its last frame if the recording runs out first.
+            src_w, src_h = probe_size(s["path"])
+            x, top, w, h = clip_geometry(src_w, src_h)
+            png = os.path.join(SEG, f"{i:02d}.png")
+            clip_layer(src_w, src_h, s["caption"]).convert("RGB").save(png)
+            vf = (f"[1:v]scale={w}:{h}:flags=lanczos,setsar=1,tpad=stop_mode=clone:stop_duration=600[c];"
+                  f"[0:v][c]overlay={x}:{top}:shortest=0[v]")
+            run([
+                "ffmpeg", "-v", "error", "-y", "-loop", "1", "-framerate", str(FPS), "-i", png,
+                "-ss", str(s.get("start", 0)), "-i", s["path"],
+            ] + (["-i", voice] if has_voice else []) + [
+                "-filter_complex", vf + (";[2:a]adelay=500:all=1,apad[a]" if has_voice else ""),
+                "-map", "[v]",
+            ] + (["-map", "[a]"] if has_voice else []) + [
                 "-t", str(dur), "-r", str(FPS),
                 "-c:v", "libx264", "-preset", "medium", "-crf", "20",
                 "-pix_fmt", "yuv420p",

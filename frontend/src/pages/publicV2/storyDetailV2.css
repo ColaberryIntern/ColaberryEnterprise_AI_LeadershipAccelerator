@@ -404,6 +404,7 @@
 /* ------------------------------------------------------------------- cta --- */
 
 .cbv2-story__cta { display: grid; justify-items: center; text-align: center; }
+/* The compact, centred band is storyCtaBand.css. */
 
 /* --------------------------------------------------------- hero actions --- */
 

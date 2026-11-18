@@ -275,6 +275,24 @@ describe('the carousel is operable from a keyboard and traps nothing', () => {
     expect(scrollBy.mock.calls[0][0].behavior).toBe('smooth');
   });
 
+  it('says which slide is in view, and follows the track when it scrolls', () => {
+    // Ali, 2026-11-18: a carousel, not a strip with a scrollbar. The scrollbar is gone, so
+    // the count is how a reader knows there is more and where they are.
+    mount(<StoryMediaCarousel slides={carouselSlides([SHOT, PHOTO])} />);
+    expect(q('[data-testid="carousel-count"]')?.textContent).toBe('1 of 2');
+    const track = q('[data-testid="story-carousel-track"]') as HTMLElement;
+    Object.defineProperty(track, 'clientWidth', { configurable: true, value: 800 });
+    track.scrollLeft = 800;
+    act(() => { track.dispatchEvent(new Event('scroll')); });
+    expect(q('[data-testid="carousel-count"]')?.textContent).toBe('2 of 2');
+  });
+
+  it('prints the artifact description under its title, so the caption carries the message', () => {
+    const described = { ...SHOT, description: 'The report starts with the next best action.' };
+    mount(<StoryMediaCarousel slides={carouselSlides([described, PHOTO])} />);
+    expect(q('.cbv2-story-carousel__note')?.textContent).toBe('The report starts with the next best action.');
+  });
+
   it('survives an environment with no matchMedia at all', () => {
     delete (window as unknown as { matchMedia?: unknown }).matchMedia;
     mount(<StoryMediaCarousel slides={carouselSlides([SHOT, PHOTO])} />);

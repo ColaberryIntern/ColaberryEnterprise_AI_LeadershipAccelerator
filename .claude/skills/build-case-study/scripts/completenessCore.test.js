@@ -2,7 +2,40 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { presenceProfile, selectReferences, compareToReferences, formatReport } = require('./completenessCore');
+const { presenceProfile, selectReferences, compareToReferences, formatReport, codeShownArtifacts, storyInBriefLint } = require('./completenessCore');
+
+test('no code shown: a prompt file, a JSON ledger and a Claude Code screen are caught; a chart is not', () => {
+  const pub = (title, publicUrl) => ({ title, publicUrl, visibility: 'public' });
+  const found = codeShownArtifacts([
+    pub('ONE_MOVE_PROMPT.md: the prompt Claude Code runs', 'https://e/shot-prompt.png'),
+    pub('The ledger entry', 'https://e/decisions.json'),
+    pub('The weekly loop in five steps', 'https://e/loop.png'),
+    pub('Where they come from: ad source and device', 'https://e/source.png'),
+    pub('The funnel, from ad visit to a perfect Quick check', 'https://e/funnel.png'),
+    { title: 'Terminal session', publicUrl: 'https://e/t.png', visibility: 'private' },
+  ]);
+  assert.deepEqual(found, ['ONE_MOVE_PROMPT.md: the prompt Claude Code runs', 'The ledger entry']);
+});
+
+test('the story in brief: a figure in What happened, no ticket words, no copy of the standfirst', () => {
+  const good = [
+    { label: 'Before', text: 'Applicants emailed two staff inboxes and the rules lived in one head.' },
+    { label: 'What we built', text: 'One portal from application to cohort, with a person deciding.' },
+    { label: 'What happened', text: '8 of 8 admission decisions were made by a reviewer.' },
+  ];
+  assert.deepEqual(storyInBriefLint(good, 'A portal that admits interns.'), []);
+  const bad = [
+    { label: 'Before', text: 'The welcome flow in enrollmentService.ts sent the wrong email (PR #4190).' },
+    { label: 'What we built', text: 'A portal that admits interns with a reviewer in charge of every call.' },
+    { label: 'What happened', text: 'It worked well and people liked it.' },
+    { label: 'Why it matters', text: 'It worked well and people liked it.' },
+  ];
+  const problems = storyInBriefLint(bad, 'A portal that admits interns with a reviewer in charge of every call.');
+  assert.ok(problems.some((p) => p.includes('"What happened" carries no figure')));
+  assert.ok(problems.some((p) => p.includes('"Before" reads like a ticket')));
+  assert.ok(problems.some((p) => p.includes('"What we built" repeats the standfirst')));
+  assert.ok(problems.some((p) => p.includes('"Why it matters" repeats another beat')));
+});
 
 const full = (extra = {}) => ({
   identity: { slug: 's', title: 't', summary: 'x', heroImageUrl: 'https://e/c.jpg' },
