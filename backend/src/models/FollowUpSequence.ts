@@ -1,6 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 import type { CampaignChannel } from './ScheduledEmail';
+import type { BrainPiece } from '../services/openHouseBrain';
 
 export interface SequenceStep {
   delay_days: number;
@@ -20,7 +21,7 @@ export interface SequenceStep {
   fallback_channel?: CampaignChannel | null;
   step_goal?: string;
   /** OH1f: the one piece of the content brain this step's email is built around (openHouseBrain.ts). */
-  brain_piece?: 'their_progress' | 'builder_spotlight' | 'day_of';
+  brain_piece?: BrainPiece;
   /** AI instructions — what the AI should achieve/say in this step.
    *  The AI generates the actual message content at send time using this + lead context.
    *  When set, this is the primary content source; body_template becomes fallback. */

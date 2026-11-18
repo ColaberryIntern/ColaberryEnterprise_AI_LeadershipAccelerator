@@ -2,6 +2,7 @@ import axios from 'axios';
 import { OpenclawSignal } from '../../../models';
 import { getOptimizedScanConfig } from './openclawSignalScaler';
 import type { AgentExecutionResult, AgentAction } from '../types';
+import { mapHnHit } from '../../mayaBrain/viralSignals';
 
 interface PlatformResult {
   platform: string;
@@ -174,21 +175,8 @@ async function scanPlatform(
         timeout: 15000,
       });
       const hits = resp.data?.hits || [];
-      for (const hit of hits) {
-        results.push({
-          platform: 'hackernews',
-          source_url: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
-          author: hit.author || '',
-          title: hit.title || '',
-          content_excerpt: (hit.story_text || '').slice(0, 500),
-          details: {
-            objectID: hit.objectID,
-            points: hit.points,
-            num_comments: hit.num_comments,
-            created_at: hit.created_at,
-          },
-        });
-      }
+      // OH1i: one HN mapper, shared with the Show HN build-idea collector (mayaBrain/viralSignals).
+      for (const hit of hits) results.push(mapHnHit(hit));
       break;
     }
 
