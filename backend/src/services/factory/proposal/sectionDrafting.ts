@@ -30,9 +30,9 @@ const DOC_TYPE_TEMPLATES: Record<string, string> = {
   technical:
     'Lead each requirement with the hot button, then the feature, the benefit to the agency, then the proof. Stay specific to this scope; never write filler that would fit any proposal.',
   reps_certs:
-    'State each representation or certification plainly; where a specific registration number, date, or status is required, write a [PLACEHOLDER: …] rather than a value.',
+    'State each representation or certification plainly; where a specific registration number, date, or status is required, write a [PLACEHOLDER: a full self-describing phrase naming exactly what is needed, for example "the firm SAM.gov registration status" or "the firm CAGE code"] rather than a value or a bare field label.',
   forms:
-    'Reproduce the form fields as a labelled list; fill only values present in the grounding and mark every other field [PLACEHOLDER: …].',
+    'Reproduce the form fields as a labelled list; fill only values present in the grounding and mark every other field [PLACEHOLDER: a full self-describing phrase naming that field and what it needs, for example "the authorized signer name", never the bare field label].',
 };
 
 /** PURE: the drafting instruction for a document type, with a safe default for an unknown key. */
@@ -63,14 +63,17 @@ const SECTION_SYSTEM =
   'sections. Open the section body with the exact requirement-reference line given, then follow the section plan ' +
   'if one is provided. CRITICAL no fabrication: use ONLY the specific facts in the grounding; for any specific fact ' +
   'the section needs but the grounding does not contain (a client, metric, date, dollar figure, certification, or ' +
-  'person), write a visible [PLACEHOLDER: what the firm must provide] rather than inventing it. ' +
+  'person), write a visible [PLACEHOLDER: a full self-describing phrase naming exactly what the firm must provide, ' +
+  'for example "the firm SAM.gov registration status", never a bare field label like "Status" or "See quote"] ' +
+  'rather than inventing it. ' +
   'EXCEPTION for grouped records: when the missing item is a WHOLE past-performance reference or a WHOLE key person ' +
   '(not a single field), write ONE grouped marker in the HTML — [RECORD: reference] for a past-performance entry, ' +
   '[RECORD: personnel] for a person — instead of a [PLACEHOLDER] per field, and do NOT list that record in gaps. A ' +
   'record is answered as one unit (reference: client, scope, period of performance, outcome; personnel: name, role, ' +
   'relevant experience) and must never be split into separate field placeholders or gaps. Return STRICT JSON ' +
   '{"html":"<the section, allowed tags only, starting with an <h3> heading>","gaps":[{"question":"...","suggestions":["..."]}]} ' +
-  'where gaps lists each specific FIELD-LEVEL fact you placeholdered (never a [RECORD] marker). Allowed tags: h3, h4, ' +
+  'where gaps lists each specific FIELD-LEVEL fact you placeholdered (never a [RECORD] marker), each "question" phrased ' +
+  'as a complete, self-describing question a person can answer without seeing the form (never a bare label). Allowed tags: h3, h4, ' +
   'p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No attributes, no links, no images, ' +
   'no <script>, no <style>.';
 

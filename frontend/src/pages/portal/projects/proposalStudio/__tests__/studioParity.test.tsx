@@ -402,6 +402,16 @@ describe('deriveContractStepState — unified stepper statuses for an assigned c
 describe('StudioShell — the UNIFIED stepper routes steps 1-5 to the Qualification Workspace, 6-8 in the Studio', () => {
   const cockpitApi = { askCopilot: async () => ({ intent: 'other', answer: 'ok' }) } as any;
 
+  it('shows the live build bar while a document is building', async () => {
+    const building = { ...VIEW, proposalDocuments: [doc({ key: 'technical', status: 'drafting', cycle: { status: 'running', runId: 'r1' } as any })] } as unknown as StudentGovProjectView;
+    await render(<StudioShell view={building} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    expect(present('building-bar')).toBe(true);
+  });
+  it('hides the build bar when nothing is building', async () => {
+    await render(<StudioShell view={VIEW} projectId="p1" onReload={noop} cockpitApi={cockpitApi} studioApi={studioApi} reviewApi={reviewApi} />);
+    expect(present('building-bar')).toBe(false);
+  });
+
   it('viewOpensQualification selects only the pre-award assessment stages', () => {
     expect(['snapshot', 'solicitation', 'fit', 'decide'].every(viewOpensQualification)).toBe(true);
     expect(['evidence', 'overview', 'package', 'outcome', 'editor', 'needs'].some(viewOpensQualification)).toBe(false);

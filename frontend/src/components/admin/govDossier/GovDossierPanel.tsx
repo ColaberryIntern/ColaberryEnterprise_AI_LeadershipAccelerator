@@ -334,7 +334,7 @@ function NeedsAcrossContractsSection(): React.ReactElement {
                 <span className={`badge rounded-pill me-2 ${g.blocking === 'fatal' ? 'bg-danger-subtle text-danger-emphasis' : 'bg-warning-subtle text-warning-emphasis'}`}>{groupKindTag(g.groupKind)}</span>
                 <strong>{g.groupLabel}</strong>
                 {g.subject && g.subject !== 'general' ? <span className="badge rounded-pill bg-info-subtle text-info-emphasis ms-2" data-testid="group-subject">{g.subjectLabel}</span> : null}
-                <div className="small text-secondary">{g.concepts.map((c) => c.label).join(', ')}</div>
+                <div className="small text-secondary">{g.concepts.map((c) => (c.asks && c.asks[0]) || c.label).join(', ')}</div>
                 <div className="small text-secondary">Asked on: {g.projects.map((p) => p.projectName).filter(Boolean).join(', ')}</div>
               </span>
               <span className="d-flex align-items-center gap-2 flex-shrink-0">
@@ -437,12 +437,18 @@ function GroupFillModal({ group, onCancel, onFilled, onError }: { group: NeedGro
               <label className="form-label">Bio</label>
               <textarea className="form-control" rows={4} value={form.resumeHtml ?? ''} onChange={set('resumeHtml')} />
             </>)}
-            {!isRecord && group.concepts.map((c) => (
-              <div key={c.conceptId} className="mb-2">
-                <label className="form-label">{c.label}</label>
-                <input className="form-control" data-testid={`fill-${c.conceptId}`} value={form[c.conceptId] ?? ''} onChange={set(c.conceptId)} />
-              </div>
-            ))}
+            {!isRecord && group.concepts.map((c) => {
+              const question = (c.asks && c.asks[0]) || c.label;
+              const quote = c.sourceQuote ? (c.sourceQuote.length > 160 ? `${c.sourceQuote.slice(0, 160)}...` : c.sourceQuote) : null;
+              return (
+                <div key={c.conceptId} className="mb-3">
+                  <label className="form-label fw-semibold">{question}</label>
+                  {c.why ? <div className="form-text mt-0 mb-1">{c.why}</div> : null}
+                  {quote ? <div className="small text-secondary fst-italic mb-1">From the solicitation: &ldquo;{quote}&rdquo;</div> : null}
+                  <input className="form-control" data-testid={`fill-${c.conceptId}`} placeholder="Type the answer" value={form[c.conceptId] ?? ''} onChange={set(c.conceptId)} />
+                </div>
+              );
+            })}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-outline-secondary" onClick={onCancel}>Cancel</button>

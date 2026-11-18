@@ -10,12 +10,16 @@ import { anyNotStarted, docStageLabel } from './buildHelpers';
  * documents" primary action when any document is not started. Every number is the real projection's.
  */
 export default function WhereWeAre(
-  { view, onNavigate, studioApi, onReload, onToast }:
-  { view: StudentGovProjectView; onNavigate: (v: StudioView) => void; studioApi: GovStudioApi; onReload: () => void; onToast: (m: string) => void },
+  { view, onNavigate, studioApi, onReload, onToast, onBuildKicked }:
+  { view: StudentGovProjectView; onNavigate: (v: StudioView) => void; studioApi: GovStudioApi; onReload: () => void; onToast: (m: string) => void;
+    /** Starts the shell's live build poller the instant Build all is requested. */
+    onBuildKicked?: () => void },
 ): React.ReactElement {
   const readiness = view.proposalReadiness ?? { pct: 0, passing: 0, total: 0 };
   const docs = (view.proposalDocuments ?? []);
-  const scored = docs.filter((d) => d.docType !== 'form' && !d.superseded);
+  // Match the backend readiness meter's SCORED subset: narratives/derived/generated/build, minus forms (signed, not
+  // scored), the sealed price sheet, and superseded docs. Keeping this in sync stops the mini-list disagreeing with the ring.
+  const scored = docs.filter((d) => d.docType !== 'form' && !d.superseded && d.key !== 'pricing');
   const r = 34, c = 2 * Math.PI * r;
   const p = readiness.pct;
   const needCount = view.needsCount ?? 0;
@@ -23,9 +27,9 @@ export default function WhereWeAre(
 
   const buildAll = useCallback(async () => {
     setBuilding(true);
-    try { const res = await studioApi.buildAll(view.projectId); onToast(res.enqueued.length ? `Building ${res.enqueued.length} document${res.enqueued.length === 1 ? '' : 's'}…` : 'Nothing to build right now.'); onReload(); }
+    try { const res = await studioApi.buildAll(view.projectId); onBuildKicked?.(); onToast(res.enqueued.length ? `Building ${res.enqueued.length} document${res.enqueued.length === 1 ? '' : 's'}…` : 'Nothing to build right now.'); onReload(); }
     catch { onToast('Could not start Build all. Please try again.'); } finally { setBuilding(false); }
-  }, [studioApi, view.projectId, onReload, onToast]);
+  }, [studioApi, view.projectId, onReload, onToast, onBuildKicked]);
 
   const lowest = scored.filter((d) => docScore(d) < 95).sort((a, b) => docScore(a) - docScore(b))[0];
   const formsPending = docs.filter((d) => d.docType === 'form' && !(d.latest?.passes)).length;
@@ -57,7 +61,7 @@ export default function WhereWeAre(
               <circle cx="42" cy="42" r={r} fill="none" stroke="var(--gps-sunk)" strokeWidth="9" />
               <circle cx="42" cy="42" r={r} fill="none" stroke={colr(p)} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(c * p) / 100} ${c}`} transform="rotate(-90 42 42)" />
             </svg>
-            <div><div className="gps-big gps-num">{p}%</div><div className="gps-muted gps-small">target 95% on every document &middot; {readiness.passing} of {readiness.total} documents pass</div></div>
+            <div><div className="gps-big gps-num">{p}%</div><div className="gps-muted gps-small">target 95% on every scored document &middot; {readiness.passing} of {readiness.total} scored documents pass</div>{docs.length > readiness.total && <div className="gps-muted gps-small" style={{ marginTop: 2 }}>The other {docs.length - readiness.total} of {docs.length} documents are forms and the sealed price sheet. Those are signed, not scored, so they are not in this count.</div>}</div>
           </div>
           <div className="gps-mini-docs" style={{ marginTop: 14 }}>
             {scored.map((d) => { const sc = docScore(d); const scored0 = !!d.latest; return (<div className="gps-r" key={d.key} data-testid={`overview-doc-${d.key}`} data-stage={docStageLabel(d)}><span>{d.title} <span className="gps-tag gps-small" style={{ marginLeft: 4 }}>{docStageLabel(d)}</span></span><Bar v={sc} /><b className="gps-num" style={{ textAlign: 'right' }}>{scored0 ? sc : '—'}</b></div>); })}
