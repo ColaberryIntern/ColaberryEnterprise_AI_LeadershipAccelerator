@@ -64,6 +64,18 @@ const RESTING = new Set(['case_study_not_approved', 'snapshot_not_approved']);
   const [cover] = hero ? await q("select artifact_type, source_type from case_study_artifacts where case_study_id=:id and public_url=:u limit 1", { id, u: hero }) : [];
   add('cover is a picked thumbnail (§8f: photo artifact, generated)', !!cover && cover.artifact_type === 'photo', cover ? `${cover.artifact_type}/${cover.source_type}` : 'no cover artifact');
 
+  // The three things every first try has missed (Ali, 2026-11-18). Each is its own named check, so a
+  // record cannot read "nearly complete" while the pictures, the video or the picked cover are absent.
+  const [shots] = await q(`select count(*)::int n from case_study_artifacts where case_study_id=:id and artifact_type='screenshot'
+      and status='approved' and visibility='public' and public_url ~* '\\.(png|jpe?g|webp)'`, { id });
+  const appScreensAccepted = accepted['record.appScreens'];
+  add(`at least 3 real screens of the software (§8, captureAppScreens.js)${appScreensAccepted ? ' [ACCEPTED: ' + appScreensAccepted + ']' : ''}`,
+    shots.n >= 3 || !!appScreensAccepted, `${shots.n} approved public screenshot artifact(s)`);
+  const wv = latest.content.walkthroughVideo || {};
+  add('walkthrough video with captions and a poster (§8c)', !!(wv.url && wv.captionsUrl && wv.posterUrl && wv.durationSeconds), wv.url ? `${wv.durationSeconds || '?'} s, captions ${wv.captionsUrl ? 'yes' : 'NO'}, poster ${wv.posterUrl ? 'yes' : 'NO'}` : 'no video');
+  const pick = (latest.content.identity || {}).heroImageUrl;
+  add('the cover is the concept Ali picked (§8f), and the video poster matches it', !!pick && wv.posterUrl === pick, pick ? (wv.posterUrl === pick ? 'cover = poster' : 'poster differs from cover') : 'no cover yet: generate three concepts and open the picker on day one');
+
   // The real gate, with service-link facts (the bare gate reports every record as unlinked).
   const gate = require(`${D}/services/caseStudy/caseStudyPublishGate`);
   const store = require(`${D}/services/caseStudy/caseStudyPublicationStore`);
