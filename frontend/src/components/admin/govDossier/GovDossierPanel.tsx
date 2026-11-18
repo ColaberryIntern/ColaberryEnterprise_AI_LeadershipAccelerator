@@ -438,14 +438,22 @@ function GroupFillModal({ group, onCancel, onFilled, onError }: { group: NeedGro
               <textarea className="form-control" rows={4} value={form.resumeHtml ?? ''} onChange={set('resumeHtml')} />
             </>)}
             {!isRecord && group.concepts.map((c) => {
-              const question = (c.asks && c.asks[0]) || c.label;
+              // A bare label like "Status" or "See quote" tells the person nothing. When the question is generic,
+              // lead with the "why it matters" (which reads as a real question), and fall back to a composed one.
+              const raw = ((c.asks && c.asks[0]) || c.label || '').trim();
+              const generic = !raw || raw.length <= 3 || /^(see quote|status|quote|value|answer|detail|n\/?a|tbd|\.{2,}|[–—-]+)$/i.test(raw);
+              const question = !generic ? raw
+                : (c.why && c.why.trim() ? c.why.trim() : `What is the ${(c.label || 'value').toLowerCase()} for ${group.groupLabel}?`);
+              const showWhy = !!(c.why && c.why.trim() && c.why.trim() !== question);
               const quote = c.sourceQuote ? (c.sourceQuote.length > 160 ? `${c.sourceQuote.slice(0, 160)}...` : c.sourceQuote) : null;
+              const example = (c.suggestions || []).find((s) => s && s.trim());
               return (
                 <div key={c.conceptId} className="mb-3">
                   <label className="form-label fw-semibold">{question}</label>
-                  {c.why ? <div className="form-text mt-0 mb-1">{c.why}</div> : null}
+                  {showWhy ? <div className="form-text mt-0 mb-1">{c.why}</div> : null}
                   {quote ? <div className="small text-secondary fst-italic mb-1">From the solicitation: &ldquo;{quote}&rdquo;</div> : null}
-                  <input className="form-control" data-testid={`fill-${c.conceptId}`} placeholder="Type the answer" value={form[c.conceptId] ?? ''} onChange={set(c.conceptId)} />
+                  {example ? <div className="small text-success-emphasis mb-1">Example of a good answer: {example}</div> : null}
+                  <input className="form-control" data-testid={`fill-${c.conceptId}`} placeholder={example ? `e.g. ${example.length > 60 ? `${example.slice(0, 60)}...` : example}` : 'Type the answer'} value={form[c.conceptId] ?? ''} onChange={set(c.conceptId)} />
                 </div>
               );
             })}

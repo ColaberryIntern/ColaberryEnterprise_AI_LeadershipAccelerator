@@ -251,6 +251,8 @@ export interface GovProjectNeed {
   usedIn: Array<{ docKey: string; sectionKey?: string }>;
   format: string; options?: string[]; blocking: 'fatal' | 'score';
   source?: { quote: string; file: string; page?: number };
+  /** Example good answers, so the Needs form shows what a good answer looks like instead of only a terse label. */
+  suggestions?: string[];
   /** Present iff kind === 'record': whether this groups a past-performance reference or a key person, and the
    *  field keys the grouped form collects. */
   recordType?: GovRecordType; recordFields?: string[];

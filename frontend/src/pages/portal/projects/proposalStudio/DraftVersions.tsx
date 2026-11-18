@@ -26,6 +26,13 @@ export default function DraftVersions(
   const [docKey, setDocKey] = useState<string>(() => (initialDocKey && scored.some((d) => d.key === initialDocKey) ? initialDocKey : scored[0]?.key ?? ''));
   const doc = scored.find((d) => d.key === docKey) ?? null;
 
+  // REQ-### chips carry the requirement's own text on hover, so the editor is not a wall of opaque ids.
+  const reqText = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of view.requirements ?? []) if (r.canonicalReqId && r.statement) m.set(r.canonicalReqId, r.statement);
+    return m;
+  }, [view.requirements]);
+
   const [versions, setVersions] = useState<GovDocumentVersion[]>([]);
   const [selVerId, setSelVerId] = useState<string | null>(null);
   const [content, setContent] = useState<GovVersionContent | null>(null);
@@ -138,7 +145,7 @@ export default function DraftVersions(
                       <div className="gps-outline-row" key={r.sectionKey}>
                         <div style={{ minWidth: 0 }}>
                           <b>{r.heading}</b>{r.suggested && <span className="gps-tag acc" style={{ marginLeft: 6 }}>Suggested</span>}
-                          <div className="gps-choice-row" style={{ marginTop: 4 }}>{r.requirementIds.map((id) => <span key={id} className="gps-tag">{id}</span>)}</div>
+                          <div className="gps-choice-row" style={{ marginTop: 4 }}>{r.requirementIds.map((id) => <span key={id} className="gps-tag" style={{ cursor: 'help' }} title={reqText.get(id) || id}>{id}</span>)}</div>
                         </div>
                         <div className="gps-num gps-small" title="page budget">{r.pageBudget != null ? `${r.pageBudget} pg` : '—'}</div>
                         <span className={`gps-tag ${r.hasContent ? 'ok' : ''}`}>{r.hasContent ? 'Drafted' : 'Empty'}</span>
@@ -173,7 +180,7 @@ export default function DraftVersions(
                 ) : paperSections.length > 0 ? (
                   paperSections.map((s) => (
                     <section className="gps-ed-section" data-testid="ed-section" data-key={s.sectionKey} key={s.sectionKey}>
-                      <div className="gps-reqref" data-testid="ed-reqref">{s.requirementIds && s.requirementIds.length > 0 ? <>Answers {s.requirementIds.map((id) => <span className="gps-tag" key={id}>{id}</span>)}</> : <span className="gps-muted">No mapped requirement</span>}
+                      <div className="gps-reqref" data-testid="ed-reqref">{s.requirementIds && s.requirementIds.length > 0 ? <>Answers {s.requirementIds.map((id) => <span className="gps-tag" key={id} style={{ cursor: 'help' }} title={reqText.get(id) || id}>{id}</span>)}</> : <span className="gps-muted">No mapped requirement</span>}
                         {canEdit && <button type="button" className="gps-btn sm" data-testid="ed-sec-edit" style={{ marginLeft: 'auto' }} onClick={() => setMode('edit')}>Edit</button>}
                       </div>
                       {/* eslint-disable-next-line react/no-danger */}

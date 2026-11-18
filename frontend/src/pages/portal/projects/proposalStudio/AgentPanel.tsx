@@ -123,6 +123,7 @@ export default function AgentPanel(
                   <span className="gps-tag" style={{ alignSelf: 'flex-start' }}>{needKindLabel(n.kind)}</span>
                   <b>{n.ask}</b>
                   {n.why && <span className="gps-why">{n.why}</span>}
+                  {(n.suggestions || []).some((s) => s && s.trim()) && <span className="gps-small" style={{ color: 'var(--gps-ok)' }}>Example: {(n.suggestions || []).find((s) => s && s.trim())}</span>}
                   {inline ? (
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input className="gps-input" aria-label="Answer" disabled={readOnly} value={drafts[n.key] ?? ''} onChange={(e) => setDrafts((d) => ({ ...d, [n.key]: e.target.value }))} />

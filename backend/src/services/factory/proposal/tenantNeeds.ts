@@ -66,6 +66,8 @@ export interface NeedGroupConcept {
    *  instead of showing only a terse label. Optional; present when the underlying need carried them. */
   why?: string;
   sourceQuote?: string;
+  /** Example good answers, so the Fill form shows what a good answer looks like and a person can replicate it. */
+  suggestions?: string[];
 }
 export interface NeedGroupCard {
   groupSlug: string;
@@ -127,6 +129,7 @@ export function groupTenantNeeds(needs: TenantNeed[]): NeedGroupCard[] {
     if (!concept.needKeys.includes(n.key)) concept.needKeys.push(n.key);
     if (!concept.why && typeof n.why === 'string' && n.why.trim()) concept.why = n.why.trim();
     if (!concept.sourceQuote && n.source && typeof n.source.quote === 'string' && n.source.quote.trim()) concept.sourceQuote = n.source.quote.trim();
+    if ((!concept.suggestions || !concept.suggestions.length) && Array.isArray(n.suggestions) && n.suggestions.length) concept.suggestions = n.suggestions.filter((s) => typeof s === 'string' && s.trim()).slice(0, 3);
   }
   const cards = [...byCard.values()];
   for (const c of cards) c.bidCount = c.projects.length;

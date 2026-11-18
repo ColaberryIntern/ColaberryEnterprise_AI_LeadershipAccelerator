@@ -37,6 +37,15 @@ describe('extractNeeds', () => {
     );
     expect(out.map((n) => n.key).sort()).toEqual(['fact:years', 'file:hub']);
   });
+
+  it('carries the gap suggestions (example answers) onto a need that has none', () => {
+    const out = extractNeeds([{ need: need({ key: 'fact:duns', kind: 'fact' }), suggestions: ['12-345-6789', '', '  '] }], []);
+    expect(out[0].suggestions).toEqual(['12-345-6789']); // blanks dropped
+  });
+  it('does not overwrite suggestions the need already carries', () => {
+    const out = extractNeeds([{ need: need({ key: 'fact:duns', kind: 'fact', suggestions: ['kept'] }), suggestions: ['ignored'] }], []);
+    expect(out[0].suggestions).toEqual(['kept']);
+  });
 });
 
 describe('dropResolved', () => {

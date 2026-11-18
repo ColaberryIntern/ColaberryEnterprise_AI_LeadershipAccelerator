@@ -47,12 +47,19 @@ Branch: workstream/studio-feed-and-counts (off origin/main @ cd6e947d).
 
 - [x] 5/6/7 Readiness explanation + build meter (see item 1/7 above; readiness stays the quality ring)
 
-## Still open in this PR (next)
-- [ ] 8/9/10 Dossier Fill clarity: a contextual question (not "Status"/"See quote"), a REQ-### hover
-      tooltip with the requirement text, and an example of a good answer (from the gap suggestions).
-      Needs: carry `suggestions` + requirement text onto HumanNeed/concept, then render them.
+- [x] 8/10 Dossier + in-studio Needs clarity: a contextual question (when the ask is a bare "Status"/
+      "See quote" it leads with the why, else a composed question) + an example of a good answer.
+  - HumanNeed gained `suggestions` (example answers); collectProjectNeeds enriches each need from the
+    gap's own `suggestions` column at read time (fixes existing data, not just new drafts). It flows
+    through aggregateNeeds (spread-preserved), the pass-through needs route, and groupTenantNeeds (onto
+    the dossier concept). Rendered in the dossier GroupFillModal, the in-studio NeedsInbox card, and the
+    AgentPanel "Needs you" card. The NeedsInbox doc chips are now labelled "Answering this unblocks:" so
+    the unblocked documents (e.g. "Technical proposal") are not mistaken for answer options.
+- [x] 9 REQ-### hover tooltip: the editor's requirement chips (DraftVersions outline + paper) carry the
+      requirement's statement text on hover (built from view.requirements), cursor: help.
 
-## Verification so far (CI gates)
-- Backend tsc clean (pre-existing maxmind only); proposalActivity jest 4/4; studioU1 route test
-  (mocks loadProposalActivity) unaffected.
-- Frontend tsc clean; proposalStudio react-scripts suites 108/108.
+## Verification (CI gates) - all green
+- Backend tsc clean (pre-existing maxmind only); jest proposalActivity 4/4, collectProjectNeeds +
+  tenantNeedsGrouping green (16/16 across the three), frozen frontendTypographyLint + frontendCopyLint
+  pass (334 content tests); studioU1 route test (mocks loadProposalActivity) unaffected.
+- Frontend tsc clean; react-scripts suites 118/118 (govDossier + proposalStudio); build (CI=true) EXIT 0.

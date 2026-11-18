@@ -31,6 +31,9 @@ export interface HumanNeed {
   usedIn: Array<{ docKey: string; sectionKey?: string }>;
   format: string;
   options?: string[];
+  /** Example good answers, so a person filling this in sees what one looks like and can replicate it (not just a
+   *  terse label). Carried from the gap's own `suggestions`; optional so every existing need literal stays valid. */
+  suggestions?: string[];
   blocking: 'fatal' | 'score';
   source?: { quote: string; file: string; page?: number };
   /** Present iff `kind === 'record'`: whether this groups a past-performance reference or a key person, and the
