@@ -130,6 +130,35 @@ limit, malformed file) comes back as a classified result, and an unexpected thro
 `workspace_verification_failed` while the pull still succeeds. There is deliberately **no
 webhook** — the reasoning is in `docs/BUILD_VERIFICATION_CONTRACT.md`.
 
+> **That "no webhook" sentence is now out of date, and this is the correction.** A GitHub
+> push webhook does exist and is the live cadence: `githubPushVerification` has taken
+> **2,473 deliveries since 16 August 2026**, and it calls the same `verifyBuildFromRepo`.
+> The sync button is no longer the only caller.
+
+**The cadence floor, and the silence detector** (phase A2b). The webhook is the cadence, and
+it is a good one while it fires. The gap it leaves is SILENCE: a project whose hook was
+never registered verifies never, and that is indistinguishable from a project with nothing
+to do. Two modules close it, and **both are off by default**.
+
+- `verificationSweepService.ts` is a bounded sweep on the existing `aiOpsScheduler`
+  registry, every 15 minutes, re-verifying the projects most overdue a look. It picks the
+  **stalest first**, so it yields to the push path rather than competing with it, and a 6
+  hour cooldown stops it re-running the same project every tick. It orders by
+  `verification_json ->> 'checked_at'`, **not** `student_tasks.updated_at`: measured on
+  2026-11-18, 93 production rows share one identical `updated_at` because a bulk write
+  stomped the column, so ordering by it would pick near-arbitrary projects while claiming to
+  pick the stalest. Projects never verified at all come first, and there are 34 of them.
+  Three modes, default `off`; `report_only` selects a batch and logs it **without calling
+  the verifier**, which matters because `verifyBuildFromRepo` latches stories verified and
+  awards XP.
+- `buildSilenceReport.ts` answers "which projects have stopped reporting" and puts one
+  finding on the health report. Measured 2026-11-18: of **43** projects bound to a
+  connection with a published plan, **28** have not been heard from in 14 days, and every
+  one of those is on an ACTIVE enrollment. So the finding carries the ratio and the bands
+  and names only the **three** that have never delivered a single webhook, because a
+  finding listing 28 projects every run is noise. The full list is at
+  `GET /api/admin/orchestration/build-silence`.
+
 **`.colaberry/progress.json` is no longer platform-only bookkeeping.** It is now the
 two-way contract, and it is co-owned exactly the way `CLAUDE.md` is (H-5):
 
