@@ -43,11 +43,13 @@ const report = (rows: ChannelRow[], over: Partial<ChannelTruth> = {}): ChannelTr
 const render = (r: ChannelTruth) => renderToStaticMarkup(<ChannelTable report={r} />);
 
 describe('the channel panel never prints a number nobody measured', () => {
-  it('shows a dash, not $0, where no spend was ever recorded', () => {
+  it('says "Not recorded", not $0, where no spend was ever recorded', () => {
     const html = render(report([row()]));
-    // $0 here would assert the open house was free. It was not measured, which is different.
+    // $0 here would assert the open house cost nothing. It was not measured, which differs.
     expect(html).not.toContain('$0');
-    expect(html).toContain('—');
+    // Spelled out rather than punctuated: a bare hyphen in a money column reads as zero.
+    // (House style also bans the em dash in frontend source, per the D1 typography gate.)
+    expect(html).toContain('Not recorded');
   });
 
   it('shows the spend and a dash for cost when a channel was paid for and nobody paid back', () => {
@@ -66,8 +68,10 @@ describe('the channel panel never prints a number nobody measured', () => {
     // The most useful fact on the panel: $3,895 spent, nobody paying. Both must be visible.
     expect(html).toContain('$3,895');
     expect(html).toContain('channel-row-paid_landing');
-    // And the cost cell must not invent a figure from a zero denominator.
-    expect(html).toMatch(/channel-cost-paid_landing[^]*?—/);
+    // And the cost cell must not invent a figure from a zero denominator. Scoped to the cell
+    // itself: an earlier version of this matched lazily across the whole table and tripped on
+    // the footer's own spend total, which proved nothing about the cell.
+    expect(html).toMatch(/data-testid="channel-cost-paid_landing"><div>-<\/div>/);
   });
 
   it('never blends a cost per member across channels in the total row', () => {

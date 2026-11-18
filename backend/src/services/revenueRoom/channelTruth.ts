@@ -17,7 +17,7 @@
  *     enrollments.referral_channel  0 of 26   NULL for every paying member
  *
  * A panel keyed on campaign would be blank for 19 of the 26 people who pay us. Keyed on
- * `leads.source` it is complete today. `referral_channel` is the free-text VARCHAR(50) that
+ * `leads.source` it is complete today. `referral_channel` is the open-text VARCHAR(50) that
  * `enrollments` carried before R18 added `lead_id`; it is not a fallback, it is empty.
  *
  * This is deliberately a CHANNEL panel, not a campaign panel. Campaign-level return already
@@ -81,7 +81,7 @@ const LABELS: Record<string, string> = {
   ccpp_alumni: 'CCPP alumni',
   ccpp_winback: 'CCPP winback',
   paid_landing: 'Paid ads and landing pages',
-  free_signup: 'Free signup (landing)',
+  free_signup: 'Landing page signup',
   apollo: 'Apollo outbound',
   apollo_contacts: 'Apollo contacts',
   unlinked: 'No lead on record',
@@ -148,7 +148,7 @@ export function noteForChannel(row: Omit<ChannelRow, 'note'>): string {
   }
   if (row.spendCents === null) {
     parts.push('No spend was ever recorded against this channel, so cost per member cannot be '
-      + 'computed. That is not the same as it having been free.');
+      + 'computed. That is not the same as it having cost nothing.');
   }
   if (row.leads > 0 && row.payingMembers > 0) {
     parts.push(`${row.payingMembers} of ${row.leads.toLocaleString('en-US')} lead rows ever `

@@ -100,9 +100,9 @@ describe('the invariant that stops an invented cost reaching the page', () => {
 });
 
 describe('wording', () => {
-  it('says plainly that blank spend is not the same as free', () => {
+  it('says plainly that blank spend is not the same as costing nothing', () => {
     const r = row({ spendCents: null });
-    expect(noteForChannel(r)).toMatch(/not the same as it having been free/);
+    expect(noteForChannel(r)).toMatch(/not the same as it having cost nothing/);
   });
 
   it('calls a channel with spend and no payers a measured zero', () => {
@@ -154,7 +154,7 @@ describe('getChannelTruth', () => {
     const oh = out.rows.find((r) => r.key === 'open_house')!;
 
     expect(landing.spendCents).toBe(389480);
-    // The whole point. The open house was not free; we simply never recorded a cost for it.
+    // The whole point. The open house was not costless; we simply never recorded a cost.
     expect(oh.spendCents).toBeNull();
     expect(oh.costPerPayingMemberCents).toBeNull();
     expect(oh.costStatus).toBe('unmeasurable');

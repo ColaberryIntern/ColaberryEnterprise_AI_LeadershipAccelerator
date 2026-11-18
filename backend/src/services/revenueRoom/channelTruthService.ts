@@ -24,7 +24,7 @@
  * Spend is keyed by campaign, campaigns run against landing pages, and the landing sources are
  * the population that buys. Attributing a share of Meta spend to the open house would be an
  * invention. Every other channel therefore reports `spendCents: null`, meaning NOT RECORDED —
- * never 0, which would assert those channels were free.
+ * never 0, which would assert those channels cost nothing.
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';

@@ -4,10 +4,10 @@ import { SectionCard } from '../shell';
 import { StatusChip, type TileStatus } from '../commercialization/statusVocabulary';
 
 /**
- * R19 — where the people who pay us actually came from.
+ * R19: where the people who pay us actually came from.
  *
  * THE JOB OF THIS PANEL IS THAT A CHANNEL WE SPENT ON AND GOT NOBODY FROM CANNOT BE SCROLLED
- * PAST, and that a channel we never measured is not quietly reported as free. Measured on
+ * PAST, and that a channel we never measured is not quietly reported as costless. Measured on
  * production 2026-11-17: the open house produced 16 of the 26 paying members, CCPP alumni and
  * winback 5 each, and paid ads produced none against $3,894.80 of recorded spend.
  *
@@ -17,9 +17,10 @@ import { StatusChip, type TileStatus } from '../commercialization/statusVocabula
  * denominator). One chip would silently pick one of those and hide the other - the same reason
  * the Revenue Room keeps status and verdict apart on a hypothesis card.
  *
- * A BLANK SPEND CELL MEANS NOT RECORDED. It is rendered as an em dash with its reason in the
- * row note, never as $0, because "we spent nothing on the open house" is a claim nobody
- * measured.
+ * A BLANK SPEND CELL MEANS NOT RECORDED. It says "Not recorded" in as many words, with the
+ * reason in the row note, and never $0, because "we spent nothing on the open house" is a
+ * claim nobody measured. House style bans the em dash (D1's typography gate), so an absent
+ * figure is a plain hyphen and anything load-bearing is spelled out instead.
  */
 
 export interface ChannelRow {
@@ -44,7 +45,7 @@ export interface ChannelTruth {
 
 /** Whole dollars. These are comparison figures, and cents on a $20,000 column are noise. */
 const usd = (cents: number | null): string => (
-  cents === null ? '—' : `$${Math.round(cents / 100).toLocaleString('en-US')}`
+  cents === null ? '-' : `$${Math.round(cents / 100).toLocaleString('en-US')}`
 );
 
 const count = (n: number): string => n.toLocaleString('en-US');
@@ -100,7 +101,11 @@ export function ChannelTable({ report }: { report: ChannelTruth }) {
                 <td className="text-end">{usd(r.mrrCents)}</td>
                 <td className="text-end">{count(r.leads)}</td>
                 <td className="text-end" data-testid={`channel-spend-${r.key}`}>
-                  {usd(r.spendCents)}
+                  {/* Spelled out rather than punctuated. A bare hyphen in a money column
+                      reads as zero, and zero is the one thing this cell must not say. */}
+                  {r.spendCents === null
+                    ? <span className="small text-muted">Not recorded</span>
+                    : usd(r.spendCents)}
                 </td>
                 <td className="text-end" data-testid={`channel-cost-${r.key}`}>
                   <div>{usd(r.costPerPayingMemberCents)}</div>
