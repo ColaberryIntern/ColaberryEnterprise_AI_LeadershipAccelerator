@@ -393,8 +393,22 @@
 .tl-de .tld-certimg{display:block;width:100%;max-height:420px;object-fit:contain;border-radius:var(--r-12);border:1px solid var(--border-subtle);background:var(--surface-sunken);margin:8px 0}
 .tl-de .tld-sharerow{display:flex;flex-wrap:wrap;gap:8px}
 .tl-de .tld-sharerow .tl-btn{text-decoration:none}
-.tl-de .tld-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:15px 20px;
+/* `flex-wrap:wrap` and the nowrap guard below are load-bearing on a phone. The
+   row holds Close + "Collect points · 23/75%" + "Enter workspace →"; without a
+   wrap it cannot grow sideways, so the buttons were squeezed under their content
+   width and the LABELS wrapped instead — the collect button broke across three
+   lines, which is the one control a student blocked on the watch gate is
+   reaching for. Photographed on a 360px Android, 2026-11-18.
+   A wrap rule already existed at :has(.tld-win) below 560px; the ordinary
+   three-button case — what a student sees every time — was never covered. */
+.tl-de .tld-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px;padding:15px 20px;
   border-top:1px solid var(--border-subtle);flex:none}
+/* Scoped to the footer rather than every .tl-btn: elsewhere buttons do sit in
+   rows that are meant to flex. `.tld-win-next` is exempt because it is also a
+   .tl-btn and the ≤560px celebration rule below hands it `flex:1` on purpose to
+   fill its wrapped row — without this exclusion the guard, being the more
+   specific selector, would silently win and undo that. */
+.tl-de .tld-foot .tl-btn:not(.tld-win-next){white-space:nowrap;flex:0 0 auto}
 
 /* Inline (non-scrim) rendering of the shared CardDetailBody — used by the admin
    Experience Studio preview + the Timeline editor "finished product". Same body,
