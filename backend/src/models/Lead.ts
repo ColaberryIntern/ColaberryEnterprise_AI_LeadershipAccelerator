@@ -1,5 +1,6 @@
 import { DataTypes, Model, Op } from 'sequelize';
 import { sequelize } from '../config/database';
+import { leadEnrollmentBacklinkHook } from '../services/marketing/enrollmentLeadBacklink';
 
 interface LeadAttributes {
   id?: number;
@@ -440,6 +441,14 @@ Lead.init(
     sequelize,
     tableName: 'leads',
     timestamps: false,
+    hooks: {
+      // R21. The other half of R18's enrollment -> lead link. A new signup INSERTs the
+      // enrollment BEFORE the lead, so `Enrollment.beforeCreate` finds nothing to link to;
+      // measured on production, five of six new enrollments were left NULL. This fills them
+      // in the moment the lead appears. It resolves through the same oldest-lead rule rather
+      // than stamping this lead's id, and it never throws: see the module header.
+      afterCreate: leadEnrollmentBacklinkHook,
+    },
     defaultScope: {
       where: {
         source: { [Op.or]: [{ [Op.ne]: 'campaign_test' }, { [Op.is]: null as any }] },
