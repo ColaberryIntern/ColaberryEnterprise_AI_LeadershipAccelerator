@@ -149,6 +149,12 @@ export interface HardStopFlags {
    * build these flags are unchanged; only the Explorer governor sets it (governor/humanOwnership.ts).
    */
   humanOwned?: boolean;
+  /**
+   * OH1f: the learner's Open House countdown is live (a step due, or one sent in the last 48 hours). The Open House
+   * takes precedence, so Explorer Growth proposes nothing until it is over. Optional for the same reason as
+   * `humanOwned`; only the Explorer governor sets it (governor/openHouseHold.ts).
+   */
+  openHouseCountdown?: boolean;
 }
 
 /** Anything carrying the six stops. `hardStopReason` needs no more than this. */

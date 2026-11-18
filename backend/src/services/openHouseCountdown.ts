@@ -89,7 +89,7 @@ export function softenIdioms(text: string): string {
  * Checked on the subject and the body. The body must carry the event's own Join
  * link and no other web link except the main site.
  */
-export function screenEventReminderCopy(subject: string, body: string, joinUrl: string): string[] {
+export function screenEventReminderCopy(subject: string, body: string, joinUrl: string, extraAllowed: string[] = []): string[] {
   const problems: string[] = [];
   const text = `${subject || ''}\n${body || ''}`;
   for (const [re, label] of BANNED) if (re.test(text)) problems.push(`mentions ${label}`);
@@ -100,6 +100,8 @@ export function screenEventReminderCopy(subject: string, body: string, joinUrl: 
     if (clean === joinUrl || clean === 'https://enterprise.colaberry.ai' || clean === 'https://enterprise.colaberry.ai/') continue;
     // OH1d: the platform Today page, which a momentum step may invite them back to.
     if (clean === PORTAL_TODAY_URL) continue;
+    // OH1f: the links of this email's own brain piece (a builder's public case study, the Events schedule).
+    if (extraAllowed.includes(clean)) continue;
     problems.push(`links somewhere else (${clean.slice(0, 60)})`);
   }
   return problems;
@@ -112,14 +114,32 @@ export function screenEventReminderCopy(subject: string, body: string, joinUrl: 
  */
 export function fallbackReminderBody(firstName: string | null, event: Pick<OpenHouseEventForLead, 'when_label' | 'join_url' | 'title'>, minutesBefore: number): string {
   const hi = firstName ? `Hi ${escapeHtml(firstName)},` : 'Hi,';
-  const lead = minutesBefore <= 180
-    ? `The Colaberry Open House starts soon: ${escapeHtml(event.when_label)}. We are looking forward to seeing you.`
-    : `A quick reminder that you are registered for the Colaberry Open House on ${escapeHtml(event.when_label)}. We are looking forward to seeing you there.`;
+  const when = escapeHtml(event.when_label);
+  const link = `<a href="${event.join_url}">${event.join_url}</a>`;
+  // OH1f: one wording per stage, so a rejected draft never swaps in a copy of the last
+  // fallback. (Day of was "<= 180" while the day-of step ran at 240, so it read as a
+  // days-ahead reminder on the day itself.)
+  if (minutesBefore < 1440) {
+    return [
+      `<p>${hi}</p>`,
+      `<p>The Colaberry Open House is today: ${when}.</p>`,
+      `<p>Your Join link signs you in and checks you in: ${link}</p>`,
+      '<p>Keep your phone handy for the live polls. See you there.</p>',
+    ].join('\n');
+  }
+  if (minutesBefore < 5 * 1440) {
+    return [
+      `<p>${hi}</p>`,
+      `<p>The Colaberry Open House is coming up on ${when}. In that hour you will see what people in the program are building, and you can ask anything live, or just listen.</p>`,
+      `<p>Save your Join link: ${link}</p>`,
+      '<p>If a question is already on your mind, reply with it and I will make sure it gets answered.</p>',
+    ].join('\n');
+  }
   return [
     `<p>${hi}</p>`,
-    `<p>${lead}</p>`,
-    `<p>Join here when it is time. The link signs you in and checks you in: <a href="${event.join_url}">${event.join_url}</a></p>`,
-    '<p>Bring your questions. If you can no longer make it, just reply and let me know.</p>',
+    `<p>You are registered for the Colaberry Open House on ${when}, and I am glad you are coming.</p>`,
+    `<p>Join here when it is time. The link signs you in and checks you in: ${link}</p>`,
+    '<p>If you can no longer make it, just reply and let me know.</p>',
   ].join('\n');
 }
 

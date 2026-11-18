@@ -84,6 +84,10 @@ export interface GenerateMessageParams {
     step_goal?: string;
     /** OH1d: the platform Today page, the one other link a step may use. */
     portal_url?: string;
+    /** OH1f: this email's one piece from the content brain (openHouseBrain.gatherBrainPiece), a labelled block. */
+    content_piece?: string;
+    /** OH1f: the links that piece carries (a builder's public case study, the Events schedule). */
+    extra_links?: string[];
   };
   /**
    * Who this message is sent AS.
@@ -247,9 +251,16 @@ ${emailFormat}
 OPEN HOUSE REMINDER RULES (these override everything else):
 - This person registered for: ${ev.title}, ${ev.when}. You are reminding them and helping them get there. You are NOT selling.
 - The Join link is required, exactly: ${ev.join_url}
-  It signs them in and checks them in. Include it once, as a link.${ev.portal_url ? `
-- The ONLY other link allowed is the platform Today page, exactly: ${ev.portal_url}, and only when the step invites them back to the platform.` : `
-- No other links of any kind.`}
+  It signs them in and checks them in. Include it once, as a link.${(() => {
+    const extra = [...(ev.portal_url ? [ev.portal_url] : []), ...(ev.extra_links || [])];
+    return extra.length > 0
+      ? `
+- The ONLY other links allowed are these, exactly as written, and only the ones THIS email's content piece calls for: ${extra.join(' , ')}`
+      : `
+- No other links of any kind.`;
+  })()}
+- The Open House is the center of every message. Whatever else the email talks about (their progress, a builder's story, a live event), tie it back to why the Open House is worth their hour.
+- Each email in this countdown has ONE job and ONE content piece, and they are different on purpose. Never re-say what an earlier email said: not its opening, not its description of the Open House, not its ask. If an earlier email already explained what the Open House is, do not explain it again.
 - NEVER mention price, cost, tuition, a discount, an offer, a deal, an early bird, a scholarship, seats, deadlines to buy, or say that anything costs nothing or comes at no charge. Any offer is shared live at the Open House only.
 - NEVER ask them to book a call. NEVER mention a cohort start date.
 - Never invent facts about the program, outcomes, salaries or jobs. Never invent facts about the person.
@@ -313,10 +324,17 @@ export function buildEventUserPrompt(params: GenerateMessageParams): string {
   if (prev.length > 0) {
     parts.push('');
     parts.push('WHAT WE ALREADY SENT THEM (build on it, never repeat it)');
+    // OH1f: long enough to see what was actually said (240 characters was little more than
+    // the greeting, which is how five drafts each re-explained the Open House).
     for (const m of prev.slice(0, 5)) {
-      const preview = (m.bodyPreview || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+      const preview = (m.bodyPreview || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 900);
       parts.push(`- ${m.sentAt} (${m.channel}): "${m.subject}"${preview ? `: ${preview}` : ''}`);
     }
+  }
+  if (ev.content_piece && ev.content_piece.trim()) {
+    parts.push('');
+    parts.push("THIS EMAIL'S CONTENT PIECE (from the content brain: verified, live; build the email around it, framed by the Open House)");
+    parts.push(ev.content_piece.trim());
   }
   parts.push('');
   if (ev.step_goal) parts.push(`THIS MESSAGE'S JOB: ${ev.step_goal}`);

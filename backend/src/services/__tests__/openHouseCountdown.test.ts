@@ -7,6 +7,7 @@ import { activitySentence, meaningfulHistory, sourceLabel } from '../openHouseCo
 import { buildSystemPrompt, buildEventUserPrompt } from '../aiMessageService';
 import { isWithinSendWindow, isWithinCallSchedule } from '../campaignSendWindow';
 import { COUNTDOWN_STEPS, COUNTDOWN_SETTINGS, MAYA_SYSTEM_PROMPT } from '../../scripts/ensureOpenHouseCountdownCampaign';
+import { spacingProblems } from '../openHouseBrain';
 
 const JOIN = 'https://enterprise.colaberry.ai/portal/class-checkin/8c92ba87-4766-4a83-9da4-ad529f68b2dc';
 const START = new Date('2026-11-20T00:30:00Z'); // Thu Nov 19, 6:30 PM CST
@@ -61,9 +62,21 @@ describe('screenEventReminderCopy (an AI draft that fails is not sent)', () => {
 });
 
 describe('fallbackReminderBody (what is sent when the AI draft is rejected)', () => {
+  const ok2 = `<p>Hi Sam,</p><p>See you Thursday. Join here: <a href="${JOIN}">${JOIN}</a></p>`;
   it.each(COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => [s.minutes_before_event!]))('passes its own screen at T-%i minutes', (mins) => {
     const body = fallbackReminderBody('Sam', EVENT, mins as number);
     expect(screenEventReminderCopy('Reminder', body, JOIN)).toEqual([]);
+  });
+  it('OH1f: says something different at each step, so a rejected draft never swaps in a repeat', () => {
+    const bodies = COUNTDOWN_STEPS.map((s) => fallbackReminderBody('Sam', EVENT, s.minutes_before_event!));
+    expect(new Set(bodies).size).toBe(bodies.length);
+    expect(fallbackReminderBody('Sam', EVENT, 240)).toContain('is today');
+  });
+  it('lets a step through only the extra links it was given', () => {
+    const story = 'https://hire.refactored.ai/case-studies/x';
+    const withStory = `${ok2}<p>Read it: ${story}</p>`;
+    expect(screenEventReminderCopy('Hi', withStory, JOIN, [story])).toEqual([]);
+    expect(screenEventReminderCopy('Hi', withStory, JOIN).some((p) => p.startsWith('links somewhere else'))).toBe(true);
   });
   it('greets without a name and escapes one', () => {
     expect(fallbackReminderBody(null, EVENT, 60)).toContain('<p>Hi,</p>');
@@ -81,12 +94,28 @@ describe('the countdown campaign definition', () => {
       else expect(s.ai_instructions).toBeFalsy();
     }
   });
-  it('spreads five emails across the two weeks before the event, plus one text, and no call step yet', () => {
+  it('OH1f: sends three emails (a week, three days, the day of) and nothing else', () => {
     const emails = COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => s.minutes_before_event);
-    expect(emails).toEqual([14400, 8640, 4320, 1440, 240]); // 10, 6, 3, 1 day(s), 4 hours
-    expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'sms')).toHaveLength(1);
-    // Calls come back in their own PR, on our own agent, after a test call to Ali.
-    expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'voice')).toHaveLength(0);
+    expect(emails).toEqual([10080, 4320, 240]); // 7 days, 3 days, 4 hours
+    // A text or a call on the day would be a second touch inside 24 hours (Ali, 2026-11-18).
+    expect(COUNTDOWN_STEPS.filter((s) => s.channel !== 'email')).toHaveLength(0);
+  });
+  it('OH1f: never touches one person twice within 24 hours', () => {
+    expect(spacingProblems(COUNTDOWN_STEPS)).toEqual([]);
+    // The rule has teeth: the OH1d cadence fails it.
+    const oh1d = [14400, 8640, 4320, 1440, 240, 60].map((m) => ({ minutes_before_event: m, channel: 'email' as const }));
+    expect(spacingProblems(oh1d).length).toBeGreaterThan(0);
+  });
+  it('OH1f: gives every email a different piece of the content brain', () => {
+    const pieces = COUNTDOWN_STEPS.map((s) => s.brain_piece);
+    expect(pieces).toEqual(['their_progress', 'builder_spotlight', 'day_of']);
+  });
+  it('OH1f: only the first email explains the Open House; the later ones are told not to', () => {
+    const [, second, third] = COUNTDOWN_STEPS;
+    expect(second.ai_instructions).toMatch(/do NOT explain what the Open House is/);
+    expect(third.ai_instructions).toMatch(/No new content/);
+    expect(MAYA_SYSTEM_PROMPT).toContain('THE THREE EMAILS ARE THREE DIFFERENT EMAILS');
+    expect(MAYA_SYSTEM_PROMPT).toContain('THE CONTENT BRAIN');
   });
   it('gives every email its own job, and no job the validator would turn into a booking link', () => {
     const goals = COUNTDOWN_STEPS.map((s) => s.step_goal || '');

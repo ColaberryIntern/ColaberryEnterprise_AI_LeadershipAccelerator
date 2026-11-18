@@ -332,6 +332,41 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
     // event's own Join link. What the person has been doing on the platform is added so
     // Maya can relate to it (Ali, 2026-11-17: "relate to what they are doing, but not try
     // to sell").
+    // OH1f: this email's one piece from the content brain, read live (openHouseBrain.ts), and
+    // the full text of the countdown emails this person already got, so the AI builds on them
+    // instead of re-saying them (the shared context keeps only 300 characters of each).
+    const brainPiece = action.metadata?.event_countdown
+      ? await (async () => {
+          try {
+            const { gatherBrainPiece } = await import('./openHouseBrain');
+            return await gatherBrainPiece(action.metadata?.brain_piece, String(lead.id));
+          } catch (err: any) {
+            console.warn(`[Scheduler] Countdown brain piece failed for lead ${lead.id}: ${err?.message}`);
+            return null;
+          }
+        })()
+      : null;
+    const earlierCountdown: Array<{ subject: string; body: string; sent_at: Date }> = action.metadata?.event_countdown
+      ? await sequelize.query<{ subject: string; body: string; sent_at: Date }>(
+          `SELECT subject, body, COALESCE(sent_at, updated_at) AS sent_at FROM scheduled_emails
+            WHERE lead_id = :leadId AND campaign_id = :campaignId AND status = 'sent' AND channel = 'email'
+              AND id <> :id ORDER BY COALESCE(sent_at, updated_at)`,
+          { replacements: { leadId: action.lead_id, campaignId: action.campaign_id, id: action.id }, type: QueryTypes.SELECT },
+        ).catch(() => [])
+      : [];
+    if (action.metadata?.event_countdown && earlierCountdown.length > 0) {
+      if (!compositeContext) compositeContext = {};
+      const others = (compositeContext.previousMessages || []).filter(
+        (m: any) => !earlierCountdown.some((e) => e.subject === m.subject));
+      compositeContext.previousMessages = [
+        ...earlierCountdown.map((e) => ({
+          channel: 'email', subject: e.subject, bodyPreview: e.body,
+          sentAt: new Date(e.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        })),
+        ...others,
+      ];
+    }
+
     const eventCountdown = action.metadata?.event_countdown ? {
       title: String(action.metadata.event_title || 'Colaberry Open House'),
       when: String(action.metadata.event_when || ''),
@@ -349,7 +384,11 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
         }
       })(),
       step_goal: (action.metadata?.step_goal as string) || undefined,
-      portal_url: (await import('./openHouseCountdown')).PORTAL_TODAY_URL,
+      // OH1f: a step with a brain piece gets exactly that piece's links; a step from before
+      // OH1f keeps the Today page as its one extra link.
+      portal_url: brainPiece ? undefined : (await import('./openHouseCountdown')).PORTAL_TODAY_URL,
+      content_piece: brainPiece?.block || undefined,
+      extra_links: brainPiece?.allowedLinks || [],
     } : undefined;
     if (eventCountdown && compositeContext?.allowedUrls) {
       compositeContext.allowedUrls = {
@@ -385,7 +424,11 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       // OH1e: "feel ___ to" / "what we offer" are rewritten, not rejected (see softenIdioms).
       if (result.subject) result.subject = softenIdioms(result.subject);
       if (result.body) result.body = softenIdioms(result.body);
-      const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url);
+      const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url, eventCountdown.extra_links);
+      // OH1f: a draft that re-says an earlier countdown email is not sent either.
+      const { repetitionScore, REPETITION_LIMIT } = await import('./openHouseBrain');
+      const rep = repetitionScore(result.body || '', earlierCountdown.map((e) => e.body));
+      if (rep > REPETITION_LIMIT) problems.push(`repeats an earlier email (${Math.round(rep * 100)}% of its phrases)`);
       if (problems.length > 0) {
         await action.update({
           metadata: { ...(action.metadata || {}), ai_rejected: problems, ai_model: result.model },
@@ -817,6 +860,26 @@ async function processScheduledActions(): Promise<void> {
       // would land a "starts soon" note after the Open House. The day here is the
       // database's (UTC) day, so a 6:30 PM CT and a 5:30 PM CT step the next day fall on
       // the same UTC date and the second would always be pushed past the event.
+      // OH1f: the countdown's own steps are now at least 24 hours apart (pinned by
+      // openHouseBrain.spacingProblems), so the exemption no longer lets it touch twice in a day.
+      // And the Open House takes PRECEDENCE (Ali, 2026-11-18): any other campaign's touch that
+      // would land within 24 hours of a countdown touch, sent or due, waits until 24 hours after it.
+      if (!action.metadata?.event_countdown) {
+        const near = await sequelize.query<{ at: Date }>(
+          `SELECT COALESCE(sent_at, scheduled_for) AS at FROM scheduled_emails
+            WHERE lead_id = :leadId AND (metadata->>'event_countdown') = 'true'
+              AND status IN ('pending', 'processing', 'sent')
+              AND COALESCE(sent_at, scheduled_for) BETWEEN NOW() - INTERVAL '24 hours' AND NOW() + INTERVAL '24 hours'`,
+          { replacements: { leadId: action.lead_id }, type: QueryTypes.SELECT },
+        ).catch(() => [] as { at: Date }[]);
+        const { countdownYieldUntil } = await import('./openHouseBrain');
+        const until = countdownYieldUntil(near.map((r) => new Date(r.at)));
+        if (until) {
+          await action.update({ status: 'pending', scheduled_for: until, processing_started_at: null, processor_id: null } as any);
+          console.log(`[Scheduler] Open House precedence: lead ${action.lead_id} has a countdown touch within 24h, action ${action.id} deferred to ${until.toISOString()}`);
+          continue;
+        }
+      }
       if (!action.metadata?.event_countdown) {
         const [capCheck] = await sequelize.query(
           `SELECT

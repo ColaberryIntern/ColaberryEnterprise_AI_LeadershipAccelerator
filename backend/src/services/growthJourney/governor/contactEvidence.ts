@@ -322,7 +322,7 @@ const LEAD_STATUS_BOUNCE = 'lead_bounced';
 
 export function tierZeroStopsFromContact(
   contact: ContactEvidence,
-): Omit<HardStopFlags, 'converted' | 'killSwitch' | 'campaignInactive' | 'humanOwned'> {
+): Omit<HardStopFlags, 'converted' | 'killSwitch' | 'campaignInactive' | 'humanOwned' | 'openHouseCountdown'> {
   const { email, sms, voice } = contact.channels;
   const closedByStatus = (c: ChannelEvidence) => c.evaluator === 'lead_status';
   const optedOutByStatus = (c: ChannelEvidence) =>

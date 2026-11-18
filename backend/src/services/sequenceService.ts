@@ -543,6 +543,7 @@ export async function enrollLeadInSequence(leadId: number, sequenceId: string, c
           event_when: openHouseEvent.when_label,
           event_join_url: openHouseEvent.join_url,
           minutes_before_event: step.minutes_before_event ?? null,
+          brain_piece: step.brain_piece ?? null,
         } : {}),
       },
     } as any);

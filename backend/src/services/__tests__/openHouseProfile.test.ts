@@ -81,7 +81,8 @@ describe('the profile reaches the AI', () => {
     expect(u).toContain(PORTAL_TODAY_URL);
   });
   it('allows the Today page as the one extra link, in the rules and in the screen', () => {
-    expect(buildSystemPrompt('email', params)).toContain(`platform Today page, exactly: ${PORTAL_TODAY_URL}`);
+    // OH1f: the rule now lists every link this email may carry (the Today page, or a brain piece's links).
+    expect(buildSystemPrompt('email', params)).toContain(`The ONLY other links allowed are these, exactly as written, and only the ones THIS email's content piece calls for: ${PORTAL_TODAY_URL}`);
     const body = `<p>Hi Sam, pick up Self Study: <a href="${PORTAL_TODAY_URL}">${PORTAL_TODAY_URL}</a>. Join: <a href="${JOIN}">${JOIN}</a></p>`;
     expect(screenEventReminderCopy('See you soon', body, JOIN)).toEqual([]);
     expect(screenEventReminderCopy('x', `${body}<p>https://enterprise.colaberry.ai/ai-architect</p>`, JOIN).length).toBeGreaterThan(0);
