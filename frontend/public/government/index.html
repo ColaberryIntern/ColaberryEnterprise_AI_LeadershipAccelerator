@@ -1436,9 +1436,13 @@ fetch('/api/public/services?audience=gov', { headers: { Accept: 'application/jso
   .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(function (payload) {
     adoptCatalog(payload);
+    /* W27: the header script below may not have run yet (a cached response lands
+       first), so leave the catalog where it can pick it up when it does. */
+    window.gnCatalog = payload;
     if (window.gnFillGov) window.gnFillGov(payload);
     if (!S.length) { govFailed(); return; }
     GOV_RENDER();
+    window.gnCatalogReady = true;
     if (window.gnApplyFamily) window.gnApplyFamily();
   })
   .catch(function () { govFailed(); });
@@ -1683,9 +1687,10 @@ if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es
     nav.querySelector('[data-gn="gov-all"]').innerHTML = 'All ' + cat.services.length + ' government services &rarr;';
   };
 
-  /* ?family=AI selects that family chip once the catalog has rendered. */
-  window.gnApplyFamily = function () {
-    var fam = new URLSearchParams(location.search).get('family');
+  /* ?family=AI selects that family chip once the catalog has rendered.
+     `orAll` (back/forward) selects All when the URL names no family. */
+  window.gnApplyFamily = function (orAll) {
+    var fam = new URLSearchParams(location.search).get('family') || (orAll ? 'All' : '');
     if (!fam) return;
     var chip = Array.prototype.find.call(document.querySelectorAll('#fam .gv-chip'), function (c) { return c.textContent === fam; });
     if (!chip) return;
@@ -1693,6 +1698,22 @@ if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es
     var target = document.getElementById('gv-services');
     if (target) target.scrollIntoView();
   };
+
+  /* W27 (Ali, 2026-11-18: "Government navigation filters don't work").
+     1. The catalog script usually finishes before this one, so it found neither
+        function above and skipped both the menu and ?family. Catch up here.
+     2. On this page a menu link that only changes ?family (or not even that)
+        would reload or merely scroll, so apply it in place instead. */
+  if (window.gnCatalog) window.gnFillGov(window.gnCatalog);
+  if (window.gnCatalogReady) window.gnApplyFamily();
+  nav.addEventListener('click', function (e) {
+    var a = e.target.closest('a[href^="/government/?family="]');
+    if (!a || !window.gnCatalogReady || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    history.pushState(null, '', a.getAttribute('href'));
+    window.gnApplyFamily();
+  });
+  addEventListener('popstate', function () { if (window.gnCatalogReady) window.gnApplyFamily(true); });
 
   fillProof(null);
   fetch('/api/public/case-study-taxonomy', { headers: { Accept: 'application/json' } })
