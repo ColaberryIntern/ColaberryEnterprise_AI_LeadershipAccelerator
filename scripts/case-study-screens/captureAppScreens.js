@@ -22,6 +22,9 @@
  *     "clip": "[data-testid=decide-panel]",                                   optional: crop to an element
  *     "mask": ["td.applicant-name", ".avatar"],                               optional: painted over
  *     "redactText": ["Jane Doe"],                                            optional: literal strings
+ *     "redactNamesFrom": ["/api/admin/internship/queue"],                   optional: admin API endpoints;
+ *          every field named like a name (name, full_name, first_name, display_name...) in their JSON is
+ *          redacted on the screen, as a whole and word by word. Use it for every page that lists people.
  *     "viewport": { "width": 1440, "height": 900 } } ] }
  *
  * REDACTION, ALWAYS, ON EVERY SCREEN (a spec can add to it, never remove it):
@@ -70,14 +73,34 @@ async function login(base) {
   const deadline = Date.now() + 15 * 60_000;
   let token = null;
   while (Date.now() < deadline && !token) {
-    await page.waitForTimeout(2000);
+    if (page.isClosed()) { console.error('[login] the window was closed before signing in finished; run --login again'); process.exit(3); }
+    await new Promise((r) => setTimeout(r, 2000));
     token = await page.evaluate(() => localStorage.getItem('admin_token')).catch(() => null);
     if (token && jwtExp(token) < Date.now()) token = null;
   }
-  await browser.close();
+  await browser.close().catch(() => {});
   if (!token) { console.error('[login] no admin session within 15 minutes'); process.exit(3); }
   fs.writeFileSync(JWT_FILE, token, { mode: 0o600 });
   console.log(`[login] saved; valid until ${new Date(jwtExp(token)).toISOString()}`);
+}
+
+/** Person names from admin API endpoints: every string field whose key ends in "name". */
+async function namesFrom(base, token, endpoints) {
+  const out = new Set();
+  const walk = (v, k) => {
+    if (Array.isArray(v)) return v.forEach((x) => walk(x, k));
+    if (v && typeof v === 'object') return Object.entries(v).forEach(([kk, vv]) => walk(vv, kk));
+    if (typeof v === 'string' && /name$/i.test(k || '') && !/(file|user|host|service|template|org|company|cohort|project|track|stage)_?name$/i.test(k) && /^[\p{L}' .-]{2,60}$/u.test(v.trim())) {
+      const n = v.trim(); out.add(n);
+      for (const part of n.split(/\s+/)) if (part.length > 2) out.add(part);
+    }
+  };
+  for (const e of endpoints || []) {
+    const r = await fetch(base + e, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) { console.error(`[names] ${e} answered ${r.status}: refusing to capture without its names`); process.exit(5); }
+    walk(await r.json());
+  }
+  return [...out];
 }
 
 async function capture(specFile, outDir) {
@@ -116,7 +139,7 @@ async function capture(specFile, outDir) {
       for (const el of document.querySelectorAll('input,textarea')) {
         el.value = String(el.value || '').replace(email, 'name@example.com').replace(phone, '(555) 010-0000');
       }
-    }, { extra: s.redactText || [], emailSrc: EMAIL.source, phoneSrc: PHONE.source });
+    }, { extra: [...(s.redactText || []), ...(await namesFrom(base, token, s.redactNamesFrom))], emailSrc: EMAIL.source, phoneSrc: PHONE.source });
     const left = await page.evaluate(({ emailSrc, phoneSrc }) => {
       const t = document.body.innerText;
       return [...(t.match(new RegExp(emailSrc, 'gi')) || []), ...(t.match(new RegExp(phoneSrc, 'g')) || [])].filter((x) => x !== 'name@example.com' && x !== '(555) 010-0000');
