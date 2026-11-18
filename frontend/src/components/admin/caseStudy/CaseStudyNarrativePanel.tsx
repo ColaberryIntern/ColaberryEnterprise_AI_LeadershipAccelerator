@@ -71,7 +71,7 @@ export default function CaseStudyNarrativePanel({
             <dt className="col-5">Industry</dt>
             <dd className="col-7">{view.industry || '—'}</dd>
             <dt className="col-5">Departments</dt>
-            <dd className="col-7">{view.departments.join(', ') || '—'}</dd>
+            <dd className="col-7">{view.departments.join(', ') || 'Not tagged'}</dd>
             <dt className="col-5">Primary capability</dt>
             <dd className="col-7">{view.primaryCapability || '—'}</dd>
           </dl>
