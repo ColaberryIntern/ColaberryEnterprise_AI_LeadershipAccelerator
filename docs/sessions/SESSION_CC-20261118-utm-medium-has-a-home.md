@@ -90,14 +90,54 @@ model can store, and fails for any that `createLead` does not write — which is
 `utm_medium` was in. A fourth UTM field added to the schema alone would be caught without anybody
 remembering this file exists.
 
-## Deliberately NOT done
+## The 135 stored rows: repaired, on Ali's authorization
 
-**The 135 stored rows are not repaired here.** Splitting them is provably safe — 129 of the 135
-already carry the correct `utm_medium` alongside the packed source, so the pipe was not preserving
-anything the row did not already hold, and the remaining 6 would need the medium moved before the
-source is trimmed. But `adSpend/utmSource.ts` records a deliberate decision that "the rows already
-stored cannot be rewritten" and settles the shape on read instead. Reversing that is Ali's call,
-not a silent side effect of this PR.
+`adSpend/utmSource.ts` recorded a deliberate decision that the stored rows "cannot be rewritten",
+settling the shape on read instead. Reversing that was put to Ali rather than taken as a side
+effect of this PR. He chose to repair.
+
+**The prediction went on the record before anything ran**, in the units the script prints, so the
+dry run was a real pass/fail:
+
+| Measure | Predicted | Dry run | Executed |
+|---|---|---|---|
+| Rows matched and updated | 135 | 135 | 135 |
+| Still packed afterwards | 0 | 0 | 0 |
+| Lost a source | 0 | 0 | 0 |
+| Lost a medium | 0 | 0 | 0 |
+| Gained a medium they lacked | 6 | 6 | 6 |
+| Stored medium overwritten | 0 | 0 | 0 |
+| `fb` / `ig` / `social` after | 385 / 196 / 1 | 385 / 196 / 1 | 385 / 196 / 1 |
+| `updated_at` on those rows | 134 null, newest 2026-03-20 | unchanged | unchanged |
+
+One UPDATE, deliberately: in a single statement every SET expression reads the OLD row, so the
+medium comes out of `utm_source` in the same breath that `utm_source` is trimmed. Two statements
+would trim first and find nothing to move. `COALESCE` puts the stored medium first so it always
+wins over the pipe; measured beforehand, all 129 rows holding both agree exactly, and the executed
+run confirmed `stored_medium_overwritten = 0`.
+
+Checked before writing: no triggers on `leads`, and nothing reads `leads.updated_at` for recency,
+so a raw UPDATE has no collateral. `updated_at` was deliberately left alone — stamping 135 rows
+as modified today would invent activity, and 134 of them have never had a value at all.
+
+**A correction worth recording.** The first dry run's own checks were scoped to "every row in
+these three channels" (582 rows) rather than "the rows this statement changes" (135). It reported
+38 rows "without a medium" and an `updated_at` of 2026-10-28 — both true, both answering the wrong
+question, both properties of clean rows the repair never touches. That is the same defect as a test
+that passes because of its own fixture. The second dry run captures the target ids into a temp
+table first and verifies against exactly those. The repair was never run against the unreadable
+gate.
+
+Book-wide `utm_medium` coverage: 560 -> 567. The +7 against 6 repaired rows reconciles exactly:
+4 leads arrived during the work and 1 of them carries a medium.
+
+### Still open until #4202 deploys
+
+The frontend on production still packs the medium, so a new `fb|paid` row can appear at any time
+until this PR ships. The repair is **idempotent** — its WHERE clause selects only rows that still
+contain a pipe, so a second run matches nothing if there is nothing to fix. It should be re-run
+after the deploy to sweep anything written in between. Measured immediately after the commit:
+0 packed rows in the table.
 
 **The 19 of 26 paying members with no campaign-level attribution are not recoverable.** Measured
 with the canonical `PAYING_MEMBERS_CTE`: 26 paying members, all 26 now linked to a lead, 7 with a
