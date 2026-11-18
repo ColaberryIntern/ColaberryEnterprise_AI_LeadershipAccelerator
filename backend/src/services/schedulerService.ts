@@ -337,12 +337,19 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       when: String(action.metadata.event_when || ''),
       join_url: String(action.metadata.event_join_url || ''),
       minutes_before: Number(action.metadata.minutes_before_event ?? 0),
-      platform_activity: await (async () => {
+      // OH1d: the person's 360 profile in labelled sections (what they did, where they are,
+      // momentum), not one sentence. Each section fails on its own and is logged.
+      person_profile: await (async () => {
         try {
-          const { describePlatformActivity } = await import('./openHouseCountdownContext');
-          return await describePlatformActivity(lead.email);
-        } catch { return ''; }
+          const { gatherPersonProfile, renderPersonProfile } = await import('./openHouseProfile');
+          return renderPersonProfile(await gatherPersonProfile(lead.email, Number(lead.id)));
+        } catch (err: any) {
+          console.error(`[Scheduler] Countdown profile failed for lead ${lead.id}:`, err?.message);
+          return '';
+        }
       })(),
+      step_goal: (action.metadata?.step_goal as string) || undefined,
+      portal_url: (await import('./openHouseCountdown')).PORTAL_TODAY_URL,
     } : undefined;
     if (eventCountdown && compositeContext?.allowedUrls) {
       compositeContext.allowedUrls = {

@@ -81,11 +81,18 @@ describe('the countdown campaign definition', () => {
       else expect(s.ai_instructions).toBeFalsy();
     }
   });
-  it('has the emails and one text, and NO call step (Ali: "We request, Cora schedules")', () => {
-    expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'email')).toHaveLength(3);
+  it('spreads five emails across the two weeks before the event, plus one text, and no call step yet', () => {
+    const emails = COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => s.minutes_before_event);
+    expect(emails).toEqual([14400, 8640, 4320, 1440, 240]); // 10, 6, 3, 1 day(s), 4 hours
     expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'sms')).toHaveLength(1);
-    // The app must not start Synthflow calls outside Cora's 75-second slot pool.
+    // Calls come back in their own PR, on our own agent, after a test call to Ali.
     expect(COUNTDOWN_STEPS.filter((s) => s.channel === 'voice')).toHaveLength(0);
+  });
+  it('gives every email its own job, and no job the validator would turn into a booking link', () => {
+    const goals = COUNTDOWN_STEPS.map((s) => s.step_goal || '');
+    expect(new Set(goals).size).toBe(goals.length);
+    // messageValidatorService injects "Book Your Strategy Call" when a step goal says book/schedule.
+    for (const g of goals) expect(g.toLowerCase()).not.toMatch(/book|schedule|strategy call/);
   });
 
   // Each step must fire INSIDE the window the scheduler enforces with these settings,
@@ -108,10 +115,19 @@ describe('the countdown campaign definition', () => {
     const lastEmail = Math.min(...COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => s.minutes_before_event!));
     expect(lastEmail).toBeGreaterThanOrEqual(180);
   });
-  it('never tells the AI to sell', () => {
-    const all = (MAYA_SYSTEM_PROMPT + COUNTDOWN_STEPS.map((s) => s.ai_instructions).join(' ')).toLowerCase();
-    for (const w of ['discount', 'early bird', 'scholarship', '$', 'free', 'book a call', 'seats']) expect(all).not.toContain(w);
-    expect(all).toContain('not selling');
+  it('never tells the AI to sell: the steps ask for none of it, and the system prompt forbids all of it', () => {
+    const steps = COUNTDOWN_STEPS.map((s) => s.ai_instructions || '').join(' ').toLowerCase();
+    for (const w of ['discount', 'early bird', 'scholarship', '$', 'free', 'book a call', 'seats', 'price', 'offer']) expect(steps).not.toContain(w);
+    const sys = MAYA_SYSTEM_PROMPT.toLowerCase();
+    expect(sys).toContain('you are not selling');
+    for (const w of ['price', 'discount', 'offer', 'scholarship', 'seats', 'f-r-e-e']) expect(sys).toContain(w);
+    expect(sys).not.toMatch(/free/); // the prompt itself never uses the word
+  });
+  it('is at the depth of the existing campaign prompts (Ali: "I want that level of detail")', () => {
+    expect(MAYA_SYSTEM_PROMPT.length).toBeGreaterThan(4000);
+    for (const h of ['THE SITUATION', 'YOUR OBJECTIVES', 'WHAT THE OPEN HOUSE IS', 'HOW TO USE THEIR PROFILE', 'THE QUESTIONS PEOPLE CARRY', 'TONE AND VOICE', 'HARD RULES', 'POSITIONING']) {
+      expect(MAYA_SYSTEM_PROMPT).toContain(h);
+    }
   });
 });
 

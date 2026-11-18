@@ -27,7 +27,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import {
   OPEN_HOUSE_COUNTDOWN_KEY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy,
-  fallbackReminderBody, fallbackReminderSms, countdownCallBrief,
+  fallbackReminderBody, fallbackReminderSms, PORTAL_TODAY_URL,
 } from '../services/openHouseCountdown';
 import type { SequenceStep } from '../models/FollowUpSequence';
 
@@ -36,62 +36,122 @@ const MAYA_NAME = 'Maya at Colaberry';
 const EMAIL_DOMAIN = 'colaberry.com';
 const SEQUENCE_NAME = 'Open House Countdown (Maya)';
 const CAMPAIGN_NAME = 'Open House Countdown (Maya)';
+const CAMPAIGN_DESCRIPTION = 'Every Open House registrant is enrolled at sign-up. Maya emails them 10, 6, 3 and 1 day(s) before and the afternoon of their Open House, each written for that person from their profile (what they have done on the platform, where they are, their momentum), and texts the ones with text consent an hour before, through GHL. No price, offer or discount (Ali, 2026-11-17).';
 
-export const MAYA_SYSTEM_PROMPT = `You are Maya, Director of Admissions at Colaberry. You write to people who registered for a Colaberry Open House, a live online session about the Forward Deployed AI Engineer Accelerator.
+/**
+ * Maya's campaign persona. OH1d (Ali, 2026-11-17): "This prompt needs to be much more significant.
+ * Reverse engineer some of the Cold Campaign prompts ... I want that level of detail."
+ * Structure follows the Strategy Call Readiness prompt (the one existing prompt written for a single
+ * message timed against a scheduled event); the program knowledge follows Maya Inbound. Every fact
+ * about the person comes from the profile in the user prompt; nothing here describes a person.
+ */
+export const MAYA_SYSTEM_PROMPT = `You are Maya, Director of Admissions at Colaberry. You are writing to one person who registered for a Colaberry Open House: a live, online session about the Forward Deployed AI Engineer Accelerator.
 
-Your job in these emails is to help them show up: remind them warmly, make it easy to join, and make them feel expected. You are not selling. Any offer is shared live at the Open House, never in email.
+THE SITUATION
+This is not outreach. This person chose to come. Most of them signed up from an ad in the last two weeks, created a Colaberry account, and many have already started exploring the learning platform: opening lessons, watching the welcome video, walking the campus, passing knowledge checks. Your job is to help them show up, feel expected, and get the most out of the hour. You are not selling.
 
-Write like a real person who is glad they registered: short, plain American English, no hype, no emojis.`;
+These messages are timed back from the start of their Open House. One may arrive ten days out, another the day before, another a few hours before. Each message tells you how far out it is. Write for that moment. Never sound like a calendar notification.
 
-/** The countdown. Timed back from the start of the Open House each person registered for. */
+YOUR OBJECTIVES
+1. Make them feel personally expected: a real person noticed they signed up and is glad.
+2. Relate to what they are actually doing on the platform. Their profile is in the message instructions; use it.
+3. Reduce uncertainty about the Open House: what happens, how long, how to get in.
+4. Help them arrive with a question. The best Open Houses are driven by the questions people bring.
+5. Make joining effortless: the Join link signs them in and checks them in, no password hunting.
+6. Keep their momentum on the platform going between now and then, without turning it into homework.
+
+WHAT THE OPEN HOUSE IS (you may describe it this way)
+- A live online session, about an hour, hosted by the Colaberry team.
+- A walk through the Forward Deployed AI Engineer Accelerator: how it works and what people build in it.
+- Live questions and answers. People can ask anything about the program, the platform, or whether it fits them.
+- Quick live polls on their phone, so keeping a phone handy helps.
+- They can come just to listen. There is no pressure to decide anything.
+Do not describe outcomes, salaries, job placement, or anything about the program beyond this list. If a detail is not here, say they can ask it live.
+
+HOW TO USE THEIR PROFILE
+The profile lists verified facts in sections: who they are, how they found us, what they have done on the platform, and their momentum.
+- Lead with ONE specific, true fact that shows you know where they are: the last lesson they completed, a lesson they opened but did not finish, the part of campus they were in, their streak, what they told us about their goal.
+- Use at most two facts per message. Weave them in naturally. Never list their activity back to them.
+- If they opened a lesson and did not finish it, that is the most useful fact you have: offer that it is a great thing to ask about live, or suggest picking it back up.
+- If they are deep into the platform, acknowledge the effort in plain words. If they have barely started, make starting feel small and easy.
+- Never sound like surveillance. Say "I saw you started the welcome video" or "you're already a few lessons in", never "our records show" or "we tracked".
+- Never invent anything. If the profile says there is no activity, write a warm, simple message and invite a question. Do not guess at their job, goals or interests.
+- The section marked FOR YOUR TONE ONLY shapes how warm and direct you are. Never mention it.
+
+THE QUESTIONS PEOPLE CARRY INTO AN OPEN HOUSE
+You may gently name one of these and invite them to bring it, because the answer is always "ask it live":
+- "Am I technical enough for this?"
+- "Is this for someone like me?"
+- "What would I actually build?"
+- "How much time does it take each week?"
+- "Can I just listen?" (Yes.)
+
+TONE AND VOICE
+Warm, personal, plain American English. A real person who is glad they registered. Short paragraphs. Peer to peer, never corporate. No hype, no emojis, no exclamation-mark pile-ups, no "I hope this email finds you well". Do not sound scripted or automated. Use their first name.
+
+HARD RULES (these never bend)
+- Links: the event Join link, exactly as given, is required in every message. The only other link allowed is the platform Today page, exactly as given, and only when a step invites them back to the platform. No other links of any kind.
+- Never mention price, cost, tuition, payment, a discount, an offer, a deal, an early bird, a scholarship, seats, deadlines to buy, or anything being at no charge. Never use the word spelled f-r-e-e in any form, not even in the phrase "feel f-r-e-e to" (say "you're welcome to" or "just reply" instead). Any offer is shared live at the Open House only.
+- Never ask them to book a call and never mention a cohort start date.
+- Never claim a prior conversation that did not happen.
+- Do not add a sign-off or signature. Maya's signature is added automatically.
+
+POSITIONING
+This is not a sales email. This is a host saying: I'm glad you're coming, here is how to get the most out of it, see you there.`;
+
+/**
+ * The countdown, timed back from the start of the Open House each person registered for.
+ * OH1d: spread across the two weeks people typically register ahead (ad sign-ups), each step
+ * with one distinct job. A step whose moment has already passed when someone registers is
+ * skipped, so a late registrant starts wherever the countdown is.
+ */
 export const COUNTDOWN_STEPS: SequenceStep[] = [
   {
-    delay_days: 0,
-    minutes_before_event: 2 * 24 * 60,
-    channel: 'email',
-    subject: 'Looking forward to seeing you at the Colaberry Open House',
-    body_template: '',
-    step_goal: 'Make them feel expected and set up what the Open House is',
-    ai_instructions: 'Two days out. Thank them for registering and say you are looking forward to seeing them. If the facts say what they have done on the platform, mention it in one natural sentence and say the Open House is a good place to ask about it. Tell them what to expect: a walk through the program and what you build in it, live questions and answers, and quick polls on their phone. Give the Join link and invite them to reply with a question they want answered live.',
-    ai_tone: 'warm, personal, brief',
+    delay_days: 0, minutes_before_event: 10 * 24 * 60, channel: 'email',
+    subject: 'Glad you are coming to the Colaberry Open House',
+    body_template: '', step_goal: 'Welcome: make them feel expected and connect the Open House to what they are already doing',
+    ai_instructions: 'Ten days out. Welcome them personally and say you are glad they are coming. Use one specific fact from their profile to show you know where they are on the platform (a lesson finished, a lesson opened, where they were on campus); if there is no activity, say the platform is open to them before the Open House and keep it light. Say in two sentences what the Open House is: a live hour walking through the program and what people build, with live Q&A and phone polls. Ask them to reply with one question they want answered live. Include the Join link once and say to save it. 120-170 words.',
+    ai_tone: 'warm, personal, welcoming',
   },
   {
-    delay_days: 0,
-    minutes_before_event: 24 * 60,
-    channel: 'email',
+    delay_days: 0, minutes_before_event: 6 * 24 * 60, channel: 'email',
+    subject: 'Picking up where you left off before the Open House',
+    body_template: '', step_goal: 'Momentum: one small, specific next step on the platform',
+    ai_instructions: 'Six days out. A short, helpful nudge built around their profile. If they opened a lesson and did not finish it, suggest picking that one back up and say it is a great thing to ask about live. If they finished lessons, acknowledge the progress in plain words and point to keeping it going. If they have not started, suggest one small first step on the platform (the welcome video on the Today page). You may include the Today page link once. Also include the Join link once. Do not repeat the welcome email. 90-140 words.',
+    ai_tone: 'encouraging, practical, brief',
+  },
+  {
+    delay_days: 0, minutes_before_event: 3 * 24 * 60, channel: 'email',
+    subject: 'What happens at the Colaberry Open House',
+    body_template: '', step_goal: 'Set expectations and invite their question',
+    ai_instructions: 'Three days out. Tell them what to expect, in plain words: about an hour, a walk through the program and what people build, live Q&A, quick phone polls, and that they can come just to listen. Name one of the common questions people bring that fits their profile (for example "am I technical enough" for someone just starting, or "what would I build" for someone deep into lessons) and invite them to bring it. Reference their platform activity in one clause at most. Include the Join link once. 100-150 words.',
+    ai_tone: 'clear, reassuring, personal',
+  },
+  {
+    delay_days: 0, minutes_before_event: 24 * 60, channel: 'email',
     subject: 'Tomorrow: the Colaberry Open House',
-    body_template: '',
-    step_goal: 'Remind them it is tomorrow and how to join',
-    ai_instructions: 'One day out. A short reminder that the Open House is tomorrow, with the day and time. Give the Join link and say it signs them in and checks them in. Suggest they put it on their calendar and bring their questions. Do not repeat the previous email.',
+    body_template: '', step_goal: 'Logistics: day, time, how to join',
+    ai_instructions: 'One day out. Short logistics: it is tomorrow, give the day and start time, the Join link signs them in and checks them in, suggest putting it on their calendar, keep a phone handy for the polls. One warm personal line that fits their profile. Do not repeat earlier emails. 70-110 words.',
     ai_tone: 'friendly, brief',
   },
-  // NO CALL STEP (Ali, 2026-11-17: "We request, Cora schedules"). The app must not start
-  // Synthflow calls itself: Cora owns the one 75-second slot pool, and calls started outside it
-  // bring back the silent record drops in Kes's note (call_spacing_note_for_ali.md). The
-  // per-person brief (countdownCallBrief) is kept: it is what we will hand Cora when we
-  // REQUEST the call, once Cora exposes a request endpoint.
   {
-    // Day of, 2:30 PM CT. Four hours out, not one: the scheduler sends at most about 120
-    // per campaign per hour, so a whole list due one hour out would still be going out
-    // after the Open House began.
-    delay_days: 0,
-    minutes_before_event: 240,
-    channel: 'email',
+    // Day of, four hours out (2:30 PM CT for a 6:30 PM Open House). Four hours, not one: the
+    // scheduler sends about 120 per campaign per hour, so a whole list due one hour out would
+    // still be going out after the start.
+    delay_days: 0, minutes_before_event: 240, channel: 'email',
     subject: 'Today: the Colaberry Open House',
-    body_template: '',
-    step_goal: 'Get them into the room tonight',
-    ai_instructions: 'It is today, a few hours from now. Two or three sentences only: it is today at the start time (name it), here is the Join link, and keep your phone handy for the live polls.',
+    body_template: '', step_goal: 'Get them into the room tonight',
+    ai_instructions: 'Today, a few hours from now. Two or three sentences only: it is today at the start time (name it), here is the Join link, keep your phone handy for the live polls. If their profile has one natural hook (a question to bring), use it in a few words.',
     ai_tone: 'warm, very brief',
   },
+  // NO CALL STEP yet: PR 2 adds Maya's call on our own Synthflow agent, after a test call to Ali.
   {
-    // Day of, 5:30 PM CT. A text to people with express SMS consent, through GHL.
-    // Fixed copy (fallbackReminderSms), so no ai_instructions.
-    delay_days: 0,
-    minutes_before_event: 60,
-    channel: 'sms',
+    // Day of, one hour out. A text to people with express SMS consent, written into the GHL
+    // `cory_sms_composed` field. Fixed copy (fallbackReminderSms): a text must carry the Join
+    // link, and the AI's SMS limit of 160 characters cannot fit it.
+    delay_days: 0, minutes_before_event: 60, channel: 'sms',
     subject: 'Open House starts in an hour (text)',
-    body_template: '',
-    step_goal: 'Get them into the room',
+    body_template: '', step_goal: 'Get them into the room',
   },
 ];
 
@@ -188,7 +248,7 @@ async function main(): Promise<void> {
   // 3. The sequence
   let seq = await one<{ id: string }>(`SELECT id FROM follow_up_sequences WHERE name = :n LIMIT 1`, { n: SEQUENCE_NAME });
   if (!seq) {
-    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: email T-2 days, email T-1 day, email day-of 2:30 PM, text T-1 hour)`);
+    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: emails at 10, 6, 3 and 1 day(s) and 4 hours before, text 1 hour before)`);
     if (apply) {
       seq = await one<{ id: string }>(
         `INSERT INTO follow_up_sequences (id, name, description, steps, is_active, tenant_id, created_at, updated_at)
@@ -213,7 +273,7 @@ async function main(): Promise<void> {
                  'Get Open House registrants into the room', '/open-house', 'https://enterprise.colaberry.ai/open-house?utm_source=maya&utm_campaign=open_house_countdown',
                  'draft', :profile, :tenant, :brand, 'consideration', NULL, NOW(), NOW())
          RETURNING id`,
-        { name: CAMPAIGN_NAME, desc: 'Every Open House registrant is enrolled at sign-up. Maya emails them (T-2 days, T-1 day, day-of) and texts the ones with text consent an hour before, through GHL. Calls will be requested from the Cora scheduler, not placed here. No price, offer or discount (Ali, 2026-11-17).',
+        { name: CAMPAIGN_NAME, desc: CAMPAIGN_DESCRIPTION,
           seq: seq.id, prompt: MAYA_SYSTEM_PROMPT, settings: JSON.stringify(settings),
           cc: JSON.stringify({ email: { enabled: true, daily_limit: 500 }, sms: { enabled: true, daily_limit: 250 } }),
           profile: profile.id, tenant: domainRow.tenant_id, brand: domainRow.brand_id });
@@ -232,8 +292,10 @@ async function main(): Promise<void> {
     log(`campaign: exists ${campaign.id} (${campaign.status}), settings refreshed (sign-offs kept)`);
     if (apply) {
       await sequelize.query(
-        `UPDATE campaigns SET settings = COALESCE(settings, '{}'::jsonb) || CAST(:s AS jsonb), updated_at = NOW() WHERE id = :id`,
-        { replacements: { s: JSON.stringify(COUNTDOWN_SETTINGS), id: campaign.id } });
+        `UPDATE campaigns SET settings = COALESCE(settings, '{}'::jsonb) || CAST(:s AS jsonb),
+                ai_system_prompt = :prompt, description = :desc, updated_at = NOW() WHERE id = :id`,
+        { replacements: { s: JSON.stringify(COUNTDOWN_SETTINGS), prompt: MAYA_SYSTEM_PROMPT, desc: CAMPAIGN_DESCRIPTION, id: campaign.id } });
+      log('campaign: system prompt and description refreshed');
     }
   }
 
@@ -261,49 +323,67 @@ async function main(): Promise<void> {
     }
   }
 
-  // The dry run Ali reads: real AI drafts for N registrants, screened, emails masked.
+  // The dry run Ali reads: real AI drafts for N registrants of the NEXT Open House, screened,
+  // emails masked. OH1d: sampled across activity levels (deep into lessons, exploring the portal,
+  // no activity) so Ali sees how the profile changes the message, and each person's profile is
+  // shown above their emails so the personalization can be checked against the facts.
   const drafts = Number(arg('--drafts') || 0);
   if (drafts > 0) {
     const { generateMessage } = await import('../services/aiMessageService');
-    const { describePlatformActivity, gatherCallFacts } = await import('../services/openHouseCountdownContext');
-    const { buildConversationHistory } = await import('../services/aiMessageService');
-    const sample = await sequelize.query<{ email: string; name: string | null; lead_id: number | null }>(
-      `SELECT r.email_lower AS email, r.name, (SELECT l.id FROM leads l WHERE LOWER(l.email) = r.email_lower ORDER BY l.id LIMIT 1) AS lead_id
-         FROM open_house_registrations r
-         JOIN live_sessions s ON s.open_house_event_id = r.event_id AND s.status IN ('scheduled','live') AND s.session_date >= CURRENT_DATE
-        ORDER BY random() LIMIT :n`, { replacements: { n: drafts }, type: QueryTypes.SELECT });
+    const { gatherPersonProfile, renderPersonProfile } = await import('../services/openHouseProfile');
+    const sample = await sequelize.query<{ email: string; name: string | null; lead_id: number | null; band: string }>(
+      `WITH nxt AS (
+         SELECT s.open_house_event_id AS event_id FROM live_sessions s
+          WHERE s.open_house_event_id IS NOT NULL AND s.status IN ('scheduled','live') AND s.session_date >= CURRENT_DATE
+          ORDER BY s.session_date, s.start_time LIMIT 1),
+       r AS (
+         SELECT r.email_lower AS email, r.name,
+                (SELECT l.id FROM leads l WHERE LOWER(l.email) = r.email_lower ORDER BY l.id LIMIT 1) AS lead_id,
+                (SELECT COUNT(*) FROM timeline_card_progress p WHERE p.enrollment_id = r.enrollment_id AND p.status = 'completed') AS done,
+                (SELECT COUNT(*) FROM page_events pe JOIN visitors v ON v.id = pe.visitor_id
+                  WHERE v.lead_id = (SELECT l.id FROM leads l WHERE LOWER(l.email) = r.email_lower ORDER BY l.id LIMIT 1)
+                    AND pe.page_path LIKE '/portal/%') AS views
+           FROM open_house_registrations r JOIN nxt ON nxt.event_id = r.event_id),
+       banded AS (
+         SELECT *, CASE WHEN done > 0 THEN 'lessons' WHEN views > 0 THEN 'exploring' ELSE 'none' END AS band,
+                ROW_NUMBER() OVER (PARTITION BY CASE WHEN done > 0 THEN 'lessons' WHEN views > 0 THEN 'exploring' ELSE 'none' END ORDER BY random()) AS rn
+           FROM r)
+       SELECT email, name, lead_id, band FROM banded ORDER BY rn, band LIMIT :n`,
+      { replacements: { n: drafts }, type: QueryTypes.SELECT });
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const label = (m: number) => (m >= 1440 ? `${m / 1440} day(s) before` : `${m / 60} hour(s) before`);
     let html = `<!doctype html><html><head><meta charset="utf-8"><title>Open House Countdown Drafts</title></head><body style="font-family:Segoe UI,Arial;max-width:900px;margin:20px auto;padding:0 16px">
-<h1 style="color:#1a365d">Open House countdown: real AI drafts (dry run)</h1><p>${sample.length} registrants picked at random, each step written for that person by Maya's prompt. Emails are masked. Any draft marked REJECTED would not be sent; the safe fallback goes instead.</p>`;
+<h1 style="color:#1a365d">Open House countdown: real AI drafts (dry run)</h1>
+<p>${sample.length} registrants of the next Open House, picked across activity levels. Each person's profile (what the AI is given) is shown first, then every step written for them by Maya's prompt. Emails are masked. A draft marked REJECTED would not be sent; the safe fallback goes instead.</p>`;
     for (const p of sample) {
       const ev = await findNextOpenHouseForEmail(p.email);
       if (!ev) continue;
-      const activity = await describePlatformActivity(p.email).catch(() => '');
-      const masked = p.email.replace(/^(.).*(@.*)$/, '$1***$2');
-      html += `<h2 style="border-top:2px solid #1a365d;padding-top:10px">${esc(masked)}</h2><p><i>${esc(activity || 'no platform activity recorded')}</i></p>`;
       const firstName = (p.name || '').trim().split(/\s+/)[0] || null;
+      const profile = renderPersonProfile(await gatherPersonProfile(p.email, p.lead_id ?? null, firstName));
+      const masked = p.email.replace(/^(.).*(@.*)$/, '$1***$2');
+      html += `<h2 style="border-top:2px solid #1a365d;padding-top:10px">${esc(masked)} <small style="color:#888">(${p.band})</small></h2>
+<details open><summary><b>Profile passed to the AI</b></summary><pre style="white-space:pre-wrap;background:#f7f9fc;padding:10px;border-radius:6px">${esc(profile)}</pre></details>`;
       for (const step of COUNTDOWN_STEPS) {
-        if (step.channel === 'voice') {
-          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px;background:#f7f9fc"><b>Call, day of at noon</b> (only if they gave call permission): what Maya's voice agent is told
-            <pre style="white-space:pre-wrap;font-family:inherit">${esc(countdownCallBrief({ firstName, event: ev, facts: await gatherCallFacts(p.email, p.lead_id ?? null).catch(() => null), history: p.lead_id ? await buildConversationHistory(p.lead_id).catch(() => '') : '' }))}</pre></div>`;
-          continue;
-        }
         if (step.channel === 'sms') {
-          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px;background:#f7f9fc"><b>Text, 1 hour before</b> (only if they gave text permission; sent through GHL)
+          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px;background:#f7f9fc"><b>Text, 1 hour before</b> (only with text permission; sent through GHL)
             <p>${esc(fallbackReminderSms(firstName, ev))}</p></div>`;
           continue;
         }
+        if (step.channel !== 'email') continue;
         try {
           const r = await generateMessage({
             channel: 'email', ai_instructions: step.ai_instructions!, tone: step.ai_tone,
             lead: { name: p.name || '' } as any,
             campaignContext: { type: 'behavioral_trigger', name: CAMPAIGN_NAME, system_prompt: MAYA_SYSTEM_PROMPT },
-            eventContext: { title: ev.title, when: ev.when_label, join_url: ev.join_url, minutes_before: step.minutes_before_event!, platform_activity: activity },
+            eventContext: {
+              title: ev.title, when: ev.when_label, join_url: ev.join_url, minutes_before: step.minutes_before_event!,
+              person_profile: profile, step_goal: step.step_goal, portal_url: PORTAL_TODAY_URL,
+            },
           } as any);
           const problems = screenEventReminderCopy(r.subject || '', r.body || '', ev.join_url);
-          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px"><b>T-${step.minutes_before_event! >= 1440 ? step.minutes_before_event! / 1440 + ' day(s)' : step.minutes_before_event! / 60 + ' hours'}:</b> ${esc(r.subject || step.subject)}
+          html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px"><b>${label(step.minutes_before_event!)}:</b> ${esc(r.subject || step.subject)}
             <span style="margin-left:8px;padding:2px 8px;border-radius:10px;background:${problems.length ? '#fbe9e7;color:#b3261e' : '#e6f4ec;color:#1f7a4d'}">${problems.length ? 'REJECTED: ' + esc(problems.join('; ')) : 'passes the screen'}</span>
-            <div style="margin-top:8px">${problems.length ? fallbackReminderBody((p.name || '').split(' ')[0] || null, ev, step.minutes_before_event!) + '<p style="color:#888">(fallback shown, since the AI draft was rejected)</p>' : r.body}</div>
+            <div style="margin-top:8px">${problems.length ? fallbackReminderBody(firstName, ev, step.minutes_before_event!) + '<p style="color:#888">(fallback shown, since the AI draft was rejected)</p>' : r.body}</div>
             <div style="color:#555;margin-top:6px;border-left:3px solid #1a365d;padding-left:10px"><b>${MAYA_NAME}</b><br>Director of Admissions<br>Colaberry Inc.</div></div>`;
         } catch (err: any) {
           html += `<p style="color:#b3261e">AI unavailable for this step (${esc(err.message)}): the fallback would be sent.</p>`;
