@@ -2272,7 +2272,8 @@
 .cbv2-shell .cbv2-phero5 h1,
 .cbv2-shell .cbv2-bookpage5 .cbv2-book__h,
 .cbv2-shell .cbv2-pagehero--page h1 {
-  font-size: clamp(46px, 7vw, 96px);
+  /* W25 (Ali, 2026-11-17: "about 20% smaller across all pages"): 96 -> 77px, 46 -> 37px. */
+  font-size: clamp(37px, 5.6vw, 77px);
   line-height: 1.04;
   letter-spacing: -0.035em;
 }

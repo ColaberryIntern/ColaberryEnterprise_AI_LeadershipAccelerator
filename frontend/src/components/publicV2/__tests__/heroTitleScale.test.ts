@@ -12,7 +12,7 @@ import path from 'path';
  *     titles (long sentences) keep their own size.
  */
 const CSS = fs.readFileSync(path.join(__dirname, '..', 'fidelityV5.css'), 'utf8');
-const SCALE = 'clamp(46px, 7vw, 96px)';
+const SCALE = 'clamp(37px, 5.6vw, 77px)'; // W25: 20% under the old home scale (96/46)
 const HEROES = [
   '.cbv2-shell .cbv2-h8__h1',
   '.cbv2-shell .cbv2-shero5 h1',
@@ -65,7 +65,7 @@ describe('W23: the Government page title uses the same scale', () => {
   });
   it('sizes it at the home scale, in the last style block so nothing overrides it', () => {
     // After the design-system block's own !important title sizes, so it is the rule that applies.
-    const rule = html.indexOf('.ghero h1{font-size:clamp(46px,7vw,96px)!important;');
+    const rule = html.indexOf('.ghero h1{font-size:clamp(37px,5.6vw,77px)!important;');
     expect(rule).toBeGreaterThan(-1);
     expect(rule).toBeGreaterThan(html.lastIndexOf('.gx-strip h1{font-size:25px!important}'));
   });
