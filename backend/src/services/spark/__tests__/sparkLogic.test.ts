@@ -151,3 +151,25 @@ describe('questions', () => {
     expect([...SURVEY, ...DAILY].filter((q) => q.type !== 'open').every((q) => (q.options || []).length >= 2)).toBe(true);
   });
 });
+
+describe('checking what was read from a calendar photo (Ali, 2026-11-18: "that does not sound right")', () => {
+  // The real first read of Addie's work calendar: back-to-back hours 9 to 5, most of them twice.
+  const hrs = (date: string, from: number, to: number): L.Busy[] => Array.from({ length: to - from }, (_, i) => ({ date, start: `${String(from + i).padStart(2, '0')}:00`, end: `${String(from + i + 1).padStart(2, '0')}:00` }));
+  const grid = [...hrs('2026-11-17', 9, 17), ...hrs('2026-11-17', 9, 12)];
+  test('a solid run of one-hour blocks is flagged as the hour grid', () => {
+    expect(L.looksLikeGrid(grid, '2026-11-17')).toBe(true);
+    expect(L.mergeBusy(grid, '2026-11-17')).toEqual([[540, 1020]]);
+  });
+  test('a real meeting day is not flagged', () => {
+    const real: L.Busy[] = [
+      { date: '2026-11-17', start: '09:00', end: '10:00' }, { date: '2026-11-17', start: '10:00', end: '11:00' },
+      { date: '2026-11-17', start: '13:00', end: '14:30' }, { date: '2026-11-17', start: '15:00', end: '16:00' },
+    ];
+    expect(L.looksLikeGrid(real, '2026-11-17')).toBe(false);
+    expect(L.looksLikeGrid([{ date: '2026-11-17', start: '08:00', end: '17:00' }], '2026-11-17')).toBe(false); // one real all-day block is the person's call
+  });
+  test('tapping a wrong range removes every block under it, only on that day', () => {
+    const left = L.removeRange([...grid, ...hrs('2026-11-18', 9, 10)], '2026-11-17', '09:00', '17:00');
+    expect(left).toEqual([{ date: '2026-11-18', start: '09:00', end: '10:00' }]);
+  });
+});

@@ -24,7 +24,7 @@ import { SURVEY, DAILY, Question, dailyFor, answerLines, GAMES, WAGER, gameForDa
 import {
   Busy, Slot, PlanItem, RawPick, ctNow, mondayOf, weekDates, addDays, candidateSlots, pickWeekdaySlots,
   weekendSlots, pendingDays, weekdayIndex, shapeItem, nextSlot, fitsSlot, prettyDay, prettyTime, toMin, fromMin,
-  isWeekday, prevWeekday, decideWinner, PROGRAM_START,
+  isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange,
 } from './sparkLogic';
 
 export type Person = 'ali' | 'addie';
@@ -133,15 +133,18 @@ export async function today(p: Person) {
     today: prettyDay(now.date),
     survey: remaining.length ? { answered: SURVEY.length - remaining.length, total: SURVEY.length, questions: remaining } : null,
     planning: {
-      needed: !cal?.data.done && !(plan && plan.data.status === 'ready'),
+      // Needed until this person is done; a planned week only skips it for someone who never started (Ali's calendar is automatic).
+      needed: !cal?.data.done && !(plan?.data.status === 'ready' && !cal),
       carried: now.date > week, // anything not done on Monday rolls forward (Ali, 2026-11-16)
       partnerDone: !!partnerCal?.data.done,
       autoCalendar: p === 'ali',
       shots: Number(cal?.data.shots || 0),
+      retake: !!cal?.data.retake, // Spark asked for a new picture: the page shows only the photo step, then plans by itself
     },
     daily: pendingDays(now.date, answeredDays).map((d) => ({ day: d, label: prettyDay(d), carried: d !== now.date, questions: dailyFor(weekdayIndex(d)) })),
     plan: plan ? { status: plan.data.status, error: plan.data.status === 'failed' ? 'Planning hit a snag. Tap "Plan our week" to try again.' : null, items: (plan.data.items || []).map(view) } : null,
     learned: lessons,
+    calendar: calendarView(cal?.data, week),
     game: await gameState(p, now.date),
     reveal: await reveal(now.date),
   };
@@ -321,14 +324,14 @@ async function chat(messages: unknown[], temperature = 0.7): Promise<any> {
 // ---------------------------------------------------------------------------------- calendars
 
 /** Read busy blocks from one calendar screenshot. Returns the blocks it could read. */
-export async function readScreenshot(p: Person, dataUrl: string): Promise<{ blocks: number; note: string }> {
+export async function readScreenshot(p: Person, dataUrl: string): Promise<{ blocks: number; suspect: boolean; note: string }> {
   if (!/^data:image\/(png|jpe?g|webp);base64,/.test(dataUrl) || dataUrl.length > 1_200_000) throw new Error('bad image');
   const now = ctNow(); const week = mondayOf(now.date);
   const dates = weekDates(week).map((d) => `${prettyDay(d)} = ${d}`).join(', ');
   const out = await chat([
     { role: 'system', content: 'You read calendar screenshots. Return only JSON.' },
     { role: 'user', content: [
-      { type: 'text', text: `This is a screenshot, or a phone photo of a computer screen, showing a person's calendar for the week of ${prettyDay(week)}. The dates this week are: ${dates}. List every block of time that is busy (meetings, appointments, any event), using the dates shown in the screenshot. Use 24-hour local times. Ignore all-day banners. A photo may be tilted, glared or partly cut off: read what you can and never guess a block you cannot see. Reply as {"readable": true|false, "busy": [{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"}], "note": "one short sentence on what you saw"}.` },
+      { type: 'text', text: `This is a screenshot, or a phone photo of a computer screen, showing a person's calendar for the week of ${prettyDay(week)}. The dates this week are: ${dates}. List every block of time that is busy (meetings, appointments, any event), using the dates shown in the screenshot. Use 24-hour local times. Ignore all-day banners. Only a filled, colored event box with its own title counts as busy. The hour grid lines, hour labels, empty rows, the current-time line and shaded "working hours" or out-of-office backgrounds are NOT events: an empty calendar has none. Give each event its real start and end as drawn; do not split it into hours. A photo may be tilted, glared or partly cut off: read what you can and never guess a block you cannot see. Reply as {"readable": true|false, "busy": [{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"}], "note": "one short sentence on what you saw"}.` },
       { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
     ] },
   ], 0);
@@ -336,16 +339,63 @@ export async function readScreenshot(p: Person, dataUrl: string): Promise<{ bloc
   const busy: Busy[] = (Array.isArray(out.busy) ? out.busy : []).filter(valid);
   const row = await one('calendar', { person: p, week });
   const data = row?.data || { busy: [], shots: 0, done: false };
-  data.busy = [...(data.busy || []), ...busy]; data.shots = Number(data.shots || 0) + 1;
+  const have = new Set((data.busy || []).map((b: Busy) => `${b.date} ${b.start} ${b.end}`));
+  data.busy = [...(data.busy || []), ...busy.filter((b) => !have.has(`${b.date} ${b.start} ${b.end}`))]; // a second photo of the same week adds no duplicates
+  data.shots = Number(data.shots || 0) + 1;
   if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
-  return { blocks: busy.length, note: String(out.note || '').slice(0, 200) };
+  const suspect = [...new Set(busy.map((b) => b.date))].some((d) => looksLikeGrid(data.busy, d));
+  return { blocks: busy.length, suspect, note: String(out.note || '').slice(0, 200) };
+}
+
+/**
+ * What Spark read from this person's own calendar photos this week, day by day, so they can confirm
+ * or fix it before (or after) planning. Only ever sent to that person. A day that looks like the hour
+ * grid rather than meetings is flagged.
+ */
+function calendarView(data: any, week: string) {
+  if (!data || !Number(data.shots || 0)) return null;
+  const busy: Busy[] = data.busy || [];
+  const days = weekDates(week).map((date) => ({
+    date, label: prettyDay(date),
+    ranges: mergeBusy(busy, date).map(([s, e]) => ({ start: fromMin(s), end: fromMin(e), text: `${prettyTime(fromMin(s))} to ${prettyTime(fromMin(e))}` })),
+    suspect: looksLikeGrid(busy, date),
+  }));
+  return { shots: Number(data.shots), done: !!data.done, suspect: days.some((d) => d.suspect), days };
+}
+
+/** "That is wrong, I am open then": remove a busy range Spark read. */
+export async function removeBusy(p: Person, date: unknown, start: unknown, end: unknown): Promise<void> {
+  const hm = /^\d{2}:\d{2}$/;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !hm.test(String(start)) || !hm.test(String(end))) throw new Error('not found');
+  const row = await one('calendar', { person: p, week: mondayOf(ctNow().date) });
+  if (!row) throw new Error('not found');
+  await update(row.id, { ...row.data, busy: removeRange(row.data.busy || [], String(date), String(start), String(end)) });
+}
+
+/**
+ * Ask one person for a new calendar picture this week (Ali, 2026-11-18: "show nothing but prompt her to
+ * take another picture ... when she uploads, then search and have the updates ready"). Their old read is
+ * dropped; the page shows only the photo step, and a clean read plans the week by itself.
+ */
+export async function requestRetake(p: Person): Promise<void> {
+  const week = mondayOf(ctNow().date);
+  const row = await one('calendar', { person: p, week });
+  const data = { busy: [], shots: 0, done: false, retake: true, note: String(row?.data.note || '') };
+  if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
+}
+
+/** Start over: forget this week's photos so new ones can be taken. Spark re-plans when they tap done again. */
+export async function clearCalendar(p: Person): Promise<void> {
+  const row = await one('calendar', { person: p, week: mondayOf(ctNow().date) });
+  if (row) await update(row.id, { ...row.data, busy: [], shots: 0, done: false });
 }
 
 /** Mark this person's planning done (with any off-calendar note). Plans the week once both are in. */
 export async function finishPlanning(p: Person, note: string, force = false): Promise<{ planning: boolean }> {
   const week = mondayOf(ctNow().date);
   const row = await one('calendar', { person: p, week });
-  const data = { ...(row?.data || { busy: [], shots: 0 }), done: true, note: String(note || '').slice(0, 600) };
+  const prev = row?.data || { busy: [], shots: 0 };
+  const data = { ...prev, done: true, retake: false, note: String(note || prev.note || '').slice(0, 600) };
   if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
   const partner = await one('calendar', { person: other(p), week });
   if (partner?.data.done || force) { void planWeek(week, { fill: true }).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
