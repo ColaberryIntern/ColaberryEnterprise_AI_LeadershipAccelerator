@@ -56,7 +56,7 @@ export function eventStepTime(startsAt: Date, minutesBefore: number, now: Date):
  * about discounts in the communication. That is Open House offer only." Plus the
  * standing rule never to say "free" (TWC, 40 TAC 807.172(d)).
  */
-const BANNED: Array<[RegExp, string]> = [
+export const BANNED: Array<[RegExp, string]> = [
   [/discount/i, 'discount'],
   [/\boffers?\b/i, 'offer'],
   [/early[\s-]?bird/i, 'early bird'],

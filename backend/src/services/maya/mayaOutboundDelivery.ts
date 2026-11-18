@@ -28,6 +28,48 @@ import { sendPreRenderedEmail } from '../emailService';
  * reconstructed and sent by some future path that never saw this queue at all.
  */
 
+/** OH1h: a row composed by mayaReplyDraftService (composed_by `maya_reply:<leadId>`, recipient_ref `lead:<id>`). */
+export function isMayaReplyRow(row: Pick<MayaOutboundApproval, 'composed_by'>): boolean {
+  return String(row.composed_by || '').startsWith('maya_reply:');
+}
+
+/** Maya's reply-to address on the Mandrill inbound domain (reply.colaberry.ai in production). */
+export async function mayaReplyToAddress(): Promise<string> {
+  // Lazy, like everything this module reaches beyond the provider: it keeps the containment graph of the
+  // approve path (mayaOutboundContainment.test.ts) exactly as it was.
+  const { env } = await import('../../config/env');
+  return `"Maya at Colaberry" <maya@${env.mandrillInboundDomain || 'reply.colaberry.ai'}>`;
+}
+
+/**
+ * OH1h: the answer is recorded on the lead - the unified communication log (so the one memory sees it) and the
+ * activity timeline. A recording failure is logged and never turns a delivered message into a failed one: the
+ * person HAS the email, and reporting otherwise would invite a second send.
+ */
+async function recordMayaReplyOnLead(row: MayaOutboundApproval, providerMessageId: string | null): Promise<void> {
+  const leadId = Number(String(row.recipient_ref || '').replace(/^lead:/, ''));
+  if (!Number.isInteger(leadId) || leadId <= 0) return;
+  try {
+    const { logCommunication } = await import('../communicationLogService');
+    const { logActivity } = await import('../activityService');
+    await logCommunication({
+      lead_id: leadId, channel: 'email', direction: 'outbound', delivery_mode: 'live', status: 'sent',
+      to_address: row.recipient_address, from_address: null, subject: row.subject ?? null, body: row.body,
+      provider: 'mandrill', provider_message_id: providerMessageId,
+      metadata: { maya_reply: true, outbound_approval_id: row.id, decided_by: row.decided_by ?? null },
+    });
+    await logActivity({
+      lead_id: leadId, type: 'email_sent', subject: `Maya replied: ${row.subject ?? ''}`.slice(0, 250),
+      body: row.body.slice(0, 2000), metadata: { channel: 'email', maya_reply: true, outbound_approval_id: row.id, decided_by: row.decided_by ?? null },
+    });
+  } catch (err: unknown) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'maya', event: 'maya_reply_record_failed', outcome: 'failure',
+      error_class: err instanceof Error ? err.name : 'UnknownError', context: { id: row.id },
+    }));
+  }
+}
+
 export interface OutboundDelivery {
   /** The provider's id for the message, when it gives one. Never PII. */
   providerRef?: string | null;
@@ -64,6 +106,8 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
         to: row.recipient_address,
         subject: row.subject ?? '',
         html: row.body,
+        // OH1h: Maya's answer to an email reply threads back to her (Mandrill inbound domain).
+        ...(isMayaReplyRow(row) ? { replyTo: await mayaReplyToAddress() } : {}),
       });
       return sent.ok
         ? { ok: true, messageId: sent.messageId }
@@ -71,7 +115,10 @@ export async function deliverOutboundRow(row: MayaOutboundApproval): Promise<Out
     },
   );
 
-  if (result.outcome === 'sent') return { providerRef: result.messageId ?? null };
+  if (result.outcome === 'sent') {
+    if (isMayaReplyRow(row)) await recordMayaReplyOnLead(row, result.messageId ?? null);
+    return { providerRef: result.messageId ?? null };
+  }
   if (result.outcome === 'skipped') {
     // The ledger already holds a send for this exact message. Not an error: the person has it.
     // Reported as a delivery so the row settles on `sent` rather than being left for a human to

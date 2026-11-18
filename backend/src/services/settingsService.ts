@@ -67,6 +67,10 @@ const DEFAULTS: Record<string, any> = {
   // ABAC agent-authorization gate (TBI P2-1): 'off' | 'shadow' | 'enforce'. Default shadow =
   // evaluate + log every agent action's authorization verdict but NEVER block, until flipped on.
   abac_enforcement: 'shadow',
+  // OH1h: Maya answers replies to her campaign emails. OFF = every answer is a DRAFT in the review queue
+  // (maya_outbound_approvals) and leaves only when a person approves it. ON = the draft is delivered at once
+  // through the same delivery path (still consent-checked, never for Explorers). Only Ali flips this.
+  maya_email_autoreply_enabled: false,
 };
 
 export async function getSetting(key: string): Promise<any> {

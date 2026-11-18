@@ -346,6 +346,8 @@ export interface PreRenderedEmail {
   subject: string;
   /** The exact bytes to transmit. Nothing in this function modifies them. */
   html: string;
+  /** OH1h: where a reply goes (Maya's address on the Mandrill inbound domain, so the answer threads back to her). */
+  replyTo?: string;
 }
 
 export interface PreRenderedEmailResult {
@@ -386,6 +388,7 @@ export async function sendPreRenderedEmail(params: PreRenderedEmail): Promise<Pr
       subject: r.subject,
       html: params.html,
       text: htmlToPlainText(params.html),
+      ...(params.replyTo ? { replyTo: params.replyTo } : {}),
     });
     return { ok: true, messageId: String(info?.messageId ?? '') };
   } catch (err: unknown) {
