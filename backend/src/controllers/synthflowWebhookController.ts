@@ -14,6 +14,7 @@ import { env } from '../config/env';
 import { webhookTokenOk } from '../services/voice/synthflowWebhookAuth';
 import { getTestOverrides } from '../services/settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { mirrorToGhlInBackground, resolveGhlContactId } from '../services/ghlMirrorService';
 
 /**
  * POST /api/webhook/synthflow/call-complete
@@ -141,6 +142,15 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
             trigger: commMeta.trigger || 'outbound_call',
             status,
           },
+        });
+
+        // OH1l: GHL mirror note (setting ghl_mirror_enabled, default off). Fire-and-forget.
+        mirrorToGhlInBackground({
+          event: 'call_finished',
+          lead: leadRecord,
+          leadId: commLog.lead_id as number,
+          subject: `${isVoicemail ? 'Voicemail' : `Call ${status || 'ended'}`}${durationMin ? ` (${durationMin})` : ''}`,
+          body: transcript || null,
         });
       } catch (actErr: any) {
         console.warn(`[Synthflow Webhook] Activity bridge error:`, actErr.message);
@@ -401,12 +411,8 @@ async function sendPostCallSms(leadId: number, transcript: string, callId: strin
       ghlContactId = syncResult.contactId;
     }
   } else {
-    ghlContactId = (lead as any).ghl_contact_id;
-    if (!ghlContactId) {
-      console.log(`[PostCallSMS] Lead ${leadId} has no GHL contact — syncing now`);
-      const syncResult = await syncLeadToGhl(lead, 'voice_call', false, true);
-      ghlContactId = syncResult.contactId;
-    }
+    // Shared find-or-sync with the GHL mirror (OH1l).
+    ghlContactId = await resolveGhlContactId(lead, 'voice_call');
   }
 
   if (!ghlContactId) {
