@@ -176,6 +176,7 @@ import {
 import { ensureTicketIndexesSchema } from './db/ensureTicketIndexesSchema';
 import { ensureSessionReminderSchema } from './db/ensureSessionReminderSchema';
 import { ensureEnrollmentNotificationSchema } from './db/ensureEnrollmentNotificationSchema';
+import { ensureEnrollmentLeadIdSchema } from './db/ensureEnrollmentLeadIdSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureAgentWorkLifecycleFieldsSchema } from './db/ensureAgentWorkLifecycleFieldsSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
@@ -2673,6 +2674,10 @@ async function start(): Promise<void> {
   // reminder cron starts, or the sweep falls back to re-sending on every deploy.
   await ensureSessionReminderSchema();
   await ensureEnrollmentNotificationSchema();
+  // R18: enrollments.lead_id, the edge that joins revenue back to the campaign that
+  // produced it. Must be ensured before the model is used, because Enrollment declares
+  // the attribute and Sequelize emits it in every enrollment SELECT.
+  await ensureEnrollmentLeadIdSchema();
   // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
   // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
   // additive only).
