@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../utils/videoEmbed';
 import { ytHandshake } from '../../utils/youtubeChannel';
 import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
+import { creditForTick } from './watchCredit';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -12,7 +13,8 @@ import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePrefere
  * auto-complete; iframe providers complete via an explicit action.
  *
  * Watch tracking (`onWatchBeat`): accumulates seconds ACTUALLY PLAYED (scrubbing
- * adds nothing — only small position deltas count) and flushes a beat roughly
+ * adds nothing — a playhead advance is credited only as far as the wall clock
+ * backs it up, see watchCredit.ts) and flushes a beat roughly
  * every 15s of playback plus on pause/end/unmount. Sources: native `timeupdate`
  * for <video>/<audio>; the YouTube (`enablejsapi` postMessage `infoDelivery`)
  * and Vimeo (`timeupdate` postMessage) player channels for iframes; a
@@ -66,7 +68,6 @@ const PlayIcon = () => (
 );
 
 const FLUSH_AFTER_S = 15;          // flush a beat after this much new play time
-const MAX_TICK_DELTA_S = 2.5;      // position jumps beyond this = a seek, not playback
 
 const addParam = (u: string, p: string) => u + (u.includes('?') ? '&' : '?') + p;
 
@@ -76,6 +77,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   // --- watch accumulation (refs so handlers/effects never go stale) ---
   const bufRef = useRef({ delta: 0, position: 0, duration: 0 });
   const lastPosRef = useRef<number | null>(null);
+  // When the previous playhead sample arrived, so a gap can be measured against the clock.
+  const lastTickAtRef = useRef<number | null>(null);
   const beatRef = useRef<Props['onWatchBeat']>(onWatchBeat);
   beatRef.current = onWatchBeat;
   const fallbackRef = useRef<number>(0);
@@ -104,10 +107,15 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   const tick = (pos: number, dur: number | null, provider: string, isPlaying = true) => {
     lastProviderRef.current = provider;
     const last = lastPosRef.current;
+    const lastAt = lastTickAtRef.current;
+    const nowMs = Date.now();
     lastPosRef.current = pos;
+    lastTickAtRef.current = nowMs;
     if (last != null && isPlaying) {
-      const d = pos - last;
-      if (d > 0 && d < MAX_TICK_DELTA_S) bufRef.current.delta += d;   // seeks add nothing
+      // Credit the playhead advance, capped by the wall-clock time that really
+      // passed — so a throttled background tab still earns its minutes and a
+      // scrub still earns nothing. See watchCredit.ts.
+      bufRef.current.delta += creditForTick(pos - last, lastAt == null ? 0 : (nowMs - lastAt) / 1000);
     }
     bufRef.current.position = Math.max(bufRef.current.position, pos);
     if (dur && Number.isFinite(dur) && dur > 0) bufRef.current.duration = Math.max(bufRef.current.duration, dur);
