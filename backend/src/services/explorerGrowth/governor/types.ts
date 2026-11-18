@@ -185,4 +185,10 @@ export interface ContactPolicyInput {
   consent: { verdict: 'allow' | 'block'; reason: string; hasRecord: boolean };
   recentContactCount: number;
   hoursSinceLastContact: number | null;
+  /**
+   * OH1j: hours since this person's last brain pick, shadow picks included (BRAIN_PICK_MIN_HOURS).
+   * Null = never had one. Optional so the Growth Journey callers, which have no brain picks, are unchanged.
+   * NaN is treated as "too recent" (fail closed).
+   */
+  hoursSinceLastBrainPick?: number | null;
 }

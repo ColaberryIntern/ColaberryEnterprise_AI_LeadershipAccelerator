@@ -7,11 +7,13 @@ import { validateGeneratedMessage } from '../../messageValidatorService';
 import type { ExplorerFactSet } from '../explorerFactGuard';
 import { groundDraft } from '../explorerKnowledgeGrounding';
 import { loadExplorerKnowledge } from '../explorerKnowledgeLoader';
+import { isInOpenHouseCountdown } from '../governor/openHouseHold';
 import { type DraftOutcome, type DraftRenderResult } from './draftContracts';
 import { tallyReasons } from './draftEligibility';
 import {
   commitDraft,
   countPriorDrafted,
+  loadBrainHistory,
   loadDecisionById,
   loadDecisionsForDate,
   loadRecipientEmail,
@@ -109,6 +111,13 @@ function liveDeps(): DraftRenderDeps {
     resolveBrandVoice: async () => DEFAULT_BRAND_VOICE,
     commitDraft,
     recommitDraft,
+    // OH1j: the same brain the Open House emails use, one piece per person per 72 hours.
+    loadBrainHistory,
+    gatherBrainPiece: async (piece, seed, person) => {
+      const { gatherBrainPiece } = await import('../../openHouseBrain');
+      return gatherBrainPiece(piece, seed, person);
+    },
+    inOpenHouseCountdown: (leadId) => isInOpenHouseCountdown(leadId),
   };
 }
 

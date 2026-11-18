@@ -1,6 +1,7 @@
 import { QueryTypes, type Transaction } from 'sequelize';
 import { sequelize } from '../../../config/database';
 import type { SequenceStep } from '../../../models/FollowUpSequence';
+import type { BrainPickRecord } from '../explorerBrainPick';
 import {
   EXPLORER_DRAFT_REJECTED_STATUS,
   EXPLORER_DRAFT_STATUS,
@@ -65,6 +66,45 @@ export async function countPriorDrafted(
     { replacements: { enrollmentId, campaignId, before }, type: QueryTypes.SELECT },
   );
   return Number(rows[0]?.n ?? 0);
+}
+
+/**
+ * OH1j: this person's earlier brain picks, newest first, for the 72-hour cadence, the
+ * rotation (never the same kind twice in a row) and the exclusion of items already given.
+ *
+ * Read from the draft rows themselves (`metadata.brain_pick`), so shadow picks count. The
+ * decision being rendered is excluded, so a regeneration re-chooses rather than seeing its
+ * own previous version as "the last pick"; superseded rows are excluded because their
+ * decision's current version already counts. Keyed on `lead_id`, the column every draft
+ * row carries.
+ */
+export async function loadBrainHistory(
+  leadId: number,
+  excludeDecisionId: string,
+): Promise<BrainPickRecord[]> {
+  const rows = await sequelize.query<{ piece: string | null; item_id: string | null; decision_date: string | null }>(
+    `SELECT metadata->'brain_pick'->>'piece' AS piece,
+            metadata->'brain_pick'->>'item_id' AS item_id,
+            metadata->>'explorer_decision_date' AS decision_date
+       FROM scheduled_emails
+      WHERE lead_id = :leadId
+        AND (metadata->'brain_pick') IS NOT NULL
+        AND status <> :supersededStatus
+        AND COALESCE(metadata->>'explorer_decision_id', '') <> :excludeDecisionId
+      ORDER BY metadata->>'explorer_decision_date' DESC, created_at DESC
+      LIMIT 50`,
+    {
+      replacements: { leadId, excludeDecisionId, supersededStatus: EXPLORER_DRAFT_SUPERSEDED_STATUS },
+      type: QueryTypes.SELECT,
+    },
+  );
+  return rows
+    .filter((r) => r.piece && r.decision_date)
+    .map((r) => ({
+      piece: r.piece as BrainPickRecord['piece'],
+      item_id: r.item_id || null,
+      decision_date: String(r.decision_date),
+    }));
 }
 
 export async function loadRecipientEmail(leadId: number): Promise<string | null> {
