@@ -381,7 +381,10 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
     // discount or "free"; the Join link present; no other links). A draft that fails
     // is NOT sent: the step keeps its safe fallback body, and the reason is recorded.
     if (eventCountdown && (channel === 'email' || channel === 'sms')) {
-      const { screenEventReminderCopy } = await import('./openHouseCountdown');
+      const { screenEventReminderCopy, softenIdioms } = await import('./openHouseCountdown');
+      // OH1e: "feel ___ to" / "what we offer" are rewritten, not rejected (see softenIdioms).
+      if (result.subject) result.subject = softenIdioms(result.subject);
+      if (result.body) result.body = softenIdioms(result.body);
       const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url);
       if (problems.length > 0) {
         await action.update({

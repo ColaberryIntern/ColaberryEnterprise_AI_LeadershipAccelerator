@@ -2,7 +2,7 @@
  * OH1 (Ali, 2026-11-17): Maya's Open House countdown campaign. The parts that decide
  * WHEN a step goes and WHETHER an AI draft may be sent are pure, and pinned here.
  */
-import { eventStepTime, screenEventReminderCopy, fallbackReminderBody, fallbackReminderSms, countdownCallBrief } from '../openHouseCountdown';
+import { eventStepTime, screenEventReminderCopy, softenIdioms, fallbackReminderBody, fallbackReminderSms, countdownCallBrief } from '../openHouseCountdown';
 import { activitySentence, meaningfulHistory, sourceLabel } from '../openHouseCountdownContext';
 import { buildSystemPrompt, buildEventUserPrompt } from '../aiMessageService';
 import { isWithinSendWindow, isWithinCallSchedule } from '../campaignSendWindow';
@@ -258,5 +258,23 @@ describe('what a call may say about the person (no internal labels, no system no
     const b = countdownCallBrief({ firstName: 'Ali', event: EVENT, facts: null, history: raw });
     expect(b).toContain('Maya called Ali');
     expect(b).not.toMatch(/opted out|status change/);
+  });
+});
+
+describe('softenIdioms (OH1e: the phrases that threw away half the personal drafts)', () => {
+  // Real sentences from prod drafts, Nov 18.
+  const JOINLINK = `<a href="${JOIN}">${JOIN}</a>`;
+  it.each([
+    ['Feel free to bring any questions you have.', "You're welcome to bring any questions you have."],
+    ['Keep your phone handy, and feel free to bring any questions.', "Keep your phone handy, and you're welcome to bring any questions."],
+    ["It's a great way to get familiar with what we offer.", "It's a great way to get familiar with what we do."],
+  ])('rewrites "%s"', (input, out) => {
+    expect(softenIdioms(input)).toBe(out);
+    expect(screenEventReminderCopy('Reminder', `<p>${softenIdioms(input)}</p><p>${JOINLINK}</p>`, JOIN)).toEqual([]);
+  });
+  it('leaves real offers and the bare word alone, so the screen still rejects them', () => {
+    for (const t of ['A special offer is waiting', 'This session is free']) {
+      expect(screenEventReminderCopy('Reminder', `<p>${softenIdioms(t)}</p><p>${JOINLINK}</p>`, JOIN).length).toBeGreaterThan(0);
+    }
   });
 });
