@@ -662,6 +662,8 @@ export interface PublicCaseStudyFacet {
 export interface PublicCaseStudyTaxonomyFacets {
   readonly capabilities: readonly PublicCaseStudyFacet[];
   readonly industries: readonly PublicCaseStudyFacet[];
+  /** W10: absent from an older server; the client treats absent as none. */
+  readonly departments?: readonly PublicCaseStudyFacet[];
   readonly stack: readonly PublicCaseStudyFacet[];
   readonly programs: readonly PublicCaseStudyFacet[];
   readonly builtBy: readonly { readonly slug: CaseStudyBuiltByType; readonly count: number }[];

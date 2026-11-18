@@ -126,6 +126,8 @@ export interface SnapshotView {
   readonly artifacts: ArtifactView[];
   readonly repositories: { readonly label: string; readonly role: string; readonly visibility: string }[];
   readonly industry: string;
+  /** W10: department slugs in this snapshot's taxonomy. */
+  readonly departments: string[];
   readonly primaryCapability: string;
   /** The hero video, whether generated or operator-supplied. Null when the record has
    *  neither. `embedUrl` set means an operator chose their own. */
@@ -163,7 +165,7 @@ export const EMPTY_SNAPSHOT_VIEW: SnapshotView = {
   builderNamingConsent: false, situationHeading: '', situationBody: [], heroMetrics: [],
   measurementMetrics: [], timeline: [], stack: [], capabilities: [], integrations: [],
   architectureNarrative: [], roadmap: [], contributors: [], artifacts: [], repositories: [],
-  industry: '', primaryCapability: '', walkthroughVideo: null, visualStory: null,
+  industry: '', departments: [], primaryCapability: '', walkthroughVideo: null, visualStory: null,
 };
 
 export function readSnapshot(content: Record<string, unknown> | null | undefined): SnapshotView {
@@ -243,6 +245,7 @@ export function readSnapshot(content: Record<string, unknown> | null | undefined
       };
     }),
     industry: str(taxonomy.industry),
+    departments: strList(taxonomy.departments),
     primaryCapability: str(taxonomy.primaryCapability),
     walkthroughVideo: walkthroughOf(content),
     visualStory: visualStoryOf(content),

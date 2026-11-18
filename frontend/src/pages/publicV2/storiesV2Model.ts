@@ -1,4 +1,5 @@
 import { BUILT_BY_LABELS } from '../../config/caseStudySurfaces';
+import { departmentLabel } from '../../services/caseStudyDepartments';
 import { humanizeFacetLabel } from './facetLabels';
 
 /* Re-exported: this module is where callers already look for facet-group
@@ -244,6 +245,14 @@ export function filterGroupsFrom(
     { field: 'stack', legend: 'Stack', options: toOptions(facets.stack) },
     { field: 'capability', legend: 'Capability', options: toOptions(facets.capabilities) },
     { field: 'industry', legend: 'Industry', options: toOptions(facets.industries) },
+    // W10: shown once any published study is tagged; until then the group would offer nothing to pick.
+    ...((facets.departments ?? []).some((f) => f.count > 0)
+      ? [{
+          field: 'department' as const,
+          legend: 'Department',
+          options: (facets.departments ?? []).map((f) => ({ value: f.slug, label: departmentLabel(f.slug), count: f.count })),
+        }]
+      : []),
     { field: 'program', legend: 'Program', options: toOptions(facets.programs) },
     {
       field: 'builtBy',

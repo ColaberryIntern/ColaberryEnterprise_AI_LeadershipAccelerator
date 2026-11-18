@@ -125,6 +125,8 @@ export function describeCaseStudyError(err: unknown): string {
 export interface CaseStudyFilterState {
   readonly capability: readonly string[];
   readonly industry: readonly string[];
+  /** W10: `?department=`, department slugs. */
+  readonly department: readonly string[];
   readonly stack: readonly string[];
   readonly program: readonly string[];
   readonly deliverable: readonly string[];
@@ -143,6 +145,7 @@ export interface CaseStudyFilterState {
 export const EMPTY_CASE_STUDY_FILTERS: CaseStudyFilterState = Object.freeze({
   capability: [],
   industry: [],
+  department: [],
   stack: [],
   program: [],
   deliverable: [],
@@ -162,6 +165,7 @@ export const EMPTY_CASE_STUDY_FILTERS: CaseStudyFilterState = Object.freeze({
 const PARAM_OF: Record<keyof CaseStudyFilterState, string> = {
   capability: 'capability',
   industry: 'industry',
+  department: 'department',
   stack: 'stack',
   program: 'program',
   deliverable: 'deliverable',
@@ -177,7 +181,7 @@ const PARAM_OF: Record<keyof CaseStudyFilterState, string> = {
 };
 
 const LIST_FIELDS = [
-  'capability', 'industry', 'stack', 'program', 'deliverable',
+  'capability', 'industry', 'department', 'stack', 'program', 'deliverable',
   'builtBy', 'verification', 'verificationMethod', 'status',
 ] as const;
 
@@ -233,6 +237,7 @@ export function parseCaseStudyFilters(search: string | URLSearchParams): CaseStu
   return {
     capability: lists.capability,
     industry: lists.industry,
+    department: lists.department,
     stack: lists.stack,
     program: lists.program,
     deliverable: lists.deliverable,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { SectionCard } from '../shell';
 import CaseStudyOverrideField from './CaseStudyOverrideField';
+import CaseStudyDepartmentPicker from './CaseStudyDepartmentPicker';
 import { CASE_STUDY_CONTROLS } from './caseStudyDesk';
 import type { SnapshotView } from './caseStudySnapshotView';
 
@@ -21,7 +22,7 @@ interface Props {
   view: SnapshotView;
   busy: boolean;
   hasSnapshot: boolean;
-  onApplyOverride: (path: string, value: string, note?: string) => void;
+  onApplyOverride: (path: string, value: unknown, note?: string) => void;
 }
 
 const Empty = ({ what }: { what: string }): React.ReactElement => (
@@ -69,6 +70,8 @@ export default function CaseStudyNarrativePanel({
             </dd>
             <dt className="col-5">Industry</dt>
             <dd className="col-7">{view.industry || '—'}</dd>
+            <dt className="col-5">Departments</dt>
+            <dd className="col-7">{view.departments.join(', ') || '—'}</dd>
             <dt className="col-5">Primary capability</dt>
             <dd className="col-7">{view.primaryCapability || '—'}</dd>
           </dl>
@@ -124,6 +127,12 @@ export default function CaseStudyNarrativePanel({
         </div>
 
         <div className="col-lg-6">
+          <CaseStudyDepartmentPicker
+            current={view.departments}
+            busy={busy}
+            onApply={onApplyOverride}
+            disabledReason={hasSnapshot ? undefined : NO_SNAPSHOT_REASON}
+          />
           <h3 className="h6">Human editorial copy</h3>
           <p className="small text-muted">
             An override becomes a new snapshot version and must be approved like any other. The
