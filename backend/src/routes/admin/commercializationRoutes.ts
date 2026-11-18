@@ -17,6 +17,7 @@ import {
   handleGetLivePopulation,
 } from '../../controllers/commercializationController';
 import {
+  handleGetChannelTruth,
   handleGetRevenueRoomBoard,
   handleGetRevenueRoomDrilldown,
 } from '../../controllers/revenueRoomController';
@@ -42,6 +43,10 @@ router.get(
   requireAdmin,
   handleGetRevenueRoomDrilldown,
 );
+// R19 - the acquisition channel panel: which channels produced the members who pay, and
+// what was spent to get them. A LITERAL segment under /commercialization/, deliberately not
+// a child of /revenue-room/, so the parameterized `:cardKey` route above can never shadow it.
+router.get('/api/admin/commercialization/channel-truth', requireAdmin, handleGetChannelTruth);
 // R16 - the Revenue Flow board: the big-picture dashboard plus the dated, classified events
 // behind each number. `?window=<days>` narrows the timeline; it defaults to 180, which is
 // wider than the oldest real datum production holds.
