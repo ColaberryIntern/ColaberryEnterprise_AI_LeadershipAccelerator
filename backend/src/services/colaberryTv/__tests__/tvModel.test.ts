@@ -1,7 +1,18 @@
-import { nextPositions, AddBody, audienceSees, displayTitle, OrderBody, parseYoutubeId, toViewerList, UpdateBody, type TvVideoRow } from '../tvModel';
-import { fetchShortTitle } from '../tvOembed';
+import { displayTitle, parseYoutubeId } from '../tvModel';
 
-/** Campus v20 N3 (C134): which links are shorts, who sees which short, and the request shapes. */
+/**
+ * Campus v20 N3 (C134): which links are shorts, and what title to show for one.
+ *
+ * TV-2 removed the rest of this suite with the code it covered. `audienceSees` and `toViewerList`
+ * described a per-audience, positioned playlist that only `colaberry_tv_videos` ever had; the
+ * library has no audience, no position and no on-air flag. `nextPositions` and the four Zod bodies
+ * served the manage routes. `fetchShortTitle` went with `tvOembed.ts`, whose only caller was the
+ * write path.
+ *
+ * What is left is what the LIVE path still calls: `tvLibrarySource` parses each asset's
+ * `source_url` with `parseYoutubeId` and names it with `displayTitle`. Both are load-bearing, so
+ * both keep full coverage.
+ */
 const ID = 'Pa5J5T6MZok';
 
 describe('parseYoutubeId', () => {
@@ -27,76 +38,32 @@ describe('parseYoutubeId', () => {
   ])('rejects %s', (_n, url) => { expect(parseYoutubeId(url)).toBeNull(); });
 });
 
-describe('who sees which short', () => {
-  it('everyone sees "all"; explorers see explorers; members and business accounts see members; staff see everything', () => {
-    expect(audienceSees('all', 'explorer')).toBe(true);
-    expect(audienceSees('explorers', 'explorer')).toBe(true);
-    expect(audienceSees('members', 'explorer')).toBe(false);
-    expect(audienceSees('members', 'member')).toBe(true);
-    expect(audienceSees('members', 'business')).toBe(true);
-    expect(audienceSees('explorers', 'member')).toBe(false);
-    expect(audienceSees('explorers', 'staff')).toBe(true);
-    expect(audienceSees('members', 'staff')).toBe(true);
-  });
-
-  const row = (id: string, position: number, extra: Partial<TvVideoRow> = {}): TvVideoRow =>
-    ({ id, youtube_id: ID, title: null, duration_s: null, audience: 'all', on_air: true, position, created_at: '2026-11-11T15:00:00Z', ...extra });
-
-  it('the viewer list is on air only, in play order, with a neutral title when none is stored', () => {
-    const list = toViewerList([row('b', 2), row('a', 1, { title: 'Week 1 recap' }), row('c', 3, { on_air: false }), row('d', 4, { audience: 'members' })], 'explorer');
-    expect(list.map((v) => v.id)).toEqual(['a', 'b']);
-    expect(list.map((v) => v.title)).toEqual(['Week 1 recap', 'Colaberry short']);
-    expect(list[0].created_at).toBe('2026-11-11T15:00:00.000Z');
-  });
-
+describe('displayTitle', () => {
   it('an empty or blank title is never shown as blank', () => {
     expect(displayTitle({ title: '   ' })).toBe('Colaberry short');
+    expect(displayTitle({ title: null })).toBe('Colaberry short');
+  });
+
+  it('a real title is shown as stored', () => {
+    expect(displayTitle({ title: 'Week 1 recap' })).toBe('Week 1 recap');
   });
 });
 
-it('nextPositions numbers the order from 1', () => {
-  expect(nextPositions(['b', 'a'])).toEqual([{ id: 'b', position: 1 }, { id: 'a', position: 2 }]);
-});
+describe('what TV-2 removed from this module', () => {
+  /**
+   * Asserted rather than merely deleted. These symbols described a second playlist that nothing
+   * reads any more; if one reappears it should be because somebody decided to bring the table
+   * back, not because an import was restored to make something compile.
+   */
+  it('exports nothing from the retired playlist', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const mod = require('../tvModel');
+    for (const gone of ['AUDIENCES', 'audienceSees', 'toViewerList', 'nextPositions', 'AddBody', 'UpdateBody', 'OrderBody', 'IdParam']) {
+      expect(mod[gone]).toBeUndefined();
+    }
+  });
 
-describe('request shapes', () => {
-  it('add takes a url and nothing else', () => {
-    expect(AddBody.safeParse({ url: 'x' }).success).toBe(true);
-    expect(AddBody.safeParse({ url: '' }).success).toBe(false);
-    expect(AddBody.safeParse({ url: 'x', position: 1 }).success).toBe(false);
-  });
-  it('an update must change something known', () => {
-    expect(UpdateBody.safeParse({ on_air: false }).success).toBe(true);
-    expect(UpdateBody.safeParse({}).success).toBe(false);
-    expect(UpdateBody.safeParse({ audience: 'everyone' }).success).toBe(false);
-    expect(UpdateBody.safeParse({ title: 'x'.repeat(121) }).success).toBe(false);
-    expect(UpdateBody.safeParse({ youtube_id: ID }).success).toBe(false);
-  });
-  it('an order lists each short once, as uuids', () => {
-    const a = '11111111-2222-4333-8444-000000000001';
-    expect(OrderBody.safeParse({ ids: [a] }).success).toBe(true);
-    expect(OrderBody.safeParse({ ids: [a, a] }).success).toBe(false);
-    expect(OrderBody.safeParse({ ids: ['x'] }).success).toBe(false);
-    expect(OrderBody.safeParse({ ids: [] }).success).toBe(false);
-  });
-});
-
-describe('fetchShortTitle (oEmbed)', () => {
-  beforeEach(() => { jest.spyOn(console, 'warn').mockImplementation(() => undefined); });
-  afterEach(() => { jest.restoreAllMocks(); });
-
-  it('returns the title YouTube reports, asking with a timeout', async () => {
-    const f = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ title: ' Colaberry: Week 1 ' }) });
-    await expect(fetchShortTitle(ID, f as unknown as typeof fetch)).resolves.toBe('Colaberry: Week 1');
-    expect(String(f.mock.calls[0][0])).toContain(encodeURIComponent(`https://www.youtube.com/shorts/${ID}`));
-    expect(f.mock.calls[0][1].signal).toBeDefined();
-  });
-  it.each<[string, () => Promise<unknown>]>([
-    ['a 404', () => Promise.resolve({ ok: false, status: 404, json: async () => ({}) })],
-    ['a timeout', () => Promise.reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' }))],
-    ['a body without a title', () => Promise.resolve({ ok: true, json: async () => ({ html: '<iframe>' }) })],
-    ['malformed JSON', () => Promise.resolve({ ok: true, json: async () => { throw new SyntaxError('bad'); } })],
-  ])('%s is null, logged, never thrown', async (_n, impl) => {
-    await expect(fetchShortTitle(ID, jest.fn(impl) as unknown as typeof fetch)).resolves.toBeNull();
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('colaberry_tv_oembed_failed'));
+  it('tvOembed is gone from the tree', () => {
+    expect(() => require('../tvOembed')).toThrow();
   });
 });

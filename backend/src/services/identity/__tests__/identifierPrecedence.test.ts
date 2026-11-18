@@ -264,10 +264,14 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     // to look like one. Added by the Agent Factory run (CC-20261006-a4k7), whose author did not
     // know this tripwire existed until it fired -- which is the tripwire working.
     'backend/src/scripts/seedAgentDomainIdentityPrereqs.js',
-    // `enrollment:<id>` as the ACTOR on a colaberry_tv_audit row (Campus v20, C134): a who-did-it label written next to
-    // admin:<email> actors, never looked up, joined or compared as a subject reference. Classified per this block's rule;
-    // the author found this tripwire when it fired in CI (CC-20261016-sqcm).
-    'backend/src/routes/colaberryTvRoutes.ts',
+    // REMOVED by TV-2 (2026-11-17), and this tripwire is how the removal was noticed. The entry was
+    // `enrollment:<id>` as the ACTOR on a colaberry_tv_audit row (Campus v20, C134), built inside the
+    // portal manage gate. That gate, its five routes and the audit writes behind them are gone, so
+    // the file constructs no subject key at all any more and the scan no longer finds it here.
+    //
+    // The list is the expectation, so a file that STOPS constructing one fails just as loudly as a
+    // new one that starts - which is the second direction this tripwire guards, and it fired in CI
+    // for exactly that reason.
     // `lead:<id>` and `visitor:<id>` as the RECIPIENT REFERENCE on a `maya_outbound_approvals`
     // row (T5-T8, 2026-11-15): the opaque handle the approval queue and its log lines carry
     // instead of an email address, because an API response in this repo carries no PII. It is

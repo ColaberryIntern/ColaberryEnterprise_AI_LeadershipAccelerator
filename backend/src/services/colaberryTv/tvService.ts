@@ -1,135 +1,27 @@
-import { QueryTypes, type Transaction } from 'sequelize';
-import { sequelize } from '../../config/database';
-import { ensureColaberryTvSchema } from '../../db/ensureColaberryTvSchema';
-import { fetchShortTitle } from './tvOembed';
-import { nextPositions, type TvAudience, type TvVideo, type TvVideoRow, type TvViewer } from './tvModel';
+import type { TvVideo, TvViewer } from './tvModel';
 import { listLibraryShorts } from './tvLibrarySource';
 
 /**
- * Colaberry TV playlist (Campus v20 N3, Basecamp C134). Raw SQL because there is no model for these two additive tables; every
- * result is typed here. Every write runs in one transaction with its audit row, so a change and its record land together or not
- * at all. `actor` is who did it ("enrollment:<id>" from the campus, "admin:<email>" from the admin console).
+ * What Colaberry TV plays (Campus v20 N3, Basecamp C134).
  *
- * IDEMPOTENT: adding a link already on the playlist returns the existing row and writes nothing (no duplicate, no audit row);
- * removing an id that is gone is 'not_found'; reordering to the current order rewrites the same positions.
+ * ONE FUNCTION LEFT, and that is the point of TV-2. This file used to own a second playlist in
+ * `colaberry_tv_videos` - add, update, reorder, remove, each in a transaction with its audit row -
+ * and TV-1 pointed the TV at the Colaberry Training library instead. From that moment the writes
+ * had no reader: nothing displayed the rows they maintained. They are gone now rather than left to
+ * look load-bearing.
+ *
+ * THE TABLE IS STILL THERE, deliberately. Dropping `colaberry_tv_videos` is a schema change and
+ * ESCALATE-tier, and it holds the only record of the nine hard-coded seeds, so it stays for a
+ * release as the rollback if the library turns out to be the wrong source. `ensureColaberryTvSchema`
+ * is kept for the same reason and now has no caller: that is intended, not an oversight.
  */
-const COLS = 'id, youtube_id, title, duration_s, audience, on_air, position, created_at';
-
-async function rows(t?: Transaction): Promise<TvVideoRow[]> {
-  return sequelize.query<TvVideoRow>(`SELECT ${COLS} FROM colaberry_tv_videos ORDER BY position ASC, created_at ASC`,
-    { type: QueryTypes.SELECT, transaction: t });
-}
-
-async function audit(t: Transaction, actor: string, action: string, row: { id: string | null; youtube_id: string | null }, detail: Record<string, unknown> = {}): Promise<void> {
-  await sequelize.query(
-    'INSERT INTO colaberry_tv_audit (video_id, youtube_id, action, actor, detail) VALUES (:video_id, :youtube_id, :action, :actor, CAST(:detail AS JSONB))',
-    { replacements: { video_id: row.id, youtube_id: row.youtube_id, action, actor, detail: JSON.stringify(detail) }, transaction: t });
-}
-
-let titlesFilled = false;
-/** Once per process: fill NULL titles from oEmbed (the seed's nine). Best effort, sequential, each call bounded by its timeout. */
-async function fillMissingTitles(list: TvVideoRow[]): Promise<void> {
-  if (titlesFilled) return;
-  titlesFilled = true;
-  for (const r of list.filter((x) => !x.title)) {
-    const title = await fetchShortTitle(r.youtube_id);
-    if (!title) continue;
-    await sequelize.query('UPDATE colaberry_tv_videos SET title = :title, updated_at = NOW() WHERE id = :id AND title IS NULL',
-      { replacements: { title, id: r.id } });
-    r.title = title;
-  }
-}
-
-export async function listAll(): Promise<TvVideoRow[]> {
-  await ensureColaberryTvSchema();
-  const list = await rows();
-  await fillMissingTitles(list).catch((err) => {
-    console.warn(JSON.stringify({ level: 'warn', service: 'colaberry-tv', event: 'colaberry_tv_title_fill_failed', outcome: 'failure',
-      error_class: (err as Error)?.name || 'Error' }));
-  });
-  return list;
-}
 
 /**
- * What the campus plays. Ali, 2026-11-15: "I want Colaberry TV videos picked from videos loaded to
- * the Colaberry training brand / library ... Instead of having to manage them in two places." So the
- * playlist is the library (tvLibrarySource), and `colaberry_tv_videos` no longer feeds the TV.
- *
- * The viewer is still taken and deliberately ignored: the library has no audience concept, so every
- * short is on for everyone. The parameter stays because two callers pass it and keeping the plumbing
- * costs nothing if per-audience shorts are ever wanted again; `_viewer` is the honest signal that
- * nothing downstream varies by it today.
- *
- * The write functions below still operate on `colaberry_tv_videos`, which nothing reads any more.
- * Removing that surface is a follow-up, not this change.
+ * The viewer is taken and deliberately ignored: the library has no audience concept, so every
+ * short is on for everyone. The parameter stays because two callers pass it - the portal GET route
+ * and `colaberryNow/happeningService` - and `_viewer` is the honest signal that nothing downstream
+ * varies by it today.
  */
 export async function listForViewer(_viewer: TvViewer): Promise<TvVideo[]> {
   return listLibraryShorts();
 }
-
-export async function addShort(youtubeId: string, actor: string): Promise<{ row: TvVideoRow; created: boolean }> {
-  await ensureColaberryTvSchema();
-  const existing = (await rows()).find((r) => r.youtube_id === youtubeId);
-  if (existing) return { row: existing, created: false };
-  const title = await fetchShortTitle(youtubeId);
-  return sequelize.transaction(async (t) => {
-    const inserted = await sequelize.query<TvVideoRow>(
-      `INSERT INTO colaberry_tv_videos (youtube_id, title, position)
-       VALUES (:youtubeId, :title, (SELECT COALESCE(MAX(position), 0) + 1 FROM colaberry_tv_videos))
-       ON CONFLICT (youtube_id) DO NOTHING RETURNING ${COLS}`,
-      { replacements: { youtubeId, title }, type: QueryTypes.SELECT, transaction: t });
-    if (!inserted.length) {
-      const again = (await rows(t)).find((r) => r.youtube_id === youtubeId)!;
-      return { row: again, created: false };
-    }
-    await audit(t, actor, 'add', inserted[0], { title });
-    return { row: inserted[0], created: true };
-  });
-}
-
-export interface TvUpdate { title?: string; audience?: TvAudience; on_air?: boolean }
-
-export async function updateShort(id: string, patch: TvUpdate, actor: string): Promise<TvVideoRow | 'not_found'> {
-  await ensureColaberryTvSchema();
-  return sequelize.transaction(async (t) => {
-    const updated = await sequelize.query<TvVideoRow>(
-      `UPDATE colaberry_tv_videos SET
-         title = COALESCE(:title, title), audience = COALESCE(:audience, audience), on_air = COALESCE(:on_air, on_air), updated_at = NOW()
-       WHERE id = :id RETURNING ${COLS}`,
-      { replacements: { id, title: patch.title ?? null, audience: patch.audience ?? null, on_air: patch.on_air ?? null },
-        type: QueryTypes.SELECT, transaction: t });
-    if (!updated.length) return 'not_found';
-    await audit(t, actor, 'update', updated[0], { ...patch });
-    return updated[0];
-  });
-}
-
-/** `ids` must be exactly the playlist's ids (every short once): a partial or stale order is 'mismatch' and changes nothing. */
-export async function reorderShorts(ids: string[], actor: string): Promise<TvVideoRow[] | 'mismatch'> {
-  await ensureColaberryTvSchema();
-  return sequelize.transaction(async (t) => {
-    const current = await rows(t);
-    const known = new Set(current.map((r) => r.id));
-    if (ids.length !== current.length || ids.some((x) => !known.has(x))) return 'mismatch';
-    for (const { id, position } of nextPositions(ids)) {
-      await sequelize.query('UPDATE colaberry_tv_videos SET position = :pos, updated_at = NOW() WHERE id = :id',
-        { replacements: { pos: position, id }, transaction: t });
-    }
-    await audit(t, actor, 'reorder', { id: null, youtube_id: null }, { ids });
-    return rows(t);
-  });
-}
-
-export async function removeShort(id: string, actor: string): Promise<'removed' | 'not_found'> {
-  await ensureColaberryTvSchema();
-  return sequelize.transaction(async (t) => {
-    const gone = await sequelize.query<TvVideoRow>(`DELETE FROM colaberry_tv_videos WHERE id = :id RETURNING ${COLS}`,
-      { replacements: { id }, type: QueryTypes.SELECT, transaction: t });
-    if (!gone.length) return 'not_found';
-    await audit(t, actor, 'remove', gone[0], { title: gone[0].title });
-    return 'removed';
-  });
-}
-
-/** Test seam. */
-export function __resetTitleFillForTests(): void { titlesFilled = false; }
