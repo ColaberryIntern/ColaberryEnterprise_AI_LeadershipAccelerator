@@ -231,6 +231,20 @@ export const portalFreeSignupSchema = z.object({
    * caveat as `marketing_opt_in` applies: the frontend and this ship together.
    */
   phone_consent: z.boolean().optional(),
+
+  /**
+   * Permission to be NAMED in the recent-signup notices, which is a display permission and not a
+   * contact one. It is the only field here that authorises nothing being sent to anybody.
+   *
+   * A STRICT BOOLEAN and OPTIONAL, for the same two reasons as `marketing_opt_in`: this is a
+   * first-party form posting JSON, so there is no reason to accept "on"; and this object is
+   * `.strict()`, so the key is REJECTED until this schema is deployed. The frontend and this ship
+   * together or the form starts failing - that ordering is the whole reason it cannot be required.
+   *
+   * Absent means no permission, never a revocation. `leads.social_proof_opt_in` is
+   * `NOT NULL DEFAULT false`, so absent and false land identically on the row.
+   */
+  social_proof_opt_in: z.boolean().optional(),
 }).strict();
 
 export type PortalFreeSignupInput = z.infer<typeof portalFreeSignupSchema>;

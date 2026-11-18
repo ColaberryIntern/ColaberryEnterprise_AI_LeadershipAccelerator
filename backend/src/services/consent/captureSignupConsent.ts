@@ -200,3 +200,27 @@ export const SIGNUP_CONSENT_TEXT =
  */
 export const PHONE_CONSENT_TEXT =
   'You can call or text me about getting started. Message and data rates may apply, and you can ask us to stop at any time.';
+
+/**
+ * Permission to be NAMED in the recent-signup notices a landing page shows.
+ *
+ * NOT A CONTACT PERMISSION, which is why there is no `consent_records` row behind it.
+ * `ConsentChannel` is voice | sms | email, and every one of those authorises a SEND. This
+ * authorises a DISPLAY, so it lives on `leads.social_proof_opt_in` instead. Putting it in the
+ * consent table would mean inventing a fourth channel that the send gate would then have to learn
+ * to ignore, and a row that looks like permission to contact somebody is the one shape of mistake
+ * that table exists to prevent.
+ *
+ * The wording is pinned HERE, beside the other two, for the reason the others are: one sentence
+ * per permission, shown and stored identically, so the column means one specific thing years from
+ * now. `consentTextParity.test.ts` holds the frontend copy to this string.
+ *
+ * IT SAYS WHAT ACTUALLY APPEARS. "Social proof" means nothing to the person ticking the box, and
+ * the bar renders a real person: first name, last initial, city. Anything vaguer would be consent
+ * to something the reader did not picture.
+ *
+ * NOT A CONDITION OF BEING COUNTED. Without the tick the same signup still appears, as
+ * "Someone in <city>", so leaving it unticked costs the person nothing.
+ */
+export const SOCIAL_PROOF_CONSENT_TEXT =
+  'Show my first name, last initial and city when Colaberry mentions recent signups.';

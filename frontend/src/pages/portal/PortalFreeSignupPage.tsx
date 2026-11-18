@@ -4,7 +4,7 @@ import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import { freeSignup } from '../../services/onboardingApi';
 import { identifyVisitor } from '../../utils/tracker';
 import { getSignupAcquisitionFields } from '../../services/utmService';
-import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT } from '../../config/consentText';
+import { SIGNUP_CONSENT_TEXT, PHONE_CONSENT_TEXT, SOCIAL_PROOF_CONSENT_TEXT } from '../../config/consentText';
 import { hasLiveParticipantSession } from '../../utils/participantToken';
 import ColaberryLockup from '../../components/brand/ColaberryLockup';
 
@@ -42,6 +42,14 @@ function PortalFreeSignupPage() {
   // account and still gets their sign-in link, which is transactional and needs no
   // marketing consent.
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  // Permission to be NAMED in the recent-signup notices. Unchecked, optional, and asked for
+  // separately from the email box for the same reason the phone box is separate: agreeing to be
+  // emailed is not agreeing to appear by name on a public page.
+  //
+  // Leaving it alone costs the person nothing visible - their signup still shows as
+  // "Someone in <city>" like everyone else's - which is why it can sit on a conversion-sensitive
+  // form without being a toll.
+  const [socialProofOptIn, setSocialProofOptIn] = useState(false);
   const { login } = useParticipantAuth();
   // C105 (C97: 32 return visits were Explorers re-clicking the ad and landing here as strangers): a browser that
   // already holds a live session is offered the way back first. "Create a different account" still reaches the form,
@@ -65,6 +73,11 @@ function PortalFreeSignupPage() {
         // fields existed would reject the whole signup rather than ignore the extra keys.
         ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(phone.trim() && phoneConsent ? { phone_consent: true } : {}),
+        // Same rule, and it is why an unticked box sends NOTHING rather than `false`: this page
+        // can reach a server that predates the field, and `.strict()` would reject the whole
+        // signup over a key it does not know. Absent and false land identically on the row
+        // (`NOT NULL DEFAULT false`), so nothing is lost by omitting it.
+        ...(socialProofOptIn ? { social_proof_opt_in: true } : {}),
       };
       // C94: the ad that brought them (source|medium, campaign, ad, placement, page). Only keys with a value the
       // strict route accepts are present. If the server still answers 400 (a backend older than this page, or a
@@ -155,6 +168,23 @@ function PortalFreeSignupPage() {
             placeholder="Your name" value={fullName} onChange={(e) => setFullName(e.target.value)}
             disabled={loading}
           />
+          {/*
+            DIRECTLY UNDER THE NAME FIELD, for the reason the email box sits under the email
+            field: it belongs beside the thing it is about, and the thing this is about is the
+            name just typed. It asks to show that name; putting it anywhere else would ask the
+            person to hold the question in their head while they fill in something else.
+            Unchecked, optional, and never a condition of signing up.
+          */}
+          <label className="cbfs-consent" htmlFor="cbfs-social-proof">
+            <input
+              id="cbfs-social-proof" className="cbfs-check" type="checkbox"
+              checked={socialProofOptIn}
+              onChange={(e) => setSocialProofOptIn(e.target.checked)}
+              disabled={loading}
+            />
+            <span>{SOCIAL_PROOF_CONSENT_TEXT}</span>
+          </label>
+
           <label className="cbfs-label" htmlFor="cbfs-email">Email</label>
           <input
             id="cbfs-email" className="cbfs-input" type="email" autoComplete="email"

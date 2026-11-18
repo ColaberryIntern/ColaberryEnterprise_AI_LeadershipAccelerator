@@ -137,6 +137,11 @@ export async function freeSignup(
     phone?: string;
     /** Permission to call or text. Separate from `marketing_opt_in`, which is email only. */
     phone_consent?: boolean;
+    /**
+     * Permission to be NAMED in the recent-signup notices. A display permission, not a contact
+     * one, and separate from both of the above: nothing is sent to anybody on the strength of it.
+     */
+    social_proof_opt_in?: boolean;
   } & SignupAcquisitionFields,
 ): Promise<FreeSignupResult> {
   const { data } = await portalApi.post<FreeSignupResult>('/api/portal/free-signup', body);
