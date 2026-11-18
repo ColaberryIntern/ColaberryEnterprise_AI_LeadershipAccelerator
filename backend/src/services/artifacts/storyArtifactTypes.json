@@ -1,11 +1,14 @@
 {
   "$comment": "THE ARTIFACT TYPE CATALOG. Single source of truth. See storyArtifactTypes.ts for why this is a JSON file in git and not 11 rows in artifact_definitions. Add a type by adding an entry here; the tests derive their expectations from this file, so nothing else needs editing to stay honest. file_types are lowercase extensions WITHOUT a dot; [\"*\"] means any extension. evidence_source: 'repo' the git tree is the evidence, 'platform' an upload recorded against the story is the evidence, 'either' both are accepted and the contract entry may name which. requires_github_validation MUST equal (evidence_source === 'repo'); the invariant is asserted by a test rather than trusted.",
-  "version": 1,
+  "version": 2,
   "types": [
     {
       "type": "case_study",
       "name": "Case study",
-      "file_types": ["html", "pdf"],
+      "file_types": [
+        "html",
+        "pdf"
+      ],
       "evidence_source": "either",
       "requires_github_validation": false,
       "requires_screenshot": false,
@@ -17,7 +20,10 @@
     {
       "type": "proposal",
       "name": "Proposal",
-      "file_types": ["pdf", "docx"],
+      "file_types": [
+        "pdf",
+        "docx"
+      ],
       "evidence_source": "either",
       "requires_github_validation": false,
       "requires_screenshot": false,
@@ -29,7 +35,9 @@
     {
       "type": "portfolio",
       "name": "Portfolio entry",
-      "file_types": ["html"],
+      "file_types": [
+        "html"
+      ],
       "evidence_source": "platform",
       "requires_github_validation": false,
       "requires_screenshot": false,
@@ -41,7 +49,9 @@
     {
       "type": "build_artifact",
       "name": "Build artifact",
-      "file_types": ["*"],
+      "file_types": [
+        "*"
+      ],
       "evidence_source": "repo",
       "requires_github_validation": true,
       "requires_screenshot": true,
@@ -53,7 +63,11 @@
     {
       "type": "analysis_report",
       "name": "Analysis report",
-      "file_types": ["pdf", "html", "xlsx"],
+      "file_types": [
+        "pdf",
+        "html",
+        "xlsx"
+      ],
       "evidence_source": "repo",
       "requires_github_validation": true,
       "requires_screenshot": false,
@@ -65,7 +79,10 @@
     {
       "type": "data_workbook",
       "name": "Data workbook",
-      "file_types": ["xlsx", "csv"],
+      "file_types": [
+        "xlsx",
+        "csv"
+      ],
       "evidence_source": "repo",
       "requires_github_validation": true,
       "requires_screenshot": false,
@@ -77,7 +94,10 @@
     {
       "type": "architecture_decision",
       "name": "Architecture decision record",
-      "file_types": ["md", "pdf"],
+      "file_types": [
+        "md",
+        "pdf"
+      ],
       "evidence_source": "repo",
       "requires_github_validation": true,
       "requires_screenshot": false,
@@ -89,7 +109,9 @@
     {
       "type": "field_guide",
       "name": "Field guide",
-      "file_types": ["html"],
+      "file_types": [
+        "html"
+      ],
       "evidence_source": "platform",
       "requires_github_validation": false,
       "requires_screenshot": false,
@@ -101,7 +123,10 @@
     {
       "type": "prompt_library",
       "name": "Prompt library",
-      "file_types": ["md", "json"],
+      "file_types": [
+        "md",
+        "json"
+      ],
       "evidence_source": "repo",
       "requires_github_validation": true,
       "requires_screenshot": false,
@@ -113,7 +138,11 @@
     {
       "type": "demo_capture",
       "name": "Demo capture",
-      "file_types": ["png", "gif", "mp4"],
+      "file_types": [
+        "png",
+        "gif",
+        "mp4"
+      ],
       "evidence_source": "platform",
       "requires_github_validation": false,
       "requires_screenshot": true,
@@ -125,7 +154,10 @@
     {
       "type": "presentation",
       "name": "Presentation",
-      "file_types": ["pdf", "pptx"],
+      "file_types": [
+        "pdf",
+        "pptx"
+      ],
       "evidence_source": "either",
       "requires_github_validation": false,
       "requires_screenshot": false,
@@ -133,6 +165,20 @@
       "exists_today": "1 row",
       "handed_over": "Repo plus the showcase",
       "sort_order": 110
+    },
+    {
+      "type": "claude_studio",
+      "name": "Claude Studio submission",
+      "file_types": [
+        "html"
+      ],
+      "evidence_source": "platform",
+      "requires_github_validation": false,
+      "requires_screenshot": false,
+      "evaluation_criteria": "A reader can open what the student actually built in Claude, and the reflection beside it says what they would do differently, so the submission shows judgement and not only output.",
+      "exists_today": "71 rows across 18 learners, from twelve named Studios (Problem Framing, Data Storytelling, Decision Intelligence, Executive Communication and the rest). Each is an Artifact the student built in their OWN Claude account, recorded with artifact_url, a written reflection, an AI disclosure and a review state. Measured 2026-11-18.",
+      "handed_over": "As a claude.ai URL on the platform, with the reflection. There is no repository file, so the repository check neither confirms nor denies it.",
+      "sort_order": 111
     }
   ]
 }

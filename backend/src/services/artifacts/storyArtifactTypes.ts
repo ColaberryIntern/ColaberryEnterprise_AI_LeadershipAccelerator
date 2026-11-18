@@ -148,3 +148,86 @@ export function allowsEvidenceSource(t: StoryArtifactType, source: ArtifactEvide
   if (t.evidence_source === 'either') return source === 'repo' || source === 'platform';
   return source === t.evidence_source;
 }
+
+/* ---------------------------------------------------------------------------
+ * WHAT PRODUCTION ACTUALLY PRODUCES, AND HOW IT MAPS ONTO THE CATALOG
+ * ---------------------------------------------------------------------------
+ *
+ * The catalog says what a story's contract MAY DECLARE. It said nothing about what the platform
+ * already holds, and `storyArtifactTypes.test.ts` only ever checked one direction: that every
+ * declared type is well formed. It could not notice a kind that exists in production and has no
+ * type at all, which is the same one-way check this workstream keeps finding elsewhere, here in
+ * its own test.
+ *
+ * Measured against production on 2026-11-18, `runtime_portfolio_artifacts` holds eight distinct
+ * kinds and TWO of them had no catalog type:
+ *
+ *   claude_studio    71 rows, 18 learners. Now a catalog type in its own right: a student's own
+ *                    Claude Artifact with a reflection and an AI disclosure is a different thing
+ *                    from a file in a repository.
+ *   architecture_doc 1 row, "AI Systems Architecture Job Aid". NOT given its own type, and the
+ *                    reason is in the alias below.
+ *
+ * `MEASURED_PRODUCTION_KINDS` is measured, not derived: nothing here can query the database, so
+ * it carries the date it was taken and a test holds the mapping complete against it. A kind that
+ * appears in production later will not fail this on its own, which is the honest limit of a list
+ * a human maintains. What the test DOES catch is an alias pointing at a type that does not exist,
+ * an alias with no reason, and a measured kind that maps to nothing.
+ */
+
+export interface ProductionKindAlias {
+  /** The `kind` value as `runtime_portfolio_artifacts` stores it. */
+  kind: string;
+  /** The catalog type it is read as. Must be a real type; a test enforces that. */
+  maps_to: string;
+  /** Why it is an alias rather than a type. Required, and a test enforces that too. */
+  reason: string;
+}
+
+/**
+ * Production kinds that are READ AS an existing catalog type rather than given one of their own.
+ *
+ * The bar for a new type is that a builder could tell it apart from every existing one. Where no
+ * honest criterion separates two things, two types just make the builder guess, and a catalog
+ * with two names for one thing is worse than a catalog that is missing a name.
+ */
+export const PRODUCTION_KIND_ALIASES: ProductionKindAlias[] = [
+  {
+    kind: 'architecture_doc',
+    maps_to: 'field_guide',
+    reason:
+      'One row, "AI Systems Architecture Job Aid", and it satisfies field_guide\'s own criterion '
+      + 'as written: someone doing the task for the first time can follow it without the author '
+      + 'present. Its stored content has the same shape as the other sections-and-skills '
+      + 'documents, and no criterion distinguishes an architecture job aid from a field guide '
+      + 'without inventing one. Measured 2026-11-18.',
+  },
+];
+
+/** Every distinct kind in `runtime_portfolio_artifacts`, with the date it was counted. */
+export const MEASURED_PRODUCTION_KINDS = {
+  measured_on: '2026-11-18',
+  table: 'runtime_portfolio_artifacts',
+  kinds: [
+    'architecture_decision',
+    'architecture_doc',
+    'build_artifact',
+    'case_study',
+    'claude_studio',
+    'field_guide',
+    'presentation',
+    'prompt_library',
+  ] as string[],
+};
+
+/**
+ * The catalog type a production kind is read as, or undefined when nothing claims it.
+ *
+ * Undefined is a real answer and the caller must render it as unclassified rather than guessing:
+ * an artifact filed under a type nobody chose is worse than one visibly unfiled.
+ */
+export function catalogTypeForProductionKind(kind: string): string | undefined {
+  if (isKnownArtifactType(kind)) return kind;
+  const alias = PRODUCTION_KIND_ALIASES.find((a) => a.kind === kind);
+  return alias ? alias.maps_to : undefined;
+}

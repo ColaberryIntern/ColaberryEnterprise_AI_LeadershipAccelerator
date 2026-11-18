@@ -119,7 +119,7 @@ judged by. Author it in the config under `artifacts.by_story.<story id>` (see
 `story_configs/EXAMPLE.json`) or in the generated plan's story itself, where the story's own
 block wins.
 
-**The vocabulary lives in code, not here.** The eleven artifact types, their file types, where
+**The vocabulary lives in code, not here.** The artifact types, their file types, where
 each is handed over, and the sentence each is judged by are declared once, as data, in
 `backend/src/services/artifacts/storyArtifactTypes.json`, with
 `backend/src/services/artifacts/storyArtifactTypes.ts` as its typed door. Read that file; do not
