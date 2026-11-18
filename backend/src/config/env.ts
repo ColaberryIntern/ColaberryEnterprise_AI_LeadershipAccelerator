@@ -516,6 +516,10 @@ export const env = {
   // arrives is a conversation nobody ever reads. Empty string disables it.
   synthflowWebhookUrl: process.env.SYNTHFLOW_WEBHOOK_URL
     || `${process.env.PUBLIC_APP_URL || 'https://enterprise.colaberry.ai'}/api/webhook/synthflow/call-complete`,
+  // OH1 security audit: the call-complete webhook is otherwise unauthenticated. When set,
+  // every call we place carries ?token=<this> on its webhook URL, and a completion post
+  // without the matching token is rejected. Empty = not enforced (prior behaviour).
+  synthflowWebhookToken: process.env.SYNTHFLOW_WEBHOOK_TOKEN || '',
 
   // Open House landing/registration page (training.colaberry.com) — destination for the
   // Accelerator Open House campaign email CTAs. The page is owned by the landing-page work

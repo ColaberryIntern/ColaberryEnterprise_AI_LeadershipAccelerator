@@ -1331,19 +1331,22 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
   // Use AI-generated body as the voice prompt if AI generated, otherwise use stored voice_prompt template
   let prompt: string | undefined;
 
-  // OH1: an Open House countdown call. Maya's agent is told about the EVENT and what the
-  // person has done on the platform, and nothing to sell: no cohort, no seats, no price.
+  // OH1: an Open House countdown call. Maya's agent gets a BRIEF built at dial time for
+  // THIS person: the purpose, everything we know about them, the event and our history
+  // with them, then it runs the conversation. Nothing to sell: no cohort, seats or price.
   const countdownCall = !!action.metadata?.event_countdown;
   if (countdownCall) {
-    const { countdownCallScript } = await import('./openHouseCountdown');
-    const { describePlatformActivity } = await import('./openHouseCountdownContext');
-    const activity = lead?.email ? await describePlatformActivity(lead.email).catch(() => '') : '';
+    const { countdownCallBrief } = await import('./openHouseCountdown');
+    const { gatherCallFacts } = await import('./openHouseCountdownContext');
+    const facts = lead?.email ? await gatherCallFacts(lead.email, action.lead_id).catch(() => null) : null;
+    const history = await buildConversationHistory(action.lead_id).catch(() => '');
     const first = (lead?.name || '').trim().split(/\s+/)[0] || '';
-    prompt = countdownCallScript(
-      first && !first.includes('@') ? first : null,
-      { title: String(action.metadata?.event_title || 'Colaberry Open House'), when_label: String(action.metadata?.event_when || '') },
-      activity,
-    );
+    prompt = countdownCallBrief({
+      firstName: first && !first.includes('@') ? first : null,
+      event: { title: String(action.metadata?.event_title || 'Colaberry Open House'), when_label: String(action.metadata?.event_when || '') },
+      facts,
+      history,
+    });
   } else if (action.ai_generated && action.body) {
     // AI already generated the voice prompt instructions
     prompt = action.body;
@@ -3396,6 +3399,26 @@ export function startScheduler(): void {
           if (!lead.phone) {
             console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot (no phone — email-only lead)`);
             continue;
+          }
+
+          // OH1 security audit (2026-11-17): this path dialed cold-outreach leads with NO
+          // consent check and no off switch of its own; only ENABLE_VOICE_CALLS=false had
+          // kept it silent. Turning calls on for the Open House campaign would have started
+          // it. It now dials only when (a) the system setting hot_lead_voice_enabled is
+          // 'true' (absent = off) and (b) the same send gate as every campaign (consent,
+          // suppression, kill switch) allows a voice call to this lead. The lead is still
+          // marked hot above; only the call is withheld.
+          {
+            const voiceOn = String(await settingsSvc.getSetting('hot_lead_voice_enabled') || '').replace(/"/g, '') === 'true';
+            if (!voiceOn) {
+              console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot; call withheld (hot_lead_voice_enabled is off)`);
+              continue;
+            }
+            const gate = await evaluateSend({ leadId: lead.lead_id, channel: 'voice' as SendChannel, toPhone: lead.phone, source: 'scheduler' });
+            if (!gate.allowed) {
+              console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot; call blocked by send gate (${gate.blockedReason})`);
+              continue;
+            }
           }
 
           // Skip if Ali emailed this lead in the last 48 hours (Maya/Ali coordination)

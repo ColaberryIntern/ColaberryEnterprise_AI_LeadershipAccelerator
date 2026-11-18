@@ -2,8 +2,8 @@
  * OH1 (Ali, 2026-11-17): Maya's Open House countdown campaign. The parts that decide
  * WHEN a step goes and WHETHER an AI draft may be sent are pure, and pinned here.
  */
-import { eventStepTime, screenEventReminderCopy, fallbackReminderBody, fallbackReminderSms, countdownCallScript } from '../openHouseCountdown';
-import { activitySentence } from '../openHouseCountdownContext';
+import { eventStepTime, screenEventReminderCopy, fallbackReminderBody, fallbackReminderSms, countdownCallBrief } from '../openHouseCountdown';
+import { activitySentence, meaningfulHistory, sourceLabel } from '../openHouseCountdownContext';
 import { buildSystemPrompt, buildEventUserPrompt } from '../aiMessageService';
 import { isWithinSendWindow, isWithinCallSchedule } from '../campaignSendWindow';
 import { COUNTDOWN_STEPS, COUNTDOWN_SETTINGS, MAYA_SYSTEM_PROMPT } from '../../scripts/ensureOpenHouseCountdownCampaign';
@@ -143,24 +143,55 @@ describe('the AI prompt for a countdown step', () => {
   });
 });
 
-describe('countdownCallScript (what Maya\'s voice agent is told)', () => {
-  const script = countdownCallScript('Sam', EVENT, 'This person has completed 9 assignments.');
-  it('helps, relates to what they are doing, and says we look forward to seeing them', () => {
-    expect(script).toContain('Sam');
-    expect(script).toContain(EVENT.when_label);
-    expect(script).toContain('completed 9 assignments');
-    expect(script).toMatch(/NOT selling/);
-    expect(script).toMatch(/looking forward to seeing them/);
+describe('countdownCallBrief (what the voice agent is given: purpose + details, then it flows)', () => {
+  const base = {
+    signed_up_on: 'November 3', signup_source: 'facebook', completed_count: 0, completed: [], in_progress: [],
+    last_active_on: null, tour: null, title: null, company: null, industry: null, interest: null, their_note: null,
+  };
+  const sam = countdownCallBrief({
+    firstName: 'Sam', event: EVENT, history: '2026-11-16 email from Maya: "Looking forward to seeing you"',
+    facts: { ...base, completed_count: 9, completed: [{ title: 'Claude Code 101', on: 'November 15' }], in_progress: ['Build your first agent'], last_active_on: 'November 16', tour: 'started the campus tour (stop 4 of 8)' },
+  });
+  const ana = countdownCallBrief({
+    firstName: 'Ana', event: EVENT,
+    facts: { ...base, title: 'Nurse', company: 'Baylor Scott & White', their_note: 'I want to move into healthcare AI' },
+  });
+
+  it('is built per person: two people get two different calls', () => {
+    expect(sam).not.toEqual(ana);
+    expect(sam).toContain('"Claude Code 101" (November 15)');
+    expect(sam).toContain('"Build your first agent"');
+    expect(sam).toContain('stop 4 of 8');
+    expect(ana).toContain('Nurse at Baylor Scott & White');
+    expect(ana).toContain('I want to move into healthcare AI');
+    expect(ana).toContain('Has not completed an assignment');
+  });
+  it('states the purpose and lets the conversation flow instead of a numbered script', () => {
+    expect(sam).toMatch(/PURPOSE OF THIS CALL/);
+    expect(sam).toMatch(/really looking forward to seeing them/);
+    expect(sam).toMatch(/You are not selling/);
+    expect(sam).toMatch(/LET THE CONVERSATION FLOW/);
+    expect(sam).not.toMatch(/^\d\./m);
+  });
+  it('passes what we have already said to each other', () => {
+    expect(sam).toContain('Looking forward to seeing you');
+    expect(ana).not.toMatch(/ALREADY SAID/);
+  });
+  it('with nothing on record, asks instead of guessing', () => {
+    const none = countdownCallBrief({ firstName: null, event: EVENT, facts: null });
+    expect(none).toMatch(/no platform activity or background recorded/);
+    expect(none).toContain('calling them');
   });
   it('sends pricing questions and buying signals to a person, never answers them', () => {
-    expect(script).toMatch(/Do not discuss pricing/);
-    expect(script).toMatch(/admissions advisor will call them/);
+    expect(sam).toMatch(/covered live at the Open House/);
+    expect(sam).toMatch(/Do not quote numbers/);
+    expect(sam).toMatch(/admissions advisor will call them/);
   });
-  it('carries no price, number of dollars, link or seat count', () => {
-    expect(script).not.toMatch(/\$\s?\d|\d+\s?%|https?:\/\/|seats? (left|remaining)/i);
+  it('carries no price, percentage, link or seat count', () => {
+    for (const b of [sam, ana]) expect(b).not.toMatch(/\$\s?\d|\d+\s?%|https?:\/\/|seats? (left|remaining)/i);
   });
   it('honors a do-not-call request', () => {
-    expect(script).toMatch(/ask not to be called/);
+    expect(sam).toMatch(/ask not to be called again/);
   });
 });
 
@@ -181,5 +212,34 @@ describe('activitySentence', () => {
     expect(activitySentence({ assignments_completed: 0, last_assignment_title: null, tour_furthest: null, tour_total: null, tour_finished: false }))
       .toMatch(/has not completed anything/);
     expect(activitySentence(null)).toBe('');
+  });
+});
+
+describe('what a call may say about the person (no internal labels, no system noise)', () => {
+  // Lines taken from a real buildConversationHistory output (Ali's own lead, Nov 17).
+  const raw = [
+    '- Apr 22: email sent — Sequence email sent: Introducing a pilot',
+    '- Apr 22: status change — Pipeline auto-advanced: new_lead → contacted',
+    '- Apr 23: call — Maya called Ali',
+    '- May 7: system — Lead opted out via email',
+    '- May 18: system — Strategy call no-show detected',
+  ].join('\n');
+  it('keeps real exchanges and drops pipeline and system rows', () => {
+    const h = meaningfulHistory(raw);
+    expect(h).toContain('Maya called Ali');
+    expect(h).toContain('email sent');
+    expect(h).not.toMatch(/status change|system|opted out|Pipeline/);
+  });
+  it('names only sign-up sources a person would recognize', () => {
+    expect(sourceLabel('facebook')).toBe('a Facebook or Instagram ad');
+    expect(sourceLabel('google_cpc')).toBe('Google');
+    expect(sourceLabel('manual_test')).toBeNull();
+    expect(sourceLabel('oh_nov_retarget_v3')).toBeNull();
+    expect(sourceLabel(null)).toBeNull();
+  });
+  it('the brief drops the noise too', () => {
+    const b = countdownCallBrief({ firstName: 'Ali', event: EVENT, facts: null, history: raw });
+    expect(b).toContain('Maya called Ali');
+    expect(b).not.toMatch(/opted out|status change/);
   });
 });

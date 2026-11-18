@@ -27,7 +27,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import {
   OPEN_HOUSE_COUNTDOWN_KEY, findOpenHouseCountdownCampaign, findNextOpenHouseForEmail, screenEventReminderCopy,
-  fallbackReminderBody, fallbackReminderSms, countdownCallScript,
+  fallbackReminderBody, fallbackReminderSms, countdownCallBrief,
 } from '../services/openHouseCountdown';
 import type { SequenceStep } from '../models/FollowUpSequence';
 
@@ -67,7 +67,8 @@ export const COUNTDOWN_STEPS: SequenceStep[] = [
   },
   {
     // Day of, noon CT for a 6:30 PM Open House. Only people with a phone AND express
-    // voice consent are scheduled. The script is countdownCallScript (help, not sell).
+    // voice consent are scheduled. The agent gets countdownCallBrief, built at dial time for
+    // that person (purpose, everything we know about them, the event), and runs the call.
     delay_days: 0,
     minutes_before_event: 390,
     channel: 'voice',
@@ -271,9 +272,11 @@ async function main(): Promise<void> {
   const drafts = Number(arg('--drafts') || 0);
   if (drafts > 0) {
     const { generateMessage } = await import('../services/aiMessageService');
-    const { describePlatformActivity } = await import('../services/openHouseCountdownContext');
-    const sample = await sequelize.query<{ email: string; name: string | null }>(
-      `SELECT r.email_lower AS email, r.name FROM open_house_registrations r
+    const { describePlatformActivity, gatherCallFacts } = await import('../services/openHouseCountdownContext');
+    const { buildConversationHistory } = await import('../services/aiMessageService');
+    const sample = await sequelize.query<{ email: string; name: string | null; lead_id: number | null }>(
+      `SELECT r.email_lower AS email, r.name, (SELECT l.id FROM leads l WHERE LOWER(l.email) = r.email_lower ORDER BY l.id LIMIT 1) AS lead_id
+         FROM open_house_registrations r
          JOIN live_sessions s ON s.open_house_event_id = r.event_id AND s.status IN ('scheduled','live') AND s.session_date >= CURRENT_DATE
         ORDER BY random() LIMIT :n`, { replacements: { n: drafts }, type: QueryTypes.SELECT });
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -289,7 +292,7 @@ async function main(): Promise<void> {
       for (const step of COUNTDOWN_STEPS) {
         if (step.channel === 'voice') {
           html += `<div style="border:1px solid #ccd;border-radius:8px;margin:10px 0;padding:10px 14px;background:#f7f9fc"><b>Call, day of at noon</b> (only if they gave call permission): what Maya's voice agent is told
-            <pre style="white-space:pre-wrap;font-family:inherit">${esc(countdownCallScript(firstName, ev, activity))}</pre></div>`;
+            <pre style="white-space:pre-wrap;font-family:inherit">${esc(countdownCallBrief({ firstName, event: ev, facts: await gatherCallFacts(p.email, p.lead_id ?? null).catch(() => null), history: p.lead_id ? await buildConversationHistory(p.lead_id).catch(() => '') : '' }))}</pre></div>`;
           continue;
         }
         if (step.channel === 'sms') {

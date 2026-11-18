@@ -3,6 +3,7 @@ import { sequelize } from '../config/database';
 import { classInstant } from './acceleratorService';
 import { formatCentralClock } from './centralDate';
 import { sessionCheckinUrl, longSessionDate } from './email/sessionReminderEmail';
+import { meaningfulHistory } from './openHouseCountdownContext';
 
 /**
  * OH1 (Ali, 2026-11-17): the Open House countdown is a CAMPAIGN, sent by Maya.
@@ -57,7 +58,7 @@ const BANNED: Array<[RegExp, string]> = [
   [/\boffers?\b/i, 'offer'],
   [/early[\s-]?bird/i, 'early bird'],
   [/scholarship/i, 'scholarship'],
-  [/\bfree\b/i, 'free'],
+  [/\bfree\b/i, 'a no-cost claim'],
   [/\$\s?\d/, 'a dollar amount'],
   [/\d+\s?%/, 'a percentage'],
   [/\bprice|pricing|tuition|cost\b/i, 'price'],
@@ -117,39 +118,69 @@ export function fallbackReminderSms(firstName: string | null, event: Pick<OpenHo
 }
 
 /**
- * What Maya's voice agent is told on a countdown call (Ali, 2026-11-17): "Our AI can
- * make those phone calls, relate to what they are doing, but not try to sell. Just help
- * and bring up the Open House event they registered and how we are really looking fwd
- * to seeing you. Then ... if they happen to say they are ready to sign up now, or give
- * some buying intent signals, then they should go on Rose's list to call."
+ * What Maya's voice agent is given for a countdown call. A BRIEF, not a script (Ali,
+ * 2026-11-17): "It has to be dynamic and the voice calls takes prompt. It should pass in
+ * the purpose and all the details and then let it flow."
  *
- * Deterministic on purpose: a call prompt is instructions to an agent, not copy, so it
- * is authored here and pinned by tests rather than written by a second model.
+ *   PURPOSE     why we are calling (help, relate, "really looking forward to seeing you")
+ *   THE PERSON  every fact we hold about THIS person, so each call is about them
+ *   THE EVENT   what they registered for and when
+ *   HISTORY     what we have already said to each other
+ *   GUARDRAILS  the few things that must hold whatever the conversation does
+ *
+ * The agent runs the conversation from that. The Synthflow agent's saved prompt is only
+ * `{prompt}`, so this text is the whole of what it knows.
  */
-export function countdownCallScript(
-  firstName: string | null,
-  event: Pick<OpenHouseEventForLead, 'title' | 'when_label'>,
-  platformActivity: string,
-): string {
-  const who = firstName ? firstName : 'the person';
+export function countdownCallBrief(input: {
+  firstName: string | null;
+  event: Pick<OpenHouseEventForLead, 'title' | 'when_label'>;
+  facts: import('./openHouseCountdownContext').CallFacts | null;
+  history?: string;
+}): string {
+  const who = input.firstName || 'them';
+  const f = input.facts;
+  const history = meaningfulHistory(input.history || '');
+  const person: string[] = [];
+  if (f) {
+    if (f.signed_up_on) person.push(`Created their Colaberry account on ${f.signed_up_on}${f.signup_source ? ` (came in through ${f.signup_source})` : ''}.`);
+    if (f.completed_count > 0) {
+      const list = f.completed.map((c) => `"${c.title}"${c.on ? ` (${c.on})` : ''}`).join(', ');
+      person.push(`Has completed ${f.completed_count} assignment${f.completed_count === 1 ? '' : 's'} on the platform. Most recent: ${list}.`);
+    } else if (f.signed_up_on) {
+      person.push('Has not completed an assignment on the platform yet.');
+    }
+    if (f.in_progress.length) person.push(`Started but has not finished: ${f.in_progress.map((t) => `"${t}"`).join(', ')}. They may be stuck here; this is a good place to offer help.`);
+    if (f.last_active_on) person.push(`Last active on the platform: ${f.last_active_on}.`);
+    if (f.tour) person.push(`Has ${f.tour}.`);
+    if (f.title || f.company) person.push(`Works as ${[f.title, f.company].filter(Boolean).join(' at ')}${f.industry ? ` (${f.industry})` : ''}.`);
+    if (f.interest) person.push(`Told us they are interested in: ${f.interest}.`);
+    if (f.their_note) person.push(`What they wrote to us: "${f.their_note}"`);
+  }
+  if (person.length === 0) person.push('We have no platform activity or background recorded for them yet. Ask what made them sign up.');
+
   return [
-    `You are Maya, Director of Admissions at Colaberry, making a short, friendly call to ${who}.`,
-    `${who} registered for the ${event.title}, ${event.when_label}. It is a live online session.`,
-    platformActivity ? `What they have done on the Colaberry platform so far (true, from our records): ${platformActivity}` : 'We have no record of platform activity for them yet.',
+    `You are Maya, Director of Admissions at Colaberry, calling ${who}.`,
     '',
-    'YOUR GOAL: help them, and make them feel expected tonight. You are NOT selling.',
-    '1. Say who you are and that you are calling because they registered for the Open House.',
-    '2. If they have done something on the platform, mention it naturally and ask how it is going. If they are stuck, help briefly.',
-    '3. Tell them we are really looking forward to seeing them, and that the Join link is in their email from Maya. It signs them in and checks them in.',
-    '4. Ask if there is a question they want answered live at the Open House.',
-    '5. Thank them and end the call. Aim for under two minutes.',
+    'PURPOSE OF THIS CALL',
+    `${who} registered for the ${input.event.title}, ${input.event.when_label}, a live online session. You are calling to help them and to let them know we are really looking forward to seeing them there. Relate to what they are actually doing on the platform: ask how it is going, help if they are stuck, and find out what they hope to get out of tonight. This is a friendly, helpful call. You are not selling.`,
     '',
-    'RULES:',
-    '- Do not discuss pricing, payment, discounts, offers or enrollment terms. If they ask, say those are covered live at the Open House, and that an admissions advisor will follow up with them personally.',
-    '- If they say they are ready to enroll now, or ask how to sign up, thank them, say an admissions advisor will call them, and note it clearly before ending the call.',
-    '- Never invent facts about the program, jobs or salaries. Never pressure.',
-    '- If they ask not to be called, apologize, confirm they will not be called again, and end the call.',
-    '- If you reach voicemail: one short message that you are looking forward to seeing them at the Open House and the Join link is in their email. No other details.',
+    `WHAT WE KNOW ABOUT ${who.toUpperCase()} (true, from our records; use it naturally, never read it out as a list)`,
+    ...person.map((p) => `- ${p}`),
+    '',
+    'THE OPEN HOUSE',
+    `- ${input.event.title}, ${input.event.when_label}. Online. A walk through the program and what people build in it, live questions and answers, and quick polls on their phone.`,
+    '- Their Join link is in the email from Maya. It signs them in and checks them in. If they cannot find it, tell them to reply to that email or check spam.',
+    ...(history ? ['', 'WHAT WE HAVE ALREADY SAID TO EACH OTHER (do not repeat it; build on it)', history.slice(0, 1500)] : []),
+    '',
+    'LET THE CONVERSATION FLOW',
+    'Introduce yourself and why you are calling, then follow their lead. Keep it warm, natural and short, a few minutes at most. Invite them to bring a question to answer live tonight.',
+    '',
+    'GUARDRAILS (these hold whatever the conversation does)',
+    '- Pricing, payment, discounts, offers and enrollment terms are covered live at the Open House. If they ask, say so, and that an admissions advisor will follow up with them personally. Do not quote numbers.',
+    '- If they say they are ready to enroll, or ask how to sign up, thank them, tell them an admissions advisor will call them, and say clearly before ending the call that they want to talk to an advisor.',
+    '- Never invent facts about the program, jobs, salaries or about them. If you do not know, say someone will follow up.',
+    '- If they ask not to be called again, apologize, confirm it, and end the call.',
+    '- Voicemail: one short message that you are looking forward to seeing them at the Open House and the Join link is in their email. Nothing else.',
   ].join('\n');
 }
 
