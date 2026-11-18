@@ -283,6 +283,11 @@ describe('T208 — the tripwire: every file that builds a subject key is account
     // to look like one. Found by this tripwire firing in a full-suite run, which is the tripwire
     // working; the author did not know it existed.
     'backend/src/services/maya/mayaEmailService.ts',
+    // OH1h (2026-11-18): Maya's reply drafter. Same class as mayaEmailService above: `lead:<id>` is
+    // the recipient handle on the `maya_outbound_approvals` row, and `lead:<id>:<text>` is only the
+    // input to the idempotency hash when an inbound reply has no Message-Id. Neither is looked up,
+    // joined or compared as a subject reference. Found by this tripwire in the overnight full run.
+    'backend/src/services/maya/mayaReplyDraftService.ts',
     'backend/src/services/mayaActionService.ts',
   ];
 
