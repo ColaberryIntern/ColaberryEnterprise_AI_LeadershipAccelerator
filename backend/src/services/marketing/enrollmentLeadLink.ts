@@ -14,11 +14,14 @@
  * 1,299 match exactly one `leads` row, 96 match none, and **zero match more than one**. There is
  * no ambiguity to resolve in the live book.
  *
- * `pickLeadForEnrollment` still handles multiplicity rather than asserting it away, because the
- * database does not enforce it: `leads` has no unique index on email, so a duplicate is a future
- * data-entry event, not an impossibility. What it must never do is pick differently on two runs
- * over the same rows — a link that moves is worse than a link that is missing, because a revenue
- * figure built on it would change without anything happening.
+ * `pickLeadForEnrollment` still handles multiplicity rather than asserting it away, and the
+ * reason is narrower than this comment first claimed. It said `leads` has no unique index on
+ * email; it has one, `leads_email_unique`, but on `LOWER(email)` only. This join normalizes with
+ * `lower(btrim(email))`, so two rows whose addresses differ by surrounding whitespace satisfy
+ * the index and still both match here. Multiplicity is therefore rarer than first written and
+ * not impossible. What the function must never do is pick differently on two runs over the same
+ * rows — a link that moves is worse than a link that is missing, because a revenue figure built
+ * on it would change without anything happening.
  *
  * ── THE RULE ─────────────────────────────────────────────────────────────────────────
  *
