@@ -111,31 +111,7 @@ export async function joinLiveSession(
   const session = await findJoinableSessionFor(enrollmentId, sessionId, cohortId);
   if (!session || !JOINABLE_STATUSES.has(session.status)) return null;
 
-  const computed = computeAttendanceStatus(session.session_date, session.start_time, now);
-
-  const [record, created] = await AttendanceRecord.findOrCreate({
-    where: { enrollment_id: enrollmentId, session_id: sessionId },
-    defaults: {
-      enrollment_id: enrollmentId,
-      session_id: sessionId,
-      status: computed,
-      join_time: now,
-      marked_by: 'self',
-    } as any,
-  });
-
-  let finalStatus: string = created ? computed : (record as any).status;
-  if (!created) {
-    const resolved = resolveJoinedStatus((record as any).status, computed);
-    const updates: any = {};
-    if (!(record as any).join_time) updates.join_time = now;
-    if (resolved !== (record as any).status) {
-      updates.status = resolved;
-      updates.marked_by = 'self';
-    }
-    finalStatus = resolved;
-    if (Object.keys(updates).length) await record.update(updates);
-  }
+  const finalStatus = await recordAttendanceRow(enrollmentId, session, now);
 
   // Idempotent per (enrollment, session) via the points ledger's unique index.
   // The attendance write and this award are two independently-idempotent writes
@@ -163,6 +139,50 @@ export async function joinLiveSession(
   }
 
   return { ok: true, status: finalStatus, awarded, points };
+}
+
+/**
+ * The attendance row itself: create-only, upgrade-not-downgrade (an admin's
+ * present/excused always wins). Returns the status now stored.
+ *
+ * Split out of `joinLiveSession` so the QR check-in's name + email path
+ * (`sessionGuestService.joinAsGuest`, via 'checkin') records the SAME row for a
+ * visitor whose email matches an enrollment in the class's cohort — without
+ * the points award, which stays on the signed-in path: typing an email is a
+ * claim, not a sign-in, and points are value.
+ */
+export async function recordAttendanceRow(
+  enrollmentId: string,
+  session: Pick<LiveSession, 'id' | 'session_date' | 'start_time'>,
+  now: Date,
+): Promise<string> {
+  const sessionId = session.id;
+  const computed = computeAttendanceStatus(session.session_date, session.start_time, now);
+
+  const [record, created] = await AttendanceRecord.findOrCreate({
+    where: { enrollment_id: enrollmentId, session_id: sessionId },
+    defaults: {
+      enrollment_id: enrollmentId,
+      session_id: sessionId,
+      status: computed,
+      join_time: now,
+      marked_by: 'self',
+    } as any,
+  });
+
+  let finalStatus: string = created ? computed : (record as any).status;
+  if (!created) {
+    const resolved = resolveJoinedStatus((record as any).status, computed);
+    const updates: any = {};
+    if (!(record as any).join_time) updates.join_time = now;
+    if (resolved !== (record as any).status) {
+      updates.status = resolved;
+      updates.marked_by = 'self';
+    }
+    finalStatus = resolved;
+    if (Object.keys(updates).length) await record.update(updates);
+  }
+  return finalStatus;
 }
 
 /** A student left the Google Meet tab (best-effort, page-unload signal — see

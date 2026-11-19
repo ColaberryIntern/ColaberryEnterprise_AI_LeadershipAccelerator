@@ -193,6 +193,26 @@ export async function ensureLiveSessionSchema(): Promise<void> {
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_guest_poll_responses_key ON session_guest_poll_responses (session_id, guest_id, poll_key)`,
     `CREATE INDEX IF NOT EXISTS idx_session_guest_poll_responses_key ON session_guest_poll_responses (session_id, poll_key)`,
+    // QR check-in for ANY class (2026-11-19): a visitor who is not a signed-in member of the
+    // class gives name + email instead. awaiting_class marks a scan made BEFORE the class
+    // window (captured, not yet attendance); it clears on a scan inside the window and never
+    // sets back. DEFAULT FALSE keeps every existing Open House guest counted as before.
+    `ALTER TABLE session_guests ADD COLUMN IF NOT EXISTS awaiting_class BOOLEAN NOT NULL DEFAULT FALSE`,
+    // The guest's live status (same four states as session_pulse, which is enrollment-keyed).
+    `ALTER TABLE session_guests ADD COLUMN IF NOT EXISTS pulse_state VARCHAR(20)`,
+    `ALTER TABLE session_guests DROP CONSTRAINT IF EXISTS ck_session_guests_pulse_state`,
+    `ALTER TABLE session_guests ADD CONSTRAINT ck_session_guests_pulse_state CHECK (pulse_state IS NULL OR pulse_state IN ('here', 'building', 'stuck', 'finished'))`,
+    // Questions a guest asks from the phone. Not session_chat_messages: its enrollment_id is
+    // NOT NULL and a guest is not an enrollment.
+    `CREATE TABLE IF NOT EXISTS session_guest_questions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       guest_id UUID NOT NULL REFERENCES session_guests(id),
+       sender_name VARCHAR(100) NOT NULL,
+       content TEXT NOT NULL,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_session_guest_questions_session_created ON session_guest_questions (session_id, created_at)`,
 
     // ---- session_raffle_winners (live giveaway draws, sessionRaffleService.ts) ----
     // One row per (session, draw, draw_number): a re-click or a reloaded deck

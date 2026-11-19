@@ -1,20 +1,27 @@
 /**
- * sessionGuestController.ts — PUBLIC endpoints for Open House guests (name +
- * email, no login). Only sessions titled "Open House" accept guests; the pass
- * returned by join is session-scoped and grants voting only (see
- * sessionGuestService.ts). Inputs are validated with zod; malformed input is a
- * 400 and never reaches the service.
+ * sessionGuestController.ts — PUBLIC endpoints for guests (name + email, no
+ * login). Two doors share them: the Open House join page (sessions with
+ * `guest_access` on) and, with `via: 'checkin'`, the class QR check-in on any
+ * class not explicitly closed to guests. The pass returned by join is
+ * session-scoped and grants only the live loop — read the screen, vote, set a
+ * status, ask a question (see sessionGuestService.ts). Inputs are validated
+ * with zod; malformed input is a 400 and never reaches the service. None of
+ * these endpoints sends an email or a text to anyone.
  */
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { castGuestVote, getGuestState, GuestError, joinAsGuest, assertGuestSession } from '../services/sessionGuestService';
+import {
+  castGuestVote, getGuestState, GuestError, joinAsGuest, assertGuestSession, setGuestPulseFor, askAsGuest, MAX_GUEST_QUESTION,
+} from '../services/sessionGuestService';
 import { PollLockedError } from '../services/sessionLiveStateService';
 import { renderGuestJoinPage } from '../services/guestJoinPage';
 
 const JoinBody = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(254),
+  via: z.literal('checkin').optional(),
 });
+const AskBody = z.object({ text: z.string().trim().min(1).max(MAX_GUEST_QUESTION) });
 const VoteBody = z.object({
   poll_key: z.string().min(1).max(200),
   choice: z.number().int().min(0).max(25),
@@ -54,7 +61,27 @@ export async function handleGuestJoin(req: Request, res: Response, next: NextFun
     if (!SessionParam.safeParse(req.params.id).success) return res.status(404).json({ error: 'Not found' });
     const body = JoinBody.safeParse(req.body);
     if (!body.success) return res.status(400).json({ error: 'Please enter your name and a valid email' });
-    res.json(await joinAsGuest(req.params.id as string, body.data.name, body.data.email));
+    res.json(await joinAsGuest(req.params.id as string, body.data.name, body.data.email, { via: body.data.via }));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/sessions/:id/guest-pulse (X-Guest-Pass) {state}. */
+export async function handleGuestPulse(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!SessionParam.safeParse(req.params.id).success) return res.status(404).json({ error: 'Not found' });
+    const state = await setGuestPulseFor(req.params.id as string, passFrom(req), req.body?.state);
+    res.json({ success: true, state });
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/sessions/:id/guest-ask (X-Guest-Pass) {text}. */
+export async function handleGuestAsk(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!SessionParam.safeParse(req.params.id).success) return res.status(404).json({ error: 'Not found' });
+    const body = AskBody.safeParse(req.body);
+    if (!body.success) return res.status(400).json({ error: `Write a question (up to ${MAX_GUEST_QUESTION} characters)` });
+    await askAsGuest(req.params.id as string, passFrom(req), body.data.text);
+    res.json({ success: true });
   } catch (err) { fail(res, err, next); }
 }
 

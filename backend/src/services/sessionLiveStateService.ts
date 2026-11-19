@@ -11,7 +11,10 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getRecentPresenceEvents, PresenceEvent, formatDisplayName } from './sessionPresenceService';
-import { addTallies, countGuests, getGuestCorrectNames, getGuestTally } from './sessionGuestStore';
+import {
+  addTallies, countGuests, getGuestCorrectNames, getGuestTally,
+  getGuestPulseCounts, getGuestQuestions, countParticipatingGuests,
+} from './sessionGuestStore';
 import type { KitSlide } from './classKit/kitSpec';
 import { readPresenterTally, type PresenterTally } from './broadcast/broadcastPresenterTally';
 
@@ -246,6 +249,9 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
   );
   const c: Record<string, number> = { here: 0, building: 0, stuck: 0, finished: 0 };
   for (const row of counts) c[row.state] = Number(row.n) || 0;
+  // QR check-in guests (name + email, not signed in) pulse in their own table.
+  const guestPulse = await getGuestPulseCounts(sessionId);
+  for (const k of Object.keys(c)) c[k] += guestPulse[k] || 0;
 
   const [presentRow] = await sequelize.query<{ n: string }>(
     `SELECT COUNT(*)::int AS n FROM attendance_records WHERE session_id = :sid AND status IN ('present','late','excused')`,
@@ -265,6 +271,10 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
       WHERE session_id = :sid ORDER BY created_at DESC LIMIT 15`,
     { replacements: { sid: sessionId }, type: QueryTypes.SELECT },
   );
+  // Guests ask in their own table; merge newest-first and keep the same cap.
+  const merged = [...msgs, ...await getGuestQuestions(sessionId)]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 15);
 
   // If a question is currently on screen, include its live tally.
   let poll: LiveState['poll'] = null;
@@ -284,9 +294,9 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
 
   return {
     present: (Number(presentRow?.n) || 0) + await countGuests(sessionId),
-    participated: Number(participatedRow?.n) || 0,
+    participated: (Number(participatedRow?.n) || 0) + await countParticipatingGuests(sessionId),
     here: c.here, building: c.building, stuck: c.stuck, finished: c.finished,
-    questions: msgs.map((m) => ({ name: m.sender_name, text: m.content, at: String(m.created_at) })),
+    questions: merged.map((m) => ({ name: m.sender_name, text: m.content, at: String(m.created_at) })),
     poll,
     recentEvents,
   };

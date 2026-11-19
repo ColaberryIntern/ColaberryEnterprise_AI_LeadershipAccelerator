@@ -41,6 +41,17 @@ jest.mock('../../../services/onboardingApi', () => ({
   submitPollResponse: jest.fn(),
 }));
 jest.mock('../../../services/pointsFx', () => ({ __esModule: true, emitPointsEarned: jest.fn() }));
+jest.mock('../../../services/guestCheckinApi', () => ({
+  __esModule: true,
+  guestCheckin: jest.fn(),
+  getGuestCompanionState: jest.fn(),
+  guestVote: jest.fn(),
+  guestPulse: jest.fn(),
+  guestAsk: jest.fn(),
+  loadSavedGuest: jest.fn(),
+  saveGuest: jest.fn(),
+  forgetGuest: jest.fn(),
+}));
 
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../../utils/portalApi';
@@ -49,6 +60,9 @@ import {
   joinSession, setSessionPulse, askSessionQuestion, getCompanionState, submitPollResponse,
 } from '../../../services/onboardingApi';
 import { emitPointsEarned } from '../../../services/pointsFx';
+import {
+  guestCheckin, getGuestCompanionState, guestPulse, guestAsk, guestVote, loadSavedGuest, saveGuest,
+} from '../../../services/guestCheckinApi';
 import { LIVE_PULSES } from '../../../components/portal/livePulse';
 import ClassCheckinPage from '../ClassCheckinPage';
 
@@ -61,6 +75,13 @@ const mockAsk = askSessionQuestion as unknown as jest.Mock;
 const mockCompanion = getCompanionState as unknown as jest.Mock;
 const mockPoll = submitPollResponse as unknown as jest.Mock;
 const mockPoints = emitPointsEarned as unknown as jest.Mock;
+const mockGuestCheckin = guestCheckin as unknown as jest.Mock;
+const mockGuestState = getGuestCompanionState as unknown as jest.Mock;
+const mockGuestPulse = guestPulse as unknown as jest.Mock;
+const mockGuestAsk = guestAsk as unknown as jest.Mock;
+const mockGuestVote = guestVote as unknown as jest.Mock;
+const mockLoadSaved = loadSavedGuest as unknown as jest.Mock;
+const mockSaveGuest = saveGuest as unknown as jest.Mock;
 
 const INFO = {
   title: 'Week 12 - Build Day',
@@ -113,6 +134,12 @@ beforeEach(() => {
   mockAsk.mockResolvedValue(undefined);
   mockPoll.mockResolvedValue(undefined);
   mockCompanion.mockResolvedValue(STATUS_STATE);
+  mockLoadSaved.mockReturnValue(null);
+  mockGuestCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'open' });
+  mockGuestState.mockResolvedValue(STATUS_STATE);
+  mockGuestPulse.mockResolvedValue(undefined);
+  mockGuestAsk.mockResolvedValue(undefined);
+  mockGuestVote.mockResolvedValue(undefined);
 });
 
 /** Let the info → join → companion chain settle; it is three chained promises deep. */
@@ -152,6 +179,21 @@ async function typeQuestion(value: string) {
     setter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+
+async function typeInto(id: string, value: string) {
+  const input = find(id) as HTMLInputElement;
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function checkInAsGuest(name = 'Ana Ruiz', email = 'ana@example.com') {
+  await typeInto('checkin-guest-name', name);
+  await typeInto('checkin-guest-email', email);
+  await click('checkin-guest-submit');
 }
 
 async function pressEnter() {
@@ -449,6 +491,162 @@ describe('getting into the class', () => {
     await click('checkin-enter');
 
     expect(navigate).toHaveBeenCalledWith('/portal/today');
+  });
+});
+
+/**
+ * 2026-11-19. Ali opened Session 3's check-in signed in as a July-cohort account and got
+ * "We couldn't check you in" (POST /join answered 404: not this cohort). His requirement:
+ * "They should get name and email here for tracking." Attendees scan from their phones and
+ * mostly are not signed in, so the check-in cannot depend on a portal session.
+ */
+describe('name + email check-in for anyone who is not a signed-in member of the class', () => {
+  it('asks a signed-out visitor for name and email, then puts them in the live view', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    await render();
+
+    expect(find('checkin-guest-form')).not.toBeNull();
+    await checkInAsGuest();
+
+    expect(mockGuestCheckin).toHaveBeenCalledWith('sess-1', 'Ana Ruiz', 'ana@example.com');
+    expect(mockSaveGuest).toHaveBeenCalledWith('sess-1', { pass: 'pass-1', name: 'Ana Ruiz', email: 'ana@example.com' });
+    expect(text()).toContain('checked in, Ana');
+    expect(mockJoin).not.toHaveBeenCalled();
+  });
+
+  it('gives the guest the SAME live loop: status, questions and votes on the guest pass', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    await render();
+    await checkInAsGuest();
+
+    await click('pulse-stuck');
+    expect(mockGuestPulse).toHaveBeenCalledWith('sess-1', 'pass-1', 'stuck');
+    expect(mockPulse).not.toHaveBeenCalled();
+
+    await typeQuestion('where is the skill file?');
+    await click('checkin-ask-send');
+    expect(mockGuestAsk).toHaveBeenCalledWith('sess-1', 'pass-1', 'where is the skill file?');
+  });
+
+  it('a guest votes on the question on screen with the guest pass', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    mockGuestState.mockResolvedValue(QUESTION_STATE);
+    await render();
+    await checkInAsGuest();
+
+    expect(text()).toContain('Which ships first?');
+    await click('checkin-opt-0');
+    expect(mockGuestVote).toHaveBeenCalledWith('sess-1', 'pass-1', 'q1', 0);
+    expect(mockPoll).not.toHaveBeenCalled();
+  });
+
+  it('offers no "Open the live room" to a guest, whose pass opens nothing in the portal', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    await render();
+    await checkInAsGuest();
+
+    expect(find('checkin-enter')).toBeNull();
+  });
+
+  it('THE SESSION 3 CASE: signed in, but not on this class, gets the form instead of an error', async () => {
+    mockJoin.mockRejectedValue({ response: { status: 404 } });
+    await render();
+
+    expect(text()).not.toContain('couldn');
+    expect(text()).toContain('isn’t on this class');
+    expect(find('checkin-guest-form')).not.toBeNull();
+    // Already signed in: no "log in instead" link pointing them at the account that failed.
+    expect(find('checkin-login')).toBeNull();
+
+    mockGuestCheckin.mockResolvedValue({ pass: 'pass-2', name: 'Ali Muwwakkil', matched: false, class_window: 'open' });
+    await checkInAsGuest('Ali Muwwakkil', 'ali@example.com');
+    expect(mockGuestCheckin).toHaveBeenCalledWith('sess-1', 'Ali Muwwakkil', 'ali@example.com');
+    expect(text()).toContain('checked in, Ali');
+  });
+
+  it('a phone that checked in before re-confirms on its own, without the form', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    mockLoadSaved.mockReturnValue({ pass: 'old', name: 'Ana Ruiz', email: 'ana@example.com' });
+    await render();
+
+    expect(mockGuestCheckin).toHaveBeenCalledWith('sess-1', 'Ana Ruiz', 'ana@example.com');
+    expect(find('checkin-guest-form')).toBeNull();
+    expect(text()).toContain('checked in, Ana');
+  });
+
+  it('shows the server\'s reason when a check-in is refused', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    mockGuestCheckin.mockRejectedValue({ response: { status: 410, data: { error: 'This class has already ended' } } });
+    await render();
+    await checkInAsGuest();
+
+    expect(find('checkin-guest-error')!.textContent).toBe('This class has already ended');
+  });
+
+  it('will not submit without a name and a real-looking email', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    await render();
+    await checkInAsGuest('Ana', 'not-an-email');
+
+    expect(mockGuestCheckin).not.toHaveBeenCalled();
+    expect(find('checkin-guest-error')!.textContent).toContain('valid email');
+  });
+
+  it('CONTROL: a class closed to guests on Studio setup only offers sign-in', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    mockGet.mockResolvedValue({ data: { ...INFO, accepts_guests: false } });
+    await render();
+
+    expect(find('checkin-guest-form')).toBeNull();
+    expect(find('checkin-login')).not.toBeNull();
+  });
+});
+
+describe('before and after the class', () => {
+  const EARLY = { ...INFO, class_window: 'before', start_label: '6:30 PM CST' };
+
+  it('BEFORE: captures name + email and says when the class starts, instead of an error', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    mockGet.mockResolvedValue({ data: EARLY });
+    mockGuestCheckin.mockResolvedValue({ pass: 'pass-1', name: 'Ana Ruiz', matched: false, class_window: 'before' });
+    await render();
+
+    expect(text()).toContain('6:30 PM CST');
+    await checkInAsGuest();
+
+    expect(find('checkin-waiting')).not.toBeNull();
+    expect(text()).toContain('on the list, Ana');
+    expect(text()).toContain('starts');
+  });
+
+  it('BEFORE, signed in: records nothing yet and says when to come back', async () => {
+    mockGet.mockResolvedValue({ data: EARLY });
+    await render();
+
+    expect(mockJoin).not.toHaveBeenCalled();
+    expect(find('checkin-before')).not.toBeNull();
+    expect(text()).toContain('6:30 PM CST');
+    expect(text()).not.toContain('couldn');
+  });
+
+  it('AFTER: says the class has ended and records nothing', async () => {
+    mockAuth.mockReturnValue({ isAuthenticated: false });
+    mockGet.mockResolvedValue({ data: { ...INFO, class_window: 'ended' } });
+    await render();
+
+    expect(find('checkin-ended')).not.toBeNull();
+    expect(find('checkin-guest-form')).toBeNull();
+    expect(mockGuestCheckin).not.toHaveBeenCalled();
+  });
+});
+
+describe('the footer names the program', () => {
+  it('uses the canonical name the backend sends, never the retired one', async () => {
+    mockGet.mockResolvedValue({ data: { ...INFO, program_name: 'Forward Deployed AI Engineer Accelerator' } });
+    await render();
+
+    expect(find('checkin-foot')!.textContent).toBe('Colaberry Forward Deployed AI Engineer Accelerator');
+    expect(text()).not.toContain('Enterprise AI Leadership');
   });
 });
 

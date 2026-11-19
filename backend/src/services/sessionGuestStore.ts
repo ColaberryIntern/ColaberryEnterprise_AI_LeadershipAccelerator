@@ -21,22 +21,88 @@ import { formatDisplayName } from './sessionPresenceService';
 export interface SessionGuest { id: string; session_id: string; name: string; email: string; enrollment_id: string | null }
 
 /** Idempotent on (session, lower(email)): re-joining returns the same guest and
- * refreshes the name, so a phone that reloads never becomes a second voter. */
-export async function upsertGuest(sessionId: string, name: string, email: string): Promise<SessionGuest> {
+ * refreshes the name, so a phone that reloads never becomes a second voter.
+ *
+ * `awaitingClass` is true for a QR check-in scanned BEFORE the class window: the
+ * name and email are captured, but it is not attendance yet. A later scan inside
+ * the window clears it (AND keeps it cleared — a checked-in guest who re-scans
+ * after class is never un-checked). Every Open House join passes false. */
+export async function upsertGuest(
+  sessionId: string, name: string, email: string, opts: { awaitingClass?: boolean } = {},
+): Promise<SessionGuest> {
   const [match] = await sequelize.query<{ id: string }>(
     `SELECT e.id FROM enrollments e JOIN live_sessions s ON s.cohort_id = e.cohort_id
       WHERE s.id = :sid AND LOWER(e.email) = LOWER(:email) LIMIT 1`,
     { replacements: { sid: sessionId, email }, type: QueryTypes.SELECT },
   );
   const rows = await sequelize.query<SessionGuest>(
-    `INSERT INTO session_guests (session_id, name, email, email_lower, enrollment_id, created_at, updated_at)
-       VALUES (:sid, :name, :email, LOWER(:email), :eid, NOW(), NOW())
+    `INSERT INTO session_guests (session_id, name, email, email_lower, enrollment_id, awaiting_class, created_at, updated_at)
+       VALUES (:sid, :name, :email, LOWER(:email), :eid, :awaiting, NOW(), NOW())
      ON CONFLICT (session_id, email_lower)
-       DO UPDATE SET name = EXCLUDED.name, enrollment_id = COALESCE(EXCLUDED.enrollment_id, session_guests.enrollment_id), updated_at = NOW()
+       DO UPDATE SET name = EXCLUDED.name, enrollment_id = COALESCE(EXCLUDED.enrollment_id, session_guests.enrollment_id),
+                     awaiting_class = session_guests.awaiting_class AND EXCLUDED.awaiting_class, updated_at = NOW()
      RETURNING id, session_id, name, email, enrollment_id`,
-    { replacements: { sid: sessionId, name, email, eid: match?.id ?? null }, type: QueryTypes.SELECT },
+    { replacements: { sid: sessionId, name, email, eid: match?.id ?? null, awaiting: !!opts.awaitingClass }, type: QueryTypes.SELECT },
   );
   return rows[0];
+}
+
+/** A guest's live status (the same four states a signed-in student taps). */
+export async function setGuestPulse(sessionId: string, guestId: string, state: string): Promise<void> {
+  await sequelize.query(
+    `UPDATE session_guests SET pulse_state = :state, updated_at = NOW() WHERE id = :gid AND session_id = :sid`,
+    { replacements: { sid: sessionId, gid: guestId, state } },
+  );
+}
+
+export async function getGuestPulse(sessionId: string, guestId: string): Promise<string | null> {
+  const [r] = await sequelize.query<{ pulse_state: string | null }>(
+    `SELECT pulse_state FROM session_guests WHERE id = :gid AND session_id = :sid`,
+    { replacements: { gid: guestId, sid: sessionId }, type: QueryTypes.SELECT },
+  );
+  return r?.pulse_state ?? null;
+}
+
+/** Guest pulse counts per state, merged into the deck's pulse rail. */
+export async function getGuestPulseCounts(sessionId: string): Promise<Record<string, number>> {
+  const rows = await sequelize.query<{ state: string; n: number }>(
+    `SELECT pulse_state AS state, COUNT(*)::int AS n FROM session_guests
+      WHERE session_id = :sid AND pulse_state IS NOT NULL GROUP BY pulse_state`,
+    { replacements: { sid: sessionId }, type: QueryTypes.SELECT },
+  );
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.state] = Number(r.n) || 0;
+  return out;
+}
+
+export async function addGuestQuestion(sessionId: string, guestId: string, senderName: string, content: string): Promise<void> {
+  await sequelize.query(
+    `INSERT INTO session_guest_questions (session_id, guest_id, sender_name, content, created_at)
+       VALUES (:sid, :gid, :name, :content, NOW())`,
+    { replacements: { sid: sessionId, gid: guestId, name: senderName, content } },
+  );
+}
+
+/** Most-recent-first guest questions, same shape the deck reads from the class chat. */
+export async function getGuestQuestions(sessionId: string, limit = 15): Promise<Array<{ sender_name: string; content: string; created_at: string }>> {
+  return sequelize.query<{ sender_name: string; content: string; created_at: string }>(
+    `SELECT sender_name, content, created_at FROM session_guest_questions
+      WHERE session_id = :sid ORDER BY created_at DESC LIMIT :lim`,
+    { replacements: { sid: sessionId, lim: limit }, type: QueryTypes.SELECT },
+  );
+}
+
+/** Guests who did anything in class (pulsed, voted or asked) — the deck's "participated". */
+export async function countParticipatingGuests(sessionId: string): Promise<number> {
+  const [r] = await sequelize.query<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM session_guests g
+      WHERE g.session_id = :sid AND (
+        g.pulse_state IS NOT NULL
+        OR EXISTS (SELECT 1 FROM session_guest_poll_responses r WHERE r.guest_id = g.id)
+        OR EXISTS (SELECT 1 FROM session_guest_questions q WHERE q.guest_id = g.id))`,
+    { replacements: { sid: sessionId }, type: QueryTypes.SELECT },
+  );
+  return Number(r?.n) || 0;
 }
 
 export async function findGuest(sessionId: string, guestId: string): Promise<SessionGuest | null> {
@@ -66,7 +132,8 @@ export async function getGuestChoice(sessionId: string, guestId: string, pollKey
 
 export async function countGuests(sessionId: string): Promise<number> {
   const [r] = await sequelize.query<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM session_guests WHERE session_id = :sid`,
+    // A pre-class scan is not attendance (see upsertGuest).
+    `SELECT COUNT(*)::int AS n FROM session_guests WHERE session_id = :sid AND NOT awaiting_class`,
     { replacements: { sid: sessionId }, type: QueryTypes.SELECT },
   );
   return Number(r?.n) || 0;

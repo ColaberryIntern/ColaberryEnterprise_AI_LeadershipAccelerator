@@ -170,6 +170,19 @@ export const CBCK_CSS = `
 .cbck-prompt-meta{ margin:10px 0 0; text-align:left; font-size:13.5px; line-height:1.5; color:var(--text-body); }
 .cbck-prompt-meta b{ color:var(--text-strong); }
 
+/* Name + email check-in (any visitor who is not a signed-in member of the class) */
+.cbck-form{ width:100%; text-align:left; }
+.cbck-label{ display:block; margin:14px 0 6px; font-size:14px; font-weight:700; color:var(--text-strong); }
+.cbck-input{
+  width:100%; height:52px; padding:0 16px; box-sizing:border-box;
+  font-size:16px; color:var(--text-body);
+  background:var(--surface-card); border:1.5px solid var(--border-default); border-radius:var(--radius-lg);
+}
+.cbck-input:focus-visible{ outline:none; border-color:var(--brand-accent); box-shadow:var(--focus-ring); }
+.cbck-form-err{ margin:12px 0 0; min-height:1.2em; font-size:14px; font-weight:600; color:var(--status-danger); }
+.cbck-signin-alt{ margin-top:16px; font-size:13px; color:var(--text-subtle); }
+.cbck-signin-alt a{ color:var(--text-link); font-weight:600; }
+
 .cbck-spin{
   width:34px; height:34px; margin:8px auto 16px; border-radius:50%;
   border:3px solid var(--border-subtle); border-top-color:var(--brand-accent);

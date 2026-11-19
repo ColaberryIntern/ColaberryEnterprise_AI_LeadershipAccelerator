@@ -8,17 +8,36 @@ jest.mock('../../models/LiveSession', () => ({ __esModule: true, default: { find
 const mockBroadcast = jest.fn();
 jest.mock('../sessionLiveStateService', () => {
   class PollLockedError extends Error { constructor() { super('POLL_LOCKED'); } }
-  return { getBroadcast: (...a: unknown[]) => mockBroadcast(...a), PollLockedError };
+  return {
+    getBroadcast: (...a: unknown[]) => mockBroadcast(...a),
+    PollLockedError,
+    isValidPulseState: (s: unknown) => typeof s === 'string' && ['here', 'building', 'stuck', 'finished'].includes(s),
+  };
 });
-const store = { upsertGuest: jest.fn(), findGuest: jest.fn(), getGuestChoice: jest.fn(), recordGuestVote: jest.fn() };
+const store = {
+  upsertGuest: jest.fn(), findGuest: jest.fn(), getGuestChoice: jest.fn(), recordGuestVote: jest.fn(),
+  setGuestPulse: jest.fn(), getGuestPulse: jest.fn(), addGuestQuestion: jest.fn(),
+};
 jest.mock('../sessionGuestStore', () => ({
   upsertGuest: (...a: unknown[]) => store.upsertGuest(...a),
   findGuest: (...a: unknown[]) => store.findGuest(...a),
   getGuestChoice: (...a: unknown[]) => store.getGuestChoice(...a),
   recordGuestVote: (...a: unknown[]) => store.recordGuestVote(...a),
+  setGuestPulse: (...a: unknown[]) => store.setGuestPulse(...a),
+  getGuestPulse: (...a: unknown[]) => store.getGuestPulse(...a),
+  addGuestQuestion: (...a: unknown[]) => store.addGuestQuestion(...a),
+}));
+const mockRecordAttendance = jest.fn();
+jest.mock('../liveSessionAttendanceService', () => ({
+  recordAttendanceRow: (...a: unknown[]) => mockRecordAttendance(...a),
+}));
+jest.mock('../sessionPresenceService', () => ({
+  formatDisplayName: (n: string) => { const [f, l] = n.split(' '); return l ? `${f} ${l[0]}.` : f; },
 }));
 
-import { joinAsGuest, castGuestVote, getGuestState, mintGuestPass, verifyGuestPass, GuestError } from '../sessionGuestService';
+import {
+  joinAsGuest, castGuestVote, getGuestState, mintGuestPass, verifyGuestPass, GuestError, setGuestPulseFor, askAsGuest,
+} from '../sessionGuestService';
 import { PollLockedError } from '../sessionLiveStateService';
 
 const S1 = '11111111-1111-4111-8111-111111111111';
@@ -143,6 +162,111 @@ describe('getGuestState', () => {
   it('shows nothing to vote on between questions', async () => {
     mockBroadcast.mockResolvedValue({ phase: 'status', title: 'Welcome' });
     expect((await getGuestState(S1, mintGuestPass(S1, 'g1'))).question).toBeNull();
+  });
+  it('mirrors a Build Mode prompt and the guest\'s own status (additive for the check-in page)', async () => {
+    mockBroadcast.mockResolvedValue({ phase: 'prompt', title: 'Build', prompt: { label: 'Make a skill', prompt: 'Create SKILL.md' } });
+    store.getGuestPulse.mockResolvedValue('stuck');
+    const s = await getGuestState(S1, mintGuestPass(S1, 'g1'));
+    expect(s.phase).toBe('prompt');
+    expect(s.prompt?.prompt).toBe('Create SKILL.md');
+    expect(s.my_pulse).toBe('stuck');
+  });
+  it('carries the question kind and theater lock for the phone', async () => {
+    mockBroadcast.mockResolvedValue(question('locked'));
+    const s = await getGuestState(S1, mintGuestPass(S1, 'g1'));
+    expect(s.phase).toBe('question');
+    expect(s.question?.theater).toEqual({ state: 'locked' });
+    expect(s.question?.locked).toBe(true);
+  });
+});
+
+/**
+ * The class QR check-in (2026-11-19). Ali scanned Session 3's QR signed in as an account in
+ * another cohort and got "We couldn't check you in" (POST /join -> 404, not in this cohort).
+ * The fix: the check-in door takes name + email on ANY class, not only an Open House.
+ */
+describe('joinAsGuest via the class check-in', () => {
+  // Session 3, Cohort - November 2026: Tue 2026-11-24 18:30-19:30 Central (CST, UTC-6).
+  const classSession = (over: Record<string, unknown> = {}) => {
+    const v: Record<string, unknown> = {
+      id: S1, title: 'Your Know-How Is Now a Product (Week 2 · Agent Skills)', guest_access: null,
+      status: 'scheduled', session_date: '2026-11-24', start_time: '18:30', end_time: '19:30', ...over,
+    };
+    return { get: (k: string) => v[k] };
+  };
+  const DURING = new Date('2026-11-25T00:40:00Z'); // 6:40 PM CST
+  const FIVE_DAYS_EARLY = new Date('2026-11-19T16:48:31Z'); // when Ali scanned it
+  const AFTER = new Date('2026-11-25T03:00:00Z'); // 9:00 PM CST
+
+  it('ADMITS a normal class whose guest setting was never configured (the Session 3 case)', async () => {
+    mockFindByPk.mockResolvedValue(classSession());
+    store.upsertGuest.mockResolvedValue({ id: 'g1', name: 'Ana R', enrollment_id: null });
+    const r = await joinAsGuest(S1, 'Ana R', 'ana@x.com', { via: 'checkin', now: DURING });
+    expect(verifyGuestPass(r.pass, S1)).toBe('g1');
+    expect(r.class_window).toBe('open');
+    expect(store.upsertGuest).toHaveBeenCalledWith(S1, 'Ana R', 'ana@x.com', { awaitingClass: false });
+  });
+
+  it('CONTROL: the Open House door still refuses that same class', async () => {
+    mockFindByPk.mockResolvedValue(classSession());
+    await expect(joinAsGuest(S1, 'Ana', 'ana@x.com')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('records attendance on the matching enrollment during class, without points', async () => {
+    mockFindByPk.mockResolvedValue(classSession());
+    store.upsertGuest.mockResolvedValue({ id: 'g1', name: 'Ana R', enrollment_id: 'e1' });
+    const r = await joinAsGuest(S1, 'Ana R', 'ana@x.com', { via: 'checkin', now: DURING });
+    expect(r.matched).toBe(true);
+    expect(mockRecordAttendance).toHaveBeenCalledWith('e1', expect.objectContaining({ id: S1, session_date: '2026-11-24' }), DURING);
+  });
+
+  it('a non-matching email is a guest of the session and touches no attendance row', async () => {
+    mockFindByPk.mockResolvedValue(classSession());
+    store.upsertGuest.mockResolvedValue({ id: 'g2', name: 'Walk In', enrollment_id: null });
+    await joinAsGuest(S1, 'Walk In', 'walkin@x.com', { via: 'checkin', now: DURING });
+    expect(mockRecordAttendance).not.toHaveBeenCalled();
+  });
+
+  it('BEFORE the class: captures name + email, marks it awaiting, records no attendance', async () => {
+    mockFindByPk.mockResolvedValue(classSession());
+    store.upsertGuest.mockResolvedValue({ id: 'g1', name: 'Ali M', enrollment_id: 'e1' });
+    const r = await joinAsGuest(S1, 'Ali M', 'ali@x.com', { via: 'checkin', now: FIVE_DAYS_EARLY });
+    expect(r.class_window).toBe('before');
+    expect(store.upsertGuest).toHaveBeenCalledWith(S1, 'Ali M', 'ali@x.com', { awaitingClass: true });
+    expect(mockRecordAttendance).not.toHaveBeenCalled();
+  });
+
+  it('refuses after the class has ended (410), and on a cancelled class', async () => {
+    mockFindByPk.mockResolvedValue(classSession());
+    await expect(joinAsGuest(S1, 'Ana', 'ana@x.com', { via: 'checkin', now: AFTER })).rejects.toMatchObject({ status: 410 });
+    mockFindByPk.mockResolvedValue(classSession({ status: 'cancelled' }));
+    await expect(joinAsGuest(S1, 'Ana', 'ana@x.com', { via: 'checkin', now: DURING })).rejects.toMatchObject({ status: 410 });
+    expect(store.upsertGuest).not.toHaveBeenCalled();
+  });
+
+  it('honours an operator\'s explicit "no guests" (D4) and an unknown session', async () => {
+    mockFindByPk.mockResolvedValue(classSession({ guest_access: false }));
+    await expect(joinAsGuest(S1, 'Ana', 'ana@x.com', { via: 'checkin', now: DURING })).rejects.toMatchObject({ status: 404 });
+    mockFindByPk.mockResolvedValue(null);
+    await expect(joinAsGuest(S1, 'Ana', 'ana@x.com', { via: 'checkin', now: DURING })).rejects.toMatchObject({ status: 404 });
+    expect(store.upsertGuest).not.toHaveBeenCalled();
+  });
+});
+
+describe('the guest pass also carries status and questions', () => {
+  it('sets a valid status and rejects junk', async () => {
+    await expect(setGuestPulseFor(S1, mintGuestPass(S1, 'g1'), 'building')).resolves.toBe('building');
+    expect(store.setGuestPulse).toHaveBeenCalledWith(S1, 'g1', 'building');
+    await expect(setGuestPulseFor(S1, mintGuestPass(S1, 'g1'), 'asleep')).rejects.toMatchObject({ status: 400 });
+  });
+  it('posts a question under the redacted name the projected deck uses', async () => {
+    await askAsGuest(S1, mintGuestPass(S1, 'g1'), '  how do I install it?  ');
+    expect(store.addGuestQuestion).toHaveBeenCalledWith(S1, 'g1', 'Ana R.', 'how do I install it?');
+  });
+  it('refuses both without a pass for THIS session', async () => {
+    await expect(setGuestPulseFor(S1, mintGuestPass(S2, 'g1'), 'here')).rejects.toMatchObject({ status: 401 });
+    await expect(askAsGuest(S1, undefined, 'hi')).rejects.toMatchObject({ status: 401 });
+    expect(store.addGuestQuestion).not.toHaveBeenCalled();
   });
 });
 

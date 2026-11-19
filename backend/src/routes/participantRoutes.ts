@@ -12,7 +12,7 @@ import {
   handleGetPresenterPage,
 } from '../controllers/sessionLiveController';
 import {
-  handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote,
+  handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote, handleGuestPulse, handleGuestAsk,
 } from '../controllers/sessionGuestController';
 import { handleRaffleDraw, handleRaffleWinners } from '../controllers/sessionRaffleController';
 import {
@@ -432,14 +432,28 @@ router.post('/api/portal/sessions/:id/broadcast', kitTokenOrAdmin, handleSetBroa
 router.get('/api/portal/sessions/:id/presenter-notes', kitTokenOrAdmin, handleGetPresenterNotes);
 // Instructor's own phone page (HTML) — dark, large text, polls presenter-notes above.
 router.get('/api/portal/sessions/:id/presenter-page', kitTokenOrAdmin, handleGetPresenterPage);
-// Open House GUESTS — intentionally PUBLIC (Ali, 2026-10-29: name + email, no
-// login link). Only "Open House" sessions accept guests, and the pass is
-// session-scoped and grants voting only — never portal access
+// GUESTS — intentionally PUBLIC (Ali, 2026-10-29: name + email, no login link).
+// The Open House join page needs `guest_access` on; the class QR check-in
+// (2026-11-19) admits any class not explicitly closed to guests. The pass is
+// session-scoped and grants the live loop only — never portal access
 // (sessionGuestService.ts).
 router.get('/api/portal/sessions/:id/join', handleGuestJoinPage);
 router.post('/api/portal/sessions/:id/guest-join', handleGuestJoin);
 router.get('/api/portal/sessions/:id/guest-state', handleGuestState);
 router.post('/api/portal/sessions/:id/guest-vote', handleGuestVote);
+// The class QR check-in's guests (any class, `via: 'checkin'` on guest-join) also set a
+// status and ask questions, like a signed-in student's phone. Same pass, same scope.
+router.post('/api/portal/sessions/:id/guest-pulse', handleGuestPulse);
+// Generous on purpose: a whole room shares one venue IP. It only blunts a flood of
+// free text onto a projected screen; the pass already limits who can post at all.
+const guestAskRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many questions at once. Try again in a minute.' },
+});
+router.post('/api/portal/sessions/:id/guest-ask', guestAskRateLimiter, handleGuestAsk);
 // Giveaway draws: drawn + recorded server-side (sessionRaffleService.ts). Deck
 // kit token or admin; full names/emails only to an admin (?full=1).
 router.post('/api/portal/sessions/:id/raffle-draw', kitTokenOrAdmin, handleRaffleDraw);

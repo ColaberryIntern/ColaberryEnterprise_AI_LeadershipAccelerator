@@ -51,6 +51,35 @@ describe('getCheckinInfo', () => {
     expect(info?.room_id).toBeNull();
   });
 
+  it('names the program canonically and says when a scan is early (Session 3, 2026-11-19)', async () => {
+    // The footer used to say "Colaberry Enterprise AI Leadership Accelerator" months after the
+    // rename, because it was a hand-typed string. It now comes from canonicalCourse.ts.
+    liveSessionFindByPk.mockResolvedValue({
+      title: 'Your Know-How Is Now a Product', session_date: '2026-11-24', start_time: '18:30',
+      end_time: '19:30', status: 'scheduled', cohort_id: 'c1', guest_access: null,
+    });
+    roomFindOne.mockResolvedValue(null);
+
+    const info = await getCheckinInfo('s1', new Date('2026-11-19T16:48:31Z'));
+
+    expect(info?.program_name).toBe('Forward Deployed AI Engineer Accelerator');
+    expect(info?.class_window).toBe('before');
+    expect(info?.start_label).toBe('6:30 PM CST');
+    expect(info?.accepts_guests).toBe(true);
+
+    const during = await getCheckinInfo('s1', new Date('2026-11-25T00:40:00Z'));
+    expect(during?.class_window).toBe('open');
+  });
+
+  it('reports a class an operator closed to guests', async () => {
+    liveSessionFindByPk.mockResolvedValue({
+      title: 'Build Day', session_date: '2026-07-30', start_time: '18:30:00', cohort_id: 'c1', guest_access: false,
+    });
+    roomFindOne.mockResolvedValue(null);
+
+    expect((await getCheckinInfo('s1'))?.accepts_guests).toBe(false);
+  });
+
   it('returns null when the session does not exist', async () => {
     liveSessionFindByPk.mockResolvedValue(null);
 
