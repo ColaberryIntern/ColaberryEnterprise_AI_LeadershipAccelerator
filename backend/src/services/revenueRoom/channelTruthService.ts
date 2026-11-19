@@ -42,6 +42,7 @@ import {
   labelForChannel,
   noteForChannel,
   sortChannels,
+  foldLongTail,
 } from './channelTruth';
 
 /** The synthetic key the landing sources collapse into, and the only row spend attaches to. */
@@ -196,13 +197,20 @@ export async function getChannelTruth(now: Date = new Date()): Promise<ChannelTr
     + 'sources. This panel is by channel and covers the rest of the book.',
   );
 
-  const sorted = sortChannels(rows);
+  const sorted = foldLongTail(sortChannels(rows));
+
+  // Again, on the folded set. The synthetic row is a row like any other and has to obey the
+  // same rail; asserting only before the fold would exempt the one row this file invented.
+  assertNoChannelShowsAnUnmeasuredCost(sorted);
+
   return {
     asOf: now.toISOString(),
     rows: sorted,
+    // Totals are summed over EVERY row, before the fold, so a presentation choice can never
+    // move the book. `rows` here is the unfolded set; `sorted` is what the page draws.
     totals: {
-      payingMembers: sorted.reduce((t, r) => t + r.payingMembers, 0),
-      mrrCents: sorted.reduce((t, r) => t + r.mrrCents, 0),
+      payingMembers: rows.reduce((t, r) => t + r.payingMembers, 0),
+      mrrCents: rows.reduce((t, r) => t + r.mrrCents, 0),
       recordedSpendCents: spendCents ?? 0,
     },
     caveats,
