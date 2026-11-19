@@ -219,7 +219,10 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   // a beat per render. `beatRef.current` is reassigned on every render anyway, so the effect
   // always calls the newest callback; the only thing it needs to react to is the callback
   // appearing or disappearing, which is a boolean. (19 Nov 2026)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Deliberately NOT exhaustive, and deliberately carrying no lint-suppression comment: this
+  // project ships no ESLint config, so the react-hooks rules are unresolvable here and a
+  // suppression directive naming one is a HARD ERROR under `CI=true` in the separate Frontend
+  // build gate (which passes typecheck and unit tests first, so it fails on its own).
   }, [playing, kind, provider, hasBeat]);
 
   // C119: leaving the page sends the buffered watch time now, as an exit beat. `pagehide` covers a closed tab,
