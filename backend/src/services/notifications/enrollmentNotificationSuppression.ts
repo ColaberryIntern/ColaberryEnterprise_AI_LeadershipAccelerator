@@ -77,3 +77,27 @@ export function partitionNotifiable<T extends SuppressibleEnrollment>(
 export function filterNotifiable<T extends SuppressibleEnrollment>(enrollments: readonly T[]): T[] {
   return partitionNotifiable(enrollments).notifiable;
 }
+
+/**
+ * Per-SESSION opt-out: true when a live session must send no student mail at
+ * all — the 24 h / 1 h reminders, the post-session missed-session mail, and the
+ * absence alert those misses would raise.
+ *
+ * Stored as `live_sessions.email_trigger_config = {"student_email": false}`.
+ * That JSONB column already exists and nothing read it before this, so the
+ * switch needs no migration and every existing session (NULL) is unaffected.
+ * Only an explicit boolean `false` opts out: a missing key, `true`, or any
+ * other value keeps today's behaviour, so a malformed config can never silence
+ * a real class by accident.
+ *
+ * Attendance is still recorded for an opted-out session; only the mail stops.
+ * Ali, 2026-11-19: the November cohort's roster needs cleaning up before it is
+ * emailed, and post-Open-House follow-up belongs to the campaign engine.
+ */
+export function isSessionStudentEmailOff(
+  session: { email_trigger_config?: unknown } | null | undefined
+): boolean {
+  const cfg = session?.email_trigger_config;
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return false;
+  return (cfg as Record<string, unknown>).student_email === false;
+}
