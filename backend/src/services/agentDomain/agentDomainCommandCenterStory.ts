@@ -128,8 +128,19 @@ export const COMMAND_CENTER_ACCEPTANCE: ReadonlyArray<string> = Object.freeze([
   // 19 Nov: admissions, marketing, platform and sales are VERIFIED at 6 of 6, and internship
   // sits at 5 of 6. Criteria match by normalised text (`criterionIdentity.ts`), so rewording
   // criterion 1's "all six panels" to say eight would stop matching the sentence those five
-  // boards were graded against, and -- with no `SUPERSEDED_CRITERIA` alias, which this file's
-  // own doctrine forbids -- would un-verify four builders' completed work.
+  // boards were graded against, so their per-criterion ticks would stop matching.
+  //
+  // An alias is the documented remedy for a reword, NOT something the doctrine forbids --
+  // `commandCenterStory.ts` says to reword "only by adding an entry to SUPERSEDED_CRITERIA
+  // in the same commit". What it forbids is an alias that credits work nobody did, and that
+  // is exactly what one here would do: it would carry a tick earned for SIX built panels
+  // onto a sentence asserting EIGHT render. Criterion 6 below -- "no panel shows a result
+  // this domain has not actually produced" -- forbids that outright. So both ways of
+  // editing criterion 1 are worse than leaving it, and APPENDING is what the doctrine blesses.
+  //
+  // Appending does move every board from "x of 6" to "x of 8", so the four verified ones
+  // now read 6 of 8. That is correct and honest: two panels genuinely are not built yet.
+  // What is preserved is the per-criterion ticks, which is the part a reword would destroy.
   //
   // So the new count lives in the new criterion, where it can be checked without discarding
   // anything. `COMMAND_CENTER_PANEL_COUNT` below is what the test compares against, and the

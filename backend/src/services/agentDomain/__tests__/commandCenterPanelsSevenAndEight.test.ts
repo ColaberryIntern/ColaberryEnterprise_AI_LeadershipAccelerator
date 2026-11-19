@@ -10,10 +10,18 @@
  *   curriculum, product_experience           in_progress, 0 of 6
  *   executive, learner_success, website      nothing claimed
  *
- * Criteria match by NORMALISED TEXT (`criterionIdentity.ts`). So rewording criterion 1's "all six
- * panels" to say eight would stop matching the sentence five boards were graded against, and the
- * file's own doctrine forbids a `SUPERSEDED_CRITERIA` alias to carry the tick across. That would
- * un-verify four builders' completed work to fix a number in a sentence.
+ * Criteria match by NORMALISED TEXT (`criterionIdentity.ts`), so rewording criterion 1's "all
+ * six panels" to say eight would stop matching the sentence five boards were graded against
+ * and their per-criterion ticks would stop counting.
+ *
+ * An alias is the documented remedy for a reword, not something forbidden. What is forbidden
+ * is an alias that credits unperformed work -- and one here would carry a tick earned for SIX
+ * built panels onto a sentence asserting EIGHT render, which criterion 6 forbids outright. So
+ * both ways of editing criterion 1 are worse than leaving it.
+ *
+ * Appending does take every board from "x of 6" to "x of 8", so the four verified ones now
+ * read 6 of 8. That is honest: two panels are genuinely not built. What appending preserves is
+ * the per-criterion ticks, which is what a reword would have destroyed.
  *
  * ## So the count moved OUT of the sentence
  *
