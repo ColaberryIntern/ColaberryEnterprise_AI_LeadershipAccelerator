@@ -55,7 +55,19 @@ function importsOf(file: string): string[] {
   const specs = [...src.matchAll(/from\s+'(\.[^']+)'/g)].map((m) => m[1]);
   return specs
     .map((spec) => path.resolve(path.dirname(file), spec))
-    .map((p) => (fs.existsSync(`${p}.ts`) ? `${p}.ts` : p))
+    // A specifier resolves either to a FILE (`./candidateSection` -> `candidateSection.ts`) or to
+    // a DIRECTORY with a barrel (`../../models` -> `models/index.ts`). The first version of this
+    // walker handled only the file form, so a directory specifier failed `.endsWith('.ts')` and
+    // was dropped silently — which meant the single most obvious form of the regression this file
+    // exists to catch, `import { AgentDomainCandidate } from '../../models'`, was INVISIBLE to it.
+    // T004's verifier proved that by injecting exactly that line: the guard passed 5 of 5 while
+    // the original 138-test breakage was fully reintroduced. The directory form is used 207 times
+    // elsewhere under `backend/src/services`, so this was a live hole, not a hypothetical one.
+    .map((p) => {
+      if (fs.existsSync(`${p}.ts`)) return `${p}.ts`;
+      if (fs.existsSync(path.join(p, 'index.ts'))) return path.join(p, 'index.ts');
+      return p;
+    })
     .filter((p) => p.endsWith('.ts') && fs.existsSync(p));
 }
 
@@ -92,10 +104,35 @@ describe('the snapshot reaches no Sequelize model', () => {
 
   it('imports nothing from ../../models, directly or through anything it imports', () => {
     const offenders = [...GRAPH.entries()]
-      .filter(([file]) => `${path.sep}models${path.sep}`.includes(path.sep)
-        && file.split(path.sep).includes('models'))
+      .filter(([file]) => file.split(path.sep).includes('models'))
       .map(([, trail]) => trail.join(' -> '));
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The resolver's own control, against the hole T004's verifier found.
+   *
+   * Without it, a `${p}/index.ts` regression in `importsOf` would make all three negative
+   * assertions above pass over a graph that quietly stops at the barrel — green, and blind to the
+   * exact import that caused the original 138-test breakage.
+   */
+  it('POSITIVE CONTROL: the resolver can see a DIRECTORY import, not just a file one', () => {
+    const barrel = path.join(DIR, '..', '..', 'models', 'index.ts');
+    expect(fs.existsSync(barrel)).toBe(true);
+    const tmp = path.join(__dirname, '__purity_probe__.ts');
+    // `../../../models` from `__tests__/`, which is the same directory the real `../../models`
+    // from `agentDomain/` resolves to. The probe has to land on the barrel for real, or it would
+    // prove the resolver can see a path that happens not to exist.
+    fs.writeFileSync(tmp, "import { Project } from '../../../models';\nexport const x = Project;\n");
+    try {
+      const names = [...reachable(tmp).keys()].map((f) => path.basename(f));
+      expect(names).toContain('index.ts');
+      const reachedModels = [...reachable(tmp).keys()]
+        .some((f) => f.split(path.sep).includes('models'));
+      expect(reachedModels).toBe(true);
+    } finally {
+      fs.unlinkSync(tmp);
+    }
   });
 
   it('reaches no module that calls .init at module scope', () => {

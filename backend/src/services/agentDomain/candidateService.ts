@@ -42,7 +42,6 @@ import type { CandidateListResult, CandidateView } from './candidateSection';
 export { candidatesSection } from './candidateSection';
 export type { CandidateListResult, CandidateView } from './candidateSection';
 
-
 const iso = (v: Date | string | null | undefined): string | null => {
   if (!v) return null;
   return v instanceof Date ? v.toISOString() : String(v);

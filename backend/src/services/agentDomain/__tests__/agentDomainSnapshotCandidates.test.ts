@@ -50,8 +50,10 @@ const EMPTY: CandidateListResult = {
   reason: 'No candidates have been put on the list yet for marketing.',
 };
 
-describe('the four existing sources keys are unchanged, and there are now five', () => {
-  it('names all five BY NAME, so no panel loses its provenance', () => {
+describe('the four existing sources keys are unchanged, and there are now six', () => {
+  it('names all six BY NAME, so no panel loses its provenance', () => {
+    // Five after the candidate list landed, six after the gap board. The set is compared rather
+    // than counted, so adding a key is a deliberate edit here and not something that slides in.
     const { sources } = build();
     expect(Object.keys(sources).sort()).toEqual([
       'agent',
@@ -59,6 +61,7 @@ describe('the four existing sources keys are unchanged, and there are now five',
       'capabilities',
       'capability_ladder',
       'governance',
+      'owed_by_product',
     ]);
   });
 
