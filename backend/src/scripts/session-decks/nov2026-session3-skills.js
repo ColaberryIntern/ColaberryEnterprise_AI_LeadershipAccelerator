@@ -1,6 +1,6 @@
 /**
- * nov2026-session3-skills.js — Cohort - November 2026, Session 3, Tuesday
- * 2026-11-24, 6:30-7:30 PM CT: "Your Know-How Is Now a Product (Week 2 ·
+ * nov2026-session3-skills.js — Cohort - November 2026, Session 3, Monday
+ * 2026-11-23 (moved from Tue 11-24 on 2026-11-19: the weekly live is Mondays), 6:30-7:30 PM CT: "Your Know-How Is Now a Product (Week 2 ·
  * Agent Skills)". A 60-minute TEST class on the generated Class Kit, composed
  * from the plan-live-session blueprint's deckHandoff.
  *
@@ -12,7 +12,7 @@
  * Test class should be built in the Nov batch as session 3."
  *
  * WHAT IS COMPOSED, NOT TRANSCRIBED
- * The blueprint (docs/live-sessions/2026-11-24-your-know-how-is-now-a-product/
+ * The blueprint (docs/live-sessions/2026-11-23-your-know-how-is-now-a-product/
  * blueprint.json, validated VALID, dayKind architecture) already carries a
  * KitConfig-shaped deckHandoff: teach slides, interactions, story beats,
  * opening and slideNotes. This file reads it and layers three things on top:
@@ -38,7 +38,7 @@
  *
  * TITLE CONTRACT
  * The title has "Week 2" (parseWeek) and no "Open House" (that would switch on
- * the openhouse day kind: guest join and draws). A Tuesday with neither
+ * the openhouse day kind: guest join and draws). A Monday with neither
  * "architecture day" nor "build day" in the title resolves to architecture
  * (detectDayKind's weekday rule), which is the blueprint's dayKind.
  *
@@ -50,7 +50,7 @@
  * the session's Commons room), and 30 min after the end it marks it completed,
  * marks every non-attendee absent and sends each of them a missed-session
  * email. There is no per-session flag for that; the status has to leave
- * 'scheduled' before 2026-11-24 18:15 CT. See the session log.
+ * 'scheduled' before 2026-11-23 18:15 CT (or PR #4229 deployed). See the session log.
  *
  * MODES
  *   node nov2026-session3-skills.js --check            local lint, no DB
@@ -73,7 +73,7 @@ const SESSION = {
   session_number: 3,
   title: 'Your Know-How Is Now a Product (Week 2 · Agent Skills)',
   description: 'Week 2 · Agent Skills. Turn a check you run by hand into a Claude skill that fires from a plain question, break it on purpose, and hand its result to leadership. Bring your phone: polls and questions run on it.',
-  session_date: '2026-11-24',
+  session_date: '2026-11-23',
   start_time: '18:30',
   end_time: '19:30',
   session_type: 'core',
@@ -86,7 +86,7 @@ const FOLDER = 'morning-check';
 function blueprintPath() {
   const arg = process.argv.find((a) => a.startsWith('--blueprint='));
   if (arg) return arg.slice('--blueprint='.length);
-  const repo = path.join(__dirname, '../../../../docs/live-sessions/2026-11-24-your-know-how-is-now-a-product/blueprint.json');
+  const repo = path.join(__dirname, '../../../../docs/live-sessions/2026-11-23-your-know-how-is-now-a-product/blueprint.json');
   if (fs.existsSync(repo)) return repo;
   return '/tmp/s3-blueprint.json';
 }
@@ -456,13 +456,16 @@ const SLIDE_NOTES = {
     'SAY: If you said I watched, start with instruction one tonight. With the three instructions is exactly where this week wants you.',
   ),
   'cta:trailer-0': L(
-    'SITUATION: The template’s trailer reads Thursday we make it work; tonight it is the close and the open loop to Week 3.',
-    'ROOM: Trailer card. Stop sharing tabs; this is face to camera.',
+    // The card's title, eyebrow and paragraph are generated from Week 2's
+    // authored Thursday trailer and cannot be overridden without a deploy; the
+    // paragraph is also the phone's read screen. So the correction lives here.
+    'SITUATION: The template’s trailer card says Thursday we make it work. There is no Thursday class: the weekly live is Mondays, and the next one is Monday, November 30, Week 3. Tonight this card is the close and the open loop.',
+    'ROOM: Trailer card. Stop sharing tabs; this is face to camera. Do not read the card’s Thursday line aloud.',
     'MOOD: Warm finish, like the Open House close: thank them, then one clear ask.',
-    'OPEN: Here is your week.',
-    'DO: Read the build-along proof line, name Week 3, ask the 2 AM question, then stop talking.',
+    'OPEN: Here is your week, and I will see you next Monday.',
+    'DO: Say the build-along proof line, then: next Monday, November 30, is Week 3, Build Your First AI Workflow Assistant. Ask the 2 AM question, then stop talking.',
     'SAY: Rebuild all three skills on sample data, including the diagnosis one that sat prepared in the folder. Prove each fires from a plain question.',
-    'SAY: Next session is Week 3: Build Your First AI Workflow Assistant. Tonight it ran a check you wrote once, and it still waited for you to decide.',
+    'SAY: Next Monday, November 30, is Week 3: Build Your First AI Workflow Assistant. Tonight it ran a check you wrote once, and it still waited for you to decide.',
   ),
 };
 
