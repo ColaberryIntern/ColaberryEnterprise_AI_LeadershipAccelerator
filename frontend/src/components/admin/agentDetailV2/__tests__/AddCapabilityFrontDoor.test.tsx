@@ -26,11 +26,31 @@ const LANDING_PAGE = {
   label: 'Draft a landing page',
   what_it_does: 'Create a landing page, revise it, and preview the real rendered page.',
   state: 'in_app' as const,
-  product_route: '/admin/landing-pages',
+  product_route: '/admin/marketing/landing-pages',
+  product_route_note: null,
   backed_by: 'backend/src/routes/admin/landingPageRoutes.ts',
   verified_on: '2026-11-17',
   ruling_needed: null,
   matches: ['landing page'],
+};
+
+/**
+ * The `api_only` branch, added 18 Nov 2026: the platform owns the endpoint and nobody built a
+ * screen. The property worth pinning is a NEGATIVE one — there must be no "Go and use it" link,
+ * because offering a door that is not there is the whole reason this state exists.
+ */
+const ADMISSIONS_KNOWLEDGE = {
+  feature_key: 'admissions.knowledge.edit',
+  domain_key: 'admissions',
+  label: 'Change what admissions tells applicants',
+  what_it_does: 'Add or correct an entry in the admissions knowledge base.',
+  state: 'api_only' as const,
+  product_route: '/admin/ai-settings',
+  product_route_note: 'THERE IS NO SCREEN. The tab shows the knowledge base and cannot change it.',
+  backed_by: 'backend/src/routes/admin/admissionsRoutes.ts',
+  verified_on: '2026-11-18',
+  ruling_needed: 'The screen needs to list the entries, add one, and edit one.',
+  matches: ['admissions knowledge'],
 };
 
 beforeEach(() => {
@@ -85,7 +105,11 @@ describe('already in the app', () => {
     await render();
     await ask('draft a landing page');
     expect(text()).toContain('The app already does this');
-    const link = container.querySelector('a[href="/admin/landing-pages"]');
+    // The REAL screen. This said `/admin/landing-pages` and passed, because the fixture repeated
+    // the catalog's mistake; the page has always been at `/admin/marketing/landing-pages`. The
+    // backend suite now checks every route in the catalog against the router, which is the check
+    // a fixture cannot do.
+    const link = container.querySelector('a[href="/admin/marketing/landing-pages"]');
     expect(link).toBeTruthy();
   });
 
@@ -133,6 +157,49 @@ describe('partly there', () => {
     expect(text()).toContain('ruling');
     expect(text()).toContain('does not need a scope sheet');
     expect(text()).not.toContain('The next step is the scope sheet');
+  });
+});
+
+describe('the app has the endpoint and nobody built the screen', () => {
+  const apiOnly = {
+    answer: {
+      state: 'api_only', feature: ADMISSIONS_KNOWLEDGE, route_to: 'ask_for_a_screen',
+      implies_tried_in_product: 'exists_unused', domain_is_mapped: true,
+    },
+    coverage: { features: 16, domains: ['admissions', 'marketing'] },
+  };
+
+  it('OFFERS NO DOOR, because there is not one — the whole reason this state exists', async () => {
+    // The negative is the property. `in_app` renders "Go and use it" as a link to
+    // `product_route`, and the first stage of the ladder is doing the thing by hand. On a feature
+    // with no screen that link is a dead end that looks like an instruction, and the builder
+    // stalls with no explanation.
+    mockAsk.mockResolvedValue(apiOnly);
+    await render();
+    await ask('edit admissions knowledge');
+    expect(container.querySelector('a[href="/admin/ai-settings"]')).toBeNull();
+    expect(text()).not.toContain('Go and use it');
+  });
+
+  it('says what is missing, and asks for a screen rather than a scope sheet', async () => {
+    mockAsk.mockResolvedValue(apiOnly);
+    await render();
+    await ask('edit admissions knowledge');
+    expect(text()).toContain('nobody built the screen');
+    expect(text()).toContain('THERE IS NO SCREEN');
+    expect(text()).toContain('Ask for the screen');
+    // The other expensive direction: this must not become a request to rebuild an endpoint we
+    // already own and have working.
+    expect(text()).not.toContain('The next step is the scope sheet');
+    expect(text()).not.toContain('genuine build request');
+  });
+
+  it('carries the specification, because "build a screen" is not one', async () => {
+    mockAsk.mockResolvedValue(apiOnly);
+    await render();
+    await ask('edit admissions knowledge');
+    expect(text()).toContain('What the screen needs to let somebody do');
+    expect(text()).toContain('list the entries');
   });
 });
 
