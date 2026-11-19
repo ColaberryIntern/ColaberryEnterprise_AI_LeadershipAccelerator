@@ -173,3 +173,22 @@ describe('checking what was read from a calendar photo (Ali, 2026-11-18: "that d
     expect(left).toEqual([{ date: '2026-11-18', start: '09:00', end: '10:00' }]);
   });
 });
+
+describe('never the same prize twice (Ali, 2026-11-19: "avoid doing the same prize")', () => {
+  test('a love note in a pocket is the same prize as a love note hidden somewhere', () => {
+    expect(L.similarPrize('A handwritten love note, hidden somewhere', 'A handwritten love note, hidden in your coat pocket for a surprise discovery')).toBe(true);
+    expect(L.similarPrize('A love letter', 'Love letters under your pillow')).toBe(true);
+  });
+  test('different prizes are not', () => {
+    expect(L.similarPrize('A handwritten love note, hidden somewhere', 'A 15-minute back rub with the lavender lotion')).toBe(false);
+    expect(L.similarPrize('A playlist made just for me', 'A 10-minute portrait of me (any skill level)')).toBe(false);
+  });
+});
+
+describe('planning while a calendar photo is still coming (Ali, 2026-11-19: "I was expecting to have our planned week")', () => {
+  test('assumed work hours put the weekday Sparks in the evening', () => {
+    const p = L.pickWeekdaySlots(L.candidateSlots(L.weekDates(MON), L.assumedWorkHours(MON), TUE_7AM), 3);
+    expect(p.length).toBe(3);
+    expect(p.every((s) => L.toMin(s.start) >= L.toMin(L.EVENING_FROM))).toBe(true);
+  });
+});

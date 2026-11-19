@@ -255,3 +255,20 @@ export function removeRange(blocks: Busy[], date: string, start: string, end: st
   const s = toMin(start); const e = toMin(end);
   return blocks.filter((x) => !(x.date === date && toMin(x.start) < e && toMin(x.end) > s));
 }
+
+const PRIZE_FILLER = new Set(['with', 'your', 'from', 'that', 'this', 'just', 'tonight', 'minute', 'minutes', 'somewhere', 'hidden', 'surprise', 'made', 'little', 'special', 'choice']);
+const prizeWords = (s: string): Set<string> => new Set(String(s).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/)
+  .filter((w) => w.length >= 4 && !PRIZE_FILLER.has(w)).map((w) => w.replace(/s$/, '')));
+
+/** Two prizes are "the same prize" when most of the shorter one's real words are in the other (love note vs love note in a pocket). */
+export function similarPrize(a: string, b: string): boolean {
+  const x = prizeWords(a); const y = prizeWords(b);
+  if (!x.size || !y.size) return false;
+  const shared = [...x].filter((w) => y.has(w)).length;
+  return shared / Math.min(x.size, y.size) >= 0.5;
+}
+
+/** Weekday work hours to assume for someone whose new calendar photo is not in yet, so Sparks land in the evening. */
+export function assumedWorkHours(week: string): Busy[] {
+  return weekDates(week).filter(isWeekday).map((date) => ({ date, start: '08:00', end: '17:30' }));
+}
