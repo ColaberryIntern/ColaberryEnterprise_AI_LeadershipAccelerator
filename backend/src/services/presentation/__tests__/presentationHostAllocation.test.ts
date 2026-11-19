@@ -37,8 +37,20 @@ const exclusionViolation = () =>
   Object.assign(new Error('conflicting key value violates exclusion constraint "presentation_slot_no_overlap_per_host"'),
     { parent: { code: '23P01' } });
 
-const inserts = () => q.mock.calls.filter((c: any[]) => String(c[0]).includes('INSERT INTO presentation_slot_reservations'));
+// Reservation ATTEMPTS only — a capacity denial is also written to this table (state
+// 'denied') to record that a slot could not be served, and it is not a host the
+// allocator "tried", so it must not count as one here.
+const inserts = () => q.mock.calls.filter((c: any[]) =>
+  String(c[0]).includes('INSERT INTO presentation_slot_reservations') && !String(c[0]).includes("'denied'"));
 const hostsTried = () => inserts().map((c: any[]) => c[1].replacements.host);
+
+/**
+ * The practice pool now reads the room table to drop any host carrying an always-open
+ * room (a rehearsal must not take a live room's host). With a populated registry that
+ * lookup runs first; these tests describe a pool where NONE is blocked, so it answers
+ * empty. Enqueued as the first `q` result in every populated-pool case below.
+ */
+const noBlockedRooms = () => q.mockResolvedValueOnce([[], {}]);
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -61,6 +73,7 @@ describe('allocation asks the database, never a read-then-write', () => {
 
   it('takes the first host in priority order when it is free', async () => {
     hostPool.mockResolvedValue(['a@x.com', 'b@x.com', 'c@x.com']);
+    noBlockedRooms();
     q.mockResolvedValueOnce([[{ id: 'r1' }], {}]);
 
     const r = await reserveSlot(req());
@@ -73,6 +86,7 @@ describe('allocation asks the database, never a read-then-write', () => {
   it('moves to the next host when the first is busy, instead of refusing', async () => {
     // THE WHOLE POINT. Before this, one busy host meant the platform was full.
     hostPool.mockResolvedValue(['a@x.com', 'b@x.com', 'c@x.com']);
+    noBlockedRooms();
     q.mockRejectedValueOnce(exclusionViolation());
     q.mockResolvedValueOnce([[{ id: 'r2' }], {}]);
 
@@ -86,9 +100,10 @@ describe('allocation asks the database, never a read-then-write', () => {
 
   it('only says "taken" once EVERY host has refused', async () => {
     hostPool.mockResolvedValue(['a@x.com', 'b@x.com']);
+    noBlockedRooms();
     q.mockRejectedValueOnce(exclusionViolation());
     q.mockRejectedValueOnce(exclusionViolation());
-    q.mockResolvedValueOnce([[], {}]); // nextAvailable lookup
+    q.mockResolvedValueOnce([[], {}]); // nextAvailable lookup (capacity passed in, no second room query)
 
     const r = await reserveSlot(req());
 
@@ -103,6 +118,7 @@ describe('allocation asks the database, never a read-then-write', () => {
     // A dropped connection is not "this host is busy". Walking the pool on a real
     // fault would hammer every host in turn and bury the actual cause.
     hostPool.mockResolvedValue(['a@x.com', 'b@x.com']);
+    noBlockedRooms();
     q.mockRejectedValueOnce(Object.assign(new Error('connection terminated'), { parent: { code: '08006' } }));
 
     await expect(reserveSlot(req())).rejects.toThrow('connection terminated');
@@ -111,6 +127,7 @@ describe('allocation asks the database, never a read-then-write', () => {
 
   it('writes the chosen host onto the reservation row', async () => {
     hostPool.mockResolvedValue(['only@x.com']);
+    noBlockedRooms();
     q.mockResolvedValueOnce([[{ id: 'r1' }], {}]);
     await reserveSlot(req());
     expect(String(inserts()[0][0])).toContain('host_email');
@@ -151,7 +168,10 @@ describe('a time is only unavailable when every host is busy', () => {
 
   it('offers the requested time even when one of two hosts is already booked', async () => {
     hostPool.mockResolvedValue(['a@x.com', 'b@x.com']);
+    // nextAvailableFrom reads held slots FIRST, then resolves the pool, so the held
+    // lookup is queued before the always-open-room lookup.
     q.mockResolvedValueOnce([[{ s: '2026-11-04T19:00:00Z', e: '2026-11-04T19:30:00Z' }], {}]);
+    noBlockedRooms();
 
     const next = await nextAvailableFrom(START, 30);
 
@@ -161,10 +181,12 @@ describe('a time is only unavailable when every host is busy', () => {
 
   it('skips past the window where both hosts are booked', async () => {
     hostPool.mockResolvedValue(['a@x.com', 'b@x.com']);
+    // Held lookup first, then the pool's always-open-room lookup (see note above).
     q.mockResolvedValueOnce([[
       { s: '2026-11-04T19:00:00Z', e: '2026-11-04T19:30:00Z' },
       { s: '2026-11-04T19:00:00Z', e: '2026-11-04T19:30:00Z' },
     ], {}]);
+    noBlockedRooms();
 
     const next = await nextAvailableFrom(START, 30);
 

@@ -64,8 +64,30 @@ describe('government page menu wiring', () => {
   });
 
   it('applies ?family= after the catalog renders, so menu links land filtered', () => {
-    const render = html.indexOf('GOV_RENDER();\n    if (window.gnApplyFamily) window.gnApplyFamily();');
+    const render = html.indexOf('GOV_RENDER();\n    window.gnCatalogReady = true;\n    if (window.gnApplyFamily) window.gnApplyFamily();');
     expect(render).toBeGreaterThan(-1);
     expect(html).toContain("new URLSearchParams(location.search).get('family')");
+  });
+
+  /* W27 (Ali, 2026-11-18: "Government navigation filters don't work"). The catalog
+     usually resolved before the header script defined its hooks, so neither ran. */
+  it('W27: catches up when the catalog finished first, whichever script wins', () => {
+    expect(html).toContain('window.gnCatalog = payload;');
+    const hooks = html.indexOf('window.gnApplyFamily = function');
+    const catchUp = html.indexOf('if (window.gnCatalogReady) window.gnApplyFamily();');
+    expect(hooks).toBeGreaterThan(-1);
+    expect(catchUp).toBeGreaterThan(hooks);
+    expect(html).toContain('if (window.gnCatalog) window.gnFillGov(window.gnCatalog);');
+  });
+
+  it('W27: applies a family picked from the menu in place while on the page', () => {
+    expect(html).toContain('a[href^="/government/?family="]');
+    expect(html).toContain("history.pushState(null, '', a.getAttribute('href'));");
+    expect(html).toContain("addEventListener('popstate'");
+  });
+
+  it('W27: offers only family chips the grid can fill, and sends uncased services to the catalog list', () => {
+    expect(html).toContain("GOV_FAMILIES.filter(function(f){return f==='All'||pub.some(function(x){return x.family===f})})");
+    expect(html).toContain("x.caseStudies === 0 ? '#gv-prep' : href");
   });
 });

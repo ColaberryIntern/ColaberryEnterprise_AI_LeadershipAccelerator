@@ -219,6 +219,56 @@
 .cs-artifact-title { margin: 0; font-weight: 600; }
 .cs-artifact-note { margin: 0; font-size: .9rem; color: var(--cs-fg-muted); max-width: 60ch; }
 
+/* One picture at a time (Ali, 18 Nov 2026): a scroll-snap track with no scrollbar, each
+   picture whole inside the same 16:9 frame, and arrows plus a count underneath.
+   `position: relative` keeps each slide's sr-only text clipped inside the track. */
+.cs-carousel { display: grid; gap: .9rem; min-width: 0; }
+.cs-artifacts.cs-carousel-track {
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  position: relative;
+  min-width: 0;
+}
+.cs-carousel-track::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: reduce) { .cs-artifacts.cs-carousel-track { scroll-behavior: auto; } }
+.cs-carousel-track > .cs-artifact { flex: 0 0 100%; scroll-snap-align: start; }
+.cs-carousel-track > .cs-artifact img {
+  aspect-ratio: 16 / 9;
+  max-height: 70vh;
+  object-fit: contain;
+  padding: .75rem;
+  background: var(--cs-bg-sunken, rgba(127, 127, 127, .08));
+}
+.cs-carousel-controls { display: flex; align-items: center; justify-content: center; gap: 1rem; }
+.cs-carousel-count { min-width: 5.5em; text-align: center; font-size: .9rem; font-variant-numeric: tabular-nums; color: var(--cs-fg-muted); }
+.cs-carousel-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--cs-line);
+  border-radius: var(--cs-radius, 10px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+.cs-carousel-btn:hover { border-color: currentColor; }
+.cs-carousel-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.cs-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* -------------------------------------------------------------- not found --- */
 
 .cs-notfound { display: grid; gap: 1rem; justify-items: start; padding-block: 3rem; }

@@ -11,8 +11,8 @@
  * hashes and were seeded on the server, never committed.
  *
  * The planner: busy time = each person's calendar screenshot (read by a vision model) + Ali's Google
- * work calendar (free/busy) + timed events on the family calendar. It finds midday hours where both
- * are free, picks 3 weekdays + 1 weekend slot, and asks the model for activities that fit both
+ * work calendar (free/busy) + timed events on the family calendar. It finds midday or evening hours
+ * where both are free, picks 3 weekdays + 1 weekend slot, and asks the model for activities that fit both
  * people's answers, each with a stated "why". The code, not the model, enforces the time limits.
  */
 import crypto from 'crypto';
@@ -24,7 +24,7 @@ import { SURVEY, DAILY, Question, dailyFor, answerLines, GAMES, WAGER, gameForDa
 import {
   Busy, Slot, PlanItem, RawPick, ctNow, mondayOf, weekDates, addDays, candidateSlots, pickWeekdaySlots,
   weekendSlots, pendingDays, weekdayIndex, shapeItem, nextSlot, fitsSlot, prettyDay, prettyTime, toMin, fromMin,
-  isWeekday, prevWeekday, decideWinner, PROGRAM_START,
+  isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange,
 } from './sparkLogic';
 
 export type Person = 'ali' | 'addie';
@@ -133,15 +133,18 @@ export async function today(p: Person) {
     today: prettyDay(now.date),
     survey: remaining.length ? { answered: SURVEY.length - remaining.length, total: SURVEY.length, questions: remaining } : null,
     planning: {
-      needed: !cal?.data.done && !(plan && plan.data.status === 'ready'),
+      // Needed until this person is done; a planned week only skips it for someone who never started (Ali's calendar is automatic).
+      needed: !cal?.data.done && !(plan?.data.status === 'ready' && !cal),
       carried: now.date > week, // anything not done on Monday rolls forward (Ali, 2026-11-16)
       partnerDone: !!partnerCal?.data.done,
       autoCalendar: p === 'ali',
       shots: Number(cal?.data.shots || 0),
+      retake: !!cal?.data.retake, // Spark asked for a new picture: the page shows only the photo step, then plans by itself
     },
     daily: pendingDays(now.date, answeredDays).map((d) => ({ day: d, label: prettyDay(d), carried: d !== now.date, questions: dailyFor(weekdayIndex(d)) })),
     plan: plan ? { status: plan.data.status, error: plan.data.status === 'failed' ? 'Planning hit a snag. Tap "Plan our week" to try again.' : null, items: (plan.data.items || []).map(view) } : null,
     learned: lessons,
+    calendar: calendarView(cal?.data, week),
     game: await gameState(p, now.date),
     reveal: await reveal(now.date),
   };
@@ -165,7 +168,7 @@ async function gameState(p: Person, day: string) {
     day, game: { id: game.id, name: game.name, emoji: game.emoji, how: game.how },
     triesLeft: TRIES - tries.length, scores: done, best: done.length ? Math.max(...done) : null,
     locked: !!row?.data.locked || tries.length >= TRIES,
-    wager: wager ? { prize: String(wager.data.prize) } : null,
+    wager: wager ? { locked: true } : null, // the prize stays a surprise until the reveal
     wagerGroups: wager ? null : WAGER,
   };
 }
@@ -201,20 +204,46 @@ export async function lockScore(p: Person): Promise<void> {
   if (row) await update(row.id, { ...row.data, locked: true });
 }
 
-/** The wager: rank the 5 groups, then the prizes in your top group. Your prize if you win = your top pick. */
-export async function saveWager(p: Person, groups: unknown, picks: unknown): Promise<{ prize: string }> {
+/**
+ * The 15-minute prize, chosen by Spark from this person's own answers and their group ranking (Ali,
+ * 2026-11-18: "you should pick the prize for the 15 minutes based on our answers"). The partner owes it.
+ */
+async function pickPrize(p: Person, groups: string[]): Promise<{ prize: string; why: string }> {
+  const top = groups.find((g) => g in WAGER) || 'Sweet 💗';
+  const fallback = { prize: WAGER[top][0], why: `From the group you ranked first (${top.replace(/\s\S+$/, '')}).` };
+  try {
+    const out = await chat([
+      { role: 'system', content: `You choose a 15-minute game prize for one partner in a married couple. The other partner gives it to them tonight or tomorrow, at home or nearby, with no planning and little or no cost. Make it specific to this person's answers (a concrete action, not a category), warm or playful; flirty is fine, explicit is not. No em dashes. Phrase the prize as what they receive, a short noun phrase that reads after "Your prize:" (for example "A 15-minute back rub with the lavender lotion"). Reply only in JSON: {"prize": "under 90 characters", "why": "1 sentence, citing their answers, written to them as you"}` },
+      { role: 'user', content: `Their answers:\n${(await personLines(p)).map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}\n\nPrize groups they ranked today, favorite first: ${groups.length ? groups.join(' > ') : 'not ranked'}.\nExamples of the kind of prize in their top group: ${WAGER[top].join('; ')}.\nPick one prize from their top group's spirit that fits them best.` },
+    ], 0.8);
+    const clean = (s: unknown, n: number) => String(s || '').replace(/\s+/g, ' ').replace(/ ?[—–] ?/g, ', ').trim().slice(0, n);
+    const prize = clean(out.prize, 110);
+    return prize ? { prize, why: clean(out.why, 220) } : fallback;
+  } catch (e: any) { console.warn('[Spark] prize pick failed, using the list:', e.message); return fallback; }
+}
+
+/** The wager: rank the 5 groups secretly. Spark picks the exact prize from your answers; you see it only if you win. */
+export async function saveWager(p: Person, groups: unknown): Promise<{ ok: true }> {
   const day = ctNow().date;
   const st = await gameState(p, day);
   if (!st || !st.locked) throw new Error('finish your tries first');
-  if (st.wager) return st.wager;
+  if (st.wager) return { ok: true };
   const g = Array.isArray(groups) ? groups.map(String).filter((x) => x in WAGER) : [];
   if (g.length !== Object.keys(WAGER).length) throw new Error('rank every group');
-  const opts = WAGER[g[0]];
-  const pk = Array.isArray(picks) ? picks.map(String).filter((x) => opts.includes(x)) : [];
-  if (!pk.length) throw new Error('rank your top group');
-  await insert('wager', p, mondayOf(day), day, { groups: g, picks: pk, prize: pk[0] });
+  const { prize, why } = await pickPrize(p, g);
+  await insert('wager', p, mondayOf(day), day, { groups: g, picks: [], prize, why });
   await insert('lesson', p, mondayOf(day), day, { text: `One of you put "${g[0].replace(/\s\S+$/, '')}" prizes first today.`, private: true });
-  return { prize: pk[0] };
+  return { ok: true };
+}
+
+/** The winner's prize for a day: their wager's, or (when they skipped the wager) one Spark picks now and keeps. */
+async function prizeFor(p: Person, day: string): Promise<{ prize: string; why: string | null }> {
+  const w = await one('wager', { person: p, day });
+  if (w?.data.prize) return { prize: String(w.data.prize), why: w.data.why ? String(w.data.why) : null };
+  const recent = (await rows('wager', { person: p }, 5)).find((r) => (r.data.groups || []).length);
+  const { prize, why } = await pickPrize(p, recent ? recent.data.groups : []);
+  await insert('wager', p, mondayOf(day), day, { groups: [], picks: [], prize, why, auto: true });
+  return { prize, why };
 }
 
 /** This morning's reveal: yesterday's (last weekday's) scores, winner and the prize owed. */
@@ -229,8 +258,8 @@ async function reveal(today: string) {
   const a = await best('ali'); const b = await best('addie');
   const win = decideWinner(a, b);
   if (!win.length) return null;
-  const prizeOf = async (p: Person) => String((await one('wager', { person: p, day }))?.data.prize || 'Any 15-minute request of your choice');
-  const winners = await Promise.all(win.map(async (w) => { const p: Person = w === 'a' ? 'ali' : 'addie'; return { name: PEOPLE[p].name, prize: await prizeOf(p) }; }));
+  const winners: Array<{ name: string; prize: string }> = []; // never the prize's why: it quotes the winner's answers
+  for (const w of win) { const p: Person = w === 'a' ? 'ali' : 'addie'; winners.push({ name: PEOPLE[p].name, prize: (await prizeFor(p, day)).prize }); }
   const played = (await gameRow('ali', day)) || (await gameRow('addie', day));
   const g = GAMES.find((x) => x.id === played?.data.gameId) || gameForDay(weekdayIndex(day));
   return { day: prettyDay(day), game: `${g.emoji} ${g.name}`, scores: { Ali: a, Addie: b }, winners, tie: win.length === 2 };
@@ -295,14 +324,14 @@ async function chat(messages: unknown[], temperature = 0.7): Promise<any> {
 // ---------------------------------------------------------------------------------- calendars
 
 /** Read busy blocks from one calendar screenshot. Returns the blocks it could read. */
-export async function readScreenshot(p: Person, dataUrl: string): Promise<{ blocks: number; note: string }> {
+export async function readScreenshot(p: Person, dataUrl: string): Promise<{ blocks: number; suspect: boolean; note: string }> {
   if (!/^data:image\/(png|jpe?g|webp);base64,/.test(dataUrl) || dataUrl.length > 1_200_000) throw new Error('bad image');
   const now = ctNow(); const week = mondayOf(now.date);
   const dates = weekDates(week).map((d) => `${prettyDay(d)} = ${d}`).join(', ');
   const out = await chat([
     { role: 'system', content: 'You read calendar screenshots. Return only JSON.' },
     { role: 'user', content: [
-      { type: 'text', text: `This is a screenshot, or a phone photo of a computer screen, showing a person's calendar for the week of ${prettyDay(week)}. The dates this week are: ${dates}. List every block of time that is busy (meetings, appointments, any event), using the dates shown in the screenshot. Use 24-hour local times. Ignore all-day banners. A photo may be tilted, glared or partly cut off: read what you can and never guess a block you cannot see. Reply as {"readable": true|false, "busy": [{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"}], "note": "one short sentence on what you saw"}.` },
+      { type: 'text', text: `This is a screenshot, or a phone photo of a computer screen, showing a person's calendar for the week of ${prettyDay(week)}. The dates this week are: ${dates}. List every block of time that is busy (meetings, appointments, any event), using the dates shown in the screenshot. Use 24-hour local times. Ignore all-day banners. Only a filled, colored event box with its own title counts as busy. The hour grid lines, hour labels, empty rows, the current-time line and shaded "working hours" or out-of-office backgrounds are NOT events: an empty calendar has none. Give each event its real start and end as drawn; do not split it into hours. A photo may be tilted, glared or partly cut off: read what you can and never guess a block you cannot see. Reply as {"readable": true|false, "busy": [{"date": "YYYY-MM-DD", "start": "HH:MM", "end": "HH:MM"}], "note": "one short sentence on what you saw"}.` },
       { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
     ] },
   ], 0);
@@ -310,19 +339,66 @@ export async function readScreenshot(p: Person, dataUrl: string): Promise<{ bloc
   const busy: Busy[] = (Array.isArray(out.busy) ? out.busy : []).filter(valid);
   const row = await one('calendar', { person: p, week });
   const data = row?.data || { busy: [], shots: 0, done: false };
-  data.busy = [...(data.busy || []), ...busy]; data.shots = Number(data.shots || 0) + 1;
+  const have = new Set((data.busy || []).map((b: Busy) => `${b.date} ${b.start} ${b.end}`));
+  data.busy = [...(data.busy || []), ...busy.filter((b) => !have.has(`${b.date} ${b.start} ${b.end}`))]; // a second photo of the same week adds no duplicates
+  data.shots = Number(data.shots || 0) + 1;
   if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
-  return { blocks: busy.length, note: String(out.note || '').slice(0, 200) };
+  const suspect = [...new Set(busy.map((b) => b.date))].some((d) => looksLikeGrid(data.busy, d));
+  return { blocks: busy.length, suspect, note: String(out.note || '').slice(0, 200) };
+}
+
+/**
+ * What Spark read from this person's own calendar photos this week, day by day, so they can confirm
+ * or fix it before (or after) planning. Only ever sent to that person. A day that looks like the hour
+ * grid rather than meetings is flagged.
+ */
+function calendarView(data: any, week: string) {
+  if (!data || !Number(data.shots || 0)) return null;
+  const busy: Busy[] = data.busy || [];
+  const days = weekDates(week).map((date) => ({
+    date, label: prettyDay(date),
+    ranges: mergeBusy(busy, date).map(([s, e]) => ({ start: fromMin(s), end: fromMin(e), text: `${prettyTime(fromMin(s))} to ${prettyTime(fromMin(e))}` })),
+    suspect: looksLikeGrid(busy, date),
+  }));
+  return { shots: Number(data.shots), done: !!data.done, suspect: days.some((d) => d.suspect), days };
+}
+
+/** "That is wrong, I am open then": remove a busy range Spark read. */
+export async function removeBusy(p: Person, date: unknown, start: unknown, end: unknown): Promise<void> {
+  const hm = /^\d{2}:\d{2}$/;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !hm.test(String(start)) || !hm.test(String(end))) throw new Error('not found');
+  const row = await one('calendar', { person: p, week: mondayOf(ctNow().date) });
+  if (!row) throw new Error('not found');
+  await update(row.id, { ...row.data, busy: removeRange(row.data.busy || [], String(date), String(start), String(end)) });
+}
+
+/**
+ * Ask one person for a new calendar picture this week (Ali, 2026-11-18: "show nothing but prompt her to
+ * take another picture ... when she uploads, then search and have the updates ready"). Their old read is
+ * dropped; the page shows only the photo step, and a clean read plans the week by itself.
+ */
+export async function requestRetake(p: Person): Promise<void> {
+  const week = mondayOf(ctNow().date);
+  const row = await one('calendar', { person: p, week });
+  const data = { busy: [], shots: 0, done: false, retake: true, note: String(row?.data.note || '') };
+  if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
+}
+
+/** Start over: forget this week's photos so new ones can be taken. Spark re-plans when they tap done again. */
+export async function clearCalendar(p: Person): Promise<void> {
+  const row = await one('calendar', { person: p, week: mondayOf(ctNow().date) });
+  if (row) await update(row.id, { ...row.data, busy: [], shots: 0, done: false });
 }
 
 /** Mark this person's planning done (with any off-calendar note). Plans the week once both are in. */
 export async function finishPlanning(p: Person, note: string, force = false): Promise<{ planning: boolean }> {
   const week = mondayOf(ctNow().date);
   const row = await one('calendar', { person: p, week });
-  const data = { ...(row?.data || { busy: [], shots: 0 }), done: true, note: String(note || '').slice(0, 600) };
+  const prev = row?.data || { busy: [], shots: 0 };
+  const data = { ...prev, done: true, retake: false, note: String(note || prev.note || '').slice(0, 600) };
   if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
   const partner = await one('calendar', { person: other(p), week });
-  if (partner?.data.done || force) { void planWeek(week).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
+  if (partner?.data.done || force) { void planWeek(week, { fill: true }).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
   return { planning: false };
 }
 
@@ -397,13 +473,19 @@ async function syncEvent(i: PlanItem): Promise<void> {
 
 // ---------------------------------------------------------------------------------- planning
 
+/** One person's survey answers, recent daily answers and prize rankings, as plain lines. */
+async function personLines(p: Person): Promise<string[]> {
+  const s = answerLines(SURVEY, await answeredSurvey(p));
+  const d = (await rows('daily', { person: p }, 15)).flatMap((r) => answerLines(DAILY, r.data.answers || {}));
+  const w = (await rows('wager', { person: p }, 5)).filter((r) => (r.data.groups || []).length)
+    .map((r) => `Game prize ranking (${r.day}): groups ${r.data.groups.join(' > ')}`);
+  return [...s, ...d, ...w];
+}
+
 async function profiles(): Promise<string> {
   const parts: string[] = [];
   for (const [n, p] of [['Partner 1', 'ali'], ['Partner 2', 'addie']] as Array<[string, Person]>) {
-    const s = answerLines(SURVEY, await answeredSurvey(p));
-    const d = (await rows('daily', { person: p }, 15)).flatMap((r) => answerLines(DAILY, r.data.answers || {}));
-    const w = (await rows('wager', { person: p }, 5)).map((r) => `Game prize ranking (${r.day}): groups ${r.data.groups.join(' > ')}; top picks ${r.data.picks.join(' > ')}`);
-    parts.push(`${n}:\n${[...s, ...d, ...w].map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}`);
+    parts.push(`${n}:\n${(await personLines(p)).map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}`);
   }
   return parts.join('\n\n');
 }
@@ -417,7 +499,7 @@ async function history(): Promise<{ past: string[]; lessons: string[] }> {
 
 const RULES = `You plan "Spark Hour" dates for a married couple (Partner 1 and Partner 2) who live in ${HOME_AREA}, with a young son.
 Rules:
-- Weekday Sparks happen in the middle of a workday. "home" = about 60 minutes at the house. "out" = 90 minutes total INCLUDING the drive both ways, so a drive of at most 20 minutes each way, and only well-known, long-standing places that are reliably open at that time.
+- Weekday Sparks happen at the slot's time: a midday break or a weekday evening. An evening Spark must still work with a young son at home (after bedtime, or something he can be near), unless it is an outing. "home" = about 60 minutes at the house. "out" = 90 minutes total INCLUDING the drive both ways, so a drive of at most 20 minutes each way, and only well-known, long-standing places that are reliably open at that time.
 - The weekend date can be morning, afternoon or evening, 2 to 3 hours, at most 1.5 hours' drive each way.
 - Match what BOTH partners said. When they differ, find the overlap or alternate. Be creative and specific: a concrete plan, not a category. Give each Spark one playful prompt, question or small dare to do during it.
 - "why" must cite their answers WITHOUT revealing who said what: say "one of you", never "Partner 1/2". Say "you both" ONLY when both partners' answers actually say it.
@@ -439,20 +521,32 @@ const FALLBACK: RawPick[] = [
   { place: 'home', title: 'Song swap and story', emoji: '🎧', plan: 'Each picks three songs that mean something; play them and tell the story behind each one.', why: 'Music and memories, with no planning needed.' },
 ];
 
-export async function planWeek(week: string): Promise<void> {
+/**
+ * Plan the week. With `fill`, a week that is already planned keeps every Spark it has and only adds
+ * the weekday ones it is missing (up to 3) in the time still ahead, plus a weekend date if it has none.
+ */
+export async function planWeek(week: string, opts: { fill?: boolean } = {}): Promise<{ added: number }> {
   const existing = await one('plan', { person: null, week });
-  if (existing && ['planning', 'ready'].includes(existing.data.status)) return;
+  if (existing?.data.status === 'planning') return { added: 0 };
+  if (!opts.fill && existing?.data.status === 'ready') return { added: 0 };
+  const keep: PlanItem[] = opts.fill && existing?.data.status === 'ready' ? existing.data.items || [] : [];
+  const before = existing?.data || {};
   const id = existing ? existing.id : await insert('plan', null, week, null, { status: 'planning' });
-  if (existing) await update(id, { status: 'planning' });
+  if (existing) await update(id, { ...before, status: 'planning' });
   try {
     const now = ctNow();
     const { busy, notes, missing } = await weekBusy(week);
-    const wk = pickWeekdaySlots(candidateSlots(weekDates(week), busy, now), 3);
-    const we = weekendSlots(week, busy, now).slice(0, 1);
+    const keptDays = new Set(keep.filter((i) => i.kind === 'weekday').map((i) => i.date));
+    const needWeekdays = 3 - keptDays.size;
+    const wk = needWeekdays > 0 ? pickWeekdaySlots(candidateSlots(weekDates(week), busy, now).filter((s) => !keptDays.has(s.date)), needWeekdays) : [];
+    const we = keep.some((i) => i.kind === 'weekend') ? [] : weekendSlots(week, busy, now).slice(0, 1);
+    const taken = new Set(keep.map((i) => i.id));
+    const freeId = (prefix: string) => { let k = 1; while (taken.has(`${week}-${prefix}${k}`)) k++; taken.add(`${week}-${prefix}${k}`); return `${prefix}${k}`; };
     const slots: Array<{ id: string; kind: 'weekday' | 'weekend'; slot: Slot }> = [
-      ...wk.map((s, n) => ({ id: `S${n + 1}`, kind: 'weekday' as const, slot: s })),
-      ...we.map((s) => ({ id: 'W1', kind: 'weekend' as const, slot: s })),
+      ...wk.map((s) => ({ id: freeId('S'), kind: 'weekday' as const, slot: s })),
+      ...we.map((s) => ({ id: freeId('W'), kind: 'weekend' as const, slot: s })),
     ];
+    if (!slots.length) { await update(id, { ...before, status: 'ready', items: keep, busy, missing }); return { added: 0 }; }
     const { past, lessons } = await history();
     let out: any = {};
     try {
@@ -463,16 +557,21 @@ export async function planWeek(week: string): Promise<void> {
     } catch (e: any) { console.warn('[Spark] model plan failed, using fallbacks:', e.message); }
     const picks: any[] = Array.isArray(out.items) ? out.items : [];
     const items: PlanItem[] = [];
+    const used = new Set(past.map((t) => t.toLowerCase()));
+    const spare = FALLBACK.filter((f) => !used.has(String(f.title).toLowerCase()));
     slots.forEach((s, n) => {
       const raw = picks.find((x) => x && x.slot === s.id);
-      const item = (raw && shapeItem(`${week}-${s.id}`, s.kind, s.slot, raw)) || shapeItem(`${week}-${s.id}`, s.kind, s.slot, FALLBACK[n % FALLBACK.length]);
+      const item = (raw && shapeItem(`${week}-${s.id}`, s.kind, s.slot, raw)) || shapeItem(`${week}-${s.id}`, s.kind, s.slot, (spare.length ? spare : FALLBACK)[n % (spare.length || FALLBACK.length)]);
       if (item) items.push(item);
     });
     for (const i of items) await syncEvent(i);
     for (const i of items) await insert('reason', null, week, i.date, { text: `Picked "${i.title}" for ${prettyDay(i.date)}: ${i.why}` });
-    await update(id, { status: 'ready', items, busy, missing, plannedAt: new Date().toISOString() });
+    const all = [...keep, ...items].sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+    await update(id, { status: 'ready', items: all, busy, missing, plannedAt: new Date().toISOString() });
+    return { added: items.length };
   } catch (e: any) {
-    await update(id, { status: 'failed', error: String(e.message).slice(0, 300) });
+    // A fill that fails must not lose the Sparks the week already had.
+    await update(id, keep.length ? { ...before, status: 'ready' } : { status: 'failed', error: String(e.message).slice(0, 300) });
     throw e;
   }
 }

@@ -1,11 +1,14 @@
 import { useRef } from 'react';
 import type { WatchBeatPayload } from './VideoEmbed';
+import { creditForTick } from './watchCredit';
 
 /**
  * useMediaBeats — turn a media element's timeupdate stream into watch beats.
  *
  * The same accumulator VideoEmbed runs for <video>: count seconds ACTUALLY
- * PLAYED (a position jump past MAX_TICK_DELTA_S is a seek and adds nothing),
+ * PLAYED (a playhead advance counts only as far as the wall clock backs it up,
+ * so a scrub adds nothing and a throttled background tab is not robbed of the
+ * minutes it really played — see watchCredit.ts),
  * remember the furthest playhead and the duration, and flush a beat every
  * FLUSH_AFTER_S of new play. Extracted so the podcast <audio> on the Today tile
  * measures listening exactly the way the video tile measures watching — one
@@ -20,11 +23,12 @@ import type { WatchBeatPayload } from './VideoEmbed';
 export type { WatchBeatPayload } from './VideoEmbed';
 
 export const FLUSH_AFTER_S = 15;          // flush a beat after this much new play time
-export const MAX_TICK_DELTA_S = 2.5;      // a position jump beyond this = a seek, not playback
 
 export function useMediaBeats(onBeat: ((b: WatchBeatPayload) => void) | undefined, provider: string) {
   const bufRef = useRef({ delta: 0, position: 0, duration: 0 });
   const lastPosRef = useRef<number | null>(null);
+  // When the previous playhead sample arrived, so a gap can be measured against the clock.
+  const lastTickAtRef = useRef<number | null>(null);
   const beatRef = useRef(onBeat);
   beatRef.current = onBeat;
 
@@ -45,10 +49,12 @@ export function useMediaBeats(onBeat: ((b: WatchBeatPayload) => void) | undefine
     const pos = el.currentTime;
     const dur = el.duration;
     const last = lastPosRef.current;
+    const lastAt = lastTickAtRef.current;
+    const nowMs = Date.now();
     lastPosRef.current = pos;
+    lastTickAtRef.current = nowMs;
     if (last != null && !el.paused) {
-      const d = pos - last;
-      if (d > 0 && d < MAX_TICK_DELTA_S) bufRef.current.delta += d;
+      bufRef.current.delta += creditForTick(pos - last, lastAt == null ? 0 : (nowMs - lastAt) / 1000);
     }
     bufRef.current.position = Math.max(bufRef.current.position, pos);
     if (dur && Number.isFinite(dur) && dur > 0) bufRef.current.duration = Math.max(bufRef.current.duration, dur);

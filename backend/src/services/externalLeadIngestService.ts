@@ -107,6 +107,7 @@ export async function ingestExternalLead(payload: V1LeadInput, correlation_id?: 
     form_type: FORM_TYPE,
     consent_contact: payload.consent_contact ?? false,
     utm_source: payload.utm_source ?? '',
+    utm_medium: payload.utm_medium ?? '',
     utm_campaign: payload.utm_campaign ?? '',
     page_url: payload.landing_page ?? '',
     corporate_sponsorship_interest: false,
@@ -115,6 +116,11 @@ export async function ingestExternalLead(payload: V1LeadInput, correlation_id?: 
 
   // Attribution fields beyond what the Lead model stores natively are kept in
   // strapi_attribution JSONB so no data is lost and they remain queryable.
+  //
+  // R22: `utm_medium` is NO LONGER one of those - it is a real column now, and the Lead.create
+  // below writes it there. It stays in this bag as well, deliberately: the bag is this path's
+  // audit record of what the payload contained, and removing a key from it would rewrite history
+  // for every row already stored while gaining nothing.
   const strapiAttribution = {
     utm_medium: payload.utm_medium,
     utm_term: payload.utm_term,
@@ -143,6 +149,9 @@ export async function ingestExternalLead(payload: V1LeadInput, correlation_id?: 
       form_type: FORM_TYPE,
       lead_source_type: LEAD_SOURCE_TYPE,
       utm_source: payload.utm_source,
+      // R22: into the column, not only into strapi_attribution. This path already received a
+      // medium and had nowhere native to put it, which is half of why the column was added.
+      utm_medium: payload.utm_medium,
       utm_campaign: payload.utm_campaign,
       page_url: payload.landing_page,
       lead_score: leadScore,

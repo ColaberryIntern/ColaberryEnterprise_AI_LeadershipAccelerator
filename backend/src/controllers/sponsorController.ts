@@ -58,6 +58,8 @@ const sponsorInquirySchema = z.object({
   message: z.string().trim().max(5000).optional().default(''),
   utm_source: z.string().trim().max(255).optional().default(''),
   utm_campaign: z.string().trim().max(255).optional().default(''),
+  /** R22: this handler writes a Lead, and `Lead.utm_medium` exists, so the medium has a home here. */
+  utm_medium: z.string().trim().max(255).optional().default(''),
   page_url: z.string().trim().max(500).optional().default(''),
 });
 
@@ -86,6 +88,7 @@ export async function handleSponsorInquiry(
       form_type: 'sponsor_inquiry',
       corporate_sponsorship_interest: true,
       utm_source: data.utm_source,
+      utm_medium: data.utm_medium,
       utm_campaign: data.utm_campaign,
       page_url: data.page_url,
       // leadSchema defaults fill the remaining optional fields.

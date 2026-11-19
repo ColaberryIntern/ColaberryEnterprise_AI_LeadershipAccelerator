@@ -15,6 +15,7 @@ import { ensureRoomForSession } from './communityRooms/roomService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
 import { log } from './communityRooms/roomShared';
+import { probeRecording, COMFORTABLE_MAX_HEIGHT } from './communityRooms/recordingProbe';
 import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRecordingMatch } from './driveService';
 import {
   findRecordingForSession as findZoomRecording,
@@ -176,6 +177,26 @@ async function attachRecording(
 
   const sizeBytes = fs.statSync(destPath).size;
 
+  // What actually arrived. A 4K class recording plays badly on ordinary laptops
+  // whatever its bitrate, and until 2026-11-18 nothing here looked inside the
+  // file, so the one that did arrive at 3840x2160 was stored and linked without
+  // comment and surfaced as a student complaint three weeks later. A null means
+  // ffprobe could not run, which is never a reason to fail an ingest.
+  const geometry = await probeRecording(destPath);
+  if (geometry?.oversized) {
+    log('warn', 'recording_resolution_above_comfortable_max', {
+      room_id: roomId,
+      booking_id: bookingId,
+      width: geometry.width,
+      height: geometry.height,
+      comfortable_max_height: COMFORTABLE_MAX_HEIGHT,
+      size_bytes: sizeBytes,
+    });
+  }
+  const geometryMetadata = geometry
+    ? { video_width: geometry.width, video_height: geometry.height, duration_seconds: geometry.durationSeconds }
+    : {};
+
   const t = await sequelize.transaction();
   try {
     const resource = await RoomResource.create(
@@ -189,7 +210,7 @@ async function attachRecording(
         size_bytes: sizeBytes,
         storage_key: storageKey,
         created_by_enrollment_id: null,
-        ...(metadata ? { metadata } : {}),
+        ...(metadata || geometry ? { metadata: { ...(metadata || {}), ...geometryMetadata } } : {}),
       },
       { transaction: t },
     );

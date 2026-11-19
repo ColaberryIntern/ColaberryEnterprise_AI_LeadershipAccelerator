@@ -60,6 +60,13 @@ router.post(`${P}/rooms/:id/resources`, ...participantChain, c.createResource);
 router.post(`${P}/rooms/:id/resources/file`, ...participantChain, c.uploadResourceFile);
 router.delete(`${P}/rooms/:id/resources/:resourceId`, ...participantChain, c.deleteResource);
 router.get(`${P}/rooms/:id/resources/:resourceId/download`, ...participantChain, c.downloadResource);
+// Playback is deliberately two routes. `/playback` is Bearer-gated and mints a
+// short-lived signed URL; `/stream` is NOT in participantChain, because the
+// `<video>` element that fetches it cannot send an Authorization header. The
+// token names the enrollment and streamResource re-reads its entitlement, so
+// this is not an unauthenticated surface — see resourcePlaybackToken.ts.
+router.get(`${P}/rooms/:id/resources/:resourceId/playback`, ...participantChain, c.getResourcePlaybackUrl);
+router.get(`${P}/rooms/:id/resources/:resourceId/stream`, flagGate, c.streamResource);
 
 router.post(`${P}/bookings`, ...participantChain, c.createBooking);
 router.post(`${P}/bookings/:id/publish`, ...participantChain, c.publishBooking);

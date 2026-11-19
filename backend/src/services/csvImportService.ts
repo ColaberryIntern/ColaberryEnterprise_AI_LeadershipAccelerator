@@ -97,6 +97,9 @@ export async function importLeadsFromCsv(buffer: Buffer): Promise<ImportResult> 
         // own wording.
         phone_consent: false,
         utm_source: row.utm_source?.trim() || '',
+        // R22: read, now that `leads.utm_medium` is a column a writer can fill. A file that
+        // carried a medium column had it dropped before, because `LeadInput` had no such field.
+        utm_medium: row.utm_medium?.trim() || '',
         utm_campaign: row.utm_campaign?.trim() || '',
         page_url: row.page_url?.trim() || '',
         corporate_sponsorship_interest: false,
@@ -131,6 +134,6 @@ export function getExpectedColumns(): string[] {
     'name', 'email', 'company', 'title', 'phone', 'role',
     'company_size', 'evaluating_90_days', 'interest_area', 'message',
     'source', 'form_type', 'consent_contact',
-    'utm_source', 'utm_campaign', 'page_url',
+    'utm_source', 'utm_medium', 'utm_campaign', 'page_url',
   ];
 }

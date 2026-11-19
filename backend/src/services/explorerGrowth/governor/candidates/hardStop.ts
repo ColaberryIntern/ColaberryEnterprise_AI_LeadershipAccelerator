@@ -24,7 +24,8 @@ export type HardStopReason =
   | 'consent_revoked'
   | 'kill_switch'
   | 'campaign_inactive'
-  | 'human_owned';
+  | 'human_owned'
+  | 'open_house_countdown';
 
 /**
  * Returns the reason to stop, or null to continue.
@@ -49,6 +50,8 @@ export function hardStopReason(ctx: HardStopBearer): HardStopReason | null {
   // M35 / M5: a person has taken this learner (an accepted admissions handoff). Last, because the reasons above are
   // permanent and more informative; this one lifts when the handoff closes.
   if (h.humanOwned) return 'human_owned';
+  // OH1f: the Open House countdown is live for this learner; it takes precedence. Lifts on its own after the event.
+  if (h.openHouseCountdown) return 'open_house_countdown';
   return null;
 }
 

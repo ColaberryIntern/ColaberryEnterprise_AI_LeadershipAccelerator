@@ -681,6 +681,30 @@ of the tab that was captured first.
   seen working when it was not.
 - **A screenshot of a different system.** If the image does not depict *this* subject,
   it is decoration pretending to be proof.
+- **CODE, EVER.** Ali, 2026-11-18: *"Don't ever show code in a case study."* That means no
+  screen of source, a prompt or `.md` file, a JSON or YAML entry, a terminal, a diff, a pull
+  request, or the AI tool that built it (*"Remove the claude code screenshots ... the part
+  where you show claude is boring"*). Show the product a buyer would use and the result it
+  produced. The audit's `no code shown` check refuses a public artifact whose file is source
+  or data or whose title says code, prompt, terminal, JSON, commit, pull request or Claude.
+  Not even as "how it was built": that story is told in words, in the decisions.
+
+### Trim every screen, and they show one at a time
+
+Ali, 2026-11-18: *"I don't like the scroll bar for the artifacts. Instead use a carousel and
+trim the screenshots."* Both renderers now draw the pictures as a one-slide carousel (no
+scrollbar, arrows and a "3 of 21" count, each picture whole inside the same 16:9 frame), so:
+
+- **Trim before attaching**: cut the blank page margins, and cut a very tall capture to its
+  headline chart (a funnel without its table, the top of a timeline). A screen taller than
+  it is wide reads tiny in a 16:9 frame; a phone view belongs in the video, not the carousel.
+  Never alter a pixel inside what you keep.
+- **The caption is the message.** The carousel prints each artifact's title and description
+  under the picture, so the description says what the picture shows and what it means, in
+  the order the story tells it. Attach in story order.
+- **Show the product being used.** When the product has a guided tour, a wizard or a flow,
+  capture a screen per step (the tour's stops) as well as the overview, and record a GIF of
+  a person moving through it (`scripts/walkthrough-video/screencast.js`).
 
 ### Generating one honestly
 
@@ -854,6 +878,14 @@ risk is horizontal overflow.
 - **Labels stacked above two-word values.** Four label/value rows printing the label on
   its own line is eight lines of card height to carry four facts. Put the label in a fixed
   left track.
+- **The closing call to action in a 448px black block, off centre** (Ali, 2026-11-18:
+  *"the black space ... where the text is not centered and not on a good ratio"*). It
+  inherited the 128px section padding and a left-aligned card. Fixed in
+  `storyDetailV2.css`; the check is that the eyebrow, heading and button are centred on one
+  axis and the band is no taller than its content plus 64px each side.
+- **Pictures in a strip of cards with a scrollbar** (Ali, 2026-11-18: *"I don't like the
+  scroll bar"*). Now one slide at a time on both renderers; the check is no visible
+  scrollbar, a "1 of N" count, and every picture whole in its frame.
 
 ### Before publishing, confirm on the rendered page
 
@@ -868,6 +900,9 @@ risk is horizontal overflow.
 - [ ] Diagrams are in the architecture section, not standing in for a picture
 - [ ] If the record carries a visual story (§8d): the band sits under the context strip,
       the strip prints no duplicate headline figure, and the band renders at 768 too
+- [ ] The story in brief: label caption-size, each text directly under its label, desktop and phone
+- [ ] The pictures: one at a time, no scrollbar, a "1 of N" count, no screen of code (§8)
+- [ ] The closing band: centred, and not a tall empty black block
 - [ ] `problems[]` is empty
 - [ ] **On all three surfaces, not the one you previewed:** the rail, the status board, the
       folds and no empty "Who built it" (the §8e marker table), and the flow in lanes at 1440.
@@ -966,11 +1001,23 @@ rather than from your notes.
 1. **The project's own demo recording**, if it committed one. Cropped to the application
    window, held at its real rate — a 1.3fps timelapse shown as slow stills is honest;
    interpolating it into motion the source never had is not.
-2. **Its real screenshots**, the same ones the record already publishes as artifacts.
-3. **Its own architecture diagram**, rendered from `diagramSource`.
-4. **Typographic slides** carrying the record's own sentences.
+2. **A recording of a person using the real product** (`clip` slides). Ali, 2026-11-18:
+   *"show the person going through the tour"*. Drive the real (public or redacted) page with
+   a visible cursor through `scripts/walkthrough-video/screencast.js`, log the time of each
+   step, assemble the frames with ffmpeg, and cut the clip into slides by `start`. The
+   builder holds the last frame if a sentence outlasts its cut.
+3. **Its real screenshots**, the same ones the record already publishes as artifacts.
+4. **Its own architecture diagram**, rendered from `diagramSource`.
+5. **Typographic slides** carrying the record's own sentences.
 
-Nothing is generated, staged or restaged. There is no fifth option. The visual story's
+Nothing is generated or restaged: a clip is the real page doing what it does, performed
+once, at its real speed. There is no sixth option.
+
+**The script follows the product, not the build.** Lead with the single most important
+thing the product says (the one action, the headline result), then walk the reader through
+the rest the way a user would (the top 10, the tour), then what it predicted and how that
+was graded. Never a slide of code, a prompt, a terminal or the AI tool that built it (§8,
+*"the part where you show claude is boring"*). The visual story's
 workflow illustration (§8d) is NOT slide material: it is an illustration drawn by the
 team, and a film that shows it as if it were the product is exactly the fault §8 forbids.
 
@@ -1316,6 +1363,57 @@ One paragraph, `closing` (variant or canonical): what the work shows about the r
 one or two figures that carry it, and the gaps stated as gaps. Every statement on the
 record. Do not write "the gaps made the next priorities clear" when the roadmap marks
 them "not pursued". No CTA language; the profile's CTA follows it.
+
+### The story in brief (required, added 2026-11-18)
+
+Ali: "the story is so shortened I can't even tell what the story is. Can we create a small
+format at the top that tells the story of what happened ... Sometimes the opening paragraph
+does a good job explaining and sometimes it doesn't." So every record carries
+`identity.storyInBrief`: **3 to 5 beats**, each `{ label, text }`, drawn as "The story in
+brief" directly under the masthead on Enterprise and under the outcome tiles on Hire.
+
+- Labels are a few words (32 characters at most). The default arc is **Before**, **What we
+  built**, **What happened**, **Why it matters**; a fifth beat ("What's next") is allowed.
+- Each text is one or two plain sentences (240 characters at most), readable by someone
+  who reads nothing else on the page. Name the business problem, not the code.
+- Every figure in a beat must be on the record: beats are claim-scanned like the standfirst.
+- All or nothing: one bad beat drops the band, and the audit's record check
+  `the story in brief tells the whole arc` fails. Nothing is ever derived from other sections.
+
+Ali, 18 Nov 2026, after seeing it live: "I do like the Story in Brief section." Hardened from
+the builds of 17-18 Nov (CF1-CF3, GD1-GD2, Internship, Open House). What a good set does:
+
+- **Before** names the situation a buyer recognizes, in business terms, with its number if
+  it has one: "An audit the next morning found 5 new accounts and nobody had gone in", not
+  "the onboarding flow had a bug".
+- **What we built** is the thing, in one sentence a non-engineer repeats: "One portal from
+  application to cohort", "A weekly funnel report that ... stars the one move". Never a
+  file, a service, a model or the AI tool that wrote it.
+- **What happened** carries the headline figure with its denominator and its comparison:
+  "66 of 82 new accounts went in, against 0 of 5 before", "8 of 8 admission decisions were
+  made by a reviewer". A result with no number is a claim. (Audit: `carries no figure`.)
+- **Why it matters** is the principle a buyer takes away, not a restated result.
+- **What's next** is the honest limit: what has not shipped, what is not measured yet, with
+  an absolute date when one exists ("Its first grade is due on 25 November"; "Nothing yet
+  records whether an intern was hired"). This is where the record's `closing.limit` lands.
+- **Write the beats LAST**, after metrics, closing and the standfirst are final, and copy
+  every figure from the record's own metric or closing. Beats copy figures, nothing syncs
+  them: change a metric and re-read the beats.
+- **No beat repeats the standfirst**, and no two beats say the same thing: the band exists
+  because the opening paragraph sometimes does not tell the story.
+- **It is not a ticket**: no file names, identifiers, URLs, PR or ticket numbers, staff names
+  (roles only), learner names ("Kes" only). (Audit: `reads like a ticket`.)
+- **Writing it on a live record republishes it.** `applyHumanOverride` on path `identity`
+  takes the WHOLE identity: `{ ...identity, storyInBrief: beats }`, or the rest is erased.
+  Run `storyInBriefProblem(beats)` from `/app/dist` first and refuse on any problem.
+- **Look at it on both sites, desktop and phone (§8b).** Two layout faults shipped on day
+  one: a page-level `h2` rule outranked the band's caption on Enterprise (it printed at 41px
+  in the display face), and on Hire the text dropped below its label when a beat stretched to
+  its row. Both are fixed in the CSS; the check is that the label is caption-size and every
+  text starts directly under its label.
+
+The audit's second check, `the story in brief is a story, not a ticket`, runs
+`storyInBriefLint` (completenessCore.js) over the beats and the standfirst.
 
 ### One introduction
 

@@ -13,6 +13,10 @@ import { resolveAllForCandidate } from '../content/resolveContentAssets';
 import { isFreePreviewTier } from '../../access/contentEntitlement';
 import type { Candidate, ContactPolicyInput, GovernorContext } from './types';
 import { isHumanOwned } from './humanOwnership';
+import { isInOpenHouseCountdown } from './openHouseHold';
+import { governorKillSwitch } from './killSwitch';
+import { hoursSinceLastBrainPick } from './brainCadence';
+import { loadBrainRules } from '../brainRules';
 
 /**
  * Explorer Growth OS — Governor batch runner. Plan §9; EPIC 4 T005.
@@ -121,7 +125,17 @@ async function runOne(
     email: profile.email_normalized ?? null,
   });
 
-  const [history, humanOwned] = await Promise.all([contactHistory(enrollmentId, asOf), isHumanOwned(enrollmentId)]);
+  const [history, humanOwned, openHouseCountdown, hoursSinceBrainPick, killSwitch, brainRules] = await Promise.all([
+    contactHistory(enrollmentId, asOf),
+    isHumanOwned(enrollmentId),
+    isInOpenHouseCountdown(profile.lead_id ?? null),
+    // OH1j: one brain pick per person per 72 h, shadow picks included (contactPolicy BRAIN_PICK_MIN_HOURS).
+    hoursSinceLastBrainPick(profile.lead_id ?? null, asOf.toISOString().slice(0, 10)),
+    // OH1k: the one global kill switch, read strictly (unreadable = on).
+    governorKillSwitch(),
+    // OH1o: the cadence is a brain rule (Brain tab); unreadable = the code default, floor 24 h.
+    loadBrainRules(),
+  ]);
 
   const ctx: GovernorContext = {
     enrollment_id: enrollmentId,
@@ -153,9 +167,10 @@ async function runOne(
         `${contactability.email?.reason ?? ''} ${contactability.sms?.reason ?? ''}`,
       ),
       consentRevoked: false,
-      killSwitch: false,
+      killSwitch, // OH1k: system_kill_switch, the same switch that stops every send (was hard-coded false)
       campaignInactive: false,
       humanOwned, // M35 / M5: an accepted admissions handoff pauses the AI for this learner
+      openHouseCountdown, // OH1f: the Open House countdown is live for this learner and takes precedence
     },
     asOf,
   };
@@ -173,6 +188,8 @@ async function runOne(
         hasRecord: ch?.reason ? ch.reason !== 'can_spam_opt_out' : false,
       },
       ...history,
+      hoursSinceLastBrainPick: hoursSinceBrainPick,
+      brainPickMinHours: brainRules.rules.brainPickMinHours,
     };
   };
 

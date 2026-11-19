@@ -48,6 +48,9 @@ const DEFAULTS: Record<string, any> = {
   ai_maya_visitor_delay_seconds: 3,
   // GoHighLevel CRM
   ghl_enabled: false,
+  // OH1l: one note on the GHL contact per Maya email sent, reply received and call finished.
+  // OFF by default: while false, ghlMirrorService makes no GHL call at all.
+  ghl_mirror_enabled: false,
   ghl_api_key: '',
   ghl_location_id: 'JFWwp8q7l6T12NWTIOKG',
   // Group key -> GHL sub-account. Open-house and training-site signups belong in
@@ -67,6 +70,16 @@ const DEFAULTS: Record<string, any> = {
   // ABAC agent-authorization gate (TBI P2-1): 'off' | 'shadow' | 'enforce'. Default shadow =
   // evaluate + log every agent action's authorization verdict but NEVER block, until flipped on.
   abac_enforcement: 'shadow',
+  // OH1h: Maya answers replies to her campaign emails. OFF = every answer is a DRAFT in the review queue
+  // (maya_outbound_approvals) and leaves only when a person approves it. ON = the draft is delivered at once
+  // through the same delivery path (still consent-checked, never for Explorers). Only Ali flips this.
+  maya_email_autoreply_enabled: false,
+  // OH1o: Explorer Growth drafts that pass every screen go to the Outbound approvals queue
+  // (maya_outbound_approvals), and leave ONLY when a person approves that exact message. OFF = no
+  // Explorer draft is queued at all (they stay shadow drafts). Never an auto-send. Only Ali flips this.
+  explorer_growth_send_enabled: false,
+  // OH1o: the brain's rules as data (explorerGrowth/brainRules.ts). Null = the code defaults.
+  maya_brain_rules: null,
 };
 
 export async function getSetting(key: string): Promise<any> {

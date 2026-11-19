@@ -48,6 +48,28 @@ export const CONTACT_WINDOW_DAYS = 7;
 export const MIN_HOURS_BETWEEN_CONTACTS = 48;
 
 /**
+ * OH1j: one brain pick per person every three days (Ali, 2026-11-18: "I want EG OS to use
+ * the same brain"). A brain pick is an Explorer email built around one piece of the content
+ * brain (openHouseBrain.ts), recorded on the draft row as `metadata.brain_pick`.
+ *
+ * COUNTED ON SHADOW PICKS TOO. Nothing sends yet, so a cadence counted only on sent mail
+ * would never trigger and every night would draft another email for the same person; the
+ * shadow drafts would then show a rhythm the live system would never have.
+ *
+ * Measured in whole decision days (decision_date is a UTC day), so a pick on day D blocks
+ * D+1 and D+2 and allows D+3, whatever hour each nightly run happens to start.
+ */
+export const BRAIN_PICK_MIN_HOURS = 72;
+
+/** Hours between two `YYYY-MM-DD` decision dates (absolute). NaN when either is unreadable. */
+export function hoursBetweenDecisionDates(a: string, b: string): number {
+  const ta = Date.parse(`${String(a).slice(0, 10)}T00:00:00Z`);
+  const tb = Date.parse(`${String(b).slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return Number.NaN;
+  return Math.abs(ta - tb) / 3_600_000;
+}
+
+/**
  * May this candidate be delivered?
  *
  * Ordered cheapest-and-most-decisive first, so the reason recorded is the most
@@ -93,6 +115,22 @@ export function evaluateContact(
     return {
       allowed: false,
       reason: `cooldown (${Math.floor(input.hoursSinceLastContact)}h < ${MIN_HOURS_BETWEEN_CONTACTS}h)`,
+    };
+  }
+
+  // OH1j: the brain cadence. Email only, because a brain pick is an email; absent (undefined)
+  // means the caller does not track brain picks (the Growth Journey strategies), and null
+  // means this person has never had one.
+  // OH1o: the cadence is a brain rule; the floor is 24 hours whatever the rule says.
+  const minHours = Math.max(24, Number.isFinite(input.brainPickMinHours) ? Number(input.brainPickMinHours) : BRAIN_PICK_MIN_HOURS);
+  if (
+    candidate.channel === 'email' &&
+    typeof input.hoursSinceLastBrainPick === 'number' &&
+    !(input.hoursSinceLastBrainPick >= minHours)
+  ) {
+    return {
+      allowed: false,
+      reason: `brain_cadence (${Math.floor(input.hoursSinceLastBrainPick)}h < ${minHours}h)`,
     };
   }
 

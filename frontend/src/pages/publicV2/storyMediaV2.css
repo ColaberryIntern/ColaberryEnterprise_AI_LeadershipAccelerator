@@ -65,7 +65,11 @@
      content, which is what turns a horizontal scroller into a page that scrolls
      sideways. This is the whole 320px story. */
   min-width: 0;
+  /* No scrollbar (Ali, 18 Nov 2026). The track still scrolls: arrows, swipe, a
+     trackpad and Tab all move it, and the counter says where you are. */
+  scrollbar-width: none;
 }
+.cbv2-story-carousel__track::-webkit-scrollbar { display: none; }
 
 /* A programmatic scroll carries its own behaviour and ignores this rule, so the
    arrow handler asks matchMedia again. Both halves are needed. */
@@ -75,10 +79,9 @@
 
 .cbv2-story-carousel__slide {
   flex: 0 0 auto;
-  /* `min()` and not a fixed width: at 320px one slide is the viewport, and on a
-     wide screen three sit side by side. No media query needed and no breakpoint
-     to get wrong. */
-  width: min(100%, 20rem);
+  /* One slide is the whole track, at every width: a carousel, not a strip of
+     cards of different heights (Ali, 18 Nov 2026). */
+  width: 100%;
   min-width: 0;
   scroll-snap-align: start;
 }
@@ -116,12 +119,35 @@
   box-shadow: var(--focus-ring);
 }
 
-.cbv2-story-carousel__image {
-  display: block;
-  width: 100%;
-  height: auto;
+/* Every picture in the same 16:9 frame, whole (contain, never cropped), so a
+   wide chart and a tall table sit at one height and nothing below them jumps. */
+.cbv2-story-carousel__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  max-height: 70vh;
+  padding: var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.cbv2-story-carousel__image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.cbv2-story-carousel__note {
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-relaxed);
+  color: var(--text-body);
+  max-width: 72ch;
 }
 
 .cbv2-story-carousel__caption { display: grid; gap: var(--space-1); }
@@ -141,8 +167,17 @@
 
 .cbv2-story-carousel__controls {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.cbv2-story-carousel__count {
+  min-width: 5.5em;
+  text-align: center;
+  font-size: var(--fs-body-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
 }
 
 /* -------------------------------------------------------------- diagram --- */

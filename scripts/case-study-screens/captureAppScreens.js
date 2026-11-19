@@ -20,8 +20,14 @@
  *   { "name": "decide-panel", "path": "/admin/internship?view=apps",
  *     "steps": [{ "click": "text=Review" }, { "waitFor": "text=Decide" }],   optional, in order
  *     "clip": "[data-testid=decide-panel]",                                   optional: crop to an element
+ *     "clipRect": { "x": 256, "y": 0, "width": 1184, "height": 900 },        optional: crop to a rectangle
  *     "mask": ["td.applicant-name", ".avatar"],                               optional: painted over
  *     "redactText": ["Jane Doe"],                                            optional: literal strings
+ *     "redactNamesFrom": ["/api/admin/internship/queue"],                   optional: admin API endpoints;
+ *          every field named like a name (name, full_name, first_name, display_name...) in their JSON is
+ *          redacted on the screen, as a whole and word by word. Use it for every page that lists people.
+ *     "keepWords": ["Info"],                                                 optional: a name PART that is also a
+ *          UI word (a staff display name "Info Desk" would otherwise blank "Info requested").
  *     "viewport": { "width": 1440, "height": 900 } } ] }
  *
  * REDACTION, ALWAYS, ON EVERY SCREEN (a spec can add to it, never remove it):
@@ -42,7 +48,9 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const JWT_FILE = path.join(ROOT, 'scripts', '.ali_admin_jwt.txt');
 const BASE_DEFAULT = 'https://enterprise.colaberry.ai';
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const PHONE = /(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g;
+// Separators optional: a bare "4254452358" was missed on the first live capture (2026-11-18), and the
+// re-scan used the same pattern, so the leak check passed it too. Never relax this without the test below.
+const PHONE = /(?<!\d)(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/g;
 
 function loadPlaywright() {
   for (const p of [path.join(ROOT, 'node_modules', 'playwright'), path.join(ROOT, 'frontend', 'node_modules', 'playwright'), 'playwright']) {
@@ -70,14 +78,57 @@ async function login(base) {
   const deadline = Date.now() + 15 * 60_000;
   let token = null;
   while (Date.now() < deadline && !token) {
-    await page.waitForTimeout(2000);
+    if (page.isClosed()) { console.error('[login] the window was closed before signing in finished; run --login again'); process.exit(3); }
+    await new Promise((r) => setTimeout(r, 2000));
     token = await page.evaluate(() => localStorage.getItem('admin_token')).catch(() => null);
     if (token && jwtExp(token) < Date.now()) token = null;
   }
-  await browser.close();
+  await browser.close().catch(() => {});
   if (!token) { console.error('[login] no admin session within 15 minutes'); process.exit(3); }
   fs.writeFileSync(JWT_FILE, token, { mode: 0o600 });
   console.log(`[login] saved; valid until ${new Date(jwtExp(token)).toISOString()}`);
+}
+
+/**
+ * One regex for every name to hide: whole words, any case ("OBI, ANAMELECHI" is caught by "Obi" and
+ * "Anamelechi"), longest first so a full name is replaced before its parts. Null when there are none.
+ */
+function nameRegexSource(names) {
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const uniq = [...new Set(names.map((x) => x.trim()).filter((x) => x.length > 1))].sort((a, b) => b.length - a.length);
+  return uniq.length ? `(?<![\\p{L}\\p{N}])(?:${uniq.map(esc).join('|')})(?![\\p{L}\\p{N}])` : null;
+}
+
+/**
+ * A name field's value and its parts. Commas and periods are allowed, because some accounts store the
+ * name as "LAST, FIRST. M" (that form leaked on 2026-11-18 when only letters, spaces and hyphens passed).
+ */
+function namePartsOf(value) {
+  const n = String(value || '').trim();
+  if (!/^[\p{L}' .,-]{2,60}$/u.test(n)) return [];
+  return [n, ...n.split(/[\s,.]+/).filter((p) => p.length > 2)];
+}
+
+const isPersonLike = (x) => /^\p{Lu}[\p{L}'.,-]*(\s+\p{Lu}[\p{L}'.,-]*){1,3}$/u.test(String(x || '').trim());
+
+/** Person names from admin API endpoints: every string field whose key ends in "name". */
+async function namesFrom(base, token, endpoints) {
+  const out = new Set();
+  const walk = (v, k) => {
+    if (Array.isArray(v)) return v.forEach((x) => walk(x, k));
+    if (v && typeof v === 'object') return Object.entries(v).forEach(([kk, vv]) => walk(vv, kk));
+    // A bare `name` key also holds project and agent names on some endpoints, so it counts only when the
+    // value looks like a person: two to four capitalized words, letters only (a comma allowed, for "LAST, FIRST").
+    const personLike = isPersonLike;
+    const nameKey = /^(full|first|last|display|student|intern|applicant|preferred)_?name$/i.test(k || '') || (/^name$/i.test(k || '') && typeof v === 'string' && personLike(v.trim()));
+    if (typeof v === 'string' && nameKey) namePartsOf(v).forEach((x) => out.add(x));
+  };
+  for (const e of endpoints || []) {
+    const r = await fetch(base + e, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) { console.error(`[names] ${e} answered ${r.status}: refusing to capture without its names`); process.exit(5); }
+    walk(await r.json());
+  }
+  return [...out];
 }
 
 async function capture(specFile, outDir) {
@@ -102,29 +153,33 @@ async function capture(specFile, outDir) {
       if (st.wait) await page.waitForTimeout(st.wait);
     }
     await page.waitForTimeout(s.settle || 1500);
-    await page.evaluate(({ extra, emailSrc, phoneSrc }) => {
+    const keep = new Set((s.keepWords || []).map((x) => x.toLowerCase()));
+    const names = [...(s.redactText || []), ...(await namesFrom(base, token, s.redactNamesFrom))].filter((x) => x && !keep.has(x.toLowerCase()));
+    const nameSrc = nameRegexSource(names);
+    await page.evaluate(({ nameSrc, emailSrc, phoneSrc }) => {
       const email = new RegExp(emailSrc, 'gi'); const phone = new RegExp(phoneSrc, 'g');
-      const lits = extra.filter(Boolean).sort((a, b) => b.length - a.length);
+      const name = nameSrc ? new RegExp(nameSrc, 'giu') : null;
       const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
       for (const n of nodes) {
         let v = n.nodeValue;
         v = v.replace(email, 'name@example.com').replace(phone, '(555) 010-0000');
-        for (const l of lits) v = v.split(l).join('[redacted]');
+        if (name) v = v.replace(name, '[redacted]');
         n.nodeValue = v;
       }
       for (const el of document.querySelectorAll('input,textarea')) {
         el.value = String(el.value || '').replace(email, 'name@example.com').replace(phone, '(555) 010-0000');
       }
-    }, { extra: s.redactText || [], emailSrc: EMAIL.source, phoneSrc: PHONE.source });
-    const left = await page.evaluate(({ emailSrc, phoneSrc }) => {
+    }, { nameSrc, emailSrc: EMAIL.source, phoneSrc: PHONE.source });
+    const left = await page.evaluate(({ nameSrc, emailSrc, phoneSrc }) => {
       const t = document.body.innerText;
-      return [...(t.match(new RegExp(emailSrc, 'gi')) || []), ...(t.match(new RegExp(phoneSrc, 'g')) || [])].filter((x) => x !== 'name@example.com' && x !== '(555) 010-0000');
-    }, { emailSrc: EMAIL.source, phoneSrc: PHONE.source });
-    if (left.length) { console.error(`[${s.name}] NOT WRITTEN: ${left.length} contact detail(s) still visible after redaction`); leaked += 1; await ctx.close(); continue; }
+      return [...(t.match(new RegExp(emailSrc, 'gi')) || []), ...(t.match(new RegExp(phoneSrc, 'g')) || []), ...(nameSrc ? t.match(new RegExp(nameSrc, 'giu')) || [] : [])].filter((x) => x !== 'name@example.com' && x !== '(555) 010-0000');
+    }, { nameSrc, emailSrc: EMAIL.source, phoneSrc: PHONE.source });
+    if (left.length) { console.error(`[${s.name}] NOT WRITTEN: ${left.length} contact detail(s) or known name(s) still visible after redaction`); leaked += 1; await ctx.close(); continue; }
     const file = path.join(outDir, `${s.name}.png`);
     const opts = { path: file, mask: (s.mask || []).map((m) => page.locator(m)), maskColor: '#c8ced8' };
-    if (s.clip) await page.locator(s.clip).first().screenshot(opts); else await page.screenshot(opts);
+    if (s.clip) await page.locator(s.clip).first().screenshot(opts);
+    else await page.screenshot(s.clipRect ? { ...opts, clip: s.clipRect, fullPage: true } : opts);
     const md5 = crypto.createHash('md5').update(fs.readFileSync(file)).digest('hex');
     manifest.push({ name: s.name, path: s.path, file: path.basename(file), md5, capturedAt: new Date().toISOString() });
     console.log(`[${s.name}] ok ${md5.slice(0, 8)}`);
@@ -135,7 +190,8 @@ async function capture(specFile, outDir) {
   if (leaked) process.exit(4);
 }
 
-(async () => {
+module.exports = { EMAIL, PHONE, nameRegexSource, namePartsOf, isPersonLike };
+if (require.main === module) (async () => {
   const a = process.argv.slice(2);
   const val = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : null; };
   if (a.includes('--check')) { const t = readSession(); console.log(t ? `admin session valid until ${new Date(jwtExp(t)).toISOString()}` : 'no usable admin session: run --login'); process.exit(t ? 0 : 3); }

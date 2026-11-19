@@ -85,6 +85,7 @@ function walk(value: unknown, path: string, out: { path: string; value: string }
 function readerStrings(content: CaseStudySnapshotContent, standfirst: string | null, decisions: readonly CaseStudyDecision[], closing: string | null): { path: string; value: string }[] {
   const out: { path: string; value: string }[] = [];
   if (standfirst) out.push({ path: 'standfirst', value: standfirst });
+  walk(content.identity?.storyInBrief, 'identity.storyInBrief', out);
   walk(content.situation?.narrative, 'situation.narrative', out);
   walk(content.situation?.goals, 'situation.goals', out);
   walk(content.situation?.constraints, 'situation.constraints', out);

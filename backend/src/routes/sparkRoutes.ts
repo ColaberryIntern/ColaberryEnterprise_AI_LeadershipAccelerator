@@ -15,7 +15,6 @@ const fail = (res: Response, e: unknown) => {
     'no tries left': 'No tries left today. Come back tomorrow for a new game.',
     'finish your tries first': 'Finish your tries (or lock your score) first.',
     'rank every group': 'Rank all 5 groups first.',
-    'rank your top group': 'Rank the prizes in your top group.',
     'no game today': 'No game today. Games run on weekdays.',
   };
   res.status(msg === 'not found' ? 404 : 400).json({ error: SAY[msg] || 'Something went wrong. Try again.' });
@@ -67,6 +66,14 @@ router.post('/api/spark/calendar/done', needKey, needSession, async (req, res) =
   try { res.json(await S.finishPlanning(me(req), String(req.body?.note || ''))); } catch (e) { fail(res, e); }
 });
 
+router.post('/api/spark/calendar/remove', needKey, needSession, async (req, res) => {
+  try { await S.removeBusy(me(req), req.body?.date, req.body?.start, req.body?.end); res.json({ ok: true }); } catch (e) { fail(res, e); }
+});
+
+router.post('/api/spark/calendar/clear', needKey, needSession, async (req, res) => {
+  try { await S.clearCalendar(me(req)); res.json({ ok: true }); } catch (e) { fail(res, e); }
+});
+
 router.post('/api/spark/plan-now', needKey, needSession, async (req, res) => {
   try { await S.planNow(me(req)); res.json({ planning: true }); } catch (e) { fail(res, e); }
 });
@@ -92,7 +99,7 @@ router.post('/api/spark/game/lock', needKey, needSession, async (req, res) => {
 });
 
 router.post('/api/spark/wager', needKey, needSession, async (req, res) => {
-  try { res.json(await S.saveWager(me(req), req.body?.groups, req.body?.picks)); } catch (e) { fail(res, e); }
+  try { res.json(await S.saveWager(me(req), req.body?.groups)); } catch (e) { fail(res, e); }
 });
 
 export default router;

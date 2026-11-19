@@ -489,6 +489,123 @@ function params<T extends object>(q: T): Record<string, string> {
   return out;
 }
 
+/** OH1k: every switch that decides what reaches a learner. `null` = could not be read (never a guessed "off"). */
+export interface ExplorerControls {
+  killSwitch: { active: boolean | null; readable: boolean };
+  countdown: { campaignId: string | null; status: string | null; adminUrl: string | null; readable: boolean };
+  switches: {
+    /** OH1o: Explorer drafts go to Outbound approvals (a person approves each). Optional for older servers. */
+    explorerGrowthSend?: boolean | null;
+    mayaEmailAutoReply: boolean | null;
+    ghlMirror: boolean | null;
+    voiceCalls: boolean;
+    openHouseAgentConfigured: boolean;
+  };
+  shelves: Record<string, { servable: number; draft: number }> | null;
+}
+
+export async function getControls(): Promise<ExplorerControls> {
+  const { data } = await api.get<ExplorerControls>(`${BASE}/controls`);
+  return data;
+}
+
+/* ── OH1o: the Brain tab (/api/admin/maya-brain) ─────────────────────────── */
+
+const BRAIN = '/api/admin/maya-brain';
+
+export type BrainShelf = 'builder_spotlight' | 'build_prompt' | 'ai_fact' | 'community_pulse' | 'live_event';
+
+export interface MayaBrainRules {
+  explorerVoice: string;
+  neverSay: string[];
+  rotation: Array<{ piece: BrainShelf; enabled: boolean }>;
+  brainPickMinHours: number;
+  weekAhead: boolean;
+  openHouseHold: true;
+}
+
+export interface BrainInventory {
+  builders: Array<{ id?: string; name: string; role: string | null; title: string; url: string }>;
+  events: Array<{ id: string; title: string; when: string; openHouse: boolean }>;
+  communityThemes: Array<{ id: string; label: string; count: number }>;
+  aiFacts: Array<{ id: string; title: string; source: string | null; expires_at: string | null }>;
+  buildPrompts: Array<{ id: string; title: string; source: string | null; expires_at: string | null }>;
+  weekAhead: { id: string | null; block: string };
+  unavailable: string[];
+}
+
+export interface BrainGivenRow { recipient_masked: string; date: string | null; shelf: string; item_id: string | null; status: string }
+
+export interface BrainControl {
+  rules: MayaBrainRules;
+  rules_problems: string[];
+  rules_stored: boolean;
+  hard_rules: string;
+  send_enabled: boolean | null;
+  inventory: BrainInventory | null;
+  given: BrainGivenRow[];
+}
+
+export interface BrainItemRow {
+  id: string; kind: 'ai_fact' | 'build_prompt'; title: string; body: string;
+  source_url: string | null; source_label: string | null; status: 'draft' | 'approved' | 'retired';
+  test_build_status: 'pending' | 'passed' | 'failed'; expires_at: string | null;
+}
+
+export interface BrainSnapshot {
+  profile?: string;
+  memory_excerpt?: string;
+  piece?: { shelf: string; item_id: string | null; empty: boolean; block: string; allowed_links: string[] };
+  earlier_emails?: Array<{ subject: string; date: string | null }>;
+  screen?: { passed: boolean; issues: string[]; overlap_pct: number };
+}
+
+export interface BrainSampleEmail {
+  date: string; status: string; reason: string | null; issues: string[];
+  subject: string | null; html: string | null; snapshot: BrainSnapshot | null;
+}
+
+export interface BrainSampleResult {
+  generated_at: string;
+  people: Array<{ recipient_masked: string; action: string | null; emails: BrainSampleEmail[] }>;
+  note: string;
+}
+
+export async function getBrainControl(): Promise<BrainControl> {
+  const { data } = await api.get<BrainControl>(`${BRAIN}/control`);
+  return data;
+}
+
+export async function saveBrainRules(rules: MayaBrainRules): Promise<MayaBrainRules> {
+  const { data } = await api.put<{ rules: MayaBrainRules }>(`${BRAIN}/rules`, rules);
+  return data.rules;
+}
+
+export async function listBrainItems(q: { kind?: 'ai_fact' | 'build_prompt'; status?: string } = {}): Promise<BrainItemRow[]> {
+  const { data } = await api.get<{ items: BrainItemRow[] }>(`${BRAIN}/items`, { params: params(q) });
+  return data.items;
+}
+
+export async function addAiFact(input: { title: string; body: string; source_url?: string | null; source_label?: string | null }): Promise<BrainItemRow> {
+  const { data } = await api.post<{ item: BrainItemRow }>(`${BRAIN}/items`, { kind: 'ai_fact', ...input });
+  return data.item;
+}
+
+export async function approveBrainItem(id: string): Promise<BrainItemRow> {
+  const { data } = await api.post<{ item: BrainItemRow }>(`${BRAIN}/items/${id}/approve`, {});
+  return data.item;
+}
+
+export async function retireBrainItem(id: string): Promise<BrainItemRow> {
+  const { data } = await api.post<{ item: BrainItemRow }>(`${BRAIN}/items/${id}/retire`, {});
+  return data.item;
+}
+
+export async function runBrainSample(people = 3, emailsEach = 3): Promise<BrainSampleResult> {
+  const { data } = await api.post<BrainSampleResult>(`${BRAIN}/sample`, { people, emails_each: emailsEach }, { timeout: 300_000 });
+  return data;
+}
+
 export async function getSummary(): Promise<ExplorerSummary> {
   const { data } = await api.get<ExplorerSummary>(`${BASE}/summary`);
   return data;

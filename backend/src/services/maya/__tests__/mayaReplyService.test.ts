@@ -16,6 +16,8 @@ jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() 
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
 jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
 jest.mock('../mayaPortalPrompt', () => ({ buildMayaPortalSystemPrompt: jest.fn(async () => 'SYSTEM') }));
+// OH1g: the one memory is read before every reply; mocked so no database is touched.
+jest.mock('../mayaMemory', () => ({ mayaMemoryBlock: jest.fn(async () => 'WHAT MAYA AND THIS PERSON HAVE SAID (all channels) - email Them ->: see you Thursday') }));
 jest.mock('../mayaCallbackService', () => ({ requestPortalCallback: jest.fn() }));
 jest.mock('../mayaJourneyHandoff', () => ({ createJourneyHandoff: jest.fn(async () => ({ handoff: false, reason: 'disabled' })) }));
 jest.mock('../mayaPortalTools', () => {
@@ -86,6 +88,14 @@ describe('guards: no LLM call, no message', () => {
 });
 
 describe('a reply', () => {
+  it('OH1g: the one-memory block reaches the system prompt, keyed by the sender, without repeating the room', async () => {
+    const { mayaMemoryBlock } = jest.requireMock('../mayaMemory');
+    create.mockResolvedValue(answer('See you there.'));
+    await maybeTriggerMayaReply(ROOM, LEARNER);
+    expect(mayaMemoryBlock).toHaveBeenCalledWith({ enrollmentId: LEARNER }, expect.objectContaining({ excludeSources: ['room_messages'] }));
+    expect(create.mock.calls[0][0].messages[0].content).toContain('WHAT MAYA AND THIS PERSON HAVE SAID (all channels)');
+  });
+
   it('answers through sendDmMessage as Maya, offering only the five portal tools', async () => {
     create.mockResolvedValue(answer('Membership is billed annually.'));
     await maybeTriggerMayaReply(ROOM, LEARNER);

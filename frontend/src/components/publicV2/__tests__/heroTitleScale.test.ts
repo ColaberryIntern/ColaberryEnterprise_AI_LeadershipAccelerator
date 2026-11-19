@@ -47,7 +47,8 @@ describe('W18: one title size on every page', () => {
 
   it('opts the Proof, Stories and Privacy page heroes in, and only those', () => {
     const src = (f: string) => fs.readFileSync(path.join(__dirname, '..', '..', '..', 'pages', 'publicV2', f), 'utf8');
-    expect(src('StoriesV2.tsx')).toContain('cbv2-pagehero cbv2-pagehero--page');
+    // W26: Proof moved to the light .cbv2-prhero5 hero, which the shared rule also covers.
+    expect(src('StoriesV2.tsx')).toContain('cbv2-prhero5 cbv2-stories__hero');
     expect(src('PrivacyV2.tsx')).toContain('cbv2-pagehero cbv2-pagehero--page');
     expect(src('StoryDetailArticle.tsx')).not.toContain('cbv2-pagehero--page');
   });

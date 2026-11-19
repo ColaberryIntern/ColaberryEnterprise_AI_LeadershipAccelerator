@@ -16,6 +16,8 @@ import {
 import { ArchiveError } from '../../services/projects/projectArchiveService';
 import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
+import { buildProjectArtifactRegistry } from '../../services/artifacts/projectArtifactRegistry';
+import { renderProjectArtifactRegistry } from '../../services/artifacts/projectArtifactRegistryHtml';
 
 const router = Router();
 
@@ -431,6 +433,33 @@ router.get('/api/admin/projects/:projectId/evidence', requireAdmin, async (req: 
  * Artifacts grouped by document with version history. Stored as submission content
  * rather than files, so no download URL is offered.
  */
+/**
+ * THE ARTIFACT REGISTRY (phase A4): what the plan requires, what exists, and what the missing
+ * thing was supposed to be, for one project.
+ *
+ * Served as HTML because the ticket's acceptance is that Ali can OPEN one project and read it
+ * without asking anyone, and this repository already server-renders admin dashboards. The JSON
+ * is available on the same path with `?format=json` for anything that wants the data.
+ *
+ * It does NOT replace `/artifacts` below. That endpoint reads `project_artifacts`, which holds 4
+ * rows across 3 projects, and other things read it. This one reads what students have actually
+ * produced, 1,018 rows across 65 projects in `runtime_portfolio_artifacts`, plus the contract and
+ * the repository verification rows.
+ */
+router.get('/api/admin/projects/:projectId/artifact-registry', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const registry = await buildProjectArtifactRegistry(String(req.params.projectId));
+    if (String(req.query.format || '') === 'json') {
+      res.json(registry);
+      return;
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderProjectArtifactRegistry(registry, new Date().toISOString()));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, error_class: 'ArtifactRegistryUnavailable' });
+  }
+});
+
 router.get('/api/admin/projects/:projectId/artifacts', requireAdmin, async (req: Request, res: Response) => {
   const id = validProjectId(req, res);
   if (!id) return;

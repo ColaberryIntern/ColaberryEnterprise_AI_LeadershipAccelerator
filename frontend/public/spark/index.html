@@ -50,6 +50,10 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
 @keyframes s{to{transform:rotate(360deg)}}
 .top{display:flex;justify-content:space-between;align-items:center}
 .top button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 14px;font-weight:700;cursor:pointer}
+.warn{background:#fff1cc;color:#5a4300;border-radius:12px;padding:10px 12px;margin:8px 0;font-size:14px;font-weight:600}
+.cday{border-top:1px solid var(--line);padding:8px 0}.cday.sus b{color:#b4540a}
+.busy{border:0;border-radius:999px;background:var(--opt);color:var(--ink);padding:6px 10px;margin:4px 6px 0 0;font-size:13px;cursor:pointer}
+#calread summary{cursor:pointer;font-size:17px;list-style-position:inside}
 .done{background:var(--green-soft);border-radius:12px;padding:12px;text-align:center;font-weight:800}
 .learn li{margin:4px 0;font-size:14px}
 .file{display:block;border:3px dashed var(--line);border-radius:14px;padding:18px;text-align:center;cursor:pointer;margin-top:10px}
@@ -138,7 +142,7 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
   function render() {
     var s = state; clearInterval(poll);
     var h = '<div class="top"><div><h1>Hi ' + esc(s.name) + '</h1><div class="sub">' + esc(s.today) + '</div></div><button id="lockb">🔒 Lock</button></div>';
-    h += revealCard(s) + planningCard(s) + planCard(s) + gameCard(s) + surveyCard(s) + dailyCards(s) + learnedCard(s);
+    h += revealCard(s) + planningCard(s) + calendarCard(s) + planCard(s) + gameCard(s) + surveyCard(s) + dailyCards(s) + learnedCard(s);
     if (!s.survey && !s.daily.length && !s.planning.needed && s.plan && s.plan.status === 'ready') h = h.replace('</div><button id="lockb">', '<div class="done" style="margin-top:6px">✅ All caught up today</div></div><button id="lockb">');
     app.innerHTML = h;
     document.getElementById('lockb').onclick = lock;
@@ -149,6 +153,10 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
   function planningCard(s) {
     var p = s.planning;
     if (!p.needed) return '';
+    if (p.retake) return '<div class="card" id="planning"><h2>📸 One more picture, please</h2><div class="muted">We did not get your full calendar yesterday. Take a picture of this week\'s work calendar (point your camera at the screen so the whole week shows). Spark updates this week\'s Sparks as soon as it reads it.</div>' +
+      '<div class="pick"><label class="file"><input type="file" id="cam" accept="image/*" capture="environment"><b>📷 Take a photo</b><div class="muted">Opens your camera</div></label>' +
+      '<label class="file"><input type="file" id="shot" accept="image/*" multiple><b>🖼️ Choose a screenshot</b><div class="muted">From your photos</div></label></div>' +
+      '<div class="muted" id="shotmsg" style="text-align:center;margin-top:8px"></div></div>';
     var carried = p.carried ? '<span class="badge">carried over</span>' : '';
     var intro = p.autoCalendar
       ? 'Your work calendar is read automatically. Add a screenshot only if you have another calendar (or a busy time that is not on it).'
@@ -159,6 +167,24 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
       '<div class="muted" id="shotmsg" style="text-align:center;margin-top:8px">' + (p.shots ? '✅ ' + p.shots + ' added so far. Add more, or tap I\'m done.' : '') + '</div>' +
       '<div class="q"><div class="qt">Anything not on the calendar this week?</div><textarea id="note" placeholder="Example: Creed has a half day Friday"></textarea></div>' +
       '<button class="btn" id="plandone">I\'m done, plan our week</button></div>';
+  }
+
+  // What Spark read from MY calendar photos (only ever my own), so a misread can be fixed before it plans.
+  function calendarCard(s) {
+    var c = s.calendar; if (!c) return '';
+    var open = c.suspect || !c.done;
+    var h = '<div class="card" id="calread"><details' + (open ? ' open' : '') + '><summary><b>🗓️ What Spark read from your calendar</b></summary>';
+    if (c.suspect) h += '<div class="warn">⚠️ Some days look like the calendar\'s hour lines, not real meetings. Tap ✕ on anything that is wrong, or start over with a closer, straighter photo.</div>';
+    else h += '<div class="muted">Check it. Tap ✕ on anything that is wrong and Spark will treat that time as open.</div>';
+    c.days.forEach(function (d) {
+      var wkend = /^(Sat|Sun)/.test(d.label);
+      if (wkend && !d.ranges.length) return;
+      h += '<div class="cday' + (d.suspect ? ' sus' : '') + '"><b>' + esc(d.label) + '</b>' + (d.suspect ? ' <span class="badge">looks wrong</span>' : '') + '<div>' +
+        (d.ranges.length ? d.ranges.map(function (r) { return '<button class="busy" data-date="' + esc(d.date) + '" data-start="' + esc(r.start) + '" data-end="' + esc(r.end) + '">Busy ' + esc(r.text) + ' ✕</button>'; }).join('') : '<span class="muted">Open all day</span>') +
+        '</div></div>';
+    });
+    if (c.done) h += '<button class="btn" id="replan">Looks right now, re-plan our week</button>';
+    return h + '<button class="btn ghost" id="calclear">Start over with new photos</button></details></div>';
   }
 
   var PLACE = { home: '🏠 At home', out: '🚗 Out' };
@@ -222,9 +248,9 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
       if (g.scores.length) h += '<button class="btn ghost" id="lockscore">Keep ' + g.best + ' and stop playing</button>';
       h += '<div class="muted" style="margin-top:8px">' + esc(s.partner) + '\'s score stays hidden until tomorrow morning.</div>';
     } else if (!g.wager) {
-      h += '<div class="q" id="wager"><div class="qt">💰 Your wager: if you win, what do you get?</div><div class="muted">Step 1: tap the 5 groups in order, the one you want most first.</div><div id="wgroups">' +
+      h += '<div class="q" id="wager"><div class="qt">💰 Your wager: if you win, what kind of prize?</div><div class="muted">Tap the 5 groups in order, the one you want most first. Spark picks your exact 15-minute prize from your answers. You see it tomorrow morning if you win.</div><div id="wgroups">' +
         Object.keys(g.wagerGroups).map(function (k) { return '<button class="opt" data-g="' + esc(k) + '">' + esc(k) + '</button>'; }).join('') +
-        '</div><div id="wpicks"></div><button class="btn" id="savewager" disabled>Lock in my wager</button></div>';
+        '</div><button class="btn" id="savewager" disabled>Lock in my wager</button></div>';
     } else {
       h += '<div class="done">🔒 Wager locked. ' + esc(s.partner) + ' never sees it. Results tomorrow morning.</div>';
     }
@@ -252,18 +278,11 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
     if (ls) ls.onclick = function () { api('POST', '/game/lock').then(load).catch(function (e) { toast(e.message); }); };
     var wg = document.getElementById('wgroups');
     if (!wg) return;
-    var groups = [], picks = [], sv = document.getElementById('savewager');
-    rankable(wg, function (order) {
-      groups = order; picks = []; sv.disabled = true;
-      var box = document.getElementById('wpicks');
-      if (order.length < Object.keys(g.wagerGroups).length) { box.innerHTML = ''; return; }
-      box.innerHTML = '<div class="muted" style="margin-top:10px">Step 2: rank the prizes in ' + esc(order[0]) + '. Your #1 is what you get if you win.</div>' +
-        g.wagerGroups[order[0]].map(function (o) { return '<button class="opt">' + esc(o) + '</button>'; }).join('');
-      rankable(box, function (p) { picks = p; sv.disabled = !p.length; });
-    });
+    var groups = [], sv = document.getElementById('savewager');
+    rankable(wg, function (order) { groups = order; sv.disabled = order.length < Object.keys(g.wagerGroups).length; });
     sv.onclick = function () {
-      sv.disabled = true;
-      api('POST', '/wager', { groups: groups, picks: picks }).then(function () { toast('Wager locked. Good luck!'); load(); }).catch(function (e) { sv.disabled = false; toast(e.message); });
+      sv.disabled = true; sv.textContent = 'Spark is picking your prize…';
+      api('POST', '/wager', { groups: groups }).then(function () { toast('Wager locked. Good luck!'); load(); }).catch(function (e) { sv.disabled = false; sv.textContent = 'Lock in my wager'; toast(e.message); });
     };
   }
   function openGame(game, tryId) {
@@ -340,6 +359,24 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
         .then(function (j) { toast(j.planning ? 'Spark is planning your week now.' : 'Saved. Spark plans as soon as ' + state.partner + ' is in.'); load(); })
         .catch(function (e) { pd.disabled = false; toast(e.message); });
     };
+    app.querySelectorAll('#calread .busy').forEach(function (b) {
+      b.onclick = function () {
+        b.disabled = true;
+        api('POST', '/calendar/remove', { date: b.dataset.date, start: b.dataset.start, end: b.dataset.end })
+          .then(function () { toast('Removed. Spark will treat that time as open.'); load(); }).catch(function (e) { b.disabled = false; toast(e.message); });
+      };
+    });
+    var cc = document.getElementById('calclear');
+    if (cc) cc.onclick = function () {
+      if (!confirm('Forget this week\'s calendar photos and take new ones?')) return;
+      cc.disabled = true;
+      api('POST', '/calendar/clear').then(function () { toast('Cleared. Take a new photo above.'); load(); }).catch(function (e) { cc.disabled = false; toast(e.message); });
+    };
+    var rp = document.getElementById('replan');
+    if (rp) rp.onclick = function () {
+      rp.disabled = true;
+      api('POST', '/calendar/done', { note: '' }).then(function (j) { toast(j.planning ? 'Spark is adding Sparks in your open time.' : 'Saved.'); load(); }).catch(function (e) { rp.disabled = false; toast(e.message); });
+    };
     wireGame();
     var pn = document.getElementById('plannow');
     if (pn) pn.onclick = function () { pn.disabled = true; api('POST', '/plan-now').then(function () { toast('Spark is planning your week now.'); load(); }).catch(function (e) { pn.disabled = false; toast(e.message); }); };
@@ -377,15 +414,21 @@ textarea{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px
     });
   }
   function uploadAll(files) {
-    var msg = document.getElementById('shotmsg'); var total = 0, i = 0;
+    var msg = document.getElementById('shotmsg'); var total = 0, i = 0, suspect = false;
     function next() {
       if (i >= files.length) {
+        // Asked for a new picture: a clean read plans the week right away, no extra tap.
+        if (state.planning.retake && total && !suspect) {
+          if (msg) msg.innerHTML = '<span class="spin"></span>Got it. Spark is updating this week\'s Sparks…';
+          return api('POST', '/calendar/done', { note: '' }).then(function () { toast('Got it. Your Sparks are being updated.'); load(); }).catch(function (e) { toast(e.message); load(); });
+        }
+        if (state.planning.retake) { if (msg) msg.textContent = total ? '⚠️ That picture looks like the hour lines, not meetings. Try once more, closer and straighter.' : '⚠️ No meetings could be read. Try once more, closer and straighter.'; return load(); }
         if (msg) msg.textContent = total ? '✅ Read ' + total + ' busy times. Add another picture, or tap I\'m done.' : '⚠️ No meetings could be read. Try a closer, straighter picture, or tap I\'m done if your week is open.';
         return;
       }
       var f = files[i++]; if (msg) msg.innerHTML = '<span class="spin"></span>Reading screenshot ' + i + ' of ' + files.length + '…';
       shrink(f).then(function (d) { return api('POST', '/calendar/image', { image: d }); })
-        .then(function (j) { total += j.blocks; next(); })
+        .then(function (j) { total += j.blocks; suspect = suspect || !!j.suspect; next(); })
         .catch(function (e) { toast(e.message); next(); });
     }
     next();

@@ -519,6 +519,20 @@
       "disposition": "human_approved",
       "rule": "authored"
     },
+    "CaseStudyIdentitySection.storyInBrief": {
+      "authoring": "human override identity.storyInBrief (3 to 5 {label, text} beats); AI draft permitted, human approval required",
+      "sourcePriority": "human override > repo sync",
+      "aiMayInfer": true,
+      "approvalRequired": true,
+      "indexHome": "—",
+      "detailHome": "\"The story in brief\" band under the masthead (Enterprise) and under the outcome tiles (Hire)",
+      "publicBehaviour": "all or nothing: the whole usable set of beats is projected, or none; every beat is claim-scanned",
+      "emptyBehaviour": "band hides; never derived from other sections; the completeness audit fails the record",
+      "privacy": "public",
+      "test": "caseStudyStoryInBrief.test.ts",
+      "disposition": "human_approved",
+      "rule": "authored"
+    },
     "CaseStudyIdentitySection.summary": {
       "authoring": "admin narrative panel",
       "sourcePriority": "human override > repo sync",
@@ -2184,6 +2198,20 @@
       "test": "caseStudyPublicProjection.test.ts",
       "disposition": "deterministic",
       "rule": "public-projection-mirror"
+    },
+    "PublicCaseStudyDetail.storyInBrief": {
+      "authoring": "projected from identity.storyInBrief by projectStoryInBrief",
+      "sourcePriority": "human override > repo sync",
+      "aiMayInfer": false,
+      "approvalRequired": false,
+      "indexHome": "—",
+      "detailHome": "\"The story in brief\" band",
+      "publicBehaviour": "projected as-is",
+      "emptyBehaviour": "empty list; the band hides",
+      "privacy": "public",
+      "test": "caseStudyStoryInBrief.test.ts",
+      "disposition": "deterministic",
+      "rule": "authored"
     },
     "PublicCaseStudyDetail.surfaceKey": {
       "authoring": "not authored — computed by caseStudyPublicProjection.ts",

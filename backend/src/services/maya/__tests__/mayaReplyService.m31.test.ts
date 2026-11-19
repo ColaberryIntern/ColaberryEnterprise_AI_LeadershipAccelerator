@@ -14,6 +14,7 @@ jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() 
 jest.mock('../../communityRooms/dmService', () => ({ sendDmMessage: jest.fn() }));
 jest.mock('../../agentBlueprint/agentActivityLogService', () => ({ logAgentActivity: jest.fn() }));
 jest.mock('../mayaPortalPrompt', () => ({ buildMayaPortalSystemPrompt: jest.fn(async () => 'SYSTEM') }));
+jest.mock('../mayaMemory', () => ({ mayaMemoryBlock: jest.fn(async () => '') }));
 jest.mock('../mayaCallbackService', () => ({ requestPortalCallback: jest.fn() }));
 
 import RoomMembership from '../../../models/RoomMembership';

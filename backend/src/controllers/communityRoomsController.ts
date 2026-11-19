@@ -5,7 +5,10 @@ import CommunityRoom from '../models/CommunityRoom';
 import RoomBooking from '../models/RoomBooking';
 import RoomMembership from '../models/RoomMembership';
 import CommunityMember from '../models/CommunityMember';
+import Enrollment from '../models/Enrollment';
 import { RoomAccessContext, canUploadResource } from '../services/communityRooms/roomEntitlementService';
+import { mintPlaybackToken, verifyPlaybackToken } from '../services/communityRooms/resourcePlaybackToken';
+import { isStaffEnrollment } from '../services/access/staffAccess';
 import * as rooms from '../services/communityRooms/roomService';
 import * as members from '../services/communityRooms/roomMembershipService';
 import * as bookings from '../services/communityRooms/roomBookingService';
@@ -47,10 +50,13 @@ function ctxOf(req: Request): RoomAccessContext {
 // RFC 6266/5987 fixes it: an ASCII-sanitized `filename=` for old clients,
 // plus a UTF-8 percent-encoded `filename*=` that every modern browser
 // prefers and renders correctly.
-export function contentDispositionHeader(rawTitle: string): string {
+export function contentDispositionHeader(
+  rawTitle: string,
+  disposition: 'attachment' | 'inline' = 'attachment',
+): string {
   const name = rawTitle.replace(/[\r\n]/g, '');
   const asciiName = name.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
-  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+  return `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 function fail(res: Response, err: any): void {
@@ -389,16 +395,91 @@ export async function deleteResource(req: Request, res: Response): Promise<void>
   } catch (err) { fail(res, err); }
 }
 
+function resourceFilePath(resource: { resource_type: string; storage_key?: string | null }): string {
+  const baseDir = resource.resource_type === 'recording' ? ROOM_RECORDING_DIR : ROOM_RESOURCE_DIR;
+  return path.join(baseDir, resource.storage_key as string);
+}
+
 export async function downloadResource(req: Request, res: Response): Promise<void> {
   try {
     const resource = await resourceSvc.getResourceForDownload(ctxOf(req), String(req.params.id), String(req.params.resourceId));
-    const baseDir = resource.resource_type === 'recording' ? ROOM_RECORDING_DIR : ROOM_RESOURCE_DIR;
     res.setHeader('Content-Type', resource.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', contentDispositionHeader(resource.title || resource.storage_key || 'file'));
     // sendFile natively honors Range requests, so large recordings also get
     // in-browser scrubbing for free — the route stays the same "download".
-    res.sendFile(path.join(baseDir, resource.storage_key as string));
+    res.sendFile(resourceFilePath(resource));
   } catch (err) { fail(res, err); }
+}
+
+/**
+ * Mint a short-lived, single-resource URL the browser can stream from directly.
+ *
+ * This route is the Bearer-gated half; `streamResource` below is the half a
+ * `<video>` element actually hits. The split exists because a media element
+ * cannot send an Authorization header, which is why the portal used to pull
+ * whole recordings into memory as a Blob before anything played. See
+ * services/communityRooms/resourcePlaybackToken.ts for why a token is NOT a
+ * grant: entitlement is re-read from the database on every stream request.
+ */
+export async function getResourcePlaybackUrl(req: Request, res: Response): Promise<void> {
+  try {
+    const roomId = String(req.params.id);
+    const resourceId = String(req.params.resourceId);
+    const ctx = ctxOf(req);
+    // The same entitlement path a download takes. If this throws, no token is minted.
+    const resource = await resourceSvc.getResourceForDownload(ctx, roomId, resourceId);
+    const { token, expiresAt } = mintPlaybackToken({ roomId, resourceId, enrollmentId: ctx.enrollmentId });
+    res.json({
+      url: `/api/portal/community/rooms/${roomId}/resources/${resourceId}/stream?t=${encodeURIComponent(token)}`,
+      expires_at: expiresAt.toISOString(),
+      mime_type: resource.mime_type || 'application/octet-stream',
+      size_bytes: resource.size_bytes ?? null,
+      title: resource.title || null,
+    });
+  } catch (err) { fail(res, err); }
+}
+
+/**
+ * Serve the bytes for a playback token. NOT in the participant chain: the whole
+ * point is that no Authorization header is required, because a media element
+ * cannot send one. The token names the enrollment; this re-checks what that
+ * enrollment is allowed to read, so losing room access stops playback at once.
+ */
+export async function streamResource(req: Request, res: Response): Promise<void> {
+  const roomId = String(req.params.id);
+  const resourceId = String(req.params.resourceId);
+  const verdict = verifyPlaybackToken(typeof req.query.t === 'string' ? req.query.t : undefined, { roomId, resourceId });
+  if (!verdict.ok) {
+    // One answer for every failure. Distinguishing "expired" from "wrong resource"
+    // here would tell an unauthenticated caller which resource ids are real.
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+
+  try {
+    const enrollment = await Enrollment.findByPk(verdict.enrollmentId, { attributes: ['id', 'cohort_id'] });
+    if (!enrollment) { res.status(404).json({ error: 'Not found' }); return; }
+    const ctx: RoomAccessContext = {
+      enrollmentId: verdict.enrollmentId,
+      cohortId: enrollment.cohort_id,
+      isAdmin: await isStaffEnrollment(verdict.enrollmentId),
+    };
+    const resource = await resourceSvc.getResourceForDownload(ctx, roomId, resourceId);
+
+    // A signed URL in the address bar must not leak to third parties through a
+    // Referer header, and must not be cached by a shared proxy.
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Cache-Control', 'private, max-age=0, no-store');
+    res.setHeader('Content-Type', resource.mime_type || 'application/octet-stream');
+    // inline, not attachment: the browser should PLAY this, not download it.
+    res.setHeader('Content-Disposition', contentDispositionHeader(resource.title || resource.storage_key || 'file', 'inline'));
+    res.sendFile(resourceFilePath(resource));
+  } catch (err) {
+    // Same flattening: an entitlement failure here is a 404, not a 403.
+    const status = typeof (err as any)?.status === 'number' ? (err as any).status : 500;
+    if (status >= 500) { fail(res, err); return; }
+    res.status(404).json({ error: 'Not found' });
+  }
 }
 
 // The Global Library — a well-known public room whose resources are visible to

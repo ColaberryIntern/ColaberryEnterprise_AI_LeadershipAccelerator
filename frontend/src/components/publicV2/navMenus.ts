@@ -47,7 +47,13 @@ export interface NavMenu {
 /** The government catalog as /api/public/services returns it (the fields used here). */
 export interface GovCatalog {
   readonly families: readonly string[];
-  readonly services: readonly { readonly slug: string; readonly name: string; readonly family: string }[];
+  readonly services: readonly {
+    readonly slug: string;
+    readonly name: string;
+    readonly family: string;
+    /** Documented case studies. The page's grid shows only services with one. */
+    readonly caseStudies?: number;
+  }[];
 }
 
 /* Facet labels are stored lower-case slugs ("career-services-and-technical-hiring").
@@ -138,6 +144,13 @@ const GOV_SECTIONS: readonly NavMenuLink[] = [
 export const govFamilyHref = (family: string): string =>
   `/government/?family=${encodeURIComponent(family)}#gv-services`;
 
+/** Where the government page actually shows a service.
+ *  W27: the filtered grid holds only services with a documented case study, so
+ *  one without would land on a filter that does not contain it. Those live under
+ *  "Also in our catalog". A count the API omits is treated as documented. */
+export const govServiceHref = (s: { family: string; caseStudies?: number }): string =>
+  s.caseStudies === 0 ? '/government/#gv-prep' : govFamilyHref(s.family);
+
 export function buildGovMenu(catalog: GovCatalog | null): NavMenu {
   const families = catalog
     ? catalog.families.filter((f) => catalog.services.some((s) => s.family === f))
@@ -147,7 +160,7 @@ export function buildGovMenu(catalog: GovCatalog | null): NavMenu {
       heading: family,
       links: catalog!.services
         .filter((s) => s.family === family)
-        .map((s) => ({ label: s.name, to: govFamilyHref(family), external: true })),
+        .map((s) => ({ label: s.name, to: govServiceHref(s), external: true })),
     })),
     aside: {
       heading: 'Government',

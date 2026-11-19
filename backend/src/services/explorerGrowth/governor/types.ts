@@ -149,6 +149,12 @@ export interface HardStopFlags {
    * build these flags are unchanged; only the Explorer governor sets it (governor/humanOwnership.ts).
    */
   humanOwned?: boolean;
+  /**
+   * OH1f: the learner's Open House countdown is live (a step due, or one sent in the last 48 hours). The Open House
+   * takes precedence, so Explorer Growth proposes nothing until it is over. Optional for the same reason as
+   * `humanOwned`; only the Explorer governor sets it (governor/openHouseHold.ts).
+   */
+  openHouseCountdown?: boolean;
 }
 
 /** Anything carrying the six stops. `hardStopReason` needs no more than this. */
@@ -179,4 +185,12 @@ export interface ContactPolicyInput {
   consent: { verdict: 'allow' | 'block'; reason: string; hasRecord: boolean };
   recentContactCount: number;
   hoursSinceLastContact: number | null;
+  /**
+   * OH1j: hours since this person's last brain pick, shadow picks included (BRAIN_PICK_MIN_HOURS).
+   * Null = never had one. Optional so the Growth Journey callers, which have no brain picks, are unchanged.
+   * NaN is treated as "too recent" (fail closed).
+   */
+  hoursSinceLastBrainPick?: number | null;
+  /** OH1o: the brain rules' cadence (Brain tab). Absent = BRAIN_PICK_MIN_HOURS. Never below 24. */
+  brainPickMinHours?: number;
 }

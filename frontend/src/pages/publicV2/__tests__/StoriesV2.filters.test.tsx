@@ -71,11 +71,11 @@ afterEach(() => {
 /* ------------------------------------------------------------- facets --- */
 
 describe('the facet menu is derived from what is published', () => {
-  it('offers the six groups spec section 22 names, in that order', async () => {
+  it('offers the six groups spec section 22 names, in the W26 order (who it is for first)', async () => {
     H.mount();
     await H.settle();
     expect(H.all('.cbv2-cs-filters__summary span:first-child').map((n) => n.textContent))
-      .toEqual(['Stack', 'Capability', 'Industry', 'Program', 'Built by', 'Verification']);
+      .toEqual(['Industry', 'Capability', 'Stack', 'Program', 'Built by', 'Verification']);
   });
 
   it('offers no menu at all when nothing is published, rather than one matching nothing', async () => {

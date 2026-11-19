@@ -31,6 +31,7 @@ import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
 import { logCommunication } from './communicationLogService';
+import { mayaMemoryBlock } from './maya/mayaMemory';
 import { buildUnsubscribeUrl } from './unsubscribeTokenService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
@@ -69,6 +70,10 @@ import {
   isWithinCallSchedule,
   getCampaignSettingsFromRecord,
 } from './campaignSendWindow';
+import { voiceCallTypeForAction, voicePauseMs, dialFailureRecord } from './voice/voiceDialPolicy';
+import { mirrorToGhlInBackground } from './ghlMirrorService';
+// OH1o: the wrapper (signature + legal footer) lives in its own module so Explorer Growth emails get the same one.
+import { wrapEmailHtml } from './email/campaignEmailWrapper';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -332,6 +337,43 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
     // event's own Join link. What the person has been doing on the platform is added so
     // Maya can relate to it (Ali, 2026-11-17: "relate to what they are doing, but not try
     // to sell").
+    // OH1f: this email's one piece from the content brain, read live (openHouseBrain.ts), and
+    // the full text of the countdown emails this person already got, so the AI builds on them
+    // instead of re-saying them (the shared context keeps only 300 characters of each).
+    const brainPiece = action.metadata?.event_countdown
+      ? await (async () => {
+          try {
+            const { gatherBrainPiece } = await import('./openHouseBrain');
+            return await gatherBrainPiece(action.metadata?.brain_piece, String(lead.id));
+          } catch (err: any) {
+            console.warn(`[Scheduler] Countdown brain piece failed for lead ${lead.id}: ${err?.message}`);
+            return null;
+          }
+        })()
+      : null;
+    const earlierCountdown: Array<{ subject: string; body: string; sent_at: Date }> = action.metadata?.event_countdown
+      ? await sequelize.query<{ subject: string; body: string; sent_at: Date }>(
+          `SELECT subject, body, COALESCE(sent_at, updated_at) AS sent_at FROM scheduled_emails
+            WHERE lead_id = :leadId AND campaign_id = :campaignId AND status = 'sent' AND channel = 'email'
+              AND (metadata->>'event_starts_at') = :startsAt
+              AND id <> :id ORDER BY COALESCE(sent_at, updated_at)`,
+          // Same Open House only: a second registration must not count the first event's emails.
+          { replacements: { leadId: action.lead_id, campaignId: action.campaign_id, id: action.id, startsAt: String(action.metadata?.event_starts_at || '') }, type: QueryTypes.SELECT },
+        ).catch(() => [])
+      : [];
+    if (action.metadata?.event_countdown && earlierCountdown.length > 0) {
+      if (!compositeContext) compositeContext = {};
+      const others = (compositeContext.previousMessages || []).filter(
+        (m: any) => !earlierCountdown.some((e) => e.subject === m.subject));
+      compositeContext.previousMessages = [
+        ...earlierCountdown.map((e) => ({
+          channel: 'email', subject: e.subject, bodyPreview: e.body,
+          sentAt: new Date(e.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        })),
+        ...others,
+      ];
+    }
+
     const eventCountdown = action.metadata?.event_countdown ? {
       title: String(action.metadata.event_title || 'Colaberry Open House'),
       when: String(action.metadata.event_when || ''),
@@ -349,7 +391,14 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
         }
       })(),
       step_goal: (action.metadata?.step_goal as string) || undefined,
-      portal_url: (await import('./openHouseCountdown')).PORTAL_TODAY_URL,
+      // OH1f: a step with a brain piece gets exactly that piece's links; a step from before
+      // OH1f keeps the Today page as its one extra link.
+      portal_url: brainPiece ? undefined : (await import('./openHouseCountdown')).PORTAL_TODAY_URL,
+      content_piece: brainPiece?.block || undefined,
+      extra_links: brainPiece?.allowedLinks || [],
+      // OH1g: the one memory (every channel, both directions) replaces the countdown-only view in the prompt;
+      // `earlierCountdown` above still feeds the repetition check on the full bodies. Never throws ('' = none).
+      memory_timeline: (await mayaMemoryBlock({ leadId: Number(lead.id) }, { limit: 20, maxChars: 3500 })) || undefined,
     } : undefined;
     if (eventCountdown && compositeContext?.allowedUrls) {
       compositeContext.allowedUrls = {
@@ -385,7 +434,11 @@ async function generateAIContent(action: InstanceType<typeof ScheduledEmail>): P
       // OH1e: "feel ___ to" / "what we offer" are rewritten, not rejected (see softenIdioms).
       if (result.subject) result.subject = softenIdioms(result.subject);
       if (result.body) result.body = softenIdioms(result.body);
-      const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url);
+      const problems = screenEventReminderCopy(result.subject || action.subject || '', result.body || '', eventCountdown.join_url, eventCountdown.extra_links);
+      // OH1f: a draft that re-says an earlier countdown email is not sent either.
+      const { repetitionScore, REPETITION_LIMIT } = await import('./openHouseBrain');
+      const rep = repetitionScore(result.body || '', earlierCountdown.map((e) => e.body));
+      if (rep > REPETITION_LIMIT) problems.push(`repeats an earlier email (${Math.round(rep * 100)}% of its phrases)`);
       if (problems.length > 0) {
         await action.update({
           metadata: { ...(action.metadata || {}), ai_rejected: problems, ai_model: result.model },
@@ -817,6 +870,32 @@ async function processScheduledActions(): Promise<void> {
       // would land a "starts soon" note after the Open House. The day here is the
       // database's (UTC) day, so a 6:30 PM CT and a 5:30 PM CT step the next day fall on
       // the same UTC date and the second would always be pushed past the event.
+      // OH1f: the countdown's own steps are now at least 24 hours apart (pinned by
+      // openHouseBrain.spacingProblems), so the exemption no longer lets it touch twice in a day.
+      // And the Open House takes PRECEDENCE (Ali, 2026-11-18): any other campaign's touch that
+      // would land within 24 hours of a countdown touch, sent or due, waits until 24 hours after it.
+      if (!action.metadata?.event_countdown) {
+        const near = await sequelize.query<{ at: Date }>(
+          `SELECT COALESCE(sent_at, scheduled_for) AS at FROM scheduled_emails
+            WHERE lead_id = :leadId AND (metadata->>'event_countdown') = 'true'
+              AND status IN ('pending', 'processing', 'sent')
+              AND COALESCE(sent_at, scheduled_for) BETWEEN NOW() - INTERVAL '24 hours' AND NOW() + INTERVAL '24 hours'`,
+          { replacements: { leadId: action.lead_id }, type: QueryTypes.SELECT },
+        ).catch((err: any) => {
+          console.warn(`[Scheduler] Open House precedence read failed for lead ${action.lead_id}: ${err?.message}`);
+          return null;
+        });
+        const { countdownYieldUntil } = await import('./openHouseBrain');
+        // Fail closed: an unreadable answer is not permission to send. Try again in an hour.
+        const until = near === null
+          ? new Date(Date.now() + 60 * 60 * 1000)
+          : countdownYieldUntil(near.map((r) => new Date(r.at)));
+        if (until) {
+          await action.update({ status: 'pending', scheduled_for: until, processing_started_at: null, processor_id: null } as any);
+          console.log(`[Scheduler] Open House precedence: lead ${action.lead_id} has a countdown touch within 24h, action ${action.id} deferred to ${until.toISOString()}`);
+          continue;
+        }
+      }
       if (!action.metadata?.event_countdown) {
         const [capCheck] = await sequelize.query(
           `SELECT
@@ -926,6 +1005,12 @@ async function processScheduledActions(): Promise<void> {
       const delayMs = (campaignSettings.delay_between_sends || 0) * 1000;
       if (delayMs > 5000 && delayMs <= 180000) {
         await new Promise((r) => setTimeout(r, delayMs));
+      }
+
+      // OH1m: voice-only dial spacing (voice_dial_spacing_seconds), after a call that went out.
+      const voicePause = voicePauseMs(channel, campaignSettings, action as any, 5000 + (delayMs > 5000 && delayMs <= 180000 ? delayMs : 0));
+      if (voicePause > 0) {
+        await new Promise((r) => setTimeout(r, voicePause));
       }
     } catch (error: any) {
       console.error(`[Scheduler] Failed to process action ${action.id} (${channel}):`, error.message);
@@ -1273,6 +1358,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     },
   });
 
+  // OH1l: GHL mirror note (setting ghl_mirror_enabled, default off). Fire-and-forget.
+  mirrorToGhlInBackground({ event: 'email_sent', leadId: action.lead_id, subject: action.subject, body: html });
+
   // Record interaction outcome for ICP intelligence
   await recordActionOutcome(action, 'sent');
 
@@ -1307,6 +1395,13 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
 }
 
 async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
+  // OH1m: a countdown call while voice is off is CANCELLED (reason voice_disabled), not
+  // marked sent: "sent" would claim a call that never happened.
+  if (!env.enableVoiceCalls && action.metadata?.event_countdown) {
+    console.log(`[Scheduler] Voice calls disabled. Cancelling countdown call ${action.id} (voice_disabled).`);
+    await cancelScheduledMessage(action, 'voice_disabled');
+    return;
+  }
   if (!env.enableVoiceCalls) {
     console.log('[Scheduler] Voice calls disabled. Marking as skipped.');
     await action.update({
@@ -1336,7 +1431,8 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
 
   const lead = await Lead.findByPk(action.lead_id);
   const name = lead?.name || 'there';
-  const callType = (action.voice_agent_type === 'welcome' ? 'welcome' : 'interest') as 'welcome' | 'interest';
+  // OH1m: a countdown call goes to our own Open House agent ('open_house'), never another.
+  const callType = voiceCallTypeForAction(action as any);
 
   // Use AI-generated body as the voice prompt if AI generated, otherwise use stored voice_prompt template
   let prompt: string | undefined;
@@ -1350,12 +1446,15 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
     const { gatherCallFacts } = await import('./openHouseCountdownContext');
     const facts = lead?.email ? await gatherCallFacts(lead.email, action.lead_id).catch(() => null) : null;
     const history = await buildConversationHistory(action.lead_id).catch(() => '');
+    // OH1g: the one memory is the call's history; the activity-log history stays the fallback.
+    const memory = await mayaMemoryBlock({ leadId: action.lead_id }, { limit: 15, maxChars: 2500 });
     const first = (lead?.name || '').trim().split(/\s+/)[0] || '';
     prompt = countdownCallBrief({
       firstName: first && !first.includes('@') ? first : null,
       event: { title: String(action.metadata?.event_title || 'Colaberry Open House'), when_label: String(action.metadata?.event_when || '') },
       facts,
       history,
+      memory,
     });
   } else if (action.ai_generated && action.body) {
     // AI already generated the voice prompt instructions
@@ -1457,9 +1556,16 @@ async function processVoiceAction(action: InstanceType<typeof ScheduledEmail>): 
       (err) => console.error('[Scheduler] Pipeline advance failed:', err.message)
     );
   } else {
+    // OH1m: keep Synthflow's status and raw body on the step, so a refused dial says why.
+    await action.update({
+      metadata: { ...(action.metadata || {}), last_dial_error: dialFailureRecord(result) },
+    } as any).catch((err: any) => console.warn('[Scheduler] Could not record dial error:', err.message));
     throw new Error(result.error || 'Voice call failed');
   }
 }
+
+/** Test seam (OH1m): the voice step handler, exercised with its dependencies mocked. */
+export { processVoiceAction as __processVoiceActionForTests };
 
 async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Promise<void> {
   const phone = action.to_phone;
@@ -1689,71 +1795,6 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   `.trim();
 }
 
-function wrapEmailHtml(
-  body: string,
-  tracking?: { campaignId?: string; campaignType?: string; leadId?: number; senderName?: string; senderEmail?: string; unsubscribeUrl?: string },
-): string {
-  const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
-  const senderEmail = tracking?.senderEmail || env.emailFrom;
-  // OH1: Maya signs her campaign mail with her own title (the same one the
-  // admissions-document email uses).
-  const title = senderEmail === 'ali@colaberry.com' ? 'Managing Director / Forward Deployed AI Engineer'
-    : senderEmail === 'maya@colaberry.com' ? 'Director of Admissions' : '';
-  const titleLine = title ? `<div style="font-size:14px;color:#2b6cb0;font-weight:600;">${title}</div>` : '';
-
-  // Detect the first prominent CTA URL in the body (pilot, partners, demo pages on enterprise.colaberry.ai)
-  // and inject a styled button after the body so it's visually prominent rather than buried inline.
-  let primaryCtaButton = '';
-  // OH1: an Open House countdown email's Join link (the portal check-in) gets the button.
-  const joinMatch = body.match(/https?:\/\/enterprise\.colaberry\.ai\/portal\/class-checkin\/[0-9a-f-]{36}/i);
-  const ctaMatch = joinMatch ? null : body.match(/https?:\/\/enterprise\.colaberry\.ai\/(pilot\/[a-z0-9-]+|partners|demo|contact|executive-overview|ai-architect|enroll|ai-workforce-designer)(?:\?[^\s"<>]*)?/i);
-  if (joinMatch) {
-    primaryCtaButton = `
-  <div style="text-align: center; margin: 28px 0;">
-    <a href="${joinMatch[0]}" class="cta" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">Join the Open House &rarr;</a>
-  </div>`;
-  }
-  if (ctaMatch) {
-    const ctaUrl = ctaMatch[0];
-    const slug = ctaMatch[1];
-    let label = 'Book Your 30-Minute Strategy Call';
-    if (/pilot\/zero-risk/i.test(slug)) label = 'Start Your Zero-Risk AI Pilot';
-    else if (/pilot\/ai-team/i.test(slug)) label = 'See the AI Team Pilot';
-    else if (/pilot\/exclusive/i.test(slug)) label = 'See the Exclusive Build Program';
-    else if (/partners/i.test(slug)) label = 'Become a Delivery Partner';
-    else if (/ai-workforce-designer/i.test(slug)) label = 'Design Your AI Workforce';
-    else if (/ai-architect/i.test(slug)) label = 'Talk to Our AI Architect';
-    primaryCtaButton = `
-  <div style="text-align: center; margin: 28px 0;">
-    <a href="${ctaUrl}" class="cta" style="display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px;">${label} &rarr;</a>
-  </div>`;
-  }
-
-  return `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#ffffff;">
-  <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#2d3748;line-height:1.6;max-width:600px;margin:0 auto;padding:24px;">
-    ${body}
-    ${primaryCtaButton}
-    <table cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-collapse:collapse;">
-      <tr><td style="border-left:3px solid #1a365d;padding-left:14px;font-family:Arial,Helvetica,sans-serif;">
-        <div style="font-weight:700;font-size:16px;color:#1a365d;">${senderName}</div>
-        ${titleLine}
-        <div style="font-size:14px;color:#718096;">Colaberry Inc.</div>
-        <div style="font-size:14px;margin-top:6px;color:#2d3748;"><a href="https://enterprise.colaberry.ai" style="color:#2b6cb0;text-decoration:none;">enterprise.colaberry.ai</a> &nbsp;&middot;&nbsp; <a href="mailto:${senderEmail}" style="color:#2b6cb0;text-decoration:none;">${senderEmail}</a></div>
-      </td></tr>
-    </table>
-    <div style="margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#a0aec0;line-height:1.5;">
-      Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075<br>
-      Not relevant? <a href="${tracking?.unsubscribeUrl || `mailto:${senderEmail}?subject=unsubscribe`}" style="color:#a0aec0;">Unsubscribe</a> or reply &ldquo;unsubscribe&rdquo;.
-    </div>
-  </div>
-</body>
-</html>
-  `.trim();
-}
 
 /** Detect no-show strategy calls (2+ hours past scheduled time, still 'scheduled') */
 async function detectNoShows(): Promise<void> {

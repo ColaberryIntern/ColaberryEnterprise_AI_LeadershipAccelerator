@@ -50,8 +50,8 @@ function candidate(over: Partial<CaseStudyFilterCandidate> = {}): CaseStudyFilte
 }
 
 describe('W10: the department vocabulary', () => {
-  it('is the six departments of the home page band, as facet slugs', () => {
-    expect(CASE_STUDY_DEPARTMENTS).toEqual(['finance', 'operations', 'customer-service', 'sales', 'hr', 'it-data']);
+  it('is the six departments of the home page band plus marketing, as facet slugs', () => {
+    expect(CASE_STUDY_DEPARTMENTS).toEqual(['finance', 'operations', 'customer-service', 'sales', 'marketing', 'hr', 'it-data']);
     expect(DEPARTMENTS_OVERRIDE_PATH).toBe('taxonomy.departments');
   });
 
@@ -62,7 +62,9 @@ describe('W10: the department vocabulary', () => {
 
   it('refuses a non-list, an unknown slug, and a repeat', () => {
     expect(departmentsOverrideProblem('finance')).toMatch(/must be a list/);
-    expect(departmentsOverrideProblem(['finance', 'marketing'])).toMatch(/unknown department\(s\): marketing/);
+    expect(departmentsOverrideProblem(['finance', 'legal'])).toMatch(/unknown department\(s\): legal/);
+    // Marketing joined the vocabulary on 2026-11-18 for the Open House funnel case study.
+    expect(departmentsOverrideProblem(['marketing'])).toBeNull();
     expect(departmentsOverrideProblem(['sales', 'sales'])).toMatch(/repeat/);
   });
 });
@@ -72,7 +74,7 @@ describe('W10: the admin override refuses a bad tag before touching any record',
     await expect(applyHumanOverride({
       caseStudyId: '6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b',
       path: 'taxonomy.departments',
-      value: ['marketing'],
+      value: ['legal'],
       actor: 'ali@colaberry.com',
     })).rejects.toMatchObject({ error_class: 'ValidationError' });
   });

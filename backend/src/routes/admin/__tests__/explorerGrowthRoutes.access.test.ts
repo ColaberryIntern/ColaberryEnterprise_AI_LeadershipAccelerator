@@ -56,6 +56,9 @@ jest.mock('../../../services/explorerGrowth/explorerDecisionsService', () => dec
 jest.mock('../../../services/explorerGrowth/explorerLearnerService', () => learner);
 jest.mock('../../../services/explorerGrowth/explorerWhyService', () => why);
 jest.mock('../../../services/explorerGrowth/explorerCampusService', () => campus);
+// OH1k: the one-front-door controls read.
+const controls = { getExplorerControls: jest.fn() };
+jest.mock('../../../services/explorerGrowth/explorerControlsService', () => controls);
 
 // The draft render behind the two write routes. Mocked so this file never calls a
 // paid model, and so the flag-off path can be proven to not call it AT ALL.
@@ -135,6 +138,8 @@ const ROUTES: {
   { name: 'eligibility', path: `${BASE}/eligibility/${ID}`, badInput: `${BASE}/eligibility/${BAD}`, notFound: 'learner' },
   { name: 'campus', path: `${BASE}/campus`, badInput: null, notFound: null },
   { name: 'outreach', path: `${BASE}/outreach?view=engaged`, badInput: `${BASE}/outreach?view=everyone`, notFound: null },
+  // OH1k: read-only controls (kill switch, countdown event rule, every switch, shelves).
+  { name: 'controls', path: `${BASE}/controls`, badInput: null, notFound: null },
 ];
 
 /** Every service returns something, so a 200 means the route reached its service. */
@@ -154,6 +159,7 @@ function serveAll() {
   campus.getCampusActivity.mockResolvedValue({ explorers: 340 });
   campus.getOutreach.mockResolvedValue({ view: 'engaged', rows: [], tracked_since: '2026-10-26' });
   draftRepo.loadDraftHistory.mockResolvedValue([]);
+  controls.getExplorerControls.mockResolvedValue({ killSwitch: { active: false, readable: true } });
 }
 
 beforeEach(() => {
@@ -167,7 +173,7 @@ describe('the route table is the fifteen in scope (twelve + campus and outreach 
     // assertion rather than passing silently. §27 lists 14; two are EPIC 12's.
     // Phase 3 adds `/decisions/:id/history`, the version-history read behind the
     // regenerate button.
-    expect(ROUTES).toHaveLength(15);
+    expect(ROUTES).toHaveLength(16); // OH1k added /controls
   });
 });
 
@@ -204,9 +210,9 @@ describe('200 authorised', () => {
 describe('400 on malformed input', () => {
   const withInput = ROUTES.filter((r) => r.badInput !== null);
 
-  it('covers thirteen of the fifteen — /summary and /campus take no input', () => {
+  it('covers thirteen of the sixteen — /summary, /campus and /controls take no input', () => {
     expect(withInput).toHaveLength(13);
-    expect(ROUTES.filter((r) => r.badInput === null).map((r) => r.name)).toEqual(['summary', 'campus']);
+    expect(ROUTES.filter((r) => r.badInput === null).map((r) => r.name)).toEqual(['summary', 'campus', 'controls']);
   });
 
   it.each(withInput)('$name rejects malformed input', async ({ badInput }) => {
@@ -233,13 +239,13 @@ describe('404 — qualified by which identifier the route takes', () => {
   const decisionRoutes = ROUTES.filter((r) => r.notFound === 'decision');
   const noIdRoutes = ROUTES.filter((r) => r.notFound === null);
 
-  it('splits five learner-id, one decision-id, nine with no id', () => {
+  it('splits five learner-id, one decision-id, ten with no id', () => {
     expect(learnerRoutes).toHaveLength(5);
     // Still ONE decision-id 404: the history read takes a decision id but answers an empty
     // list rather than a 404, because "no versions" is a true answer about a real decision.
     expect(decisionRoutes).toHaveLength(1);
-    expect(noIdRoutes).toHaveLength(9);
-    expect(learnerRoutes.length + decisionRoutes.length + noIdRoutes.length).toBe(15);
+    expect(noIdRoutes).toHaveLength(10);
+    expect(learnerRoutes.length + decisionRoutes.length + noIdRoutes.length).toBe(16);
   });
 
   it.each(learnerRoutes)('$name 404s on an unknown learner', async ({ path }) => {
@@ -333,9 +339,9 @@ describe('the write surface is exactly two POSTs, at exactly two paths, and noth
     );
   });
 
-  it('registers exactly fifteen GETs', () => {
+  it('registers exactly sixteen GETs (OH1k added /controls)', () => {
     const gets = stack.filter((l) => l.route?.methods?.get);
-    expect(gets).toHaveLength(15);
+    expect(gets).toHaveLength(16);
   });
 
   it('rejects a POST to a real GET path', async () => {
@@ -478,10 +484,11 @@ describe('a rejected service answers 500 — it does not hang, and it does not k
     campus: campus.getCampusActivity,
     outreach: campus.getOutreach,
     'draft history': draftRepo.loadDraftHistory,
+    controls: controls.getExplorerControls,
   };
 
-  it('covers all fifteen routes', () => {
-    expect(Object.keys(REJECTORS)).toHaveLength(15);
+  it('covers all sixteen routes', () => {
+    expect(Object.keys(REJECTORS)).toHaveLength(16);
     // And every one of them is a route in the table, so a renamed route cannot leave a
     // rejector pointing at nothing while the count still passes.
     expect(Object.keys(REJECTORS).sort()).toEqual(ROUTES.map((r) => r.name).sort());

@@ -76,6 +76,23 @@ const RESTING = new Set(['case_study_not_approved', 'snapshot_not_approved']);
   const pick = (latest.content.identity || {}).heroImageUrl;
   add('the cover is the concept Ali picked (§8f), and the video poster matches it', !!pick && wv.posterUrl === pick, pick ? (wv.posterUrl === pick ? 'cover = poster' : 'poster differs from cover') : 'no cover yet: generate three concepts and open the picker on day one');
 
+  // The story in brief (Ali, 2026-11-18: "sometimes the opening paragraph does a good job explaining and
+  // sometimes it doesn't"). 3 to 5 labeled beats at identity.storyInBrief; the band under the masthead.
+  let briefProblem;
+  try { briefProblem = require(`${D}/services/caseStudy/caseStudyStoryInBrief`).storyInBriefProblem((latest.content.identity || {}).storyInBrief); }
+  catch (e) { const b = (latest.content.identity || {}).storyInBrief; briefProblem = Array.isArray(b) && b.length >= 3 && b.length <= 5 ? null : 'no story in brief (server predates the field)'; }
+  add('the story in brief tells the whole arc in 3 to 5 beats (identity.storyInBrief)', briefProblem === null, briefProblem || `${latest.content.identity.storyInBrief.length} beats`);
+  // Hardened after the 17-18 Nov builds (SKILL.md, "The story in brief"): a figure in What happened,
+  // nothing that reads like a ticket, no copy of the standfirst, no two beats alike.
+  const briefLint = core.storyInBriefLint((latest.content.identity || {}).storyInBrief, (latest.content.identity || {}).standfirst);
+  add('the story in brief is a story, not a ticket: a figure in What happened, no code words, no repeats', briefLint.length === 0, briefLint.length ? briefLint.join('; ') : 'clean');
+  // Ali, 2026-11-18: "Don't ever show code in a case study."
+  const coded = core.codeShownArtifacts(latest.content.artifacts);
+  add('no code shown: no public artifact of source, a prompt, a terminal or the builder tool', coded.length === 0, coded.length ? `remove: ${coded.join(' | ')}` : 'clean');
+
+  const reserved = core.mermaidReservedIds((latest.content.architecture || {}).diagramSource);
+  add('the architecture diagram parses: no node named after a Mermaid keyword', reserved.length === 0, reserved.length ? `rename node(s): ${reserved.join(', ')}` : 'clean');
+
   // The real gate, with service-link facts (the bare gate reports every record as unlinked).
   const gate = require(`${D}/services/caseStudy/caseStudyPublishGate`);
   const store = require(`${D}/services/caseStudy/caseStudyPublicationStore`);

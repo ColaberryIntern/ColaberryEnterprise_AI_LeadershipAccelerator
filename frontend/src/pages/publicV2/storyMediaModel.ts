@@ -58,6 +58,8 @@ export interface StorySlide {
   readonly href: string;
   readonly artifactType: CaseStudyArtifactType;
   readonly presentation: 'evidence' | 'atmosphere';
+  /** The artifact's own sentence, shown under the title. Optional: older callers build slides without it. */
+  readonly description?: string | null;
 }
 
 /** An open artifact that is an image and has somewhere to point. */
@@ -75,6 +77,7 @@ function toSlide(artifact: PublicCaseStudyArtifact): StorySlide | null {
     href: artifact.url,
     artifactType: artifact.artifactType,
     presentation: artifact.presentation,
+    description: artifact.description,
   };
 }
 

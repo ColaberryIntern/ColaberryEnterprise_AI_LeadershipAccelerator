@@ -8,6 +8,7 @@ import { getVisitorWorkflowStage } from './admissionsWorkflowService';
 import { buildPersonalizedContext } from './mayaPersonalizationService';
 import { getCampaignContext, formatCampaignContextForPrompt } from './campaignContextService';
 import { Lead } from '../models';
+import { mayaMemoryBlock } from './maya/mayaMemory';
 
 /**
  * Maya's admissions voice, one paragraph. Shared by the public site chat (below) and the portal DM prompt
@@ -69,6 +70,16 @@ Your goals:
   const memoryContext = await buildMemoryContext(params.visitorId, params.leadId);
   if (memoryContext) {
     parts.push(`\n${memoryContext}`);
+  }
+
+  // OH1g: the one memory - what Maya and this person said on email, calls and the campus IM. This chat's own
+  // messages are already the conversation history, so chat_messages is not repeated here. Never throws.
+  const oneMemory = await mayaMemoryBlock(
+    { visitorId: params.visitorId, leadId: params.leadId ?? null },
+    { excludeSources: ['chat_messages'], limit: 20, maxChars: 3000 },
+  );
+  if (oneMemory) {
+    parts.push(`\n${oneMemory}`);
   }
 
   // Knowledge context (RAG). Appended unconditionally once there is a message to match:

@@ -122,6 +122,15 @@ export const PRESENTATION_SLOT_STATEMENTS: string[] = [
      ON presentation_slot_reservations (enrollment_id)`,
   `CREATE INDEX IF NOT EXISTS presentation_slot_held
      ON presentation_slot_reservations USING gist (slot) WHERE state = 'held'`,
+
+  // Capacity denials are recorded as rows in THIS table with state = 'denied' (see
+  // PRESENTATION_SLOT_STATES): a practice request that could not be served is the same
+  // subject as one that could, needs no table of its own, and never participates in the
+  // overlap constraint, which is partial on state = 'held'. This partial index is what
+  // makes "when did practice start running out of rooms" a cheap query over a small
+  // slice rather than a scan of every reservation ever held.
+  `CREATE INDEX IF NOT EXISTS presentation_slot_denied
+     ON presentation_slot_reservations (created_at) WHERE state = 'denied'`,
 ];
 
 export const PRESENTATION_SLOT_REQUIRED_COLUMNS: string[] = [
@@ -143,8 +152,13 @@ export const PRESENTATION_SLOT_CONSTRAINT_ALTERNATIVES: string[] = [
   'presentation_slot_no_overlap_per_host',
 ];
 
-/** Held blocks the slot. Released and cancelled do not, but are kept for history. */
-export const PRESENTATION_SLOT_STATES = ['held', 'released', 'cancelled'] as const;
+/**
+ * Held blocks the slot. Released and cancelled do not, but are kept for history.
+ * Denied is not a reservation at all: it is a durable record of a practice request the
+ * platform could not serve (no eligible host, or every host busy), written here so an
+ * operator can see when capacity starts to bite. It is never 'held', so it never blocks.
+ */
+export const PRESENTATION_SLOT_STATES = ['held', 'released', 'cancelled', 'denied'] as const;
 
 export async function ensurePresentationSlotSchema(): Promise<void> {
   for (const sql of PRESENTATION_SLOT_STATEMENTS) {
