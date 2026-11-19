@@ -24,7 +24,7 @@ import { SURVEY, DAILY, Question, dailyFor, answerLines, GAMES, WAGER, gameForDa
 import {
   Busy, Slot, PlanItem, RawPick, ctNow, mondayOf, weekDates, addDays, candidateSlots, pickWeekdaySlots,
   weekendSlots, pendingDays, weekdayIndex, shapeItem, nextSlot, fitsSlot, prettyDay, prettyTime, toMin, fromMin,
-  isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange,
+  isWeekday, prevWeekday, decideWinner, PROGRAM_START, mergeBusy, looksLikeGrid, removeRange, similarPrize, assumedWorkHours,
 } from './sparkLogic';
 
 export type Person = 'ali' | 'addie';
@@ -208,18 +208,30 @@ export async function lockScore(p: Person): Promise<void> {
  * The 15-minute prize, chosen by Spark from this person's own answers and their group ranking (Ali,
  * 2026-11-18: "you should pick the prize for the 15 minutes based on our answers"). The partner owes it.
  */
-async function pickPrize(p: Person, groups: string[]): Promise<{ prize: string; why: string }> {
+async function pickPrize(p: Person, groups: string[], avoid: string[] = []): Promise<{ prize: string; why: string }> {
   const top = groups.find((g) => g in WAGER) || 'Sweet 💗';
-  const fallback = { prize: WAGER[top][0], why: `From the group you ranked first (${top.replace(/\s\S+$/, '')}).` };
-  try {
+  const fresh = (x: string) => !avoid.some((a) => similarPrize(a, x));
+  const order = [top, ...groups.filter((g) => g !== top && g in WAGER), ...Object.keys(WAGER)];
+  const listed = order.map((g) => ({ g, x: WAGER[g].find(fresh) })).find((o) => o.x);
+  const fallback = listed
+    ? { prize: String(listed.x), why: `From the ${listed.g.replace(/\s\S+$/, '')} prizes you ranked.` }
+    : { prize: WAGER[top][0], why: `From the group you ranked first (${top.replace(/\s\S+$/, '')}).` };
+  const avoidText = avoid.length ? `\nPrizes they already got (choose something clearly DIFFERENT, a different kind of thing, not a variation of these): ${avoid.slice(0, 15).join('; ')}.` : '';
+  for (let attempt = 0; attempt < 2; attempt++) try {
     const out = await chat([
       { role: 'system', content: `You choose a 15-minute game prize for one partner in a married couple. The other partner gives it to them tonight or tomorrow, at home or nearby, with no planning and little or no cost. Make it specific to this person's answers (a concrete action, not a category), warm or playful; flirty is fine, explicit is not. No em dashes. Phrase the prize as what they receive, a short noun phrase that reads after "Your prize:" (for example "A 15-minute back rub with the lavender lotion"). Reply only in JSON: {"prize": "under 90 characters", "why": "1 sentence, citing their answers, written to them as you"}` },
-      { role: 'user', content: `Their answers:\n${(await personLines(p)).map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}\n\nPrize groups they ranked today, favorite first: ${groups.length ? groups.join(' > ') : 'not ranked'}.\nExamples of the kind of prize in their top group: ${WAGER[top].join('; ')}.\nPick one prize from their top group's spirit that fits them best.` },
-    ], 0.8);
+      { role: 'user', content: `Their answers:\n${(await personLines(p)).map((x) => `- ${x}`).join('\n') || '- (no answers yet)'}\n\nPrize groups they ranked today, favorite first: ${groups.length ? groups.join(' > ') : 'not ranked'}.\nExamples of the kind of prize in their top group: ${WAGER[top].join('; ')}.\nPick one prize from their top group's spirit that fits them best.${avoidText}` },
+    ], attempt ? 1 : 0.8);
     const clean = (s: unknown, n: number) => String(s || '').replace(/\s+/g, ' ').replace(/ ?[—–] ?/g, ', ').trim().slice(0, n);
     const prize = clean(out.prize, 110);
-    return prize ? { prize, why: clean(out.why, 220) } : fallback;
-  } catch (e: any) { console.warn('[Spark] prize pick failed, using the list:', e.message); return fallback; }
+    if (prize && fresh(prize)) return { prize, why: clean(out.why, 220) };
+  } catch (e: any) { console.warn('[Spark] prize pick failed, using the list:', e.message); }
+  return fallback;
+}
+
+/** Every prize this person has had before `day` (Ali, 2026-11-19: "avoid doing the same prize"). */
+async function pastPrizes(p: Person, day: string): Promise<string[]> {
+  return (await rows('wager', { person: p }, 100)).filter((r) => r.day && String(r.day) < day && r.data.prize).map((r) => String(r.data.prize));
 }
 
 /** The wager: rank the 5 groups secretly. Spark picks the exact prize from your answers; you see it only if you win. */
@@ -230,19 +242,22 @@ export async function saveWager(p: Person, groups: unknown): Promise<{ ok: true 
   if (st.wager) return { ok: true };
   const g = Array.isArray(groups) ? groups.map(String).filter((x) => x in WAGER) : [];
   if (g.length !== Object.keys(WAGER).length) throw new Error('rank every group');
-  const { prize, why } = await pickPrize(p, g);
+  const { prize, why } = await pickPrize(p, g, await pastPrizes(p, day));
   await insert('wager', p, mondayOf(day), day, { groups: g, picks: [], prize, why });
   await insert('lesson', p, mondayOf(day), day, { text: `One of you put "${g[0].replace(/\s\S+$/, '')}" prizes first today.`, private: true });
   return { ok: true };
 }
 
-/** The winner's prize for a day: their wager's, or (when they skipped the wager) one Spark picks now and keeps. */
+/** The winner's prize for a day: their wager's, or (when they skipped the wager, or it repeats an earlier prize) one Spark picks now and keeps. */
 async function prizeFor(p: Person, day: string): Promise<{ prize: string; why: string | null }> {
   const w = await one('wager', { person: p, day });
-  if (w?.data.prize) return { prize: String(w.data.prize), why: w.data.why ? String(w.data.why) : null };
+  const past = await pastPrizes(p, day);
+  if (w?.data.prize && !past.some((x) => similarPrize(x, String(w.data.prize)))) return { prize: String(w.data.prize), why: w.data.why ? String(w.data.why) : null };
   const recent = (await rows('wager', { person: p }, 5)).find((r) => (r.data.groups || []).length);
-  const { prize, why } = await pickPrize(p, recent ? recent.data.groups : []);
-  await insert('wager', p, mondayOf(day), day, { groups: [], picks: [], prize, why, auto: true });
+  const groups: string[] = (w?.data.groups || []).length ? w!.data.groups : recent ? recent.data.groups : [];
+  const { prize, why } = await pickPrize(p, groups, past);
+  if (w) await update(w.id, { ...w.data, prize, why, repicked: String(w.data.prize) }); // a repeat: picked again, once, and kept
+  else await insert('wager', p, mondayOf(day), day, { groups: [], picks: [], prize, why, auto: true });
   return { prize, why };
 }
 
@@ -398,7 +413,8 @@ export async function finishPlanning(p: Person, note: string, force = false): Pr
   const data = { ...prev, done: true, retake: false, note: String(note || prev.note || '').slice(0, 600) };
   if (row) await update(row.id, data); else await insert('calendar', p, week, null, data);
   const partner = await one('calendar', { person: other(p), week });
-  if (partner?.data.done || force) { void planWeek(week, { fill: true }).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
+  // A retake photo still on its way must not hold up the week (Ali, 2026-11-19).
+  if (partner?.data.done || partner?.data.retake || force) { void planWeek(week, { fill: true }).catch((e) => console.error('[Spark] plan failed:', e.message)); return { planning: true }; }
   return { planning: false };
 }
 
@@ -438,7 +454,10 @@ async function weekBusy(week: string): Promise<{ busy: Busy[]; notes: string[]; 
     const c = await one('calendar', { person: p, week });
     if (c?.data.busy) busy.push(...c.data.busy);
     if (c?.data.note) notes.push(String(c.data.note));
-    if (!c?.data.done) missing.push(PEOPLE[p].name);
+    if (c?.data.retake && !(c.data.busy || []).length) {
+      busy.push(...assumedWorkHours(week)); // photo not in yet: assume a workday, so Sparks land in the evening
+      notes.push(`${PEOPLE[p].name}'s new calendar photo is not in yet; assume ${PEOPLE[p].name} works weekdays until 5:30 PM.`);
+    } else if (!c?.data.done) missing.push(PEOPLE[p].name);
   }
   return { busy, notes, missing };
 }
@@ -500,6 +519,7 @@ async function history(): Promise<{ past: string[]; lessons: string[] }> {
 const RULES = `You plan "Spark Hour" dates for a married couple (Partner 1 and Partner 2) who live in ${HOME_AREA}, with a young son.
 Rules:
 - Weekday Sparks happen at the slot's time: a midday break or a weekday evening. An evening Spark must still work with a young son at home (after bedtime, or something he can be near), unless it is an outing. "home" = about 60 minutes at the house. "out" = 90 minutes total INCLUDING the drive both ways, so a drive of at most 20 minutes each way, and only well-known, long-standing places that are reliably open at that time.
+- It is dark by about 5:30 PM from November through February: an evening outing must be indoors or at a lit, busy spot, never a trail, park walk, sunset or anything that needs daylight.
 - The weekend date can be morning, afternoon or evening, 2 to 3 hours, at most 1.5 hours' drive each way.
 - Match what BOTH partners said. When they differ, find the overlap or alternate. Be creative and specific: a concrete plan, not a category. Give each Spark one playful prompt, question or small dare to do during it.
 - "why" must cite their answers WITHOUT revealing who said what: say "one of you", never "Partner 1/2". Say "you both" ONLY when both partners' answers actually say it.
