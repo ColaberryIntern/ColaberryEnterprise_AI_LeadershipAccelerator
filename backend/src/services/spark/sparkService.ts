@@ -518,7 +518,7 @@ async function history(): Promise<{ past: string[]; lessons: string[] }> {
 
 const RULES = `You plan "Spark Hour" dates for a married couple (Partner 1 and Partner 2) who live in ${HOME_AREA}, with a young son.
 Rules:
-- Weekday Sparks happen at the slot's time: a midday break or a weekday evening. An evening Spark must still work with a young son at home (after bedtime, or something he can be near), unless it is an outing. "home" = about 60 minutes at the house. "out" = 90 minutes total INCLUDING the drive both ways, so a drive of at most 20 minutes each way, and only well-known, long-standing places that are reliably open at that time.
+- Weekday Sparks happen at the slot's time: a midday break or a weekday evening. An evening Spark must still work with a young son at home (after bedtime, or something he can be near), unless it is an outing. Every weekday Spark is 60 minutes, "home" or "out". For "out", walk first: a stroll around the neighborhood or the nearest park or spot you can walk to from home (driveMinutesEachWay 0). Drive only when nothing walkable fits, and then to the CLOSEST place of that kind, at most 10 minutes each way (never pass nearer options to reach a farther one), and only well-known, long-standing places that are reliably open at that time. Only for a real special occasion (a birthday, anniversary or holiday that falls that day) set "special" to the occasion's name: then it can be 90 minutes with up to 20 minutes' drive each way. Otherwise "special" is null.
 - It is dark by about 5:30 PM from November through February: an evening outing must be indoors or at a lit, busy spot, never a trail, park walk, sunset or anything that needs daylight.
 - The weekend date can be morning, afternoon or evening, 2 to 3 hours, at most 1.5 hours' drive each way.
 - Match what BOTH partners said. When they differ, find the overlap or alternate. Be creative and specific: a concrete plan, not a category. Give each Spark one playful prompt, question or small dare to do during it.
@@ -528,10 +528,10 @@ Rules:
 - No em dashes.
 Reply only in JSON.`; // json_object mode refuses any request whose messages never say "JSON"
 
-const ITEM_SHAPE = '{"slot": "<slot id>", "place": "home"|"out", "title": "short name", "emoji": "one emoji", "venue": "place name and city, or null for home", "driveMinutesEachWay": number, "minutes": number, "plan": "2 to 3 sentences: what you do, plus the playful prompt", "why": "1 to 2 sentences"}';
+const ITEM_SHAPE = '{"slot": "<slot id>", "place": "home"|"out", "title": "short name", "emoji": "one emoji", "venue": "place name and city, or null for home", "driveMinutesEachWay": number, "minutes": number, "special": "occasion name or null", "plan": "2 to 3 sentences: what you do, plus the playful prompt", "why": "1 to 2 sentences"}';
 
 function slotLine(id: string, s: Slot, kind: string): string {
-  return `${id}: ${kind}, ${prettyDay(s.date)} starting ${prettyTime(s.start)}, up to ${toMin(s.maxEnd) - toMin(s.start)} minutes`;
+  return `${id}: ${kind}, ${prettyDay(s.date)} starting ${prettyTime(s.start)}, up to ${toMin(s.maxEnd) - toMin(s.start)} minutes${kind === 'weekday' ? ' (plan 60; 90 only for a special occasion)' : ''}`;
 }
 
 const FALLBACK: RawPick[] = [

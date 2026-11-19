@@ -2,7 +2,7 @@
  * Spark Hour - pure scheduling logic (no database, no network), so it can be unit tested.
  *
  * Spark Hour (Ali + Addie, 2026-11-16): each week Spark plans 3 weekday "Sparks" in a midday hour when
- * both are out of meetings (about 1 hour at home, or up to 90 minutes out including the drive) and 1
+ * both are out of meetings (1 hour, at home or a walk or short drive away; 90 minutes only for a special occasion) and 1
  * weekend date. Each person answers questions separately; Spark decides. They can change the time but
  * never pick the activity. Anything not done on its day carries to the next day ("If something is not
  * done on Monday, combine for Tuesday and so on throughout the week").
@@ -156,8 +156,12 @@ export interface PlanItem {
 
 export interface RawPick {
   slot?: string; place?: string; title?: string; emoji?: string; plan?: string; why?: string;
-  venue?: string | null; driveMinutesEachWay?: number; minutes?: number;
+  venue?: string | null; driveMinutesEachWay?: number; minutes?: number; special?: string | null;
 }
+
+/** Ali, 2026-11-19: "keep them at an hour if we can and special occasions do the 1.5", and walk before you drive. */
+export const NEAR_DRIVE = 10;
+export const SPECIAL_DRIVE = 20;
 
 /** Turn a model's pick into a safe plan item for a slot: enforce the time limits, never trust free text blindly. */
 export function shapeItem(id: string, kind: 'weekday' | 'weekend', slot: Slot, raw: RawPick): PlanItem | null {
@@ -172,8 +176,10 @@ export function shapeItem(id: string, kind: 'weekday' | 'weekend', slot: Slot, r
     if (drive > 90) return null; // the weekend date can travel, but not more than 1.5 hours each way
     minutes = Math.min(WEEKEND_MINUTES, Math.max(90, Math.round(Number(raw.minutes) || 150)));
   } else {
-    if (place === 'out' && (room < OUT_MINUTES || drive > 25)) return null; // an outing needs 90 minutes, drive included
-    minutes = place === 'out' ? OUT_MINUTES : HOME_MINUTES;
+    // One hour, home or out, drive included. Only a named special occasion gets 90 minutes and a longer drive.
+    const special = String(raw.special || '').trim();
+    minutes = special && room >= OUT_MINUTES ? OUT_MINUTES : HOME_MINUTES;
+    if (place === 'out' && drive > (minutes === OUT_MINUTES ? SPECIAL_DRIVE : NEAR_DRIVE)) return null;
   }
   const clean = (s: unknown, n: number) => String(s || '').replace(/\s+/g, ' ').replace(/ ?[—–] ?/g, ', ').trim().slice(0, n);
   return {
@@ -218,7 +224,7 @@ export function decideWinner(a: number | null, b: number | null): Array<'a' | 'b
 export function fitsSlot(item: PlanItem, slot: Slot): boolean {
   if (item.kind === 'weekend') return true;
   const room = toMin(slot.maxEnd) - toMin(slot.start);
-  return item.place === 'home' ? room >= HOME_MINUTES : room >= OUT_MINUTES;
+  return room >= toMin(item.end) - toMin(item.start);
 }
 
 // ---------------------------------------------------------------------------------- what was read from a calendar photo
