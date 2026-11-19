@@ -84,19 +84,10 @@ const REPORTS = [
     sendHourUTC: 19,  // 2 PM CT
     description: 'Client project. Per-list cards with DRAFTED BY CB pattern. Karun on CC (added 2026-06-01).',
   },
-  {
-    name: 'LandJet',
-    scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=LandJet', '--with-contextual'],
-    projectId: 46699826,
-    needsOpenai: true,
-    recipients: STANDARD_RECIPIENTS,
-    cbRunnerState: 'tmp/cb-ai-runner-state-46699826.json',
-    skipFlag: '--skip-clients',
-    cadence: 'daily',
-    sendHourUTC: 20,  // 3 PM CT
-    description: 'Client project. Per-list cards with DRAFTED BY CB pattern.',
-  },
+  // ---- LandJet daily client report: RETIRED 2026-11-19 ----
+  // Ali: client relationship ended, everything LandJet is shut down
+  // (session CC-20261119-lj4r). Entry removed, not skip-flagged, because its
+  // skipFlag --skip-clients is shared with AI Pathway and ShipCES.
   // ---- Anthropic Partner Network daily countdown: RETIRED 2026-09-16 ----
   // Ali: "let's remove this auto email and archive the project - it is no
   // longer relevant." The entry that fired dailyAnthropicPartnerCountdown.js at

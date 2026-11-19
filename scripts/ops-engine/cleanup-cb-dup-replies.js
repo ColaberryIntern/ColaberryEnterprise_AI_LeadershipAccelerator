@@ -42,7 +42,7 @@ const DATE_FLOOR = Date.parse('2026-06-14T23:00:00Z');
 const TARGETS = [
   { bucket: 47502609, rec: 9946499000, name: 'Launch PMO' },
   { bucket: 47502609, rec: 9946499054, name: 'Launch PMO' },
-  { bucket: 46699826, rec: 9946698771, name: 'LandJet' },
+  // LandJet (bucket 46699826) removed 2026-11-19: project retired.
 ];
 
 let TOKEN = process.env.BASECAMP_ACCESS_TOKEN || '';

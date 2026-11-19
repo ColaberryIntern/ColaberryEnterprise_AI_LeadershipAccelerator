@@ -104,16 +104,7 @@ const REPORTS_LEGACY_UNUSED = [
     cbRunnerState: 'tmp/cb-ai-runner-state-47126345.json',
     skipFlag: '--skip-clients',
   },
-  {
-    name: 'LandJet',
-    scriptPath: 'backend/src/scripts/dailyClientProjectsReport.js',
-    args: ['--only=LandJet'],
-    projectId: 46699826,
-    needsOpenai: true,
-    recipients: { to: 'ali@colaberry.com', cc: ['ram@colaberry.com'] },
-    cbRunnerState: 'tmp/cb-ai-runner-state-46699826.json',
-    skipFlag: '--skip-clients',
-  },
+  // LandJet: RETIRED 2026-11-19 (client relationship ended, CC-20261119-lj4r).
   {
     name: 'Anthropic Partner Network',
     scriptPath: 'backend/src/scripts/dailyAnthropicPartnerCountdown.js',

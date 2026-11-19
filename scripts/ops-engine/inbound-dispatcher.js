@@ -451,7 +451,6 @@ function classifyKeyword(text, requester) {
 const WATCHED_BUCKETS_FALLBACK = [
   46697389, // AI Pathway
   47126345, // ShipCES
-  46699826, // LandJet
   47346103, // Gov Contracts
   47477101, // Anthropic Partner Network
   7463955,  // Ali Personal
@@ -459,6 +458,15 @@ const WATCHED_BUCKETS_FALLBACK = [
   33392153, // Family Goals
   24864171, // Power BI - Center of Excellence
 ];
+
+// Projects whose engagement is over. The dispatcher must never answer in them,
+// even while the Basecamp project is still active (archiving it is a manual step).
+// 46699826 = LandJet Growth Engine, retired 2026-11-19 (Ali: client relationship ended).
+const RETIRED_BUCKETS = new Set([46699826]);
+
+function excludeRetiredBuckets(ids) {
+  return (ids || []).filter((id) => !RETIRED_BUCKETS.has(Number(id)));
+}
 
 async function getWatchedBuckets() {
   // CRITICAL: /projects.json?status=active returns 400 - BC's status param does
@@ -471,13 +479,13 @@ async function getWatchedBuckets() {
     if (Array.isArray(projects) && projects.length > 0) {
       // Filter out trashed/archived explicitly in case the API ever changes default
       const active = projects.filter((p) => !p.status || p.status === 'active');
-      return active.map((p) => p.id);
+      return excludeRetiredBuckets(active.map((p) => p.id));
     }
     console.warn('  /projects.json returned empty; falling back to hardcoded list');
   } catch (e) {
     console.warn(`  /projects.json failed (${e.message}); falling back to hardcoded list`);
   }
-  return WATCHED_BUCKETS_FALLBACK;
+  return excludeRetiredBuckets(WATCHED_BUCKETS_FALLBACK);
 }
 
 // PRIMARY scan: Basecamp's account-wide recordings feed. One paginated query
@@ -686,7 +694,7 @@ async function scanRecordingComments({ bucketId, recId, cutoffMs, state, newMent
 }
 
 // Exported for unit tests. Guarded IIFE below only runs when executed directly.
-module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID, noteReply, AUTOTRIP_MAX, AUTOTRIP_WINDOW_MS, classifyIdentity };
+module.exports = { shouldCircuitBreak, replyCountFor, recordReply, isCBMention, isAutomatedAgentCard, classifyKeyword, MAX_REPLIES_PER_COMMENT, findNewMentionsByFeed, findNewMentionsByWalk, isOwnOutput, CB_SYSTEM_ID, noteReply, AUTOTRIP_MAX, AUTOTRIP_WINDOW_MS, classifyIdentity, excludeRetiredBuckets, RETIRED_BUCKETS, WATCHED_BUCKETS_FALLBACK };
 
 if (require.main !== module) return;
 

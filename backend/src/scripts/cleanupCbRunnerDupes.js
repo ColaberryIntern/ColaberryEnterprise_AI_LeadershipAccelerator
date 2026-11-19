@@ -26,7 +26,7 @@ const CB = 37708014;
 const APPLY = process.argv.includes('--apply');
 
 const TARGETS = [
-  { bucket: 46699826, name: 'LandJet Growth Engine' },
+  // LandJet Growth Engine (bucket 46699826) removed 2026-11-19: project retired.
   { bucket: 46697389, name: 'AI Pathway' },
   { bucket: 47126345, name: 'ShipCES' },
 ];
