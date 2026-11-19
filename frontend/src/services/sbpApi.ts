@@ -172,6 +172,39 @@ export async function fetchIntakeQuestions(input: {
   }
 }
 
+/** The text read out of an uploaded scope document. Mirrors IntakeDocumentResult in backend/src/services/sbp/intakeDocument.ts. */
+export interface IntakeDocument {
+  fileName: string;
+  text: string;
+  /** True when the document was longer than the intake can take and was cut. */
+  truncated: boolean;
+  chars: number;
+}
+
+/**
+ * Read a scope document the student already has (PDF, DOCX, PPTX, TXT, MD).
+ * Stores nothing: the text comes back and the wizard folds it into the idea.
+ * The server's refusals are written for the student, so they are passed
+ * through as the message rather than reclassified.
+ */
+export async function extractIntakeDocument(file: File): Promise<{ ok: true; doc: IntakeDocument } | { ok: false; error: SbpError }> {
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/extract', form, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000,
+    });
+    return { ok: true, doc: res.data };
+  } catch (err: any) {
+    const e = toError(err);
+    const status = err?.response?.status;
+    const serverSays = typeof err?.response?.data?.error === 'string' ? err.response.data.error : null;
+    if (status === 413 && !serverSays) e.message = 'That file is too large to upload. Try a smaller copy, or paste the text in.';
+    else if (serverSays && (status === 400 || status === 413 || status === 422)) e.message = serverSays;
+    return { ok: false, error: e };
+  }
+}
+
 /**
  * One statement the server understood, grouped by how much a person can trust
  * it. Mirrors `ReviewItem` in backend/src/services/sbp/intakeReview.ts.

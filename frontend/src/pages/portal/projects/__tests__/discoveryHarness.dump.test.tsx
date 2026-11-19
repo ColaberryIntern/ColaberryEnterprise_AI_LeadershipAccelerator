@@ -27,6 +27,7 @@ jest.mock('../../../../services/sbpApi', () => ({
   fetchIntakeQuestions: jest.fn(),
   previewIntake: jest.fn(),
   getCaseStudyFoundation: jest.fn(),
+  extractIntakeDocument: jest.fn(),
   describeFailure: () => ({ title: '', body: '', action: '' }),
 }));
 jest.mock('../../useIsExplorer', () => ({ useIsExplorer: () => false }));
@@ -136,6 +137,7 @@ maybe('discovery harness', () => {
     (previewIntake as jest.Mock).mockResolvedValue(PREVIEW);
 
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea'));
     await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya reads every draft before anything goes out, and anything over a $500 claim needs her sign-off in writing.');
@@ -154,6 +156,7 @@ maybe('discovery harness', () => {
     (previewIntake as jest.Mock).mockResolvedValue({ ok: false, error: { status: 503, kind: 'server_error', message: 'unreachable' } });
 
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea'));
     await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
@@ -178,7 +181,33 @@ maybe('discovery harness', () => {
 
   it('step 1: the copy that says why detail matters', async () => {
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump'));
     write('04-step1.html', container.innerHTML);
+  });
+
+  it('step 1: the guided outline, part filled (the B · Guided outline reference state)', async () => {
+    await mount(<ProjectWizard onCreate={() => {}} />);
+    await setValue(container.querySelector('#pjg-f-q1') as HTMLTextAreaElement, 'An AI agent that triages my support inbox and drafts replies for my team.');
+    await click(buttonByText('Something arrives'));
+    await click(buttonByText('Gmail'));
+    await click(buttonByText('Slack'));
+    await setValue(container.querySelector('#pjg-f-q6') as HTMLTextAreaElement, 'Any reply that mentions a refund or a cancellation.');
+    write('06-step1-guided.html', container.innerHTML);
+  });
+
+  it('step 1: a scope document attached, brain-dump and guided (L12.2)', async () => {
+    const { extractIntakeDocument } = jest.requireMock('../../../../services/sbpApi');
+    (extractIntakeDocument as jest.Mock).mockResolvedValue({
+      ok: true, doc: { fileName: 'Claims Triage Agent - Scope v3.pdf', text: 'Scope. '.repeat(1800), truncated: false, chars: 12600 },
+    });
+    await mount(<ProjectWizard onCreate={() => {}} />);
+    write('07-step1-upload-empty.html', container.innerHTML);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [new File(['%PDF'], 'scope.pdf', { type: 'application/pdf' })], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
+    write('08-step1-guided-with-doc.html', container.innerHTML);
+    await click(buttonByText('Brain-dump'));
+    write('09-step1-dump-with-doc.html', container.innerHTML);
   });
 
   it('case study readiness: a build record with one open question', async () => {

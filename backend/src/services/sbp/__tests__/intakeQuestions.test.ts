@@ -1,4 +1,5 @@
 import { generateIntakeQuestions } from '../intakeQuestionsService';
+import { INTAKE_IDEA_MAX } from '../intakeLimits';
 import {
   buildIntakeQuestionsPrompt, fallbackQuestions, QUESTION_TARGETS, INTAKE_SYSTEM_PROMPT,
 } from '../intakeQuestionsPrompt';
@@ -57,8 +58,9 @@ describe('intake interview — prompt', () => {
   });
 
   it('caps a very long idea rather than sending it unbounded', () => {
-    const p = buildIntakeQuestionsPrompt({ idea: 'x'.repeat(50_000), size: 'project' });
-    expect(p.length).toBeLessThan(25_000);
+    // The cap is the intake's own idea limit (INTAKE_IDEA_MAX, 60,000 since L12.2), not a second number.
+    const p = buildIntakeQuestionsPrompt({ idea: 'x'.repeat(INTAKE_IDEA_MAX + 50_000), size: 'project' });
+    expect(p.length).toBeLessThan(INTAKE_IDEA_MAX + 5_000);
   });
 });
 

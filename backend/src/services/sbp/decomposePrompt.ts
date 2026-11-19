@@ -33,7 +33,11 @@ import { FLAGS } from '../../config/featureFlags';
 import { neutraliseDelimiters } from '../../utils/promptDelimiters';
 
 export const MAX_DOCUMENT_CHARS = 200_000;
-export const MAX_BRIEF_CHARS = 20_000;
+// The brief is the student's idea (up to INTAKE_IDEA_MAX = 60,000, which now includes an uploaded
+// scope document - L12.2) plus their interview answers (at most 20 x 4,000). It was 20,000, which
+// let the questions step read a whole scope document and the build quietly read only the first third.
+// A literal rather than an import: this module keeps its import list to config reads (see above).
+export const MAX_BRIEF_CHARS = 150_000;
 
 /**
  * One blank line, in the file’s own newlines.

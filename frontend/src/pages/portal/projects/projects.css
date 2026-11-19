@@ -131,6 +131,78 @@
 .pjw-tf{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:rgba(54,120,149,.08);border:1px solid rgba(54,120,149,.28);border-radius:var(--r-16);padding:16px;margin-bottom:14px}
 .pjw-tf select{max-width:180px}
 
+/* Step 1 "Guided outline" (B · Guided outline design reference). Same input as
+   the brain-dump, laid out as the ten things a plan needs. Values follow the
+   mockup; colors go through the portal tokens so dark mode follows. */
+.pjg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.pjw-pane .pjg-head h3{margin:0;padding-top:10px}
+.pjg-modewrap{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.pjg-mode{display:inline-flex;gap:4px;padding:4px;background:var(--surface-sunken,#F1F1F0);border-radius:var(--r-pill,999px)}
+.pjg-mode button{min-height:44px;padding:0 18px;border:none;border-radius:999px;background:transparent;font:inherit;
+  font-size:14px;font-weight:600;color:var(--text-muted);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.pjg-mode button.on{background:var(--surface-page,#fff);box-shadow:0 1px 3px rgba(0,0,0,.12);font-weight:700;color:var(--text-strong)}
+.pjg-mode button:focus-visible{outline:2px solid var(--berry,#367895);outline-offset:2px}
+.pjg-modenote{font-size:12.5px;color:var(--text-muted)}
+.pjg-wrap{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.pjg-nav{flex:0 0 260px;box-sizing:border-box;position:sticky;top:16px;background:var(--surface-sunken,#F8F8F7);
+  border:1px solid var(--border-subtle,#E4E4E3);border-radius:var(--r-12,12px);padding:16px}
+.pjg-navt{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.pjg-prog{display:flex;align-items:center;gap:10px;margin:8px 0 14px}
+.pjg-bar{flex:1;height:5px;border-radius:999px;background:var(--border-default,#D8D8D8);overflow:hidden}
+.pjg-bar i{display:block;height:100%;background:var(--leaf,#5BA63C);transition:width .28s ease}
+@media(prefers-reduced-motion:reduce){.pjg-bar i{transition:none}}
+.pjg-count{font-size:13px;font-weight:600;color:var(--text-strong)}
+.pjg-links{display:flex;flex-direction:column;gap:2px}
+.pjg-links a{display:flex;align-items:center;gap:10px;min-height:36px;text-decoration:none;font-size:14px;color:var(--text-muted)}
+.pjg-links a.on{font-weight:600;color:var(--text-strong)}
+.pjg-links a:hover{color:var(--text-strong)}
+.pjg-dot{flex:none;box-sizing:border-box;width:22px;height:22px;border-radius:50%;border:1.5px solid #B4B4B4;
+  display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700}
+.pjg-dot.on{border:none;background:#3C7A26;color:#fff}
+.pjg-main{flex:1 1 520px;min-width:0;display:flex;flex-direction:column;gap:24px}
+.pjg-sec{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#2E6A86;
+  padding-bottom:8px;border-bottom:1px solid var(--border-subtle,#E4E4E3)}
+.pjg-sec ~ .pjg-sec{margin-top:8px}
+.pjg-q{display:flex;flex-direction:column;gap:8px;scroll-margin-top:16px}
+.pjg-ql{font-size:15px;font-weight:700;color:var(--text-strong)}
+.pjg-hint{font-size:13.5px;color:var(--text-muted)}
+.pjg-q textarea{min-height:72px}
+.pjg-chips{display:flex;flex-wrap:wrap;gap:8px}
+.pjg-chip{min-height:44px;padding:8px 14px;border:1.5px solid var(--border-default,#D8D8D8);border-radius:999px;
+  background:var(--surface-page,#fff);font:inherit;font-size:14px;color:var(--text-body);cursor:pointer;
+  display:inline-flex;align-items:center;gap:7px;text-align:left}
+.pjg-chip.on{border-color:var(--berry,#367895);background:rgba(54,120,149,.08);font-weight:700;color:var(--text-strong)}
+.pjg-chip.add{border-style:dashed;border-color:#8A8A8A;font-weight:600;color:#2E6A86;gap:6px}
+.pjg-chip:focus-visible{outline:2px solid var(--berry,#367895);outline-offset:2px}
+.pjg-addin{width:auto;min-width:220px;border-radius:999px;min-height:44px}
+.pjg-pair{display:flex;gap:12px;flex-wrap:wrap}
+.pjg-half{flex:1 1 240px;display:flex;flex-direction:column;gap:6px}
+.pjg-else{padding-top:20px;border-top:1px solid var(--border-subtle,#E4E4E3)}
+/* Wrap on the CARD's width, not the viewport's: the portal's side rails can
+   leave a narrow card on a wide screen. Below ~860px the outline sits on top. */
+.pjw-pane{container-type:inline-size}
+@container (max-width:860px){.pjg-nav{position:static;flex-basis:100%}}
+.pjg-mode button{white-space:nowrap}
+/* "Already scoped it?" upload (L12.2), in both modes. Dashed like "Add your own" so it reads as optional. */
+.pjg-drop{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;
+  border:1.5px dashed var(--border-default,#D8D8D8);border-radius:var(--r-12,12px);background:var(--surface-sunken,#F8F8F7)}
+.pjg-drop.over{border-color:var(--berry,#367895);background:rgba(54,120,149,.08)}
+.pjg-drop-t{font-size:14px;color:var(--text-body);flex:1 1 300px}
+.pjg-drop-t strong{color:var(--text-strong)}
+.pjg-drop-h{display:block;font-size:12.5px;color:var(--text-muted);margin-top:2px}
+.pjg-drop .pjg-chip.add:disabled{opacity:.7;cursor:progress}
+.pjg-doc{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1.5px solid var(--berry,#367895);
+  border-radius:var(--r-12,12px);background:rgba(54,120,149,.06)}
+.pjg-doc-ic{flex:none;width:36px;height:36px;border-radius:9px;background:rgba(54,120,149,.14);color:#2E6A86;
+  display:flex;align-items:center;justify-content:center}
+.pjg-doc-b{flex:1;min-width:0}
+.pjg-doc-n{font-weight:700;font-size:14.5px;color:var(--text-strong);overflow-wrap:anywhere}
+.pjg-doc-s{font-size:13px;color:var(--text-muted);margin-top:2px}
+.pjg-doc-x{flex:none;min-height:36px;padding:0 14px;border:1.5px solid var(--border-default,#D8D8D8);border-radius:999px;
+  background:var(--surface-page,#fff);font:inherit;font-size:13.5px;font-weight:600;color:var(--text-body);cursor:pointer}
+.pjg-doc-x:hover{border-color:var(--cherry,#FB2832);color:var(--cherry,#FB2832)}
+@container (max-width:480px){.pjg-modewrap{align-items:stretch;width:100%}.pjg-mode button{flex:1;justify-content:center;padding:0 10px}}
+
 /* ── AI-tool preview (milder setup) ── */
 .pjp-card{padding:0;overflow:hidden;margin-bottom:18px}
 .pjp-cover{height:96px;position:relative;display:flex;align-items:flex-end}

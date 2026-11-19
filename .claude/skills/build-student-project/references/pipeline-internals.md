@@ -10,6 +10,8 @@ marked where that matters. Everything in
 | File | Pure? | What it owns |
 |---|---|---|
 | `sbpOrchestrator.ts` | I/O | **The spine.** `startBuild`, `getBuildState`, `publishBuild`, `scheduleFor`, `makeActiveProject`. Nothing else calls the chain. |
+| `intakeLimits.ts` | pure | `INTAKE_IDEA_MAX` (60,000 since L12.2), the ONE idea cap shared by the questions, preview and start routes and the questions prompt, plus the 25 MB upload cap. Prevents the routes disagreeing: a student whose idea passes Sharpen it and is then refused at Confirm on a limit they were never shown. The wizard mirrors it as `IDEA_MAX` in `ProjectWizard.tsx`; `MAX_BRIEF_CHARS` in `decomposePrompt.ts` must stay above it, or the build quietly reads only part of an idea the interview read in full |
+| `intakeDocument.ts` | I/O | Step 1 "Already scoped it?" upload (L12.2). Reads a PDF, DOCX, PPTX, TXT or MD file through the case-study extractor and returns the text; **stores nothing** (the wizard folds the text into `idea`). Served by `POST /api/portal/sbp/intake/extract`. Prevents an image-only PDF or a damaged file leaving the student with an empty box and no reason: each refusal is a student-worded sentence. Uploads over 1 MB need the route's own nginx location (26m) |
 | `intakeQuestionsPrompt.ts` | pure | The interview: per-tier question targets, the ten designed angles, the fallback set |
 | `intakeQuestionsService.ts` | I/O | The interview model call. **Never throws** — degrades to the generic set with `generated:false` |
 | `decomposePrompt.ts` | pure | The decomposition system + user prompt |
