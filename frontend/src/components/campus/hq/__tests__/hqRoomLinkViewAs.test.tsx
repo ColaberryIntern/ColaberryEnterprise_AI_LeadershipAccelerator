@@ -170,8 +170,27 @@ describe('hqRoomLinkIsTheLeaf', () => {
     expect(FILES.map(rel).some((f) => f.includes('__tests__'))).toBe(false);
   });
 
-  it('roomHref is called only where it is defined and by the leaf', () => {
-    expect(callers('roomHref(')).toEqual(['hq/HqRoomLink.tsx', 'hq/hqModel.ts']);
+  /**
+   * `home/ConciergeCards.tsx` is on this list and is SAFE: it was one of the four surfaces the
+   * October fix converted, and it hands `roomHref(r)` straight to `AdminLink`. It is pinned here
+   * rather than excluded, because the next file to appear should have to prove the same thing.
+   * The first CI run of this test is what found it; the author's grep had not.
+   */
+  const ROOM_URL_CALLERS = ['home/ConciergeCards.tsx', 'hq/HqRoomLink.tsx', 'hq/hqModel.ts'];
+
+  it('roomHref is called only where it is defined and where a guarded leaf is drawn', () => {
+    expect(callers('roomHref(')).toEqual(ROOM_URL_CALLERS);
+  });
+
+  it('every room-URL caller but the model itself renders a guarded leaf', () => {
+    // Without this, the list above could be quieted by appending a name to it, which is exactly
+    // the move that would reintroduce the bug. A name on the list has to earn its place.
+    const drawers = ROOM_URL_CALLERS.filter((f) => f !== 'hq/hqModel.ts');
+    expect(drawers.length).toBeGreaterThan(1);
+    for (const f of drawers) {
+      const src = fs.readFileSync(path.join(DIR, f), 'utf8');
+      expect({ file: f, guarded: /AdminLink'|HqRoomLink'/.test(src) }).toEqual({ file: f, guarded: true });
+    }
   });
 
   it('mgmtBridgeTo is called only where a room URL is built, never at a link', () => {

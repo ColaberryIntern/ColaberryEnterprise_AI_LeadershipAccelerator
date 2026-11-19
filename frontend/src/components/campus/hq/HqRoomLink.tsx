@@ -32,9 +32,9 @@ import { roomHref, opensInPlace, type HqRoom } from './hqModel';
  *   - `external` — its own URL, never `/portal/mgmt-enter`. No identity of ours is bridged.
  *   - anything else — `roomHref` returns `mgmtBridgeTo(r.path)`. THIS is the leak, and only this.
  *
- * `roomHref` is deliberately called nowhere else under `components/campus`: a call site that
- * wants a room's URL is a call site that is about to draw an anchor, and `hqRoomLinkIsTheLeaf`
- * fails the build if a new one appears.
+ * A call site that wants a room's URL is a call site that is about to draw an anchor, so
+ * `hqRoomLinkIsTheLeaf` pins who may call `roomHref` under `components/campus` and checks that
+ * each of them renders a guarded leaf. A new one fails the build.
  */
 export default function HqRoomLink({ room, className, testId, ariaLabel, children }: {
   room: HqRoom;
