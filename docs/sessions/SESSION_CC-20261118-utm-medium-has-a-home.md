@@ -131,13 +131,16 @@ gate.
 Book-wide `utm_medium` coverage: 560 -> 567. The +7 against 6 repaired rows reconciles exactly:
 4 leads arrived during the work and 1 of them carries a medium.
 
-### Still open until #4202 deploys
+### Closed out: #4202 deployed 2026-11-19
 
-The frontend on production still packs the medium, so a new `fb|paid` row can appear at any time
-until this PR ships. The repair is **idempotent** — its WHERE clause selects only rows that still
-contain a pipe, so a second run matches nothing if there is nothing to fix. It should be re-run
-after the deploy to sweep anything written in between. Measured immediately after the commit:
-0 packed rows in the table.
+Written while the frontend on production still packed the medium, so a new `fb|paid` row could
+appear at any time until the PR shipped. The repair is **idempotent** — its WHERE clause selects
+only rows that still contain a pipe, so a second run matches nothing if there is nothing to fix.
+Measured immediately after the commit: 0 packed rows in the table.
+
+**Resolved.** #4202 was merged and deployed to production as `d1801c0f2` on 2026-11-19, and the
+sweep was re-run afterwards to catch anything written in between: it matched 0 rows. No packed
+`fb|paid` value can be written by a first-party path any more.
 
 **The 19 of 26 paying members with no campaign-level attribution are not recoverable.** Measured
 with the canonical `PAYING_MEMBERS_CTE`: 26 paying members, all 26 now linked to a lead, 7 with a
