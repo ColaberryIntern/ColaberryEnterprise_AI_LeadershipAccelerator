@@ -271,17 +271,35 @@ describe('ingestRecordingForSession — Zoom provider dispatch', () => {
     expect(createResource).toHaveBeenCalledTimes(1);
   });
 
-  it('a webhook-supplied preResolvedMatch skips the findRecording lookup entirely', async () => {
+  it('sends a webhook-supplied match through the window-aware selector anyway', async () => {
+    // THIS REPLACES A TEST THAT PINNED A DEFECT. It asserted that a
+    // webhook-supplied preResolvedMatch "skips the findRecording lookup
+    // entirely", on the reasoning that the payload already IS one specific
+    // completed recording so there is nothing to select.
+    //
+    // That reasoning cost both Open House recordings. `recording.completed`
+    // fires for EVERY recording Zoom closes on a meeting, and Zoom closes one
+    // for every brief visit — so the payload is one specific recording but not
+    // necessarily one specific SESSION. Taking it unexamined attached the first
+    // passer-by's four seconds and pinned it, after which the booking-wide
+    // idempotency check refused the real recording for good.
+    //
+    // It matters more still now that an Open House session points at a RECURRING
+    // meeting: one meeting id serves many months, and without the window filter
+    // December's recording would land on November's session.
+    //
+    // So the webhook keeps what it is good at (prompt notice) and gives up
+    // selection. The payload's own download url must NOT be the one streamed.
     findOneResource.mockResolvedValue(null);
     streamZoomMock.mockResolvedValue(fakeSource());
     createResource.mockResolvedValue({ id: 'zoom-resource-2' });
 
     const preResolvedMatch = { downloadUrl: 'https://zoom.us/rec/download/xyz', downloadToken: 'tok', name: 'Build Day.mp4', mimeType: 'video/mp4', sizeBytes: 900 };
-    const result = await ingestRecordingForSession(zoomSession, preResolvedMatch);
+    await ingestRecordingForSession(zoomSession, preResolvedMatch);
 
-    expect(result).toEqual({ status: 'ingested', resourceId: 'zoom-resource-2' });
-    expect(findZoomMatchMock).not.toHaveBeenCalled();
-    expect(streamZoomMock).toHaveBeenCalledWith(preResolvedMatch);
+    expect(findClassInstancesMock).toHaveBeenCalled();
+    const streamed = streamZoomMock.mock.calls.map((c: any[]) => c[0].downloadUrl);
+    expect(streamed).not.toContain('https://zoom.us/rec/download/xyz');
   });
 });
 
