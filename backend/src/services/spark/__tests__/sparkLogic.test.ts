@@ -75,9 +75,14 @@ describe('the model can suggest, the code enforces the limits', () => {
   test('an outing with a long drive is refused even with room', () => {
     expect(L.shapeItem('x', 'weekday', { ...slot, maxEnd: '13:30' }, { place: 'out', title: 'Far away', driveMinutesEachWay: 40 })).toBeNull();
   });
-  test('home is an hour, out is 90 minutes, and dashes are cleaned', () => {
+  test('every weekday Spark is an hour, home or out, and dashes are cleaned (Ali, 2026-11-19)', () => {
     expect(L.shapeItem('x', 'weekday', slot, { place: 'home', title: 'Cook-off', plan: 'Cook — then eat' })).toMatchObject({ end: '13:00', place: 'home', plan: 'Cook, then eat', driveMinutes: 0 });
-    expect(L.shapeItem('x', 'weekday', { ...slot, maxEnd: '13:30' }, { place: 'out', title: 'Garden', driveMinutesEachWay: 15 })).toMatchObject({ end: '13:30', place: 'out' });
+    expect(L.shapeItem('x', 'weekday', { ...slot, maxEnd: '13:30' }, { place: 'out', title: 'Walk the block', driveMinutesEachWay: 0 })).toMatchObject({ end: '13:00', place: 'out' });
+    expect(L.shapeItem('x', 'weekday', { ...slot, maxEnd: '13:30' }, { place: 'out', title: 'Rowlett lake', driveMinutesEachWay: 15 })).toBeNull(); // walk or a short drive first
+  });
+  test('a special occasion can have 90 minutes and a longer drive', () => {
+    expect(L.shapeItem('x', 'weekday', { ...slot, maxEnd: '13:30' }, { place: 'out', title: 'Garden', driveMinutesEachWay: 15, special: 'Anniversary' })).toMatchObject({ end: '13:30', place: 'out' });
+    expect(L.shapeItem('x', 'weekday', slot, { place: 'home', title: 'Cake', special: 'Birthday' })).toMatchObject({ end: '13:00' }); // no room for 90: still an hour
   });
 });
 
@@ -96,8 +101,8 @@ describe('changing the time', () => {
     expect(s.date).not.toBe('2026-11-18');
     expect(s.date).not.toBe('2026-11-19');
   });
-  test('an outing only fits a slot with 90 minutes', () => {
-    const out = { ...a, place: 'out' as const };
+  test('a 90-minute special Spark only fits a slot with 90 minutes; an hour fits an hour', () => {
+    const out = { ...a, place: 'out' as const, end: '13:30' };
     expect(L.fitsSlot(out, { date: '2026-11-18', start: '14:30', maxEnd: '15:30' })).toBe(false);
     expect(L.fitsSlot(a, { date: '2026-11-18', start: '14:30', maxEnd: '15:30' })).toBe(true);
   });
