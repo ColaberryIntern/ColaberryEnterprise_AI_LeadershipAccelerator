@@ -9,6 +9,15 @@ import {
 } from './accountCreditService';
 import { retireRedundantExplorerAccounts } from './enrollmentService';
 import { MEMBERSHIP_PRICE, ANNUAL_TERM_MONTHS } from './membershipPrice';
+
+/** Grant the Open House flash credit if this member qualifies. Never blocks the caller.
+ *  Loaded lazily: it queries the database directly, and this module is unit-tested
+ *  against mocked models. */
+async function applyFlashOffer(enrollmentId: string, nowMs: number): Promise<void> {
+  if (process.env.JEST_WORKER_ID) return;
+  try { const { ensureFlashCredit } = await import('./openHouseFlashDiscountService'); await ensureFlashCredit(enrollmentId, nowMs); }
+  catch (err: any) { console.error('[Subscription] flash offer check failed (non-fatal):', err?.message); }
+}
 import { resolvePaidBatchPlacement } from './batch/batchPlacementService';
 import type { SubscriptionPlan } from '../models/Subscription';
 
@@ -210,6 +219,9 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
   const plans = [PLANS.annual, PLANS.monthly];
 
   // Unspent account credit (Open House $50 deposit) applied to the next payment.
+  // An Open House attendee inside the flash window gets their 50% credit here,
+  // so the plans page already shows the discounted price.
+  if (!sub || sub.status !== 'active') await applyFlashOffer(enrollmentId, nowMs);
   const available_credit_cents = await getAvailableCreditCents(enrollmentId);
   const credit_cents_by_plan: Record<string, number> = {
     annual: await getAvailableCreditCents(enrollmentId, 'annual'),
@@ -358,7 +370,8 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
   // pick whole credit rows up to the payable target so the amount PaySimple is
   // asked to charge is reduced. The credit is not consumed until the payment
   // settles (activateByRef) — a checkout the student abandons keeps the credit.
-  const creditRows = await availableCreditRows(enrollmentId, plan);
+  if (plan === 'annual') await applyFlashOffer(enrollmentId, nowMs);
+  const creditRows = await availableCreditRows(enrollmentId, plan, nowMs);
   const { appliedCents } = selectCreditsUpTo(creditRows, creditApplyTarget(cfg.amount_cents));
   const chargeCents = cfg.amount_cents - appliedCents;
   const chargeAmount = round2(chargeCents / 100);

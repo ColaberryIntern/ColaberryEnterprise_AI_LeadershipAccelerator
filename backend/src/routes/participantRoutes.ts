@@ -14,7 +14,7 @@ import {
 import {
   handleGuestJoinPage, handleGuestJoin, handleGuestState, handleGuestVote, handleGuestPulse, handleGuestAsk,
 } from '../controllers/sessionGuestController';
-import { handleRaffleDraw, handleRaffleWinners } from '../controllers/sessionRaffleController';
+import { handleRaffleDraw, handleRaffleWinners, handleFlashDiscount, handleEnrollmentFeed } from '../controllers/sessionRaffleController';
 import {
   handleGetInternshipStatus, handleStartInternshipApplication, handleSaveInternshipIntake,
   handleSelectInternshipChannel, handleDismissInternshipCard,
@@ -458,6 +458,10 @@ router.post('/api/portal/sessions/:id/guest-ask', guestAskRateLimiter, handleGue
 // kit token or admin; full names/emails only to an admin (?full=1).
 router.post('/api/portal/sessions/:id/raffle-draw', kitTokenOrAdmin, handleRaffleDraw);
 router.get('/api/portal/sessions/:id/raffle-winners', kitTokenOrAdmin, handleRaffleWinners);
+// Open House flash offer (the EVERYBODY draw) + the deck's "just enrolled" feed.
+// Same deck auth. See openHouseFlashDiscountService.ts.
+router.post('/api/portal/sessions/:id/flash-discount', kitTokenOrAdmin, handleFlashDiscount);
+router.get('/api/portal/sessions/:id/enrollment-feed', kitTokenOrAdmin, handleEnrollmentFeed);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
