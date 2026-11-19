@@ -239,11 +239,15 @@ describe('it makes the board match the plan', () => {
     expect(plan.to_update).toHaveLength(0);
   });
 
-  it('inserts the whole plan onto an empty board, including the four ladder stories', () => {
+  it('inserts the whole plan onto an empty board, including the seven path stories', () => {
     const plan = planBoardReconcile(DOMAIN, []);
     const expected = planProvision(DOMAIN).stories;
     expect(plan.to_insert).toHaveLength(expected.length);
-    expect(plan.to_insert.filter((s) => s.kind === 'capability_ladder')).toHaveLength(4);
+    // Four until 2026-11-19, seven since: the eight-stage builder path added three stages
+    // ahead of the four that existed, keeping all four ids so a verified tick survives.
+    expect(plan.to_insert.filter((s) => s.kind === 'capability_ladder')).toHaveLength(7);
+    // Plus the CURRENT rung's gate story, which is option C made visible on the board.
+    expect(plan.to_insert.filter((s) => s.kind === 'rung_gate')).toHaveLength(1);
     expect(plan.to_delete).toHaveLength(0);
   });
 
@@ -308,13 +312,22 @@ describe('running it again writes nothing', () => {
 // ───────────────────── 4. the blast radius, across all ten ─────────────────────
 
 describe('the migration this was written for', () => {
-  it('inserts 40 ladder stories across the ten domains and no more', () => {
+  it('inserts 70 path stories and 10 gate stories across the ten domains, no more', () => {
+    // 40 until 2026-11-19. Seven path stories per domain rather than four, for the one
+    // capability each has in flight, plus one gate story per domain for its CURRENT rung.
+    //
+    // The 'and no more' is the point of this test and it still holds: 80 rows across ten
+    // boards. Emitting every rung's gate instead of the current one would have made it 370,
+    // which is how Phase 2's 964 unfinishable stories happened.
     let ladder = 0;
+    let gates = 0;
     for (const d of AGENT_DOMAIN_KEYS) {
-      ladder += planBoardReconcile(d, []).to_insert
-        .filter((s) => s.kind === 'capability_ladder').length;
+      const inserts = planBoardReconcile(d, []).to_insert;
+      ladder += inserts.filter((s) => s.kind === 'capability_ladder').length;
+      gates += inserts.filter((s) => s.kind === 'rung_gate').length;
     }
-    expect(ladder).toBe(40);
+    expect(ladder).toBe(70);
+    expect(gates).toBe(10);
   });
 
   it('deletes every per-rung behaviour row it is shown, on every domain', () => {

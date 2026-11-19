@@ -257,8 +257,11 @@ describe('every implementation story traces to a capability, or justifies not do
 
   it('every shared-foundation story gives a reason instead', () => {
     const shared = everyStory.filter((x) => !TRACED_KINDS.includes(x.kind));
-    // 7 per domain: the Command Center, the five research stories and the legacy migration plan.
-    expect(shared).toHaveLength(70);
+    // 8 per domain: the Command Center, the five research stories, the legacy migration plan, and
+    // since 2026-11-19 the current rung's `rung_gate`. The gate is untraced on purpose -- how many
+    // capabilities a rung needs is fixed, WHICH ones satisfy it is the builder's choice -- and it
+    // first shipped as `capability_ladder` with a null capability_id, which this suite caught.
+    expect(shared).toHaveLength(80);
     for (const s of shared) {
       expect(s.capability_id).toBeNull();
       expect(s.shared_foundation_reason).toBeTruthy();

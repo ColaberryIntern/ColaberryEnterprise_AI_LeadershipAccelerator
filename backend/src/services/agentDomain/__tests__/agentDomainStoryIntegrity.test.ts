@@ -241,15 +241,33 @@ describe('the story set, counted correctly', () => {
     // for the ONE capability each of the ten domains currently has in flight. The other 434
     // capabilities stay on the board as `implementation` candidates, which is why that number
     // does not move. See `agentDomainCapabilityLadder.ts` for the measurements.
+    // 558 -> 598 on 2026-11-19, when the four-step ladder became the EIGHT-stage builder path.
+    // This revision ADDS and removes nothing: every one of the 558 ids above is still emitted,
+    // asserted against a committed fixture in `builderPathStories.test.ts`, because a verified
+    // tick has to survive the change. Ali: "Don't delete anything they already have."
+    //
+    // The 40 become 70: three new stages join the four that existed, for the ONE capability each
+    // domain has in flight. `proposed` (pick one of four candidates and run it past the front
+    // door), `scope_sheet_owed` (the product cannot do this at all) and `platform_owed` (it has
+    // the endpoints and no screen, so Ali owes one) had nowhere to land before. The fourth new
+    // stage, `screen_built`, reuses `L2-IN-THE-APP`, and the fifth, `tool_requested`, is a WAIT
+    // and deliberately gets no row: a task telling somebody to wait is how the old board
+    // accumulated 853 items above R0 with zero completions.
+    //
+    // Plus 10 `rung_gate` stories, one per domain. That is option C made visible: a rung is
+    // cleared when `GATE_SIZE_BY_RUNG[rung]` capabilities are being done by the agent under
+    // watch, which is 1 at R0 and 5 at R9. Only the CURRENT rung's gate is emitted -- all ten
+    // would be 300 rows across the ten boards and would repeat Phase 2's mistake exactly.
     expect(all.filter((s) => s.kind === 'implementation')).toHaveLength(448);
-    expect(all.filter((s) => s.kind === 'capability_ladder')).toHaveLength(40);
+    expect(all.filter((s) => s.kind === 'capability_ladder')).toHaveLength(70);
+    expect(all.filter((s) => s.kind === 'rung_gate')).toHaveLength(10);
     // Nothing generates the old kind any more. Production rows still carry it until migrated, so
     // the kind still exists in the union -- this asserts the GENERATOR has stopped emitting it.
     expect(all.filter((s) => s.kind === 'release_behaviour')).toHaveLength(0);
     expect(all.filter((s) => s.kind === 'research')).toHaveLength(50);
     expect(all.filter((s) => s.kind === 'legacy_migration')).toHaveLength(10);
     expect(all.filter((s) => s.kind === 'command_center')).toHaveLength(10);
-    expect(all).toHaveLength(558);
+    expect(all).toHaveLength(598);
     // 13 releases per domain: ten rungs plus the three originals, kept empty as the rollback path.
     expect(planForAllDomains().reduce((n, p) => n + p.releases.length, 0)).toBe(130);
   });

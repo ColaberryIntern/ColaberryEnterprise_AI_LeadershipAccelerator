@@ -12,8 +12,9 @@
  *
  * ## Why there IS a new `PATH_SECTION` row
  *
- * `matchesPrefix` needs an exact match or a `/` boundary. `/api/admin/agent-domain-candidates` is
- * not a boundary match for `/api/admin/agent-domains-mine` or `/api/admin/agent-domains`, so
+ * `matchesPrefix` needs an exact match or a `/` boundary.
+ * `/api/admin/agent-domain-candidates-mine` is not a boundary match for
+ * `/api/admin/agent-domains-mine` or `/api/admin/agent-domains`, so
  * without its own row it falls through to a deny-by-default 403 with nothing in the response
  * explaining why. The row is purely additive: before it, these paths were denied for every scoped
  * role, so no role loses anything.

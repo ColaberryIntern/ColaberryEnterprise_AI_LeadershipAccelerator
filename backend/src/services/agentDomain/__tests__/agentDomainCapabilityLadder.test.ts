@@ -47,15 +47,21 @@ describe('the four steps exist, in order, for each capability in flight', () => 
 
   it('the step number is visible in the title, so a board reads in order', () => {
     // The board sorts on position, but a human scanning titles should not have to trust that.
+    //
+    // `0.1` to `0.3` joined `1` to `4` on 2026-11-19, when the eight-stage builder path added
+    // three stages ahead of the four that existed. They are numbered `0.N` rather than renumbered
+    // 1-7 deliberately: the four existing titles carry "1", "2", "3", "4", people have been
+    // reading them for a month, and their story ids are the ones a verified tick hangs off.
+    // Renumbering would have renamed work somebody had already done.
     for (const s of ladder) {
-      expect(s.title).toMatch(/ · [1-4] · /);
+      expect(s.title).toMatch(/ · (0\.[1-3]|[1-4]) · /);
     }
   });
 });
 
 // ───────────────────────── 2. one capability at a time, per builder ─────────────────────────
 
-describe('a builder holds four live stories, not a backlog', () => {
+describe('a builder holds one capability\'s path, not a backlog', () => {
   it('every domain has exactly one capability in flight by default', () => {
     for (const d of AGENT_DOMAINS) {
       const m = loadDomainMatrix(d.domain_key);
@@ -63,10 +69,18 @@ describe('a builder holds four live stories, not a backlog', () => {
     }
   });
 
-  it('each domain therefore gets exactly four ladder stories', () => {
+  it('each domain therefore gets exactly seven path stories, and one gate story', () => {
+    // Four on 2026-11-13, seven on 2026-11-19. The eight-stage builder path adds three stages
+    // ahead of the four that existed and reuses `L2-IN-THE-APP` for a fourth, and the eighth
+    // stage -- waiting on Ali's decision -- deliberately gets no row at all.
+    //
+    // Still ONE capability per domain. The number that matters here is unchanged: a builder holds
+    // one capability's worth of work, not a backlog.
     for (const d of AGENT_DOMAINS) {
       const plan = planForDomain(d.domain_key);
-      expect(plan.stories.filter((s) => s.kind === 'capability_ladder')).toHaveLength(4);
+      expect(plan.stories.filter((s) => s.kind === 'capability_ladder')).toHaveLength(7);
+      // The CURRENT rung's gate only. All ten rungs would be 30 rows per board.
+      expect(plan.stories.filter((s) => s.kind === 'rung_gate')).toHaveLength(1);
     }
   });
 
@@ -88,7 +102,7 @@ describe('a builder holds four live stories, not a backlog', () => {
     const second = m.capabilities[1].capability_id;
     const plan = planForDomain(d.domain_key, { liveCapabilityIds: [second] });
     const live = plan.stories.filter((s) => s.kind === 'capability_ladder');
-    expect(live).toHaveLength(4);
+    expect(live).toHaveLength(7);
     expect(live.every((s) => s.capability_id === second)).toBe(true);
     // Refused rather than silently ignored: a typo'd capability id would otherwise put a builder
     // on an empty board and look like a configuration choice.

@@ -277,7 +277,7 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // `agent-domains-mine` before it moved to this section.
   //
   // It needs its OWN row rather than riding the `-mine` one: `matchesPrefix` requires an exact
-  // match or a `/` boundary, and `/api/admin/agent-domain-candidates` is neither for
+  // match or a `/` boundary, and `/api/admin/agent-domain-candidates-mine` is neither for
   // `/api/admin/agent-domains-mine` nor for `/api/admin/agent-domains`. Without this row the path
   // falls through to the deny-by-default 403 at the bottom of this file with nothing in the
   // response explaining why. Purely additive: before it, these paths were denied for every scoped

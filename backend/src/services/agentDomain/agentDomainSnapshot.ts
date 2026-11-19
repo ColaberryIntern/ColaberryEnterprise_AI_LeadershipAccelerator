@@ -40,7 +40,10 @@
  *
  * Pure. No I/O, no clock, no randomness: the bridge supplies every input.
  */
-import { candidatesSection, type CandidateListResult } from './candidateService';
+// From `candidateSection`, NOT `candidateService`: the service imports
+// `models/AgentDomainCandidate`, which calls `.init(..., { sequelize })` at module scope, and
+// importing it here made this file's own purity claim false and broke five untouched suites.
+import { candidatesSection, type CandidateListResult } from './candidateSection';
 import { effectiveAuthorityForDomain, isAutonomyStage } from './autonomyLadder';
 import type { CapabilityAutonomy } from './autonomyLadder';
 import { projectCapabilities } from './capabilityProjection';
