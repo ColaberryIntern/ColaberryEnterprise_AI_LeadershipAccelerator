@@ -28,6 +28,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import cron from 'node-cron';
 import { SCHEDULE_REGISTRY } from '../aiOpsScheduler';
 import {
@@ -72,12 +73,19 @@ describe('the delivery path is the script, and that is deliberate', () => {
     expect(sh).toContain('set -euo pipefail');
   });
 
-  it('it is executable, like its precedent', () => {
-    // A wrapper the crontab cannot run is a wrapper that silently never fires.
-    const mode = fs.statSync(WRAPPER).mode;
-    const precedent = fs.statSync(path.join(ROOT, 'scripts', 'agentNudges.sh')).mode;
-    // eslint-disable-next-line no-bitwise
-    expect(mode & 0o111).toBe(precedent.valueOf() & 0o111);
+  it('it is recorded in git as executable, which is what actually ships', () => {
+    // THE FIRST VERSION OF THIS TEST WAS VACUOUS. It compared `mode & 0o111` against
+    // `agentNudges.sh`, and on this checkout BOTH were 644, so it asserted `0 === 0` and passed
+    // with a non-executable wrapper -- under its own comment saying "a wrapper the crontab cannot
+    // run is a wrapper that silently never fires".
+    //
+    // What matters is the mode GIT records, because that is what lands on the host. Read from the
+    // index rather than from the working tree, where Windows checkouts do not carry the bit
+    // reliably.
+    const indexed = execFileSync('git', ['ls-files', '-s', 'scripts/approvalQueueDigest.sh'], {
+      cwd: ROOT, encoding: 'utf8',
+    }).trim();
+    expect(indexed).toMatch(/^100755\s/);
   });
 
   it('DRY RUN is the default: the crontab line is the only thing that passes --apply', () => {
@@ -92,6 +100,41 @@ describe('the delivery path is the script, and that is deliberate', () => {
     const script = code(SCRIPT);
     expect(script).toContain("process.argv.includes('--apply')");
     expect(code(SENDER)).toContain('AGENT_APPROVAL_DIGEST_SEND');
+  });
+
+  /**
+   * THE DEFECT THIS TEST EXISTS FOR, and the reason the one above was not enough.
+   *
+   * `docker exec` does NOT forward the host environment. The first wrapper copied
+   * `scripts/agentNudges.sh`, which gets away without `-e` because its script has only the
+   * `--apply` gate. This one's send is also gated on a variable read INSIDE the container, so the
+   * documented crontab line set it in the host cron shell and the node process never saw it.
+   *
+   * Installed exactly as documented it would have returned
+   * `status: 'skipped', reason: 'AGENT_APPROVAL_DIGEST_SEND_off'`, sent nothing, FOREVER, and
+   * exited 0. The disable direction was vacuously true and the arm direction was unreachable.
+   *
+   * The test above could not see it, because it greps the SENDER's source for the variable name
+   * rather than the WRAPPER's command line for the forwarding.
+   */
+  it('the wrapper FORWARDS the gate into the container, or the digest can never be armed', () => {
+    const sh = read(WRAPPER);
+    const execLine = sh
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith('#'))
+      .join('\n');
+    expect(execLine).toMatch(/docker exec[\s\S]*?-e AGENT_APPROVAL_DIGEST_SEND/);
+    expect(execLine).toMatch(/dist\/scripts\/sendApprovalQueueDigest\.js/);
+  });
+
+  it('POSITIVE CONTROL: the forwarding check fails on a line without -e', () => {
+    // Without this, the assertion above could be passing over a regex that matches anything.
+    const without = 'docker exec "$BACKEND" node dist/scripts/sendApprovalQueueDigest.js "$@"';
+    expect(without).not.toMatch(/docker exec[\s\S]*?-e AGENT_APPROVAL_DIGEST_SEND/);
+  });
+
+  it('the precedent it copied is the reason this was missed, and says so', () => {
+    expect(read(WRAPPER)).toMatch(/docker exec. does NOT forward the host environment/);
   });
 
   it('the crontab line in the wrapper matches APPROVAL_DIGEST_SCHEDULE, so the comment cannot drift', () => {
@@ -179,7 +222,10 @@ describe('re-running is safe, and a dry run does not swallow the real send', () 
     const sender = code(SENDER);
     expect(sender).toContain('approval_digest_nothing_open');
     expect(sender).toContain('if (rows.length === 0)');
-    expect(sender).toContain("status: 'skipped', reason: 'AGENT_APPROVAL_DIGEST_SEND_off'");
+    // The gate's reason string is NOT asserted here any more. An empty queue and a closed gate
+    // are different conditions and only one is about the queue; conflating them in one assertion
+    // is how a test ends up covering neither. Both are now driven for real in
+    // `briefings/__tests__/approvalQueueDigestBehaviour.test.ts`.
   });
 });
 

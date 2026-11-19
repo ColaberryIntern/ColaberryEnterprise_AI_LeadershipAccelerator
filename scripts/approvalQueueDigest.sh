@@ -78,5 +78,18 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$BACKEND"; then
 fi
 
 echo "$STAMP approval-digest: start ($* )"
-docker exec "$BACKEND" node dist/scripts/sendApprovalQueueDigest.js "$@"
+# `-e AGENT_APPROVAL_DIGEST_SEND` IS LOAD-BEARING, and leaving it off was a real defect.
+#
+# `docker exec` does NOT forward the host environment. The first version of this wrapper copied
+# `scripts/agentNudges.sh`, which gets away without it because `sendAgentNudges` has only the
+# `--apply` gate. This script's send is ALSO gated on an environment variable read INSIDE the
+# container, so the documented crontab line set the variable in the host cron shell and the node
+# process never saw it. Installed exactly as documented it would have returned
+# `status: 'skipped', reason: 'AGENT_APPROVAL_DIGEST_SEND_off'`, sent nothing, forever, and exited
+# 0 -- so the disable direction was vacuously true and the ARM direction was unreachable.
+#
+# The pattern was already in the repo: `scripts/auditAiPilotCampaign.sh:15` forwards with `-e`.
+# A test asserts this line carries the flag, with a positive control that fails without it.
+docker exec -e AGENT_APPROVAL_DIGEST_SEND="${AGENT_APPROVAL_DIGEST_SEND:-}" \
+  "$BACKEND" node dist/scripts/sendApprovalQueueDigest.js "$@"
 echo "$STAMP approval-digest: done"
