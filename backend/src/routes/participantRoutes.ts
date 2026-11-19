@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { makeParticipantLimiter } from './participantLimiter';
 import { requireAdmin } from '../middlewares/authMiddleware';
 import { verifyKitToken } from '../services/classKit/kitToken';
 import {
@@ -295,14 +296,17 @@ router.post('/api/portal/runtime/cards/:cardId/architect/evaluate', requireParti
 router.post('/api/portal/runtime/cards/:cardId/architect/complete', requireParticipant, handleArchitectComplete);
 router.get('/api/portal/runtime/cards/:cardId/architect/ledger', requireParticipant, handleArchitectLedger);
 // Watch-progress heartbeat (~1 per 15s of playback per player; limiter blunts floods).
-const watchBeatRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many watch beats — please slow down' },
-});
-router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+//
+// KEYED BY PARTICIPANT, AND MOUNTED AFTER requireParticipant SO THERE IS A PARTICIPANT TO KEY ON.
+// It used to be a bare `rateLimit({ max: 30 })` with no keyGenerator, which keys on `req.ip` --
+// and req.ip here is the CLOUDFLARE EDGE, not the learner. So every learner behind one PoP shared
+// a single budget of 30 beats a minute, and the beats that lost the race were discarded by a
+// client that clears its buffer before it sends. That is watch time destroyed, not deferred, and
+// it is why learners reported being unable to reach 75% on video cards (19 Nov 2026).
+//
+// 30/min per participant is generous for a player that beats roughly 4 times a minute, and it
+// leaves room for a learner with two cards open.
+router.post('/api/portal/runtime/cards/:cardId/watch', requireParticipant, makeParticipantLimiter('watch-beat', 30), handleWatchBeat);
 router.get('/api/portal/runtime/cards/:cardId/watch', requireParticipant, handleWatchVerdict);
 
 // ── AI Internship (participant surface) ─────────────────────────────────────
@@ -390,19 +394,24 @@ router.post(
 
 
 
+// The three gates below are the same beat shape as the video one above, and until 19 Nov 2026
+// they shared ONE ip-keyed limiter with it -- so a learner reading a blog spent the budget their
+// video beats needed, and every learner behind a Cloudflare PoP spent each other's. Each gate now
+// has its own per-participant bucket.
+//
 // Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
-router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
+router.post('/api/portal/runtime/today/blog/:blogId/read', requireParticipant, makeParticipantLimiter('blog-read-beat', 30), handleBlogReadBeat);
 router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);
 // In-Workspace blog reader: the post's article fetched + sanitized server-side (the
 // training site sends X-Frame-Options: DENY, so it can't be iframed directly).
 router.get('/api/portal/runtime/today/blog/:blogId/reader', requireParticipant, handleBlogReader);
 // Podcast / testimonial listen-to-earn: ambient items with no card row (see
 // ambientMediaGateService). Beat → verdict → collect; 35 / 10 points at 75%.
-router.post('/api/portal/runtime/today/media/:kind/:id/watch', watchBeatRateLimiter, requireParticipant, handleMediaBeat);
+router.post('/api/portal/runtime/today/media/:kind/:id/watch', requireParticipant, makeParticipantLimiter('media-beat', 30), handleMediaBeat);
 router.get('/api/portal/runtime/today/media/:kind/:id/watch', requireParticipant, handleMediaVerdict);
 router.post('/api/portal/runtime/today/media/:kind/:id/collect', requireParticipant, handleMediaCollect);
 // Generic dwell gate: heartbeat for passive-content types (intel/reflection/…).
-router.post('/api/portal/runtime/cards/:cardId/dwell', watchBeatRateLimiter, requireParticipant, handleDwellBeat);
+router.post('/api/portal/runtime/cards/:cardId/dwell', requireParticipant, makeParticipantLimiter('dwell-beat', 30), handleDwellBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);

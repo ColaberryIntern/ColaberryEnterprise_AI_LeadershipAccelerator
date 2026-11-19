@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { bandRungForLevel } from '../../services/bandLadder';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed, { type WatchBeatMeta } from './VideoEmbed';
@@ -248,6 +248,21 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // where the type's completion gate lives. The tile only PREVIEWS progress (the
   // video watch %); the drawer owns the Collect button.
   const [watch, setWatch] = useState<WatchState | null>(null); // video watch progress (on-card % preview)
+
+  // STABLE IDENTITY MATTERS HERE. This used to be an inline arrow in the JSX below, so every
+  // render of this card handed VideoEmbed a brand new function -- and VideoEmbed listed that
+  // function in an effect's dependency array whose cleanup flushes a watch beat. The two together
+  // produced a POST per render. useCallback fixes the caller's half; VideoEmbed's deps fix the
+  // other half. Either alone would do, and both together make the bug hard to reintroduce.
+  //
+  // The promise is RETURNED, not swallowed. VideoEmbed re-credits the buffered seconds if it
+  // rejects, which it cannot do for a caller that catches and returns void. (19 Nov 2026)
+  const sendWatchBeat = useCallback(
+    (beat: WatchBeatPayload, meta?: { exiting?: boolean }) => portalApi
+      .post(`/api/portal/runtime/cards/${card.id}/watch`, beat, keepaliveConfig(meta?.exiting))
+      .then((r) => { setWatch(r.data); }),
+    [card.id],
+  );
   const toggleInline = () => {
     if (locked) return;
     if (!playingInline) { setPlayingInline(true); return; }
@@ -444,7 +459,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         // moment the student collected points (75%), so the stored value was
         // capped at the unlock threshold instead of measuring real playback.
         onWatchBeat={watchable
-          ? (beat, meta) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat, keepaliveConfig(meta?.exiting)).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
+          ? sendWatchBeat
           : mediaTracked && ambient?.kind === 'testimonial'
             ? mediaBeat   // ambient testimonial: same beats, the media gate instead of the card gate
             : undefined}
