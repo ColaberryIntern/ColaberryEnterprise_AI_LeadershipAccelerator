@@ -3,6 +3,7 @@ import { sequelize } from '../../config/database';
 import { env } from '../../config/env';
 import { guardedSendMail, resolveDeliveryAddress } from '../emailService';
 import { claimBriefingSlot } from '../executiveBriefingService';
+import { ticketReplyToHeader } from '../emailReplyAddress';
 import { resolveManagerReach, reachFor } from '../agentDomain/managerReachResolver';
 import {
   composeApprovalDigests,
@@ -212,11 +213,26 @@ export async function sendApprovalQueueDigests(
       const deliveredTo = await resolveDeliveryAddress(digest.to).catch(() => digest.to);
       const claimed = await claimBriefingSlot(APPROVAL_DIGEST_SLOT, deliveredTo);
       if (!claimed) { summary.already_sent += 1; continue; }
+      // The reply address comes from `ticketReplyAddress`, the same function `emailService`
+      // uses, NEVER from a format string written here. `ticketReplyService.ts` parses that shape
+      // on the way back in, so a second copy of the format is an email that reaches Mandrill and
+      // routes nowhere with nothing failing where a test would see it.
+      //
+      // A change request is not a ticket and carries no reply token, so this is `null` today and
+      // no `replyTo` is set. That is deliberate: an address with a blank segment looks like a
+      // working reply path, accepts a reply and drops it, and the person who replied has no way
+      // to know. The digest body names where to go instead. The day these rows carry a token,
+      // this line starts producing an address with no format string to keep in sync.
+      const replyTo = ticketReplyToHeader({
+        ticketId: digest.replyTicketId ?? null,
+        replyToken: digest.replyToken ?? null,
+      });
       await guardedSendMail({
         from: FROM(),
         to: digest.to,
         subject: digest.subject,
         text: digest.text,
+        ...(replyTo ? { replyTo } : {}),
       });
       summary.sent += 1;
     } catch (err: unknown) {

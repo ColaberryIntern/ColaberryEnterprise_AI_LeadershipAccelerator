@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { ticketReplyToHeader } from './emailReplyAddress';
 import { getTestOverrides, getSetting, setSetting, getSettingUpdatedAt } from './settingsService';
 import {
   isTestModeExpired, testModeAgeHours, TEST_MODE_MAX_AGE_HOURS,
@@ -2564,18 +2565,18 @@ export async function sendTicketApprovalEmail(data: {
 </html>
   `.trim();
 
-  // reply.colaberry.ai is the only Mandrill-inbound-routed domain colaberry.com mail
-  // actually reaches — colaberry.com addresses (where Ali's real inbox lives) are plain
-  // Google Workspace mailboxes Mandrill has no visibility into. The ticket ID + a random
-  // per-ticket token live in the reply address's local part: the ID routes the reply back
-  // to this exact ticket without needing Message-ID/In-Reply-To correlation, and the token
-  // (only ever sent in this email, never rendered in the dashboard) is what actually
-  // authorizes the reply — the ticket UUID alone is visible to any admin on the board.
-  const replyToAddr = `ticket-${data.ticketId}-${data.replyToken}@${env.mandrillInboundDomain}`;
+  // Built by `ticketReplyAddress`, not formatted here. `ticketReplyService.ts` parses this
+  // shape on the way back in, so a retyped format string here is an email that reaches
+  // Mandrill and routes nowhere, with nothing failing where a test would see it. The comment
+  // above moved into that module with the format, so the reasoning travels with the code.
+  const replyToHeader = ticketReplyToHeader(data);
 
   const info = await guardedSendMail({
     from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
-    replyTo: `"Colaberry AI Workforce" <${replyToAddr}>`,
+    // Omitted entirely when the id or the token is missing, rather than sent with a blank
+    // segment: an address like `ticket-abc-@...` looks like a working reply path, accepts a
+    // reply and drops it, and the person who replied has no way to know.
+    ...(replyToHeader ? { replyTo: replyToHeader } : {}),
     to: r.to,
     subject: r.subject,
     html,
