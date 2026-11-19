@@ -1,5 +1,6 @@
 import React from 'react';
-import { badgeLevel, floorStatus, openFloors, roomHref, roomName, roomsText, type HqFloor, type HqPlaced, opensInPlace } from './hqModel';
+import { badgeLevel, floorStatus, openFloors, roomName, roomsText, type HqFloor, type HqPlaced } from './hqModel';
+import HqRoomLink from './HqRoomLink';
 import type { HqState } from './useHq';
 import { HqPeople, type HqPerson } from './HqPeople';
 import type { StaffDesk } from '../campusPeopleApi';
@@ -64,7 +65,7 @@ export function HqPanel({ s, who, face, placed, agents = [] }: { s: HqState; who
               <HqPeople people={placed.byRoom.get(r.path) ?? []} label={`At ${r.label}`} size="sm" />
               <span className="go">{r.open ? (r.external ? 'Open ↗' : r.own ? 'Open →' : 'Open in admin ↗') : '🔒'}</span></>);
             return r.open
-              ? <a key={r.path} className="cm-hq-rrow" href={roomHref(r)} target={opensInPlace(r) ? undefined : '_blank'} rel={opensInPlace(r) ? undefined : 'noopener noreferrer'} data-testid="cm-hq-rrow">{body}</a>
+              ? <HqRoomLink key={r.path} room={r} className="cm-hq-rrow" testId="cm-hq-rrow">{body}</HqRoomLink>
               : <button key={r.path} type="button" className="cm-hq-rrow lock" aria-disabled="true" onClick={() => s.lockedRoom(r)}>{body}</button>;
           })}
         </div>
