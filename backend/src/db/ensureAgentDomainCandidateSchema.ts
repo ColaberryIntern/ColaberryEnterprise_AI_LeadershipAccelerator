@@ -46,10 +46,16 @@
  *
  * ## When this runs
  *
- * On the next boot after merge. One `CREATE TABLE IF NOT EXISTS`, net-new, referenced by nothing
- * until the candidate endpoints land, so reverting the code leaves an empty table that nothing
- * reads. There are no `ALTER` statements in this file and its test asserts the absence, because an
- * absence is what a later edit silently removes.
+ * On the next boot after merge, from `server.ts`, AFTER
+ * `ensureAgentDomainChangeRequestSchemaGuarded()` because the two foreign keys point at that
+ * table. `ensureAgentDomainCandidateSchema.bootWiring.test.ts` asserts that call is active and in
+ * that order — the first version of this file claimed this paragraph while nothing called it at
+ * all, so the table would never have existed on any environment and all 48 tests still passed.
+ *
+ * One `CREATE TABLE IF NOT EXISTS`, net-new, referenced by nothing until the candidate endpoints
+ * land, so reverting the code leaves an empty table that nothing reads. There are no `ALTER`
+ * statements in this file and its test asserts the absence, because an absence is what a later
+ * edit silently removes.
  */
 
 import { QueryTypes } from 'sequelize';

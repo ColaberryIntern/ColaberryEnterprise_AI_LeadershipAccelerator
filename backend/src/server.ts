@@ -222,6 +222,7 @@ import { ensureAgentDomainProjectSchemaGuarded } from './db/ensureAgentDomainPro
 import { ensureAgentDomainChangeRequestSchemaGuarded } from './db/ensureAgentDomainChangeRequestSchema';
 import { ensureAgentDomainToolRequestSchemaGuarded } from './db/ensureAgentDomainToolRequestSchema';
 import { ensureAgentDomainToolDuplicateCheckSchemaGuarded } from './db/ensureAgentDomainToolDuplicateCheckSchema';
+import { ensureAgentDomainCandidateSchemaGuarded } from './db/ensureAgentDomainCandidateSchema';
 import { ensureCapabilityConfirmationSchemaGuarded } from './db/ensureCapabilityConfirmationSchema';
 import { ensureToolRequestDecisionSchemaGuarded } from './db/ensureToolRequestDecisionSchema';
 import { ensureToolRequestMessageSchemaGuarded } from './db/ensureToolRequestMessageSchema';
@@ -3346,6 +3347,15 @@ async function start(): Promise<void> {
   // references `agent_domain_change_requests(id)`, so on a database where the parent does not exist
   // yet the `CREATE` would fail and this table would be missing with no obvious reason why.
   await ensureAgentDomainToolRequestSchemaGuarded();
+  // Capability candidates. AFTER the change-request table for the same reason the detail table is:
+  // `screen_request_id` and `tool_request_id` are foreign keys into it, so on a database where the
+  // parent does not exist yet the `CREATE` fails and this table goes missing with no obvious cause.
+  //
+  // This call is the reason the table exists at all. Its own header used to say "on the next boot
+  // after merge" while nothing called it, which the T001 verifier caught: a header can assert a
+  // runtime behavior that no line of code provides, and nothing downstream notices until a reader
+  // queries a table that was never created.
+  await ensureAgentDomainCandidateSchemaGuarded();
   await ensureAgentDomainToolDuplicateCheckSchemaGuarded();
   await ensureCapabilityConfirmationSchemaGuarded();
   await ensureToolRequestDecisionSchemaGuarded();
