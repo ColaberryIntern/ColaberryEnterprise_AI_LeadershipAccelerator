@@ -17,6 +17,17 @@ test('no code shown: a prompt file, a JSON ledger and a Claude Code screen are c
   assert.deepEqual(found, ['ONE_MOVE_PROMPT.md: the prompt Claude Code runs', 'The ledger entry']);
 });
 
+test('no code shown: a link into a repository file or folder is code; the repository front page is not', () => {
+  const pub = (title, publicUrl) => ({ title, publicUrl, visibility: 'public' });
+  const found = codeShownArtifacts([
+    pub('The cloud infrastructure that was never applied', 'https://github.com/o/r/tree/master/infrastructure/aws'),
+    pub('The readiness review', 'https://github.com/o/r/blob/master/docs/READINESS-REVIEW'),
+    pub('The repository', 'https://github.com/o/r'),
+    pub('The working demo', 'https://demo.example.com/app'),
+  ]);
+  assert.deepEqual(found, ['The cloud infrastructure that was never applied', 'The readiness review']);
+});
+
 test('the story in brief: a figure in What happened, no ticket words, no copy of the standfirst', () => {
   const good = [
     { label: 'Before', text: 'Applicants emailed two staff inboxes and the rules lived in one head.' },
