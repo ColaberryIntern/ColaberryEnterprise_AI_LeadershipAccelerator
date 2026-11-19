@@ -183,6 +183,24 @@
 .pjw-pane{container-type:inline-size}
 @container (max-width:860px){.pjg-nav{position:static;flex-basis:100%}}
 .pjg-mode button{white-space:nowrap}
+/* "Already scoped it?" upload (L12.2), in both modes. Dashed like "Add your own" so it reads as optional. */
+.pjg-drop{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:14px 16px;
+  border:1.5px dashed var(--border-default,#D8D8D8);border-radius:var(--r-12,12px);background:var(--surface-sunken,#F8F8F7)}
+.pjg-drop.over{border-color:var(--berry,#367895);background:rgba(54,120,149,.08)}
+.pjg-drop-t{font-size:14px;color:var(--text-body);flex:1 1 300px}
+.pjg-drop-t strong{color:var(--text-strong)}
+.pjg-drop-h{display:block;font-size:12.5px;color:var(--text-muted);margin-top:2px}
+.pjg-drop .pjg-chip.add:disabled{opacity:.7;cursor:progress}
+.pjg-doc{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1.5px solid var(--berry,#367895);
+  border-radius:var(--r-12,12px);background:rgba(54,120,149,.06)}
+.pjg-doc-ic{flex:none;width:36px;height:36px;border-radius:9px;background:rgba(54,120,149,.14);color:#2E6A86;
+  display:flex;align-items:center;justify-content:center}
+.pjg-doc-b{flex:1;min-width:0}
+.pjg-doc-n{font-weight:700;font-size:14.5px;color:var(--text-strong);overflow-wrap:anywhere}
+.pjg-doc-s{font-size:13px;color:var(--text-muted);margin-top:2px}
+.pjg-doc-x{flex:none;min-height:36px;padding:0 14px;border:1.5px solid var(--border-default,#D8D8D8);border-radius:999px;
+  background:var(--surface-page,#fff);font:inherit;font-size:13.5px;font-weight:600;color:var(--text-body);cursor:pointer}
+.pjg-doc-x:hover{border-color:var(--cherry,#FB2832);color:var(--cherry,#FB2832)}
 @container (max-width:480px){.pjg-modewrap{align-items:stretch;width:100%}.pjg-mode button{flex:1;justify-content:center;padding:0 10px}}
 
 /* ── AI-tool preview (milder setup) ── */

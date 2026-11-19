@@ -11,6 +11,7 @@
  * an instant rollback: the frontend falls back to the local path on a 404.
  *
  *   POST  /api/portal/sbp/intake/questions        interview questions for an idea
+ *   POST  /api/portal/sbp/intake/extract          text out of an uploaded scope document
  *   POST  /api/portal/sbp/builds                  start a build from the wizard
  *   GET   /api/portal/sbp/builds/:projectId       poll status + the draft plan
  *   POST  /api/portal/sbp/builds/:projectId/publish   promote + write the repo
@@ -26,6 +27,8 @@ import { env } from '../config/env';
 // TYPES are named here.
 import { GateViolation, blockingViolations, advisoryViolations } from '../services/sbp/planGate';
 import type { BuildStatus } from '../services/sbp/sbpOrchestrator';
+import multer from 'multer';
+import { INTAKE_IDEA_MAX, INTAKE_DOCUMENT_MAX_BYTES } from '../services/sbp/intakeLimits';
 
 const router = Router();
 
@@ -142,7 +145,7 @@ async function repoFor(projectId: string): Promise<{ owner: string; repo: string
 // exists, so it takes the idea directly and creates nothing. Never fails to the
 // student — the service degrades to a generic set and reports `generated:false`.
 const questionsSchema = z.object({
-  idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(20_000),
+  idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(INTAKE_IDEA_MAX),
   size: z.enum(['workflow', 'project', 'autonomous']).optional(),
   name: z.string().max(200).optional(),
 });
@@ -181,8 +184,8 @@ export const ANSWER_MAX = 4_000;
 export const startSchema = z.object({
   project_id: z.string().uuid(),
   // Generous: the wizard explicitly asks students to pour everything out, and
-  // the pilot's failure was throwing that away. 20k is the documented cap.
-  idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(20_000),
+  // the pilot's failure was throwing that away. INTAKE_IDEA_MAX is the cap.
+  idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(INTAKE_IDEA_MAX),
   name: z.string().max(200).optional(),
   size: z.enum(['workflow', 'project', 'autonomous']).optional(),
   // These three are NOT independently typed by the student. The browser copies
@@ -653,7 +656,7 @@ router.get('/api/portal/sbp/intake/:projectId/case-study-foundation', requirePar
  * only and not to an owned project.
  */
 const previewSchema = z.object({
-  idea: z.string().min(1).max(20_000),
+  idea: z.string().min(1).max(INTAKE_IDEA_MAX),
   answers: z.array(z.object({
     id: z.string().max(80),
     question: z.string().max(500),
@@ -677,6 +680,47 @@ router.post('/api/portal/sbp/intake/preview', requireParticipant, async (req: Re
     // configuration, not truth, and the preview itself stays pure.
     res.json({ ...previewIntake(body), callOffer: callAvailability() });
   } catch (e) { fail(res, e, next); }
+});
+
+// ── scope document upload (L12.2) ─────────────────────────────────────────────
+// A student who has already scoped their project uploads the document at step 1
+// instead of retyping it. This only READS it: the text goes back to the wizard,
+// which folds it into the idea, so the questions, the preview and the build get
+// it through the same `idea` field as typed text. Nothing is stored here.
+//
+// In memory, one file, 25 MB: a scope document is read once and dropped. The
+// container nginx raises its 1 MB default for exactly this path (nginx.conf).
+const intakeDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: INTAKE_DOCUMENT_MAX_BYTES, files: 1 },
+});
+
+router.post('/api/portal/sbp/intake/extract', requireParticipant, (req: Request, res: Response, next: NextFunction) => {
+  if (!gate(res)) return;
+  intakeDocumentUpload.single('file')(req, res, async (err: unknown) => {
+    try {
+      if (err instanceof multer.MulterError) {
+        return err.code === 'LIMIT_FILE_SIZE'
+          ? res.status(413).json({ error: 'That file is over 25 MB. Upload a smaller copy, or paste the text in.' })
+          : res.status(400).json({ error: 'Upload one file at a time.' });
+      }
+      if (err) return next(err);
+      const file = (req as Request & { file?: Express.Multer.File }).file;
+      if (!file) return res.status(400).json({ error: 'No file was attached.' });
+      const { readIntakeDocument } = await import('../services/sbp/intakeDocument');
+      const out = await readIntakeDocument(file.buffer, file.originalname, file.mimetype);
+      if (!out.ok) {
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(), level: 'warn', service: 'backend', event: 'sbp_intake_document_refused',
+          outcome: 'failure', error_class: out.reason,
+          // Size and type only. Never the file name or its text: both are the student's.
+          context: { bytes: file.size, mime: String(file.mimetype || '').slice(0, 100) },
+        }));
+        return res.status(422).json({ error: out.message, reason: out.reason });
+      }
+      res.json(out);
+    } catch (e) { fail(res, e, next); }
+  });
 });
 
 /*

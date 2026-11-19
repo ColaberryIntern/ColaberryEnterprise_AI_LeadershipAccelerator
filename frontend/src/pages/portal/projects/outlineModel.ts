@@ -95,3 +95,20 @@ export function composeIdea(o: Outline, freeText: string): string {
   const free = freeText.trim();
   return free ? `${lines.join('\n')}\n\nAnything else:\n${free}` : lines.join('\n');
 }
+
+export interface ScopeDocument { fileName: string; text: string }
+
+/**
+ * Add an uploaded scope document (L12.2) after whatever the student typed.
+ *
+ * The typed part is never cut to make room: it is what they wrote for THIS
+ * form. The document takes what is left of `max`, and `kept` says how much of
+ * it made it, so the page can tell the student exactly where it stops.
+ */
+export function withDocument(typed: string, doc: ScopeDocument | null, max: number): { idea: string; kept: number } {
+  if (!doc) return { idea: typed, kept: 0 };
+  const head = `${typed.trim() ? '\n\n' : ''}From my scope document (${doc.fileName}):\n`;
+  const room = Math.max(0, max - typed.length - head.length);
+  const body = doc.text.slice(0, room);
+  return { idea: body ? `${typed}${head}${body}` : typed, kept: body.length };
+}

@@ -27,6 +27,7 @@ jest.mock('../../../../services/sbpApi', () => ({
   fetchIntakeQuestions: jest.fn(),
   previewIntake: jest.fn(),
   getCaseStudyFoundation: jest.fn(),
+  extractIntakeDocument: jest.fn(),
   describeFailure: () => ({ title: '', body: '', action: '' }),
 }));
 jest.mock('../../useIsExplorer', () => ({ useIsExplorer: () => false }));
@@ -192,6 +193,21 @@ maybe('discovery harness', () => {
     await click(buttonByText('Slack'));
     await setValue(container.querySelector('#pjg-f-q6') as HTMLTextAreaElement, 'Any reply that mentions a refund or a cancellation.');
     write('06-step1-guided.html', container.innerHTML);
+  });
+
+  it('step 1: a scope document attached, brain-dump and guided (L12.2)', async () => {
+    const { extractIntakeDocument } = jest.requireMock('../../../../services/sbpApi');
+    (extractIntakeDocument as jest.Mock).mockResolvedValue({
+      ok: true, doc: { fileName: 'Claims Triage Agent - Scope v3.pdf', text: 'Scope. '.repeat(1800), truncated: false, chars: 12600 },
+    });
+    await mount(<ProjectWizard onCreate={() => {}} />);
+    write('07-step1-upload-empty.html', container.innerHTML);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [new File(['%PDF'], 'scope.pdf', { type: 'application/pdf' })], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
+    write('08-step1-guided-with-doc.html', container.innerHTML);
+    await click(buttonByText('Brain-dump'));
+    write('09-step1-dump-with-doc.html', container.innerHTML);
   });
 
   it('case study readiness: a build record with one open question', async () => {

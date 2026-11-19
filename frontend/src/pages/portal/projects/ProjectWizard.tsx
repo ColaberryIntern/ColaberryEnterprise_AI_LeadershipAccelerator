@@ -4,7 +4,8 @@ import { useIsExplorer } from '../useIsExplorer';
 import { fetchIntakeQuestions, previewIntake, IntakeQuestion, CoveredAngle, IntakePreview } from '../../../services/sbpApi';
 import IntakeReviewPane, { phoneLooksValid, type CallChoice } from './IntakeReviewPane';
 import GuidedOutline from './GuidedOutline';
-import { Outline, EMPTY_OUTLINE, SECTIONS, composeIdea, filledCount } from './outlineModel';
+import { Outline, EMPTY_OUTLINE, SECTIONS, composeIdea, filledCount, withDocument, type ScopeDocument } from './outlineModel';
+import ScopeUpload from './ScopeUpload';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) interview questions generated from THAT
@@ -45,7 +46,9 @@ const STEPS = ['Your idea', 'Sharpen it', 'Review & confirm'];
 // answer, pressed Confirm, and the server refused the request on a length he
 // was never shown, on a field he never filled in. A limit a student cannot see
 // until they have violated it is not a limit, it is a trapdoor.
-const IDEA_MAX = 20_000;
+// IDEA_MAX is INTAKE_IDEA_MAX in backend/src/services/sbp/intakeLimits.ts:
+// 60,000 since L12.2, so an uploaded scope document fits.
+const IDEA_MAX = 60_000;
 const ANSWER_MAX = 4_000;
 const NAME_MAX = 200;
 
@@ -72,7 +75,11 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   const [mode, setMode] = useState<'dump' | 'guided'>('guided');
   const [freeText, setFreeText] = useState('');
   const [outline, setOutline] = useState<Outline>(EMPTY_OUTLINE);
-  const idea = composeIdea(outline, freeText);
+  // An uploaded scope document rides after the typed part, in whatever room is
+  // left (withDocument). Typed text is never cut to make room for it.
+  const [doc, setDoc] = useState<ScopeDocument | null>(null);
+  const typed = composeIdea(outline, freeText);
+  const { idea, kept } = withDocument(typed, doc, IDEA_MAX);
   const tooLong = idea.length > IDEA_MAX;
   const [name, setName] = useState('');
   // Size is no longer asked. A student cannot know on day one whether their idea
@@ -247,11 +254,13 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
                   Your outline answers ({filledCount(outline)} of {SECTIONS.length}) are kept and sent along with this.
                 </div>
               )}
+              <div style={{ marginBottom: 14 }}><ScopeUpload doc={doc} onDoc={setDoc} kept={kept} /></div>
               <textarea value={freeText} maxLength={IDEA_MAX} onChange={(e) => setFreeText(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
             </>
           ) : (
             <>
               <p className="lead" style={{ maxWidth: 820, marginBottom: 22 }}>These are the things a build plan needs to know. Fill in what you can, in any order, and skip the rest. The next step asks only about what is still open.</p>
+              <div style={{ marginBottom: 24 }}><ScopeUpload doc={doc} onDoc={setDoc} kept={kept} /></div>
               <GuidedOutline outline={outline} onChange={setOutline} freeText={freeText} onFreeText={setFreeText} freeMax={IDEA_MAX}>
                 {step1Footer}
               </GuidedOutline>
