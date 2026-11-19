@@ -7,6 +7,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { drawRaffleWinner, listRaffleWinners, RaffleError } from '../services/sessionRaffleService';
+import { activateFlashDiscount, recentEnrollments } from '../services/openHouseFlashDiscountService';
 
 const DrawBody = z.object({
   poll_key: z.string().min(1).max(200),
@@ -37,5 +38,27 @@ export async function handleRaffleWinners(req: Request, res: Response, next: Nex
     res.json({
       winners: winners.map((w) => (full ? w : { poll_key: w.poll_key, draw_number: w.draw_number, display_name: w.display_name })),
     });
+  } catch (err) { next(err); }
+}
+
+/** POST /api/portal/sessions/:id/flash-discount {deadline} — the EVERYBODY draw:
+ *  open the 50%-off-annual offer for everyone signed in right now. Idempotent. */
+export async function handleFlashDiscount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const r = await activateFlashDiscount(req.params.id as string, (req.body || {}).deadline);
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    res.json({ deadline: r.flash.deadline, activated_at: r.flash.activated_at, qualifying: r.qualifying });
+  } catch (err) { next(err); }
+}
+
+/** GET /api/portal/sessions/:id/enrollment-feed?since=ISO — memberships paid since
+ *  `since` (default: 3 hours ago, at most 12), for the deck's "just enrolled" pop-up.
+ *  First name + last initial only. */
+export async function handleEnrollmentFeed(req: Request, res: Response, next: NextFunction) {
+  try {
+    const now = Date.now();
+    const asked = typeof req.query.since === 'string' ? Date.parse(req.query.since) : NaN;
+    const since = Number.isFinite(asked) ? Math.max(asked, now - 12 * 3600_000) : now - 3 * 3600_000;
+    res.json({ enrollments: await recentEnrollments(since) });
   } catch (err) { next(err); }
 }

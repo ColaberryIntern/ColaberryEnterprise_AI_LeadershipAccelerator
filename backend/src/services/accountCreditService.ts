@@ -1,5 +1,6 @@
 import { AccountCredit } from '../models';
 import type { AccountCreditAttributes } from '../models/AccountCredit';
+import { FLASH_REASON, FLASH_SETTLE_GRACE_MS, isFlashCreditExpired } from './openHouseFlashCredit';
 
 /**
  * accountCreditService — account credits applied to a student's next payment.
@@ -24,7 +25,7 @@ export const MIN_CHARGE_CENTS = 100;
 /** Credit reasons that may ONLY reduce an annual-plan charge. The Open House
  * scholarship (50% off a year) is worth $894; letting it fall on a $199 monthly
  * charge would turn a year's discount into four free months. */
-export const ANNUAL_ONLY_CREDIT_REASONS: readonly string[] = ['open_house_scholarship_annual'];
+export const ANNUAL_ONLY_CREDIT_REASONS: readonly string[] = ['open_house_scholarship_annual', FLASH_REASON];
 
 /** Whether a credit with `reason` may be applied to a charge for `plan`. No plan
  * given = no restriction (the ledger total). Pure. */
@@ -60,12 +61,13 @@ export function creditApplyTarget(chargeCents: number): number {
 
 /** Available (unspent) credit rows for an enrollment, oldest first. With `plan`,
  *  only the rows that may be applied to that plan (annual-only credits drop out
- *  of a monthly charge). */
-export async function availableCreditRows(enrollmentId: string, plan?: string): Promise<AccountCredit[]> {
-  const rows = await AccountCredit.findAll({
+ *  of a monthly charge). An Open House flash credit past its deadline (plus
+ *  `graceMs`) is no longer available. */
+export async function availableCreditRows(enrollmentId: string, plan?: string, nowMs: number = Date.now(), graceMs = 0): Promise<AccountCredit[]> {
+  const rows = ((await AccountCredit.findAll({
     where: { enrollment_id: enrollmentId, status: 'available' },
     order: [['created_at', 'ASC']],
-  });
+  })) || []).filter((r) => !isFlashCreditExpired(r.reason, r.source_event_id, nowMs, graceMs));
   return plan ? rows.filter((r) => creditUsableOnPlan(r.reason, plan)) : rows;
 }
 
@@ -143,7 +145,9 @@ export async function consumeCreditsForSubscription(
 
   // Same plan filter as checkout, so the rows consumed are the rows that
   // discounted the charge — never an annual-only credit on a monthly plan.
-  const rows = await availableCreditRows(enrollmentId, plan);
+  // A flash credit that discounted a checkout begun before its deadline may
+  // settle shortly after it, so settlement allows the grace window.
+  const rows = await availableCreditRows(enrollmentId, plan, nowMs, FLASH_SETTLE_GRACE_MS);
   const { creditIds, appliedCents } = selectCreditsUpTo(rows, targetCents);
   if (!creditIds.length) return 0;
 
