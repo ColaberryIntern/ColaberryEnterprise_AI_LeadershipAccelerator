@@ -1493,7 +1493,12 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
   }
 
   if (ghlEnabled && ghlContactId) {
-    const result = await sendSmsViaGhl(ghlContactId, action.body || '');
+    // OH1p: write the text to the sub-account the contact was synced into (open house leads
+    // live in the School account). Unroutable means we do not know where the contact is: fail.
+    const { ghlApiKeyForSource } = await import('./leads/ghlAccountRouting');
+    const apiKey = await ghlApiKeyForSource(lead?.source);
+    if (!apiKey) throw new Error(`GHL SMS not sent: no usable GHL account for lead source "${lead?.source || ''}"`);
+    const result = await sendSmsViaGhl(ghlContactId, action.body || '', apiKey);
     if (!result.success) {
       console.warn(`[Scheduler] GHL SMS failed for lead ${action.lead_id}: ${result.error}`);
       // OH1: a text GHL never received was being recorded as sent. Throw, so the
@@ -1502,9 +1507,14 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
     }
     await addContactNote(
       ghlContactId,
-      `📱 SMS Sent: ${action.subject || 'Campaign message'}\n${(action.body || '').substring(0, 500)}`
+      `📱 SMS Sent: ${action.subject || 'Campaign message'}\n${(action.body || '').substring(0, 500)}`,
+      apiKey,
     ).catch(() => {});
     console.log(`[Scheduler] SMS sent via GHL for lead ${action.lead_id}: ${action.subject}`);
+  } else if (ghlEnabled) {
+    // OH1p: GHL is on but this lead has no contact there, so no text went out. This was being
+    // recorded as sent.
+    throw new Error(`GHL SMS not sent: lead ${action.lead_id} has no GHL contact`);
   } else {
     console.log(`[Scheduler] SMS to ${phone}: ${action.body?.substring(0, 160)} (GHL disabled or sync failed)`);
   }

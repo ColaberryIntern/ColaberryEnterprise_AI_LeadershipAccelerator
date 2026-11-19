@@ -146,11 +146,13 @@ export const COUNTDOWN_STEPS: SequenceStep[] = [
   },
   // NO CALL STEP yet: PR 2 adds Maya's call on our own Synthflow agent, after a test call to Ali.
   {
-    // Day of, one hour out. A text to people with express SMS consent, written into the GHL
-    // `cory_sms_composed` field. Fixed copy (fallbackReminderSms): a text must carry the Join
+    // Day of, 30 minutes out (OH1p, Ali Nov 18: "a text message a few minutes before"). Thirty,
+    // not five: ~60 texts take about half an hour at the scheduler's pace, so they land before
+    // the start. Express SMS consent only, written into the GHL `cory_sms_composed` field of the
+    // contact's own sub-account. Fixed copy (fallbackReminderSms): a text must carry the Join
     // link, and the AI's SMS limit of 160 characters cannot fit it.
-    delay_days: 0, minutes_before_event: 60, channel: 'sms',
-    subject: 'Open House starts in an hour (text)',
+    delay_days: 0, minutes_before_event: 30, channel: 'sms',
+    subject: 'Open House starts in 30 minutes (text)',
     body_template: '', step_goal: 'Get them into the room',
   },
 ];
@@ -248,7 +250,7 @@ async function main(): Promise<void> {
   // 3. The sequence
   let seq = await one<{ id: string }>(`SELECT id FROM follow_up_sequences WHERE name = :n LIMIT 1`, { n: SEQUENCE_NAME });
   if (!seq) {
-    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: emails at 10, 6, 3 and 1 day(s) and 4 hours before, text 1 hour before)`);
+    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: emails at 10, 6, 3 and 1 day(s) and 4 hours before, text 30 minutes before)`);
     if (apply) {
       seq = await one<{ id: string }>(
         `INSERT INTO follow_up_sequences (id, name, description, steps, is_active, tenant_id, created_at, updated_at)
