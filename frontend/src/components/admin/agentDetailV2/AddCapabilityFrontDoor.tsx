@@ -33,6 +33,10 @@ import {
 const STATE_TITLE: Record<string, string> = {
   in_app: 'The app already does this',
   partly: 'The app does this, and whether an agent may is a separate decision',
+  // Added 18 Nov 2026 with the `api_only` state. Worded as "most of it" on purpose: the platform
+  // owns the endpoint, so this is a much smaller ask than the capability itself, and a title
+  // saying "cannot do this" would send the builder down the scope-sheet path for a screen.
+  api_only: 'The app has most of this already, and nobody built the screen',
   not_built: 'The app cannot do this yet',
 };
 
@@ -113,6 +117,13 @@ export default function AddCapabilityFrontDoor({ domainKey }: { domainKey: strin
               <a className="btn btn-sm btn-outline-primary" href={answer.feature.product_route}>
                 Go and use it
               </a>
+              {/* The bit a URL cannot carry: which tab, or what is absent. Rendered beside the
+                  link rather than inside it, so "go here then click that" reads as one
+                  instruction. Two of the five original entries pointed at a route that does not
+                  exist, which is why the note and the route are now both checked by tests. */}
+              {answer.feature.product_route_note && (
+                <div className="form-text mt-2">{answer.feature.product_route_note}</div>
+              )}
               <div className="form-text mt-2">
                 Use it once and confirm it does what you need. Then ask for your agent to be given
                 the thing you just used: that is a grant, which is a much shorter request than a
@@ -128,10 +139,36 @@ export default function AddCapabilityFrontDoor({ domainKey }: { domainKey: strin
               <a className="btn btn-sm btn-outline-primary me-2" href={answer.feature.product_route}>
                 Go and use it
               </a>
+              {answer.feature.product_route_note && (
+                <div className="form-text mt-2 mb-2">{answer.feature.product_route_note}</div>
+              )}
               <span className="text-muted">
                 Then ask Ali for a ruling on whether the agent may do it unsupervised. This is not
                 a build, so it does not need a scope sheet.
               </span>
+            </div>
+          )}
+
+          {/* API ONLY: the platform owns the endpoint and there is no screen, so the builder
+              cannot do this by hand at all. There is deliberately NO "go and use it" link here —
+              that was the whole reason the state exists. Offering one would send somebody to a
+              door that is not there, and the first stage of the ladder is doing it by hand. */}
+          {answer.state === 'api_only' && answer.feature && (
+            <div className="small">
+              <div className="alert alert-info py-2 mb-2">
+                {answer.feature.product_route_note}
+              </div>
+              <div className="mb-2">
+                You cannot do this by hand yet, so the first step is not a scope sheet. Ask for the
+                screen. The work behind it is already built and working, which makes this a much
+                smaller request than it looks.
+              </div>
+              {answer.feature.ruling_needed && (
+                <div className="text-muted">
+                  <span className="fw-semibold">What the screen needs to let somebody do: </span>
+                  {answer.feature.ruling_needed}
+                </div>
+              )}
             </div>
           )}
 

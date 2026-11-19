@@ -21,20 +21,31 @@ export interface ProductFeature {
   backed_by: string;
   /** When a human last checked. A claim with no date goes stale invisibly. */
   verified_on: string;
-  /** Why a ruling is needed, on a `partly` feature. Null otherwise. */
+  /**
+   * Why a ruling is needed, on a `partly` feature; what the screen has to do, on an `api_only`
+   * one. Null otherwise.
+   */
   ruling_needed: string | null;
+  /** Which tab to click, or what is missing. Null when the route lands you in the right place. */
+  product_route_note: string | null;
   matches: string[];
 }
 
 export interface FrontDoorAnswer {
-  state: 'in_app' | 'partly' | 'not_built';
+  state: 'in_app' | 'partly' | 'api_only' | 'not_built';
   feature: ProductFeature | null;
-  route_to: 'use_it_then_ask_for_a_grant' | 'ask_for_a_ruling' | 'write_a_scope_sheet';
+  route_to:
+    | 'use_it_then_ask_for_a_grant'
+    | 'ask_for_a_ruling'
+    | 'ask_for_a_screen'
+    | 'write_a_scope_sheet';
   /**
    * The AF11.7 value this implies, or null when the builder still has to answer.
    *
-   * Only ever `not_built`. The product having a feature is not the builder having used it, and
-   * "go and use it first" only means something if trying it is what produces the answer.
+   * `not_built` on a candidate nothing matches, and `exists_unused` on an `api_only` one, where
+   * there is no screen so the builder could not have used it. Null on `in_app` and `partly`,
+   * because there the product having a feature is not the builder having used it, and "go and
+   * use it first" only means something if trying it is what produces the answer.
    */
   implies_tried_in_product: 'used_by_hand' | 'exists_unused' | 'not_built' | null;
   /** False means nobody has curated this domain, which is NOT the same as "nothing exists". */
