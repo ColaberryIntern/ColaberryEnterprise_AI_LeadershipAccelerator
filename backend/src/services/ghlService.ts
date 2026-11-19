@@ -248,18 +248,24 @@ export async function sendSmsViaGhl(
    * account does not exist in the default (Agent Cory AI) account, so writing it with the
    * default key fails. Omitted by callers that only ever text default-account contacts.
    */
-  apiKey?: string
+  apiKey?: string,
+  /**
+   * OH1r: the custom field this sub-account's send-SMS workflow watches. The default account's
+   * workflow fires on `cory_sms_composed`; the School account's fires on `support_issue_ticket_4`.
+   * Writing a field no workflow watches saves the text and sends nothing.
+   */
+  smsField: string = 'cory_sms_composed'
 ): Promise<GHLResult> {
-  console.log(`[GHL] Updating cory_sms_composed for contact ${contactId} (${message.length} chars)`);
+  console.log(`[GHL] Updating ${smsField} for contact ${contactId} (${message.length} chars)`);
 
   const result = await updateContact(contactId, {
-    customField: { cory_sms_composed: message },
+    customField: { [smsField]: message },
   }, apiKey);
 
   if (result.success) {
-    console.log(`[GHL] SMS composed field updated for contact ${contactId} — triggers GHL workflow`);
+    console.log(`[GHL] SMS field ${smsField} updated for contact ${contactId} — triggers GHL workflow`);
   } else {
-    console.error(`[GHL] Failed to update cory_sms_composed for contact ${contactId}: ${result.error}`);
+    console.error(`[GHL] Failed to update ${smsField} for contact ${contactId}: ${result.error}`);
   }
   return result;
 }
