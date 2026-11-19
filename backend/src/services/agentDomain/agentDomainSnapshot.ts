@@ -40,6 +40,7 @@
  *
  * Pure. No I/O, no clock, no randomness: the bridge supplies every input.
  */
+import { candidatesSection, type CandidateListResult } from './candidateService';
 import { effectiveAuthorityForDomain, isAutonomyStage } from './autonomyLadder';
 import type { CapabilityAutonomy } from './autonomyLadder';
 import { projectCapabilities } from './capabilityProjection';
@@ -137,6 +138,15 @@ export interface SnapshotInput {
    * outstanding". Silence and zero are different answers.
    */
   stories?: SnapshotStoryVerdict[];
+  /**
+   * The caller's capability candidates, already scoped and already stepped.
+   *
+   * Optional for the same reason `stories` is: every existing caller compiles unchanged, and an
+   * absent list renders as "the platform did not supply one", never as "your list is empty".
+   * `candidatesSection` lives in `candidateService.ts` rather than here because this file is 472
+   * lines against CLAUDE.md's 500 ceiling, and a section that grows belongs beside its service.
+   */
+  candidates?: CandidateListResult;
 }
 
 /**
@@ -255,6 +265,10 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
       capabilities: `GET /api/admin/agent-domains-mine/${input.domain_key}`,
       capability_ladder: `GET /api/admin/agent-domains-mine/${input.domain_key}/coverage`,
       governance: 'GET /api/admin/agent-domain-change-requests-mine',
+      // The fifth source, added with the candidate list. The four above keep their names
+      // and their endpoints: a test asserts all five by name, because a panel that loses
+      // its provenance line renders a number with nothing to check it against.
+      candidates: 'GET /api/admin/agent-domain-candidates-mine',
     },
     // Named `staleness_note` rather than anything containing `captured_at`, so a test can assert
     // that NO clock-derived field exists here without tripping over the field that explains why.
@@ -406,6 +420,9 @@ export function buildAgentDomainSnapshot(input: SnapshotInput): Record<string, u
       pending: input.governance.filter((r) => r.status === 'pending').length,
     },
     verification: verificationSection(input.stories),
+    // The candidate list, as the page sees it: every row carries the stage it is at, whose
+    // turn it is, and the one sentence saying what that person does next.
+    candidates: candidatesSection(input.candidates),
     not_recorded: notRecordedFor(agent),
   };
 }

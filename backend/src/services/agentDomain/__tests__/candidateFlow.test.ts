@@ -11,6 +11,8 @@
  * something that mostly exists, and is the exact mistake the front door was rebuilt to stop.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { CANDIDATE_STAGES, type CandidateStage } from '../candidateStages';
 import { BUILDER_STAGES } from '../builderPath';
 import {
@@ -84,6 +86,20 @@ describe('every stage maps to exactly one turn', () => {
       expect(step.turn).toBe(TURN_BY_STAGE[step.stage]);
     },
   );
+
+  it('the branches READ their turn from BUILDER_STAGES rather than restating it', () => {
+    // `owned` was assigned and never read in the first version, which left every branch's turn as
+    // a literal that could drift from `BUILDER_STAGES` with nothing to catch it. Asserting the
+    // source here means a future edit cannot quietly go back to literals.
+    const src = fs.readFileSync(
+      path.join(__dirname, '..', 'candidateFlow.ts'),
+      'utf8',
+    ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect([...src.matchAll(/turn: owned/g)]).toHaveLength(8);
+    // The ONLY hardcoded turn left is the gate-met case, which genuinely cannot come from a
+    // per-stage table because it depends on the gate rather than on the stage.
+    expect([...src.matchAll(/turn: '(builder|owner|nobody)'/g)].map((m) => m[1])).toEqual(['nobody']);
+  });
 
   it('the turn table covers every stage and matches BUILDER_STAGES', () => {
     expect(Object.keys(TURN_BY_STAGE).sort()).toEqual([...CANDIDATE_STAGES].sort());
@@ -186,11 +202,23 @@ describe('the gate size is used, not decorative', () => {
   it('counts down the remaining capabilities on the last stage', () => {
     const step = stepFor(REACHES[7], 5, 2);
     expect(step.turn).toBe('builder');
-    expect(step.action).toContain('3 more');
+    // The whole PHRASE, not just the number. The first version of this test asserted
+    // `toContain('3 more')` and passed while the sentence read "3 more capabilityies": the plural
+    // was built by appending `ies` to `capability` instead of to the stem. A countdown is the one
+    // sentence in this module a builder reads every day, and no assertion looked at its words.
+    expect(step.action).toContain('3 more capabilities needed');
   });
 
   it('says ONE capability in the singular', () => {
-    expect(stepFor(REACHES[7], 3, 2).action).toContain('1 more capability ');
+    expect(stepFor(REACHES[7], 3, 2).action).toContain('1 more capability needed');
+  });
+
+  it('never renders a malformed plural, at any remaining count', () => {
+    for (let cleared = 0; cleared < 9; cleared += 1) {
+      const { action } = stepFor(REACHES[7], 9, cleared);
+      expect(action).not.toMatch(/capabilityies|capabilitys|capabilityy/);
+      expect(action).toMatch(/\b\d+ more capabilit(y|ies) needed\b|Done\./);
+    }
   });
 
   it('turns to nobody once the gate is met, and never goes negative', () => {

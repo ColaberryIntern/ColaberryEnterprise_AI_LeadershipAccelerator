@@ -270,6 +270,19 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   ['/api/admin/intern-nudges', 'internship'],
   ['/api/admin/agent-domains-builders', 'internship'],
   ['/api/admin/agent-domains-authorization', 'program'],
+  // The capability candidate list. `dashboard`, because every route under it is SELF-SCOPED:
+  // it resolves the caller's identity from their verified token and returns only the domains they
+  // manage or build, so a stranger who reaches it learns nothing. `program` would protect nothing
+  // and would 403 every builder the surface exists for, which is the failure AF8.3 measured on
+  // `agent-domains-mine` before it moved to this section.
+  //
+  // It needs its OWN row rather than riding the `-mine` one: `matchesPrefix` requires an exact
+  // match or a `/` boundary, and `/api/admin/agent-domain-candidates` is neither for
+  // `/api/admin/agent-domains-mine` nor for `/api/admin/agent-domains`. Without this row the path
+  // falls through to the deny-by-default 403 at the bottom of this file with nothing in the
+  // response explaining why. Purely additive: before it, these paths were denied for every scoped
+  // role, so no role loses anything.
+  ['/api/admin/agent-domain-candidates-mine', 'dashboard'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],

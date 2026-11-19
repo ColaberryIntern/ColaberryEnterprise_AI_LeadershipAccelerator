@@ -102,7 +102,10 @@ export function nextStep(
 
   const slug = slugFor(candidate.title);
   const artifact_path = artifactPathFor(stage, slug);
-  const owned = stageFor(stage).owned_by;
+  // The turn is READ from `BUILDER_STAGES` rather than restated per branch, so a stage whose
+  // ownership changes there cannot keep a stale literal here. `agent_watched` is the one stage
+  // whose turn depends on something other than the stage itself, and it overrides below.
+  const owned: FlowTurn = stageFor(stage).owned_by;
   const rungLabel = rung ? ` for ${rung}` : '';
   const remaining = Math.max(0, gateSize - clearedInDomain);
 
@@ -110,7 +113,7 @@ export function nextStep(
     case 'proposed':
       return {
         stage,
-        turn: 'builder',
+        turn: owned,
         action: `Run "${candidate.title}" past the front door and record what the app already `
           + `does about it, in ${artifact_path}.`,
         blocked_reason: null,
@@ -120,7 +123,7 @@ export function nextStep(
     case 'scope_sheet_owed':
       return {
         stage,
-        turn: 'builder',
+        turn: owned,
         action: `The app cannot do this at all. Write the scope sheet in ${artifact_path}: who `
           + 'acts on the output, what number says it worked, and what the system already records '
           + 'that would produce that number.',
@@ -131,7 +134,7 @@ export function nextStep(
     case 'platform_owed':
       return {
         stage,
-        turn: 'owner',
+        turn: owned,
         action: `${platformOwes(candidate)} Write what is missing in ${artifact_path} so the `
           + 'request is buildable, then wait.',
         blocked_reason: platformOwes(candidate),
@@ -141,7 +144,7 @@ export function nextStep(
     case 'screen_built':
       return {
         stage,
-        turn: 'builder',
+        turn: owned,
         action: `The screen is there now. Use it on real work until it does the job, and record `
           + `in ${artifact_path} what worked and what did not. A clean report with nothing to `
           + 'say is a sign it was not really used.',
@@ -152,7 +155,7 @@ export function nextStep(
     case 'by_hand_pending':
       return {
         stage,
-        turn: 'builder',
+        turn: owned,
         action: `The app already does this. Do it by hand yourself first, then record the run `
           + `in ${artifact_path}: what you entered, what came out, how long it took, and what `
           + 'was annoying about it.',
@@ -163,7 +166,7 @@ export function nextStep(
     case 'proven_by_hand':
       return {
         stage,
-        turn: 'builder',
+        turn: owned,
         action: `You have done it by hand, so you know what it costs. Write the tool request in `
           + `${artifact_path}, citing that run rather than describing the idea.`,
         blocked_reason: null,
@@ -173,7 +176,7 @@ export function nextStep(
     case 'tool_requested':
       return {
         stage,
-        turn: 'owner',
+        turn: owned,
         action: `The request is filed and sitting with Ali. Record its id in ${artifact_path} so `
           + 'the decision can be found later, and move to your next candidate.',
         blocked_reason: 'The tool request is filed and waiting on Ali. Nothing here is yours to '
@@ -194,10 +197,11 @@ export function nextStep(
       }
       return {
         stage,
-        turn: 'builder',
+        turn: owned,
         action: `Watch a run and compare it against what you produced by hand, in `
-          + `${artifact_path}. ${remaining} more capability${remaining === 1 ? '' : 'ies'} `
-          + `needed to clear the gate${rungLabel}.`,
+          + `${artifact_path}. ${remaining} more `
+          + `capabilit${remaining === 1 ? 'y' : 'ies'} needed to clear the gate`
+          + `${rungLabel}.`,
         blocked_reason: null,
         artifact_path,
       };
