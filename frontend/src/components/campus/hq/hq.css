@@ -138,11 +138,13 @@
 .cm-hq-floor .office .who{position:absolute;left:14px;top:14px}
 .cm-hq-floor .office:hover{transform:translateY(-3px);transition:transform .15s}
 .cm-hq-floor .office:hover .gl{background:linear-gradient(160deg,var(--cm-art-hq-glass-hi),var(--cm-art-hq-glass-hi2))}
-.cm-hq-floor .office.lock{background:linear-gradient(180deg,var(--cm-art-hq-office-lock),var(--cm-art-hq-office-lock2))!important;cursor:not-allowed}
-.cm-hq-floor .office.lock .gl{background:repeating-linear-gradient(135deg,var(--cm-art-hq-glass-lock) 0 8px,var(--cm-art-hq-glass-lock2) 8px 16px);color:var(--cm-art-hq-ink-lock)}
-.cm-hq-floor .office.lock .gl i{color:var(--cm-art-hq-lock-icon)}
-.cm-hq-floor .office.lock .pl{background:var(--cm-art-hq-plaque-lock);color:var(--cm-art-hq-btn-lock-s)}
-.cm-hq-floor .office.lock:hover{transform:none}
+/* `.is-disabled` is what AdminLink appends to a room withheld during a read-only "View as"
+   session (AF2.7b). To the viewer that room is shut, so it reads exactly like a locked one. */
+.cm-hq-floor .office.lock,.cm-hq-floor .office.is-disabled{background:linear-gradient(180deg,var(--cm-art-hq-office-lock),var(--cm-art-hq-office-lock2))!important;cursor:not-allowed}
+.cm-hq-floor .office.lock .gl,.cm-hq-floor .office.is-disabled .gl{background:repeating-linear-gradient(135deg,var(--cm-art-hq-glass-lock) 0 8px,var(--cm-art-hq-glass-lock2) 8px 16px);color:var(--cm-art-hq-ink-lock)}
+.cm-hq-floor .office.lock .gl i,.cm-hq-floor .office.is-disabled .gl i{color:var(--cm-art-hq-lock-icon)}
+.cm-hq-floor .office.lock .pl,.cm-hq-floor .office.is-disabled .pl{background:var(--cm-art-hq-plaque-lock);color:var(--cm-art-hq-btn-lock-s)}
+.cm-hq-floor .office.lock:hover,.cm-hq-floor .office.is-disabled:hover{transform:none}
 .cm-hq-floorbar{position:absolute;left:20px;bottom:20px;display:flex;gap:8px;z-index:3}
 /* C119: an AI agent at the floor's front desk, in the floor's lobby (bottom right; the elevator and Lobby buttons are bottom left) */
 .cm-hq-fdesks{position:absolute;right:20px;bottom:16px;z-index:3;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:calc(100% - 300px)}
@@ -211,7 +213,7 @@
 .cm-hq-rrow i.ic{font-size:18px;color:var(--cm-art-hq-navy3);width:22px;text-align:center}
 .cm-hq-rrow .t b{display:block;font-size:14px}.cm-hq-rrow .t code{font:500 11.5px ui-monospace,Menlo,monospace;color:var(--cm-art-muted)}
 .cm-hq-rrow .go{font-weight:800;font-size:13px;color:var(--cm-art-red);white-space:nowrap}
-.cm-hq-rrow.lock{background:var(--cm-art-hq-row-lock);cursor:not-allowed}.cm-hq-rrow.lock .t b{color:var(--cm-art-hq-ink-lock)}.cm-hq-rrow.lock i.ic{color:var(--cm-art-hq-lock-icon)}
+.cm-hq-rrow.lock,.cm-hq-rrow.is-disabled{background:var(--cm-art-hq-row-lock);cursor:not-allowed}.cm-hq-rrow.lock .t b,.cm-hq-rrow.is-disabled .t b{color:var(--cm-art-hq-ink-lock)}.cm-hq-rrow.lock i.ic,.cm-hq-rrow.is-disabled i.ic{color:var(--cm-art-hq-lock-icon)}
 .cm-hq-btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .cm-hq-note{font-size:12.5px;color:var(--cm-art-muted);line-height:1.5;background:var(--cm-art-hq-paper);border-radius:12px;padding:10px 12px;margin-top:14px}
 
