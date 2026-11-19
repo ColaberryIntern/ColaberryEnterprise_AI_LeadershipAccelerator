@@ -76,10 +76,21 @@ export function accumulateWatch(prev: WatchState | null | undefined, beat: Watch
   const hasAuthoritative = Number.isFinite(authoritative) && authoritative > 0;
 
   const watched_s = p.watched_s + delta;
-  const max_position_s = Math.max(p.max_position_s, position);
   // Ground truth wins outright (pinned, not ratcheted) when known; otherwise the
   // original client-trust ratchet — ANY reported value can only grow, never shrink.
   const duration_s = hasAuthoritative ? authoritative : Math.max(p.duration_s, duration);
+  // The playhead ratchet is monotonic, which is correct for ONE video and wrong the
+  // moment a card's video is REPLACED: the old media's furthest position outlives it
+  // and sits on the new one forever. C118 swapped this card's 213s YouTube video for
+  // a 109s mp4 and left 104 of 107 rows claiming a playhead past the end of a video
+  // that no longer exists — including one row whose duration_s had already been
+  // re-pinned to 109 while max_position_s stayed at 213, which is this ratchet caught
+  // in the act. No student-facing code reads this field, so it blocked nobody; it did
+  // make an audit of this very card reach a false conclusion, which is what an audit
+  // field is for. Clamp to ground truth when ground truth is known, and leave the
+  // plain ratchet alone when it is not (Loom/Wistia/unverified have no ceiling).
+  const ratcheted_position_s = Math.max(p.max_position_s, position);
+  const max_position_s = hasAuthoritative ? Math.min(ratcheted_position_s, authoritative) : ratcheted_position_s;
   // Never let accumulated time exceed a known duration by more than 2x (replays
   // are fine, runaway clients are not); pct caps at 100 regardless.
   const capped_watched_s = duration_s > 0 ? Math.min(watched_s, duration_s * 2) : watched_s;
@@ -108,7 +119,13 @@ export function hasVideoMetadata(metadata: any): boolean {
  *  because ground truth wasn't known yet) self-heals the moment ground truth becomes
  *  available — even if the student isn't actively watching right now. No-op when no
  *  authoritative duration is given (or the state is null), so an ungated/unknown
- *  card's behavior is unchanged. */
+ *  card's behavior is unchanged.
+ *
+ *  `max_position_s` is clamped here for the same reason `accumulateWatch` clamps it:
+ *  a state carried over from a replaced video can hold a playhead past the end of
+ *  the one now on the card. `watched_s` is deliberately NOT reduced — it is the
+ *  student's earned credit, and this function's job is to re-express it against the
+ *  real duration, never to take it away. */
 export function withAuthoritativeDuration(watch: WatchState | null | undefined, authoritativeDurationS?: number | null): WatchState | null {
   if (!watch || typeof watch !== 'object') return watch ?? null;
   const authoritative = Number(authoritativeDurationS);
@@ -116,7 +133,13 @@ export function withAuthoritativeDuration(watch: WatchState | null | undefined, 
   const watched_s = Number(watch.watched_s) || 0;
   const capped_watched_s = Math.min(watched_s, authoritative * 2);
   const watched_pct = Math.min(100, Math.round((capped_watched_s / authoritative) * 100));
-  return { ...watch, duration_s: Math.round(authoritative * 10) / 10, watched_pct };
+  const max_position_s = Math.min(Number(watch.max_position_s) || 0, authoritative);
+  return {
+    ...watch,
+    duration_s: Math.round(authoritative * 10) / 10,
+    max_position_s: Math.round(max_position_s * 10) / 10,
+    watched_pct,
+  };
 }
 
 /** PURE — is this card one whose completion requires watching? */
