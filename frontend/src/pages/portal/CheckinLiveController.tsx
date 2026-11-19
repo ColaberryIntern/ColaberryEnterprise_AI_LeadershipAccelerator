@@ -31,11 +31,15 @@ interface Props {
   onEnter?: () => void;
 }
 
-/** Emoji-labelled kind for the live question card. */
+/**
+ * The kind label for the live question card. Plain words: the house-style lint
+ * (frontendTypographyLint) holds new files to no emoji and no em dashes in product copy,
+ * and this file is new — the copy it inherited from ClassCheckinPage was cleaned on the move.
+ */
 function kindLabel(kind: 'prediction' | 'poll' | 'trivia'): string {
-  if (kind === 'trivia') return '🧠 Trivia';
-  if (kind === 'prediction') return '🔮 Make your prediction';
-  return '📊 Live poll';
+  if (kind === 'trivia') return 'Trivia';
+  if (kind === 'prediction') return 'Make your prediction';
+  return 'Live poll';
 }
 
 interface PulseGridProps {
@@ -190,7 +194,7 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
         <div className="cbck-controller">
           {companion.question.theater && (
             <p className={`cbck-theater-badge${companion.question.theater.state !== 'voting' ? ' is-locked' : ''}`}>
-              {companion.question.theater.state === 'locked' ? '🔒 Voting locked' : companion.question.theater.state === 'revealed' ? '✅ Results are in' : '🗳️ Live vote — everyone is watching'}
+              {companion.question.theater.state === 'locked' ? 'Voting locked' : companion.question.theater.state === 'revealed' ? 'Results are in' : 'Live vote: everyone is watching'}
             </p>
           )}
           <p className="cbck-ctl-label">{kindLabel(companion.question.kind)}</p>
@@ -221,32 +225,32 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
             {companion.question.revealed
               ? 'Answer revealed ✓'
               : companion.question.theater && companion.question.theater.state === 'locked'
-                ? 'Vote locked — waiting for the reveal'
-                : companion.question.my_choice != null ? 'Locked in ✓ — you can change it' : 'Tap your answer'}
+                ? 'Vote locked. Waiting for the reveal'
+                : companion.question.my_choice != null ? 'Locked in ✓. You can change it' : 'Tap your answer'}
           </p>
         </div>
       ) : companion?.phase === 'prompt' && companion.prompt ? (
         /* ── BUILD MODE PROMPT — copy-ready, no need to read it off the screen ── */
         <div className="cbck-controller">
-          <p className="cbck-ctl-label">⌨️ {companion.prompt.label}</p>
+          <p className="cbck-ctl-label">{companion.prompt.label}</p>
           <div className="cbck-prompt-box">
             <pre>{companion.prompt.prompt}</pre>
           </div>
           <button type="button" className="cbck-btn cbck-copy-btn" onClick={() => copyPrompt(companion.prompt!.prompt)}>
-            {copyState === 'copied' ? 'Copied ✓' : `📋 Copy · paste into ${companion.prompt.pasteWhere || 'Claude Code'}`}
+            {copyState === 'copied' ? 'Copied ✓' : `Copy · paste into ${companion.prompt.pasteWhere || 'Claude Code'}`}
           </button>
           {companion.prompt.expectedResult && (
-            <p className="cbck-prompt-meta"><b>👀 You should see:</b> {companion.prompt.expectedResult}</p>
+            <p className="cbck-prompt-meta"><b>You should see:</b> {companion.prompt.expectedResult}</p>
           )}
           {companion.prompt.stopCondition && (
-            <p className="cbck-prompt-meta"><b>🛑 Stop when:</b> {companion.prompt.stopCondition}</p>
+            <p className="cbck-prompt-meta"><b>Stop when:</b> {companion.prompt.stopCondition}</p>
           )}
           <PulseGrid pulse={pulse} onTap={tapPulse} style={{ marginTop: 16 }} />
         </div>
       ) : companion?.phase === 'broadcast' ? (
         /* ── BUILDER BROADCAST — appears when the instructor reaches that segment ── */
         <div className="cbck-controller">
-          <p className="cbck-ctl-label">🎬 Builder Broadcast — record 30 seconds</p>
+          <p className="cbck-ctl-label">Builder Broadcast: record 30 seconds</p>
           <ul className="cbck-broadcast-list">
             {(companion.broadcast_prompts || []).map((p, idx) => <li key={idx}>{p}</li>)}
           </ul>
@@ -273,7 +277,7 @@ const CheckinLiveController: React.FC<Props> = ({ title, meta, eyebrow, client, 
               {qState === 'sent' ? 'Sent ✓' : qState === 'sending' ? '…' : 'Send'}
             </button>
           </div>
-          <p className="cbck-text cbck-text-sub">Your instructor sees this on screen — no need to interrupt.</p>
+          <p className="cbck-text cbck-text-sub">Your instructor sees this on screen, so no need to interrupt.</p>
         </div>
       )}
 

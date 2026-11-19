@@ -113,7 +113,11 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // 2026-11-16: 2096 -> 2095. The Section plan authoring panel was removed from the gov
   // proposal editor (DraftVersions.tsx) at Ali's request; its one JSX dash (the empty-field
   // placeholder) went with it, so that file's entry drops 6 -> 5. No copy was rewritten.
-  [DASH_RULE.id]: 2095,
+  //
+  // 2026-11-19: 2095 -> 2089. The class check-in's live view moved out of ClassCheckinPage
+  // into the new CheckinLiveController, and its copy was written to house style on the move
+  // (dashes became colons, full stops or commas). ClassCheckinPage's entry (6) is DELETED.
+  [DASH_RULE.id]: 2089,
   // 2026-11-15: 74 -> 72. The v5 site adoption rewrote HomeV2 and ServicesV2,
   // and the four new pages were written to house style, so the two entries
   // those files held are gone rather than carried over.
@@ -142,7 +146,10 @@ export const FRONTEND_TYPOGRAPHY_BASELINE_TOTALS: Readonly<Record<string, number
   // than zeroed - a file that no longer exists should not stay on the books owing
   // anything. No copy was rewritten for this: the ratchet turned because the surface
   // went away.
-  [EMOJI_RULE.id]: 657,
+  //
+  // 2026-11-19: 657 -> 646. Same move as the dash note above: the check-in live view's eleven
+  // emoji labels became plain words in CheckinLiveController. ClassCheckinPage's entry DELETED.
+  [EMOJI_RULE.id]: 646,
 };
 
 /**
