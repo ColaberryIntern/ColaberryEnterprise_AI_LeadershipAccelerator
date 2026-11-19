@@ -82,12 +82,13 @@ function stop(msg, code = 2) { console.log(`STOP: ${msg}`); process.exit(code); 
   const store = require('/app/dist/services/caseStudy/caseStudySnapshotStore');
   const gate = require('/app/dist/services/caseStudy/caseStudyPublishGate');
   const { serviceLinkGateFacts } = require('/app/dist/services/caseStudy/caseStudyServiceLinkGateFacts');
+  const { hireGateFacts } = require('/app/dist/services/career/caseStudyLinkedPerson');
   const sections = require('/app/dist/services/caseStudy/caseStudyPublicSections');
   const review = require('/app/dist/services/caseStudy/caseStudyAdminReview');
   const pub = require('/app/dist/services/caseStudy/caseStudyPublicationService');
   const { hashCanonical } = require('/app/dist/utils/canonicalHash');
 
-  const [[rec]] = await sequelize.query('select id, slug, status, visibility, builder_identity_mode, builder_naming_consent, organization_identity_mode, organization_naming_consent, organization_display_name from case_studies where id=:id', { replacements: { id: ID } });
+  const [[rec]] = await sequelize.query('select id, slug, project_id, status, visibility, builder_identity_mode, builder_naming_consent, organization_identity_mode, organization_naming_consent, organization_display_name from case_studies where id=:id', { replacements: { id: ID } });
   if (!rec) stop(`no case study ${ID}`);
   const [[snap]] = await sequelize.query('select id, version, status, content, provenance, source_commit_map from case_study_snapshots where case_study_id=:id order by version desc limit 1', { replacements: { id: ID } });
   const [pubs] = await sequelize.query("select surface_key, status, published_snapshot_id from case_study_publications where case_study_id=:id and status='published' order by surface_key", { replacements: { id: ID } });
@@ -163,8 +164,9 @@ function stop(msg, code = 2) { console.log(`STOP: ${msg}`); process.exit(code); 
   const asApproved = { id: 'composed', version: snap.version + 1, status: 'approved', approvedBy: ACTOR, approvedAt: new Date().toISOString(), content: composed, provenance };
   for (const surfaceKey of (live.length ? live : SURFACES)) {
     // The pure gate needs the record's service-link facts passed in; without them every record reads as
-    // `no_confirmed_service_link`, even one whose link is confirmed (CF3, 17 Nov 2026).
-    const d = gate.evaluateCaseStudyPublishGate({ surfaceKey, caseStudy: record, snapshot: asApproved, serviceLinks: await serviceLinkGateFacts(ID) });
+    // `no_confirmed_service_link`, even one whose link is confirmed (CF3, 17 Nov 2026). The same holds for
+    // the hire facts: without them every hire record reads as `hire_no_linked_person` (Open House, 18 Nov 2026).
+    const d = gate.evaluateCaseStudyPublishGate({ surfaceKey, caseStudy: record, snapshot: asApproved, serviceLinks: await serviceLinkGateFacts(ID), hire: await hireGateFacts({ id: ID, project_id: rec.project_id }, surfaceKey) });
     const rest = (d.blockers || []).filter((b) => !RESTING.has(b.code));
     console.log(`gate ${surfaceKey}: ${rest.length ? 'BLOCKED ' + JSON.stringify(rest.map((b) => [b.code, b.field])) : 'clean'}`);
     if (rest.length) stop('a blocker other than approval itself');
