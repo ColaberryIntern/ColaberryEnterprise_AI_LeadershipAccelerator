@@ -14,6 +14,7 @@ import { sequelize } from '../../../config/database';
 import { EXPLORER_DRAFT_STATUS } from './draftContracts';
 import type { EarlierEmail, ExplorerApprovalInput, ExplorerSignals } from './renderDecisionDraft';
 import { EXPLORER_COMPOSER_PREFIX, EXPLORER_SEND_SETTING } from '../send/explorerSendGuards';
+import { subjectRefFrom } from '../../identity/identifierPrecedence';
 
 /** Maya's sender identity on campaign mail (ensureOpenHouseCountdownCampaign MAYA_EMAIL / MAYA_NAME). */
 export const MAYA_SENDER = { name: 'Maya at Colaberry', email: 'maya@colaberry.com' } as const;
@@ -108,7 +109,8 @@ export async function enqueueExplorerDraft(
   if (!(await deps.sendEnabled())) return null;
   const html = await deps.wrap(input.leadId, input.toEmail, input.body);
   return deps.enqueue({
-    recipientRef: `lead:${input.leadId}`,
+    // The one sanctioned subject-key builder (T208 tripwire); a lead id always yields lead:<id>.
+    recipientRef: subjectRefFrom({ leadId: input.leadId }) as string,
     recipientAddress: input.toEmail,
     recipientDisplay: null,
     channel: 'email',
