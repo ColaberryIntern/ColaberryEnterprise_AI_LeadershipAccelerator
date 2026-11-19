@@ -75,6 +75,24 @@ export default function StudioSetupPage(): React.ReactElement {
   const [accessMode, setAccessMode] = useState<BroadcastAccessMode | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [recordingConfirmed, setRecordingConfirmed] = useState(false);
+  /**
+   * Can this operator cross into a portal session at all?
+   *
+   * `Run this class` is not a navigation, it is a session exchange: the producer controls live
+   * on `/portal/live/:id`, a PARTICIPANT surface, so the admin session has to be swapped for
+   * the operator's own student portal session first. That exchange needs a staff portal account
+   * linked to the admin login, and most admin logins do not have one. On production, 8 of 50 do.
+   *
+   * Until now an operator without one found out by pressing the button and reading "Could not
+   * open the producer view", which names the symptom and not the cause, and leaves them with
+   * nothing to act on. The server already answers the question on `/api/admin/me`.
+   *
+   * THREE STATES, NOT TWO. Null means the answer has not come back yet, or the call failed, and
+   * is deliberately not folded into false: disabling the button on a slow or failed lookup would
+   * block an operator whose bridge works perfectly. Unknown keeps the button live and leaves the
+   * existing failure copy to cover it.
+   */
+  const [hasPortalAccount, setHasPortalAccount] = useState<boolean | null>(null);
 
   const adopt = useCallback((c: StudioConfig) => {
     setConfig(c);
@@ -102,15 +120,48 @@ export default function StudioSetupPage(): React.ReactElement {
     return () => { cancelled = true; };
   }, [sessionId, adopt]);
 
+  /** Asked once, on its own, so a failure here cannot take the rest of the screen down with it. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<{ has_portal_account?: boolean }>('/api/admin/me');
+        if (!cancelled) setHasPortalAccount(res.data?.has_portal_account === true);
+      } catch {
+        if (!cancelled) setHasPortalAccount(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const producerIsPresenter = Boolean(presenter && producer && presenter === producer);
+
+  /**
+   * Is there anything permanent left to acknowledge?
+   *
+   * `canSetAccessMode` is `occurrence === null` on the server. Once the broadcast exists the
+   * choice is already made and already permanent, and the acknowledgement checkbox is not even
+   * rendered any more.
+   *
+   * It used to gate the primary button regardless, which meant that on every class that HAD a
+   * broadcast, "Save changes" was disabled for all time behind a To do item with no control
+   * attached to it. The operator could see what was wrong and had no way to do it. Found on
+   * production on 18 November 2026, on a class airing the next day.
+   */
+  const accessModeSettled = config !== null && !config.canSetAccessMode;
 
   const summary: SummaryItem[] = [
     { label: 'Producer is not the presenter', done: Boolean(presenter && producer) && !producerIsPresenter },
     { label: 'Audience chosen', done: guestAccess !== null },
     { label: 'Access mode chosen', done: accessMode !== null },
-    { label: 'Permanence acknowledged', done: acknowledged },
+    accessModeSettled
+      ? { label: 'Permanence settled when the broadcast was created', done: true }
+      : { label: 'Permanence acknowledged', done: acknowledged },
   ];
   const canCreate = summary.every((s) => s.done) && !saving;
+
+  /** False, not null: only a definite no disables the control. */
+  const noPortalAccount = hasPortalAccount === false;
 
   /**
    * Cross from the admin session into this operator's own portal session, and land on the
@@ -417,11 +468,26 @@ export default function StudioSetupPage(): React.ReactElement {
                 className="cls-btn cls-btn-ghost"
                 style={{ marginTop: 10, width: '100%' }}
                 data-testid="cls-run"
-                disabled={bridging}
+                disabled={bridging || noPortalAccount}
                 onClick={() => { void runThisClass(); }}
               >
                 {bridging ? 'Opening the producer view...' : 'Run this class'}
               </button>
+            )}
+            {occurrence && noPortalAccount && (
+              /*
+               * Said BEFORE the click, not after it.
+               *
+               * This is the one failure on this screen that the operator cannot fix by trying
+               * again, because nothing about the class is wrong: the account they are signed in
+               * as simply has no portal side to cross into. The sentence therefore has to name
+               * the account rather than the class.
+               */
+              <p className="cls-note cls-note-warn" data-testid="cls-run-no-portal">
+                The producer controls live in your own student portal account, and this admin
+                login is not linked to one, so there is nothing to cross into. Sign in with the
+                admin account that has a portal account, then open this page again.
+              </p>
             )}
             {bridgeFailed && (
               <p className="cls-note cls-note-error" role="alert" data-testid="cls-run-failed">
@@ -442,3 +508,4 @@ export default function StudioSetupPage(): React.ReactElement {
     </div>
   );
 }
+

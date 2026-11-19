@@ -27,6 +27,18 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const mockGet = jest.fn();
 const mockPatch = jest.fn();
+/**
+ * The admin api client. The page asks `/api/admin/me` on mount whether this operator has a
+ * portal account to cross into; unmocked that is a real request from a sweep that has no
+ * business making one.
+ */
+jest.mock('../../../../utils/api', () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn(),
+    get: jest.fn().mockResolvedValue({ data: { has_portal_account: true } }),
+  },
+}));
 jest.mock('../../../../services/studioSetupApi', () => {
   const actual = jest.requireActual('../../../../services/studioSetupApi');
   return {

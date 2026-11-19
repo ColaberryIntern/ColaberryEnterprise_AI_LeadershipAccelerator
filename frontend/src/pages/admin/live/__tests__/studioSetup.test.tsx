@@ -33,9 +33,17 @@ const mockStaff = jest.fn();
  * request, and  would try to leave the test page.
  */
 const mockApiPost = jest.fn();
+/**
+ * `GET /api/admin/me`, because the page asks it on mount whether this operator has a portal
+ * account to cross into at all. Defaulted per test in `beforeEach`.
+ */
+const mockApiGet = jest.fn();
 jest.mock('../../../../utils/api', () => ({
   __esModule: true,
-  default: { post: (...a: unknown[]) => mockApiPost(...a) },
+  default: {
+    post: (...a: unknown[]) => mockApiPost(...a),
+    get: (...a: unknown[]) => mockApiGet(...a),
+  },
 }));
 jest.mock('../../../../services/studioSetupApi', () => {
   const actual = jest.requireActual('../../../../services/studioSetupApi');
@@ -138,6 +146,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGet.mockResolvedValue(config());
   mockPatch.mockResolvedValue({ ok: true, config: config() });
+  // The ordinary operator: an admin login with a portal account behind it.
+  mockApiGet.mockResolvedValue({ data: { has_portal_account: true } });
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -217,6 +227,60 @@ describe('the permanent choice', () => {
     await renderCold();
     expect(q<HTMLButtonElement>('[data-testid="cls-mode-paid"]')!.disabled).toBe(true);
     expect(text()).toMatch(/cannot be changed here/i);
+  });
+
+  /**
+   * THE DEAD SAVE BUTTON, found on production on 18 November 2026 on a class airing the day
+   * after.
+   *
+   * Create and Save changes are the same control, gated on all four checklist items. The
+   * acknowledgement checkbox is only rendered while the access mode is still settable, and it
+   * is settable only while no broadcast exists. So on every class that HAD a broadcast, the
+   * fourth item sat on To do with no control attached to it anywhere on the page, and the
+   * primary button was disabled for all time.
+   *
+   * The property these two pin is that the checklist can only ever ask for something the
+   * operator can actually do.
+   */
+  it('does not demand an acknowledgement that has no checkbox left to tick', async () => {
+    mockGet.mockResolvedValue(config({
+      canSetAccessMode: false,
+      occurrence: {
+        id: 'occ-1', access_mode: 'free', editorial_state: 'scheduled', version: 2,
+        provider_session_id: 'input-1',
+      },
+    }));
+    await renderCold();
+
+    // The control is genuinely absent, which is what made the old gate impossible to satisfy.
+    expect(q('#cls-ack')).toBeNull();
+
+    const permanence = all('[data-testid="cls-sum"]')
+      .find((n) => /permanence/i.test(n.textContent || ''));
+    expect(permanence).toBeDefined();
+    expect(permanence!.textContent).not.toMatch(/to do/i);
+  });
+
+  it('lets an existing broadcast be edited and saved', async () => {
+    // The pickers resolve the saved ids back to names on mount, so the lookup has to answer.
+    mockStaff.mockResolvedValue([
+      { enrollment_id: 'person-a', name: 'Ada Lovelace', email: 'ada@example.com' },
+      { enrollment_id: 'person-b', name: 'Grace Hopper', email: 'grace@example.com' },
+    ]);
+    mockGet.mockResolvedValue(config({
+      canSetAccessMode: false,
+      presenter_enrollment_id: 'person-a',
+      producer_enrollment_id: 'person-b',
+      guest_access: true,
+      occurrence: {
+        id: 'occ-1', access_mode: 'free', editorial_state: 'scheduled', version: 2,
+        provider_session_id: 'input-1',
+      },
+    }));
+    await renderCold();
+
+    expect(create().textContent).toMatch(/save changes/i);
+    expect(create().disabled).toBe(false);
   });
 
   it('warns about a broadcast that will not play', async () => {
@@ -342,5 +406,50 @@ describe('crossing from setup into the producer view', () => {
 
     expect(q('[data-testid="cls-run"]')).not.toBeNull();
     expect(q('[data-testid="cls-create"]')).not.toBeNull();
+  });
+
+  /**
+   * THE EXCHANGE AN OPERATOR CANNOT MAKE, found on production on 18 November 2026.
+   *
+   * The hop needs a staff portal account linked to the admin login, and most admin logins do
+   * not have one: 8 of 50 on production, and the second super_admin is not among them. Pressing
+   * the button as one of the other 42 returned a 403 and the generic "could not open" sentence,
+   * which describes the symptom, blames nothing in particular, and leaves the operator pressing
+   * it again.
+   *
+   * So the question is asked before the click, and only a definite no is acted on.
+   */
+  it('refuses up front when this admin login has no portal account to cross into', async () => {
+    mockApiGet.mockResolvedValue({ data: { has_portal_account: false } });
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+
+    expect(q<HTMLButtonElement>('[data-testid="cls-run"]')!.disabled).toBe(true);
+    expect(q('[data-testid="cls-run-no-portal"]')).not.toBeNull();
+    // It names the account, not the class. Nothing about the class is wrong.
+    expect(text()).toMatch(/this admin login is not linked to one/i);
+  });
+
+  it('says nothing about accounts when the operator has one', async () => {
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+
+    expect(q<HTMLButtonElement>('[data-testid="cls-run"]')!.disabled).toBe(false);
+    expect(q('[data-testid="cls-run-no-portal"]')).toBeNull();
+  });
+
+  it('leaves the button live when the lookup itself fails', async () => {
+    /*
+     * Unknown is not no. Folding a failed lookup into "no portal account" would disable the
+     * button for an operator whose bridge works, which is a worse failure than the one this
+     * check exists to prevent: it blocks the show on the strength of a request that did not
+     * answer.
+     */
+    mockApiGet.mockRejectedValue(new Error('me is down'));
+    mockGet.mockResolvedValue(withBroadcast());
+    await renderCold();
+
+    expect(q<HTMLButtonElement>('[data-testid="cls-run"]')!.disabled).toBe(false);
+    expect(q('[data-testid="cls-run-no-portal"]')).toBeNull();
   });
 });
