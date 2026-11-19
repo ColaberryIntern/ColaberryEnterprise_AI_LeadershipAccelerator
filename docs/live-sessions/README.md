@@ -43,7 +43,7 @@ students_on=
 build=""
 # e.g. build="an MCP server that reads and updates our CRM"
 proof=""
-# e.g. proof="Kaci's deployed triage agent cut ticket handling from 9 min to 2"
+# e.g. proof="<student>'s deployed triage agent cut ticket handling from 9 min to 2"
 #      real thing you can show; without it the Proof line is capped at 2/5
 news=""
 # e.g. news="https://www.anthropic.com/news/..."  or  news="Anthropic launched X this week"
@@ -56,7 +56,7 @@ length=60
 date=
 # e.g. date=2026-12-01   (blank = next open Tuesday, 6:30 pm Central)
 series=""
-# e.g. series="Forward Deployed Fridays, Episode 4"   (blank = "Weekly Live · Episode N")
+# e.g. series="Forward Deployed Live, Episode 4"   (blank = "Weekly Live · Episode N")
 guest=""
 # e.g. guest="Jane Doe, Head of AI Platform at Acme Health"
 
