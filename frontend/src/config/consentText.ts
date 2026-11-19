@@ -22,15 +22,21 @@ export const SIGNUP_CONSENT_TEXT =
   'Email me about Colaberry courses, events and AI resources. You can unsubscribe at any time.';
 
 /**
- * Permission to call or text, shown beside the optional phone field.
+ * Permission to call or text, shown beside every phone field (PH1, Ali 2026-11-19).
  *
  * Same pinning rule as above, for the same reason: the backend stores this exact string as
  * evidence of what the person was shown. It is a SEPARATE permission from the email wording and so
  * must be a separate string - a record attesting "Email me about Colaberry courses" cannot stand
  * as evidence that somebody agreed to a phone call.
+ *
+ * The phone NUMBER is required on every public form; this permission is NOT. The box is always
+ * shown, never pre-ticked, never required, and it names AI-assisted or automated calls because
+ * that may be what places the call.
+ *
+ * Double-quoted because the wording contains an apostrophe; the parity test accepts either quote.
  */
 export const PHONE_CONSENT_TEXT =
-  'You can call or text me about getting started. Message and data rates may apply, and you can ask us to stop at any time.';
+  "Colaberry may call or text me at this number, including with AI-assisted or automated calls, about my program and events. Consent isn't required to sign up. Message and data rates may apply. Reply STOP or ask us to stop at any time.";
 
 /**
  * Permission to be named in the recent-signup notices on a landing page.

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Modal from './ui/Modal';
 import PhoneConsentCheckbox from './PhoneConsentCheckbox';
+import { phoneProblem } from '../utils/phone';
 import { useCalendarAvailability } from '../hooks/useCalendarAvailability';
 import { downloadICS } from '../utils/ics';
 import api from '../utils/api';
@@ -117,8 +118,10 @@ export default function StrategyCallModal({
   const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
   const [editingDetails, setEditingDetails] = useState(false);
 
-  // If we already have name + email, the required fields are satisfied
-  const hasPrefilledIdentity = !!(initialName && initialEmail);
+  // If we already have name + email + a usable phone, the required fields are satisfied. A
+  // prefill without a usable phone goes to the form, because the phone is required (PH1) and the
+  // compact summary has no field to type one into.
+  const hasPrefilledIdentity = !!(initialName && initialEmail && !phoneProblem(initialPhone));
 
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
@@ -168,6 +171,8 @@ export default function StrategyCallModal({
       setFormError('Please enter a valid email address');
       return;
     }
+    const phoneError = phoneProblem(phone);
+    if (phoneError) { setFormError(phoneError); return; }
     if (!selectedSlot) return;
 
     setStep('submitting');
@@ -378,7 +383,6 @@ export default function StrategyCallModal({
               */}
               <PhoneConsentCheckbox
                 id="sc-phone-consent-confirm"
-                phone={phone}
                 checked={phoneConsent}
                 onChange={setPhoneConsent}
                 disabled={step === 'submitting'}
@@ -450,7 +454,9 @@ export default function StrategyCallModal({
                   />
                 </div>
                 <div className="col-md-6">
-                  <label htmlFor="sc-phone" className="form-label">Phone</label>
+                  <label htmlFor="sc-phone" className="form-label">
+                    Phone <span className="text-danger">*</span>
+                  </label>
                   <input
                     type="tel"
                     className="form-control"
@@ -458,18 +464,19 @@ export default function StrategyCallModal({
                     value={phone}
                     onChange={(e) => setPhone(formatPhone(e.target.value))}
                     placeholder="(555) 123-4567"
+                    autoComplete="tel"
+                    required
                     disabled={step === 'submitting'}
                   />
                 </div>
                 {/*
-                  Appears only once a number is typed, and never pre-ticked. The
-                  phone stays optional and so does this: leaving it alone still
-                  books the call, it just records no permission to telephone.
+                  Always shown beside the phone (PH1) and never pre-ticked. The phone
+                  is required; this is not: leaving it alone still books the call, it
+                  just records no permission to telephone.
                 */}
                 <div className="col-12">
                   <PhoneConsentCheckbox
                     id="sc-phone-consent"
-                    phone={phone}
                     checked={phoneConsent}
                     onChange={setPhoneConsent}
                     disabled={step === 'submitting'}

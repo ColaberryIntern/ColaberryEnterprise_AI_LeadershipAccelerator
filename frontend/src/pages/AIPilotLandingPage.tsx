@@ -4,6 +4,7 @@ import { captureUTMFromURL } from '../services/utmService';
 import { captureCampaignFromURL } from '../services/campaignAttributionService';
 import SEOHead from '../components/SEOHead';
 import PhoneConsentCheckbox from '../components/PhoneConsentCheckbox';
+import { phoneProblem } from '../utils/phone';
 
 // Standalone landing page for the SMB CEO "6-Week AI ROI Pilot" initiative.
 // Targets owner-operators of 5-50 person, operations-heavy companies. Low-barrier
@@ -70,6 +71,13 @@ function AIPilotLandingPage() {
     e.preventDefault();
     if (!form.name || !form.email || !form.consent_contact) {
       setErrorMsg('Please add your name, work email, and check the consent box.');
+      setStatus('error');
+      return;
+    }
+    // PH1: the phone is required on every public lead form; the call/text box is not.
+    const phoneError = phoneProblem(form.phone);
+    if (phoneError) {
+      setErrorMsg(phoneError);
       setStatus('error');
       return;
     }
@@ -268,15 +276,14 @@ function AIPilotLandingPage() {
                     <input type="text" className="form-control" value={form.company} onChange={(e) => update('company', e.target.value)} />
                   </div>
                   <div className="col-md-5">
-                    <label className="form-label small fw-bold" style={{ color: DARK.text }}>Phone</label>
-                    <input type="tel" className="form-control" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="(555) 123-4567" />
+                    <label className="form-label small fw-bold" style={{ color: DARK.text }}>Phone *</label>
+                    <input type="tel" className="form-control" value={form.phone} onChange={(e) => update('phone', e.target.value)} placeholder="(555) 123-4567" autoComplete="tel" required />
                   </div>
                 </div>
-                {/* Only once a number is typed, never pre-ticked, never required. */}
+                {/* Always shown beside the phone (PH1), never pre-ticked, never required. */}
                 <div className="mb-3">
                   <PhoneConsentCheckbox
                     id="ai-pilot-phone-consent"
-                    phone={form.phone}
                     checked={form.phone_consent}
                     onChange={(next) => update('phone_consent', next)}
                     disabled={status === 'submitting'}

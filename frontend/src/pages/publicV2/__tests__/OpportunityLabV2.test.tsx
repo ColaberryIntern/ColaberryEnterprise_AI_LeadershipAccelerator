@@ -95,11 +95,12 @@ describe('buildLeadPayload — the phone grant', () => {
     expect(payload.phone_consent).toBe(false);
   });
 
-  it('does not require a phone or its permission to submit', () => {
-    // The lab is a diagnostic, not a lead-qualification gate. Leaving both alone
-    // must still validate — only `consent` is required.
-    const errors = validateContact({ ...contact, phone: '', phoneConsent: false });
-    expect(errors).toEqual({});
+  it('requires the phone (PH1) but never its permission', () => {
+    // Ali, 2026-11-19: every public lead form requires a phone number. The
+    // permission to call it stays optional: leaving the tick alone still validates.
+    expect(validateContact({ ...contact, phone: '' }).phone).toBeTruthy();
+    expect(validateContact({ ...contact, phone: '555-0100' }).phone).toBeTruthy();
+    expect(validateContact({ ...contact, phoneConsent: false })).toEqual({});
   });
 });
 

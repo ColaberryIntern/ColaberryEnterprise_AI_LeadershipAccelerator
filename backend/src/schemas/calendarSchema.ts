@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { requiredPhone } from './phone';
 
 export const bookCallSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address'),
   company: z.string().optional().default(''),
-  phone: z.string().optional().default(''),
+  // REQUIRED (PH1, Ali 2026-11-19): every public signup/lead form requires a phone number.
+  // The number only - `phone_consent` below stays optional and separate.
+  phone: requiredPhone,
   /**
    * Permission to call or text the number above.
    *

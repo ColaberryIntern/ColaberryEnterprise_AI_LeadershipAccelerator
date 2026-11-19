@@ -10,6 +10,7 @@ export const v1LeadSchema = z.object({
   // Lead identity — optional
   company: z.string().max(255).optional(),
   role: z.string().max(100).optional(),
+  // Stays OPTIONAL on purpose (PH1, 2026-11-19): training.colaberry.com calls this route, so requiring it would 400 their leads.
   phone: z.string().max(50).optional(),
   title: z.string().max(255).optional(),
   industry: z.string().max(100).optional(),

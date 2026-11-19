@@ -33,7 +33,7 @@ describe('handleCreateFreeAccount', () => {
     });
 
     const req: any = {
-      body: { full_name: 'Jane Doe', email: 'jane@example.com', company: 'Acme' },
+      body: { phone: '(214) 555-0100', full_name: 'Jane Doe', email: 'jane@example.com', company: 'Acme' },
     };
     const res = mockRes();
     const next = jest.fn();
@@ -57,7 +57,7 @@ describe('handleCreateFreeAccount', () => {
       cohort_id: 'explorer-cohort-1',
     });
 
-    const req: any = { body: { full_name: 'Jane Doe', email: 'jane@example.com' } };
+    const req: any = { body: { phone: '(214) 555-0100', full_name: 'Jane Doe', email: 'jane@example.com' } };
     const res = mockRes();
     await handleCreateFreeAccount(req, res, jest.fn());
 
@@ -81,7 +81,7 @@ describe('handleCreateFreeAccount', () => {
 
   it('passes non-Zod errors to next() rather than swallowing them', async () => {
     mockCreateExplorer.mockRejectedValue(new Error('db unavailable'));
-    const req: any = { body: { full_name: 'Jane', email: 'jane@example.com' } };
+    const req: any = { body: { phone: '(214) 555-0100', full_name: 'Jane', email: 'jane@example.com' } };
     const res = mockRes();
     const next = jest.fn();
 
@@ -118,7 +118,7 @@ describe('handleCreateFreeAccount', () => {
       const res = mockRes();
 
       await handleCreateFreeAccount(
-        { body: { full_name: 'Jane Doe', email: 'jane@example.com' } } as any,
+        { body: { phone: '(214) 555-0100', full_name: 'Jane Doe', email: 'jane@example.com' } } as any,
         res,
         jest.fn(),
       );
@@ -149,7 +149,7 @@ describe('handleCreateFreeAccount', () => {
       });
 
       await handleCreateFreeAccount(
-        { body: { full_name: 'Jane Doe', email: 'jane@example.com' } } as any,
+        { body: { phone: '(214) 555-0100', full_name: 'Jane Doe', email: 'jane@example.com' } } as any,
         mockRes(),
         jest.fn(),
       );

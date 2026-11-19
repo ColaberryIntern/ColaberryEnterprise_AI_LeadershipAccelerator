@@ -22,6 +22,7 @@
  */
 
 import type { IconName } from '../components/publicV2/Icon';
+import { phoneProblem } from '../utils/phone';
 
 export type StepId = 'function' | 'friction' | 'volume' | 'outcome' | 'contact';
 
@@ -168,6 +169,7 @@ export function composeSummary(
 export interface ContactErrors {
   name?: string;
   email?: string;
+  phone?: string;
   consent?: string;
 }
 
@@ -185,6 +187,9 @@ export function validateContact(contact: LabContact): ContactErrors {
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim())) {
     errors.email = 'That address does not look right.';
   }
+  // PH1 (Ali, 2026-11-19): every public lead form requires a phone number.
+  const phoneError = phoneProblem(contact.phone);
+  if (phoneError) errors.phone = phoneError;
   if (!contact.consent) errors.consent = 'We need your agreement before we contact you.';
   return errors;
 }
@@ -197,13 +202,13 @@ export interface LabContact {
   readonly companySize: string;
   readonly timeline: string;
   readonly consent: boolean;
-  /** Optional, and only asked once a number is typed. */
+  /** REQUIRED since PH1 (2026-11-19). */
   readonly phone: string;
   /**
    * Permission to call or text, which `consent` does not grant: that one is the
    * required channel-blind agreement, and reading it as telephone permission is
-   * the conflation this field exists to avoid. Never required — the lab submits
-   * perfectly well with no number and no tick.
+   * the conflation this field exists to avoid. Never required: the number is,
+   * this tick is not.
    */
   readonly phoneConsent: boolean;
 }

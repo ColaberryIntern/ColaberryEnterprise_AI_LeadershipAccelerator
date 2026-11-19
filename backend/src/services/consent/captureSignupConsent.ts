@@ -197,9 +197,15 @@ export const SIGNUP_CONSENT_TEXT =
  *
  * It names calls AND texts, because one checkbox cannot honestly authorise only whichever channel
  * turns out to be convenient later.
+ *
+ * PH1 (Ali, 2026-11-19): every public form now REQUIRES a phone number, so this box is always
+ * shown beside the field - unticked and optional. The wording therefore names AI-assisted or
+ * automated calls (an AI voice agent may be what places the call) and says outright that consent
+ * is not a condition of signing up, so a required number can never be read as a granted
+ * permission.
  */
 export const PHONE_CONSENT_TEXT =
-  'You can call or text me about getting started. Message and data rates may apply, and you can ask us to stop at any time.';
+  "Colaberry may call or text me at this number, including with AI-assisted or automated calls, about my program and events. Consent isn't required to sign up. Message and data rates may apply. Reply STOP or ask us to stop at any time.";
 
 /**
  * Permission to be NAMED in the recent-signup notices a landing page shows.

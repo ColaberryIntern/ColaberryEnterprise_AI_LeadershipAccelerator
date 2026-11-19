@@ -147,11 +147,35 @@ const settle = async () => {
 };
 
 describe('the booking form', () => {
-  it('shows no permission tick before a number is typed', () => {
+  it('shows the permission tick from the start, unticked, before any number is typed (PH1)', () => {
     render();
     reachDetails();
 
-    expect(container.textContent).not.toContain(PHONE_CONSENT_TEXT);
+    expect(container.textContent).toContain(PHONE_CONSENT_TEXT);
+    expect(consentBox()!.checked).toBe(false);
+    expect(consentBox()!.required).toBe(false);
+  });
+
+  it('marks the phone as required (PH1)', () => {
+    render();
+    reachDetails();
+
+    expect(container.querySelector<HTMLInputElement>('#sc-phone')!.required).toBe(true);
+  });
+
+  it('refuses to book without a usable phone, and books nothing', async () => {
+    render();
+    reachDetails();
+    setValue('#sc-name', 'Dana Reyes');
+    setValue('#sc-email', 'dana@example.com');
+    setValue('#sc-phone', '555');
+    await act(async () => {
+      container.querySelector<HTMLFormElement>('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    expect(bodyOf('/api/calendar/book')).toBeUndefined();
+    expect(container.textContent).toMatch(/area code|phone number/i);
   });
 
   it('shows the tick, unticked, once a number is typed', () => {

@@ -43,12 +43,15 @@ describe('DemoPilotV2 — consent', () => {
     expect(textOf(h)).toContain('I agree that Colaberry may contact me');
   });
 
-  it('collects no phone number, which is why there is no phone-consent tick', () => {
-    // /contact asked for a phone and therefore needed a second, separate
-    // consent. This page does not ask, so it must not imply it might call.
+  it('PH1: asks for a REQUIRED phone, with its own optional call/text tick beside it', () => {
+    // Ali, 2026-11-19: every public lead form requires a phone number. Because it now
+    // collects one, it needs the separate permission tick: shown, unticked, not required.
     const h = html();
-    expect(h).not.toContain('name="phone"');
-    expect(h).not.toContain('autoComplete="tel"');
+    expect(h).toContain('name="phone"');
+    expect(h).toMatch(/id="dp-phone"[^>]*required/);
+    // Static markup escapes the apostrophe in the wording, so match a span without one.
+    expect(textOf(h)).toContain('including with AI-assisted or automated calls');
+    expect(h).not.toMatch(/id="dp-phone-consent"[^>]*checked/);
   });
 });
 

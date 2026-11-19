@@ -138,14 +138,14 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
     ['entry_point_id', ENTRY_POINT_ID],
     ['visitor_id', VISITOR_ID],
   ])('%s accepts a UUID, because the column is a UUID', (field, value) => {
-    const r = portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', [field]: value });
+    const r = portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', [field]: value });
     expect(r.success).toBe(true);
   });
 
   it.each(['source_id', 'entry_point_id', 'visitor_id'])(
     '%s rejects an integer — the value the first draft accepted and the column cannot store',
     (field) => {
-      expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', [field]: 42 }).success)
+      expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', [field]: 42 }).success)
         .toBe(false);
     },
   );
@@ -189,10 +189,10 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
     (field) => {
       const width = stringWidth(field);
       expect(portalFreeSignupSchema.safeParse({
-        full_name: 'Maya', email: 'a@b.co', [field]: 'x'.repeat(width),
+        phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', [field]: 'x'.repeat(width),
       }).success).toBe(true);
       expect(portalFreeSignupSchema.safeParse({
-        full_name: 'Maya', email: 'a@b.co', [field]: 'x'.repeat(width + 1),
+        phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', [field]: 'x'.repeat(width + 1),
       }).success).toBe(false);
     },
   );
@@ -200,9 +200,9 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
   it('page_url caps at the column width too, not at 2048 as the first draft allowed', () => {
     const width = stringWidth('page_url');
     const url = (n: number) => `https://x.io/${'a'.repeat(n - 13)}`;
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url: url(width) }).success)
+    expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', page_url: url(width) }).success)
       .toBe(true);
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: 'a@b.co', page_url: url(width + 1) }).success)
+    expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'Maya', email: 'a@b.co', page_url: url(width + 1) }).success)
       .toBe(false);
   });
 
@@ -217,16 +217,16 @@ describe('T204 — the schema agrees with the Lead model it writes', () => {
   it('email caps at its column width, not at the RFC maximum', () => {
     const width = stringWidth('email');
     const local = (n: number) => `${'a'.repeat(n - 6)}@b.com`;
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: local(width) }).success).toBe(true);
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'Maya', email: local(width + 1) }).success).toBe(false);
+    expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'Maya', email: local(width) }).success).toBe(true);
+    expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'Maya', email: local(width + 1) }).success).toBe(false);
   });
 
   it('full_name caps at the width of the column it is written to', () => {
     // `Lead.name` and `Enrollment.full_name` are both STRING(255); `Lead.name` is the
     // one this service writes, so it is the one the test reads.
     const width = stringWidth('name');
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'x'.repeat(width), email: 'a@b.co' }).success).toBe(true);
-    expect(portalFreeSignupSchema.safeParse({ full_name: 'x'.repeat(width + 1), email: 'a@b.co' }).success).toBe(false);
+    expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'x'.repeat(width), email: 'a@b.co' }).success).toBe(true);
+    expect(portalFreeSignupSchema.safeParse({ phone: '(214) 555-0100', full_name: 'x'.repeat(width + 1), email: 'a@b.co' }).success).toBe(false);
   });
 
 

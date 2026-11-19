@@ -21,6 +21,10 @@ export interface OrgRegisterBody {
   name: string;
   company?: string;
   email: string;
+  /** REQUIRED since PH1 (2026-11-19): every public signup form requires a phone number. */
+  phone: string;
+  /** Permission to call or text. OPTIONAL and separate from the number; only a tick sends true. */
+  phone_consent?: boolean;
 }
 
 /**

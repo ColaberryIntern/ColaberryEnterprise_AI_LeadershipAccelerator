@@ -83,6 +83,7 @@ import {
   handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
   handleSetResume, handleGetResume, handleClearResume,
 } from '../controllers/portalSettingsController';
+import { handleGetPhoneGate, handleSavePortalPhone } from '../controllers/portalPhoneGateController';
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
@@ -487,6 +488,9 @@ router.post('/api/portal/handoff', requireParticipant, handleCreateHandoff);
 // limit); the resume download streams the decoded file back to its owner.
 router.get('/api/portal/settings', requireParticipant, handleGetSettings);
 router.put('/api/portal/settings/profile', requireParticipant, handleUpdateProfile);
+// PH1: the blocking "Add your phone" step every authenticated portal page passes through.
+router.get('/api/portal/phone-gate', requireParticipant, handleGetPhoneGate);
+router.put('/api/portal/phone', requireParticipant, handleSavePortalPhone);
 router.post('/api/portal/settings/avatar', requireParticipant, handleSetAvatar);
 router.delete('/api/portal/settings/avatar', requireParticipant, handleClearAvatar);
 router.post('/api/portal/settings/resume', requireParticipant, handleSetResume);

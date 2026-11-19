@@ -81,6 +81,12 @@ export interface RegisterManagerInput {
   entrySite?: string | null;
   /** Explicit override, for an internal caller creating an account directly. */
   accountType?: string | null;
+  /**
+   * PH1: the manager's phone, REQUIRED on the public route (orgController) and optional here
+   * so internal callers are unaffected. Stored on the lead and on a newly created enrollment.
+   * Permission to call it is recorded separately by the controller, only from a tick.
+   */
+  phone?: string | null;
 }
 
 export interface RegisterManagerResult {
@@ -221,8 +227,9 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
   // describes — it would put every org owner onto learner rosters and into the
   // Explorer nurture. The first draft of the shared service defaulted this
   // argument to 'learner', which is why it now has no default at all.
+  const phone = typeof input.phone === 'string' && input.phone.trim() !== '' ? input.phone.trim() : undefined;
   const free = grantsTrainingEnrollment(accountType)
-    ? await createFreeAccount({ full_name: name, email, programme: 'standard' })
+    ? await createFreeAccount({ full_name: name, email, programme: 'standard', ...(phone ? { phone } : {}) })
     : null;
   const ownerEnrollmentId = free?.enrollment.id ?? null;
   const orgName = (input.company || '').trim() || name;
@@ -302,6 +309,7 @@ export async function registerManager(input: RegisterManagerInput): Promise<Regi
           name,
           email,
           company: (input.company || '').trim() || null,
+          ...(phone ? { phone } : {}),
           source: resolved.host || 'business_registration',
           status: 'new',
           notes: `Auto-created at ${accountType} account registration`,

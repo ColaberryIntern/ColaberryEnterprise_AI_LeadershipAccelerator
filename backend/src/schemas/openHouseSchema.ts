@@ -1,50 +1,21 @@
 import { z } from 'zod';
+import { requiredPhone, PHONE_MIN_DIGITS, PHONE_MAX_DIGITS, phoneDigits } from './phone';
 
 /**
- * A phone number we will actually be able to call.
+ * The phone rule now lives in ./phone (PH1, 2026-11-19), shared by every public
+ * signup and lead form. Re-exported here so existing imports keep working.
  *
- * Counted in DIGITS, not characters, because "(512) 555-0142" is 14 characters and
- * "5125550142" is 10 and both are the same number. The ceiling is E.164's 15 digits.
+ * It is required on the PUBLIC signup route below (Ali, 2026-11-11). It stays
+ * optional on openHouseRegisterSchema because that route is called by
+ * training.colaberry.com, a separate deployment in a separate repo.
  */
-export const PHONE_MIN_DIGITS = 10;
-export const PHONE_MAX_DIGITS = 15;
-export const phoneDigits = (raw: string): string => raw.replace(/\D/g, '');
-
-/**
- * REQUIRED on our own landing page (Ali, 2026-11-11: "We need to collect phone number
- * mandatory in this process").
- *
- * It is required on THIS route only. `openHouseRegisterSchema` below keeps phone
- * optional because that route is called by training.colaberry.com, a separate
- * deployment in a separate repo; making it mandatory here would start 400ing their
- * signups the moment this deploys, with no coordinated release.
- *
- * COLLECTING A NUMBER IS NOT CONSENT TO RING IT. This makes the field mandatory and
- * nothing more - no box is pre-ticked and no consent record is written from it. The
- * marketing opt-in below remains separate, freely given, and about email.
- */
-// NOTE ON THE OPTIONS OBJECT. This deliberately passes none. zod 4 removed
-// 'required_error' (it is 'error' now), and an unknown key here is a typecheck
-// failure, not a runtime nicety - which is exactly how the first push of this change
-// broke the build. An ABSENT phone therefore gets zod's own
-// "expected string, received undefined", which is only ever a backstop: the form
-// validates first and gives the friendly wording.
-const requiredPhone = z
-  .string()
-  .trim()
-  .min(1, 'phone is required')
-  .max(50)
-  .refine((v) => phoneDigits(v).length >= PHONE_MIN_DIGITS, {
-    message: `a phone number with at least ${PHONE_MIN_DIGITS} digits is required`,
-  })
-  .refine((v) => phoneDigits(v).length <= PHONE_MAX_DIGITS, {
-    message: 'that phone number has too many digits',
-  });
+export { PHONE_MIN_DIGITS, PHONE_MAX_DIGITS, phoneDigits };
 
 // Contract for POST /api/v1/open-house/register (called by training.colaberry.com).
 export const openHouseRegisterSchema = z.object({
   name: z.string().trim().min(1, 'name is required').max(200),
   email: z.string().trim().email('a valid email is required').max(255),
+  // Stays OPTIONAL on purpose (PH1, 2026-11-19): training.colaberry.com calls this route, so requiring it would 400 their signups.
   phone: z.string().trim().max(50).optional(),
   order_id: z.string().trim().max(64).optional(),
   utm_source: z.string().trim().max(255).optional(),

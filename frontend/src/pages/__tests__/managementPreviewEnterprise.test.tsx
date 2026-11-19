@@ -12,7 +12,7 @@ import { act } from 'react-dom/test-utils';
  *  1. The page root carries data-brand="enterprise" and the scoped theme is on the page.
  *  2. The header is the Enterprise lockup, not the Training wordmark or the accelerator label.
  *  3. No "free" in the page text, the pop-up text, or any aria-label.
- *  4. Account creation still sends the same request (name, company, email).
+ *  4. Account creation sends name, company, email and the now-required phone (PH1).
  *  5. The theme cannot leak: every rule is scoped to the enterprise shell, and errors stay red.
  */
 jest.mock('../../services/orgApi', () => ({
@@ -100,9 +100,13 @@ describe('W21: /try in Colaberry Enterprise branding', () => {
     type(inputs[0], 'Dana Lead');
     type(inputs[1], 'Acme');
     type(inputs[2], 'dana@example.com');
+    type(inputs[3], '(214) 555-0100');
     const submit = Array.from(host.querySelectorAll('[role="dialog"] button')).find((b) => b.textContent === 'Create account') as HTMLButtonElement;
     await act(async () => { submit.click(); });
-    expect(register).toHaveBeenCalledWith({ name: 'Dana Lead', company: 'Acme', email: 'dana@example.com' });
+    // PH1: the phone is required; the call/text box was left alone, so no permission is sent.
+    expect(register).toHaveBeenCalledWith({
+      name: 'Dana Lead', company: 'Acme', email: 'dana@example.com', phone: '(214) 555-0100', phone_consent: false,
+    });
     expect(host.textContent).toContain('You already have an account.');
   });
 });

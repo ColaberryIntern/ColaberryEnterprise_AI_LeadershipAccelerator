@@ -6,6 +6,8 @@ import { EnterpriseLead, toLeadPayload } from '../../models/EnterpriseLead';
 import { getUTMParams } from '../../services/utmService';
 import { identifyVisitor } from '../../utils/tracker';
 import api from '../../utils/api';
+import { PHONE_CONSENT_TEXT } from '../../config/consentText';
+import { phoneProblem } from '../../utils/phone';
 
 /**
  * DemoPilotV2 — /demo-pilot. The single conversion page.
@@ -27,8 +29,12 @@ import api from '../../utils/api';
  * `consentContact` before it will submit, and that is a compliance surface, not
  * a styling choice. Replacing a consented lead form with an unconsented one
  * would be a regression dressed as a redesign, so the tick is carried over and
- * submission is blocked without it. Phone is not collected here at all, which
- * is why there is no phone-consent tick: no number, no call.
+ * submission is blocked without it.
+ *
+ * PHONE IS REQUIRED (PH1, Ali 2026-11-19: every public signup/lead form requires
+ * a phone number). It used to be absent here. The call/text permission beside it
+ * is a separate box, always shown, unticked and NOT required - the number is
+ * mandatory, permission to ring it is not.
  *
  * It posts to the SAME endpoint as /contact (`/api/leads`) with the same
  * `EnterpriseLead` shape, so these leads land in the pipeline that already
@@ -80,6 +86,8 @@ interface PilotForm {
   costToday: string;
   requiredReturn: string;
   consentContact: boolean;
+  phone: string;
+  phoneConsent: boolean;
 }
 
 const EMPTY: PilotForm = {
@@ -93,6 +101,8 @@ const EMPTY: PilotForm = {
   costToday: '',
   requiredReturn: '',
   consentContact: false,
+  phone: '',
+  phoneConsent: false,
 };
 
 /**
@@ -144,6 +154,8 @@ export function DemoPilotV2(): React.ReactElement {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       next.email = 'That does not look like an email address';
     }
+    const phoneError = phoneProblem(form.phone);
+    if (phoneError) next.phone = phoneError;
     if (!form.process.trim()) next.process = 'Name one process, even roughly';
     // Blocking, deliberately: see the consent note in this file's header.
     if (!form.consentContact) next.consentContact = 'You must agree to be contacted';
@@ -160,6 +172,8 @@ export function DemoPilotV2(): React.ReactElement {
         email: form.email.trim(),
         company: form.company.trim() || undefined,
         title: form.role.trim() || undefined,
+        phone: form.phone.trim(),
+        phoneConsent: form.phoneConsent,
         message: composeMessage(form),
         consentContact: form.consentContact,
         formType: FORM_TYPE,
@@ -170,6 +184,7 @@ export function DemoPilotV2(): React.ReactElement {
       identifyVisitor(lead.email, {
         name: lead.fullName,
         company: lead.company,
+        phone: lead.phone,
         metadata: { source_form: FORM_TYPE, title: lead.title },
       });
       setSubmitted(true);
@@ -321,6 +336,38 @@ export function DemoPilotV2(): React.ReactElement {
                     autoComplete="organization-title"
                   />
                 </div>
+              </div>
+
+              <div className="cbv2-field5">
+                <label htmlFor="dp-phone">Phone</label>
+                <input
+                  id="dp-phone"
+                  name="phone"
+                  type="tel"
+                  inputMode="tel"
+                  value={form.phone}
+                  onChange={change}
+                  autoComplete="tel"
+                  required
+                  aria-invalid={Boolean(errors.phone)}
+                  aria-describedby={errors.phone ? 'dp-phone-err' : undefined}
+                />
+                {errors.phone ? (
+                  <p className="cbv2-field5__err" id="dp-phone-err">
+                    {errors.phone}
+                  </p>
+                ) : null}
+              </div>
+              {/* Always shown beside the phone (PH1), unticked, never required. */}
+              <div className="cbv2-consent5">
+                <input
+                  type="checkbox"
+                  id="dp-phone-consent"
+                  name="phoneConsent"
+                  checked={form.phoneConsent}
+                  onChange={change}
+                />
+                <label htmlFor="dp-phone-consent">{PHONE_CONSENT_TEXT}</label>
               </div>
 
               <fieldset className="cbv2-field5 cbv2-field5--set">
