@@ -95,7 +95,7 @@ const GuidedOutline: React.FC<{
 
       <div className="pjg-main">
         <Section title="The basics" />
-        {text('q1', 'produce', '1. In one sentence, what should this produce — and for whom?', undefined, 'e.g. An AI agent that triages my support inbox and drafts replies for my team.')}
+        {text('q1', 'produce', '1. In one sentence, what should this produce, and for whom?', undefined, 'e.g. An AI agent that triages my support inbox and drafts replies for my team.')}
         {text('q2', 'users', '2. Who is actually using it, and how comfortable are they with tools like this?',
           'Include anything they should never have to understand to use it.',
           "e.g. Two support reps who live in Gmail. They shouldn't have to write prompts.")}
@@ -132,7 +132,7 @@ const GuidedOutline: React.FC<{
           </div>
         </div>
         {text('q5', 'call', "5. What's the call you're handing over?",
-          'The thing you currently work out in your head — and what you look at when you make it.',
+          'The thing you currently work out in your head, and what you look at when you make it.',
           'e.g. Deciding which emails are urgent. I look at who sent it and whether an order number is mentioned.')}
 
         <Section title="Keeping you in control" />

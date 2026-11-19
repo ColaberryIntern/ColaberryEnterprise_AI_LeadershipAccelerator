@@ -189,7 +189,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
       <Counter value={idea} max={IDEA_MAX} />
       {tooLong && (
         <div className="small" style={{ marginTop: 4, color: '#B5710A' }}>
-          Together this is {idea.length.toLocaleString()} characters — {IDEA_MAX.toLocaleString()} is the most we can take. Trim something to continue.
+          Together this is {idea.length.toLocaleString()} characters. {IDEA_MAX.toLocaleString()} is the most we can take. Trim something to continue.
         </div>
       )}
       <label className="pjw-label" htmlFor="pjw-name" style={mode === 'guided' ? { marginTop: 0 } : undefined}>Give it a name (optional)</label>
@@ -204,7 +204,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
       )}
       {mode === 'guided' && idea.trim().length >= 20 && filledCount(outline) < SECTIONS.length && (
         <div className="small" style={{ marginTop: 8, opacity: .75 }}>
-          {SECTIONS.length - filledCount(outline)} still open. The next step will ask about those — anything you skip there, we infer.
+          {SECTIONS.length - filledCount(outline)} still open. The next step will ask about those. Anything you skip there, we infer.
         </div>
       )}
     </div>
@@ -251,7 +251,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
             </>
           ) : (
             <>
-              <p className="lead" style={{ maxWidth: 820, marginBottom: 22 }}>These are the things a build plan needs to know. Fill in what you can, in any order, and skip the rest — the next step asks only about what is still open.</p>
+              <p className="lead" style={{ maxWidth: 820, marginBottom: 22 }}>These are the things a build plan needs to know. Fill in what you can, in any order, and skip the rest. The next step asks only about what is still open.</p>
               <GuidedOutline outline={outline} onChange={setOutline} freeText={freeText} onFreeText={setFreeText} freeMax={IDEA_MAX}>
                 {step1Footer}
               </GuidedOutline>
