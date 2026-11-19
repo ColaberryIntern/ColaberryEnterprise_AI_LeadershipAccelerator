@@ -13,6 +13,9 @@ import { env } from '../config/env';
 import { sessionCheckinUrl } from './email/sessionReminderEmail';
 import { buildSessionLinks } from './broadcast/broadcastSessionLinks';
 import { Cohort, CommunityRoom, Enrollment, LiveSession } from '../models';
+import { CANONICAL_COURSE } from '../data/canonicalCourse';
+import { classWindowAt, ClassWindow } from './classCheckinWindow';
+import { formatCentralClock } from './centralDate';
 
 /**
  * Absolute app origin for building QR/deep-link URLs. Mirrors
@@ -93,6 +96,15 @@ export interface CheckinInfo {
   start_time: string;
   cohort_name: string;
   room_id: string | null;
+  /** The program's canonical name (canonicalCourse.ts), for the page footer — the ONE source,
+   * so a rename never leaves this page saying the old name again. */
+  program_name: string;
+  /** Whether a scan right now is attendance ('open'), early ('before') or too late ('ended'). */
+  class_window: ClassWindow;
+  /** "6:30 PM CST" — the start time with the zone derived from the class's own date. */
+  start_label: string;
+  /** False only when an operator explicitly closed this class to guests on Studio setup. */
+  accepts_guests: boolean;
 }
 
 /**
@@ -105,9 +117,9 @@ export interface CheckinInfo {
  * the room instead of the retired /portal/sessions/:id page. Returns null if
  * the session does not exist (→ 404).
  */
-export async function getCheckinInfo(sessionId: string): Promise<CheckinInfo | null> {
+export async function getCheckinInfo(sessionId: string, now: Date = new Date()): Promise<CheckinInfo | null> {
   const session = await LiveSession.findByPk(sessionId, {
-    attributes: ['title', 'session_date', 'start_time', 'cohort_id'],
+    attributes: ['title', 'session_date', 'start_time', 'end_time', 'status', 'cohort_id', 'guest_access'],
   });
   if (!session) return null;
 
@@ -122,5 +134,15 @@ export async function getCheckinInfo(sessionId: string): Promise<CheckinInfo | n
     start_time: session.start_time,
     cohort_name: cohort?.name ?? '',
     room_id: room?.id ?? null,
+    program_name: CANONICAL_COURSE.program.name,
+    class_window: classWindowAt({
+      sessionDate: session.session_date,
+      startTime: session.start_time,
+      endTime: session.end_time,
+      status: session.status,
+      now,
+    }),
+    start_label: formatCentralClock(session.session_date, session.start_time),
+    accepts_guests: session.guest_access !== false,
   };
 }

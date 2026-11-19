@@ -11,6 +11,9 @@ jest.mock('../sessionGuestStore', () => ({
   countGuests: async () => 0,
   getGuestCorrectNames: async () => [],
   getGuestTally: async () => [],
+  getGuestPulseCounts: async () => ({}),
+  getGuestQuestions: async () => [],
+  countParticipatingGuests: async () => 0,
 }));
 
 // Keep the REAL `formatDisplayName` (needed to prove the "Ali Muwwakkil" ->
