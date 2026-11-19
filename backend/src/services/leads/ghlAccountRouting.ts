@@ -154,3 +154,43 @@ export async function ghlApiKeyForSource(source: string | null | undefined): Pro
   const route = await resolveGhlAccountForSource(source);
   return route.status === 'ready' ? route.account.apiKey : null;
 }
+
+/**
+ * OH1r: each sub-account's send-SMS workflow watches its own custom field. The default
+ * (Agent Cory AI) account's "Cory - Send Scheduled SMS" fires on `cory_sms_composed`; the
+ * School account's "AI Agent - Send SMS" fires on `support_issue_ticket_4` (Ali, 2026-11-19).
+ * Writing a field no workflow watches saves the text on the contact and sends nothing, while
+ * the row is still recorded as sent.
+ *
+ * The field lives in `ghl_sms_field_<account>` (`ghl_sms_field_default` for the default).
+ * ABSENT means the historical `cory_sms_composed`. PRESENT but not a plain field key means we
+ * do not know which field the workflow watches, so the target is null and nothing is written.
+ */
+export const DEFAULT_SMS_FIELD = 'cory_sms_composed';
+
+export function smsFieldSettingFor(accountKey: string): string {
+  return `ghl_sms_field_${accountKey}`;
+}
+
+const FIELD_KEY = /^[a-z0-9_]{1,64}$/;
+
+export function parseSmsField(raw: unknown): string | null {
+  if (raw === null || raw === undefined || raw === '') return DEFAULT_SMS_FIELD;
+  if (typeof raw !== 'string') return null;
+  const key = raw.trim().replace(/^contact\./, '');
+  return FIELD_KEY.test(key) ? key : null;
+}
+
+export interface GhlSmsTarget {
+  apiKey: string;
+  accountKey: string;
+  smsField: string;
+}
+
+export async function ghlSmsTargetForSource(source: string | null | undefined): Promise<GhlSmsTarget | null> {
+  const route = await resolveGhlAccountForSource(source);
+  if (route.status !== 'ready') return null;
+  const smsField = parseSmsField(await getSetting(smsFieldSettingFor(route.account.accountKey)));
+  if (!smsField) return null;
+  return { apiKey: route.account.apiKey, accountKey: route.account.accountKey, smsField };
+}

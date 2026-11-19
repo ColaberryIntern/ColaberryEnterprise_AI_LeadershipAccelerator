@@ -1601,10 +1601,12 @@ async function processSmsAction(action: InstanceType<typeof ScheduledEmail>): Pr
   if (ghlEnabled && ghlContactId) {
     // OH1p: write the text to the sub-account the contact was synced into (open house leads
     // live in the School account). Unroutable means we do not know where the contact is: fail.
-    const { ghlApiKeyForSource } = await import('./leads/ghlAccountRouting');
-    const apiKey = await ghlApiKeyForSource(lead?.source);
-    if (!apiKey) throw new Error(`GHL SMS not sent: no usable GHL account for lead source "${lead?.source || ''}"`);
-    const result = await sendSmsViaGhl(ghlContactId, action.body || '', apiKey);
+    // OH1r: and to the field that account's send-SMS workflow watches.
+    const { ghlSmsTargetForSource } = await import('./leads/ghlAccountRouting');
+    const target = await ghlSmsTargetForSource(lead?.source);
+    if (!target) throw new Error(`GHL SMS not sent: no usable GHL account or text field for lead source "${lead?.source || ''}"`);
+    const apiKey = target.apiKey;
+    const result = await sendSmsViaGhl(ghlContactId, action.body || '', apiKey, target.smsField);
     if (!result.success) {
       console.warn(`[Scheduler] GHL SMS failed for lead ${action.lead_id}: ${result.error}`);
       // OH1: a text GHL never received was being recorded as sent. Throw, so the
