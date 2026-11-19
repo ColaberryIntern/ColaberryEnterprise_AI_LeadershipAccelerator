@@ -292,6 +292,10 @@ export const NAV_GROUPS: NavGroup[] = [
     // The programme-wide view of the same ten. Sits beside My Domain because the pair is
     // the distinction worth seeing in the nav: one is what you own, one is everything.
     { path: '/admin/all-domains', label: 'All Domains', icon: 'stack-line' },
+    // The builder PATH across all seven, as distinct from the ten domain PLANS above: this
+    // one answers whose turn each capability is on and what is waiting on Ali. Same group,
+    // because it is the same ten domains seen from the owner's side.
+    { path: '/admin/builder-path', label: 'Builder Path', icon: 'route-line' },
     // Reese manager-growth mission, Phase 3 (T09/T10) — fleet-wide tool/
     // capability catalog, reconciled read-only across every real authority
     // source. Sibling to "AI Organization" (agents), not nested under it.

@@ -283,6 +283,14 @@ const PATH_SECTION: Array<[string, SectionKey]> = [
   // response explaining why. Purely additive: before it, these paths were denied for every scoped
   // role, so no role loses anything.
   ['/api/admin/agent-domain-candidates-mine', 'dashboard'],
+  // The OWNER's cross-builder board. `program`, like the other programme-wide reads, and the
+  // route itself carries `requireAdmin` -- which is what actually decides, because this read
+  // returns all ten domains by design and its safety cannot come from the handler.
+  //
+  // It needs its own row for the same boundary reason the candidate row does:
+  // `/api/admin/builder-path-board` is not a prefix match for anything already listed, so
+  // without this it would 403 by default with nothing in the response saying why.
+  ['/api/admin/builder-path-board', 'program'],
   ['/api/admin/cohorts', 'program'], ['/api/admin/curriculum', 'program'], ['/api/admin/components', 'program'],
   ['/api/admin/composer', 'program'], ['/api/admin/capabilities', 'program'], ['/api/admin/recipes', 'program'],
   ['/api/admin/feed-control', 'program'],
