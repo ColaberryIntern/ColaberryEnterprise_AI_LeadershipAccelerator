@@ -68,7 +68,7 @@ describe('fallbackReminderBody (what is sent when the AI draft is rejected)', ()
     expect(screenEventReminderCopy('Reminder', body, JOIN)).toEqual([]);
   });
   it('OH1f: says something different at each step, so a rejected draft never swaps in a repeat', () => {
-    const bodies = COUNTDOWN_STEPS.map((s) => fallbackReminderBody('Sam', EVENT, s.minutes_before_event!));
+    const bodies = COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => fallbackReminderBody('Sam', EVENT, s.minutes_before_event!));
     expect(new Set(bodies).size).toBe(bodies.length);
     expect(fallbackReminderBody('Sam', EVENT, 240)).toContain('is today');
   });
@@ -94,20 +94,22 @@ describe('the countdown campaign definition', () => {
       else expect(s.ai_instructions).toBeFalsy();
     }
   });
-  it('OH1f: sends three emails (a week, three days, the day of) and nothing else', () => {
+  it('OH1f: sends three emails (a week, three days, the day of), plus one text 30 minutes before (OH1p)', () => {
     const emails = COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => s.minutes_before_event);
     expect(emails).toEqual([10080, 4320, 240]); // 7 days, 3 days, 4 hours
-    // A text or a call on the day would be a second touch inside 24 hours (Ali, 2026-11-18).
-    expect(COUNTDOWN_STEPS.filter((s) => s.channel !== 'email')).toHaveLength(0);
+    // OH1p (Ali, Nov 18 evening): "an email a few hours out and a text message a few minutes
+    // before". The day-of text is the one exception to the 24-hour rule; still no call.
+    const others = COUNTDOWN_STEPS.filter((s) => s.channel !== 'email');
+    expect(others.map((s) => [s.channel, s.minutes_before_event])).toEqual([['sms', 30]]);
   });
-  it('OH1f: never touches one person twice within 24 hours', () => {
-    expect(spacingProblems(COUNTDOWN_STEPS)).toEqual([]);
+  it('OH1f: never emails one person twice within 24 hours', () => {
+    expect(spacingProblems(COUNTDOWN_STEPS.filter((s) => s.channel === 'email'))).toEqual([]);
     // The rule has teeth: the OH1d cadence fails it.
     const oh1d = [14400, 8640, 4320, 1440, 240, 60].map((m) => ({ minutes_before_event: m, channel: 'email' as const }));
     expect(spacingProblems(oh1d).length).toBeGreaterThan(0);
   });
   it('OH1f: gives every email a different piece of the content brain', () => {
-    const pieces = COUNTDOWN_STEPS.map((s) => s.brain_piece);
+    const pieces = COUNTDOWN_STEPS.filter((s) => s.channel === 'email').map((s) => s.brain_piece);
     expect(pieces).toEqual(['their_progress', 'builder_spotlight', 'day_of']);
   });
   it('OH1f: only the first email explains the Open House; the later ones are told not to', () => {

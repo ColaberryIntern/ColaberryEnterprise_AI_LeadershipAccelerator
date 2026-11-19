@@ -242,13 +242,19 @@ export async function addContactNote(contactId: string, note: string, apiKey?: s
 
 export async function sendSmsViaGhl(
   contactId: string,
-  message: string
+  message: string,
+  /**
+   * OH1p: the key of the sub-account the contact lives in. A contact id from the School
+   * account does not exist in the default (Agent Cory AI) account, so writing it with the
+   * default key fails. Omitted by callers that only ever text default-account contacts.
+   */
+  apiKey?: string
 ): Promise<GHLResult> {
   console.log(`[GHL] Updating cory_sms_composed for contact ${contactId} (${message.length} chars)`);
 
   const result = await updateContact(contactId, {
     customField: { cory_sms_composed: message },
-  });
+  }, apiKey);
 
   if (result.success) {
     console.log(`[GHL] SMS composed field updated for contact ${contactId} — triggers GHL workflow`);

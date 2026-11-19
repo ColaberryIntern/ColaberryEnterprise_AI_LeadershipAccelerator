@@ -143,3 +143,14 @@ export async function resolveGhlAccountForSource(
   }
   return { status: 'no_credentials' };
 }
+
+/**
+ * OH1p: the API key for the sub-account a lead of this source was synced into, or null when
+ * the destination is unknown or unprovisioned. Writes to an existing contact (a text, a note)
+ * must use the same account the contact was created in; the default key cannot see a School
+ * contact.
+ */
+export async function ghlApiKeyForSource(source: string | null | undefined): Promise<string | null> {
+  const route = await resolveGhlAccountForSource(source);
+  return route.status === 'ready' ? route.account.apiKey : null;
+}

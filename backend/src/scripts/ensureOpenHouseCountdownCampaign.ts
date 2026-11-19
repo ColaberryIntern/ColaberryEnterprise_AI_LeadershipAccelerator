@@ -150,7 +150,19 @@ export const COUNTDOWN_STEPS: SequenceStep[] = [
     ai_instructions: 'Today, a few hours from now. Three or four short sentences: it is today, name the start time, here is the Join link (it signs them in and checks them in), keep a phone handy for the live polls. If they replied with a question or their profile has one natural hook, one clause on it. No new content, no recap of earlier emails, no welcome. 40-70 words.',
     ai_tone: 'warm, very brief',
   },
-  // NO CALL STEP and NO TEXT: either would be a second touch inside 24 hours (Ali, 2026-11-18).
+  // NO CALL STEP: a call would be a second touch inside 24 hours (Ali, 2026-11-18).
+  // THE TEXT IS THE ONE EXCEPTION (Ali, Nov 18 evening: "an email a few hours out and a text
+  // message a few minutes before"): on the day itself, the day-of email and a last-minute text.
+  {
+    // Day of, 30 minutes out (OH1p, Ali Nov 18: "a text message a few minutes before"). Thirty,
+    // not five: ~60 texts take about half an hour at the scheduler's pace, so they land before
+    // the start. Express SMS consent only, written into the GHL `cory_sms_composed` field of the
+    // contact's own sub-account. Fixed copy (fallbackReminderSms): a text must carry the Join
+    // link, and the AI's SMS limit of 160 characters cannot fit it.
+    delay_days: 0, minutes_before_event: 30, channel: 'sms',
+    subject: 'Open House starts in 30 minutes (text)',
+    body_template: '', step_goal: 'Get them into the room',
+  },
 ];
 
 /** Campaign settings. The key names are the ones the scheduler reads (campaignSendWindow.ts). */
@@ -275,7 +287,7 @@ async function main(): Promise<void> {
   // 3. The sequence
   let seq = await one<{ id: string }>(`SELECT id FROM follow_up_sequences WHERE name = :n LIMIT 1`, { n: SEQUENCE_NAME });
   if (!seq) {
-    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} emails: 7 days, 3 days and 4 hours before)`);
+    log(`sequence: create "${SEQUENCE_NAME}" (${COUNTDOWN_STEPS.length} steps: 7 days, 3 days and 4 hours before, plus a text 30 minutes before)`);
     if (apply) {
       seq = await one<{ id: string }>(
         `INSERT INTO follow_up_sequences (id, name, description, steps, is_active, tenant_id, created_at, updated_at)
