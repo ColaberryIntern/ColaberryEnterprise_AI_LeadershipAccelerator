@@ -132,6 +132,16 @@ export async function runReviewCycle(deliveryProjectId: string, docKey: string, 
         if (id && stmt) reqStatements.set(id, stmt);
       }
     } catch { /* best-effort; a requirement-text read failure degrades to the id, never an invention */ }
+    // B1b: ground the RFP's OWN submission-administration statements (deadline, submission email, how/where to send)
+    // PROPOSAL-WIDE. They are administrative requirements that rarely sit in one volume's requirementIds, so the
+    // per-document requirement grounding above misses them and the drafter asks the operator for the due date /
+    // submission email the solicitation already states. Grounding them verbatim stops that human need from ever rising.
+    try {
+      const { selectSubmissionFacts } = await import('./proposalGrounding');
+      for (const s of selectSubmissionFacts(Array.from(reqStatements.values()))) {
+        solicitationFacts.push(`Submission instruction (stated in the RFP; assert it verbatim and NEVER raise a question for it): ${s}`);
+      }
+    } catch { /* best-effort */ }
     try { const { default: GovProposalBlueprint } = await import('../../../models/GovProposalBlueprint'); const bp: any = await GovProposalBlueprint.findOne({ where: { delivery_project_id: deliveryProjectId }, order: [['version', 'DESC']] }); blueprint = bp ? bp.blueprint_json : null; } catch { /* best-effort */ }
     try {
       const { default: GovQualification } = await import('../../../models/GovQualification');
