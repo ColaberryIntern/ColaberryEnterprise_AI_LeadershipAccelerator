@@ -22,7 +22,7 @@ import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
 import { redactForLogs } from '../utils/piiRedaction';
-import { partitionNotifiable, isNotificationSuppressed } from './notifications/enrollmentNotificationSuppression';
+import { partitionNotifiable, isNotificationSuppressed, isSessionStudentEmailOff } from './notifications/enrollmentNotificationSuppression';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import {
   renewClaim, recoverStaleActions as recoverStaleActionsLeased, recoveryLogLines,
@@ -3101,6 +3101,11 @@ export function startScheduler(): void {
           continue;
         }
         if (session.reminder_24h_sent_at) continue; // Already sent, and it survives restarts
+        // Per-session opt-out (email_trigger_config.student_email === false): no mail.
+        if (isSessionStudentEmailOff(session)) {
+          console.log(`[Scheduler] Session ${session.session_number}: student email off for this session, 24h reminder not sent`);
+          continue;
+        }
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
@@ -3140,6 +3145,10 @@ export function startScheduler(): void {
         // be swept twice in one tick.
         if (openHouseEventIdOf(session)) continue;
         if (session.reminder_1h_sent_at) continue; // Already sent, and it survives restarts
+        if (isSessionStudentEmailOff(session)) {
+          console.log(`[Scheduler] Session ${session.session_number}: student email off for this session, 1h reminder not sent`);
+          continue;
+        }
         const enrollments = await Enrollment.findAll({
           where: { cohort_id: session.cohort_id, status: 'active' },
         });
@@ -3208,7 +3217,13 @@ export function startScheduler(): void {
 
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);
-        for (const { enrollment, consecutiveMisses, missedTitles } of absentees) {
+        // Per-session opt-out: absences are still RECORDED above; only the
+        // missed-session mail and the absence alert it would raise are withheld.
+        const sessionEmailOff = isSessionStudentEmailOff(session);
+        if (sessionEmailOff && absentees.length > 0) {
+          console.log(`[Scheduler] Session ${session.session_number}: student email off for this session, withheld missed-session mail from ${absentees.length} absentee(s)`);
+        }
+        for (const { enrollment, consecutiveMisses, missedTitles } of sessionEmailOff ? [] : absentees) {
           // Attendance is still RECORDED for a paused student (detectAbsentParticipants
           // above already wrote the record) — pausing notifications must not quietly
           // edit somebody's academic history. Only the mail is withheld.
@@ -3242,7 +3257,7 @@ export function startScheduler(): void {
           }
         }
 
-        if (absentees.length > 0) {
+        if (!sessionEmailOff && absentees.length > 0) {
           console.log(`[Scheduler] Session ${session.session_number}: ${absentees.length} absent, recap emails sent`);
         }
 

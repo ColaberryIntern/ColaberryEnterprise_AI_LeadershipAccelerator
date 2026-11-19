@@ -4,6 +4,7 @@ import {
   filterNotifiable,
   SUPPRESSION_COLUMN,
   SuppressibleEnrollment,
+  isSessionStudentEmailOff,
 } from '../enrollmentNotificationSuppression';
 
 /**
@@ -133,5 +134,31 @@ describe('filterNotifiable', () => {
 describe('SUPPRESSION_COLUMN', () => {
   it('matches the column the schema guard adds and the model declares', () => {
     expect(SUPPRESSION_COLUMN).toBe('notifications_paused_at');
+  });
+});
+
+/**
+ * Per-session opt-out (Nov 2026 Session 3): a real class whose cohort must not
+ * be mailed. Default must stay "mail as before" for every existing session.
+ */
+describe('isSessionStudentEmailOff', () => {
+  it('keeps mail on for a session with no config (every existing row)', () => {
+    expect(isSessionStudentEmailOff({ email_trigger_config: null })).toBe(false);
+    expect(isSessionStudentEmailOff({})).toBe(false);
+    expect(isSessionStudentEmailOff(null)).toBe(false);
+    expect(isSessionStudentEmailOff(undefined)).toBe(false);
+  });
+
+  it('turns mail off only for an explicit student_email: false', () => {
+    expect(isSessionStudentEmailOff({ email_trigger_config: { student_email: false } })).toBe(true);
+  });
+
+  it('keeps mail on for anything that is not exactly false', () => {
+    expect(isSessionStudentEmailOff({ email_trigger_config: { student_email: true } })).toBe(false);
+    expect(isSessionStudentEmailOff({ email_trigger_config: { student_email: 'false' } })).toBe(false);
+    expect(isSessionStudentEmailOff({ email_trigger_config: { student_email: 0 } })).toBe(false);
+    expect(isSessionStudentEmailOff({ email_trigger_config: { other: false } })).toBe(false);
+    expect(isSessionStudentEmailOff({ email_trigger_config: [false] })).toBe(false);
+    expect(isSessionStudentEmailOff({ email_trigger_config: 'off' })).toBe(false);
   });
 });
