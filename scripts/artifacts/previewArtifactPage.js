@@ -93,7 +93,13 @@ async function previewPage({ html, outPath, landscape = false, marginMm = 14, qu
   const box = pageBox({ landscape, marginMm });
   const scale = Math.max(1, Math.min(2, MAX_PNG_WIDTH / box.width));
 
-  const browser = await chromium.launch();
+  // ARTIFACT_CHROMIUM: the same escape hatch renderArtifactPdf already honors, for a machine
+  // where Playwright's bundled browser was never downloaded. Without it this tool threw while
+  // the renderer beside it worked, which makes the preview the skippable step -- and a skipped
+  // preview is how a one-page visual ships unlooked-at.
+  const browser = await chromium.launch(
+    process.env.ARTIFACT_CHROMIUM ? { executablePath: process.env.ARTIFACT_CHROMIUM } : {},
+  );
   try {
     const page = await browser.newPage({
       viewport: { width: box.width, height: box.height },

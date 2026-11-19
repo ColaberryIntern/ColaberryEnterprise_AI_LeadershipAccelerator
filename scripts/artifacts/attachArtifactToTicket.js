@@ -112,6 +112,21 @@ async function uploadBlob(filePath, filename) {
  * and a human should say which.
  */
 async function resolveTicket(spec) {
+  // A ticket outside the Agent Factory list has no `AF3.2`-style code to resolve against, so the
+  // id would go unchecked -- the exact hole that sent six artifacts to strangers' tickets. The
+  // substitute is an assertion the spec author can actually verify by eye: a distinctive phrase
+  // from the title. Cheap to write, and it fails loudly when an id is stale.
+  if (!spec.ticketCode && spec.ticketTitleContains) {
+    const t = await api('GET', `/buckets/${BUCKET}/todos/${spec.ticketId}.json`);
+    if (!String(t.title || '').includes(spec.ticketTitleContains)) {
+      throw new Error(
+        `ticket ${spec.ticketId} is titled ${JSON.stringify(t.title)}, which does not contain `
+        + `${JSON.stringify(spec.ticketTitleContains)}. Refusing to attach to the wrong ticket.`,
+      );
+    }
+    console.log(`ticket ${spec.ticketId} verified: ${JSON.stringify(t.title)}`);
+    return spec.ticketId;
+  }
   if (!spec.ticketCode) return spec.ticketId;
   const groups = await listAll(`/buckets/${BUCKET}/todolists/${LIST}/groups.json`);
   const todos = [];
@@ -139,7 +154,11 @@ async function main() {
 
   const folders = await listAll(`/buckets/${BUCKET}/vaults/${PARENT_VAULT}/vaults.json`);
   const folder = folders.find((f) => f.title === spec.folderTitle);
-  if (!folder) throw new Error(`folder not found: ${spec.folderTitle}`);
+  if (!folder) {
+    throw new Error(`folder not found: ${spec.folderTitle} (looked under vault `
+      + `${PARENT_VAULT} in bucket ${BUCKET}; saw: `
+      + `${folders.map((f) => f.title).join(', ') || 'none'})`);
+  }
 
   const existingComments = await listAll(
     `/buckets/${BUCKET}/recordings/${spec.ticketId}/comments.json`,
