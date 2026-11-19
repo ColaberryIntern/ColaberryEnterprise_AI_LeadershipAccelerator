@@ -86,6 +86,7 @@ const IDEA = 'A robot that sorts warehouse pallets by weight and destination aut
 /** Walk step 1 -> step 2 with a given idea. */
 async function reachStep2(idea = IDEA) {
   await mount(<ProjectWizard onCreate={() => {}} />);
+  await click(buttonByText('Brain-dump')!);
   await setValue(container.querySelector('textarea')!, idea);
   await click(buttonByText('Sharpen my idea')!);
 }
@@ -220,6 +221,7 @@ describe('step 3 — nothing fabricated is presented as generated (A4)', () => {
       result: { generated: true, model: 'gpt-4o', attempts: 1, questions: [q('p1', 'How are pallets identified today?')] },
     });
     await mount(<ProjectWizard onCreate={onCreate} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea')!);
     await setValue(container.querySelector('#q-p1') as HTMLTextAreaElement, 'RFID tags');
@@ -271,6 +273,7 @@ describe('step 3 — nothing fabricated is presented as generated (A4)', () => {
       },
     });
     await mount(<ProjectWizard onCreate={onCreate} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea')!);
     await setValue(container.querySelector('#q-p1') as HTMLTextAreaElement, 'RFID tags');
@@ -408,6 +411,7 @@ describe('step 3 — the confirmation gate shows what will be recorded', () => {
       result: { generated: true, model: 'gpt-4o', attempts: 1, questions: [{ ...q('g1', 'Who checks it?'), angle: 'THE GUARDRAIL' }] },
     });
     await mount(<ProjectWizard onCreate={onCreate} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea')!);
     await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
@@ -461,6 +465,7 @@ describe('step 3 — "have an AI call me" is offered only when it can happen', (
       result: { generated: true, model: 'gpt-4o', attempts: 1, questions: [{ ...q('g1', 'Who checks it?'), angle: 'THE GUARDRAIL' }] },
     });
     await mount(<ProjectWizard onCreate={onCreate} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea')!);
     await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
@@ -539,6 +544,7 @@ describe('step 3 — "have an AI call me" is offered only when it can happen', (
 describe('step 1 — the copy says why detail matters', () => {
   it('tells the student that more detail means fewer questions', async () => {
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump')!);
     expect(container.textContent).toContain('the more detail you give here, the fewer questions we ask');
   });
 });

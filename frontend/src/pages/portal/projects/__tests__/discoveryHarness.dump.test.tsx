@@ -136,6 +136,7 @@ maybe('discovery harness', () => {
     (previewIntake as jest.Mock).mockResolvedValue(PREVIEW);
 
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea'));
     await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya reads every draft before anything goes out, and anything over a $500 claim needs her sign-off in writing.');
@@ -154,6 +155,7 @@ maybe('discovery harness', () => {
     (previewIntake as jest.Mock).mockResolvedValue({ ok: false, error: { status: 503, kind: 'server_error', message: 'unreachable' } });
 
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump')!);
     await setValue(container.querySelector('textarea')!, IDEA);
     await click(buttonByText('Sharpen my idea'));
     await setValue(container.querySelector('#q-g1') as HTMLTextAreaElement, 'Priya does');
@@ -178,7 +180,18 @@ maybe('discovery harness', () => {
 
   it('step 1: the copy that says why detail matters', async () => {
     await mount(<ProjectWizard onCreate={() => {}} />);
+    await click(buttonByText('Brain-dump'));
     write('04-step1.html', container.innerHTML);
+  });
+
+  it('step 1: the guided outline, part filled (the B · Guided outline reference state)', async () => {
+    await mount(<ProjectWizard onCreate={() => {}} />);
+    await setValue(container.querySelector('#pjg-f-q1') as HTMLTextAreaElement, 'An AI agent that triages my support inbox and drafts replies for my team.');
+    await click(buttonByText('Something arrives'));
+    await click(buttonByText('Gmail'));
+    await click(buttonByText('Slack'));
+    await setValue(container.querySelector('#pjg-f-q6') as HTMLTextAreaElement, 'Any reply that mentions a refund or a cancellation.');
+    write('06-step1-guided.html', container.innerHTML);
   });
 
   it('case study readiness: a build record with one open question', async () => {

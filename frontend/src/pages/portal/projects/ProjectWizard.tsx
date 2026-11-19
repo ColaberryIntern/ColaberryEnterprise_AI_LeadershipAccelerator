@@ -3,6 +3,8 @@ import { NewBuildAnswers, BuildSize } from './projectsStore';
 import { useIsExplorer } from '../useIsExplorer';
 import { fetchIntakeQuestions, previewIntake, IntakeQuestion, CoveredAngle, IntakePreview } from '../../../services/sbpApi';
 import IntakeReviewPane, { phoneLooksValid, type CallChoice } from './IntakeReviewPane';
+import GuidedOutline from './GuidedOutline';
+import { Outline, EMPTY_OUTLINE, SECTIONS, composeIdea, filledCount } from './outlineModel';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) interview questions generated from THAT
@@ -63,7 +65,15 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   const demo = useIsExplorer();
   const [step, setStep] = useState(1);
   const [qIndex, setQIndex] = useState(0);   // which interview question is on screen
-  const [idea, setIdea] = useState('');
+  // Step 1 has two ways in. `freeText` is the brain-dump box in one mode and
+  // "Anything else?" in the other — the same state, so switching loses nothing.
+  // `idea` is what every later step and the build receive: the outline folded
+  // into text plus the free text (just the free text when the outline is empty).
+  const [mode, setMode] = useState<'dump' | 'guided'>('guided');
+  const [freeText, setFreeText] = useState('');
+  const [outline, setOutline] = useState<Outline>(EMPTY_OUTLINE);
+  const idea = composeIdea(outline, freeText);
+  const tooLong = idea.length > IDEA_MAX;
   const [name, setName] = useState('');
   // Size is no longer asked. A student cannot know on day one whether their idea
   // is "8-12 requirements" or "30-40" — that is a judgement about a system that
@@ -172,6 +182,34 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   // request. Confirm waits for one rather than quietly dropping the call.
   const callIncomplete = callRequested && !phoneLooksValid(call.phone);
 
+  // Name + Sharpen. Under the box in brain-dump; inside the question column in
+  // the guided outline, where the design puts it.
+  const step1Footer = (
+    <div>
+      <Counter value={idea} max={IDEA_MAX} />
+      {tooLong && (
+        <div className="small" style={{ marginTop: 4, color: '#B5710A' }}>
+          Together this is {idea.length.toLocaleString()} characters — {IDEA_MAX.toLocaleString()} is the most we can take. Trim something to continue.
+        </div>
+      )}
+      <label className="pjw-label" htmlFor="pjw-name" style={mode === 'guided' ? { marginTop: 0 } : undefined}>Give it a name (optional)</label>
+      <input id="pjw-name" className="txt" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
+      <div className="pjw-actions">
+        <button className="btn primary grow" disabled={idea.trim().length < 20 || tooLong} onClick={goSharpen}>Sharpen my idea
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
+      {idea.trim().length > 0 && idea.trim().length < 20 && (
+        <div className="small" style={{ marginTop: 8, color: '#B5710A' }}>A few more words and we can start asking about it.</div>
+      )}
+      {mode === 'guided' && idea.trim().length >= 20 && filledCount(outline) < SECTIONS.length && (
+        <div className="small" style={{ marginTop: 8, opacity: .75 }}>
+          {SECTIONS.length - filledCount(outline)} still open. The next step will ask about those — anything you skip there, we infer.
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div>
       <div className="pjw-steps">
@@ -184,20 +222,42 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
 
       {step === 1 && (
         <div className="card pjw-pane">
-          <h3>What do you want to build?</h3>
-          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise. The next step reads what you wrote and asks only about what it could not find: the more detail you give here, the fewer questions we ask.</p>
-          <textarea value={idea} maxLength={IDEA_MAX} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
-          <Counter value={idea} max={IDEA_MAX} />
-          <label className="pjw-label">Give it a name (optional)</label>
-          <input className="txt" value={name} maxLength={NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
-          <div className="pjw-actions">
-            <button className="btn primary grow" disabled={idea.trim().length < 20} onClick={goSharpen}>Sharpen my idea
-              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
+          <div className="pjg-head">
+            <h3>What do you want to build?</h3>
+            <div className="pjg-modewrap">
+              <div role="group" aria-label="How do you want to start?" className="pjg-mode">
+                <button type="button" aria-pressed={mode === 'dump'} className={mode === 'dump' ? 'on' : ''} onClick={() => setMode('dump')}>
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                  Brain-dump
+                </button>
+                <button type="button" aria-pressed={mode === 'guided'} className={mode === 'guided' ? 'on' : ''} onClick={() => setMode('guided')}>
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>
+                  Guided outline
+                </button>
+              </div>
+              <div className="pjg-modenote">Switching keeps everything you've written.</div>
+            </div>
           </div>
-          {idea.trim().length > 0 && idea.trim().length < 20 && (
-            <div className="small" style={{ marginTop: 8, color: '#B5710A' }}>A few more words and we can start asking about it.</div>
+
+          {mode === 'dump' ? (
+            <>
+              <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise. The next step reads what you wrote and asks only about what it could not find: the more detail you give here, the fewer questions we ask.</p>
+              {filledCount(outline) > 0 && (
+                <div className="small" style={{ margin: '-6px 0 10px', opacity: .75 }}>
+                  Your outline answers ({filledCount(outline)} of {SECTIONS.length}) are kept and sent along with this.
+                </div>
+              )}
+              <textarea value={freeText} maxLength={IDEA_MAX} onChange={(e) => setFreeText(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
+            </>
+          ) : (
+            <>
+              <p className="lead" style={{ maxWidth: 820, marginBottom: 22 }}>These are the things a build plan needs to know. Fill in what you can, in any order, and skip the rest — the next step asks only about what is still open.</p>
+              <GuidedOutline outline={outline} onChange={setOutline} freeText={freeText} onFreeText={setFreeText} freeMax={IDEA_MAX}>
+                {step1Footer}
+              </GuidedOutline>
+            </>
           )}
+          {mode === 'dump' && step1Footer}
         </div>
       )}
 
