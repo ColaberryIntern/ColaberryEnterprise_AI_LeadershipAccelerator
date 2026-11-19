@@ -28,8 +28,8 @@ sentence works too: "plan next week's live on subagents, students are on week 7"
 
 ## history.json
 
-- `schedule` sets the default air date: the next `weekday` with no blueprint yet. **It is an
-  assumption (Thursday) until Ali confirms the real slot. Change it here.**
+- `schedule` sets the default air date: the next `weekday` with no blueprint yet. (Tuesday 6:30 pm Central,
+  confirmed by Ali 2026-11-19). Change it here if the slot moves.
 - `sessions[]` is appended by `scripts/history.js append` after a blueprint validates.
 - After a session airs, fill its `results` by hand, for example
   `{ "aired": true, "attendance": 41, "youtubeViews7d": 1200, "shortsUsed": ["sb-3", "sb-7"] }`.

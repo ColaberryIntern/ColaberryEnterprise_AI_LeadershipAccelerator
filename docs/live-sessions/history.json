@@ -1,10 +1,10 @@
 {
   "about": "Every live-session blueprint written by the plan-live-session skill. Append-only via history.js; fill `results` by hand after the session airs.",
   "schedule": {
-    "weekday": "Thursday",
-    "time": null,
+    "weekday": "Tuesday",
+    "time": "18:30",
     "timezone": "America/Chicago",
-    "note": "ASSUMED default weekly slot (not confirmed by Ali) used when no date= is given. Change it here."
+    "note": "Confirmed by Ali 2026-11-19: Tuesdays 6:30 pm Central. Used when no date= is given."
   },
   "sessions": []
 }

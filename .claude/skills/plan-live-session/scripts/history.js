@@ -27,7 +27,7 @@ const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 
 const EMPTY = {
   about: 'Every live-session blueprint written by the plan-live-session skill. Append-only via history.js; fill `results` by hand after the session airs.',
-  schedule: { weekday: 'Thursday', time: null, timezone: 'America/Chicago', note: 'ASSUMED default weekly slot (not confirmed by Ali) used when no date= is given. Change it here.' },
+  schedule: { weekday: 'Tuesday', time: '18:30', timezone: 'America/Chicago', note: 'Confirmed by Ali 2026-11-19: Tuesdays 6:30 pm Central. Used when no date= is given.' },
   sessions: [],
 };
 
@@ -72,7 +72,7 @@ if (cmd === 'init') {
   if (load()) console.log(`exists: ${HISTORY}`); else { save(EMPTY); console.log(`created: ${HISTORY}`); }
 } else if (cmd === 'next-date') {
   const h = load() || EMPTY;
-  const want = DAYS.indexOf((h.schedule && h.schedule.weekday) || 'Thursday');
+  const want = DAYS.indexOf((h.schedule && h.schedule.weekday) || 'Tuesday');
   const taken = new Set(h.sessions.map((s) => s.date));
   // --min-lead-days (default 1): never plan a session for today; it needs at least a day of prep.
   // US federal holidays are skipped unless --allow-holidays (a live on Thanksgiving draws nobody).
