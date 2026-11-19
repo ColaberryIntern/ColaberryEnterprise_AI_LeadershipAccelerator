@@ -33,6 +33,7 @@ import {
   BUILDER_PATH_CHECKLIST_PATH,
   builderPathChecklist,
 } from '../agentDomain/builderPathChecklist';
+import { capabilitySkillFiles } from '../agentDomain/capabilitySkill';
 import {
   byKey, renderClaudeMd, renderRequirements, renderStories, renderStoryFile, renderTraceability,
 } from './planDocSections';
@@ -213,6 +214,10 @@ export function renderDocs(plan: BuildPlan, ctx: RenderContext = {}): RenderedFi
       path: BUILDER_PATH_CHECKLIST_PATH,
       content: builderPathChecklist(ctx.existingRepoPaths ?? null),
     },
+    // The per-stage instructions the checklist above points at. In `docs/`, which the
+    // allowlist below permits; `.claude/skills/...` would have thrown a RenderError and
+    // broken document sync for every builder on the first run after deploy.
+    ...capabilitySkillFiles(),
   ];
 
   for (const story of byKey(plan.stories, (s) => s.id)) {
