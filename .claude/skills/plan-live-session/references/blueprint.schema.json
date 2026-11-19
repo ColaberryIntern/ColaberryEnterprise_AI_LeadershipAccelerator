@@ -36,7 +36,9 @@
             "pass_mark": { "type": "integer", "minimum": 60, "maximum": 90 },
             "interactive": { "type": "boolean" },
             "stop_after": { "enum": ["picks", "angles", "idea", "blueprint"] },
-            "out": { "type": "string" }
+            "out": { "type": "string" },
+            "day": { "enum": ["build", "architecture", null], "description": "Forces deckHandoff.session.dayKind. Omitted/null = the default (build), recorded in meta.assumptions." },
+            "history": { "type": ["string", "null"] }
           }
         },
         "belowPassMark": { "type": "boolean" },
@@ -52,6 +54,9 @@
         "openingLine": { "type": "string", "minLength": 10 },
         "promise": { "type": "string", "minLength": 10 },
         "airDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "airTime": { "type": ["string", "null"], "pattern": "^\\d{2}:\\d{2}$", "description": "history.json schedule.time (24-hour, Central); null when no time is set." },
+        "timezone": { "type": ["string", "null"] },
+        "nextAirDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "history.js next-date --from=<airDate>; the recap and nextLiveCta date." },
         "audience": { "enum": ["students", "public", "public-preview"] },
         "lengthMinutes": { "enum": [60, 90, 120] },
         "series": { "type": ["string", "null"] },
@@ -199,7 +204,13 @@
           "source": { "type": "string", "minLength": 2 },
           "url": { "type": ["string", "null"] },
           "publishedAt": { "type": ["string", "null"] },
-          "status": { "enum": ["sourced", "verify"] },
+          "status": { "enum": ["sourced", "checked", "verify"], "description": "sourced = on a page fetched this run; checked = confirmed against the repo or by Ali (checkedAt + checkedAgainst), never for a real-world or news claim; verify = neither." },
+          "checkedAt": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "checkedAgainst": {
+            "type": "array", "minItems": 1,
+            "items": { "type": "string", "pattern": "^([A-Za-z0-9_.][A-Za-z0-9_./-]*:[1-9]\\d*|Ali confirmed \\d{4}-\\d{2}-\\d{2}|blueprint:[A-Za-z0-9_.\\[\\]]+)$" },
+            "description": "Each entry: a repo file with a line number ('backend/src/data/classSessionPlan.ts:486'), 'Ali confirmed YYYY-MM-DD', or 'blueprint:<path>' for the session's own design (e.g. 'blueprint:demo.claudeCodeInstructions[0]')."
+          },
           "registryVerified": { "type": "boolean", "description": "The claim matches a claimsRegistry.ts entry that is VERIFIED and approved for public routes; its evidenceSource is the source. May go public." },
           "illustrative": { "type": "boolean", "description": "A labeled hypothetical (e.g. the curriculum's teaching scenario). Never a real-world claim; may appear publicly only with a visible 'illustrative' label." },
           "registry": {
@@ -223,7 +234,7 @@
               "id": { "type": "string" },
               "kind": { "enum": ["roll-call", "diagnostic", "judgment-poll", "self-check"] },
               "q": { "type": "string" },
-              "options": { "type": "array", "items": { "type": "string" } },
+              "options": { "type": "array", "minItems": 2, "items": { "type": "string" }, "description": "Every question becomes a deck poll or trivia, so it needs options; a self-check has 3-4 self-rating options." },
               "answer": { "type": "string", "minLength": 2 },
               "segmentId": { "type": "string" }
             }
@@ -251,7 +262,8 @@
         "steps": { "type": "array", "minItems": 3, "items": { "type": "string" } },
         "claudeCodeInstructions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 20 } },
         "whatCouldGoWrong": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-        "fallback": { "type": "string", "minLength": 10 }
+        "fallback": { "type": "string", "minLength": 10 },
+        "routingCompetitors": { "type": "array", "items": { "type": "string" }, "description": "Required (2+) when the teardown breaks skill triggering: the other skills in the folder during the teardown, so the vague one loses the routing." }
       }
     },
     "students": {
@@ -354,10 +366,45 @@
       "type": "array", "maxItems": 6,
       "items": {
         "type": "object", "required": ["headline", "publisher", "url", "publishedAt", "ageDays"],
-        "properties": { "ageDays": { "type": ["integer", "null"], "minimum": 0 } }
+        "properties": {
+          "ageDays": { "type": ["integer", "null"], "minimum": 0, "maximum": 90 },
+          "publishedAt": { "type": ["string", "null"], "description": "From the fetched page itself, never from a search summary." }
+        }
       }
     },
-    "demand": { "type": "array" }
+    "newsDropped": {
+      "type": "array",
+      "description": "Stories found but not kept, with the reason, so the loss is visible.",
+      "items": {
+        "type": "object", "required": ["headline", "url", "reason", "alternateTried"],
+        "properties": {
+          "headline": { "type": "string" },
+          "publisher": { "type": ["string", "null"] },
+          "url": { "type": "string" },
+          "reason": { "type": "string", "minLength": 3, "description": "e.g. 'HTTP 403 on fetch', 'HTTP 429', 'outside the window', 'duplicate of news[2]', 'avoid'" },
+          "alternateTried": { "type": ["string", "null"], "description": "A refused fetch: the alternate outlet URL tried for the same story and its result. null only when the reason is not a fetch failure." }
+        }
+      }
+    },
+    "demand": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["week", "title", "channel", "url", "views", "channelMedian", "ratio", "sourceUrls"],
+        "properties": {
+          "week": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "query": { "type": ["string", "null"], "description": "The yt_demand.js search query that found it." },
+          "title": { "type": "string" },
+          "channel": { "type": "string", "description": "The channel handle (@name)." },
+          "url": { "type": "string", "pattern": "^https://www\\.youtube\\.com/watch\\?v=[\\w-]{11}$" },
+          "views": { "type": ["integer", "null"], "minimum": 0 },
+          "channelMedian": { "type": ["integer", "null"], "minimum": 0 },
+          "ratio": { "type": ["number", "null"], "minimum": 0 },
+          "publishedAt": { "type": ["string", "null"] },
+          "sourceUrls": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^https?://" }, "description": "Every page yt_demand.js printed as source for this row (search results, channel videos page, watch page); each is in `sources` with fetchedThisRun: true." }
+        }
+      }
+    }
   },
   "$defs": {
     "lens": { "enum": ["build-story", "news-consequence", "mistake-teardown", "student-journey", "contrarian-take", "comparison", "prediction"] },

@@ -1,0 +1,2340 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "generatedAt": "2026-11-19T00:00:00-06:00",
+    "slug": "your-know-how-is-now-a-product",
+    "params": {
+      "source": "auto",
+      "topic": null,
+      "week": null,
+      "students_on": null,
+      "build": null,
+      "proof": null,
+      "news": null,
+      "audience": "students",
+      "length": 60,
+      "date": "2026-11-24",
+      "last_session": null,
+      "series": null,
+      "guest": null,
+      "avoid": null,
+      "notes": null,
+      "angles": 5,
+      "pass_mark": 70,
+      "interactive": false,
+      "stop_after": "blueprint",
+      "out": "docs/live-sessions/",
+      "day": "architecture"
+    },
+    "belowPassMark": false,
+    "stoppedAfter": "blueprint",
+    "assumptions": [
+      "Air date 2026-11-24 is the default next open slot from history.js next-date: Tuesday 6:30 pm Central (CST), the schedule Ali confirmed on 2026-11-19 in history.json.",
+      "Planning ran on 2026-11-19, five days before air. News was searched for 2026-11-05 to 2026-11-19 only; ageDays is counted to the air date, so the Fable 5.2 launch (2026-11-09) is 15 days old on air and scored as a 14-90 day story.",
+      "No previous session exists in history (this is Episode 1). The callback is to the student's current week: 'you just finished Week 1'. It says 'last session' nowhere and claims nothing about a prior live.",
+      "students_on is unknown, so every week scored closeness 3 of 5.",
+      "Series defaulted to 'Weekly Live · Episode 1' (history.js episode = 1); it scores the Idea series line as a named episode.",
+      "Demand was gathered only for the top three weeks after the first news pass (2, 5, 3). Other weeks scored a neutral demand 2 (never searched).",
+      "Week 3 demand: Grace Leung's 'Build Your First AI Agent in 20 Minutes' ran 5.0x its channel median but is about Claude Code, not the Claude API, so it was not counted as this topic; week 3 demand held at 3.",
+      "A Frontmost AI press release about Claude Code skills (2026-11-17) was found in search but both copies refused the fetch (HTTP 403 and 429), so it is not a source (listed in newsDropped) and did not lift week 2's news fit.",
+      "Week 2 won the data pick by two points (82 vs 80) over week 5 (MCP), which has fresher main-subject news (Avochato and Rule MCP servers, 7-8 days old) but weaker demand (1.6x vs 4.6x).",
+      "dayKind is architecture (day=architecture, Ali's choice): the session teaches Week 2's Architecture Day incident (monday.tension, realExample and microBuild: data-quality-gate, then executive-dashboard-brief), so the deck uses the Architecture Day template and renders no checkpoint slides.",
+      "Next session is assumed to cover Week 3: Build Your First AI Workflow Assistant (load_curriculum.js next); the 2 AM question is kept as the tease. It is not yet planned.",
+      "No proof= was given, so the Idea proof line is capped at 2 and the session's proof is the live build itself.",
+      "The CTA carries the air time (Tuesday, 6:30 pm Central): schedule values (air date, next air date, air time, episode, length) are exempt from the public-number check."
+    ]
+  },
+  "header": {
+    "title": "Your Know-How Is Now a Product",
+    "openingLine": "Your company is about to package what you know into AI skills.",
+    "promise": "Turn one routine check that lives in one person's head into a Claude skill that fires when someone asks in plain words, then chain it to a second skill that writes the update leadership needs.",
+    "airDate": "2026-11-24",
+    "audience": "students",
+    "lengthMinutes": 60,
+    "series": "Weekly Live · Episode 1",
+    "guest": null,
+    "lens": "news-consequence",
+    "lastSessionCallback": "No earlier live exists. Callback to the week: you just finished Week 1, where you stopped typing code and started directing Claude Code. Tonight you stop repeating yourself: you teach it a check once.",
+    "week": {
+      "number": 2,
+      "theme": "Agent Skills (build 3 skills)",
+      "beat": "You teach it once, and it never forgets — knowledge stops living in one head.",
+      "academy": {
+        "title": "Introduction to agent skills",
+        "url": "https://anthropic.skilljar.com/introduction-to-agent-skills",
+        "status": "confirmed"
+      },
+      "deliverable": "Your idea, architected and demoed: .claude/skills/ with all 3 Skills committed; A real architecture diagram + tech stack for your idea; A visual mockup + one-pager showing off what it could look like",
+      "storyDevice": "The person who isn't there: an analyst who is out today, so a check nobody else knows how to run does not get run"
+    },
+    "dataPick": {
+      "weights": {
+        "closeness": 30,
+        "coverage": 20,
+        "demand": 20,
+        "buildability": 15,
+        "newsFit": 15
+      },
+      "rows": [
+        {
+          "rank": 1,
+          "week": 2,
+          "theme": "Agent Skills (build 3 skills)",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 5,
+            "buildability": 5,
+            "newsFit": 3
+          },
+          "total": 82,
+          "evidence": "Claude for Manufacturing (claude.com, 2026-11-12, 12d) ships 17 skills, a passing mention; Prince Eliot 'CLAUDE SKILLS FULL COURSE 2.5 HOURS' 109,221 views vs 24,000 channel median (4.6x, 2026-09-10); a Nov 17 Frontmost AI skills press release was found but could not be fetched (403/429), so not counted"
+        },
+        {
+          "rank": 2,
+          "week": 5,
+          "theme": "MCP Foundations + First MCP Server",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 3,
+            "buildability": 5,
+            "newsFit": 5
+          },
+          "total": 80,
+          "evidence": "Avochato Claude connector built as an MCP server (PR Newswire, 2026-11-17, 7d) and Rule MCP server (SMTPedia, 2026-11-16, 8d) are main-subject stories; Claude for Manufacturing connectors (2026-11-12); Tech With Tim 'MCP Servers Explained & Built' 134,547 vs 82,000 median (1.6x); Mikey No Code MCP 23,014 vs 28,500 (below)"
+        },
+        {
+          "rank": 3,
+          "week": 3,
+          "theme": "Claude API + Workflow Assistant",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 3,
+            "buildability": 4,
+            "newsFit": 3
+          },
+          "total": 71,
+          "evidence": "Self-hosted Managed Agents (2026-11-12) and Claude Meetings (TechCrunch, 2026-11-10): passing; AI Master 'Claude Cowork 2.0 Workflow Automation' 18,032 vs 12,500 median (1.4x); Grace Leung 'Build Your First AI Agent in 20 Minutes' 336,177 vs 67,500 (5.0x) is Claude Code, not the API, so not counted as this exact topic; Austin Marchese 57,471 vs 59,500 (below)"
+        },
+        {
+          "rank": 4,
+          "week": 6,
+          "theme": "Advanced MCP + System Integration",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 3,
+            "newsFit": 3
+          },
+          "total": 64,
+          "evidence": "Xero Xforce FDEs connect workflows to the stack (2026-11-12); Managed Agents MCP credentials: passing"
+        },
+        {
+          "rank": 5,
+          "week": 10,
+          "theme": "Governance + Governance Engine",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 3,
+            "newsFit": 3
+          },
+          "total": 64,
+          "evidence": "Managed Agents allowed hosts (2026-11-12); Manufacturing review-before-send: passing"
+        },
+        {
+          "rank": 6,
+          "week": 8,
+          "theme": "Claude Code Workflows + Automation",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 3,
+            "newsFit": 3
+          },
+          "total": 64,
+          "evidence": "Xero Xforce builds automated workflows (2026-11-12): passing"
+        },
+        {
+          "rank": 7,
+          "week": 7,
+          "theme": "Subagents + Multi-Agent Team",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 4,
+            "newsFit": 2
+          },
+          "total": 64,
+          "evidence": "Fable 5.2 (2026-11-09, 15d at air) 1,000+ subagents: passing"
+        },
+        {
+          "rank": 8,
+          "week": 1,
+          "theme": "Claude Code Foundations + Workspace",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 5,
+            "newsFit": 0
+          },
+          "total": 61,
+          "evidence": "no story this fortnight on CLAUDE.md or workspace foundations"
+        },
+        {
+          "rank": 9,
+          "week": 4,
+          "theme": "Prompt Engineering + Prompt Library",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 4,
+            "newsFit": 0
+          },
+          "total": 58,
+          "evidence": "none"
+        },
+        {
+          "rank": 10,
+          "week": 9,
+          "theme": "Reliability Engineering + Quality Layer",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 3,
+            "newsFit": 0
+          },
+          "total": 55,
+          "evidence": "none"
+        },
+        {
+          "rank": 11,
+          "week": 11,
+          "theme": "Systems Architecture + Arch Package",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 2,
+            "newsFit": 0
+          },
+          "total": 52,
+          "evidence": "none"
+        },
+        {
+          "rank": 12,
+          "week": 12,
+          "theme": "Capstone + Architect Expo",
+          "factors": {
+            "closeness": 3,
+            "coverage": 5,
+            "demand": 2,
+            "buildability": 1,
+            "newsFit": 0
+          },
+          "total": 49,
+          "evidence": "none"
+        }
+      ],
+      "pickedWeek": 2,
+      "reason": "Top-ranked row (82/100), two points clear of week 5. It is the only week with demand at 5: a Claude Skills course ran 4.6x its channel median inside 90 days. Week 5 had the fresher main-subject news (two MCP server launches 7-8 days before air) but its best video ran only 1.6x its median."
+    },
+    "tighteningLog": [
+      {
+        "round": 0,
+        "angleLens": "news-consequence",
+        "title": "Your Know-How Is Now a Product",
+        "score": 79,
+        "changed": "Starting score, highest of five angles (next: mistake-teardown and contrarian-take at 72). Already above pass mark 70, so no rewrite rounds were spent. Ceiling with this run's evidence is 87 (demand held at 4, proof capped at 2)."
+      }
+    ],
+    "airTime": "18:30",
+    "timezone": "America/Chicago",
+    "nextAirDate": "2026-12-01"
+  },
+  "angles": [
+    {
+      "lens": "build-story",
+      "title": "Teach Claude Your Morning Check",
+      "originalTitle": "Teach Claude Your Morning Check",
+      "angle": "We build the analyst's morning data check as a Skill from an empty folder, and watch Claude run it on a file nobody has looked at.",
+      "promise": "Your check, run without you",
+      "openingLine": "You run a check every morning that only lives in your head.",
+      "whyNow": "Anthropic shipped Claude for Manufacturing on 2026-11-12 as 17 skills; packaged know-how is how AI is being sold this month.",
+      "proofNeeded": "A Skill folder built live, then Claude running it on a sample orders file and returning PASS/WARN/FAIL with reasons.",
+      "device": "the trust ladder, Weeks 1-2: you approve every single action",
+      "chosen": false,
+      "idea": {
+        "lines": {
+          "demand": 4,
+          "viewer": 4,
+          "promise": 3,
+          "tension": 3,
+          "proof": 2,
+          "series": 5,
+          "news": 4
+        },
+        "caps": [],
+        "total": 71
+      }
+    },
+    {
+      "lens": "news-consequence",
+      "title": "Your Know-How Is Now a Product",
+      "originalTitle": "Your Know-How Is Now a Product",
+      "angle": "Anthropic is packaging manufacturing know-how into 17 skills and Xero is sending forward deployed engineers into accounting firms: the routine judgment in your head is what gets packaged next, so learn to package it yourself.",
+      "promise": "Package your know-how first",
+      "openingLine": "Your company is about to package what you know into AI skills.",
+      "whyNow": "Claude for Manufacturing (2026-11-12) and Xforce by Xero (2026-11-12), both 12 days old on the air date.",
+      "proofNeeded": "Both announcements on screen, then a Skill built live from one person's routine check.",
+      "device": "the person who isn't there",
+      "chosen": true,
+      "idea": {
+        "lines": {
+          "demand": 4,
+          "viewer": 4,
+          "promise": 4,
+          "tension": 4,
+          "proof": 2,
+          "series": 5,
+          "news": 5
+        },
+        "caps": [],
+        "total": 79
+      }
+    },
+    {
+      "lens": "mistake-teardown",
+      "title": "Why Your AI Skill Never Fires",
+      "originalTitle": "Why Your AI Skill Never Fires",
+      "angle": "The most common Skill mistake is a vague description; we write one that never fires, watch it fail, and fix it in one sentence.",
+      "promise": "Skills that actually fire",
+      "openingLine": "You wrote a skill, Claude ignored it, and the description is why.",
+      "whyNow": "Skills are how vendors are shipping AI this month (Claude for Manufacturing, 2026-11-12).",
+      "proofNeeded": "A Skill with 'Helps with data' failing to trigger on screen, then the rewritten description firing.",
+      "device": "the trust ladder",
+      "chosen": false,
+      "idea": {
+        "lines": {
+          "demand": 4,
+          "viewer": 3,
+          "promise": 4,
+          "tension": 5,
+          "proof": 2,
+          "series": 5,
+          "news": 3
+        },
+        "caps": [],
+        "total": 72
+      }
+    },
+    {
+      "lens": "student-journey",
+      "title": "When the Analyst Is Out",
+      "originalTitle": "When the Analyst Is Out",
+      "angle": "It is 8:05 AM, the dashboard says revenue is down 18%, the job says SUCCESS, and the analyst who checks it is out; tonight the check stops living in one head.",
+      "promise": "Nobody is the control",
+      "openingLine": "The analyst who catches bad numbers is out today, and you're on.",
+      "whyNow": "Xforce by Xero (2026-11-12): firms are paying engineers to turn how a practice runs into automated workflows.",
+      "proofNeeded": "The curriculum's sample incident file, the Skill catching all four problems, and a PUBLISH/BLOCK recommendation.",
+      "device": "the person who isn't there: an analyst who is out today, so a check nobody else knows how to run does not get run",
+      "chosen": false,
+      "idea": {
+        "lines": {
+          "demand": 4,
+          "viewer": 5,
+          "promise": 2,
+          "tension": 4,
+          "proof": 2,
+          "series": 5,
+          "news": 3
+        },
+        "caps": [],
+        "total": 70
+      }
+    },
+    {
+      "lens": "contrarian-take",
+      "title": "Stop Writing Better Prompts",
+      "originalTitle": "Stop Writing Better Prompts",
+      "angle": "A better prompt lives in one chat and one head; a Skill is the same judgment written once, which Claude loads when the job calls for it.",
+      "promise": "Write it once, reuse it",
+      "openingLine": "You don't need a better prompt; you need one Claude remembers.",
+      "whyNow": "Anthropic's 2026-11-12 manufacturing release ships its expertise as skills, not prompts.",
+      "proofNeeded": "The same check run as a pasted prompt and as a Skill, side by side.",
+      "device": "the trust ladder",
+      "chosen": false,
+      "idea": {
+        "lines": {
+          "demand": 4,
+          "viewer": 3,
+          "promise": 4,
+          "tension": 5,
+          "proof": 2,
+          "series": 5,
+          "news": 3
+        },
+        "caps": [],
+        "total": 72
+      }
+    }
+  ],
+  "runOfShow": {
+    "lengthMinutes": 60,
+    "publicEndsAtMinute": null,
+    "segments": [
+      {
+        "id": "cold-open",
+        "start": 0,
+        "minutes": 5,
+        "mode": "cold-open",
+        "title": "The finished check: BLOCK, with four reasons",
+        "talkingPoints": [
+          "Open on the result: Claude reads a sample orders file nobody has checked, finds four problems, and says BLOCK before the dashboard publishes.",
+          "Callback: you just finished Week 1 and you direct Claude Code now. Tonight you stop repeating yourself and teach it a check once.",
+          "Name the spine once: your know-how is now a product. Tonight you write one piece of it down, so it runs when you are out."
+        ],
+        "onScreenBuild": "The finished morning-check folder already open in Claude Code; Ali asks in plain words whether the sample orders file is safe to publish and the data-quality-gate report comes back BLOCK (recorded run in tab 2 as backup).",
+        "chatPrompt": "Type one word: what check do you run by hand at work every week?",
+        "visual": "Full screen: the data-quality-gate report, four FAIL/WARN rows and a red BLOCK, with a SAMPLE DATA banner across the top.",
+        "soundBiteIds": [
+          "sb-7",
+          "sb-12"
+        ]
+      },
+      {
+        "id": "know-how",
+        "start": 5,
+        "minutes": 8,
+        "mode": "teach",
+        "title": "Your know-how is now a product: what a skill is",
+        "talkingPoints": [
+          "Why now: on November 12 Anthropic introduced Claude for Manufacturing as 17 skills, and Xero introduced Xforce, forward deployed engineers who build AI workflows around how a firm works.",
+          "A skill is a folder with a SKILL.md: a name, a description that says when to use it, and the steps. Claude reads the descriptions and loads the steps only when they are needed.",
+          "Committed in the project, a skill travels with the repo, so the whole team gets the same check, the same thresholds and the same PASS or FAIL language."
+        ],
+        "onScreenBuild": "No build yet: the two announcement pages side by side, then the what-a-skill-is flowchart.",
+        "chatPrompt": "Poll: the pipeline is green but the dashboard looks wrong. What should happen first?",
+        "visual": "The skill-routing flowchart full screen: your question, descriptions scanned, matching skill, steps load, same answer.",
+        "soundBiteIds": [
+          "sb-1",
+          "sb-2",
+          "sb-8"
+        ]
+      },
+      {
+        "id": "build-gate",
+        "start": 13,
+        "minutes": 10,
+        "mode": "live-build",
+        "title": "Build 1: the analyst's check becomes data-quality-gate",
+        "talkingPoints": [
+          "In a sandbox folder, Claude Code generates a fictional orders file with four planted problems. Sample data only, so we know the right answer before Claude does.",
+          "The description names the trigger in the words an analyst uses; the body is her routine: freshness, duplicate keys, required fields, unreasonable amounts.",
+          "Test it the honest way: ask in plain words, without naming the skill, and watch which skill loads."
+        ],
+        "onScreenBuild": "Claude Code runs instruction 1: creates morning-check, the SAMPLE DATA orders file with four planted problems and the data-quality-gate skill; Ali asks in plain words and the report finds all four and says BLOCK.",
+        "chatPrompt": "Type READY when your own skills folder exists, or STUCK and a mentor will jump in.",
+        "visual": "Split screen: the SKILL.md on the left, the PASS/WARN/FAIL report with BLOCK on the right.",
+        "soundBiteIds": [
+          "sb-10",
+          "sb-11"
+        ]
+      },
+      {
+        "id": "never-fires",
+        "start": 23,
+        "minutes": 8,
+        "mode": "teardown",
+        "title": "The mistake: a skill that never fires",
+        "talkingPoints": [
+          "On a throwaway copy, keep the same steps and change only the description to 'Helps with data.' Ask the same plain question.",
+          "Direct invocation proves the steps run; a plain-words question tests whether Claude can tell when the skill applies. A vague description names no trigger and no output.",
+          "Delete the copy: with real skills beside it, the vague one loses. One sentence is the difference between a check that runs and one nobody can find."
+        ],
+        "onScreenBuild": "Claude Code runs instruction 2: makes the data-helper copy with the vague description, reports whether it loaded on the plain question, then deletes it; data-quality-gate, etl-failure-triage and csv-summary stay.",
+        "chatPrompt": "Diagnostic: it works when you type the slash command but not when you ask in plain words. What do you inspect first?",
+        "visual": "Two descriptions side by side, 'Helps with data.' crossed out in red, the trigger-naming description in green beneath it.",
+        "soundBiteIds": [
+          "sb-3",
+          "sb-6"
+        ]
+      },
+      {
+        "id": "build-brief",
+        "start": 31,
+        "minutes": 10,
+        "mode": "live-build",
+        "title": "Build 2: the update leadership can act on",
+        "talkingPoints": [
+          "The gate stopped the bad number from publishing. The CFO still needs to know what happened, what it means and who owns it.",
+          "executive-dashboard-brief turns the technical report into status, impact, evidence, decision, owner and next update, in under 150 words.",
+          "Detect, then communicate: two skills, one workflow. Diagnosis (etl-failure-triage) is the third, and it is your build-along."
+        ],
+        "onScreenBuild": "Claude Code runs instruction 3: creates executive-dashboard-brief, runs the gate again, hands its report to the brief and lists both skills with their descriptions.",
+        "chatPrompt": "Poll: what belongs in the executive update?",
+        "visual": "The finished executive brief full screen: status BLOCKED, impact, owner, next update, with the gate report greyed out behind it.",
+        "soundBiteIds": [
+          "sb-4"
+        ]
+      },
+      {
+        "id": "hot-seat",
+        "start": 41,
+        "minutes": 9,
+        "mode": "hot-seat",
+        "title": "Hot seat: write the description for your check",
+        "talkingPoints": [
+          "Two volunteers name a check from their own work that would stop running if they were out tomorrow. No real data on screen, only the shape of the check.",
+          "Ali drafts the description live for each: the trigger in their words, the output, and what the skill must never do.",
+          "The job behind this: Xero now pairs firms with forward deployed engineers whose work is turning how a firm runs into AI workflows. You already know how yours runs."
+        ],
+        "onScreenBuild": "A blank skill card filled in live for each volunteer: name, description (when), steps, output, never-do.",
+        "chatPrompt": "Self-check in chat: name one check that would stop running if you were out tomorrow.",
+        "visual": "The filled skill card for the volunteer's check, full screen.",
+        "soundBiteIds": [
+          "sb-9"
+        ]
+      },
+      {
+        "id": "recap",
+        "start": 50,
+        "minutes": 10,
+        "mode": "recap",
+        "title": "Recap: your know-how, written down once",
+        "talkingPoints": [
+          "Spine one last time: your know-how is now a product, and tonight you wrote one piece of it down. Detect, diagnose, communicate.",
+          "Build-along: your own three-skill incident workflow on sample data, including etl-failure-triage, each proven by a plain-words question.",
+          "Next session, Week 3: Build Your First AI Workflow Assistant. It is 2 AM and nobody is at the keyboard. Does anything happen at all?"
+        ],
+        "onScreenBuild": "The trust ladder with the Weeks 1-2 rung lit: you approve every single action.",
+        "chatPrompt": "Self-check: from 'I watched' to 'I could build this tonight', where are you?",
+        "visual": "The trust ladder full screen with the Weeks 1-2 rung highlighted and the 2 AM question beneath it.",
+        "soundBiteIds": [
+          "sb-5"
+        ]
+      }
+    ]
+  },
+  "soundBites": [
+    {
+      "id": "sb-1",
+      "kind": "news-take",
+      "segmentId": "know-how",
+      "score": 85,
+      "text": "Anthropic just shipped manufacturing know-how as 17 skills; your own routine judgment is next, not last.",
+      "story": null
+    },
+    {
+      "id": "sb-2",
+      "kind": "number",
+      "segmentId": "know-how",
+      "score": 79,
+      "text": "79% of manufacturers still enter data by hand, and every manual check you run is a skill waiting to be written.",
+      "story": null
+    },
+    {
+      "id": "sb-3",
+      "kind": "mistake",
+      "segmentId": "never-fires",
+      "score": 81,
+      "text": "The biggest mistake you can make is a vague description; 'helps with data' never fires, not once.",
+      "story": null
+    },
+    {
+      "id": "sb-4",
+      "kind": "framework",
+      "segmentId": "build-brief",
+      "score": 79,
+      "text": "Detect, diagnose, communicate: every incident needs all three, and a skill can run each one for you.",
+      "story": null
+    },
+    {
+      "id": "sb-5",
+      "kind": "prediction",
+      "segmentId": "recap",
+      "score": 85,
+      "text": "Within a year, your team's best checks will live in skills, not in one person's memory.",
+      "story": null
+    },
+    {
+      "id": "sb-6",
+      "kind": "contrarian",
+      "segmentId": "never-fires",
+      "score": 79,
+      "text": "You don't need a better prompt; you need one Claude remembers and runs the same way every time.",
+      "story": null
+    },
+    {
+      "id": "sb-7",
+      "kind": "story-30s",
+      "segmentId": "cold-open",
+      "score": 85,
+      "text": "The analyst is out today, so the check you never wrote down did not run, and revenue looked down 18%.",
+      "story": "This is an illustrative scenario from our curriculum. It is 8:05 AM. The executive dashboard says revenue is down 18%. The overnight job says SUCCESS: it ran clean, on schedule, no errors. But the analyst who checks those numbers by hand every morning is out today, and nobody else knows her check. The data has a duplicate order, a missing region and a negative amount. A green job only proves it ran. Her check should not live in her head."
+    },
+    {
+      "id": "sb-8",
+      "kind": "framework",
+      "segmentId": "know-how",
+      "score": 81,
+      "text": "A skill is only a folder: a name, a description that says when, and the steps you would never skip.",
+      "story": null
+    },
+    {
+      "id": "sb-9",
+      "kind": "news-take",
+      "segmentId": "hot-seat",
+      "score": 73,
+      "text": "Xero is pairing accounting firms with forward deployed engineers, and you already know the one thing they must learn: how your firm works.",
+      "story": null
+    },
+    {
+      "id": "sb-10",
+      "kind": "mistake",
+      "segmentId": "build-gate",
+      "score": 75,
+      "text": "Never test a new skill on live company data; a sample file fails safely and costs you nothing.",
+      "story": null
+    },
+    {
+      "id": "sb-11",
+      "kind": "other",
+      "segmentId": "build-gate",
+      "score": 83,
+      "text": "We built a skill in ten minutes that catches four problems a green pipeline never flagged.",
+      "story": null
+    },
+    {
+      "id": "sb-12",
+      "kind": "contrarian",
+      "segmentId": "cold-open",
+      "score": 73,
+      "text": "A green pipeline only proves the job ran; it never proved the data was right.",
+      "story": null
+    }
+  ],
+  "slides": [
+    {
+      "id": "s1",
+      "segmentId": "cold-open",
+      "type": "title",
+      "title": "Your Know-How Is Now a Product",
+      "bullets": [
+        "Weekly Live · Episode 1",
+        "Tonight one check stops living in one head"
+      ],
+      "visual": "Dark slide, a single folder icon with a small tag reading 'when' on it, the title beneath; no logos.",
+      "diagram": null,
+      "instruction": null,
+      "speakerNote": "Do not read the slide. Say the callback first: you just finished Week 1 and you direct Claude Code now. Then go to the finished report within 30 seconds.",
+      "publicValue": "Episode title card for the edited video"
+    },
+    {
+      "id": "s2",
+      "segmentId": "cold-open",
+      "type": "story",
+      "title": "8:05 AM. The analyst is out.",
+      "bullets": [
+        "Dashboard: revenue down 18% (illustrative)",
+        "Pipeline: SUCCESS",
+        "The person who checks it: out today"
+      ],
+      "visual": "A plain card: a clock at 8:05, a green SUCCESS badge, and an empty chair; an ILLUSTRATIVE SCENARIO label in the corner.",
+      "diagram": null,
+      "instruction": null,
+      "speakerNote": "Tell it as the curriculum's scenario, not a real company. Slow down on 'nobody else knows her check'. Then switch to the finished report in tab 1: this is what the check looks like once it is written down.",
+      "publicValue": "Story Short: the check that did not run"
+    },
+    {
+      "id": "s3",
+      "segmentId": "know-how",
+      "type": "data",
+      "title": "Know-how is shipping as skills",
+      "bullets": [
+        "Nov 12: Claude for Manufacturing ships as 17 skills",
+        "Nov 12: Xero pairs firms with forward deployed engineers",
+        "Every manufacturing skill ends with a person's review"
+      ],
+      "visual": "Two announcement headlines side by side with their dates, each source URL in small type beneath.",
+      "diagram": null,
+      "instruction": null,
+      "speakerNote": "Open both source pages live rather than trusting the slide; they were checked on November 19 and must be re-checked on the air date. The point is not the vendors: someone at your company will be asked to write down how a job gets done.",
+      "publicValue": "News clip: know-how is being packaged this month"
+    },
+    {
+      "id": "s4",
+      "segmentId": "know-how",
+      "type": "teach",
+      "title": "What a skill is",
+      "bullets": [
+        "A folder with a SKILL.md",
+        "The description says when",
+        "The steps load only when needed"
+      ],
+      "visual": "The skill-routing flowchart full screen, the 'Scans descriptions' box outlined in amber.",
+      "diagram": "flowchart LR\n  A[Your question] --> B[Scans descriptions]\n  B --> C[Matching skill]\n  C --> D[Steps load]\n  D --> E[Same answer]",
+      "instruction": null,
+      "speakerNote": "Walk the boxes left to right. Land on 'Scans descriptions': Claude reads every description first and opens a skill only when one matches. That is why the description is the most important line you write tonight.",
+      "publicValue": "Explainer clip: what a Claude skill is, for a non-engineer"
+    },
+    {
+      "id": "s5",
+      "segmentId": "build-gate",
+      "type": "demo",
+      "title": "Build 1: data-quality-gate",
+      "bullets": [
+        "Sandbox folder, fictional orders file",
+        "Four planted problems",
+        "Ask in plain words, watch which skill loads"
+      ],
+      "visual": "Claude Code on the left running the instruction, the generated SKILL.md on the right.",
+      "diagram": null,
+      "instruction": "Run these steps yourself — do not print commands for me to copy and paste.\n1. Open the morning-check folder (it already holds two prepared skills, etl-failure-triage and csv-summary) and create a sample-data folder inside it.\n   # WHY: a sandbox. Nothing in this folder touches a real company system.\n2. Generate a fictional orders file for a made-up retailer, about 40 rows: order id, region, revenue amount, load timestamp. Put SAMPLE DATA as the first line. Plant exactly four problems: one duplicate order id, one missing region, one negative revenue amount, and a load timestamp older than 48 hours.\n   # WHY: these are the four problems the analyst catches by hand. Planting them means we know the right answer before Claude does.\n3. Create a project skill named data-quality-gate in this folder. Description: \"Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication.\" Steps: check freshness, duplicate keys, required fields and unreasonable amounts; give each check PASS, WARN or FAIL with the row that proves it; end with PUBLISH or BLOCK.\n   # WHY: the description says when, the steps say how. This is the analyst's morning routine, written down once.\n4. Tell me when it is ready and stop. I will ask, in my own words and without naming the skill, whether the orders file is safe to publish.\n   # WHY: asking in plain words tests whether the description does its job.\nStop when the report finds all four planted problems and says BLOCK.",
+      "speakerNote": "Narrate the decisions, not the characters: why sample data, why four planted problems, why the description is written in an analyst's words. Then ask: is this orders file safe to publish to the revenue dashboard?",
+      "publicValue": "Main build footage: a first Claude skill in a sandbox folder"
+    },
+    {
+      "id": "s6",
+      "segmentId": "build-gate",
+      "type": "teach",
+      "title": "The gate decides before anyone sees it",
+      "bullets": [
+        "Four checks, each with evidence",
+        "PASS, WARN or FAIL per check",
+        "One recommendation: PUBLISH or BLOCK"
+      ],
+      "visual": "The gate flowchart full screen, BLOCK in red.",
+      "diagram": "flowchart LR\n  F[Orders file] --> G[Four checks]\n  G --> H[Pass Warn Fail]\n  H --> I{Safe?}\n  I --> P[PUBLISH]\n  I --> X[BLOCK]",
+      "instruction": null,
+      "speakerNote": "Point at the evidence column: every FAIL names the row. A check that cannot show its evidence is an opinion. Ask the room to type READY or STUCK before moving on.",
+      "publicValue": "Teaching clip: how a data check decides publish or block"
+    },
+    {
+      "id": "s7",
+      "segmentId": "never-fires",
+      "type": "demo",
+      "title": "Break it: 'Helps with data.'",
+      "bullets": [
+        "Same steps, vague description",
+        "Same plain question",
+        "Delete the copy"
+      ],
+      "visual": "Split screen: the data-helper SKILL.md with the one-line description, beside Claude's answer showing which skill it used.",
+      "diagram": null,
+      "instruction": "Run these steps yourself — do not print commands for me to copy and paste.\n1. Make a throwaway copy of data-quality-gate called data-helper with the same steps, but set its description to \"Helps with data.\" Leave data-quality-gate, etl-failure-triage and csv-summary in the skills folder.\n   # WHY: same steps, vague description. Only the trigger changes, so whatever happens next is the description's doing.\n2. Tell me when it is ready and stop. I will ask the same plain question about the orders file.\n   # WHY: typing the slash command would prove the steps run. A plain question tests whether Claude can tell when this skill applies.\n3. After my question, report which skill loaded, and what in data-helper's description helped or failed to help it compete.\n4. Delete data-helper and list the skills that remain.\nStop when data-helper is gone and data-quality-gate, etl-failure-triage and csv-summary remain.",
+      "speakerNote": "This is the deliberate failure: data-helper competes with data-quality-gate, etl-failure-triage and csv-summary, so 'Helps with data' should lose. If it fires anyway, say so out loud and compare the two descriptions. Confirm the copy is deleted before moving on.",
+      "publicValue": "High-retention teardown: the description mistake and its fix"
+    },
+    {
+      "id": "s8",
+      "segmentId": "never-fires",
+      "type": "poll",
+      "title": "Slash works. Plain words do not. Why?",
+      "bullets": [
+        "Dataset size",
+        "Skill description",
+        "Body length"
+      ],
+      "visual": "Three large option tiles plus 'CSV filename'; the vote bars fill as answers arrive.",
+      "diagram": null,
+      "instruction": null,
+      "speakerNote": "Expect most of the room on the description, and a few on body length. Reveal: the slash command proves the steps can run; a plain question tests whether the description helps Claude recognize when the skill applies.",
+      "publicValue": "Interaction clip: why a skill does not trigger"
+    },
+    {
+      "id": "s9",
+      "segmentId": "build-brief",
+      "type": "demo",
+      "title": "Build 2: executive-dashboard-brief",
+      "bullets": [
+        "A second skill for a different reader",
+        "Status, impact, owner, next update",
+        "Two skills, one workflow"
+      ],
+      "visual": "Claude Code's finished executive brief on the left, the list of both skills with their descriptions on the right.",
+      "diagram": null,
+      "instruction": "Run these steps yourself — do not print commands for me to copy and paste.\n1. Create a second project skill named executive-dashboard-brief. Description: \"Use when a data-quality or incident report must be turned into an update for executives or leadership.\" Steps: write status, business impact, evidence, decision needed, owner and next update time, in under 150 words, with no SQL and no log lines.\n   # WHY: the technical report is right but written for the wrong reader. Leadership needs a decision, not a data dump.\n2. Run data-quality-gate on the orders file again, then hand its report to executive-dashboard-brief.\n   # WHY: detect, then communicate. Two skills, one workflow, and neither one lives in a person's head.\n3. Show me the brief, then list every skill in the folder with its description.\n   # WHY: the list is what your teammates will see. If a description is unclear here, it will be unclear to Claude too.\nStop when the brief names the BLOCK decision, an owner and a next-update time in under 150 words.",
+      "speakerNote": "Read the brief aloud as if you were the CFO. Ask the room: could you act on this? Then point out that diagnosis, the middle step, is the build-along.",
+      "publicValue": "Payoff footage: two skills turn an incident into a decision"
+    },
+    {
+      "id": "s10",
+      "segmentId": "build-brief",
+      "type": "teach",
+      "title": "Detect, diagnose, communicate",
+      "bullets": [
+        "Detection protects the business",
+        "Diagnosis restores the system",
+        "Communication closes the loop"
+      ],
+      "visual": "The three-step incident flowchart full screen, Diagnose outlined in dashed amber because it is tonight's build-along.",
+      "diagram": "flowchart LR\n  A[Detect] --> B[Diagnose]\n  B --> C[Communicate]\n  C --> D[Decision]",
+      "instruction": null,
+      "speakerNote": "Say who each step is for: detection is for the business, diagnosis for the engineers, communication for leadership. Tonight we built the first and last; the middle one is yours.",
+      "publicValue": "Framework clip: the three skills every incident needs"
+    },
+    {
+      "id": "s11",
+      "segmentId": "hot-seat",
+      "type": "quote",
+      "title": "Your skill card",
+      "bullets": [
+        "Which check would stop if you were out?",
+        "When should Claude use it, in your words?",
+        "What must it never do?"
+      ],
+      "visual": "A blank skill card with five boxes: name, when, steps, output, never-do.",
+      "diagram": null,
+      "instruction": null,
+      "speakerNote": "Take two volunteers and fill the card for their check without putting any real data or screens on air. If nobody volunteers, use a month-end invoice check: when the user asks whether invoices are ready to send, check totals, dates and missing purchase orders.",
+      "publicValue": "Hot-seat clip: turning a viewer's routine into a skill"
+    },
+    {
+      "id": "s12",
+      "segmentId": "recap",
+      "type": "close",
+      "title": "Written down once",
+      "bullets": [
+        "Your know-how is now a product",
+        "Build-along: your three-skill incident workflow",
+        "Next: Week 3, Build Your First AI Workflow Assistant"
+      ],
+      "visual": "The trust ladder with the Weeks 1-2 rung lit, and the next session's question beneath it.",
+      "diagram": null,
+      "instruction": null,
+      "speakerNote": "Restate the spine in one sentence, read the build-along proof line off the slide, then ask the 2 AM question and stop talking. Leave it open.",
+      "publicValue": "Close and next-live CTA"
+    }
+  ],
+  "facts": [
+    {
+      "id": "f1",
+      "claim": "Anthropic introduced Claude for Manufacturing on 2026-11-12: a plugin with 17 skills and four connectors (Autodesk Fusion, Infor, Microsoft 365, Oracle NetSuite), installed on Team or Enterprise plans.",
+      "usedIn": [
+        "slides.s3",
+        "soundBites.sb-1",
+        "runOfShow.know-how",
+        "contentYield.linkedinPost",
+        "contentYield.shorts",
+        "angles"
+      ],
+      "source": "Claude blog: Introducing Claude for Manufacturing",
+      "url": "https://claude.com/blog/claude-for-manufacturing",
+      "publishedAt": "2026-11-12",
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Third-party product fact; implies no affiliation."
+      }
+    },
+    {
+      "id": "f2",
+      "claim": "Claude for Manufacturing skills are built to end with a user's review, so the person responsible can review and approve the work before it reaches a customer or supplier.",
+      "usedIn": [
+        "slides.s3",
+        "contentYield.linkedinPost"
+      ],
+      "source": "Claude blog: Introducing Claude for Manufacturing",
+      "url": "https://claude.com/blog/claude-for-manufacturing",
+      "publishedAt": "2026-11-12",
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Third-party product fact."
+      }
+    },
+    {
+      "id": "f3",
+      "claim": "Anthropic's Claude for Manufacturing announcement cites a 2025 Manufacturing Leadership Council survey in which 79% of manufacturers said they manually enter data.",
+      "usedIn": [
+        "soundBites.sb-2",
+        "runOfShow.know-how"
+      ],
+      "source": "Claude blog: Introducing Claude for Manufacturing (citing a 2025 Manufacturing Leadership Council survey)",
+      "url": "https://claude.com/blog/claude-for-manufacturing",
+      "publishedAt": "2026-11-12",
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Secondary citation of a survey; say 'surveyed manufacturers' on air and open the page live."
+      }
+    },
+    {
+      "id": "f4",
+      "claim": "Anthropic's example: if a steel shipment slips by two weeks, Claude can identify affected customer orders and steel stock at other sites; after the buyer approves, it can release a purchase order to another supplier and reschedule production in Infor.",
+      "usedIn": [
+        "participation.storyBeats.b2"
+      ],
+      "source": "Claude blog: Introducing Claude for Manufacturing",
+      "url": "https://claude.com/blog/claude-for-manufacturing",
+      "publishedAt": "2026-11-12",
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "An example scenario in Anthropic's announcement, told as such, never as a real customer."
+      }
+    },
+    {
+      "id": "f5",
+      "claim": "Xero announced Xforce by Xero on 12 November 2026: forward-deployed engineers and partner consultants who help accounting firms redesign workflows for AI, in beta with design partners in Australia, New Zealand and the UK.",
+      "usedIn": [
+        "slides.s3",
+        "soundBites.sb-9",
+        "runOfShow.know-how",
+        "runOfShow.hot-seat",
+        "contentYield.linkedinPost",
+        "angles"
+      ],
+      "source": "Xero media release: Xforce by Xero",
+      "url": "https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/",
+      "publishedAt": "2026-11-12",
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Third-party labor-market fact; not a Colaberry outcome claim."
+      }
+    },
+    {
+      "id": "f6",
+      "claim": "Xero's forward-deployed engineers build automated workflows with XeroForce, Xero's APIs and Xero OS, connected to the other software in a firm's stack; firms decide which clients and data the workflows touch.",
+      "usedIn": [
+        "runOfShow.hot-seat",
+        "contentYield.linkedinPost"
+      ],
+      "source": "Xero media release: Xforce by Xero",
+      "url": "https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/",
+      "publishedAt": "2026-11-12",
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Third-party fact."
+      }
+    },
+    {
+      "id": "f7",
+      "claim": "A Claude Code skill is a SKILL.md file with instructions; project skills live at .claude/skills/<skill-name>/SKILL.md and can be committed so the team gets them.",
+      "usedIn": [
+        "slides.s4",
+        "soundBites.sb-8",
+        "runOfShow.know-how",
+        "demo"
+      ],
+      "source": "Claude Code docs: Extend Claude with skills",
+      "url": "https://code.claude.com/docs/en/skills",
+      "publishedAt": null,
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Product documentation."
+      }
+    },
+    {
+      "id": "f8",
+      "claim": "The skill description helps Claude decide when to load the skill automatically; a user can also invoke a skill directly with /skill-name.",
+      "usedIn": [
+        "slides.s4",
+        "slides.s7",
+        "slides.s8",
+        "soundBites.sb-3",
+        "participation.questions.q3",
+        "participation.questions.q4"
+      ],
+      "source": "Claude Code docs: Extend Claude with skills",
+      "url": "https://code.claude.com/docs/en/skills",
+      "publishedAt": null,
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Product documentation."
+      }
+    },
+    {
+      "id": "f9",
+      "claim": "A skill's body loads only when it is used; in a regular session only the descriptions are in context.",
+      "usedIn": [
+        "slides.s4",
+        "runOfShow.know-how"
+      ],
+      "source": "Claude Code docs: Extend Claude with skills",
+      "url": "https://code.claude.com/docs/en/skills",
+      "publishedAt": null,
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Product documentation."
+      }
+    },
+    {
+      "id": "f10",
+      "claim": "allowed-tools lists tools Claude can use without asking permission during the turn that invokes the skill; it does not restrict which tools are available.",
+      "usedIn": [
+        "participation.questions.q7"
+      ],
+      "source": "Claude Code docs: Extend Claude with skills",
+      "url": "https://code.claude.com/docs/en/skills",
+      "publishedAt": null,
+      "status": "sourced",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Product documentation."
+      }
+    },
+    {
+      "id": "f11",
+      "claim": "Week 2 is Agent Skills (build 3 skills); beat 'You teach it once, and it never forgets'; deliverable .claude/skills/ with all 3 Skills committed plus an architecture diagram and mockup; Academy course Introduction to agent skills.",
+      "usedIn": [
+        "header.week",
+        "students",
+        "slides.s12"
+      ],
+      "source": "backend/src/data/canonicalCourse.ts, backend/src/data/classSessionPlan.ts, docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Curriculum fact from the repo."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "backend/src/data/canonicalCourse.ts:192",
+        "backend/src/data/canonicalCourse.ts:196",
+        "docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md:118",
+        "backend/src/data/classSessionPlan.ts:664"
+      ]
+    },
+    {
+      "id": "f12",
+      "claim": "The 8:05 AM incident: the dashboard says revenue is down 18%, the ETL job says SUCCESS, the analyst is out, and the data holds a duplicate order id, a missing region, a negative amount and a load timestamp older than 48 hours.",
+      "usedIn": [
+        "soundBites.sb-7",
+        "slides.s2",
+        "slides.s5",
+        "participation.storyBeats.b1",
+        "runOfShow.cold-open"
+      ],
+      "source": "backend/src/data/classSessionPlan.ts (Week 2 monday.tension)",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "illustrative": true,
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Labeled teaching scenario; shown only with a visible 'illustrative' label."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "backend/src/data/classSessionPlan.ts:486"
+      ]
+    },
+    {
+      "id": "f13",
+      "claim": "The description examples 'Helps with data' (never fires) and 'Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication' (fires reliably), and the three skills data-quality-gate, etl-failure-triage and executive-dashboard-brief.",
+      "usedIn": [
+        "slides.s5",
+        "slides.s7",
+        "slides.s9",
+        "soundBites.sb-3",
+        "demo"
+      ],
+      "source": "backend/src/data/classSessionPlan.ts (Week 2 realExample, architectureBeats)",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Curriculum teaching material."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "backend/src/data/classSessionPlan.ts:490",
+        "backend/src/data/classSessionPlan.ts:491",
+        "backend/src/data/classSessionPlan.ts:495"
+      ]
+    },
+    {
+      "id": "f14",
+      "claim": "Week 3's 2 AM question: 'It's 2 AM and nobody is at the keyboard. Does anything happen at all?'",
+      "usedIn": [
+        "students.openQuestion",
+        "runOfShow.recap",
+        "slides.s12",
+        "contentYield.nextLiveCta"
+      ],
+      "source": "docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Curriculum device; next session's topic is an assumption."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md:70"
+      ]
+    },
+    {
+      "id": "f15",
+      "claim": "Trust ladder, Weeks 1-2: 'You approve every single action'.",
+      "usedIn": [
+        "participation.storyBeats.b4",
+        "slides.s12",
+        "runOfShow.recap"
+      ],
+      "source": "docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Curriculum device."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md:90"
+      ]
+    },
+    {
+      "id": "f16",
+      "claim": "Series name 'Weekly Live · Episode 1'.",
+      "usedIn": [
+        "header.series",
+        "slides.s1"
+      ],
+      "source": "Skill default series name: plan-live-session SKILL.md (series default) and history.js episode = 1",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Out of registry scope; an internal series label."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        ".claude/skills/plan-live-session/SKILL.md:94",
+        ".claude/skills/plan-live-session/scripts/history.js:93"
+      ]
+    },
+    {
+      "id": "f17",
+      "claim": "Air date Tuesday 2026-11-24, 6:30 pm Central (CST); next session Tuesday 2026-12-01.",
+      "usedIn": [
+        "header.airDate",
+        "checklist",
+        "contentYield.nextLiveCta"
+      ],
+      "source": "history.json schedule (confirmed by Ali 2026-11-19) and history.js next-date",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Schedule, not a public claim."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "Ali confirmed 2026-11-19"
+      ]
+    },
+    {
+      "id": "f18",
+      "claim": "The program is the Forward Deployed AI Engineer Accelerator.",
+      "usedIn": [
+        "students.applyToOwnPlan"
+      ],
+      "source": "backend/src/data/canonicalCourse.ts (curriculum engine prompt)",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "registry": {
+        "applies": true,
+        "key": null,
+        "note": "not registered. Program name kept out of public copy until registered."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "backend/src/data/canonicalCourse.ts:145"
+      ]
+    },
+    {
+      "id": "f19",
+      "claim": "Claude Code is an Anthropic product (named in the Fable 5.2 announcement as a surface where fast mode is available); we build on Claude and Claude Code.",
+      "usedIn": [
+        "slides",
+        "demo",
+        "contentYield"
+      ],
+      "source": "Anthropic: Introducing Claude Fable 5.2 and Claude Mythos 5.2",
+      "url": "https://www.anthropic.com/news/claude-fable-and-mythos-5-2",
+      "publishedAt": "2026-11-09",
+      "status": "sourced",
+      "registryVerified": true,
+      "registry": {
+        "applies": true,
+        "key": "anthropic.capability",
+        "note": "VERIFIED, approved for all routes ('We build on Claude and Claude Code.'). Never phrase as a partnership: anthropic.partner is DO_NOT_PUBLISH."
+      }
+    },
+    {
+      "id": "f20",
+      "claim": "The sample orders file, the morning-check folder, the planted problems, the prepared competitor skill csv-summary and the month-end invoice fallback example are fictional teaching material created for the demo.",
+      "usedIn": [
+        "demo",
+        "slides.s5",
+        "slides.s11"
+      ],
+      "source": "This blueprint's own sandbox design (demo instruction 1, hot-seat fallback note)",
+      "url": null,
+      "publishedAt": null,
+      "status": "checked",
+      "illustrative": true,
+      "registry": {
+        "applies": false,
+        "key": null,
+        "note": "Illustrative; shown on air under a visible SAMPLE DATA label."
+      },
+      "checkedAt": "2026-11-19",
+      "checkedAgainst": [
+        "blueprint:demo.claudeCodeInstructions[0]",
+        "blueprint:slides[10].speakerNote"
+      ]
+    }
+  ],
+  "participation": {
+    "questions": [
+      {
+        "id": "q1",
+        "kind": "roll-call",
+        "segmentId": "cold-open",
+        "q": "Where are you watching from, and what kind of check do you run by hand at work?",
+        "options": [
+          "Numbers and reports",
+          "Customer records",
+          "Invoices and payments",
+          "Something else"
+        ],
+        "answer": "No right answer. Read three out loud and keep them for the hot seat."
+      },
+      {
+        "id": "q2",
+        "kind": "judgment-poll",
+        "segmentId": "know-how",
+        "q": "The ETL run is green, but the dashboard looks wrong. What should happen first?",
+        "options": [
+          "Rebuild the dashboard",
+          "Rerun the entire ETL pipeline",
+          "Validate the output against its data-quality contract",
+          "Ask leadership which number looks suspicious"
+        ],
+        "answer": "Validate the output against its data-quality contract. A green pipeline proves the job ran; it does not prove the data is trustworthy."
+      },
+      {
+        "id": "q3",
+        "kind": "diagnostic",
+        "segmentId": "build-gate",
+        "q": "Which part helps Claude recognize when a skill is relevant?",
+        "options": [
+          "Folder name",
+          "Description",
+          "Body length",
+          "Creation date"
+        ],
+        "answer": "Description. Claude scans the descriptions to decide when to load a skill; the description is the routing logic, not documentation."
+      },
+      {
+        "id": "q4",
+        "kind": "diagnostic",
+        "segmentId": "never-fires",
+        "q": "The skill works when you type /data-quality-gate, but not when you ask 'Is this dataset safe to publish?' What do you inspect first?",
+        "options": [
+          "Dataset size",
+          "Skill description",
+          "Body length",
+          "CSV filename"
+        ],
+        "answer": "Skill description. Direct invocation proves the steps run; a plain-words question tests whether the description helps Claude recognize when the skill applies."
+      },
+      {
+        "id": "q5",
+        "kind": "judgment-poll",
+        "segmentId": "build-brief",
+        "q": "What belongs in the executive update?",
+        "options": [
+          "The entire pipeline log",
+          "Every SQL statement tested",
+          "Status, impact, evidence, decision, owner and next update",
+          "A general note that IT is investigating"
+        ],
+        "answer": "Status, impact, evidence, decision, owner and next update. Leadership needs a decision product, not a technical data dump."
+      },
+      {
+        "id": "q6",
+        "kind": "self-check",
+        "segmentId": "hot-seat",
+        "q": "Name one check that would stop running if you were out tomorrow. How ready is it to become a skill?",
+        "options": [
+          "I have not thought of one yet",
+          "I know the check but not the words",
+          "I could write its description now",
+          "I already wrote it down"
+        ],
+        "answer": "A good answer names a specific check, the words a colleague would use to ask for it, and the one thing it must never do (for example, send anything without a person approving)."
+      },
+      {
+        "id": "q7",
+        "kind": "diagnostic",
+        "segmentId": "recap",
+        "q": "What does allowed-tools in a skill do?",
+        "options": [
+          "Permanently restricts the skill to those tools",
+          "Pre-approves the named tools for the turn that invokes the skill",
+          "Prevents automatic invocation",
+          "Loads every reference file"
+        ],
+        "answer": "Pre-approves the named tools for the turn that invokes the skill. It does not restrict which tools are available; permission settings still govern the rest."
+      },
+      {
+        "id": "q8",
+        "kind": "self-check",
+        "segmentId": "recap",
+        "q": "From 'I watched' to 'I could build this tonight', where are you?",
+        "options": [
+          "I watched",
+          "I could follow it",
+          "I could build it with the three instructions",
+          "I could build it from memory"
+        ],
+        "answer": "Any honest answer is right. 'With the three instructions' is this week's target; 'I watched' means start the build-along with instruction 1 tonight."
+      }
+    ],
+    "storyBeats": [
+      {
+        "id": "b1",
+        "segmentId": "cold-open",
+        "device": "the person who isn't there",
+        "person": "An analyst at a retailer, in the curriculum's illustrative incident",
+        "moment": "8:05 AM: the dashboard says revenue is down 18% and the overnight job says SUCCESS, but she is out today and nobody else knows her morning check.",
+        "stake": "A wrong revenue number reaches the executive team before anyone notices the duplicate order and the negative amount.",
+        "punch": "She should not be the control. The check should."
+      },
+      {
+        "id": "b2",
+        "segmentId": "know-how",
+        "device": null,
+        "person": "A buyer at a manufacturer, in Anthropic's own Claude for Manufacturing example",
+        "moment": "A steel shipment slips two weeks, and Claude finds the affected customer orders and the steel stock at other sites.",
+        "stake": "Claude can release a purchase order to another supplier, but only after she approves it.",
+        "punch": "The know-how is packaged. The decision stays hers."
+      },
+      {
+        "id": "b3",
+        "segmentId": "build-brief",
+        "device": null,
+        "person": "A CFO waiting on the incident, in the curriculum's illustrative scenario",
+        "moment": "The data team has a correct technical report full of row numbers and timestamps, and the CFO has a board call in an hour.",
+        "stake": "A right answer in the wrong shape means the decision gets made without it.",
+        "punch": "A technically correct answer can still be the wrong communication product."
+      },
+      {
+        "id": "b4",
+        "segmentId": "recap",
+        "device": "the trust ladder",
+        "person": "You, last week in Week 1",
+        "moment": "You approved every single action Claude took, one click at a time.",
+        "stake": "Tonight it ran a check you wrote once, and it still waited for you before anything was published.",
+        "punch": "Teach it once. Still approve every time, for now."
+      }
+    ]
+  },
+  "demo": {
+    "goal": "In a sandbox folder that holds two prepared skills (etl-failure-triage and csv-summary), turn the analyst's morning check into a data-quality-gate skill on a fictional orders file, break it with a vague description and restore it, then add executive-dashboard-brief so one plain-words question ends in a decision leadership can act on.",
+    "steps": [
+      "Before the show: create etl-failure-triage and csv-summary in the morning-check folder's skills (prepared, not built live; csv-summary describes a CSV's columns and row counts), so the teardown has real competition.",
+      "Cold open: show the finished BLOCK report from the prepared folder (recorded run ready in tab 2).",
+      "Build 1: Claude Code creates morning-check, the SAMPLE DATA orders file with four planted problems and data-quality-gate; Ali asks in plain words whether the file is safe to publish.",
+      "Teardown: a throwaway data-helper copy with the description 'Helps with data.'; ask the same question, report which skill loaded (data-helper competes with data-quality-gate, etl-failure-triage and csv-summary), then delete it.",
+      "Build 2: Claude Code creates executive-dashboard-brief, runs the gate again and hands its report to the brief.",
+      "Close the loop: list every skill with its description and confirm data-helper is gone."
+    ],
+    "claudeCodeInstructions": [
+      "Run these steps yourself — do not print commands for me to copy and paste. In the morning-check folder (it already holds two prepared skills, etl-failure-triage and csv-summary), create a sample-data folder, generate a fictional retailer orders file with SAMPLE DATA on the first line and exactly four planted problems (a duplicate order id, a missing region, a negative revenue amount, a load timestamp older than 48 hours), and create a project skill named data-quality-gate with the description 'Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication.' and steps that give PASS, WARN or FAIL per check with evidence and end with PUBLISH or BLOCK. Then stop and wait for my question.",
+      "Run these steps yourself — do not print commands for me to copy and paste. Make a throwaway copy of data-quality-gate called data-helper whose description is only 'Helps with data.', leave data-quality-gate, etl-failure-triage and csv-summary where they are, and wait for my question. After it, report which skill loaded and why data-helper did or did not, then delete data-helper and list the skills that remain.",
+      "Run these steps yourself — do not print commands for me to copy and paste. Create a project skill named executive-dashboard-brief with the description 'Use when a data-quality or incident report must be turned into an update for executives or leadership.' that writes status, impact, evidence, decision, owner and next update in under 150 words, run data-quality-gate on the orders file, hand its report to the brief, show the brief and list every skill with its description."
+    ],
+    "whatCouldGoWrong": [
+      "The vague 'Helps with data.' skill fires anyway even with data-quality-gate, etl-failure-triage and csv-summary beside it: say so, read the two descriptions side by side, and explain that a team folder with twenty skills makes the collision worse, not better.",
+      "Claude Code does not pick up a new skill until a new message or session: ask it to confirm the skill is listed before asking the question.",
+      "The generated sample data has five problems or three, not four: ask Claude Code to list the planted problems before the build, and regenerate if the count is wrong.",
+      "The generated data uses a real company name: regenerate with obviously fictional names before going live.",
+      "The brief runs long or includes log lines: point at the 150-word rule in the description and have Claude Code tighten the skill, which is itself the lesson."
+    ],
+    "fallback": "Tab 2 holds a recorded run of all three instructions against the same sample data, a saved copy of the finished morning-check folder, and screenshots of the BLOCK report and the executive brief. If any build stalls past two minutes, switch to the recording and narrate it.",
+    "routingCompetitors": [
+      "etl-failure-triage",
+      "csv-summary"
+    ]
+  },
+  "students": {
+    "buildAlong": "Rebuild tonight's workflow on a sample file you generate, never real data: data-quality-gate, executive-dashboard-brief, and etl-failure-triage, which sat prepared in tonight's folder but was not built live; it reads the run's log and ranks the likely causes with evidence. Prove each skill fires from a plain-words question, not the slash command, and commit all three to .claude/skills/.",
+    "applyToOwnPlan": "Your generated build plan arrives in Week 3. Before then, write down the one check from your own job that would stop running if you were out tomorrow, and draft its description in the words a colleague would use to ask for it. Bring it to the next session; it becomes the first skill in your own plan.",
+    "openQuestion": "Your skills run when you ask. It's 2 AM and nobody is at the keyboard. Does anything happen at all?"
+  },
+  "contentYield": {
+    "video": {
+      "title": "Your Know-How Is Now a Product",
+      "thumbnailText": "PACKAGED",
+      "firstTwoSentences": "You run a check at work that lives only in your head, and the day you are out, it does not run. In this video you will turn that check into a Claude skill that runs the same way every time, and see the one mistake that makes a skill never fire.",
+      "targetMinutes": "18-24 (edit path: cold open, know-how, Build 1, teardown, Build 2, recap; hot seat cut to one volunteer)"
+    },
+    "shorts": [
+      {
+        "title": "Your know-how is the next AI product",
+        "soundBiteId": "sb-1",
+        "segmentId": "know-how"
+      },
+      {
+        "title": "The skill mistake that means it never fires",
+        "soundBiteId": "sb-3",
+        "segmentId": "never-fires"
+      },
+      {
+        "title": "Stop writing better prompts",
+        "soundBiteId": "sb-6",
+        "segmentId": "never-fires"
+      },
+      {
+        "title": "A green pipeline proves less than you think",
+        "soundBiteId": "sb-12",
+        "segmentId": "cold-open"
+      },
+      {
+        "title": "Never test AI on live company data",
+        "soundBiteId": "sb-10",
+        "segmentId": "build-gate"
+      },
+      {
+        "title": "Where your team's best checks will live",
+        "soundBiteId": "sb-5",
+        "segmentId": "recap"
+      }
+    ],
+    "quoteCards": [
+      "A skill is only a folder: a name, a description that says when, and the steps you would never skip.",
+      "Detect, diagnose, communicate: every incident needs all three, and a skill can run each one for you.",
+      "A green pipeline only proves the job ran; it never proved the data was right."
+    ],
+    "linkedinPost": "Two announcements on November 12 point the same way.\n\nAnthropic introduced Claude for Manufacturing as 17 skills, each built to end with a person's review. Xero introduced Xforce, which pairs accounting firms with forward deployed engineers who build AI workflows around how each firm works.\n\nKnow-how is being packaged.\n\nThe routine checks you run every week are exactly what gets packaged next. The only question is who writes them down.\n\nIn our next weekly live we write one down. A morning data check that only one analyst knows how to run becomes a Claude skill: a name, a description that says when to use it, and the steps she would never skip. Then we break it on purpose with a one-line description that never fires, and fix it.\n\nDetect. Diagnose. Communicate.\n\nBring one check from your own job that would stop running if you were out tomorrow. We will draft its description live.",
+    "email": {
+      "subject": "Your know-how, written down once",
+      "recap": "We turned a morning data check that lived in one analyst's head into a Claude skill, broke it with a vague description, fixed it, and chained it to a brief leadership can act on. Your build-along: write the missing diagnosis skill and draft the description for one check from your own job."
+    },
+    "nextLiveCta": "Next live, Tuesday, 6:30 pm Central (December 1): Week 3, Build Your First AI Workflow Assistant. It's 2 AM and nobody is at the keyboard. Does anything happen at all? Bring the check you named tonight."
+  },
+  "scores": {
+    "idea": 79,
+    "room": {
+      "total": 47,
+      "lines": {
+        "coldOpen": {
+          "score": 10,
+          "why": "Finished BLOCK report inside 5 minutes; Episode 1 calls back to Week 1 by number and name, which the rubric's Episode 1 rule scores as the callback."
+        },
+        "pace": {
+          "score": 9,
+          "why": "Every segment 5-10 minutes, a new mode every 8-10 minutes, pace changes at the story beats, 60 minutes total."
+        },
+        "participation": {
+          "score": 9,
+          "why": "A chat prompt in every segment, 8 questions across all four kinds, and a hot seat; two questions sit in the recap tail."
+        },
+        "buildCredibility": {
+          "score": 10,
+          "why": "Two live builds, a deliberate teardown set up to fail for real (data-helper competes with data-quality-gate, etl-failure-triage and csv-summary), and a recorded fallback in tab 2."
+        },
+        "studentRelevance": {
+          "score": 9,
+          "why": "Matches Week 2's beat and its Architecture Day incident and micro-build, uses the person-who-isn't-there device and the trust ladder, and names Week 3 in the recap; the student's own build plan arrives only in Week 3, so the own-plan link is a draft."
+        }
+      }
+    },
+    "yield": {
+      "total": 43,
+      "lines": {
+        "clipDensity": {
+          "score": 9,
+          "why": "12 sound bites, all 73-85, all seven kinds, spread across all seven segments."
+        },
+        "shortsReadiness": {
+          "score": 9,
+          "why": "6 Shorts, each mapped to a bite and a segment with a full-screen visual; the story Short (sb-7) was left out because its 18% needs an illustrative label."
+        },
+        "longFormPath": {
+          "score": 8,
+          "why": "An 18-24 minute edit path exists and the avatar's first two sentences need no live context; the hot seat must be cut to one volunteer to fit."
+        },
+        "titleAndThumbnail": {
+          "score": 8,
+          "why": "30 characters, six words, stakes framing; thumbnail 'PACKAGED' is 8 characters but abstract."
+        },
+        "distributionPack": {
+          "score": 9,
+          "why": "Video, 6 Shorts, 3 quote cards, LinkedIn post, email recap, next-live CTA and publicValue on every slide."
+        }
+      }
+    },
+    "topFixes": [
+      "Supply proof=: a real deployed skill (Ali's own or a learner's, with permission) on screen lifts the Idea proof line from 2 to 4 or 5, worth +6 to +9 Idea points.",
+      "Find demand on this exact angle: a video about packaging work know-how into skills that ran 3x its channel median lifts the Idea demand line from 4 to 5, worth +4 Idea points."
+    ]
+  },
+  "checklist": [
+    "No keys, client data or student data on screen",
+    "News sources re-checked on the air date",
+    "Clip-marker button tested",
+    "Fallback tab open: recorded run of all three instructions plus the finished morning-check folder",
+    "Sandbox reset: morning-check holds only the two prepared skills, and the sample data is regenerated with obviously fictional names",
+    "Sandbox prepared: etl-failure-triage and csv-summary created in the morning-check skills folder before the show (the teardown's routing competitors), and no other skills",
+    "Both announcement pages (Claude for Manufacturing, Xforce by Xero) open in tabs for slide s3",
+    "Zoom/YouTube link posted; Tuesday 2026-11-24, 6:30 pm Central (CST)"
+  ],
+  "risks": [
+    "The teardown can silently succeed: if 'Helps with data.' still fires with data-quality-gate, etl-failure-triage and csv-summary in the folder, say so out loud, read the two descriptions side by side, and name the trigger the vague one lacks.",
+    "News is 12 days old on the air date; if a fresher skills or forward deployed story lands, swap it into slide s3 and the LinkedIn post.",
+    "The 79% figure is Anthropic's citation of a 2025 survey, not a primary source; open the page live and say 'surveyed manufacturers'.",
+    "The 8:05 AM incident and its 18% are illustrative; say so on air and never put them in public copy without the label.",
+    "Viewers may hear 'Anthropic' and assume a partnership; never imply one (anthropic.partner is DO_NOT_PUBLISH)."
+  ],
+  "deckHandoff": {
+    "session": {
+      "title": "Your Know-How Is Now a Product",
+      "publicTitle": "Your Know-How Is Now a Product",
+      "week": 2,
+      "dayKind": "architecture"
+    },
+    "segments": [
+      {
+        "id": "cold-open",
+        "startMin": 0,
+        "endMin": 5,
+        "label": "The finished check",
+        "mode": "open",
+        "purpose": "Show the BLOCK report first and call back to Week 1",
+        "publicValue": "Cold open",
+        "deckSegment": "cold-open"
+      },
+      {
+        "id": "know-how",
+        "startMin": 5,
+        "endMin": 13,
+        "label": "Your know-how is now a product",
+        "mode": "present",
+        "purpose": "Why now, and what a skill is",
+        "publicValue": "Explainer clip",
+        "deckSegment": "business-problem"
+      },
+      {
+        "id": "build-gate",
+        "startMin": 13,
+        "endMin": 23,
+        "label": "Build 1: data-quality-gate",
+        "mode": "build",
+        "purpose": "The analyst's check becomes a skill",
+        "publicValue": "Main build footage",
+        "deckSegment": "architecture"
+      },
+      {
+        "id": "never-fires",
+        "startMin": 23,
+        "endMin": 31,
+        "label": "The skill that never fires",
+        "mode": "build",
+        "purpose": "Deliberate failure: a vague description",
+        "publicValue": "High-retention sequence",
+        "deckSegment": "deconstruct"
+      },
+      {
+        "id": "build-brief",
+        "startMin": 31,
+        "endMin": 41,
+        "label": "Build 2: the executive brief",
+        "mode": "build",
+        "purpose": "Detect, then communicate",
+        "publicValue": "Payoff footage",
+        "deckSegment": "micro-build"
+      },
+      {
+        "id": "hot-seat",
+        "startMin": 41,
+        "endMin": 50,
+        "label": "Hot seat: your skill card",
+        "mode": "interact",
+        "purpose": "Draft descriptions for volunteers' own checks",
+        "publicValue": "Hot-seat clip",
+        "deckSegment": "challenge"
+      },
+      {
+        "id": "recap",
+        "startMin": 50,
+        "endMin": 60,
+        "label": "Written down once",
+        "mode": "close",
+        "purpose": "Recap, build-along, name Week 3",
+        "publicValue": "Next-live CTA",
+        "deckSegment": "trailer"
+      }
+    ],
+    "opening": {
+      "coldOpen": {
+        "title": "The finished check: BLOCK, with four reasons",
+        "body": "A sample orders file nobody has checked. One plain question: is it safe to publish? Claude loads the skill you are about to build, finds four problems with the row that proves each, and says BLOCK before the dashboard ever sees it."
+      }
+    },
+    "checkpointsEnabled": false,
+    "teach": [
+      {
+        "segment": "business-problem",
+        "eyebrow": "📰 Why now",
+        "title": "Know-how is shipping as skills",
+        "body": "On November 12 Anthropic introduced Claude for Manufacturing as 17 skills, each built to end with a person's review. The same day Xero introduced Xforce, which pairs accounting firms with forward deployed engineers who build AI workflows around how each firm works.",
+        "bullets": [
+          "Nov 12: Claude for Manufacturing, 17 skills",
+          "Nov 12: Xforce by Xero, forward deployed engineers",
+          "Every manufacturing skill ends with a person's review"
+        ],
+        "script": "SITUATION: The cold open just showed the finished check; now the room needs the reason it matters this month.\nROOM: Both announcement pages open in tabs, ready to switch to.\nMOOD: Matter-of-fact, a little urgent.\nOPEN: Two companies said the same thing on the same day.\nDO: Switch to each source page for five seconds so the room sees it is real.\nNOTE: Re-check both pages on the air date before trusting the slide.\nSAY: Anthropic shipped manufacturing know-how as 17 skills. Xero is sending engineers into accounting firms to build workflows around how they work.\nSAY: Your routine judgment is what gets packaged next. Tonight you learn to package it yourself."
+      },
+      {
+        "segment": "business-problem",
+        "eyebrow": "🧩 What a skill is",
+        "title": "What a skill is",
+        "body": "A skill is a folder with a SKILL.md: a name, a description that says when to use it, and the steps. Claude reads every description first and loads a skill's steps only when one matches, so the description decides whether your skill is ever used.",
+        "bullets": [
+          "A folder with a SKILL.md",
+          "The description says when",
+          "The steps load only when needed"
+        ],
+        "diagram": "flowchart LR\n  A[Your question] --> B[Scans descriptions]\n  B --> C[Matching skill]\n  C --> D[Steps load]\n  D --> E[Same answer]",
+        "script": "SITUATION: The why is landed; now the what, before anyone builds.\nROOM: The flowchart, ready to full-screen.\nMOOD: Calm teacher; this is the one concept everything hangs on.\nOPEN: Here is how Claude decides to use something you taught it.\nDO: Click the diagram to full screen and point at each box.\nNOTE: Spend most of the time on the second box; the rest of the night depends on it.\nSAY: You ask a question. Claude scans the descriptions. If one matches, it opens that skill and follows the steps.\nSAY: That is why the description is the most important sentence you will write tonight."
+      },
+      {
+        "segment": "architecture",
+        "eyebrow": "🛠️ Build 1",
+        "title": "Build 1: data-quality-gate",
+        "body": "In a sandbox folder, Claude Code generates a fictional orders file with four planted problems and writes the analyst's routine as a skill. Then we ask in plain words, without naming it, and watch which skill loads.",
+        "code": {
+          "label": "Build data-quality-gate",
+          "kind": "paste",
+          "pasteWhere": "Claude Code",
+          "code": "Run these steps yourself — do not print commands for me to copy and paste.\n1. Open the morning-check folder (it already holds two prepared skills, etl-failure-triage and csv-summary) and create a sample-data folder inside it.\n   # WHY: a sandbox. Nothing in this folder touches a real company system.\n2. Generate a fictional orders file for a made-up retailer, about 40 rows: order id, region, revenue amount, load timestamp. Put SAMPLE DATA as the first line. Plant exactly four problems: one duplicate order id, one missing region, one negative revenue amount, and a load timestamp older than 48 hours.\n   # WHY: these are the four problems the analyst catches by hand. Planting them means we know the right answer before Claude does.\n3. Create a project skill named data-quality-gate in this folder. Description: \"Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication.\" Steps: check freshness, duplicate keys, required fields and unreasonable amounts; give each check PASS, WARN or FAIL with the row that proves it; end with PUBLISH or BLOCK.\n   # WHY: the description says when, the steps say how.\n4. Tell me when it is ready and stop. I will ask, in my own words and without naming the skill, whether the orders file is safe to publish.\nStop when the report finds all four planted problems and says BLOCK.",
+          "expectedResult": "A morning-check folder with a SAMPLE DATA orders file and a data-quality-gate skill; a plain-words question returns four FAIL/WARN rows with evidence and BLOCK.",
+          "stopCondition": "The report finds all four planted problems and says BLOCK.",
+          "rescue": "If the skill does not load, ask Claude Code to list the skills it can see and confirm data-quality-gate is there before asking again."
+        },
+        "script": "SITUATION: First build of the night; the room has just seen what a skill is.\nROOM: Claude Code open on the sandbox folder (two prepared skills in it); tab 2 has the recorded run.\nMOOD: Hands-on, unhurried.\nOPEN: Let's write the analyst's check down, once.\nDO: Paste the instruction and narrate why each step exists while it runs.\nNOTE: If it stalls past two minutes, switch to tab 2 and narrate the recording.\nSAY: Notice the description is written in the words an analyst uses, not the words an engineer uses.\nSAY: Now I will ask the way a colleague would: is this orders file safe to publish to the revenue dashboard?"
+      },
+      {
+        "segment": "architecture",
+        "eyebrow": "🚦 The gate",
+        "title": "The gate decides before anyone sees it",
+        "body": "Every check returns PASS, WARN or FAIL with the row that proves it, and the skill ends with one recommendation: PUBLISH or BLOCK. A check that cannot show its evidence is an opinion.",
+        "bullets": [
+          "Four checks, each with evidence",
+          "PASS, WARN or FAIL per check",
+          "One recommendation: PUBLISH or BLOCK"
+        ],
+        "diagram": "flowchart LR\n  F[Orders file] --> G[Four checks]\n  G --> H[Pass Warn Fail]\n  H --> I{Safe?}\n  I --> P[PUBLISH]\n  I --> X[BLOCK]",
+        "script": "SITUATION: The report just came back BLOCK; now explain why its shape matters.\nROOM: The report on the right of the screen, the flowchart ready.\nMOOD: Satisfied, then serious.\nOPEN: Look at the column on the right of that report.\nDO: Ask the room to type READY or STUCK before moving on.\nNOTE: Send mentors to anyone who types STUCK before the teardown starts.\nSAY: Every FAIL names the row that proves it. That is what makes this a control and not a hunch.\nSAY: And it ends in one decision a person can act on: publish or block."
+      },
+      {
+        "segment": "deconstruct",
+        "eyebrow": "💥 Break it on purpose",
+        "title": "Break it: 'Helps with data.'",
+        "body": "Same steps, one change: the description becomes 'Helps with data.' It names no trigger and no output, so Claude has nothing to match a plain question against. With real skills beside it, the vague one loses. Then we delete the copy.",
+        "code": {
+          "label": "The vague description",
+          "kind": "paste",
+          "pasteWhere": "Claude Code",
+          "code": "Run these steps yourself — do not print commands for me to copy and paste.\n1. Make a throwaway copy of data-quality-gate called data-helper with the same steps, but set its description to \"Helps with data.\" Leave data-quality-gate, etl-failure-triage and csv-summary in the skills folder.\n   # WHY: only the trigger changes, so whatever happens next is the description's doing.\n2. Tell me when it is ready and stop. I will ask the same plain question about the orders file.\n   # WHY: a slash command proves the steps run; a plain question tests whether Claude can tell when this skill applies.\n3. After my question, report which skill loaded, and what in data-helper's description helped or failed to help it compete.\n4. Delete data-helper and list the skills that remain.\nStop when data-helper is gone and data-quality-gate, etl-failure-triage and csv-summary remain.",
+          "expectedResult": "Claude reports that data-quality-gate, not data-helper, loaded and why; data-helper is deleted.",
+          "stopCondition": "data-helper is gone; data-quality-gate, etl-failure-triage and csv-summary remain.",
+          "rescue": "If the vague skill fires anyway, say so: name the competitors it beat and why that was luck, then read the two descriptions side by side."
+        },
+        "script": "SITUATION: The skill works; now the mistake almost everyone makes first.\nROOM: The working skill in place; the poll slide comes next.\nMOOD: Playful, then pointed.\nOPEN: Let's write the description most people write on their first try.\nDO: Run the instruction, ask the plain question, then read Claude's explanation aloud.\nNOTE: Confirm out loud that data-helper is deleted before Build 2.\nSAY: Same steps. One line changed. That line is the only way Claude knows when to use what you taught it.\nSAY: Helps with data names no trigger and no output. A team folder full of those is a folder nobody can use."
+      },
+      {
+        "segment": "micro-build",
+        "eyebrow": "📣 Build 2",
+        "title": "Build 2: executive-dashboard-brief",
+        "body": "The gate stopped the bad number. Leadership still needs status, impact, evidence, decision, owner and next update. A second skill turns the technical report into that, in under 150 words.",
+        "code": {
+          "label": "Build the executive brief",
+          "kind": "paste",
+          "pasteWhere": "Claude Code",
+          "code": "Run these steps yourself — do not print commands for me to copy and paste.\n1. Create a second project skill named executive-dashboard-brief. Description: \"Use when a data-quality or incident report must be turned into an update for executives or leadership.\" Steps: write status, business impact, evidence, decision needed, owner and next update time, in under 150 words, with no SQL and no log lines.\n   # WHY: the technical report is right but written for the wrong reader.\n2. Run data-quality-gate on the orders file again, then hand its report to executive-dashboard-brief.\n   # WHY: detect, then communicate. Two skills, one workflow.\n3. Show me the brief, then list every skill in the folder with its description.\n   # WHY: the list is what your teammates will see.\nStop when the brief names the BLOCK decision, an owner and a next-update time in under 150 words.",
+          "expectedResult": "A brief of under 150 words naming status BLOCKED, impact, owner and next update; two skills listed with their descriptions.",
+          "stopCondition": "The brief names the BLOCK decision, an owner and a next-update time.",
+          "rescue": "If the brief runs long or quotes log lines, have Claude Code tighten the skill's steps and run it again."
+        },
+        "script": "SITUATION: The failure is fixed; the incident is not over, because leadership is waiting.\nROOM: The restored gate; the CFO story beat just played.\nMOOD: Purposeful, a recovery.\nOPEN: The data team has the answer. The CFO still does not.\nDO: Run the instruction, then read the finished brief aloud as if you were the CFO.\nNOTE: Ask the room whether they could act on it before moving on.\nSAY: Two skills, one workflow. Detect, then communicate.\nSAY: The middle step, diagnosis, is the one you build this week."
+      },
+      {
+        "segment": "micro-build",
+        "eyebrow": "🧭 The pattern",
+        "title": "Detect, diagnose, communicate",
+        "body": "Detection protects the business. Diagnosis restores the system. Communication closes the loop. Tonight we built the first and the last; the middle one is your build-along.",
+        "bullets": [
+          "Detection protects the business",
+          "Diagnosis restores the system",
+          "Communication closes the loop"
+        ],
+        "diagram": "flowchart LR\n  A[Detect] --> B[Diagnose]\n  B --> C[Communicate]\n  C --> D[Decision]",
+        "script": "SITUATION: Both builds are done; give the room the pattern to take home.\nROOM: The three-step flowchart, Diagnose outlined.\nMOOD: Summing up, confident.\nOPEN: Every incident needs three things.\nDO: Point at Diagnose and leave it there while you speak.\nNOTE: This sets up the build-along, so name it clearly.\nSAY: Detection is for the business, diagnosis is for the engineers, communication is for leadership.\nSAY: We built the first and the last tonight. The middle one is yours."
+      }
+    ],
+    "slideNotes": {
+      "cover:cold-open-0": "SITUATION: Doors open; Episode 1 of the weekly live.\nDO: Start the class clock the moment you begin.\nSAY: You just finished Week 1. You direct Claude Code now. Tonight you stop repeating yourself.",
+      "hook:cold-open--1": "SITUATION: The authored Week 2 hook: the ETL job says SUCCESS, the revenue number is wrong.\nDO: One sentence, let it land, then switch to the finished check.\nSAY: A green pipeline proves the job ran. It never proved the data was trustworthy.",
+      "segment:cold-open-0": "SITUATION: The cold open: the finished BLOCK report.\nDO: Switch to tab 1 and ask the plain question live; tab 2 has the recording.\nSAY: One question, four problems found, and nothing published. By minute 23 you will have built this.",
+      "rules:cold-open-1": "SITUATION: Phones out before the story starts.\nDO: Wait until you see people scanning.\nSAY: Scan once now. I will ask you questions on it all night, starting in about a minute.",
+      "checkin-950": "DO: Read three answers out loud and keep them for the hot seat.",
+      "checkin-900": "SITUATION: The analyst story, told as the curriculum's illustrative scenario.\nDO: Say 'illustrative' once, out loud.\nSAY: She should not be the control. The check should.",
+      "bullets:business-problem-0": "SITUATION: The template's business-problem slide carries the curriculum's 8:05 AM incident, an illustrative scenario.\nDO: Say 'illustrative' once, then go to the two announcements.\nSAY: The job ran. Nobody checked the data. That check lived in one person's head.",
+      "business-problem-900": "SITUATION: Anthropic's own steel-shipment example, told as their example.\nSAY: The know-how is packaged. The decision stays hers.",
+      "business-problem-950": "DO: Expect most of the room on 'validate the output'; reveal that a green pipeline proves only that the job ran.",
+      "architecture:architecture-0": "SITUATION: The template's architecture slide: Week 2's three skills, detect, diagnose, communicate.\nDO: One minute only in a 60-minute live; the Build 1 slides carry the detail.\nSAY: One incident, one connected workflow. Tonight we build the first skill and the last one.",
+      "architecture-950": "DO: Ask before Build 1 runs; the answer is the description. Do not explain yet; the build shows it.",
+      "example:deconstruct-0": "SITUATION: The template's deconstruct slide shows the same two descriptions we are about to test.\nDO: Read both descriptions aloud, then run the teardown.\nSAY: Same steps, one sentence different. Watch which one Claude can find.",
+      "deconstruct-950": "DO: This is the teardown's diagnosis; reveal right after the vague skill is tested.",
+      "break:reset-0": "SITUATION: No break in a 60-minute live; skip this slide.\nNOTE: Arrow past it; it renders because the template carries a reset segment.",
+      "microbuild:micro-build-0": "SITUATION: The template's micro-build slide names the two skills that finish the incident; etl-failure-triage is already in the folder, prepared, and is tonight's build-along.\nSAY: The gate stopped the bleeding. Now leadership needs an answer it can act on.",
+      "micro-build-900": "SITUATION: The CFO is waiting; this beat sets up Build 2.\nSAY: A technically correct answer can still be the wrong communication product.",
+      "micro-build-950": "DO: Take responses, reveal, then go straight into Build 2.",
+      "challenge-950": "SITUATION: The hot seat: two volunteers, their own checks, no real data on screen.\nDO: Fill the skill card for each volunteer: name, when, steps, output, never-do.\nSAY: Tell me a check that would stop running if you were out tomorrow. I will write its description with you.\nNOTE: Ask everyone to answer in chat while the volunteers are on; pick the hot-seat volunteers from these.",
+      "trivia-950": "DO: Expendable if time is short. Read the reveal exactly as written: pre-approval is not restriction.",
+      "trivia-951": "DO: Ask for honest answers; 'I watched' means start instruction 1 tonight.",
+      "cta:trailer-0": "SITUATION: The template's trailer slide reads 'Thursday we make it work'; tonight it is the close and the open loop to Week 3.\nDO: Read the build-along proof line, name Week 3, then ask the 2 AM question and stop talking.\nSAY: Rebuild all three skills on sample data, including the diagnosis one that sat prepared in the folder. Prove each fires from a plain question.\nSAY: Next session is Week 3: Build Your First AI Workflow Assistant. Last week you approved every action. Tonight it ran a check you wrote once, and it still waited for you."
+    },
+    "interactions": [
+      {
+        "kind": "poll",
+        "segment": "checkin",
+        "q": "Where are you watching from, and what kind of check do you run by hand at work?",
+        "options": [
+          "Numbers and reports",
+          "Customer records",
+          "Invoices and payments",
+          "Something else"
+        ],
+        "reveal": "No right answer. Keep these for the hot seat.",
+        "eyebrow": "👋 Roll call",
+        "title": "What do you check by hand?",
+        "presenterTip": "Read three answers out loud."
+      },
+      {
+        "kind": "poll",
+        "segment": "business-problem",
+        "q": "The ETL run is green, but the dashboard looks wrong. What should happen first?",
+        "options": [
+          "Rebuild the dashboard",
+          "Rerun the entire ETL pipeline",
+          "Validate the output against its data-quality contract",
+          "Ask leadership which number looks suspicious"
+        ],
+        "reveal": "A green pipeline proves that the job ran. It does not prove that the resulting data is trustworthy.",
+        "eyebrow": "🗳️ Judgment call",
+        "title": "Green job, wrong number",
+        "presenterTip": "Expect the room to split between validate and rerun."
+      },
+      {
+        "kind": "trivia",
+        "segment": "architecture",
+        "q": "Which part helps Claude recognize when a skill is relevant?",
+        "options": [
+          "Folder name",
+          "Description",
+          "Body length",
+          "Creation date"
+        ],
+        "answer": 1,
+        "reveal": "Claude scans the descriptions to decide when to load a skill. The description is the routing logic.",
+        "eyebrow": "🧠 Quick check",
+        "title": "What makes a skill fire?",
+        "presenterTip": "Ask before Build 1 runs; the build proves the answer."
+      },
+      {
+        "kind": "trivia",
+        "segment": "deconstruct",
+        "q": "The skill works when you type /data-quality-gate, but not when you ask 'Is this dataset safe to publish?' What do you inspect first?",
+        "options": [
+          "Dataset size",
+          "Skill description",
+          "Body length",
+          "CSV filename"
+        ],
+        "answer": 1,
+        "reveal": "Direct invocation proves the steps run. A plain question tests whether the description helps Claude recognize when the skill applies.",
+        "eyebrow": "🔬 Diagnose",
+        "title": "Slash works. Plain words do not.",
+        "presenterTip": "Reveal right after the vague skill is tested."
+      },
+      {
+        "kind": "poll",
+        "segment": "micro-build",
+        "q": "What belongs in the executive update?",
+        "options": [
+          "The entire pipeline log",
+          "Every SQL statement tested",
+          "Status, impact, evidence, decision, owner and next update",
+          "A general note that IT is investigating"
+        ],
+        "reveal": "Leadership needs a decision product, not a technical data dump.",
+        "eyebrow": "📣 Leadership is waiting",
+        "title": "What goes in the brief?",
+        "presenterTip": "Take responses, reveal, then go straight into Build 2."
+      },
+      {
+        "kind": "poll",
+        "segment": "challenge",
+        "q": "Name one check that would stop running if you were out tomorrow. How ready is it to become a skill?",
+        "options": [
+          "I have not thought of one yet",
+          "I know the check but not the words",
+          "I could write its description now",
+          "I already wrote it down"
+        ],
+        "reveal": "A good answer names a specific check, the words a colleague would use to ask for it, and the one thing it must never do.",
+        "eyebrow": "🪞 Self-check",
+        "title": "Your check",
+        "presenterTip": "Pick hot-seat volunteers from the last two options."
+      },
+      {
+        "kind": "trivia",
+        "segment": "trivia",
+        "q": "What does allowed-tools in a skill do?",
+        "options": [
+          "Permanently restricts the skill to those tools",
+          "Pre-approves the named tools for the turn that invokes the skill",
+          "Prevents automatic invocation",
+          "Loads every reference file"
+        ],
+        "answer": 1,
+        "reveal": "Pre-approval and restriction are different controls. allowed-tools pre-approves tools for the turn; permission settings govern the rest.",
+        "eyebrow": "🧠 Knowledge check",
+        "title": "Tool permissions, precisely",
+        "presenterTip": "Expendable if time is short; read the reveal exactly as written."
+      },
+      {
+        "kind": "poll",
+        "segment": "trivia",
+        "q": "From 'I watched' to 'I could build this tonight', where are you?",
+        "options": [
+          "I watched",
+          "I could follow it",
+          "I could build it with the three instructions",
+          "I could build it from memory"
+        ],
+        "reveal": "Any honest answer is right. 'With the three instructions' is this week's target.",
+        "eyebrow": "🪞 Self-check",
+        "title": "Where are you?",
+        "presenterTip": "Ask for honest answers; no right one."
+      }
+    ],
+    "storyBeats": [
+      {
+        "segment": "checkin",
+        "icon": "🕗",
+        "tone": "violet",
+        "eyebrow": "8:05 AM · illustrative",
+        "title": "The analyst who catches this is out today.",
+        "body": "The dashboard says revenue is down 18%. The overnight job says SUCCESS. The analyst who checks those numbers by hand every morning is out, and nobody else knows her check.",
+        "punch": "She should not be the control. The check should."
+      },
+      {
+        "segment": "business-problem",
+        "icon": "🏭",
+        "tone": "amber",
+        "eyebrow": "Anthropic's own example",
+        "title": "A steel shipment slips two weeks.",
+        "body": "In Anthropic's Claude for Manufacturing example, Claude finds the affected customer orders and the steel stock at other sites. It can release a purchase order to another supplier, but only after the buyer approves.",
+        "punch": "The know-how is packaged. The decision stays hers."
+      },
+      {
+        "segment": "micro-build",
+        "icon": "📣",
+        "tone": "berry",
+        "eyebrow": "The audience changes",
+        "title": "The data team has an answer. The CFO is still waiting.",
+        "body": "The report is correct and full of row numbers and timestamps. The CFO has a board call in an hour and needs impact, a decision, an owner and the next update.",
+        "punch": "A technically correct answer can still be the wrong communication product."
+      }
+    ],
+    "unmapped": [
+      {
+        "field": "runOfShow segment times",
+        "reason": "The deck scales the fixed 120-minute Architecture Day template to the session length; the blueprint's custom start/end minutes are not carried."
+      },
+      {
+        "field": "hook",
+        "reason": "Architecture Day shows the authored Week 2 hook ('The ETL job says SUCCESS. The revenue number is wrong.') before the cold open; kept, because it is tonight's incident. Commentary in slideNotes hook:cold-open--1."
+      },
+      {
+        "field": "template content slides",
+        "reason": "business-problem (the 8:05 AM incident), architecture (Week 2's three-skill diagram), deconstruct (the two descriptions) and micro-build render from Week 2's authored Architecture Day content; their commentary is in slideNotes."
+      },
+      {
+        "field": "reset segment",
+        "reason": "No blueprint content; renders as template default (break slide). slideNotes tells the presenter to skip it."
+      },
+      {
+        "field": "hot-seat segment",
+        "reason": "Architecture Day has no slide of its own in challenge; the hot seat runs on its self-check poll (challenge-950), whose note carries the commentary."
+      },
+      {
+        "field": "trailer slide",
+        "reason": "Renders 'Thursday we make it work' with the authored Week 2 Thursday trailer; slideNotes cta:trailer-0 reframes it as tonight's close and the Week 3 open loop."
+      },
+      {
+        "field": "checkpoints (CP0-CP3)",
+        "reason": "Architecture Day renders no checkpoint slides; checkpointsEnabled false has no effect."
+      },
+      {
+        "field": "story beat b4 (recap)",
+        "reason": "Architecture Day renders story beats only in checkin, business-problem, architecture, deconstruct and micro-build; b4's line is carried in slideNotes cta:trailer-0."
+      },
+      {
+        "field": "slides s1 (title), s2 (story), s8 (poll), s11 (quote), s12 (close)",
+        "reason": "Generated slides on the deck (cover, story beat, interaction, challenge poll, trailer); their commentary is carried in slideNotes, their bullets are not."
+      },
+      {
+        "field": "publicEndsAtMinute",
+        "reason": "Not set (audience=students); the deck has no field for it."
+      },
+      {
+        "field": "contentYield",
+        "reason": "Video, Shorts, quote cards, LinkedIn, email and CTA are not deck content."
+      },
+      {
+        "field": "per-slide publicValue",
+        "reason": "The deck reads publicValue per run-of-show segment, not per slide."
+      }
+    ]
+  },
+  "news": [
+    {
+      "headline": "Introducing Claude for Manufacturing",
+      "publisher": "Anthropic (claude.com)",
+      "url": "https://claude.com/blog/claude-for-manufacturing",
+      "publishedAt": "2026-11-12",
+      "ageDays": 12
+    },
+    {
+      "headline": "Xforce by Xero: Forward-Deployed Engineers & Partner Consultants to Help Accountants Put AI to Work",
+      "publisher": "Xero",
+      "url": "https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/",
+      "publishedAt": "2026-11-12",
+      "ageDays": 12
+    },
+    {
+      "headline": "Operate Claude Managed Agents inside your security perimeter",
+      "publisher": "Anthropic (claude.com)",
+      "url": "https://claude.com/resources/articles/self-hosted-claude-managed-agents",
+      "publishedAt": "2026-11-12",
+      "ageDays": 12
+    },
+    {
+      "headline": "Anthropic launches Claude Meetings to turn workplace discussions into plans and tasks",
+      "publisher": "TechCrunch",
+      "url": "https://techcrunch.com/2026/11/10/anthropic-launches-claude-meetings-to-turn-workplace-discussions-into-plans-and-tasks/",
+      "publishedAt": "2026-11-10",
+      "ageDays": 14
+    },
+    {
+      "headline": "Avochato Launches Claude Connector for Agentic Business Texting",
+      "publisher": "PR Newswire",
+      "url": "https://www.prnewswire.com/news-releases/avochato-launches-claude-connector-for-agentic-business-texting-302941601.html",
+      "publishedAt": "2026-11-17",
+      "ageDays": 7
+    },
+    {
+      "headline": "Rule Launches an MCP Server So AI Assistants Can Draft Campaigns and Automations",
+      "publisher": "SMTPedia",
+      "url": "https://smtpedia.com/rule-mcp-server-launch/",
+      "publishedAt": "2026-11-16",
+      "ageDays": 8
+    }
+  ],
+  "demand": [
+    {
+      "week": 2,
+      "title": "CLAUDE SKILLS FULL COURSE 2.5 HOURS (Beginner to Expert)",
+      "channel": "@princeeliot",
+      "views": 109221,
+      "channelMedian": 24000,
+      "ratio": 4.6,
+      "url": "https://www.youtube.com/watch?v=-DawhgUKiOg",
+      "publishedAt": "2026-09-10",
+      "query": null,
+      "sourceUrls": [
+        "https://www.youtube.com/watch?v=-DawhgUKiOg",
+        "https://www.youtube.com/@princeeliot/videos"
+      ]
+    },
+    {
+      "week": 2,
+      "title": "The ONLY Claude Skills Tutorial Beginners Need in 2026 (110 days old, outside the 90-day window, not scored)",
+      "channel": "@100xEngineers",
+      "views": 135903,
+      "channelMedian": 25700,
+      "ratio": 5.3,
+      "url": "https://www.youtube.com/watch?v=TyB7kLZPVKo",
+      "publishedAt": "2026-08-01",
+      "query": null,
+      "sourceUrls": [
+        "https://www.youtube.com/watch?v=TyB7kLZPVKo",
+        "https://www.youtube.com/@100xEngineers/videos"
+      ]
+    },
+    {
+      "week": 5,
+      "title": "MCP Servers Explained & Built",
+      "channel": "@TechWithTim",
+      "views": 134547,
+      "channelMedian": 82000,
+      "ratio": 1.6,
+      "url": "https://www.youtube.com/watch?v=He8tUwLzLnU",
+      "publishedAt": "2026-09-24",
+      "query": null,
+      "sourceUrls": [
+        "https://www.youtube.com/watch?v=He8tUwLzLnU",
+        "https://www.youtube.com/@TechWithTim/videos"
+      ]
+    },
+    {
+      "week": 5,
+      "title": "How Complete Beginners Master Claude Code MCP in 19 minutes",
+      "channel": "@mikeynocode",
+      "views": 23014,
+      "channelMedian": 28500,
+      "ratio": 0.8,
+      "url": "https://www.youtube.com/watch?v=dhsyihMpqZQ",
+      "publishedAt": "2026-10-22",
+      "query": null,
+      "sourceUrls": [
+        "https://www.youtube.com/watch?v=dhsyihMpqZQ",
+        "https://www.youtube.com/@mikeynocode/videos"
+      ]
+    },
+    {
+      "week": 3,
+      "title": "How to Use Claude Cowork 2.0 – Full Workflow Automation Guide 2026",
+      "channel": "@iamAImaster",
+      "views": 18032,
+      "channelMedian": 12500,
+      "ratio": 1.4,
+      "url": "https://www.youtube.com/watch?v=zo1izxXPbQ4",
+      "publishedAt": "2026-10-22",
+      "query": null,
+      "sourceUrls": [
+        "https://www.youtube.com/watch?v=zo1izxXPbQ4",
+        "https://www.youtube.com/@iamAImaster/videos"
+      ]
+    },
+    {
+      "week": 3,
+      "title": "Claude Code: Build Your First AI Agent in 20 Minutes (100% No Coding) (Claude Code, not the API; not counted for week 3)",
+      "channel": "@graceleungyl",
+      "views": 336177,
+      "channelMedian": 67500,
+      "ratio": 5,
+      "url": "https://www.youtube.com/watch?v=F8jidmEkIeM",
+      "publishedAt": "2026-10-30",
+      "query": null,
+      "sourceUrls": [
+        "https://www.youtube.com/watch?v=F8jidmEkIeM",
+        "https://www.youtube.com/@graceleungyl/videos"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://claude.com/blog/claude-for-manufacturing",
+      "title": "Introducing Claude for Manufacturing",
+      "publisher": "Anthropic (claude.com)",
+      "publishedAt": "2026-11-12",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "News (week 2 and 5 fit), facts f1-f4, slide s3, sb-1, sb-2, story beat b2, LinkedIn"
+    },
+    {
+      "url": "https://www.xero.com/media-releases/xforce-by-xero-forward-deployed-engineers-partner-consultants-help-accountants-put-ai-to-work/",
+      "title": "Xforce by Xero: Forward-Deployed Engineers & Partner Consultants to Help Accountants Put AI to Work",
+      "publisher": "Xero",
+      "publishedAt": "2026-11-12",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "News (Idea news line), facts f5-f6, slide s3, sb-9, hot seat, LinkedIn"
+    },
+    {
+      "url": "https://claude.com/resources/articles/self-hosted-claude-managed-agents",
+      "title": "Operate Claude Managed Agents inside your security perimeter",
+      "publisher": "Anthropic (claude.com)",
+      "publishedAt": "2026-11-12",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Topic-scoring news evidence (weeks 3, 5, 6, 10)"
+    },
+    {
+      "url": "https://techcrunch.com/2026/11/10/anthropic-launches-claude-meetings-to-turn-workplace-discussions-into-plans-and-tasks/",
+      "title": "Anthropic launches Claude Meetings to turn workplace discussions into plans and tasks",
+      "publisher": "TechCrunch",
+      "publishedAt": "2026-11-10",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Topic-scoring news evidence (week 3)"
+    },
+    {
+      "url": "https://www.anthropic.com/news/claude-fable-and-mythos-5-2",
+      "title": "Introducing Claude Fable 5.2 and Claude Mythos 5.2",
+      "publisher": "Anthropic",
+      "publishedAt": "2026-11-09",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Topic-scoring evidence (week 7, 1,000+ subagents); fact f19"
+    },
+    {
+      "url": "https://www.prnewswire.com/news-releases/avochato-launches-claude-connector-for-agentic-business-texting-302941601.html",
+      "title": "Avochato Launches Claude Connector for Agentic Business Texting",
+      "publisher": "PR Newswire",
+      "publishedAt": "2026-11-17",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Topic-scoring news evidence (week 5 main subject)"
+    },
+    {
+      "url": "https://smtpedia.com/rule-mcp-server-launch/",
+      "title": "Rule Launches an MCP Server So AI Assistants Can Draft Campaigns and Automations",
+      "publisher": "SMTPedia",
+      "publishedAt": "2026-11-16",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Topic-scoring news evidence (week 5 main subject)"
+    },
+    {
+      "url": "https://code.claude.com/docs/en/skills",
+      "title": "Extend Claude with skills",
+      "publisher": "Anthropic (Claude Code docs)",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Facts f7-f10: what a skill is, descriptions, loading, allowed-tools"
+    },
+    {
+      "url": "https://www.youtube.com/results?search_query=Claude%20agent%20skills%20tutorial",
+      "title": "YouTube search: Claude agent skills tutorial",
+      "publisher": "YouTube (via yt_demand.js)",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 2 demand search"
+    },
+    {
+      "url": "https://www.youtube.com/results?search_query=claude%20skills",
+      "title": "YouTube search: claude skills",
+      "publisher": "YouTube (via yt_demand.js)",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 2 demand search"
+    },
+    {
+      "url": "https://www.youtube.com/results?search_query=build%20MCP%20server%20Claude",
+      "title": "YouTube search: build MCP server Claude",
+      "publisher": "YouTube (via yt_demand.js)",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 5 demand search"
+    },
+    {
+      "url": "https://www.youtube.com/results?search_query=Claude%20API%20workflow%20automation%20tutorial",
+      "title": "YouTube search: Claude API workflow automation tutorial",
+      "publisher": "YouTube (via yt_demand.js)",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 3 demand search"
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=-DawhgUKiOg",
+      "title": "CLAUDE SKILLS FULL COURSE 2.5 HOURS (Beginner to Expert)",
+      "publisher": "YouTube · @princeeliot",
+      "publishedAt": "2026-09-10",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 2 demand (109,221 views)"
+    },
+    {
+      "url": "https://www.youtube.com/@princeeliot/videos",
+      "title": "Prince Eliot channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 24,000"
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=TyB7kLZPVKo",
+      "title": "The ONLY Claude Skills Tutorial Beginners Need in 2026",
+      "publisher": "YouTube · @100xEngineers",
+      "publishedAt": "2026-08-01",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 2 demand, excluded (outside 90 days)"
+    },
+    {
+      "url": "https://www.youtube.com/@100xEngineers/videos",
+      "title": "100xEngineers channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 25,700"
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=He8tUwLzLnU",
+      "title": "MCP Servers Explained & Built",
+      "publisher": "YouTube · @TechWithTim",
+      "publishedAt": "2026-09-24",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 5 demand (134,547 views)"
+    },
+    {
+      "url": "https://www.youtube.com/@TechWithTim/videos",
+      "title": "Tech With Tim channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 82,000"
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=dhsyihMpqZQ",
+      "title": "How Complete Beginners Master Claude Code MCP in 19 minutes",
+      "publisher": "YouTube · @mikeynocode",
+      "publishedAt": "2026-10-22",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 5 demand (below median)"
+    },
+    {
+      "url": "https://www.youtube.com/@mikeynocode/videos",
+      "title": "Mikey No Code channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 28,500"
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=zo1izxXPbQ4",
+      "title": "How to Use Claude Cowork 2.0 – Full Workflow Automation Guide 2026",
+      "publisher": "YouTube · @iamAImaster",
+      "publishedAt": "2026-10-22",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 3 demand (18,032 views)"
+    },
+    {
+      "url": "https://www.youtube.com/@iamAImaster/videos",
+      "title": "AI Master channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 12,500"
+    },
+    {
+      "url": "https://www.youtube.com/watch?v=F8jidmEkIeM",
+      "title": "Claude Code: Build Your First AI Agent in 20 Minutes (100% No Coding)",
+      "publisher": "YouTube · @graceleungyl",
+      "publishedAt": "2026-10-30",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Week 3 demand, not counted (Claude Code, not the API)"
+    },
+    {
+      "url": "https://www.youtube.com/@graceleungyl/videos",
+      "title": "Grace Leung channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 67,500"
+    },
+    {
+      "url": "https://www.youtube.com/@austin.marchese/videos",
+      "title": "Austin Marchese channel uploads",
+      "publisher": "YouTube",
+      "publishedAt": null,
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": true,
+      "usedFor": "Channel median 59,500 (week 3 demand, below median)"
+    },
+    {
+      "url": "https://www.globenewswire.com/news-release/2026/11/18/3406062/0/en/astra-security-connects-autonomous-pentesting-to-claude-code-and-github-copilot-through-new-mcp-server.html",
+      "title": "Astra Security Connects Autonomous Pentesting to Claude Code and GitHub Copilot Through New MCP Server",
+      "publisher": "GlobeNewswire",
+      "publishedAt": "2026-11-18",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": false,
+      "usedFor": "Not used: fetch refused (HTTP 403)"
+    },
+    {
+      "url": "https://www.openpr.com/news/4691714/frontmost-ai-releases-aeo-skills-for-claude-code-to-help",
+      "title": "Frontmost AI releases AEO skills for Claude Code",
+      "publisher": "openPR",
+      "publishedAt": "2026-11-17",
+      "accessedAt": "2026-11-19",
+      "fetchedThisRun": false,
+      "usedFor": "Not used: fetch refused (HTTP 403; the Daily Tribune copy returned 429)"
+    }
+  ],
+  "newsDropped": [
+    {
+      "headline": "Frontmost AI releases AEO skills for Claude Code",
+      "publisher": "openPR",
+      "url": "https://www.openpr.com/news/4691714/frontmost-ai-releases-aeo-skills-for-claude-code-to-help",
+      "reason": "HTTP 403 on fetch",
+      "alternateTried": "Daily Tribune copy of the same release (URL not recorded): HTTP 429"
+    }
+  ]
+}

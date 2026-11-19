@@ -11,17 +11,23 @@
  *   backend/src/data/classSessionPlan.ts                   public title, tension, assignment (the deliverable)
  *   docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md beat, act, 2 AM question, person who isn't there, trust rung
  *
+ * Per week it also prints `days`: the material each day kind plans from (SKILL.md Stage 1.2,
+ * "Which day's material"):
+ *   days.architecture  Architecture Day (monday): tension, payoffPreview, realExample (the incident
+ *                      deconstructed), microBuild
+ *   days.build         Build Day (thursday): resultPreview (the deliverable shown), failureInjection,
+ *                      checkpoints (CP0..CPn labels; empty = the week has none)
+ * and `next`: the curriculum week after this one (week + 1, or the capstone after week 12) with its
+ * public title and tension, for the recap's "name next week".
+ *
  * Every field the parser cannot find is printed as null and listed under `gaps`, never guessed.
  * Exit 0 on success (even with gaps), 1 when a source file is missing.
+ * Also usable as a module: `require('./load_curriculum').loadCurriculum(repoRoot)` (throws when a
+ * source file is missing); validate_blueprint.js uses it.
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
-
-const args = process.argv.slice(2);
-const opt = (k, d) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
-const REPO = path.resolve(opt('repo', path.join(__dirname, '..', '..', '..', '..')));
-const ONLY = opt('week', null);
 
 const SRC = {
   course: 'backend/src/data/canonicalCourse.ts',
@@ -29,9 +35,9 @@ const SRC = {
   arc: 'docs/training-program-2026-q3/TWELVE_WEEK_STORY_ARC.md',
 };
 
-function read(rel) {
-  const p = path.join(REPO, rel);
-  if (!fs.existsSync(p)) { console.error(`load_curriculum: missing source ${rel} (repo root ${REPO})`); process.exit(1); }
+function read(repo, rel) {
+  const p = path.join(repo, rel);
+  if (!fs.existsSync(p)) throw new Error(`load_curriculum: missing source ${rel} (repo root ${repo})`);
   return fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 }
 
@@ -82,9 +88,28 @@ function parsePlan(src) {
       const items = dStart >= 0 ? [...a.slice(dStart, dEnd).matchAll(new RegExp(STR, 'g'))].map((m) => unq(m[1])) : [];
       assignment = { title: field(a, 'title'), deliverables: items, proof: field(a, 'proof') };
     }
-    out[n] = { publicTitle: field(c, 'publicTitle'), tension: field(c, 'tension'), assignment };
+    const mon = sectionOf(c, 'monday');
+    const thu = sectionOf(c, 'thursday');
+    const cpStart = thu.indexOf('checkpoints: [');
+    const cpBlock = cpStart >= 0 ? thu.slice(cpStart, thu.indexOf('],', cpStart) + 1 || undefined) : '';
+    const checkpoints = [...cpBlock.matchAll(new RegExp(`\\{\\s*n:\\s*(\\d+),\\s*label:\\s*${STR}`, 'g'))].map((m) => ({ n: Number(m[1]), label: unq(m[2]) }));
+    out[n] = {
+      publicTitle: field(c, 'publicTitle'), tension: field(c, 'tension'), assignment,
+      days: {
+        architecture: { tension: field(mon, 'tension'), payoffPreview: field(mon, 'payoffPreview'), realExample: field(mon, 'realExample'), microBuild: field(mon, 'microBuild') },
+        build: { resultPreview: field(thu, 'resultPreview'), failureInjection: field(thu, 'failureInjection'), checkpoints },
+      },
+    };
   }
   return out;
+}
+/** The text of one day block (`monday: {` or `thursday: {`) inside a week chunk, up to the next day/assignment key. */
+function sectionOf(chunk, day) {
+  const start = chunk.search(new RegExp(`\\n {4}${day}: \\{`));
+  if (start < 0) return '';
+  const rest = chunk.slice(start + 1);
+  const end = rest.search(/\n {4}(monday|thursday|assignment|builderBroadcastFocus): /);
+  return end > 0 ? rest.slice(0, end) : rest;
 }
 
 /* ---------- TWELVE_WEEK_STORY_ARC.md ---------- */
@@ -113,9 +138,10 @@ function parseArc(src) {
   return { beats, twoAm, person, ladder, acts, spine: (src.match(/> \*\*(.+?)\*\*/s) || [])[1]?.replace(/\s*\n>\s*/g, ' ') || null };
 }
 
-const course = parseCourse(read(SRC.course));
-const plan = parsePlan(read(SRC.plan));
-const arc = parseArc(read(SRC.arc));
+function loadCurriculum(repo, only = null) {
+const course = parseCourse(read(repo, SRC.course));
+const plan = parsePlan(read(repo, SRC.plan));
+const arc = parseArc(read(repo, SRC.arc));
 
 const weeks = [];
 const gaps = [];
@@ -145,10 +171,27 @@ for (let n = 1; n <= 12; n++) {
       ownProject: n >= 3 ? 'Connect the exercise to the student\'s own generated build plan.' : 'Build plan is generated in Week 3; point at it as what is coming.',
       dragonCallback: [3, 6, 9, 12].includes(n),
     },
+    days: p.days || null,
   };
-  for (const k of ['theme', 'beat', 'academy', 'deliverable']) if (w[k] == null) gaps.push(`week ${n}: ${k}`);
+  for (const k of ['theme', 'beat', 'academy', 'deliverable', 'days']) if (w[k] == null) gaps.push(`week ${n}: ${k}`);
   weeks.push(w);
 }
+// "Name next week" = the next curriculum week (n + 1), or the capstone after week 12.
+for (const w of weeks) {
+  const nx = weeks.find((x) => x.week === w.week + 1);
+  w.next = nx ? { week: nx.week, theme: nx.theme, publicTitle: nx.publicTitle, tension: nx.tension } : { week: null, theme: 'the capstone', publicTitle: 'the capstone', tension: null };
+}
 
-const result = { readAt: new Date().toISOString(), repo: REPO, sources: SRC, spine: arc.spine, weeks: ONLY ? weeks.filter((w) => w.week === Number(ONLY)) : weeks, gaps };
-process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+return { readAt: new Date().toISOString(), repo, sources: SRC, spine: arc.spine, weeks: only ? weeks.filter((w) => w.week === Number(only)) : weeks, gaps };
+}
+
+module.exports = { loadCurriculum };
+
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  const opt = (k, d) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
+  const repo = path.resolve(opt('repo', path.join(__dirname, '..', '..', '..', '..')));
+  try {
+    process.stdout.write(JSON.stringify(loadCurriculum(repo, opt('week', null)), null, 2) + '\n');
+  } catch (e) { console.error(e.message); process.exit(1); }
+}
