@@ -29,6 +29,10 @@ export interface GroundingInput {
   artifacts?: Array<{ caption: string | null; requirementIds: string[] }>;
   /** Approved company-library facts as "key: value" strings. */
   approvedFacts?: string[];
+  /** Authoritative solicitation facts pulled from the RFP's OWN requirements (due date, submission method/email,
+   *  agency). The agent MUST assert these directly and must NEVER insert a placeholder or raise a human need for them —
+   *  they are stated in the solicitation, not something the operator has to supply. */
+  solicitationFacts?: string[];
   /** Approved past-performance references (real, named clients the agent MAY cite). */
   references?: GroundingReference[];
   /** Approved key personnel the agent MAY name and describe. */
@@ -50,6 +54,7 @@ export interface Grounding {
   artifacts: string[];
   facts: string[];
   /** Optional so existing Grounding fixtures (built as literals) stay valid; buildGrounding always sets them to []. */
+  solicitationFacts?: string[];
   references?: GroundingReference[];
   personnel?: GroundingPersonnel[];
   caseStudies?: GroundingCaseStudy[];
@@ -70,6 +75,7 @@ export function buildGrounding(input: GroundingInput): Grounding {
     sections: (Array.isArray(input?.document?.sections) ? input.document.sections : []).map((s) => ({ heading: s.heading, plan: s.plan ?? null })),
     artifacts: (Array.isArray(input?.artifacts) ? input.artifacts : []).map((a) => `${a.caption ?? 'Build screenshot'} (proves ${(a.requirementIds || []).join(', ') || 'requirements'})`),
     facts: Array.isArray(input?.approvedFacts) ? input.approvedFacts : [],
+    solicitationFacts: Array.isArray(input?.solicitationFacts) ? input.solicitationFacts : [],
     references: Array.isArray(input?.references) ? input.references : [],
     personnel: Array.isArray(input?.personnel) ? input.personnel : [],
     caseStudies: Array.isArray(input?.caseStudies) ? input.caseStudies : [],
@@ -86,6 +92,11 @@ export function groundingToPromptText(g: Grounding): string {
   if (g.requirements.length) { lines.push('Requirements to cover:'); for (const r of g.requirements) lines.push(`- [${r.canonicalReqId}] ${r.statement}`); }
   if (g.sections.some((s) => s.plan)) { lines.push('Section plans (hot button → feature → benefit → proof → discriminator):'); for (const s of g.sections) if (s.plan) lines.push(`- ${s.heading}: ${s.plan}`); }
   if (g.artifacts.length) { lines.push('Build evidence you may cite:'); for (const a of g.artifacts) lines.push(`- ${a}`); }
+  const solicitationFacts = g.solicitationFacts ?? [];
+  if (solicitationFacts.length) {
+    lines.push('Solicitation facts (authoritative — stated in the RFP itself; assert these directly and NEVER insert a placeholder or raise a question for them, they are not something the operator must supply):');
+    for (const s of solicitationFacts) lines.push(`- ${s}`);
+  }
   if (g.facts.length) { lines.push('Approved company facts (the ONLY specific facts you may assert):'); for (const f of g.facts) lines.push(`- ${f}`); }
   else lines.push('No approved company facts are available — insert a [PLACEHOLDER: …] for any specific fact rather than inventing one.');
   const references = g.references ?? [];
