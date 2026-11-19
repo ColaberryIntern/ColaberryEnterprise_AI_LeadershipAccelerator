@@ -31,6 +31,14 @@ jest.mock('../../config/env', () => ({
  * state, so each test needs a genuinely fresh module instance rather than cleared
  * mocks — hence resetModules() + require() per test, matching zoomService.test.ts.
  */
+// Makes this file a module rather than a global script. Without it, TypeScript
+// puts these helpers in the global scope and `jsonResponse` collides with the
+// identically-named helper in zoomService.test.ts — which jest never notices,
+// because it transforms each file separately, and only the test-file typecheck
+// gate catches. Everything here loads its subject through require(), so there is
+// no import to serve the purpose on its own.
+export {};
+
 function loadZoomService() {
   jest.resetModules();
   return require('../zoomService') as typeof import('../zoomService');
